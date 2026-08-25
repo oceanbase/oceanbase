@@ -608,7 +608,7 @@ int ObParquetFileWriter::close_file()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("caught exception when close parquet file", K(ret), K(url_));
   }
-  if (OB_SUCC(ret) && share::ObLakeTableFormat::ICEBERG == lake_table_format_) {
+  if (OB_SUCC(ret) && share::is_iceberg_lake_table(lake_table_format_)) {
     OZ(get_datafile_generator().generate_datafile(storage_appender_,
                                                   url_,
                                                   record_count_,
@@ -737,7 +737,7 @@ int ObOrcFileWriter::close_file()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("caught exception when close parquet file", K(ret), K(url_));
   }
-  if (share::ObLakeTableFormat::ICEBERG == lake_table_format_) {
+  if (share::is_iceberg_lake_table(lake_table_format_)) {
     OZ(get_datafile_generator().generate_datafile(storage_appender_,
                                                   url_,
                                                   record_count_,

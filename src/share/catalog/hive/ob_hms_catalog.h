@@ -97,6 +97,10 @@ private:
                                   const ObILakeTableMetadata *table_metadata,
                                   const ObIArray<ObString> &part_col_names,
                                   ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos);
+  int fill_partition_stats(const ObILakeTableMetadata *table_metadata,
+                           const ObString &location,
+                           const ObString &access_info,
+                           ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos);
 
   virtual int do_init(const common::ObString &properties) override;
 

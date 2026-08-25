@@ -64,7 +64,6 @@ private:
   const char *java_opts_;
   const char *class_path_;
   const char *connector_path_;
-  const char *ld_library_path_;
 
   bool is_inited_java_home_ = false;
   bool is_inited_java_opts_ = false;

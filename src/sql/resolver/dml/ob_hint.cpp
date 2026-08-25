@@ -982,6 +982,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_MERGE_INTO:
     case ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK:
     case PRESERVE_ORDER_FOR_GROUPBY:
+    case ENABLE_LAKE_TABLE_PARALLEL_RESOLVING:
     case _ENABLE_PX_TASK_REBALANCE: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
@@ -1211,6 +1212,13 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     }
     case CACHE_AWARE_ROW_NUM: {
       is_valid = val.is_int() && val.get_int() >= 1;
+      break;
+    }
+    case EXT_TABLE_OPTIONS: {
+      // The value is an opaque JSON string passed through to the external-table
+      // plugin. OB intentionally does NOT validate its contents — the plugin
+      // unwraps and validates it. We only require it be a string.
+      is_valid = val.is_varchar();
       break;
     }
     case UDF_COST_FACTOR: {

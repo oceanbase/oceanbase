@@ -103,6 +103,10 @@ int ObLakeTableMetadataCacheValue::deep_copy(char *buf,
   } else {
     ObLakeTableMetadataCacheValue *pvalue = NULL;
     switch (lake_table_metadata_->get_format_type()) {
+      case ObLakeTableFormat::ODPS: {
+        DEEP_COPY_LAKE_TABLE_METADATA(sql::odps::ObODPSTableMetadata);
+        break;
+      }
       case ObLakeTableFormat::ICEBERG: {
         DEEP_COPY_LAKE_TABLE_METADATA(sql::iceberg::ObIcebergTableMetadata);
         break;
@@ -111,12 +115,10 @@ int ObLakeTableMetadataCacheValue::deep_copy(char *buf,
         DEEP_COPY_LAKE_TABLE_METADATA(sql::hive::ObHiveTableMetadata);
         break;
       }
-      case ObLakeTableFormat::ODPS: {
-        DEEP_COPY_LAKE_TABLE_METADATA(sql::odps::ObODPSTableMetadata);
-        break;
-      }
       default: {
-        ret = OB_ERR_UNEXPECTED;
+        // iceberg, hive, and plugin-backed formats do not support deep-copying shared pointers
+        // do not cache now
+        ret = OB_NOT_IMPLEMENT;
         LOG_WARN("invalid format type", K(lake_table_metadata_->get_format_type()), K(ret));
       }
     }
@@ -219,6 +221,10 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
     is_cache_valid = (cached_table_metadata_version == latest_schema_version);
     if (is_cache_valid) {
       switch (cached_value->lake_table_metadata_->get_format_type()) {
+        case ObLakeTableFormat::ICEBERG: {
+          ASSIGN_VALUE_FROM_CACHE(sql::iceberg::ObIcebergTableMetadata)
+          break;
+        }
         case ObLakeTableFormat::HIVE: {
           ASSIGN_VALUE_FROM_CACHE(sql::hive::ObHiveTableMetadata);
           break;
@@ -227,12 +233,10 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
           ASSIGN_VALUE_FROM_CACHE(sql::odps::ObODPSTableMetadata);
           break;
         }
-        case ObLakeTableFormat::ICEBERG: {
-          ASSIGN_VALUE_FROM_CACHE(sql::iceberg::ObIcebergTableMetadata)
-          break;
-        }
         default: {
-          ret = OB_ERR_UNEXPECTED;
+          // iceberg, hive, and plugin-backed formats do not support deep-copying shared pointers
+          // do not cache now
+          ret = OB_NOT_IMPLEMENT;
           LOG_WARN("unreachable code", K(ret));
         }
       }
@@ -261,9 +265,8 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
     } else if (OB_ISNULL(lake_table_metadata)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lake_table_metadata is null", K(ret));
-    } else if (ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()
-               || ObLakeTableFormat::HIVE == lake_table_metadata->get_format_type()) {
-      // todo
+    } else if (is_lake_external_table(lake_table_metadata->get_format_type())) {
+      // iceberg, hive, plugin-backed formats do not support deep copy shared ptr
       // do not cache now
     } else {
       ObLakeTableMetadataCacheValue tmp_cache_value(lake_table_metadata);

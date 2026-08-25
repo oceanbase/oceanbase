@@ -36,6 +36,11 @@ public:
   }
   virtual ~ObILakeTableMetadata() = default;
   virtual ObLakeTableFormat get_format_type() const = 0;
+  virtual common::ObString get_plugin_name() const { return common::ObString(); }
+  // The plugin identity (which .so backs this table) is encoded in get_format_type()
+  // itself: a plugin-placeholder range value encodes the plugin slot. There is no
+  // separate plugin name/slot field on the metadata — the enum value is the identity.
+  virtual bool is_ext_plugin_metadata() const { return false; }
   virtual int64_t get_convert_size() const = 0;
   int init(const uint64_t tenant_id,
            const uint64_t catalog_id,
@@ -48,6 +53,7 @@ public:
   int build_table_schema(std::optional<int32_t> schema_id,
                          std::optional<int64_t> snapshot_id,
                          share::schema::ObTableSchema *&table_schema);
+  static int destroy(ObIAllocator &allocator, ObILakeTableMetadata *&lake_table_metadata);
   virtual int resolve_time_travel_info(const ObTimeTravelInfo *time_travel_info,
                                        std::optional<int32_t> &schema_id,
                                        std::optional<int64_t> &snapshot_id);

@@ -70,11 +70,13 @@ private:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFileSystemCatalog);
-  int deduce_table_format_(const ObString &tbl_path, ObLakeTableFormat &table_format);
+  int deduce_table_format_(const ObString &tbl_path,
+                           ObLakeTableFormat &table_format);
   ObIAllocator &allocator_;
   ObString warehouse_;
   ObString access_info_;
   uint64_t location_object_id_;
+  // location object 匹配后，截断下来的路径
   ObString warehouse_sub_path_;
 };
 

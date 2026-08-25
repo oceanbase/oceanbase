@@ -8,7 +8,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #define private public
-#include "plugin/external_table/ob_external_format.h"
+#include "plugin/legacy/external_table/ob_external_format.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

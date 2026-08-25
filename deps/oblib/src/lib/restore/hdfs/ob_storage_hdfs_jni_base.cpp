@@ -199,8 +199,8 @@ int ObStorageHdfsBase::get_hdfs_file_meta(const ObString &uri, ObStorageObjectMe
     hdfsFS hdfs_fs = hdfs_client_->get_hdfs_fs();
     hdfsFileInfo *file_info = obHdfsGetPathInfo(hdfs_fs, path_buf_);
     if (OB_ISNULL(file_info)) {
-      ret = OB_HDFS_PATH_NOT_FOUND;
-      OB_LOG(WARN, "failed to get file info", K(ret), K(uri), K_(path_buf));
+      // 参考 s3 的语义，这里返回的应该是文件不存在
+      meta.is_exist_ = false;
     } else {
       meta.is_exist_ = true;
       if (file_info->mKind == kObjectKindDirectory) {
@@ -474,17 +474,18 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
           hdfsFileInfo file_info = file_infos[idx];
           if (file_info.mKind == kObjectKindDirectory) {
             // do nothing
-          } else if (op.need_get_file_meta()) {
-            if (OB_UNLIKELY(file_info.mSize < 0)) {
-              ret = OB_INVALID_ARGUMENT;
-              OB_LOG(WARN, "invalid hdfs file size", K(file_info.mSize),
-                     K(file_info.mName));
-            } else {
-              op.set_size(file_info.mSize);
-              // Set file extra info last modified time and its unit is seconds.
-              ObFileExtraInfo file_ext_info;
-              file_ext_info.last_modified_time_ms_ = file_info.mLastMod * 1000LL;
-              op.set_extra_info(file_ext_info);
+          } else {
+            if (op.need_get_file_meta()) {
+              if (OB_UNLIKELY(file_info.mSize < 0)) {
+                ret = OB_INVALID_ARGUMENT;
+                OB_LOG(WARN, "invalid hdfs file size", K(file_info.mSize), K(file_info.mName));
+              } else {
+                op.set_size(file_info.mSize);
+                // Set file extra info last modified time and its unit is seconds.
+                ObFileExtraInfo file_ext_info;
+                file_ext_info.last_modified_time_ms_ = file_info.mLastMod * 1000LL;
+                op.set_extra_info(file_ext_info);
+              }
             }
 
             if (OB_SUCC(ret)) {
@@ -498,13 +499,15 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
                 const int64_t obj_name_len = strlen(obj_name);
                 ObString file_name;
                 char *file_name_start = obj_name + uri.length();
-                file_name.assign_ptr(
-                    file_name_start,
-                    static_cast<int64_t>(obj_name_len - uri.length()));
+                file_name.assign_ptr(file_name_start,
+                                     static_cast<int64_t>(obj_name_len - uri.length()));
                 if (file_name.length() > sizeof(entry.d_name)) {
                   ret = OB_SIZE_OVERFLOW;
-                  OB_LOG(WARN, "file name length is overflow d_name", K(ret),
-                         K(file_name), K(file_name.length()));
+                  OB_LOG(WARN,
+                         "file name length is overflow d_name",
+                         K(ret),
+                         K(file_name),
+                         K(file_name.length()));
                 } else {
                   MEMCPY(entry.d_name, file_name.ptr(), file_name.length());
                   entry.d_name[file_name.length()] = '\0'; // set str end

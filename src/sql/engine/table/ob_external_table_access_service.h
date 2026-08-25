@@ -14,6 +14,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "common/storage/ob_io_device.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "sql/ob_sql_context.h"
 #include "sql/engine/table/ob_file_prebuffer.h"
 #include "lib/roaringbitmap/ob_roaringbitmap.h"
@@ -292,17 +293,17 @@ protected:
 
   OB_INLINE bool is_iceberg_lake_table() const
   {
-    return scan_param_->lake_table_format_ == share::ObLakeTableFormat::ICEBERG;
+    return share::is_iceberg_lake_table(scan_param_->lake_table_format_);
   }
 
   OB_INLINE bool is_hive_lake_table() const
   {
-    return scan_param_->lake_table_format_ == share::ObLakeTableFormat::HIVE;
+    return share::is_hive_lake_table(scan_param_->lake_table_format_);
   }
 
   OB_INLINE bool is_lake_table() const
   {
-    return is_iceberg_lake_table() || is_hive_lake_table();
+    return share::is_lake_external_table(scan_param_->lake_table_format_);
   }
 
   int init_for_iceberg(ObExternalTableAccessOptions *options);

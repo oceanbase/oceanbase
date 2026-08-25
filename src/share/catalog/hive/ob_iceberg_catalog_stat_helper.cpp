@@ -44,8 +44,8 @@ int ObIcebergCatalogStatHelper::fetch_iceberg_table_statistics(
   } else if (column_names.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column names should not be empty", K(ret));
-  } else if (OB_UNLIKELY(ObLakeTableFormat::ICEBERG !=
-                         table_metadata->get_format_type())) {
+  } else if (OB_UNLIKELY(!share::is_iceberg_lake_table(
+                         table_metadata->get_format_type()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table format should be iceberg", K(ret),
              K(table_metadata->get_format_type()));

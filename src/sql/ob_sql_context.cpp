@@ -308,6 +308,10 @@ void ObSqlSchemaGuard::reset()
 {
   mocked_database_schemas_.reset();
   table_schemas_.reset();
+  for (int64_t i = 0; i < lake_table_metadatas_.count(); i++) {
+    // allocator_ reset laster  use destructure func to free shared ptr
+    lake_table_metadatas_.at(i)->~ObILakeTableMetadata();
+  }
   lake_table_metadatas_.reset();
   schema_guard_ = NULL;
   allocator_.reset();
@@ -482,7 +486,7 @@ int ObSqlSchemaGuard::add_mocked_table_schema(const share::schema::ObTableSchema
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table schema is null", K(ret));
-  } else if (ObLakeTableFormat::ICEBERG == table_schema->get_lake_table_format()) {
+  } else if (share::is_iceberg_lake_table(table_schema->get_lake_table_format())) {
     ObIcebergTableSchema *temp_schema = NULL;
     const share::schema::ObIcebergTableSchema *iceberg_table_schema
         = down_cast<const share::schema::ObIcebergTableSchema *>(table_schema);

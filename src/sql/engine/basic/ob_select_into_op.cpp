@@ -468,7 +468,7 @@ int ObSelectIntoOp::init_env_common()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected column count", K(MY_SPEC.select_exprs_.count()),
               K(MY_SPEC.alias_names_.strs_.count()), K(ret));
-  } else if (share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_
+  } else if (share::is_iceberg_lake_table(MY_SPEC.lake_table_format_)
              && ObExternalFileFormat::FormatType::PARQUET_FORMAT != format_type_
              && ObExternalFileFormat::FormatType::ORC_FORMAT != format_type_) {
     ret = OB_ERR_UNEXPECTED;
@@ -835,7 +835,7 @@ int ObSelectIntoOp::inner_close()
       LOG_WARN("failed to close data writer", K(ret));
     }
     // insert into iceberg table not support partition now
-    if (OB_SUCC(ret) && share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_) {
+    if (OB_SUCC(ret) && share::is_iceberg_lake_table(MY_SPEC.lake_table_format_)) {
       const ObIcebergDataGenerator& iceberg_data_generator =
                             static_cast<ObBatchFileWriter*>(data_writer_)->get_datafile_generator();
       if (iceberg_data_generator.get_data_files().empty()) {
@@ -964,7 +964,7 @@ int ObSelectIntoOp::calc_first_file_path(ObString &path)
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid outfile path");
     LOG_WARN("invalid outfile path", K(ret));
   } else {
-    if (share::ObLakeTableFormat::ICEBERG != MY_SPEC.lake_table_format_) {
+    if (!share::is_iceberg_lake_table(MY_SPEC.lake_table_format_)) {
       if (input_file_name.ptr()[input_file_name.length() - 1] == '/') {
         OZ(file_name_with_suffix.append_fmt("%.*sdata", input_file_name.length(), input_file_name.ptr()));
       } else {
@@ -1027,7 +1027,7 @@ int ObSelectIntoOp::calc_next_file_path(ObExternalFileWriter &data_writer)
         LOG_WARN("failed to append string", K(ret));
       }
     } else if (!MY_SPEC.is_single_) {
-      if (share::ObLakeTableFormat::ICEBERG != MY_SPEC.lake_table_format_) {
+      if (!share::is_iceberg_lake_table(MY_SPEC.lake_table_format_)) {
         file_path = data_writer.url_.split_on(data_writer.url_.reverse_find('_'));
         if (OB_FAIL(url_with_suffix.assign(file_path))) {
           LOG_WARN("failed to assign string", K(ret));
@@ -4243,7 +4243,7 @@ int ObSelectIntoOp::setup_parquet_schema()
   ObString alias_name;
   int primitive_length = -1;
   int field_id = -1;
-  if (share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_
+  if (share::is_iceberg_lake_table(MY_SPEC.lake_table_format_)
       && MY_SPEC.field_ids_.count() != select_exprs.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected column count", K(MY_SPEC.select_exprs_.count()),
@@ -4272,7 +4272,7 @@ int ObSelectIntoOp::setup_parquet_schema()
       } else if (ob_is_number_or_decimal_int_tc(obj_type)
                 && OB_FALSE_IT(primitive_length = calc_parquet_decimal_length(
                                                       select_exprs.at(i)->datum_meta_.precision_))) {
-      } else if (share::ObLakeTableFormat::ICEBERG == MY_SPEC.lake_table_format_
+      } else if (share::is_iceberg_lake_table(MY_SPEC.lake_table_format_)
                 && OB_FALSE_IT(field_id = MY_SPEC.field_ids_.at(i))) {
       } else {
         //todo@linyi repetition level

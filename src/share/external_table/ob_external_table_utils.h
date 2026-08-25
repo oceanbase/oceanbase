@@ -73,8 +73,9 @@ public:
   ~ObCachedExternalFileInfoValue() = default;
   int64_t size() const override;
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const override;
-  TO_STRING_KV(K_(file_size));
+  TO_STRING_KV(K_(file_size), K_(modify_time));
   int64_t file_size_ = OB_INVALID_SIZE;
+  int64_t modify_time_ = 0;
 };
 
 class ObCachedExternalFileInfoCollector
@@ -83,7 +84,12 @@ public:
   int init();
   static ObCachedExternalFileInfoCollector &get_instance();
   int collect_file_size(const common::ObString &url, const common::ObObjectStorageInfo *storage_info, int64_t &file_size);
+  int collect_file_modify_time(const common::ObString &url, const common::ObObjectStorageInfo *storage_info, int64_t &modify_time);
 private:
+  // Shared miss path: loads size + mtime with (two) network calls and caches both,
+  // so a lookup for either field warms the other.
+  int get_or_load_(const common::ObString &url, const common::ObObjectStorageInfo *storage_info,
+                   ObCachedExternalFileInfoValue &value);
   const int64_t bucket_num_ = 10;
   common::ObBucketLock bucket_lock_;
   common::ObKVCache<ObCachedExternalFileInfoKey, ObCachedExternalFileInfoValue> kv_cache_;
@@ -109,7 +115,12 @@ public:
   int collect_file_content_digest(const common::ObString &url, ObString &content_digest);
   int collect_files_modify_time(const common::ObIArray<common::ObString> &file_urls,
                                 common::ObIArray<int64_t> &modify_times);
-  int collect_file_modify_time(const common::ObString &url, int64_t &modify_time);
+  int collect_file_modify_time(const common::ObString &url, int64_t &modify_time, bool enable_cache = false);
+  // Pure existence check (no file size). Unlike collect_file_size, this works
+  // for directories too: OB's get_file_length/get_file_stat reject paths whose
+  // length is -1 (directories), but is_exist only checks existence, so a
+  // table-root directory correctly reports exist=true here.
+  int collect_file_exist(const common::ObString &url, bool &exist);
   int collect_file_size(const common::ObString &url, int64_t &file_size, bool enable_cache = false);
   int collect_dirs_with_spec_level(
       ObIAllocator &allocator,
@@ -247,6 +258,9 @@ public:
   static int get_tenant_compat_version(schema::ObSchemaGetterGuard &schema_guard,
                                        const uint64_t tenant_id,
                                        uint64_t &compat_version);
+  static int64_t calc_parallel_task_chunk_size(const int64_t total_task_cnt,
+                                               int64_t worker_cnt,
+                                               const int64_t task_cnt_per_worker = 4);
 
   // range_filter is from query_range
   static int is_file_id_in_ranges(const common::ObIArray<common::ObNewRange *> &range_filter,

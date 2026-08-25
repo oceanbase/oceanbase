@@ -175,16 +175,15 @@ public:
     return is_new_query_range_ ? static_cast<const ObQueryRangeProvider&>(pre_range_graph_)
                                : static_cast<const ObQueryRangeProvider&>(pre_query_range_);
   }
+  // External tables whose metadata lives in OB schema: file LOCATION / CREATE EXTERNAL
+  // (format unset) and ODPS. Lake catalog formats (Iceberg/Hive/plugin) are excluded.
   bool is_ob_external_table() const
   {
-    return is_external_table_ && lake_table_format_ != share::ObLakeTableFormat::ICEBERG
-           && lake_table_format_ != share::ObLakeTableFormat::HIVE;
+    return is_external_table_ && share::is_ob_external_table(lake_table_format_);
   }
   bool is_lake_external_table() const
   {
-    return is_external_table_
-           && (lake_table_format_ == share::ObLakeTableFormat::ICEBERG
-               || lake_table_format_ == share::ObLakeTableFormat::HIVE);
+    return is_external_table_ && share::is_lake_external_table(lake_table_format_);
   }
 
   bool check_need_fill_scn() const

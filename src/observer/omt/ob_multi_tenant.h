@@ -190,6 +190,7 @@ protected:
                                     share::ObUnitInfoGetter::ObTenantConfig &allowed_unit);
 
 private:
+  int update_lake_table_executor_config_();
   int update_tenant_freezer_config_();
   int update_throttle_config_(const uint64_t tenant_id);
   lib::ObShareTenantLimiter* get_share_tenant_limiter_unsafe(int64_t tenant_id);

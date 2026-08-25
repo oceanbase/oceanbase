@@ -65,12 +65,18 @@ public:
                K_(is_file_scoped));
 };
 
-enum class LakeFileType{
-    INVALID = 0,
-    ICEBERG = 1,
-    HIVE = 2,
-    PAIMON = 3
-  };
+enum class LakeFileType
+{
+  INVALID = 0,
+  ICEBERG = 1,
+  HIVE = 2,
+  // A scan task produced by the generic external-table plugin contract
+  // (ob_external_table_plugin.h). Payload = the contract task_json string (a
+  // single scan-task JSON object, incl. payload_b64). Used by any plugin-backed
+  // format — not a format-specific task type. Value 3 reuses the legacy PAIMON
+  // enum value so previously serialized plugin scan tasks stay compatible.
+  EXT_PLUGIN = 3
+};
 
 enum class CsvTaskType{
   INVALID = 0,
@@ -92,6 +98,7 @@ public:
   virtual LakeFileType get_file_type() const { return type_; }
   bool is_iceberg_file() const { return LakeFileType::ICEBERG == type_; }
   bool is_hive_file() const { return LakeFileType::HIVE == type_; }
+  bool is_ext_plugin_file() const { return LakeFileType::EXT_PLUGIN == type_; }
   static int create_opt_lake_table_file_by_type(ObIAllocator &allocator, LakeFileType type, ObIOptLakeTableFile *&file);
   VIRTUAL_TO_STRING_KV(K_(type));
 public:
@@ -133,6 +140,24 @@ public:
   int64_t file_size_;
   int64_t modification_time_;
   int64_t part_id_;
+};
+
+struct ObOptPluginFile : public ObIOptLakeTableFile
+{
+public:
+  explicit ObOptPluginFile(common::ObIAllocator &allocator)
+  : ObIOptLakeTableFile(LakeFileType::EXT_PLUGIN),
+    task_json_(),
+    record_count_(0),
+    allocator_(allocator)
+  {}
+  virtual int assign(const ObIOptLakeTableFile &other) override;
+  virtual void reset() override;
+  VIRTUAL_TO_STRING_KV(K_(type), K_(task_json), K_(record_count));
+
+  ObString task_json_;                 // single scan-task JSON text
+  int64_t record_count_;
+  common::ObIAllocator &allocator_;
 };
 
 /* structs for execution */
@@ -267,6 +292,33 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHiveScanTask);
   int assign(const ObHiveScanTask &other);
+};
+
+/// Execution-side scan task for the generic plugin contract. Carries the
+/// contract task_json (the single scan-task JSON text) which the row iterator
+/// hands to `reader_create`. Rides in ObVTableScanParam::scan_tasks_ alongside
+/// the format-specific task types.
+struct ObPluginScanTask : public ObFileScanTask
+{
+public:
+  OB_UNIS_VERSION_V(1);
+public:
+  explicit ObPluginScanTask()
+  : ObFileScanTask(LakeFileType::EXT_PLUGIN),
+    task_json_()
+  {}
+  virtual ~ObPluginScanTask() {}
+  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                            const ObIOptLakeTableFile &opt_table_file) override;
+
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
+                      K_(file_id), K_(part_id), K_(content_digest), K_(record_count),
+                      K_(task_json));
+
+  ObString task_json_;  // single scan-task JSON text (carries payload_b64)
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPluginScanTask);
+  int assign(const ObPluginScanTask &other);
 };
 
 struct ObExtTableScanTask : public ObFileScanTask

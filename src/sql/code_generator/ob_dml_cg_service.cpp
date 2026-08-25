@@ -4212,8 +4212,7 @@ int ObDmlCgService::generate_table_loc_meta(const IndexDMLInfo &index_dml_info,
     loc_meta.unuse_related_pruning_ = (OB_PHY_PLAN_DISTRIBUTED == cg_.opt_ctx_->get_phy_plan_type()
                                        && !cg_.opt_ctx_->get_root_stmt()->is_insert_stmt());
     loc_meta.is_external_table_ = table_schema->is_external_table();
-    loc_meta.is_lake_table_ = (table_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG
-                               || table_schema->get_lake_table_format() == share::ObLakeTableFormat::HIVE);
+    loc_meta.is_lake_table_ = share::is_lake_external_table(table_schema->get_lake_table_format());
     ObString file_location;
     bool is_shared_external_files_on_disk = false;
     OZ(ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard, cg_.phy_plan_->get_allocator(), file_location, &is_shared_external_files_on_disk));
@@ -5169,7 +5168,7 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
     loc_meta->unuse_related_pruning_ = (OB_PHY_PLAN_DISTRIBUTED == cg_.opt_ctx_->get_phy_plan_type()
                                        && !cg_.opt_ctx_->get_root_stmt()->is_insert_stmt());
     loc_meta->is_external_table_ = rowkey_domain_schema->is_external_table();
-    loc_meta->is_lake_table_ = (rowkey_domain_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG);
+    loc_meta->is_lake_table_ = share::is_lake_external_table(rowkey_domain_schema->get_lake_table_format());
     ObString file_location;
     share::ObDasSemanticIndexInfo &semantic_index_info = scan_ctdef->semantic_index_info_;
     bool is_shared_external_files_on_disk = false;

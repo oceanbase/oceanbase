@@ -15,6 +15,7 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
+#include "lib/utility/ob_ld_library_path_util.h"
 
 
 namespace oceanbase
@@ -372,37 +373,13 @@ int ObJavaEnv::setup_extra_runtime_lib_path()
     if (OB_ISNULL(extra_lib_path)) {
       ret = OB_JNI_PARAMS_ERROR;
       LOG_WARN("extra java runtime lib path is null", K(ret));
-    } else {
-      const char *original_ld_lib_path = std::getenv(LD_LIBRARY_PATH);
-      ObSqlString final_ld_lib_path;
-      ObString tmp_ld_library_path;
-      if (OB_FAIL(OB_NOT_NULL(original_ld_lib_path)
-                  && final_ld_lib_path.append_fmt("%s:", original_ld_lib_path))) {
-        LOG_WARN("failed to append original ld library path", K(ret), K(original_ld_lib_path));
-      } else if (OB_FAIL(final_ld_lib_path.append_fmt("%s:", extra_lib_path))) {
-        LOG_WARN("failed to append extra java runtime lib path",
-                 K(ret),
-                 K(extra_lib_path),
-                 K(original_ld_lib_path));
-      } else if (OB_FAIL(ob_write_string(arena_alloc_,
-                                         final_ld_lib_path.string(),
-                                         tmp_ld_library_path,
-                                         true /*c_style*/))) {
-        LOG_WARN("failed to write final ld library path", K(ret));
-      } else {
-        ld_library_path_ = tmp_ld_library_path.ptr();
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (0 != setenv(LD_LIBRARY_PATH, ld_library_path_, 1)) {
+    } else if (OB_FAIL(ObLdLibraryPathUtil::ensure_dir_in_ld_library_path(extra_lib_path))) {
       ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to setup LD_LIBRARY_PATH", K(ret), K_(ld_library_path));
-    } else if (STRCMP(ld_library_path_, std::getenv(LD_LIBRARY_PATH))) {
-      ret = OB_JNI_PARAMS_ERROR;
-      LOG_WARN("failed to set LD_LIBRARY_PATH from variables", K(ret), K_(ld_library_path));
+      LOG_WARN("failed to ensure extra java runtime lib path in LD_LIBRARY_PATH",
+               K(ret), K(extra_lib_path));
     } else {
-      LOG_INFO("succ to setup LD_LIBRARY_PATH", K(ret), K_(ld_library_path));
+      LOG_INFO("succ to setup LD_LIBRARY_PATH", K(ret), KCSTRING(extra_lib_path),
+               "ld_library_path", std::getenv(LD_LIBRARY_PATH));
     }
   }
   return ret;

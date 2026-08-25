@@ -120,6 +120,8 @@ int ObIOptLakeTableFile::create_opt_lake_table_file_by_type(ObIAllocator &alloca
     file = OB_NEWx(ObOptIcebergFile, &allocator, allocator);
   } else if (type == LakeFileType::HIVE) {
     file = OB_NEWx(ObOptHiveFile, &allocator);
+  } else if (type == LakeFileType::EXT_PLUGIN) {
+    file = OB_NEWx(ObOptPluginFile, &allocator, allocator);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected file type", K(type));
@@ -185,6 +187,29 @@ void ObOptHiveFile::reset()
   part_id_ = OB_INVALID_PARTITION_ID;
 }
 
+int ObOptPluginFile::assign(const ObIOptLakeTableFile &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    const ObOptPluginFile &plugin_file = static_cast<const ObOptPluginFile&>(other);
+    if (OB_FAIL(ObIOptLakeTableFile::assign(other))) {
+      LOG_WARN("failed to assign ObIOptLakeTableFile");
+    } else if (OB_FAIL(ob_write_string(allocator_, plugin_file.task_json_, task_json_))) {
+      LOG_WARN("failed to copy plugin task json", K(ret));
+    } else {
+      record_count_ = plugin_file.record_count_;
+    }
+  }
+  return ret;
+}
+
+void ObOptPluginFile::reset()
+{
+  ObIOptLakeTableFile::reset();
+  task_json_.reset();
+  record_count_ = 0;
+}
+
 OB_SERIALIZE_MEMBER(ObIExtTblScanTask);
 
 OB_SERIALIZE_MEMBER((ObFileScanTask, ObIExtTblScanTask), file_url_, file_size_, modification_time_);
@@ -199,6 +224,8 @@ int ObFileScanTask::create_lake_table_file_by_type(ObIAllocator &allocator,
     file = OB_NEWx(ObIcebergScanTask, &allocator, allocator);
   } else if (type == LakeFileType::HIVE) {
     file = OB_NEWx(ObHiveScanTask, &allocator);
+  } else if (type == LakeFileType::EXT_PLUGIN) {
+    file = OB_NEWx(ObPluginScanTask, &allocator);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected file type", K(type));
@@ -264,6 +291,29 @@ int ObHiveScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
       file_size_ = opt_hive_file.file_size_;
       modification_time_ = opt_hive_file.modification_time_;
       part_id_ = opt_hive_file.part_id_;
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObPluginScanTask, ObFileScanTask),
+                    part_id_,
+                    task_json_,
+                    record_count_);
+
+int ObPluginScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                                    const ObIOptLakeTableFile &opt_table_file)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!opt_table_file.is_ext_plugin_file())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected opt table file type", K(opt_table_file.get_file_type()));
+  } else {
+    const ObOptPluginFile &opt_plugin_file = static_cast<const ObOptPluginFile &>(opt_table_file);
+    if (OB_FAIL(ob_write_string(allocator, opt_plugin_file.task_json_, task_json_))) {
+      LOG_WARN("failed to write plugin task json");
+    } else {
+      record_count_ = opt_plugin_file.record_count_;
     }
   }
   return ret;

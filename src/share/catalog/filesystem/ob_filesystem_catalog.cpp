@@ -8,17 +8,22 @@
 #include "share/catalog/filesystem/ob_filesystem_catalog.h"
 
 #include "share/catalog/ob_catalog_location_schema_provider.h"
+#include "share/catalog/ob_lake_format_deducer.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/scan/task.h"
+#include "plugin/v2/external_table/ob_ext_table_metadata.h"
+#include "plugin/v2/external_table/ob_ext_format_registry.h"
 
 namespace oceanbase
 {
 namespace share
 {
+
+typedef sql::ext_plugin::ObExtTableMetadata ObExtTableMetadata;
 
 int ObFileSystemCatalog::do_init(const common::ObString &properties)
 {
@@ -158,6 +163,44 @@ int ObFileSystemCatalog::fetch_lake_table_metadata(ObIAllocator &allocator,
     LOG_WARN("failed to build tbl path", K(ret));
   } else if (OB_FAIL(deduce_table_format_(tbl_path.string(), table_format))) {
     LOG_WARN("deduce table format failed", K(ret));
+  } else if (is_lake_plugin_table(table_format)) {
+    // Plugin-backed format: drive the generic plugin metadata reader. The plugin
+    // identity is encoded in table_format; if the .so is not resident, schema
+    // build will surface "external table plugin not loaded".
+    sql::ext_plugin::ObExtTableMetadata *ext_table_metadata = NULL;
+    ObSqlString sub_path_builder;
+    if (OB_FAIL(sub_path_builder.append_fmt("%.*s/%.*s/%.*s",
+                                            warehouse_sub_path_.length(),
+                                            warehouse_sub_path_.ptr(),
+                                            ns_name.length(),
+                                            ns_name.ptr(),
+                                            tbl_name.length(),
+                                            tbl_name.ptr()))) {
+      LOG_WARN("failed to build sub path", K(ret));
+    } else if (OB_ISNULL(ext_table_metadata
+                         = OB_NEWx(sql::ext_plugin::ObExtTableMetadata, &allocator, allocator))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate ext table metadata", K(ret));
+    } else if (OB_FAIL(ext_table_metadata->init(tenant_id_,
+                                                catalog_id_,
+                                                database_id,
+                                                table_id,
+                                                ns_name,
+                                                tbl_name,
+                                                case_mode,
+                                                table_format,
+                                                tbl_path.string(),
+                                                location_object_id_,
+                                                sub_path_builder.string(),
+                                                access_info_))) {
+      LOG_WARN("failed to init ext table metadata", K(ret));
+    } else {
+      table_metadata = ext_table_metadata;
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(ext_table_metadata)) {
+      OB_DELETEx(ObExtTableMetadata, &allocator, ext_table_metadata);
+      ext_table_metadata = NULL;
+    }
   } else {
     switch (table_format) {
       case ObLakeTableFormat::ICEBERG: {
@@ -230,22 +273,12 @@ int ObFileSystemCatalog::deduce_table_format_(const ObString &tbl_path,
     LOG_WARN("init external data access driver failed", K(ret));
   } else if (OB_FAIL(driver.get_directory_list(tbl_path, table_dirs, allocator_))) {
     LOG_WARN("get file urls failed", K(ret));
-  } else {
-    if (table_dirs.count() == 0) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("table not existed", K(ret), K(tbl_path));
-    } else if (table_dirs.count() == 1) {  // 创建表, 但还没插入数据时只有meta目录
-      if (0 == table_dirs.at(0).case_compare("metadata")) {
-        table_format = ObLakeTableFormat::ICEBERG;
-      }
-    } else if (table_dirs.count() == 2) {
-      ObString first_dir = table_dirs.at(0);
-      ObString second_dir = table_dirs.at(1);
-      if ((0 == first_dir.case_compare("data") && 0 == second_dir.case_compare("metadata"))
-          || (0 == first_dir.case_compare("metadata") && 0 == second_dir.case_compare("data"))) {
-        table_format = ObLakeTableFormat::ICEBERG;
-      }
-    }
+  } else if (table_dirs.count() == 0) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not existed", K(ret), K(tbl_path));
+  } else if (OB_FAIL(ObLakeFormatDeducer::deduce_from_filesystem(
+                 allocator_, tbl_path, table_dirs, nullptr, table_format))) {
+    LOG_WARN("deduce lake table format failed", K(ret), K(tbl_path));
   }
 
   if (driver.is_opened()) {

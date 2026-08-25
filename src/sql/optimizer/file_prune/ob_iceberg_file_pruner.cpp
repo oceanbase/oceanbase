@@ -5,15 +5,17 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_iceberg_file_pruner.h"
+#include "ob_lake_table_optimizer_utils.h"
 
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "share/object/ob_obj_cast.h"
-#include "share/external_table/ob_external_table_utils.h"
+#include "sql/table_format/common/utils/ob_lake_table_executor.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/scan/conversions.h"
 #include "sql/table_format/iceberg/scan/delete_file_index.h"
@@ -34,6 +36,57 @@ namespace oceanbase
 {
 namespace sql
 {
+namespace
+{
+
+typedef common::ObArray<const iceberg::ManifestEntry *> ObIcebergMatchedDeleteFiles;
+
+class ObIcebergDeleteFileMatchTask
+{
+public:
+  ObIcebergDeleteFileMatchTask(const int64_t begin,
+                               const int64_t end,
+                               common::ObIArray<ObIcebergFileDesc *> &file_descs,
+                               common::ObIArray<ObIcebergMatchedDeleteFiles *> &matched_delete_files,
+                               iceberg::DeleteFileIndex &delete_file_index)
+      : begin_(begin),
+        end_(end),
+        file_descs_(file_descs),
+        matched_delete_files_(matched_delete_files),
+        delete_file_index_(delete_file_index)
+  {
+  }
+
+  int operator()() const
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t idx = begin_; idx < end_; ++idx) {
+      ObIcebergFileDesc *file_desc = file_descs_.at(idx);
+      ObIcebergMatchedDeleteFiles *matched_delete_files = matched_delete_files_.at(idx);
+      if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", KP(file_desc), K(idx));
+      } else if (OB_ISNULL(matched_delete_files)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null matched delete files", K(idx));
+      } else if (OB_FAIL(delete_file_index_.match_delete_files(*file_desc->entry_,
+                                                               *matched_delete_files))) {
+        LOG_WARN("failed to match delete files", K(ret), K(idx));
+      }
+    }
+    return ret;
+  }
+
+private:
+  const int64_t begin_;
+  const int64_t end_;
+  common::ObIArray<ObIcebergFileDesc *> &file_descs_;
+  common::ObIArray<ObIcebergMatchedDeleteFiles *> &matched_delete_files_;
+  iceberg::DeleteFileIndex &delete_file_index_;
+};
+
+} // namespace
+
 OB_DEF_SERIALIZE(ObPartFieldBound)
 {
   int ret = OB_SUCCESS;
@@ -260,9 +313,10 @@ int ObIcebergPartBound::deep_copy(ObIcebergPartBound &src)
 }
 
 ObIcebergFilePrunner::ObIcebergFilePrunner(common::ObIAllocator &allocator)
-: ObILakeTableFilePruner(allocator, PrunnerType::ICEBERG),
+: ObILakeTableFilePruner(allocator),
   part_column_descs_(allocator_),
-  part_bound_(allocator_)
+  part_bound_(allocator_),
+  enable_lake_table_parallel_resolving_(true)
 {}
 
 void ObIcebergFilePrunner::reset()
@@ -273,6 +327,23 @@ void ObIcebergFilePrunner::reset()
     part_bound_.at(i).second->reset();
   }
   part_bound_.reset();
+  enable_lake_table_parallel_resolving_ = true;
+}
+
+int ObIcebergFilePrunner::clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const
+{
+  int ret = OB_SUCCESS;
+  pruner = nullptr;
+  ObIcebergFilePrunner *tmp = nullptr;
+  if (OB_ISNULL(tmp = OB_NEWx(ObIcebergFilePrunner, &allocator, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObIcebergFilePrunner");
+  } else if (OB_FAIL(tmp->assign(*this))) {
+    LOG_WARN("failed to assign iceberg file pruner");
+  } else {
+    pruner = tmp;
+  }
+  return ret;
 }
 
 int ObIcebergFilePrunner::assign(const ObILakeTableFilePruner &o)
@@ -286,6 +357,7 @@ int ObIcebergFilePrunner::assign(const ObILakeTableFilePruner &o)
     } else if (OB_FAIL(part_column_descs_.assign(other.part_column_descs_))) {
       LOG_WARN("failed to assign part column ids");
     } else {
+      enable_lake_table_parallel_resolving_ = other.enable_lake_table_parallel_resolving_;
       if (other.part_bound_.count() > 0) {
         OZ(part_bound_.init(other.part_bound_.count()));
         ObIcebergPartBound *bound = NULL;
@@ -431,7 +503,10 @@ int ObIcebergFilePrunner::init(ObSqlSchemaGuard *schema_guard,
     loc_meta_.is_external_files_on_disk_ = false;
     is_partitioned_ = !partition_specs.empty();
 
-    if (OB_FAIL(generate_column_meta_info(stmt))) {
+    if (OB_FAIL(ObLakeTableOptimizerUtils::get_enable_lake_table_parallel_resolving(
+            stmt, enable_lake_table_parallel_resolving_))) {
+      LOG_WARN("failed to get lake table parallel resolve config", K(ret));
+    } else if (OB_FAIL(generate_column_meta_info(stmt))) {
       LOG_WARN("failed to generate column meta info");
     } else if (OB_FAIL(genearte_partition_bound(stmt, exec_ctx, table_schema,
                                                 partition_specs, filter_exprs))) {
@@ -1078,25 +1153,38 @@ int ObIcebergFilePrunner::prune_manifest_files(ObIArray<iceberg::ManifestFile*> 
       LOG_WARN("failed to assign manifest list");
     }
   } else {
-    ObArenaAllocator tmp_allocator("FilePrunnerTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
     for (int64_t i = 0; OB_SUCC(ret) && i < manifest_list.count(); ++i) {
       iceberg::ManifestFile* manifest_file = manifest_list.at(i);
-      ObIcebergPartBound* part_bound = nullptr;
       bool in_bound = false;
       if (OB_ISNULL(manifest_file)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null manifest file");
-      } else if (OB_ISNULL(part_bound = get_part_bound_by_spec_id(manifest_file->partition_spec_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get part bound");
-      } else if (OB_FAIL(check_manifest_file_in_bound(tmp_allocator, *manifest_file, *part_bound, in_bound))) {
-        LOG_WARN("failed to check manifest desc in bound");
+      } else if (OB_FAIL(prune_single_manifest_file(manifest_file, in_bound))) {
+        LOG_WARN("failed to prune manifest file", K(ret), K(i));
       } else if (in_bound && OB_FAIL(valid_manifest_list.push_back(manifest_file))) {
         LOG_WARN("failed to push back manifest desc");
-      } else {
-        tmp_allocator.reuse();
       }
     }
+  }
+  return ret;
+}
+
+int ObIcebergFilePrunner::prune_single_manifest_file(iceberg::ManifestFile *manifest_file,
+                                                     bool &in_bound)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("FilePrunnerTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  ObIcebergPartBound *part_bound = nullptr;
+  if (OB_ISNULL(manifest_file)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null manifest file");
+  } else if (need_all_ || !is_partitioned_) {
+    in_bound = true;
+  } else if (OB_ISNULL(part_bound = get_part_bound_by_spec_id(manifest_file->partition_spec_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get part bound", K(ret), K(manifest_file->partition_spec_id));
+  } else if (OB_FAIL(check_manifest_file_in_bound(tmp_allocator, *manifest_file, *part_bound, in_bound))) {
+    LOG_WARN("failed to check manifest desc in bound", K(ret));
   }
   return ret;
 }
@@ -1366,14 +1454,92 @@ int ObIcebergFilePrunner::prune_data_files(ObExecContext &exec_ctx,
   }
 
   if (OB_SUCC(ret) && !file_descs.empty()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
-      ObIcebergFileDesc *file_desc = file_descs.at(i);
-      if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)) {
+    bool use_parallel_iceberg_pruning = false;
+    lake_table::ObLakeTableExecutor *exec_impl = NULL;
+    int64_t file_desc_cnt = 0;
+    int64_t chunk_size = 0;
+    int64_t task_cnt = 0;
+
+    if (enable_lake_table_parallel_resolving_) {
+      exec_impl = MTL(lake_table::ObLakeTableExecutor*);
+      if (OB_ISNULL(exec_impl)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", KP(file_desc));
-      } else if (OB_FAIL(delete_file_index.match_delete_files(*file_desc->entry_,
-                                                              file_desc->delete_files_))) {
-        LOG_WARN("failed to match delete files");
+        LOG_WARN("lake table executor MTL service is null");
+      } else {
+        file_desc_cnt = file_descs.count();
+        chunk_size = ObExternalTableUtils::calc_parallel_task_chunk_size(
+                       file_desc_cnt, exec_impl->get_thread_cnt());
+        task_cnt = file_desc_cnt <= 0 ? 0
+                 : (file_desc_cnt + chunk_size - 1) / chunk_size;
+        use_parallel_iceberg_pruning = task_cnt > 1;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (use_parallel_iceberg_pruning) {
+      lake_table::ObLakeTableTaskGroupHandle task_group = nullptr;
+      ObSEArray<ObIcebergMatchedDeleteFiles *, 16> matched_delete_files;
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_desc_cnt; ++i) {
+        ObIcebergMatchedDeleteFiles *delete_files = OB_NEWx(ObIcebergMatchedDeleteFiles, &allocator_);
+        if (OB_ISNULL(delete_files)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate matched delete files", K(ret), K(i));
+        } else if (OB_FAIL(matched_delete_files.push_back(delete_files))) {
+          LOG_WARN("failed to push back matched delete files", K(ret), K(i));
+          OB_DELETEx(ObIcebergMatchedDeleteFiles, &allocator_, delete_files);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(exec_impl->create_task_group(allocator_, task_cnt, task_group))) {
+        LOG_WARN("failed to create lake table task group", K(ret), K(task_cnt));
+      }
+      for (int64_t begin = 0; OB_SUCC(ret) && begin < file_desc_cnt; begin += chunk_size) {
+        const int64_t end = (begin + chunk_size < file_desc_cnt)
+                              ? (begin + chunk_size) : file_desc_cnt;
+        ObIcebergDeleteFileMatchTask task(begin, end, file_descs, matched_delete_files, delete_file_index);
+        if (OB_FAIL(exec_impl->Add(task_group, task))) {
+          LOG_WARN("failed to submit delete file match task", K(ret), K(begin), K(end));
+        }
+      }
+
+      if (task_group) {
+        const int task_ret = task_group->wait();
+        if (OB_SUCCESS != task_ret) {
+          if (OB_SUCC(ret)) {
+            ret = task_ret;
+          }
+          LOG_WARN("parallel delete file match failed", K(task_ret), K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < file_desc_cnt; ++i) {
+          ObIcebergFileDesc *file_desc = file_descs.at(i);
+          ObIcebergMatchedDeleteFiles *delete_files = matched_delete_files.at(i);
+          if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_) || OB_ISNULL(delete_files)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", KP(file_desc), KP(delete_files), K(i));
+          } else {
+            if (OB_FAIL(file_desc->delete_files_.push_back(*delete_files))) {
+              LOG_WARN("failed to push back matched delete files", K(ret), K(i));
+            }
+          }
+        }
+        exec_impl->destroy_task_group(allocator_, task_group);
+      }
+      for (int64_t i = 0; i < matched_delete_files.count(); ++i) {
+        ObIcebergMatchedDeleteFiles *delete_files = matched_delete_files.at(i);
+        if (OB_NOT_NULL(delete_files)) {
+          OB_DELETEx(ObIcebergMatchedDeleteFiles, &allocator_, delete_files);
+        }
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
+        ObIcebergFileDesc *file_desc = file_descs.at(i);
+        if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", KP(file_desc));
+        } else if (OB_FAIL(delete_file_index.match_delete_files(*file_desc->entry_,
+                                                                file_desc->delete_files_))) {
+          LOG_WARN("failed to match delete files");
+        }
       }
     }
   }

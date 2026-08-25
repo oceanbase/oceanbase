@@ -11,6 +11,9 @@
 #include "src/share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/catalog/ob_catalog_properties.h"  // is_lake_plugin_table
+#include "plugin/v2/external_table/ob_ext_json_protocol.h"  // build_options_json
+#include "plugin/v2/external_table/ob_ext_table_metadata.h"  // ObExtTableMetadata
 #include "sql/resolver/dml/ob_hint.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
 namespace oceanbase
@@ -188,6 +191,86 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
                   LOG_WARN("failed to push back partition info", K(ret), K(i));
                 }
               }
+            }
+          }
+        }
+      }
+
+      // Plugin lake table: the reader options (location / access_info /
+      // catalog_context / ext_options hint) are query-fixed — build them once
+      // here and carry them inside the format string to every iterator.
+      if (OB_SUCC(ret) && share::is_lake_plugin_table(scan_ctdef.lake_table_format_)) {
+        common::ObIAllocator &phy_alloc = cg_.phy_plan_->get_allocator();
+        share::ObILakeTableMetadata *lake_metadata = nullptr;
+        ObString catalog_ctx;
+        ObString ext_options;
+        ObString options_json;
+        if (OB_FAIL(schema_guard->get_lake_table_metadata(op.get_ref_table_id(), lake_metadata))) {
+          LOG_WARN("failed to get lake table metadata", K(ret), K(op.get_ref_table_id()));
+        } else {
+          if (OB_NOT_NULL(lake_metadata)) {
+            const ext_plugin::ObExtTableMetadata *ext_metadata =
+                dynamic_cast<const ext_plugin::ObExtTableMetadata *>(lake_metadata);
+            if (OB_NOT_NULL(ext_metadata)) {
+              catalog_ctx = ext_metadata->get_catalog_context_json();
+            }
+          }
+          ObObj opt_val;
+          int64_t opt_idx = common::OB_INVALID_INDEX;
+          if (OB_FAIL(log_plan->get_stmt()->get_query_ctx()->get_global_hint().opt_params_
+                  .get_opt_param(ObOptParamHint::EXT_TABLE_OPTIONS, opt_val, &opt_idx))) {
+            LOG_WARN("failed to get ext_table_options hint", K(ret));
+            ret = OB_SUCCESS;  // non-fatal: no per-query tuning
+          } else if (opt_idx != common::OB_INVALID_INDEX && opt_val.is_varchar()) {
+            ext_options = opt_val.get_varchar();
+          }
+        }
+        ObString catalog_ctx_buf;
+        ObString ext_options_buf;
+        if (OB_FAIL(ret)) {
+        } else if (!catalog_ctx.empty()
+                   && OB_FAIL(ob_write_string(phy_alloc, catalog_ctx, catalog_ctx_buf, true))) {
+          LOG_WARN("failed to deep copy catalog context", K(ret));
+        } else if (!ext_options.empty()
+                   && OB_FAIL(ob_write_string(phy_alloc, ext_options, ext_options_buf, true))) {
+          LOG_WARN("failed to deep copy ext options hint", K(ret));
+        } else {
+          const std::string loc_str(file_location.ptr(), file_location.length());
+          const std::string acc_str(access_info.ptr(), access_info.length());
+          const char *keys[4] = {"location", "access_info", nullptr, nullptr};
+          const char *vals[4] = {loc_str.c_str(), acc_str.c_str(), nullptr, nullptr};
+          const char *raw_keys[2] = {nullptr, nullptr};
+          int32_t opt_count = 2;
+          int32_t raw_count = 0;
+          if (!catalog_ctx_buf.empty()) {
+            keys[opt_count] = OB_EXT_K_CATALOG_CONTEXT;
+            vals[opt_count] = catalog_ctx_buf.ptr();
+            raw_keys[raw_count++] = OB_EXT_K_CATALOG_CONTEXT;
+            ++opt_count;
+          }
+          if (!ext_options_buf.empty()) {
+            keys[opt_count] = OB_EXT_K_EXT_OPTIONS;
+            vals[opt_count] = ext_options_buf.ptr();
+            raw_keys[raw_count++] = OB_EXT_K_EXT_OPTIONS;
+            ++opt_count;
+          }
+          if (OB_FAIL(share::build_options_json(phy_alloc, keys, vals, opt_count,
+                                                options_json, raw_keys, raw_count))) {
+            LOG_WARN("failed to build reader options json", K(ret));
+          }
+        }
+        // Inject into the format struct and re-render the format string.
+        if (OB_SUCC(ret) && !options_json.empty()) {
+          ObExternalFileFormat format;
+          ObString rendered_format;
+          if (OB_FAIL(format.load_from_string(table_format_or_properties, phy_alloc))) {
+            LOG_WARN("failed to parse external file format", K(ret));
+          } else {
+            format.cpp_plugin_format_.reader_options_json_ = options_json;
+            if (OB_FAIL(format.to_string_with_alloc(rendered_format, phy_alloc))) {
+              LOG_WARN("failed to render external file format", K(ret));
+            } else {
+              table_format_or_properties = rendered_format;
             }
           }
         }
@@ -2119,8 +2202,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.ref_table_id_ = real_table_id;
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
   loc_meta.is_external_table_ = table_schema.is_external_table();
-  loc_meta.is_lake_table_ = (table_schema.get_lake_table_format() == share::ObLakeTableFormat::ICEBERG
-                             || table_schema.get_lake_table_format() == share::ObLakeTableFormat::HIVE);
+  loc_meta.is_lake_table_ = share::is_lake_external_table(table_schema.get_lake_table_format());
   ObString file_location;
   bool is_shared_external_files_on_disk = false;
   CK (OB_NOT_NULL(schema_guard->get_schema_guard()));

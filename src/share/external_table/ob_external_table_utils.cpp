@@ -22,7 +22,7 @@
 #include "observer/mysql/obmp_utils.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
 #include "sql/engine/table/ob_odps_table_row_iter.h"
-#include "plugin/interface/ob_plugin_external_intf.h"
+#include "plugin/legacy/interface/ob_plugin_external_intf.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "sql/optimizer/file_prune/ob_iceberg_file_pruner.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
@@ -271,6 +271,24 @@ int ObExternalTableUtils::get_tenant_compat_version(schema::ObSchemaGetterGuard 
     LOG_WARN("failed to get compatibility version value", K(ret), K(compat_version_obj));
   }
   return ret;
+}
+
+int64_t ObExternalTableUtils::calc_parallel_task_chunk_size(const int64_t total_task_cnt,
+                                                            int64_t worker_cnt,
+                                                            const int64_t task_cnt_per_worker)
+{
+  if (worker_cnt <= 0) {
+    worker_cnt = 1;
+  }
+
+  int64_t target_task_cnt = worker_cnt * task_cnt_per_worker;
+  if (target_task_cnt <= 0) {
+    target_task_cnt = 1;
+  } else if (target_task_cnt > total_task_cnt) {
+    target_task_cnt = total_task_cnt;
+  }
+
+  return total_task_cnt <= 0 ? 1 : (total_task_cnt + target_task_cnt - 1) / target_task_cnt;
 }
 
 bool ObExternalTableUtils::is_left_edge(const ObObj &value)
@@ -1637,7 +1655,7 @@ int ObExternalTableUtils::plugin_split_tasks(
     LOG_WARN("sqc node not found", K(ret), K(sqcs.count()));
   } else if (OB_FAIL(external_file_format.load_from_string(external_table_format_str, allocator))) {
     LOG_WARN("failed to load external file format from string", K(external_table_format_str), K(ret));
-  } else if (ObExternalFileFormat::PLUGIN_FORMAT != external_file_format.format_type_) {
+  } else if (ObExternalFileFormat::JAVA_PLUGIN_FORMAT != external_file_format.format_type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("external format is not plugin", K(ret), K(external_table_format_str));
   } else if (OB_FAIL(external_file_format.plugin_format_.create_engine(allocator, engine))) {
@@ -2085,7 +2103,7 @@ int ObExternalTableUtils::collect_external_file_list(
     sql::ObExternalFileFormat ex_format;
     if (OB_FAIL(ex_format.load_from_string(properties, allocator))) {
       LOG_WARN("failed to load from string", K(ret));
-    } else if (sql::ObExternalFileFormat::PLUGIN_FORMAT == ex_format.format_type_) {
+    } else if (sql::ObExternalFileFormat::JAVA_PLUGIN_FORMAT == ex_format.format_type_) {
       // do nothing
     } else if (!GCONF._use_odps_jni_connector) {
 #if defined (OB_BUILD_CPP_ODPS)
@@ -3044,12 +3062,34 @@ int ObExternalFileInfoCollector::collect_files_modify_time(
 }
 
 int ObExternalFileInfoCollector::collect_file_modify_time(const common::ObString &url,
-                                                          int64_t &modify_time)
+                                                          int64_t &modify_time,
+                                                          bool enable_cache)
 {
   int ret = OB_SUCCESS;
   modify_time = 0;
-  if (OB_FAIL(ObExternalIoAdapter::get_file_modify_time(url, storage_info_, modify_time))) {
+  if (enable_cache) {
+    ObCachedExternalFileInfoCollector &cached_collector
+        = ObCachedExternalFileInfoCollector::get_instance();
+    if (OB_FAIL(cached_collector.collect_file_modify_time(url, storage_info_, modify_time))) {
+      LOG_WARN("failed to get cached file modify time", K(ret));
+    }
+  } else if (OB_FAIL(ObExternalIoAdapter::get_file_modify_time(url, storage_info_, modify_time))) {
     LOG_WARN("failed to get file modify time", K(ret));
+  }
+  return ret;
+}
+
+int ObExternalFileInfoCollector::collect_file_exist(const common::ObString &url, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  // is_exist is a pure existence probe (OB_IO_MANAGER.exist -> device exist) and
+  // does not require a valid file length, so directories report exist=true.
+  // get_file_length/get_file_stat (used by collect_file_size) reject paths with
+  // length_ == -1, which is what directories look like — wrong for an existence
+  // check.
+  if (OB_FAIL(ObExternalIoAdapter::is_exist(url, storage_info_, exist))) {
+    LOG_WARN("failed to check file exist", K(ret), K(url));
   }
   return ret;
 }
@@ -3639,6 +3679,7 @@ int ObCachedExternalFileInfoValue::deep_copy(char *buf,
     LOG_WARN("failed to create cache value", K(ret));
   } else {
     cache_value->file_size_ = file_size_;
+    cache_value->modify_time_ = modify_time_;
     value = cache_value;
   }
   return ret;
@@ -3658,43 +3699,95 @@ int ObCachedExternalFileInfoCollector::init()
   return ret;
 }
 
+int ObCachedExternalFileInfoCollector::get_or_load_(
+    const common::ObString &url,
+    const common::ObObjectStorageInfo *storage_info,
+    ObCachedExternalFileInfoValue &value)
+{
+  int ret = OB_SUCCESS;
+  ObCachedExternalFileInfoKey cached_key;
+  cached_key.tenant_id_ = MTL_ID();
+  cached_key.file_path_ = url;
+  bool loaded = false;
+  {
+    ObBucketHashRLockGuard(bucket_lock_, cached_key.tenant_id_);
+    ObKVCacheHandle handle;
+    const ObCachedExternalFileInfoValue *cached_value = nullptr;
+    int get_ret = kv_cache_.get(cached_key, cached_value, handle);
+    if (OB_SUCCESS == get_ret && OB_NOT_NULL(cached_value)) {
+      value = *cached_value;
+      loaded = true;
+    } else if (OB_SUCCESS != get_ret && OB_ENTRY_NOT_EXIST != get_ret) {
+      LOG_WARN("failed to get cached file info", K(get_ret));
+    }
+  }
+
+  if (!loaded) {
+    ObBucketHashWLockGuard(bucket_lock_, cached_key.tenant_id_);
+    // double-check under the write lock: another thread may have loaded it
+    {
+      ObKVCacheHandle handle;
+      const ObCachedExternalFileInfoValue *cached_value = nullptr;
+      if (OB_SUCCESS == kv_cache_.get(cached_key, cached_value, handle)
+          && OB_NOT_NULL(cached_value)) {
+        value = *cached_value;
+        loaded = true;
+      }
+    }
+    if (!loaded) {
+      if (OB_FAIL(ObExternalIoAdapter::get_file_length(url, storage_info, value.file_size_))) {
+        LOG_WARN("failed to get file size", K(ret));
+      } else if (OB_FAIL(ObExternalIoAdapter::get_file_modify_time(url, storage_info, value.modify_time_))) {
+        LOG_WARN("failed to get file modify time", K(ret));
+      } else {
+        loaded = true;
+        // best-effort cache fill: a put failure (e.g. entry race) must not
+        // fail the stat — the data is already loaded.
+        int put_ret = kv_cache_.put(cached_key, value);
+        if (OB_SUCCESS != put_ret && OB_ENTRY_EXIST != put_ret) {
+          LOG_WARN("failed to put cached file info, continue without cache", K(put_ret));
+        }
+      }
+    }
+  }
+  if (!loaded) {
+    // only reachable when a network stat above failed; ret holds that error
+    if (OB_SUCC(ret)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("file stat not loaded but no error recorded", K(ret), K(url));
+    }
+  }
+  return ret;
+}
+
 int ObCachedExternalFileInfoCollector::collect_file_size(
     const common::ObString &url,
     const common::ObObjectStorageInfo *storage_info,
     int64_t &file_size)
 {
   int ret = OB_SUCCESS;
-  ObCachedExternalFileInfoKey cached_key;
-  cached_key.tenant_id_ = MTL_ID();
-  cached_key.file_path_ = url;
-  file_size = OB_INVALID_SIZE;
-
-  if (OB_SUCC(ret)) {
-    ObBucketHashRLockGuard(bucket_lock_, cached_key.tenant_id_);
-    ObKVCacheHandle handle;
-    const ObCachedExternalFileInfoValue *cached_value;
-    if (OB_FAIL(kv_cache_.get(cached_key, cached_value, handle))) {
-      if (ret != OB_ENTRY_NOT_EXIST) {
-        LOG_WARN("failed to get cached file info", K(ret));
-      }
-    } else if (OB_ISNULL(cached_value)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null cached value", K(ret));
-    } else {
-      file_size = cached_value->file_size_;
-    }
+  ObCachedExternalFileInfoValue value;
+  value.file_size_ = OB_INVALID_SIZE;
+  if (OB_FAIL(get_or_load_(url, storage_info, value))) {
+    LOG_WARN("failed to collect cached file info", K(ret));
+  } else {
+    file_size = value.file_size_;
   }
+  return ret;
+}
 
-  if (OB_ENTRY_NOT_EXIST == ret) {
-    ret = OB_SUCCESS;
-    ObBucketHashWLockGuard(bucket_lock_, cached_key.tenant_id_);
-    if (OB_FAIL(ObExternalIoAdapter::get_file_length(url, storage_info, file_size))) {
-      LOG_WARN("failed to get file size", K(ret));
-    } else {
-      ObCachedExternalFileInfoValue cache_value;
-      cache_value.file_size_ = file_size;
-      OZ(kv_cache_.put(cached_key, cache_value));
-    }
+int ObCachedExternalFileInfoCollector::collect_file_modify_time(
+    const common::ObString &url,
+    const common::ObObjectStorageInfo *storage_info,
+    int64_t &modify_time)
+{
+  int ret = OB_SUCCESS;
+  ObCachedExternalFileInfoValue value;
+  value.file_size_ = OB_INVALID_SIZE;
+  if (OB_FAIL(get_or_load_(url, storage_info, value))) {
+    LOG_WARN("failed to collect cached file info", K(ret));
+  } else {
+    modify_time = value.modify_time_;
   }
   return ret;
 }

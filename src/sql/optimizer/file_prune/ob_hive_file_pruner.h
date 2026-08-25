@@ -57,6 +57,7 @@ public:
 
   void reset();
   virtual int assign(const ObILakeTableFilePruner &o);
+  virtual int clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const override;
   int init(ObSqlSchemaGuard &sql_schema_guard,
            const ObDMLStmt &stmt,
            ObExecContext *exec_ctx,

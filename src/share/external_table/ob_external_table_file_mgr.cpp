@@ -640,7 +640,7 @@ int ObExternalTableFileManager::get_mocked_external_table_files(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (ObLakeTableFormat::HIVE == das_ctdef.lake_table_format_) {
+  } else if (share::is_hive_lake_table(das_ctdef.lake_table_format_)) {
     // HMS format does not need regexp_vars.
     bool is_local_file_on_disk
         = ObSQLUtils::is_external_files_on_local_disk(das_ctdef.external_file_location_.str_);

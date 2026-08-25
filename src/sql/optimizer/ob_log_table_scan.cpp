@@ -9,7 +9,7 @@
 #include "share/vector_index/ob_vector_index_util.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "plugin/interface/ob_plugin_external_intf.h"
+#include "plugin/legacy/interface/ob_plugin_external_intf.h"
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "sql/hybrid_search/ob_hybrid_search_node.h"
@@ -1159,7 +1159,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         LOG_WARN("get unexpected null", K(ret));
       } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, external_table_type))) {
           LOG_WARN("failed to get external table type", K(ret));
-      } else if (ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+      } else if (ObExternalFileFormat::JAVA_PLUGIN_FORMAT == external_table_type) {
         ObArray<ObString> tmp_external_filters;
         if (OB_ISNULL(external_pushdown_filters)) {
           external_pushdown_filters = &tmp_external_filters;
@@ -1172,6 +1172,21 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         } else {
           need_dup_filter = false;
         }
+      } else if (ObExternalFileFormat::CPP_PLUGIN_FORMAT == external_table_type) {
+        // C++ .so plugin (LAKE_PLUGIN): filtering is DELEGATED, not duplicated.
+        // The pushdown-able predicates stay in scan_pushdown_filters -> pd_storage_filters_;
+        // ObExtTablePluginRowIterator converts them to a predicate JSON handed to the plugin's
+        // reader_create (-> SetPredicate), and runs calc_filters only for the black-box
+        // residual. We deliberately do NOT copy all filters into spec.filters_: the plugin
+        // is the backstop for the pushed predicates (the user's chosen trust model), so
+        // need_dup_filter=false, mirroring Parquet/ORC.
+        // CORRECTNESS IS LOAD-BEARING ON THE PLUGIN: once reader_create accepts the
+        // predicate JSON it MUST actually apply it (SetPredicate). If the plugin ever
+        // silently skips filtering (returns success without SetPredicate), rows leak with
+        // no OB backstop — see ObExtTablePluginRowIterator reader_predicate_fully_pushed_.
+        // external_pushdown_filters (the legacy JNI string mechanism) is left empty: the
+        // CPP plugin path uses the JSON predicate, not it.
+        need_dup_filter = false;
       } else if (get_plan()->get_optimizer_context().get_min_cluster_version()
                  >= CLUSTER_VERSION_4_4_1_0) {
         if (external_table_type == ObExternalFileFormat::FormatType::PARQUET_FORMAT ||
@@ -1231,7 +1246,7 @@ int ObLogTableScan::extract_plugin_external_table_pushdown_filters(ObIArray<ObRa
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(external_file_format.parse_format_type(external_properties_str, arena_allocator, format_type))) {
     LOG_WARN("failed to parse external file format", K(ret));
-  } else if (ObExternalFileFormat::PLUGIN_FORMAT != format_type) {
+  } else if (ObExternalFileFormat::JAVA_PLUGIN_FORMAT != format_type) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected format type", K(format_type));
   } else if (OB_FAIL(external_file_format.load_from_string(external_properties_str, arena_allocator))) {
@@ -3349,8 +3364,10 @@ int ObLogTableScan::has_pushdown_filters(bool &has)
 {
   int ret = OB_SUCCESS;
   has = !range_conds_.empty();
-  if (!has && (lake_table_format_ == share::ObLakeTableFormat::HIVE ||
-               lake_table_format_ == share::ObLakeTableFormat::ICEBERG)) {
+  // Iceberg/Hive/plugin lake tables: partition predicates already consumed by
+  // file pruning are removed from filter_exprs_ (pick_out_lake_table_part_exprs),
+  // so ask the file pruner whether pruning ranges still testify to filtering.
+  if (!has && share::is_lake_external_table(lake_table_format_)) {
     // check has filters
     ObTablePartitionInfo *part_info = get_table_partition_info();
     ObILakeTableFilePruner *file_pruner = nullptr;
@@ -6911,8 +6928,10 @@ int ObLogTableScan::pick_out_lake_table_part_exprs()
   int ret = OB_SUCCESS;
   // Hive partition columns and Iceberg identity transforms are exact: after
   // file pruning, a precise partition predicate is redundant at row-scan time.
-  if (lake_table_format_ != share::ObLakeTableFormat::HIVE &&
-      lake_table_format_ != share::ObLakeTableFormat::ICEBERG) {
+  // Plugin tables are included for symmetry: ObExtFilePruner currently reports
+  // no partition ranges (base-class get_part_id_and_range_exprs), so this is a
+  // no-op until the plugin contract supports partition pruning.
+  if (!share::is_lake_external_table(lake_table_format_)) {
     // do nothing
   } else {
     ObTablePartitionInfo *part_info = get_table_partition_info();

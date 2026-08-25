@@ -16,6 +16,7 @@
 #include "sql/resolver/expr/ob_raw_expr_part_func_checker.h"
 #include "sql/resolver/expr/ob_raw_expr_part_expr_checker.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "pl/ob_pl_package.h"
 #include "pl/ob_pl_compile.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -5240,12 +5241,23 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
-    } else if (ObLakeTableFormat::ICEBERG == external_table_schema.get_lake_table_format()) {
+    } else if (share::is_iceberg_lake_table(external_table_schema.get_lake_table_format())) {
       if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
         LOG_WARN("fail to calc file column idx", K(ret));
       } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
                                real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
         if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_iceberg(expr_factory, session_info,
+                                              OB_INVALID_ID, ObString(), q_name.col_name_,
+                                              file_column_idx, gen_col_schema, file_column_expr))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
+      }
+    } else if (share::is_lake_plugin_table(external_table_schema.get_lake_table_format())) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", K(ret));
+      } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_plugin(expr_factory, session_info,
                                               OB_INVALID_ID, ObString(), q_name.col_name_,
                                               file_column_idx, gen_col_schema, file_column_expr))) {
           LOG_WARN("fail to build external table file column expr", K(ret));
@@ -5313,14 +5325,15 @@ bool ObResolverUtils::check_external_pseudo_column_is_valid(
   } else if (0 == column_name.case_compare(N_EXTERNAL_FILE_ROW)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
                || ObExternalFileFormat::ORC_FORMAT == format_type
-               || ObExternalFileFormat::PLUGIN_FORMAT == format_type;
+               || ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format_type;
   } else if (column_name.prefix_match_ci(N_EXTERNAL_FILE_POS)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
                || ObExternalFileFormat::ORC_FORMAT == format_type
                || ObExternalFileFormat::CSV_FORMAT == format_type;
   } else if (column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_ID)) {
     is_valid = ObExternalFileFormat::PARQUET_FORMAT == format_type
-               || ObExternalFileFormat::ORC_FORMAT == format_type;
+               || ObExternalFileFormat::ORC_FORMAT == format_type
+               || ObExternalFileFormat::CPP_PLUGIN_FORMAT == format_type;
   } else if (column_name.prefix_match_ci(N_EXTERNAL_KAFKA_COLUMN_PREFIX)) {
     is_valid = ObExternalFileFormat::KAFKA_FORMAT == format_type;
   }
@@ -5766,6 +5779,75 @@ int ObResolverUtils::build_file_column_expr_for_iceberg(
               || column_expr->get_result_type().is_enum_or_set())
             && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
           // string data stored in parquet file as UTF8 format
+          file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+        }
+        if (ob_is_enum_or_set_type(column_expr->get_data_type())
+            || ob_is_text_tc(column_expr->get_data_type())) {
+          if (is_oracle_mode() && CS_TYPE_BINARY == column_expr->get_collation_type()) {
+            file_column_expr->set_data_type(ObRawType);
+          } else if (is_mysql_mode() && ob_is_enum_or_set_type(column_expr->get_data_type())) {
+            file_column_expr->set_data_type(ObCharType);
+            file_column_expr->set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+          } else {
+            file_column_expr->set_data_type(ObVarcharType);
+          }
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected arg", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = file_column_expr;
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::build_file_column_expr_for_plugin(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const ObString &table_name,
+    const ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *generated_column,
+    ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *file_column_expr = nullptr;
+
+  if (OB_FAIL(expr_factory.create_raw_expr(T_PSEUDO_EXTERNAL_FILE_COL, file_column_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else if (OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    file_column_expr->set_expr_name(column_name);
+    file_column_expr->set_table_name(table_name);
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_column_idx(column_idx);
+
+    if (OB_NOT_NULL(generated_column)) {
+      ObColumnRefRawExpr *column_expr = nullptr;
+      if (OB_FAIL(ObRawExprUtils::build_column_expr(expr_factory, *generated_column, &session_info, column_expr))) {
+        LOG_WARN("failed to build column expr", K(ret));
+      } else {
+        file_column_expr->set_accuracy(column_expr->get_accuracy());
+        file_column_expr->set_data_type(column_expr->get_data_type());
+        file_column_expr->set_collation_type(column_expr->get_collation_type());
+        file_column_expr->set_collation_level(column_expr->get_collation_level());
+        file_column_expr->set_subschema_id(column_expr->get_subschema_id());
+        if ((column_expr->get_result_type().is_string_or_lob_locator_type()
+              || column_expr->get_result_type().is_enum_or_set())
+            && ObCharset::charset_type_by_coll(column_expr->get_collation_type()) != CHARSET_UTF8MB4) {
           file_column_expr->set_collation_type(CS_TYPE_UTF8MB4_BIN);
         }
         if (ob_is_enum_or_set_type(column_expr->get_data_type())
@@ -10727,13 +10809,18 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
     switch (node->type_) {
       case T_EXTERNAL_FILE_FORMAT_TYPE: {
         ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        bool matched = false;
         for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
-          if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
+          if (ObExternalFileFormat::CPP_PLUGIN_FORMAT == i) {
+          } else if (0 == string_v.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i])) {
             format.format_type_ = static_cast<ObExternalFileFormat::FormatType>(i);
+            matched = true;
             break;
           }
         }
-        if (ObExternalFileFormat::INVALID_FORMAT == format.format_type_) {
+        // SQL DDL accepts only declared file-format types. C++ plugin Lake
+        // tables are discovered and built through external catalogs.
+        if (!matched) {
           ObSqlString err_msg;
           err_msg.append_fmt("format '%.*s'", string_v.length(), string_v.ptr());
           ret = OB_NOT_SUPPORTED;
@@ -11088,7 +11175,7 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         uint64_t data_version = 0;
         GET_MIN_DATA_VERSION(MTL_ID(), data_version);
         if (ObExternalFileFormat::INVALID_FORMAT == format.format_type_) {
-          format.format_type_ = ObExternalFileFormat::PLUGIN_FORMAT;
+          format.format_type_ = ObExternalFileFormat::JAVA_PLUGIN_FORMAT;
         }
         if (data_version < DATA_VERSION_4_4_1_0) {
           ret = OB_NOT_SUPPORTED;

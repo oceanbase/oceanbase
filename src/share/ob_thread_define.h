@@ -205,6 +205,7 @@ TG_DEF(SS_SSTableGCTimer, SS_TableGCTimer, TIMER)
 TG_DEF(SSScheduleUpload, ScheUpload, QUEUE_THREAD, ThreadCountPair(8, 4), 100)
 #endif
 
+TG_DEF(LakeTableExecutor, LakeTblExec, QUEUE_THREAD, ThreadCountPair(4, 1), 10240)
 TG_DEF(ExtDiskCacheServerTimer, ExtDiskCacheServerTimer, TIMER)
 
 TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)

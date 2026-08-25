@@ -5,7 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 
-#include "plugin/sys/ob_plugin_helper.h"
+#include "plugin/legacy/sys/ob_plugin_helper.h"
 #include "ob_das_match_phrase_op.h"
 #include "ob_das_token_op.h"
 #include "storage/retrieval/ob_phrase_match_counter.h"

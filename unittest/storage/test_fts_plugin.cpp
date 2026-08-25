@@ -15,7 +15,7 @@
 
 #include "lib/charset/ob_charset.h"
 #include "object/ob_object.h"
-#include "plugin/sys/ob_plugin_mgr.h"
+#include "plugin/legacy/sys/ob_plugin_mgr.h"
 #include "share/rc/ob_tenant_base.h"
 #include "sql/das/ob_das_utils.h"
 #include "storage/fts/ob_fts_plugin_helper.h"

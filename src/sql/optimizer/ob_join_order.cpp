@@ -12709,8 +12709,7 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
         OB_FAIL(get_output_tables().add_member(table_bit_index))) {
       LOG_WARN("failed to add member", K(table_bit_index), K(ret));
     } else if (table_item->is_basic_table()) {
-      if (share::ObLakeTableFormat::ICEBERG == table_meta_info_.lake_table_format_ ||
-          share::ObLakeTableFormat::HIVE == table_meta_info_.lake_table_format_) {
+      if (share::is_lake_external_table(table_meta_info_.lake_table_format_)) {
         set_type(LAKE_TABLE_ACCESS);
       } else {
         set_type(ACCESS);
@@ -18663,9 +18662,8 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     LOG_TRACE("after compute table meta info", K(table_meta_info_));
   }
   if (OB_SUCC(ret)) {
-    if (table_meta_info_.lake_table_format_ != ObLakeTableFormat::ICEBERG &&
-        table_meta_info_.lake_table_format_ != ObLakeTableFormat::HIVE &&
-        table_meta_info_.lake_table_format_ != ObLakeTableFormat::ODPS) {
+    if (table_meta_info_.lake_table_format_ != ObLakeTableFormat::ODPS &&
+        !share::is_lake_external_table(table_meta_info_.lake_table_format_)) {
       if (OB_FAIL(init_est_sel_info_for_access_path(table_id,
                                                     ref_table_id,
                                                     *table_schema))) {
@@ -24897,7 +24895,7 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ICEBERG) {
+    } else if (share::is_iceberg_lake_table(table_meta_info_.lake_table_format_)) {
       if (OB_UNLIKELY(!table_partition_info_->is_lake_table_partition_info())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected table partition info");
@@ -24911,9 +24909,23 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
       } else {
         table_meta_info_.table_row_count_ = table_stat.total_row_count_;
       }
+    } else if (share::is_lake_plugin_table(table_meta_info_.lake_table_format_)) {
+      if (OB_UNLIKELY(!table_partition_info_->is_lake_table_partition_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected table partition info");
+      } else if (OB_FAIL(get_plugin_table_stat(*allocator_,
+                                                ref_table_id,
+                                                column_ids,
+                                                column_exprs,
+                                                table_stat,
+                                                column_stats))) {
+        LOG_WARN("failed to get plugin table stat", K(ret));
+      } else {
+        table_meta_info_.table_row_count_ = table_stat.total_row_count_;
+      }
     } else {
       bool is_all_partitions_selected = false;
-      if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::HIVE) {
+      if (share::is_hive_lake_table(table_meta_info_.lake_table_format_)) {
         ObLakeTablePartitionInfo *lake_table_partition_info =
             static_cast<ObLakeTablePartitionInfo *>(table_partition_info_);
         if (OB_ISNULL(lake_table_partition_info)
@@ -24965,7 +24977,7 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
       int64_t total_file_count = 0;
       int64_t total_file_size = 0;
       int64_t iceberg_record_count = 0;
-      bool is_iceberg_table = (ObLakeTableFormat::ICEBERG == table_meta_info_.lake_table_format_);
+      const bool is_iceberg_lake_table = share::is_iceberg_lake_table(table_meta_info_.lake_table_format_);
       for (int64_t i = 0; OB_SUCC(ret) && i < partitions.count(); ++i) {
         const ObIArray<ObIOptLakeTableFile *> &files = partitions.at(i).get_opt_lake_table_files();
         total_file_count += files.count();
@@ -24990,7 +25002,7 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
         table_meta_info_.total_file_size_ = total_file_size;
         table_meta_info_.is_local_external_storage_ = false;
         // Iceberg manifest carries exact record count, use it when stats are absent
-        if (is_iceberg_table && iceberg_record_count > 0 && table_meta_info_.table_row_count_ <= 0) {
+        if (is_iceberg_lake_table && iceberg_record_count > 0 && table_meta_info_.table_row_count_ <= 0) {
           table_meta_info_.table_row_count_ = iceberg_record_count;
         }
         int64_t schema_row_width = 0;
@@ -25251,6 +25263,43 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
   return ret;
 }
 
+int ObJoinOrder::get_plugin_table_stat(ObIAllocator &allocator,
+                                       uint64_t ref_table_id,
+                                       ObIArray<uint64_t> &column_ids,
+                                       ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                                       common::ObLakeTableStat &table_stat,
+                                       ObIArray<common::ObLakeColumnStat*> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(allocator);
+  UNUSED(ref_table_id);
+  UNUSED(column_ids);
+  UNUSED(column_exprs);
+  UNUSED(column_stats);
+  ObLakeTablePartitionInfo *lake_table_partition_info
+      = static_cast<ObLakeTablePartitionInfo*>(table_partition_info_);
+  if (OB_ISNULL(lake_table_partition_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null lake table partition info", K(ret));
+  } else {
+    // Estimate row count from split record_count_ metadata
+    const ObCandiTabletLocIArray &tablet_locs
+        = lake_table_partition_info->get_phy_tbl_location_info().get_phy_part_loc_info_list();
+    int64_t total_row_count = 0;
+    for (int64_t i = 0; i < tablet_locs.count(); ++i) {
+      const ObIArray<ObIOptLakeTableFile*> &files = tablet_locs.at(i).get_opt_lake_table_files();
+      for (int64_t j = 0; j < files.count(); ++j) {
+        if (OB_NOT_NULL(files.at(j)) && files.at(j)->is_ext_plugin_file()) {
+          const ObOptPluginFile *pf = static_cast<const ObOptPluginFile*>(files.at(j));
+          total_row_count += pf->record_count_;
+        }
+      }
+    }
+    table_stat.total_row_count_ = std::max(total_row_count, (int64_t)1);
+  }
+  return ret;
+}
+
 int ObJoinOrder::get_common_lake_table_stat(ObIAllocator &allocator,
                                             uint64_t ref_table_id,
                                             ObIArray<ObColumnRefRawExpr*> &column_exprs,
@@ -25326,7 +25375,7 @@ int ObJoinOrder::get_lake_table_partition_values(ObIArray<ObString> &partition_v
   int ret = OB_SUCCESS;
   partition_values.reuse();
 
-  if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::HIVE) {
+  if (share::is_hive_lake_table(table_meta_info_.lake_table_format_)) {
     ObLakeTablePartitionInfo *lake_table_partition_info = static_cast<ObLakeTablePartitionInfo*>(table_partition_info_);
     if (OB_ISNULL(lake_table_partition_info)) {
       ret = OB_ERR_UNEXPECTED;

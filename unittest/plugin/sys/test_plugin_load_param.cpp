@@ -8,7 +8,7 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "plugin/sys/ob_plugin_load_param.h"
+#include "plugin/legacy/sys/ob_plugin_load_param.h"
 
 using namespace std;
 using namespace oceanbase::common;

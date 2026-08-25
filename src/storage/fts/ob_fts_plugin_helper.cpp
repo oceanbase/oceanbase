@@ -10,8 +10,8 @@
 
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/worker.h"
-#include "plugin/interface/ob_plugin_ftparser_intf.h"
-#include "plugin/sys/ob_plugin_helper.h"
+#include "plugin/legacy/interface/ob_plugin_ftparser_intf.h"
+#include "plugin/legacy/sys/ob_plugin_helper.h"
 #include "share/ob_force_print_log.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_ft_token_processor.h"

@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://oceanbase.io/schemas/ob_ext_table_load_schema.schema.json",
+  "title": "OceanBase external-table plugin: load_schema output document",
+  "description": "Formal grammar of the table-schema JSON a plugin returns from load_schema. Encoded from OB's parser (src/plugin/v2/external_table/ob_ext_schema_parser.cpp) and type mapper (ob_ext_type_mapper.cpp); a document valid against this schema parses cleanly in OB. Field names correspond to the OB_EXT_K_* constants in ob_external_table_protocol.h.\n\nRules JSON Schema cannot express (also enforced by OB, hard errors):\n  - 'name' values must be unique across top-level columns;\n  - 'field_id' values must be unique across top-level columns;\n  - 'partition_keys' entries SHOULD name an existing column (an unmatched name is only WARNed and skipped, not an error).\nEvolution rule: unknown keys at any level are tolerated (OB logs a loud WARN, never fails) — plugins may add private keys, OB may add new known keys, independently compiled builds keep working.",
+  "type": "object",
+  "required": ["columns"],
+  "additionalProperties": true,
+  "properties": {
+    "columns": {
+      "description": "Table columns, in read order. Non-empty.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/column" }
+    },
+    "partition_keys": {
+      "description": "Names of partition columns (option B: mark only; OB builds no partitions, partition pruning is the plugin's job via the predicate JSON at plan_create). Absent/empty = no partition columns.",
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "catalog_context": {
+      "description": "Opaque plugin-defined object (T0 versioning/pinning state, e.g. snapshot/schema ids). OB stores it verbatim, hands it back inside options_json at plan_create, and never looks inside. The contract defines NO keys here — the content is 100% plugin-private.",
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "int_attr": {
+      "description": "Optional integer attribute; -1 (or absent) = unspecified.",
+      "type": "integer",
+      "minimum": -1,
+      "maximum": 2147483647,
+      "default": -1
+    },
+    "column": {
+      "description": "A top-level table column.",
+      "type": "object",
+      "required": ["name", "field_id", "ext_type"],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "description": "Column name. Non-empty; unique across columns. The predicate JSON's col nodes reference columns by this name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "field_id": {
+          "description": "Stable field id of the column (0..32750; unique across columns). OB derives its column_id as field_id + 16 and echoes it back as col_idx in the predicate/projection JSON. Keep ids stable across schema refreshes — catalog_context drift detection relies on it.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32750
+        },
+        "ext_type": {
+          "description": "Protocol type name (OB matches case-insensitively; emit UPPER). Names are the shared vocabulary in ob_external_table_plugin.h. NOT accepted for top-level columns today (OB returns OB_NOT_SUPPORTED): NULL, BINARY, VARBINARY, MAP, UNKNOWN — do not emit them; fail load_schema yourself if your format has a type outside this list.",
+          "enum": ["BOOL", "TINYINT", "SMALLINT", "INT", "BIGINT",
+                   "FLOAT", "DOUBLE", "DECIMAL", "STRING", "VARCHAR", "CHAR",
+                   "DATE", "DATETIME", "TIMESTAMP", "TIME", "ARRAY"]
+        },
+        "precision": { "$ref": "#/$defs/int_attr" },
+        "scale":    { "$ref": "#/$defs/int_attr" },
+        "length":   { "$ref": "#/$defs/int_attr" },
+        "nullable": {
+          "description": "Default true.",
+          "type": "boolean",
+          "default": true
+        },
+        "children": {
+          "description": "ARRAY element descriptor: exactly one entry, recursive. Required iff ext_type == ARRAY. The element object only needs 'ext_type' (+precision/scale/length as its type requires, +its own children for nested ARRAY); name/field_id are ignored by OB here.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/column_element" }
+        }
+      },
+      "allOf": [
+        {
+          "if":   { "properties": { "ext_type": { "const": "DECIMAL" } }, "required": ["ext_type"] },
+          "then": {
+            "description": "DECIMAL: precision and scale come as a pair — both -1/absent (OB default) or both >= 0.",
+            "anyOf": [
+              { "properties": { "precision": { "const": -1 }, "scale": { "const": -1 } } },
+              { "required": ["precision", "scale"],
+                "properties": { "precision": { "type": "integer", "minimum": 0, "maximum": 65 },
+                                "scale":     { "type": "integer", "minimum": 0, "maximum": 30 } } }
+            ]
+          }
+        },
+        {
+          "if":   { "properties": { "ext_type": { "const": "VARCHAR" } }, "required": ["ext_type"] },
+          "then": { "properties": { "length": { "type": "integer", "minimum": -1, "maximum": 65535 } } }
+        },
+        {
+          "if":   { "properties": { "ext_type": { "const": "CHAR" } }, "required": ["ext_type"] },
+          "then": { "properties": { "length": { "type": "integer", "minimum": -1, "maximum": 256 } } }
+        },
+        {
+          "if":   { "properties": { "ext_type": { "enum": ["DATETIME", "TIMESTAMP"] } }, "required": ["ext_type"] },
+          "then": {
+            "description": "precision = sub-second digits (fsp). Values above 6 are accepted but clamped to 6 with a WARN — emit <= 6. DATETIME = timezone-agnostic local time; TIMESTAMP = instant (LTZ semantics).",
+            "properties": { "precision": { "type": "integer", "minimum": -1, "maximum": 6 } }
+          }
+        },
+        {
+          "if":   { "properties": { "ext_type": { "const": "ARRAY" } }, "required": ["ext_type"] },
+          "then": { "required": ["children"] }
+        }
+      ]
+    },
+    "column_element": {
+      "description": "ARRAY element (recursive). Only ext_type is required. LOB types are auto-substituted by OB: STRING -> VARCHAR(65535), BINARY/VARBINARY -> VARBINARY(65535) — you may emit them, OB bounds them. MAP/NULL/UNKNOWN are rejected.",
+      "type": "object",
+      "required": ["ext_type"],
+      "additionalProperties": true,
+      "properties": {
+        "name":     { "type": "string" },
+        "field_id": { "type": "integer" },
+        "ext_type": {
+          "enum": ["BOOL", "TINYINT", "SMALLINT", "INT", "BIGINT",
+                   "FLOAT", "DOUBLE", "DECIMAL", "STRING", "VARCHAR", "CHAR",
+                   "BINARY", "VARBINARY",
+                   "DATE", "DATETIME", "TIMESTAMP", "TIME", "ARRAY"]
+        },
+        "precision": { "$ref": "#/$defs/int_attr" },
+        "scale":    { "$ref": "#/$defs/int_attr" },
+        "length":   { "$ref": "#/$defs/int_attr" },
+        "nullable": { "type": "boolean", "default": true },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/column_element" }
+        }
+      },
+      "allOf": [
+        {
+          "if":   { "properties": { "ext_type": { "const": "DECIMAL" } }, "required": ["ext_type"] },
+          "then": {
+            "description": "DECIMAL as array element REQUIRES precision and scale (>= 0) — unlike top-level, there is no default.",
+            "required": ["precision", "scale"],
+            "properties": { "precision": { "type": "integer", "minimum": 0, "maximum": 65 },
+                            "scale":     { "type": "integer", "minimum": 0, "maximum": 30 } }
+          }
+        },
+        {
+          "if":   { "properties": { "ext_type": { "const": "ARRAY" } }, "required": ["ext_type"] },
+          "then": { "required": ["children"] }
+        }
+      ]
+    }
+  },
+  "examples": [
+    {
+      "columns": [
+        { "name": "id",     "field_id": 0, "ext_type": "BIGINT",  "nullable": false },
+        { "name": "price",  "field_id": 1, "ext_type": "DECIMAL", "precision": 10, "scale": 2 },
+        { "name": "ts",     "field_id": 2, "ext_type": "DATETIME", "precision": 3 },
+        { "name": "tags",   "field_id": 3, "ext_type": "ARRAY",
+          "children": [ { "name": "element", "field_id": 0, "ext_type": "STRING" } ] }
+      ],
+      "partition_keys": ["dt"],
+      "catalog_context": { "schema_id": 7, "snapshot_id": 42 }
+    }
+  ]
+}

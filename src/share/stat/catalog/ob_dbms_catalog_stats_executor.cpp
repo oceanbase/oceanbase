@@ -114,8 +114,7 @@ int ObDbmsCatalogStatsExecutor::prepare_gather_stats(ObExecContext &ctx,
     gather_helper.maximum_gather_part_cnt_
         = partition_cnt > 0 ? std::min(partition_cnt, batch_part_size) : 1;
   }
-  if (OB_SUCC(ret)
-      && share::ObLakeTableFormat::ICEBERG == param.external_info_.lake_table_format_
+  if (OB_SUCC(ret) && share::is_iceberg_lake_table(param.external_info_.lake_table_format_)
       && param.part_level_ != share::schema::PARTITION_LEVEL_ZERO
       && partition_cnt > 0) {
     // Iceberg partition evolution means different partitions may belong to different specs,

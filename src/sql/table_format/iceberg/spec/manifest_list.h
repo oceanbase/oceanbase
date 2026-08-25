@@ -9,6 +9,7 @@
 #include <optional>
 #include <avro/Node.hh>
 
+#include "lib/allocator/page_arena.h"
 #include "sql/table_format/iceberg/avro_schema_util.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 #include "sql/table_format/iceberg/spec/schema_field.h"
@@ -81,9 +82,11 @@ class ManifestFile : public SpecWithAllocator
 {
 public:
   ManifestFile(ObIAllocator &allocator);
+  int load_manifest_entry(const ObString &access_info);
   int decode_field(const FieldProjection &field_projection, avro::Decoder &decoder);
   int get_manifest_entries(const ObString &access_info,
                            ObIArray<ManifestEntry *> &manifest_entries);
+  ~ManifestFile();
   ObIAllocator *get_allocator()
   {
     return &allocator_;
@@ -283,6 +286,9 @@ private:
   int get_manifest_entries_(const ObString &access_info,
                             ObIArray<ManifestEntry *> &manifest_entries) const;
 
+  // Keep decoded manifest-entry cache in a per-manifest arena so concurrent
+  // manifest parsing does not contend on the shared metadata allocator.
+  mutable common::ObArenaAllocator manifest_entry_allocator_;
   // ManifestFile 一旦加载完成过一个 manifest，这个字段就会被填充
   // 后续该 Manifest 读取 ManifestEntry 直接从这个字段返回
   // 有效减少内存开销

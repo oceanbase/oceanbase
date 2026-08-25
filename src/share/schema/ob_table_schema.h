@@ -1614,7 +1614,7 @@ public:
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
   void set_external_location_id(uint64_t id) { external_location_id_ = id; }
   int set_external_sub_path(const common::ObString &sub_path) { return deep_copy_str(sub_path, external_sub_path_); }
-  int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
+  int set_external_file_format(const common::ObString &format);
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
   void set_external_file_pattern_type(ObExternalFilePatternType type) { external_file_pattern_type_ = static_cast<int64_t>(type); }
   int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }

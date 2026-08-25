@@ -1570,7 +1570,7 @@ int ObPhysicalPlanCtx::set_lake_table_metadata(const share::ObILakeTableMetadata
   if (OB_ISNULL(lake_table_metadata)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(lake_table_metadata));
-  } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
+  } else if (share::is_iceberg_lake_table(lake_table_metadata->get_format_type())) {
     iceberg::ObIcebergTableMetadata *iceberg_table_metadata = NULL;
     if (OB_ISNULL(iceberg_table_metadata
                   = OB_NEWx(iceberg::ObIcebergTableMetadata, &allocator_, allocator_))) {

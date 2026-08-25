@@ -32,6 +32,7 @@ class Snapshot : public SpecWithAllocator
 {
 public:
   explicit Snapshot(ObIAllocator &allocator);
+  ~Snapshot();
   int init_from_json(const ObJsonObject &json_object);
   int assign(const Snapshot &other);
   int64_t get_convert_size() const;

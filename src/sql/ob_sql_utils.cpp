@@ -1579,7 +1579,7 @@ int ObSQLUtils::check_location_constraint(const ObTableSchema &table_schema)
   if (OB_FAIL(ObSQLUtils::get_external_table_type(&table_schema, external_table_type))) {
     LOG_WARN("failed to check external table type", K(ret));
   } else if (ObExternalFileFormat::ODPS_FORMAT == external_table_type ||
-             ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+             ObExternalFileFormat::JAVA_PLUGIN_FORMAT == external_table_type) {
     // do nothing
   } else if ((!table_schema.get_external_file_location().empty()
       && OB_INVALID_ID != table_schema.get_external_location_id())

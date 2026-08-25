@@ -184,7 +184,7 @@ int ObLocationDDLService::check_location_constraint(const ObTableSchema &schema)
   } else if (OB_FAIL(sql::ObSQLUtils::get_external_table_type(&schema, external_table_type))) {
     LOG_WARN("failed to get external table type", K(ret));
   } else if (sql::ObExternalFileFormat::ODPS_FORMAT == external_table_type ||
-      sql::ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+      sql::ObExternalFileFormat::JAVA_PLUGIN_FORMAT == external_table_type) {
     // do nothing
   } else {
     if (compat_version < DATA_VERSION_4_4_0_0 && OB_INVALID_ID != schema.get_external_location_id()) {

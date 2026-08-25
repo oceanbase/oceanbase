@@ -12,6 +12,7 @@
 
 #include "rootserver/ob_split_partition_helper.h"
 #include "share/catalog/ob_external_catalog.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
@@ -2630,6 +2631,19 @@ int ObTableSchema::check_column_group_valid() const
 {
   return ObColumnGroupHelper::check_column_group_valid(
       *this, column_group_arr_, column_group_cnt_, max_used_column_group_id_, hidden_rowkey_column_group_);
+}
+
+int ObTableSchema::set_external_file_format(const common::ObString &format)
+{
+  int ret = OB_SUCCESS;
+  // The plugin identity is carried as the slot encoded in lake_table_format_,
+  // set separately by the catalog at schema-build time. The format string here
+  // carries the PLUGIN_TYPE text used only to
+  // render/parse the format JSON; no derived name field is kept.
+  if (OB_FAIL(deep_copy_str(format, external_file_format_))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to deep copy external file format", K(ret), K(format));
+  }
+  return ret;
 }
 
 bool ObTableSchema::is_valid() const

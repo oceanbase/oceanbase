@@ -11,7 +11,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/json/ob_json.h"
 #include "lib/charset/ob_charset_string_helper.h"
-#include "plugin/external_table/ob_external_format.h"
+#include "plugin/legacy/external_table/ob_external_format.h"
 
 namespace oceanbase
 {
@@ -465,6 +465,22 @@ struct ObKAFKAGeneralFormat {
                K_(max_batch_size), K_(job_id), K_(insert_table_id),
                K_(column_ids), K_(custom_properties));
   OB_UNIS_VERSION(1);
+};
+
+/// C++ .so plugin file format. Mirrors the other format sub-structs
+/// (csv/parquet/...) but carries a single field: the plugin name, persisted
+/// as the JSON `PLUGIN_TYPE` kv. The field is optional so legacy
+/// marker-only `{"TYPE":"CPP_PLUGIN"}` strings still parse.
+struct ObCppPluginFormat {
+  int to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  common::ObString plugin_name_;
+  // Reader options JSON (location / access_info / catalog_context /
+  // ext_options) for the plugin contract's reader_create. Query-scoped
+  // runtime data: injected at codegen, hex-encoded as `READER_OPTIONS`;
+  // never persisted in DDL (empty there, and skipped on render when empty).
+  common::ObString reader_options_json_;
+  TO_STRING_KV(K_(plugin_name));
 };
 
 /**
@@ -1335,9 +1351,14 @@ struct ObExternalFileFormat
     PARQUET_FORMAT,
     ODPS_FORMAT,
     ORC_FORMAT,
-    PLUGIN_FORMAT,
+    JAVA_PLUGIN_FORMAT,  // FARM COMPAT WHITELIST, renamed from PLUGIN_FORMAT
     KAFKA_FORMAT,
-    PAIMON_FORMAT,
+    /// C++ .so external-table plugin format. The plugin identity is carried by
+    /// the slot encoded in lake_table_format_ at runtime; the persisted
+    /// `PLUGIN_TYPE` field of this format JSON (rendered from `plugin_name_`)
+    /// is used only to render/parse the format JSON, not as a runtime identity.
+    /// This is distinct from the Java-side JAVA_PLUGIN_FORMAT.
+    CPP_PLUGIN_FORMAT,  // FARM COMPAT WHITELIST, renamed from PAIMON_FORMAT
     MAX_FORMAT
   };
 
@@ -1359,6 +1380,10 @@ struct ObExternalFileFormat
 
   static int parse_format_type(const common::ObString &str, common::ObIAllocator &allocator, FormatType &format_type);
 
+  bool is_cpp_plugin_format() const { return CPP_PLUGIN_FORMAT == format_type_; }
+  const ObCppPluginFormat &get_cpp_plugin_format() const { return cpp_plugin_format_; }
+  ObCppPluginFormat &get_cpp_plugin_format() { return cpp_plugin_format_; }
+
   static int encrypt_str(ObIAllocator &allocator, const common::ObString &src, common::ObString &dst);
   static int deep_copy_str(ObIAllocator &allocator, const common::ObString &src, common::ObString &dst);
   static int decrypt_str(ObIAllocator &allocator, const common::ObString &src, common::ObString &dst);
@@ -1371,6 +1396,10 @@ struct ObExternalFileFormat
   sql::ObOrcGeneralFormat orc_format_;
   plugin::ObPluginFormat plugin_format_;
   sql::ObKAFKAGeneralFormat kafka_format_;
+  /// Plugin name for CPP_PLUGIN_FORMAT; persisted as the JSON `PLUGIN_TYPE`
+  /// field. Owned by the allocator passed to load_from_string_, or a borrowed
+  /// pointer when set transiently for rendering (to_string).
+  ObCppPluginFormat cpp_plugin_format_;
   uint64_t options_;
   static const char *FORMAT_TYPE_STR[];
 

@@ -380,16 +380,15 @@ public:
   ObCostTableScanSimpleInfo& get_est_cost_simple_info() { return est_cost_simple_info_; }
   const ObCostTableScanSimpleInfo& get_est_cost_simple_info() const { return est_cost_simple_info_; }
   ObQueryFlag get_query_flag() const { return tsc_ctdef_.scan_flags_; }
+  // External tables whose metadata lives in OB schema: file LOCATION / CREATE EXTERNAL
+  // (format unset) and ODPS. Lake catalog formats (Iceberg/Hive/plugin) are excluded.
   bool is_ob_external_table() const
   {
-    return is_external_table_ && lake_table_format_ != share::ObLakeTableFormat::ICEBERG
-           && lake_table_format_ != share::ObLakeTableFormat::HIVE;
+    return is_external_table_ && share::is_ob_external_table(lake_table_format_);
   }
   bool is_lake_external_table() const
   {
-    return is_external_table_
-           && (lake_table_format_ == share::ObLakeTableFormat::ICEBERG
-               || lake_table_format_ == share::ObLakeTableFormat::HIVE);
+    return is_external_table_ && share::is_lake_external_table(lake_table_format_);
   }
 
   DECLARE_VIRTUAL_TO_STRING;

@@ -57,6 +57,7 @@ devdeps-zstd-1.5.7-52026052517.el7.x86_64.rpm
 devdeps-obcharset-1.0.0-32025111215.el7.x86_64.rpm
 devdeps-hms-client-1.0.0-52026081815.el7.x86_64.rpm
 devdeps-kafka-2.12.1-52026012814.el7.x86_64.rpm
+devdeps-paimon-cpp-0.1.3-162026082414.el7.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el7.x86_64.rpm

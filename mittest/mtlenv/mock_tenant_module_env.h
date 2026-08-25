@@ -128,6 +128,7 @@
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #include "storage/high_availability/ob_tenant_startup_status.h"
 #include "storage/tx/wrs/ob_weak_read_service.h"
+#include "sql/table_format/common/utils/ob_lake_table_executor.h"
 
 namespace oceanbase
 {
@@ -966,6 +967,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, sql::ObExternalDataAccessMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, omt::ObTenantAiService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, storage::ObTenantStartupStatus::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, sql::lake_table::ObLakeTableExecutor::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(GMEMCONF.reload_config(config_))) {

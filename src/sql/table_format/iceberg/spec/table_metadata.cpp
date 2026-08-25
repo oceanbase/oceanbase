@@ -29,6 +29,16 @@ TableMetadata::TableMetadata(ObIAllocator &allocator)
 {
 }
 
+TableMetadata::~TableMetadata()
+{
+  for (int i = 0; i < snapshots.count(); ++i) {
+    if (OB_NOT_NULL(snapshots.at(i))) {
+      snapshots.at(i)->~Snapshot();
+    }
+  }
+  snapshots.reset();
+}
+
 int TableMetadata::assign(const TableMetadata &other)
 {
   return assign(other, 0);

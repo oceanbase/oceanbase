@@ -7,9 +7,16 @@
 #include "share/catalog/ob_external_catalog.h"
 
 #include "share/schema/ob_column_schema.h"
+#include "share/stat/ob_opt_external_column_stat.h"
+#include "share/stat/ob_opt_external_table_stat.h"
 #include "share/stat/catalog/ob_opt_catalog_table_stat.h"
 #include "share/stat/catalog/ob_opt_catalog_column_stat.h"
 #include "sql/ob_sql_context.h"
+#include "sql/table_format/hive/ob_hive_table_metadata.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/odps/ob_odps_table_metadata.h"
+#include "plugin/v2/external_table/ob_ext_table_metadata.h"
+
 namespace oceanbase
 {
 namespace share
@@ -112,6 +119,49 @@ int ObILakeTableMetadata::build_table_schema(std::optional<int32_t> schema_id,
       }
     }
     table_schema->set_table_pk_exists_mode(schema::ObTablePrimaryKeyExistsMode::TOM_TABLE_WITHOUT_PK);
+  }
+  return ret;
+}
+
+int ObILakeTableMetadata::destroy(ObIAllocator &allocator,
+                                  ObILakeTableMetadata *&lake_table_metadata)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(lake_table_metadata)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null lake table metadata");
+  } else {
+    if (lake_table_metadata->is_ext_plugin_metadata()) {
+      using sql::ext_plugin::ObExtTableMetadata;
+      ObExtTableMetadata *metadata = static_cast<ObExtTableMetadata *>(lake_table_metadata);
+      OB_DELETEx(ObExtTableMetadata, &allocator, metadata);
+    } else {
+      switch (lake_table_metadata->get_format_type()) {
+      case share::ObLakeTableFormat::ICEBERG: {
+        using sql::iceberg::ObIcebergTableMetadata;
+        ObIcebergTableMetadata *metadata
+            = static_cast<ObIcebergTableMetadata *>(lake_table_metadata);
+        OB_DELETEx(ObIcebergTableMetadata, &allocator, metadata);
+        break;
+      }
+      case share::ObLakeTableFormat::HIVE: {
+        using sql::hive::ObHiveTableMetadata;
+        ObHiveTableMetadata *metadata = static_cast<ObHiveTableMetadata *>(lake_table_metadata);
+        OB_DELETEx(ObHiveTableMetadata, &allocator, metadata);
+        break;
+      }
+      case share::ObLakeTableFormat::ODPS: {
+        using sql::odps::ObODPSTableMetadata;
+        ObODPSTableMetadata *metadata = static_cast<ObODPSTableMetadata *>(lake_table_metadata);
+        OB_DELETEx(ObODPSTableMetadata, &allocator, metadata);
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unreachable code");
+      }
+      }
+    }
   }
   return ret;
 }

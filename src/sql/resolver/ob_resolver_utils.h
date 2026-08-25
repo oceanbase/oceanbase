@@ -866,6 +866,15 @@ public:
     int64_t column_idx,
     const ObColumnSchemaV2 *generated_column,
     ObRawExpr *&expr);
+  static int build_file_column_expr_for_plugin(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const ObString &table_name,
+    const ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *generated_column,
+    ObRawExpr *&expr);
   static int build_file_column_expr_for_kafka(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,

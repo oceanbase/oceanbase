@@ -53,6 +53,7 @@ devdeps-zstd-1.5.7-52026052517.al8.aarch64.rpm
 devdeps-obcharset-1.0.0-32025111215.al8.aarch64.rpm
 devdeps-hms-client-1.0.0-52026081815.al8.aarch64.rpm
 devdeps-kafka-2.12.1-52026012814.al8.aarch64.rpm
+devdeps-paimon-cpp-0.1.3-162026082414.al8.aarch64.rpm
 
 [tools]
 obdevtools-binutils-2.30-82024092619.al8.aarch64.rpm

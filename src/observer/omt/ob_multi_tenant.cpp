@@ -86,6 +86,7 @@
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "sql/plan_cache/ob_ps_cache.h"
+#include "sql/table_format/common/utils/ob_lake_table_executor.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "share/detect/ob_detect_manager.h"
 #include "storage/access/ob_empty_read_bucket.h"
@@ -160,6 +161,7 @@
 #include "observer/virtual_table/ob_all_virtual_tablet_replica_info.h"
 #include "sql/monitor/ob_sql_stat_manager.h"
 #include "lib/thread/thread_mgr_interface.h"
+#include "sql/table_format/common/utils/ob_lake_table_executor.h"
 #include "share/ob_inspection_service.h" // ObInspectionService
 
 using namespace oceanbase;
@@ -693,6 +695,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(client_pool_mgr_mtl_new<ObCurlRestClient>, nullptr, nullptr, client_pool_mgr_mtl_stop<ObCurlRestClient>, client_pool_mgr_mtl_wait<ObCurlRestClient>, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::schema::ObSchemaHistoryRecycleService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, share::ObInspectionService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, sql::lake_table::ObLakeTableExecutor::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {
@@ -1660,6 +1663,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
         LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_lake_table_executor_config_())) {
+        LOG_WARN("failed to update lake table executor config", K(tmp_ret), K(tenant_id));
+      }
       if (OB_TMP_FAIL(update_throttle_config_(tenant_id))) {
         LOG_WARN("update throttle config failed", K(ret), K(tenant_id));
       }
@@ -1730,6 +1736,19 @@ int ObMultiTenant::update_tenant_ddl_config()
     }
   }
 #endif
+  return ret;
+}
+
+int ObMultiTenant::update_lake_table_executor_config_()
+{
+  int ret = OB_SUCCESS;
+  sql::lake_table::ObLakeTableExecutor *exec = MTL(sql::lake_table::ObLakeTableExecutor *);
+  if (OB_ISNULL(exec)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table executor should not be null", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(exec->reload_config())) {
+    LOG_WARN("failed to reload lake table executor config", K(ret), K(MTL_ID()));
+  }
   return ret;
 }
 

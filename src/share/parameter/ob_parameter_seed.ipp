@@ -54,6 +54,18 @@ DEF_CAP(memory_reserved, OB_CLUSTER_PARAMETER, "500M", "[10M,)",
 //// observer config
 DEF_STR_LIST(config_additional_dir, OB_CLUSTER_PARAMETER, "etc2;etc3", "additional directories of configure file",
              ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR(ext_plugin_config, OB_CLUSTER_PARAMETER, "[{\"name\":\"paimon\"}]",
+        "JSON array of external-table cpp plugins to load. Each element is an object "
+        "{\"name\":\"<plugin>\",\"path\":\"</abs/lib.so>\"} where 'path' is optional (absent/empty "
+        "=> resolve lib_ob_<name>.so via LD_LIBRARY_PATH). JSON escaping applies to name/path "
+        "(e.g. a path with a backslash is written with \\\\). Loaded LAZILY on the first lookup that "
+        "needs the registry (get_plugin_by_name / recognize_format): a std::call_once reads this "
+        "config and dlopens every named plugin. The config is read at most once per process — "
+        "ALTER SYSTEM SET ext_plugin_config takes effect only after restart (declarative). A "
+        "per-plugin failure is logged and skipped; it does not abort the rest. The .so must be "
+        "reachable on every observer (LD_LIBRARY_PATH or the given path). "
+        "Example: [{\"name\":\"paimon\"},{\"name\":\"odps\",\"path\":\"/abs/lib_ob_odps.so\"}]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_STR(leak_mod_to_check, OB_CLUSTER_PARAMETER, "NONE", "the name of the module under memory leak checks",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(rpc_port, OB_CLUSTER_PARAMETER, "2882", "(1024,65536)",
@@ -2838,6 +2850,14 @@ DEF_INT(_max_dop_for_external_table_file_listing, OB_TENANT_PARAMETER, "0", "[0,
         "max parallelism of file listing for external table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(lake_table_pruning_thread_count, OB_TENANT_PARAMETER, "4", "[1,64]",
+        "thread count for lake table pruning. Range: [1, 64] in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(enable_lake_table_parallel_resolving, OB_TENANT_PARAMETER, "True",
+         "enable or disable parallel resolving for lake table pruning",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(inc_sstable_upload_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of upload incremental sstable to shared storage"
         " Range: [0,100] in integer. Especially, 0 means default value",
@@ -2900,7 +2920,9 @@ DEF_STR(ob_java_connector_path, OB_CLUSTER_PARAMETER, "",
                      "specifies the connector path for external table with enabled option: ob_enable_java_env",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(_ob_additional_lib_path, OB_CLUSTER_PARAMETER, "/usr/local/oceanbase/deps/devel/lib",
-                     "specifies the needed libs path for external table with enabled option: ob_enable_java_env",
+                     "colon-separated additional library directories for external tables: searched for "
+                     "cpp format plugins (lib_ob_<name>.so) and ensured into LD_LIBRARY_PATH for "
+                     "java runtime (ob_enable_java_env)",
                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(_ob_java_odps_data_transfer_mode, OB_CLUSTER_PARAMETER, "arrowTable",
                       common::ObConfigJniTransDataParamsChecker,

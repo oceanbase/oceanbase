@@ -760,6 +760,7 @@ ob_set_subtarget(ob_share catalog
   catalog/ob_cached_catalog_meta_getter.cpp
   catalog/ob_catalog_utils.cpp
   catalog/ob_catalog_location_schema_provider.cpp
+  catalog/ob_lake_format_deducer.cpp
   catalog/odps/ob_odps_catalog_utils.cpp
   catalog/odps/ob_odps_catalog.cpp
   catalog/filesystem/ob_filesystem_catalog.cpp

@@ -11,7 +11,7 @@
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/shared_storage/ob_ss_local_cache_control_mode.h"
-#include "plugin/sys/ob_plugin_load_param.h"
+#include "plugin/legacy/sys/ob_plugin_load_param.h"
 #include "share/table/ob_table_config_util.h"
 #include "storage/ob_micro_block_format_version_helper.h"
 

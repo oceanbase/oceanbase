@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_lake_table_partition_info.h"
+#include "sql/optimizer/file_prune/ob_lake_table_optimizer_utils.h"
 
 #include "share/location_cache/ob_location_service.h"
 #include "share/schema/ob_iceberg_table_schema.h"
@@ -17,6 +18,9 @@
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
+#include "sql/optimizer/file_prune/ob_ext_file_pruner.h"
+#include "sql/table_format/common/utils/ob_lake_table_executor.h"
+#include "plugin/v2/external_table/ob_ext_table_metadata.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
@@ -30,6 +34,58 @@ using namespace oceanbase::sql::iceberg;
 namespace sql
 {
 
+namespace {
+struct ParallelIcebergManifestPruneTask
+{
+  ParallelIcebergManifestPruneTask(ObIcebergFilePrunner *iceberg_file_pruner,
+                                  ObIArray<iceberg::ManifestFile*> &all_manifest_files,
+                                  ObSEArray<bool, 16> &in_bound_array,
+                                  const ObString &access_info,
+                                  const int64_t begin,
+                                  const int64_t end)
+    : iceberg_file_pruner_(iceberg_file_pruner),
+      all_manifest_files_(all_manifest_files),
+      in_bound_array_(in_bound_array),
+      access_info_(access_info),
+      begin_(begin),
+      end_(end)
+  {}
+
+  int operator()() const
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = begin_; OB_SUCC(ret) && i < end_; ++i) {
+      bool in_bound = false;
+      iceberg::ManifestFile *manifest_file = all_manifest_files_.at(i);
+      if (OB_ISNULL(manifest_file)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null manifest file");
+      } else if (OB_FAIL(iceberg_file_pruner_->prune_single_manifest_file(manifest_file, in_bound))) {
+        LOG_WARN("failed to prune manifest files", K(ret));
+      } else if (in_bound) {
+        if (OB_FAIL(manifest_file->load_manifest_entry(access_info_))) {
+          LOG_WARN("failed to load manifest entries", K(ret));
+        }
+      }
+      in_bound_array_.at(i) = in_bound;
+    }
+    return ret;
+  }
+
+private:
+  ObIcebergFilePrunner *iceberg_file_pruner_;
+  ObIArray<iceberg::ManifestFile*> &all_manifest_files_;
+  ObSEArray<bool, 16> &in_bound_array_;
+  const ObString &access_info_;
+  int64_t begin_;
+  int64_t end_;
+};
+}
+
+ObLakeTablePartitionInfo::~ObLakeTablePartitionInfo()
+{
+}
+
 int ObLakeTablePartitionInfo::assign(const ObTablePartitionInfo &other)
 {
   int ret = OB_SUCCESS;
@@ -37,30 +93,17 @@ int ObLakeTablePartitionInfo::assign(const ObTablePartitionInfo &other)
     const ObLakeTablePartitionInfo &info = static_cast<const ObLakeTablePartitionInfo&>(other);
     if (OB_FAIL(ObTablePartitionInfo::assign(other))) {
       LOG_WARN("failed to assign table partition info");
+    } else if (OB_ISNULL(info.file_pruner_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null file pruner");
+    } else if (OB_FAIL(info.file_pruner_->clone(allocator_, file_pruner_))) {
+      LOG_WARN("failed to clone file pruner");
+    } else if (OB_FAIL(iceberg_file_descs_.assign(info.iceberg_file_descs_))) {
+      LOG_WARN("failed to assign iceberg file descs");
     } else {
-      file_pruner_ = NULL;
-      if (info.file_pruner_->type_ == PrunnerType::ICEBERG) {
-        file_pruner_ = OB_NEWx(ObIcebergFilePrunner, &allocator_, allocator_);
-      } else if (info.file_pruner_->type_ == PrunnerType::HIVE) {
-        file_pruner_ = OB_NEWx(ObHiveFilePruner, &allocator_, allocator_);
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid pruner type");
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (file_pruner_ == NULL) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for file_pruner");
-      } else if (OB_FAIL(file_pruner_->assign(*info.file_pruner_))) {
-        LOG_WARN("failed to assign file prunner");
-      } else if (OB_FAIL(iceberg_file_descs_.assign(info.iceberg_file_descs_))) {
-        LOG_WARN("failed to assign iceberg file descs");
-      } else {
-        is_hash_aggregate_ = info.is_hash_aggregate_;
-        hash_count_ = info.hash_count_;
-        first_bucket_partition_value_offset_ = info.first_bucket_partition_value_offset_;
-      }
+      is_hash_aggregate_ = info.is_hash_aggregate_;
+      hash_count_ = info.hash_count_;
+      first_bucket_partition_value_offset_ = info.first_bucket_partition_value_offset_;
     }
   }
 
@@ -98,7 +141,7 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
   } else if (OB_ISNULL(lake_table_metadata)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null lake table metadata", KP(lake_table_metadata));
-  } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
+  } else if (share::is_iceberg_lake_table(lake_table_metadata->get_format_type())) {
     ObIcebergTableMetadata *iceberg_table_metadata
         = down_cast<ObIcebergTableMetadata *>(lake_table_metadata);
     const ObString &access_info = iceberg_table_metadata->access_info_;
@@ -124,6 +167,17 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     ObSEArray<iceberg::ManifestEntry*, 16> manifest_entries;
     hash::ObHashMap<ObLakeTablePartKey, uint64_t> part_key_map;
     iceberg::Snapshot *snapshot = NULL;
+    bool enable_lake_table_parallel_resolving = true;
+    bool use_parallel_iceberg_pruning = false;
+    lake_table::ObLakeTableExecutor *exec_impl = NULL;
+    int64_t manifest_file_cnt = 0;
+    int64_t chunk_size = 0;
+    int64_t task_cnt = 0;
+    if (OB_FAIL(ObLakeTableOptimizerUtils::get_enable_lake_table_parallel_resolving(
+            stmt, enable_lake_table_parallel_resolving))) {
+      LOG_WARN("failed to get lake table parallel resolve config", K(ret));
+    }
+
     if (OB_FAIL(ret)) {
     } else if (lake_table_snapshot_id == -1L) {
       // do nothing 空表
@@ -158,23 +212,88 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       LOG_WARN("failed to get manifest files");
     } else if (all_manifest_files.empty()) {
       // do nothing
-    } else if (OB_FAIL(iceberg_file_pruner->prune_manifest_files(all_manifest_files, manifest_files))) {
-      LOG_WARN("failed to prune manifest files");
-    } else if (OB_NOT_NULL(partition_names)
+    } else {
+      if (enable_lake_table_parallel_resolving) {
+        exec_impl = MTL(lake_table::ObLakeTableExecutor*);
+        if (OB_ISNULL(exec_impl)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("lake table executor MTL service is null");
+        } else {
+          manifest_file_cnt = all_manifest_files.count();
+          chunk_size = ObExternalTableUtils::calc_parallel_task_chunk_size(
+                                                          manifest_file_cnt,
+                                                          exec_impl->get_thread_cnt());
+          task_cnt = manifest_file_cnt <= 0 ? 0
+                   : (manifest_file_cnt + chunk_size - 1) / chunk_size;
+          use_parallel_iceberg_pruning = task_cnt > 1;
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (use_parallel_iceberg_pruning) {
+        lake_table::ObLakeTableTaskGroupHandle task_group;
+        ObSEArray<bool, 16> in_bound_array;
+        if (OB_FAIL(in_bound_array.prepare_allocate(manifest_file_cnt))) {
+          LOG_WARN("failed to prepare allocate in bound array", K(ret));
+        } else if (OB_FAIL(exec_impl->create_task_group(allocator_, task_cnt, task_group))) {
+          LOG_WARN("failed to create lake table task group", K(ret), K(task_cnt));
+        }
+        for (int64_t begin = 0; OB_SUCC(ret) && begin < manifest_file_cnt; begin += chunk_size) {
+          const int64_t end = (begin + chunk_size < manifest_file_cnt)
+                                ? (begin + chunk_size) : manifest_file_cnt;
+          if (OB_FAIL(exec_impl->Add(task_group,
+                  ParallelIcebergManifestPruneTask(iceberg_file_pruner,
+                                                   all_manifest_files,
+                                                   in_bound_array,
+                                                   access_info,
+                                                   begin,
+                                                   end)))) {
+            LOG_WARN("failed to submit manifest parse task", K(ret), K(begin), K(end));
+          }
+        }
+
+        if (task_group) {
+          const int task_ret = task_group->wait();
+          if (OB_SUCCESS != task_ret) {
+            if (OB_SUCC(ret)) {
+              ret = task_ret;
+            }
+            LOG_WARN("parallel load manifest failed", K(task_ret), K(ret));
+          }
+          exec_impl->destroy_task_group(allocator_, task_group);
+        }
+
+        if (OB_SUCC(ret)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < manifest_file_cnt; ++i) {
+            if (in_bound_array.at(i)) {
+              if (OB_FAIL(all_manifest_files.at(i)->get_manifest_entries(access_info, manifest_entries))) {
+                LOG_WARN("failed to get manifest entries", K(ret));
+              }
+            }
+          }
+        }
+      } else {
+        if (OB_FAIL(iceberg_file_pruner->prune_manifest_files(all_manifest_files, manifest_files))) {
+          LOG_WARN("failed to prune manifest files", K(ret));
+        } else if (OB_NOT_NULL(partition_names)
                && OB_NOT_NULL(partition_values)
                && !partition_names->empty()
                && OB_FAIL(iceberg_file_pruner->prune_manifest_files_by_partition_clause(
                               manifest_files, *partition_names, *partition_values, partition_spec_id,
                               iceberg_table_metadata->table_metadata_.partition_specs))) {
-      LOG_WARN("failed to prune manifest files by partition clause");
-    // 解析出的 ManifestEntry 裁剪之后还要用来获取统计信息，因此使用类的成员 allocator 生成。
-    } else if (manifest_files.empty()) {
-      // do nothing
-    } else if (OB_FAIL(get_manifest_entries(access_info,
-                                            manifest_files,
-                                            manifest_entries))) {
-      LOG_WARN("failed to get manifest entries");
-    } else if (manifest_entries.empty()) {
+          LOG_WARN("failed to prune manifest files by partition clause");
+        // 解析出的 ManifestEntry 裁剪之后还要用来获取统计信息，因此使用类的成员 allocator 生成。
+        } else if (manifest_files.empty()) {
+          // do nothing
+        } else if (OB_FAIL(get_manifest_entries(access_info,
+                                                manifest_files,
+                                                manifest_entries))) {
+          LOG_WARN("failed to get manifest entries", K(ret));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret) || manifest_entries.empty()) {
       // do nothing
     } else if (OB_NOT_NULL(partition_names)
                && OB_NOT_NULL(partition_values)
@@ -214,7 +333,7 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
         LOG_WARN("failed to destroy part key map", K(tmp_ret));
       }
     }
-  } else if (share::ObLakeTableFormat::HIVE == lake_table_metadata->get_format_type()) {
+  } else if (share::is_hive_lake_table(lake_table_metadata->get_format_type())) {
     ObHiveFilePruner *hive_file_pruner = NULL;
     ObArray<ObHiveFileDesc> hive_files(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_));
     if (OB_ISNULL(hive_file_pruner = OB_NEWx(ObHiveFilePruner, &allocator_, allocator_))) {
@@ -240,6 +359,39 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       file_pruner_ = hive_file_pruner;
     }
 
+  } else if (share::is_lake_plugin_table(lake_table_metadata->get_format_type())) {
+    // cpp .so plugin-backed format: metadata is sql::ext_plugin::ObExtTableMetadata.
+    // ObExtFilePruner drives the plugin contract's plan_create to obtain scan tasks
+    // (one ObPluginSplitDesc per task, task_json_ = task JSON), then
+    // select_location_for_plugin distributes them across PX servers — the existing
+    // PX plumbing is reused unchanged.
+    const sql::ext_plugin::ObExtTableMetadata *ext_table_metadata
+        = static_cast<const sql::ext_plugin::ObExtTableMetadata *>(lake_table_metadata);
+    ObExtFilePruner *ext_file_pruner = NULL;
+    ObSEArray<ObPluginSplitDesc *, 16> plugin_splits;
+    ObExtTableDispatchMode dispatch_mode = ObExtTableDispatchMode::ROUND_ROBIN;
+    if (OB_ISNULL(ext_file_pruner = OB_NEWx(ObExtFilePruner, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObExtFilePruner", K(ret));
+    } else if (OB_FAIL(ext_file_pruner->init(stmt,
+                                             exec_ctx,
+                                             table_id,
+                                             ref_table_id,
+                                             ext_table_metadata,
+                                             filter_exprs))) {
+      LOG_WARN("failed to init ext file pruner", K(ret));
+    } else if (OB_FAIL(ext_file_pruner->prune_ext_splits(*exec_ctx,
+                                                         plugin_splits,
+                                                         dispatch_mode))) {
+      LOG_WARN("failed to prune ext splits", K(ret));
+    } else if (OB_FAIL(select_location_for_plugin(exec_ctx, plugin_splits, dispatch_mode))) {
+      LOG_WARN("failed to select location for plugin", K(ret));
+    } else {
+      candi_table_loc_.set_table_location_key(ext_file_pruner->get_table_id(),
+                                              ext_file_pruner->get_ref_table_id());
+      candi_table_loc_.set_is_lake_table(true);
+      file_pruner_ = ext_file_pruner;
+    }
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("get unsupported lake format");
@@ -734,6 +886,136 @@ int ObLakeTablePartitionInfo::add_table_file_for_hive(ObCandiTabletLoc &tablet_l
     hive_file->part_id_ = file_desc.part_id_;
     hive_file->file_size_ = file_desc.file_size_;
     hive_file->modification_time_ = file_desc.modify_ts_;
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::select_location_for_plugin(
+    ObExecContext *exec_ctx,
+    ObIArray<ObPluginSplitDesc *> &plugin_splits,
+    ObExtTableDispatchMode dispatch_mode)
+{
+  int ret = OB_SUCCESS;
+  if (dispatch_mode == ObExtTableDispatchMode::ROUND_ROBIN) {
+    if (OB_FAIL(select_location_for_plugin_round_robin(exec_ctx, plugin_splits))) {
+      LOG_WARN("failed to select plugin location for round robin");
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported dispatch mode", K(dispatch_mode));
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::select_location_for_plugin_round_robin(
+    ObExecContext *exec_ctx,
+    ObIArray<ObPluginSplitDesc *> &plugin_splits)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 16> all_servers;
+  ObCandiTabletLocIArray &candi_tablet_locs
+      = candi_table_loc_.get_phy_part_loc_info_list_for_update();
+  candi_tablet_locs.reset();
+  ObDefaultLoadBalancer load_balancer;
+  ObAddr addr;
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (plugin_splits.empty()) {
+    // empty table: create a single tablet loc on self
+    ObCandiTabletLoc *tablet_loc = nullptr;
+    uint64_t part_id = 0;
+    if (OB_ISNULL(tablet_loc = candi_tablet_locs.alloc_place_holder())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to alloc place holder for ObCandiTabletLoc");
+    } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc, GCTX.self_addr(), part_id))) {
+      LOG_WARN("failed to init tablet loc by addr");
+    }
+  } else if (OB_FAIL(GCTX.location_service_->external_table_get(
+                 exec_ctx->get_my_session()->get_effective_tenant_id(),
+                 all_servers))) {
+    LOG_WARN("fail to get external table location");
+  } else if (OB_FAIL(load_balancer.add_server_list(all_servers))) {
+    LOG_WARN("failed to add server list");
+  } else {
+    uint64_t last_part_id = 0;
+    hash::ObHashMap<ObAddr, int64_t> tablet_loc_map;
+    if (OB_FAIL(tablet_loc_map.create(all_servers.count(),
+                                      "TabletPlgMap",
+                                      "PluginTblLoc"))) {
+      LOG_WARN("failed to create tablet loc map");
+    } else if (OB_FAIL(candi_tablet_locs.reserve(all_servers.count()))) {
+      LOG_WARN("failed to reserve candi tablet locs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < plugin_splits.count(); ++i) {
+      int64_t idx = -1;
+      ObPluginSplitDesc *split_desc = plugin_splits.at(i);
+      if (OB_ISNULL(split_desc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null plugin split desc");
+      } else if (OB_FAIL(load_balancer.select_server(i, addr))) {
+        LOG_WARN("failed to select server");
+      } else if (OB_FAIL(tablet_loc_map.get_refactored(addr, idx))) {
+        if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+          ret = OB_SUCCESS;
+          idx = candi_tablet_locs.count();
+          ObCandiTabletLoc *tablet_loc = candi_tablet_locs.alloc_place_holder();
+          if (OB_ISNULL(tablet_loc)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to alloc place holder for ObCandiTabletLoc");
+          } else if (OB_FAIL(tablet_loc_map.set_refactored(addr, idx))) {
+            LOG_WARN("failed to set tablet loc map");
+          } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc, addr, ++last_part_id))) {
+            LOG_WARN("failed to init tablet loc by addr");
+          }
+        } else {
+          LOG_WARN("failed to get tablet loc");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(idx < 0 || idx >= candi_tablet_locs.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected idx", K(idx));
+      } else if (OB_FAIL(add_table_file_for_plugin(candi_tablet_locs.at(idx),
+                                                   split_desc))) {
+        LOG_WARN("failed to add table file for plugin");
+      }
+    }
+    if (tablet_loc_map.created()) {
+      int tmp_ret = tablet_loc_map.destroy();
+      if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+        LOG_WARN("failed to destroy tablet loc map", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::add_table_file_for_plugin(ObCandiTabletLoc &tablet_loc,
+                                                        ObPluginSplitDesc *split_desc)
+{
+  int ret = OB_SUCCESS;
+  ObIArray<ObIOptLakeTableFile*>& files = tablet_loc.get_opt_lake_table_files_for_update();
+  ObIOptLakeTableFile *file = nullptr;
+  if (OB_ISNULL(split_desc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null plugin split desc");
+  } else if (OB_FAIL(ObIOptLakeTableFile::create_opt_lake_table_file_by_type(allocator_,
+                                                                              LakeFileType::EXT_PLUGIN,
+                                                                              file))) {
+    LOG_WARN("failed to create plugin lake table file");
+  } else if (OB_ISNULL(file)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate plugin lake table file", K(ret));
+  } else if (OB_FAIL(files.push_back(file))) {
+    LOG_WARN("failed to push back plugin lake table file", K(ret));
+  } else {
+    ObOptPluginFile *plugin_file = static_cast<ObOptPluginFile *>(file);
+    if (OB_FAIL(ob_write_string(allocator_, split_desc->task_json_, plugin_file->task_json_))) {
+      LOG_WARN("failed to copy plugin task json", K(ret));
+    } else {
+      plugin_file->record_count_ = split_desc->record_count_;
+    }
   }
   return ret;
 }

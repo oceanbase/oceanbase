@@ -15,7 +15,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "object/ob_object.h"
-#include "plugin/sys/ob_plugin_helper.h"
+#include "plugin/legacy/sys/ob_plugin_helper.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"

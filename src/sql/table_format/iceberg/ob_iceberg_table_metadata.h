@@ -47,7 +47,7 @@ public:
                                std::optional<int32_t> &schema_id,
                                std::optional<int64_t> &snapshot_id) override;
 
-  ObString access_info_;
+  ObString access_info_; // used by vended credentials in rest-catalog
   int64_t location_object_id_;
   ObString location_object_sub_path_;
   TableMetadata table_metadata_;

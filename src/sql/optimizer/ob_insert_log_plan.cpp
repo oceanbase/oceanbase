@@ -2158,7 +2158,7 @@ int ObInsertLogPlan::prepare_external_table_info_for_insert(const ObTableSchema 
   } else if (table_format_or_properties->empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("external properties is empty", K(ret));
-  } else if (table_schema->get_lake_table_format() != share::ObLakeTableFormat::ICEBERG
+  } else if (!share::is_iceberg_lake_table(table_schema->get_lake_table_format())
              && table_schema->get_external_properties().empty()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support to insert into external table which is not in odps or iceberg",

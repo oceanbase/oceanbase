@@ -69,6 +69,9 @@ namespace sql {
   class ObExternalDataAccessMgr;
   class ObSQLCCLRuleManager;
   class ObSqlStatManager;
+  namespace lake_table {
+    class ObLakeTableExecutor;
+  }
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -557,6 +560,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       storage::ObTenantStartupStatus*,                \
       observer::ObTabletReplicaInfoCacheMgr*  ,       \
       ObCurlRestClientPoolMgr*,                      \
+      sql::lake_table::ObLakeTableExecutor*,        \
       share::schema::ObSchemaHistoryRecycleService*, \
       storage::ObRsRandomPartitionScheduler*,        \
       share::ObInspectionService*                    \

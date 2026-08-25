@@ -168,7 +168,7 @@ then
   do_install $BUILD_DIR/src/observer/observer $BIN_DIR/observer
   do_install "$BUILD_DIR/syspack_release/*" $ADMIN_DIR
   do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/devtools/bin/llvm-symbolizer $TOOL_DIR/
-  do_install $SOURCE_DIR/rpm/.dep_create/lib/libstdc++.so.6 $LIB_DIR true
+  do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/devtools/lib64/libstdc++.so.6 $LIB_DIR true
   do_install "$SOURCE_DIR/tools/timezone*.data" $ETC_DIR
   do_install $SOURCE_DIR/deps/oblib/src/lib/profile/obperf $TOOL_DIR/ true
   do_install $SOURCE_DIR/deps/3rd/home/admin/oceanbase/bin/obshell $BIN_DIR/obshell true
@@ -191,6 +191,9 @@ then
   do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.13.so.1.0 $LIB_DIR true
 
   do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/deps/devel/lib/libhdfs.so $LIB_DIR true
+  # 单体 lib_ob_paimon.so：所有 format/index/fs 工厂已 --whole-archive 重链接进
+  # 单体并在 dlopen 时自注册，同伴 libpaimon_*.so 不再随 RPM 提供，无需拷贝。
+  do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/deps/devel/lib64/lib_ob_paimon.so $LIB_DIR true
 
   # 下载 java-extensions jar 到 lib (仅当指定 --with-java 时)
   if [[ "$WITH_JAVA" == "true" ]]; then

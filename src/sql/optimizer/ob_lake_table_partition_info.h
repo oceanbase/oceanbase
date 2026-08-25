@@ -8,6 +8,7 @@
 
 #include "sql/optimizer/file_prune/ob_iceberg_file_pruner.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
+#include "sql/optimizer/file_prune/ob_ext_file_pruner.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 
 namespace oceanbase
@@ -32,7 +33,7 @@ public:
     file_pruner_(NULL),
     iceberg_file_descs_(allocator)
   {}
-  virtual ~ObLakeTablePartitionInfo() {}
+  virtual ~ObLakeTablePartitionInfo() override;
 
   virtual int assign(const ObTablePartitionInfo &other) override;
   virtual uint64_t get_table_id() const override
@@ -88,6 +89,9 @@ public:
                                   ObIArray<ObIcebergFileDesc*> &file_descs);
 
   int select_location_for_hive(ObExecContext *exec_ctx, ObIArray<ObHiveFileDesc> &file_descs);
+  int select_location_for_plugin(ObExecContext *exec_ctx,
+                                 ObIArray<ObPluginSplitDesc *> &plugin_splits,
+                                 ObExtTableDispatchMode dispatch_mode);
   int get_partition_values(ObIArray<ObString> &partition_values) const;
 private:
   int check_iceberg_use_hash_part(const ObIArray<iceberg::PartitionSpec*> &partition_specs, int64_t &offset);
@@ -95,6 +99,10 @@ private:
   int init_tablet_loc_by_addr(ObCandiTabletLoc &tablet_loc, const ObAddr &addr, const uint64_t part_id);
   int add_table_file(ObCandiTabletLoc &tablet_loc, ObIcebergFileDesc *file_desc);
   int add_table_file_for_hive(ObCandiTabletLoc &tablet_loc, ObHiveFileDesc &file_desc);
+  int select_location_for_plugin_round_robin(ObExecContext *exec_ctx,
+                                             ObIArray<ObPluginSplitDesc *> &plugin_splits);
+  int add_table_file_for_plugin(ObCandiTabletLoc &tablet_loc,
+                                ObPluginSplitDesc *split_desc);
   template <typename T>
   int filter_files_by_sample(const ObDMLStmt &stmt, const uint64_t table_id, common::ObIArray<T> &files);
 

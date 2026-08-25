@@ -1,0 +1,133 @@
+/**
+ * Copyright (c) 2023 OceanBase
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+
+#include "apache-arrow/arrow/api.h"
+#include "plugin/legacy/interface/ob_plugin_intf.h"
+#include "plugin/legacy/external_table/ob_external_struct.h"
+#include "plugin/legacy/external_table/ob_external_table_schema.h"
+#include "common/object/ob_object.h"
+
+namespace oceanbase {
+
+namespace sql {
+class ObRawExpr;
+}
+
+namespace plugin {
+
+class ObExternalScanner;
+class ObExternalDataEngine;
+
+class ObIExternalDescriptor : public ObIPluginDescriptor
+{
+public:
+  ObIExternalDescriptor() = default;
+  virtual ~ObIExternalDescriptor() = default;
+
+  // int init(ObPluginParam *) override;
+  // int deinit(ObPluginParam *) override;
+
+  virtual const char *name() const = 0;
+
+  /**
+   * validate the properties
+   * @param[in] table_schema The schema of the table which will be created
+   * @param[in] plugin_name  Plugin name.
+   * @param[inout] properties The properties given(from SQL request usually) and
+   * set the default values if the key not exist.
+   * @return return OB_SUCCESS if everything OK, others return an error code.
+   */
+  virtual int validate_properties(ObIAllocator &allocator,
+                                  const external::ObTableSchema &table_schema,
+                                  const ObString &plugin_name,
+                                  ObString &parameters)
+  {
+    return OB_SUCCESS;
+  }
+
+  virtual int create_data_engine(ObIAllocator &allocator,
+                                 const ObString &parameters,
+                                 const ObString &plugin_name,
+                                 ObExternalDataEngine *&data_engine) = 0;
+
+  /**
+   * Lazily discover and register data-source sub-plugins (e.g. odps, jdbc) on first use.
+   * @details For plugins backed by an external runtime (such as the JVM), enumerating the
+   * available data sources is expensive and may require starting that runtime. So it is
+   * deferred until the first external table lookup misses, rather than done at startup.
+   * Default no-op for plugins that have no sub-plugins. Implementations must be thread-safe
+   * and run the actual discovery at most once.
+   */
+  virtual int discover_sub_plugins(ObPluginParam *param)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+class ObExternalDataEngine
+{
+public:
+  ObExternalDataEngine(const ObString &parameters)
+      : parameters_(parameters)
+  {}
+
+  virtual ~ObExternalDataEngine() = default;
+
+  virtual int init() = 0;
+  virtual void destroy() = 0;
+
+  virtual int display(ObIAllocator &allocator, ObString &display_string)
+  {
+    return ob_write_string(allocator, parameters_, display_string);
+  }
+
+  virtual int split_task(ObIAllocator &allocator, int64_t parallelism, ObIArray<ObString> &tasks) = 0;
+
+  /**
+   * detect which filters(predicate) can pushdown
+   * @param[in] allocator The allocator to allocate memory for `pushdown_filters`.
+   * @param[in] filters The filters may pushdown to storage or external table data source.
+   * @param[out] pushdown_filters The filters serialized. Should be empty string if any filter can't be supported.
+   * The number of `pushdown_filters` should be equals to `filters`.
+   */
+  virtual int pushdown_filters(ObIAllocator &allocator,
+                               const common::ParamStore &param_store,
+                               const ObIArray<sql::ObRawExpr *> &filters,
+                               ObIArray<ObString> &pushdown_filters) = 0;
+  virtual int open_scanner(ObIAllocator &allocator,
+                           const ObExternalTableScanParam &param,
+                           ObExternalScanner *&scanner) = 0;
+
+protected:
+  const ObString &parameters_;
+};
+
+class ObExternalScanner
+{
+public:
+  ObExternalScanner() = default;
+  virtual ~ObExternalScanner() = default;
+
+  virtual int init() = 0;
+  virtual int rescan(const ObExternalTableScanParam &param) = 0;
+  /**
+   * get the schema of `record_batch` returned by `next`
+   * @detauls A schema describe a list of columns. `table name` is not needed.
+   */
+  virtual int schema(std::shared_ptr<arrow::Schema> &schema) = 0;
+
+  /**
+   * get a batch of records
+   * @details You should return array columns in the same order with `shema`.
+   */
+  virtual int next(int64_t capacity, arrow::RecordBatch *&record_batch) = 0;
+
+  virtual void destroy() = 0;
+};
+
+} // namespace plugin
+} // namespace oceanbase

@@ -3108,6 +3108,12 @@ struct MergeKeyInfoHelper
                                ObIArray<ObColumnRefRawExpr*> &column_exprs,
                                common::ObLakeTableStat &table_stat,
                                ObIArray<common::ObLakeColumnStat*> &column_stats);
+    int get_plugin_table_stat(ObIAllocator &allocator,
+                              uint64_t ref_table_id,
+                              ObIArray<uint64_t> &column_ids,
+                              ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                              common::ObLakeTableStat &table_stat,
+                              ObIArray<common::ObLakeColumnStat*> &column_stats);
     int get_common_lake_table_stat(ObIAllocator &allocator,
                                    uint64_t ref_table_id,
                                    ObIArray<ObColumnRefRawExpr*> &column_exprs,

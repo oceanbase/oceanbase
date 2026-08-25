@@ -280,7 +280,7 @@ int ObRestCatalog::fetch_table_statistics(ObIAllocator &allocator,
   if (OB_ISNULL(table_metadata)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table metadata", K(ret));
-  } else if (ObLakeTableFormat::ICEBERG == table_metadata->get_format_type()) {
+  } else if (share::is_iceberg_lake_table(table_metadata->get_format_type())) {
     ObOptCatalogTableStat *external_table_stat = nullptr;
     ObIcebergCatalogStatHelper stat_helper(allocator);
     if (OB_FAIL(stat_helper.fetch_iceberg_table_statistics(table_metadata,

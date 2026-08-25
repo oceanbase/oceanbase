@@ -8,3 +8,8 @@ target_sources(test_ob_limit_vec_op PRIVATE
   utils/expr_maker.cpp
   utils/mock_child.cpp
   utils/test_op_base.cpp)
+sql_unittest(test_arrow_data_loader)
+target_sources(test_arrow_data_loader PRIVATE
+  utils/expr_maker.cpp
+  utils/mock_child.cpp
+  utils/test_op_base.cpp)

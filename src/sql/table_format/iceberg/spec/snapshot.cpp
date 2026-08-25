@@ -32,6 +32,16 @@ Snapshot::Snapshot(ObIAllocator &allocator)
 {
 }
 
+Snapshot::~Snapshot()
+{
+  for (int i = 0; i < cached_manifest_file_.count(); ++i) {
+    if (OB_NOT_NULL(cached_manifest_file_.at(i))) {
+      cached_manifest_file_.at(i)->~ManifestFile();
+    }
+  }
+  cached_manifest_file_.reset();
+}
+
 int Snapshot::init_from_json(const ObJsonObject &json_object)
 {
   int ret = OB_SUCCESS;

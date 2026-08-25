@@ -118,6 +118,7 @@ enable_global_background_resource_isolation
 enable_gts_standalone
 enable_hbase_rowkey_ttl
 enable_kv_ttl
+enable_lake_table_parallel_resolving
 enable_lock_priority
 enable_logonly_replica
 enable_logservice
@@ -156,6 +157,7 @@ external_table_csv_max_buffer_size
 external_table_disk_cache_max_percentage
 external_table_io_hole_size
 external_table_io_range_size
+ext_plugin_config
 freeze_trigger_percentage
 function_round_dialect
 fuse_row_cache_priority
@@ -180,6 +182,7 @@ kv_transport_compress_threshold
 kv_ttl_delete_max_ops
 kv_ttl_duty_duration
 kv_ttl_history_recycle_interval
+lake_table_pruning_thread_count
 large_query_threshold
 large_query_worker_percentage
 leak_mod_to_check

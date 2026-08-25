@@ -8,7 +8,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #define private public
-#include "plugin/share/ob_properties.h"
+#include "plugin/legacy/share/ob_properties.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;

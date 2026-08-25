@@ -16,14 +16,97 @@ namespace oceanbase
 {
 namespace share
 {
-enum class ObLakeTableFormat
+// Keep the four-byte enum representation used by existing schema/plan fields while
+// allowing dynamically encoded plugin values in the range [-256, -1].
+enum class ObLakeTableFormat : int32_t
 {
+  // C++ external-table plugin. The concrete plugin identity is the enum value
+  // itself: the inclusive range [LAKE_PLUGIN_PLACEHOLDER_BEGIN,
+  // LAKE_PLUGIN_PLACEHOLDER_END] maps to resident plugin slots [255, 0] in
+  // ObExtFormatRegistry. So lake_table_format_ (already carried in every plan
+  // struct, serialized via OB_UNIS) doubles as the plugin identity — no separate
+  // plugin name/slot field is carried, and NO OB_UNIS_VERSION bump is needed.
+  // The plugin order in `ext_plugin_config` maps to slot 0..255.
+  LAKE_PLUGIN_PLACEHOLDER_BEGIN = -256,
+  LAKE_PLUGIN_PLACEHOLDER_END = -1,
   INVALID = 0,
   ICEBERG,
   HIVE,
   ODPS,
-  PAIMON
 };
+
+/// Raw plugin slot index ([0, 256)) used internally by ObExtFormatRegistry (and the
+/// loader/virtual-table diagnostic). It is NOT a field in any plan struct — the
+/// plugin identity in the runtime flow is carried by the ObLakeTableFormat enum
+/// value itself (within the plugin-placeholder range). Convert with lake_plugin_slot_of() /
+/// lake_plugin_format_of().
+using ObPluginSlot = int16_t;
+static constexpr ObPluginSlot INVALID_LAKE_PLUGIN_SLOT = -1;
+
+/// Enum value for the first plugin slot (slot 0).
+static constexpr int64_t LAKE_PLUGIN_PLACEHOLDER_BASE
+    = static_cast<int64_t>(ObLakeTableFormat::LAKE_PLUGIN_PLACEHOLDER_END);
+/// Max number of plugin slots (matches ObExtFormatRegistry::MAX_PLUGINS).
+static constexpr int64_t LAKE_PLUGIN_PLACEHOLDER_COUNT = 256;
+
+/// True iff `slot` can be represented by the plugin-placeholder enum range.
+inline bool is_valid_lake_plugin_slot(const ObPluginSlot slot)
+{
+  return slot >= 0 && static_cast<int64_t>(slot) < LAKE_PLUGIN_PLACEHOLDER_COUNT;
+}
+
+/// True iff `format` is one of the plugin placeholder slots.
+inline bool is_lake_plugin_table(const ObLakeTableFormat format)
+{
+  const int64_t v = static_cast<int64_t>(format);
+  return v <= LAKE_PLUGIN_PLACEHOLDER_BASE
+         && v > LAKE_PLUGIN_PLACEHOLDER_BASE - LAKE_PLUGIN_PLACEHOLDER_COUNT;
+}
+
+/// True iff `format` identifies an Iceberg lake table.
+inline bool is_iceberg_lake_table(const ObLakeTableFormat format)
+{
+  return ObLakeTableFormat::ICEBERG == format;
+}
+
+/// True iff `format` identifies a Hive lake table.
+inline bool is_hive_lake_table(const ObLakeTableFormat format)
+{
+  return ObLakeTableFormat::HIVE == format;
+}
+
+/// Extract the plugin slot ([0, 256)) from a plugin-placeholder enum value, or
+/// INVALID_LAKE_PLUGIN_SLOT when `format` is not in the plugin range.
+inline ObPluginSlot lake_plugin_slot_of(const ObLakeTableFormat format)
+{
+  return is_lake_plugin_table(format)
+             ? static_cast<ObPluginSlot>(
+                   LAKE_PLUGIN_PLACEHOLDER_BASE - static_cast<int64_t>(format))
+             : INVALID_LAKE_PLUGIN_SLOT;
+}
+
+/// Build the plugin-placeholder enum value for slot `slot` ([0, 256)), or
+/// INVALID when the supplied slot is out of range.
+inline ObLakeTableFormat lake_plugin_format_of(const ObPluginSlot slot)
+{
+  return is_valid_lake_plugin_slot(slot)
+             ? static_cast<ObLakeTableFormat>(LAKE_PLUGIN_PLACEHOLDER_BASE - slot)
+             : ObLakeTableFormat::INVALID;
+}
+
+/// Catalog-backed lake formats (Iceberg / Hive / C++ plugin). ODPS is not included.
+inline bool is_lake_external_table(const ObLakeTableFormat format)
+{
+  return is_iceberg_lake_table(format)
+         || is_hive_lake_table(format)
+         || is_lake_plugin_table(format);
+}
+
+/// ODPS materializes catalog metadata into OB schema (unlike Iceberg/Hive/plugin).
+inline bool is_ob_external_table(const ObLakeTableFormat format)
+{
+  return (ObLakeTableFormat::ODPS == format || ObLakeTableFormat::INVALID == format);
+}
 
 enum class ObURISelectionMode
 {

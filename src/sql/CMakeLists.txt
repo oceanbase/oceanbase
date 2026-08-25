@@ -253,6 +253,7 @@ ob_set_subtarget(ob_sql engine_aggregate
 
 ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_arrow_basic.cpp
+  engine/basic/ob_arrow_data_loader.cpp
   engine/basic/ob_batch_result_holder.cpp
   engine/basic/ob_compact_row.cpp
   engine/basic/ob_temp_block_store.cpp
@@ -1374,6 +1375,9 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/file_prune/ob_iceberg_file_filter.cpp
   optimizer/file_prune/ob_lake_table_file_map.cpp
   optimizer/file_prune/ob_lake_table_fwd.cpp
+  optimizer/file_prune/ob_lake_table_optimizer_utils.cpp
+  optimizer/file_prune/ob_ext_file_pruner.cpp
+  optimizer/file_prune/ob_ext_predicate_json.cpp
   optimizer/ob_lake_table_partition_info.cpp
   optimizer/ob_log_rescan.cpp
 )
@@ -1796,6 +1800,15 @@ ob_set_subtarget(ob_sql iceberg
   table_format/iceberg/write/ob_manifest_writer.cpp
   table_format/iceberg/write/ob_snapshot_producer.cpp
   table_format/iceberg/write/metadata_helper.cpp
+)
+
+ob_set_subtarget(ob_sql lake_table_common
+  table_format/common/utils/ob_lake_table_executor.cpp
+)
+
+ob_set_subtarget(ob_sql ext_plugin
+  engine/table/ob_ext_table_plugin_row_iter.cpp
+  engine/table/ob_ext_table_java_plugin_row_iter.cpp
 )
 
 ob_set_subtarget(ob_sql parquet

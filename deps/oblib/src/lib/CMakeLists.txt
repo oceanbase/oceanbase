@@ -369,6 +369,7 @@ ob_set_subtarget(oblib_lib utility
   utility/ob_unify_serialize.cpp
   utility/ob_rpc_authentication_utility.cpp
   utility/ob_hyperloglog.cpp
+  utility/ob_ld_library_path_util.cpp
 )
 
 ob_set_subtarget(oblib_lib ash

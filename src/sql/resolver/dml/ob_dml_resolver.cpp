@@ -37,6 +37,7 @@
 #endif
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/catalog/ob_catalog_utils.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/ob_sql_mock_schema_utils.h"
@@ -6148,7 +6149,7 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
   }
   if (OB_SUCC(ret)) {
     if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
-        ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_ ||
+        ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format.format_type_ ||
         ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
       if (OB_FAIL(table_schema.set_external_properties(format_str))) {
         LOG_WARN("failed to set external properties", K(ret));
@@ -11460,13 +11461,16 @@ int ObDMLResolver::resolve_external_table_generated_column(
       }
     } else if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_ ||
                ObExternalFileFormat::ORC_FORMAT == format.format_type_ ||
-               ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_ ||
-               ObLakeTableFormat::ICEBERG == table_schema->get_lake_table_format()) {
+               ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format.format_type_ ||
+               ObExternalFileFormat::CPP_PLUGIN_FORMAT == format.format_type_ ||
+               share::is_iceberg_lake_table(table_schema->get_lake_table_format()) ||
+               share::is_lake_plugin_table(table_schema->get_lake_table_format())) {
       ObRawExpr *cast_expr = NULL;
       ObRawExpr *get_path_expr = NULL;
       ObRawExpr *cast_type_expr = NULL;
       ColumnIndexType column_index_type = ColumnIndexType::NAME;
-      if (ObLakeTableFormat::ICEBERG == table_schema->get_lake_table_format()) {
+      if (share::is_iceberg_lake_table(table_schema->get_lake_table_format()) ||
+          share::is_lake_plugin_table(table_schema->get_lake_table_format())) {
         column_index_type = ColumnIndexType::ID;
       } else {
         if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_) {

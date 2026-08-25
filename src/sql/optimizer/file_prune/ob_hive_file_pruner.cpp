@@ -27,7 +27,7 @@ using namespace oceanbase::common;
 static const char HIVE_DEFAULT_PARTITION_VALUE[] = "__HIVE_DEFAULT_PARTITION__";
 
 ObHiveFilePruner::ObHiveFilePruner(common::ObIAllocator &allocator)
-    : ObILakeTableFilePruner(allocator, PrunnerType::HIVE), sql_schema_guard_(),
+    : ObILakeTableFilePruner(allocator), sql_schema_guard_(),
       hive_part_bounds_(allocator_), part_column_ids_(allocator_),
       use_fast_path_(false)
 {
@@ -40,6 +40,22 @@ void ObHiveFilePruner::reset()
   hive_part_bounds_.reset();
   part_column_ids_.reset();
   use_fast_path_ = false;
+}
+
+int ObHiveFilePruner::clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const
+{
+  int ret = OB_SUCCESS;
+  pruner = nullptr;
+  ObHiveFilePruner *tmp = nullptr;
+  if (OB_ISNULL(tmp = OB_NEWx(ObHiveFilePruner, &allocator, allocator))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObHiveFilePruner");
+  } else if (OB_FAIL(tmp->assign(*this))) {
+    LOG_WARN("failed to assign hive file pruner");
+  } else {
+    pruner = tmp;
+  }
+  return ret;
 }
 
 int ObHiveFilePruner::assign(const ObILakeTableFilePruner &o)

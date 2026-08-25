@@ -325,7 +325,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
       } else if (OB_FAIL(ObSQLUtils::get_external_table_type(external_table_format_str, external_table_type))) {
         LOG_WARN("failed to get external table type", K(ret), K(external_table_format_str));
       } else if (ObExternalFileFormat::ODPS_FORMAT == external_table_type ||
-                 ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+                 ObExternalFileFormat::JAVA_PLUGIN_FORMAT == external_table_type) {
         int64_t expected_location_cnt = std::min(dfo.get_dop(), all_locations.count());
         if (1 == expected_location_cnt) {
           if (OB_FAIL(target_locations.push_back(GCTX.self_addr()))) {
@@ -422,7 +422,7 @@ int ObPXServerAddrUtil::assign_external_files_to_sqc(
               dfo, exec_ctx, sqcs, parallel, odps_api_mode))) {
         LOG_WARN("failed to assisn odps file to sqcs", K(files), K(ret));
       }
-    } else if (ObExternalFileFormat::PLUGIN_FORMAT == external_table_type) {
+    } else if (ObExternalFileFormat::JAVA_PLUGIN_FORMAT == external_table_type) {
       if (OB_FAIL(ObExternalTableUtils::plugin_split_tasks(
               exec_ctx.get_allocator(), external_table_format_str, dfo, sqcs, parallel))) {
         LOG_WARN("failed to do plugin_split_tasks", K(ret));

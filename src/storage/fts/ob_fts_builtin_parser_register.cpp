@@ -4,7 +4,7 @@
  */
 
 #include "lib/ob_errno.h"
-#include "plugin/sys/ob_plugin_helper.h"
+#include "plugin/legacy/sys/ob_plugin_helper.h"
 #include "storage/fts/ob_beng_ft_parser.h"
 #include "storage/fts/ob_fts_literal.h"
 #include "storage/fts/ob_fts_plugin_helper.h"

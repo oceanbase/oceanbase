@@ -21,9 +21,9 @@
 #include "share/ob_dynamic_partition_manager.h"
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/ob_license_utils.h"
-#include "plugin/interface/ob_plugin_external_intf.h"
-#include "plugin/external_table/ob_external_struct.h"
-#include "plugin/sys/ob_plugin_helper.h"
+#include "plugin/legacy/interface/ob_plugin_external_intf.h"
+#include "plugin/legacy/external_table/ob_external_struct.h"
+#include "plugin/legacy/sys/ob_plugin_helper.h"
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
 #include "rootserver/ob_random_partition_helper.h"
@@ -2948,7 +2948,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             if (OB_SUCC(ret)) {
               //TODO: 其他地方检查ObExternalFileFormat::ODPS_FORMAT == format.format_type_
               if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
-                  ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_ ||
+                  ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format.format_type_ ||
                   ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
                 if (OB_FAIL(arg.schema_.set_external_properties(format_str))) {
                   LOG_WARN("failed to set external properties", K(ret));
@@ -2983,7 +2983,7 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               } else {
                 if (OB_SUCC(ret)) {
                   if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ ||
-                      ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+                      ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format.format_type_) {
                     ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
                     if (OB_ISNULL(create_table_stmt)) {
                       ret = OB_ERR_UNEXPECTED;
@@ -3573,7 +3573,7 @@ int ObDDLResolver::resolve_column_definition_ref(ObColumnSchemaV2 &column,
 int ObDDLResolver::check_format_valid(ObExternalFileFormat &format, bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  if (ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+  if (ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format.format_type_) {
     ObMalloc malloc(ObMemAttr(MTL_ID(), "PluginParameter"));
     ObString parameters = format.plugin_format_.parameters();
     ObString engine_type = format.plugin_format_.type_name();
@@ -3597,6 +3597,9 @@ int ObDDLResolver::check_format_valid(ObExternalFileFormat &format, bool &is_val
     }
   } else if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
     is_valid = true;
+  } else if (ObExternalFileFormat::CPP_PLUGIN_FORMAT == format.format_type_) {
+    // C++ plugin Lake tables are built by external catalogs only.
+    is_valid = false;
   // } else if (ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
   //   is_valid = true;
   } else {

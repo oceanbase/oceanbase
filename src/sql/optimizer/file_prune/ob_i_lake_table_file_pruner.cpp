@@ -7,6 +7,7 @@
 
 #include "ob_i_lake_table_file_pruner.h"
 
+#include "share/rc/ob_tenant_base.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/table_format/hive/ob_hive_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
@@ -159,10 +160,10 @@ bool ObFieldBound::is_intersect(const ObFieldBound &r_bound)
   return intersect;
 }
 
-ObILakeTableFilePruner::ObILakeTableFilePruner(common::ObIAllocator &allocator, PrunnerType type)
+ObILakeTableFilePruner::ObILakeTableFilePruner(common::ObIAllocator &allocator)
     : is_partitioned_(true), inited_(false), need_all_(false), all_partitions_selected_(false), allocator_(allocator),
       loc_meta_(allocator_), column_ids_(allocator_), column_metas_(allocator_),
-      file_filter_spec_(allocator_), type_(type), partition_values_(allocator_)
+      file_filter_spec_(allocator_), partition_values_(allocator_)
 {
 }
 
@@ -175,7 +176,6 @@ int ObILakeTableFilePruner::assign(const ObILakeTableFilePruner &other)
     is_partitioned_ = other.is_partitioned_;
     need_all_ = other.need_all_;
     all_partitions_selected_ = other.all_partitions_selected_;
-    type_ = other.type_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
     } else if (OB_FAIL(column_ids_.assign(other.column_ids_))) {
@@ -205,6 +205,7 @@ void ObILakeTableFilePruner::reset()
   column_metas_.reset();
   partition_values_.reset();
 }
+
 
 int ObILakeTableFilePruner::generate_column_meta_info(const ObDMLStmt &stmt)
 {
@@ -423,7 +424,7 @@ int ObLakeTablePushDownFilter::normalization_column_id(uint64_t ob_column_id)
   //   - hive 需要根据 column id 判断当前 column 是否是分区键，并获取对应的分区值
   //   - iceberg 需要根据 column id ， 从 manifest 里面获取对应的最大值、最小值
   // 因为 iceberg 的 manifest 里面的 column id 是原始的 column id （没有经过 ob 加上偏移量的）
-  // （虽然 hive 其实可以不用）所以这里统一都用了原始 column id （后面 paimon 也需要用）
+  // （虽然 hive 其实可以不用）所以这里统一都用了原始 column id。
   return iceberg::ObIcebergUtils::get_iceberg_field_id(ob_column_id);
 }
 

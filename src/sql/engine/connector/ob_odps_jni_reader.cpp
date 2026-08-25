@@ -561,7 +561,6 @@ int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, in
         LOG_WARN("unexpected null schema in non-first arrow batch", K(ret));
       }
       if (OB_SUCC(ret)) {
-
         // Some producers may return a top-level StructArray with non-zero
         // null_count, which ImportRecordBatch rejects. Fallback to
         // ImportArray + RecordBatch::Make.
@@ -588,7 +587,6 @@ int ObOdpsJniReader::do_get_next_split_by_odps(int64_t *read_rows, bool *eof, in
                     K(ret),
                     K(result_import_array.status().ToString().c_str()));
         }
-
 
         if (OB_SUCC(ret)) {
           long cur_rows = cur_reader_->num_rows();

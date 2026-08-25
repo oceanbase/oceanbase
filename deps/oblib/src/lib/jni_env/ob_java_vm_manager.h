@@ -206,10 +206,6 @@ private:
   int jni_find_class(const char *clazz, jclass *gen_clazz);
   int open_lib_(const char *lib_name, const ObSqlString &search_paths, void *&lib_handle);
 
-  static bool search_dir_file(const char *dir, const char *file_name);
-  static int build_lib_search_paths_(ObSqlString &paths);
-  int get_lib_path(const char *lib_name, const ObSqlString &search_paths, ObSqlString &path);
-
   int open_java_lib();
   int open_hdfs_lib();
 

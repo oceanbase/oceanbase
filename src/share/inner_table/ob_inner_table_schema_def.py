@@ -17624,7 +17624,7 @@ def_table_schema(
     ('interface_version', 'varchar:80', 'true', 'NULL'),  # 该插件实现的具体接口API版本
     ('author', 'varchar:64', 'true', 'NULL'),             # 插件作者信息
     ('license', 'varchar:64', 'true', 'NULL'),            # 插件LICENSE
-    ('description', 'varchar:65535', 'true', 'NULL')      # 插件描述信息
+    ('description', 'varchar:65535', 'true', 'NULL')      # 插件描述信息(外表格式插件行复用为加载失败原因)
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed'

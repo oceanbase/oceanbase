@@ -4711,8 +4711,8 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         } else {
           gi_op->set_used_by_external_table();
         }
-        if (static_cast<ObLogTableScan *>(this)->get_lake_table_type() == share::ObLakeTableFormat::ICEBERG
-            || static_cast<ObLogTableScan *>(this)->get_lake_table_type() == share::ObLakeTableFormat::HIVE) {
+        if (share::is_lake_external_table(
+                static_cast<ObLogTableScan *>(this)->get_lake_table_type())) {
           gi_op->set_used_by_lake_table();
         }
       }

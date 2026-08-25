@@ -85,6 +85,7 @@ class TableMetadata : public SpecWithAllocator
 {
 public:
   explicit TableMetadata(ObIAllocator &allocator);
+  ~TableMetadata();
   int assign(const TableMetadata &other);
 
   // The metadata file location. This is used by writers to determine whether to writer

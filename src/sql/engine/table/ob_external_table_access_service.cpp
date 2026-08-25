@@ -9,6 +9,7 @@
 #include "lib/container/ob_bitmap.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "plugin/v2/external_table/ob_ext_format_registry.h"
 #include "share/ob_device_manager.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
@@ -24,11 +25,12 @@
 #include "sql/engine/table/ob_orc_table_row_iter.h"
 #include "sql/engine/table/ob_orc_min_max_iter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
-#include "plugin/external_table/ob_plugin_external_table_row_iter.h"
+#include "sql/engine/table/ob_ext_table_java_plugin_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_iceberg_delete_bitmap_builder.h"
 #include "sql/engine/table/ob_kafka_table_row_iter.h"
+#include "sql/engine/table/ob_ext_table_plugin_row_iter.h"
 
 namespace oceanbase
 {
@@ -554,7 +556,7 @@ int ObExternalTableAccessService::table_scan(
       }
     } else {
       ObExternalFileFormat::FormatType format_type = param.external_file_format_.format_type_;
-      if (param.lake_table_format_ == ObLakeTableFormat::ICEBERG) {
+      if (share::is_iceberg_lake_table(param.lake_table_format_)) {
         ObIcebergScanTask *scan_task = static_cast<ObIcebergScanTask *>(scan_param.scan_tasks_.at(0));
         iceberg::DataFileFormat file_format = scan_task->file_format_;
         if (file_format == iceberg::DataFileFormat::PARQUET) {
@@ -564,6 +566,7 @@ int ObExternalTableAccessService::table_scan(
         } else {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("unsupported iceberg file format", K(file_format), K(ret));
+          format_type = ObExternalFileFormat::INVALID_FORMAT;
         }
       }
 
@@ -628,10 +631,10 @@ int ObExternalTableAccessService::table_scan(
             }
           }
           break;
-        case ObExternalFileFormat::PLUGIN_FORMAT:
-          if (OB_ISNULL(row_iter = OB_NEWx(ObPluginExternalTableRowIterator, (scan_param.allocator_)))) {
+        case ObExternalFileFormat::JAVA_PLUGIN_FORMAT:
+          if (OB_ISNULL(row_iter = OB_NEWx(ObExtTableJavaPluginRowIterator, (scan_param.allocator_)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("failed to allocate memory", K(ret), K(sizeof(ObPluginExternalTableRowIterator)));
+            LOG_WARN("failed to allocate memory", K(ret), K(sizeof(ObExtTableJavaPluginRowIterator)));
           } else {
             LOG_TRACE("success to create plugin row iterator");
           }
@@ -642,6 +645,16 @@ int ObExternalTableAccessService::table_scan(
             LOG_WARN("alloc memory failed", KR(ret));
           }
           break;
+        case ObExternalFileFormat::CPP_PLUGIN_FORMAT: {
+          // cpp .so plugin-backed formats: the generic row iterator drives the plugin
+          // vtable (plan_create / reader_create / reader_next_batch). If the plugin
+          // .so is not loaded, init returns OB_NOT_SUPPORTED.
+          if (OB_ISNULL(row_iter = OB_NEWx(ext_plugin::ObExtTablePluginRowIterator, (scan_param.allocator_)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memory failed for ext row iterator", K(ret));
+          }
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -680,6 +693,7 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
       case ObExternalFileFormat::PARQUET_FORMAT:
       case ObExternalFileFormat::ORC_FORMAT:
       case ObExternalFileFormat::KAFKA_FORMAT:
+      case ObExternalFileFormat::CPP_PLUGIN_FORMAT:
         result->reset();
         break;
       case ObExternalFileFormat::ODPS_FORMAT:
@@ -691,8 +705,8 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
         LOG_WARN("not support to read odps in opensource", K(ret));
 #endif
         break;
-      case ObExternalFileFormat::PLUGIN_FORMAT: {
-        ObPluginExternalTableRowIterator *iter = static_cast<ObPluginExternalTableRowIterator *>(result);
+      case ObExternalFileFormat::JAVA_PLUGIN_FORMAT: {
+        ObExtTableJavaPluginRowIterator *iter = static_cast<ObExtTableJavaPluginRowIterator *>(result);
         iter->reset();
         if (OB_FAIL(iter->rescan(static_cast<ObTableScanParam *>(&param)))) {
           LOG_WARN("failed to do rescan by plugin row iterator", K(ret));

@@ -13,6 +13,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/file/file_directory_utils.h"
+#include "lib/utility/ob_ld_library_path_util.h"
 #include "share/config/ob_server_config.h"
 
 #include "lib/jni_env/ob_java_vm_manager.h"
@@ -254,91 +255,17 @@ int ObJavaVmManager::get_env(JNIEnv *&env) {
 }
 
 
-// Returns true if file_name exists in dir; false if not found or dir is inaccessible.
-bool ObJavaVmManager::search_dir_file(const char *dir, const char *file_name)
-{
-  bool found = false;
-  DIR *dirp = nullptr;
-  if (OB_NOT_NULL(dir) && OB_NOT_NULL(file_name) && OB_NOT_NULL(dirp = opendir(dir))) {
-    dirent *dp = nullptr;
-    while (!found && OB_NOT_NULL(dp = readdir(dirp))) {
-      if (DT_UNKNOWN == dp->d_type || DT_LNK == dp->d_type || DT_REG == dp->d_type) {
-        found = (0 == strcasecmp(file_name, dp->d_name));
-      }
-    }
-    closedir(dirp);
-  }
-  return found;
-}
-
-// Appends LD_LIBRARY_PATH entries to paths. Reads env only; no filesystem I/O.
-int ObJavaVmManager::build_lib_search_paths_(ObSqlString &paths)
-{
-  int ret = OB_SUCCESS;
-  const char *ld_path = std::getenv("LD_LIBRARY_PATH");
-  if (OB_ISNULL(ld_path)) {
-    ret = OB_JNI_ENV_SETUP_ERROR;
-    LOG_WARN("LD_LIBRARY_PATH is not set", K(ret));
-  } else if (OB_FAIL(paths.append_fmt("%s:", ld_path))) {
-    LOG_WARN("failed to append LD_LIBRARY_PATH to search list", K(ret));
-  }
-  return ret;
-}
-
-// Scans search_paths (colon-delimited) for lib_name; writes the full path into path on success.
-int ObJavaVmManager::get_lib_path(const char *lib_name, const ObSqlString &search_paths,
-                                    ObSqlString &path)
-{
-  int ret = OB_SUCCESS;
-  bool found = false;
-  LOG_INFO("lib search paths", KCSTRING(lib_name), K(search_paths.string()));
-  ObString remaining(search_paths.string());
-  while (OB_SUCC(ret) && !found && !remaining.empty()) {
-    ObString dir = remaining.split_on(':');
-    if (dir.empty() && OB_ISNULL(remaining.find(':'))) {
-      dir = remaining;
-      remaining.reset();
-    }
-    while (!dir.empty() && ' ' == *dir.ptr()) {
-      dir.assign_ptr(dir.ptr() + 1, dir.length() - 1);
-    }
-    if (!dir.empty()) {
-      ObSqlString dir_str;
-      if (OB_FAIL(dir_str.append(dir))) {
-        LOG_WARN("failed to copy dir to string", K(ret), K(dir));
-      } else {
-        found = search_dir_file(dir_str.ptr(), lib_name);
-        LOG_DEBUG("searched dir for lib", K(dir), KCSTRING(lib_name), K(found));
-      }
-
-      if (OB_SUCC(ret) && found) {
-        if (OB_FAIL(path.append(dir))) {
-          LOG_WARN("failed to build lib path", K(ret), K(dir));
-        } else if (OB_FAIL(path.append_fmt("/%s", lib_name))) {
-          LOG_WARN("failed to append lib name to path", K(ret), KCSTRING(lib_name));
-        }
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to resolve lib path", K(ret), KCSTRING(lib_name));
-  } else if (!found) {
-    ret = OB_JNI_ENV_SETUP_ERROR;
-    LOG_WARN("lib not found in any search path", K(ret), KCSTRING(lib_name), K(search_paths.string()));
-  } else {
-    LOG_INFO("resolved lib path", KCSTRING(lib_name), K(path.string()));
-  }
-  return ret;
-}
 
 int ObJavaVmManager::open_lib_(const char *lib_name, const ObSqlString &search_paths,
                                  void *&lib_handle)
 {
   int ret = OB_SUCCESS;
   ObSqlString lib_path;
-  if (OB_FAIL(get_lib_path(lib_name, search_paths, lib_path))) {
-    LOG_WARN("failed to get lib path", K(ret), KCSTRING(lib_name));
+  if (OB_FAIL(ObLdLibraryPathUtil::get_lib_path(lib_name, search_paths, lib_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_JNI_ENV_SETUP_ERROR;
+    }
+    LOG_INFO("failed to get lib path", K(ret), KCSTRING(lib_name));
   } else if (OB_ISNULL(lib_handle = LIB_OPEN(lib_path.ptr()))) {
     ret = OB_JNI_ENV_SETUP_ERROR;
     LOG_WARN("failed to open lib", K(ret), K(lib_path.string()), KCSTRING(dlerror()));
@@ -359,7 +286,10 @@ int ObJavaVmManager::open_java_lib()
   const char *jdk8_server = "/jre/lib/amd64/server/";
 #endif
   const char *jdk_higher_version_opt = "/lib/server/";
-  if (OB_FAIL(build_lib_search_paths_(search_paths))) {
+  if (OB_FAIL(ObLdLibraryPathUtil::build_ld_library_search_paths(search_paths))) {
+    if (OB_ERR_UNEXPECTED == ret) {
+      ret = OB_JNI_ENV_SETUP_ERROR;
+    }
     error_msg_ = "LD_LIBRARY_PATH is not set, required to locate libjvm.so";
     LOG_WARN("failed to build lib search paths", K(ret));
   } else if (OB_ISNULL(java_home)) {
@@ -381,7 +311,10 @@ int ObJavaVmManager::open_hdfs_lib()
 {
   int ret = OB_SUCCESS;
   ObSqlString search_paths;
-  if (OB_FAIL(build_lib_search_paths_(search_paths))) {
+  if (OB_FAIL(ObLdLibraryPathUtil::build_ld_library_search_paths(search_paths))) {
+    if (OB_ERR_UNEXPECTED == ret) {
+      ret = OB_JNI_ENV_SETUP_ERROR;
+    }
     LOG_WARN("failed to build lib search paths", K(ret));
   } else if (OB_FAIL(open_lib_("libhdfs.so", search_paths, hdfs_lib_handle_))) {
     LOG_WARN("failed to open hdfs lib", K(ret));

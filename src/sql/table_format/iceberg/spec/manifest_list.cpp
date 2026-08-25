@@ -94,8 +94,17 @@ int PartitionFieldSummary::decode_field(const FieldProjection &field_projection,
 }
 
 ManifestFile::ManifestFile(ObIAllocator &allocator)
-    : SpecWithAllocator(allocator), partitions(allocator_), cached_manifest_entries_(allocator_)
+    : SpecWithAllocator(allocator),
+      partitions(allocator_),
+      manifest_entry_allocator_("IceMfEntry", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      cached_manifest_entries_(manifest_entry_allocator_)
 {
+}
+
+ManifestFile::~ManifestFile()
+{
+  cached_manifest_entries_.reset();
+  manifest_entry_allocator_.reset();
 }
 
 int ManifestFile::decode_field(const FieldProjection &field_projection, avro::Decoder &decoder)
@@ -339,17 +348,24 @@ int ManifestFile::decode_partitions_(const FieldProjection &field_projection,
   return ret;
 }
 
-int ManifestFile::get_manifest_entries(const ObString &access_info,
-                                       ObIArray<ManifestEntry *> &manifest_entries)
+int ManifestFile::load_manifest_entry(const ObString &access_info)
 {
   int ret = OB_SUCCESS;
   if (cached_manifest_entries_.empty()) {
     if (OB_FAIL(get_manifest_entries_(access_info, cached_manifest_entries_))) {
-      LOG_WARN("failed to get manifest entries", K(ret));
+      LOG_WARN("failed to load manifest entries into cache", K(ret));
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
+int ManifestFile::get_manifest_entries(const ObString &access_info,
+                                       ObIArray<ManifestEntry *> &manifest_entries)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(load_manifest_entry(access_info))) {
+    LOG_WARN("failed to load manifest entries into cache", K(ret));
+  } else {
     // 这里不能用 assign，因为 manifest_entries 指所有的 manifest file 的 manifest entries
     for (int64_t idx = 0; OB_SUCC(ret) && idx < cached_manifest_entries_.count(); ++idx) {
       if (OB_FAIL(manifest_entries.push_back(cached_manifest_entries_[idx]))) {
@@ -404,8 +420,10 @@ int ManifestFile::get_manifest_entries_(const ObString &access_info,
       StructType *expected_avro_schema = NULL;
       SchemaProjection schema_projection(tmp_allocator);
       ManifestMetadata *manifest_metadata
-          = NULL; // 为所有 manifest entry 共享，所以需要从 allocator_ 里面创建
-      if (OB_ISNULL(manifest_metadata = OB_NEWx(ManifestMetadata, &allocator_, allocator_))) {
+          = NULL; // 为当前 manifest 的所有 entry 共享，保存在私有 arena 中。
+      if (OB_ISNULL(manifest_metadata = OB_NEWx(ManifestMetadata,
+                                                &manifest_entry_allocator_,
+                                                manifest_entry_allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate manifest metadata", K(ret));
       } else if (OB_FAIL(manifest_metadata->init_from_metadata(metadata))) {
@@ -421,7 +439,7 @@ int ManifestFile::get_manifest_entries_(const ObString &access_info,
         LOG_WARN("failed to project avro schema", K(ret));
       } else {
         avro::DataFileReader<ManifestEntryDatum> avro_reader(std::move(avro_reader_base));
-        ManifestEntryDatum manifest_entry_datum(allocator_,
+        ManifestEntryDatum manifest_entry_datum(manifest_entry_allocator_,
                                                 schema_projection,
                                                 *this,
                                                 *manifest_metadata);

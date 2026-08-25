@@ -36,9 +36,55 @@ const char * ObExternalFileFormat::FORMAT_TYPE_STR[] = {
   "ORC",
   "PLUGIN",
   "KAFKA",
-  "PAIMON"
+  "CPP_PLUGIN"
 };
-static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT, "Not enough initializer for ObExternalFileFormat");
+static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR)
+              == ObExternalFileFormat::MAX_FORMAT,
+              "Not enough format type strings");
+
+int ObCppPluginFormat::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (!plugin_name_.empty()) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, "\"PLUGIN_TYPE\":\"%.*s\"",
+                       static_cast<int>(plugin_name_.length()), plugin_name_.ptr()));
+  }
+  if (OB_SUCC(ret) && !reader_options_json_.empty()) {
+    // Hex-encoded: the options JSON may contain arbitrary characters.
+    ObCStringHelper helper;
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, "\"READER_OPTIONS\":\"%s\"",
+                       helper.convert(ObHexStringWrap(reader_options_json_))));
+  }
+  return ret;
+}
+
+int ObCppPluginFormat::load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  // PLUGIN_TYPE is optional (legacy marker-only strings omit it). Match by
+  // name rather than position so absence is silently tolerated.
+  if (OB_NOT_NULL(node)
+      && 0 == node->name_.case_compare("PLUGIN_TYPE")
+      && json::JT_STRING == node->value_->get_type()) {
+    OZ (ob_write_string(allocator, node->value_->get_string(), plugin_name_));
+    node = node->get_next();
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(node)
+      && 0 == node->name_.case_compare("READER_OPTIONS")
+      && json::JT_STRING == node->value_->get_type()) {
+    char *buf = nullptr;
+    int64_t len = 0;
+    if (OB_FAIL(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, buf, len))) {
+      LOG_WARN("failed to unhex reader options", K(ret));
+    } else {
+      reader_options_json_.assign_ptr(buf, static_cast<int32_t>(len));
+    }
+    node = node->get_next();
+  }
+  return ret;
+}
 
 int ObODPSGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int64_t &pos) const
 {
@@ -1326,7 +1372,8 @@ int ObExternalFileFormat::to_string(char *buf, const int64_t buf_len, int64_t &p
   int ret = OB_SUCCESS;
   bool is_valid_format = format_type_ > INVALID_FORMAT && format_type_ < MAX_FORMAT;
   OZ(J_OBJ_START());
-  OZ(databuff_print_kv(buf, buf_len, pos, "\"TYPE\"", is_valid_format ? ObExternalFileFormat::FORMAT_TYPE_STR[format_type_] : "INVALID"));
+  const char *type_str = is_valid_format ? ObExternalFileFormat::FORMAT_TYPE_STR[format_type_] : "INVALID";
+  OZ(databuff_print_kv(buf, buf_len, pos, "\"TYPE\"", type_str));
   switch (format_type_) {
     case CSV_FORMAT:
       OZ(csv_format_.to_json_kv_string(buf, buf_len, pos, into_outfile));
@@ -1341,7 +1388,7 @@ int ObExternalFileFormat::to_string(char *buf, const int64_t buf_len, int64_t &p
     case ORC_FORMAT:
       OZ(orc_format_.to_json_kv_string(buf, buf_len, pos));
       break;
-    case PLUGIN_FORMAT: {
+    case JAVA_PLUGIN_FORMAT: {
       J_COMMA();
       pos += plugin_format_.to_json_string(buf + pos, buf_len - pos);
       break;
@@ -1349,6 +1396,12 @@ int ObExternalFileFormat::to_string(char *buf, const int64_t buf_len, int64_t &p
     case KAFKA_FORMAT:
       OZ(kafka_format_.to_json_kv_string(buf, buf_len, pos));
       OZ(csv_format_.to_json_kv_string(buf, buf_len, pos, into_outfile));
+      break;
+    case CPP_PLUGIN_FORMAT:
+      // Persisted as {"TYPE":"CPP_PLUGIN","PLUGIN_TYPE":"<plugin_name_>"}.
+      // The plugin name is the only plugin-specific payload; it lives only in
+      // this format JSON (the runtime identity is the slot in lake_table_format_).
+      OZ(cpp_plugin_format_.to_json_kv_string(buf, buf_len, pos));
       break;
     default:
       // do nothing, format type can be invalid
@@ -1530,13 +1583,18 @@ int ObExternalFileFormat::load_from_string_(const ObString &str, ObIAllocator &a
       LOG_WARN("unexpected json format", K(ret), K(str));
     } else {
       ObString format_type_str = format_type_node->value_->get_string();
-      for (int i = 0; i < array_elements(ObExternalFileFormat::FORMAT_TYPE_STR); ++i) {
+      bool matched = false;
+      for (int i = 0; i < MAX_FORMAT; ++i) {
         if (format_type_str.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i]) == 0) {
           format_type_ = static_cast<FormatType>(i);
+          matched = true;
           break;
         }
       }
-      if (parse_format_type_only) {
+      if (!matched) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported external file format type", K(ret), K(format_type_str));
+      } else if (parse_format_type_only) {
       } else {
         format_type_node = format_type_node->get_next();
         switch (format_type_) {
@@ -1553,13 +1611,19 @@ int ObExternalFileFormat::load_from_string_(const ObString &str, ObIAllocator &a
           case ORC_FORMAT:
             OZ (orc_format_.load_from_json_data(format_type_node, allocator));
             break;
-          case PLUGIN_FORMAT:
+          case JAVA_PLUGIN_FORMAT:
             OZ (plugin_format_.init(allocator));
             OZ (plugin_format_.load_from_json_node(format_type_node));
             break;
           case KAFKA_FORMAT:
             OZ (kafka_format_.load_from_json_data(format_type_node, allocator));
             OZ (csv_format_.load_from_json_data(format_type_node, allocator));
+            break;
+          case CPP_PLUGIN_FORMAT:
+            // PLUGIN_TYPE carries the plugin name (optional: legacy
+            // marker-only strings omit it). The runtime plugin identity is the
+            // slot in lake_table_format_, not this name string.
+            OZ (cpp_plugin_format_.load_from_json_data(format_type_node, allocator));
             break;
           default:
             ret = OB_ERR_UNEXPECTED;
@@ -1669,7 +1733,7 @@ int ObExternalFileFormat::mock_gen_column_def(
       }
       break;
     }
-    case PLUGIN_FORMAT: {
+    case JAVA_PLUGIN_FORMAT: {
       if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
                                       N_EXTERNAL_FILE_ROW,
                                       column.get_column_name_str().length(),

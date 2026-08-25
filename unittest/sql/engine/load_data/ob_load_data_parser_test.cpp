@@ -308,6 +308,21 @@ TEST_F(TestParser, general_parser_escape)
 
 }
 
+TEST_F(TestParser, cpp_plugin_format_json_round_trip)
+{
+  ObArenaAllocator allocator;
+  ObExternalFileFormat format;
+  ObString format_json;
+  format.format_type_ = ObExternalFileFormat::CPP_PLUGIN_FORMAT;
+
+  ASSERT_EQ(OB_SUCCESS, format.to_string_with_alloc(format_json, allocator));
+  ASSERT_EQ(0, format_json.case_compare("{\"TYPE\":\"CPP_PLUGIN\"}"));
+
+  ObExternalFileFormat parsed_format;
+  ASSERT_EQ(OB_SUCCESS, parsed_format.load_from_string(format_json, allocator));
+  ASSERT_EQ(ObExternalFileFormat::CPP_PLUGIN_FORMAT, parsed_format.format_type_);
+}
+
 int main(int argc, char **argv)
 {
   init_sql_factories();

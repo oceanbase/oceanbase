@@ -76,7 +76,7 @@
 #include "storage/fts/dict/ob_ft_cache.h"
 #include "common/ob_target_specific.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
-#include "plugin/sys/ob_plugin_mgr.h"
+#include "plugin/legacy/sys/ob_plugin_mgr.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
 #include "storage/ddl/ob_partition_random_distribution_helper.h"
 #include "share/ob_license_utils.h"

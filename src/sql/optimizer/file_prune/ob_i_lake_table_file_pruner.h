@@ -62,16 +62,10 @@ public:
   ObExprFrameInfo expr_frame_info_;
 };
 
-typedef enum {
-  ICEBERG,
-  HIVE,
-  PAIMON
-} PrunnerType;
-
 class ObILakeTableFilePruner
 {
 public:
-  explicit ObILakeTableFilePruner(common::ObIAllocator &allocator, PrunnerType type);
+  explicit ObILakeTableFilePruner(common::ObIAllocator &allocator);
   virtual ~ObILakeTableFilePruner() { }
 
   inline uint64_t get_table_id() const { return loc_meta_.table_loc_id_; }
@@ -86,6 +80,8 @@ public:
                              : share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO;
   }
   virtual int assign(const ObILakeTableFilePruner &o) = 0;
+  // Allocate a same-dynamic-type pruner on `allocator` and deep-copy *this into it.
+  virtual int clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const = 0;
   virtual void reset();
   int generate_column_meta_info(const ObDMLStmt &stmt);
   // Return partition predicates that were converted into exact file-pruning
@@ -111,7 +107,6 @@ public:
   common::ObFixedArray<uint64_t, common::ObIAllocator> column_ids_;
   common::ObFixedArray<ObColumnMeta, common::ObIAllocator> column_metas_;
   ObLakeTablePushDownFilterSpec file_filter_spec_;
-  PrunnerType type_;
   common::ObFixedArray<ObString, common::ObIAllocator> partition_values_;
 };
 

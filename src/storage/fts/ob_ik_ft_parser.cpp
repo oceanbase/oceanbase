@@ -22,7 +22,7 @@
 #include "storage/fts/ik/ob_ik_letter_processor.h"
 #include "storage/fts/ik/ob_ik_quantifier_processor.h"
 #include "storage/fts/ik/ob_ik_surrogate_processor.h"
-#include "plugin/sys/ob_plugin_mgr.h"
+#include "plugin/legacy/sys/ob_plugin_mgr.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
 

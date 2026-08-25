@@ -16,8 +16,9 @@
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
 #include "sql/resolver/ddl/ob_storage_cache_ddl_util.h"
-#include "plugin/interface/ob_plugin_external_intf.h"
+#include "plugin/legacy/interface/ob_plugin_external_intf.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "plugin/v2/external_table/ob_ext_format_registry.h"  // ObExtFormatRegistry (plugin slot→api for USING <name>)
 
 namespace oceanbase
 {
@@ -62,7 +63,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   } else if (OB_FAIL(ObSQLUtils::get_external_table_type(&table_schema, external_table_type))) {
     LOG_WARN("failed to check is odps table or not", K(ret));
   } else if (ObExternalFileFormat::ODPS_FORMAT != external_table_type &&
-      ObExternalFileFormat::PLUGIN_FORMAT != external_table_type) {
+      ObExternalFileFormat::JAVA_PLUGIN_FORMAT != external_table_type) {
     use_properties = false;
   } else {
     use_properties = true;
@@ -125,7 +126,8 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
     } else if (use_properties && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPROPERTIES (\n"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print FORMAT (", K(ret));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',", ObExternalFileFormat::FORMAT_TYPE_STR[format.format_type_]))) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "  TYPE = '%s',",
+                                       ObExternalFileFormat::FORMAT_TYPE_STR[format.format_type_]))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print TYPE", K(ret));
     }
 
@@ -291,7 +293,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
           LOG_WARN("failed to get right api mode", K(ret));
         }
       }
-    } else if (OB_SUCC(ret) && ObExternalFileFormat::PLUGIN_FORMAT == format.format_type_) {
+    } else if (OB_SUCC(ret) && ObExternalFileFormat::JAVA_PLUGIN_FORMAT == format.format_type_) {
       ObString plugin_unavailable("<plugin is not available>");
       ObString parameters;
       plugin::ObExternalDataEngine *engine = nullptr;
@@ -352,6 +354,20 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
                                      parquet.column_name_case_sensitive_ ? "TRUE" : "FALSE"))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print column name case sensitive", K(ret));
       }
+    } else if (OB_SUCC(ret) && ObExternalFileFormat::KAFKA_FORMAT == format.format_type_) {
+      const ObKAFKAGeneralFormat &kafka = format.kafka_format_;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  TOPIC = '%.*s',",
+                                 kafka.topic_.length(), kafka.topic_.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print TOPIC", K(ret));
+      }
+    } else if (OB_SUCC(ret) && ObExternalFileFormat::CPP_PLUGIN_FORMAT == format.format_type_) {
+      const ObCppPluginFormat &cpp_plugin = format.get_cpp_plugin_format();
+      const ObString &plugin_type = cpp_plugin.plugin_name_;
+      if (!plugin_type.empty()
+          && OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  PLUGIN_TYPE = '%.*s',",
+                                     plugin_type.length(), plugin_type.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print PLUGIN_TYPE", K(ret), K(plugin_type));
+      }
     }
     if (OB_SUCC(ret)) {
       --pos;
@@ -361,7 +377,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     }
   }
 
-  // add USING ICEBERG/HIVE
+  // add USING ICEBERG/HIVE/<cpp .so plugin name>
   if (OB_SUCC(ret)) {
     switch (table_schema.get_lake_table_format()) {
       case ObLakeTableFormat::ICEBERG: {
@@ -377,6 +393,26 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
         break;
       }
       default: {
+        // Plugin tables: a value in the plugin-placeholder range identifies the
+        // plugin; resolve its slot to the resident plugin's format name via the
+        // registry. Print nothing if the plugin .so is not loaded.
+        const share::ObLakeTableFormat format = table_schema.get_lake_table_format();
+        if (share::is_lake_plugin_table(format)) {
+          const share::ObPluginSlot slot =
+              share::lake_plugin_slot_of(format);
+          const ObExtTablePluginApi *api =
+              share::ObExtFormatRegistry::get_instance().get_plugin_by_slot(slot);
+          const char *format_name = nullptr;
+          if (OB_NOT_NULL(api) && OB_NOT_NULL(api->format_name)) {
+            format_name = api->format_name();
+          }
+          if (nullptr == format_name) {
+            SHARE_SCHEMA_LOG(WARN, "ext plugin not loaded for format", K(format), K(slot));
+          } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nUSING %s\n",
+                                             format_name))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to print using plugin", K(ret), K(slot));
+          }
+        }
         // 以前的文件外部表不会被设置 LakeTableFormat
         // odps 暂时也不考虑
         // do nothing

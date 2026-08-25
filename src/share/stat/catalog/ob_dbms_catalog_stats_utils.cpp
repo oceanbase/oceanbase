@@ -1133,9 +1133,9 @@ int ObDbmsCatalogStatsUtils::filter_partitions_by_freshness(
   if (share::ObLakeTableFormat::INVALID == lake_table_format) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("lake table format is invalid", K(ret));
-  } else if (share::ObLakeTableFormat::HIVE == lake_table_format) {
+  } else if (share::is_hive_lake_table(lake_table_format)) {
     checker = OB_NEWx(ObHMSCatalogStatsFreshnessChecker, &allocator);
-  } else if (share::ObLakeTableFormat::ICEBERG == lake_table_format) {
+  } else if (share::is_iceberg_lake_table(lake_table_format)) {
     checker = OB_NEWx(ObIcebergStatsFreshnessChecker, &allocator);
   } else if (share::ObLakeTableFormat::ODPS == lake_table_format) {
     checker = OB_NEWx(ObOdpsCatalogStatsFreshnessChecker, &allocator);

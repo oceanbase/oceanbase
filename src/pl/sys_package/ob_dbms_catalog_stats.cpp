@@ -632,7 +632,7 @@ int ObDbmsCatalogStats::parse_table_part_info(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (share::ObLakeTableFormat::ICEBERG == lake_table_metadata->get_format_type()) {
+    } else if (share::is_iceberg_lake_table(lake_table_metadata->get_format_type())) {
       if (OB_FAIL(ObDbmsCatalogStatsUtils::collect_iceberg_partition_infos(
                                               *stat_param.allocator_,
                                               lake_table_metadata,

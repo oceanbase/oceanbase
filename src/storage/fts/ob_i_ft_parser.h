@@ -6,7 +6,7 @@
 #ifndef OB_I_FT_PARSER_H_
 #define OB_I_FT_PARSER_H_
 
-#include "plugin/interface/ob_plugin_ftparser_intf.h"
+#include "plugin/legacy/interface/ob_plugin_ftparser_intf.h"
 
 namespace oceanbase
 {

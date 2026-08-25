@@ -8742,7 +8742,7 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema is null", K(ret));
       } else if (table_schema->is_external_table()) {
-        is_target_iceberg_table = (table_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG);
+        is_target_iceberg_table = share::is_iceberg_lake_table(table_schema->get_lake_table_format());
       }
     }
   }

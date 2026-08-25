@@ -394,7 +394,7 @@ int ObSnapshotProducer::refresh()
     } else if (OB_ISNULL(lake_table_metadata)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null lake_table_metadata", K(ret));
-    } else if (lake_table_metadata->get_format_type() != share::ObLakeTableFormat::ICEBERG) {
+    } else if (!share::is_iceberg_lake_table(lake_table_metadata->get_format_type())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected format type", K(ret), "format_type", lake_table_metadata->get_format_type());
     } else {

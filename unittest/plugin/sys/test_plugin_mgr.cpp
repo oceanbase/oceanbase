@@ -7,9 +7,9 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include "plugin/sys/ob_plugin_mgr.h"
-#include "plugin/sys/ob_plugin_handle.h"
-#include "plugin/sys/ob_plugin_entry_handle.h"
+#include "plugin/legacy/sys/ob_plugin_mgr.h"
+#include "plugin/legacy/sys/ob_plugin_handle.h"
+#include "plugin/legacy/sys/ob_plugin_entry_handle.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::plugin;

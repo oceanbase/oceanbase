@@ -6554,5 +6554,5 @@ int ObTableLocation::get_tablet_id_for_temp_table(
 
 bool ObTableLocation::can_use_table_location(ObLakeTableFormat format)
 {
-  return !(ObLakeTableFormat::ICEBERG == format || ObLakeTableFormat::HIVE == format);
+  return !is_lake_external_table(format);
 }

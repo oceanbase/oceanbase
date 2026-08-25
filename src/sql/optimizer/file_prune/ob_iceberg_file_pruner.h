@@ -92,6 +92,7 @@ public:
 
   void reset();
   virtual int assign(const ObILakeTableFilePruner &other);
+  virtual int clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const override;
   int init(ObSqlSchemaGuard *schema_guard,
            const ObDMLStmt &stmt,
            ObExecContext *exec_ctx,
@@ -102,6 +103,8 @@ public:
 
   int prune_manifest_files(ObIArray<iceberg::ManifestFile*> &manifest_list,
                            ObIArray<iceberg::ManifestFile*> &valid_manifest_list);
+  int prune_single_manifest_file(iceberg::ManifestFile *manifest_file,
+                                 bool &in_bound);
   int prune_manifest_files_by_partition_clause(
                           ObIArray<iceberg::ManifestFile*> &manifest_files,
                           const common::ObIArray<common::ObString> &partition_names,
@@ -168,6 +171,7 @@ public:
 private:
   common::ObFixedArray<PartColDesc, common::ObIAllocator> part_column_descs_;
   common::ObFixedArray<std::pair<int32_t, ObIcebergPartBound*>, common::ObIAllocator> part_bound_;
+  bool enable_lake_table_parallel_resolving_;
 };
 
 }
