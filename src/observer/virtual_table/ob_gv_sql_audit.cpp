@@ -1227,14 +1227,16 @@ int ObGvSqlAudit::extract_request_ids(const uint64_t tenant_id,
 
           if (cur_start.is_min_value()) {
             cur_start_id = 0;
-          } else if (cur_start.is_max_value()) {
+          } else if (cur_start.is_max_value()
+                     || (lib::is_oracle_mode() && cur_start.is_null())) {
             cur_start_id = INT64_MAX;
           } else {
             cur_start_id = cur_start.get_int();
           }
           if (cur_end.is_min_value()) {
             cur_end_id = 0;
-          } else if (cur_end.is_max_value()) {
+          } else if (cur_end.is_max_value()
+                     || (lib::is_oracle_mode() && cur_end.is_null())) {
             cur_end_id = INT64_MAX;
           } else {
             cur_end_id = cur_end.get_int() + 1;
