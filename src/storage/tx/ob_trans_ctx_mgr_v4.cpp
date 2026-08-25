@@ -886,7 +886,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   int64_t start_time = ObTimeUtility::current_time();
   int64_t process_count = 0;
   int64_t total_process_count = 0;
-  const int64_t default_retry_timeout_us = 500 * 1000;  // 500ms
+  const int64_t default_retry_timeout_us = 100 * 1000;  // 100ms
   int64_t retry_timeout_us = default_retry_timeout_us;
   const int64_t errsim_retry_timeout_us = llabs(ERRSIM_SWITCH_TO_FOLLOWER_GRACEFULLY_RETRY_TIMEOUT_US);
   if (errsim_retry_timeout_us > 0) {

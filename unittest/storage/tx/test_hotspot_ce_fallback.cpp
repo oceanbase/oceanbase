@@ -66,7 +66,7 @@ TEST_F(ObTestHotspotCeFallback, empty_facade_has_no_hotspot_work)
   EXPECT_EQ(nullptr, cache.cache_);
   EXPECT_EQ(OB_SUCCESS, cache.reuse());
   EXPECT_EQ(nullptr, cache.cache_);
-  EXPECT_EQ(OB_SUCCESS, cache.try_release_idle_log_cb(nullptr));
+  EXPECT_EQ(OB_SUCCESS, cache.try_release_idle_log_cb(nullptr, false));
   cache.reset();
 }
 

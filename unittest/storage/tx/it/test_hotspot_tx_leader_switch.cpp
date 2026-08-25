@@ -614,8 +614,8 @@ TEST_F(ObTestHotspotTxLeaderSwitch,
 // cbs_is_working_() sees free>0, blocking clean_hotspot_redo_cache() and
 // preventing tx ctx from exiting (EDIAG at ob_tx_hotspot_helper.cpp:45).
 //
-// After fix: try_release_idle_log_cb() calls release_free_cbs_to_idle_()
-// first, so free CBs are moved to idle and released normally.
+// After fix: try_release_idle_log_cb() with force_release=true moves free CBs
+// to idle via move_free_cbs_to_idle_() and releases them normally.
 TEST_F(ObTestHotspotTxLeaderSwitch,
        hotspot_force_revoke_replay_abort_releases_free_cbs)
 {

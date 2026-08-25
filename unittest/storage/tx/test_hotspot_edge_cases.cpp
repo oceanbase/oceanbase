@@ -202,7 +202,7 @@ TEST_F(ObTestHotspotEdgeCases, test_handle_empty_semantics)
   EXPECT_TRUE(cache.all_redo_synced());
   EXPECT_TRUE(cache.all_redo_frozen_flushed());
   EXPECT_EQ(OB_SUCCESS, cache.reuse());
-  EXPECT_EQ(OB_SUCCESS, cache.try_release_idle_log_cb(nullptr));
+  EXPECT_EQ(OB_SUCCESS, cache.try_release_idle_log_cb(nullptr, false));
 
   TRANS_LOG(INFO, "test_handle_empty_semantics: verified empty handle behavior");
 }
@@ -359,9 +359,82 @@ TEST_F(ObTestHotspotEdgeCases, test_handle_release_idle_rejects_null_ctx_when_in
   const ObTransID primary_id(20260604005);
 
   ASSERT_EQ(OB_SUCCESS, cache.init(primary_id, 1, nullptr));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, cache.try_release_idle_log_cb(nullptr));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, cache.try_release_idle_log_cb(nullptr, false));
 
   TRANS_LOG(INFO, "test_handle_release_idle_rejects_null_ctx_when_inited: verified argument check");
+}
+
+// Regression: free-list membership models a CB reserved for retry after OB_BLOCK_FROZEN.
+TEST_F(ObTestHotspotEdgeCases, test_normal_release_preserves_retry_free_cb)
+{
+  TransModulePageAllocator allocator;
+  ObTxHotspotRedoCacheHandle cache(allocator);
+  const ObTransID primary_id(20260604007);
+  ObTxLogCb free_cb;
+  ObPartTransCtx primary_ctx;
+
+  ASSERT_EQ(OB_SUCCESS, cache.init(primary_id, 1, nullptr));
+  ASSERT_NE(nullptr, cache.cache_);
+  ObTxHotspotRedoCache *core = cache.cache_;
+  {
+    SpinWLockGuard guard(cache.hotspot_lock_);
+    ASSERT_TRUE(core->free_hotspot_cbs_.add_last(&free_cb));
+    core->all_log_cb_cnt_ = 1;
+  }
+
+  EXPECT_EQ(OB_EAGAIN, cache.try_release_idle_log_cb(&primary_ctx, false));
+  {
+    SpinRLockGuard guard(cache.hotspot_lock_);
+    EXPECT_EQ(1, core->free_hotspot_cbs_.get_size());
+    EXPECT_EQ(0, core->busy_hotspot_cbs_.get_size());
+    EXPECT_EQ(0, core->idle_hotspot_cbs_.get_size());
+    EXPECT_EQ(1, core->all_log_cb_cnt_);
+  }
+
+  ObTxLogCb *retry_cb = nullptr;
+  EXPECT_EQ(OB_SUCCESS, cache.get_free_cb(retry_cb));
+  EXPECT_EQ(&free_cb, retry_cb);
+  {
+    SpinWLockGuard guard(cache.hotspot_lock_);
+    EXPECT_EQ(0, core->free_hotspot_cbs_.get_size());
+    EXPECT_EQ(1, core->all_log_cb_cnt_);
+    core->all_log_cb_cnt_ = 0;
+  }
+  EXPECT_EQ(OB_SUCCESS, cache.reuse());
+}
+
+// Force release abandons unsynced redo and returns free CBs to the primary context.
+TEST_F(ObTestHotspotEdgeCases, test_force_release_returns_free_cb_to_primary)
+{
+  TransModulePageAllocator allocator;
+  ObTxHotspotRedoCacheHandle cache(allocator);
+  const ObTransID primary_id(20260604008);
+  ObTxLogCb free_cb;
+  ObPartTransCtx primary_ctx;
+
+  ASSERT_EQ(OB_SUCCESS, cache.init(primary_id, 1, nullptr));
+  ASSERT_NE(nullptr, cache.cache_);
+  ObTxHotspotRedoCache *core = cache.cache_;
+  {
+    SpinWLockGuard guard(cache.hotspot_lock_);
+    ASSERT_TRUE(core->free_hotspot_cbs_.add_last(&free_cb));
+    core->all_log_cb_cnt_ = 1;
+  }
+
+  EXPECT_EQ(OB_SUCCESS, cache.try_release_idle_log_cb(&primary_ctx, true));
+  {
+    SpinRLockGuard guard(cache.hotspot_lock_);
+    EXPECT_EQ(0, core->free_hotspot_cbs_.get_size());
+    EXPECT_EQ(0, core->busy_hotspot_cbs_.get_size());
+    EXPECT_EQ(0, core->idle_hotspot_cbs_.get_size());
+    EXPECT_EQ(0, core->all_log_cb_cnt_);
+  }
+  {
+    ObSpinLockGuard guard(primary_ctx.log_cb_lock_);
+    EXPECT_EQ(1, primary_ctx.free_cbs_.get_size());
+    EXPECT_EQ(&free_cb, primary_ctx.free_cbs_.remove_first());
+  }
+  EXPECT_EQ(OB_SUCCESS, cache.reuse());
 }
 
 // ============================================================================

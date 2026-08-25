@@ -370,7 +370,7 @@ int ObTxHotspotRedoCacheHandle::rollback_secondary_memtable_and_mark(const ObTra
   return OB_NOT_SUPPORTED;
 }
 
-int ObTxHotspotRedoCacheHandle::try_release_idle_log_cb(ObPartTransCtx *)
+int ObTxHotspotRedoCacheHandle::try_release_idle_log_cb(ObPartTransCtx *, const bool)
 {
   return OB_SUCCESS;
 }

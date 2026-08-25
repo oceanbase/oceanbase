@@ -177,7 +177,7 @@ public:
   void dec_pending_submit_other_redo_msg_cnt();
   int get_rollback_range(const ObTransID *secondary_tx_id, ObTxSEQ &from_seq, ObTxSEQ &to_seq) const;
   int rollback_secondary_memtable_and_mark(const ObTransID &secondary_tx_id);
-  int try_release_idle_log_cb(ObPartTransCtx *primary_tx_ctx);
+  int try_release_idle_log_cb(ObPartTransCtx *primary_tx_ctx, const bool force_release);
   bool need_rollback_primary_tx() const;
   int abort_secondary_txs(const int reason);
   int cleanup_hotspot_cache_and_revert_secondary_ctxs();

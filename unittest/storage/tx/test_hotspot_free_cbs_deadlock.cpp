@@ -21,7 +21,7 @@
 // Fix approach:
 //   When cbs_is_working_() returns true in handle_abort_response_():
 //   - Return OB_EAGAIN first (per existing contract)
-//   - Then call release_free_cbs_to_idle_() to move free CBs to idle list
+//   - Then call move_free_cbs_to_idle_() to move free CBs to idle list
 //   - If busy==0: free moved to idle, next retry cbs_is_working_() returns false -> success
 //   - If busy>0: wait for clog callback to clear busy, then next retry succeeds
 
@@ -134,7 +134,7 @@ TEST_F(ObTestHotspotFreeCbsDeadlock, test_need_return_cbs)
   // need_return_cbs_() = idle>0 || free>0 || busy>0
   EXPECT_FALSE(cache.need_return_cbs_());
 
-  // After fix: release_free_cbs_to_idle_() moves free to idle
+  // After fix: move_free_cbs_to_idle_() moves free to idle
   // Then try_release_idle_log_cb() releases idle CBs to primary
   // After both steps, need_return_cbs_() returns false -> reuse() succeeds
 
@@ -142,9 +142,9 @@ TEST_F(ObTestHotspotFreeCbsDeadlock, test_need_return_cbs)
 }
 
 // ============================================================================
-// TC-05: Verify release_free_cbs_to_idle_() with empty free list
+// TC-05: Verify move_free_cbs_to_idle_() with empty free list
 // ============================================================================
-TEST_F(ObTestHotspotFreeCbsDeadlock, test_release_empty_free)
+TEST_F(ObTestHotspotFreeCbsDeadlock, test_move_empty_free)
 {
   ObTxHotspotRedoCache cache;
 
@@ -153,18 +153,17 @@ TEST_F(ObTestHotspotFreeCbsDeadlock, test_release_empty_free)
   new (&cache.free_hotspot_cbs_) common::ObDList<ObTxLogCb>();
   new (&cache.busy_hotspot_cbs_) common::ObDList<ObTxLogCb>();
 
-  // Empty free list: release should succeed with nothing to do
+  // Empty free list: move should be a no-op
   EXPECT_EQ(0, cache.free_hotspot_cbs_.get_size());
   EXPECT_EQ(0, cache.busy_hotspot_cbs_.get_size());
 
-  int ret = cache.release_free_cbs_to_idle_();
-  EXPECT_EQ(OB_SUCCESS, ret);
+  cache.move_free_cbs_to_idle_();  // void, no-op on empty list
 
   // Lists should remain empty
   EXPECT_EQ(0, cache.free_hotspot_cbs_.get_size());
   EXPECT_EQ(0, cache.idle_hotspot_cbs_.get_size());
 
-  TRANS_LOG(INFO, "test_release_empty_free: empty case returns SUCCESS");
+  TRANS_LOG(INFO, "test_move_empty_free: empty case is no-op");
 }
 
 // ============================================================================
