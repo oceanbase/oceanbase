@@ -1266,7 +1266,7 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
       }
     }
   }
-  else if (is_execute_mode(mode) && PC_PL_MODE != pc_ctx.mode_) {
+  else if (is_execute_mode(mode)) {
     if (OB_FAIL(gen_ps_not_param_var(sql_info.ps_not_param_offsets_, params, pc_ctx))) {
       SQL_PC_LOG(WARN, "fail to gen ps not param var", K(ret));
     } else if (OB_FAIL(construct_no_check_type_params(sql_info.no_check_type_offsets_,
