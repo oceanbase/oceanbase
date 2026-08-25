@@ -3797,11 +3797,11 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
                    || stmt::T_UPDATE == basic_stmt->get_stmt_type()
                    || stmt::T_DELETE == basic_stmt->get_stmt_type())) {
         //do not check privilege of view stmt, one level 已经递归处理了视图的情况
-      } else if (OB_FAIL(get_stmt_ora_need_privs(user_id,
-                                                 ctx,
-                                                 sub_stmt,
-                                                 need_privs,
-                                                 check_flag))) {
+      } else if (OB_FAIL(SMART_CALL(get_stmt_ora_need_privs(user_id,
+                                                            ctx,
+                                                            sub_stmt,
+                                                            need_privs,
+                                                            check_flag)))) {
         LOG_WARN("Failed to extract priv info of shild stmts", K(i), K(dml_stmt), K(ret));
       } else {
         //do nothing
@@ -3822,11 +3822,11 @@ int ObPrivilegeCheck::get_stmt_ora_need_privs(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table item is null", K(ret));
         } else if (table_item->is_temp_table() && OB_NOT_NULL(table_item->ref_query_)) {
-          if (OB_FAIL(get_stmt_ora_need_privs(user_id,
-                                              ctx,
-                                              table_item->ref_query_,
-                                              need_privs,
-                                              check_flag))) {
+          if (OB_FAIL(SMART_CALL(get_stmt_ora_need_privs(user_id,
+                                                         ctx,
+                                                         table_item->ref_query_,
+                                                         need_privs,
+                                                         check_flag)))) {
             LOG_WARN("Failed to extract priv info of CTE definition", K(i), K(dml_stmt), K(ret));
           }
         }
@@ -3863,7 +3863,7 @@ int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
         LOG_WARN("Sub-stmt is NULL", K(ret));
       } else if (sub_stmt->is_view_stmt() && ObStmt::is_dml_stmt(basic_stmt->get_stmt_type())) {
         //do not check privilege of view stmt
-      } else if (OB_FAIL(get_stmt_need_privs(session_priv, sub_stmt, need_privs))) {
+      } else if (OB_FAIL(SMART_CALL(get_stmt_need_privs(session_priv, sub_stmt, need_privs)))) {
         LOG_WARN("Failed to extract priv info of shild stmts", K(i), K(dml_stmt), K(ret));
       } else {
         //do nothing
@@ -3883,7 +3883,7 @@ int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table item is null", K(ret));
         } else if (table_item->is_temp_table() && OB_NOT_NULL(table_item->ref_query_)) {
-          if (OB_FAIL(get_stmt_need_privs(session_priv, table_item->ref_query_, need_privs))) {
+          if (OB_FAIL(SMART_CALL(get_stmt_need_privs(session_priv, table_item->ref_query_, need_privs)))) {
             LOG_WARN("Failed to extract priv info of CTE definition", K(i), K(dml_stmt), K(ret));
           }
         }
