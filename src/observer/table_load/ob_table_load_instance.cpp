@@ -509,7 +509,7 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
     ddl_param.dest_table_id_ = table_id;
     ddl_param.task_id_ = raw_id.id();
     ddl_param.schema_version_ = table_schema->get_schema_version();
-    ddl_param.snapshot_version_ = current_scn.convert_to_ts();
+    ddl_param.snapshot_version_ = current_scn.get_val_for_tx();
     ddl_param.data_version_ = tenant_data_version;
     ddl_param.cluster_version_ = GET_MIN_CLUSTER_VERSION();
     LOG_INFO("init ddl param for inc direct load succeed", K(ddl_param));

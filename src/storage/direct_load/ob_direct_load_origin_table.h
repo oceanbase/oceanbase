@@ -35,13 +35,15 @@ public:
                K_(tablet_id),
                K_(ls_id),
                K_(tx_id),
-               K_(tx_seq));
+               K_(tx_seq),
+               K_(snapshot_version));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   transaction::ObTransID tx_id_;
   transaction::ObTxSEQ tx_seq_;
+  int64_t snapshot_version_;
 };
 
 struct ObDirectLoadOriginTableMeta
@@ -54,13 +56,15 @@ public:
                K_(tablet_id),
                K_(ls_id),
                K_(tx_id),
-               K_(tx_seq));
+               K_(tx_seq),
+               K_(snapshot_version));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
   transaction::ObTransID tx_id_;
   transaction::ObTxSEQ tx_seq_;
+  int64_t snapshot_version_;
 };
 
 class ObDirectLoadOriginTable
