@@ -38,7 +38,7 @@ devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.x86_64.rpm
 obdevtools-binutils-2.30-12022100413.el7.x86_64.rpm
 obdevtools-bison-2.4.1-12022100413.el7.x86_64.rpm
 obdevtools-ccache-3.7.12-12022100417.el7.x86_64.rpm
-obdevtools-cmake-3.22.1-22022100417.el7.x86_64.rpm
+obdevtools-cmake-4.2.7-32026080610.el7.x86_64.rpm
 obdevtools-flex-2.5.35-12022100417.el7.x86_64.rpm
 obdevtools-gcc9-9.3.0-52022092914.el7.x86_64.rpm
 obdevtools-llvm-11.0.1-312022092921.el7.x86_64.rpm
