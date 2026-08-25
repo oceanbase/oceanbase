@@ -7,6 +7,7 @@
 #include "sql/engine/expr/ob_expr_left.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/charset/ob_charset_string_helper.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -73,22 +74,42 @@ int ObExprLeft::calc_result_type2(ObExprResType &type,
     type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
     type.set_varchar();
     int64_t result_len = type1.get_length();
-    const ObObj &result_len_obj = type2.get_param();
-    ObObj int_obj;
-    ObExprCtx tmp_expr_ctx;
-    ObArenaAllocator allocator(common::ObModIds::OB_SQL_EXPR_CALC);
-    tmp_expr_ctx.calc_buf_ = &allocator;
-    tmp_expr_ctx.cast_mode_ = type_ctx.get_cast_mode();
-    if (OB_FAIL(cast_param_type(result_len_obj, tmp_expr_ctx, int_obj))) {
-      LOG_WARN("cast_param_type failed", K(result_len_obj.get_type()));
-    } else if (int_obj.get_int() <= 0) {
-      type.set_char();
-      type.set_length(0);
-    } else {
-      type.set_length(int_obj.get_int());
+    const ObObj *result_len_obj = type2.is_literal() ? &type2.get_param() : nullptr;
+    if (OB_ISNULL(result_len_obj)) {
+      const ObRawExpr *raw_expr = type_ctx.get_raw_expr();
+      const ObRawExpr *param_expr = nullptr;
+      if (OB_NOT_NULL(raw_expr) && T_FUN_SYS_LEFT == raw_expr->get_expr_type() && 2 == raw_expr->get_param_count()
+          && OB_NOT_NULL(param_expr = ObRawExprUtils::skip_implicit_cast(raw_expr->get_param_expr(1)))
+          && param_expr->is_const_raw_expr()) {
+        const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(param_expr);
+        if (!const_expr->get_value().is_unknown() && !const_expr->get_param().is_unknown()) {
+          result_len_obj = &const_expr->get_param();
+        }
+      }
     }
-
+    const bool is_result_len_literal = OB_NOT_NULL(result_len_obj);
+    if (is_result_len_literal) {
+      ObObj int_obj;
+      ObExprCtx tmp_expr_ctx;
+      ObArenaAllocator allocator(common::ObModIds::OB_SQL_EXPR_CALC);
+      tmp_expr_ctx.calc_buf_ = &allocator;
+      tmp_expr_ctx.cast_mode_ = type_ctx.get_cast_mode();
+      if (OB_FAIL(cast_param_type(*result_len_obj, tmp_expr_ctx, int_obj))) {
+        LOG_WARN("cast_param_type failed", K(result_len_obj->get_type()));
+      } else if (int_obj.get_int() <= 0) {
+        type.set_char();
+        result_len = 0;
+      } else {
+        result_len = int_obj.get_int();
+      }
+    }
     OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx));
+    if (OB_SUCC(ret) && !is_result_len_literal) {
+      int64_t mbmaxlen = 1;
+      OZ(ObCharset::get_mbmaxlen_by_coll(type.get_collation_type(), mbmaxlen));
+      OX(result_len = MIN(result_len, OB_MAX_VARCHAR_LENGTH / mbmaxlen));
+    }
+    OX(type.set_length(result_len));
     OX(type1.set_calc_type(ObVarcharType));
     OX(type1.set_calc_collation_type(type.get_collation_type()));
     OX(type1.set_calc_collation_level(type.get_collation_level()));
