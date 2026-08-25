@@ -1004,7 +1004,8 @@ LATCH_DEF(JAVA_DATASOURCE_INIT_MUTEX, 972, "java datasource init mutex", LATCH_F
 LATCH_DEF(SHARED_COMPACTION_THREAD_LIMITER_LOCK, 973, "shared compaction thread limiter lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(POST_MINI_QUEUE_LOCK, 974, "post mini queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(PALF_SW_APPEND_CB_LOCK, 975, "palf sliding window append callback lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 976, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(VECTOR_BOUNDED_OVERLAY_LOCK, 976, "vector bounded overlay lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(LATCH_END, 977, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
