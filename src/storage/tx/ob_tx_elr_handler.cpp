@@ -37,6 +37,7 @@ int ObTxELRHandler::check_and_early_lock_release(bool has_row_updated, ObPartTra
       if (OB_FAIL(ctx->acquire_ctx_ref())) {
         TRANS_LOG(WARN, "get trans ctx error", K(ret), K(*this));
       } else {
+        set_memtable_ctx(ctx->get_memtable_ctx());
         set_elr_prepared();
       }
     } else {
