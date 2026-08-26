@@ -1243,6 +1243,10 @@ public:
   int get_index_merge_tids(ObIArray<ObTableID> &index_tids) const;
   int get_index_merge_name_list(ObIArray<ObString> &index_name_list) const;
   int check_match_index_merge_hint(const ObIndexMergeHint *index_merge_hint, bool &is_match) const;
+  bool is_automatic_hybrid_search_path() const;
+  const ObIndexMergeHint *get_hybrid_search_index_merge_hint() const;
+  int get_hybrid_search_index_merge_hint_args(ObIArray<ObString> &column_name_list,
+                                              ObIArray<ObString> &index_name_list) const;
 
   int copy_gen_col_range_exprs();
   int check_col_calculable_on_index(const ObColumnRefRawExpr *col,

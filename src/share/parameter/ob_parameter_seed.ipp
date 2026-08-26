@@ -3643,3 +3643,7 @@ DEF_BOOL(_enable_trigger_dml_snapshot_opt, OB_TENANT_PARAMETER, "False",
          " UPDATE/DELETE try local LS read snapshot instead of remote GTS,"
          " reducing RPC count on data-local execution.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_search_index, OB_TENANT_PARAMETER, "True",
+         "enable search index merge optimization for scalar predicates on search indexes",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

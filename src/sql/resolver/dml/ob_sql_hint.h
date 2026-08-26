@@ -324,7 +324,10 @@ struct LogTableHint
       left_tables_(allocator),
       dynamic_sampling_hint_(NULL),
       cache_hint_(NULL),
-      is_ds_hint_conflict_(false) {}
+      is_ds_hint_conflict_(false),
+      hybrid_search_index_merge_index_ids_(allocator),
+      hybrid_search_index_merge_column_ids_(allocator),
+      hybrid_search_index_merge_hint_(NULL) {}
   int assign(const LogTableHint &other);
   int check_vec_hint_index_id(const ObDMLStmt &stmt,
                               ObSqlSchemaGuard &schema_guard,
@@ -338,13 +341,19 @@ struct LogTableHint
                                 || dynamic_sampling_hint_ != NULL
                                 || NULL != use_column_store_hint_
                                 || NULL != cache_hint_
-                                || !index_merge_hints_.empty(); }
+                                || !index_merge_hints_.empty()
+                                || NULL != hybrid_search_index_merge_hint_; }
   bool has_valid_index_merge_hint() const { return !index_merge_hints_.empty()
                                                    && !index_merge_list_.empty(); }
   bool has_force_index_merge_hint() const { return has_valid_index_merge_hint()
                                                    && index_merge_hints_.at(0)->is_enable_hint(); }
   bool has_no_index_merge_hint() const { return has_valid_index_merge_hint()
                                                 && index_merge_hints_.at(0)->is_disable_hint(); }
+  bool has_force_hybrid_search_index_merge_hint() const
+  {
+    return NULL != hybrid_search_index_merge_hint_
+        && hybrid_search_index_merge_hint_->is_enable_hint();
+  }
   int get_join_filter_hint(const ObRelIds &left_tables,
                            bool part_join_filter,
                            const ObJoinFilterHint *&hint) const;
@@ -361,7 +370,9 @@ struct LogTableHint
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint), K_(index_merge_list),
                K_(index_merge_hints), K_(join_filter_hints), K_(left_tables),
-               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_), K_(vec_index_list), K_(vec_index_hints), KPC(cache_hint_));
+               KPC(dynamic_sampling_hint_), K(is_ds_hint_conflict_), K_(vec_index_list),
+               K_(vec_index_hints), KPC(cache_hint_), K_(hybrid_search_index_merge_index_ids),
+               K_(hybrid_search_index_merge_column_ids), KPC_(hybrid_search_index_merge_hint));
 
   const TableItem *table_;
   ObSqlArray<uint64_t> index_list_;
@@ -378,6 +389,26 @@ struct LogTableHint
   const ObTableDynamicSamplingHint *dynamic_sampling_hint_;
   const ObCacheHint *cache_hint_;  // Single hint that can represent both CACHE and NOCACHE
   bool is_ds_hint_conflict_;
+  ObSqlArray<uint64_t> hybrid_search_index_merge_index_ids_;
+  ObSqlArray<uint64_t> hybrid_search_index_merge_column_ids_;
+  const ObIndexMergeHint *hybrid_search_index_merge_hint_;
+
+private:
+  int collect_hybrid_search_index_merge_column_ids(
+      const share::schema::ObTableSchema &data_table_schema,
+      const ObIArray<ObString> &hint_names,
+      ObIArray<uint64_t> &column_ids);
+  int collect_hybrid_search_index_merge_index_id(
+      const ObIndexMergeHint &index_merge_hint,
+      const ObString &index_name,
+      const uint64_t readable_index_id,
+      ObIArray<uint64_t> &index_ids,
+      bool &is_match);
+  int assign_hybrid_search_index_merge_hint(
+      const ObIndexMergeHint *index_merge_hint,
+      const ObIArray<uint64_t> &index_ids,
+      const ObIArray<uint64_t> &column_ids,
+      bool &is_valid_hint);
 };
 
 struct LeadingInfo {

@@ -3166,14 +3166,39 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     } else if (use_index_merge()) {
       ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
       ObIndexMergeHint index_merge_hint(allocator);
+      ObSEArray<ObString, 8> index_name_list;
+      ObSEArray<ObString, 8> column_name_list;
+      bool has_structured_hybrid_search_hint = false;
+      const bool can_print_structured_hybrid_search_hint =
+          is_automatic_hybrid_search_path() &&
+          get_plan()->get_optimizer_context().get_min_cluster_version() >= CLUSTER_VERSION_5_0_2_0;
       index_merge_hint.set_qb_name(qb_name);
       index_merge_hint.get_table().set_table(*table_item);
-      ObSEArray<ObString, 8> index_name_list;
-      if (OB_FAIL(get_index_merge_name_list(index_name_list))) {
+      if (can_print_structured_hybrid_search_hint &&
+          OB_FAIL(get_hybrid_search_index_merge_hint_args(column_name_list, index_name_list))) {
+        LOG_WARN("failed to get hybrid search index merge hint arguments", K(ret));
+      } else if (can_print_structured_hybrid_search_hint) {
+        lib::ob_sort(column_name_list.begin(), column_name_list.end());
+        lib::ob_sort(index_name_list.begin(), index_name_list.end());
+        if (OB_FAIL(append_array_no_dup(index_merge_hint.get_column_name_list(), column_name_list))) {
+          LOG_WARN("failed to append hybrid search index merge column names", K(ret));
+        } else if (OB_FAIL(append_array_no_dup(index_merge_hint.get_index_name_list(), index_name_list))) {
+          LOG_WARN("failed to append hybrid search index merge index names", K(ret));
+        } else {
+          has_structured_hybrid_search_hint = !column_name_list.empty() && !index_name_list.empty();
+        }
+      }
+      if (OB_FAIL(ret) || has_structured_hybrid_search_hint) {
+      } else if (OB_FALSE_IT(index_name_list.reuse())) {
+      } else if (OB_FALSE_IT(index_merge_hint.get_index_name_list().reuse())) {
+      } else if (OB_FALSE_IT(index_merge_hint.get_column_name_list().reuse())) {
+      } else if (OB_FAIL(get_index_merge_name_list(index_name_list))) {
         LOG_WARN("failed to get index name list", K(ret));
       } else if (OB_FALSE_IT(lib::ob_sort(index_name_list.begin(), index_name_list.end()))) {
       } else if (OB_FAIL(append_array_no_dup(index_merge_hint.get_index_name_list(), index_name_list))) {
         LOG_WARN("failed to append index name list", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(index_merge_hint.print_hint(plan_text))) {
         LOG_WARN("failed to print index merge hint", K(ret));
       }
@@ -3341,7 +3366,14 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
         }
       }
     }
-    if (OB_SUCC(ret) && NULL != table_hint && table_hint->has_valid_index_merge_hint()) {
+    const ObIndexMergeHint *hybrid_search_hint = get_hybrid_search_index_merge_hint();
+    if (OB_SUCC(ret) && OB_NOT_NULL(hybrid_search_hint)) {
+      if (OB_FAIL(hybrid_search_hint->print_hint(plan_text))) {
+        LOG_WARN("failed to print used hybrid search index merge hint",
+                 K(ret),
+                 KPC(hybrid_search_hint));
+      }
+    } else if (OB_SUCC(ret) && NULL != table_hint && table_hint->has_valid_index_merge_hint()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < table_hint->index_merge_hints_.count(); ++i) {
         const ObIndexMergeHint *index_merge_hint = table_hint->index_merge_hints_.at(i);
         bool is_match = false;
@@ -6306,15 +6338,106 @@ int ObLogTableScan::check_match_index_merge_hint(const ObIndexMergeHint *index_m
                                                  bool &is_match) const
 {
   int ret = OB_SUCCESS;
-  const ObIndexMergeNode *root = NULL;
+  const LogTableHint *table_hint = NULL;
+  const IndexMergePath *index_merge_path = OB_NOT_NULL(access_path_) && access_path_->is_index_merge_path()
+      ? static_cast<const IndexMergePath *>(access_path_) : NULL;
+  const bool is_hybrid_search_path = OB_NOT_NULL(index_merge_path) &&
+                                     OB_NOT_NULL(index_merge_path->root_) &&
+                                     index_merge_path->root_->is_hybrid_search_node();
+  const bool is_automatic_path = is_automatic_hybrid_search_path();
   is_match = false;
   if (OB_ISNULL(access_path_) || OB_ISNULL(index_merge_hint)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(access_path_), K(index_merge_hint));
   } else if (index_merge_hint->is_disable_hint()) {
-    is_match = true;
-  } else if (access_path_->is_index_merge_path()) {
-    is_match = true;
+    is_match = !is_hybrid_search_path;
+  } else {
+    table_hint = OB_ISNULL(get_plan())
+        ? NULL : get_plan()->get_log_plan_hint().get_log_table_hint(table_id_);
+    if (is_automatic_path && OB_NOT_NULL(table_hint) &&
+        index_merge_hint == table_hint->hybrid_search_index_merge_hint_) {
+      is_match = true;
+    } else if (!index_merge_hint->get_column_name_list().empty()) {
+      // The COLUMNS form only controls automatic SQL-to-DSL.
+    } else if (access_path_->is_index_merge_path() && !is_hybrid_search_path) {
+      is_match = true;
+    }
+  }
+  return ret;
+}
+
+bool ObLogTableScan::is_automatic_hybrid_search_path() const
+{
+  bool is_automatic_path = false;
+  if (OB_NOT_NULL(access_path_) && access_path_->is_index_merge_path()) {
+    const IndexMergePath *index_merge_path = static_cast<const IndexMergePath *>(access_path_);
+    is_automatic_path = OB_NOT_NULL(index_merge_path->root_) &&
+                        !index_merge_path->is_dsl_query_ &&
+                        index_merge_path->root_->is_hybrid_search_node();
+  }
+  return is_automatic_path;
+}
+
+const ObIndexMergeHint *ObLogTableScan::get_hybrid_search_index_merge_hint() const
+{
+  const ObIndexMergeHint *index_merge_hint = NULL;
+  const LogTableHint *table_hint = NULL;
+  if (is_automatic_hybrid_search_path() && OB_NOT_NULL(get_plan())) {
+    table_hint = get_plan()->get_log_plan_hint().get_log_table_hint(table_id_);
+    if (OB_NOT_NULL(table_hint) && table_hint->has_force_hybrid_search_index_merge_hint()) {
+      index_merge_hint = table_hint->hybrid_search_index_merge_hint_;
+    }
+  }
+  return index_merge_hint;
+}
+
+int ObLogTableScan::get_hybrid_search_index_merge_hint_args(
+    ObIArray<ObString> &column_name_list,
+    ObIArray<ObString> &index_name_list) const
+{
+  int ret = OB_SUCCESS;
+  const IndexMergePath *index_merge_path = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObSEArray<ObIndexMergeNode *, 8> scan_nodes;
+  column_name_list.reuse();
+  index_name_list.reuse();
+  if (!is_automatic_hybrid_search_path() || OB_ISNULL(get_plan()) ||
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hybrid search path context", K(ret), KPC(access_path_), K(get_plan()), K(schema_guard));
+  } else if (OB_FALSE_IT(index_merge_path = static_cast<const IndexMergePath *>(access_path_))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
+    LOG_WARN("failed to get data table schema", K(ret), K(ref_table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data table schema is null", K(ret), K(ref_table_id_));
+  } else if (OB_FAIL(get_index_merge_name_list(index_name_list))) {
+    LOG_WARN("failed to get index merge name list", K(ret));
+  } else if (OB_FAIL(index_merge_path->get_all_scan_nodes(scan_nodes))) {
+    LOG_WARN("failed to collect hybrid search scan nodes", K(ret));
+  }
+  for (int64_t node_idx = 0; OB_SUCC(ret) && node_idx < scan_nodes.count(); ++node_idx) {
+    ObSEArray<uint64_t, 4> column_ids;
+    if (OB_ISNULL(scan_nodes.at(node_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null hybrid search scan node", K(ret), K(node_idx));
+    } else if (OB_ISNULL(scan_nodes.at(node_idx)->ap_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null hybrid search scan path", K(ret), K(node_idx));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(scan_nodes.at(node_idx)->filter_, column_ids))) {
+      LOG_WARN("failed to extract hybrid search scan columns", K(ret), K(node_idx));
+    }
+    for (int64_t column_idx = 0; OB_SUCC(ret) && column_idx < column_ids.count(); ++column_idx) {
+      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(column_ids.at(column_idx));
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hybrid search column schema is null", K(ret), K(column_ids.at(column_idx)));
+      } else if (OB_FAIL(add_var_to_array_no_dup(column_name_list,
+                                                  column_schema->get_column_name_str()))) {
+        LOG_WARN("failed to add hybrid search column name", K(ret), K(column_ids.at(column_idx)));
+      }
+    }
   }
   return ret;
 }

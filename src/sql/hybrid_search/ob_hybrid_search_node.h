@@ -206,14 +206,22 @@ public:
 
 class ObHybridSearchGenerator {
 public:
-  explicit ObHybridSearchGenerator(common::ObIAllocator *alloc, ObLogPlan *plan, ObSqlSchemaGuard *schema_guard,
-    const ObTableSchema *table_schema, const ObIArray<uint64_t> &valid_index_ids,
-    const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
-    const ObIArray<bool> &index_can_ignore_prefix, const TableItem *table_item)
+  explicit ObHybridSearchGenerator(common::ObIAllocator *alloc,
+                                   ObLogPlan *plan,
+                                   ObSqlSchemaGuard *schema_guard,
+                                   const ObTableSchema *table_schema,
+                                   const ObIArray<uint64_t> &valid_index_ids,
+                                   const ObIArray<ObSEArray<uint64_t, 4>> &valid_index_cols,
+                                   const ObIArray<bool> &index_can_ignore_prefix,
+                                   const TableItem *table_item,
+                                   const bool has_force_index_merge_hint,
+                                   const ObIArray<uint64_t> *index_merge_hint_column_ids)
     : allocator_(alloc), plan_(plan), schema_guard_(schema_guard), table_schema_(table_schema),
       valid_index_ids_(valid_index_ids), valid_index_cols_(valid_index_cols),
       index_can_ignore_prefix_(index_can_ignore_prefix),
-      fusion_node_(nullptr), table_item_(table_item) {}
+      fusion_node_(nullptr), table_item_(table_item),
+      has_force_index_merge_hint_(has_force_index_merge_hint),
+      index_merge_hint_column_ids_(index_merge_hint_column_ids) {}
   virtual ~ObHybridSearchGenerator() {}
   int generate(const ObDSLQueryInfo *dsl_query, ObIndexMergeNode *&hybrid_search_tree);
   int deal_table_scan_filters(ObIndexMergeNode *hybrid_search_tree,
@@ -254,6 +262,8 @@ private:
                                            ObConstRawExpr *one_boost_expr,
                                            int64_t child_idx);
   int deal_child_node(ObIndexMergeNode *node, bool &prune_happened, double &sel);
+  int check_node_match_index_merge_column_hint(const ObIndexMergeNode *node,
+                                               bool &is_match) const;
   int recurse_count_index_nodes(const ObIndexMergeNode *node, int64_t &index_scan_count,
                                 bool &ingore_normal_access_path) const;
   int collect_unprecise_index_filters(const ObIndexMergeNode *node,
@@ -280,6 +290,8 @@ private :
   const TableItem *table_item_;
   static const double MAX_INTERSECTION_MERGE_SEL;
   static const double MAX_SEL_GAP_RATIO;
+  bool has_force_index_merge_hint_;
+  const ObIArray<uint64_t> *index_merge_hint_column_ids_;
 };
 
 }

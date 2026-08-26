@@ -4003,6 +4003,7 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
   ObSEArray<uint64_t, 4> disabled_index_ids;
   ObSEArray<uint64_t, 4> index_column_ids;
   bool has_no_index_merge_hint = false;
+  bool use_all_indexes = !use_force_hint;
   valid_index_ids.reuse();
   valid_index_cols.reuse();
   index_can_ignore_prefix.reuse();
@@ -4013,6 +4014,14 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
   } else if (OB_FALSE_IT(log_table_hint = get_plan()->get_log_plan_hint().get_log_table_hint(table_id))) {
   } else if (NULL == log_table_hint) {
     // do nothing
+  } else if (use_force_hint && is_hybrid_search &&
+             log_table_hint->has_force_hybrid_search_index_merge_hint()) {
+    OPT_TRACE("valid hybrid search indexes by hint:");
+    if (log_table_hint->hybrid_search_index_merge_index_ids_.empty()) {
+      use_all_indexes = true;
+    } else if (OB_FAIL(index_ids.assign(log_table_hint->hybrid_search_index_merge_index_ids_))) {
+      LOG_WARN("failed to assign hinted hybrid search index ids", K(ret));
+    }
   } else if (use_force_hint && log_table_hint->has_force_index_merge_hint()) {
     OPT_TRACE("valid index merge indexes by hint:");
     if (OB_FAIL(index_ids.assign(log_table_hint->index_merge_list_))) {
@@ -4023,7 +4032,7 @@ int ObJoinOrder::get_valid_index_merge_indexes(const uint64_t table_id,
       LOG_WARN("failed to assign no index merge list", K(ret));
     }
   }
-  if (OB_SUCC(ret) && !use_force_hint) {
+  if (OB_SUCC(ret) && use_all_indexes) {
     uint64_t can_read_tids[OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1];
     int64_t table_index_aux_count = OB_MAX_AUX_TABLE_PER_MAIN_TABLE + 1;
     OPT_TRACE("valid index merge indexes:");
@@ -4953,6 +4962,7 @@ int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
     continue_matching = false;
     if (OB_FAIL(get_matched_multivalue_index_tid(filters.at(0),
                                                  ref_table_id,
+                                                 valid_index_ids,
                                                  multivalue_index_tid))) {
       // If no matching multivalue index found, reset error and continue to search index matching
       if (ret == OB_ERR_INDEX_KEY_NOT_FOUND) {
@@ -4961,8 +4971,6 @@ int ObJoinOrder::collect_candicate_indexes(const uint64_t ref_table_id,
       } else {
         LOG_WARN("failed to get matched multivalue index tid", K(ret), KPC(filters.at(0)), K(ref_table_id));
       }
-    } else if (!ObOptimizerUtil::find_item(valid_index_ids, multivalue_index_tid)) {
-      // multivalue index not in valid list, continue to search index matching
     } else if (OB_FAIL(candicate_index_tids.push_back(multivalue_index_tid))) {
       LOG_WARN("failed to push back index id", K(multivalue_index_tid), K(ret));
     }
@@ -22789,6 +22797,7 @@ int ObJoinOrder::get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
 
 int ObJoinOrder::get_matched_multivalue_index_tid(ObRawExpr *multivalue_expr,
                                                   uint64_t ref_table_id,
+                                                  const ObIArray<uint64_t> &valid_index_ids,
                                                   uint64_t &multivalue_idx_tid)
 {
   int ret = OB_SUCCESS;
@@ -22827,6 +22836,8 @@ int ObJoinOrder::get_matched_multivalue_index_tid(ObRawExpr *multivalue_expr,
         const ObAuxTableMetaInfo &index_info = index_infos.at(i);
         if (!share::schema::is_multivalue_index_aux(index_info.index_type_)) {
           // skip non-multivalue indexes
+        } else if (!ObOptimizerUtil::find_item(valid_index_ids, index_info.table_id_)) {
+          // skip indexes outside the candidate whitelist
         } else if (OB_FAIL(schema_guard->get_table_schema(index_info.table_id_, multivalue_idx_schema))) {
           LOG_WARN("failed to get index schema", K(ret));
         } else if (OB_ISNULL(multivalue_idx_schema)) {
@@ -25468,6 +25479,9 @@ int ObJoinOrder::create_hybrid_search_access_paths(const uint64_t table_id,
   ObIndexMergeNode *index_merge_tree = NULL;
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = nullptr;
+  const LogTableHint *log_table_hint = NULL;
+  const ObIArray<uint64_t> *index_merge_hint_column_ids = NULL;
+  bool has_force_index_merge_hint = false;
   ObSEArray<uint64_t, 4> valid_index_ids; // all valid indexes
   ObSEArray<ObSEArray<uint64_t, 4>, 4> valid_index_cols; // column ids in the valid indexes
   ObSEArray<bool, 4> index_can_ignore_prefix; // whether index can ignore prefix
@@ -25481,8 +25495,17 @@ int ObJoinOrder::create_hybrid_search_access_paths(const uint64_t table_id,
       OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_plan()), K(stmt), K(query_ctx));
+  } else if (OB_FALSE_IT(log_table_hint =
+      get_plan()->get_log_plan_hint().get_log_table_hint(table_id))) {
+  } else if (OB_FALSE_IT(has_force_index_merge_hint = NULL == table_item->dsl_query_ &&
+                                                      NULL != log_table_hint &&
+                                                      log_table_hint->has_force_hybrid_search_index_merge_hint())) {
+  } else if (OB_FALSE_IT(index_merge_hint_column_ids = has_force_index_merge_hint &&
+                                                       !log_table_hint->hybrid_search_index_merge_column_ids_.empty()
+      ? &log_table_hint->hybrid_search_index_merge_column_ids_ : NULL)) {
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0) {
     // cluster version less than 4.5.1.0 does not support hybrid search merge
+    ignore_normal_access_path = false;
     OPT_TRACE("can not create hybrid search paths due to cluster version");
   } else if (OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
@@ -25500,7 +25523,7 @@ int ObJoinOrder::create_hybrid_search_access_paths(const uint64_t table_id,
                                                    valid_index_ids,
                                                    valid_index_cols,
                                                    index_can_ignore_prefix,
-                                                   false, /* use_force_hint */
+                                                   has_force_index_merge_hint,
                                                    true /* is_hybrid_search */))) {
     LOG_WARN("failed to get valid index ids", K(ret));
   } else {
@@ -25508,7 +25531,16 @@ int ObJoinOrder::create_hybrid_search_access_paths(const uint64_t table_id,
     ObSEArray<ObRawExpr*, 4> unprecise_filters; // unused now
     bool prune_happened = false;
     ObSEArray<ObRawExpr *, 4> table_filters;
-    ObHybridSearchGenerator generator(allocator_, get_plan(), schema_guard, table_schema, valid_index_ids, valid_index_cols, index_can_ignore_prefix, table_item);
+    ObHybridSearchGenerator generator(allocator_,
+                                      get_plan(),
+                                      schema_guard,
+                                      table_schema,
+                                      valid_index_ids,
+                                      valid_index_cols,
+                                      index_can_ignore_prefix,
+                                      table_item,
+                                      has_force_index_merge_hint,
+                                      index_merge_hint_column_ids);
     if (OB_FAIL(generator.generate(dsl_query, index_merge_tree))) {
       LOG_WARN("generate hybrid search tree failed", K(ret), K(get_plan()), K(stmt), K(query_ctx));
     } else if (OB_FAIL(create_hybrid_search_node_path(table_id, ref_table_id, helper,
@@ -25994,15 +26026,24 @@ int ObJoinOrder::init_dsl_query(const TableItem *table_item, const PathHelper &h
 {
   int ret = OB_SUCCESS;
   bool use_hs_index_merge = false;
+  const LogTableHint *log_table_hint = NULL;
   dsl_query = NULL;
   ObSEArray<ObRawExpr *, 4> non_match_filters;
   ObSEArray<ObRawExpr *, 2> match_filters;
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null table item", K(ret));
+  } else if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan", K(ret));
   } else if (table_item->dsl_query_ != NULL) {
     // use table item's dsl query resolved from DSL resolver
     dsl_query = table_item->dsl_query_;
+  } else if (!OPT_CTX.is_enable_search_index() &&
+             (OB_ISNULL(log_table_hint =
+                  get_plan()->get_log_plan_hint().get_log_table_hint(table_item->table_id_)) ||
+              !log_table_hint->has_force_hybrid_search_index_merge_hint())) {
+    // A force hint may explicitly opt in while the tenant default is disabled.
   } else if (OB_FAIL(use_hybrid_search_index_merge(table_item, use_hs_index_merge))) {
     LOG_WARN("failed to use hybrid search index merge", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_match_against_filters(helper.filters_,

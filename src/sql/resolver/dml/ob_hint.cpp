@@ -2729,6 +2729,8 @@ int ObIndexMergeHint::assign(const ObIndexMergeHint &other)
     LOG_WARN("failed to assign table", K(ret));
   } else if (OB_FAIL(index_name_list_.assign(other.index_name_list_))) {
     LOG_WARN("failed to assign index name list", K(ret));
+  } else if (OB_FAIL(column_name_list_.assign(other.column_name_list_))) {
+    LOG_WARN("failed to assign column name list", K(ret));
   } else if  (OB_FAIL(ObOptHint::assign(other))) {
     LOG_WARN("fail to assign hint", K(ret));
   }
@@ -2743,8 +2745,39 @@ int ObIndexMergeHint::print_hint_desc(PlanText &plan_text) const
   int64_t &pos = plan_text.pos_;
   if (OB_FAIL(table_.print_table_in_hint(plan_text))) {
     LOG_WARN("fail to print table in hint", K(ret));
+  } else if (!column_name_list_.empty()) {
+    if (OB_FAIL(BUF_PRINTF(" COLUMNS("))) {
+      LOG_WARN("fail to print index merge columns prefix", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_name_list_.count(); ++i) {
+      if (OB_FAIL(BUF_PRINTF("%s\"%.*s\"",
+                             0 == i ? "" : " ",
+                             column_name_list_.at(i).length(),
+                             column_name_list_.at(i).ptr()))) {
+        LOG_WARN("fail to print index merge column", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(")"))) {
+      LOG_WARN("fail to print index merge columns suffix", K(ret));
+    }
+    if (OB_SUCC(ret) && !index_name_list_.empty()) {
+      if (OB_FAIL(BUF_PRINTF(" INDEXES("))) {
+        LOG_WARN("fail to print index merge indexes prefix", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_name_list_.count(); ++i) {
+        if (OB_FAIL(BUF_PRINTF("%s\"%.*s\"",
+                               0 == i ? "" : " ",
+                               index_name_list_.at(i).length(),
+                               index_name_list_.at(i).ptr()))) {
+          LOG_WARN("fail to print index merge index", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF(")"))) {
+        LOG_WARN("fail to print index merge indexes suffix", K(ret));
+      }
+    }
   } else {
-    for (int64_t i = 0; i < index_name_list_.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_name_list_.count(); ++i) {
       if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_list_.at(i).length(), index_name_list_.at(i).ptr()))) {
         LOG_WARN("fail to print index name", K(ret));
       }

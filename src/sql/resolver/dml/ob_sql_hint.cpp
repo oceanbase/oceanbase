@@ -2781,6 +2781,74 @@ int LogTableHint::assign(const LogTableHint &other)
     LOG_WARN("failed to assign vector index list", K(ret));
   } else if (OB_FAIL(vec_index_hints_.assign(other.vec_index_hints_))) {
     LOG_WARN("failed to assign vector index hints", K(ret));
+  } else if (OB_FAIL(hybrid_search_index_merge_index_ids_.assign(
+                         other.hybrid_search_index_merge_index_ids_))) {
+    LOG_WARN("failed to assign hybrid search index merge index ids", K(ret));
+  } else if (OB_FAIL(hybrid_search_index_merge_column_ids_.assign(
+                         other.hybrid_search_index_merge_column_ids_))) {
+    LOG_WARN("failed to assign hybrid search index merge column ids", K(ret));
+  } else {
+    hybrid_search_index_merge_hint_ = other.hybrid_search_index_merge_hint_;
+  }
+  return ret;
+}
+
+int LogTableHint::collect_hybrid_search_index_merge_column_ids(const ObTableSchema &data_table_schema,
+                                                               const ObIArray<ObString> &hint_names,
+                                                               ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t hint_idx = 0; OB_SUCC(ret) && hint_idx < hint_names.count(); ++hint_idx) {
+    const ObColumnSchemaV2 *column_schema = data_table_schema.get_column_schema(hint_names.at(hint_idx));
+    if (OB_ISNULL(column_schema)) {
+      // Keep the valid subset, consistent with ordinary INDEX_MERGE candidate hints.
+    } else if (OB_FAIL(add_var_to_array_no_dup(column_ids, column_schema->get_column_id()))) {
+      LOG_WARN("failed to add hinted column id", K(ret), K(column_schema->get_column_id()));
+    }
+  }
+  return ret;
+}
+
+int LogTableHint::collect_hybrid_search_index_merge_index_id(
+    const ObIndexMergeHint &index_merge_hint,
+    const ObString &index_name,
+    const uint64_t readable_index_id,
+    ObIArray<uint64_t> &index_ids,
+    bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  for (int64_t i = 0;
+       !is_match && i < index_merge_hint.get_index_list_count();
+       ++i) {
+    if (0 == index_merge_hint.get_index_name_list().at(i).case_compare(index_name)) {
+      is_match = true;
+    }
+  }
+  if (is_match && OB_FAIL(add_var_to_array_no_dup(index_ids, readable_index_id))) {
+    LOG_WARN("failed to add hybrid search index merge index id", K(ret), K(readable_index_id));
+  }
+  return ret;
+}
+
+int LogTableHint::assign_hybrid_search_index_merge_hint(
+    const ObIndexMergeHint *index_merge_hint,
+    const ObIArray<uint64_t> &index_ids,
+    const ObIArray<uint64_t> &column_ids,
+    bool &is_valid_hint)
+{
+  int ret = OB_SUCCESS;
+  is_valid_hint = OB_NOT_NULL(index_merge_hint) &&
+                  (index_merge_hint->get_index_name_list().empty() || !index_ids.empty()) &&
+                  (index_merge_hint->get_column_name_list().empty() || !column_ids.empty());
+  if (!is_valid_hint) {
+    // do nothing
+  } else if (OB_FAIL(hybrid_search_index_merge_index_ids_.assign(index_ids))) {
+    LOG_WARN("failed to assign hybrid search index merge index ids", K(ret));
+  } else if (OB_FAIL(hybrid_search_index_merge_column_ids_.assign(column_ids))) {
+    LOG_WARN("failed to assign hybrid search index merge column ids", K(ret));
+  } else {
+    hybrid_search_index_merge_hint_ = index_merge_hint;
   }
   return ret;
 }
@@ -2871,10 +2939,42 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
     ObSEArray<uint64_t, 4> no_index_merge_list;
     ObSEArray<const ObIndexMergeHint*, 4> index_merge_hints;
     ObSEArray<const ObIndexMergeHint*, 4> no_index_merge_hints;
+    ObSEArray<uint64_t, 4> hybrid_search_index_merge_index_ids;
+    ObSEArray<uint64_t, 4> hybrid_search_index_merge_column_ids;
+    const ObIndexMergeHint *hybrid_search_index_merge_hint = NULL;
+    bool is_valid_hybrid_search_index_merge_hint = false;
+    const bool is_explicit_dsl = OB_NOT_NULL(table_->dsl_query_);
+    hybrid_search_index_merge_index_ids_.reuse();
+    hybrid_search_index_merge_column_ids_.reuse();
+    hybrid_search_index_merge_hint_ = NULL;
+    if (!index_merge_hints_.empty()) {
+      const ObIndexMergeHint *first_index_merge_hint = index_merge_hints_.at(0);
+      if (OB_ISNULL(first_index_merge_hint)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null index merge hint", K(ret));
+      } else if (first_index_merge_hint->is_enable_hint() &&
+                 (!first_index_merge_hint->get_index_name_list().empty() ||
+                  !first_index_merge_hint->get_column_name_list().empty()) &&
+                 !is_explicit_dsl) {
+        hybrid_search_index_merge_hint = first_index_merge_hint;
+        if (OB_FAIL(collect_hybrid_search_index_merge_column_ids(
+                       *data_table_schema,
+                       hybrid_search_index_merge_hint->get_column_name_list(),
+                       hybrid_search_index_merge_column_ids))) {
+          LOG_WARN("failed to collect hybrid search index merge column ids", K(ret));
+        }
+      }
+    }
+    const bool need_hybrid_search_index_name =
+        OB_NOT_NULL(hybrid_search_index_merge_hint) &&
+        !hybrid_search_index_merge_hint->get_index_name_list().empty();
     for (int64_t i = -1; OB_SUCC(ret) && i < table_index_aux_count; ++i) {
-      uint64_t index_id = -1 == i ? table_->ref_id_ : tids[i];
+      const uint64_t readable_index_id = -1 == i ? table_->ref_id_ : tids[i];
+      uint64_t index_id = readable_index_id;
       ObString index_name;
       bool is_primary_key = false;
+      bool is_index_hint_candidate = true;
+      bool is_hybrid_search_index_match = false;
       bool is_vec_index_valid = true;
       if (-1 == i) {
         is_primary_key = true;
@@ -2884,17 +2984,30 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
         ret = OB_SCHEMA_ERROR;
         LOG_WARN("fail to get table schema", K(index_id), K(ret));
       } else if (index_schema->is_built_in_fts_index() || (index_schema->is_vec_index() && !stmt.has_vec_approx())) {
-        // just ignore fts && vector index
+        is_index_hint_candidate = false;
       } else if (stmt.has_vec_approx() && index_schema->is_vec_index()
           && OB_FAIL(check_vec_hint_index_id(stmt, schema_guard, index_id, is_vec_index_valid))) {
         LOG_WARN("failed to check vector index hint valid", K(ret));
       } else if (!is_vec_index_valid) {
-        // skip invalid vector index.
-      } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
+        is_index_hint_candidate = false;
+      }
+      if (OB_SUCC(ret) && -1 != i &&
+          (is_index_hint_candidate || need_hybrid_search_index_name) &&
+          OB_FAIL(index_schema->get_index_name(index_name))) {
         LOG_WARN("fail to get index name", K(index_name), K(ret));
       }
 
-      if (OB_SUCC(ret) && (!index_name.empty())) {
+      if (OB_SUCC(ret) && !index_name.empty() && need_hybrid_search_index_name) {
+        if (OB_FAIL(collect_hybrid_search_index_merge_index_id(
+                        *hybrid_search_index_merge_hint,
+                        index_name,
+                        readable_index_id,
+                        hybrid_search_index_merge_index_ids,
+                        is_hybrid_search_index_match))) {
+          LOG_WARN("failed to collect hybrid search index merge index id", K(ret), K(readable_index_id));
+        }
+      }
+      if (OB_SUCC(ret) && !index_name.empty() && is_index_hint_candidate) {
         int64_t no_index_hint_pos = OB_INVALID_INDEX;
         int64_t index_hint_pos = OB_INVALID_INDEX;
         int64_t index_asc_hint_pos = OB_INVALID_INDEX;
@@ -3015,10 +3128,16 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
           if (OB_ISNULL(index_merge_hint)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null index merge hint", K(ret), K(hint_i), K(index_merge_hints_));
+          } else if (!index_merge_hint->get_column_name_list().empty()) {
+            // The COLUMNS form must not constrain ordinary Index Merge paths.
           } else if (index_merge_hint->get_index_name_list().empty()) {
             is_match = true;
+          } else if (index_merge_hint == hybrid_search_index_merge_hint) {
+            is_match = is_hybrid_search_index_match;
           } else {
-            for (int64_t index_i = 0; OB_SUCC(ret) && !is_match && index_i < index_merge_hint->get_index_list_count(); ++index_i) {
+            for (int64_t index_i = 0;
+                 OB_SUCC(ret) && !is_match && index_i < index_merge_hint->get_index_list_count();
+                 ++index_i) {
               if (0 == index_merge_hint->get_index_name_list().at(index_i).case_compare(index_name)) {
                 is_match = true;
               }
@@ -3042,6 +3161,13 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
         }
       }
     }
+    if (OB_SUCC(ret) && OB_FAIL(assign_hybrid_search_index_merge_hint(
+                                   hybrid_search_index_merge_hint,
+                                   hybrid_search_index_merge_index_ids,
+                                   hybrid_search_index_merge_column_ids,
+                                   is_valid_hybrid_search_index_merge_hint))) {
+      LOG_WARN("failed to assign hybrid search index merge hint", K(ret));
+    }
     if (OB_FAIL(ret)) {
     } else if (!index_list.empty()) {
       if (OB_FAIL(index_list_.assign(index_list))) {
@@ -3056,6 +3182,10 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
     }
     // handle index merge hint
     if (OB_FAIL(ret)) {
+    } else if (is_valid_hybrid_search_index_merge_hint &&
+               !hybrid_search_index_merge_hint->get_column_name_list().empty()) {
+      index_merge_list_.reuse();
+      index_merge_hints_.reuse();
     } else if (index_merge_list.empty()) {
       if (OB_FAIL(index_merge_list_.assign(no_index_merge_list))) {
         LOG_WARN("failed to assign no index merge list", K(ret));

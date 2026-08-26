@@ -14147,6 +14147,36 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint opt_comma NAME_OB opt_inde
   merge_nodes(index_list, result, T_NAME_LIST, $6);
   malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_MERGE_HINT, 3, $3, $4, index_list);
 }
+| INDEX_MERGE_HINT '(' qb_name_option relation_factor_in_hint opt_comma
+  COLUMNS '(' name_list ')' ')'
+{
+  (void) $5; /* unused */
+  ParseNode *column_list = NULL;
+  merge_nodes(column_list, result, T_NAME_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_MERGE_HINT, 5,
+                           $3, $4, NULL, column_list, NULL);
+}
+| INDEX_MERGE_HINT '(' qb_name_option relation_factor_in_hint opt_comma
+  INDEXES '(' name_list ')' ')'
+{
+  (void) $5; /* unused */
+  ParseNode *index_list = NULL;
+  merge_nodes(index_list, result, T_NAME_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_MERGE_HINT, 5,
+                           $3, $4, NULL, NULL, index_list);
+}
+| INDEX_MERGE_HINT '(' qb_name_option relation_factor_in_hint opt_comma
+  COLUMNS '(' name_list ')' opt_comma INDEXES '(' name_list ')' ')'
+{
+  (void) $5;  /* unused */
+  (void) $10; /* unused */
+  ParseNode *column_list = NULL;
+  ParseNode *index_list = NULL;
+  merge_nodes(column_list, result, T_NAME_LIST, $8);
+  merge_nodes(index_list, result, T_NAME_LIST, $13);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INDEX_MERGE_HINT, 5,
+                           $3, $4, NULL, column_list, index_list);
+}
 | NO_INDEX_MERGE_HINT '(' qb_name_option relation_factor_in_hint opt_comma opt_name_list ')'
 {
   (void) $5; /* unused */

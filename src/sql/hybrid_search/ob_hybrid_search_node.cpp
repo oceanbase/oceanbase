@@ -59,13 +59,29 @@ int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_se
       LOG_WARN("unexpected children count", K(ret), K(fusion_node->children_.count()));
     } else if (fusion_node->children_.at(0)->is_hybrid_scalar_node()) {
       // if single scan node is not search index path, normal access path is better.
+      bool child_prune_happened = false;
+      double child_selectivity = 0.0;
       ingore_normal_access_path = false;
-      if (OB_FAIL(recurse_count_index_nodes(fusion_node->children_.at(0), index_scan_count,
-                                            ingore_normal_access_path))) {
+      if (has_force_index_merge_hint_ &&
+          OB_FAIL(deal_child_node(fusion_node->children_.at(0),
+                                  child_prune_happened,
+                                  child_selectivity))) {
+        LOG_WARN("failed to deal child node", K(ret), KPC(fusion_node->children_.at(0)));
+      } else if (has_force_index_merge_hint_ && child_prune_happened) {
+        ObScalarQueryNode *scalar_node =
+            static_cast<ObScalarQueryNode *>(fusion_node->children_.at(0));
+        if (OB_FAIL(append_array_no_dup(table_filters,
+                                        scalar_node->pri_table_query_params_.pushdown_filters_))) {
+          LOG_WARN("failed to append expr", K(ret));
+        }
+      } else if (OB_FAIL(recurse_count_index_nodes(fusion_node->children_.at(0), index_scan_count,
+                                                   ingore_normal_access_path))) {
         LOG_WARN("failed to recurse count index nodes", K(ret));
       } else if (OB_FAIL(collect_unprecise_index_filters(fusion_node->children_.at(0),
                                                          table_filters))) {
         LOG_WARN("failed to collect unprecise index filters", K(ret));
+      } else if (has_force_index_merge_hint_ && 0 < index_scan_count) {
+        ingore_normal_access_path = true;
       }
     } else if (fusion_node->children_.at(0)->node_type_ != INDEX_MERGE_HYBRID_BOOLEAN_QUERY) {
       // do nothing
@@ -75,6 +91,10 @@ int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_se
       ObSEArray<double, 8> children_selectivity;
       double invalid_sel = 100;
       int idx = -1;
+      bool root_prune_happened = false;
+      const bool is_root_or_node = has_force_index_merge_hint_
+                                   && bool_node->filter_nodes_.empty()
+                                   && !bool_node->should_nodes_.empty();
       for (int i = 0; i < bool_node->filter_nodes_.count() && OB_SUCC(ret); i++) {
         ObIndexMergeNode *child_node = bool_node->filter_nodes_.at(i);
         double child_sel = 0.0;
@@ -138,13 +158,23 @@ int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_se
           }
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && is_root_or_node) {
+        double root_selectivity = 0.0;
+        if (OB_FAIL(deal_child_node(bool_node, root_prune_happened, root_selectivity))) {
+          LOG_WARN("failed to deal root or node", K(ret), KPC(bool_node));
+        } else if (root_prune_happened) {
+          LOG_TRACE("do not use hybrid search path because root or node is pruned", KPC(bool_node));
+        }
+      }
+      if (OB_SUCC(ret) && !root_prune_happened) {
         ingore_normal_access_path = false;
         if (OB_FAIL(recurse_count_index_nodes(bool_node, index_scan_count,
                                               ingore_normal_access_path))) {
           LOG_WARN("failed to recurse count index nodes", K(ret));
         } else if (OB_FAIL(collect_unprecise_index_filters(bool_node, table_filters))) {
           LOG_WARN("failed to collect unprecise index filters", K(ret));
+        } else if (has_force_index_merge_hint_ && 0 < index_scan_count) {
+          ingore_normal_access_path = true;
         }
       }
     }
@@ -155,13 +185,27 @@ int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_se
 int ObHybridSearchGenerator::deal_child_node(ObIndexMergeNode *node, bool &prune_happened, double &sel)
 {
   int ret = OB_SUCCESS;
-  if (node->is_hybrid_scalar_node()) {
+  bool is_match_column_hint = true;
+  prune_happened = false;
+  sel = 0.0;
+  if (OB_ISNULL(node)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index merge node", K(ret), K(node));
+  } else if (node->is_hybrid_scalar_node()) {
     if (OB_ISNULL(node->ap_)) {
       prune_happened = true;
       LOG_TRACE("prune node because no available index", KPC(node));
     } else if (!node->ap_->is_new_query_range_with_precise_expr()) {
       prune_happened = true;
       LOG_TRACE("prune node because no precise query range", KPC(node));
+    } else if (OB_FAIL(check_node_match_index_merge_column_hint(node, is_match_column_hint))) {
+      LOG_WARN("failed to check index merge column hint", K(ret), KPC(node));
+    } else if (!is_match_column_hint) {
+      prune_happened = true;
+      LOG_TRACE("prune node because column is not specified by hint", KPC(node));
+    } else if (has_force_index_merge_hint_) {
+      // A valid force hint must not be rejected by the default selectivity heuristic.
+      sel = 0.0;
     } else {
       if (node->filter_.count() == 1 && (node->filter_.at(0)->is_json_domain_expr() ||
                                        node->filter_.at(0)->is_domain_array_expr())) {
@@ -183,7 +227,7 @@ int ObHybridSearchGenerator::deal_child_node(ObIndexMergeNode *node, bool &prune
         ObHybridSearchNodeBase *child_node = static_cast<ObHybridSearchNodeBase *>(bool_node->filter_nodes_.at(i));
         double child_sel = 0.0;
         bool child_prune_happened = false;
-        if (OB_FAIL(deal_child_node(child_node, child_prune_happened, child_sel))) {
+        if (OB_FAIL(SMART_CALL(deal_child_node(child_node, child_prune_happened, child_sel)))) {
           LOG_WARN("failed to append node for child", K(ret), K(i), KPC(child_node));
         } else if (child_prune_happened) {
           prune_happened = true;
@@ -215,7 +259,7 @@ int ObHybridSearchGenerator::deal_child_node(ObIndexMergeNode *node, bool &prune
         ObHybridSearchNodeBase *child_node = static_cast<ObHybridSearchNodeBase *>(bool_node->should_nodes_.at(i));
         double child_sel = 0.0;
         bool child_prune_happened = false;
-        if (OB_FAIL(deal_child_node(child_node, child_prune_happened, child_sel))) {
+        if (OB_FAIL(SMART_CALL(deal_child_node(child_node, child_prune_happened, child_sel)))) {
           LOG_WARN("failed to append node for child", K(ret), K(i), KPC(child_node));
         } else if (child_prune_happened) {
           prune_happened = true;
@@ -651,7 +695,12 @@ int ObHybridSearchGenerator::get_search_index_cons_encode_type(ObRawExpr *filter
     // empty or multiple columns, can not use search index
   } else {
     const uint64_t column_id = column_ids.at(0);
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids_.count() && !has_search_index; ++i) {
+    // Keep the first-match behavior for automatic SQL-to-DSL. A forced hint provides a candidate
+    // whitelist, so merge their type coverage and let each split leaf choose its own index later.
+    for (int64_t i = 0;
+         OB_SUCC(ret) && i < valid_index_ids_.count() &&
+         (!has_search_index || has_force_index_merge_hint_);
+         ++i) {
       const uint64_t index_id = valid_index_ids_.at(i);
       const ObIArray<uint64_t> &index_column_ids = valid_index_cols_.at(i);
       const bool can_ignore_prefix = index_can_ignore_prefix_.at(i);
@@ -659,7 +708,7 @@ int ObHybridSearchGenerator::get_search_index_cons_encode_type(ObRawExpr *filter
           column_ids, index_column_ids, true /* ignore prefix */)) {
         const ObTableSchema *index_schema = nullptr;
         const ObColumnSchemaV2 *index_column_schema = nullptr;
-        has_search_index = true;
+        uint8_t index_cons_encode_type = 0;
         if (OB_FAIL(schema_guard_->get_table_schema(index_id, index_schema))) {
           LOG_WARN("failed to get table schema", K(ret), K(index_id));
         } else if (OB_ISNULL(index_schema)) {
@@ -675,8 +724,28 @@ int ObHybridSearchGenerator::get_search_index_cons_encode_type(ObRawExpr *filter
             LOG_WARN("failed to parse json column filter", K(ret), K(index_id), K(column_id),
                      K(index_column_schema->get_comment_str()));
           } else {
-            cons_encode_type = json_filter.get_type_mask();
+            index_cons_encode_type = json_filter.get_type_mask();
           }
+        }
+        // With a forced INDEX_MERGE hint, multiple search indexes form one candidate set.
+        // For example:
+        // si_string：INCLUDE_TYPES(JSON_STRING)
+        // si_number：INCLUDE_TYPES(JSON_NUMBER)
+        // JSON_CONTAINS(j, '["abc", 100]')
+        // using either index's INCLUDE_TYPES alone would reject the original predicate before
+        // it can be split. Therefore, merge the supported types of all candidates before
+        // splitting, and let each split leaf select an applicable index using the candidate's
+        // own configuration.
+        if (OB_SUCC(ret)) {
+          if (!has_search_index) {
+            cons_encode_type = index_cons_encode_type;
+          } else if (0 == cons_encode_type || 0 == index_cons_encode_type) {
+            // A zero mask means that the Search Index has no type restriction.
+            cons_encode_type = 0;
+          } else {
+            cons_encode_type = static_cast<uint8_t>(cons_encode_type | index_cons_encode_type);
+          }
+          has_search_index = true;
         }
       }
     }
@@ -2300,6 +2369,25 @@ int ObHybridSearchGenerator::split_array_contains_all(const ObDSLScalarQuery *sc
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObHybridSearchGenerator::check_node_match_index_merge_column_hint(const ObIndexMergeNode *node,
+                                                                       bool &is_match) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> column_ids;
+  is_match = true;
+  if (OB_ISNULL(index_merge_hint_column_ids_)) {
+    // Automatic SQL-to-DSL without a structured hint does not restrict columns.
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(node->filter_, column_ids))) {
+    LOG_WARN("failed to extract column ids from index merge node", K(ret), KPC(node));
+  } else if (column_ids.empty()) {
+    is_match = false;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_match && i < column_ids.count(); ++i) {
+    is_match = ObOptimizerUtil::find_item(*index_merge_hint_column_ids_, column_ids.at(i));
   }
   return ret;
 }

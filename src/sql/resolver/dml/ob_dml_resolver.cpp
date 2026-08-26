@@ -17858,11 +17858,27 @@ int ObDMLResolver::resolve_index_merge_hint(const ParseNode &hint_node,
   ObIndexMergeHint *index_merge_hint = NULL;
   const ParseNode *table_node = NULL;
   const ParseNode *index_list_node = NULL;
+  const ParseNode *column_list_node = NULL;
+  const bool has_named_clause = 5 == hint_node.num_child_;
   ObString qb_name;
-  if (OB_UNLIKELY(3 != hint_node.num_child_)
-      || OB_ISNULL(table_node = hint_node.children_[1])) {
+  if (OB_UNLIKELY(3 != hint_node.num_child_ && 5 != hint_node.num_child_) ||
+      OB_ISNULL(table_node = hint_node.children_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected index merge hint", K(ret), K(hint_node.type_), K(hint_node.num_child_), K(table_node));
+  } else if (has_named_clause &&
+             OB_FALSE_IT(column_list_node = hint_node.children_[3])) {
+  } else if (has_named_clause &&
+             OB_FALSE_IT(index_list_node = hint_node.children_[4])) {
+  } else if (has_named_clause &&
+             OB_ISNULL(column_list_node) && OB_ISNULL(index_list_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("structured index merge hint has no columns or indexes", K(ret));
+  } else if (has_named_clause && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "INDEX_MERGE with COLUMNS or INDEXES before cluster version 5.0.2.0 is");
+    LOG_WARN("structured INDEX_MERGE hint is not supported before cluster version 5.0.2.0",
+             K(ret), K(GET_MIN_CLUSTER_VERSION()));
   } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, index_merge_hint))) {
     LOG_WARN("failed to create hint", K(ret));
   } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
@@ -17870,26 +17886,48 @@ int ObDMLResolver::resolve_index_merge_hint(const ParseNode &hint_node,
   } else if (OB_FALSE_IT(index_merge_hint->set_qb_name(qb_name))) {
   } else if (OB_FAIL(resolve_table_relation_in_hint(*table_node, index_merge_hint->get_table()))) {
     LOG_WARN("Resolve table relation fail", K(ret));
-  } else if (NULL == (index_list_node = hint_node.children_[2])) {
+  } else if (!has_named_clause && NULL == (index_list_node = hint_node.children_[2])) {
     // do nothing
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < index_list_node->num_child_; ++i) {
-      const ParseNode *index_node = index_list_node->children_[i];
-      ObString index_name;
-      if (OB_ISNULL(index_node)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected nullptr index node", K(ret), K(i));
-      } else {
-        index_name.assign_ptr(index_node->str_value_, static_cast<int32_t>(index_node->str_len_));
-        if (OB_FAIL(index_merge_hint->get_index_name_list().push_back(index_name))) {
-          LOG_WARN("failed to push back index name", K(ret), K(index_name), K(index_merge_hint->get_index_name_list()));
-        }
-      }
-    }
+  } else if (!has_named_clause &&
+             OB_FAIL(resolve_index_merge_hint_name_list(index_list_node,
+                                                        index_merge_hint->get_index_name_list()))) {
+    LOG_WARN("failed to resolve index merge index names", K(ret));
+  } else if (has_named_clause && OB_NOT_NULL(column_list_node) &&
+             OB_FAIL(resolve_index_merge_hint_name_list(column_list_node,
+                                                        index_merge_hint->get_column_name_list()))) {
+    LOG_WARN("failed to resolve index merge column names", K(ret));
+  } else if (has_named_clause && OB_NOT_NULL(index_list_node) &&
+             OB_FAIL(resolve_index_merge_hint_name_list(index_list_node,
+                                                        index_merge_hint->get_index_name_list()))) {
+    LOG_WARN("failed to resolve hybrid search index names", K(ret));
   }
   if (OB_SUCC(ret)) {
     opt_hint = index_merge_hint;
     LOG_DEBUG("resolve index merge hint finished", KPC(index_merge_hint));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_index_merge_hint_name_list(const ParseNode *name_list_node,
+                                                      ObIArray<ObString> &name_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(name_list_node) || OB_UNLIKELY(T_NAME_LIST != name_list_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected index merge name list", K(ret), K(name_list_node));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < name_list_node->num_child_; ++i) {
+    const ParseNode *name_node = name_list_node->children_[i];
+    ObString name;
+    if (OB_ISNULL(name_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null index merge name", K(ret), K(i));
+    } else {
+      name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
+      if (OB_FAIL(name_list.push_back(name))) {
+        LOG_WARN("failed to add index merge name", K(ret), K(name));
+      }
+    }
   }
   return ret;
 }

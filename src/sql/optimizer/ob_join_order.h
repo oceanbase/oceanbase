@@ -1743,6 +1743,7 @@ struct MergeKeyInfoHelper
                                    ObIArray<uint64_t> &inv_idx_tids);
     int get_matched_multivalue_index_tid(ObRawExpr *multivalue_expr,
                                          uint64_t ref_table_id,
+                                         const ObIArray<uint64_t> &valid_index_ids,
                                          uint64_t &multivalue_idx_tid);
     int check_multivalue_index_match_column(uint64_t json_column_id,
                                            const ObTableSchema *table_schema,

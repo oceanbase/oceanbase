@@ -544,6 +544,7 @@ int ObConfigInfoInPC::load_influence_plan_config()
     enable_insertup_column_store_opt_ = tenant_config->_enable_insertup_column_store_opt;
     enable_px_task_rebalance_ = tenant_config->_enable_px_task_rebalance;
     enable_nested_sql_local_optimize_ = tenant_config->_enable_nested_sql_local_optimize;
+    enable_search_index_ = tenant_config->_enable_search_index;
   }
 
   return ret;
@@ -650,6 +651,8 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_px_task_rebalance_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_nested_sql_local_optimize_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_nested_sql_local_optimize_));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%d,", enable_search_index_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_search_index_));
   } else {
     // do nothing
   }

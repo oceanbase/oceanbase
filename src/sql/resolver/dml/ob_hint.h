@@ -1332,7 +1332,8 @@ class ObIndexMergeHint : public ObOptHint
 public:
   ObIndexMergeHint(ObIAllocator &allocator, ObItemType hint_type = T_INDEX_MERGE_HINT)
     : ObOptHint(hint_type),
-      index_name_list_(allocator)
+      index_name_list_(allocator),
+      column_name_list_(allocator)
   {
     set_hint_class(HINT_INDEX_MERGE);
   }
@@ -1345,10 +1346,13 @@ public:
   inline common::ObIArray<common::ObString> &get_index_name_list() { return index_name_list_; }
   inline const common::ObIArray<common::ObString> &get_index_name_list() const { return index_name_list_; }
   inline int64_t get_index_list_count() const { return index_name_list_.count(); }
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list));
+  inline common::ObIArray<common::ObString> &get_column_name_list() { return column_name_list_; }
+  inline const common::ObIArray<common::ObString> &get_column_name_list() const { return column_name_list_; }
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(index_name_list), K_(column_name_list));
 private:
   ObTableInHint table_;
   ObSqlArray<common::ObString> index_name_list_;
+  ObSqlArray<common::ObString> column_name_list_;
 };
 
 class ObTableParallelHint : public ObOptHint
