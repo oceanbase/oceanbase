@@ -6190,27 +6190,29 @@ int ObPLCodeGenerator::generate_normal_next_and_check(const ObPLForLoopStmt &s,
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(get_current().get_v()));
-  // 对INDEX +1/-1 并将结果存储进param_store
+  // Compare before +/- 1 so PLS_INTEGER INT_MAX/INT_MIN does not overflow the exit check.
+  // Forward: continue iff index < upper, then index++.
+  // Reverse: continue iff index > lower, then index--.
   if (!s.get_reverse()) {
     OZ (extract_value_ptr_from_obj(
       p_index_obj, s.get_lower_expr()->get_data_type(), p_index_value));
     OZ (get_helper().create_load(ObString("load_index_value"), p_index_value, index_value));
+    OZ (get_helper().create_icmp(index_value, upper_value, ObLLVMHelper::ICMP_SLT, is_true));
     OZ (get_helper().create_inc(index_value, index_value));
     OZ (get_helper().create_store(index_value, p_index_value));
     OZ (cast_to_int64(p_index_value));
     OZ (get_helper().create_load(ObString("load_index_obj"), p_index_obj, index_obj));
     OZ (get_helper().create_store(index_obj, dest_datum));
-    OZ (get_helper().create_icmp(index_value, upper_value, ObLLVMHelper::ICMP_SLE, is_true));
   } else {
     OZ (extract_value_ptr_from_obj(
       p_index_obj, s.get_upper_expr()->get_data_type(), p_index_value));
     OZ (get_helper().create_load(ObString("load_index_value"), p_index_value, index_value));
+    OZ (get_helper().create_icmp(index_value, lower_value, ObLLVMHelper::ICMP_SGT, is_true));
     OZ (get_helper().create_dec(index_value, index_value));
     OZ (get_helper().create_store(index_value, p_index_value));
     OZ (cast_to_int64(p_index_value));
     OZ (get_helper().create_load(ObString("load_index_obj"), p_index_obj, index_obj));
     OZ (get_helper().create_store(index_obj, dest_datum));
-    OZ (get_helper().create_icmp(index_value, lower_value, ObLLVMHelper::ICMP_SGE, is_true));
   }
   return ret;
 }
