@@ -3985,6 +3985,9 @@ OB_DEF_DESERIALIZE(ObHCfRows)
   if (OB_SUCC(ret) && (OB_ISNULL(keys_) || OB_ISNULL(deserialize_alloc_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keys or deserialize_alloc_ is null", K(ret));
+  } else if (OB_SUCC(ret) && (keys_->count() <= 0 || real_table_name_.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("keys or real table name is empty", K(ret), "key_count", keys_->count(), K_(real_table_name));
   }
   if (OB_SUCC(ret)) {
     ObFixedArray<int64_t, ObIAllocator> key_idx;
@@ -3995,7 +3998,7 @@ OB_DEF_DESERIALIZE(ObHCfRows)
     int64_t key_idx_num = 0;
     OB_UNIS_DECODE(key_idx_num);
     if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(key_idx_num < 0
+      if (OB_UNLIKELY(key_idx_num <= 0
                       || key_idx_num > UINT32_MAX
                       || pos < 0
                       || pos > data_len
@@ -4023,7 +4026,7 @@ OB_DEF_DESERIALIZE(ObHCfRows)
         int64_t cell_num = 0;
         OB_UNIS_DECODE(cell_num_array_size);
         if (OB_SUCC(ret)) {
-          if (OB_UNLIKELY(cell_num_array_size < 0
+          if (OB_UNLIKELY(cell_num_array_size <= 0
                           || cell_num_array_size > UINT32_MAX
                           || pos < 0
                           || pos > data_len
@@ -4040,7 +4043,7 @@ OB_DEF_DESERIALIZE(ObHCfRows)
           for (int64_t i = 0; OB_SUCC(ret) && i < cell_num_array_size; ++i) {
             OB_UNIS_DECODE(cell_num);
             if (OB_SUCC(ret)) {
-              if (OB_UNLIKELY(cell_num < 0 || cell_num > UINT32_MAX)) {
+              if (OB_UNLIKELY(cell_num <= 0 || cell_num > UINT32_MAX)) {
                 ret = OB_INVALID_ARGUMENT;
                 LOG_WARN("invalid cell number", K(ret), K(cell_num), K(i));
               } else if (OB_UNLIKELY(total_cell_count > INT64_MAX - cell_num)) {

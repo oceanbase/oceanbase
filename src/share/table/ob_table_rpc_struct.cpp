@@ -334,21 +334,28 @@ OB_DEF_DESERIALIZE(ObHbaseRpcRequest,)
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation not HBase Put");
       LOG_WARN("operation not HBase Put is not supported yet", K(ret), K_(op_type));
+    } else if (OB_ISNULL(deserialize_allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deserialize_allocator_ is null", K(ret));
     } else {
       // decode keys
-      int64_t now_ms = -(ObTimeUtility::current_time() / 1000);
+      const int64_t now_ms = -(ObTimeUtility::current_time() / 1000);
       int64_t key_num = 0;
       keys_.set_allocator(deserialize_allocator_);
       cf_rows_.set_allocator(deserialize_allocator_);
       OB_UNIS_DECODE(key_num);
       if (OB_SUCC(ret)) {
-        if (OB_ISNULL(deserialize_allocator_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("deserialize_allocator_ is null", K(ret));
+        if (OB_UNLIKELY(key_num <= 0
+                        || key_num > UINT32_MAX
+                        || pos < 0
+                        || pos > data_len
+                        || key_num > data_len - pos)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid hbase key array size", K(ret), K(key_num), K(data_len), K(pos));
         } else if (OB_FAIL(keys_.prepare_allocate(key_num))) {
           LOG_WARN("fail to prepare allocate keys", K(ret), K(key_num));
         } else {
-          for (int64_t i = 0; OB_SUCC(ret) && i < key_num; i++) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < key_num; ++i) {
             if (OB_FAIL(ObTableSerialUtil::deserialize(buf, data_len, pos, keys_.at(i)))) {
               LOG_WARN("fail to deserialize table object", K(ret), K(buf), K(data_len), K(pos));
             }
@@ -357,10 +364,19 @@ OB_DEF_DESERIALIZE(ObHbaseRpcRequest,)
           if (OB_SUCC(ret)) {
             int64_t cf_rows_num = 0;
             OB_UNIS_DECODE(cf_rows_num);
-            if (OB_FAIL(cf_rows_.prepare_allocate(cf_rows_num))) {
-              LOG_WARN("fail to prepare allocate same_cf_rows", K(ret), K(cf_rows_num));
+            if (OB_SUCC(ret)) {
+              if (OB_UNLIKELY(cf_rows_num <= 0
+                              || cf_rows_num > UINT32_MAX
+                              || pos < 0
+                              || pos > data_len
+                              || cf_rows_num > data_len - pos)) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("invalid hbase cf row array size", K(ret), K(cf_rows_num), K(data_len), K(pos));
+              } else if (OB_FAIL(cf_rows_.prepare_allocate(cf_rows_num))) {
+                LOG_WARN("fail to prepare allocate same_cf_rows", K(ret), K(cf_rows_num));
+              }
             }
-            for (int i = 0; OB_SUCC(ret) && i < cf_rows_num; ++i) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < cf_rows_num; ++i) {
               ObHCfRows &same_cf_rows = cf_rows_.at(i);
               same_cf_rows.deserialize_alloc_ = deserialize_allocator_;
               same_cf_rows.rows_.set_allocator(deserialize_allocator_);
