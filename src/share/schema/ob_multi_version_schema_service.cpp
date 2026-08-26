@@ -711,6 +711,7 @@ int ObMultiVersionSchemaService::update_schema_cache(
 
 // for ObLatestSchemaGuard
 int ObMultiVersionSchemaService::get_latest_schema(
+    common::ObISQLClient &sql_client,
     common::ObIAllocator &allocator,
     const ObSchemaType schema_type,
     const uint64_t tenant_id,
@@ -767,12 +768,15 @@ int ObMultiVersionSchemaService::get_latest_schema(
     schema_status.tenant_id_ = tenant_id;
     const int64_t schema_version = INT64_MAX;
     ObSchema *new_schema = NULL;
-    if (OB_FAIL(schema_fetcher_.fetch_schema(schema_type,
-                                             schema_status,
-                                             schema_id,
-                                             schema_version,
-                                             allocator,
-                                             new_schema))) {
+    ObSchemaFetcher schema_fetcher;
+    if (OB_FAIL(schema_fetcher.init(schema_service_, &sql_client))) {
+      LOG_WARN("fail to init schema fetcher", KR(ret));
+    } else if (OB_FAIL(schema_fetcher.fetch_schema(schema_type,
+                                                   schema_status,
+                                                   schema_id,
+                                                   schema_version,
+                                                   allocator,
+                                                   new_schema))) {
       LOG_WARN("fail to fetch schema", KR(ret), K(schema_type),
                K(tenant_id), K(schema_id), K(schema_version));
     } else if (OB_ISNULL(new_schema)) {
@@ -789,7 +793,7 @@ int ObMultiVersionSchemaService::get_latest_schema(
         if (OB_FAIL(ObSysTableChecker::fill_sys_index_infos(*new_table))) {
           LOG_WARN("fail to fill sys indexes", KR(ret), K(tenant_id), "table_id", schema_id);
         }
-      } else if (OB_FAIL(construct_aux_infos_(*sql_proxy_,
+      } else if (OB_FAIL(construct_aux_infos_(sql_client,
                  schema_status, tenant_id, *new_table))) {
         LOG_WARN("fail to construct aux infos", KR(ret), K(tenant_id), "table_id", schema_id);
       }

@@ -79,9 +79,14 @@ int ObLatestSchemaGuard::get_schema_(
 {
   int ret = OB_SUCCESS;
   const ObSchema *base_schema = NULL;
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
   schema = NULL;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to get schema service", KR(ret));
+  } else if (OB_ISNULL(sql_client)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql client is null", KR(ret));
   } else if (OB_UNLIKELY(TENANT_SCHEMA == schema_type && !is_sys_tenant(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id for TENANT_SCHEMA", KR(ret), K(tenant_id), K(schema_id));
@@ -97,7 +102,7 @@ int ObLatestSchemaGuard::get_schema_(
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get schema from cache", KR(ret), K(schema_type), K(tenant_id), K(schema_id));
     } else if (OB_FAIL(schema_service_->get_latest_schema(
-               local_allocator_, schema_type, tenant_id, schema_id, base_schema))) {
+               *sql_client, local_allocator_, schema_type, tenant_id, schema_id, base_schema))) {
       LOG_WARN("fail to get latest schema", KR(ret), K(schema_type), K(tenant_id), K(schema_id));
     } else if (OB_ISNULL(base_schema)) {
       // schema not exist

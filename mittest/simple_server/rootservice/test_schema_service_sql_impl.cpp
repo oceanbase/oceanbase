@@ -12,6 +12,8 @@
 #define private public
 
 #include "env/ob_simple_cluster_test_base.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/schema/ob_latest_schema_guard.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 
 namespace oceanbase
@@ -31,6 +33,12 @@ class TestSchemaServiceSqlImpl : public unittest::ObSimpleClusterTestBase
 public:
   TestSchemaServiceSqlImpl() : unittest::ObSimpleClusterTestBase("test_schema_service_sql_impl") {}
   int batch_create_table(ObMySQLProxy &sql_proxy, const int64_t TOTAL_NUM, ObIArray<uint64_t> &table_ids);
+  int prepare_uncommitted_table_schema(
+      const ObTableSchema &source_schema,
+      const uint64_t table_id,
+      const uint64_t tablegroup_id,
+      const ObString &table_name,
+      ObTableSchema &table_schema);
 };
 
 int TestSchemaServiceSqlImpl::batch_create_table(
@@ -77,6 +85,29 @@ int TestSchemaServiceSqlImpl::batch_create_table(
       } else {
         LOG_WARN("fail to generate data", K(sql));
       }
+    }
+  }
+  return ret;
+}
+
+int TestSchemaServiceSqlImpl::prepare_uncommitted_table_schema(
+    const ObTableSchema &source_schema,
+    const uint64_t table_id,
+    const uint64_t tablegroup_id,
+    const ObString &table_name,
+    ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(table_schema.assign(source_schema))) {
+    LOG_WARN("fail to assign source table schema", KR(ret));
+  } else {
+    table_schema.set_table_id(table_id);
+    table_schema.set_tablet_id(table_id);
+    table_schema.set_data_table_id(table_id);
+    table_schema.set_tablegroup_id(tablegroup_id);
+    table_schema.set_schema_version(source_schema.get_schema_version() + 1);
+    if (OB_FAIL(table_schema.set_table_name(table_name))) {
+      LOG_WARN("fail to set table name", KR(ret), K(table_name));
     }
   }
   return ret;
@@ -181,6 +212,96 @@ TEST_F(TestSchemaServiceSqlImpl, test_get_table_latest_schema_versions)
   ASSERT_EQ(OB_SUCCESS, schema_service->get_table_latest_schema_versions(inner_sql_proxy, g_tenant_id, dup_table_ids, schema_versions));
   ASSERT_TRUE(schema_versions.count() == 1);
   ASSERT_TRUE(dup_table_ids.at(0) == schema_versions.at(0).get_table_id());
+}
+
+TEST_F(TestSchemaServiceSqlImpl, test_latest_schema_guard_uses_transaction_client)
+{
+  ASSERT_EQ(TOTAL_NUM, g_table_ids.count());
+  ASSERT_TRUE(is_valid_tenant_id(g_tenant_id));
+
+  ObTenantSwitchGuard tenant_guard;
+  ASSERT_EQ(OB_SUCCESS, tenant_guard.switch_to(g_tenant_id));
+  ASSERT_TRUE(OB_NOT_NULL(GCTX.schema_service_));
+  ObSchemaService *base_schema_service = GCTX.schema_service_->get_schema_service();
+  ASSERT_TRUE(OB_NOT_NULL(base_schema_service));
+  ObSchemaServiceSQLImpl *schema_service =
+      static_cast<ObSchemaServiceSQLImpl *>(base_schema_service);
+
+  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
+  ObMySQLTransaction trans;
+  ASSERT_EQ(OB_SUCCESS, trans.start(&inner_sql_proxy, g_tenant_id));
+
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = g_tenant_id;
+  ObArenaAllocator allocator("TxLatestSchema", OB_MALLOC_NORMAL_BLOCK_SIZE, g_tenant_id);
+  ObTableSchema *source_schema = NULL;
+  ASSERT_EQ(OB_SUCCESS,
+      schema_service->get_table_schema(
+          schema_status,
+          g_table_ids.at(1),
+          INT64_MAX,
+          trans,
+          allocator,
+          source_schema));
+  ASSERT_TRUE(OB_NOT_NULL(source_schema));
+
+  const uint64_t table_id = g_table_ids.at(g_table_ids.count() - 1) + 1000;
+  const uint64_t tablegroup_id = table_id + 1000;
+  ObTableSchema table_schema;
+  ASSERT_EQ(OB_SUCCESS,
+      prepare_uncommitted_table_schema(
+          *source_schema,
+          table_id,
+          tablegroup_id,
+          ObString::make_string("tx_visible_cf"),
+          table_schema));
+  ASSERT_EQ(OB_SUCCESS,
+      schema_service->table_service_.create_table(
+          table_schema,
+          trans,
+          NULL /* ddl_stmt_str */,
+          false /* need_sync_schema_version */));
+
+  {
+    ObLatestSchemaGuard latest_schema_guard(GCTX.schema_service_, g_tenant_id, &trans);
+    const ObTableSchema *actual_table_schema = NULL;
+    const int get_ret = latest_schema_guard.get_table_schema(table_id, actual_table_schema);
+    EXPECT_EQ(OB_SUCCESS, get_ret);
+    if (OB_SUCCESS == get_ret) {
+      ASSERT_TRUE(OB_NOT_NULL(actual_table_schema));
+      EXPECT_EQ(table_id, actual_table_schema->get_table_id());
+      EXPECT_EQ(tablegroup_id, actual_table_schema->get_tablegroup_id());
+    }
+  }
+
+  {
+    ObLatestSchemaGuard latest_schema_guard(GCTX.schema_service_, g_tenant_id, &trans);
+    const ObTableSchema *primary_table_schema = NULL;
+    const int get_ret = latest_schema_guard.get_primary_table_schema_in_tablegroup(
+        tablegroup_id, primary_table_schema);
+    EXPECT_EQ(OB_SUCCESS, get_ret);
+    if (OB_SUCCESS == get_ret) {
+      ASSERT_TRUE(OB_NOT_NULL(primary_table_schema));
+      EXPECT_EQ(table_id, primary_table_schema->get_table_id());
+      EXPECT_EQ(tablegroup_id, primary_table_schema->get_tablegroup_id());
+    }
+  }
+
+  {
+    ObLatestSchemaGuard latest_schema_guard(GCTX.schema_service_, g_tenant_id, &trans);
+    ObArray<const ObTableSchema *> table_schemas;
+    const int get_ret = latest_schema_guard.get_table_schemas_in_tablegroup(
+        tablegroup_id, table_schemas);
+    EXPECT_EQ(OB_SUCCESS, get_ret);
+    if (OB_SUCCESS == get_ret) {
+      ASSERT_EQ(1, table_schemas.count());
+      ASSERT_TRUE(OB_NOT_NULL(table_schemas.at(0)));
+      EXPECT_EQ(table_id, table_schemas.at(0)->get_table_id());
+      EXPECT_EQ(tablegroup_id, table_schemas.at(0)->get_tablegroup_id());
+    }
+  }
+
+  EXPECT_EQ(OB_SUCCESS, trans.end(false /* commit */));
 }
 
 } // namespace rootserver

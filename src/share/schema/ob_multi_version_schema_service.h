@@ -214,7 +214,8 @@ public:
                          common::ObKVCacheHandle &handle,
                          const ObSchema *&schema);
 
-  int get_latest_schema(common::ObIAllocator &allocator,
+  int get_latest_schema(common::ObISQLClient &sql_client,
+                        common::ObIAllocator &allocator,
                         const ObSchemaType schema_type,
                         const uint64_t tenant_id,
                         const uint64_t schema_id,
