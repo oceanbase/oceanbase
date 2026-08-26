@@ -128,7 +128,7 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid template argument", K(ret), K(arg0->datum_meta_.type_));
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *template_datum, arg0->datum_meta_, arg0->obj_meta_.has_lob_header(), template_str))) {
-    LOG_WARN("fail to read real string data", K(ret), K(arg0->datum_meta_), K(template_str));
+    LOG_WARN("fail to read real string data", K(ret), K(arg0->datum_meta_));
   }
 
   ObSEArray<ObAIFuncPromptObjectUtils::PromptArgType, 8> arg_types;
@@ -140,7 +140,7 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   // Parse template placeholders once, then drive per-arg runtime checks by placeholder type.
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObAIFuncPromptObjectUtils::parse_template_arg_types(template_str, expr.arg_cnt_ - 1, arg_types))) {
-    LOG_WARN("fail to parse template arg types", K(ret), K(template_str));
+    LOG_WARN("fail to parse template arg types", K(ret), K(template_str.length()));
   } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_array(tmp_allocator, args_array))) {
     LOG_WARN("fail to get json array", K(ret));
   } else {
@@ -189,9 +189,9 @@ int ObExprAIPrompt::eval_ai_prompt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
           ret = OB_ERR_INVALID_TYPE_FOR_OP;
           LOG_WARN("binary-like type is not allowed for text placeholder", K(ret), K(arg->datum_meta_.type_), K(i));
         } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_string(tmp_allocator, arg_str, arg_json_str))) {
-          LOG_WARN("fail to get json string", K(ret), K(arg_str));
+          LOG_WARN("fail to get json string", K(ret), K(i), K(arg_str.length()));
         } else if (OB_FAIL(args_array->append(arg_json_str))) {
-          LOG_WARN("fail to add item", K(ret), K(arg_str));
+          LOG_WARN("fail to add item", K(ret), K(i), K(arg_str.length()));
         }
       }
     }

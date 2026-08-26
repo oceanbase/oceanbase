@@ -123,14 +123,13 @@ public:
   TO_STRING_KV(K_(name),
                K_(scope),
                K_(endpoint_id),
-               K_(url),
-               K_(access_key),
                K_(ai_model_name),
                K_(provider),
                K_(request_model_name),
-               K_(parameters),
-               K_(request_transform_fn),
-               K_(response_transform_fn));
+               "url_length", url_.length(),
+               "parameters_length", parameters_.length(),
+               "request_transform_fn_length", request_transform_fn_.length(),
+               "response_transform_fn_length", response_transform_fn_.length());
 private:
   static const ObString DEFAULT_SCOPE;
   static bool is_valid_provider(const ObString &provider);

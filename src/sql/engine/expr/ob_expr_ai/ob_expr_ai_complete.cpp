@@ -182,9 +182,9 @@ int ObExprAIComplete::eval_ai_complete(const ObExpr &expr,
       if (OB_FAIL(client.init(&model_config))) {
         LOG_WARN("fail to init model", K(ret), K(model_id));
       } else if (OB_FAIL(client.call_completion(prompt, prompt_object, config, result))) {
-        LOG_WARN("fail to call model completion", K(ret), K(model_id), K(prompt), K(prompt_object), K(config));
+        LOG_WARN("fail to call model completion", K(ret), K(model_id));
       } else if (OB_FAIL(ObAIFuncUtils::set_string_result(expr, ctx, res, result))) {
-        LOG_WARN("fail to set string result", K(ret), K(model_id), K(prompt), K(prompt_object), K(config));
+        LOG_WARN("fail to set string result", K(ret), K(model_id), K(result.length()));
       }
     }
   }

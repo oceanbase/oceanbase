@@ -35,44 +35,45 @@ int ObAiServiceProxy::insert_ai_endpoint(const uint64_t tenant_id, ObMySQLTransa
   } else if (OB_FAIL(sql.add_pk_column("tenant_id", user_tenant_id))) {
     LOG_WARN("failed to add column", K(ret), K(user_tenant_id));
   } else if (OB_FAIL(sql.add_pk_column("endpoint_id", endpoint.endpoint_id_))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_pk_column("scope", ObHexEscapeSqlStr(endpoint.scope_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("version", new_endpoint_version))) {
-    LOG_WARN("failed to add column", K(ret), K(new_endpoint_version));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_), K(new_endpoint_version));
   } else if (OB_FAIL(sql.add_column("endpoint_name", endpoint.name_))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("ai_model_name", ObHexEscapeSqlStr(endpoint.ai_model_name_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("url", ObHexEscapeSqlStr(endpoint.url_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("access_key", ObHexEscapeSqlStr(endpoint.access_key_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("request_model_name", ObHexEscapeSqlStr(endpoint.request_model_name_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("provider", ObHexEscapeSqlStr(endpoint.provider_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("parameters", ObHexEscapeSqlStr(endpoint.parameters_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("request_transform_fn", ObHexEscapeSqlStr(endpoint.request_transform_fn_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("response_transform_fn", ObHexEscapeSqlStr(endpoint.response_transform_fn_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.splice_insert_sql(OB_ALL_AI_MODEL_ENDPOINT_TNAME, buffer))) {
-    LOG_WARN("failed to splice_insert_sql", K(ret));
+    LOG_WARN("failed to splice_insert_sql", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(trans.write(tenant_id, buffer.ptr(), affected_rows))) {
-    LOG_WARN("failed to write sql", KR(ret), K(tenant_id), K(buffer));
+    LOG_WARN("failed to write sql", KR(ret), K(tenant_id), K(endpoint.name_));
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows should be one", KR(ret), K(affected_rows));
+    LOG_WARN("affected_rows should be one", KR(ret), K(endpoint.name_), K(affected_rows));
   }
 
   if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
     ret = OB_ENTRY_EXIST;
     LOG_USER_ERROR(OB_ENTRY_EXIST, "endpoint already exists");
-    LOG_WARN("ai model endpoint already exists", KR(ret), K(tenant_id), K(endpoint));
+    LOG_WARN("ai model endpoint already exists", KR(ret), K(tenant_id), K(endpoint.name_));
   }
-  LOG_DEBUG("insert ai model endpoint", K(tenant_id), K(new_endpoint_version), K(endpoint), K(buffer), KR(ret));
+  LOG_DEBUG("insert ai model endpoint",
+            K(tenant_id), K(new_endpoint_version), K(endpoint.name_), KR(ret));
   return ret;
 }
 
@@ -93,38 +94,39 @@ int ObAiServiceProxy::update_ai_endpoint(const uint64_t tenant_id, ObMySQLTransa
   } else if (OB_FAIL(sql.add_pk_column("tenant_id", user_tenant_id))) {
     LOG_WARN("failed to add column", K(ret), K(user_tenant_id));
   } else if (OB_FAIL(sql.add_pk_column("endpoint_id", endpoint.endpoint_id_))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_pk_column("scope", ObHexEscapeSqlStr(endpoint.scope_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("version", new_endpoint_version))) {
-    LOG_WARN("failed to add column", K(ret), K(new_endpoint_version));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_), K(new_endpoint_version));
   } else if (OB_FAIL(sql.add_column("endpoint_name", endpoint.name_))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("ai_model_name", ObHexEscapeSqlStr(endpoint.ai_model_name_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("url", ObHexEscapeSqlStr(endpoint.url_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("access_key", ObHexEscapeSqlStr(endpoint.access_key_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("request_model_name", ObHexEscapeSqlStr(endpoint.request_model_name_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("provider", ObHexEscapeSqlStr(endpoint.provider_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("parameters", ObHexEscapeSqlStr(endpoint.parameters_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("request_transform_fn", ObHexEscapeSqlStr(endpoint.request_transform_fn_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.add_column("response_transform_fn", ObHexEscapeSqlStr(endpoint.response_transform_fn_)))) {
-    LOG_WARN("failed to add column", K(ret), K(endpoint));
+    LOG_WARN("failed to add column", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(sql.splice_update_sql(OB_ALL_AI_MODEL_ENDPOINT_TNAME, buffer))) {
-    LOG_WARN("failed to splice_update_sql", K(ret));
+    LOG_WARN("failed to splice_update_sql", K(ret), K(endpoint.name_));
   } else if (OB_FAIL(trans.write(tenant_id, buffer.ptr(), affected_rows))) {
-    LOG_WARN("failed to write sql", KR(ret), K(buffer));
+    LOG_WARN("failed to write sql", KR(ret), K(endpoint.name_));
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows should be one", KR(ret), K(affected_rows));
+    LOG_WARN("affected_rows should be one", KR(ret), K(endpoint.name_), K(affected_rows));
   }
-  LOG_DEBUG("update ai model endpoint", K(tenant_id), K(new_endpoint_version), K(endpoint), K(buffer), KR(ret));
+  LOG_DEBUG("update ai model endpoint",
+            K(tenant_id), K(new_endpoint_version), K(endpoint.name_), KR(ret));
   return ret;
 }
 
@@ -170,7 +172,7 @@ int ObAiServiceProxy::select_ai_endpoint(const uint64_t tenant_id, ObArenaAlloca
           LOG_WARN("failed to get next result", KR(ret));
         }
       } else if (OB_FAIL(build_ai_endpoint_(allocator, *result, endpoint))) {
-        LOG_WARN("failed to build ai endpoint", KR(ret));
+        LOG_WARN("failed to build ai endpoint", KR(ret), K(name));
       } else {
         int tmp_ret = OB_SUCCESS;
         if (OB_ITER_END != (tmp_ret = result->next())) {
@@ -240,7 +242,7 @@ int ObAiServiceProxy::select_ai_endpoint_by_ai_model_name(
           LOG_WARN("failed to get next result", KR(ret));
         }
       } else if (OB_FAIL(build_ai_endpoint_(allocator, *result, endpoint))) {
-        LOG_WARN("failed to build ai endpoint", KR(ret));
+        LOG_WARN("failed to build ai endpoint", KR(ret), K(ai_model_name));
       } else {
         int tmp_ret = OB_SUCCESS;
         if (OB_ITER_END != (tmp_ret = result->next())) {
@@ -288,24 +290,24 @@ int ObAiServiceProxy::build_ai_endpoint_(ObArenaAllocator &allocator, ObMySQLRes
   } else if (OB_FAIL(deep_copy_ob_string(allocator, ai_model_name, endpoint.ai_model_name_))) {
     LOG_WARN("failed to deep copy ai_model_name", KR(ret), K(ai_model_name));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, url, endpoint.url_))) {
-    LOG_WARN("failed to deep copy url", KR(ret), K(url));
+    LOG_WARN("failed to deep copy url", KR(ret), K(name));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, access_key, endpoint.access_key_))) {
-    LOG_WARN("failed to deep copy access_key", KR(ret), K(access_key));
+    LOG_WARN("failed to deep copy access_key", KR(ret), K(name));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, provider, endpoint.provider_))) {
     LOG_WARN("failed to deep copy provider", KR(ret), K(provider));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, request_model_name, endpoint.request_model_name_))) {
     LOG_WARN("failed to deep copy request_model_name", KR(ret), K(request_model_name));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, arguments, endpoint.parameters_))) {
-    LOG_WARN("failed to deep copy arguments", KR(ret), K(arguments));
+    LOG_WARN("failed to deep copy arguments", KR(ret), K(name));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, request_transform_fn, endpoint.request_transform_fn_))) {
-    LOG_WARN("failed to deep copy request_transform_fn", KR(ret), K(request_transform_fn));
+    LOG_WARN("failed to deep copy request_transform_fn", KR(ret), K(name));
   } else if (OB_FAIL(deep_copy_ob_string(allocator, response_transform_fn, endpoint.response_transform_fn_))) {
-    LOG_WARN("failed to deep copy response_transform_fn", KR(ret), K(response_transform_fn));
+    LOG_WARN("failed to deep copy response_transform_fn", KR(ret), K(name));
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(endpoint.check_valid())) {
-      LOG_WARN("select invalid ai endpoint", KR(ret), K(name), K(endpoint));
+      LOG_WARN("select invalid ai endpoint", KR(ret), K(name));
     }
   }
 

@@ -105,25 +105,25 @@ int ObDBMSAiService::create_ai_model_endpoint(ObPLExecCtx &ctx, sql::ParamStore 
     LOG_WARN("failed to get name string", K(ret), K(params.at(0)));
   } else if (endpoint_name.empty()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
-    LOG_WARN("ai service endpoint name is empty", K(ret), K(params));
+    LOG_WARN("ai service endpoint name is empty", K(ret));
     ObString var_name = "name";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
   } else if (params.at(1).is_null()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
-    LOG_WARN("ai service endpoint params is wrong", K(ret), K(params));
+    LOG_WARN("ai service endpoint params is wrong", K(ret));
     ObString var_name = "PARAMS";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
   } else {
     ObArenaAllocator tmp_allocator;
     ObIJsonBase *j_base = nullptr;
     if (OB_FAIL(get_json_base_(tmp_allocator, params, j_base))) {
-      LOG_WARN("failed to get json base", K(ret), K(params));
+      LOG_WARN("failed to get json base", K(ret), K(endpoint_name));
     } else if (OB_FAIL(ObAiServiceExecutor::create_ai_model_endpoint(tmp_allocator, endpoint_name, *j_base))) {
       LOG_WARN("failed to insert ai service endpoint", K(ret), K(endpoint_name));
     }
   }
 
-  LOG_DEBUG("finished to create ai service endpoint", K(ret), K(params));
+  LOG_DEBUG("finished to create ai service endpoint", K(ret), K(endpoint_name));
   return ret;
 }
 
@@ -145,25 +145,25 @@ int ObDBMSAiService::alter_ai_model_endpoint(ObPLExecCtx &ctx, sql::ParamStore &
     LOG_WARN("failed to get name string", K(ret), K(params.at(0)));
   } else if (endpoint_name.empty()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
-    LOG_WARN("ai service endpoint name is empty", K(ret), K(params), K(endpoint_name));
+    LOG_WARN("ai service endpoint name is empty", K(ret), K(endpoint_name));
     ObString var_name = "name";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
   } else if (params.at(1).is_null()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
-    LOG_WARN("ai service endpoint params is wrong", K(ret), K(params));
+    LOG_WARN("ai service endpoint params is wrong", K(ret));
     ObString var_name = "PARAMS";
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, var_name.length(), var_name.ptr());
   } else {
     ObIJsonBase *j_base = nullptr;
     ObArenaAllocator tmp_allocator;
     if (OB_FAIL(get_json_base_(tmp_allocator, params, j_base))) {
-      LOG_WARN("failed to get json base", K(ret), K(params));
+      LOG_WARN("failed to get json base", K(ret), K(endpoint_name));
     } else if (OB_FAIL(ObAiServiceExecutor::alter_ai_model_endpoint(tmp_allocator, endpoint_name, *j_base))) {
       LOG_WARN("failed to alter ai service endpoint", K(ret), K(endpoint_name));
     }
   }
 
-  LOG_DEBUG("finished to alter ai service endpoint", K(ret), K(params));
+  LOG_DEBUG("finished to alter ai service endpoint", K(ret), K(endpoint_name));
   return ret;
 }
 
@@ -224,12 +224,12 @@ int ObDBMSAiService::get_json_base_(ObArenaAllocator &allocator, sql::ParamStore
   uint32_t parse_flag = 0; // mysql mode
 
   if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator, params.at(1), j_str))) {
-    LOG_WARN("fail to read real string data", K(ret), K(params.at(1)));
+    LOG_WARN("fail to read real string data", K(ret));
   } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, in_type, in_type, j_base, parse_flag))) {
-    LOG_WARN("fail to get json base", K(ret), K(j_str));
+    LOG_WARN("fail to get json base", K(ret), K(j_str.length()));
   } else if (j_base->json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ai service endpoint params is not a json object", K(ret), K(params));
+    LOG_WARN("ai service endpoint params is not a json object", K(ret), K(j_base->json_type()));
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_TYPE_INVALID, (int)strlen("PARAMS"), "PARAMS", (int)strlen("JSON_OBJECT"), "JSON_OBJECT");
   }
   return ret;

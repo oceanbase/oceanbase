@@ -104,11 +104,11 @@ static int check_endpoint_parameters_valid(const ObString &parameters)
                                                       ObJsonInType::JSON_TREE,
                                                       ObJsonInType::JSON_TREE,
                                                       params_base))) {
-    LOG_WARN("failed to parse endpoint parameters", K(ret), K(parameters));
+    LOG_WARN("failed to parse endpoint parameters", K(ret), K(parameters.length()));
   } else if (OB_ISNULL(params_base) || params_base->json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("parameters"), "parameters");
-    LOG_WARN("endpoint parameters should be json object", K(ret), K(parameters));
+    LOG_WARN("endpoint parameters should be json object", K(ret), K(parameters.length()));
   } else {
     JsonObjectIterator iter = params_base->object_iterator();
     while (!iter.end() && OB_SUCC(ret)) {
@@ -173,9 +173,10 @@ int ObAiModelEndpointInfo::parse_from_json_base(common::ObArenaAllocator &alloca
   reset();
   name_ = name;
   if (OB_FAIL(merge_delta_endpoint(allocator, params_jbase))) {
-    LOG_WARN("failed to merge delta endpoint", K(ret), K(params_jbase));
+    LOG_WARN("failed to merge delta endpoint", K(ret));
   }
-  LOG_INFO("parse from json base", K(ret), K(params_jbase), K(params_jbase.json_type()), K(params_jbase.element_count()));
+  LOG_INFO("parse from json base",
+           K(ret), K(params_jbase.json_type()), K(params_jbase.element_count()));
   return ret;
 }
 
@@ -202,6 +203,10 @@ int ObAiModelEndpointInfo::check_valid() const
     ret = OB_AI_FUNC_PARAM_EMPTY;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("url"), "url");
     LOG_WARN("url is empty", K(ret), K(*this));
+  } else if (!url_.prefix_match_ci("http://") && !url_.prefix_match_ci("https://")) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("url"), "url");
+    LOG_WARN("url scheme is invalid", K(ret), K(*this));
   } else if (access_key_.empty()) {
     ret = OB_AI_FUNC_PARAM_EMPTY;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_EMPTY, strlen("access_key"), "access_key");
@@ -215,7 +220,7 @@ int ObAiModelEndpointInfo::check_valid() const
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("provider"), "provider");
     LOG_WARN("provider is invalid", K(ret), K(*this));
   } else if (OB_FAIL(check_endpoint_parameters_valid(parameters_))) {
-    LOG_WARN("parameters is invalid", K(ret), K(*this), K(parameters_));
+    LOG_WARN("parameters is invalid", K(ret), K(*this), K(parameters_.length()));
   } else if (!request_transform_fn_.empty()) {
     ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("request_transform_fn"), "request_transform_fn");
@@ -268,11 +273,12 @@ int ObAiModelEndpointInfo::merge_delta_endpoint(common::ObArenaAllocator &alloca
     if (has_api_key && !access_key_.empty() && OB_FAIL(encrypt_access_key_(allocator, access_key_, access_key_))) {
       LOG_WARN("failed to encrypt access key", K(ret));
     } else if (OB_FAIL(check_valid())) {
-      LOG_WARN("invalid endpoint", K(ret), K(delta_jbase));
+      LOG_WARN("invalid endpoint", K(ret));
     }
   }
 
-  LOG_INFO("merge delta endpoint", K(ret), K(delta_jbase), K(delta_jbase.json_type()), K(delta_jbase.element_count()));
+  LOG_INFO("merge delta endpoint",
+           K(ret), K(delta_jbase.json_type()), K(delta_jbase.element_count()));
   return ret;
 }
 
@@ -301,7 +307,7 @@ int ObAiModelEndpointInfo::encrypt_access_key_(ObIAllocator &allocator, const Ob
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc encrypted hex key buf", K(ret), K(hex_buf_length));
   } else if (OB_FAIL(hex_print(encrypted_key_buf, out_len, encrypted_hex_key_buf, hex_buf_length, hex_buf_pos))) {
-    LOG_WARN("failed to convert encrypted key to hex", K(ret), K(encrypted_key_buf), K(hex_buf_length));
+    LOG_WARN("failed to convert encrypted key to hex", K(ret), K(hex_buf_length));
   } else {
     encrypted_access_key.assign_ptr(encrypted_hex_key_buf, hex_buf_pos);
   }
@@ -321,7 +327,7 @@ int ObAiModelEndpointInfo::encrypt_access_key_no_tde_(ObIAllocator &allocator, c
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc hex key buf", K(ret), K(hex_buf_length));
   } else if (OB_FAIL(hex_print(access_key.ptr(), access_key.length(), hex_buf, hex_buf_length, hex_buf_pos))) {
-    LOG_WARN("failed to convert access key to hex", K(ret), K(access_key), K(hex_buf_length));
+    LOG_WARN("failed to convert access key to hex", K(ret), K(hex_buf_length));
   } else {
     encrypted_access_key.assign_ptr(hex_buf, hex_buf_pos);
   }
@@ -347,7 +353,7 @@ int ObAiModelEndpointInfo::decrypt_access_key_(ObIAllocator &allocator, const Ob
     LOG_WARN("failed to alloc deserialized key buf", K(ret), K(deser_buf_length));
   } else if (OB_FAIL(hex_to_cstr(encrypted_access_key.ptr(), encrypted_access_key.length(),
                                  deser_buf, deser_buf_length, deser_buf_pos))) {
-    LOG_WARN("failed to deserialize encrypted key", K(ret), K(encrypted_access_key), K(deser_buf_length));
+    LOG_WARN("failed to deserialize encrypted key", K(ret), K(deser_buf_length));
   } else if (deser_buf_pos != deser_buf_length-1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid encrypted access key", K(ret), K(encrypted_access_key.length()));
@@ -377,7 +383,8 @@ int ObAiModelEndpointInfo::decrypt_access_key_no_tde_(ObIAllocator &allocator, c
     LOG_WARN("failed to alloc unencrypted key buf", K(ret), K(unencrypted_buf_length));
   } else if (OB_FAIL(hex_to_cstr(encrypted_access_key.ptr(), encrypted_access_key.length(),
                                  unencrypted_buf, unencrypted_buf_length, unencrypted_buf_pos))) {
-    LOG_WARN("failed to convert encrypted key to unencrypted key", K(ret), K(encrypted_access_key), K(unencrypted_buf_length));
+    LOG_WARN("failed to convert encrypted key to unencrypted key",
+             K(ret), K(unencrypted_buf_length));
   } else {
     unencrypted_access_key.assign_ptr(unencrypted_buf, unencrypted_buf_pos);
   }
@@ -480,13 +487,13 @@ int ObAIModelConfigInfo::init(ObIAllocator &allocator,
   } else if (OB_FAIL(ob_write_string(allocator, ai_model_schema.get_model_name(), model_name_, true))) {
     LOG_WARN("failed to deep copy model name", K(ret), K(ai_model_schema));
   } else if (OB_FAIL(ob_write_string(allocator, endpoint_info.get_provider(), provider_, true))) {
-    LOG_WARN("failed to deep copy provider", K(ret), K(endpoint_info));
+    LOG_WARN("failed to deep copy provider", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, endpoint_info.get_url(), url_, true))) {
-    LOG_WARN("failed to deep copy endpoint url", K(ret), K(endpoint_info));
+    LOG_WARN("failed to deep copy endpoint url", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, request_model_name, request_model_name_, true))) {
     LOG_WARN("failed to deep copy request model name", K(ret), K(request_model_name));
   } else if (OB_FAIL(endpoint_info.get_unencrypted_access_key(allocator, api_key_))) {
-    LOG_WARN("failed to get unencrypted access key", K(ret), K(endpoint_info));
+    LOG_WARN("failed to get unencrypted access key", K(ret));
   } else if (OB_FALSE_IT(model_type_ = ai_model_schema.get_type())) {
   } else {
     const ObString &parameters = endpoint_info.get_parameters();
@@ -497,10 +504,10 @@ int ObAIModelConfigInfo::init(ObIAllocator &allocator,
                                                     ObJsonInType::JSON_TREE,
                                                     ObJsonInType::JSON_TREE,
                                                     params_base))) {
-        LOG_WARN("failed to parse endpoint parameters", K(ret), K(parameters));
+        LOG_WARN("failed to parse endpoint parameters", K(ret), K(parameters.length()));
       } else if (OB_ISNULL(params_base) || params_base->json_type() != ObJsonNodeType::J_OBJECT) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("endpoint parameters should be json object", K(ret), K(parameters));
+        LOG_WARN("endpoint parameters should be json object", K(ret), K(parameters.length()));
       } else {
         // get endpoint parameters
         JsonObjectIterator iter = params_base->object_iterator();

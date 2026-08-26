@@ -79,7 +79,6 @@ int ObAIFuncClient::init(common::ObIAllocator &allocator, const common::ObString
       LOG_WARN("failed to convert url to cstring", K(ret));
     } else {
       url_ = url_str.ptr();
-      LOG_DEBUG("ai_function, url_", K(url_str));
     }
     timeout_sec_ = std::min(std::max(60L, remain_timeout_us / 1000000), CURL_MAX_TIMEOUT_SEC);
     abs_timeout_ts_ = remain_timeout_us + ObTimeUtility::current_time();
@@ -92,8 +91,6 @@ int ObAIFuncClient::init(common::ObIAllocator &allocator, const common::ObString
         } else if (OB_ISNULL(header_list_ = curl_slist_append(header_list_, header_c_str.ptr()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to append header", K(ret), K(i));
-        } else {
-          LOG_DEBUG("ai_function, header:", K(headers.at(i)));
         }
       }
     }
@@ -556,13 +553,14 @@ int ObAIFuncClient::init_easy_handle(CURL *curl, ObJsonObject *body, ObStringBuf
     }
   }
 
-  LOG_DEBUG("ai_function, body_str", K(body_str));
-  CURLcode res;
+  CURLcode res = CURLE_OK;
   const int64_t no_delay = 1;
   const int64_t no_signal = 1;
   if (OB_SUCC(ret)) {
-    if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_URL, url_))) {
-      LOG_WARN("set url failed", K(res), K(url_));
+    if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https"))) {
+      LOG_WARN("failed to restrict curl protocols", K(res));
+    } else if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_URL, url_))) {
+      LOG_WARN("set url failed", K(res));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ObAIFuncClient::write_callback))) {
       LOG_WARN("set write function failed", K(res));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buf))) {
@@ -578,7 +576,7 @@ int ObAIFuncClient::init_easy_handle(CURL *curl, ObJsonObject *body, ObStringBuf
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, header_list_))) {
       LOG_WARN("set headers failed", K(res));
     } else if (CURLE_OK !=(res = curl_easy_setopt(curl, CURLOPT_POSTFIELDS, body_str.ptr()))) {
-      LOG_WARN("set post failed", K(res), K(body_str.ptr()));
+      LOG_WARN("set post failed", K(res), K(body_str.length()));
     } else if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,body_str.length()))) {
       LOG_WARN("set post failed", K(res), K(body_str.length()));
     } else if (CURLE_OK != (res = curl_easy_setopt(curl, CURLOPT_POST, 1))) {
@@ -586,7 +584,7 @@ int ObAIFuncClient::init_easy_handle(CURL *curl, ObJsonObject *body, ObStringBuf
     }
     if (CURLE_OK != res) {
       ret = OB_CURL_ERROR;
-      LOG_WARN("fail to set curl options", K(ret), K(res), K(body_str.ptr()), K(timeout_sec_));
+      LOG_WARN("fail to set curl options", K(ret), K(res), K(timeout_sec_));
     }
   }
   return ret;
@@ -626,8 +624,6 @@ size_t ObAIFuncClient::write_callback(void *contents, size_t size, size_t nmemb,
     result.reserve(total_size);
     if (OB_FAIL(result.append(static_cast<const char *>(contents), total_size, 0))) {
       LOG_WARN("failed to append to result", K(ret));
-    } else {
-      LOG_DEBUG("ai_function, http response", K(result.string()));
     }
   }
   return OB_SUCC(ret) ? total_size : 0;

@@ -79,6 +79,57 @@ TEST_F(TestAiServiceStruct, check_valid_positive_cases)
   ASSERT_EQ(OB_SUCCESS, endpoint.check_valid());
 }
 
+TEST_F(TestAiServiceStruct, check_valid_url_scheme)
+{
+  ObAiModelEndpointInfo endpoint;
+  init_valid_endpoint(endpoint);
+  const char *valid_urls[] = {
+      "http://127.0.0.1:8080/v1",
+      "HTTP://10.0.0.8/v1",
+      "HtTpS://model.service.local/v1",
+      "https://intranet-model/v1"};
+  for (int64_t i = 0; i < ARRAYSIZEOF(valid_urls); ++i) {
+    endpoint.url_ = ObString::make_string(valid_urls[i]);
+    ASSERT_EQ(OB_SUCCESS, endpoint.check_valid());
+  }
+
+  const char *invalid_urls[] = {
+      "dict://legacy/model",
+      "file:///tmp/model-response",
+      "ftp://model.service.local/v1"};
+  for (int64_t i = 0; i < ARRAYSIZEOF(invalid_urls); ++i) {
+    endpoint.url_ = ObString::make_string(invalid_urls[i]);
+    ASSERT_EQ(OB_AI_FUNC_PARAM_VALUE_INVALID, endpoint.check_valid());
+  }
+}
+
+TEST_F(TestAiServiceStruct, merge_delta_endpoint_checks_effective_url)
+{
+  ObAiModelEndpointInfo endpoint;
+  init_valid_endpoint(endpoint);
+  endpoint.url_ = ObString::make_string("dict://legacy/model");
+  endpoint.access_key_ = ObString::make_string("6C65676163795F6B6579");
+  const ObString old_access_key = endpoint.access_key_;
+
+  ObArenaAllocator allocator("TestAIEP");
+  ObIJsonBase *delta_jbase = nullptr;
+  ASSERT_EQ(OB_SUCCESS,
+            build_json_base(allocator, R"({"url":"http://model.intranet/v1"})", delta_jbase));
+  ASSERT_NE(nullptr, delta_jbase);
+  ASSERT_EQ(OB_SUCCESS, endpoint.merge_delta_endpoint(allocator, *delta_jbase));
+  ASSERT_EQ(0, endpoint.get_url().compare("http://model.intranet/v1"));
+  ASSERT_EQ(0, endpoint.get_encrypted_access_key().compare(old_access_key));
+
+  ObIJsonBase *invalid_delta_jbase = nullptr;
+  ASSERT_EQ(OB_SUCCESS,
+            build_json_base(allocator,
+                            R"({"url":"file:///tmp/model-response"})",
+                            invalid_delta_jbase));
+  ASSERT_NE(nullptr, invalid_delta_jbase);
+  ASSERT_EQ(OB_AI_FUNC_PARAM_VALUE_INVALID,
+            endpoint.merge_delta_endpoint(allocator, *invalid_delta_jbase));
+}
+
 TEST_F(TestAiServiceStruct, check_valid_reject_type_or_format_errors)
 {
   ObAiModelEndpointInfo endpoint;

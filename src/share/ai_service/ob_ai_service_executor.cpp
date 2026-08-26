@@ -36,7 +36,7 @@ int ObAiServiceExecutor::create_ai_model_endpoint(common::ObArenaAllocator &allo
   bool is_exists = false;
   ObAiModelEndpointInfo tmp_endpoint;
   if (OB_FAIL(endpoint.parse_from_json_base(allocator, endpoint_name, create_jbase))) {
-    LOG_WARN("failed to parse ai service endpoint info", KR(ret), K(create_jbase));
+    LOG_WARN("failed to parse ai service endpoint info", KR(ret), K(endpoint_name));
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
     LOG_WARN("failed to start transaction", KR(ret));
   } else if (OB_FAIL(ObAiServiceProxy::check_ai_endpoint_exists(tenant_id, allocator, trans, endpoint_name, is_exists))) {
@@ -67,7 +67,7 @@ int ObAiServiceExecutor::create_ai_model_endpoint(common::ObArenaAllocator &allo
   } else if (OB_FAIL(lock_and_fetch_endpoint_version(trans, tenant_id, new_endpoint_version))) {
     LOG_WARN("failed to lock and fetch endpoint version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObAiServiceProxy::insert_ai_endpoint(tenant_id, trans, new_endpoint_version, endpoint))) {
-    LOG_WARN("failed to insert ai endpoint", KR(ret), K(endpoint));
+    LOG_WARN("failed to insert ai endpoint", KR(ret), K(endpoint_name));
   }
 
   if (trans.is_started()) {
@@ -99,14 +99,13 @@ int ObAiServiceExecutor::alter_ai_model_endpoint(ObArenaAllocator &allocator, co
   } else if (OB_FAIL(ObAiServiceProxy::select_ai_endpoint(tenant_id, allocator, *GCTX.sql_proxy_, name, old_endpoint, true))) {
     LOG_WARN("failed to select ai endpoint", K(ret), K(name));
   } else if (OB_FAIL(construct_new_endpoint(allocator, old_endpoint, alter_jbase, new_endpoint))) {
-    LOG_WARN("failed to construct new endpoint", KR(ret), K(old_endpoint), K(alter_jbase));
-  } else if (OB_FAIL(new_endpoint.check_valid())) {
-    LOG_WARN("invalid endpoint", KR(ret), K(new_endpoint));
+    LOG_WARN("failed to construct new endpoint", KR(ret), K(name));
   } else if (OB_FAIL(ObImportTableUtil::get_tenant_name_case_mode(user_tenant_id, name_case_mode))) {
     LOG_WARN("failed to get tenant name case mode", K(ret), K(user_tenant_id));
   } else if (ObCharset::case_mode_equal(name_case_mode, new_endpoint.get_ai_model_name(), old_endpoint.get_ai_model_name())) {
     // need check name case mode equal, if not change ai model name, just update the endpoint
-    LOG_INFO("ai model name is the same, just update the endpoint", KR(ret), K(name), K(user_tenant_id), K(name_case_mode), K(new_endpoint), K(old_endpoint));
+    LOG_INFO("ai model name is the same, just update the endpoint",
+             KR(ret), K(name), K(user_tenant_id), K(name_case_mode));
   } else {
     // if change ai model name, check if the ai model endpoint has the same ai model name is already exists
     // if not exists, continue
@@ -127,7 +126,7 @@ int ObAiServiceExecutor::alter_ai_model_endpoint(ObArenaAllocator &allocator, co
   } else if (OB_FAIL(lock_and_fetch_endpoint_version(trans, tenant_id, new_endpoint_version))) {
     LOG_WARN("failed to lock and fetch endpoint version", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObAiServiceProxy::update_ai_endpoint(tenant_id, trans, new_endpoint_version, new_endpoint))) {
-    LOG_WARN("failed to insert new ai endpoint", KR(ret), K(new_endpoint));
+    LOG_WARN("failed to insert new ai endpoint", KR(ret), K(name));
   }
 
   if (trans.is_started()) {
@@ -149,7 +148,7 @@ int ObAiServiceExecutor::construct_new_endpoint(common::ObArenaAllocator &alloca
   int ret = OB_SUCCESS;
   new_endpoint = old_endpoint;
   if (OB_FAIL(new_endpoint.merge_delta_endpoint(allocator, alter_jbase))) {
-    LOG_WARN("failed to merge delta endpoint", KR(ret), K(new_endpoint), K(alter_jbase));
+    LOG_WARN("failed to merge delta endpoint", KR(ret));
   }
   return ret;
 }

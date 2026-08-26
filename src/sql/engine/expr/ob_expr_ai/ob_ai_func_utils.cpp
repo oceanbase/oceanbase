@@ -2052,13 +2052,13 @@ int ObAIFuncJsonUtils::get_json_object_form_str(ObIAllocator &allocator, const O
   int ret = OB_SUCCESS;
   ObIJsonBase *j_base = NULL;
   if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, str, ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base))) {
-    LOG_WARN("fail to get json base", K(ret), K(str));
+    LOG_WARN("fail to get json base", K(ret), K(str.length()));
   } else if (OB_ISNULL(j_base)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("j_base is null", K(ret), K(str));
+    LOG_WARN("j_base is null", K(ret), K(str.length()));
   } else if (j_base->json_type() != ObJsonNodeType::J_OBJECT) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("j_base is not json object", K(ret), K(str), K(j_base->json_type()));
+    LOG_WARN("j_base is not json object", K(ret), K(str.length()), K(j_base->json_type()));
   } else {
     obj_node = static_cast<ObJsonObject *>(j_base);
   }
@@ -2308,9 +2308,9 @@ int ObAIFuncUtils::set_string_result(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
   int64_t res_len = res_str.length();
   if (OB_FAIL(text_result.init(res_len))) {
-    LOG_WARN("fail to init string result length", K(ret), K(text_result), K(res_len));
+    LOG_WARN("fail to init string result length", K(ret), K(res_len));
   } else if (OB_FAIL(text_result.append(res_str))) {
-    LOG_WARN("fail to append string", K(ret), K(res_str), K(text_result));
+    LOG_WARN("fail to append string", K(ret), K(res_len));
   } else {
     text_result.set_result();
   }
@@ -3267,7 +3267,7 @@ int ObAIFuncPromptObjectUtils::parse_template_arg_types(const ObString &template
       const int64_t digit = ptr[j] - '0';
       if (idx > (INT64_MAX - digit) / 10) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("placeholder index overflow", K(ret), K(template_str));
+        LOG_WARN("placeholder index overflow", K(ret));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_prompt: invalid placeholder index");
       } else {
         idx = idx * 10 + digit;
@@ -3277,11 +3277,11 @@ int ObAIFuncPromptObjectUtils::parse_template_arg_types(const ObString &template
     if (has_digit && j < len && ptr[j] == '}') {
       if (idx < 0 || idx >= arg_cnt) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid placeholder index", K(ret), K(idx), K(arg_cnt), K(template_str));
+        LOG_WARN("invalid placeholder index", K(ret), K(idx), K(arg_cnt));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_prompt: placeholder index out of range");
       } else if (arg_types.at(idx) != PromptArgType::UNKNOWN) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("placeholder index duplicated", K(ret), K(idx), K(template_str));
+        LOG_WARN("placeholder index duplicated", K(ret), K(idx));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_prompt: duplicated placeholder index");
       } else {
         arg_types.at(idx) = is_img ? PromptArgType::IMAGE : PromptArgType::TEXT;
@@ -3315,10 +3315,10 @@ int ObAIFuncPromptObjectUtils::build_image_arg_object(ObIAllocator &allocator,
     ObString url = arg_str;
     if (!url.prefix_match_ci(HTTPS_PREFIX) && !url.prefix_match_ci(HTTP_PREFIX)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid image url, should start with http or https", K(ret), K(url));
+      LOG_WARN("invalid image url, should start with http or https", K(ret));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "ai_prompt image url should start with http or https");
     } else if (OB_FAIL(ObAIFuncJsonUtils::get_json_string(allocator, url, url_json))) {
-      LOG_WARN("fail to get image url", K(ret), K(url));
+      LOG_WARN("fail to get image url", K(ret));
     } else if (OB_FAIL(obj->add("url", url_json))) {
       LOG_WARN("fail to add image url", K(ret));
     }
@@ -3420,7 +3420,7 @@ int ObAIFuncPromptObjectUtils::construct_prompt_object(ObIAllocator &allocator, 
   } else if (OB_FAIL(prompt_obj->add(ObAIFuncPromptObjectUtils::prompt_template_key, template_json_str))) {
     LOG_WARN("fail to set template", K(ret));
   } else if (OB_FAIL(prompt_obj->add(ObAIFuncPromptObjectUtils::prompt_args_key, args_array))) {
-    LOG_WARN("fail to set args", K(ret), K(args_array));
+    LOG_WARN("fail to set args", K(ret));
   }
   if (OB_SUCC(ret)) {
     prompt_object = prompt_obj;
