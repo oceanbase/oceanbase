@@ -6400,6 +6400,109 @@ int ObSPIService::spi_sub_nestedtable_generate_collection(pl::ObPLExecCtx *ctx,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObSPIService::spi_init_record_member_default(ObPLExecCtx *pl_ctx,
+                                                 ObPLRecord *record,
+                                                 const ObRecordMember *member,
+                                                 int64_t member_idx,
+                                                 ObIAllocator &copy_allocator,
+                                                 bool is_pkg_type,
+                                                 uint64_t package_id,
+                                                 bool &has_init_value)
+{
+  int ret = OB_SUCCESS;
+  ObObjParam result;
+  ObObj *elem = NULL;
+  OZ (record->get_element(member_idx, elem));
+  CK (OB_NOT_NULL(elem));
+  if (OB_FAIL(ret)) {
+  } else if (OB_INVALID_INDEX != member->get_default()) {
+    has_init_value = true;
+    if (is_pkg_type) {
+      OZ (ObSPIService::spi_calc_package_expr(pl_ctx, package_id, member->get_default(), &result));
+    } else {
+      OZ (ObSPIService::spi_calc_expr_at_idx(pl_ctx, member->get_default(),
+                                            OB_INVALID_INDEX, false, &result));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (result.is_pl_extend()) {
+      OZ (ObUserDefinedType::deep_copy_obj(copy_allocator, result, *elem));
+    } else {
+      OZ (deep_copy_obj(copy_allocator, result, *elem));
+    }
+  } else if (member->member_type_.is_record_type()) {
+    int64_t member_ptr = 0;
+    int64_t init_size = OB_INVALID_SIZE;
+    ObPLRecord *nested_record = NULL;
+    const ObUserDefinedType *nested_udt = NULL;
+    const ObRecordType *nested_record_type = NULL;
+    bool nested_has_init_value = false;
+    bool nested_is_pkg_type = false;
+    uint64_t nested_package_id = OB_INVALID_ID;
+    if (!elem->is_ext() || 0 == elem->get_ext()) {
+      OZ (member->member_type_.get_size(PL_TYPE_INIT_SIZE, init_size));
+      OZ (member->member_type_.newx(copy_allocator, pl_ctx, member_ptr));
+      OX (elem->set_extend(member_ptr, member->member_type_.get_type(), init_size));
+    } else {
+      member_ptr = elem->get_ext();
+    }
+    OX (nested_record = reinterpret_cast<ObPLRecord *>(member_ptr));
+    CK (OB_NOT_NULL(nested_record));
+    if (OB_FAIL(ret)) {
+    } else if (member->member_type_.is_package_type()) {
+      OZ (pl_ctx->get_user_type_from_package(member->member_type_.get_user_type_id(), nested_udt));
+    } else {
+      OZ (pl_ctx->get_user_type(member->member_type_.get_user_type_id(), nested_udt));
+    }
+    CK (OB_NOT_NULL(nested_udt));
+    CK (nested_udt->is_record_type());
+    OX (nested_record_type = static_cast<const ObRecordType *>(nested_udt));
+    OX (nested_is_pkg_type = nested_record_type->is_package_type());
+    OX (nested_package_id = nested_is_pkg_type
+        ? extract_package_id(nested_record_type->get_user_type_id()) : OB_INVALID_ID);
+    OZ (SMART_CALL(spi_init_record_defaults(pl_ctx,
+                                           nested_record,
+                                           nested_record_type,
+                                           copy_allocator,
+                                           nested_is_pkg_type,
+                                           nested_package_id,
+                                           nested_has_init_value)));
+    if (OB_SUCC(ret) && nested_has_init_value) {
+      has_init_value = true;
+    }
+  }
+  return ret;
+}
+
+int ObSPIService::spi_init_record_defaults(ObPLExecCtx *pl_ctx,
+                                           ObPLRecord *record,
+                                           const ObRecordType *record_type,
+                                           ObIAllocator &copy_allocator,
+                                           bool is_pkg_type,
+                                           uint64_t package_id,
+                                           bool &has_init_value)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(pl_ctx));
+  CK (OB_NOT_NULL(record));
+  CK (OB_NOT_NULL(record_type));
+  for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
+    const ObRecordMember *member = record_type->get_record_member(i);
+    if (OB_NOT_NULL(member)) {
+      OZ (spi_init_record_member_default(pl_ctx,
+                                         record,
+                                         member,
+                                         i,
+                                         copy_allocator,
+                                         is_pkg_type,
+                                         package_id,
+                                         has_init_value));
+    }
+  }
+  return ret;
+}
+#endif
+
 int ObSPIService::spi_new_coll_element(uint64_t collection_id,
                                        ObIAllocator *allocator,
                                        const pl::ObPLINS *ns,
@@ -6460,29 +6563,13 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
                 ? extract_package_id(record_type->get_user_type_id()) : OB_INVALID_ID;
             ObIAllocator &copy_allocator = OB_NOT_NULL(record->get_allocator())
                                             ? *record->get_allocator() : *allocator;
-            for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_record_member_count(); ++i) {
-              const ObRecordMember *member = record_type->get_record_member(i);
-              if (OB_NOT_NULL(member)
-                  && OB_INVALID_INDEX != member->get_default()) {
-                has_default = true;
-                ObObjParam result;
-                ObObj *elem = NULL;
-                if (is_pkg_type) {
-                  OZ (spi_calc_package_expr(pl_ctx, package_id, member->get_default(), &result));
-                } else {
-                  OZ (spi_calc_expr_at_idx(pl_ctx, member->get_default(),
-                                          OB_INVALID_INDEX, false, &result));
-                }
-                OZ (record->get_element(i, elem));
-                CK (OB_NOT_NULL(elem));
-                if (OB_FAIL(ret)) {
-                } else if (result.is_pl_extend()) {
-                  OZ (ObUserDefinedType::deep_copy_obj(copy_allocator, result, *elem));
-                } else {
-                  OZ (deep_copy_obj(copy_allocator, result, *elem));
-                }
-              }
-            }
+            OZ (spi_init_record_defaults(pl_ctx,
+                                         record,
+                                         record_type,
+                                         copy_allocator,
+                                         is_pkg_type,
+                                         package_id,
+                                         has_default));
           }
         }
       }

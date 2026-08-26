@@ -1147,6 +1147,23 @@ public:
   static int spi_internal_error(pl::ObPLExecCtx *ctx);
 
 private:
+#ifdef OB_BUILD_ORACLE_PL
+  static int spi_init_record_defaults(pl::ObPLExecCtx *pl_ctx,
+                                      pl::ObPLRecord *record,
+                                      const pl::ObRecordType *record_type,
+                                      ObIAllocator &copy_allocator,
+                                      bool is_pkg_type,
+                                      uint64_t package_id,
+                                      bool &has_init_value);
+  static int spi_init_record_member_default(pl::ObPLExecCtx *pl_ctx,
+                                            pl::ObPLRecord *record,
+                                            const pl::ObRecordMember *member,
+                                            int64_t member_idx,
+                                            ObIAllocator &copy_allocator,
+                                            bool is_pkg_type,
+                                            uint64_t package_id,
+                                            bool &has_init_value);
+#endif
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
   static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);
 
