@@ -31,9 +31,6 @@ class ObIStoreRowIterator;
 class ObSplitIndexBuilderCtx;
 class ObTabletCreateSSTableParam;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObSSDataSplitHelper;
-#endif
 
 class ObSplitIndexBuilderCtx final
 {
@@ -86,8 +83,6 @@ public:
       ObIAllocator &allocator,
       const int64_t task_idx) = 0;
   virtual int generate_sstable() = 0;
-  OB_INLINE const ObTabletSplitParam *get_split_param() const { return param_; }
-  OB_INLINE const ObTabletSplitCtx *get_split_context() const { return context_; }
   VIRTUAL_TO_STRING_KV(K_(is_inited), KPC_(param), KPC_(context));
 protected:
   int prepare_index_builder_ctxs(
@@ -109,7 +104,6 @@ protected:
 
 class ObSSTableSplitWriteHelper : public ObSSTableSplitHelper
 {
-  friend class ObSSSplitWriteHelperBase;
 public:
   ObSSTableSplitWriteHelper();
   virtual ~ObSSTableSplitWriteHelper();
@@ -118,11 +112,9 @@ public:
       const int64_t task_idx) override;
   virtual int generate_sstable() override;
   OB_INLINE ObSSTable *get_sstable() const { return sstable_; }
-  OB_INLINE const ObIArray<MacroBlockId> &get_split_point_macros() const { return split_point_macros_; }
   OB_INLINE const ObITableReadInfo *get_index_read_info() const { return index_read_info_; }
-  OB_INLINE const ObIArray<ObSplitIndexBuilderCtx> &get_index_builder_ctx_arr() const { return index_builder_ctx_arr_; }
   INHERIT_TO_STRING_KV("ObSSTableSplitHelper", ObSSTableSplitHelper,
-    KPC_(sstable), K_(default_row), K_(split_point_macros),
+    KPC_(sstable), K_(default_row),
     KPC_(index_read_info), K_(index_builder_ctx_arr));
 protected:
   int inner_init_common(
@@ -169,7 +161,6 @@ protected:
   common::ObArenaAllocator arena_allocator_; // multi-thread(rewrite task) unsafe.
   ObSSTable *sstable_; // row_store_sstale, or co, or cg.
   blocksstable::ObDatumRow default_row_;
-  ObArray<MacroBlockId> split_point_macros_;
   const ObITableReadInfo *index_read_info_;
   ObArray<ObSplitIndexBuilderCtx> index_builder_ctx_arr_;
   // ObSplitComparator *split_comparator_;
@@ -243,57 +234,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSpecialSplitWriteHelper);
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObSSSplitWriteHelperCommon final
-{
-public:
-  ObSSSplitWriteHelperCommon() = default;
-  ~ObSSSplitWriteHelperCommon() = default;
-public:
-  int prepare_macro_seq_param_impl(
-      const int64_t task_idx,
-      ObSSTableSplitWriteHelper &helper,
-      ObIArray<ObMacroSeqParam> &macro_seq_param_arr);
-  int build_create_sstable_param_impl(
-      const int64_t dest_tablet_index,
-      ObSSTableSplitWriteHelper &helper,
-      ObTabletCreateSSTableParam &create_sstable_param);
-};
-
-class ObSSRowSSTableSplitWriteHelper : public ObRowSSTableSplitWriteHelper
-{
-public:
-  ObSSRowSSTableSplitWriteHelper() : ObRowSSTableSplitWriteHelper() {}
-  virtual ~ObSSRowSSTableSplitWriteHelper() = default;
-protected:
-  virtual int prepare_macro_seq_param(
-    const int64_t task_idx,
-    ObIArray<ObMacroSeqParam> &macro_seq_param_arr) override;
-  virtual int build_create_sstable_param(
-    const int64_t dest_tablet_index,
-    ObTabletCreateSSTableParam &create_sstable_param) override;
-private:
-  ObSSSplitWriteHelperCommon ss_common_helper_;
-  DISALLOW_COPY_AND_ASSIGN(ObSSRowSSTableSplitWriteHelper);
-};
-
-class ObSSColSSTableSplitWriteHelper : public ObColSSTableSplitWriteHelper
-{
-public:
-  ObSSColSSTableSplitWriteHelper() : ObColSSTableSplitWriteHelper() {}
-  virtual ~ObSSColSSTableSplitWriteHelper() = default;
-protected:
-  virtual int prepare_macro_seq_param(
-    const int64_t task_idx,
-    ObIArray<ObMacroSeqParam> &macro_seq_param_arr) override;
-  virtual int build_create_sstable_param(
-    const int64_t dest_tablet_index,
-    ObTabletCreateSSTableParam &create_sstable_param) override;
-private:
-  ObSSSplitWriteHelperCommon ss_common_helper_;
-  DISALLOW_COPY_AND_ASSIGN(ObSSColSSTableSplitWriteHelper);
-};
-#endif
 
 }  // end namespace storage
 }  // end namespace oceanbase

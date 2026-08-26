@@ -8,11 +8,6 @@
 #include <stdint.h>
 #include "lib/oblog/ob_log_module.h"
 #include "lib/utility/ob_print_utils.h"
-#include "lib/lock/ob_spin_rwlock.h"
-#include "lib/allocator/page_arena.h"
-#include "lib/hash_func/murmur_hash.h"
-#include "lib/hash/ob_hashmap.h"
-#include "lib/task/ob_timer.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_ls_id.h"
 
@@ -112,48 +107,6 @@ public:
   int64_t rowkey_prefix_;
 };
 
-struct ObTableStoreStatKey
-{
-public:
-  ObTableStoreStatKey() : table_id_(common::OB_INVALID_ID), tablet_id_(common::OB_INVALID_ID) {}
-  ObTableStoreStatKey(const ObTableID table_id, const ObTabletID tablet_id) : table_id_(table_id), tablet_id_(tablet_id) {}
-  ~ObTableStoreStatKey() {}
-  OB_INLINE uint64_t hash() const
-  {
-    uint64_t hash_ret = 0;
-    hash_ret = common::murmurhash(&table_id_, sizeof(ObTableID), 0);
-    hash_ret = common::murmurhash(&tablet_id_, sizeof(ObTabletID), hash_ret);
-    return hash_ret;
-  }
-  int hash(uint64_t &hash_val) const
-  {
-    hash_val = hash();
-    return OB_SUCCESS;
-  }
-  OB_INLINE bool operator ==(const ObTableStoreStatKey &other) const
-  {
-    return (table_id_ == other.table_id_) && (tablet_id_ == other.tablet_id_);
-  }
-  OB_INLINE bool operator !=(const ObTableStoreStatKey &other) const
-  {
-    return (*this == other);
-  }
-  TO_STRING_KV(K_(table_id), K_(tablet_id));
-  common::ObTableID table_id_;
-  common::ObTabletID tablet_id_;
-};
-
-struct ObTableStoreStatNode
-{
-public:
-  ObTableStoreStatNode() : pre_(NULL), next_(NULL), stat_(NULL) {}
-  ~ObTableStoreStatNode() { reset(); }
-  OB_INLINE void reset() { pre_ = next_ = NULL; stat_ = NULL; }
-  ObTableStoreStatNode *pre_;
-  ObTableStoreStatNode *next_;
-  ObTableStoreStat *stat_;
-};
-
 class ObTableStoreStatIterator
 {
 public:
@@ -165,61 +118,6 @@ public:
 private:
   int64_t cur_idx_;
   bool is_opened_;
-};
-
-// TODO(@DanLing) remove ObTableStoreStatMgr
-class ObTableStoreStatMgr
-{
-public:
-  int init(const int64_t limit_cnt = DEFAULT_MAX_CNT);
-  void stop();
-  void wait();
-  void reset();
-  void destroy();
-  static ObTableStoreStatMgr &get_instance();
-  int report_stat(const ObTableStoreStat &stat);
-private:
-  ObTableStoreStatMgr();
-  virtual ~ObTableStoreStatMgr();
-  void move_node_to_head(ObTableStoreStatNode *node);
-  int get_table_store_stat(const int64_t idx, ObTableStoreStat &stat);
-  void run_report_task();
-  int add_stat(const ObTableStoreStat &stat);
-
-  friend class ObTableStoreStatIterator;
-  typedef common::hash::ObHashMap<ObTableStoreStatKey, ObTableStoreStatNode*, common::hash::NoPthreadDefendMode> TableStoreMap;
-  static const int64_t DEFAULT_MAX_CNT = 40000; // 40000 * (sizeof(key)(16) + sizeof(node*)(8) + sizeof(node)(24) + sizeof(stat)(96)) = 6.25MB
-  static const int64_t MAX_PENDDING_CNT = 100000; // 100000 * sizeof(stat)(96) = 9.2MB
-  static const int64_t REPORT_TASK_INTERVAL_US = 1000 * 1000; // 1 seconds
-
-  class ReportTask : public common::ObTimerTask
-  {
-  public:
-    ReportTask() : stat_mgr_(NULL) {}
-    virtual ~ReportTask() { destroy(); }
-    int init(ObTableStoreStatMgr *stat_mgr);
-    void destroy() { stat_mgr_ = NULL; }
-    virtual void runTimerTask();
-  private:
-    ObTableStoreStatMgr *stat_mgr_;
-    DISALLOW_COPY_AND_ASSIGN(ReportTask);
-  };
-
-  bool is_inited_;
-  common::SpinRWLock lock_;
-  TableStoreMap quick_map_;
-  int64_t cur_cnt_;
-  int64_t limit_cnt_;
-  ObTableStoreStatNode *lru_head_;
-  ObTableStoreStatNode *lru_tail_;
-  ObTableStoreStat stat_array_[DEFAULT_MAX_CNT];
-  ObTableStoreStatNode node_pool_[DEFAULT_MAX_CNT];
-
-  // stat buffer area
-  ObTableStoreStat stat_queue_[MAX_PENDDING_CNT];
-  uint64_t report_cursor_ CACHE_ALIGNED;
-  uint64_t pending_cursor_ CACHE_ALIGNED;
-  ReportTask report_task_;
 };
 
 } //namespace storage

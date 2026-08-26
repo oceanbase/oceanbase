@@ -441,23 +441,6 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     common::ObArenaAllocator &allocator,
     ObTableHandleV2 &table_handle)
 {
-  int64_t unused_tree_start_seq = 0;
-  return generate_mds_mini_sstable(allocator, table_handle, unused_tree_start_seq);
-}
-
-int ObMdsTableMiniMerger::generate_ss_mds_mini_sstable(
-    common::ObArenaAllocator &allocator,
-    ObTableHandleV2 &table_handle,
-    int64_t &tree_start_seq)
-{
-  return generate_mds_mini_sstable(allocator, table_handle, tree_start_seq);
-}
-
-int ObMdsTableMiniMerger::generate_mds_mini_sstable(
-    common::ObArenaAllocator &allocator,
-    ObTableHandleV2 &table_handle,
-    int64_t &index_tree_start_seq)
-{
   int ret = OB_SUCCESS;
   TIMEGUARD_INIT(STORAGE, 20_ms);
   if (OB_UNLIKELY(!is_inited_)) {
@@ -468,8 +451,8 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
       if (OB_FAIL(macro_writer_.close())) {
         LOG_WARN("fail to close macro writer", K(ret), K(macro_writer_));
       } else if (FALSE_IT(ctx_->update_block_info(macro_writer_.get_merge_block_info(), 0/*cost_time*/))) {
-      } else if (OB_FAIL(close_index_builder(index_tree_start_seq, res))) {
-        LOG_WARN("close index builder failed", K(ret), K(index_tree_start_seq));
+      } else if (OB_FAIL(sstable_builder_.close(res))) {
+        LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));
       } else if (CLICK_FAIL(param.init_for_mds(*ctx_, res, *storage_schema_))) {
         LOG_WARN("fail to create sstable param for mds", K(ret));
       } else if (CLICK_FAIL(ObTabletCreateDeleteHelper::create_sstable(param, allocator, table_handle))) {
@@ -489,35 +472,6 @@ int ObMdsTableMiniMerger::generate_mds_mini_sstable(
     const blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable*>(table_handle.get_table());
     LOG_TRACE("succeed to generate mds mini sstable", K(ret), K(ls_id), K(tablet_id), KPC(sstable));
   }
-  return ret;
-}
-
-int ObMdsTableMiniMerger::close_index_builder(
-    int64_t &index_tree_start_seq/*used for ss.*/,
-    ObSSTableMergeRes &res)
-{
-  int ret = OB_SUCCESS;
-  share::ObPreWarmerParam pre_warm_param;
-  const bool is_output_exec = is_output_exec_mode(ctx_->get_exec_mode());
-  if (is_output_exec) {
-    if (OB_UNLIKELY(index_tree_start_seq <= 0
-        || nullptr == ctx_)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid arg", K(ret), K(index_tree_start_seq), KPC(ctx_));
-    } else if (OB_FAIL(pre_warm_param.init(ctx_->get_ls_id(), ctx_->get_tablet_id()))) {
-      LOG_WARN("failed to init pre warm param", K(ret));
-    } else if (OB_FAIL(sstable_builder_.close_with_macro_seq(
-                  res, index_tree_start_seq,
-                  OB_DEFAULT_MACRO_BLOCK_SIZE /*nested_size*/,
-                  0 /*nested_offset*/, pre_warm_param))) {
-      LOG_WARN("close with seq failed", K(ret), K(index_tree_start_seq));
-    }
-  } else {
-    if (OB_FAIL(sstable_builder_.close(res))) {
-      LOG_WARN("fail to close sstable builder", K(ret), K(sstable_builder_));
-    }
-  }
-
   return ret;
 }
 

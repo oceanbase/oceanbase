@@ -145,9 +145,6 @@ public:
     skipped_split_major_keys_(), row_inserted_(0), cg_row_inserted_(0), physical_row_count_(0),
     split_scn_(), reorg_scn_(), ls_rebuild_seq_(-1),
     dst_major_snapshot_(-1)
-#ifdef OB_BUILD_SHARED_STORAGE
-    , ss_split_helper_(), is_data_split_executor_(false)
-#endif
   {}
   ~ObLobSplitContext() { destroy(); }
   int init(const ObLobSplitParam& param);
@@ -162,9 +159,6 @@ public:
     K_(skipped_split_major_keys), K_(row_inserted), K_(cg_row_inserted), K_(physical_row_count),
     K_(split_scn), K_(reorg_scn), K_(ls_rebuild_seq),
     K_(dst_major_snapshot)
-#ifdef OB_BUILD_SHARED_STORAGE
-    , K_(is_data_split_executor)
-#endif
     );
 
 private:
@@ -205,10 +199,6 @@ public:
   share::SCN reorg_scn_;
   int64_t ls_rebuild_seq_;
   int64_t dst_major_snapshot_;
-#ifdef OB_BUILD_SHARED_STORAGE
-  ObSSDataSplitHelper ss_split_helper_;
-  bool is_data_split_executor_;
-#endif
 };
 
 
@@ -282,9 +272,6 @@ public:
   int init(ObLobSplitParam &param, ObLobSplitContext &ctx);
   virtual int process() override;
 private:
-#ifdef OB_BUILD_SHARED_STORAGE
-  int prepare_split_helper();
-#endif
 private:
   static const int64_t SORT_MEMORY_LIMIT = 32L * 1024L * 1024L;
   bool is_inited_;
@@ -374,13 +361,6 @@ private:
                                             ObArrayArray<ObSSTableIndexBuilder*>& index_builders);
   int check_and_create_mds_sstable(
       const ObTabletID &dest_tablet_id);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int close_ss_index_builder(
-      const ObTabletLobWriteSSTableCtx &write_sstable_ctx,
-      const int64_t dest_tablet_index, // index in ctx.dest_tablets_id.
-      ObSSTableIndexBuilder *index_builder,
-      ObSSTableMergeRes &res);
-#endif
 private:
   common::ObArenaAllocator allocator_;
   bool is_inited_;

@@ -26,7 +26,6 @@ bin_PROGRAMS = test_save_storage_info \
 							 test_migrate_logical_row_writer \
 							 test_migrate_rpc\
 							 test_table_store\
-							 test_table_store_stat_mgr\
 							 test_join_mv_merge\
 							 test_split_version_range\
 							 test_handle_cache\
@@ -54,7 +53,6 @@ test_multi_version_sstable_multi_scan_SOURCES=test_multi_version_sstable_multi_s
 test_migrate_logical_row_writer_SOURCES=test_migrate_logical_row_writer.cpp
 test_migrate_rpc_SOURCES=test_migrate_rpc.h test_migrate_rpc.cpp
 test_table_store_SOURCES=test_table_store.cpp
-test_table_store_stat_mgr_SOURCES=test_table_store_stat_mgr.cpp
 test_i_store_SOURCES=test_i_store.cpp
 test_join_mv_merge_SOURCES=test_join_mv_merge.cpp
 #test_logic_row_producer_SOURCES=test_logic_row_producer.cpp

@@ -475,8 +475,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("set_use_rpc_table failed", KR(ret));
     } else if (OB_FAIL(ObSysTaskStatMgr::get_instance().set_self_addr(self_addr_))) {
       LOG_ERROR("set sys task status self addr failed", KR(ret));
-    } else if (OB_FAIL(ObTableStoreStatMgr::get_instance().init())) {
-      LOG_ERROR("init table store stat mgr failed", KR(ret));
     } else if (OB_FAIL(ObServerAutoSplitScheduler::get_instance().init())) {
       LOG_ERROR("init auto split scheduler failed", KR(ret));
     } else if (OB_FAIL(ObServerRandomPartitionScheduler::get_instance().init())) {
@@ -632,10 +630,6 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy thread hung detector");
     common::occam::ObThreadHungDetector::get_instance().destroy();
     FLOG_INFO("thread hung detector destroyed");
-
-    FLOG_INFO("begin to destroy table store stat mgr");
-    ObTableStoreStatMgr::get_instance().destroy();
-    FLOG_INFO("table store stat mgr destroyed");
 
 #ifdef OB_BUILD_TDE_SECURITY
     FLOG_INFO("begin to destroy master key getter");
@@ -1492,10 +1486,6 @@ int ObServer::stop()
     ObActiveSessHistTask::get_instance().stop();
     FLOG_INFO("active session history task stopped");
 
-    FLOG_INFO("begin to stop table store stat mgr");
-    ObTableStoreStatMgr::get_instance().stop();
-    FLOG_INFO("table store stat mgr stopped");
-
 #ifdef OB_BUILD_TDE_SECURITY
     FLOG_INFO("begin to stop master key getter");
     ObMasterKeyGetter::instance().stop();
@@ -1822,10 +1812,6 @@ int ObServer::wait()
     FLOG_INFO("begin to wait timer monitor");
     ObTimerMonitor::get_instance().wait();
     FLOG_INFO("wait timer monitor success");
-
-    FLOG_INFO("begin to wait table store stat mgr");
-    ObTableStoreStatMgr::get_instance().wait();
-    FLOG_INFO("wait table store stat mgr success");
 
 #ifdef OB_BUILD_TDE_SECURITY
     FLOG_INFO("begin to wait master key getter");

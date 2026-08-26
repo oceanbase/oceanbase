@@ -12,12 +12,6 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/incremental/atomic_protocol/ob_atomic_sstablelist_define.h"
-#include "close_modules/shared_storage/storage/incremental/atomic_protocol/ob_atomic_sstablelist_op.h"
-#include "close_modules/shared_storage/storage/incremental/ob_shared_meta_service.h"
-#include "close_modules/shared_storage/storage/incremental/atomic_protocol/ob_atomic_file_handle.h"
-#endif
 
 namespace oceanbase
 {
@@ -28,8 +22,6 @@ class ObLSHandle;
 }
 namespace storage
 {
-class ObSSDataSplitHelper;
-
 template <typename T>
 void destroy_split_object(common::ObIAllocator &alloc, T *&obj)
 {
@@ -48,13 +40,6 @@ void destroy_split_array(common::ObIAllocator &alloc, ObIArray<T *> &arr)
   }
   arr.reset();
 }
-
-enum class ObSplitTabletInfoStatus : uint8_t
-{
-  CANT_EXEC_MINOR = 0,
-  CANT_GC_MACROS = 1,
-  STATUS_TYPE_MAX
-};
 
 struct ObTabletSplitRegisterMdsArg final
 {
@@ -79,12 +64,6 @@ public:
   common::ObSArray<ObTabletSplitArg> split_info_array_;
   const ObTableSchema *table_schema_;
 };
-
-static bool is_valid_tablet_split_info_status(const ObSplitTabletInfoStatus &type)
-{
-  return ObSplitTabletInfoStatus::CANT_EXEC_MINOR <= type
-      && ObSplitTabletInfoStatus::STATUS_TYPE_MAX > type;
-}
 
 struct ObTabletSplitUtil final
 {
@@ -191,9 +170,6 @@ public:
       const int64_t dest_tablet_index,
       const ObTabletID &dest_tablet_id,
       const share::SCN &reorganization_scn,
-    #ifdef OB_BUILD_SHARED_STORAGE
-      const ObSSDataSplitHelper &mds_ss_split_helper,
-    #endif
       ObMdsTableMiniMerger &mds_mini_merger,
       compaction::ObTabletMergeCtx &tablet_merge_ctx,
       bool &has_mds_row);
@@ -253,123 +229,6 @@ private:
 
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObSSDataSplitHelper final
-{
-public:
-  ObSSDataSplitHelper()
-    : allocator_("SSSplitHelp", OB_MALLOC_NORMAL_BLOCK_SIZE /*8KB*/, MTL_ID()),
-      split_sstable_list_handle_(allocator_), add_minor_op_handle_(allocator_)
-    { }
-  ~ObSSDataSplitHelper() { reset(); }
-  void reset();
-private:
-  template <typename T>
-  void release_handles_array(ObIArray<T *> &arr);
-public:
-  // 1. generate macro start sequence for data block.
-  // 2. generate macro start sequence for index block when parallel_idx = parallel_cnt.
-  int generate_major_macro_seq_info(
-      const int64_t major_index /*the index in the generated majors, from 0*/,
-      const int64_t parallel_cnt /*the parallel cnt in one sstable*/,
-      const int64_t parallel_idx /*the parallel idx in one sstable*/,
-      int64_t &macro_start_seq) const;
-
-  // generate macro start sequence for tablet persist.
-  static int get_major_macro_seq_by_stage(
-      const compaction::ObGetMacroSeqStage &stage,
-      const int64_t majors_cnt /*cnt of the dst_majors */,
-      const int64_t parallel_cnt,
-      int64_t &macro_start_seq);
-
-  // 1. generate macro start sequence for data block.
-  // 2. generate macro start sequence for index block when parallel_idx = parallel_cnt.
-  int generate_minor_macro_seq_info(
-      const int64_t dest_tablet_index/*index in dest_tablets_id array*/,
-      const int64_t minor_index/*the index in generated minors, from 0*/,
-      const int64_t parallel_cnt/*the parallel cnt in one sstable*/,
-      const int64_t parallel_idx/*the parallel idx in one sstable*/,
-      const uint64_t data_version,
-      int64_t &macro_start_seq) const;
-
-  int generate_mds_minor_macro_seq_info(
-        const int64_t dest_tablet_index,
-        const int64_t minor_index,
-        const int64_t parallel_cnt,
-        const int64_t parallel_idx,
-        int64_t &macro_start_seq) const;
-
-  int start_add_minor_op(
-      const ObLSID &ls_id,
-      const share::SCN &split_scn,
-      const share::SCN &dest_reorg_scn,
-      const int64_t parallel_cnt_of_each_sstable,
-      const ObTableStoreIterator &src_table_store_iterator,
-      const ObIArray<ObTabletID> &dest_tablets_id,
-      const uint64_t data_version);
-  int start_add_mds_op(
-      const ObLSID &ls_id,
-      const share::SCN &split_scn,
-      const int64_t parallel_cnt_of_each_sstable,
-      const int64_t sstables_cnt_of_each_tablet,
-      const ObIArray<ObTabletID> &dest_tablets_id);
-  int finish_add_op(
-      const int64_t dest_tablet_index,
-      const bool need_finish);
-
-  int persist_majors_gc_rely_info(
-      const ObLSID &ls_id,
-      const ObIArray<ObTabletID> &dst_tablet_ids,
-      const share::SCN &transfer_scn,
-      const int64_t generated_majors_cnt,
-      const int64_t max_majors_snapshot,
-      const int64_t parallel_cnt_of_each_sstable);
-
-  static int set_source_tablet_split_status(
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &local_source_tablet_hdl,
-      const ObSplitTabletInfoStatus &expected_status);
-
-  static int check_at_sswriter_lease(
-      const ObLSID &ls_id,
-      const ObTabletID &tablet_id,
-      int64_t &epoch,
-      bool &is_data_split_executor);
-
-  static int create_shared_tablet_if_not_exist(
-      const ObLSID &ls_id,
-      const ObIArray<ObTabletID> &dest_tablet_ids,
-      const share::SCN &transfer_scn);
-
-  int get_op_id(
-      const int64_t dest_tablet_index,
-      int64_t &op_id) const;
-private:
-  int prepare_minor_gc_info_list(
-      const int64_t parallel_cnt_of_each_sstable,
-      const int64_t sstables_cnt_of_each_tablet,
-      const bool is_for_minor,
-      const uint64_t data_version,
-      ObSSTableGCInfo &minor_gc_info);
-  int start_add_op(
-      const ObLSID &ls_id,
-      const share::SCN &split_scn,
-      const share::SCN &dest_reorg_scn,
-      const ObAtomicFileType &file_type,
-      const int64_t parallel_cnt_of_each_sstable,
-      const int64_t sstables_cnt_of_each_tablet,
-      const ObIArray<ObTabletID> &dest_tablets_id,
-      const uint64_t data_version);
-private:
-  static const int64_t SPLIT_MINOR_MACRO_DATA_SEQ_BITS = 40;
-  common::ObArenaAllocator allocator_;
-public:
-  // for minor split.
-  ObFixedArray<ObAtomicFileHandle<ObAtomicSSTableListFile>*, common::ObIAllocator> split_sstable_list_handle_;
-  // array for each dest tablet, and corresponding to the each one in split_sstable_list_handle_.
-  ObFixedArray<ObAtomicOpHandle<ObAtomicSSTableListAddOp>*, common::ObIAllocator> add_minor_op_handle_;
-};
-#endif
 
 
 }  // end namespace storage
