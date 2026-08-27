@@ -614,16 +614,12 @@ int ObTableRedefinitionTask::copy_table_indexes()
                                            &data_tablet_ids);
                 param.sub_task_trace_id_ = sub_task_trace_id_;
                 param.tenant_data_version_ = data_format_version_;
-                if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
-                  if (OB_ENTRY_EXIST == ret) {
-                    ret = OB_SUCCESS;
-                    active_task_cnt += 1;
-                  } else {
-                    LOG_WARN("submit ddl task failed", K(ret));
-                  }
-                } else if (FALSE_IT(active_task_cnt += 1)) {
-                } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
-                  LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+                bool is_active_task = false;
+                if (OB_FAIL(create_dependent_ddl_task(
+                        param, index_id, task_record, is_active_task))) {
+                  LOG_WARN("create dependent index task failed", K(ret), K(index_id));
+                } else if (is_active_task) {
+                  active_task_cnt += 1;
                 }
               }
             }
@@ -631,19 +627,8 @@ int ObTableRedefinitionTask::copy_table_indexes()
               add_event_info("create table_redefinition index task fail");
               LOG_WARN("add build index task failed", K(ret), K(task_record), K(ddl_event_info));
             } else if (need_rebuild_index) {
-              TCWLockGuard guard(lock_);
-              const uint64_t task_key = index_ids.at(i);
-              DependTaskStatus status;
-              status.task_id_ = task_record.task_id_;
-              if (OB_FAIL(dependent_task_result_map_.get_refactored(task_key, status))) {
-                if (OB_HASH_NOT_EXIST != ret) {
-                  LOG_WARN("get from dependent task map failed", K(ret));
-                } else if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
-                  LOG_WARN("set dependent task map failed", K(ret), K(task_key));
-                }
-              }
               add_event_info("create table_redefinition index task succ");
-              LOG_INFO("add build index task", K(ret), K(task_key), K(status), K(ddl_event_info));
+              LOG_INFO("add build index task", K(ret), K(index_id), K(task_record), K(ddl_event_info));
             }
           }
         }
@@ -1149,7 +1134,8 @@ int64_t ObTableRedefinitionTask::get_serialize_param_size() const
          + serialization::encoded_length_i8(use_heap_table_ddl_plan_)
          + serialization::encoded_length_i8(is_ddl_retryable_)
          + serialization::encoded_length_i8(has_rebuild_domain_indexes_)
-         + serialization::encoded_length_i8(direct_load_need_sync_stats_info_);
+         + serialization::encoded_length_i8(direct_load_need_sync_stats_info_)
+         + get_dependent_task_serialize_size();
 }
 
 int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -1192,6 +1178,8 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
     LOG_WARN("fail to serialize has rebuild domain indexes", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, direct_load_need_sync_stats_info_))) {
     LOG_WARN("fail to serialize need sync stats info", K(ret));
+  } else if (OB_FAIL(serialize_dependent_tasks(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize dependent tasks", K(ret));
   }
   FLOG_INFO("serialize message for table redefinition", K(ret),
       K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
@@ -1278,6 +1266,11 @@ int ObTableRedefinitionTask::deserialize_params_from_message(const uint64_t tena
         LOG_WARN("fail to deserialize need sync stats info", K(ret));
       } else {
         direct_load_need_sync_stats_info_ = direct_load_need_sync_stats_info;
+      }
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      if (OB_FAIL(deserialize_dependent_tasks(buf, data_len, pos))) {
+        LOG_WARN("fail to deserialize dependent tasks", K(ret));
       }
     }
   }

@@ -23,6 +23,8 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::transaction::tablelock;
 
+OB_SERIALIZE_MEMBER(ObDDLDependTaskInfo, child_task_key_, task_id_);
+
 ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const int64_t task_id,
     const uint64_t tenant_id,
@@ -945,6 +947,228 @@ int ObDDLRedefinitionTask::check_data_dest_tables_columns_checksum(const int64_t
   return ret;
 }
 
+int64_t ObDDLRedefinitionTask::get_dependent_task_serialize_size() const
+{
+  TCRLockGuard guard(lock_);
+  const int64_t task_count = dependent_task_result_map_.created()
+      ? dependent_task_result_map_.size() : 0;
+  int64_t serialize_size = serialization::encoded_length(task_count);
+  if (dependent_task_result_map_.created()) {
+    for (common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator iter =
+             dependent_task_result_map_.begin();
+         iter != dependent_task_result_map_.end(); ++iter) {
+      const ObDDLDependTaskInfo task_info(iter->first, iter->second.task_id_);
+      serialize_size += task_info.get_serialize_size();
+    }
+  }
+  return serialize_size;
+}
+
+int ObDDLRedefinitionTask::serialize_dependent_tasks(char *buf, const int64_t buf_len,
+                                                     int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDDLDependTaskInfo, MAX_DEPEND_OBJECT_COUNT> task_infos;
+  if (OB_UNLIKELY(nullptr == buf || buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len));
+  } else {
+    {
+      TCRLockGuard guard(lock_);
+      if (dependent_task_result_map_.created()) {
+        for (common::hash::ObHashMap<uint64_t, DependTaskStatus>::const_iterator iter =
+                 dependent_task_result_map_.begin();
+             OB_SUCC(ret) && iter != dependent_task_result_map_.end(); ++iter) {
+          const ObDDLDependTaskInfo task_info(iter->first, iter->second.task_id_);
+          if (OB_FAIL(task_infos.push_back(task_info))) {
+            LOG_WARN("add dependent task info failed", K(ret), K(task_info));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(task_infos.serialize(buf, buf_len, pos))) {
+      LOG_WARN("serialize dependent task infos failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::deserialize_dependent_tasks(const char *buf, const int64_t data_len,
+                                                       int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDDLDependTaskInfo, MAX_DEPEND_OBJECT_COUNT> task_infos;
+  if (OB_UNLIKELY(nullptr == buf || data_len <= 0 || pos < 0 || pos >= data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(task_infos.deserialize(buf, data_len, pos))) {
+    LOG_WARN("deserialize dependent task infos failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    TCWLockGuard guard(lock_);
+    if (dependent_task_result_map_.created()) {
+      dependent_task_result_map_.reuse();
+    } else if (!task_infos.empty()
+               && OB_FAIL(dependent_task_result_map_.create(
+                   MAX_DEPEND_OBJECT_COUNT, lib::ObLabel("DepTasMap")))) {
+      LOG_WARN("create dependent task map failed", K(ret), K(task_infos));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_infos.count(); ++i) {
+      const ObDDLDependTaskInfo &task_info = task_infos.at(i);
+      DependTaskStatus status;
+      status.task_id_ = task_info.task_id_;
+      if (OB_UNLIKELY(!task_info.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid dependent task", K(ret), K(task_info));
+      } else if (OB_FAIL(dependent_task_result_map_.set_refactored(
+                     task_info.child_task_key_, status))) {
+        LOG_WARN("set dependent task map failed", K(ret), K(task_info), K(status));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::update_dependent_task_message(common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("RedefDepMsg");
+  const int64_t serialize_size = get_serialize_param_size();
+  char *buf = nullptr;
+  int64_t pos = 0;
+  ObString message;
+  if (OB_UNLIKELY(!is_inited_ || task_id_ <= 0 || serialize_size <= 0)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ddl redefinition task is not initialized", K(ret), K(task_id_), K(serialize_size));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(serialize_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate dependent task message failed", K(ret), K(serialize_size));
+  } else if (OB_FAIL(serialize_params_to_message(buf, serialize_size, pos))) {
+    LOG_WARN("serialize ddl redefinition task message failed", K(ret), K(serialize_size));
+  } else if (OB_UNLIKELY(pos != serialize_size)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected serialized message size", K(ret), K(pos), K(serialize_size));
+  } else if (FALSE_IT(message.assign(buf, static_cast<int32_t>(pos)))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_message(
+                 sql_client, dst_tenant_id_, task_id_, message))) {
+    LOG_WARN("update ddl redefinition task message failed", K(ret), K(dst_tenant_id_),
+             K(task_id_));
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::create_dependent_ddl_task(
+    const ObCreateDDLTaskParam &param, const uint64_t child_task_key,
+    ObDDLTaskRecord &task_record, bool &is_active_task)
+{
+  int ret = OB_SUCCESS;
+  bool task_already_registered = false;
+  bool task_record_created = false;
+  bool map_entry_inserted = false;
+  bool relationship_committed = false;
+  is_active_task = false;
+  if (OB_UNLIKELY(!is_inited_ || 0 == child_task_key || OB_INVALID_ID == child_task_key)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(is_inited_), K(child_task_key));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else {
+    TCWLockGuard guard(lock_);
+    if (!dependent_task_result_map_.created()
+        && OB_FAIL(dependent_task_result_map_.create(
+            MAX_DEPEND_OBJECT_COUNT, lib::ObLabel("DepTasMap")))) {
+      LOG_WARN("create dependent task map failed", K(ret));
+    } else {
+      DependTaskStatus status;
+      const int get_ret = dependent_task_result_map_.get_refactored(child_task_key, status);
+      if (OB_SUCCESS == get_ret) {
+        task_already_registered = true;
+        task_record.task_id_ = status.task_id_;
+      } else if (OB_HASH_NOT_EXIST != get_ret) {
+        ret = get_ret;
+        LOG_WARN("get dependent task failed", K(ret), K(child_task_key));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !task_already_registered) {
+    ObMySQLTransaction trans;
+    int64_t parent_task_status = 0;
+    int64_t parent_execution_id = 0;
+    int64_t parent_ret_code = OB_SUCCESS;
+    int64_t parent_snapshot_version = 0;
+    if (OB_FAIL(trans.start(GCTX.sql_proxy_, dst_tenant_id_))) {
+      LOG_WARN("start transaction failed", K(ret), K(dst_tenant_id_));
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(
+                   trans, dst_tenant_id_, task_id_, parent_task_status, parent_execution_id,
+                   parent_ret_code, parent_snapshot_version))) {
+      LOG_WARN("lock parent ddl task failed", K(ret), K(dst_tenant_id_), K(task_id_));
+    } else if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
+      if (OB_ENTRY_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("create dependent ddl task failed", K(ret), K(param));
+      }
+    } else {
+      task_record_created = true;
+    }
+
+    if (OB_SUCC(ret)) {
+      DependTaskStatus status;
+      status.task_id_ = task_record.task_id_;
+      if (OB_UNLIKELY(status.task_id_ <= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid dependent task id", K(ret), K(child_task_key), K(task_record));
+      } else {
+        TCWLockGuard guard(lock_);
+        if (OB_FAIL(dependent_task_result_map_.set_refactored(child_task_key, status))) {
+          LOG_WARN("set dependent task map failed", K(ret), K(child_task_key), K(status));
+        } else {
+          map_entry_inserted = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(update_dependent_task_message(trans))) {
+      LOG_WARN("persist dependent task relationship failed", K(ret), K(child_task_key),
+               K(task_record));
+    }
+    if (trans.is_started()) {
+      const bool commit = OB_SUCC(ret);
+      const int end_ret = trans.end(commit);
+      if (OB_SUCCESS != end_ret) {
+        LOG_WARN("end transaction failed", K(ret), K(end_ret), K(commit));
+        ret = OB_SUCC(ret) ? end_ret : ret;
+      } else if (commit) {
+        relationship_committed = true;
+      }
+    }
+
+    if (map_entry_inserted && !relationship_committed) {
+      int cleanup_ret = OB_SUCCESS;
+      TCWLockGuard guard(lock_);
+      DependTaskStatus status;
+      cleanup_ret = dependent_task_result_map_.get_refactored(child_task_key, status);
+      if (OB_SUCCESS == cleanup_ret
+          && status.task_id_ == task_record.task_id_) {
+        cleanup_ret = dependent_task_result_map_.erase_refactored(child_task_key);
+      }
+      if (OB_SUCCESS != cleanup_ret && OB_HASH_NOT_EXIST != cleanup_ret) {
+        LOG_WARN("rollback dependent task map failed", K(cleanup_ret), K(child_task_key),
+                 K(task_record));
+      }
+    }
+    if (OB_SUCC(ret) && relationship_committed) {
+      is_active_task = true;
+      if (task_record_created
+          && OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
+        LOG_WARN("schedule dependent ddl task failed", K(ret), K(task_record));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
 {
   int ret = OB_SUCCESS;
@@ -1012,29 +1236,12 @@ int ObDDLRedefinitionTask::add_constraint_ddl_task(const int64_t constraint_id)
                                      &alter_table_arg,
                                      task_id_);
           param.sub_task_trace_id_ = sub_task_trace_id_;
-          if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param,
-                                                             *GCTX.sql_proxy_,
-                                                             task_record))) {
-            if (OB_ENTRY_EXIST == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("submit ddl task failed", K(ret));
-            }
-          } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
-            LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
-          }
-          if (OB_SUCC(ret)) {
-            TCWLockGuard guard(lock_);
-            DependTaskStatus status;
-            status.task_id_ = task_record.task_id_; // child task id, which is used to judge child task finish.
-            if (OB_FAIL(dependent_task_result_map_.get_refactored(constraint_id, status))) {
-              if (OB_HASH_NOT_EXIST != ret) {
-                LOG_WARN("get from dependent task map failed", K(ret));
-              } else if (OB_FAIL(dependent_task_result_map_.set_refactored(constraint_id, status))) {
-                LOG_WARN("set dependent task map failed", K(ret), K(constraint_id));
-              }
-            }
-            LOG_INFO("add constraint task finish", K(ret), K(constraint_id), K(status), K(ddl_event_info));
+          bool is_active_task = false;
+          if (OB_FAIL(create_dependent_ddl_task(param, constraint_id, task_record, is_active_task))) {
+            LOG_WARN("create dependent constraint task failed", K(ret), K(constraint_id));
+          } else {
+            LOG_INFO("add constraint task finish", K(ret), K(constraint_id), K(task_record),
+                     K(is_active_task), K(ddl_event_info));
             add_event_info("ddl redefinition task add constraint finish");
           }
         }
@@ -1144,27 +1351,16 @@ int ObDDLRedefinitionTask::add_fk_ddl_task(const int64_t fk_id)
           param.sub_task_trace_id_ = sub_task_trace_id_;
           if (OB_FAIL(alter_table_arg.foreign_key_arg_list_.push_back(fk_arg))) {
             LOG_WARN("push back foreign key arg failed", K(ret));
-          } else if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, *GCTX.sql_proxy_, task_record))) {
-            if (OB_ENTRY_EXIST == ret) {
-              ret = OB_SUCCESS;
+          } else {
+            bool is_active_task = false;
+            if (OB_FAIL(create_dependent_ddl_task(param, fk_id, task_record, is_active_task))) {
+              LOG_WARN("create dependent foreign key task failed", K(ret), K(fk_id));
             } else {
-              LOG_WARN("submit ddl task failed", K(ret));
+              LOG_INFO("add fk task finish", K(ret), K(fk_arg), K(fk_id), K(task_record),
+                       K(is_active_task), K(ddl_event_info));
             }
-          } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
-            LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
           }
           if (OB_SUCC(ret)) {
-            TCWLockGuard guard(lock_);
-            DependTaskStatus status;
-            status.task_id_ = task_record.task_id_; // child task id, which is used to judge child task finish.
-            if (OB_FAIL(dependent_task_result_map_.get_refactored(fk_id, status))) {
-              if (OB_HASH_NOT_EXIST != ret) {
-                LOG_WARN("get from dependent task map failed", K(ret));
-              } else if (OB_FAIL(dependent_task_result_map_.set_refactored(fk_id, status))) {
-                LOG_WARN("set dependent task map failed", K(ret), K(fk_id));
-              }
-            }
-            LOG_INFO("add fk task finish", K(ret), K(fk_arg), K(fk_id), K(status), K(ddl_event_info));
             add_event_info("ddl redefinition task add fk finish");
           }
         }

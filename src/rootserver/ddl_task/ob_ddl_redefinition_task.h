@@ -15,6 +15,26 @@ namespace rootserver
 {
 class ObRootService;
 
+struct ObDDLDependTaskInfo final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDDLDependTaskInfo()
+    : child_task_key_(common::OB_INVALID_ID), task_id_(0)
+  {}
+  ObDDLDependTaskInfo(const uint64_t child_task_key, const int64_t task_id)
+    : child_task_key_(child_task_key), task_id_(task_id)
+  {}
+  bool is_valid() const
+  {
+    return 0 != child_task_key_ && common::OB_INVALID_ID != child_task_key_ && task_id_ > 0;
+  }
+  TO_STRING_KV(K_(child_task_key), K_(task_id));
+public:
+  uint64_t child_task_key_;
+  int64_t task_id_;
+};
+
 class ObDDLRedefinitionSSTableBuildTask : public share::ObAsyncTask
 {
 public:
@@ -173,6 +193,15 @@ protected:
   int release_snapshot(const int64_t snapshot_version);
   int add_constraint_ddl_task(const int64_t constraint_id);
   int add_fk_ddl_task(const int64_t fk_id);
+  // Persist child record and parent relationship before the child is scheduled.
+  int create_dependent_ddl_task(const ObCreateDDLTaskParam &param,
+                                const uint64_t child_task_key,
+                                ObDDLTaskRecord &task_record,
+                                bool &is_active_task);
+  int update_dependent_task_message(common::ObISQLClient &sql_client);
+  int64_t get_dependent_task_serialize_size() const;
+  int serialize_dependent_tasks(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize_dependent_tasks(const char *buf, const int64_t data_len, int64_t &pos);
   int sync_auto_increment_position();
   int sync_identity_column_sequence_value();
   int modify_autoinc(const share::ObDDLTaskStatus next_task_status);
@@ -287,7 +316,7 @@ protected:
   static const int64_t OB_REDEFINITION_TASK_VERSION = 1L;
   static const int64_t MAX_DEPEND_OBJECT_COUNT = 100L;
   static const int64_t RETRY_INTERVAL = 1 * 1000 * 1000; // 1s
-  static const int64_t RETRY_LIMIT = 100;   
+  static const int64_t RETRY_LIMIT = 100;
   ObSyncTabletAutoincSeqCtx sync_tablet_autoinc_seq_ctx_;
   int64_t build_replica_request_time_;
   int64_t complete_sstable_job_ret_code_;

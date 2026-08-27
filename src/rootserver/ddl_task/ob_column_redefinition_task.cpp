@@ -307,18 +307,12 @@ int ObColumnRedefinitionTask::copy_table_indexes()
                                            &data_tablet_ids);
                 param.sub_task_trace_id_ = sub_task_trace_id_;
                 param.tenant_data_version_ = data_format_version_;
-                if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param,
-                                                                   *GCTX.sql_proxy_,
-                                                                   task_record))) {
-                  if (OB_ENTRY_EXIST == ret) {
-                    ret = OB_SUCCESS;
-                    active_task_cnt += 1;
-                  } else {
-                    LOG_WARN("submit ddl task failed", K(ret));
-                  }
-                } else if (FALSE_IT(active_task_cnt += 1)) {
-                } else if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
-                  LOG_WARN("fail to schedule ddl task", K(ret), K(task_record));
+                bool is_active_task = false;
+                if (OB_FAIL(create_dependent_ddl_task(
+                        param, index_id, task_record, is_active_task))) {
+                  LOG_WARN("create dependent index task failed", K(ret), K(index_id));
+                } else if (is_active_task) {
+                  active_task_cnt += 1;
                 }
               }
             }
@@ -326,19 +320,8 @@ int ObColumnRedefinitionTask::copy_table_indexes()
               add_event_info("create column redefinition index fail");
               LOG_WARN("add build index task failed", K(ret), K(ddl_event_info), K(task_record));
             } else if (need_rebuild_index) {
-              TCWLockGuard guard(lock_);
-              const uint64_t task_key = index_ids.at(i);
-              DependTaskStatus status;
-              status.task_id_ = task_record.task_id_; // child task id is used to judge whether child task finish.
-              if (OB_FAIL(dependent_task_result_map_.get_refactored(task_key, status))) {
-                if (OB_HASH_NOT_EXIST != ret) {
-                  LOG_WARN("get from dependent task map failed", K(ret));
-                } else if (OB_FAIL(dependent_task_result_map_.set_refactored(task_key, status))) {
-                  LOG_WARN("set dependent task map failed", K(ret), K(task_key));
-                }
-              }
               add_event_info("create column redefinition index succ");
-              LOG_INFO("add build index task", K(ret), K(task_key), K(status), K(ddl_event_info));
+              LOG_INFO("add build index task", K(ret), K(index_id), K(task_record), K(ddl_event_info));
             }
           }
         }
@@ -471,6 +454,8 @@ int ObColumnRedefinitionTask::serialize_params_to_message(char *buf, const int64
     LOG_WARN("ObDDLTask serialize failed", K(ret));
   } else if (OB_FAIL(alter_table_arg_.serialize(buf, buf_len, pos))) {
     LOG_WARN("alter_table_arg_ serialize failed", K(ret));
+  } else if (OB_FAIL(serialize_dependent_tasks(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize dependent tasks", K(ret));
   }
   return ret;
 }
@@ -490,13 +475,16 @@ int ObColumnRedefinitionTask::deserialize_params_from_message(const uint64_t ten
     LOG_WARN("replace user tenant id failed", K(ret), K(tenant_id), K(tmp_arg));
   } else if (OB_FAIL(deep_copy_table_arg(allocator_, tmp_arg, alter_table_arg_))) {
     LOG_WARN("deep copy table arg failed", K(ret));
+  } else if (pos < data_len && OB_FAIL(deserialize_dependent_tasks(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize dependent tasks", K(ret));
   }
   return ret;
 }
 
 int64_t ObColumnRedefinitionTask::get_serialize_param_size() const
 {
-  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
+  return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size()
+         + get_dependent_task_serialize_size();
 }
 
 int ObColumnRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus next_task_status)
