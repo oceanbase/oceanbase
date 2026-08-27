@@ -26,6 +26,10 @@ ObDiagnosisManager::~ObDiagnosisManager()
     bad_file_writer_->~ObDiagnosisFileWriter();
     bad_file_writer_ = nullptr;
   }
+  if (OB_NOT_NULL(metadata_file_writer_)) {
+    metadata_file_writer_->~ObDiagnosisFileWriter();
+    metadata_file_writer_ = nullptr;
+  }
 }
 
 ObDiagnosisFileWriter::~ObDiagnosisFileWriter()
@@ -47,8 +51,28 @@ int ObDiagnosisManager::add_warning_info(int err_ret, int line_idx) {
   return ret;
 }
 
+static const char *get_diagnosis_file_suffix(ObDiagnosisFileType file_type)
+{
+  const char *suffix = "";
+  switch (file_type) {
+    case DIAGNOSIS_LOG_FILE:
+      suffix = "diagnosis.log";
+      break;
+    case DIAGNOSIS_BAD_FILE:
+      suffix = "data.bad";
+      break;
+    case DIAGNOSIS_METADATA_FILE:
+      suffix = "diagnosis_metadata.log";
+      break;
+    default:
+      break;
+  }
+  return suffix;
+}
+
 int ObDiagnosisManager::calc_first_file_path(ObString &path, int64_t sqc_id, int64_t task_id,
-                                            bool is_log, ObDiagnosisFileWriter &file_writer)
+                                            ObDiagnosisFileType file_type,
+                                            ObDiagnosisFileWriter &file_writer)
 {
   int ret = OB_SUCCESS;
   ObSqlString file_name_suffix;
@@ -62,7 +86,7 @@ int ObDiagnosisManager::calc_first_file_path(ObString &path, int64_t sqc_id, int
   } else {
     if (input_file_name.ptr()[input_file_name.length() - 1] == '/') {
       OZ(file_name_suffix.append_fmt("%.*s", input_file_name.length(), input_file_name.ptr()));
-      OZ(file_name_suffix.append(is_log ? "diagnosis.log" : "data.bad"));
+      OZ(file_name_suffix.append(get_diagnosis_file_suffix(file_type)));
     } else {
 
       ObCSVGeneralFormat::ObCSVCompression compression_format;
@@ -74,6 +98,13 @@ int ObDiagnosisManager::calc_first_file_path(ObString &path, int64_t sqc_id, int
                                         path_without_suffix.ptr()));
         } else {
           OZ(file_name_suffix.append_fmt("%.*s", input_file_name.length(), input_file_name.ptr()));
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (file_type == DIAGNOSIS_LOG_FILE) {
+          OZ(file_name_suffix.append(".diagnosis"));
+        } else if (file_type == DIAGNOSIS_METADATA_FILE) {
+          OZ(file_name_suffix.append(".metadata"));
         }
       }
     }
@@ -91,7 +122,8 @@ int ObDiagnosisManager::calc_first_file_path(ObString &path, int64_t sqc_id, int
 }
 
 int ObDiagnosisManager::init_file_name(const ObString& file_path, int64_t sqc_id, int64_t task_id,
-                                      bool is_log, ObDiagnosisFileWriter &file_writer)
+                                      ObDiagnosisFileType file_type,
+                                      ObDiagnosisFileWriter &file_writer)
 {
   int ret = OB_SUCCESS;
 
@@ -136,7 +168,7 @@ int ObDiagnosisManager::init_file_name(const ObString& file_path, int64_t sqc_id
 
   if (OB_SUCC(ret)) {
     bool is_exist = false;
-    if (OB_FAIL(calc_first_file_path(log_file_path, sqc_id, task_id, is_log, file_writer))) {
+    if (OB_FAIL(calc_first_file_path(log_file_path, sqc_id, task_id, file_type, file_writer))) {
       LOG_WARN("failed to calculate first file path", K(ret));
     } else if (OB_FAIL(util.is_exist(file_writer.file_name_, dest.get_storage_info(), is_exist))) {
       LOG_WARN("fail to check file exist", KR(ret), K(file_writer.file_name_));
@@ -155,18 +187,24 @@ int ObDiagnosisManager::init_file_name(const ObString& file_path, int64_t sqc_id
   return ret;
 }
 
-int ObDiagnosisManager::gen_csv_line_data(int64_t err_ret, int64_t idx, ObString file_name,
-                          ObString err_message, ObString& result, common::ObIAllocator &allocator) {
+int ObDiagnosisManager::gen_csv_line_data(int64_t err_ret,
+                                          int64_t idx,
+                                          int64_t file_id,
+                                          int64_t row_start_offset,
+                                          ObString err_message,
+                                          ObString& result,
+                                          common::ObIAllocator &allocator) {
   int ret = OB_SUCCESS;
   ObSqlString line_data;
   if (!is_header_written_) {
-    OZ (line_data.append("\'ERROR CODE\',\'FILE NAME\',\'LINE NUMBER\',\'ERROR MESSAGE\'\n"));
+    OZ (line_data.append("\'ERROR CODE\',\'FILE ID\',\'CHUNK ID\',\'LINE NUMBER\',\'OFFSET\',\'ERROR MESSAGE\'\n"));
     is_header_written_ = true;
   }
 
-  OZ (line_data.append_fmt("\'%ld\',\'%.*s\',\'%ld\',\'%.*s\'\n",
-                      err_ret, file_name.length(), file_name.ptr(),
-                      idx, err_message.length(), err_message.ptr()));
+  OZ (line_data.append_fmt("\'%ld\',\'%ld\',\'%ld\',\'%ld\',\'%ld\',\'%.*s\'\n",
+                      err_ret, file_id,
+                      cur_chunk_id_, idx, row_start_offset,
+                      err_message.length(), err_message.ptr()));
 
   if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator, line_data.string(), result))) {
     LOG_WARN("failed to write string", K(ret));
@@ -275,6 +313,12 @@ int ObDiagnosisManager::close()
       OB_FAIL(bad_file_writer_->data_writer_->close_data_writer())) {
     LOG_WARN("failed to close data writer", K(ret));
   }
+
+  if (OB_NOT_NULL(metadata_file_writer_) &&
+      OB_NOT_NULL(metadata_file_writer_->data_writer_) &&
+      OB_FAIL(metadata_file_writer_->data_writer_->close_data_writer())) {
+    LOG_WARN("failed to close data writer", K(ret));
+  }
   return ret;
 }
 
@@ -282,7 +326,7 @@ int ObDiagnosisManager::init_file_writer(common::ObIAllocator &allocator,
                                         const ObString& file_name,
                                         int64_t sqc_id,
                                         int64_t task_id,
-                                        bool is_log_file,
+                                        ObDiagnosisFileType file_type,
                                         ObDiagnosisFileWriter *&file_writer)
 {
   int ret = OB_SUCCESS;
@@ -303,7 +347,7 @@ int ObDiagnosisManager::init_file_writer(common::ObIAllocator &allocator,
     ObString cstyle_file_name;
     if (OB_FAIL(ob_write_string(allocator, file_name, cstyle_file_name, true /* c_style */))) {
       LOG_WARN("failed to write string with c_style", K(ret), K(file_name));
-    } else if (OB_FAIL(init_file_name(cstyle_file_name, sqc_id, task_id, is_log_file, *file_writer))) {
+    } else if (OB_FAIL(init_file_name(cstyle_file_name, sqc_id, task_id, file_type, *file_writer))) {
       LOG_WARN("failed to init log file name", K(ret));
     } else if (OB_FAIL(file_writer->create_data_writer(cstyle_file_name))) {
         LOG_WARN("failed to get device", K(ret));
@@ -344,7 +388,10 @@ int ObDiagnosisFileWriter::split_file()
   return ret;
 }
 
-int ObDiagnosisManager::handle_warning(int64_t err_ret, int64_t idx, ObString col_name,
+int ObDiagnosisManager::handle_warning(int64_t err_ret,
+                                      int64_t idx,
+                                      int64_t row_start_offset,
+                                      ObString col_name,
                                       ObString log_file, ObWarningBuffer *buffer, int64_t limit_cnt)
 {
   int ret = OB_SUCCESS;
@@ -370,7 +417,7 @@ int ObDiagnosisManager::handle_warning(int64_t err_ret, int64_t idx, ObString co
   }
 
   if (OB_SUCC(ret) && !log_file.empty()) {
-    if  (OB_FAIL(gen_csv_line_data(err_ret, line_num, cur_file_url_,
+    if  (OB_FAIL(gen_csv_line_data(err_ret, line_num, cur_file_id_, row_start_offset,
                                   err_msg.string(), line_data, allocator))) {
       LOG_WARN("fail to gen csv line data", K(ret));
     } else if (OB_FAIL(log_file_writer_->data_writer_->flush_data(line_data.ptr(),
@@ -403,6 +450,8 @@ void ObDiagnosisManager::reuse(bool defer_reuse)
   rets_.reset();
   col_names_.reset();
   missing_col_idxs_.reset();
+  missing_col_offsets_.reset();
+  cur_row_offsets_.reset();
 
   if (!defer_reuse) {
     data_.reset();
@@ -418,7 +467,8 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
                                     bool defer_reuse) {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  if (idxs_.count() != rets_.count() || idxs_.count() != col_names_.count()) {
+  if (idxs_.count() != rets_.count() || idxs_.count() != col_names_.count()
+      || missing_col_idxs_.count() != missing_col_offsets_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("idxs_, col_names_ and rets_ count mismatch",
             K(ret), K(idxs_.count()), K(col_names_.count()), K(rets_.count()));
@@ -427,11 +477,11 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
     if (!is_file_writer_inited_) {
       if (!diagnosis_info.log_file_.empty() &&
           OB_FAIL(init_file_writer(allocator, diagnosis_info.log_file_,
-                                  sqc_id, task_id, true, log_file_writer_))) {
+                                  sqc_id, task_id, DIAGNOSIS_LOG_FILE, log_file_writer_))) {
         LOG_WARN("failed to init log file writer", K(ret));
       } else if (!diagnosis_info.bad_file_.empty() &&
                 OB_FAIL(init_file_writer(allocator, diagnosis_info.bad_file_,
-                                        sqc_id, task_id, false, bad_file_writer_))) {
+                                        sqc_id, task_id, DIAGNOSIS_BAD_FILE, bad_file_writer_))) {
         LOG_WARN("failed to init log file writer", K(ret));
       } else {
         is_file_writer_inited_ = true;
@@ -466,7 +516,10 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
 
           // warning log
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(handle_warning(rets_.at(i), idx, col_names_.at(i), diagnosis_info.log_file_,
+            const int64_t row_start_offset = idx >= 0 && idx < cur_row_offsets_.count()
+                ? cur_row_offsets_.at(idx) : OB_INVALID_INDEX;
+            if (OB_FAIL(handle_warning(rets_.at(i), idx, row_start_offset,
+                                      col_names_.at(i), diagnosis_info.log_file_,
                                       buffer, diagnosis_info.limit_num_))) {
               LOG_WARN("failed to handle warning", K(ret), K(rets_.at(i)), K(idx));
             } else {
@@ -478,9 +531,11 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
         // lines that doesn't contain all columns(found by csv parser)
         for (int i = 0; OB_SUCC(ret) && i < missing_col_idxs_.count(); i++) {
           int64_t idx = missing_col_idxs_.at(i);
+          int64_t row_start_offset = missing_col_offsets_.at(i);
           int64_t err_ret = OB_WARN_TOO_FEW_RECORDS;
 
-          if (OB_FAIL(handle_warning(err_ret, idx, ObString::make_empty_string(),
+          if (OB_FAIL(handle_warning(err_ret, idx, row_start_offset,
+                                    ObString::make_empty_string(),
                                     diagnosis_info.log_file_, buffer, diagnosis_info.limit_num_))) {
             LOG_WARN("failed to handle warning", K(ret), K(err_ret), K(idx));
           }
@@ -493,6 +548,46 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
     reuse(defer_reuse);
   }
 
+  return ret;
+}
+
+int ObDiagnosisManager::write_chunk_metadata(const ObString& file_name,
+                                            int64_t file_id,
+                                            int64_t chunk_id,
+                                            int64_t row_cnt,
+                                            common::ObIAllocator &allocator,
+                                            const ObString& metadata_file_path,
+                                            int64_t sqc_id,
+                                            int64_t task_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString line_data;
+
+  if (metadata_file_path.empty()) {
+    // do nothing
+  } else if (!is_metadata_file_writer_inited_) {
+    if (OB_FAIL(init_file_writer(allocator, metadata_file_path, sqc_id, task_id,
+                                 DIAGNOSIS_METADATA_FILE, metadata_file_writer_))) {
+      LOG_WARN("failed to init metadata file writer", K(ret));
+    } else {
+      is_metadata_file_writer_inited_ = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !metadata_file_path.empty()) {
+    if (!is_metadata_header_written_) {
+      OZ(line_data.append("\'FILE NAME\',\'FILE ID\',\'CHUNK ID\',\'ROW CNT\'\n"));
+      is_metadata_header_written_ = true;
+    }
+    OZ(line_data.append_fmt("\'%.*s\',\'%ld\',\'%ld\',\'%ld\'\n",
+                            file_name.length(), file_name.ptr(),
+                            file_id, chunk_id, row_cnt));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(metadata_file_writer_->data_writer_->flush_data(line_data.ptr(),
+                                                                      line_data.length()))) {
+      LOG_WARN("failed to flush metadata data", K(ret), K(line_data));
+    }
+  }
   return ret;
 }
 }/* ns sql*/

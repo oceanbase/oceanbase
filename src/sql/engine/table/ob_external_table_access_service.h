@@ -219,6 +219,8 @@ public:
   virtual ~ObDiagnosisInfoProvider() {}
   virtual bool is_diagnosis_supported() const { return false; }
   virtual int64_t get_cur_line_num() const { return 0; }
+  virtual int64_t get_cur_chunk_id() const { return OB_INVALID_INDEX; }
+  virtual int64_t get_cur_file_id() const { return 0; }
   virtual ObString get_cur_file_url() const { return ObString(); }
 };
 

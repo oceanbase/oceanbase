@@ -261,6 +261,52 @@ public:
   static int64_t calc_parallel_task_chunk_size(const int64_t total_task_cnt,
                                                int64_t worker_cnt,
                                                const int64_t task_cnt_per_worker = 4);
+  // Parallel low word:     [parallel(bit0), file_id(1-20), chunk_id(21-34), chunk_line_number(35-63)]
+  // Non-parallel low word: [parallel(bit0), file_id(1-20), line_number(21-63)]
+  // High word:             [row_start_offset(64-125), reserved(126-127)]
+  static constexpr int64_t ROW_METADATA_FLAG_BITS = 1;
+  static constexpr int64_t ROW_METADATA_FILE_ID_BITS = 20;
+  static constexpr int64_t ROW_METADATA_CHUNK_ID_BITS = 14;
+  static constexpr int64_t MAX_PARALLEL_PARSE_CSV_CHUNK_CNT =
+      (1LL << ROW_METADATA_CHUNK_ID_BITS); // 16384
+  static constexpr int64_t PARALLEL_PARSE_CSV_CHUNK_SIZE = 32 * 1024 * 1024; // 32MB
+  static constexpr int64_t ROW_METADATA_FILE_ID_SHIFT = ROW_METADATA_FLAG_BITS;
+  static constexpr int64_t ROW_METADATA_CHUNK_ID_SHIFT =
+      ROW_METADATA_FILE_ID_SHIFT + ROW_METADATA_FILE_ID_BITS;
+  static constexpr int64_t ROW_METADATA_PARALLEL_LINE_NUMBER_SHIFT =
+      ROW_METADATA_CHUNK_ID_SHIFT + ROW_METADATA_CHUNK_ID_BITS;
+  static constexpr int64_t ROW_METADATA_NON_PARALLEL_LINE_NUMBER_SHIFT =
+      ROW_METADATA_CHUNK_ID_SHIFT;
+  static constexpr int64_t ROW_METADATA_PARALLEL_LINE_NUMBER_BITS =
+      64 - ROW_METADATA_PARALLEL_LINE_NUMBER_SHIFT;
+  static constexpr int64_t ROW_METADATA_NON_PARALLEL_LINE_NUMBER_BITS =
+      64 - ROW_METADATA_NON_PARALLEL_LINE_NUMBER_SHIFT;
+  static constexpr uint64_t ROW_METADATA_FILE_ID_MASK =
+      (1ULL << ROW_METADATA_FILE_ID_BITS) - 1;
+  static constexpr uint64_t ROW_METADATA_CHUNK_ID_MASK =
+      (1ULL << ROW_METADATA_CHUNK_ID_BITS) - 1;
+  static constexpr uint64_t ROW_METADATA_PARALLEL_LINE_NUMBER_MASK =
+      (1ULL << ROW_METADATA_PARALLEL_LINE_NUMBER_BITS) - 1;
+  static constexpr uint64_t ROW_METADATA_NON_PARALLEL_LINE_NUMBER_MASK =
+      (1ULL << ROW_METADATA_NON_PARALLEL_LINE_NUMBER_BITS) - 1;
+  static constexpr uint64_t ROW_METADATA_PARALLEL_FLAG = 1ULL;
+  static constexpr int64_t ROW_METADATA_OFFSET_BITS = 62;
+  static constexpr int ROW_METADATA_OFFSET_SHIFT = 64;
+  static constexpr uint64_t ROW_METADATA_OFFSET_MASK =
+      (1ULL << ROW_METADATA_OFFSET_BITS) - 1;
+
+  static int encode_csv_row_metadata(const bool is_parallel,
+                                     const int64_t file_id,
+                                     const int64_t chunk_id,
+                                     const int64_t line_number,
+                                     const int64_t row_start_offset,
+                                     common::int128_t &encoded);
+  static int decode_csv_row_metadata(const common::int128_t &encoded,
+                                     bool &is_parallel,
+                                     int64_t &file_id,
+                                     int64_t &chunk_id,
+                                     int64_t &line_number,
+                                     int64_t &row_start_offset);
 
   // range_filter is from query_range
   static int is_file_id_in_ranges(const common::ObIArray<common::ObNewRange *> &range_filter,
@@ -440,7 +486,8 @@ public:
   {
     return T_PSEUDO_EXTERNAL_FILE_COL == expr_type
         || T_PSEUDO_PARTITION_LIST_COL == expr_type
-        || T_PSEUDO_EXTERNAL_FILE_URL == expr_type;
+        || T_PSEUDO_EXTERNAL_FILE_URL == expr_type
+        || T_PSEUDO_METADATA_ROW_METADATA == expr_type;
   }
   static int concat_external_file_location(const ObString &location,
                                            const ObString &sub_path,
@@ -453,6 +500,14 @@ public:
                                                        common::ObString &full_path,
                                                        common::ObString *access_info = NULL,
                                                        bool check_oss_prefix = false);
+  // Resolve location object to url, append "?access_info" when needed (SELECT INTO / diagnosis).
+  static int resolve_location_url_with_access_info(ObSchemaGetterGuard &schema_guard,
+                                                   const ObSQLSessionInfo &session_info,
+                                                   common::ObIAllocator &allocator,
+                                                   const ParseNode *location_name_node,
+                                                   const ParseNode *sub_path_node,
+                                                   common::ObString &url,
+                                                   bool check_oss_prefix = false);
   static int get_external_file_location(const ObTableSchema &table_schema,
                                         ObSchemaGetterGuard &schema_guard,
                                         ObIAllocator &allocator,
@@ -1125,9 +1180,12 @@ public:
       return true;
     }
   }
-  static bool is_satisfied_for_parallel_parse_csv(const common::ObIArray<share::ObExternalFileInfo> &external_table_filesconst,
-                                                   const ObCSVGeneralFormat &csv_format);
-
+  static bool is_external_file_size_uniform(
+      const common::ObIArray<share::ObExternalFileInfo> &external_table_files);
+  static bool is_satisfied_for_parallel_parse_csv(
+      const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
+      const ObCSVGeneralFormat &csv_format,
+      const int64_t parallelism);
   static int calc_assigned_odps_files_to_sqcs_optimized(
     const common::ObIArray<ObExternalFileInfo> &files,
     common::ObSEArray<FileInfoWithIdx, 20> &assigned_idx,

@@ -309,6 +309,7 @@ OB_DEF_SERIALIZE(ObInsCtDef)
   }
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_ctdefs_));
   OB_UNIS_ENCODE(is_single_value_);
+  OB_UNIS_ENCODE(diagnosis_row_metadata_expr_);
   return ret;
 }
 
@@ -334,6 +335,7 @@ OB_DEF_DESERIALIZE(ObInsCtDef)
                                         alloc_, DAS_OP_TABLE_INSERT,
                                         related_ctdefs_));
   OB_UNIS_DECODE(is_single_value_);
+  OB_UNIS_DECODE(diagnosis_row_metadata_expr_);
   return ret;
 }
 
@@ -351,6 +353,7 @@ OB_DEF_SERIALIZE_SIZE(ObInsCtDef)
   }
   len += ObDASUtils::das_ctdefs_serialize_size(related_ctdefs_);
   OB_UNIS_ADD_LEN(is_single_value_);
+  OB_UNIS_ADD_LEN(diagnosis_row_metadata_expr_);
   return len;
 }
 

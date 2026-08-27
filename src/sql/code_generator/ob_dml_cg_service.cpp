@@ -99,6 +99,15 @@ int ObDmlCgService::generate_insert_ctdef(ObLogDelUpd &op,
     }
   }
 
+  if (OB_SUCC(ret) && index_dml_info.is_primary_index_ && op.get_stmt()->is_insert_stmt()) {
+    ObRawExpr *meta_expr = static_cast<const ObInsertStmt *>(op.get_stmt())
+                               ->get_insert_table_info().diagnosis_row_metadata_expr_;
+    if (NULL != meta_expr
+        && OB_FAIL(cg_.generate_rt_expr(*meta_expr, ins_ctdef.diagnosis_row_metadata_expr_))) {
+      LOG_WARN("fail to cg diagnosis row metadata expr", K(ret), KPC(meta_expr));
+    }
+  }
+
   // generate for replace into and insert_up fetch conflict rowkey
   if (OB_SUCC(ret) && op.get_stmt()->is_insert_stmt() &&
       (static_cast<ObLogInsert&>(op).is_replace() || static_cast<ObLogInsert&>(op).get_insert_up())) {

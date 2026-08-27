@@ -4,8 +4,8 @@
 | ObDMLStmt | 1088 |
 | ObSelectStmt | 2024 |
 | ObDelUpdStmt | 1456 |
-| ObInsertStmt | 1936 |
+| ObInsertStmt | 1944 |
 | ObInsertAllStmt | 1496 |
 | ObUpdateStmt | 1496 |
 | ObDeleteStmt | 1496 |
-| ObMergeStmt | 2112 |
+| ObMergeStmt | 2120 |

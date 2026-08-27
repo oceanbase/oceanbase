@@ -250,7 +250,8 @@ struct ObCSVGeneralFormat {
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
                K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_),
-               K(parallel_parse_on_single_file_), K(parallel_parse_file_size_threshold_), K(max_row_length_), K(enable_check_bom_));
+               K(parallel_parse_on_single_file_), K(parallel_parse_file_size_threshold_),
+               K(max_row_length_), K(enable_check_bom_));
   OB_UNIS_VERSION(1);
 };
 
@@ -493,10 +494,11 @@ class ObCSVGeneralParser
 public:
   struct LineErrRec
   {
-    LineErrRec() : line_no(0), err_code(0) {}
+    LineErrRec() : line_no(0), err_code(0), line_offset_in_scan(0) {}
     int line_no;
     int err_code;
-    TO_STRING_KV(K(line_no), K(err_code));
+    int64_t line_offset_in_scan;
+    TO_STRING_KV(K(line_no), K(err_code), K(line_offset_in_scan));
   };
   struct FieldValue {
     FieldValue() : ptr_(nullptr), len_(0), flags_(0) {}
@@ -530,7 +532,7 @@ public:
     unsigned min_term_;
   };
 public:
-  ObCSVGeneralParser() {}
+  ObCSVGeneralParser() : need_line_offsets_in_scan_(false) {}
   int init(const ObCSVGeneralFormat &format);
 
   int init(const ObDataInFileStruct &format,
@@ -538,6 +540,10 @@ public:
            common::ObCollationType file_cs_type);
   const ObCSVGeneralFormat &get_format() { return format_; }
   const OptParams &get_opt_params() { return opt_param_; }
+  void set_need_line_offsets_in_scan(const bool need_line_offsets_in_scan)
+  {
+    need_line_offsets_in_scan_ = need_line_offsets_in_scan;
+  }
 
   int reset_fields_per_line_count(int64_t count);
 
@@ -866,9 +872,20 @@ public:
     bool is_file_end_;
   };
   struct HandleBatchLinesParam {
-    HandleBatchLinesParam(common::ObIArray<FieldValue> &fields, int field_cnt, int batch_size)
-      : fields_(fields), field_cnt_(field_cnt), batch_size_(batch_size) {}
+    HandleBatchLinesParam(common::ObIArray<FieldValue> &fields,
+                          const common::ObIArray<int64_t> &line_offsets_in_scan,
+                          const char *scan_begin,
+                          int field_cnt,
+                          int batch_size)
+      : fields_(fields),
+        line_offsets_in_scan_(line_offsets_in_scan),
+        scan_begin_(scan_begin),
+        field_cnt_(field_cnt),
+        batch_size_(batch_size)
+    {}
     common::ObIArray<FieldValue> &fields_;
+    const common::ObIArray<int64_t> &line_offsets_in_scan_;
+    const char *scan_begin_;
     int field_cnt_;
     int batch_size_;
   };
@@ -884,10 +901,12 @@ private:
   int init_opt_variables();
 
   int handle_irregular_line(int field_idx,
-    int line_no,
-    int output_line_no,
-    bool is_batch_mode,
-    common::ObIArray<LineErrRec> &errors);
+                            int line_no,
+                            int output_line_no,
+                            bool is_batch_mode,
+                            int64_t line_offset_in_scan,
+                            common::ObIArray<LineErrRec> &errors);
+  int save_batch_line_offset_in_scan(const int64_t line_offset_in_scan);
 
   inline
   char escape(char c) {
@@ -960,7 +979,9 @@ private:
 protected:
   ObCSVGeneralFormat format_;
   common::ObSEArray<FieldValue, 1> fields_per_line_;
+  common::ObSEArray<int64_t, 16> batch_line_offsets_in_scan_;
   OptParams opt_param_;
+  bool need_line_offsets_in_scan_;
 };
 
 
@@ -979,8 +1000,13 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
   int line_no = 0;
   int blank_line_cnt = 0;
   int output_line_no = 0;
+  const char *scan_begin = str;
   const char *line_begin = str;
   char *escape_buf_pos = escape_buf;
+
+  if (USE_HANDLE_BATCH_LINES && need_line_offsets_in_scan_) {
+    batch_line_offsets_in_scan_.reuse();
+  }
 
   if (NEED_ESCAPED_RESULT) {
     if (escape_buf_end - escape_buf < end - str) {
@@ -1130,9 +1156,14 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
     }
     if (OB_LIKELY(find_new_line) || is_end_file) {
       if (!format_.skip_blank_lines_ || field_idx > 0) {
-        if (field_idx < format_.file_column_nums_
-            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
-          ret = handle_irregular_line(field_idx, line_no, output_line_no, USE_HANDLE_BATCH_LINES, errors);
+        if (USE_HANDLE_BATCH_LINES && need_line_offsets_in_scan_) {
+          ret = save_batch_line_offset_in_scan(line_begin - scan_begin);
+        }
+        if (OB_SUCC(ret)
+            && (field_idx < format_.file_column_nums_
+                || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_))) {
+          ret = handle_irregular_line(field_idx, line_no, output_line_no,
+                                      USE_HANDLE_BATCH_LINES, line_begin - scan_begin, errors);
         }
         output_line_no++;
         if (!USE_HANDLE_BATCH_LINES) {
@@ -1157,7 +1188,8 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
 
   if (USE_HANDLE_BATCH_LINES) {
     if (OB_SUCC(ret)) {
-      HandleBatchLinesParam param(fields_per_line_, format_.file_column_nums_, line_no - blank_line_cnt);
+      HandleBatchLinesParam param(fields_per_line_, batch_line_offsets_in_scan_, scan_begin,
+                                  format_.file_column_nums_, line_no - blank_line_cnt);
       ret = handle_one_line(param);
     }
   }
@@ -1190,8 +1222,12 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
   int line_no = 0;
   int blank_line_cnt = 0;
   int output_line_no = 0;
+  const char *scan_begin = str;
   const char *line_begin = str;
   char *escape_buf_pos = escape_buf;
+  if (USE_HANDLE_BATCH_LINES && need_line_offsets_in_scan_) {
+    batch_line_offsets_in_scan_.reuse();
+  }
   while (OB_SUCC(ret) && str < end && line_no - blank_line_cnt < nrows) {
     bool find_new_line = false;
     int field_idx = 0;
@@ -1244,9 +1280,14 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
 
     if (OB_LIKELY(find_new_line) || IS_END_FILE) {
       if (!SKIP_BLANK_LINES || field_idx > 0) {
-        if (field_idx < format_.file_column_nums_
-            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
-          ret = handle_irregular_line(field_idx, line_no, output_line_no, USE_HANDLE_BATCH_LINES, errors);
+        if (USE_HANDLE_BATCH_LINES && need_line_offsets_in_scan_) {
+          ret = save_batch_line_offset_in_scan(line_begin - scan_begin);
+        }
+        if (OB_SUCC(ret)
+            && (field_idx < format_.file_column_nums_
+                || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_))) {
+          ret = handle_irregular_line(field_idx, line_no, output_line_no,
+                                      USE_HANDLE_BATCH_LINES, line_begin - scan_begin, errors);
         }
         output_line_no++;
         if (!USE_HANDLE_BATCH_LINES) {
@@ -1273,7 +1314,8 @@ int ObCSVGeneralParser::scan_utf8_ex(const char *&str,
 
   if (USE_HANDLE_BATCH_LINES) {
     if (OB_SUCC(ret)) {
-      HandleBatchLinesParam param(fields_per_line_, format_.file_column_nums_, line_no - blank_line_cnt);
+      HandleBatchLinesParam param(fields_per_line_, batch_line_offsets_in_scan_, scan_begin,
+                                  format_.file_column_nums_, line_no - blank_line_cnt);
       ret = handle_one_line(param);
     }
   }

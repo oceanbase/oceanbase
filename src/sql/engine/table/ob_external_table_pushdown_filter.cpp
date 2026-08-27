@@ -763,8 +763,10 @@ int ObExternalTablePushdownFilter::find_ext_tbl_expr_index(
     LOG_WARN("invalid argument", K(ret));
   } else if (expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL ||
              expr->type_ == T_PSEUDO_EXTERNAL_FILE_URL ||
+             expr->type_ == T_PSEUDO_METADATA_ROW_METADATA ||
              expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
     is_file_meta_column = (expr->type_ == T_PSEUDO_EXTERNAL_FILE_URL ||
+                           expr->type_ == T_PSEUDO_METADATA_ROW_METADATA ||
                            expr->type_ == T_PSEUDO_PARTITION_LIST_COL);
     int64_t col_expr_index = -1;
     const common::ObIArray<ObExpr*> *file_column_exprs_array =

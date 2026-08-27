@@ -168,6 +168,7 @@ int ObInsertTableInfo::assign(const ObInsertTableInfo &other)
   } else {
     is_replace_ = other.is_replace_;
     all_values_simple_const_ = other.all_values_simple_const_;
+    diagnosis_row_metadata_expr_ = other.diagnosis_row_metadata_expr_;
   }
   return ret;
 }
@@ -191,6 +192,9 @@ int ObInsertTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
     LOG_WARN("failed to copy other.part_generated_col_dep_cols_", K(ret));
   } else if (OB_FAIL(assignments_.prepare_allocate(other.assignments_.count()))) {
     LOG_WARN("failed to do propare allocate array", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.diagnosis_row_metadata_expr_,
+                                      diagnosis_row_metadata_expr_))) {
+    LOG_WARN("failed to copy diagnosis row metadata expr", K(ret));
   } else {
     is_replace_ = other.is_replace_;
     all_values_simple_const_ = other.all_values_simple_const_;
@@ -215,6 +219,9 @@ int ObInsertTableInfo::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     LOG_WARN("failed to iterate column conv exprs", K(ret));
   } else if (OB_FAIL(visitor.visit(part_generated_col_dep_cols_, SCOPE_DICT_FIELDS))) {
     LOG_WARN("failed to iterate part generated col dep cols", K(ret));
+  } else if (NULL != diagnosis_row_metadata_expr_
+             && OB_FAIL(visitor.visit(diagnosis_row_metadata_expr_, SCOPE_DMLINFOS))) {
+    LOG_WARN("failed to visit diagnosis row metadata expr", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < value_desc_cnt; ++i) {
     const ObColumnRefRawExpr *col_expr = values_desc_.at(i);

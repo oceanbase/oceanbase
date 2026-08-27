@@ -44,10 +44,13 @@ public:
     has_escape_(true),
     bounded_start_pos_(0),
     bounded_end_pos_(INT64_MAX),
+    buf_file_offset_(0),
     already_read_size_(0),
     is_scan_full_file_(true),
     chunk_idx_(OB_INVALID_INDEX),
-    need_check_bom_(false) {}
+    need_check_bom_(false),
+    chunk_parsed_row_cnt_(0),
+    chunk_metadata_flushed_(true) {}
 
   virtual void reuse() override
   {
@@ -66,10 +69,13 @@ public:
     has_escape_ = true;
     bounded_start_pos_ = 0;
     bounded_end_pos_ = INT64_MAX;
+    buf_file_offset_ = 0;
     already_read_size_ = 0;
     is_scan_full_file_ = true;
     chunk_idx_ = OB_INVALID_INDEX;
     need_check_bom_ = false;
+    chunk_parsed_row_cnt_ = 0;
+    chunk_metadata_flushed_ = true;
   }
   DECLARE_VIRTUAL_TO_STRING;
   char *buf_;
@@ -89,10 +95,13 @@ public:
   bool has_escape_;
   int64_t bounded_start_pos_;
   int64_t bounded_end_pos_;
+  int64_t buf_file_offset_;
   int64_t already_read_size_;
   bool is_scan_full_file_;
   int64_t chunk_idx_;
   bool need_check_bom_;
+  int64_t chunk_parsed_row_cnt_;
+  bool chunk_metadata_flushed_;
 };
 
 class ObCSVTableRowIterator : public ObExternalTableRowIterator {
@@ -102,6 +111,8 @@ public:
   static const int max_ipv6_port_length = 100;
   ObCSVTableRowIterator() : bit_vector_cache_(NULL),
                             is_bad_file_enabled_(false),
+                            diagnosis_enabled_(false),
+                            need_row_offsets_(false),
                             max_buffer_size_(1024 * 1024 * 1024),
                             enable_prefetch_(false),
                             prefetch_mgr_(),
@@ -120,11 +131,23 @@ public:
   virtual void reset() override;
   virtual bool is_diagnosis_supported() const override { return true; }
   virtual int64_t get_cur_line_num() const override { return state_.batch_first_row_line_num_; }
+  virtual int64_t get_cur_chunk_id() const override
+  {
+    return state_.is_scan_full_file_ ? OB_INVALID_INDEX : state_.chunk_idx_;
+  }
+  virtual int64_t get_cur_file_id() const override { return state_.cur_file_id_; }
   virtual ObString get_cur_file_url() const override { return state_.cur_file_name_; }
 
 private:
   int expand_buf();
   int load_next_buf();
+  int fill_row_metadata_datum(common::ObDatum &datum,
+                              const int64_t line_number,
+                              const int64_t row_start_offset);
+  int64_t get_file_offset(const char *ptr) const
+  {
+    return state_.buf_file_offset_ + ptr - state_.buf_;
+  }
   int open_next_file();
   int get_next_file_scan_info(const int64_t task_idx,
                                common::ObString &file_url,
@@ -138,7 +161,9 @@ private:
   int skip_lines();
   void release_buf();
   void dump_error_log(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
-  int handle_error_msgs(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs);
+  int handle_error_msgs(common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs,
+                        const int64_t scan_start_offset);
+  int flush_chunk_metadata_if_needed(const bool is_incomplete);
   static int handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
                                   ObEvalCtx &eval_ctx,
                                   ObCSVGeneralParser::HandleOneLineParam &param);
@@ -160,6 +185,8 @@ private:
   ObSqlString url_;
   ObExpr *file_name_expr_;
   bool is_bad_file_enabled_;
+  bool diagnosis_enabled_;
+  bool need_row_offsets_;
   bool use_handle_batch_lines_ = false;
   int64_t max_buffer_size_;
   bool enable_prefetch_;

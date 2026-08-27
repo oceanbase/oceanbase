@@ -72,6 +72,7 @@ ob_unittest(test_throttling_utils)
 ob_unittest(test_array_meta)
 ob_unittest(test_roaringbitmap)
 ob_unittest(test_map_meta)
+ob_unittest(test_external_table_utils)
 
 if (OB_BUILD_STANDALONE)
   ob_unittest(test_license_mgr)

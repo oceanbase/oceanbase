@@ -910,6 +910,13 @@ public:
     const common::ObString &table_name,
     const common::ObString &column_name,
     ObRawExpr *&expr);
+  static int build_file_row_metadata_expr(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    ObRawExpr *&expr);
 
   static int build_file_row_expr_for_parquet_orc(
     ObRawExprFactory &expr_factory,

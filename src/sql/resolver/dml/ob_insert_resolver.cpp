@@ -283,9 +283,9 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
   return ret;
 }
 
-int ObInsertResolver::add_column_conv_for_diagnosis(ObInsertStmt *insert_stmt,
-                                                    ObSelectStmt *select_stmt,
-                                                    TableItem* table_item)
+int ObInsertResolver::add_exprs_for_diagnosis(ObInsertStmt *insert_stmt,
+                                              ObSelectStmt *select_stmt,
+                                              TableItem* table_item)
 {
   int ret = OB_SUCCESS;
   bool is_diagnosis = false;
@@ -330,6 +330,52 @@ int ObInsertResolver::add_column_conv_for_diagnosis(ObInsertStmt *insert_stmt,
                                             ObObjMeta::is_binary(tbl_col->get_data_type(),
                                                                 tbl_col->get_collation_type())))) {
             LOG_WARN("failed to build column conv expr", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_2_0
+          && 1 == select_stmt->get_table_size()
+          && OB_NOT_NULL(select_stmt->get_table_item(0))
+          && select_stmt->get_table_item(0)->is_basic_table()
+          && schema::EXTERNAL_TABLE == select_stmt->get_table_item(0)->table_type_) {
+        const TableItem *src_table = select_stmt->get_table_item(0);
+        const ObTableSchema *table_schema = NULL;
+        ObExternalFileFormat::FormatType format_type = ObExternalFileFormat::INVALID_FORMAT;
+        ObRawExpr *meta_expr = NULL;
+        if (OB_ISNULL(schema_checker_) || OB_ISNULL(params_.expr_factory_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("schema checker or expr factory is null", K(ret));
+        } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                            src_table->ref_id_,
+                                                            table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(src_table->ref_id_));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table schema is null", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::get_external_table_type(table_schema, format_type))) {
+          LOG_WARN("get external table type failed", K(ret));
+        } else if (ObExternalFileFormat::CSV_FORMAT == format_type) {
+          const ObString &table_name = src_table->alias_name_.empty()
+              ? src_table->table_name_ : src_table->alias_name_;
+          SelectItem sel_item;
+          sel_item.is_implicit_added_ = true;
+          sel_item.is_real_alias_ = true;
+          sel_item.alias_name_ = ObString::make_string(N_METADATA_ROW_METADATA);
+          if (OB_FAIL(ObResolverUtils::build_file_row_metadata_expr(
+                  *params_.expr_factory_, *session_info_,
+                  src_table->table_id_, table_name,
+                  sel_item.alias_name_, meta_expr))) {
+            LOG_WARN("fail to build external row metadata expr", K(ret));
+          } else if (OB_FAIL(meta_expr->add_relation_id(
+                  select_stmt->get_table_bit_index(src_table->table_id_)))) {
+            LOG_WARN("add relation id failed", K(ret));
+          } else if (OB_FAIL(add_var_to_array_no_dup(
+                  select_stmt->get_pseudo_column_like_exprs(), meta_expr))) {
+            LOG_WARN("failed to add pseudo column like expr", K(ret));
+          } else if (FALSE_IT(sel_item.expr_ = meta_expr)) {
+          } else if (OB_FAIL(select_stmt->add_select_item(sel_item))) {
+            LOG_WARN("failed to add row metadata select item", K(ret));
           }
         }
       }
@@ -741,8 +787,8 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
                                                                         label_se_columns,
                                                                         *select_stmt))) {
       LOG_WARN("add label security columns to select item failed", K(ret));
-    } else if (OB_FAIL(add_column_conv_for_diagnosis(insert_stmt, select_stmt, table_item))) {
-      LOG_WARN("failed to add column conv for diagnosis", K(ret));
+    } else if (OB_FAIL(add_exprs_for_diagnosis(insert_stmt, select_stmt, table_item))) {
+      LOG_WARN("failed to add exprs for diagnosis", K(ret));
     } else if (OB_FAIL(resolve_generate_table_item(select_stmt, view_name, sub_select_table))) {
       LOG_WARN("failed to resolve generate table item", K(ret));
     }
@@ -781,6 +827,28 @@ int ObInsertResolver::resolve_values(const ParseNode &value_node,
       LOG_WARN("failed to resolve all generated table columns", K(ret));
     } else {
       insert_stmt->add_from_item(sub_select_table->table_id_);
+      if (session_info_->is_diagnosis_enabled()) {
+        int64_t meta_idx = -1;
+        for (int64_t i = 0; meta_idx < 0 && i < select_stmt->get_select_item_size(); ++i) {
+          const ObRawExpr *sel_expr = select_stmt->get_select_item(i).expr_;
+          if (OB_NOT_NULL(sel_expr)
+              && T_PSEUDO_METADATA_ROW_METADATA == sel_expr->get_expr_type()) {
+            meta_idx = i;
+          }
+        }
+        if (meta_idx >= 0) {
+          ObColumnRefRawExpr *meta_col = insert_stmt->get_column_expr_by_id(
+                                                        sub_select_table->table_id_,
+                                                        OB_APP_MIN_COLUMN_ID + meta_idx);
+          if (OB_ISNULL(meta_col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("diagnosis metadata column not found on generate table",
+                     K(ret), K(meta_idx), K(sub_select_table->table_id_));
+          } else {
+            insert_stmt->get_insert_table_info().diagnosis_row_metadata_expr_ = meta_col;
+          }
+        }
+      }
     }
   }
   return ret;

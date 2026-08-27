@@ -1122,6 +1122,7 @@
 #define N_PARTITION_LIST_COL                "metadata$partition_list_col"
 #define N_EXTERNAL_FILE_URL                 "metadata$fileurl"
 #define N_EXTERNAL_FILE_ROW                 "external$filerow"
+#define N_METADATA_ROW_METADATA             "metadata$row_metadata"
 #define N_EXTERNAL_FILE_POS                 "external$filepos"
 #define N_EXTERNAL_TABLE_COLUMN_ID          "external$table_col_id"
 

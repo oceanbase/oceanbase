@@ -134,11 +134,11 @@ total_size = 1496, fragment = 0
 
 | class | sizeof(class) |
 | --- | --- |
-| ObInsertStmt | 1936 |
+| ObInsertStmt | 1944 |
 | ObDelUpdStmt | 1456 |
 | is_all_const_values_ | 1 |
-| table_info_ | 480 |
-total_size = 1937, fragment = -1
+| table_info_ | 488 |
+total_size = 1945, fragment = -1
 
 | class | sizeof(class) |
 | --- | --- |
@@ -151,7 +151,7 @@ total_size = 1498, fragment = -2
 
 | class | sizeof(class) |
 | --- | --- |
-| ObMergeStmt | 2112 |
+| ObMergeStmt | 2120 |
 | ObDelUpdStmt | 1456 |
-| table_info_ | 656 |
-total_size = 2112, fragment = 0
+| table_info_ | 664 |
+total_size = 2120, fragment = 0

@@ -5599,7 +5599,7 @@ LOG ERRORS opt_to_file opt_reject_limit opt_bad_file
 ;
 
 opt_to_file:
-INTO STRING_VALUE
+INTO load_export_location_expr
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_ERR_FILE, 1, $2);
 }
@@ -5626,7 +5626,7 @@ REJECT LIMIT INTNUM
 ;
 
 opt_bad_file:
-BADFILE opt_equal_mark STRING_VALUE
+BADFILE opt_equal_mark load_export_location_expr
 {
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA_BAD_FILE, 1, $3);
@@ -15905,7 +15905,7 @@ relation_factor %prec LOWER_PARENS
   }
   $$->value_ = T_EXTERNAL_FILE_LOCATION;
 }
-| READ_ERROR_LOG '(' STRING_VALUE ')'
+| READ_ERROR_LOG '(' load_export_location_expr ')'
 {
   ParseNode *read_log_node = NULL;
   malloc_non_terminal_node(read_log_node, result->malloc_pool_, T_READ_ERROR_LOG, 1, $3);

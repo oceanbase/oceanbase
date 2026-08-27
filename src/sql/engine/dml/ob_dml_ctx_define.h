@@ -647,20 +647,23 @@ public:
       column_infos_(alloc),
       multi_ctdef_(nullptr),
       alloc_(alloc),
-      is_single_value_(false)
+      is_single_value_(false),
+      diagnosis_row_metadata_expr_(nullptr)
   { }
   INHERIT_TO_STRING_KV("base_ctdef", ObDMLBaseCtDef,
                        K_(das_ctdef),
                        K_(related_ctdefs),
                        K_(column_infos),
                        KPC_(multi_ctdef),
-                       K_(is_single_value));
+                       K_(is_single_value),
+                       KPC_(diagnosis_row_metadata_expr));
   ObDASInsCtDef das_ctdef_;
   DASInsCtDefArray related_ctdefs_;
   ColContentFixedArray column_infos_;
   ObMultiInsCtDef *multi_ctdef_;
   common::ObIAllocator &alloc_;
   bool is_single_value_;
+  ObExpr *diagnosis_row_metadata_expr_;
 };
 
 struct ObInsRtDef : ObDMLBaseRtDef

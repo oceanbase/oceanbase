@@ -803,6 +803,7 @@ int ObExternalTableRowIterator::init_exprs(const storage::ObTableScanParam *scan
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected ptr", K(ret));
         } else if (ext_file_column_expr->type_ == T_PSEUDO_EXTERNAL_FILE_URL
+                  || ext_file_column_expr->type_ == T_PSEUDO_METADATA_ROW_METADATA
                   || ext_file_column_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
           OZ (file_meta_column_exprs.push_back(ext_file_column_expr));
         } else if (ext_file_column_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {

@@ -43,6 +43,7 @@ int ObExprRelationAnalyzer::visit_expr(ObRawExpr &expr)
   if (!expr.is_column_ref_expr() &&
       T_PSEUDO_EXTERNAL_FILE_COL != expr.get_expr_type() &&
       T_PSEUDO_EXTERNAL_FILE_URL != expr.get_expr_type() &&
+      T_PSEUDO_METADATA_ROW_METADATA != expr.get_expr_type() &&
       T_PSEUDO_PARTITION_LIST_COL != expr.get_expr_type() &&
       T_ORA_ROWSCN != expr.get_expr_type() &&
       T_PSEUDO_OLD_NEW_COL != expr.get_expr_type()) {

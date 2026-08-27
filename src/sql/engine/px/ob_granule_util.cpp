@@ -395,7 +395,7 @@ int ObGranuleUtil::split_granule_for_parallel_resolve_csv_for_range_prepare(
                                         const ObString &location, const ObString &access_info,
                                         const ObString &format, int64_t parallelism,
                                         int64_t tsc_op_id, int64_t gi_op_id,
-                                        int64_t csv_large_file_size_threshold,
+                                        int64_t min_split_file_size,
                                         const common::ObIArray<ObDASTabletLoc *> &tablets,
                                         const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                                         common::ObIArray<ObDASTabletLoc *> &granule_tablets,
@@ -422,8 +422,8 @@ int ObGranuleUtil::split_granule_for_parallel_resolve_csv_for_range_prepare(
     // runner may created and rerun at regenerate_gi_task in ObPxTaskProcess::execute
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(split_granule_for_parallel_resolve_csv(
-            exec_ctx, args_ctx_allocator, location, access_info, format,
-            parallelism, runner, csv_large_file_size_threshold, tablets,
+            args_ctx_allocator, location, access_info, format,
+            parallelism, runner, min_split_file_size, tablets,
             external_table_files, granule_tablets, granule_tasks, granule_idx))) {
       LOG_WARN("failed to split granule for parallel resolve csv", K(ret));
     }
@@ -433,13 +433,13 @@ int ObGranuleUtil::split_granule_for_parallel_resolve_csv_for_range_prepare(
 }
 
 int ObGranuleUtil::split_granule_for_parallel_resolve_csv(
-                  ObExecContext &exec_ctx,
                   common::ObIAllocator &allocator,
                   const ObString &location,
                   const ObString &access_info,
                   const ObString &format,
-                  int64_t parallelism, GITaskGenRunner *runner,
-                  int64_t csv_large_file_size_threshold,
+                  int64_t parallelism,
+                  GITaskGenRunner *runner,
+                  int64_t min_split_file_size,
                   const common::ObIArray<ObDASTabletLoc *> &tablets,
                   const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
                   common::ObIArray<ObDASTabletLoc *> &granule_tablets,
@@ -456,19 +456,27 @@ int ObGranuleUtil::split_granule_for_parallel_resolve_csv(
     LOG_WARN("runner or ctx is null", K(ret));
   } else if (OB_FAIL(external_file_format.load_from_string(format, allocator))) {
     LOG_WARN("failed to load from string", K(ret), K(format));
+  } else if (OB_UNLIKELY(min_split_file_size <= 0 || parallelism <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid split size args", K(ret), K(min_split_file_size), K(parallelism));
   }
 
   int64_t task_idx = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
     const ObExternalFileInfo &file_info = external_table_files.at(i);
     const int64_t file_size = file_info.file_size_;
-    if (file_size >= csv_large_file_size_threshold) {  // large csv file, split into chunks
-      int64_t chunk_cnt = parallelism;
-      int64_t avg_chunk_size = file_size / chunk_cnt;
+    if (file_size > min_split_file_size
+        && file_size > ObExternalTableUtils::PARALLEL_PARSE_CSV_CHUNK_SIZE) {
+      int64_t chunk_cnt = MIN(parallelism,
+                              (file_size + ObExternalTableUtils::PARALLEL_PARSE_CSV_CHUNK_SIZE - 1)
+                              / ObExternalTableUtils::PARALLEL_PARSE_CSV_CHUNK_SIZE);
+      chunk_cnt = MAX(chunk_cnt, 1L);
+      chunk_cnt = MIN(chunk_cnt, ObExternalTableUtils::MAX_PARALLEL_PARSE_CSV_CHUNK_CNT);
+      const int64_t avg_chunk_size = file_size / chunk_cnt;
       if (external_file_format.csv_format_.field_escaped_char_ == INT64_MAX) {  // no escaped char
-        for (int64_t j = 0; j < chunk_cnt; ++j) {
-          int64_t start_pos = j * avg_chunk_size;
-          int64_t end_pos = (j == chunk_cnt - 1) ? file_size : start_pos + avg_chunk_size;
+        for (int64_t j = 0; OB_SUCC(ret) && j < chunk_cnt; ++j) {
+          const int64_t start_pos = j * avg_chunk_size;
+          const int64_t end_pos = (j == chunk_cnt - 1) ? file_size : start_pos + avg_chunk_size;
           ObExtTableScanTask *scan_task = NULL;
           if (OB_ISNULL(scan_task = OB_NEWx(ObExtTableScanTask, &allocator))) {
             ret = OB_ERR_UNEXPECTED;
@@ -734,10 +742,10 @@ int ObGranuleUtil::split_granule_for_external_table(ObGranulePumpArgs &args,
       }
 
     } else if (parallelism > 1
-             && parallelism * 2 >= external_table_files.count()
              && args.gi_op_id_ != OB_INVALID_ID
              && ObExternalFileFormat::CSV_FORMAT == external_file_format.format_type_
-             && ObExternalTableUtils::is_satisfied_for_parallel_parse_csv(external_table_files, external_file_format.csv_format_)) {
+             && ObExternalTableUtils::is_satisfied_for_parallel_parse_csv(
+                    external_table_files, external_file_format.csv_format_, parallelism)) {
     if (OB_FAIL(split_granule_for_parallel_resolve_csv_for_range_prepare(
                                                        exec_ctx, args_ctx_allocator,
                                                        tsc->tsc_ctdef_.scan_ctdef_.external_file_location_.str_,
@@ -1484,4 +1492,3 @@ int ObGranuleUtil::split_fts_granule_ranges(ObExecContext &exec_ctx,
 
 }
 }
-

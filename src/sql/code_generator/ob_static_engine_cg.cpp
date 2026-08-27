@@ -1080,6 +1080,7 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_CTE_CYCLE_COLUMN != raw_expr->get_expr_type()
             && T_PSEUDO_EXTERNAL_FILE_COL != raw_expr->get_expr_type()
             && T_PSEUDO_EXTERNAL_FILE_URL != raw_expr->get_expr_type()
+            && T_PSEUDO_METADATA_ROW_METADATA != raw_expr->get_expr_type()
             && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
             && T_ORA_ROWSCN != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))

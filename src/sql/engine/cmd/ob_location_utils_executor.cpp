@@ -37,12 +37,8 @@ int ObLocationUtilsExecutor::execute(ObExecContext &ctx, ObLocationUtilsStmt &st
     } else {
       if (OB_LOCATION_UTILS_REMOVE == stmt.get_op_type()) {
         ObSqlString full_path;
-        OZ (full_path.append(loc_schema->get_location_url_str()));
-        if (OB_SUCC(ret) && full_path.length() > 0
-            && *(full_path.ptr() + full_path.length() - 1) != '/') {
-          OZ (full_path.append("/"));
-        }
-        OZ (full_path.append(stmt.get_sub_path()));
+        OZ (ObExternalTableUtils::concat_external_file_location(
+            loc_schema->get_location_url_str(), stmt.get_sub_path(), full_path));
         ObExprRegexpSessionVariables regexp_vars;
         OZ (ObExternalTableUtils::remove_external_file_list(tenant_id,
                                                             full_path.string(),

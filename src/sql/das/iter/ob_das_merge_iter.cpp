@@ -562,7 +562,9 @@ int ObDASMergeIter::get_cur_diagnosis_info(ObDiagnosisManager *diagnosis_manager
                        KP(das_scan_iter->get_output_result_iter()));
             } else {
               diagnosis_manager->set_cur_file_url(diagnosis_provider->get_cur_file_url());
+              diagnosis_manager->set_cur_file_id(diagnosis_provider->get_cur_file_id());
               diagnosis_manager->set_cur_line_number(diagnosis_provider->get_cur_line_num());
+              diagnosis_manager->set_cur_chunk_id(diagnosis_provider->get_cur_chunk_id());
             }
           }
         }

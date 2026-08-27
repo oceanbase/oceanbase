@@ -421,7 +421,22 @@ protected:
   int resolve_mocked_table(const ParseNode *table_node,
                            TableItem *&table_item,
                            const ParseNode *alias_node = NULL);
-  int resolve_error_log_table(const ParseNode *table_node, TableItem *&table_item);
+  int resolve_error_log_table(const ParseNode *table_node,
+                              TableItem *&table_item,
+                              const ParseNode *alias_node = NULL);
+  int resolve_error_log_location(const ParseNode *table_node,
+                                 common::ObSqlString &location_clause,
+                                 common::ObString &file_pattern,
+                                 bool &has_file_prefix);
+  int append_error_log_sql_literal(const common::ObString &value,
+                                   common::ObSqlString &sql);
+  int build_error_log_expand_sql(const common::ObSqlString &location_clause,
+                                 const common::ObString &file_pattern,
+                                 const bool has_file_prefix,
+                                 common::ObSqlString &expand_sql);
+  int resolve_error_log_generated_table(const common::ObSqlString &expand_sql,
+                                        const ParseNode *alias_node,
+                                        TableItem *&table_item);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
   int resolve_time_travel_query(const ParseNode *version_node, ObTimeTravelInfo &time_travel_info);

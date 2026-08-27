@@ -180,7 +180,16 @@ int ObLogInsert::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
                                                                 all_exprs,
                                                                 true))) {
     LOG_WARN("failed to add table columns to ctx", K(ret));
-  } else if (get_insert_up() && enable_insertup_column_store_opt && data_version >= DATA_VERSION_4_5_0_0) {
+  }
+  if (OB_SUCC(ret) && get_stmt()->is_insert_stmt()) {
+    ObRawExpr *meta_expr = static_cast<const ObInsertStmt*>(get_stmt())
+                               ->get_insert_table_info().diagnosis_row_metadata_expr_;
+    if (NULL != meta_expr && OB_FAIL(all_exprs.push_back(meta_expr))) {
+      LOG_WARN("failed to push diagnosis row metadata expr", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && get_insert_up() && enable_insertup_column_store_opt
+      && data_version >= DATA_VERSION_4_5_0_0) {
     if (OB_FAIL(generate_in_filter_for_insertup_opt())) {
       LOG_WARN("failed to generate in filter expr for insertup opt", K(ret));;
     } else if (OB_NOT_NULL(in_filter_expr_) && OB_FAIL(all_exprs.push_back(in_filter_expr_))) {

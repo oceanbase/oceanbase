@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SQL
 #include "share/external_table/ob_external_table_utils.h"
 
+#include <cmath>
 #include "lib/random/ob_random.h"
 #include "sql/ob_sql_utils.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
@@ -2780,6 +2781,51 @@ int ObExternalTableUtils::resolve_location_for_load_and_select_into(ObSchemaGett
   return ret;
 }
 
+int ObExternalTableUtils::resolve_location_url_with_access_info(ObSchemaGetterGuard &schema_guard,
+                                                                const ObSQLSessionInfo &session_info,
+                                                                ObIAllocator &allocator,
+                                                                const ParseNode *location_name_node,
+                                                                const ParseNode *sub_path_node,
+                                                                ObString &url,
+                                                                bool check_oss_prefix)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(location_name_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location name node is null", K(ret));
+  } else {
+    ObString location_name(location_name_node->str_len_, location_name_node->str_value_);
+    ObString sub_path;
+    ObString access_info;
+    if (OB_NOT_NULL(sub_path_node)) {
+      sub_path.assign_ptr(sub_path_node->str_value_,
+                          static_cast<int32_t>(sub_path_node->str_len_));
+    }
+    if (!sub_path.empty() && is_sub_path_contain_parent_dir(sub_path)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sub path contains '..' which is not allowed");
+      LOG_WARN("sub path contains parent directory reference, suspected path traversal",
+               K(ret), K(sub_path));
+    } else if (OB_FAIL(resolve_location_for_load_and_select_into(
+                            schema_guard, session_info, allocator,
+                            location_name, sub_path, url, &access_info, check_oss_prefix))) {
+      LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+    } else if (!access_info.empty()) {
+      ObSqlString final_path;
+      if (OB_FAIL(final_path.append(url))) {
+        LOG_WARN("failed to append full path", K(ret));
+      } else if (OB_FAIL(final_path.append("?"))) {
+        LOG_WARN("failed to append access info separator", K(ret));
+      } else if (OB_FAIL(final_path.append(access_info))) {
+        LOG_WARN("failed to append access info", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator, final_path.string(), url, true))) {
+        LOG_WARN("failed to write full path with access info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::normalize_shared_file_location(ObIAllocator &allocator,
                                                          ObString &location,
                                                          bool &is_shared)
@@ -3580,12 +3626,47 @@ int ObExternalTableUtils::generate_file_sample_indices(const int64_t total_files
   return ret;
 }
 
+bool ObExternalTableUtils::is_external_file_size_uniform(
+                             const common::ObIArray<share::ObExternalFileInfo> &external_table_files)
+{
+  // CV catches overall dispersion; max/avg catches a diluted single outlier.
+  static constexpr double FILE_SIZE_CV_THRESHOLD = 0.5;
+  static constexpr double FILE_SIZE_MAX_AVG_RATIO = 2.0;
+  bool is_uniform = true;
+  const int64_t file_cnt = external_table_files.count();
+  if (file_cnt > 1) {
+    int64_t total_size = 0;
+    int64_t max_size = 0;
+    for (int64_t i = 0; i < file_cnt; ++i) {
+      const int64_t file_size = external_table_files.at(i).file_size_;
+      total_size += file_size;
+      max_size = MAX(max_size, file_size);
+    }
+    if (total_size > 0) {
+      const double mean = static_cast<double>(total_size) / static_cast<double>(file_cnt);
+      double var_sum = 0.0;
+      for (int64_t i = 0; i < file_cnt; ++i) {
+        const double diff = static_cast<double>(external_table_files.at(i).file_size_) - mean;
+        var_sum += diff * diff;
+      }
+      const double stddev = std::sqrt(var_sum / static_cast<double>(file_cnt));
+      const double cv = stddev / mean;
+      if (cv > FILE_SIZE_CV_THRESHOLD || static_cast<double>(max_size) > mean * FILE_SIZE_MAX_AVG_RATIO) {
+        is_uniform = false;
+      }
+    }
+  }
+  return is_uniform;
+}
+
 bool ObExternalTableUtils::is_satisfied_for_parallel_parse_csv(
                              const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
-                             const ObCSVGeneralFormat &csv_format)
+                             const ObCSVGeneralFormat &csv_format,
+                             const int64_t parallelism)
 {
   bool basic_condition = ObCSVGeneralFormat::ObCSVCompression::NONE == csv_format.compression_algorithm_
-                         && csv_format.parallel_parse_on_single_file_;
+                         && csv_format.parallel_parse_on_single_file_
+                         && parallelism > 1;
   bool further_condition = false;
   if (basic_condition) {
     ObCollationType collation_type = ObCharset::get_default_collation(csv_format.cs_type_);
@@ -3613,15 +3694,29 @@ bool ObExternalTableUtils::is_satisfied_for_parallel_parse_csv(
       }
     }
   }
-  bool large_file_condition = false;
-  if (basic_condition && further_condition) {
-    for (int64_t i = 0; !large_file_condition && i < external_table_files.count(); ++i) {
-      if (external_table_files.at(i).file_size_ >= csv_format.parallel_parse_file_size_threshold_) {
-        large_file_condition = true;
+  bool need_parallel_parse = false;
+  if (basic_condition && further_condition && external_table_files.count() > 0) {
+    const int64_t file_cnt = external_table_files.count();
+    bool has_large_file = false;
+    bool has_file_to_chunk = false;
+    for (int64_t i = 0; i < file_cnt && (!has_large_file || !has_file_to_chunk); ++i) {
+      const int64_t file_size = external_table_files.at(i).file_size_;
+      if (file_size >= csv_format.parallel_parse_file_size_threshold_) {
+        has_large_file = true;
+      }
+      if (file_size >= PARALLEL_PARSE_CSV_CHUNK_SIZE) {
+        has_file_to_chunk = true;
       }
     }
+    const bool is_uniform = is_external_file_size_uniform(external_table_files);
+    const bool few_files = parallelism * 2 >= file_cnt;
+    if (is_uniform) {
+      need_parallel_parse = few_files && has_large_file && has_file_to_chunk;
+    } else {
+      need_parallel_parse = has_large_file && has_file_to_chunk;
+    }
   }
-  return basic_condition && further_condition && large_file_condition;
+  return need_parallel_parse;
 }
 
 bool ObCachedExternalFileInfoKey::operator==(const common::ObIKVCacheKey &other) const
@@ -3840,6 +3935,78 @@ int ObExternalTableUtils::adjust_end_pos_skip_escape(sql::ObExternalStreamFileRe
   }
 
   return ret;
+}
+
+int ObExternalTableUtils::encode_csv_row_metadata(const bool is_parallel,
+                                                  const int64_t file_id,
+                                                  const int64_t chunk_id,
+                                                  const int64_t line_number,
+                                                  const int64_t row_start_offset,
+                                                  int128_t &encoded)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t line_number_mask = is_parallel
+      ? ROW_METADATA_PARALLEL_LINE_NUMBER_MASK
+      : ROW_METADATA_NON_PARALLEL_LINE_NUMBER_MASK;
+  const int64_t line_number_shift = is_parallel
+      ? ROW_METADATA_PARALLEL_LINE_NUMBER_SHIFT
+      : ROW_METADATA_NON_PARALLEL_LINE_NUMBER_SHIFT;
+  if (OB_UNLIKELY(file_id < 0 || file_id > static_cast<int64_t>(ROW_METADATA_FILE_ID_MASK))) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("file_id out of row metadata encode range", K(ret), K(file_id));
+  } else if (OB_UNLIKELY(line_number < 0
+                         || line_number > static_cast<int64_t>(line_number_mask))) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("line_number out of row metadata encode range", K(ret), K(line_number));
+  } else if (is_parallel
+             && OB_UNLIKELY(chunk_id < 0 || chunk_id > static_cast<int64_t>(ROW_METADATA_CHUNK_ID_MASK))) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("chunk_id out of row metadata encode range", K(ret), K(chunk_id));
+  } else if (OB_UNLIKELY(row_start_offset < 0
+                         || row_start_offset > static_cast<int64_t>(ROW_METADATA_OFFSET_MASK))) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("row_start_offset out of row metadata encode range", K(ret), K(row_start_offset));
+  } else {
+    uint64_t low_word = (static_cast<uint64_t>(file_id) & ROW_METADATA_FILE_ID_MASK)
+                            << ROW_METADATA_FILE_ID_SHIFT;
+    low_word |= (static_cast<uint64_t>(line_number) & line_number_mask) << line_number_shift;
+    if (is_parallel) {
+      low_word |= ROW_METADATA_PARALLEL_FLAG;
+      low_word |= (static_cast<uint64_t>(chunk_id) & ROW_METADATA_CHUNK_ID_MASK)
+                      << ROW_METADATA_CHUNK_ID_SHIFT;
+    }
+    encoded = int128_t(static_cast<uint64_t>(row_start_offset)) << ROW_METADATA_OFFSET_SHIFT;
+    encoded += int128_t(low_word);
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::decode_csv_row_metadata(const int128_t &encoded,
+                                                  bool &is_parallel,
+                                                  int64_t &file_id,
+                                                  int64_t &chunk_id,
+                                                  int64_t &line_number,
+                                                  int64_t &row_start_offset)
+{
+  const uint64_t low_word = static_cast<uint64_t>(static_cast<int64_t>(encoded));
+  const uint64_t high_word = static_cast<uint64_t>(static_cast<int64_t>(
+      encoded >> ROW_METADATA_OFFSET_SHIFT));
+  is_parallel = (low_word & ROW_METADATA_PARALLEL_FLAG) != 0;
+  file_id = static_cast<int64_t>(
+      (low_word >> ROW_METADATA_FILE_ID_SHIFT) & ROW_METADATA_FILE_ID_MASK);
+  chunk_id = is_parallel
+      ? static_cast<int64_t>(
+          (low_word >> ROW_METADATA_CHUNK_ID_SHIFT) & ROW_METADATA_CHUNK_ID_MASK)
+      : OB_INVALID_INDEX;
+  const uint64_t line_number_mask = is_parallel
+      ? ROW_METADATA_PARALLEL_LINE_NUMBER_MASK
+      : ROW_METADATA_NON_PARALLEL_LINE_NUMBER_MASK;
+  const int64_t line_number_shift = is_parallel
+      ? ROW_METADATA_PARALLEL_LINE_NUMBER_SHIFT
+      : ROW_METADATA_NON_PARALLEL_LINE_NUMBER_SHIFT;
+  line_number = static_cast<int64_t>((low_word >> line_number_shift) & line_number_mask);
+  row_start_offset = static_cast<int64_t>(high_word & ROW_METADATA_OFFSET_MASK);
+  return OB_SUCCESS;
 }
 
 }  // namespace share

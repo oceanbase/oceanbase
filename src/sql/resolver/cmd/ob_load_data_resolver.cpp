@@ -405,21 +405,54 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("load data on error is not supported", K(ret));
       } else if (T_LOG_ERROR == child_node->type_ && OB_LIKELY(child_node->num_child_ == 3)) {
 
-        if (OB_NOT_NULL(child_node->children_[0])) {
-          const ParseNode *log_file_node = child_node->children_[0];
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("logging errors into files is not supported", K(ret));
-          } else if (OB_UNLIKELY(log_file_node->type_ != T_LOAD_DATA_ERR_FILE)
-              || OB_ISNULL(log_file_node->children_[0])
-              || OB_UNLIKELY(T_VARCHAR != log_file_node->children_[0]->type_
-                            && T_CHAR != log_file_node->children_[0]->type_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid log file node", K(ret), K(log_file_node));
-          } else {
-            ObString file_name(log_file_node->children_[0]->str_len_,
-                              log_file_node->children_[0]->str_value_);
-            load_stmt->get_load_arguments().diagnosis_log_file_ = file_name;
+        // resolve diagnosis log file (children_[0]) and bad file (children_[2])
+        for (int64_t i = 0; OB_SUCC(ret) && i < 2; ++i) {
+          const ParseNode *file_node = (0 == i) ? child_node->children_[0]
+                                               : child_node->children_[2];
+          if (OB_NOT_NULL(file_node)) {
+            const ObItemType expect_type = (0 == i) ? T_LOAD_DATA_ERR_FILE : T_LOAD_DATA_BAD_FILE;
+            ObString &out_path = (0 == i) ? load_stmt->get_load_arguments().diagnosis_log_file_
+                                          : load_stmt->get_load_arguments().diagnosis_bad_file_;
+            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("logging errors into files is not supported", K(ret));
+            } else if (OB_UNLIKELY(file_node->type_ != expect_type)
+                || OB_ISNULL(file_node->children_[0])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid diagnosis file node", K(ret), K(file_node), K(expect_type));
+            } else {
+              const ParseNode *location_node = file_node->children_[0];
+              if (T_LOCATION_OBJECT == location_node->type_) {
+                if (2 != location_node->num_child_ || OB_ISNULL(location_node->children_[0])) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid location object node", K(ret), K(location_node));
+                } else {
+                  share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+                  if (OB_ISNULL(schema_guard)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("schema guard is null", K(ret));
+                  } else if (OB_FAIL(ObExternalTableUtils::resolve_location_url_with_access_info(
+                                        *schema_guard, *session_info_, *allocator_,
+                                        location_node->children_[0], location_node->children_[1],
+                                        out_path))) {
+                    LOG_WARN("failed to resolve location object", K(ret));
+                  }
+                }
+              } else if (T_EXTERNAL_FILE_LOCATION == location_node->type_) {
+                if (1 != location_node->num_child_ || OB_ISNULL(location_node->children_[0])
+                    || OB_UNLIKELY(T_VARCHAR != location_node->children_[0]->type_
+                                  && T_CHAR != location_node->children_[0]->type_)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid external file location node", K(ret), K(location_node));
+                } else {
+                  out_path.assign_ptr(location_node->children_[0]->str_value_,
+                      static_cast<int32_t>(location_node->children_[0]->str_len_));
+                }
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected diagnosis file location type", K(ret), K(location_node->type_));
+              }
+            }
           }
         }
 
@@ -446,26 +479,6 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
           } else {
             load_stmt->get_load_arguments().is_diagnosis_enabled_ = true;
             load_stmt->get_load_arguments().diagnosis_limit_num_ = 0;
-          }
-        }
-
-        if (OB_SUCC(ret)) {
-          if (OB_NOT_NULL(child_node->children_[2])) {
-            const ParseNode *bad_file_node = child_node->children_[2];
-            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_0_0) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("logging errors into files is not supported", K(ret));
-            } else if (OB_UNLIKELY(bad_file_node->type_ != T_LOAD_DATA_BAD_FILE)
-                || OB_ISNULL(bad_file_node->children_[0])
-                || OB_UNLIKELY(T_VARCHAR != bad_file_node->children_[0]->type_
-                              && T_CHAR != bad_file_node->children_[0]->type_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid bad file node", K(ret), K(bad_file_node));
-            } else {
-              ObString bad_file_name(bad_file_node->children_[0]->str_len_,
-                                    bad_file_node->children_[0]->str_value_);
-              load_stmt->get_load_arguments().diagnosis_bad_file_ = bad_file_name;
-            }
           }
         }
 

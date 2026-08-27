@@ -6075,49 +6075,21 @@ int ObSelectResolver::resolve_into_file_name_node(const ParseNode *node, ObObj &
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid node", K(ret));
     } else {
-      const ParseNode *location_node = node->children_[0];
+      const ParseNode *location_name_node = node->children_[0];
       const ParseNode *sub_path_node = node->children_[1];
-      ObString location_name(location_node->str_len_, location_node->str_value_);
-      ObString sub_path;
-      if (OB_NOT_NULL(sub_path_node)) {
-        sub_path = ObString(sub_path_node->str_len_, sub_path_node->str_value_);
-        if (ObExternalTableUtils::is_sub_path_contain_parent_dir(sub_path)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sub path contains '..' which is not allowed");
-          LOG_WARN("sub path contains parent directory reference, suspected path traversal",
-                   K(ret), K(sub_path));
-        }
-      }
-
       share::schema::ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
       ObString full_path_str;
-      ObString access_info;
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(schema_guard)) {
+      if (OB_ISNULL(schema_guard)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("schema guard is null", K(ret));
-      } else if (OB_FAIL(ObExternalTableUtils::resolve_location_for_load_and_select_into(
+      } else if (OB_FAIL(ObExternalTableUtils::resolve_location_url_with_access_info(
                                 *schema_guard, *session_info_, *allocator_,
-                                location_name, sub_path, full_path_str, &access_info))) {
-        LOG_WARN("failed to resolve location object", K(ret), K(location_name), K(sub_path));
+                                location_name_node, sub_path_node, full_path_str))) {
+        LOG_WARN("failed to resolve location object", K(ret));
       } else {
-        if (!access_info.empty()) {
-          ObSqlString final_path;
-          if (OB_FAIL(final_path.append(full_path_str))) {
-            LOG_WARN("failed to append full path", K(ret), K(full_path_str));
-          } else if (OB_FAIL(final_path.append("?"))) {
-            LOG_WARN("failed to append access info separator", K(ret));
-          } else if (OB_FAIL(final_path.append(access_info))) {
-            LOG_WARN("failed to append access info", K(ret), K(access_info));
-          } else if (OB_FAIL(ob_write_string(*allocator_, final_path.string(), full_path_str, true))) {
-            LOG_WARN("failed to write full path with access info", K(ret), K(final_path));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          obj.set_varchar(full_path_str);
-          obj.set_collation_type(session_info_->get_local_collation_connection());
-          params_.global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
-        }
+        obj.set_varchar(full_path_str);
+        obj.set_collation_type(session_info_->get_local_collation_connection());
+        params_.global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
       }
     }
   } else if (T_EXTERNAL_FILE_LOCATION == node->type_) {

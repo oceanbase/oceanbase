@@ -476,9 +476,11 @@ int ObCSVGeneralParser::handle_irregular_line(int field_idx,
                           int line_no,
                           int output_line_no,
                           bool is_batch_mode,
+                          int64_t line_offset_in_scan,
                           common::ObIArray<LineErrRec> &errors) {
   int ret = OB_SUCCESS;
   LineErrRec rec;
+  rec.line_offset_in_scan = line_offset_in_scan;
   rec.err_code = field_idx > format_.file_column_nums_ ?
         OB_WARN_TOO_MANY_RECORDS : OB_WARN_TOO_FEW_RECORDS;
   rec.line_no = line_no;
@@ -496,6 +498,15 @@ int ObCSVGeneralParser::handle_irregular_line(int field_idx,
       new_field = FieldValue();
       new_field.is_null_ = 1;
     }
+  }
+  return ret;
+}
+
+int ObCSVGeneralParser::save_batch_line_offset_in_scan(const int64_t line_offset_in_scan)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(batch_line_offsets_in_scan_.push_back(line_offset_in_scan))) {
+    LOG_WARN("failed to save batch line offset in scan", K(ret), K(line_offset_in_scan));
   }
   return ret;
 }

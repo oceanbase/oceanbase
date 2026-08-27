@@ -30,10 +30,35 @@ bool ObCSVTableRowIterator::has_utf8_bom(const char *buf, const int64_t len)
 
 ObCSVTableRowIterator::~ObCSVTableRowIterator()
 {
+  int tmp_ret = flush_chunk_metadata_if_needed(true);
+  if (OB_SUCCESS != tmp_ret) {
+    LOG_INFO("failed to flush incomplete chunk metadata", K(tmp_ret), K(state_));
+  }
   release_buf();
   if (nullptr != bit_vector_cache_) {
     malloc_alloc_.free(bit_vector_cache_);
   }
+}
+
+int ObCSVTableRowIterator::fill_row_metadata_datum(ObDatum &datum,
+                                                   const int64_t line_number,
+                                                   const int64_t row_start_offset)
+{
+  int ret = OB_SUCCESS;
+  int128_t encoded = 0;
+  const bool is_parallel = !state_.is_scan_full_file_;
+  if (OB_FAIL(ObExternalTableUtils::encode_csv_row_metadata(is_parallel,
+                                                            state_.cur_file_id_,
+                                                            is_parallel ? state_.chunk_idx_ : 0,
+                                                            line_number,
+                                                            row_start_offset,
+                                                            encoded))) {
+    LOG_WARN("failed to encode row metadata", K(ret), K(is_parallel),
+             K(state_.cur_file_id_), K(state_.chunk_idx_), K(line_number), K(row_start_offset));
+  } else {
+    datum.set_decimal_int(encoded);
+  }
+  return ret;
 }
 
 void ObCSVTableRowIterator::release_buf()
@@ -78,6 +103,9 @@ int ObCSVTableRowIterator::expand_buf()
     LOG_WARN("fail to alloc memory", K(ret));
   } else {
     int64_t remain_len =  (nullptr != old_buf) ? (state_.data_end_ - state_.pos_) : 0;
+    if (nullptr != old_buf) {
+      state_.buf_file_offset_ += state_.pos_ - old_buf;
+    }
     if (remain_len > 0) {
       MEMCPY(new_buf, state_.pos_, remain_len);
     }
@@ -204,12 +232,15 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     if (OB_ISNULL(session = eval_ctx.exec_ctx_.get_my_session())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid session", K(ret));
-    } else if (session->is_diagnosis_enabled()
-               && !session->get_diagnosis_info().bad_file_.empty()) {
-      is_bad_file_enabled_ = true;
+    } else {
+      diagnosis_enabled_ = session->is_diagnosis_enabled();
+      if (diagnosis_enabled_ && !session->get_diagnosis_info().bad_file_.empty()) {
+        is_bad_file_enabled_ = true;
+      }
     }
   }
 
+  need_row_offsets_ = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < scan_param_->ext_file_column_exprs_->count(); i++) {
     ObExpr *meta_expr = scan_param_->ext_file_column_exprs_->at(i);
     if (OB_ISNULL(meta_expr)) {
@@ -217,8 +248,12 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       LOG_WARN("get null meta expr");
     } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
       need_partition_info_ = true;
-      break;
+    } else if (meta_expr->type_ == T_PSEUDO_METADATA_ROW_METADATA) {
+      need_row_offsets_ = true;
     }
+  }
+  if (OB_SUCC(ret)) {
+    parser_.set_need_line_offsets_in_scan(need_row_offsets_);
   }
 
   return ret;
@@ -246,7 +281,7 @@ static int extract_file_scan_task_info(const TaskType *task,
   if (OB_ISNULL(csv_parallel_info)) {
     bounded_start_pos = 0;
     bounded_end_pos = INT64_MAX;
-    chunk_idx = 0;
+    chunk_idx = OB_INVALID_INDEX;
   } else if (csv_parallel_info->csv_task_type_ != CsvTaskType::PARSE_DATA) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parallel parse csv type", K(ret), K(csv_parallel_info->csv_task_type_));
@@ -306,7 +341,6 @@ int ObCSVTableRowIterator::open_next_file()
     file_reader_.close();
   }
   do {
-    // todo@lekou: 考虑头部跳行的情况
     ObString file_url;
     int64_t file_id = 0;
     int64_t part_id = 0;
@@ -316,6 +350,8 @@ int ObCSVTableRowIterator::open_next_file()
     task_idx = state_.file_idx_++;
     if (state_.file_idx_ == 1) {
       // Skip to handle first file
+    } else if (OB_FAIL(flush_chunk_metadata_if_needed(false))) {
+      LOG_WARN("failed to flush chunk metadata", K(ret));
     } else {
       LOG_TRACE("print lastest csv file state infos", K(ret), K(state_));
       state_.duration_ = 0;
@@ -324,11 +360,13 @@ int ObCSVTableRowIterator::open_next_file()
     file_size = 0;
     url_.reuse();
     state_.already_read_size_ = 0;
-    ret = get_next_file_scan_info(task_idx, file_url, file_id,
-                                  part_id, start_line, end_line,
-                                  state_.bounded_start_pos_, state_.bounded_end_pos_,
-                                  state_.chunk_idx_);
+
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(get_next_file_scan_info(task_idx, file_url, file_id,
+                                               part_id, start_line, end_line,
+                                               state_.bounded_start_pos_, state_.bounded_end_pos_,
+                                               state_.chunk_idx_))) {
+      LOG_WARN("failed to get next file scan info", K(ret));
     } else if (part_id == 0) {
       //empty file do not belong to any partitions
     } else if (!need_partition_info_) {
@@ -347,6 +385,7 @@ int ObCSVTableRowIterator::open_next_file()
       }
     }
     if (OB_SUCC(ret)) {
+      state_.buf_file_offset_ = state_.bounded_start_pos_;
       if (start_line == ObCSVTableRowIterator::MIN_EXTERNAL_TABLE_LINE_NUMBER && end_line == INT64_MAX) {
         state_.cur_file_name_ = file_url;
         state_.cur_file_id_ = file_id;
@@ -408,8 +447,8 @@ int ObCSVTableRowIterator::open_next_file()
   } while (OB_SUCC(ret) && file_size <= 0);
 
   if (OB_SUCC(ret)) {
+    state_.is_scan_full_file_ = state_.bounded_end_pos_ == INT64_MAX;
     if (enable_prefetch_) {
-      state_.is_scan_full_file_ = state_.bounded_end_pos_ == INT64_MAX;
       CK (OB_NOT_NULL(file_url_info));
       ObExternalFileCacheOptions cache_options;  // no cache for csv prefetch
       OZ (prefetch_mgr_.open(*file_url_info, cache_options, state_.bounded_start_pos_, state_.bounded_end_pos_));
@@ -418,12 +457,12 @@ int ObCSVTableRowIterator::open_next_file()
       state_.is_scan_full_file_ = true;
       if (OB_SUCC(ret) && state_.bounded_end_pos_ != INT64_MAX) {
         file_reader_.advance(state_.bounded_start_pos_);
-        state_.is_scan_full_file_ = false;
       }
     }
     if (OB_SUCC(ret)) {
       state_.need_check_bom_ = enable_check_bom_
                                && (state_.is_scan_full_file_ || state_.chunk_idx_ == 0);
+      state_.chunk_metadata_flushed_ = false;
     }
   }
   LOG_DEBUG("open external file", K(ret), K(url_), K(location));
@@ -449,6 +488,7 @@ int ObCSVTableRowIterator::load_next_buf()
     } else {
       //move unfinish tail in old buf to the front
       int64_t remain_bytes = state_.data_end_ - state_.pos_;
+      state_.buf_file_offset_ += state_.pos_ - state_.buf_;
       if (remain_bytes > 0) {
         if (state_.pos_ > state_.buf_) {
           MEMMOVE(state_.buf_, state_.pos_, remain_bytes);
@@ -555,24 +595,60 @@ void ObCSVTableRowIterator::dump_error_log(ObIArray<ObCSVGeneralParser::LineErrR
 }
 
 int ObCSVTableRowIterator::handle_error_msgs(
-                                      common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs)
+                                      common::ObIArray<ObCSVGeneralParser::LineErrRec> &error_msgs,
+                                      const int64_t scan_start_offset)
 {
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = scan_param_->op_->get_eval_ctx().exec_ctx_;
-  ObSQLSessionInfo* session_info = exec_ctx.get_my_session();
   ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
 
-  if (session_info->is_diagnosis_enabled()) {
+  if (diagnosis_enabled_) {
     for (int i = 0; OB_SUCC(ret) && i < error_msgs.count(); ++i) {
-      int64_t line_num = error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_;
+      int64_t line_num = state_.cur_line_number_ + error_msgs.at(i).line_no;
+      int64_t row_start_offset = scan_start_offset + error_msgs.at(i).line_offset_in_scan;
       if (OB_FAIL(diagnosis_manager.missing_col_idxs_.push_back(line_num))) {
         LOG_WARN("failed to push back missing column number into array", K(ret), K(line_num));
+      } else if (OB_FAIL(diagnosis_manager.missing_col_offsets_.push_back(row_start_offset))) {
+        LOG_WARN("failed to push back missing column offset into array", K(ret), K(row_start_offset));
       }
     }
   } else {
     dump_error_log(error_msgs);
   }
 
+  return ret;
+}
+
+int ObCSVTableRowIterator::flush_chunk_metadata_if_needed(const bool is_incomplete)
+{
+  int ret = OB_SUCCESS;
+  if (!state_.chunk_metadata_flushed_ && diagnosis_enabled_) {
+    ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+    ObExecContext &exec_ctx = eval_ctx.exec_ctx_;
+    const ObSQLSessionInfo *session = exec_ctx.get_my_session();
+    if (OB_ISNULL(session)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid session", K(ret));
+    } else if (!session->get_diagnosis_info().log_file_.empty()) {
+      const int64_t chunk_id = state_.is_scan_full_file_ ? OB_INVALID_INDEX : state_.chunk_idx_;
+      const int64_t row_cnt = is_incomplete ? -1 : state_.chunk_parsed_row_cnt_;
+      ObDiagnosisManager &diagnosis_manager = exec_ctx.get_diagnosis_manager();
+      if (OB_FAIL(diagnosis_manager.write_chunk_metadata(state_.cur_file_name_,
+                                                         state_.cur_file_id_,
+                                                         chunk_id,
+                                                         row_cnt,
+                                                         exec_ctx.get_allocator(),
+                                                         session->get_diagnosis_info().log_file_,
+                                                         exec_ctx.get_px_sqc_id(),
+                                                         exec_ctx.get_px_task_id()))) {
+        LOG_WARN("failed to write chunk metadata", K(ret), K(state_.cur_file_name_),
+                 K(state_.cur_file_id_), K(chunk_id), K(row_cnt), K(is_incomplete),
+                 K(state_.is_scan_full_file_));
+      }
+    }
+  }
+  state_.chunk_metadata_flushed_ = true;
+  state_.chunk_parsed_row_cnt_ = 0;
   return ret;
 }
 
@@ -643,6 +719,7 @@ int ObCSVTableRowIterator::get_next_row()
     bool is_bad_file_enabled_;
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
+      const int64_t row_start_offset = csv_iter_->get_file_offset(param.line_data_.ptr());
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
         ObDatum &datum = file_column_exprs_.at(i)->locate_datum_for_write(eval_ctx_);
         if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
@@ -650,6 +727,14 @@ int ObCSVTableRowIterator::get_next_row()
             datum.set_string(csv_iter_->state_.cur_file_url_.ptr(), csv_iter_->state_.cur_file_url_.length());
           } else {
             datum.set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
+          }
+        } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_METADATA_ROW_METADATA) {
+          OZ(csv_iter_->fill_row_metadata_datum(datum,
+                                                csv_iter_->state_.cur_line_number_ + returned_row_cnt_,
+                                                row_start_offset));
+          if (OB_SUCC(ret) && csv_iter_->diagnosis_enabled_) {
+            ObDiagnosisManager &diagnosis_manager = eval_ctx_.exec_ctx_.get_diagnosis_manager();
+            OZ(diagnosis_manager.cur_row_offsets_.push_back(row_start_offset));
           }
         } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_PARTITION_LIST_COL) {
           int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
@@ -682,6 +767,7 @@ int ObCSVTableRowIterator::get_next_row()
       }
 
       returned_row_cnt_++;
+      csv_iter_->state_.chunk_parsed_row_cnt_++;
       return ret;
     }
     int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
@@ -703,6 +789,7 @@ int ObCSVTableRowIterator::get_next_row()
       if (OB_UNLIKELY(0 == nrows)) {
         // if line_count_limit = 0, get next file.
       } else {
+        const int64_t scan_start_offset = get_file_offset(state_.pos_);
         ret = parser_.scan<decltype(handle_one_line), true>(state_.pos_, state_.data_end_, nrows,
                                                   state_.escape_buf_, state_.escape_buf_end_,
                                                   handle_one_line, error_msgs,
@@ -710,7 +797,7 @@ int ObCSVTableRowIterator::get_next_row()
         if (OB_FAIL(ret)) {
           LOG_WARN("fail to scan csv", K(ret));
         } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
-          if (OB_FAIL(handle_error_msgs(error_msgs))) {
+          if (OB_FAIL(handle_error_msgs(error_msgs, scan_start_offset))) {
             LOG_WARN("fail to handle error messages", K(ret), K(error_msgs));
           }
         }
@@ -790,6 +877,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 
     int operator()(ObCSVGeneralParser::HandleOneLineParam param) {
       int ret = OB_SUCCESS;
+      const int64_t row_start_offset = csv_iter_->get_file_offset(param.line_data_.ptr());
       bool row_filtered = csv_iter_->is_row_sample_
           && csv_iter_->check_row_sample_filtered(csv_iter_->global_row_counter_++);
       if (!row_filtered) {
@@ -800,6 +888,14 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_url_.ptr(), csv_iter_->state_.cur_file_url_.length());
             } else {
               datums[returned_row_cnt_].set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
+            }
+          } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_METADATA_ROW_METADATA) {
+            OZ(csv_iter_->fill_row_metadata_datum(datums[returned_row_cnt_],
+                                                  csv_iter_->state_.cur_line_number_ + returned_row_cnt_,
+                                                  row_start_offset));
+            if (OB_SUCC(ret) && csv_iter_->diagnosis_enabled_) {
+              ObDiagnosisManager &diagnosis_manager = eval_ctx_.exec_ctx_.get_diagnosis_manager();
+              OZ(diagnosis_manager.cur_row_offsets_.push_back(row_start_offset));
             }
           } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_PARTITION_LIST_COL) {
             int64_t loc_idx = file_column_exprs_.at(i)->extra_ - 1;
@@ -833,12 +929,20 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           }
         }
         returned_row_cnt_++;
+        csv_iter_->state_.chunk_parsed_row_cnt_++;
       }
       return ret;
     }
 
     int operator()(ObCSVGeneralParser::HandleBatchLinesParam param) {
       int ret = OB_SUCCESS;
+      const int64_t scan_start_offset = csv_iter_->get_file_offset(param.scan_begin_);
+      if ((csv_iter_->need_row_offsets_ || csv_iter_->diagnosis_enabled_)
+          && OB_UNLIKELY(param.line_offsets_in_scan_.count() != param.batch_size_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("batch line offset count does not match batch size", K(ret),
+                 K(param.line_offsets_in_scan_.count()), K(param.batch_size_));
+      }
       for (int i = 0; OB_SUCC(ret) && i < file_column_exprs_.count() && param.batch_size_ > 0; ++i) {
         if (file_column_exprs_.at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_URL) {
           ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
@@ -849,6 +953,18 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           } else {
             for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
               datums[j].set_string(csv_iter_->state_.cur_file_name_.ptr(), csv_iter_->state_.cur_file_name_.length());
+            }
+          }
+        } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_METADATA_ROW_METADATA) {
+          ObDatum *datums = file_column_exprs_.at(i)->locate_batch_datums(eval_ctx_);
+          ObDiagnosisManager &diagnosis_manager = eval_ctx_.exec_ctx_.get_diagnosis_manager();
+          for (int j = 0; OB_SUCC(ret) && j < param.batch_size_; ++j) {
+            const int64_t row_start_offset = scan_start_offset + param.line_offsets_in_scan_.at(j);
+            OZ(csv_iter_->fill_row_metadata_datum(datums[j],
+                                                  csv_iter_->state_.cur_line_number_ + returned_row_cnt_ + j,
+                                                  row_start_offset));
+            if (OB_SUCC(ret) && csv_iter_->diagnosis_enabled_) {
+              OZ(diagnosis_manager.cur_row_offsets_.push_back(row_start_offset));
             }
           }
         } else if (file_column_exprs_.at(i)->type_ == T_PSEUDO_PARTITION_LIST_COL) {
@@ -897,6 +1013,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         }
       }
       returned_row_cnt_+= param.batch_size_;
+      csv_iter_->state_.chunk_parsed_row_cnt_ += param.batch_size_;
       return ret;
     }
   };
@@ -917,6 +1034,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         if (OB_UNLIKELY(0 == nrows)) {
           // if line_count_limit = 0, get next file.
         } else {
+          const int64_t scan_start_offset = get_file_offset(state_.pos_);
           if (state_.has_escape_) {
             // only use handle_batch_lines when enable_rich_format is true, and is_bad_file_enabled_ = false
             // to do : is_bad_file_enabled_ is not surport in handle_batch_lines way
@@ -943,7 +1061,7 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           if (OB_FAIL(ret)) {
             LOG_WARN("fail to scan csv", K(ret));
           } else if (OB_UNLIKELY(error_msgs.count() > 0)) {
-            if (OB_FAIL(handle_error_msgs(error_msgs))) {
+            if (OB_FAIL(handle_error_msgs(error_msgs, scan_start_offset))) {
               LOG_WARN("fail to handle error messages", K(ret), K(error_msgs));
             }
           }
@@ -1022,6 +1140,10 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 
 void ObCSVTableRowIterator::reset()
 {
+  int tmp_ret = flush_chunk_metadata_if_needed(true);
+  if (OB_SUCCESS != tmp_ret) {
+    LOG_INFO("failed to flush incomplete chunk metadata", K(tmp_ret), K(state_));
+  }
   // reset state_ to initial values for rescan
   state_.reuse();
   global_row_counter_ = 0;
