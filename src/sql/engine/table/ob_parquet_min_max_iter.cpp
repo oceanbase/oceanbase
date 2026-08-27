@@ -292,19 +292,7 @@ int ObParquetMinMaxIter::next_file()
            || (OB_SUCC(ret) && 0 == file_size));
 
   if (OB_SUCC(ret)) {
-    int64_t part_id = scan_task->part_id_;
-    if (need_partition_info_ && part_id != 0 && state_.part_id_ != part_id) {
-      state_.part_id_ = part_id;
-      bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-      if (OB_LIKELY(is_external_object)) {
-        OZ(calc_file_part_list_value_by_array(part_id,
-                                              allocator_,
-                                              scan_param_->partition_infos_,
-                                              state_.part_list_val_));
-      } else {
-        OZ(calc_file_partition_list_value(part_id, allocator_, state_.part_list_val_));
-      }
-    }
+    OZ(prepare_file_partition_info(scan_task, allocator_, state_));
 
     state_.cur_file_id_ = scan_task->file_id_;
     state_.cur_row_group_idx_ = scan_task->first_lineno_;
@@ -385,6 +373,7 @@ int ObParquetMinMaxIter::collect_partition_aggregate()
     agg_res_datums_.at(i).set_null();
   }
   bool first_file = true;
+  const ObFileScanTask *current_task = nullptr;
   int64_t cur_part_id = 0;
   int64_t file_cnt = 0;
   while (OB_SUCC(ret)) {
@@ -393,8 +382,12 @@ int ObParquetMinMaxIter::collect_partition_aggregate()
       if (next_idx >= scan_param_->scan_tasks_.count()) {
         break;
       }
-      ObFileScanTask *next_task = static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(next_idx));
-      if (OB_NOT_NULL(next_task) && next_task->part_id_ != cur_part_id) {
+      ObFileScanTask *next_task
+          = static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(next_idx));
+      if (OB_ISNULL(current_task) || OB_ISNULL(next_task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null scan task", K(ret), K(next_idx), KP(current_task), KP(next_task));
+      } else if (current_task->part_id_ != next_task->part_id_) {
         LOG_TRACE("partition boundary hit, stop collecting",
                   K(cur_part_id),
                   K(next_task->part_id_),
@@ -403,17 +396,32 @@ int ObParquetMinMaxIter::collect_partition_aggregate()
         break;
       }
     }
-    if (OB_FAIL(next_file())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(next_file())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to open next file", K(ret));
       }
     } else {
       if (first_file) {
-        cur_part_id = state_.part_id_;
-        first_file = false;
+        // next_file() 对每个尝试的任务都会推进 file_idx_，并可能跳过空文件或不存在的文件；
+        // 成功返回后，file_idx_ - 1 才是本次实际打开的任务。
+        const int64_t current_idx = state_.file_idx_ - 1;
+        if (OB_UNLIKELY(current_idx < 0 || current_idx >= scan_param_->scan_tasks_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected current file index", K(ret), K(current_idx));
+        } else if (OB_ISNULL(current_task = static_cast<ObFileScanTask *>(
+                                 scan_param_->scan_tasks_.at(current_idx)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null current scan task", K(ret), K(current_idx));
+        } else {
+          cur_part_id = state_.part_id_;
+          first_file = false;
+        }
       }
-      ++file_cnt;
-      if (OB_FAIL(collect_file_meta_statistics())) {
+      if (OB_SUCC(ret)) {
+        ++file_cnt;
+      }
+      if (OB_SUCC(ret) && OB_FAIL(collect_file_meta_statistics())) {
         LOG_WARN("failed to collect file meta statistics", K(ret), K(state_.cur_file_url_));
       }
     }
@@ -463,25 +471,49 @@ int ObParquetMinMaxIter::collect_file_meta_statistics()
   } else {
     ObSEArray<int, 4> parquet_col_idxs;
     ObSEArray<ObColumnMeta, 4> column_metas;
+    ObSEArray<const ObObj *, 4> partition_values;
     for (int64_t agg_idx = 0; OB_SUCC(ret) && agg_idx < agg_exprs->count(); ++agg_idx) {
       ObExpr *agg_expr = agg_exprs->at(agg_idx);
       int parquet_col_idx = -1;
       ObColumnMeta column_meta;
+      const ObObj *partition_value = nullptr;
       if (OB_ISNULL(agg_expr) || agg_expr->arg_cnt_ < 1 || OB_ISNULL(agg_expr->args_[0])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid aggregate expr", K(ret), K(agg_idx), KP(agg_expr));
-      } else if (OB_FAIL(resolve_agg_parquet_column(agg_expr, agg_idx, parquet_col_idx, column_meta))) {
+      } else if (OB_FAIL(resolve_agg_parquet_column(agg_expr,
+                                                    agg_idx,
+                                                    parquet_col_idx,
+                                                    column_meta,
+                                                    partition_value))) {
         LOG_WARN("failed to resolve agg parquet column", K(ret), K(agg_idx));
       } else if (OB_FAIL(parquet_col_idxs.push_back(parquet_col_idx))) {
         LOG_WARN("failed to push back parquet col idx", K(ret));
       } else if (OB_FAIL(column_metas.push_back(column_meta))) {
         LOG_WARN("failed to push back column meta", K(ret));
+      } else if (OB_FAIL(partition_values.push_back(partition_value))) {
+        LOG_WARN("failed to push back partition value", K(ret));
       }
     }
 
+    for (int64_t agg_idx = 0;
+         OB_SUCC(ret) && file_meta_->num_rows() > 0 && agg_idx < agg_exprs->count();
+         ++agg_idx) {
+      const ObObj *partition_value = partition_values.at(agg_idx);
+      if (OB_NOT_NULL(partition_value) && !partition_value->is_null()) {
+        blocksstable::ObStorageDatum partition_datum;
+        if (OB_FAIL(partition_datum.from_obj_enhance(*partition_value))) {
+          LOG_WARN("failed to convert iceberg partition value", K(ret), K(agg_idx));
+        } else if (OB_FAIL(merge_agg_datum(agg_exprs->at(agg_idx),
+                                           agg_idx,
+                                           partition_datum,
+                                           partition_datum))) {
+          LOG_WARN("failed to merge iceberg partition value", K(ret), K(agg_idx));
+        }
+      }
+    }
     for (int64_t rg_idx = 0; OB_SUCC(ret) && rg_idx < file_meta_->num_row_groups(); ++rg_idx) {
       for (int64_t agg_idx = 0; OB_SUCC(ret) && agg_idx < agg_exprs->count(); ++agg_idx) {
-        if (parquet_col_idxs.at(agg_idx) >= 0) {
+        if (OB_ISNULL(partition_values.at(agg_idx)) && parquet_col_idxs.at(agg_idx) >= 0) {
           if (OB_FAIL(merge_rowgroup_statistics(agg_exprs->at(agg_idx),
                                                 agg_idx,
                                                 rg_idx,
@@ -500,13 +532,15 @@ int ObParquetMinMaxIter::collect_file_meta_statistics()
 int ObParquetMinMaxIter::resolve_agg_parquet_column(ObExpr *agg_expr,
                                                     const int64_t agg_idx,
                                                     int &parquet_col_idx,
-                                                    ObColumnMeta &column_meta)
+                                                    ObColumnMeta &column_meta,
+                                                    const ObObj *&partition_value)
 {
   int ret = OB_SUCCESS;
   ObExpr *col_expr = agg_expr->args_[0];
   int64_t column_expr_index = -1;
   int64_t file_col_expr_index = -1;
   parquet_col_idx = -1;
+  partition_value = nullptr;
 
   if (OB_ISNULL(col_expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -545,6 +579,13 @@ int ObParquetMinMaxIter::resolve_agg_parquet_column(ObExpr *agg_expr,
              K(ret),
              K(file_col_expr_index),
              K(file_column_exprs_.count()));
+  } else if (OB_FAIL(get_iceberg_identity_partition_value(
+                 file_column_exprs_.at(file_col_expr_index)->extra_,
+                 state_,
+                 partition_value))) {
+    LOG_WARN("failed to get iceberg identity partition value", K(ret), K(agg_idx));
+  } else if (OB_NOT_NULL(partition_value)) {
+    // 当前文件以 Manifest 中的 Identity 分区值为准，不再读取 footer 统计。
   } else if (OB_FAIL(compute_column_id_by_index_type(file_col_expr_index, parquet_col_idx))) {
     LOG_WARN("failed to compute column id by index type", K(ret), K(agg_idx));
   } else if (parquet_col_idx >= 0) {
@@ -680,7 +721,7 @@ int ObParquetMinMaxIter::calc_file_meta_column(const int64_t read_count, ObEvalC
       }
     } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
       OZ(meta_expr->init_vector_for_write(eval_ctx, VEC_UNIFORM_CONST, read_count));
-      OZ(fill_file_partition_expr(meta_expr, state_.part_list_val_));
+      OZ(fill_file_partition_expr(meta_expr, state_));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr", KPC(meta_expr));

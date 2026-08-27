@@ -13,59 +13,83 @@ namespace oceanbase
 {
 namespace sql
 {
-ObLakeTablePartKey::ObLakeTablePartKey()
-: spec_id_(-1),
-  part_values_()
+ObLakeTablePartKey::ObLakeTablePartKey() : manifest_entry_(nullptr), hash_value_(0)
 {}
 
 int ObLakeTablePartKey::assign(const ObLakeTablePartKey &other)
 {
   int ret = OB_SUCCESS;
   if (this != &other) {
-    spec_id_ = other.spec_id_;
-    ret = part_values_.assign(other.part_values_);
+    manifest_entry_ = other.manifest_entry_;
+    hash_value_ = other.hash_value_;
   }
   return ret;
 }
 
 void ObLakeTablePartKey::reset()
 {
-  spec_id_ = -1;
-  part_values_.reset();
+  manifest_entry_ = nullptr;
+  hash_value_ = 0;
 }
 
-int ObLakeTablePartKey::from_manifest_entry(iceberg::ManifestEntry *manifest_entry)
+int ObLakeTablePartKey::from_manifest_entry(const iceberg::ManifestEntry *manifest_entry)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(manifest_entry)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null data file");
-  } else if (OB_FAIL(part_values_.assign(manifest_entry->data_file.partition))) {
-    LOG_WARN("failed to assign part values");
   } else {
-    spec_id_ = manifest_entry->partition_spec_id;
+    manifest_entry_ = manifest_entry;
+    hash_value_ = do_hash(manifest_entry->partition_spec_id, 0);
+    const ObIArray<ObObj> &part_values = manifest_entry->data_file.partition;
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_values.count(); ++i) {
+      uint64_t next_hash_value = 0;
+      if (OB_FAIL(part_values.at(i).hash(next_hash_value, hash_value_))) {
+        LOG_WARN("failed to hash partition value", K(ret), K(i));
+      } else {
+        hash_value_ = next_hash_value;
+      }
+    }
   }
   return ret;
 }
 
 int ObLakeTablePartKey::hash(uint64_t &hash_val) const
 {
+  hash_val = hash_value_;
+  return OB_SUCCESS;
+}
+
+int ObLakeTablePartKey::get_partition_value(const int64_t idx, const ObObj *&value) const
+{
   int ret = OB_SUCCESS;
-  hash_val = do_hash(spec_id_, hash_val);
-  for (int64_t i = 0; i < part_values_.count(); ++i) {
-    hash_val = part_values_.at(i).hash(hash_val);
+  value = nullptr;
+  if (OB_ISNULL(manifest_entry_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("manifest entry is null", K(ret));
+  } else if (OB_UNLIKELY(idx < 0 || idx >= manifest_entry_->data_file.partition.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("partition value index is out of range",
+             K(ret),
+             K(idx),
+             K(manifest_entry_->data_file.partition.count()));
+  } else {
+    value = &manifest_entry_->data_file.partition.at(idx);
   }
   return ret;
 }
 
 bool ObLakeTablePartKey::operator== (const ObLakeTablePartKey &other) const
 {
-  bool is_equal = false;
-  if (spec_id_ == other.spec_id_ &&
-      part_values_.count() == other.part_values_.count()) {
+  bool is_equal = manifest_entry_ == other.manifest_entry_;
+  if (!is_equal && OB_NOT_NULL(manifest_entry_) && OB_NOT_NULL(other.manifest_entry_)
+      && manifest_entry_->partition_spec_id == other.manifest_entry_->partition_spec_id
+      && manifest_entry_->data_file.partition.count()
+             == other.manifest_entry_->data_file.partition.count()) {
     is_equal = true;
-    for (int64_t i = 0; is_equal && i < part_values_.count(); ++i) {
-      if (!part_values_.at(i).is_equal(other.part_values_.at(i))) {
+    for (int64_t i = 0; is_equal && i < manifest_entry_->data_file.partition.count(); ++i) {
+      if (!manifest_entry_->data_file.partition.at(i).is_equal(
+              other.manifest_entry_->data_file.partition.at(i))) {
         is_equal = false;
       }
     }
@@ -142,6 +166,9 @@ int ObOptIcebergFile::assign(const ObIOptLakeTableFile &other)
       modification_time_ = iceberg_file.modification_time_;
       file_format_ = iceberg_file.file_format_;
       record_count_ = iceberg_file.record_count_;
+      part_id_ = iceberg_file.part_id_;
+      partition_spec_id_ = iceberg_file.partition_spec_id_;
+      file_desc_idx_ = iceberg_file.file_desc_idx_;
       if (OB_FAIL(delete_files_.assign(iceberg_file.delete_files_))) {
         LOG_WARN("failed to assign delete files");
       }
@@ -159,6 +186,9 @@ void ObOptIcebergFile::reset()
   file_format_ = iceberg::DataFileFormat::INVALID;
   delete_files_.reset();
   record_count_ = 0;
+  part_id_ = OB_INVALID_INDEX_INT64;
+  partition_spec_id_ = -1;
+  file_desc_idx_ = OB_INVALID_INDEX_INT64;
 }
 
 int ObOptHiveFile::assign(const ObIOptLakeTableFile &other)
@@ -236,7 +266,9 @@ int ObFileScanTask::create_lake_table_file_by_type(ObIAllocator &allocator,
 OB_SERIALIZE_MEMBER((ObIcebergScanTask, ObFileScanTask),
                     file_format_,
                     delete_files_,
-                    record_count_);
+                    record_count_,
+                    part_id_,
+                    partition_spec_id_);
 
 int ObIcebergScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
                                                     const ObIOptLakeTableFile &opt_table_file)
@@ -256,6 +288,8 @@ int ObIcebergScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
       modification_time_ = opt_iceberg_file.modification_time_;
       file_format_ = opt_iceberg_file.file_format_;
       record_count_ = opt_iceberg_file.record_count_;
+      part_id_ = opt_iceberg_file.part_id_;
+      partition_spec_id_ = opt_iceberg_file.partition_spec_id_;
       for (int64_t i = 0; OB_SUCC(ret) && i < opt_iceberg_file.delete_files_.count(); i++) {
         const ObLakeDeleteFile *other_delete_file = opt_iceberg_file.delete_files_.at(i);
         if (OB_ISNULL(other_delete_file)) {

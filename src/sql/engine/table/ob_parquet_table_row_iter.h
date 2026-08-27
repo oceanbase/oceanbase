@@ -405,6 +405,7 @@ private:
                int64_t &row_count,
                int64_t cur_row_group_row_cnt,
                ObColumnDefaultValue &col_def,
+               const common::ObObj *partition_value,
                int64_t &read_progress,
                const bool cross_page,
                ParquetStatInfo &stat,
@@ -428,6 +429,7 @@ private:
       buffers_(buffers),
       cur_row_group_row_cnt_(cur_row_group_row_cnt),
       col_def_(col_def),
+      partition_value_(partition_value),
       read_progress_(read_progress),
       cross_page_(cross_page),
       stat_(stat),
@@ -471,6 +473,7 @@ private:
     int load_string_col();
     int load_string_col_dict();
     int load_default();
+    int load_partition_value();
     int load_fixed_string_col();
     int load_decimal_any_col();
     //[TODO EXTERNAL TABLE] float16
@@ -545,6 +548,7 @@ private:
     DataLoaderBuffers &buffers_;
     int64_t cur_row_group_row_cnt_;
     ObColumnDefaultValue &col_def_;
+    const common::ObObj *partition_value_;
     int64_t &read_progress_;
     bool cross_page_;
     ParquetStatInfo &stat_;
@@ -744,6 +748,8 @@ private:
   common::ObArrayWrap<common::ObArrayWrap<std::shared_ptr<parquet::internal::RecordReader>>> eager_coll_record_readers_;
 
   common::ObArrayWrap<DataLoader::LOAD_FUNC> load_funcs_;
+  // Indexed by file column; nullptr means the current spec has no identity partition value.
+  common::ObArrayWrap<const common::ObObj *> identity_partition_values_;
   ObSqlString url_;
   ObBitVector *bit_vector_cache_;
   common::ObArrayWrap<int16_t> def_levels_buf_;

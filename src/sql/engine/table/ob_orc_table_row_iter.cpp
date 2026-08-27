@@ -200,7 +200,14 @@ int ObOrcTableRowIterator::prepare_read_orc_file(ObEvalCtx &eval_ctx)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
     int64_t orc_col_id = -1;
-    OZ (compute_column_id_by_index_type(i, orc_col_id));
+    const ObObj *partition_value = nullptr;
+    if (OB_FAIL(get_iceberg_identity_partition_value(file_column_exprs_.at(i)->extra_,
+                                                     state_,
+                                                     partition_value))) {
+      LOG_WARN("failed to get iceberg identity partition value", K(ret), K(i));
+    } else if (OB_ISNULL(partition_value)) {
+      OZ(compute_column_id_by_index_type(i, orc_col_id));
+    }
     orc::ColumnVectorBatch *batch = nullptr;
     const orc::Type *type = nullptr;
     ObColumnDefaultValue *default_value = &colid_default_value_arr_.at(i);
@@ -231,7 +238,13 @@ int ObOrcTableRowIterator::prepare_read_orc_file(ObEvalCtx &eval_ctx)
       bool need_init_project_loader = true;
       if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
         OrcRowReader &eager_reader = sector_reader_->get_eager_reader();
-        if (OB_FAIL(init_data_loader(i, orc_col_id, type, eager_reader, default_value, eval_ctx))) {
+        if (OB_FAIL(init_data_loader(i,
+                                     orc_col_id,
+                                     type,
+                                     eager_reader,
+                                     default_value,
+                                     partition_value,
+                                     eval_ctx))) {
           LOG_WARN("fail to init data loader", K(ret), K(i));
         } else if (!is_dup_project_.at(i)) {
           // the column only in eager reader, no need to init project loader
@@ -239,8 +252,13 @@ int ObOrcTableRowIterator::prepare_read_orc_file(ObEvalCtx &eval_ctx)
         }
       }
       if (OB_SUCC(ret) && need_init_project_loader) {
-        if (OB_FAIL(
-              init_data_loader(i, orc_col_id, type, project_reader_, default_value, eval_ctx))) {
+        if (OB_FAIL(init_data_loader(i,
+                                     orc_col_id,
+                                     type,
+                                     project_reader_,
+                                     default_value,
+                                     partition_value,
+                                     eval_ctx))) {
           LOG_WARN("fail to init data loader", K(ret), K(i));
         }
       }
@@ -316,12 +334,17 @@ static void print_type_mismatch_error(const int ret, ObDatumMeta &meta,
 int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const orc::Type *type,
                                             OrcRowReader &reader,
                                             ObColumnDefaultValue *default_value,
+                                            const ObObj *partition_value,
                                             ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;
   orc::ColumnVectorBatch *batch = nullptr;
   ObExpr* column_expr = get_column_expr_by_id(i);
-  if (type == nullptr) {
+  if (OB_NOT_NULL(partition_value)) {
+    if (OB_FAIL(reader.data_loaders_.at(i).init_partition_value(column_expr, partition_value))) {
+      LOG_WARN("fail to init partition value loader", K(ret), K(i));
+    }
+  } else if (type == nullptr) {
     // Init data loader for a column absent from the current file.
     if (OB_FAIL(reader.data_loaders_.at(i)
                     .init(column_expr, default_value, eval_ctx, is_hive_lake_table()))) {
@@ -402,6 +425,9 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
 
+    // Iceberg data columns may be supplied by per-file identity partition values even when no
+    // pseudo partition column is projected.
+    need_partition_info_ = use_iceberg_manifest_partition_value();
     for (int64_t i = 0; OB_SUCC(ret) && i < file_meta_column_exprs_.count(); i++) {
       ObExpr *meta_expr = file_meta_column_exprs_.at(i);
       if (OB_ISNULL(meta_expr)) {
@@ -977,19 +1003,7 @@ int ObOrcTableRowIterator::next_file()
 
     if (OB_SUCC(ret)) {
       // read orc file footer
-      int64_t part_id = scan_task->part_id_;
-      if (need_partition_info_ && part_id != 0 && state_.part_id_ != part_id) {
-        state_.part_id_ = part_id;
-        bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-        if (OB_LIKELY(is_external_object)) {
-          OZ(calc_file_part_list_value_by_array(part_id,
-                                                allocator_,
-                                                scan_param_->partition_infos_,
-                                                state_.part_list_val_));
-        } else {
-          OZ(calc_file_partition_list_value(part_id, allocator_, state_.part_list_val_));
-        }
-      }
+      OZ(prepare_file_partition_info(scan_task, allocator_, state_));
 
       state_.cur_file_id_ = scan_task->file_id_;
       if (OB_SUCC(ret)) {
@@ -1136,6 +1150,28 @@ int ObOrcTableRowIterator::find_column_type_id_by_name(const orc::Type *type,
   return ret;
 }
 
+// Identity partition values come from the manifest and are constant within a file. Skip the
+// physical ORC stream when the current partition spec provides such a value.
+int ObOrcTableRowIterator::check_need_read_orc_column(const int64_t column_idx,
+                                                      bool &need_read_orc_column)
+{
+  int ret = OB_SUCCESS;
+  const ObObj *partition_value = nullptr;
+  need_read_orc_column = true;
+  if (!is_iceberg_lake_table()) {
+  } else if (OB_UNLIKELY(column_idx < 0 || column_idx >= file_column_exprs_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid file column index", K(ret), K(column_idx), K(file_column_exprs_.count()));
+  } else if (OB_FAIL(get_iceberg_identity_partition_value(file_column_exprs_.at(column_idx)->extra_,
+                                                          state_,
+                                                          partition_value))) {
+    LOG_WARN("failed to get iceberg identity partition value", K(ret), K(column_idx));
+  } else {
+    need_read_orc_column = OB_ISNULL(partition_value);
+  }
+  return ret;
+}
+
 int ObOrcTableRowIterator::create_row_readers()
 {
   int ret = OB_SUCCESS;
@@ -1160,84 +1196,31 @@ int ObOrcTableRowIterator::create_row_readers()
         orc::RowReaderOptions rowReaderOptions;
         all_row_reader_ = reader_->createRowReader(rowReaderOptions);
         for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-          ObDataAccessPathExtraInfo *data_access_info
-              = static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
+          bool need_read_orc_column = true;
+          if (OB_FAIL(check_need_read_orc_column(i, need_read_orc_column))) {
+            LOG_WARN("failed to check whether orc column should be read", K(ret), K(i));
+          } else if (need_read_orc_column) {
+            ObDataAccessPathExtraInfo *data_access_info
+                = static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
 
-          uint64_t orc_col_id = 0;
-          ObArray<ObString> col_names;
-          if (data_access_info->data_access_path_.empty()) {
-            ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
-            LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
-                           data_access_info->data_access_path_.length(),
-                           data_access_info->data_access_path_.ptr());
-          } else {
-            OZ(find_column_type_id_by_name(&all_row_reader_->getSelectedType(),
-                                           data_access_info->data_access_path_,
-                                           col_names,
-                                           orc_col_id));
-          }
-          if (OB_FAIL(ret)) {
-          } else if (orc_col_id == 0) {
-            // column absent from this file (schema evolution)
-          } else {
-            bool is_project_column = true;
-            if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-              eager_column_ids.push_back(orc_col_id);
-              if (!is_dup_project_.at(i)) {
-                is_project_column = false;
-              }
+            uint64_t orc_col_id = 0;
+            ObArray<ObString> col_names;
+            if (data_access_info->data_access_path_.empty()) {
+              ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
+              LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
+                             data_access_info->data_access_path_.length(),
+                             data_access_info->data_access_path_.ptr());
+            } else {
+              OZ(find_column_type_id_by_name(&all_row_reader_->getSelectedType(),
+                                             data_access_info->data_access_path_,
+                                             col_names,
+                                             orc_col_id));
             }
-            if (is_project_column) {
-              project_column_ids.push_front(orc_col_id);
-            }
-          }
-        }
-        break;
-      }
-      case sql::ColumnIndexType::POSITION: {
-        for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-          bool is_project_column = true;
-          int64_t pos_orc_col_id = 0;
-          if (OB_FAIL(normalize_position_to_include_index(file_column_exprs_.at(i)->extra_,
-                                                          reader_->getType(),
-                                                          pos_orc_col_id))) {
-            LOG_WARN("invalid orc column position", K(ret), K(file_column_exprs_.at(i)->extra_));
-          } else if (pos_orc_col_id < 0) {
-            // column absent from this file (schema evolution)
-          } else {
-            const uint64_t type_id = static_cast<uint64_t>(pos_orc_col_id);
-            if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
-              eager_column_ids.push_back(type_id);
-              if (!is_dup_project_.at(i)) {
-                is_project_column = false;
-              }
-            }
-            if (is_project_column) {
-              project_column_ids.push_back(type_id);
-            }
-          }
-        }
-        break;
-      }
-      case sql::ColumnIndexType::ID: {
-        for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
-          int64_t column_id = file_column_exprs_.at(i)->extra_;
-          CK (column_id != -1);
-
-          if (OB_SUCC(ret)) {
-            const orc::Type *type = nullptr;
-            int tmp_ret = iceberg_id_to_type_.get_refactored(column_id, type);
-            if (OB_HASH_NOT_EXIST == tmp_ret) {
-              type = nullptr;
-              ret = OB_SUCCESS;
-            } else if (OB_SUCCESS != tmp_ret) {
-              ret = tmp_ret;
-              LOG_WARN("fail to get id to type", K(ret), K(column_id));
-            }
-
-            if (OB_SUCC(ret) && type != nullptr) {
+            if (OB_FAIL(ret)) {
+            } else if (orc_col_id == 0) {
+              // column absent from this file (schema evolution)
+            } else {
               bool is_project_column = true;
-              int64_t orc_col_id = type->getColumnId();
               if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
                 eager_column_ids.push_back(orc_col_id);
                 if (!is_dup_project_.at(i)) {
@@ -1245,7 +1228,75 @@ int ObOrcTableRowIterator::create_row_readers()
                 }
               }
               if (is_project_column) {
-                project_column_ids.push_back(orc_col_id);
+                project_column_ids.push_front(orc_col_id);
+              }
+            }
+          }
+        }
+        break;
+      }
+      case sql::ColumnIndexType::POSITION: {
+        for (uint64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+          bool need_read_orc_column = true;
+          if (OB_FAIL(check_need_read_orc_column(i, need_read_orc_column))) {
+            LOG_WARN("failed to check whether orc column should be read", K(ret), K(i));
+          } else if (need_read_orc_column) {
+            bool is_project_column = true;
+            int64_t pos_orc_col_id = 0;
+            if (OB_FAIL(normalize_position_to_include_index(file_column_exprs_.at(i)->extra_,
+                                                            reader_->getType(),
+                                                            pos_orc_col_id))) {
+              LOG_WARN("invalid orc column position", K(ret), K(file_column_exprs_.at(i)->extra_));
+            } else if (pos_orc_col_id < 0) {
+              // column absent from this file (schema evolution)
+            } else {
+              const uint64_t type_id = static_cast<uint64_t>(pos_orc_col_id);
+              if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
+                eager_column_ids.push_back(type_id);
+                if (!is_dup_project_.at(i)) {
+                  is_project_column = false;
+                }
+              }
+              if (is_project_column) {
+                project_column_ids.push_back(type_id);
+              }
+            }
+          }
+        }
+        break;
+      }
+      case sql::ColumnIndexType::ID: {
+        for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); i++) {
+          bool need_read_orc_column = true;
+          if (OB_FAIL(check_need_read_orc_column(i, need_read_orc_column))) {
+            LOG_WARN("failed to check whether orc column should be read", K(ret), K(i));
+          } else if (need_read_orc_column) {
+            int64_t column_id = file_column_exprs_.at(i)->extra_;
+            CK(column_id != -1);
+
+            if (OB_SUCC(ret)) {
+              const orc::Type *type = nullptr;
+              int tmp_ret = iceberg_id_to_type_.get_refactored(column_id, type);
+              if (OB_HASH_NOT_EXIST == tmp_ret) {
+                type = nullptr;
+                ret = OB_SUCCESS;
+              } else if (OB_SUCCESS != tmp_ret) {
+                ret = tmp_ret;
+                LOG_WARN("fail to get id to type", K(ret), K(column_id));
+              }
+
+              if (OB_SUCC(ret) && type != nullptr) {
+                bool is_project_column = true;
+                int64_t orc_col_id = type->getColumnId();
+                if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
+                  eager_column_ids.push_back(orc_col_id);
+                  if (!is_dup_project_.at(i)) {
+                    is_project_column = false;
+                  }
+                }
+                if (is_project_column) {
+                  project_column_ids.push_back(orc_col_id);
+                }
               }
             }
           }
@@ -2504,6 +2555,22 @@ int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
   return ret;
 }
 
+int ObOrcTableRowIterator::DataLoader::init_partition_value(ObExpr *file_col_expr,
+                                                            const ObObj *partition_value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(file_col_expr) || OB_ISNULL(partition_value)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(file_col_expr), KP(partition_value));
+  } else {
+    reset();
+    file_col_expr_ = file_col_expr;
+    partition_value_ = partition_value;
+    load_func_ = &DataLoader::load_partition_value;
+  }
+  return ret;
+}
+
 bool ObOrcTableRowIterator::DataLoader::is_orc_read_utc(const orc::Type *type)
 {
   // TIMESTAMP_INSTANT 是utc时间
@@ -2855,7 +2922,7 @@ int ObOrcTableRowIterator::fill_file_meta_column(ObEvalCtx &eval_ctx, ObExpr *me
     }
   } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
     OZ (meta_expr->init_vector_for_write(eval_ctx, VEC_UNIFORM_CONST, read_count));
-    OZ (fill_file_partition_expr(meta_expr, state_.part_list_val_));
+    OZ(fill_file_partition_expr(meta_expr, state_));
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr", KPC(meta_expr));
@@ -3048,6 +3115,20 @@ int ObOrcTableRowIterator::DataLoader::load_default(ObEvalCtx &eval_ctx)
   ObIVector *vec = file_col_expr_->get_vector(eval_ctx);
   CK (OB_NOT_NULL(col_def_));
   OZ (ObExternalTableRowIterator::set_default_batch(file_col_expr_->datum_meta_, *col_def_, vec));
+  return ret;
+}
+
+int ObOrcTableRowIterator::DataLoader::load_partition_value(ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(partition_value_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null iceberg partition value", K(ret));
+  } else if (OB_FAIL(ObExternalTableRowIterator::load_partition_value_to_expr(file_col_expr_,
+                                                                              eval_ctx,
+                                                                              *partition_value_))) {
+    LOG_WARN("failed to load iceberg partition value", K(ret), KPC(partition_value_));
+  }
   return ret;
 }
 

@@ -27,10 +27,12 @@
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "sql/engine/table/ob_ext_table_java_plugin_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
+#include "sql/optimizer/file_prune/ob_lake_table_fwd.h"
 #include "share/config/ob_server_config.h"
 #include "sql/engine/table/ob_iceberg_delete_bitmap_builder.h"
 #include "sql/engine/table/ob_kafka_table_row_iter.h"
 #include "sql/engine/table/ob_ext_table_plugin_row_iter.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 
 namespace oceanbase
 {
@@ -866,25 +868,180 @@ int ObExternalTableRowIterator::generate_mapping_column_id(
   return ret;
 }
 
-int ObExternalTableRowIterator::fill_file_partition_expr(ObExpr *expr, ObNewRow &value)
+int ObExternalTableRowIterator::fill_file_partition_expr(ObExpr *expr,
+                                                         const ObExternalIteratorState &state)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   ObDatum *datums = expr->locate_batch_datums(eval_ctx);
-  int64_t loc_idx = expr->extra_ - 1;
-  if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= value.get_count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("loc idx is out of range", K(loc_idx), K(value), K(ret));
+  const bool use_manifest_partition_value = use_iceberg_manifest_partition_value();
+  int64_t loc_idx = OB_INVALID_INDEX;
+  const ObObj *partition_value = nullptr;
+  if (use_manifest_partition_value) {
+    if (OB_FAIL(get_iceberg_identity_partition_value(expr->extra_, state, partition_value))) {
+      LOG_WARN("failed to get iceberg identity partition value", K(ret), K(expr->extra_));
+    } else if (OB_ISNULL(partition_value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("identity partition value is absent", K(ret), K(expr->extra_));
+    }
+  } else {
+    loc_idx = expr->extra_ - 1;
+    if (OB_UNLIKELY(loc_idx < 0 || loc_idx >= state.part_list_val_.get_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("loc idx is out of range", K(loc_idx), K(state.part_list_val_), K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(expr->get_format(eval_ctx) != VEC_UNIFORM_CONST)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected format for partition expr", K(ret), K(expr->get_format(eval_ctx)));
   } else {
     // for VEC_UNIFORM_CONST, only set datums[0]
-    if (value.get_cell(loc_idx).is_null()) {
+    const ObObj &value
+        = use_manifest_partition_value ? *partition_value : state.part_list_val_.get_cell(loc_idx);
+    if (value.is_null()) {
       datums[0].set_null();
     } else {
-      CK (OB_NOT_NULL(datums[0].ptr_));
-      OZ (datums[0].from_obj(value.get_cell(loc_idx)));
+      CK(OB_NOT_NULL(datums[0].ptr_));
+      OZ(datums[0].from_obj(value));
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableRowIterator::fill_iceberg_file_partition_value(const ObFileScanTask *scan_task,
+                                                                  ObExternalIteratorState &state)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null iceberg scan task", K(ret));
+  } else if (LakeFileType::ICEBERG != scan_task->get_file_type()) {
+    if (!is_dummy_file(scan_task->file_url_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected non-iceberg scan task", K(ret), K(scan_task->get_file_type()));
+    } else {
+      state.part_id_ = OB_INVALID_INDEX_INT64;
+      state.part_list_val_.reset();
+    }
+  } else {
+    const ObIcebergScanTask *iceberg_scan_task = static_cast<const ObIcebergScanTask *>(scan_task);
+    // scan task 只携带稠密 part_id，实际 Identity 值从 scan_param 的共享数组获取。
+    const share::ObExternalTablePartInfoArray *partition_infos = scan_param_->partition_infos_;
+    if (OB_ISNULL(partition_infos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition array is null", K(ret));
+    } else if (state.part_id_ != iceberg_scan_task->part_id_
+               || state.part_list_val_.get_count() == 0) {
+      if (partition_infos->count() == 0) {
+        state.part_list_val_.reset();
+        state.part_id_ = iceberg_scan_task->part_id_;
+      } else if (OB_UNLIKELY(iceberg_scan_task->part_id_ < 0
+                             || iceberg_scan_task->part_id_ >= partition_infos->count())
+                 || OB_UNLIKELY(partition_infos->at(iceberg_scan_task->part_id_).part_id_
+                                != iceberg_scan_task->part_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid iceberg partition info",
+                 K(ret),
+                 K(iceberg_scan_task->part_id_),
+                 KP(partition_infos));
+      } else {
+        state.part_list_val_ = partition_infos->at(iceberg_scan_task->part_id_).list_row_value_;
+        state.part_id_ = iceberg_scan_task->part_id_;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableRowIterator::prepare_file_partition_info(const ObFileScanTask *scan_task,
+                                                            ObIAllocator &allocator,
+                                                            ObExternalIteratorState &state)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(scan_task)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null scan task", K(ret));
+  } else if (use_iceberg_manifest_partition_value()) {
+    if (OB_FAIL(fill_iceberg_file_partition_value(scan_task, state))) {
+      LOG_WARN("failed to fill iceberg file partition value", K(ret));
+    }
+  } else if (!need_partition_info_) {
+    // do nothing
+  } else if (scan_task->part_id_ != OB_INVALID_PARTITION_ID
+             && state.part_id_ != scan_task->part_id_) {
+    state.part_id_ = scan_task->part_id_;
+    const bool is_external_object
+        = is_external_object_id(scan_param_->table_param_->get_table_id());
+    if (OB_LIKELY(is_external_object)) {
+      if (OB_FAIL(calc_file_part_list_value_by_array(scan_task->part_id_,
+                                                     allocator,
+                                                     scan_param_->partition_infos_,
+                                                     state.part_list_val_))) {
+        LOG_WARN("failed to calculate partition value from partition info array", K(ret));
+      }
+    } else if (OB_FAIL(calc_file_partition_list_value(scan_task->part_id_,
+                                                      allocator,
+                                                      state.part_list_val_))) {
+      LOG_WARN("failed to calculate partition value from table schema", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableRowIterator::get_iceberg_identity_partition_value(
+    const int64_t source_field_id,
+    const ObExternalIteratorState &state,
+    const ObObj *&partition_value) const
+{
+  int ret = OB_SUCCESS;
+  partition_value = nullptr;
+  if (!use_iceberg_manifest_partition_value()) {
+  } else if (OB_UNLIKELY(state.part_list_val_.get_count() % 2 != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid iceberg identity partition row", K(ret), K(state.part_list_val_.get_count()));
+  } else {
+    for (int64_t i = 0;
+         OB_SUCC(ret) && OB_ISNULL(partition_value) && i < state.part_list_val_.get_count();
+         i += 2) {
+      const ObObj &source_id = state.part_list_val_.get_cell(i);
+      if (OB_UNLIKELY(!source_id.is_int32())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid iceberg identity source id", K(ret), K(source_id), K(i));
+      } else if (source_field_id == source_id.get_int32()) {
+        partition_value = &state.part_list_val_.get_cell(i + 1);
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObExternalTableRowIterator::use_iceberg_manifest_partition_value() const
+{
+  return is_iceberg_lake_table()
+         && iceberg::ObIcebergUtils::is_manifest_partition_value_supported();
+}
+
+int ObExternalTableRowIterator::load_partition_value_to_expr(ObExpr *expr,
+                                                             ObEvalCtx &eval_ctx,
+                                                             const ObObj &partition_value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get null expression for iceberg partition value", K(ret));
+  } else if (OB_FAIL(expr->init_vector_for_write(eval_ctx,
+                                                 VEC_UNIFORM_CONST,
+                                                 eval_ctx.max_batch_size_))) {
+    LOG_WARN("failed to init partition value vector", K(ret));
+  } else {
+    // Identity 分区值在单个 Iceberg 数据文件内为常量，只需写入常量向量的首个 datum。
+    ObDatum *datums = expr->locate_batch_datums(eval_ctx);
+    if (partition_value.is_null()) {
+      datums[0].set_null();
+    } else {
+      CK(OB_NOT_NULL(datums[0].ptr_));
+      OZ(datums[0].from_obj(partition_value));
     }
   }
   return ret;

@@ -344,19 +344,7 @@ int ObOrcMinMaxIter::next_file()
   } while (OB_SUCC(ret) && OB_UNLIKELY(0 == file_size));
 
   if (OB_SUCC(ret)) {
-    int64_t part_id = scan_task->part_id_;
-    if (need_partition_info_ && part_id != 0 && state_.part_id_ != part_id) {
-      state_.part_id_ = part_id;
-      bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-      if (OB_LIKELY(is_external_object)) {
-        OZ(calc_file_part_list_value_by_array(part_id,
-                                              allocator_,
-                                              scan_param_->partition_infos_,
-                                              state_.part_list_val_));
-      } else {
-        OZ(calc_file_partition_list_value(part_id, allocator_, state_.part_list_val_));
-      }
-    }
+    OZ(prepare_file_partition_info(scan_task, allocator_, state_));
 
     state_.cur_file_id_ = scan_task->file_id_;
     column_index_type_ = scan_param_->external_file_format_.orc_format_.column_index_type_;
@@ -475,6 +463,7 @@ int ObOrcMinMaxIter::collect_partition_aggregate()
     agg_res_datums_.at(i).set_null();
   }
   bool first_file = true;
+  const ObFileScanTask *current_task = nullptr;
   int64_t cur_part_id = 0;
   int64_t file_cnt = 0;
   while (OB_SUCC(ret)) {
@@ -483,9 +472,12 @@ int ObOrcMinMaxIter::collect_partition_aggregate()
       if (next_idx >= scan_param_->scan_tasks_.count()) {
         break;
       }
-      ObFileScanTask *next_task =
-          static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(next_idx));
-      if (OB_NOT_NULL(next_task) && next_task->part_id_ != cur_part_id) {
+      ObFileScanTask *next_task
+          = static_cast<ObFileScanTask *>(scan_param_->scan_tasks_.at(next_idx));
+      if (OB_ISNULL(current_task) || OB_ISNULL(next_task)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null scan task", K(ret), K(next_idx), KP(current_task), KP(next_task));
+      } else if (current_task->part_id_ != next_task->part_id_) {
         LOG_TRACE("partition boundary hit, stop collecting",
                   K(cur_part_id),
                   K(next_task->part_id_),
@@ -494,17 +486,32 @@ int ObOrcMinMaxIter::collect_partition_aggregate()
         break;
       }
     }
-    if (OB_FAIL(next_file())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(next_file())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("failed to open next file", K(ret));
       }
     } else {
       if (first_file) {
-        cur_part_id = state_.part_id_;
-        first_file = false;
+        // next_file() 对每个尝试的任务都会推进 file_idx_，并可能跳过空文件或不存在的文件；
+        // 成功返回后，file_idx_ - 1 才是本次实际打开的任务。
+        const int64_t current_idx = state_.file_idx_ - 1;
+        if (OB_UNLIKELY(current_idx < 0 || current_idx >= scan_param_->scan_tasks_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected current file index", K(ret), K(current_idx));
+        } else if (OB_ISNULL(current_task = static_cast<ObFileScanTask *>(
+                                 scan_param_->scan_tasks_.at(current_idx)))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null current scan task", K(ret), K(current_idx));
+        } else {
+          cur_part_id = state_.part_id_;
+          first_file = false;
+        }
       }
-      ++file_cnt;
-      if (OB_FAIL(collect_file_meta_statistics())) {
+      if (OB_SUCC(ret)) {
+        ++file_cnt;
+      }
+      if (OB_SUCC(ret) && OB_FAIL(collect_file_meta_statistics())) {
         LOG_WARN("failed to collect file meta statistics", K(ret), K(state_.cur_file_url_));
       }
     }
@@ -602,7 +609,25 @@ int ObOrcMinMaxIter::collect_file_meta_statistics()
             LOG_WARN("file column expr is null", K(ret), K(agg_idx), K(file_col_expr_index));
           } else {
             int64_t orc_col_id = -1;
-            if (OB_FAIL(compute_orc_column_id(file_col_expr, orc_col_id))) {
+            const ObObj *partition_value = nullptr;
+            if (OB_FAIL(get_iceberg_identity_partition_value(file_col_expr->extra_,
+                                                             state_,
+                                                             partition_value))) {
+              LOG_WARN("failed to get iceberg identity partition value", K(ret), K(agg_idx));
+            } else if (OB_NOT_NULL(partition_value)) {
+              // 当前文件以 Manifest 中的 Identity 分区值为准，不再读取 footer 统计。
+              if (!partition_value->is_null() && reader_->getNumberOfRows() > 0) {
+                blocksstable::ObStorageDatum partition_datum;
+                if (OB_FAIL(partition_datum.from_obj_enhance(*partition_value))) {
+                  LOG_WARN("failed to convert iceberg partition value", K(ret), K(agg_idx));
+                } else if (OB_FAIL(merge_agg_datum(agg_expr,
+                                                   agg_idx,
+                                                   partition_datum,
+                                                   partition_datum))) {
+                  LOG_WARN("failed to merge iceberg partition value", K(ret), K(agg_idx));
+                }
+              }
+            } else if (OB_FAIL(compute_orc_column_id(file_col_expr, orc_col_id))) {
               LOG_WARN("failed to compute orc column id", K(ret), K(agg_idx));
             } else if (orc_col_id >= 0) {
               ObColumnMeta column_meta;
@@ -869,7 +894,7 @@ int ObOrcMinMaxIter::calc_file_meta_column(const int64_t read_count, ObEvalCtx &
       }
     } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
       OZ(meta_expr->init_vector_for_write(eval_ctx, VEC_UNIFORM_CONST, read_count));
-      OZ(fill_file_partition_expr(meta_expr, state_.part_list_val_));
+      OZ(fill_file_partition_expr(meta_expr, state_));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr", KPC(meta_expr));

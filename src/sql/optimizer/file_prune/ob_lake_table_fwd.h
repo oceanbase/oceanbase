@@ -19,18 +19,21 @@ namespace iceberg
 class ManifestEntry;
 }
 
+// 非持有型分区键：直接引用 (spec_id, partition tuple)，避免每次查找都复制分区值。
 struct ObLakeTablePartKey
 {
 public:
   ObLakeTablePartKey();
   int assign(const ObLakeTablePartKey &other);
   void reset();
-  int from_manifest_entry(iceberg::ManifestEntry *manifest_entry);
+  int from_manifest_entry(const iceberg::ManifestEntry *manifest_entry);
   int hash(uint64_t &hash_val) const;
+  int get_partition_value(const int64_t idx, const common::ObObj *&value) const;
   bool operator== (const ObLakeTablePartKey &other) const;
-  TO_STRING_KV(K_(spec_id), K_(part_values));
-  int32_t spec_id_;
-  ObArray<common::ObObj> part_values_;
+  TO_STRING_KV(KP_(manifest_entry), K_(hash_value));
+  // ManifestEntry 的生命周期覆盖优化阶段的分区 Map，因此这里可以安全保存裸指针。
+  const iceberg::ManifestEntry *manifest_entry_;
+  uint64_t hash_value_;
 };
 
 enum class ObLakeDeleteFileType
@@ -109,13 +112,22 @@ struct ObOptIcebergFile : public ObIOptLakeTableFile
 {
 public:
   ObOptIcebergFile(common::ObIAllocator &allocator)
-  : ObIOptLakeTableFile(LakeFileType::ICEBERG),
-    file_url_(), file_size_(0), modification_time_(0),
-    file_format_(iceberg::DataFileFormat::INVALID), delete_files_(allocator), record_count_(0)
+      : ObIOptLakeTableFile(LakeFileType::ICEBERG), file_url_(), file_size_(0),
+        modification_time_(0), file_format_(iceberg::DataFileFormat::INVALID),
+        delete_files_(allocator), record_count_(0), part_id_(OB_INVALID_INDEX_INT64),
+        partition_spec_id_(-1), file_desc_idx_(OB_INVALID_INDEX_INT64)
   {}
   virtual int assign(const ObIOptLakeTableFile &other) override;
   virtual void reset() override;
-  VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(modification_time), K_(delete_files), K_(record_count));
+  VIRTUAL_TO_STRING_KV(K_(type),
+                       K_(file_url),
+                       K_(file_size),
+                       K_(modification_time),
+                       K_(delete_files),
+                       K_(record_count),
+                       K_(part_id),
+                       K_(partition_spec_id),
+                       K_(file_desc_idx));
 
   ObString file_url_;
   int64_t file_size_;
@@ -123,6 +135,10 @@ public:
   iceberg::DataFileFormat file_format_;
   ObSqlArray<const ObLakeDeleteFile *> delete_files_;
   int64_t record_count_;
+  int64_t part_id_;
+  int32_t partition_spec_id_;
+  // 仅用于优化阶段回查 file desc，不会序列化到 ObIcebergScanTask。
+  int64_t file_desc_idx_;
 };
 
 struct ObOptHiveFile : public ObIOptLakeTableFile
@@ -202,8 +218,8 @@ public:
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(part_id), K_(first_lineno), K_(last_lineno));
 
 public:
-  ObString file_url_; // serialized in ObFileScanTask
-  int64_t part_id_; // serialized in ObHiveScanTask
+  ObString file_url_; // 在 ObFileScanTask 中序列化
+  int64_t part_id_;   // 在具体格式的 scan task 中序列化
   int64_t first_lineno_;
   int64_t last_lineno_;
 private:
@@ -238,7 +254,7 @@ public:
   int64_t modification_time_;
   int64_t file_id_;
   common::ObString content_digest_;
-  int64_t record_count_; // serialized in ObIcebergScanTask
+  int64_t record_count_; // 在 ObIcebergScanTask 中序列化
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFileScanTask);
   int assign(const ObFileScanTask &other);
@@ -250,20 +266,30 @@ public:
   OB_UNIS_VERSION_V(1);
 public:
   explicit ObIcebergScanTask(ObIAllocator &allocator)
-  : ObFileScanTask(LakeFileType::ICEBERG),
-    file_format_(iceberg::DataFileFormat::INVALID),
-    delete_files_(allocator)
-  {}
+      : ObFileScanTask(LakeFileType::ICEBERG), file_format_(iceberg::DataFileFormat::INVALID),
+        delete_files_(allocator), partition_spec_id_(-1)
+  {
+    // Iceberg 查询内稠密分区 ID 从 0 开始，-1 表示尚未生成。
+    part_id_ = OB_INVALID_INDEX_INT64;
+  }
   virtual ~ObIcebergScanTask() {}
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) override;
 
-  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
-                      K_(delete_files), K_(file_id), K_(part_id), K_(content_digest),
-                      K_(record_count));
+  VIRTUAL_TO_STRING_KV(K_(file_url),
+                       K_(type),
+                       K_(file_size),
+                       K_(modification_time),
+                       K_(delete_files),
+                       K_(file_id),
+                       K_(part_id),
+                       K_(content_digest),
+                       K_(record_count),
+                       K_(partition_spec_id));
 
   iceberg::DataFileFormat file_format_;
   common::ObFixedArray<ObLakeDeleteFile, ObIAllocator> delete_files_;
+  int32_t partition_spec_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIcebergScanTask);

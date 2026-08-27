@@ -6,23 +6,24 @@
 #define USING_LOG_PREFIX SQL_OPT
 
 #include "ob_lake_table_partition_info.h"
-#include "sql/optimizer/file_prune/ob_lake_table_optimizer_utils.h"
 
+#include "plugin/v2/external_table/ob_ext_table_metadata.h"
+#include "share/external_table/ob_external_table_part_info.h"
+#include "share/external_table/ob_external_table_utils.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/object/ob_obj_cast.h"
 #include "share/schema/ob_iceberg_table_schema.h"
 #include "sql/das/ob_das_location_router.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/ob_sql_context.h"
-#include "share/external_table/ob_external_table_utils.h"
-#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
-#include "sql/table_format/iceberg/spec/table_metadata.h"
-#include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "sql/optimizer/file_prune/ob_ext_file_pruner.h"
+#include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
+#include "sql/optimizer/file_prune/ob_lake_table_optimizer_utils.h"
 #include "sql/table_format/common/utils/ob_lake_table_executor.h"
-#include "plugin/v2/external_table/ob_ext_table_metadata.h"
-#include "share/external_table/ob_external_table_utils.h"
+#include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
+#include "sql/table_format/iceberg/spec/table_metadata.h"
 
 namespace oceanbase
 {
@@ -126,6 +127,418 @@ int get_manifest_entries(const ObString &access_info,
   return ret;
 }
 
+// 只保留扫描实际访问、且在保留 spec 中采用 Identity 变换的 source field。
+static int get_accessed_identity_source_field_ids(const ObIArray<ObRawExpr *> &file_column_exprs,
+                                                  const ObIArray<ObIcebergFileDesc *> &file_descs,
+                                                  const iceberg::TableMetadata &table_metadata,
+                                                  ObIArray<int32_t> &identity_source_field_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int32_t, 16> accessed_source_field_ids;
+  ObSEArray<int32_t, 8> visited_spec_ids;
+  identity_source_field_ids.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs.count(); ++i) {
+    const ObRawExpr *expr = file_column_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null external file column expr", K(ret), K(i));
+    } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
+               || T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
+      const uint64_t source_field_id = expr->get_column_idx();
+      if (OB_UNLIKELY(source_field_id > INT32_MAX)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid iceberg source field id", K(ret), K(source_field_id), K(i));
+      } else if (OB_FAIL(add_var_to_array_no_dup(accessed_source_field_ids,
+                                                 static_cast<int32_t>(source_field_id)))) {
+        LOG_WARN("failed to add accessed source field id", K(ret), K(source_field_id));
+      }
+    }
+  }
+  // 每个 spec 只处理一次；已找齐全部访问字段或覆盖全部 metadata spec 后即可提前结束。
+  bool all_specs_visited = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !accessed_source_field_ids.empty() && !all_specs_visited
+                      && identity_source_field_ids.count() < accessed_source_field_ids.count()
+                      && i < file_descs.count();
+       ++i) {
+    const ObIcebergFileDesc *file_desc = file_descs.at(i);
+    if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null iceberg file desc", K(ret), K(i), KP(file_desc));
+    } else {
+      const int32_t spec_id = file_desc->entry_->partition_spec_id;
+      if (!has_exist_in_array(visited_spec_ids, spec_id)) {
+        const iceberg::PartitionSpec *partition_spec = nullptr;
+        if (OB_FAIL(visited_spec_ids.push_back(spec_id))) {
+          LOG_WARN("failed to add retained partition spec id", K(ret), K(i), K(spec_id));
+        } else if (OB_FAIL(table_metadata.get_partition_spec(spec_id, partition_spec))) {
+          LOG_WARN("failed to get retained partition spec", K(ret), K(spec_id));
+        } else if (OB_ISNULL(partition_spec)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null retained partition spec", K(ret), K(spec_id));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < partition_spec->fields.count(); ++j) {
+            const iceberg::PartitionField *field = partition_spec->fields.at(j);
+            if (OB_ISNULL(field)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get null partition field", K(ret), K(spec_id), K(j));
+            } else if (iceberg::TransformType::Identity == field->transform.transform_type
+                       && has_exist_in_array(accessed_source_field_ids, field->source_id)
+                       && OB_FAIL(
+                           add_var_to_array_no_dup(identity_source_field_ids, field->source_id))) {
+              LOG_WARN("failed to add identity source field id", K(ret), K(field->source_id));
+            }
+          }
+          all_specs_visited = visited_spec_ids.count() >= table_metadata.partition_specs.count();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+static int get_file_column_expr_by_source_field_id(const int32_t source_field_id,
+                                                   const ObIArray<ObRawExpr *> &file_column_exprs,
+                                                   const ObRawExpr *&file_column_expr)
+{
+  int ret = OB_SUCCESS;
+  file_column_expr = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && OB_ISNULL(file_column_expr) && i < file_column_exprs.count();
+       ++i) {
+    const ObRawExpr *expr = file_column_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null external file column expr", K(ret), K(i));
+    } else if ((T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
+                || T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type())
+               && source_field_id == static_cast<int64_t>(expr->get_column_idx())) {
+      file_column_expr = expr;
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to find iceberg source field expression", K(ret), K(source_field_id));
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::cast_iceberg_partition_value(const ObObj &source_value,
+                                                           const ObRawExprResType &target_type,
+                                                           ObIAllocator &allocator,
+                                                           ObObj &target_value)
+{
+  int ret = OB_SUCCESS;
+  ObAccuracy target_accuracy = target_type.get_accuracy();
+  ObCastCtx cast_ctx(&allocator,
+                     nullptr,
+                     CM_NONE,
+                     target_type.get_collation_type(),
+                     &target_accuracy);
+  ObObj cast_buffer;
+  const ObObj *cast_result = nullptr;
+  if (OB_FAIL(ObObjCaster::to_type(target_type.get_type(),
+                                   cast_ctx,
+                                   source_value,
+                                   cast_buffer,
+                                   cast_result))) {
+    LOG_WARN("failed to cast iceberg partition value", K(ret), K(source_value), K(target_type));
+  } else if (OB_ISNULL(cast_result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null iceberg partition cast result", K(ret), K(source_value), K(target_type));
+  } else {
+    target_value = *cast_result;
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::build_iceberg_partition_row(
+    const iceberg::PartitionSpec &partition_spec,
+    const iceberg::ManifestEntry &manifest_entry,
+    const ObIArray<int32_t> &source_field_ids,
+    const ObIArray<ObRawExpr *> &file_column_exprs,
+    ObIAllocator &cast_allocator,
+    ObIAllocator &partition_info_allocator,
+    ObNewRow &partition_row)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObObj, 8> identity_values;
+  const ObIArray<ObObj> &partition_values = manifest_entry.data_file.partition;
+  if (OB_UNLIKELY(partition_spec.fields.count() != partition_values.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition field and value count mismatch",
+             K(ret),
+             K(partition_spec.fields.count()),
+             K(partition_values.count()));
+  } else if (OB_FAIL(identity_values.reserve(source_field_ids.count() * 2))) {
+    LOG_WARN("failed to reserve identity partition values", K(ret));
+  }
+  // 以 (source field id, value) 紧凑存储；某个 spec 无映射时仍回退读取文件列。
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_spec.fields.count(); ++i) {
+    const iceberg::PartitionField *field = partition_spec.fields.at(i);
+    if (OB_ISNULL(field)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null partition field", K(ret), K(i));
+    } else if (iceberg::TransformType::Identity == field->transform.transform_type
+               && has_exist_in_array(source_field_ids, field->source_id)) {
+      const ObRawExpr *file_column_expr = nullptr;
+      ObObj source_id;
+      ObObj partition_value;
+      source_id.set_int32(field->source_id);
+      if (OB_FAIL(get_file_column_expr_by_source_field_id(field->source_id,
+                                                          file_column_exprs,
+                                                          file_column_expr))) {
+        LOG_WARN("failed to get iceberg source field expression", K(ret), K(field->source_id));
+      } else if (OB_FAIL(cast_iceberg_partition_value(partition_values.at(i),
+                                                      file_column_expr->get_result_type(),
+                                                      cast_allocator,
+                                                      partition_value))) {
+        LOG_WARN("failed to normalize iceberg partition value", K(ret), K(i), K(field->source_id));
+      } else if (OB_FAIL(identity_values.push_back(source_id))) {
+        LOG_WARN("failed to push identity source id", K(ret), K(i));
+      } else if (OB_FAIL(identity_values.push_back(partition_value))) {
+        LOG_WARN("failed to push identity partition value", K(ret), K(i));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (identity_values.empty()) {
+      partition_row.reset();
+    } else {
+      ObNewRow tmp_row;
+      tmp_row.assign(identity_values.get_data(), identity_values.count());
+      if (OB_FAIL(ob_write_row(partition_info_allocator, tmp_row, partition_row))) {
+        LOG_WARN("failed to copy identity partition row", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::build_iceberg_part_ids(ObLakeTablePartKeyMap &part_key_map,
+                                                     ObIArray<ObIcebergFileDesc *> &file_descs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t next_part_idx = 0;
+  if (file_descs.empty()) {
+  } else {
+    // 避免按文件数预分配 bucket；唯一分区增多时 Map 会按 2 倍扩容。
+    const int64_t initial_bucket_count = file_descs.count() < 64 ? file_descs.count() : 64;
+    if (OB_FAIL(part_key_map.create(initial_bucket_count, "PartKeyMap", "LakeTableLoc"))) {
+      LOG_WARN("failed to create partition key map", K(ret), K(initial_bucket_count));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
+    ObIcebergFileDesc *file_desc = file_descs.at(i);
+    ObLakeTablePartKey part_key;
+    uint64_t part_idx = OB_INVALID_ID;
+    if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null iceberg file desc", K(ret), K(i));
+    } else if (OB_FAIL(part_key.from_manifest_entry(file_desc->entry_))) {
+      LOG_WARN("failed to build partition key", K(ret), K(i));
+    } else if (OB_FAIL(part_key_map.get_refactored(part_key, part_idx))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        ret = OB_SUCCESS;
+        part_idx = next_part_idx++;
+        if (OB_FAIL(part_key_map.set_refactored(part_key, part_idx))) {
+          LOG_WARN("failed to set partition id", K(ret), K(part_idx));
+        }
+      } else {
+        LOG_WARN("failed to get partition id", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      file_desc->part_idx_ = part_idx;
+    }
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::update_iceberg_file_part_ids()
+{
+  int ret = OB_SUCCESS;
+  int64_t updated_file_count = 0;
+  ObCandiTabletLocIArray &tablet_locs = candi_table_loc_.get_phy_part_loc_info_list_for_update();
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_locs.count(); ++i) {
+    ObIArray<ObIOptLakeTableFile *> &files
+        = tablet_locs.at(i).get_opt_lake_table_files_for_update();
+    for (int64_t j = 0; OB_SUCC(ret) && j < files.count(); ++j) {
+      ObIOptLakeTableFile *file = files.at(j);
+      if (OB_ISNULL(file) || OB_UNLIKELY(!file->is_iceberg_file())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid iceberg file", K(ret), K(i), K(j), KP(file));
+      } else {
+        ObOptIcebergFile *iceberg_file = static_cast<ObOptIcebergFile *>(file);
+        const int64_t file_desc_idx = iceberg_file->file_desc_idx_;
+        if (OB_UNLIKELY(file_desc_idx < 0 || file_desc_idx >= iceberg_file_descs_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid iceberg file descriptor index", K(ret), K(file_desc_idx));
+        } else {
+          const ObIcebergFileDesc *file_desc = iceberg_file_descs_.at(file_desc_idx);
+          if (OB_ISNULL(file_desc) || OB_UNLIKELY(OB_INVALID_ID == file_desc->part_idx_)
+              || OB_UNLIKELY(file_desc->part_idx_
+                             >= static_cast<uint64_t>(iceberg_file_descs_.count()))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid iceberg partition id", K(ret), K(file_desc_idx), KP(file_desc));
+          } else {
+            iceberg_file->part_id_ = static_cast<int64_t>(file_desc->part_idx_);
+            ++updated_file_count;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(updated_file_count != iceberg_file_descs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("file count mismatch", K(ret), K(updated_file_count), K(iceberg_file_descs_.count()));
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::prepare_iceberg_partition_infos(
+    ObSqlSchemaGuard &sql_schema_guard,
+    const ObIArray<ObRawExpr *> &file_column_exprs,
+    ObIAllocator &partition_info_allocator,
+    share::ObExternalTablePartInfoArray &partition_infos)
+{
+  int ret = OB_SUCCESS;
+  ObILakeTableMetadata *lake_table_metadata = nullptr;
+  ObIcebergTableMetadata *iceberg_table_metadata = nullptr;
+  ObSEArray<int32_t, 8> identity_source_field_ids;
+  ObLakeTablePartKeyMap part_key_map;
+  ObArenaAllocator cast_allocator("IcebergPartCast");
+  if (OB_UNLIKELY(partition_infos.count() > 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("iceberg partition infos are not empty", K(ret), K(partition_infos.count()));
+  } else if (file_column_exprs.empty() || iceberg_file_descs_.empty()) {
+    // 没有保留文件列会消费 Identity 值，无需构造共享分区信息。
+  } else if (OB_FAIL(sql_schema_guard.get_lake_table_metadata(get_ref_table_id(),
+                                                              lake_table_metadata))) {
+    LOG_WARN("failed to get lake table metadata", K(ret), K(get_ref_table_id()));
+  } else if (OB_ISNULL(lake_table_metadata)
+             || ObLakeTableFormat::ICEBERG != lake_table_metadata->get_format_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid iceberg table metadata", K(ret), KP(lake_table_metadata));
+  } else {
+    iceberg_table_metadata = down_cast<ObIcebergTableMetadata *>(lake_table_metadata);
+    if (OB_FAIL(get_accessed_identity_source_field_ids(file_column_exprs,
+                                                       iceberg_file_descs_,
+                                                       iceberg_table_metadata->table_metadata_,
+                                                       identity_source_field_ids))) {
+      LOG_WARN("failed to get accessed identity source field ids", K(ret));
+    }
+  }
+
+  // Hash 分桶阶段可能已经生成 part_idx_；Identity 路径优先复用，避免重复去重。
+  bool part_ids_ready = true;
+  for (int64_t i = 0; OB_SUCC(ret) && !identity_source_field_ids.empty() && part_ids_ready
+                      && i < iceberg_file_descs_.count();
+       ++i) {
+    const ObIcebergFileDesc *file_desc = iceberg_file_descs_.at(i);
+    if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null iceberg file desc", K(ret), K(i), KP(file_desc));
+    } else {
+      part_ids_ready = OB_INVALID_ID != file_desc->part_idx_;
+    }
+  }
+  if (OB_FAIL(ret) || identity_source_field_ids.empty()) {
+  } else if (!part_ids_ready
+             && OB_FAIL(build_iceberg_part_ids(part_key_map, iceberg_file_descs_))) {
+    LOG_WARN("failed to build iceberg partition ids", K(ret));
+  } else if (OB_FAIL(update_iceberg_file_part_ids())) {
+    LOG_WARN("failed to update iceberg file partition ids", K(ret));
+  }
+
+  int64_t partition_count = 0;
+  if (OB_SUCC(ret) && !identity_source_field_ids.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < iceberg_file_descs_.count(); ++i) {
+      const ObIcebergFileDesc *file_desc = iceberg_file_descs_.at(i);
+      if (OB_ISNULL(file_desc) || OB_UNLIKELY(OB_INVALID_ID == file_desc->part_idx_)
+          || OB_UNLIKELY(file_desc->part_idx_
+                         >= static_cast<uint64_t>(iceberg_file_descs_.count()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid iceberg partition id", K(ret), K(i), KP(file_desc));
+      } else {
+        const int64_t current_partition_count = static_cast<int64_t>(file_desc->part_idx_) + 1;
+        if (current_partition_count > partition_count) {
+          partition_count = current_partition_count;
+        }
+      }
+    }
+  }
+
+  // 稠密 part_idx_ 与数组下标一致，每个分区只保留一个代表文件来提取分区值。
+  ObSEArray<ObIcebergFileDesc *, 16> unique_partition_files;
+  if (OB_FAIL(ret) || 0 == partition_count) {
+  } else if (OB_FAIL(unique_partition_files.reserve(partition_count))) {
+    LOG_WARN("failed to reserve unique partition files", K(ret), K(partition_count));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_count; ++i) {
+    if (OB_FAIL(unique_partition_files.push_back(nullptr))) {
+      LOG_WARN("failed to initialize unique partition files", K(ret), K(i));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < iceberg_file_descs_.count(); ++i) {
+    ObIcebergFileDesc *file_desc = iceberg_file_descs_.at(i);
+    if (OB_ISNULL(file_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null iceberg file desc", K(ret), K(i));
+    } else if (partition_count > 0) {
+      const int64_t part_idx = static_cast<int64_t>(file_desc->part_idx_);
+      if (OB_UNLIKELY(part_idx < 0 || part_idx >= unique_partition_files.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid iceberg partition id", K(ret), K(part_idx));
+      } else if (OB_ISNULL(unique_partition_files.at(part_idx))) {
+        unique_partition_files.at(part_idx) = file_desc;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) || 0 == partition_count) {
+  } else if (OB_FAIL(partition_infos.reserve(partition_count))) {
+    LOG_WARN("failed to reserve iceberg partition infos", K(ret), K(partition_count));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < unique_partition_files.count(); ++i) {
+    ObIcebergFileDesc *file_desc = unique_partition_files.at(i);
+    const iceberg::PartitionSpec *partition_spec = nullptr;
+    share::ObExternalTablePartInfo part_info;
+    if (OB_ISNULL(file_desc) || OB_ISNULL(file_desc->entry_)
+        || OB_UNLIKELY(file_desc->part_idx_ != static_cast<uint64_t>(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid unique partition file", K(ret), K(i), KP(file_desc));
+    } else if (OB_FAIL(iceberg_table_metadata->table_metadata_.get_partition_spec(
+                   file_desc->entry_->partition_spec_id,
+                   partition_spec))) {
+      LOG_WARN("failed to get partition spec", K(ret), K(file_desc->entry_->partition_spec_id));
+    } else if (OB_ISNULL(partition_spec)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null partition spec", K(ret));
+    } else {
+      part_info.part_id_ = i;
+      cast_allocator.reuse();
+      if (OB_FAIL(build_iceberg_partition_row(*partition_spec,
+                                              *file_desc->entry_,
+                                              identity_source_field_ids,
+                                              file_column_exprs,
+                                              cast_allocator,
+                                              partition_info_allocator,
+                                              part_info.list_row_value_))) {
+        LOG_WARN("failed to build iceberg partition row", K(ret), K(i));
+      } else if (OB_FAIL(partition_infos.set_part_pair_by_idx(i, part_info))) {
+        LOG_WARN("failed to set iceberg partition info", K(ret), K(i));
+      }
+    }
+  }
+  if (part_key_map.created()) {
+    const int tmp_ret = part_key_map.destroy();
+    if (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
+      LOG_WARN("failed to destroy part key map", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &sql_schema_guard,
                                                              const ObDMLStmt &stmt,
                                                              ObExecContext *exec_ctx,
@@ -165,7 +578,7 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     ObSEArray<iceberg::ManifestFile*, 16> all_manifest_files;
     ObSEArray<iceberg::ManifestFile*, 16> manifest_files;
     ObSEArray<iceberg::ManifestEntry*, 16> manifest_entries;
-    hash::ObHashMap<ObLakeTablePartKey, uint64_t> part_key_map;
+    ObLakeTablePartKeyMap part_key_map;
     iceberg::Snapshot *snapshot = NULL;
     bool enable_lake_table_parallel_resolving = true;
     bool use_parallel_iceberg_pruning = false;
@@ -310,8 +723,6 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       LOG_WARN("failed to check iceberg use hash part");
     } else if (OB_FAIL(iceberg_file_pruner->prune_data_files(*exec_ctx,
                                                              manifest_entries,
-                                                             is_hash_aggregate(),
-                                                             part_key_map,
                                                              iceberg_file_descs_))) {
       LOG_WARN("failed to prune data files");
     }
@@ -320,10 +731,14 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(filter_files_by_sample(stmt, table_id, iceberg_file_descs_))) {
       LOG_WARN("failed to filter iceberg files by sample", K(ret));
+    } else if (is_hash_aggregate()
+               && OB_FAIL(build_iceberg_part_ids(part_key_map, iceberg_file_descs_))) {
+      LOG_WARN("failed to build iceberg partition ids", K(ret));
     } else if (OB_FAIL(select_location_for_iceberg(exec_ctx, part_key_map, iceberg_file_descs_))) {
       LOG_WARN("failed to select location for iceberg");
     } else {
-      candi_table_loc_.set_table_location_key(iceberg_file_pruner->get_table_id(), iceberg_file_pruner->get_ref_table_id());
+      candi_table_loc_.set_table_location_key(iceberg_file_pruner->get_table_id(),
+                                              iceberg_file_pruner->get_ref_table_id());
       candi_table_loc_.set_is_lake_table(true);
       file_pruner_ = iceberg_file_pruner;
     }
@@ -434,10 +849,9 @@ int ObLakeTablePartitionInfo::check_iceberg_use_hash_part(const ObIArray<iceberg
   return ret;
 }
 
-
 int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ctx,
-                                                          hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
-                                                          ObIArray<ObIcebergFileDesc*> &file_descs)
+                                                          ObLakeTablePartKeyMap &part_key_map,
+                                                          ObIArray<ObIcebergFileDesc *> &file_descs)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObAddr, 16> all_servers;
@@ -483,7 +897,7 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
     } else if (OB_FAIL(bucket_idx_set.create(all_servers.count(), "BucketIdxSet", "LakeTableLoc"))) {
       LOG_WARN("failed to create bucket idx set");
     }
-    hash::ObHashMap<ObLakeTablePartKey, uint64_t>::const_iterator iter = part_key_map.begin();
+    ObLakeTablePartKeyMap::const_iterator iter = part_key_map.begin();
     for (; OB_SUCC(ret) && iter != part_key_map.end(); ++iter) {
       int32_t bucket_idx = -1;
       if (OB_FAIL(get_bucket_idx(iter->first, first_bucket_partition_value_offset_, bucket_idx))) {
@@ -538,7 +952,7 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
       } else if (OB_UNLIKELY(tablet_loc_idx < 0 || tablet_loc_idx >= candi_tablet_locs.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected idx", K(tablet_loc_idx));
-      } else if (OB_FAIL(add_table_file(candi_tablet_locs.at(tablet_loc_idx), file_desc))) {
+      } else if (OB_FAIL(add_table_file(candi_tablet_locs.at(tablet_loc_idx), file_desc, i))) {
         LOG_WARN("failed to add table file");
       }
     }
@@ -598,7 +1012,7 @@ int ObLakeTablePartitionInfo::select_location_for_iceberg(ObExecContext *exec_ct
       } else if (OB_UNLIKELY(idx < 0 || idx >= candi_tablet_locs.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected idx", K(idx));
-      } else if (OB_FAIL(add_table_file(candi_tablet_locs.at(idx), file_desc))) {
+      } else if (OB_FAIL(add_table_file(candi_tablet_locs.at(idx), file_desc, i))) {
         LOG_WARN("failed to add table file");
       }
     }
@@ -749,13 +1163,19 @@ int ObLakeTablePartitionInfo::get_bucket_idx(const ObLakeTablePartKey &part_key,
                                              int32_t &bucket_idx)
 {
   int ret = OB_SUCCESS;
-  if (part_key.part_values_.at(offset).is_null()) {
-    bucket_idx = hash_count_;
-  } else if (!part_key.part_values_.at(offset).is_int32()) {
+  const ObObj *part_value = nullptr;
+  if (OB_FAIL(part_key.get_partition_value(offset, part_value))) {
+    LOG_WARN("failed to get hash partition value", K(ret), K(offset));
+  } else if (OB_ISNULL(part_value)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("hash part value is not int", K(part_key.part_values_.at(offset)));
+    LOG_WARN("hash partition value is null", K(ret), K(offset));
+  } else if (part_value->is_null()) {
+    bucket_idx = hash_count_;
+  } else if (!part_value->is_int32()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("hash part value is not int", KPC(part_value));
   } else {
-    bucket_idx = part_key.part_values_.at(offset).get_int32();
+    bucket_idx = part_value->get_int32();
   }
   return ret;
 }
@@ -786,7 +1206,8 @@ int ObLakeTablePartitionInfo::init_tablet_loc_by_addr(ObCandiTabletLoc &tablet_l
 }
 
 int ObLakeTablePartitionInfo::add_table_file(ObCandiTabletLoc &tablet_loc,
-                                             ObIcebergFileDesc *file_desc)
+                                             ObIcebergFileDesc *file_desc,
+                                             const int64_t file_desc_idx)
 {
   int ret = OB_SUCCESS;
   ObIArray<ObIOptLakeTableFile*>& files = tablet_loc.get_opt_lake_table_files_for_update();
@@ -802,12 +1223,17 @@ int ObLakeTablePartitionInfo::add_table_file(ObCandiTabletLoc &tablet_loc,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null file desc");
   } else {
-    ObOptIcebergFile *iceberg_file = static_cast<ObOptIcebergFile*>(file);
+    ObOptIcebergFile *iceberg_file = static_cast<ObOptIcebergFile *>(file);
     iceberg_file->file_url_ = file_desc->entry_->data_file.file_path;
     iceberg_file->file_size_ = file_desc->entry_->data_file.file_size_in_bytes;
     iceberg_file->modification_time_ = file_desc->entry_->snapshot_id;
     iceberg_file->file_format_ = file_desc->entry_->data_file.file_format;
     iceberg_file->record_count_ = file_desc->entry_->data_file.record_count;
+    iceberg_file->part_id_ = OB_INVALID_ID == file_desc->part_idx_
+                                 ? OB_INVALID_INDEX_INT64
+                                 : static_cast<int64_t>(file_desc->part_idx_);
+    iceberg_file->partition_spec_id_ = file_desc->entry_->partition_spec_id;
+    iceberg_file->file_desc_idx_ = file_desc_idx;
     for (int64_t i = 0; OB_SUCC(ret) && i < file_desc->delete_files_.size(); i++) {
       const iceberg::ManifestEntry *delete_entry = file_desc->delete_files_.at(i);
       ObLakeDeleteFile *delete_file = NULL;

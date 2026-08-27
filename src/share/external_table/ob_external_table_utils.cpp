@@ -25,6 +25,7 @@
 #include "plugin/legacy/interface/ob_plugin_external_intf.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "sql/optimizer/file_prune/ob_iceberg_file_pruner.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/partition.h"
 #include "sql/table_format/iceberg/spec/schema.h"
@@ -498,7 +499,11 @@ int ObExternalTableUtils::convert_lake_table_scan_task(const int64_t file_id,
     LOG_WARN("get unexpected null scan task", K(ret), KP(scan_task));
   } else if (scan_task->get_file_type() == LakeFileType::ICEBERG) {
     scan_task->file_id_ = file_id;
-    scan_task->part_id_ = part_id;
+    // 新路径中的 part_id_ 是 manifest 分区信息数组的稠密下标，不能再被 tablet
+    // 分区号覆盖；旧版本仍使用 tablet 分区号解析路径分区值。
+    if (!sql::iceberg::ObIcebergUtils::is_manifest_partition_value_supported()) {
+      scan_task->part_id_ = part_id;
+    }
   } else if (scan_task->get_file_type() == LakeFileType::HIVE) {
     scan_task->file_id_ = file_id;
   }

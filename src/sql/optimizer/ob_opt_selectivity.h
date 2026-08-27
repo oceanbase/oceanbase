@@ -483,6 +483,9 @@ public:
 
   // int update_stat(const double rows, const bool can_reduce, const bool can_enlarge);
   int add_column_meta_no_dup(const ObIArray<uint64_t> &column_id, const OptSelectivityCtx &ctx);
+  int refine_iceberg_string_avg_len(const OptSelectivityCtx &ctx,
+                                    const uint64_t column_id,
+                                    int64_t &avg_len) const;
 
   const OptColumnMeta* get_column_meta(const uint64_t column_id) const;
   OptColumnMeta* get_column_meta(const uint64_t column_id);

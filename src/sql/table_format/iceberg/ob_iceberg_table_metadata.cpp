@@ -6,8 +6,10 @@
 #define USING_LOG_PREFIX SQL
 #include "ob_iceberg_table_metadata.h"
 
+#include "lib/ob_name_def.h"
 #include "lib/timezone/ob_time_convert.h"
 #include "share/schema/ob_iceberg_table_schema.h"
+#include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
@@ -21,6 +23,39 @@ namespace sql
 {
 namespace iceberg
 {
+
+int ObIcebergTableMetadata::check_identity_partition_field_in_all_specs(
+    const int32_t source_id,
+    bool &is_identity_in_all_specs) const
+{
+  int ret = OB_SUCCESS;
+  is_identity_in_all_specs = !table_metadata_.partition_specs.empty();
+  for (int64_t i = 0;
+       OB_SUCC(ret) && is_identity_in_all_specs && i < table_metadata_.partition_specs.count();
+       ++i) {
+    const PartitionSpec *spec = table_metadata_.partition_specs.at(i);
+    bool has_identity_field_in_spec = false;
+    if (OB_ISNULL(spec)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null partition spec", K(ret), K(i));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < spec->fields.count(); ++j) {
+        const PartitionField *field = spec->fields.at(j);
+        if (OB_ISNULL(field)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null partition field", K(ret), K(i), K(j));
+        } else if (TransformType::Identity == field->transform.transform_type
+                   && source_id == field->source_id) {
+          has_identity_field_in_spec = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_identity_in_all_specs = is_identity_in_all_specs && has_identity_field_in_spec;
+    }
+  }
+  return ret;
+}
 
 share::ObLakeTableFormat ObIcebergTableMetadata::get_format_type() const
 {
@@ -265,22 +300,49 @@ int ObIcebergTableMetadata::do_build_table_schema(std::optional<int32_t> schema_
     if (OB_FAIL(ret)) {
       // do nothing
     } else {
+      const PartitionSpec *spec = NULL;
+      const bool enable_manifest_partition_value
+          = ObIcebergUtils::is_manifest_partition_value_supported();
+      if (OB_FAIL(table_metadata_.get_partition_spec(table_metadata_.default_spec_id, spec))) {
+        LOG_WARN("get partition spec failed", K(ret), K(table_metadata_.default_spec_id));
+      }
       FOREACH_CNT_X(it, current_schema->fields, OB_SUCC(ret))
       {
         schema::ObColumnSchemaV2 column_schema;
+        bool is_identity_in_all_specs = false;
+        const int32_t source_id = ObIcebergUtils::get_iceberg_field_id((*it)->get_column_id());
         if (OB_FAIL(column_schema.assign(**it))) {
           LOG_WARN("assign column schema failed", K(ret));
+        } else if (enable_manifest_partition_value
+                   && OB_FAIL(
+                       check_identity_partition_field_in_all_specs(source_id,
+                                                                   is_identity_in_all_specs))) {
+          LOG_WARN("failed to get identity partition field status", K(ret), K(source_id));
+        } else if (enable_manifest_partition_value && is_identity_in_all_specs) {
+          ObSqlString temp_str;
+          ObCharsetType charset_type = column_schema.get_charset_type();
+          ObCollationType collation_type = column_schema.get_collation_type();
+          // Scan tasks resolve this pseudo column by the Iceberg source field id, so the
+          // partition field may be reordered independently in every spec.
+          if (OB_FAIL(temp_str.assign_fmt("%s%d", N_PARTITION_LIST_COL, source_id))) {
+            LOG_WARN("failed to assign partition list column", K(ret), K(source_id));
+          } else if (OB_FAIL(ObDMLResolver::set_basic_column_properties(column_schema,
+                                                                        temp_str.string()))) {
+            LOG_WARN("failed to set partition column properties", K(ret), K(source_id));
+          } else {
+            column_schema.set_charset_type(charset_type);
+            column_schema.set_collation_type(collation_type);
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FALSE_IT(column_schema.set_table_id(table_id_))) {
         } else if (OB_FAIL(iceberg_table_schema->add_column(column_schema))) {
           LOG_WARN("add column failed", K(ret));
         }
       }
 
-      const PartitionSpec *spec = NULL;
       if (OB_FAIL(ret)) {
         // do nothing
-      } else if (OB_FAIL(table_metadata_.get_partition_spec(table_metadata_.default_spec_id, spec))) {
-        LOG_WARN("get partition spec failed", K(ret), K(table_metadata_.default_spec_id));
       } else if (OB_NOT_NULL(spec)) {
         ObSqlString part_expr;
         for (int64_t i = 0; i < spec->fields.count() && OB_SUCC(ret); ++i) {

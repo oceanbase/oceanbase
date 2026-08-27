@@ -339,6 +339,8 @@ private:
              const ObColumnDefaultValue *col_def,
              ObEvalCtx &eval_ctx,
              const bool is_hive_lake_table);
+    int init_partition_value(ObExpr *file_col_expr,
+                             const common::ObObj *partition_value);
     void reset()
     {
       file_col_expr_ = nullptr;
@@ -347,6 +349,7 @@ private:
       col_type_ = nullptr;
       load_func_ = nullptr;
       col_def_ = nullptr;
+      partition_value_ = nullptr;
       is_hive_lake_table_ = false;
     }
 
@@ -396,6 +399,7 @@ private:
     int load_dec64_to_dec128_vec(ObEvalCtx &eval_ctx);
     int load_int64_to_number_vec(ObEvalCtx &eval_ctx);
     int load_default(ObEvalCtx &eval_ctx);
+    int load_partition_value(ObEvalCtx &eval_ctx);
     static bool is_orc_read_utc(const orc::Type *type);
     static bool is_ob_type_store_utc(const ObObjType &type);
     // Hive formats the astronomical year zero as AD 0001.  Apache ORC C++
@@ -408,6 +412,7 @@ private:
     const orc::ColumnVectorBatch *batch_;
     const orc::Type *col_type_;
     const ObColumnDefaultValue *col_def_;
+    const common::ObObj *partition_value_;
     LOAD_FUNC load_func_;
     bool is_hive_lake_table_;
   };
@@ -554,9 +559,11 @@ private:
     int build_type_name_id_map(const orc::Type* type, ObIArray<ObString> &col_names);
     int build_iceberg_id_to_type_map(const orc::Type* type);
     int prepare_read_orc_file(ObEvalCtx &eval_ctx);
+    int check_need_read_orc_column(const int64_t column_idx,
+                                   bool &need_read_orc_column);
     int init_data_loader(int64_t i, int64_t orc_col_id, const orc::Type *type,
                         OrcRowReader &reader, ObColumnDefaultValue *default_value,
-                        ObEvalCtx &eval_ctx);
+                        const common::ObObj *partition_value, ObEvalCtx &eval_ctx);
     int compute_column_id_by_index_type(int64_t index, int64_t &orc_col_id);
     int to_dot_column_path(ObIArray<ObString> &col_names, ObString &path);
     int find_column_type_id_by_name(const orc::Type* type,

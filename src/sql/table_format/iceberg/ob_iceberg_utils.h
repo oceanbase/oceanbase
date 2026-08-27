@@ -57,6 +57,7 @@ public:
                                     ObIArray<T *> &dst);
   static uint64_t get_ob_column_id(int32_t iceberg_field_id);
   static int32_t get_iceberg_field_id(uint64_t ob_column_id);
+  static bool is_manifest_partition_value_supported();
 
   static int set_string_map(ObIAllocator &allocator,
                             const ObString key,

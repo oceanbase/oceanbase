@@ -9,6 +9,7 @@
 
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/ob_cluster_version.h"
 #include "share/ob_define.h"
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
@@ -19,6 +20,11 @@ namespace sql
 {
 namespace iceberg
 {
+
+bool ObIcebergUtils::is_manifest_partition_value_supported()
+{
+  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_2_0;
+}
 
 int ObIcebergUtils::deep_copy_optional_string(ObIAllocator &allocator,
                                               const std::optional<ObString> &src,

@@ -46,8 +46,11 @@ private:
   int collect_partition_aggregate();
   int collect_aggregate_from_files();
   int collect_file_meta_statistics();
-  int resolve_agg_parquet_column(ObExpr *agg_expr, const int64_t agg_idx,
-                                 int &parquet_col_idx, ObColumnMeta &column_meta);
+  int resolve_agg_parquet_column(ObExpr *agg_expr,
+                                 const int64_t agg_idx,
+                                 int &parquet_col_idx,
+                                 ObColumnMeta &column_meta,
+                                 const common::ObObj *&partition_value);
   int merge_rowgroup_statistics(ObExpr *agg_expr, const int64_t agg_idx,
                                 const int64_t rg_idx, const int parquet_col_idx,
                                 const ObColumnMeta &column_meta, ObEvalCtx &eval_ctx);

@@ -56,6 +56,11 @@ protected:
   int do_build_table_schema(std::optional<int32_t> schema_id,
                             std::optional<int64_t> snapshot_id,
                             share::schema::ObTableSchema *&table_schema) override;
+
+private:
+  int check_identity_partition_field_in_all_specs(
+      const int32_t source_id,
+      bool &is_identity_in_all_specs) const;
 };
 
 } // namespace iceberg

@@ -25016,6 +25016,11 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
         if (is_iceberg_lake_table && iceberg_record_count > 0 && table_meta_info_.table_row_count_ <= 0) {
           table_meta_info_.table_row_count_ = iceberg_record_count;
         }
+        if (is_iceberg_lake_table && total_file_size > 0 && table_meta_info_.table_row_count_ > 0) {
+          table_meta_info_.average_row_size_
+              = static_cast<double>(total_file_size)
+                / static_cast<double>(table_meta_info_.table_row_count_);
+        }
         int64_t schema_row_width = 0;
         if (OB_FAIL(ObOptEstCost::estimate_width_for_external_table(*table_schema, schema_row_width))) {
           LOG_WARN("failed to get external table schema row width", K(ret));

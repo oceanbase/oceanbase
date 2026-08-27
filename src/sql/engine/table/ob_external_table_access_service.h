@@ -36,6 +36,7 @@ class ObExternalTablePartInfoArray;
 }
 
 namespace sql {
+struct ObFileScanTask;
 class ObExprRegexpSessionVariables;
 class ObDecompressor;
 class ObIcebergDeleteBitmapBuilder;
@@ -134,15 +135,11 @@ private:
 class ObExternalIteratorState
 {
 public:
-  ObExternalIteratorState() :
-    file_idx_(0),
-    part_id_(0),
-    cur_file_id_(0),
-    cur_line_number_(0),
-    cur_file_url_(),
-    part_list_val_(),
-    batch_first_row_line_num_(0),
-    is_delete_file_loaded_(false) {}
+  ObExternalIteratorState()
+      : file_idx_(0), part_id_(0), cur_file_id_(0), cur_line_number_(0), cur_file_url_(),
+        part_list_val_(), batch_first_row_line_num_(0), is_delete_file_loaded_(false)
+  {
+  }
 
   virtual void reuse() {
     file_idx_ = 0;
@@ -266,7 +263,18 @@ protected:
                                         common::ObIAllocator &allocator,
                                         const share::ObExternalTablePartInfoArray *partition_array,
                                         common::ObNewRow &value);
-  int fill_file_partition_expr(ObExpr *expr, common::ObNewRow &value);
+  int fill_file_partition_expr(ObExpr *expr, const ObExternalIteratorState &state);
+  int prepare_file_partition_info(const ObFileScanTask *scan_task,
+                                  common::ObIAllocator &allocator,
+                                  ObExternalIteratorState &state);
+  int fill_iceberg_file_partition_value(const ObFileScanTask *scan_task,
+                                        ObExternalIteratorState &state);
+  int get_iceberg_identity_partition_value(const int64_t source_field_id,
+                                           const ObExternalIteratorState &state,
+                                           const common::ObObj *&partition_value) const;
+  static int load_partition_value_to_expr(ObExpr *expr,
+                                          ObEvalCtx &eval_ctx,
+                                          const common::ObObj &partition_value);
   int calc_exprs_for_rowid(const int64_t read_count, ObExternalIteratorState &state,
                            const bool update_state = true);
   bool is_dummy_file(const ObString &file_url);
@@ -295,6 +303,8 @@ protected:
   {
     return share::is_iceberg_lake_table(scan_param_->lake_table_format_);
   }
+
+  bool use_iceberg_manifest_partition_value() const;
 
   OB_INLINE bool is_hive_lake_table() const
   {

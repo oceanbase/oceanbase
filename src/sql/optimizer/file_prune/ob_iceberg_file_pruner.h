@@ -9,7 +9,6 @@
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "ob_i_lake_table_file_pruner.h"
 #include "ob_iceberg_file_filter.h"
-#include "ob_lake_table_fwd.h"
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/table_format/iceberg/scan/task.h"
@@ -117,10 +116,8 @@ public:
                             int32_t expected_spec_id,
                             common::ObSEArray<iceberg::ManifestEntry *, 16> &manifest_entries);
   int prune_data_files(ObExecContext &exec_ctx,
-                       const ObIArray<iceberg::ManifestEntry*> &manifest_entries,
-                       const bool is_hash_aggregate,
-                       hash::ObHashMap<ObLakeTablePartKey, uint64_t> &part_key_map,
-                       ObIArray<ObIcebergFileDesc*> &file_descs);
+                       const ObIArray<iceberg::ManifestEntry *> &manifest_entries,
+                       ObIArray<ObIcebergFileDesc *> &file_descs);
 
   int get_part_id_and_range_exprs(ObIArray<uint64_t> &part_column_ids,
                                   ObIArray<ObRawExpr*> &range_exprs) override;

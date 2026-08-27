@@ -203,6 +203,7 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       OZ (coll_column_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (coll_record_readers_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (load_funcs_.allocate_array(allocator_, file_column_exprs_.count()));
+      OZ (identity_partition_values_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (cross_pages_.prepare_allocate(file_column_exprs_.count()));
       OZ (offset_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
       if (get_eager_count() > 0) {
@@ -215,6 +216,9 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     if (0 != err_sim) {
       mode_ = FilterCalcMode::FORCE_LAZY_CALC;
     }
+    // Iceberg data columns may be supplied by per-file identity partition values even when no
+    // pseudo partition column is projected.
+    need_partition_info_ = use_iceberg_manifest_partition_value();
     for (int64_t i = 0; OB_SUCC(ret) && i < file_meta_column_exprs_.count(); i++) {
       ObExpr *meta_expr = file_meta_column_exprs_.at(i);
       if (OB_ISNULL(meta_expr)) {
@@ -547,19 +551,7 @@ int ObParquetTableRowIterator::next_file()
 
   if (OB_SUCC(ret)) {
     ++reader_metrics_.selected_file_count_;
-    int64_t part_id = scan_task->part_id_;
-    if (need_partition_info_ && part_id != 0 && state_.part_id_ != part_id) {
-      state_.part_id_ = part_id;
-      bool is_external_object = is_external_object_id(scan_param_->table_param_->get_table_id());
-      if (OB_LIKELY(is_external_object)) {
-        OZ(calc_file_part_list_value_by_array(part_id,
-                                              allocator_,
-                                              scan_param_->partition_infos_,
-                                              state_.part_list_val_));
-      } else {
-        OZ(calc_file_partition_list_value(part_id, allocator_, state_.part_list_val_));
-      }
-    }
+    OZ(prepare_file_partition_info(scan_task, allocator_, state_));
 
     state_.cur_file_id_ = scan_task->file_id_;
     state_.cur_row_group_idx_ = scan_task->first_lineno_;
@@ -588,14 +580,29 @@ int ObParquetTableRowIterator::next_file()
         ObDataAccessPathExtraInfo *data_access_info =
             static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(i)->extra_info_);
         int column_index = -1;
-        OZ(compute_column_id_by_index_type(
-            i,
-            column_index,
-            ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_)));
+        const ObObj *partition_value = nullptr;
+        // Resolve this for every file because an evolved spec may use identity for the column
+        // while another spec does not. A manifest hit bypasses the physical Parquet column;
+        // a miss preserves the original physical-column/default-value fallback.
+        if (OB_FAIL(get_iceberg_identity_partition_value(
+                file_column_exprs_.at(i)->extra_, state_, partition_value))) {
+          LOG_WARN("failed to get iceberg identity partition value", K(ret), K(i));
+        } else {
+          identity_partition_values_.at(i) = partition_value;
+          if (OB_ISNULL(partition_value)) {
+            OZ(compute_column_id_by_index_type(
+                i,
+                column_index,
+                ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_)));
+          }
+        }
 
         if (OB_SUCC(ret)) {
           const parquet::ColumnDescriptor *col_desc = NULL;
-          if (column_index < 0 || column_index >= file_meta_->schema()->num_columns()) {
+          if (OB_NOT_NULL(partition_value)) {
+            load_funcs_.at(i) = &DataLoader::load_partition_value;
+            column_indexs_.at(i) = -1;
+          } else if (column_index < 0 || column_index >= file_meta_->schema()->num_columns()) {
             load_funcs_.at(i) = &DataLoader::load_default;
             column_indexs_.at(i) = -1;
           } else {
@@ -1397,6 +1404,24 @@ int ObParquetTableRowIterator::DataLoader::load_default()
   if (OB_FAIL(ObExternalTableRowIterator::set_default_batch(file_col_expr_->datum_meta_,
                                                             col_def_, vec))) {
     LOG_WARN("fail to set default", K(ret));
+  } else {
+    row_count_ = value_cnt;
+    read_progress_ += row_count_;
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::DataLoader::load_partition_value()
+{
+  int ret = OB_SUCCESS;
+  const int64_t value_cnt = std::min(batch_size_, cur_row_group_row_cnt_ - row_offset_);
+  if (OB_ISNULL(partition_value_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null iceberg partition value", K(ret));
+  } else if (OB_FAIL(ObExternalTableRowIterator::load_partition_value_to_expr(file_col_expr_,
+                                                                              eval_ctx_,
+                                                                              *partition_value_))) {
+    LOG_WARN("failed to load iceberg partition value", K(ret), KPC(partition_value_));
   } else {
     row_count_ = value_cnt;
     read_progress_ += row_count_;
@@ -4027,7 +4052,8 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count,
                             def_levels_buf_, rep_levels_buf_, str_res_mem_, data_loader_buffers_,
                             requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
-                            default_value, state_.eager_read_row_counts_[i],
+                            default_value, identity_partition_values_.at(cur_col_id_),
+                            state_.eager_read_row_counts_[i],
                             cross_page, stat_, cur_col_id_, first_batch,
                             dict_filter_pushdown_, false, is_hive_lake_table());
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
@@ -4325,7 +4351,8 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
                             def_levels_buf_, rep_levels_buf_, str_res_mem_, data_loader_buffers_,
                             requested_batch_size, load_row_count,
                             temp_row_count, state_.cur_row_group_row_count_,
-                            default_value, state_.read_row_counts_[cur_col_id_],
+                            default_value, identity_partition_values_.at(cur_col_id_),
+                            state_.read_row_counts_[cur_col_id_],
                             cross_page, stat_, cur_col_id_, first_batch, dict_filter_pushdown_,
                             is_eager_calc(), is_hive_lake_table());
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
@@ -5588,7 +5615,7 @@ int ObParquetTableRowIterator::calc_file_meta_column(const int64_t read_count,
       }
     } else if (meta_expr->type_ == T_PSEUDO_PARTITION_LIST_COL) {
       OZ (meta_expr->init_vector_for_write(eval_ctx, VEC_UNIFORM_CONST, read_count));
-      OZ (fill_file_partition_expr(meta_expr, state_.part_list_val_));
+      OZ(fill_file_partition_expr(meta_expr, state_));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr", KPC(meta_expr));
@@ -6457,7 +6484,8 @@ int ObParquetTableRowIterator::project_single_column_block_sample(int64_t &read_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block sample expects single-column scan",
              K(ret), K(column_indexs_.count()), K(column_readers_.count()));
-  } else if (column_indexs_.at(0) < 0 || OB_ISNULL(column_readers_.at(0).get())) {
+  } else if ((column_indexs_.at(0) < 0 || OB_ISNULL(column_readers_.at(0).get()))
+             && OB_ISNULL(identity_partition_values_.at(0))) {
     read_count = std::min(capacity, state_.cur_row_group_row_count_);
     state_.logical_read_row_count_ += read_count;
   } else {
@@ -6477,7 +6505,7 @@ int ObParquetTableRowIterator::project_single_column_block_sample(int64_t &read_
       bool first_batch = true;
       while (OB_SUCC(ret) && load_row_count < capacity
              && (state_.logical_read_row_count_ + load_row_count) < state_.cur_row_group_row_count_
-             && column_readers_.at(0)->HasNext()) {
+             && (OB_NOT_NULL(identity_partition_values_.at(0)) || column_readers_.at(0)->HasNext())) {
         int64_t temp_row_count = 0;
         const int64_t remaining_in_rg = state_.cur_row_group_row_count_
                                         - state_.logical_read_row_count_ - load_row_count;
@@ -6498,6 +6526,7 @@ int ObParquetTableRowIterator::project_single_column_block_sample(int64_t &read_
             temp_row_count,
             state_.cur_row_group_row_count_,
             default_value,
+            identity_partition_values_.at(cur_col_id_),
             state_.read_row_counts_[cur_col_id_],
             // block sample assembles one output batch from multiple ReadBatch calls,
             // page buffers may be released in between; always deep copy string values.

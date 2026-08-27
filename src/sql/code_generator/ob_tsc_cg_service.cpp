@@ -5,17 +5,20 @@
 
 #define USING_LOG_PREFIX SQL_CG
 #include "ob_tsc_cg_service.h"
-#include "sql/code_generator/ob_static_engine_cg.h"
-#include "sql/engine/table/ob_table_scan_op.h"
-#include "sql/rewrite/ob_transform_utils.h"
-#include "src/share/vector_index/ob_vector_index_util.h"
+
+#include "plugin/v2/external_table/ob_ext_json_protocol.h"
+#include "plugin/v2/external_table/ob_ext_table_metadata.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "share/domain_id/ob_domain_id.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "share/catalog/ob_catalog_properties.h"  // is_lake_plugin_table
-#include "plugin/v2/external_table/ob_ext_json_protocol.h"  // build_options_json
-#include "plugin/v2/external_table/ob_ext_table_metadata.h"  // ObExtTableMetadata
+#include "sql/code_generator/ob_static_engine_cg.h"
+#include "sql/engine/table/ob_table_scan_op.h"
+#include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "sql/resolver/dml/ob_hint.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
+#include "sql/rewrite/ob_transform_utils.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
+#include "src/share/vector_index/ob_vector_index_util.h"
 namespace oceanbase
 {
 
@@ -142,9 +145,26 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 
       int64_t partition_num = table_schema->get_partition_num();
       if (OB_FAIL(ret)) {
+      } else if (ObLakeTableFormat::ICEBERG == scan_ctdef.lake_table_format_
+                 && iceberg::ObIcebergUtils::is_manifest_partition_value_supported()) {
+        ObTablePartitionInfo *table_part_info = op.get_table_partition_info();
+        if (OB_ISNULL(table_part_info)
+            || PartitionInfoType::LAKE_TABLE != table_part_info->get_partition_info_type()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid iceberg table partition info", K(ret), KP(table_part_info));
+        } else {
+          ObLakeTablePartitionInfo *lake_table_part_info
+              = static_cast<ObLakeTablePartitionInfo *>(table_part_info);
+          if (OB_FAIL(lake_table_part_info->prepare_iceberg_partition_infos(
+                  *schema_guard,
+                  op.get_ext_file_column_exprs(),
+                  cg_.phy_plan_->get_allocator(),
+                  scan_ctdef.partition_infos_))) {
+            LOG_WARN("failed to prepare iceberg partition infos", K(ret));
+          }
+        }
       } else if (is_external_object_id(table_schema->get_table_id())
-          && table_schema->is_partitioned_table()
-          && partition_num > 0) {
+                 && table_schema->is_partitioned_table() && partition_num > 0) {
         if (OB_FAIL(scan_ctdef.partition_infos_.reserve(partition_num))) {
           LOG_WARN("failed to reserve partition infos array", K(ret), K(partition_num));
         } else {

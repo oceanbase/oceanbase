@@ -43,7 +43,7 @@ int ObLakeColumnStat::merge(ObLakeColumnStat &other)
   int ret = OB_SUCCESS;
   null_count_ += other.null_count_;
   size_ += other.size_;
-  record_count_ = other.record_count_;
+  record_count_ += other.record_count_;
   if (!other.min_val_.is_min_value() && !other.min_val_.is_null()) {
     if (min_val_.is_min_value()) {
       min_val_ = other.min_val_;
@@ -229,6 +229,10 @@ int ObLakeTableStatUtils::merge_iceberg_column_stats(const ObIArray<ObLakeColumn
         LOG_WARN("unexpected null column stat", K(common_column_stat), K(file_column_stat));
       } else if (common_column_stat->last_analyzed_ > 0) {
         file_column_stat->num_distinct_ = common_column_stat->num_distinct_;
+        if (common_column_stat->record_count_ > 0 && common_column_stat->size_ > 0) {
+          const int64_t common_avg_len = common_column_stat->size_ / common_column_stat->record_count_;
+          file_column_stat->size_ = common_avg_len * file_column_stat->record_count_;
+        }
       } else {
         file_column_stat->num_distinct_ = std::min(10000L, file_column_stat->record_count_);
       }

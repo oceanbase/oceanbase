@@ -443,6 +443,32 @@ int OptTableMeta::init_lake_table(const uint64_t table_id,
   return ret;
 }
 
+int OptTableMeta::refine_iceberg_string_avg_len(const OptSelectivityCtx &ctx,
+                                                const uint64_t column_id,
+                                                int64_t &avg_len) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t iceberg_string_varchar_len
+      = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
+  const ObColumnRefRawExpr *column_expr = NULL;
+  if (avg_len != 0) {
+    // no need to refine
+  } else if (OB_ISNULL(ctx.get_plan())
+             || OB_ISNULL(column_expr
+                          = ctx.get_plan()->get_column_expr_by_id(table_id_, column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ctx.get_plan()), K(table_id_), K(column_id));
+  } else if (OB_NOT_NULL(base_meta_info_)
+             && share::ObLakeTableFormat::ICEBERG == base_meta_info_->lake_table_format_
+             && column_expr->get_result_type().is_varchar_or_char()
+             && column_expr->get_result_type().get_accuracy().get_length()
+                    >= iceberg_string_varchar_len) {
+    avg_len = ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH
+              + ObOptEstCostModel::DEFAULT_MAX_STRING_WIDTH / 2.0;
+  }
+  return ret;
+}
+
 int OptTableMeta::init_lake_column_meta(const OptSelectivityCtx &ctx,
                                         const ObIArray<uint64_t> &column_ids,
                                         const ObIArray<ObLakeColumnStat*> &column_stats,
@@ -483,6 +509,14 @@ int OptTableMeta::init_lake_column_meta(const OptSelectivityCtx &ctx,
           } else {
             // magic number
             s.avglen_val_ = 4;
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(refine_iceberg_string_avg_len(ctx, column_ids.at(i), s.avglen_val_))) {
+              LOG_WARN("failed to refine iceberg string avg len",
+                       K(ret),
+                       K(s.avglen_val_),
+                       K(column_ids.at(i)));
+            }
           }
           s.ndv_val_ = column_stat->num_distinct_;
         }

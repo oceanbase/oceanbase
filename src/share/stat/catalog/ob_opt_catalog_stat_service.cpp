@@ -257,8 +257,8 @@ int ObOptCatalogStatService::get_catalog_column_stat_from_cache(ObIAllocator &al
             LOG_WARN("failed to deep copy max value", K(ret), KPC(handle.stat_));
           } else {
             column_stat->null_count_ = handle.stat_->get_num_null();
-            column_stat->size_ = handle.stat_->get_avg_length();
             column_stat->record_count_ = handle.stat_->get_num_rows();
+            column_stat->size_ = handle.stat_->get_avg_length() * column_stat->record_count_;
             column_stat->last_analyzed_ = handle.stat_->get_last_analyzed();
             column_stat->num_distinct_ = handle.stat_->get_num_distinct();
           }
@@ -767,7 +767,9 @@ int ObOptCatalogStatService::put_catalog_aggr_column_stat_to_cache(
   const int64_t num_not_null = column_stat.record_count_ >= column_stat.null_count_
                                    ? column_stat.record_count_ - column_stat.null_count_
                                    : 0;
-  const int64_t avg_length = column_stat.size_;
+  const int64_t avg_length = column_stat.record_count_ > 0
+                                 ? column_stat.size_ / column_stat.record_count_
+                                 : column_stat.size_;
   catalog_column_stat.set_tenant_id(tenant_id);
   catalog_column_stat.set_catalog_id(catalog_id);
   catalog_column_stat.set_database_name(database_name);
@@ -1013,7 +1015,8 @@ int ObOptCatalogStatService::aggregate_single_column_stat_from_partitions(
       }
       column_stat.last_analyzed_ = col_last_analyzed;
       if (total_row_count > 0) {
-        column_stat.size_ = static_cast<int64_t>(round(weighted_len_sum / total_row_count));
+        const int64_t avg_length = static_cast<int64_t>(round(weighted_len_sum / total_row_count));
+        column_stat.size_ = avg_length * column_stat.record_count_;
       }
     }
   }
