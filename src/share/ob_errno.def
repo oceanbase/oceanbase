@@ -724,6 +724,7 @@ DEFINE_ERROR(OB_SERVER_CONNECTION_ERROR, -4784, -1, "HY000", "Server '%s' connec
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_ATLER_TABLE_ILLEGAL_FK_DROP_INDEX, -4785, ER_DROP_INDEX_FK, "HY000", "Cannot drop index: needed in a foreign key constraint", "Cannot drop index '%.*s': needed in a foreign key constraint", 02266, "Cannot drop index: needed in a foreign key constraint", "Cannot drop index '%.*s': needed in a foreign key constraint");
 DEFINE_ORACLE_ERROR(OB_ERR_FLASHBACK_QUERY_EXP_NULL, -4786, -1, "HY000", "NULL snapshot expression not allowed here", 30055, "NULL snapshot expression not allowed here");
 DEFINE_ERROR(OB_RELEASE_MDS_NODE_ERROR, -4787, -1, "HY000", "Release mds node error");
+DEFINE_ERROR(OB_ERR_PARTITION_DEFINITION_CHANGED_DURING_SPLIT, -4788, -1, "HY000", "partition definition is changed during partition split");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

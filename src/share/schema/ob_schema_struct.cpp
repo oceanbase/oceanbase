@@ -16,6 +16,7 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/engine/cmd/ob_interval_partition_utils.h"
 #include "share/ob_fts_index_builder_util.h"
+#include "share/ob_display_list.h"
 
 namespace oceanbase
 {
@@ -5765,6 +5766,8 @@ OB_DEF_SERIALIZE_SIZE(ObPartitionOption)
   return len;
 }
 
+OB_SERIALIZE_MEMBER(ObDisplayPartitionID, part_id_);
+
 ObBasePartition::ObBasePartition()
   : tenant_id_(common::OB_INVALID_ID), table_id_(common::OB_INVALID_ID),
     part_id_(common::OB_INVALID_INDEX),
@@ -5780,7 +5783,8 @@ ObBasePartition::ObBasePartition()
     tablet_id_(),
     external_location_(),
     split_source_tablet_id_(),
-    part_storage_cache_policy_type_(storage::ObStorageCachePolicyType::MAX_POLICY)
+    part_storage_cache_policy_type_(storage::ObStorageCachePolicyType::MAX_POLICY),
+    source_partition_ids_(nullptr)
 { }
 
 ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
@@ -5802,7 +5806,8 @@ ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
     tablet_id_(),
     external_location_(),
     split_source_tablet_id_(),
-    part_storage_cache_policy_type_()
+    part_storage_cache_policy_type_(),
+    source_partition_ids_(nullptr)
 { }
 
 void ObBasePartition::reset()
@@ -5828,6 +5833,48 @@ void ObBasePartition::reset()
   ObSchema::reset();
   external_location_.reset();
   part_storage_cache_policy_type_ = storage::ObStorageCachePolicyType::MAX_POLICY;
+  if (source_partition_ids_ != nullptr) {
+    source_partition_ids_->~ObDisplayList();
+    free(source_partition_ids_);
+    source_partition_ids_ = nullptr;
+  }
+}
+
+int ObBasePartition::alloc_or_reuse_source_partition_ids()
+{
+  int ret = OB_SUCCESS;
+
+  if (source_partition_ids_ == nullptr) {
+    void *buf = nullptr;
+    common::ObIAllocator *allocator = get_allocator();
+    if (OB_ISNULL(allocator) || OB_ISNULL(buf = alloc(sizeof(ObDisplayList<ObDisplayPartitionID, 1>)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SHARE_SCHEMA_LOG(WARN, "failed to alloc source partition ids", KR(ret));
+    } else {
+      source_partition_ids_ = new (buf) ObDisplayList<ObDisplayPartitionID, 1>(*allocator, "SrcPartIDS");
+    }
+  } else {
+    source_partition_ids_->reuse();
+  }
+
+  return ret;
+}
+
+int ObBasePartition::set_source_partition_ids(const ObString &source_partition_ids)
+{
+  int ret = OB_SUCCESS;
+
+  if (source_partition_ids.empty()) {
+    if (source_partition_ids_ != nullptr) {
+      source_partition_ids_->reuse();
+    }
+  } else if (OB_FAIL(alloc_or_reuse_source_partition_ids())) {
+    SHARE_SCHEMA_LOG(WARN, "failed to alloc or reuse source partition ids", KR(ret));
+  } else if (OB_FAIL(source_partition_ids_->parse_from_display_str(source_partition_ids))) {
+    SHARE_SCHEMA_LOG(WARN, "failed to parse source partition ids", KR(ret), K(source_partition_ids));
+  }
+
+  return ret;
 }
 
 int ObBasePartition::assign(const ObBasePartition & src_part)
@@ -5857,6 +5904,12 @@ int ObBasePartition::assign(const ObBasePartition & src_part)
       LOG_WARN("Fail to deep copy low_bound_val_", K(ret));
     } else if (OB_FAIL(list_row_values_.assign(*get_allocator(), src_part.list_row_values_))) {
       LOG_WARN("fail to assign list row value", K(ret), K(src_part));
+    } else if (src_part.source_partition_ids_ != nullptr) {
+      if (OB_FAIL(alloc_or_reuse_source_partition_ids())) {
+        SHARE_SCHEMA_LOG(WARN, "failed to alloc or reuse source partition ids", KR(ret));
+      } else if (OB_FAIL(source_partition_ids_->assign(*src_part.source_partition_ids_))) {
+        SHARE_SCHEMA_LOG(WARN, "failed to assign source partition ids", KR(ret), K(src_part.source_partition_ids_));
+      }
     }
   }
   return ret;
@@ -6097,6 +6150,11 @@ OB_DEF_SERIALIZE(ObBasePartition)
               external_location_,
               split_source_tablet_id_,
               part_storage_cache_policy_type_);
+
+  bool source_partition_ids_not_null = source_partition_ids_ != nullptr;
+  OB_UNIS_ENCODE(source_partition_ids_not_null);
+  OB_UNIS_ENCODE_IF(*source_partition_ids_, source_partition_ids_not_null);
+
   return ret;
 }
 
@@ -6160,6 +6218,19 @@ OB_DEF_DESERIALIZE(ObBasePartition)
   } else if (OB_FAIL(deep_copy_str(external_location, external_location_))) {
     LOG_WARN("Fail to deep copy location ", K(ret), K_(external_location));
   }
+
+  bool source_partition_ids_not_null = false;
+  OB_UNIS_DECODE(source_partition_ids_not_null);
+  if (OB_SUCC(ret) && source_partition_ids_not_null) {
+    if (OB_FAIL(alloc_or_reuse_source_partition_ids())) {
+      LOG_WARN("Fail to alloc or reuse source partition ids", K(ret));
+    } else {
+      OB_UNIS_DECODE(*source_partition_ids_);
+    }
+  } else if (source_partition_ids_ != nullptr) {
+    source_partition_ids_->reuse();
+  }
+
   return ret;
 }
 
@@ -6171,6 +6242,11 @@ OB_DEF_SERIALIZE_SIZE(ObBasePartition)
       part_idx_, is_empty_partition_name_,
       tablespace_id_, partition_type_, low_bound_val_, tablet_id_,
       external_location_, split_source_tablet_id_, part_storage_cache_policy_type_);
+
+  bool source_partition_ids_not_null = source_partition_ids_ != nullptr;
+  OB_UNIS_ADD_LEN(source_partition_ids_not_null);
+  OB_UNIS_ADD_LEN_IF(*source_partition_ids_, source_partition_ids_not_null);
+
   return len;
 }
 
@@ -6181,6 +6257,7 @@ int64_t ObBasePartition::get_deep_copy_size() const
   deep_copy_size += low_bound_val_.get_deep_copy_size();
   deep_copy_size += list_row_values_.get_deep_copy_size();
   deep_copy_size += external_location_.length() + 1;
+  deep_copy_size += source_partition_ids_ ? sizeof(*source_partition_ids_) + source_partition_ids_->get_data_size() : 0;
   deep_copy_size += sizeof(part_storage_cache_policy_type_);
   return deep_copy_size;
 }

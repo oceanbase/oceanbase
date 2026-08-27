@@ -250,6 +250,13 @@ enum ObPartitionLevel
   PARTITION_LEVEL_TWO = 2,
   PARTITION_LEVEL_MAX,
 };
+// Which level the SPLIT (or REORGANIZE) ALTER statement targets.
+enum class ObSplitPartitionType : uint8_t
+{
+  SPLIT_PARTITION = 0,
+  SPLIT_SUBPARTITION = 1,
+  SPLIT_TYPE_MAX = 2,
+};
 // type of hash name to generate
 enum ObHashNameType
 {
@@ -2756,6 +2763,47 @@ private:
   int64_t subpart_idx_;
 };
 
+class ObDisplayPartitionID : public ObDisplayType
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDisplayPartitionID(const int64_t part_id) : part_id_(part_id) {}
+
+  explicit ObDisplayPartitionID() : part_id_(OB_INVALID_PARTITION_ID) {}
+
+  virtual ~ObDisplayPartitionID() = default;
+
+  bool operator==(const ObDisplayPartitionID &other) const { return part_id_ == other.part_id_; }
+
+  int64_t max_display_str_len() const override { return 21; }
+
+  int parse_from_display_str(const ObString &str) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(1 != sscanf(str.ptr(), "%ld", &part_id_))) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_SCHEMA_LOG(WARN, "invalid display str", KR(ret), K(str));
+    }
+    return ret;
+  }
+
+  int to_display_str(char *buf, const int64_t len, int64_t &pos) const override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(buf) || OB_UNLIKELY(len <= 0 || pos < 0 || pos >= len)) {
+      ret = OB_INVALID_ARGUMENT;
+      SHARE_SCHEMA_LOG(WARN, "invalid argument", KR(ret), KP(buf), K(len), K(pos));
+    } else if (OB_FAIL(databuff_printf(buf, len, pos, "%ld", part_id_))) {
+      SHARE_SCHEMA_LOG(WARN, "databuff_printf failed", KR(ret), K(len), K(pos), K(buf));
+    }
+    return ret;
+  }
+
+  VIRTUAL_TO_STRING_KV(K(part_id_));
+
+  int64_t part_id_;
+};
+
 class ObPartitionUtils;
 class ObBasePartition : public ObSchema
 {
@@ -2822,6 +2870,14 @@ public:
   ObTabletID get_split_source_tablet_id() const
   { return split_source_tablet_id_; }
 
+  int alloc_or_reuse_source_partition_ids();
+  int set_source_partition_ids(const ObString &source_partition_ids);
+
+  const ObDisplayList<ObDisplayPartitionID> *get_source_partition_ids() const
+  {
+    return source_partition_ids_;
+  }
+
   int assign(const ObBasePartition & src_part);
 
   // This interface is not strictly semantically less than, please note
@@ -2883,7 +2939,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(tenant_id), K_(table_id), K_(part_id), K_(name), K_(low_bound_val),
                        K_(high_bound_val), K_(list_row_values), K_(status), K_(part_idx),
                        K_(is_empty_partition_name), K_(tablet_id), K_(external_location),
-                       K_(split_source_tablet_id), K_(part_storage_cache_policy_type));
+                       K_(split_source_tablet_id), K_(part_storage_cache_policy_type), KPC_(source_partition_ids));
 protected:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -2918,6 +2974,12 @@ protected:
   // it is only used when attempting to split partition.
   ObTabletID split_source_tablet_id_;
   storage::ObStorageCachePolicyType part_storage_cache_policy_type_;
+
+  /**
+   * @brief will persisted in inner_table, which means the source partition in tablet split.
+   *        persisted like "500001,500002, ...."
+   */
+  ObDisplayList<ObDisplayPartitionID, 1> *source_partition_ids_;
 };
 
 class ObSubPartition;

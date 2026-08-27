@@ -121,6 +121,12 @@ const char *oceanbase::share::get_ddl_type(ObDDLType ddl_type)
     case ObDDLType::DDL_MANUAL_SPLIT_NON_RANGE:
       ret_name = "DDL_MANUAL_SPLIT_NON_RANGE";
       break;
+    case ObDDLType::DDL_MANUAL_SPLIT_WITHOUT_PK_BY_RANGE:
+      ret_name = "DDL_MANUAL_SPLIT_WITHOUT_PK_BY_RANGE";
+      break;
+    case ObDDLType::DDL_MANUAL_SPLIT_WITHOUT_PK_NON_RANGE:
+      ret_name = "DDL_MANUAL_SPLIT_WITHOUT_PK_NON_RANGE";
+      break;
     case ObDDLType::DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS:
       ret_name = "DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS";
       break;

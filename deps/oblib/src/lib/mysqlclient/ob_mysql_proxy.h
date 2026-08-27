@@ -34,7 +34,7 @@ public:
   InnerDDLInfo() : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
   is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
   is_retryable_ddl_(false), is_dummy_ddl_for_inner_visibility_(false), is_major_refreshing_mview_(false), is_vec_tablet_rebuild_(false),
-  is_partition_local_ddl_(false), reserved_bit_(0)
+  is_partition_local_ddl_(false), dest_part_is_hidden_(false), reserved_bit_(0)
   {
   }
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
@@ -64,6 +64,8 @@ public:
   bool is_search_index_ddl() const { return is_search_index_ddl_; }
   void set_is_partition_local_ddl(const bool flag) { is_partition_local_ddl_ = flag; }
   bool is_partition_local_ddl() const { return is_partition_local_ddl_; }
+  void set_dest_part_is_hidden(const bool flag) { dest_part_is_hidden_ = flag; }
+  bool dest_part_is_hidden() const { return dest_part_is_hidden_; }
   inline void reset() { ddl_info_ = 0; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
@@ -80,7 +82,8 @@ public:
   static const int64_t IS_MAJOR_REFRESHING_MVIEW_BIT = 1;
   static const int64_t IS_SEARCH_INDEX_DDL_BIT = 1;
   static const int64_t IS_PARTITION_LOCAL_DDL_BIT = 1;
-  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT - IS_VEC_TABLET_REBUILD_BIT - IS_SEARCH_INDEX_DDL_BIT - IS_PARTITION_LOCAL_DDL_BIT;
+  static const int64_t DEST_PART_IS_HIDDEN_BIT = 1;
+  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT - IS_MVIEW_COMPLETE_REFRESH_BIT - IS_REFRESHING_MVIEW_BIT - IS_RETRYABLE_DDL_BIT - IS_DUMMY_DDL_FOR_INNER_VISIBILITY_BIT - IS_MAJOR_REFRESHING_MVIEW_BIT - IS_VEC_TABLET_REBUILD_BIT - IS_SEARCH_INDEX_DDL_BIT - IS_PARTITION_LOCAL_DDL_BIT - DEST_PART_IS_HIDDEN_BIT;
   union {
     uint64_t ddl_info_;
     struct {
@@ -102,6 +105,7 @@ public:
       uint64_t is_vec_tablet_rebuild_ : IS_VEC_TABLET_REBUILD_BIT;
       uint64_t is_search_index_ddl_ : IS_SEARCH_INDEX_DDL_BIT;
       uint64_t is_partition_local_ddl_ : IS_PARTITION_LOCAL_DDL_BIT;
+      uint64_t dest_part_is_hidden_ : DEST_PART_IS_HIDDEN_BIT;
       uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };

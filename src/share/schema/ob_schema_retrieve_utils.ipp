@@ -5354,6 +5354,17 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
         partition.set_status(status);
       }
     }
+    if (OB_SUCC(ret)) {
+      ObString tmp_source_partition_ids;
+      ObString default_source_partition_ids("");
+      EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(
+        result, "source_partition_ids", tmp_source_partition_ids, true, /* skip null error*/ true,/*skip column error*/ default_source_partition_ids);
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(partition.set_source_partition_ids(tmp_source_partition_ids))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to set source_partition_ids", K(ret), K(tmp_source_partition_ids));
+        }
+      }
+    }
   } else { }//do nothing
   return ret;
 }

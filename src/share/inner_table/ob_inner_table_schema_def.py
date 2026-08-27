@@ -1146,6 +1146,7 @@ all_part_def = dict(
       ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID'),
       ('external_location', 'varbinary:OB_MAX_VARBINARY_LENGTH', 'true'),
       ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'NONE'),
+      ('source_partition_ids', 'longtext', 'true'),
     ],
 )
 
@@ -1187,6 +1188,7 @@ all_sub_part_def = dict(
       ('partition_type', 'int', 'false', '0'),
       ('tablet_id', 'bigint', 'false', 'ObTabletID::INVALID_TABLET_ID'),
       ('storage_cache_policy', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'NONE'),
+      ('source_partition_ids', 'longtext', 'true'),
     ],
 )
 

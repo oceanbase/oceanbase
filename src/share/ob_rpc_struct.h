@@ -3482,7 +3482,9 @@ public:
       task_type_(share::ObDDLType::DDL_INVALID),
       src_ls_id_(),
       local_index_table_schemas_(),
-      lob_table_schemas_()
+      lob_table_schemas_(),
+      total_parallelism_for_split_(0),
+      split_partition_type_(share::schema::ObSplitPartitionType::SPLIT_PARTITION)
   {}
   virtual ~ObPartitionSplitArg() {}
   bool is_valid() const
@@ -3515,13 +3517,16 @@ public:
     src_ls_id_.reset();
     local_index_table_schemas_.reset();
     lob_table_schemas_.reset();
+    total_parallelism_for_split_ = 0;
+    split_partition_type_ = share::schema::ObSplitPartitionType::SPLIT_PARTITION;
   }
   INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
       K(src_tablet_id_), K(dest_tablet_ids_), K(local_index_table_ids_),
       K(local_index_schema_versions_), K(src_local_index_tablet_ids_),
       K(dest_local_index_tablet_ids_), K(lob_table_ids_), K(lob_schema_versions_),
       K(src_lob_tablet_ids_), K(dest_lob_tablet_ids_),
-      K(task_type_), K(src_ls_id_), K(local_index_table_schemas_), K(lob_table_schemas_));
+      K(task_type_), K(src_ls_id_), K(local_index_table_schemas_), K(lob_table_schemas_),
+      K(total_parallelism_for_split_), K(split_partition_type_));
 public:
   ObTabletID src_tablet_id_;
   ObSArray<ObTabletID> dest_tablet_ids_;
@@ -3537,6 +3542,10 @@ public:
   share::ObLSID src_ls_id_;  // valid when data_version >= 4.3.5
   ObSArray<ObTableSchema> local_index_table_schemas_;
   ObSArray<ObTableSchema> lob_table_schemas_;
+
+  // Now used for sub-partition table split partition, which will send many sub-partition split tasks at the same time.
+  int64_t total_parallelism_for_split_; // This variable means the total parallelism of partition split task. (Every task will have its another own parallelism)
+  ObSplitPartitionType split_partition_type_;
 };
 
 struct ObCleanSplittedTabletArg final
@@ -3555,7 +3564,8 @@ public:
       dest_local_index_tablet_ids_(),
       src_lob_tablet_ids_(),
       dest_lob_tablet_ids_(),
-      is_auto_split_(false)
+      is_auto_split_(false),
+      split_partition_type_(ObSplitPartitionType::SPLIT_PARTITION)
   {}
   ~ObCleanSplittedTabletArg() = default;
   int assign(const ObCleanSplittedTabletArg &other);
@@ -3593,6 +3603,7 @@ public:
     src_lob_tablet_ids_.reset();
     dest_lob_tablet_ids_.reset();
     is_auto_split_ = false;
+    split_partition_type_ = ObSplitPartitionType::SPLIT_PARTITION;
   }
   TO_STRING_KV(K_(tenant_id),
                K_(table_id),
@@ -3620,6 +3631,7 @@ public:
   ObSArray<ObSArray<ObTabletID>> dest_lob_tablet_ids_;
 
   bool is_auto_split_;
+  ObSplitPartitionType split_partition_type_;
 };
 
 struct ObCleanSplittedTabletDDLArg: public ObDDLArg
@@ -4776,11 +4788,16 @@ public:
   bool micro_index_clustered_;
   ObTabletID split_src_tablet_id_;
   bool split_can_reuse_macro_block_;
+  // src_tablet_ids_[i] is the split source of every tablet in dst_tablet_ids_[i].
+  ObSArray<ObTabletID> src_tablet_ids_;
+  ObSArray<ObSArray<ObTabletID>> dst_tablet_ids_;
   TO_STRING_KV(K_(tenant_data_version),
                K_(need_create_empty_major),
                K_(micro_index_clustered),
                K_(split_src_tablet_id),
-               K_(split_can_reuse_macro_block));
+               K_(split_can_reuse_macro_block),
+               K_(src_tablet_ids),
+               K_(dst_tablet_ids));
 };
 
 struct ObBatchCreateTabletArg

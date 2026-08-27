@@ -11049,6 +11049,8 @@ int ObPartitionSplitArg::assign(const ObPartitionSplitArg &other)
   src_tablet_id_ = other.src_tablet_id_;
   task_type_ = other.task_type_;
   src_ls_id_ = other.src_ls_id_;
+  total_parallelism_for_split_ = other.total_parallelism_for_split_;
+  split_partition_type_ = other.split_partition_type_;
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("assign ddl arg failed", K(ret));
   } else if (OB_FAIL(dest_tablet_ids_.assign(other.dest_tablet_ids_))) {
@@ -11091,7 +11093,9 @@ OB_SERIALIZE_MEMBER((ObPartitionSplitArg, ObDDLArg),
                     task_type_,
                     src_ls_id_,
                     local_index_table_schemas_,
-                    lob_table_schemas_);
+                    lob_table_schemas_,
+                    total_parallelism_for_split_,
+                    split_partition_type_);
 
 int ObCleanSplittedTabletArg::assign(const ObCleanSplittedTabletArg &other)
 {
@@ -11101,6 +11105,7 @@ int ObCleanSplittedTabletArg::assign(const ObCleanSplittedTabletArg &other)
   task_id_ = other.task_id_;
   src_table_tablet_id_ = other.src_table_tablet_id_;
   is_auto_split_ = other.is_auto_split_;
+  split_partition_type_ = other.split_partition_type_;
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(dest_tablet_ids_.assign(other.dest_tablet_ids_))) {
@@ -11133,7 +11138,8 @@ OB_SERIALIZE_MEMBER(ObCleanSplittedTabletArg,
                     dest_local_index_tablet_ids_,
                     src_lob_tablet_ids_,
                     dest_lob_tablet_ids_,
-                    is_auto_split_);
+                    is_auto_split_,
+                    split_partition_type_);
 
 int ObCleanSplittedTabletDDLArg::assign(const ObCleanSplittedTabletDDLArg &other)
 {
@@ -11329,6 +11335,8 @@ void ObCreateTabletExtraInfo::reset()
   micro_index_clustered_ = false;
   split_src_tablet_id_.reset();
   split_can_reuse_macro_block_ = false;
+  src_tablet_ids_.reset();
+  dst_tablet_ids_.reset();
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -11339,6 +11347,11 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   micro_index_clustered_ = other.micro_index_clustered_;
   split_src_tablet_id_ = other.split_src_tablet_id_;
   split_can_reuse_macro_block_ = other.split_can_reuse_macro_block_;
+  if (OB_FAIL(src_tablet_ids_.assign(other.src_tablet_ids_))) {
+    LOG_WARN("failed to assign split src tablet ids", K(ret), K(other));
+  } else if (OB_FAIL(dst_tablet_ids_.assign(other.dst_tablet_ids_))) {
+    LOG_WARN("failed to assign split dst tablet ids", K(ret), K(other));
+  }
   return ret;
 }
 
@@ -11347,7 +11360,9 @@ OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo,
                     need_create_empty_major_,
                     micro_index_clustered_,
                     split_src_tablet_id_,
-                    split_can_reuse_macro_block_);
+                    split_can_reuse_macro_block_,
+                    src_tablet_ids_,
+                    dst_tablet_ids_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {
