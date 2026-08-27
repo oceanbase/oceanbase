@@ -78,7 +78,8 @@ private:
     TOP_INFO,
     MEMORY_USAGE,
     TOP_TIME,
-    TOP_TRACE_ID
+    TOP_TRACE_ID,
+    RESOURCE_GROUP
   };
   class FillScanner
   {

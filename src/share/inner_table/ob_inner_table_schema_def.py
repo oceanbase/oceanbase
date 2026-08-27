@@ -9639,6 +9639,7 @@ def_table_schema(
   ('memory_usage', 'bigint', 'true'),
   ('top_time', 'double', 'false'),
   ('top_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
+  ('resource_group', 'varchar:OB_MAX_RESOURCE_PLAN_NAME_LENGTH', 'true', ''),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -29198,7 +29199,8 @@ SELECT
   TOP_INFO,
   MEMORY_USAGE,
   TOP_TIME,
-  TOP_TRACE_ID
+  TOP_TRACE_ID,
+  resource_group AS RESOURCE_GROUP
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -29254,7 +29256,8 @@ def_table_schema(
     TOP_INFO,
     MEMORY_USAGE,
     TOP_TIME,
-    TOP_TRACE_ID
+    TOP_TRACE_ID,
+    RESOURCE_GROUP
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -76447,7 +76450,8 @@ SELECT
   TOP_INFO,
   MEMORY_USAGE,
   TOP_TIME,
-  TOP_TRACE_ID
+  TOP_TRACE_ID,
+  resource_group AS RESOURCE_GROUP
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -76505,7 +76509,8 @@ def_table_schema(
   TOP_INFO,
   MEMORY_USAGE,
   TOP_TIME,
-  TOP_TRACE_ID
+  TOP_TRACE_ID,
+  RESOURCE_GROUP
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")

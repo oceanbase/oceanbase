@@ -585,6 +585,18 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
             }
             break;
           }
+          case RESOURCE_GROUP: {
+            ObString resource_group;
+            if (OB_FAIL(sess_info->get_sys_variable(share::SYS_VAR_OB_RESOURCE_GROUP, resource_group))) {
+              SERVER_LOG(WARN, "failed to get session resource group", K(ret), K(sess_info->get_sid()));
+            } else if (!resource_group.empty()) {
+              cur_row_->cells_[cell_idx].set_varchar(resource_group);
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            } else {
+              cur_row_->cells_[cell_idx].set_null();
+            }
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),

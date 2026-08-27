@@ -11746,13 +11746,27 @@ static struct VarsInit{
     ObSysVars[851].alias_ = "OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT" ;
     }();
 
+    [&] (){
+      ObSysVars[852].default_value_ = "" ;
+      ObSysVars[852].info_ = "Specifies the resource group used by statements in the current session" ;
+      ObSysVars[852].name_ = "ob_resource_group" ;
+      ObSysVars[852].data_type_ = ObVarcharType ;
+      ObSysVars[852].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[852].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_resource_group" ;
+      ObSysVars[852].id_ = SYS_VAR_OB_RESOURCE_GROUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_RESOURCE_GROUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_RESOURCE_GROUP] = 852 ;
+      ObSysVars[852].base_value_ = "" ;
+    ObSysVars[852].alias_ = "OB_SV_RESOURCE_GROUP" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 852;
+static int64_t var_amount = 853;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

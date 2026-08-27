@@ -3639,6 +3639,7 @@ TOP_INFO	varchar(262143)	YES		NULL
 MEMORY_USAGE	bigint(20)	YES		NULL	
 TOP_TIME	double	NO		NULL	
 TOP_TRACE_ID	varchar(64)	YES			
+RESOURCE_GROUP	varchar(128)	YES			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|GV$OB_PROCESSLIST|%') then 2
@@ -3695,6 +3696,7 @@ TOP_INFO	varchar(262143)	NO
 MEMORY_USAGE	bigint(20)	NO			
 TOP_TIME	double	NO			
 TOP_TRACE_ID	varchar(64)	NO			
+RESOURCE_GROUP	varchar(128)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|V$OB_PROCESSLIST|%') then 2

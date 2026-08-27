@@ -975,6 +975,11 @@ public:
                                                                    const ObBasicSysVar &sys_var,
                                                                    const common::ObObj &in_val,
                                                                    common::ObObj &out_val);
+  static int check_and_convert_resource_group(sql::ObExecContext &ctx,
+                                              const ObSetVar &set_var,
+                                              const ObBasicSysVar &sys_var,
+                                              const common::ObObj &in_val,
+                                              common::ObObj &out_val);
   static int check_locale_type_is_valid(sql::ObExecContext &ctx,
                                         const ObSetVar &set_var,
                                         const ObBasicSysVar &sys_var,

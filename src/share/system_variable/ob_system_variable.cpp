@@ -3689,6 +3689,16 @@ int ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds(
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_and_convert_resource_group(ObExecContext &ctx,
+                                                           const ObSetVar &set_var,
+                                                           const ObBasicSysVar &sys_var,
+                                                           const common::ObObj &in_val,
+                                                           common::ObObj &out_val)
+{
+  // placeholder
+  return OB_NOT_IMPLEMENT;
+}
+
 int ObSysVarOnCheckFuncs::check_and_convert_default_authentication_plugin(ObExecContext &ctx,
                                                                           const ObSetVar &set_var,
                                                                           const ObBasicSysVar &sys_var,

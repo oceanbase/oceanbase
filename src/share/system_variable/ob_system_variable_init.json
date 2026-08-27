@@ -12029,5 +12029,19 @@
     "background_cn": "",
     "ref_url": "",
     "placeholder": true
+  },
+  "ob_resource_group": {
+    "id": 10769,
+    "name": "ob_resource_group",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "Specifies the resource group used by statements in the current session",
+    "flags": "SESSION",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_resource_group",
+    "publish_version": "",
+    "info_cn": "指定当前会话中 SQL 使用的资源组",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

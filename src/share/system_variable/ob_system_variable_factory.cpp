@@ -1146,6 +1146,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_query_timeout",
   "ob_read_consistency",
   "ob_reserved_meta_memory_percentage",
+  "ob_resource_group",
   "ob_route_policy",
   "ob_safe_weak_read_snapshot",
   "ob_security_version",
@@ -2001,6 +2002,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_QUERY_TIMEOUT,
   SYS_VAR_OB_READ_CONSISTENCY,
   SYS_VAR_OB_RESERVED_META_MEMORY_PERCENTAGE,
+  SYS_VAR_OB_RESOURCE_GROUP,
   SYS_VAR_OB_ROUTE_POLICY,
   SYS_VAR_OB_SAFE_WEAK_READ_SNAPSHOT,
   SYS_VAR_OB_SECURITY_VERSION,
@@ -3130,7 +3132,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ap_query_replica_fallback",
   "ob_udf_cost_factor",
   "ob_udf_selectivity",
-  "_enable_pl_composite_as_sql_udt"
+  "_enable_pl_composite_as_sql_udt",
+  "ob_resource_group"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4187,6 +4190,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObUdfCostFactor)
         + sizeof(ObSysVarObUdfSelectivity)
         + sizeof(ObSysVarEnablePlCompositeAsSqlUdt)
+        + sizeof(ObSysVarObResourceGroup)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11861,6 +11865,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnablePlCompositeAsSqlUdt));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObResourceGroup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObResourceGroup", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_RESOURCE_GROUP))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObResourceGroup));
       }
     }
 
@@ -21242,6 +21255,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnablePlCompositeAsSqlUdt())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnablePlCompositeAsSqlUdt", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_RESOURCE_GROUP: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObResourceGroup)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObResourceGroup)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObResourceGroup())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObResourceGroup", K(ret));
       }
       break;
     }
