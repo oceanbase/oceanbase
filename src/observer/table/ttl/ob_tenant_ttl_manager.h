@@ -67,7 +67,8 @@ class ObTTLTaskScheduler : public common::ObTimerTask
 public:
   ObTTLTaskScheduler()
   : del_ten_arr_(), sql_proxy_(nullptr), is_inited_(false), periodic_launched_(false),
-    need_reload_(true), mutex_(common::ObLatchIds::OB_TTL_TASK_SCHEDULER_LOCK), is_leader_(true),
+    last_launched_ts_(common::OB_INVALID_TIMESTAMP), need_reload_(true),
+    mutex_(common::ObLatchIds::OB_TTL_TASK_SCHEDULER_LOCK), is_leader_(true),
     need_do_for_switch_(true), rowkey_allocator_(ObMemAttr(MTL_ID(), "TTLTntRKAlloc"))
   {}
   virtual ~ObTTLTaskScheduler() {}
@@ -105,6 +106,8 @@ private:
 
   ObTTLTaskStatus next_status(int64_t curr);
 
+  int try_add_periodic_task_in_active_time(const int64_t current_ts);
+  bool is_last_launched_same_day(const int64_t current_ts) const;
   int add_ttl_task_internal(TRIGGER_TYPE trigger_type, ObString table_with_tablet = ObString());
   int check_one_tablet_task(common::ObISQLClient &sql_client,
                             const uint64_t table_id,
@@ -138,6 +141,7 @@ protected:
   uint64_t tenant_id_;
 
   bool periodic_launched_;
+  int64_t last_launched_ts_;
 
   bool need_reload_;
   lib::ObMutex mutex_;

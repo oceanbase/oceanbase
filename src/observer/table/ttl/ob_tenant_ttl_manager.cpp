@@ -5,6 +5,8 @@
 
 #define USING_LOG_PREFIX SERVER
 
+#include <time.h>
+
 #include "observer/table/ttl/ob_tenant_ttl_manager.h"
 #include "share/ob_max_id_fetcher.h"
 #include "share/lob/lob_consistency_check/ob_lob_consistency_util.h"
@@ -347,7 +349,6 @@ int ObTTLTaskScheduler::in_active_time(bool& is_active_time)
 int ObTTLTaskScheduler::try_add_periodic_task()
 {
   int ret = OB_SUCCESS;
-  TRIGGER_TYPE trigger_type = TRIGGER_TYPE::PERIODIC_TRIGGER;
   bool is_active_time = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -363,18 +364,53 @@ int ObTTLTaskScheduler::try_add_periodic_task()
   } else if (OB_FAIL(in_active_time(is_active_time))) {
     LOG_WARN("fail to check is in active time", KR(ret));
   } else if (is_active_time) {
-    if (!periodic_launched_) {
-      lib::ObMutexGuard guard(mutex_);
-      if (tenant_task_.is_finished_ && OB_FAIL(add_ttl_task_internal(TRIGGER_TYPE::PERIODIC_TRIGGER))) {
-        LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id));
-      } else {
-        periodic_launched_ = true;
-      }
-    }
+    ret = try_add_periodic_task_in_active_time(ObTimeUtility::current_time());
   } else {
     periodic_launched_ = false;
   }
   return ret;
+}
+
+int ObTTLTaskScheduler::try_add_periodic_task_in_active_time(const int64_t current_ts)
+{
+  int ret = OB_SUCCESS;
+  if (!periodic_launched_ || !is_last_launched_same_day(current_ts)) {
+    lib::ObMutexGuard guard(mutex_);
+    if (!periodic_launched_ || !is_last_launched_same_day(current_ts)) {
+      if (!tenant_task_.is_finished_) {
+        // Restore the launch watermark for a reloaded periodic task. A USER task must not
+        // consume the current window's periodic opportunity.
+        if (static_cast<int64_t>(TRIGGER_TYPE::PERIODIC_TRIGGER)
+            == tenant_task_.ttl_status_.trigger_type_) {
+          periodic_launched_ = true;
+          last_launched_ts_ = tenant_task_.ttl_status_.task_start_time_;
+        }
+      } else if (OB_FAIL(add_ttl_task_internal(TRIGGER_TYPE::PERIODIC_TRIGGER))) {
+        LOG_WARN("fail to add ttl task", KR(ret), K_(tenant_id));
+      } else {
+        periodic_launched_ = true;
+        last_launched_ts_ = tenant_task_.ttl_status_.task_start_time_;
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObTTLTaskScheduler::is_last_launched_same_day(const int64_t current_ts) const
+{
+  bool is_same_day = false;
+  if (OB_INVALID_TIMESTAMP != last_launched_ts_) {
+    const time_t last_launched_time = static_cast<time_t>(last_launched_ts_ / 1000000L);
+    const time_t current_time = static_cast<time_t>(current_ts / 1000000L);
+    struct tm last_launched_tm;
+    struct tm current_tm;
+    if (nullptr != ::localtime_r(&last_launched_time, &last_launched_tm)
+        && nullptr != ::localtime_r(&current_time, &current_tm)) {
+      is_same_day = last_launched_tm.tm_year == current_tm.tm_year
+          && last_launched_tm.tm_yday == current_tm.tm_yday;
+    }
+  }
+  return is_same_day;
 }
 
 int ObTTLTaskScheduler::check_all_tablet_task()
