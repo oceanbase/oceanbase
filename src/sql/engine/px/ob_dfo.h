@@ -246,7 +246,8 @@ public:
               px_detectable_ids_(),
               interrupt_by_dm_(false),
               p2p_dh_map_info_(),
-              sqc_order_gi_tasks_(false)
+              sqc_order_gi_tasks_(false),
+              collect_finish_res_succ_(false)
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -367,6 +368,8 @@ public:
   int64_t get_sqc_count() const { return sqc_count_;}
   void set_sqc_order_gi_tasks(bool v) { sqc_order_gi_tasks_ = v; }
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
+  void set_collect_finish_res_succ(bool v) { collect_finish_res_succ_ = v; }
+  bool collect_finish_res_succ() const { return collect_finish_res_succ_; }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   TO_STRING_KV(K_(need_report), K_(execution_id), K_(qc_id), K_(sqc_id), K_(dfo_id), K_(exec_addr), K_(qc_addr),
@@ -444,6 +447,7 @@ private:
   ObP2PDhMapInfo p2p_dh_map_info_;
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
+  bool collect_finish_res_succ_;
 };
 
 class ObDfo
