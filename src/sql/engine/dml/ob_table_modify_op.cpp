@@ -986,8 +986,12 @@ int ObTableModifyOp::get_gi_task()
   } else if (OB_FAIL(gi_prepare_map->get_refactored(MY_SPEC.id_, gi_task_info))) {
     if (ret != OB_HASH_NOT_EXIST) {
       LOG_WARN("failed to get prepare gi task", K(ret), K(MY_SPEC.get_id()));
-    } else if (OB_FAIL(handle_gi_task_not_found(gi_prepare_map, table_loc_id, ref_table_id))) {
-      LOG_WARN("failed to handle missing gi task", K(ret), K(MY_SPEC.get_id()));
+    } else {
+      LOG_DEBUG("no prepared task info, set table modify to end",
+        K(MY_SPEC.get_id()), K(this), K(lbt()));
+      // 当前DML算子无法从 GI中获得 task，表示当前DML算子iter end
+      iter_end_ = true;
+      ret = OB_SUCCESS;
     }
   } else if (OB_ISNULL(get_input()->table_loc_) &&
       OB_ISNULL(get_input()->table_loc_ = das_ctx.get_table_loc_by_id(table_loc_id, ref_table_id))) {
@@ -999,19 +1003,6 @@ int ObTableModifyOp::get_gi_task()
               K(gi_task_info), KPC(get_input()), K(MY_SPEC.id_), K(get_input()));
   }
   return ret;
-}
-
-int ObTableModifyOp::handle_gi_task_not_found(GIPrepareTaskMap *gi_prepare_map,
-                                              const ObTableID &table_loc_id,
-                                              const ObTableID &ref_table_id)
-{
-  UNUSED(gi_prepare_map);
-  UNUSED(table_loc_id);
-  UNUSED(ref_table_id);
-  LOG_DEBUG("no prepared task info, set table modify to end",
-            K(MY_SPEC.get_id()), K(this), K(lbt()));
-  iter_end_ = true;
-  return OB_SUCCESS;
 }
 
 int ObTableModifyOp::calc_single_table_loc()

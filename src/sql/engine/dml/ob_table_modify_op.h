@@ -165,7 +165,6 @@ public:
     table_loc_ = nullptr;
     tablet_loc_ = nullptr;
   }
-  inline void set_table_loc(ObDASTableLoc *table_loc) { table_loc_ = table_loc; }
   inline void set_tablet_loc(ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
   inline ObDASTabletLoc *get_tablet_loc() { return tablet_loc_; }
   inline ObDASTableLoc *get_table_loc() { return table_loc_; }
@@ -294,9 +293,6 @@ protected:
                              int64_t found_rows);
   int discharge_das_write_buffer();
   virtual void record_err_for_load_data(int err_ret, int row_num) { UNUSED(err_ret); UNUSED(row_num); }
-  virtual int handle_gi_task_not_found(GIPrepareTaskMap *gi_prepare_map,
-                                       const common::ObTableID &table_loc_id,
-                                       const common::ObTableID &ref_table_id);
 
 public:
   common::ObMySQLProxy *sql_proxy_;
