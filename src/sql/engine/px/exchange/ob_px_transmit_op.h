@@ -520,7 +520,7 @@ protected:
     uint32_t *row_size_array_;
     ObCompactRow **return_rows_;
     RowMeta meta_;
-    uint16_t *fallback_array_;
+    int64_t *fallback_array_;
     int64_t fallback_cnt_;
     ObTempRowStore::DtlRowBlock **blocks_;
     int64_t *heads_;
