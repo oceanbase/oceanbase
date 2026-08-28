@@ -6,15 +6,31 @@ GREEN='\033[32m'
 NC="\033[0m"
 
 if [ $1 -eq 0 ]; then
-    rm -rf $prefix/.meta $prefix/log_obshell
+    rm -rf $prefix/.meta* $prefix/log_obshell
 
     if [ -f "$json_file" ] && [ -s "$json_file" ]; then
         redo_dir=$(cat "$json_file" | grep -o '"redo_dir":[^,]*' | sed 's/"redo_dir"://')
         echo "rm -rf $redo_dir" >> $prefix/oceanbase_clean.sh
         data_dir=$(cat "$json_file" | grep -o '"data_dir":[^,]*' | sed 's/"data_dir"://')
         echo "rm -rf $data_dir" >> $prefix/oceanbase_clean.sh
-        echo "echo OK" >> $prefix/oceanbase_clean.sh
     fi
+
+    printf '%s\n' \
+        "rm -rf -- $prefix/.meta*" \
+        "rm -rf -- $prefix/run" \
+        "rm -rf -- $prefix/log" \
+        "rm -rf -- $prefix/log_obshell" \
+        "rm -rf -- $prefix/audit" \
+        "rm -rf -- $prefix/wallet" \
+        "rm -rf -- $prefix/etc2" \
+        "rm -rf -- $prefix/etc3" \
+        "rm -rf -- $prefix/store" \
+        "rm -f -- $prefix/etc/observer.config.bin" \
+        "rm -f -- $prefix/etc/observer.config.bin.history" \
+        "rm -f -- $prefix/etc/observer.data_version.bin" \
+        "rm -f -- $prefix/etc/observer.data_version.bin.history" \
+        'echo OK' \
+        "rm -f -- $prefix/oceanbase_clean.sh" >> "$prefix/oceanbase_clean.sh"
 
     echo "Clean oceanbase script can clean ob all configuration files and all data files."
     echo -e "${GREEN}To clean OceanBase${NC} : bash $prefix/oceanbase_clean.sh"

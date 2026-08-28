@@ -163,7 +163,7 @@ function check_trace {
           echo "maximum retries reached and then exit"
           exit 1
       fi
-      echo "wait ${delay}s and the retry"
+      echo "wait ${delay}s and then retry"
       sleep $delay
     fi
   done
@@ -219,6 +219,16 @@ function do_config_observer {
 }
 
 function do_start_observer {
+  # Return directly when observer is already running. This can happen when the
+  # package is reinstalled without cleaning the existing data and processes.
+  if [ -f "$prefix/run/observer.pid" ]; then
+    pid=$(cat "$prefix/run/observer.pid")
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      echo "Observer process with PID $pid is already running."
+      return 0
+    fi
+  fi
+
   # check observer status
   response=$(curl --silent -H "Content-Type: application/json" -X GET --unix-socket $unix_socket $url/api/v1/status)
   identity=$(echo "$response" | grep -o '"identity":[^,]*' | sed 's/"identity"://' | tr -d '"' | tr -d '}')
@@ -292,6 +302,11 @@ function stop_observer {
     echo "The observer stop failed."
     exit 1
   fi
+  $obshell admin stop > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "stop obshell failed"
+    exit 1
+  fi
 }
 
 function reload_observer {
@@ -309,14 +324,6 @@ elif [ "x$1" = "xstop" ]; then
 elif [ "x$1" = "xreload" ]; then
   echo "oceanbase service reloaded at ${DATE}"
   reload_observer
-elif [ "x$1" = "xdestroy" ]; then
-  # rpm uninstall logic, run systemctl stop oceanbase firstly
-  echo "oceanbase service destroyed at ${DATE}"
-  $obshell admin stop > /dev/null 2>&1
-  if [ $? -ne 0 ]; then
-    echo "stop obshell failed"
-    exit 1
-  fi
 elif [ "x$1" = "xtest" ]; then
   echo "test at ${DATE}"
   result=$(get_json_body_by_key "obshell:")
