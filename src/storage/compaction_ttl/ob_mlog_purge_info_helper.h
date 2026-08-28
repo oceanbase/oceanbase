@@ -9,7 +9,26 @@ namespace oceanbase
 {
 namespace storage
 {
-using MlogPurgeScnMap = common::hash::ObHashMap<int64_t, uint64_t>; // mlog id -> last purge scn
+using MlogPurgeScnMap = common::hash::ObHashMap<int64_t, int64_t>; // mlog id -> last purge scn
+
+class ObTenantMlogPurgeScnMapCache final
+{
+public:
+  static constexpr int64_t MIN_REFRESH_INTERVAL_US = 30 * 1000 * 1000L; // 30s
+  ObTenantMlogPurgeScnMapCache()
+    : map_(),
+      read_snapshot_(-1)
+  {}
+  DISABLE_COPY_ASSIGN(ObTenantMlogPurgeScnMapCache);
+  int refresh_or_init(const int64_t read_snapshot);
+  int get_purge_scn(const uint64_t mlog_id, int64_t &purge_scn) const;
+  int64_t get_read_snapshot() const { return read_snapshot_; }
+  bool is_initialized() const { return map_.created(); }
+private:
+  MlogPurgeScnMap map_;
+  int64_t read_snapshot_;
+};
+
 class ObMLogPurgeInfoHelper
 {
 public:

@@ -62,7 +62,7 @@ int ObMediumLoop::loop()
   ObLS *ls = nullptr;
   ObScheduleTabletFunc func(merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
   if (is_during_tenant_major()) {
-    if (OB_FAIL(func.refresh_mlog_purge_scn_cache(merge_version_))) {
+    if (OB_FAIL(func.try_refresh_mlog_purge_scn_cache(merge_version_))) {
       LOG_WARN("failed to refresh or init mlog purge scn map", KR(ret), K(func));
     }
   }
@@ -122,7 +122,7 @@ int ObMediumLoop::loop_in_ls(
     }
   } else if (!is_during_tenant_major() &&
               func.get_ls_status().is_leader_ &&
-                OB_FAIL(func.refresh_mlog_purge_scn_cache(
+                OB_FAIL(func.try_refresh_mlog_purge_scn_cache(
                   func.get_ls_status().weak_read_ts_.get_val_for_tx()))) {
     LOG_WARN("failed to refresh or init mlog purge scn map", KR(ret), K(ls_id),
              K(func));

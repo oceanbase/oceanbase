@@ -223,16 +223,9 @@ int ObScheduleTabletFunc::get_mlog_latest_purge_scn(
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("mlog table id is invalid", K(ret), K(tablet.get_tablet_id()));
   } else {
-    uint64_t tmp_latest_mlog_purge_scn = OB_INVALID_SCN_VAL;
     if (mlog_purge_scn_cache_.is_initialized()) { // medium scheduler use mlog purge scn map
-      if (OB_SUCC(mlog_purge_scn_cache_.get_map().get_refactored(static_cast<int64_t>(mlog_id), tmp_latest_mlog_purge_scn))) {
-        latest_mlog_purge_scn = static_cast<int64_t>(tmp_latest_mlog_purge_scn);
-      } else if (OB_HASH_NOT_EXIST == ret) {
-        latest_mlog_purge_scn = 0;
-        ret = OB_SUCCESS;
-        //overwrite ret
-      } else {
-        LOG_WARN("failed to get latest mlog purge scn from map", K(ret), K(mlog_id));
+      if (OB_FAIL(mlog_purge_scn_cache_.get_purge_scn(mlog_id, latest_mlog_purge_scn))) {
+        LOG_WARN("failed to get latest mlog purge scn from cache", KR(ret), K(mlog_id));
       }
     } else { // for user request,window compaction, use mlog purge scn from mlog purge info helper
       if (OB_FAIL(ObMLogPurgeInfoHelper::get_mlog_purge_scn(
@@ -497,9 +490,15 @@ void ObScheduleTabletFunc::schedule_freeze_dag(const bool force)
   }
 }
 
-int ObScheduleTabletFunc::refresh_mlog_purge_scn_cache(const int64_t &read_snapshot)
+int ObScheduleTabletFunc::try_refresh_mlog_purge_scn_cache(const int64_t &read_snapshot)
 {
-  return mlog_purge_scn_cache_.refresh_or_init(read_snapshot);
+  int ret = OB_SUCCESS;
+  if ((read_snapshot - mlog_purge_scn_cache_.get_read_snapshot()
+              >= ObTenantMlogPurgeScnMapCache::MIN_REFRESH_INTERVAL_US)
+      && OB_FAIL(mlog_purge_scn_cache_.refresh_or_init(read_snapshot))) {
+    LOG_WARN("failed to refresh mlog purge scn cache", KR(ret), K(read_snapshot));
+  }
+  return ret;
 }
 
 int ObScheduleTabletFunc::diagnose_switch_tablet(
@@ -560,39 +559,6 @@ int ObScheduleTabletFunc::schedule_merge_dag(
   } else {
     LOG_TRACE("schedule major merge dag success", K(ls_id), "tablet_id", tablet.get_tablet_id(), K(merge_type), K(schedule_scn));
     ++tablet_cnt_.schedule_dag_cnt_;
-  }
-  return ret;
-}
-
-int ObTenantMlogPurgeScnMapCache::refresh_or_init(const int64_t read_snapshot)
-{
-  int ret = OB_SUCCESS;
-  bool need_refresh = true;
-  if (is_initialized()) {
-    if (read_snapshot_ <= read_snapshot) {
-      if (read_snapshot - read_snapshot_ < MIN_REFRESH_INTERVAL_US) {
-        if (map_.size() > MIN_NEED_REFRESH_MAP_SIZE) {
-          need_refresh = false;
-        }
-      }
-    }
-  }
-  if (need_refresh) {
-    if (!map_.created()) {
-      if (OB_FAIL(map_.create(1024, "MlogPurgeScn",
-                              "MlogPurgeScn", MTL_ID()))) {
-        LOG_WARN("failed to create ls mlog purge scn map", K(ret));
-      }
-    } else if (OB_FAIL(map_.clear())) {
-      LOG_WARN("failed to clear mlog purge scn map", K(ret));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(storage::ObMLogPurgeInfoHelper::get_recent_tenant_mlog_purge_scns(
-                         read_snapshot, map_))) {
-      LOG_WARN("failed to get recent tenant mlog purge scns", KR(ret), K(read_snapshot));
-    } else {
-      read_snapshot_ = read_snapshot;
-    }
   }
   return ret;
 }

@@ -1750,7 +1750,11 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(
 int ObMediumCompactionScheduleFunc::try_refresh_mlog_purge_scn(const int64_t &read_snapshot)
 {
   int ret = OB_SUCCESS;
-  if (read_snapshot < mlog_purge_scn_read_snapshot_) {
+  // A sentinel is not a cache hit.  The scheduling-side tablet cache can lag
+  // the schema used for this medium info, leaving the SCN uninitialized even
+  // when both snapshots are equal.
+  if (OB_INVALID_SCN_VAL == mlog_latest_purge_scn_
+      || read_snapshot < mlog_purge_scn_read_snapshot_) {
     if (OB_FAIL(ObMLogPurgeInfoHelper::get_mlog_purge_scn(
           table_id_, read_snapshot, mlog_latest_purge_scn_))) {
       LOG_WARN("failed to get mlog purge scn", KR(ret), K(table_id_), K(read_snapshot));

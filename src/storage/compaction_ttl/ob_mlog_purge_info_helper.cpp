@@ -12,6 +12,44 @@ using namespace common;
 using namespace share;
 namespace storage
 {
+int ObTenantMlogPurgeScnMapCache::refresh_or_init(const int64_t read_snapshot)
+{
+  int ret = OB_SUCCESS;
+  if (!map_.created()) {
+    if (OB_FAIL(map_.create(1024, "MlogPurgeScn", "MlogPurgeScn", MTL_ID()))) {
+      LOG_WARN("failed to create mlog purge scn map", K(ret));
+    }
+  } else if (OB_FAIL(map_.clear())) {
+    LOG_WARN("failed to clear mlog purge scn map", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObMLogPurgeInfoHelper::get_recent_tenant_mlog_purge_scns(
+                         read_snapshot, map_))) {
+    LOG_WARN("failed to get recent tenant mlog purge scns", KR(ret), K(read_snapshot));
+  } else {
+    read_snapshot_ = read_snapshot;
+  }
+  return ret;
+}
+
+int ObTenantMlogPurgeScnMapCache::get_purge_scn(
+    const uint64_t mlog_id,
+    int64_t &purge_scn) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_initialized())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("mlog purge scn cache is not initialized", KR(ret));
+  } else if (OB_SUCC(map_.get_refactored(static_cast<int64_t>(mlog_id), purge_scn))) {
+  } else if (OB_HASH_NOT_EXIST == ret) {
+    purge_scn = 0;
+    ret = OB_SUCCESS;
+  } else {
+    LOG_WARN("failed to get mlog purge scn from cache", KR(ret), K(mlog_id));
+  }
+  return ret;
+}
+
 int ObMLogPurgeInfoHelper::get_mlog_purge_scn(
   const uint64_t mlog_id,
   const int64_t read_snapshot,
@@ -121,7 +159,7 @@ int ObMLogPurgeInfoHelper::get_recent_tenant_mlog_purge_scns(
                 LOG_WARN("failed to extract last_purge_scn", KR(ret),
                          K(mlog_id));
               } else if (OB_FAIL(mlog_purge_scn_map.set_refactored(
-                             mlog_id, last_purge_scn))) {
+                             mlog_id, static_cast<int64_t>(last_purge_scn)))) {
                 LOG_WARN("failed to set mlog purge scn map", KR(ret),
                          K(mlog_id), K(last_purge_scn));
               }
