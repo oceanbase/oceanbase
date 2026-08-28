@@ -32,7 +32,7 @@ public:
   ~ObCopyTabletRecordExtraInfo();
   void reset();
 public:
-  OB_INLINE void add_cost_time_ms(const int64_t &time_cost_ms) { ATOMIC_FAA(&cost_time_ms_, time_cost_ms); }
+  OB_INLINE void add_cost_time_us(const int64_t &time_cost_us) { ATOMIC_FAA(&cost_time_us_, time_cost_us); }
   OB_INLINE void add_total_data_size(const int64_t &total_data_size) { ATOMIC_FAA(&total_data_size_, total_data_size); }
   OB_INLINE void add_write_data_size(const int64_t &write_data_size) { ATOMIC_FAA(&write_data_size_, write_data_size); }
   OB_INLINE void inc_major_count() { ATOMIC_INC(&major_count_); }
@@ -42,14 +42,19 @@ public:
   OB_INLINE void set_restore_action(const ObTabletRestoreAction::ACTION &action) { ATOMIC_SET(&restore_action_, action); }
   OB_INLINE int get_major_count() const { return ATOMIC_LOAD(&major_count_); }
   int update_max_reuse_mgr_size(const ObMacroBlockReuseMgr *reuse_mgr);
+  // Record one finished sstable copy: macro/reuse counts always, plus major
+  // count / major-macro count (and max reuse mgr size) for major sstables.
+  int update_after_sstable_copy(const ObITable::TableKey &table_key,
+      const int64_t total_macro_count, const int64_t reuse_macro_count,
+      const ObMacroBlockReuseMgr *reuse_mgr);
 
-  TO_STRING_KV(K_(cost_time_ms), K_(total_data_size), K_(write_data_size), K_(major_count),
+  TO_STRING_KV("cost_time_ms", cost_time_us_ / 1000, K_(total_data_size), K_(write_data_size), K_(major_count),
       K_(macro_count), K_(major_macro_count), K_(reuse_macro_count), K_(max_reuse_mgr_size),
       "restore_action", ObTabletRestoreAction::get_action_str(restore_action_));
 private:
   // The following 3 member variables are updated when writer of physical copy task finish
-  // time cost of tablet copy (fully migration / restore of a single tablet)
-  int64_t cost_time_ms_;
+  // time cost of tablet copy (fully migration / restore of a single tablet), in microseconds
+  int64_t cost_time_us_;
   // total data size reading from copy source (Byte)
   int64_t total_data_size_;
   // data size writing to dst (Byte) (only count the data size of new macro block)

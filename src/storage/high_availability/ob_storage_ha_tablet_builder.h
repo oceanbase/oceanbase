@@ -265,6 +265,9 @@ public:
     common::ObArenaAllocator allocator_;
     common::ObArray<blocksstable::ObMigrationSSTableParam> copy_table_info_array_;
     ObMigrationTabletParam tablet_meta_;
+    // Protects this tablet's array/status/meta. Separated from the map-level
+    // lock_ so concurrent tasks operating on different tablets never serialize.
+    common::SpinRWLock tablet_lock_;
     DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletTableInfoMgr);
   };
 
@@ -336,7 +339,6 @@ private:
   void free_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
 
 private:
-  static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 128;
   typedef hash::ObHashMap<ObITable::TableKey, ObCopySSTableMacroRangeInfo *> CopySSTableMacroRangeInfoMap;
   bool is_inited_;
   ObStorageHACopySSTableParam param_;

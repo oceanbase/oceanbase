@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_storage_ha_tablet_builder.h"
+#include "ob_sstable_copy_ops.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/ob_storage_schema_util.h"
@@ -1539,7 +1540,8 @@ ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::ObStorageHATabletTableIn
     status_(ObCopyTabletStatus::MAX_STATUS),
     allocator_("HATableInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     copy_table_info_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
-    tablet_meta_()
+    tablet_meta_(),
+    tablet_lock_(common::ObLatchIds::OB_STORAGE_HA_TABLET_BUILDER_LOCK)
 {
 }
 
@@ -1586,6 +1588,7 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::get_copy_table_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get copy table info get invalid argument", K(ret), K(table_key));
   } else {
+    common::SpinRLockGuard guard(tablet_lock_);
     for (int64_t i = 0; i < copy_table_info_array_.count() && !found; ++i) {
       const ObMigrationSSTableParam &tmp_copy_table_info = copy_table_info_array_.at(i);
       if (table_key == tmp_copy_table_info.table_key_) {
@@ -1614,7 +1617,8 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::add_copy_table_info(
   } else if (!copy_table_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("add copy table key get invalid argument", K(ret), K(copy_table_info));
-  } else{
+  } else {
+    common::SpinWLockGuard guard(tablet_lock_);
     for (int64_t i = 0; i < copy_table_info_array_.count() && !found; ++i) {
       const ObMigrationSSTableParam &tmp_copy_table_info = copy_table_info_array_.at(i);
       if (copy_table_info.table_key_ == tmp_copy_table_info.table_key_) {
@@ -1641,10 +1645,15 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::get_table_keys(
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablet table info mgr do not init", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_info_array_.count(); ++i) {
-      const ObMigrationSSTableParam &tmp_copy_table_info = copy_table_info_array_.at(i);
-      if (OB_FAIL(table_keys.push_back(tmp_copy_table_info.table_key_))) {
-        LOG_WARN("failed to push table key into array", K(ret), K(tmp_copy_table_info));
+    common::SpinRLockGuard guard(tablet_lock_);
+    if (OB_FAIL(table_keys.reserve(copy_table_info_array_.count()))) {
+      LOG_WARN("failed to reserve table keys", K(ret), K(copy_table_info_array_.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_info_array_.count(); ++i) {
+        const ObMigrationSSTableParam &tmp_copy_table_info = copy_table_info_array_.at(i);
+        if (OB_FAIL(table_keys.push_back(tmp_copy_table_info.table_key_))) {
+          LOG_WARN("failed to push table key into array", K(ret), K(tmp_copy_table_info));
+        }
       }
     }
   }
@@ -1660,6 +1669,8 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::check_copy_tablet_ex
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablet table info mgr do not init", K(ret));
   } else {
+    // status_ is set once in init() under the map-level write lock and never
+    // mutated again, so no per-tablet lock is needed here.
     is_exist = ObCopyTabletStatus::TABLET_EXIST == status_;
   }
   return ret;
@@ -1672,11 +1683,15 @@ int ObStorageHATableInfoMgr::ObStorageHATabletTableInfoMgr::get_tablet_meta(cons
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablet table info mgr do not init", K(ret));
-  } else if (ObCopyTabletStatus::TABLET_EXIST != status_) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("src tablet do not exist, cannot get tablet meta", K(ret), K(status_));
   } else {
-    tablet_meta = &tablet_meta_;
+    // status_ and tablet_meta_ are set once in init() under the map-level write
+    // lock and never mutated again, so no per-tablet lock is needed here.
+    if (ObCopyTabletStatus::TABLET_EXIST != status_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("src tablet do not exist, cannot get tablet meta", K(ret), K(status_));
+    } else {
+      tablet_meta = &tablet_meta_;
+    }
   }
   return ret;
 }
@@ -1751,9 +1766,18 @@ int ObStorageHATableInfoMgr::add_table_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("add table info get invalid argument", K(ret), K(tablet_id), K(sstable_info));
   } else {
-    common::SpinWLockGuard guard(lock_);
+    // Read lock on the map: we only look up the per-tablet mgr pointer here. The
+    // actual append is serialized by the per-tablet tablet_lock_ inside
+    // add_copy_table_info. Holding the map READ lock for the whole call keeps the
+    // mgr alive (blocks remove/reuse which take the WRITE lock) -- must NOT release
+    // the map lock before touching *tablet_table_info_mgr, or a concurrent remove
+    // could mtl_free it (use-after-free). Different tablets no longer serialize.
+    common::SpinRLockGuard guard(lock_);
     if (OB_FAIL(table_info_mgr_map_.get_refactored(tablet_id, tablet_table_info_mgr))) {
       LOG_WARN("failed to get tablet table info mgr", K(ret), K(tablet_id));
+    } else if (OB_ISNULL(tablet_table_info_mgr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet table info mgr should not be NULL", K(ret), K(tablet_id));
     } else if (OB_FAIL(tablet_table_info_mgr->add_copy_table_info(sstable_info.param_))) {
       LOG_WARN("failed to add copy table key info", K(ret), K(tablet_id), K(sstable_info));
     }
@@ -2200,7 +2224,7 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_ob_reader_(
     arg.tenant_id_ = param_.tenant_id_;
     arg.ls_id_ = param_.ls_id_;
     arg.tablet_id_ = param_.tablet_id_;
-    arg.macro_range_max_marco_count_ = MACRO_RANGE_MAX_MACRO_COUNT;
+    arg.macro_range_max_marco_count_ = ObSSTableCopyOps::MACRO_RANGE_MAX_MACRO_COUNT;
     arg.need_check_seq_ = param_.need_check_seq_;
     arg.ls_rebuild_seq_ = param_.src_ls_rebuild_seq_;
 
@@ -2262,7 +2286,7 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_restore_reader_(
     arg.tenant_id_ = param_.tenant_id_;
     arg.ls_id_ = param_.ls_id_;
     arg.tablet_id_ = param_.tablet_id_;
-    arg.macro_range_max_marco_count_ = MACRO_RANGE_MAX_MACRO_COUNT;
+    arg.macro_range_max_marco_count_ = ObSSTableCopyOps::MACRO_RANGE_MAX_MACRO_COUNT;
     arg.need_check_seq_ = false;
     arg.ls_rebuild_seq_ = -1;
 #ifdef ERRSIM

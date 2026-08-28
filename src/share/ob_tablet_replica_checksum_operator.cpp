@@ -746,6 +746,70 @@ int ObTabletReplicaChecksumOperator::batch_get(
   return ret;
 }
 
+int ObTabletReplicaChecksumOperator::batch_get_replica_checksum_by_meta(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const common::ObAddr &src_server,
+    const common::ObIArray<common::ObTabletID> &tablet_ids,
+    common::ObISQLClient &sql_client,
+    ObReplicaCkmArray &items,
+    const int32_t group_id)
+{
+  int ret = OB_SUCCESS;
+  items.reset();
+  // The JOIN returns one checksum row per replica per tablet, so reserve for
+  // the typical full-replica count instead of the tablet count (an undersized
+  // reserve still works, it just reallocs and rehashes mid-fill).
+  const int64_t EXPECTED_REPLICA_CNT_PER_TABLET = 3;
+  const int64_t cnt = tablet_ids.count();
+  char ip[OB_MAX_SERVER_ADDR_SIZE] = "";
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid()
+      || !src_server.is_valid() || cnt < 1 || group_id < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(src_server), K(cnt), K(group_id));
+  } else if (OB_UNLIKELY(!src_server.ip_to_string(ip, sizeof(ip)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to convert server ip to string", KR(ret), K(src_server));
+  } else if (OB_FAIL(items.init(tenant_id, cnt * EXPECTED_REPLICA_CNT_PER_TABLET))) {
+    LOG_WARN("failed to init ckm array", KR(ret), K(tenant_id), K(cnt));
+  } else {
+    int64_t start_idx = 0;
+    int64_t end_idx = min(MAX_BATCH_COUNT, cnt);
+    ObSqlString sql;
+    while (OB_SUCC(ret) && (start_idx < end_idx)) {
+      sql.reuse();
+      if (OB_FAIL(sql.append_fmt(
+          "SELECT c.* FROM %s c, %s m "
+          "WHERE c.tenant_id = %lu AND m.tenant_id = %lu "
+          "AND m.ls_id = %ld AND m.svr_ip = '%s' AND m.svr_port = %d "
+          "AND c.tablet_id = m.tablet_id AND c.ls_id = m.ls_id "
+          "AND c.compaction_scn = m.compaction_scn AND m.tablet_id IN (",
+          OB_ALL_TABLET_REPLICA_CHECKSUM_TNAME, OB_ALL_TABLET_META_TABLE_TNAME,
+          tenant_id, tenant_id, ls_id.id(), ip, src_server.get_port()))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(ls_id));
+      }
+      for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; ++i) {
+        if (OB_UNLIKELY(!tablet_ids.at(i).is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid tablet id", KR(ret), K(i), K(tablet_ids.at(i)));
+        } else if (OB_FAIL(sql.append_fmt("%lu%s", tablet_ids.at(i).id(),
+            (i == end_idx - 1) ? ")" : ", "))) {
+          LOG_WARN("fail to append tablet id", KR(ret), K(i));
+        }
+      }
+      if (FAILEDx(sql.append_fmt(" ORDER BY c.tablet_id ASC"))) {
+        LOG_WARN("fail to append order by", KR(ret));
+      } else if (OB_FAIL(inner_batch_get_by_sql_(tenant_id, sql, group_id, sql_client, items))) {
+        LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), "sql", sql.ptr());
+      } else {
+        start_idx = end_idx;
+        end_idx = min(start_idx + MAX_BATCH_COUNT, cnt);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletReplicaChecksumOperator::inner_batch_get_by_sql_(
     const uint64_t tenant_id,
     const ObSqlString &sql,

@@ -126,6 +126,19 @@ public:
       ObReplicaCkmArray &items,
       const bool include_larger_than,
       const int32_t group_id);
+  // One JOIN SQL fetches, for each tablet in tablet_ids, the checksum rows of ALL
+  // replicas at that tablet's src-replica compaction_scn (ordered by tablet_id).
+  // src_server pins the src replica row in the meta table, whose compaction_scn
+  // column is the verification baseline. Both tables live in the meta tenant, so a
+  // single-SQL JOIN is possible.
+  static int batch_get_replica_checksum_by_meta(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const common::ObAddr &src_server,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObISQLClient &sql_client,
+      ObReplicaCkmArray &items,
+      const int32_t group_id);
   static int batch_update_with_trans(
       common::ObMySQLTransaction &trans,
       const uint64_t tenant_id,

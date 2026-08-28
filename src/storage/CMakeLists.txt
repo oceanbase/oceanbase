@@ -300,6 +300,8 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_sstable_copy_start_task.cpp
   high_availability/ob_sstable_copy_finish_task.cpp
   high_availability/ob_tablet_copy_finish_task.cpp
+  high_availability/ob_sstable_copy_ops.cpp
+  high_availability/ob_batch_sstable_copy_task.cpp
   high_availability/ob_storage_ha_macro_block_writer.cpp
   high_availability/ob_storage_ha_reader.cpp
   high_availability/ob_storage_ha_service.cpp

@@ -55,15 +55,16 @@ ObTabletCopyFinishTask::ObTabletCopyFinishTask()
     lock_(common::ObLatchIds::OB_TABLET_COPY_FINISH_TASK_SPIN_RW_LOCK),
     ha_dag_(nullptr),
     arena_allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "TabCopyFinish")),
-    minor_tables_handle_(),
-    ddl_tables_handle_(),
-    inc_major_ddl_tables_handle_(),
-    inc_major_tables_handle_(),
-    major_tables_handle_(),
-    mds_tables_handle_(),
+    minor_tables_handle_(get_ha_mem_tenant_id()),
+    ddl_tables_handle_(get_ha_mem_tenant_id()),
+    inc_major_ddl_tables_handle_(get_ha_mem_tenant_id()),
+    inc_major_tables_handle_(get_ha_mem_tenant_id()),
+    major_tables_handle_(get_ha_mem_tenant_id()),
+    mds_tables_handle_(get_ha_mem_tenant_id()),
     last_meta_seq_array_(),
     param_()
 {
+  last_meta_seq_array_.set_attr(ObMemAttr(get_ha_mem_tenant_id(), "LastMetaSeqArr"));
 }
 
 ObTabletCopyFinishTask::~ObTabletCopyFinishTask()

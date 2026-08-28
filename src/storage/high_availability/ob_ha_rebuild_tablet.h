@@ -285,7 +285,6 @@ private:
       ObTabletCopyFinishTask *&tablet_copy_finish_task);
   int record_server_event_(const int64_t cost_us, const int64_t result);
   int try_update_tablet_();
-  int check_tablet_replica_validity_(const common::ObTabletID &tablet_id);
   int update_ha_expected_status_(const ObCopyTabletStatus::STATUS &status);
 
 private:

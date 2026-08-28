@@ -238,7 +238,9 @@ int ObStorageHAMacroBlockWriter::process(
         } else {
           ObTaskController::get().allow_next_syslog();
           ++write_count;
-          write_size += data.capacity();
+          // Account the bytes actually flushed. capacity() is the fixed-size
+          // receive buffer and can substantially overstate tiny CG writes.
+          write_size += data.upper_align_length();
           LOG_INFO("success copy macro block", K(write_count));
         }
       } else {
@@ -259,7 +261,8 @@ int ObStorageHAMacroBlockWriter::process(
 
     data_size = reader_->get_data_size();
 
-    int64_t cost_time_ms = (ObTimeUtility::current_time() - start_time) / 1000;
+    const int64_t cost_time_us = ObTimeUtility::current_time() - start_time;
+    const int64_t cost_time_ms = cost_time_us / 1000;
     int64_t data_size_KB = data_size / 1024;
     int64_t write_size_KB = write_size / 1024;
 
@@ -270,7 +273,7 @@ int ObStorageHAMacroBlockWriter::process(
       write_speed_KB = write_size_KB * 1000 / cost_time_ms;
     }
 
-    extra_info_->add_cost_time_ms(cost_time_ms);
+    extra_info_->add_cost_time_us(cost_time_us);
     extra_info_->add_total_data_size(data_size);
     extra_info_->add_write_data_size(write_size);
 
@@ -454,4 +457,3 @@ int ObStorageHALocalMacroBlockWriter::append_macro_row_(
 
 } // storage
 } // oceanbase
-

@@ -559,68 +559,141 @@ int ObSSTableCopyFinishTask::add_logic_macro_info_for_range(const ObIArray<ObLog
   } else if (OB_ISNULL(sstable_macro_range_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable macro range info should not be null when adding logic macro info", K(ret));
-  } else {
-    // sstable_macro_range_info_ references the macro range info hold by the dag's copy sstable
-    // info mgr. Filling macro_block_ids_ in place here is exactly what the physical copy tasks
-    // read later through get_next_macro_block_copy_info().
-    ObArray<ObCopyMacroRangeIdInfo> &range_array =
-        const_cast<ObCopySSTableMacroRangeInfo *>(sstable_macro_range_info_)->copy_macro_range_array_;
-    int64_t macro_idx = 0;
-    // for each range
-    for (int64_t range_idx = 0; OB_SUCC(ret) && range_idx < range_array.count(); ++range_idx) {
-      ObCopyMacroRangeIdInfo &range_id_info = range_array.at(range_idx);
-      const ObCopyMacroRangeInfo &range_info = range_id_info.range_info_;
-      if (!range_id_info.macro_block_ids_.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("macro block ids should be empty", K(ret), K(range_id_info));
-      } else {
-        // add logic macro block ids to corresponding range
-        for (int64_t idx = 0; OB_SUCC(ret) && idx < range_info.macro_block_count_; ++idx) {
-          ObLogicMacroBlockId logic_id;
-          if (macro_idx >= logic_ids.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("macro block ids count is not match", K(ret), K(macro_idx), K(logic_ids.count()));
-          } else if (FALSE_IT(logic_id = logic_ids.at(macro_idx))) {
-          } else if (OB_FAIL(range_id_info.macro_block_ids_.push_back(logic_id))) {
-            LOG_WARN("failed to push back logic id", K(ret), K(logic_id));
-          } else {
-            ++macro_idx;
-          }
-        }
+  } else if (OB_FAIL(fill_logic_macro_info_for_range(
+                 logic_ids, *sstable_macro_range_info_))) {
+    LOG_WARN("failed to fill logic macro info for ranges", K(ret));
+  }
 
-        if (OB_SUCC(ret)) {
-          // validate macro block ids (count and correctness)
-          if (range_id_info.macro_block_ids_.count() != range_info.macro_block_count_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("macro block ids count is not match", K(ret), K(range_id_info));
-          } else if (range_id_info.macro_block_ids_.at(0) != range_info.start_macro_block_id_
-                  || range_id_info.macro_block_ids_.at(range_id_info.macro_block_ids_.count() - 1) != range_info.end_macro_block_id_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("macro block ids is not match", K(ret), K(range_info));
-          }
+  return ret;
+}
+
+int ObSSTableCopyFinishTask::fill_logic_macro_info_for_range(
+    const ObIArray<ObLogicMacroBlockId> &logic_ids,
+    const ObCopySSTableMacroRangeInfo &sstable_macro_range_info)
+{
+  int ret = OB_SUCCESS;
+  // The range info is owned by the DAG's copy sstable info manager. Both the
+  // legacy and batch copy paths fill its logical IDs before copying starts.
+  ObArray<ObCopyMacroRangeIdInfo> &range_array =
+      const_cast<ObCopySSTableMacroRangeInfo &>(
+          sstable_macro_range_info).copy_macro_range_array_;
+  int64_t macro_idx = 0;
+
+  for (int64_t range_idx = 0;
+       OB_SUCC(ret) && range_idx < range_array.count();
+       ++range_idx) {
+    ObCopyMacroRangeIdInfo &range_id_info = range_array.at(range_idx);
+    const ObCopyMacroRangeInfo &range_info = range_id_info.range_info_;
+    if (!range_id_info.macro_block_ids_.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("macro block ids should be empty", K(ret), K(range_id_info));
+    } else {
+      for (int64_t idx = 0;
+           OB_SUCC(ret) && idx < range_info.macro_block_count_;
+           ++idx) {
+        if (macro_idx >= logic_ids.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("macro block ids count is not match",
+              K(ret), K(macro_idx), K(logic_ids.count()));
+        } else if (OB_FAIL(range_id_info.macro_block_ids_.push_back(
+                       logic_ids.at(macro_idx)))) {
+          LOG_WARN("failed to push back logic id", K(ret), K(macro_idx));
+        } else {
+          ++macro_idx;
         }
+      }
+
+      if (OB_SUCC(ret)
+          && (range_id_info.macro_block_ids_.count()
+                  != range_info.macro_block_count_
+              || range_id_info.macro_block_ids_.at(0)
+                  != range_info.start_macro_block_id_
+              || range_id_info.macro_block_ids_.at(
+                     range_id_info.macro_block_ids_.count() - 1)
+                  != range_info.end_macro_block_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("macro block ids is not match",
+            K(ret), K(range_info), K(range_id_info));
       }
     }
   }
 
+  if (OB_SUCC(ret) && macro_idx != logic_ids.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected remaining logic macro block ids",
+        K(ret), K(macro_idx), K(logic_ids.count()));
+  }
   return ret;
 }
 
 int ObSSTableCopyFinishTask::build_sstable_reuse_info()
 {
   int ret = OB_SUCCESS;
+  ObTabletHandle tablet_handle;
+  ObTabletMapKey map_key;
+  map_key.ls_id_ = copy_ctx_.ls_id_;
+  map_key.tablet_id_ = copy_ctx_.tablet_id_;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("sstable copy finish task do not init", K(ret));
-  } else if (OB_FAIL(build_latest_major_sstable_reuse_info_())) {
-    LOG_WARN("failed to build latest major sstable reuse info", K(ret), K(copy_ctx_));
-  } else if (OB_FAIL(build_split_src_sstable_reuse_info_())) {
-    LOG_WARN("failed to build split src sstable reuse info", K(ret), K(copy_ctx_));
-  } else {
-    LOG_INFO("succeed build sstable reuse info", K(copy_ctx_));
+  } else if (OB_FAIL(ls_->ha_get_tablet_without_memtables(
+                 WashTabletPriority::WTP_LOW,
+                 map_key,
+                 allocator_,
+                 tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
+  } else if (OB_FAIL(build_sstable_reuse_info(
+                 copy_ctx_,
+                 *sstable_param_,
+                 tablet_handle,
+                 *tablet_copy_finish_task_,
+                 *ls_,
+                 allocator_,
+                 macro_block_reuse_mgr_,
+                 split_src_sstable_handle_))) {
+    LOG_WARN("failed to build sstable reuse info", K(ret), K(copy_ctx_));
   }
 
+  return ret;
+}
+
+int ObSSTableCopyFinishTask::build_sstable_reuse_info(
+    const ObPhysicalCopyCtx &copy_ctx,
+    const ObMigrationSSTableParam &sstable_param,
+    const ObTabletHandle &tablet_handle,
+    ObTabletCopyFinishTask &tablet_copy_finish_task,
+    ObLS &ls,
+    common::ObArenaAllocator &allocator,
+    ObMacroBlockReuseMgr &macro_block_reuse_mgr,
+    ObTableHandleV2 &split_src_sstable_handle)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_handle.is_valid() || !macro_block_reuse_mgr.is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sstable reuse build argument",
+        K(ret), K(tablet_handle), K(copy_ctx));
+  } else if (OB_FAIL(build_latest_major_sstable_reuse_info_(
+                 copy_ctx,
+                 sstable_param,
+                 tablet_handle,
+                 tablet_copy_finish_task,
+                 macro_block_reuse_mgr))) {
+    LOG_WARN("failed to build latest major sstable reuse info",
+        K(ret), K(copy_ctx));
+  } else if (OB_FAIL(build_split_src_sstable_reuse_info_(
+                 copy_ctx,
+                 sstable_param,
+                 tablet_handle,
+                 ls,
+                 allocator,
+                 macro_block_reuse_mgr,
+                 split_src_sstable_handle))) {
+    LOG_WARN("failed to build split src sstable reuse info",
+        K(ret), K(copy_ctx));
+  } else {
+    LOG_INFO("succeed build sstable reuse info", K(copy_ctx));
+  }
   return ret;
 }
 
@@ -689,18 +762,10 @@ int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
   if (OB_ISNULL(copy_ctx_.extra_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy ctx extra info is NULL", K(ret), K(copy_ctx_));
-  } else {
-    copy_ctx_.extra_info_->add_macro_count(copy_ctx_.total_macro_count_);
-    copy_ctx_.extra_info_->add_reuse_macro_count(copy_ctx_.reuse_macro_count_);
-
-    if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
-      // skip
-    } else if (OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(&macro_block_reuse_mgr_))) {
-      LOG_WARN("failed to update max reuse mgr size", K(ret), K(copy_ctx_));
-    } else {
-      copy_ctx_.extra_info_->inc_major_count();
-      copy_ctx_.extra_info_->add_major_macro_count(copy_ctx_.total_macro_count_);
-    }
+  } else if (OB_FAIL(copy_ctx_.extra_info_->update_after_sstable_copy(
+      copy_ctx_.table_key_, copy_ctx_.total_macro_count_,
+      copy_ctx_.reuse_macro_count_, copy_ctx_.macro_block_reuse_mgr_))) {
+    LOG_WARN("failed to update copy tablet record extra info", K(ret), K(copy_ctx_));
   }
 
   if (OB_SUCC(ret)) {
@@ -1123,114 +1188,103 @@ int ObSSTableCopyFinishTask::get_space_optimization_mode_(
   return ret;
 }
 
-int ObSSTableCopyFinishTask::build_latest_major_sstable_reuse_info_()
+int ObSSTableCopyFinishTask::build_latest_major_sstable_reuse_info_(
+    const ObPhysicalCopyCtx &copy_ctx,
+    const ObMigrationSSTableParam &sstable_param,
+    const ObTabletHandle &tablet_handle,
+    ObTabletCopyFinishTask &tablet_copy_finish_task,
+    ObMacroBlockReuseMgr &macro_block_reuse_mgr)
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
+  ObTablet *tablet = tablet_handle.get_obj();
   ObTableHandleV2 table_handle;
   bool is_exist = false;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObSSTableWrapper sstable_wrapper;
-  ObTabletMapKey map_key;
-  map_key.ls_id_ = copy_ctx_.ls_id_;
-  map_key.tablet_id_ = copy_ctx_.tablet_id_;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("sstable copy finish task do not init", K(ret));
-  } else if (OB_FAIL(ls_->ha_get_tablet_without_memtables(
-      WashTabletPriority::WTP_LOW, map_key, allocator_, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
-  } else if (OB_FAIL(tablet_copy_finish_task_->get_latest_major_sstable(sstable_param_->table_key_, table_handle))) {
+  if (!tablet_handle.is_valid() || OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+  } else if (OB_FAIL(tablet_copy_finish_task.get_latest_major_sstable(
+                 sstable_param.table_key_, table_handle))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
-      is_exist = false;
-      LOG_INFO("no major sstable exist, try get major from local", K(ret), KPC(sstable_param_));
+      LOG_INFO("no copied major sstable, try local major",
+          K(sstable_param.table_key_));
     } else {
-      LOG_WARN("failed to get lastest major sstable", K(ret), KPC(sstable_param_));
+      LOG_WARN("failed to get latest copied major sstable",
+          K(ret), K(sstable_param.table_key_));
     }
   } else {
     is_exist = true;
   }
 
-  // if didn't copy any major sstable, try find latest major sstable from local
-  if (OB_SUCC(ret)) {
-    if (!is_exist) {
-      ObTablet *tablet = nullptr;
-      if (!tablet_handle.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet handle should not be valid", K(ret), K(tablet_handle));
-      } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-      } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
-        LOG_WARN("failed to fetch table store", K(ret), KPC(tablet));
-      } else if (OB_FAIL(get_lastest_major_sstable_for_reuse_(copy_ctx_.table_key_, table_store_wrapper, sstable_wrapper))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          LOG_INFO("no major sstable exist in local", K(ret), KPC(sstable_param_));
-          ret = OB_SUCCESS;
-          is_exist = false;
-        } else {
-          LOG_WARN("failed to get local lastest major sstable", K(ret), KPC(sstable_param_));
-        }
-      } else if (!sstable_wrapper.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sstable wrapper is invalid", K(ret), K(sstable_wrapper), KPC(sstable_param_));
-      } else if (OB_FAIL(table_handle.set_sstable_with_tablet(sstable_wrapper.get_sstable()))) {
-        // this sstable lifetime is managed by current tablet (tablet_handle is hold by ObTabletFinishCopyTask)
-        LOG_WARN("failed to set sstable with tablet", K(ret), K(sstable_wrapper), KPC(sstable_param_));
+  if (OB_SUCC(ret) && !is_exist) {
+    if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
+      LOG_WARN("failed to fetch local table store", K(ret), KPC(tablet));
+    } else if (OB_FAIL(get_lastest_major_sstable_for_reuse_(
+                   sstable_param.table_key_,
+                   table_store_wrapper,
+                   sstable_wrapper))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("no local major sstable for reuse",
+            K(sstable_param.table_key_));
       } else {
-        is_exist = true;
+        LOG_WARN("failed to get local latest major sstable",
+            K(ret), K(sstable_param.table_key_));
       }
-    } else {
-      // do nothing
-      LOG_INFO("has get latest major sstable from copy finish task, skip get latest major sstable from local",
-                K(is_exist), K(copy_ctx_.table_key_));
-    }
-  }
-
-  if (OB_SUCC(ret) && is_exist) {
-    if (!macro_block_reuse_mgr_.is_inited()) {
+    } else if (!sstable_wrapper.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("macro block reuse mgr do not init", K(ret));
-    } else if (OB_FAIL(build_major_sstable_reuse_info_(table_handle, tablet_handle))) {
-      LOG_WARN("failed to build major sstable reuse info", K(ret), KPC(sstable_param_));
+      LOG_WARN("invalid local major sstable wrapper",
+          K(ret), K(sstable_wrapper));
+    } else if (OB_FAIL(table_handle.set_sstable_with_tablet(
+                   sstable_wrapper.get_sstable()))) {
+      LOG_WARN("failed to hold local major sstable",
+          K(ret), K(sstable_wrapper));
     } else {
-      LOG_INFO("succeed build major sstable reuse info", K(table_handle), K(tablet_handle), KPC(sstable_param_));
+      is_exist = true;
     }
   }
 
+  if (OB_SUCC(ret) && is_exist
+      && OB_FAIL(build_major_sstable_reuse_info_(
+             sstable_param,
+             table_handle,
+             tablet_handle,
+             macro_block_reuse_mgr))) {
+    LOG_WARN("failed to build latest major reuse info",
+        K(ret), K(sstable_param.table_key_));
+  }
   return ret;
 }
 
-
-int ObSSTableCopyFinishTask::build_split_src_sstable_reuse_info_()
+int ObSSTableCopyFinishTask::build_split_src_sstable_reuse_info_(
+    const ObPhysicalCopyCtx &copy_ctx,
+    const ObMigrationSSTableParam &sstable_param,
+    const ObTabletHandle &tablet_handle,
+    ObLS &ls,
+    common::ObArenaAllocator &allocator,
+    ObMacroBlockReuseMgr &macro_block_reuse_mgr,
+    ObTableHandleV2 &split_src_sstable_handle)
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
   ObTabletHandle split_src_tablet_handle;
-  ObTablet *tablet = nullptr;
+  ObTablet *tablet = tablet_handle.get_obj();
   ObTablet *split_src_tablet = nullptr;
   ObTabletID src_tablet_id;
   ObITable *sstable = nullptr;
   ObITable::TableKey src_table_key;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObSSTableWrapper sstable_wrapper;
-  ObTabletMapKey map_key;
   ObTabletMapKey split_src_map_key;
-  map_key.ls_id_ = copy_ctx_.ls_id_;
-  map_key.tablet_id_ = copy_ctx_.tablet_id_;
 
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("sstable copy finish task do not init", K(ret));
-  } else if (copy_ctx_.is_leader_restore_) {
+  if (!tablet_handle.is_valid() || OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+  } else if (copy_ctx.is_leader_restore_) {
     // skip, no need to build reuse info for restore
     LOG_INFO("skip build split src sstable reuse info for restore");
-  } else if (OB_FAIL(ls_->ha_get_tablet_without_memtables(
-      WashTabletPriority::WTP_LOW, map_key, allocator_, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(copy_ctx_));
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle));
   } else if (!tablet->get_tablet_meta().split_info_.can_reuse_macro_block()) {
     // skip, is not reuse macro block split
     LOG_INFO("not reuse macro block split, skip build split src sstable reuse info");
@@ -1238,12 +1292,13 @@ int ObSSTableCopyFinishTask::build_split_src_sstable_reuse_info_()
   } else if (!src_tablet_id.is_valid()) {
     ret = OB_SUCCESS;
     LOG_INFO("split src tablet id is invalid, skip reuse", K(src_tablet_id));
-  } else if (FALSE_IT(split_src_map_key.ls_id_ = copy_ctx_.ls_id_)) {
+  } else if (FALSE_IT(split_src_map_key.ls_id_ = copy_ctx.ls_id_)) {
   } else if (FALSE_IT(split_src_map_key.tablet_id_ = src_tablet_id)) {
-  } else if (OB_FAIL(ls_->ha_get_tablet_without_memtables(
-      WashTabletPriority::WTP_LOW, split_src_map_key, allocator_, split_src_tablet_handle))) {
+  } else if (OB_FAIL(ls.ha_get_tablet_without_memtables(
+      WashTabletPriority::WTP_LOW, split_src_map_key, allocator, split_src_tablet_handle))) {
     if (OB_TABLET_NOT_EXIST == ret) {
-      LOG_INFO("split src tablet is not exist, maybe GC, skip build reuse info", K(ret), K(copy_ctx_.ls_id_), K(src_tablet_id));
+      LOG_INFO("split src tablet is not exist, maybe GC, skip build reuse info",
+          K(ret), K(copy_ctx.ls_id_), K(src_tablet_id));
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get split src tablet", K(ret), K(src_tablet_id));
@@ -1254,28 +1309,31 @@ int ObSSTableCopyFinishTask::build_split_src_sstable_reuse_info_()
     LOG_WARN("split src tablet should not be NULL", K(ret), K(src_tablet_id), K(split_src_tablet));
   } else if (OB_FAIL(split_src_tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("failed to fetch table store", K(ret), KPC(split_src_tablet));
-  } else if (FALSE_IT(src_table_key = sstable_param_->table_key_)) {
+  } else if (FALSE_IT(src_table_key = sstable_param.table_key_)) {
   } else if (FALSE_IT(src_table_key.tablet_id_ = src_tablet_id)) { // modify to split src table key
   } else if (OB_FAIL(get_target_major_sstable_for_reuse_(src_table_key, table_store_wrapper, sstable_wrapper))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_INFO("split src sstable is not exist", K(ret), KPC(sstable_param_));
+      LOG_INFO("split src sstable is not exist", K(ret), K(sstable_param));
       ret = OB_SUCCESS;
     } else {
-      LOG_WARN("failed to get local lastest major sstable", K(ret), KPC(sstable_param_));
+      LOG_WARN("failed to get local lastest major sstable", K(ret), K(sstable_param));
     }
   } else if (!sstable_wrapper.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sstable wrapper is invalid", K(ret), K(sstable_wrapper), KPC(sstable_param_));
+    LOG_WARN("sstable wrapper is invalid", K(ret), K(sstable_wrapper), K(sstable_param));
   } else if (OB_ISNULL(sstable = sstable_wrapper.get_sstable())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sstable should not be NULL", K(ret), KP(sstable), KPC(sstable_param_));
-  } else if (OB_FAIL(split_src_sstable_handle_.set_sstable(sstable, &allocator_))) {
+    LOG_WARN("sstable should not be NULL", K(ret), KP(sstable), K(sstable_param));
+  } else if (OB_FAIL(split_src_sstable_handle.set_sstable(sstable, &allocator))) {
     // hold this sstable until copy task finish
-    LOG_WARN("failed to set sstable with tablet", K(ret), KPC(sstable_param_));
-  } else if (OB_FAIL(build_major_sstable_reuse_info_(split_src_sstable_handle_, split_src_tablet_handle))) {
-    LOG_WARN("failed to build major sstable reuse info", K(ret), KPC(sstable_param_));
-  } else {
-    LOG_INFO("succeed build major sstable reuse info", K(split_src_tablet_handle), K(split_src_sstable_handle_), KPC(sstable_param_));
+    LOG_WARN("failed to hold split src sstable", K(ret), K(sstable_param));
+  } else if (OB_FAIL(build_major_sstable_reuse_info_(
+                 sstable_param,
+                 split_src_sstable_handle,
+                 split_src_tablet_handle,
+                 macro_block_reuse_mgr))) {
+    LOG_WARN("failed to build split src major reuse info",
+        K(ret), K(sstable_param.table_key_));
   }
   return ret;
 }
@@ -1449,10 +1507,12 @@ int ObSSTableCopyFinishTask::get_latest_major_sstable_(
 }
 
 int ObSSTableCopyFinishTask::build_major_sstable_reuse_info_(
-  const storage::ObTableHandleV2 &table_handle,
-  const storage::ObTabletHandle &tablet_handle)
+    const ObMigrationSSTableParam &sstable_param,
+    const storage::ObTableHandleV2 &table_handle,
+    const storage::ObTabletHandle &tablet_handle,
+    ObMacroBlockReuseMgr &macro_block_reuse_mgr)
 {
- int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
   ObDatumRange datum_range;
   const storage::ObITableReadInfo *index_read_info = nullptr;
@@ -1467,18 +1527,21 @@ int ObSSTableCopyFinishTask::build_major_sstable_reuse_info_(
     LOG_WARN("invalid arguments", K(ret), K(tablet_handle), K(table_handle));
   } else if (OB_FAIL(table_handle.get_sstable(sstable))) {
     LOG_WARN("failed to get sstable", K(ret), K(table_handle));
-  } else if (sstable->get_key().table_type_ != copy_ctx_.table_key_.table_type_
-      || sstable->get_key().column_group_idx_ != copy_ctx_.table_key_.column_group_idx_) {
+  } else if (sstable->get_key().table_type_
+          != sstable_param.table_key_.table_type_
+      || sstable->get_key().column_group_idx_
+          != sstable_param.table_key_.column_group_idx_) {
     // skip
     LOG_INFO("table key is not match, skip to build reuse info", K(ret),
       "build_table_key", sstable->get_key(),
-      "copy_table_key", copy_ctx_.table_key_);
+      "copy_table_key", sstable_param.table_key_);
   } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
     LOG_WARN("failed to get sstable meta handler", K(ret), K(sstable));
   } else if (OB_FAIL(sst_meta_hdl.get_sstable_meta(sst_meta))) {
     LOG_WARN("failed to get sstable meta", K(ret), K(sst_meta_hdl));
   } else if (FALSE_IT(src_co_base_snapshot_version = sst_meta->get_basic_meta().get_co_base_snapshot_version())) {
-  } else if (FALSE_IT(co_base_snapshot_version = sstable_param_->basic_meta_.get_co_base_snapshot_version())) {
+  } else if (FALSE_IT(co_base_snapshot_version =
+                          sstable_param.basic_meta_.get_co_base_snapshot_version())) {
   } else if (co_base_snapshot_version != src_co_base_snapshot_version) {
     // skip
     LOG_INFO("co base snapshot version is not equal, skip to build reuse info", K(ret), KPC(sstable),
@@ -1521,7 +1584,8 @@ int ObSSTableCopyFinishTask::build_major_sstable_reuse_info_(
               // inner_replace_remote_major_sstable_.
               LOG_INFO("macro block is not local id, skip to build reuse info",
                   K(ret), K(logic_id), K(macro_id));
-            } else if (OB_FAIL(macro_block_reuse_mgr_.add_macro_block_reuse_info(logic_id, macro_id, data_checksum))) {
+            } else if (OB_FAIL(macro_block_reuse_mgr.add_macro_block_reuse_info(
+                           logic_id, macro_id, data_checksum))) {
               LOG_WARN("failed to insert reuse info into reuse map", K(ret), K(logic_id), K(macro_id), K(data_checksum));
             }
           }

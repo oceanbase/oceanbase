@@ -364,7 +364,7 @@ public:
   int assign(const ObCopySSTableMacroRangeInfoArg &arg);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
-      "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_),
+      "copy_table_key_array", storage::ObTableKeyArrayLogWrap(copy_table_key_array_),
       K_(macro_range_max_marco_count), K_(migration_task_id));
   uint64_t tenant_id_;
   share::ObLSID ls_id_;

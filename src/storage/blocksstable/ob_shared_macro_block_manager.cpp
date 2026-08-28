@@ -175,40 +175,50 @@ int ObSharedMacroBlockMgr::write_block(
   } else if (OB_UNLIKELY(0 != size % DIO_READ_ALIGN_SIZE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("write size is not aligned", K(ret), K(size));
+  } else if (OB_UNLIKELY(size >= SMALL_SSTABLE_STHRESHOLD_SIZE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("small sstable's size shouldn't be larger than 1 MB", K(ret), K(size));
   } else {
     ObMacroBlockWriteInfo write_info;
     write_info.buffer_ = buf;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     write_info.size_ = size;
-    write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
-    lib::ObMutexGuard guard(mutex_);
+    write_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
 
-    if (size >= SMALL_SSTABLE_STHRESHOLD_SIZE) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("small sstable's size shouldn't be larger than 1 MB", K(ret), K(write_info.size_));
-    } else if (offset_ + size > OB_DEFAULT_MACRO_BLOCK_SIZE) {
-      if (OB_FAIL(try_switch_macro_block())) {
-        LOG_WARN("fail to switch macro handle", K(ret));
+    // Only the cursor reservation and current-block ref handoff need the lock.
+    // The actual IO (do_write_block) is done OUTSIDE the lock so concurrent
+    // small-sstable writes to disjoint offsets can proceed in parallel.
+    ObMacroBlockHandle cur_handle;  // holds a ref on the target block; RAII dec_ref
+    int64_t write_offset = -1;
+    {
+      lib::ObMutexGuard guard(mutex_);
+      if (offset_ + size > OB_DEFAULT_MACRO_BLOCK_SIZE) {
+        if (OB_FAIL(try_switch_macro_block())) {
+          LOG_WARN("fail to switch macro handle", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        write_offset = offset_;
+        // reserve the range; advance offset_ even if the later IO fails, so the
+        // failed range becomes a hole and is never reused (keeps prior semantics)
+        offset_ += size;
+        // copy-assign inc_refs the current block under the lock, pinning it so a
+        // concurrent try_switch_macro_block()'s reset can't reclaim it mid-IO
+        cur_handle = macro_handle_;
       }
     }
 
     if (OB_SUCC(ret)) {
-      write_info.offset_ = offset_;
-      write_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-      if (OB_FAIL(do_write_block(macro_handle_.get_macro_id(), write_info, block_info))) {
+      write_info.offset_ = write_offset;
+      if (OB_FAIL(do_write_block(cur_handle.get_macro_id(), write_info, block_info))) {
         LOG_WARN("fail to do write block", K(ret), K(write_info), K(block_info));
-      }
-
-      // no matter success or failure, advance offset_
-      offset_ += size;
-
-      if (OB_SUCC(ret)) {
+      } else {
         FLOG_INFO("successfully write small sstable",
-          K(ret), K(block_info), K(offset_), "old_block", write_ctx.get_macro_block_list());
+          K(ret), K(block_info), K(write_offset), "old_block", write_ctx.get_macro_block_list());
         write_ctx.reset();
-        if (OB_FAIL(write_ctx.add_macro_block_id(macro_handle_.get_macro_id()))) {
+        if (OB_FAIL(write_ctx.add_macro_block_id(cur_handle.get_macro_id()))) {
           LOG_WARN("fail to add macro block id into write_ctx",
-            K(ret), K(macro_handle_.get_macro_id()), K(write_ctx));
+            K(ret), K(cur_handle.get_macro_id()), K(write_ctx));
         }
       }
     }

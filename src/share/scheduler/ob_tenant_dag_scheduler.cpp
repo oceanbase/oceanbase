@@ -2224,7 +2224,14 @@ void ObTenantDagWorker::run1()
           THIS_WORKER.set_module_type(type);
 #endif
           THIS_WORKER.set_compatibility_mode(compat_mode);
-          if (is_compaction_dag(dag->get_type())) {
+          const ObDagType::ObDagTypeEnum cur_dag_type = dag->get_type();
+          // tablet migration copies one small sstable per column group, so a wide
+          // column-store tablet emits the same per-sstable INFO (sstable init,
+          // macro write, ...) thousands of times. Enable refined log reduction for
+          // the tablet migration dag, same as compaction dags, to suppress those
+          // is_log_reduction()-guarded dumps without changing any log level.
+          if (is_compaction_dag(cur_dag_type)
+              || ObDagType::DAG_TYPE_TABLET_MIGRATION == cur_dag_type) {
             THIS_WORKER.set_log_reduction_mode(LogReductionMode::REFINED);
           } else {
             THIS_WORKER.set_log_reduction_mode(LogReductionMode::NONE);

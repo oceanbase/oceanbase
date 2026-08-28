@@ -27,8 +27,24 @@ class ObStorageHAUtils
 {
 public:
   static int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader_addr);
-  static int check_tablet_replica_validity(const uint64_t tenant_id, const share::ObLSID &ls_id,
-      const common::ObAddr &addr, const common::ObTabletID &tablet_id, common::ObISQLClient &sql_client);
+  // Tenant-level merge-error check (reads __all_merge_info). Invoked once per
+  // group/batch by batch_check_tablet_replica_validity, so a merge error arising
+  // mid-migration still blocks the remaining groups.
+  static int check_merge_error(const uint64_t tenant_id, common::ObISQLClient &sql_client);
+  // Batched replica validity: first the tenant-level merge-error check, then one
+  // JOIN SQL fetches this batch's checksum rows, bucketed by tablet for
+  // cross-replica data/column checksum verification.
+  static int batch_check_tablet_replica_validity(
+      const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObAddr &src_addr,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObISQLClient &sql_client);
+  // ObLogicTabletID overload filters LS inner tablets before delegating.
+  static int batch_check_tablet_replica_validity(
+      const uint64_t tenant_id, const share::ObLSID &ls_id,
+      const common::ObAddr &src_addr,
+      const common::ObIArray<ObLogicTabletID> &logic_tablet_ids,
+      common::ObISQLClient &sql_client);
   static int report_ls_meta_table(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const storage::ObMigrationStatus &migration_status);
   static int get_server_version(uint64_t &server_version);
@@ -90,15 +106,17 @@ private:
   struct TableKeySnapshotVersionComparator final
   {
     bool operator()(const ObITable::TableKey &lhs, const ObITable::TableKey &rhs) {
-      return lhs.get_snapshot_version() < rhs.get_snapshot_version();
+      // Primary key: snapshot version -- copy majors from low to high version so
+      // macro-block reuse sees the older major first (reuse correctness).
+      // Secondary key: column_group_idx -- within one major the CO base and its
+      // thousands of NORMAL_COL_GROUP CG sstables share the same snapshot_version;
+      // ordering them by cg_idx gives a deterministic ascending copy order (the
+      // table-store order is otherwise arbitrary, e.g. cg 1994 before cg 11).
+      return lhs.get_snapshot_version() != rhs.get_snapshot_version()
+          ? lhs.get_snapshot_version() < rhs.get_snapshot_version()
+          : lhs.get_column_group_id() < rhs.get_column_group_id();
     }
   };
-  static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
-  static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-      const share::ObLSID &ls_id, const common::ObAddr &src_addr, common::ObISQLClient &sql_client,
-      share::SCN &compaction_scn);
-  static int check_tablet_replica_checksum_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
-      const share::ObLSID &ls_id, const share::SCN &compaction_scn, common::ObISQLClient &sql_client);
   static int get_readable_scn_(share::SCN &readable_scn);
   static int create_ls_inner_tablet_for_compat_(
       const common::ObIArray<ObTabletID> &tablet_id_array,

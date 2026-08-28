@@ -392,6 +392,7 @@ protected:
 class ObTabletFinishMigrationTask;
 class ObTabletMigrationTask : public share::ObITask
 {
+  friend class ObBatchSSTableCopyTaskGenerator;
 public:
   ObTabletMigrationTask();
   virtual ~ObTabletMigrationTask();
@@ -434,7 +435,6 @@ private:
       ObTabletCopyFinishTask *&tablet_copy_finish_task);
   int record_server_event_(const int64_t cost_us, const int64_t result);
   int try_update_tablet_();
-  int check_tablet_replica_validity_(const common::ObTabletID &tablet_id);
   int update_ha_expected_status_(const ObCopyTabletStatus::STATUS &status);
   int check_need_copy_sstable_(
       const ObITable::TableKey &table_key,
@@ -554,6 +554,10 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObTabletGroupMigrationTask"), KP(this), KPC(ctx_));
 private:
   int build_tablets_sstable_info_();
+  // Group-level validity check: before generating per-tablet dags, one JOIN SQL
+  // verifies the whole group's tablet checksums (the util also runs the tenant-level
+  // merge-error check). A large tablet is a single-tablet group (1-element JOIN).
+  int batch_check_tablet_replica_validity_();
   int generate_tablet_migration_dag_();
   int try_remove_tablets_info_();
   int remove_tablets_info_();

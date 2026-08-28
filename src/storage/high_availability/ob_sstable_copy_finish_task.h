@@ -196,6 +196,18 @@ public:
   int64_t get_max_next_copy_task_id();
   int add_logic_macro_info_for_range(const ObIArray<ObLogicMacroBlockId> &macro_block_ids);
   int build_sstable_reuse_info();
+  static int fill_logic_macro_info_for_range(
+      const ObIArray<ObLogicMacroBlockId> &logic_ids,
+      const ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+  static int build_sstable_reuse_info(
+      const ObPhysicalCopyCtx &copy_ctx,
+      const ObMigrationSSTableParam &sstable_param,
+      const ObTabletHandle &tablet_handle,
+      ObTabletCopyFinishTask &tablet_copy_finish_task,
+      ObLS &ls,
+      common::ObArenaAllocator &allocator,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
+      ObTableHandleV2 &split_src_sstable_handle);
   const ObMacroBlockReuseMgr &get_macro_block_reuse_mgr() const { return macro_block_reuse_mgr_; }
   virtual int process() override;
   OB_INLINE int64_t get_copy_task_concurrent_cnt() const {
@@ -251,33 +263,49 @@ private:
   int get_space_optimization_mode_(
       const ObMigrationSSTableParam *sstable_param,
       ObSSTableIndexBuilder::ObSpaceOptimizationMode &mode);
-  int build_latest_major_sstable_reuse_info_();
-  int build_split_src_sstable_reuse_info_();
+  static int build_latest_major_sstable_reuse_info_(
+      const ObPhysicalCopyCtx &copy_ctx,
+      const ObMigrationSSTableParam &sstable_param,
+      const ObTabletHandle &tablet_handle,
+      ObTabletCopyFinishTask &tablet_copy_finish_task,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr);
+  static int build_split_src_sstable_reuse_info_(
+      const ObPhysicalCopyCtx &copy_ctx,
+      const ObMigrationSSTableParam &sstable_param,
+      const ObTabletHandle &tablet_handle,
+      ObLS &ls,
+      common::ObArenaAllocator &allocator,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr,
+      ObTableHandleV2 &split_src_sstable_handle);
   // get lastest major sstable from target tablet's (self) table_store
   // iterate major sstable array to get the latest major sstable
   // if table_key is cg, get the corresponding latest cg sstable
-  int get_lastest_major_sstable_for_reuse_(
+  static int get_lastest_major_sstable_for_reuse_(
     const ObITable::TableKey &table_key,
     const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
     ObSSTableWrapper &latest_major_sstable);
   // get target major sstable from target tablet's (split src tablet) table_store
   // use ObSSTableArray::get_table to get target sstable
   // if table_key is cg, get the corresponding latest cg sstable
-  int get_target_major_sstable_for_reuse_(
+  static int get_target_major_sstable_for_reuse_(
     const ObITable::TableKey &table_key,
     const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper,
     ObSSTableWrapper &target_sstable_wrapper);
-  int get_latest_available_major_(const ObIArray<ObSSTableWrapper> &major_sstables, ObSSTableWrapper &latest_major);
+  static int get_latest_available_major_(
+      const ObIArray<ObSSTableWrapper> &major_sstables,
+      ObSSTableWrapper &latest_major);
   // get correct major sstable
   // if co or row store major, latest_sstable_wrapper = sstable_wrapper
   // if cg, unpack co sstable and get the target cg
-  int get_latest_major_sstable_(
+  static int get_latest_major_sstable_(
     const ObITable::TableKey &target_table_key,
     const ObSSTableWrapper &sstable_wrapper,
     ObSSTableWrapper &latest_sstable_wrapper);
-  int build_major_sstable_reuse_info_(
-    const storage::ObTableHandleV2 &table_handle,
-    const storage::ObTabletHandle &tablet_handle);
+  static int build_major_sstable_reuse_info_(
+      const ObMigrationSSTableParam &sstable_param,
+      const storage::ObTableHandleV2 &table_handle,
+      const storage::ObTabletHandle &tablet_handle,
+      ObMacroBlockReuseMgr &macro_block_reuse_mgr);
 private:
   bool is_inited_;
   int64_t next_copy_task_id_;
