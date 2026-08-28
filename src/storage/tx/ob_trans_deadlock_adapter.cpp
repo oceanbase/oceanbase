@@ -63,6 +63,20 @@ sql::ObSQLSessionInfo *SessionGuard::operator->() const { return sess_ptr_; }
 
 sql::ObSQLSessionInfo &SessionGuard::get_session() const { return *sess_ptr_; };
 
+int SessionGuard::copy_current_query_string(ObStringHolder &query_str)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid()) {
+    DETECT_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "SessionGuard is invalid", KPC(this));
+  } else {
+    ObBasicSessionInfo::LockGuard lock_guard(sess_ptr_->get_thread_data_lock());
+    if (OB_FAIL(query_str.assign(sess_ptr_->get_current_query_string()))) {
+      DETECT_LOG(WARN, "copy current query string failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 void SessionGuard::revert_session_()
 {
   if (nullptr != sess_ptr_) {
