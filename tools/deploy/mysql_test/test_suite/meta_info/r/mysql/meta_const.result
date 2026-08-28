@@ -94,12 +94,12 @@ X'4D7953514C'
 MySQL
 SELECT 0x5061756c;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					0x5061756c	253	5	4	N	129	0	63
+def					0x5061756c	253	4	4	N	129	0	63
 0x5061756c
 Paul
 SELECT 0x636174;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					0x636174	253	5	3	N	129	0	63
+def					0x636174	253	3	3	N	129	0	63
 0x636174
 cat
 SELECT TRUE, true, FALSE, false;
@@ -117,32 +117,32 @@ abcde
 abcde
 select '我爱你';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					我爱你	253	20	9	N	1	0	45
+def					我爱你	253	12	9	N	1	0	45
 我爱你
 我爱你
 select '我e爱a你t';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					我e爱a你t	253	20	12	N	1	0	45
+def					我e爱a你t	253	24	12	N	1	0	45
 我e爱a你t
 我e爱a你t
 select '';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def						253	20	0	N	1	0	45
+def						253	0	0	N	1	0	45
 
 
 select ' ';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def						253	20	1	N	1	0	45
+def						253	4	1	N	1	0	45
 
  
 select '0x10';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					0x10	253	20	4	N	1	0	45
+def					0x10	253	16	4	N	1	0	45
 0x10
 0x10
 select '0810';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					0810	253	20	4	N	1	0	45
+def					0810	253	16	4	N	1	0	45
 0810
 0810
 drop table if exists t1;

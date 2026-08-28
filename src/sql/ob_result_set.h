@@ -310,6 +310,8 @@ public:
                                    const bool is_first_parse,
                                    const ObSQLSessionInfo &session_info);
 
+  int update_paramed_field_metadata(const ObPhysicalPlanCtx &plan_ctx);
+
   // 深拷计划中的field columns，存放在field_columns_成员中
   int copy_field_columns(const ObPhysicalPlan &plan);
   bool has_implicit_cursor() const;

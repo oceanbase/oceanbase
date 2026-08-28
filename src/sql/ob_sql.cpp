@@ -1062,20 +1062,23 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           }
         }
       }
+      if (OB_SUCC(ret) && T_QUESTIONMARK == expr->get_expr_type()) {
+        const ObConstRawExpr *param_expr = static_cast<const ObConstRawExpr *>(expr);
+        int64_t param_idx = OB_INVALID_INDEX;
+        if (OB_FAIL(param_expr->get_value().get_unknown(param_idx))) {
+          LOG_WARN("failed to get param idx", K(ret));
+        } else {
+          field.param_store_idx_ = param_idx;
+        }
+      }
+
       LOG_TRACE("column field info", K(field), K(select_item));
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(result_set.add_field_column(field))) {
         LOG_WARN("failed to add field column", K(ret));
       } else {
-        field.cname_.assign(NULL, 0);
-        field.org_cname_.assign(NULL, 0);
-        field.dname_.assign(NULL, 0);
-        field.tname_.assign(NULL, 0);
-        field.org_tname_.assign(NULL, 0);
-        field.type_.reset();
-        field.type_.set_type(ObExtendType);
-        field.paramed_ctx_ = NULL;
+        field.reset();
       }
     }
   }
