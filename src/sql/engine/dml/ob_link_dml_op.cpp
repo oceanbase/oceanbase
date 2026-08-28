@@ -7,6 +7,7 @@
 
 #include "sql/engine/dml/ob_link_dml_op.h"
 #include "sql/dblink/ob_tm_service.h"
+#include "sql/engine/ob_physical_plan.h"
 namespace oceanbase
 {
 using namespace common;
@@ -174,6 +175,12 @@ int ObLinkDmlOp::inner_get_next_row()
     LOG_WARN("failed to execute link stmt", K(ret), K(stmt_fmt), K(param_infos));
   } else {
     plan_ctx->add_affected_rows(affected_rows_);
+
+    // refer to how ObSPIService::get_result gets impilicit cursor %ROWCOUNT
+    if (OB_NOT_NULL(plan_ctx->get_phy_plan()) && stmt::T_UPDATE == plan_ctx->get_phy_plan()->get_stmt_type()) {
+      plan_ctx->add_row_matched_count(affected_rows_);
+    }
+
     ret = OB_ITER_END;
     LOG_DEBUG("succ to exec link dml", K(affected_rows_), K(ret));
   }
