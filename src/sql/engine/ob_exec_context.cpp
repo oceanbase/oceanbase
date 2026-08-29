@@ -272,6 +272,7 @@ ObExecContext::~ObExecContext()
 void ObExecContext::clean_resolve_ctx()
 {
   if (OB_NOT_NULL(expr_factory_)) {
+    expr_factory_->destory();
     expr_factory_->~ObRawExprFactory();
     expr_factory_ = nullptr;
   }
