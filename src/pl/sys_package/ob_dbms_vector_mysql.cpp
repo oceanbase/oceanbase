@@ -336,6 +336,43 @@ FUNCTION index_vector_memory_estimate (
     IN     idx_parameters    LONGTEXT DEFAULT NULL)
 RETURN VARCHAR(65535);
 */
+
+// MySQL-mode identifiers may legally contain single quotes when created via a
+// backtick-quoted name (e.g. `t' or sleep(1)--x`), so a raw sprintf would
+// break out of the surrounding single-quoted string literal and let the caller
+// inject SQL. Escape via ObISQLClient::escape (mysql_real_escape_string) first.
+static int build_escaped_info_schema_query(sqlclient::ObISQLClient &sql_proxy,
+                                           ObIAllocator &alloc,
+                                           const char *prefix_sql,
+                                           const ObString &db_name,
+                                           const ObString &table_name,
+                                           ObSqlString &out_sql)
+{
+  int ret = OB_SUCCESS;
+  char *db_buf = NULL;
+  char *tbl_buf = NULL;
+  const int64_t db_buf_size = db_name.length() * 2 + 1;
+  const int64_t tbl_buf_size = table_name.length() * 2 + 1;
+  int64_t db_out_len = 0;
+  int64_t tbl_out_len = 0;
+  if (OB_ISNULL(db_buf = static_cast<char *>(alloc.alloc(db_buf_size)))
+      || OB_ISNULL(tbl_buf = static_cast<char *>(alloc.alloc(tbl_buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc escape buffer failed", K(ret), K(db_buf_size), K(tbl_buf_size));
+  } else if (OB_FAIL(sql_proxy.escape(db_name.ptr(), db_name.length(), db_buf,
+                                       db_buf_size, db_out_len))) {
+    LOG_WARN("escape db name failed", K(ret));
+  } else if (OB_FAIL(sql_proxy.escape(table_name.ptr(), table_name.length(), tbl_buf,
+                                       tbl_buf_size, tbl_out_len))) {
+    LOG_WARN("escape table name failed", K(ret));
+  } else if (OB_FAIL(out_sql.assign_fmt("%s WHERE table_schema='%.*s' AND table_name='%.*s'",
+                                        prefix_sql, db_out_len, db_buf,
+                                        tbl_out_len, tbl_buf))) {
+    LOG_WARN("assign sql failed", K(ret));
+  }
+  return ret;
+}
+
 int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
 {
   int ret = OB_SUCCESS;
@@ -431,8 +468,9 @@ int ObDBMSVectorMySql::index_vector_memory_estimate(ObPLExecCtx &ctx, ParamStore
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObSqlString query_string;
         sqlclient::ObMySQLResult *result = NULL;
-        if (OB_FAIL(query_string.assign_fmt("SELECT cast(sum(table_rows) as unsigned) as sum, max(table_rows) as max, count(*) as count from information_schema.PARTITIONS WHERE table_schema='%.*s' and table_name='%.*s'",
-                database_name.length(), database_name.ptr(), table_name.length(), table_name.ptr()))) {
+        if (OB_FAIL(build_escaped_info_schema_query(*GCTX.sql_proxy_, *allocator,
+            "SELECT cast(sum(table_rows) as unsigned) as sum, max(table_rows) as max, count(*) as count from information_schema.PARTITIONS",
+            database_name, table_name, query_string))) {
           LOG_WARN("assign sql string failed", K(ret), K(database_name), K(table_name), K(column_name));
         } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, query_string.ptr()))) {
           LOG_WARN("read record failed", K(ret), K(tenant_id), K(query_string));
@@ -2013,12 +2051,9 @@ int ObDBMSVectorMySql::sample_vectors_from_table(ObPLExecCtx &ctx,
         SMART_VAR(ObMySQLProxy::MySQLResult, count_res) {
           sqlclient::ObMySQLResult *count_result = nullptr;
           ObSqlString count_sql;
-          if (OB_FAIL(count_sql.append_fmt(
-                "SELECT CAST(table_rows AS UNSIGNED) AS total_rows "
-                "FROM information_schema.TABLES "
-                "WHERE table_schema='%.*s' AND table_name='%.*s'",
-                db_name.length(), db_name.ptr(),
-                table_name.length(), table_name.ptr()))) {
+          if (OB_FAIL(build_escaped_info_schema_query(*sql_proxy, *allocator,
+                "SELECT CAST(table_rows AS UNSIGNED) AS total_rows FROM information_schema.TABLES",
+                db_name, table_name, count_sql))) {
             LOG_WARN("fail to build count sql", K(ret));
           } else if (OB_FAIL(sql_proxy->read(count_res, tenant_id, count_sql.ptr()))) {
             LOG_WARN("fail to execute count sql", K(ret), K(tenant_id), K(count_sql));
