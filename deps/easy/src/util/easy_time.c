@@ -112,6 +112,27 @@ int is_support_invariant_tsc()
     return ret;
 }
 
+// 判断是否支持 RDTSCP, 入口在 CPUID.80000001H:EDX[27].
+// Hypervisors (e.g. Docker Desktop on Intel macOS) may expose invariant TSC
+// without RDTSCP; executing the instruction then raises SIGILL.
+static int is_support_rdtscp()
+{
+    int ret = 0;
+
+#if defined(__x86_64__)
+    unsigned int cpu_info[4];
+    cpu_info[3] = 0;
+    if (__get_cpuid(0x80000001, cpu_info, cpu_info + 1, cpu_info + 2, cpu_info + 3)
+        && (cpu_info[3] & (1u << 27))) {
+        ret = 1;
+    }
+#else
+    ret = 1;
+#endif
+
+    return ret;
+}
+
 typedef struct ObTscTimestampStruct {
     int64_t start_us;
     uint64_t tsc_count;
@@ -248,7 +269,7 @@ void build_tsc_timestamp()
             struct timeval tv;
             gettimeofday(&tv, NULL);
             tsc_obj.start_us = tv.tv_sec * 1000000 + tv.tv_usec;
-            tsc_obj.tsc_count = rdtscp();
+            tsc_obj.tsc_count = is_support_rdtscp() ? rdtscp() : rdtsc();
             if (tsc_obj.tsc_count > 0 && cpu_freq_khz > 0) {
                 tsc_obj.scale = (1000 << 20) / cpu_freq_khz;
                 tsc_obj.use_tsc = 1;
