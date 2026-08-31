@@ -23301,3 +23301,95 @@ select not (c1 and 0) from t1;
 |              1 |
 +----------------+
 
+// Case7: batch rescan复用固定长度BOOL结果向量时必须清理旧NULL位
+explain_protocol: 0
+drop table if exists t_bool_outer_18604064, t_bool_inner_18604064;
+create table t_bool_outer_18604064 (
+  id bigint primary key,
+  c2 decimal(20, 6),
+  c1 varchar(64)
+);
+
+insert into t_bool_outer_18604064 values
+  (1, 1, 'a'), (2, 2, 'b'), (3, 3, 'c'), (4, 4, 'd'), (5, 5, 'e'),
+  (6, 6, 'f'), (7, 7, 'g'), (8, 8, 'h'), (9, 9, 'i'), (10, 10, 'j');
+
+create table t_bool_inner_18604064 (
+  id bigint primary key,
+  c0 datetime,
+  c1 varchar(64),
+  c2 decimal(20, 6),
+  c3 varchar(64)
+);
+
+insert into t_bool_inner_18604064 values
+  (1, null, null, 999.000000, '999'),
+  (2, '2026-08-24 23:46:41', null, null, null);
+
+// batch rescan开启且动态Filter下推关闭，结果应返回1到10
+select /*+ no_rewrite
+           opt_param('NLJ_BATCHING_ENABLED' 'true')
+           opt_param('ENABLE_BATCHRESCAN_DYNAMIC_FILTER_PUSHDOWN' 'false') */
+       o.id
+from t_bool_outer_18604064 o
+where exists (
+  select /*+ no_unnest full(i) use_das(i) */ 1
+  from t_bool_inner_18604064 i
+  where (
+          ifnull(cast(i.c0 as signed), cast(i.c0 as signed))
+          or i.c3 not in (i.c2, i.c1, i.c1)
+        )
+    and (i.c2 = o.c2 or o.c2 is null or i.c2 is null)
+    and (i.c3 = o.c1 or o.c1 is null or i.c3 is null)
+  limit 1
+)
+order by o.id;
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
+|  6 |
+|  7 |
+|  8 |
+|  9 |
+| 10 |
++----+
+
+// batch rescan关闭，结果应与开启时一致
+select /*+ no_rewrite
+           opt_param('NLJ_BATCHING_ENABLED' 'false')
+           opt_param('ENABLE_BATCHRESCAN_DYNAMIC_FILTER_PUSHDOWN' 'false') */
+       o.id
+from t_bool_outer_18604064 o
+where exists (
+  select /*+ no_unnest full(i) use_das(i) */ 1
+  from t_bool_inner_18604064 i
+  where (
+          ifnull(cast(i.c0 as signed), cast(i.c0 as signed))
+          or i.c3 not in (i.c2, i.c1, i.c1)
+        )
+    and (i.c2 = o.c2 or o.c2 is null or i.c2 is null)
+    and (i.c3 = o.c1 or o.c1 is null or i.c3 is null)
+  limit 1
+)
+order by o.id;
++----+
+| id |
++----+
+|  1 |
+|  2 |
+|  3 |
+|  4 |
+|  5 |
+|  6 |
+|  7 |
+|  8 |
+|  9 |
+| 10 |
++----+
+
+drop table t_bool_outer_18604064, t_bool_inner_18604064;

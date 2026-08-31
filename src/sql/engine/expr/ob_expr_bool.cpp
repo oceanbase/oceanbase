@@ -224,10 +224,6 @@ static int eval_vector_expr_bool(const ObExpr &expr,
   ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  const bool isFixedLenRes = std::is_same<ResVec, IntegerFixedVec>::value;
-  int64_t *data_ptr = isFixedLenRes ?
-                      const_cast<int64_t*>(reinterpret_cast<const int64_t *>(res_vec->get_payload(0))) :
-                      nullptr;
   bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null();
   if (no_skip_no_null) {
     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -235,8 +231,6 @@ static int eval_vector_expr_bool(const ObExpr &expr,
       if (OB_FAIL(get_bool((arg_vec->*get_data)(idx),
                             arg_vec->get_length(idx), expr, arg_is_true))) {
         LOG_WARN("failed to check is true", K(ret));
-      } else if (isFixedLenRes) {
-        data_ptr[idx] = static_cast<int64_t>(arg_is_true);
       } else {
         res_vec->set_int(idx, static_cast<int64_t>(arg_is_true));
       }
