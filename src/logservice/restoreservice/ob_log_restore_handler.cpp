@@ -30,6 +30,7 @@
 #include "share/config/ob_server_config.h"   // GCONF
 #include "share/ob_cluster_version.h"        // GET_MIN_DATA_VERSION, DATA_VERSION_4_4_2_2
 #include "share/ob_server_struct.h"          // GCTX
+#include "share/ob_debug_sync.h"             // DEBUG_SYNC
 
 namespace oceanbase
 {
@@ -1494,6 +1495,8 @@ int ObLogRestoreHandler::process_transport_tasks()
         CLOG_LOG(WARN, "try handle sync mode log fail", KR(ret),
             K_(id), K(curr_proposal_id), K(lsn), K(scn), K(buf), K(buf_size));
       } else if (FALSE_IT(curr_proposal_id = new_proposal_id)) {
+      } else if (!share::ObLSID(id_).is_sys_ls()
+          && FALSE_IT(DEBUG_SYNC(BEFORE_SEMI_SYNC_TRANSPORT_RAW_WRITE))) {
       } else if (OB_TMP_FAIL(raw_write(curr_proposal_id, lsn, scn, buf, buf_size))) {
         if (OB_ERR_OUT_OF_LOWER_BOUND == tmp_ret) {
           tmp_ret = OB_SUCCESS;

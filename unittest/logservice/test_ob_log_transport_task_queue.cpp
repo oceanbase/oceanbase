@@ -16,6 +16,7 @@
 #define private public
 #include "logservice/transportservice/ob_log_transport_task_queue.h"
 #include "logservice/restoreservice/ob_log_restore_handler.h"
+#include "logservice/transportservice/ob_log_standby_rpc_processor.h"
 #undef private
 
 #include "unittest/logservice/transport_task_queue_test_utils.h"
@@ -366,48 +367,18 @@ TEST_F(TestLogTransportTaskQueue, front_success_failure_argument_validation_and_
   EXPECT_EQ(OB_IN_STOP_STATE, queue.failure(handle));
 }
 
-TEST_F(TestLogTransportTaskQueue, queued_end_tracks_running_max_across_holes)
+TEST_F(TestLogTransportTaskQueue, semi_sync_early_ack_uses_current_rpc_position)
 {
-  // Semi-sync early ACK: queued_end_ must be the running MAX end position across the
-  // current log and everything already accepted into the queue, even with holes.
-  ObLogTransportTaskQueue queue;
-  ASSERT_EQ(OB_SUCCESS, init_queue(queue));
-  ASSERT_EQ(OB_SUCCESS, seed_next_submit_lsn(queue, LSN(100)));
+  GroupEntryBuffer buf_current;
+  ObLogTransportReq *current_req = nullptr;
+  ASSERT_EQ(OB_SUCCESS, build_task(1, 32, LSN(100), current_req, buf_current));
+  TransportReqGuard current_guard(current_req);
 
-  LSN queued_end_lsn;
-  share::SCN queued_end_scn;
-  queue.get_queued_end_position(queued_end_lsn, queued_end_scn);
-  EXPECT_EQ(LSN(100), queued_end_lsn);
-
-  // First contiguous task [100, 132) advances queued_end to its end.
-  GroupEntryBuffer buf1;
-  ObLogTransportReq *req1 = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_task(1, 32, LSN(100), req1, buf1));
-  TransportReqGuard guard1(req1);
-  ASSERT_EQ(OB_SUCCESS, push_task(queue, guard1.get()));
-  queue.get_queued_end_position(queued_end_lsn, queued_end_scn);
-  EXPECT_EQ(req1->end_lsn_, queued_end_lsn);
-
-  // A far, non-contiguous task leaves a hole after req1 but must still advance
-  // queued_end to the new max (the old contiguous-only logic would freeze here).
-  GroupEntryBuffer buf_far;
-  ObLogTransportReq *req_far = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_task(2, 32, LSN(100000), req_far, buf_far));
-  TransportReqGuard guard_far(req_far);
-  ASSERT_EQ(OB_SUCCESS, push_task(queue, guard_far.get()));
-  queue.get_queued_end_position(queued_end_lsn, queued_end_scn);
-  EXPECT_EQ(req_far->end_lsn_, queued_end_lsn);
-
-  // Filling the hole right after req1 is far below the current max and must NOT
-  // lower queued_end.
-  GroupEntryBuffer buf_hole;
-  ObLogTransportReq *req_hole = nullptr;
-  ASSERT_EQ(OB_SUCCESS, build_task(3, 32, req1->end_lsn_, req_hole, buf_hole));
-  ASSERT_LT(req_hole->end_lsn_, req_far->end_lsn_);
-  TransportReqGuard guard_hole(req_hole);
-  ASSERT_EQ(OB_SUCCESS, push_task(queue, guard_hole.get()));
-  queue.get_queued_end_position(queued_end_lsn, queued_end_scn);
-  EXPECT_EQ(req_far->end_lsn_, queued_end_lsn);
+  LSN ack_lsn;
+  share::SCN ack_scn;
+  fill_current_rpc_semi_sync_early_ack(*current_req, ack_lsn, ack_scn);
+  EXPECT_EQ(current_req->end_lsn_, ack_lsn);
+  EXPECT_EQ(current_req->scn_, ack_scn);
 }
 
 TEST_F(TestLogTransportTaskQueue, concurrent_duplicate_push)

@@ -23,6 +23,10 @@ namespace oceanbase
 namespace logservice
 {
 
+void fill_current_rpc_semi_sync_early_ack(const ObLogTransportReq &req,
+                                          palf::LSN &ack_lsn,
+                                          share::SCN &ack_scn);
+
 // 备库日志传输RPC处理
 class ObLogStandbyTransportP : public obrpc::ObRpcProcessor<obrpc::ObLogTransportRpcProxy::ObRpc<obrpc::OB_LOG_TRANSPORT_REQ> >
 {

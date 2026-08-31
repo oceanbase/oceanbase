@@ -171,6 +171,10 @@ public:
   int get_log_restore_source(bool &is_empty, ObRestoreSourceServiceAttr &restore_source_service_attr);
   // get the access_mode and max_scn of the specific LS in log restore source tenant
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);
+  // get max END_SCN among specified leader LSs in log restore source tenant
+  int get_primary_max_end_scn(const uint64_t primary_tenant_id,
+                              const common::ObIArray<ObLSID> &ls_id_array,
+                              SCN &max_end_scn);
   // RPC-based variant of get_max_log_info, bypassing SQL/transaction/GTS on the source side.
   // Use this on switchover paths to avoid getting blocked by source-side GTS unavailability
   // during the source tenant's primary->standby transition.

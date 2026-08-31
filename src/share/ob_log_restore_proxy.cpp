@@ -909,6 +909,87 @@ int ObLogRestoreProxyUtil::get_max_log_info(const ObLSID &id, palf::AccessMode &
   return ret;
 }
 
+int ObLogRestoreProxyUtil::get_primary_max_end_scn(
+    const uint64_t primary_tenant_id,
+    const common::ObIArray<ObLSID> &ls_id_array,
+    SCN &max_end_scn)
+{
+  int ret = OB_SUCCESS;
+  const char *LS_ID_COUNT = "LS_ID_COUNT";
+  const char *MAX_END_SCN = "MAX_END_SCN";
+  max_end_scn = SCN::min_scn();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLogRestoreProxyUtil not inited", KR(ret));
+  } else if (OB_UNLIKELY(!is_user_tenant(primary_tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid primary_tenant_id when getting primary max end_scn",
+        KR(ret), K(primary_tenant_id));
+  } else if (OB_UNLIKELY(ls_id_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty ls_id_array when getting primary max end_scn", KR(ret));
+  } else {
+    RESTORE_RETRY(
+      SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
+        common::sqlclient::ObMySQLResult *result = NULL;
+        common::ObSqlString sql;
+        common::ObSqlString ls_id_list_sql;
+        int64_t ls_id_count = 0;
+        uint64_t max_end_scn_val = 0;
+        const char *GET_PRIMARY_MAX_END_SCN_SQL =
+            "SELECT COUNT(DISTINCT LS_ID) AS %s, MAX(END_SCN) AS %s "
+            "FROM %s WHERE TENANT_ID = %lu AND ROLE = 'LEADER' AND LS_ID IN (%.*s)";
+        for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array.count(); ++i) {
+          if (OB_UNLIKELY(!ls_id_array.at(i).is_valid())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid ls_id when getting primary max end_scn",
+                KR(ret), K(ls_id_array), K(i));
+          } else if (OB_FAIL(ls_id_list_sql.append_fmt(
+              "%s%ld", 0 == i ? "" : ",", ls_id_array.at(i).id()))) {
+            LOG_WARN("failed to append ls_id list sql",
+                KR(ret), K(ls_id_array), K(i));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql.append_fmt(GET_PRIMARY_MAX_END_SCN_SQL,
+                LS_ID_COUNT, MAX_END_SCN,
+                OB_GV_OB_LOG_STAT_ORA_TNAME,
+                primary_tenant_id,
+                static_cast<int>(ls_id_list_sql.length()), ls_id_list_sql.ptr()))) {
+          LOG_WARN("append_fmt failed", KR(ret));
+        } else if (OB_FAIL(sql_proxy_.read(res, sql.ptr()))) {
+          LOG_WARN("execute sql failed", KR(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get result failed", KR(ret), K(sql));
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("next failed", KR(ret), K(sql));
+        } else {
+          EXTRACT_INT_FIELD_MYSQL(*result, LS_ID_COUNT, ls_id_count, int64_t);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("extract primary max end_scn ls_id count failed", KR(ret), K(sql));
+          } else if (OB_UNLIKELY(ls_id_array.count() != ls_id_count)) {
+            ret = OB_ENTRY_NOT_EXIST;
+            LOG_WARN("not all specified ls have leader end_scn when getting primary max end_scn",
+                KR(ret), K(primary_tenant_id), K(ls_id_array), K(ls_id_count), K(sql));
+          } else {
+            EXTRACT_UINT_FIELD_MYSQL(*result, MAX_END_SCN, max_end_scn_val, uint64_t);
+          }
+
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(max_end_scn.convert_for_logservice(max_end_scn_val))) {
+            LOG_WARN("convert_for_logservice failed", KR(ret), K(max_end_scn_val), K(sql));
+          } else {
+            LOG_INFO("get primary max end_scn success",
+                K(primary_tenant_id), K(ls_id_array), K(ls_id_count), K(max_end_scn));
+          }
+        }
+      }
+    )
+  }
+  return ret;
+}
+
 int ObLogRestoreProxyUtil::is_ls_existing(const ObLSID &id)
 {
   int ret = OB_SUCCESS;

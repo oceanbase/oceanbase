@@ -83,7 +83,8 @@ class ObRecoveryLSService : public ObTenantThreadHelper
 {
 public:
   ObRecoveryLSService() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), proxy_(NULL),
-  last_report_ts_(OB_INVALID_TIMESTAMP), restore_status_() {}
+  last_report_ts_(OB_INVALID_TIMESTAMP), restore_status_(), cached_restore_source_(),
+  last_refresh_restore_source_ts_(OB_INVALID_TIMESTAMP), semi_sync_disable_barrier_() {}
   virtual ~ObRecoveryLSService() {}
   int init();
   void destroy();
@@ -91,12 +92,32 @@ public:
   virtual void do_work() override;
   DEFINE_MTL_FUNC(ObRecoveryLSService)
 private:
+ struct ObSemiSyncDisableBarrier
+ {
+   ObSemiSyncDisableBarrier() : switchover_epoch_(OB_INVALID_VERSION), target_scn_() {}
+   bool is_cfg_checked_in_epoch(const int64_t switchover_epoch) const;
+   bool has_target_scn_in_epoch(const int64_t switchover_epoch) const;
+   void mark_cfg_checked(const int64_t switchover_epoch);
+   int set_target_scn(const int64_t switchover_epoch, const share::SCN &target_scn);
+   void reset();
+
+   int64_t switchover_epoch_;
+   share::SCN target_scn_;
+ };
+
  int process_thread0_(const ObAllTenantInfo &tenant_info);
  // PRE_MPT promotion: promote PRE_MPT_LEVEL to MPT/MA after all-server cfg convergence.
  int promote_pre_mpt_level_();
  int do_promote_to_steady_level_(const share::ObAllTenantInfo &expected_tenant_info);
  int get_semi_sync_target_config_(bool &target_value, int64_t &target_ver, bool &has_target_config);
  int parse_bool_config_value_(const common::ObString &value_str, bool &value);
+ int check_semi_sync_disable_cfg_converged_(const share::ObAllTenantInfo &tenant_info,
+     const int64_t tenant_info_ora_rowscn,
+     bool &cfg_converged,
+     bool &barrier_satisfied);
+ int check_semi_sync_disable_barrier_if_needed_(const share::ObAllTenantInfo &tenant_info,
+     const bool cfg_converged,
+     bool &barrier_satisfied);
  int get_all_servers_for_cfg_convergence_(common::ObIArray<common::ObAddr> &servers);
  int check_server_cfg_converged_result_(const common::ObAddr &server,
      const int64_t target_ver,
@@ -106,6 +127,14 @@ private:
      const share::ObAllTenantInfo &expected_tenant_info,
      const int64_t expected_tenant_info_ora_rowscn,
      bool &converged);
+ int check_semi_sync_disable_barrier_(const share::ObAllTenantInfo &tenant_info, bool &passed);
+ int get_primary_max_end_scn_(share::SCN &max_end_scn);
+ int get_ls_id_array_from_status_(common::ObIArray<share::ObLSID> &ls_id_array);
+ int get_restore_source_(share::ObLogRestoreSourceItem &restore_source);
+ int get_restore_source_service_attr_(share::ObRestoreSourceServiceAttr &service_attr);
+ int query_primary_max_end_scn_(const share::ObRestoreSourceServiceAttr &service_attr,
+     const common::ObIArray<share::ObLSID> &ls_id_array,
+     share::SCN &max_end_scn);
  int process_thread1_(const ObAllTenantInfo &tenant_info,
      share::SCN &start_scn,
      palf::PalfBufferIterator &iterator);
@@ -207,6 +236,7 @@ private:
   logservice::RestoreStatusInfo restore_status_;
   share::ObLogRestoreSourceItem cached_restore_source_;
   int64_t last_refresh_restore_source_ts_;
+  ObSemiSyncDisableBarrier semi_sync_disable_barrier_;
 };
 }
 }

@@ -87,24 +87,28 @@ static bool check_semi_sync_can_early_ack_(const share::ObLSID &ls_id, const uin
   return can_early_ack;
 }
 
-static void try_fill_semi_sync_early_ack_(
-    const share::ObLSID &ls_id,
-    const uint64_t tenant_id,
-    ObLogStandbyTransportWorker *transport_worker,
-    ObLogSyncStandbyInfo &resp)
+void fill_current_rpc_semi_sync_early_ack(const ObLogTransportReq &req,
+                                          palf::LSN &ack_lsn,
+                                          share::SCN &ack_scn)
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(transport_worker)) {
-    CLOG_LOG(WARN, "transport worker is null, skip early ACK", K(ls_id), K(tenant_id));
-  } else if (check_semi_sync_can_early_ack_(ls_id, tenant_id)) {
-    // Early ACK: immediately respond with queued_end_lsn_/scn_ from the task queue.
-    // No wait for PALF flush — this is the semi-sync contract.
-    palf::LSN queued_end_lsn;
-    share::SCN queued_end_scn;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(transport_worker->get_queued_end_position(ls_id, queued_end_lsn, queued_end_scn))) {
-      CLOG_LOG(WARN, "get_queued_end_position failed, skip early ACK", K(tmp_ret), K(ls_id), K(tenant_id));
-    } else if (OB_UNLIKELY(ERRSIM_DELAY_SEMI_SYNC_EARLY_ACK > 0)) {
+  ack_lsn = req.end_lsn_;
+  ack_scn = req.scn_;
+}
+
+static bool is_valid_ack_position_(const palf::LSN &ack_lsn, const share::SCN &ack_scn)
+{
+  return ack_lsn.is_valid() && ack_scn.is_valid();
+}
+
+static void try_fill_semi_sync_early_ack_(
+    const ObLogTransportReq &req,
+    const uint64_t tenant_id,
+    palf::LSN &ack_lsn,
+    share::SCN &ack_scn)
+{
+  const share::ObLSID &ls_id = req.ls_id_;
+  if (check_semi_sync_can_early_ack_(ls_id, tenant_id)) {
+    if (OB_UNLIKELY(ERRSIM_DELAY_SEMI_SYNC_EARLY_ACK > 0)) {
       const int64_t delay_s = abs(ERRSIM_DELAY_SEMI_SYNC_EARLY_ACK);
       CLOG_LOG(INFO, "ERRSIM_DELAY_SEMI_SYNC_EARLY_ACK enabled, sleep",
                K(delay_s), K(ls_id), K(tenant_id));
@@ -112,11 +116,136 @@ static void try_fill_semi_sync_early_ack_(
     } else if (OB_UNLIKELY(EN_SEMI_SYNC_RPC_LOST)) {
       CLOG_LOG(INFO, "EN_SEMI_SYNC_RPC_LOST: drop early ACK position", K(ls_id), K(tenant_id));
     } else {
-      resp.standby_committed_end_lsn_ = queued_end_lsn;
-      resp.standby_committed_end_scn_ = queued_end_scn;
-      CLOG_LOG(TRACE, "semi-sync early ACK sent", K(ls_id), K(tenant_id), K(resp),
-               K(queued_end_lsn), K(queued_end_scn));
+      fill_current_rpc_semi_sync_early_ack(req, ack_lsn, ack_scn);
+      CLOG_LOG(TRACE, "semi-sync early ACK sent", K(ls_id), K(tenant_id), K(ack_lsn), K(ack_scn),
+               K(req));
     }
+  }
+}
+
+int validate_transport_req_(const ObLogTransportReq &req,
+                            const int64_t cluster_id,
+                            const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!req.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid request", K(ret), K(req));
+  } else if (req.standby_cluster_id_ != cluster_id) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "standby cluster id not match", K(req.standby_cluster_id_), K(cluster_id), K(ret));
+  } else if (req.standby_tenant_id_ != tenant_id) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "standby tenant id not match", K(req.standby_tenant_id_), K(tenant_id), K(ret));
+  } else if (OB_UNLIKELY(req.end_lsn_ != req.start_lsn_ + req.log_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "log size mismatch with lsn range", K(ret), K(req.start_lsn_), K(req.end_lsn_), K(req.log_size_));
+  }
+  return ret;
+}
+
+static int get_standby_transport_worker_(const ObLogTransportReq &req,
+                                          ObLogService *&log_service,
+                                          ObLogStandbyTransportWorker *&transport_worker)
+{
+  int ret = OB_SUCCESS;
+  ObLogRestoreService *restore_service = nullptr;
+  log_service = MTL(ObLogService*);
+  transport_worker = nullptr;
+  if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "ObLogService is null", K(ret));
+  } else if (OB_ISNULL(restore_service = log_service->get_log_restore_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "ObLogRestoreService is null", K(ret));
+  } else if (OB_ISNULL(transport_worker = restore_service->get_log_standby_transport_worker())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport worker is null", K(ret), K(req.ls_id_));
+  } else if (transport_worker->need_stop()) {
+    ret = OB_IN_STOP_STATE;
+    CLOG_LOG(WARN, "transport worker is stopping, reject new task", K(ret), K(req.ls_id_));
+  }
+  return ret;
+}
+
+static void try_fill_flush_ack_(const ObLogTransportReq &req,
+                                ObLogService *log_service,
+                                palf::LSN &ack_lsn,
+                                share::SCN &ack_scn)
+{
+  int ret = OB_SUCCESS;
+  palf::LSN palf_committed_end_lsn;
+  share::SCN palf_committed_end_scn;
+  palf::PalfHandleGuard palf_handle_guard;
+  int64_t first_proposal_id = palf::INVALID_PROPOSAL_ID;
+  int64_t second_proposal_id = palf::INVALID_PROPOSAL_ID;
+  bool is_valid = false;
+  bool skip_return_stale_ack = false;
+
+  if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "ObLogService is null", K(ret));
+  } else if (OB_FAIL(log_service->open_palf(req.ls_id_, palf_handle_guard))) {
+    CLOG_LOG(WARN, "open_palf failed, skip returning committed ack", K(ret), K(req.ls_id_));
+  } else if (OB_FAIL(ObLogStandbyAckService::check_leader_and_raw_write_mode(
+      palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid))) {
+    CLOG_LOG(WARN, "first check leader and access mode failed", K(ret), K(req.ls_id_));
+  } else if (!is_valid) {
+    skip_return_stale_ack = true;
+    CLOG_LOG(INFO, "first check failed, skip returning ack to primary",
+        K(req.ls_id_), K(first_proposal_id));
+  } else if (OB_FAIL(ObLogStandbyAckService::check_restore_source_valid(req.ls_id_, is_valid))) {
+    CLOG_LOG(WARN, "check restore source valid failed", K(ret), K(req.ls_id_));
+  } else if (!is_valid) {
+    skip_return_stale_ack = true;
+    CLOG_LOG(INFO, "restore source not valid, skip returning ack to primary", K(req.ls_id_));
+  } else if (OB_FAIL(palf_handle_guard.get_end_lsn(palf_committed_end_lsn))) {
+    CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K(req.ls_id_));
+  } else if (OB_FAIL(palf_handle_guard.get_end_scn(palf_committed_end_scn))) {
+    CLOG_LOG(WARN, "get_end_scn failed", K(ret), K(req.ls_id_));
+  } else {
+    ERRSIM_POINT_DEF(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
+    if (ERRSIM_DELAY_STANDBY_TRANSPORT_RESP > 0) {
+      const int64_t delay_s = abs(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
+      CLOG_LOG(INFO, "ERRSIM_DELAY_STANDBY_TRANSPORT_RESP enabled, sleep", K(delay_s), K(req.ls_id_));
+      ob_usleep(static_cast<uint32_t>(delay_s * 1000 * 1000));
+    }
+
+    if (OB_FAIL(ObLogStandbyAckService::check_and_compare_leader_status(
+        palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid, second_proposal_id))) {
+      CLOG_LOG(WARN, "second check leader and access mode failed", K(ret), K(req.ls_id_));
+    } else if (!is_valid) {
+      skip_return_stale_ack = true;
+      CLOG_LOG(INFO, "second check failed, skip returning ack to primary",
+          K(req.ls_id_), K(first_proposal_id), K(second_proposal_id));
+    }
+  }
+
+  if (OB_SUCC(ret) && !skip_return_stale_ack
+      && is_valid_ack_position_(palf_committed_end_lsn, palf_committed_end_scn)) {
+    ack_lsn = palf_committed_end_lsn;
+    ack_scn = palf_committed_end_scn;
+  }
+}
+
+static void fill_transport_resp_(const ObLogTransportReq &req,
+                                 const int64_t cluster_id,
+                                 const uint64_t tenant_id,
+                                 const int resp_ret,
+                                 const palf::LSN &ack_lsn,
+                                 const share::SCN &ack_scn,
+                                 ObLogSyncStandbyInfo &resp)
+{
+  resp.ret_code_ = resp_ret;
+  resp.ls_id_ = req.ls_id_;
+  resp.standby_cluster_id_ = cluster_id;
+  resp.standby_tenant_id_ = tenant_id;
+  if (is_valid_ack_position_(ack_lsn, ack_scn)) {
+    resp.standby_committed_end_lsn_ = ack_lsn;
+    resp.standby_committed_end_scn_ = ack_scn;
+  } else {
+    resp.standby_committed_end_lsn_.reset();
+    resp.standby_committed_end_scn_.reset();
   }
 }
 
@@ -124,144 +253,31 @@ int ObLogStandbyTransportP::process()
 {
   int ret = OB_SUCCESS;
   const ObLogTransportReq &req = arg_;
-  const common::ObAddr server = req.src_;
-  ObLogSyncStandbyInfo &resp = result_;
-
   const int64_t cluster_id = GCONF.cluster_id;
   const uint64_t tenant_id = MTL_ID();
+  ObLogService *log_service = nullptr;
+  ObLogStandbyTransportWorker *transport_worker = nullptr;
+  palf::LSN ack_lsn;
+  share::SCN ack_scn;
 
   CLOG_LOG(TRACE, "ObLogStandbyTransportP process start", K(req),
       K(cluster_id), K(tenant_id), K(req.start_lsn_), K(req.end_lsn_), K(req.log_size_));
 
-  if (OB_UNLIKELY(!req.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid request", K(ret), K(req));
-  } else if (req.standby_cluster_id_ != GCONF.cluster_id){
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "standby cluster id not match", K(req.standby_cluster_id_), K(cluster_id), K(ret));
-  } else if (req.standby_tenant_id_ != MTL_ID()) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "standby tenant id not match", K(req.standby_tenant_id_), K(tenant_id), K(ret));
-  } else if (OB_UNLIKELY(req.end_lsn_ != req.start_lsn_ + req.log_size_)) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "log size mismatch with lsn range", K(ret), K(req.start_lsn_), K(req.end_lsn_), K(req.log_size_));
-  } else { } // success
-
-  if (OB_FAIL(ret)) {
-    resp.ret_code_ = ret;
-    resp.standby_committed_end_lsn_.reset();
-    resp.standby_committed_end_scn_.reset();
+  if (OB_FAIL(validate_transport_req_(req, cluster_id, tenant_id))) {
+    CLOG_LOG(TRACE, "validate_transport_req_ failed", KR(ret), K(req));
+  } else if (OB_FAIL(get_standby_transport_worker_(req, log_service, transport_worker))) {
+    CLOG_LOG(TRACE, "get_standby_transport_worker_ failed", KR(ret), K(req));
+  } else if (OB_FAIL(transport_worker->submit_transport_task(req))) {
+    CLOG_LOG(WARN, "submit transport task failed", K(ret), K(req.ls_id_));
   } else {
-    ObLogService *log_service = MTL(ObLogService*);
-    ObLogRestoreService *restore_service = nullptr;
-    ObLogStandbyTransportWorker *transport_worker = nullptr;
-
-    if (OB_ISNULL(log_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "ObLogService is null", K(ret));
-    } else if (OB_ISNULL(restore_service = log_service->get_log_restore_service())) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "ObLogRestoreService is null", K(ret));
-    } else if (OB_ISNULL(transport_worker = restore_service->get_log_standby_transport_worker())) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "transport worker is null", K(ret), K(req.ls_id_));
-    } else if (transport_worker->need_stop()) {
-      ret = OB_IN_STOP_STATE;
-      CLOG_LOG(WARN, "transport worker is stopping, reject new task", K(ret), K(req.ls_id_));
-    } else {
-      // 提交任务到worker队列，立即返回成功
-      // 确认位点会通过 standbyAckService 异步返回给主库
-      if (OB_FAIL(transport_worker->submit_transport_task(req))) {
-        CLOG_LOG(WARN, "submit transport task failed", K(ret), K(req.ls_id_));
-      } else {
-        try_fill_semi_sync_early_ack_(req.ls_id_, tenant_id, transport_worker, resp);
-        // Task submitted to queue; if not early ACK, flush ACK will be sent
-        // asynchronously by ObStandbyFsCb → StandbyAckTask
-        CLOG_LOG(TRACE, "ObLogStandbyTransportP submit task success, ack will be sent asynchronously",
-                 K(ret), K(req), K(resp));
-      }
+    try_fill_semi_sync_early_ack_(req, tenant_id, ack_lsn, ack_scn);
+    if (!is_valid_ack_position_(ack_lsn, ack_scn)) {
+      try_fill_flush_ack_(req, log_service, ack_lsn, ack_scn);
     }
-
-    // 提交任务流程结束，设置 ret_code_
-    resp.ret_code_ = ret;
-
-    // Semi-sync: if early ACK was sent, skip the palf flush ACK flow entirely.
-    // Early ACK values were already set in the submit_transport_task success branch.
-    const bool early_ack_sent = resp.standby_committed_end_lsn_.is_valid()
-        && resp.standby_committed_end_scn_.is_valid();
-    if (early_ack_sent) {
-      // Early ACK already populated — skip palf flush ACK flow
-    } else {
-      // 最后获取 palf 的 committed_end_lsn 和 committed_end_scn，确保获取到最新的值
-      palf::LSN palf_committed_end_lsn;
-      share::SCN palf_committed_end_scn;
-      palf::PalfHandleGuard palf_handle_guard;
-      int64_t first_proposal_id = palf::INVALID_PROPOSAL_ID;
-      int64_t second_proposal_id = palf::INVALID_PROPOSAL_ID;
-      bool is_valid = false;
-      bool skip_return_stale_ack = false;
-      ret = OB_SUCCESS;
-
-      // 第一次检查：确认是 leader 且 access mode 是 RAW_WRITE
-      if (OB_ISNULL(log_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "ObLogService is null", K(ret));
-      } else if (OB_FAIL(log_service->open_palf(req.ls_id_, palf_handle_guard))) {
-        CLOG_LOG(WARN, "open_palf failed, skip returning committed ack", K(ret), K(req.ls_id_));
-      } else if (OB_FAIL(ObLogStandbyAckService::check_leader_and_raw_write_mode(
-          palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid))) {
-        CLOG_LOG(WARN, "first check leader and access mode failed", K(ret), K(req.ls_id_));
-      } else if (!is_valid) {
-        skip_return_stale_ack = true;
-        CLOG_LOG(INFO, "first check failed, skip returning ack to primary",
-                 K(req.ls_id_), K(first_proposal_id));
-      } else if (OB_FAIL(ObLogStandbyAckService::check_restore_source_valid(req.ls_id_, is_valid))) {
-        CLOG_LOG(WARN, "check restore source valid failed", K(ret), K(req.ls_id_));
-      } else if (!is_valid) {
-        skip_return_stale_ack = true;
-        CLOG_LOG(INFO, "restore source not valid, skip returning ack to primary", K(req.ls_id_));
-      } else {
-        // 获取日志流的 end_lsn/end_scn
-        if (OB_FAIL(palf_handle_guard.get_end_lsn(palf_committed_end_lsn))) {
-          CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K(req.ls_id_));
-        } else if (OB_FAIL(palf_handle_guard.get_end_scn(palf_committed_end_scn))) {
-          CLOG_LOG(WARN, "get_end_scn failed", K(ret), K(req.ls_id_));
-        } else {
-          // ERRSIM: 延迟返回，便于测试在延迟窗口内触发 failover
-          ERRSIM_POINT_DEF(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
-          if (ERRSIM_DELAY_STANDBY_TRANSPORT_RESP > 0) {
-            const int64_t delay_s = abs(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
-            CLOG_LOG(INFO, "ERRSIM_DELAY_STANDBY_TRANSPORT_RESP enabled, sleep", K(delay_s), K(req.ls_id_));
-            ob_usleep(static_cast<uint32_t>(delay_s * 1000 * 1000));
-          }
-
-          // 第二次检查
-          if (OB_FAIL(ObLogStandbyAckService::check_and_compare_leader_status(
-              palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid, second_proposal_id))) {
-            CLOG_LOG(WARN, "second check leader and access mode failed", K(ret), K(req.ls_id_));
-          } else if (!is_valid) {
-            skip_return_stale_ack = true;
-            CLOG_LOG(INFO, "second check failed, skip returning ack to primary",
-                     K(req.ls_id_), K(first_proposal_id), K(second_proposal_id));
-          }
-        }
-      }
-
-      // 设置 committed 位点
-      if (OB_SUCC(ret) && !skip_return_stale_ack && palf_committed_end_lsn.is_valid() && palf_committed_end_scn.is_valid()) {
-        resp.standby_committed_end_lsn_ = palf_committed_end_lsn;
-        resp.standby_committed_end_scn_ = palf_committed_end_scn;
-      } else {
-        resp.standby_committed_end_lsn_.reset();
-        resp.standby_committed_end_scn_.reset();
-      }
-    }
+    CLOG_LOG(TRACE, "ObLogStandbyTransportP submit task success", K(ret), K(req), K(ack_lsn), K(ack_scn));
   }
 
-  // 设置 resp 基本字段
-  resp.ls_id_ = req.ls_id_;
-  resp.standby_cluster_id_ = cluster_id;
-  resp.standby_tenant_id_ = tenant_id;
+  fill_transport_resp_(req, cluster_id, tenant_id, ret, ack_lsn, ack_scn, result_);
   return OB_SUCCESS;
 }
 

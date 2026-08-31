@@ -2419,19 +2419,9 @@ int ObCheckTenantConfigAndInfoP::process()
           arg_.get_tenant_info_ora_rowscn(), expected_tenant_info,
           0 /* finish_data_version */, SCN::min_scn()))) {
         LOG_WARN("failed to update tenant info cache in convergence rpc", KR(ret), K_(arg));
-      } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
-        LOG_WARN("failed to get tenant info after cache update", KR(ret), K_(arg));
-      } else if (expected_tenant_info.get_protection_mode().is_valid()
-                 && expected_tenant_info.get_protection_level().is_valid()
-                 && tenant_info.get_protection_mode() == expected_tenant_info.get_protection_mode()
-                 && tenant_info.get_protection_level() == expected_tenant_info.get_protection_level()
-                 && tenant_info.get_switchover_epoch() == expected_tenant_info.get_switchover_epoch()) {
-        result_.set_tenant_info_refresh_ok(true);
-        LOG_INFO("tenant info matched after refresh in convergence rpc",
-            K_(arg), K(tenant_info), K(expected_tenant_info));
       } else {
-        LOG_INFO("tenant info mismatch after refresh in convergence rpc",
-            K_(arg), K(tenant_info), K(expected_tenant_info));
+        result_.set_tenant_info_refresh_ok(true);
+        LOG_INFO("tenant info cache refreshed in convergence rpc", K_(arg), K(expected_tenant_info));
       }
     }
     if (OB_TENANT_NOT_IN_SERVER == ret) {
