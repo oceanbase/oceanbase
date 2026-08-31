@@ -755,6 +755,12 @@ private:
   int register_all_sstables_upload_(ObTabletHandle &new_tablet_handle);
 #endif
 
+  int get_tablet_and_address(
+      const ObTabletMapKey &key,
+      ObTabletHandle &old_tablet,
+      ObMetaDiskAddr &old_tablet_addr,
+      ObTimeGuard &time_guard);
+
 private:
   static int replay_deserialize_tablet(
       const ObTabletMapKey &key,
