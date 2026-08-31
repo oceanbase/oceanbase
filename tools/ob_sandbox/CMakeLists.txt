@@ -15,11 +15,12 @@ target_compile_definitions(ob_sandbox PRIVATE
 
 target_link_libraries(
     ob_sandbox PRIVATE
-    -static-libgcc
-    -static-libstdc++
+    ${STATIC_LIBGCC_FLAGS}
+    ${STATIC_LIBSTDCXX_FLAGS}
     oblib
     ${DEP_DIR}/lib64/libminijail.a
     ${DEP_DIR}/lib64/libcap.a
+    ${STDCXXFS_LIB}
 )
 
 include_directories(

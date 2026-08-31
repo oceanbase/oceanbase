@@ -56,8 +56,8 @@ function(ob_offline_observer case case_file)
     ob_sql_static
     ob_storage_static
     -Wl,--end-group
-    -static-libgcc
-    -static-libstdc++
+    ${STATIC_LIBGCC_FLAGS}
+    ${STATIC_LIBSTDCXX_FLAGS}
     gtest
     gmock)
 endfunction()

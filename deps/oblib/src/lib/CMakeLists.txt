@@ -504,6 +504,20 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
     libantlr4-runtime.a
     libantlr4-autogen.a
   )
+elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "loongarch64")
+  target_link_libraries(oblib_lib
+    PUBLIC
+    libcpuinfo.a
+    libsimd.a
+    libvsag_static.a
+    libdiskann.a
+    libopenblas.a
+    gfortran
+    gomp
+    libroaring.a
+    libantlr4-runtime.a
+    libantlr4-autogen.a
+  )
 else()
     message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()

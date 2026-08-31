@@ -612,7 +612,7 @@ int ObStorageHADagUtils::inc_member_list_config_version(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
+#if defined(OB_BUILD_SHARED_STORAGE) && defined(OB_BUILD_SHARED_LOG_SERVICE)
 int ObStorageHADagUtils::check_self_is_valid_member_with_log_service(
     const share::ObLSID &ls_id,
     bool &is_valid_member)

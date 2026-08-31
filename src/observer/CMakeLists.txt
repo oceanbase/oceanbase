@@ -693,7 +693,7 @@ else()
     ob_plugin
     ${ob_close_modules_static_name}
     -Wl,--no-whole-archive
-    -static-libgcc -static-libstdc++
+    ${STATIC_LIBGCC_FLAGS} ${STATIC_LIBSTDCXX_FLAGS}
     objit)
 endif()
 
@@ -724,8 +724,8 @@ target_link_libraries(observer_without_bolt
   ob_plugin_export_static
   -Wl,--no-whole-archive
   -Wl,--export-dynamic-symbol=obp_*
-  -static-libgcc
-  -static-libstdc++
+  ${STATIC_LIBGCC_FLAGS}
+  ${STATIC_LIBSTDCXX_FLAGS}
   ${link_malloc_hook}
   ${BOLT_OPT}
 )

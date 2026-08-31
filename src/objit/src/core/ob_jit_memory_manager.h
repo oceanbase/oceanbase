@@ -71,14 +71,6 @@ public:
   virtual void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
 
 #if defined(__aarch64__)
-  /// Inform the memory manager about the total amount of memory required to
-  /// allocate all sections to be loaded:
-  /// \p CodeSize - the total size of all code sections
-  /// \p DataSizeRO - the total size of all read-only data sections
-  /// \p DataSizeRW - the total size of all read-write data sections
-  ///
-  /// Note that by default the callback is disabled. To enable it
-  /// redefine the method needsToReserveAllocationSpace to return true.
   void reserveAllocationSpace(uintptr_t CodeSize,
                               llvm::Align CodeAlign,
                               uintptr_t RODataSize,
@@ -90,8 +82,20 @@ public:
     int64_t align = MAX3(CodeAlign.value(), RODataAlign.value(), RWDataAlign.value());
     allocator_.reserve(JMT_RWE, sz, align);
   }
-
-  /// Override to return true to enable the reserveAllocationSpace callback.
+  bool needsToReserveAllocationSpace() override { return true; }
+#elif defined(__loongarch64)
+  // LoongArch uses an older LLVM where alignment params are uint32_t, not llvm::Align
+  void reserveAllocationSpace(uintptr_t CodeSize,
+                              uint32_t CodeAlign,
+                              uintptr_t RODataSize,
+                              uint32_t RODataAlign,
+                              uintptr_t RWDataSize,
+                              uint32_t RWDataAlign) override
+  {
+    int64_t sz = CodeSize + CodeAlign + RODataSize + RODataAlign + RWDataSize + RWDataAlign;
+    int64_t align = MAX3(CodeAlign, RODataAlign, RWDataAlign);
+    allocator_.reserve(JMT_RWE, sz, align);
+  }
   bool needsToReserveAllocationSpace() override { return true; }
 #endif
 

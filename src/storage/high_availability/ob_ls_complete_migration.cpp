@@ -2141,7 +2141,7 @@ int ObWaitDataReadyTask::change_member_list_with_leader_()
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
+#if defined(OB_BUILD_SHARED_STORAGE) && defined(OB_BUILD_SHARED_LOG_SERVICE)
 int ObWaitDataReadyTask::force_elect_and_wait_become_leader_()
 {
   int ret = OB_SUCCESS;

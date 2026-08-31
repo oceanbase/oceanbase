@@ -15,8 +15,8 @@ function(rpc_server_test case)
     ob_storage_static
     ${ob_close_modules_static_name}
     -Wl,--end-group
-    -static-libgcc
-    -static-libstdc++)
+    ${STATIC_LIBGCC_FLAGS}
+    ${STATIC_LIBSTDCXX_FLAGS})
 endfunction()
 
 rpc_server_test(easy_server_basic)

@@ -140,6 +140,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 set(STDC_SHARED_LIB "")
 set(STDC_SHARED_LIB_SYMLINK "${DEVTOOLS_DIR}/lib64/libstdc++.so")
+if(${ARCHITECTURE} STREQUAL "loongarch64")
+  set(STDC_SHARED_LIB_SYMLINK "/usr/lib/gcc/loongarch64-redhat-linux/8/libstdc++.so")
+endif()
 file(REAL_PATH ${STDC_SHARED_LIB_SYMLINK} STDC_SHARED_LIB)
 message(STATUS "STDC_SHARED_LIB: ${STDC_SHARED_LIB}")
 

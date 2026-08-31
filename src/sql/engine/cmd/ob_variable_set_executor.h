@@ -123,7 +123,7 @@ private:
                                     const ObValidatePasswordCtx &password_ctx);
   int is_support(const share::ObSetVar &set_var);
   int do_set_names(ObExecContext &ctx, ObSetNamesStmt &stmt);
-#ifdef OB_BUILD_CLOSE_MODULES
+#if defined(OB_BUILD_CLOSE_MODULES) && defined(OB_BUILD_ORACLE_PL)
   int do_early_lock_release(ObExecContext &ctx,
                             ObSQLSessionInfo &session,
                             const bool enable_early_lock_release);

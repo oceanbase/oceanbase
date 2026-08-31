@@ -57,10 +57,19 @@ namespace fs = std::filesystem;
 #endif
 
 // Architecture audit constant for filter portability.
+// Older LoongArch distro headers may not expose AUDIT_ARCH_LOONGARCH64 yet.
+#ifndef AUDIT_ARCH_LOONGARCH64
+#define OB_AUDIT_ARCH_LOONGARCH64 0xC0000102U
+#else
+#define OB_AUDIT_ARCH_LOONGARCH64 AUDIT_ARCH_LOONGARCH64
+#endif
+
 #if defined(__x86_64__)
 #define OB_SECCOMP_ARCH AUDIT_ARCH_X86_64
 #elif defined(__aarch64__)
 #define OB_SECCOMP_ARCH AUDIT_ARCH_AARCH64
+#elif defined(__loongarch64)
+#define OB_SECCOMP_ARCH OB_AUDIT_ARCH_LOONGARCH64
 #else
 #error "Unsupported architecture for seccomp blacklist filter"
 #endif

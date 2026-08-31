@@ -176,7 +176,7 @@ else()
     -Wl,--start-group
     oceanbase_static
     -Wl,--end-group
-    -static-libgcc -static-libstdc++
+    ${STATIC_LIBGCC_FLAGS} ${STATIC_LIBSTDCXX_FLAGS}
     -Wl,-Bsymbolic
     -Wl,-e,so_main
     easy
@@ -213,5 +213,5 @@ target_link_libraries(obcdc_static
   -Wl,--start-group
   oceanbase_static
   -Wl,--end-group
-  PRIVATE easy -static-libgcc -static-libstdc++)
+  PRIVATE easy ${STATIC_LIBGCC_FLAGS} ${STATIC_LIBSTDCXX_FLAGS})
 set_target_properties(obcdc_static PROPERTIES OUTPUT_NAME "obcdc")

@@ -60,7 +60,7 @@ install(PROGRAMS
   ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
   ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
   ${CMAKE_BINARY_DIR}/tools/ob_sandbox/ob_sandbox
-  ${CMAKE_BINARY_DIR}/close_modules/oracle_pl/pl/wrap/wrap
+  $<$<NOT:$<STREQUAL:"${ARCHITECTURE}","loongarch64">>:${CMAKE_BINARY_DIR}/close_modules/oracle_pl/pl/wrap/wrap>
   tools/ob_admin/io_bench/bench_io.sh
   ${CMAKE_BINARY_DIR}/src/observer/observer
   DESTINATION bin
@@ -143,11 +143,13 @@ install(FILES
   DESTINATION lib
   COMPONENT server)
 
-message(STATUS "system package release directory: " ${SYS_PACK_RELEASE_DIR})
-install(
-  DIRECTORY ${SYS_PACK_RELEASE_DIR}/
-  DESTINATION admin
-  COMPONENT server)
+if(NOT ${ARCHITECTURE} STREQUAL "loongarch64")
+  message(STATUS "system package release directory: " ${SYS_PACK_RELEASE_DIR})
+  install(
+    DIRECTORY ${SYS_PACK_RELEASE_DIR}/
+    DESTINATION admin
+    COMPONENT server)
+endif()
 
 if (OB_BUILD_OPENSOURCE)
 install(FILES
@@ -219,6 +221,10 @@ if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
       DEPENDS ob_sql_proxy_parser_static
       COMMAND_EXPAND_LISTS)
     list(APPEND BITCODE_TO_ELF_LIST libob_sql_proxy_parser_static_to_elf)
+  else()
+    # Without LTO the .a contains plain ELF objects; no bitcode conversion
+    # needed, but the target still must be built before packaging.
+    list(APPEND BITCODE_TO_ELF_LIST ob_sql_proxy_parser_static)
   endif()
 
   install(PROGRAMS
@@ -445,7 +451,7 @@ if(OB_BUILD_OPENSOURCE AND OB_BUILD_OBADMIN)
     ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
     ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
     ${CMAKE_BINARY_DIR}/tools/ob_sandbox/ob_sandbox
-    ${DEVTOOLS_DIR}/bin/obstack
+    $<$<NOT:$<STREQUAL:"${ARCHITECTURE}","loongarch64">>:${DEVTOOLS_DIR}/bin/obstack>
     DESTINATION /usr/bin
     COMPONENT utils
   )

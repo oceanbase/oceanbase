@@ -177,8 +177,8 @@ target_link_libraries(ob_admin
   ob_share_static
   ${ob_close_modules_static_name}
   -Wl,--end-group
-  -static-libgcc
-  -static-libstdc++
+  ${STATIC_LIBGCC_FLAGS}
+  ${STATIC_LIBSTDCXX_FLAGS}
   malloc_hook)
 
 if(ENABLE_THIN_LTO AND USE_LTO_CACHE)

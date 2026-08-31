@@ -14,7 +14,7 @@ function(oblib_addtest mainfile)
   endif()
   add_executable(${testname} ${mainfile})
   add_test(${testname} ${testname})
-  target_link_libraries(${testname} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oblib oblib_testbase -static-libgcc -static-libstdc++
+  target_link_libraries(${testname} PRIVATE -Wl,--whole-archive mock_di -Wl,--no-whole-archive oblib oblib_testbase ${STATIC_LIBGCC_FLAGS} ${STATIC_LIBSTDCXX_FLAGS}
       ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 endfunction()
 
@@ -22,7 +22,7 @@ function(oblib_addtest_simd mainfile)
   get_filename_component(testname ${mainfile} NAME_WE)
   add_executable(${testname} ${ARGV})
   add_test(${testname} ${testname})
-  target_link_libraries(${testname} PRIVATE objit oblib oblib_testbase -static-libgcc -static-libstdc++
+  target_link_libraries(${testname} PRIVATE objit oblib oblib_testbase ${STATIC_LIBGCC_FLAGS} ${STATIC_LIBSTDCXX_FLAGS}
       -Wl,-znorelro -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
   if (${ARCHITECTURE} STREQUAL "x86_64")
 	  target_compile_options(${testname}
