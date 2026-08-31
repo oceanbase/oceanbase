@@ -116,6 +116,7 @@ public:
     jit::ObLLVMFunction spi_reset_allocator_;
     jit::ObLLVMFunction spi_restore_sqlcode_;
     jit::ObLLVMFunction spi_save_sqlcode_;
+    jit::ObLLVMFunction spi_reset_sql_rowcount_;
     jit::ObLLVMFunction spi_set_rowcount_;
   };
 
@@ -215,6 +216,7 @@ public:
     out_params_(allocator),
     profile_mode_(session_info_.get_pl_profiler() != nullptr),
     code_coverage_mode_(session_info_.get_pl_code_coverage() != nullptr),
+    sql_rowcount_zero_on_fail_(false),
     global_strings_(),
     int_buffer_(allocator),
     int32_buffer_(allocator),
@@ -544,6 +546,10 @@ public:
     return nullptr != curr ? curr->raising_block_
                            : default_raise_block_;
   }
+
+  // TransformedAssign: emit spi_set_rowcount(0) on check_success fail path (before_fail).
+  inline void set_sql_rowcount_zero_on_fail(bool v) { sql_rowcount_zero_on_fail_ = v; }
+  inline bool get_sql_rowcount_zero_on_fail() const { return sql_rowcount_zero_on_fail_; }
 
   inline ObPLADTService &get_adt_service() { return adt_service_; }
   inline ObPLEHService &get_eh_service() { return eh_service_; }
@@ -934,6 +940,7 @@ private:
   ObPLSEArray<jit::ObLLVMValue> out_params_;
   bool profile_mode_;
   bool code_coverage_mode_;
+  bool sql_rowcount_zero_on_fail_;
 
   using GlobalStringMap = common::hash::ObHashMap<
                             common::ObString,

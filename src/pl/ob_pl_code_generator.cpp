@@ -427,17 +427,26 @@ int ObPLCodeGenerateVisitor::visit(const ObPLTransformedAssignStmt &s)
   if (NULL == generator_.get_current().get_v()) {
     //控制流已断，后面的语句不再处理
   } else {
-    ObSEArray<ObLLVMValue, 1> args;
+    ObSEArray<ObLLVMValue, 2> args;
+    ObLLVMValue rowcount_value;
     OZ (generator_.generate_update_location(s));
     // save sqlcode
     OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
     OZ (generator_.get_helper().create_call(ObString("spi_save_sqlcode"),
       generator_.get_spi_service().spi_save_sqlcode_, args));
+    OZ (generator_.get_helper().create_call(ObString("spi_reset_sql_rowcount"),
+      generator_.get_spi_service().spi_reset_sql_rowcount_, args));
+    OX (generator_.set_sql_rowcount_zero_on_fail(true));
     OZ (visit(static_cast<const ObPLAssignStmt&>(s)));
+    generator_.set_sql_rowcount_zero_on_fail(false);
     // restore sqlcode
     OZ (generator_.get_helper().create_call(ObString("spi_restore_sqlcode"),
       generator_.get_spi_service().spi_restore_sqlcode_, args));
     // set rowcount
+    OX (args.reset());
+    OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX)));
+    OZ (generator_.get_helper().get_int64(1, rowcount_value));
+    OZ (args.push_back(rowcount_value));
     OZ (generator_.get_helper().create_call(ObString("spi_set_rowcount"),
       generator_.get_spi_service().spi_set_rowcount_, args));
   }
@@ -5046,6 +5055,14 @@ int ObPLCodeGenerator::init_spi_service()
     arg_types.reset();
     OZ (arg_types.push_back(pl_exec_context_pointer_type));
     OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
+    OZ (helper_.create_function(ObString("spi_reset_sql_rowcount"), ft, spi_service_.spi_reset_sql_rowcount_));
+  }
+
+  if (OB_SUCC(ret)) {
+    arg_types.reset();
+    OZ (arg_types.push_back(pl_exec_context_pointer_type));
+    OZ (arg_types.push_back(int64_type));
+    OZ (ObLLVMFunctionType::get(int32_type, arg_types, ft));
     OZ (helper_.create_function(ObString("spi_set_rowcount"), ft, spi_service_.spi_set_rowcount_));
   }
 
@@ -8438,7 +8455,9 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (0 == get_loop_count() && 0 == get_out_params().count()) {
+    } else if (0 == get_loop_count()
+               && 0 == get_out_params().count()
+               && !get_sql_rowcount_zero_on_fail()) {
       // do not need to CG close cursors, cond_br to fail_branch directly
       if (OB_FAIL(helper_.create_cond_br(branch_cond, success_branch, fail_branch))) {
         LOG_WARN("failed to create_cond_br", K(ret));
@@ -8451,6 +8470,23 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
         LOG_WARN("failed to create_cond_br", K(ret));
       } else if (OB_FAIL(set_current(before_fail))) {
         LOG_WARN("failed to set_current", K(ret));
+      }
+      if (OB_SUCC(ret) && get_sql_rowcount_zero_on_fail()) {
+        ObSEArray<ObLLVMValue, 2> rowcount_args;
+        ObLLVMValue rowcount_value;
+        if (OB_FAIL(rowcount_args.push_back(vars_.at(CTX_IDX)))) {
+          LOG_WARN("failed to push ctx for set_rowcount", K(ret));
+        } else if (OB_FAIL(helper_.get_int64(0, rowcount_value))) {
+          LOG_WARN("failed to get int64 0 for set_rowcount", K(ret));
+        } else if (OB_FAIL(rowcount_args.push_back(rowcount_value))) {
+          LOG_WARN("failed to push rowcount for set_rowcount", K(ret));
+        } else if (OB_FAIL(helper_.create_call(ObString("spi_set_rowcount"),
+                                               spi_service_.spi_set_rowcount_,
+                                               rowcount_args))) {
+          LOG_WARN("failed to create call spi_set_rowcount on fail", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(generate_close_loop_cursor(true, exception_info != NULL ? exception_info->level_ : 0))) {
         /*
         * 关闭从当前位置开始到目的exception位置所有For Loop Cursor
