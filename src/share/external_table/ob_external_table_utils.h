@@ -376,6 +376,8 @@ public:
                                           ObExtTableScanTask *scan_task);
 
   static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
+
+  static bool is_sub_path_contain_parent_dir(const common::ObString &sub_path);
   static int concat_external_file_location(const ObString &location,
                                            const ObString &sub_path,
                                            ObSqlString &full_path);
