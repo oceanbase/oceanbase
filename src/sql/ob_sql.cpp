@@ -837,10 +837,16 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               && !expr->get_result_type().is_user_defined_sql_type()
               && !expr->get_result_type().is_collection_sql_type()
               && !expr->get_result_type().is_enum_or_set()
-              && !expr->get_result_type().is_enumset_inner_type()
-              && OB_FAIL(expr->get_length_for_meta_in_bytes(
-                    field.length_, static_cast<ObCollationType>(field.charsetnr_)))) {
-            LOG_WARN("get length failed", K(ret), KPC(expr));
+              && !expr->get_result_type().is_enumset_inner_type()) {
+            int tmp_ret = OB_SUCCESS;
+            ObLength tmp_length = 0;
+            if (OB_TMP_FAIL(expr->get_length_for_meta_in_bytes(
+                  tmp_length, static_cast<ObCollationType>(field.charsetnr_)))) {
+              field.length_ = 0;
+              LOG_WARN("get length failed", K(tmp_ret), KPC(expr));
+            } else {
+              field.length_ = tmp_length;
+            }
           }
         } else if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
