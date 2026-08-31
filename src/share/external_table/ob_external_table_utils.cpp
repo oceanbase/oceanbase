@@ -2595,6 +2595,7 @@ int ObExternalTableUtils::fill_catalog_partition_stats(
 {
   int ret = OB_SUCCESS;
   const ObString &location = table_schema.get_external_file_location();
+  const bool is_partitioned_table = table_schema.is_partitioned_table();
   ObString access_info;
   ObArray<ObString> partition_names;
   ObArray<int64_t> file_nums;
@@ -2602,40 +2603,43 @@ int ObExternalTableUtils::fill_catalog_partition_stats(
   ObArray<int64_t> modify_times;
   if (OB_FAIL(get_external_file_location_access_info(table_schema, schema_guard, access_info))) {
     LOG_WARN("failed to get external file location access info", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
-    if (OB_ISNULL(partition_infos.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("partition info is null", K(ret), K(i));
-    } else {
-      const ObString &full_path = partition_infos.at(i)->path_;
-      ObString relative_path;
-      if (full_path.length() > location.length() + 1 && full_path.prefix_match(location)) {
-        relative_path.assign_ptr(full_path.ptr() + location.length() + 1,
-                                 full_path.length() - location.length() - 1);
-      } else {
-        relative_path = partition_infos.at(i)->partition_;
-      }
-      OZ(partition_names.push_back(relative_path));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(fetch_external_table_simple_stats(location,
-                                                       access_info,
-                                                       partition_names,
-                                                       file_nums,
-                                                       data_sizes,
-                                                       modify_times))) {
-    LOG_WARN("failed to get external table simple stats", K(ret), K(location));
-  } else if (OB_UNLIKELY(file_nums.count() != partition_infos.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stats count mismatch", K(ret), K(file_nums.count()), K(partition_infos.count()));
+  } else if (is_partitioned_table && 0 == partition_infos.count()) {
+    LOG_TRACE("no partition stats for partitioned table without partitions", K(ret));
   } else {
-    for (int64_t i = 0; i < partition_infos.count(); ++i) {
-      partition_infos.at(i)->file_num_ = file_nums.at(i);
-      partition_infos.at(i)->data_size_ = data_sizes.at(i);
-      partition_infos.at(i)->modify_ts_ = modify_times.at(i);
-      partition_infos.at(i)->schema_version_ = schema_version;
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
+      if (OB_ISNULL(partition_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition info is null", K(ret), K(i));
+      } else {
+        const ObString &full_path = partition_infos.at(i)->path_;
+        ObString relative_path;
+        if (full_path.length() > location.length() + 1 && full_path.prefix_match(location)) {
+          relative_path.assign_ptr(full_path.ptr() + location.length() + 1,
+                                   full_path.length() - location.length() - 1);
+        } else {
+          relative_path = partition_infos.at(i)->partition_;
+        }
+        OZ(partition_names.push_back(relative_path));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fetch_external_table_simple_stats(location,
+                                                         access_info,
+                                                         partition_names,
+                                                         file_nums,
+                                                         data_sizes,
+                                                         modify_times))) {
+      LOG_WARN("failed to get external table simple stats", K(ret), K(location));
+    } else if (OB_UNLIKELY(file_nums.count() != partition_infos.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("stats count mismatch", K(ret), K(file_nums.count()), K(partition_infos.count()));
+    } else {
+      for (int64_t i = 0; i < partition_infos.count(); ++i) {
+        partition_infos.at(i)->file_num_ = file_nums.at(i);
+        partition_infos.at(i)->data_size_ = data_sizes.at(i);
+        partition_infos.at(i)->modify_ts_ = modify_times.at(i);
+        partition_infos.at(i)->schema_version_ = schema_version;
+      }
     }
   }
   return ret;
