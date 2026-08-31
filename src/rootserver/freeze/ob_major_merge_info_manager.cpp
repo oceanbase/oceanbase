@@ -30,6 +30,8 @@ using namespace palf;
 namespace rootserver
 {
 
+ERRSIM_POINT_DEF(ERRSIM_MAJOR_MERGE_RELOAD_FREEZE_INFO_FAIL, "fail after zone merge info has been reloaded");
+
 /****************************** ObMajorMergeInfoManager ******************************/
 int ObMajorMergeInfoManager::init(
     uint64_t tenant_id,
@@ -75,12 +77,26 @@ int ObMajorMergeInfoManager::reload(const bool reload_zone_merge_info)
     LOG_WARN("fail to try reload zone_merge_info", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(zone_merge_mgr_.get_global_broadcast_scn(global_broadcast_scn))) {
     LOG_WARN("fail to get broadcast version", KR(ret), K_(tenant_id));
+#ifdef ERRSIM
+  } else if (reload_zone_merge_info
+         && OB_UNLIKELY(OB_FAIL(ERRSIM_MAJOR_MERGE_RELOAD_FREEZE_INFO_FAIL))) {
+    LOG_WARN("ERRSIM ERRSIM_MAJOR_MERGE_RELOAD_FREEZE_INFO_FAIL reload freeze info fail", KR(ret), K_(tenant_id));
+#endif
   } else if (OB_FAIL(freeze_info_mgr_.reload(global_broadcast_scn))) {
     LOG_WARN("fail to update freeze info", KR(ret), K_(tenant_id), K(global_broadcast_scn));
   } else {
     LOG_INFO("succ to reload merge info manager", K_(tenant_id), K(global_broadcast_scn));
   }
   return ret;
+}
+
+void ObMajorMergeInfoManager::reset_info()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(zone_merge_mgr_.reset_merge_info())) {
+    LOG_WARN("fail to reset zone merge info", KR(ret), K_(tenant_id));
+  }
+  freeze_info_mgr_.reset_freeze_info();
 }
 
 // add freeze info to inner_table

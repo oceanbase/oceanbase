@@ -60,11 +60,7 @@ public:
            common::ObMySQLProxy &sql_proxy);
   int try_reload();
   int reload(const bool reload_zone_merge_info = false);
-  void reset_info()
-  {
-    zone_merge_mgr_.reset_merge_info();
-    freeze_info_mgr_.reset_freeze_info();
-  };
+  void reset_info();
 
   int set_freeze_info(const ObMajorFreezeReason freeze_reason);
   int get_freeze_info(const share::SCN &frozen_scn,

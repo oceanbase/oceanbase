@@ -32,7 +32,7 @@ public:
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
   virtual int reload();
   virtual int try_reload();
-  void reset_merge_info();
+  int reset_merge_info();
   void reset_merge_info_without_lock();
 
   int get_zone_merge_info(share::ObZoneMergeInfo &info) const;
@@ -133,6 +133,7 @@ public:
   int init(const uint64_t tenant_id, common::ObMySQLProxy &proxy);
   ZONE_MERGE_MANAGER_FUNC(reload);
   ZONE_MERGE_MANAGER_FUNC(try_reload);
+  ZONE_MERGE_MANAGER_FUNC(reset_merge_info);
   ZONE_MERGE_MANAGER_FUNC(start_zone_merge);
   ZONE_MERGE_MANAGER_FUNC(finish_zone_merge);
   ZONE_MERGE_MANAGER_FUNC(finish_all_zone_merge);

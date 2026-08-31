@@ -84,8 +84,15 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
     ret = OB_NOT_INIT;
     LOG_WARN("ObStorageLocalityCache is not inited", KR(ret), K_(tenant_id));
   } else if (nullptr != merge_info_mgr_) {
-    if (OB_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_zone(zone_list))) {
-      LOG_WARN("failed to get zone list", KR(ret));
+    if (OB_TMP_FAIL(merge_info_mgr_->get_zone_merge_mgr().get_zone(zone_list))) {
+      LOG_WARN("failed to get zone list", KR(tmp_ret));
+    }
+
+    if (OB_TMP_FAIL(tmp_ret) || zone_list.empty()) {
+      LOG_WARN("try load zone list from inner table", K(zone_list));
+      if (OB_FAIL(get_zone_list_from_inner_table(zone_list))) {
+        LOG_WARN("failed to get zone list from inner table", KR(ret), K_(tenant_id));
+      }
     }
   } else if (OB_FAIL(get_zone_list_from_inner_table(zone_list))) {
     LOG_WARN("failed to get zone list", K(ret), K_(tenant_id));
@@ -93,7 +100,8 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
 
   if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(zone_list.empty())) {
-    LOG_INFO("zone list is empty, skip get ls locality", K(ret), K_(tenant_id));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("zone list is empty after fallback, skip get ls locality", K(ret), K_(tenant_id));
     MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
   } else {
     // 1. clear ls_infos cached in memory

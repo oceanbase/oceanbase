@@ -29,6 +29,8 @@ using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::palf;
 
+ERRSIM_POINT_DEF(ERRSIM_ZONE_MERGE_RESET_RACE, "widen the unsafe reset race window");
+
 ObZoneMergeManagerBase::ObZoneMergeManagerBase()
   : lock_(ObLatchIds::ZONE_MERGE_MANAGER_READ_LOCK),
     is_inited_(false), is_loaded_(false),
@@ -124,13 +126,22 @@ int ObZoneMergeManagerBase::try_reload()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(tenant_id));
-  } else if (is_loaded_) {
-    if (TC_REACH_TIME_INTERVAL(5 * 60 * 1000 * 1000)) { // 5min
-      FLOG_INFO("zone_merge_mgr is already loaded", K_(tenant_id), K_(global_merge_info),
-                "zone_merge_infos", ObArrayWrap<ObZoneMergeInfo>(zone_merge_infos_, zone_count_));
+  } else {
+    const int stat_ret = check_inner_stat();
+    if (OB_SUCCESS == stat_ret) {
+      if (TC_REACH_TIME_INTERVAL(5 * 60 * 1000 * 1000)) { // 5min
+        FLOG_INFO("zone_merge_mgr is already loaded", K_(tenant_id), K_(global_merge_info),
+                  "zone_merge_infos", ObArrayWrap<ObZoneMergeInfo>(zone_merge_infos_, zone_count_));
+      }
+    } else {
+      if (is_loaded_) {
+        LOG_WARN("loaded zone merge manager is invalid, try to reload", KR(stat_ret), K_(tenant_id),
+                 K_(zone_count), K_(global_merge_info));
+      }
+      if (OB_FAIL(reload())) {
+        LOG_WARN("fail to reload", KR(ret), K_(tenant_id));
+      }
     }
-  } else if (OB_FAIL(reload())) {
-    LOG_WARN("fail to reload", KR(ret), K_(tenant_id));
   }
   return ret;
 }
@@ -143,18 +154,44 @@ void ObZoneMergeManagerBase::reset_merge_info_without_lock()
   FLOG_INFO("reset merge info without lock", K_(tenant_id), K_(global_merge_info));
 }
 
-void ObZoneMergeManagerBase::reset_merge_info()
+int ObZoneMergeManagerBase::reset_merge_info()
 {
-  SpinRLockGuard guard(lock_);
+// This function will be executed under the write lock during ZONE_MERGE_MANAGER_FUNC,
+// ObZoneMergeMgrGuard shadow copy the value so no lock is needed here.
+#ifdef ERRSIM
+  if (OB_UNLIKELY(ERRSIM_ZONE_MERGE_RESET_RACE)) {
+    zone_count_ = 0;
+    LOG_INFO("ERRSIM ERRSIM_ZONE_MERGE_RESET_RACE unsafe reset race window opened", K_(tenant_id), K_(is_loaded));
+    ob_usleep(25 * 1000 * 1000L);
+  }
+#endif
   reset_merge_info_without_lock();
+  return OB_SUCCESS;
 }
 
 int ObZoneMergeManagerBase::check_inner_stat() const
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_ || !is_loaded_)) {
+  if (OB_UNLIKELY(!is_inited_
+                  || !is_loaded_
+                  || zone_count_ <= 0
+                  || zone_count_ > common::MAX_ZONE_NUM
+                  || !global_merge_info_.is_valid()
+                  || tenant_id_ != global_merge_info_.tenant_id_)) {
     ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("inner_stat_error", K_(is_inited), K_(is_loaded), KR(ret));
+    LOG_WARN("inner_stat_error", KR(ret), K_(tenant_id), K_(is_inited), K_(is_loaded),
+             K_(zone_count), K_(global_merge_info));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < zone_count_; ++i) {
+      const ObZoneMergeInfo &zone_info = zone_merge_infos_[i];
+      if (OB_UNLIKELY(!zone_info.is_valid()
+                      || zone_info.zone_.is_empty()
+                      || tenant_id_ != zone_info.tenant_id_)) {
+        ret = OB_INNER_STAT_ERROR;
+        LOG_WARN("inner_stat_error, invalid zone merge info", KR(ret), K_(tenant_id),
+                 "index", i, K(zone_info));
+      }
+    }
   }
   return ret;
 }
@@ -1193,6 +1230,12 @@ int ObZoneMergeManagerBase::copy_infos(
       dest.zone_count_ = count;
       dest.is_inited_ = src.is_inited_;
       dest.is_loaded_ = src.is_loaded_;
+#ifdef ERRSIM
+      if (0 == dest.zone_count_ && dest.is_loaded_) {
+        LOG_WARN("ERRSIM reproduced loaded zone merge manager with zero zones",
+                 K(dest.tenant_id_), K(dest.zone_count_), K(dest.is_loaded_));
+      }
+#endif
     }
   }
   return ret;
