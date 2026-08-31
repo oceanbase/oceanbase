@@ -583,7 +583,9 @@ int ObSql::fill_result_set(ObResultSet &result_set,
       break;
     }
 
-    const int64_t question_marks_count = pctx->get_ps_fixed_array_index() != nullptr && stmt::T_ANONYMOUS_BLOCK != stmt->get_stmt_type() ?
+    const int64_t question_marks_count = pctx->get_ps_fixed_array_index() != nullptr
+          && stmt::T_ANONYMOUS_BLOCK != stmt->get_stmt_type()
+          && stmt::T_CALL_PROCEDURE != stmt->get_stmt_type() ?
           pctx->get_orig_question_mark_cnt() : stmt->get_query_ctx()->get_prepare_param_count();
     // param column is only needed in ps mode
     if (OB_SUCC(ret) && question_marks_count > 0
@@ -604,7 +606,7 @@ int ObSql::fill_result_set(ObResultSet &result_set,
         param_field.type_.set_type(ObIntType); // @bug
         param_field.cname_ = ObString::make_string("?");
         if (OB_NOT_NULL(pctx->get_ps_fixed_array_index()) &&
-            OB_NOT_NULL(anonymous_stmt) &&
+            (OB_NOT_NULL(anonymous_stmt) || OB_NOT_NULL(call_stmt)) &&
             is_exist_in_fixed_param_idx(i, *pctx->get_ps_fixed_array_index())) {
           continue;
         } else if (OB_NOT_NULL(anonymous_stmt) && anonymous_stmt->get_out_idx().has_member(i)) {
