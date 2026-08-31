@@ -5603,7 +5603,7 @@ int ObLogPlan::perform_group_by_pushdown(ObLogicalOperator *op)
     // always use replace before every thing
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if(OB_FAIL(op->replace_op_exprs(group_replacer_))) {
+    } else if (OB_FAIL(op->replace_op_exprs(group_replacer_))) {
       LOG_WARN("failed to replace generated aggr expr", K(ret));
     } else if (NULL != (group_by = dynamic_cast<ObLogGroupBy *>(op))) {
       if (OB_FAIL(group_by->unwrap_cast_for_aggr_expr())) {
@@ -15095,6 +15095,8 @@ int ObLogPlan::do_post_plan_processing()
   if (OB_ISNULL(root = get_plan_root())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(adjust_final_plan_onetime_expr_info())) {
+    LOG_WARN("failed to set replace onetime expr for plan", K(ret));
   } else if (OB_FAIL(adjust_final_plan_tree(root))) {
     LOG_WARN("failed to adjust final plan tree");
   } else if (OB_FAIL(set_use_batch_for_table_scan(root, false, false))) {
@@ -15309,8 +15311,6 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
         LOG_WARN("failed to perform simplify win expr", K(ret));
       } else if (OB_FAIL(op->get_plan()->perform_window_function_pushdown(op))) {
         LOG_WARN("failed to perform window function push down", K(ret));
-      } else if (OB_FAIL(op->get_plan()->perform_adjust_onetime_expr(op))) {
-        LOG_WARN("failed to perform adjust onetime expr", K(ret));
       } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_0_0 &&
                  get_optimizer_context().get_query_ctx()->get_global_hint().has_dbms_stats_hint() &&
                  OB_FAIL(op->get_plan()->perform_gather_stat_replace(op))) {
@@ -17992,10 +17992,56 @@ int ObLogPlan::compute_subplan_filter_repartition_distribution_info(ObLogicalOpe
   return ret;
 }
 
-int ObLogPlan::perform_adjust_onetime_expr(ObLogicalOperator *op)
+int ObLogPlan::adjust_final_plan_onetime_expr_info()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *root = NULL;
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  if (OB_ISNULL(root = get_plan_root())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(perform_onetime_expr_replacement(root))) {
+    LOG_WARN("failed to do onetime expr replacement", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::perform_onetime_expr_replacement(ObLogicalOperator *&plannode)
+{
+  int ret = OB_SUCCESS;
+  // do replacement for the whole tree
+  if (OB_ISNULL(plannode)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null op", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < plannode->get_num_of_child(); ++i) {
+      ObLogicalOperator* child = plannode->get_child(i);
+      if (OB_NOT_NULL(child)) {
+        if (OB_FAIL(SMART_CALL(perform_onetime_expr_replacement(child)))) {
+          LOG_WARN("failed to do onetime expr replacement for", K(ret), K(child->get_name()));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null op", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(plannode->get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null op", K(ret));
+  } else if (OB_FAIL(plannode->get_plan()->perform_adjust_onetime_expr_helper(plannode))) {
+    LOG_WARN("failed to do onetime expr replacement for", K(ret), K(plannode->get_name()));
+  }
+  return ret;
+}
+
+int ObLogPlan::perform_adjust_onetime_expr_helper(ObLogicalOperator *&op)
 {
   int ret = OB_SUCCESS;
   ObLogSubPlanFilter *subplan_filter = NULL;
+  ObLogGroupBy *group_by = NULL;
+  ObLogExpand *expand = NULL;
   if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null op", K(ret));
@@ -18008,6 +18054,18 @@ int ObLogPlan::perform_adjust_onetime_expr(ObLogicalOperator *op)
   }
   if (OB_SUCC(ret) && OB_FAIL(op->replace_op_exprs(onetime_replacer_))) {
     LOG_WARN("failed to replace onetime subquery", K(ret));
+  }
+  // if it is a groupby, updated stored mapping
+  if (OB_SUCC(ret) && NULL != (group_by = dynamic_cast<ObLogGroupBy *>(op))) {
+    if (OB_FAIL(group_by->replace_op_replaced_exprs(onetime_replacer_))) {
+      LOG_WARN("failed to replace op replaced exprs", K(ret));
+    }
+  }
+  // if it is a expand, updated stored mapping
+  if (OB_SUCC(ret) && NULL != (expand = dynamic_cast<ObLogExpand *>(op))) {
+    if (OB_FAIL(expand->replace_op_replaced_exprs(onetime_replacer_))) {
+      LOG_WARN("failed to replace op replaced exprs", K(ret));
+    }
   }
   return ret;
 }

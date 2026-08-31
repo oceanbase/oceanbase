@@ -3822,7 +3822,7 @@ int ObLogicalOperator::set_plan_root_output_exprs()
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt *stmt = NULL;
-  if (OB_ISNULL(stmt = get_stmt())) {
+  if (OB_ISNULL(stmt = get_stmt()) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
   } else if (stmt->is_select_stmt()) {
@@ -3837,7 +3837,18 @@ int ObLogicalOperator::set_plan_root_output_exprs()
     if (OB_FAIL(append(output_exprs_, del_upd_stmt->get_returning_exprs()))) {
       LOG_WARN("failed to append returning exprs into output", K(ret));
     }
-  } else { /*do nothing*/ }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    ObRawExprReplacer * replacer = get_plan()->get_onetime_replacer();
+    if (replacer != NULL) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); ++i) {
+        if (OB_FAIL(replace_expr_action(*replacer, output_exprs_.at(i)))) {
+          LOG_WARN("failed to replace onetime subquery", K(ret));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -3875,7 +3886,7 @@ int ObLogicalOperator::replace_op_exprs(ObRawExprReplacer &replacer)
       LOG_WARN("failed to replace expr", K(ret));
     } else if (OB_FAIL(inner_replace_op_exprs(replacer))) {
       LOG_WARN("failed to inner replace expr", K(ret));
-    } else { /* Do nothing */ }
+    }
   } else { /* Do nothing */ }
   return ret;
 }

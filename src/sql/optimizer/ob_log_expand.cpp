@@ -249,6 +249,23 @@ int ObLogExpand::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   return ret;
 }
 
+int ObLogExpand::replace_op_replaced_exprs(ObRawExprReplacer &replacer)
+{
+  int ret = OB_SUCCESS;
+  if (grouping_set_info_ != NULL) {
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->replaced_agg_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogExpand::dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory,
                                                     ObSQLSessionInfo *sess,
                                                     ObIArray<ObExprConstraint> &constraints,
@@ -368,7 +385,7 @@ int ObLogExpand::inner_replace_op_exprs(ObRawExprReplacer &replacer)
           ret = OB_SUCCESS;// if name exceeds, just truncate name and return
         }
       }
-      if (OB_SUCC(ret)) {
+      if (OB_FAIL(ret)) {
       } else {
         ObIAllocator &allocator =
           get_plan()->get_optimizer_context().get_expr_factory().get_allocator();

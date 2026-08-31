@@ -284,6 +284,7 @@ public:
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 
+  int replace_op_replaced_exprs(ObRawExprReplacer &replacer);
   virtual int compute_sharding_info() override;
 
   // used for the rowcount estimation of the first stage

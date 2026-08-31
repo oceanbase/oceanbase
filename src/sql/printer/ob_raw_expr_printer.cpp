@@ -243,6 +243,11 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       PRINT_EXPR(pse_expr);
       break;
     }
+    case ObRawExpr::EXPR_OP_PSEUDO_COLUMN: {
+      ObOpPseudoColumnRawExpr *op_pse_expr = static_cast<ObOpPseudoColumnRawExpr *>(expr);
+      PRINT_EXPR(op_pse_expr);
+      break;
+    }
     case ObRawExpr::EXPR_SET_OP: {
       ObSetOpRawExpr *set_op_expr = static_cast<ObSetOpRawExpr *>(expr);
       PRINT_EXPR(set_op_expr);
@@ -4702,6 +4707,22 @@ int ObRawExprPrinter::print_date_unit(ObRawExpr *expr)
     }
   }
 
+  return ret;
+}
+
+int ObRawExprPrinter::print(ObOpPseudoColumnRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  const char *name = NULL;
+  if (OB_ISNULL(buf_) || OB_ISNULL(pos_) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("buf or pos or expr is null", K(ret));
+  } else if (OB_ISNULL(name = expr->get_name())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("op pseudo column name is null", K(ret));
+  } else {
+    DATA_PRINTF("%s", name);
+  }
   return ret;
 }
 

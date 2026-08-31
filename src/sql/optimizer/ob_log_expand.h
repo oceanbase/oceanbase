@@ -56,6 +56,8 @@ public:
 
   virtual int compute_op_ordering() override;
 
+  int replace_op_replaced_exprs(ObRawExprReplacer &replacer);
+
   static int dup_and_replace_exprs_within_aggrs(ObRawExprFactory &factory, ObSQLSessionInfo *sess,
                                                 ObIArray<ObExprConstraint> &constraints,
                                                 const ObIArray<ObRawExpr *> &rollup_exprs,

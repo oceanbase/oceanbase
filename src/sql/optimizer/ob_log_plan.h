@@ -411,6 +411,12 @@ public:
   int add_direct_load_explain_note();
   int add_non_standard_comparison_explain_note();
 
+  int adjust_final_plan_onetime_expr_info();
+
+  int perform_onetime_expr_replacement(ObLogicalOperator *&op);
+
+  int perform_adjust_onetime_expr_helper(ObLogicalOperator *&op);
+
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
   int adjust_final_plan_tree(ObLogicalOperator *&op);
@@ -526,6 +532,7 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_onetime_exprs()
   { return onetime_exprs_; }
 
+  inline ObRawExprReplacer *get_onetime_replacer() { return &onetime_replacer_; }
   //get expr selectivity from predicate_selectivities_
   double get_expr_selectivity(const ObRawExpr *expr, bool &found);
   int get_pre_project_cost(ObLogicalOperator *top,
@@ -959,7 +966,6 @@ public:
   int perform_one_distinct_pushdown(ObLogicalOperator *op);
   int perform_groupingsets_replacement(ObLogicalOperator *op);
   int perform_simplify_win_expr(ObLogicalOperator *op);
-  int perform_adjust_onetime_expr(ObLogicalOperator *op);
   int init_onetime_replaced_exprs_if_needed();
   int set_advisor_table_id(ObLogicalOperator *op);
   int negotiate_advisor_table_id(ObLogicalOperator *op);

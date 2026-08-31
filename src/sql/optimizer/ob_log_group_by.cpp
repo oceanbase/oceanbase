@@ -486,6 +486,64 @@ int ObLogGroupBy::est_width()
   return ret;
 }
 
+int ObLogGroupBy::replace_op_replaced_exprs(ObRawExprReplacer &replacer)
+{
+  int ret = OB_SUCCESS;
+  if (is_three_stage_aggr()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < three_stage_info_.distinct_aggr_batch_.count(); ++i) {
+      ObDistinctAggrBatch &distinct_batch = three_stage_info_.distinct_aggr_batch_.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < distinct_batch.mocked_aggrs_.count(); ++j) {
+        ObRawExpr *org_agg = distinct_batch.mocked_aggrs_.at(j).first;
+        ObRawExpr *new_agg = distinct_batch.mocked_aggrs_.at(j).second;
+        if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+          LOG_WARN("replace org agg failed", K(ret));
+        } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+          LOG_WARN("replace new agg failed", K(ret));
+        } else if (OB_UNLIKELY(!org_agg->is_aggr_expr() || !new_agg->is_aggr_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("replaced expr is not aggregate expr", K(ret), KPC(org_agg), KPC(new_agg));
+        } else {
+          distinct_batch.mocked_aggrs_.at(j).first = static_cast<ObAggFunRawExpr *>(org_agg);
+          distinct_batch.mocked_aggrs_.at(j).second = static_cast<ObAggFunRawExpr *>(new_agg);
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < distinct_batch.mocked_params_.count(); ++j) {
+        ObRawExpr *&org_param = distinct_batch.mocked_params_.at(j).first;
+        ObRawExpr *&new_param = distinct_batch.mocked_params_.at(j).second;
+        if (OB_FAIL(replace_expr_action(replacer, org_param))) {
+          LOG_WARN("replace org param failed", K(ret));
+        } else if (OB_FAIL(replace_expr_action(replacer, new_param))) {
+          LOG_WARN("replace new param failed", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && grouping_set_info_ != nullptr
+      && grouping_set_info_->replaced_agg_pairs_.count() > 0) {
+    for (int i = 0; OB_SUCC(ret) && i < grouping_set_info_->replaced_agg_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = grouping_set_info_->replaced_agg_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < distinct_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = distinct_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = distinct_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogGroupBy::get_gby_output_exprs(ObIArray<ObRawExpr *> &output_exprs)
 {
   int ret = OB_SUCCESS;
