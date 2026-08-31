@@ -14,6 +14,7 @@
 
 #include "core/ob_jit_allocator.h"
 #include "common/ob_clock_generator.h"
+#include "llvm/Support/Memory.h"
 
 using namespace oceanbase::common;
 
@@ -251,6 +252,19 @@ int ObJitMemoryGroup::finalize(int64_t p_flags)
     if (OB_FAIL(ObJitMemory::protect_mapped_memory(*cur, p_flags))) {
       LOG_WARN("jit fail to finalize memory", K(p_flags), K(*cur), K(ret));
     }
+
+#if !defined(__x86_64__)
+    if (OB_SUCC(ret) && 0 != (p_flags & PROT_EXEC)) {
+      // In platforms with separate I-Cache and D-Cache, the I-Cache must be invalidated before the code runs.
+      // Otherwise, stale instructions with wrong relocations may be executed.
+      llvm::sys::Memory::InvalidateInstructionCache(cur->addr_, cur->size_);
+      LOG_INFO("AARCH64: invalidated I-Cache",
+               "addr", (void*)cur->addr_,
+               "size", cur->size_,
+               K(llvm::sys::Memory::InvalidateInstructionCache));
+    }
+#endif  // !defined(__x86_64__)
+
     cur = cur->next_;
   }
 
