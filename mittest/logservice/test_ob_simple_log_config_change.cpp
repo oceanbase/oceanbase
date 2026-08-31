@@ -16,6 +16,8 @@
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
+#include <atomic>
+#include <thread>
 #include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
 #undef protected
 #undef private
@@ -1437,6 +1439,142 @@ TEST_F(TestObSimpleLogClusterConfigChange, switch_lagged_learner_to_acceptor)
   leader.reset();
   revert_cluster_palf_handle_guard(palf_list);
   PALF_LOG(INFO, "end switch_lagged_learner_to_acceptor", K(id));
+}
+
+TEST_F(TestObSimpleLogClusterConfigChange, one_f_to_two_f_catch_up)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "one_f_to_two_f_catch_up");
+  const int64_t KB = 1024;
+  const int64_t CONFIG_CHANGE_TIMEOUT_US = 15 * 1000 * 1000L;
+  const int64_t FAILED_CONFIG_CHANGE_TIMEOUT_US = 2 * 1000 * 1000L;
+  struct Scenario
+  {
+    const char *name_;
+    int64_t initial_log_count_;
+    int64_t initial_log_size_;
+    int64_t write_interval_us_;
+    bool keep_target_blocked_;
+    bool expect_pre_sync_;
+    int expected_ret_;
+  };
+  const Scenario scenarios[] = {
+    {"idle", 0, 0, 0, false, false, OB_SUCCESS},
+    {"low_rate_write", 0, 0, 100 * 1000, false, true, OB_SUCCESS},
+    {"high_rate_write", 0, 0, 10 * 1000, false, true, OB_SUCCESS},
+    {"large_gap_with_write", 80, 512 * KB, 100 * 1000, false, true, OB_SUCCESS},
+    {"unreachable_target", 1, KB, 0, true, false, OB_TIMEOUT},
+  };
+
+  for (const Scenario &scenario : scenarios) {
+    SCOPED_TRACE(scenario.name_);
+    const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+    const int64_t target_idx = 3;
+    int64_t leader_idx = OB_INVALID_INDEX;
+    bool target_blocked = false;
+    std::atomic<bool> stop_writer(false);
+    std::atomic<bool> saw_pre_sync(false);
+    std::atomic<int64_t> write_count(0);
+    int writer_ret = OB_SUCCESS;
+    std::thread writer;
+    PalfHandleImplGuard leader;
+    std::vector<PalfHandleImplGuard*> palf_list;
+
+    ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, &loc_cb, leader_idx, leader));
+    ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+    loc_cb.leader_ = get_cluster()[leader_idx]->get_addr();
+    DEFER({
+      stop_writer.store(true);
+      if (writer.joinable()) {
+        writer.join();
+      }
+      if (target_blocked) {
+        unblock_net(leader_idx, target_idx);
+      }
+      leader.reset();
+      revert_cluster_palf_handle_guard(palf_list);
+      delete_paxos_group(id);
+    });
+
+    int64_t replica_num = 3;
+    for (int64_t idx = 0; idx < 3; ++idx) {
+      if (idx != leader_idx) {
+        ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_member(
+            ObMember(get_cluster()[idx]->get_addr(), 1),
+            --replica_num,
+            CONFIG_CHANGE_TIMEOUT_US));
+      }
+    }
+    ASSERT_EQ(1, replica_num);
+
+    ObMember target(get_cluster()[target_idx]->get_addr(), 1);
+    target.set_migrating();
+    ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(
+        target, CONFIG_CHANGE_TIMEOUT_US));
+    EXPECT_UNTIL_EQ(1, leader.palf_handle_impl_->config_mgr_.children_.get_member_number());
+    EXPECT_UNTIL_EQ(leader.palf_handle_impl_->self_,
+        palf_list[target_idx]->palf_handle_impl_->config_mgr_.parent_);
+
+    if (scenario.initial_log_count_ > 0) {
+      block_net(leader_idx, target_idx);
+      target_blocked = true;
+      ASSERT_EQ(OB_SUCCESS, submit_log(leader,
+          scenario.initial_log_count_, id, scenario.initial_log_size_));
+      ASSERT_EQ(OB_SUCCESS, wait_until_has_committed(
+          leader, leader.palf_handle_impl_->get_max_lsn()));
+      if (!scenario.keep_target_blocked_) {
+        unblock_net(leader_idx, target_idx);
+        target_blocked = false;
+      }
+    }
+
+    if (scenario.write_interval_us_ > 0) {
+      writer = std::thread([&, leader_idx]() {
+        ObSimpleLogServer *server =
+            dynamic_cast<ObSimpleLogServer *>(get_cluster()[leader_idx]);
+        ObTenantEnv::set_tenant(server->get_tenant_base());
+        while (!stop_writer.load() && OB_SUCCESS == writer_ret) {
+          writer_ret = submit_log(leader, 1, id, KB);
+          write_count.fetch_add(1);
+          LogLearnerList log_sync_children;
+          if (OB_SUCCESS == leader.palf_handle_impl_->config_mgr_.
+              get_log_sync_children_list(log_sync_children) &&
+              log_sync_children.contains(target.get_server())) {
+            saw_pre_sync.store(true);
+          }
+          ob_usleep(scenario.write_interval_us_);
+        }
+      });
+      const int64_t wait_writer_deadline =
+          ObTimeUtility::current_time() + 5 * 1000 * 1000L;
+      while (0 == write_count.load() &&
+             ObTimeUtility::current_time() < wait_writer_deadline) {
+        ob_usleep(1000);
+      }
+      ASSERT_GT(write_count.load(), 0);
+    }
+
+    LogConfigVersion config_version;
+    ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_config_version(config_version));
+    const int64_t timeout_us = scenario.keep_target_blocked_
+        ? FAILED_CONFIG_CHANGE_TIMEOUT_US : CONFIG_CHANGE_TIMEOUT_US;
+    const int switch_ret = leader.palf_handle_impl_->switch_learner_to_acceptor(
+        target, 2, config_version, timeout_us);
+
+    stop_writer.store(true);
+    if (writer.joinable()) {
+      writer.join();
+    }
+    EXPECT_EQ(OB_SUCCESS, writer_ret);
+    EXPECT_EQ(scenario.expected_ret_, switch_ret);
+    if (OB_SUCCESS == switch_ret) {
+      EXPECT_EQ(OB_SUCCESS, check_replica_sync(
+          id, &leader, palf_list[target_idx], CONFIG_CHANGE_TIMEOUT_US));
+    }
+    if (scenario.expect_pre_sync_) {
+      EXPECT_TRUE(saw_pre_sync.load());
+    }
+    EXPECT_FALSE(leader.palf_handle_impl_->config_mgr_.pre_sync_learner_.is_valid());
+  }
 }
 
 } // end unittest

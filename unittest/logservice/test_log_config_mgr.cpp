@@ -169,6 +169,53 @@ TEST_F(TestLogConfigMgr, test_remove_child_is_not_learner)
   PALF_LOG(INFO, "children", K(cm.children_));
 }
 
+TEST_F(TestLogConfigMgr, test_pre_sync_migrating_learner)
+{
+  LogConfigMgr cm;
+  LogLearnerList sync_children;
+  ObMember migrating_learner(addr2, 1);
+  migrating_learner.set_migrating();
+  const LogConfigChangeArgs args(migrating_learner, 2, SWITCH_LEARNER_TO_ACCEPTOR);
+  const LSN follower_lsn(1024);
+  const int64_t follower_log_id = 100;
+
+  cm.is_inited_ = true;
+  cm.palf_id_ = 1;
+  cm.self_ = addr1;
+  EXPECT_EQ(OB_SUCCESS, cm.children_.add_learner(LogLearner(addr2, 1)));
+
+  cm.try_enable_pre_sync_learner_(args,
+      follower_lsn + LEADER_DEFAULT_GROUP_BUFFER_SIZE,
+      follower_lsn,
+      follower_log_id + PALF_SLIDING_WINDOW_SIZE - 1,
+      follower_log_id,
+      true);
+  EXPECT_FALSE(cm.pre_sync_learner_.is_valid());
+
+  cm.try_enable_pre_sync_learner_(args,
+      follower_lsn + LEADER_DEFAULT_GROUP_BUFFER_SIZE - 1,
+      follower_lsn,
+      follower_log_id + PALF_SLIDING_WINDOW_SIZE,
+      follower_log_id,
+      true);
+  EXPECT_FALSE(cm.pre_sync_learner_.is_valid());
+
+  cm.try_enable_pre_sync_learner_(args,
+      follower_lsn + LEADER_DEFAULT_GROUP_BUFFER_SIZE - 1,
+      follower_lsn,
+      follower_log_id + PALF_SLIDING_WINDOW_SIZE - 1,
+      follower_log_id,
+      true);
+  EXPECT_EQ(addr2, cm.pre_sync_learner_);
+  EXPECT_EQ(OB_SUCCESS, cm.get_log_sync_children_list(sync_children));
+  EXPECT_TRUE(sync_children.contains(addr2));
+
+  cm.reset_pre_sync_learner();
+  sync_children.reset();
+  EXPECT_EQ(OB_SUCCESS, cm.get_log_sync_children_list(sync_children));
+  EXPECT_FALSE(sync_children.contains(addr2));
+}
+
 TEST_F(TestLogConfigMgr, test_remove_diff_region_child)
 {
   LogConfigMgr cm;
