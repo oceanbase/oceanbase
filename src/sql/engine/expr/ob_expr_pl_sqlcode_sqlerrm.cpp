@@ -160,6 +160,8 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
       int64_t sqlcode = 0;
       if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
         LOG_WARN("eval arg failed", K(ret), K(expr));
+      } else if (datum->is_null()) {
+        expr_datum.set_null();
       } else if (FALSE_IT(sqlcode = datum->get_int())) {
         // do nothing
       } else if (sqlcode > 0) {
@@ -202,7 +204,9 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
           }
         }
       }
-      OX (expr_datum.set_string(sqlerrm_result, strlen(sqlerrm_result)));
+      if (OB_SUCC(ret) && OB_NOT_NULL(sqlerrm_result)) {
+        expr_datum.set_string(sqlerrm_result, strlen(sqlerrm_result));
+      }
     }
   }
 
