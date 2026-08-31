@@ -964,6 +964,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
 
 int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                                   const ObPLBlockNS *parent_ns,
+                                  const ObPLPackageAST *package_spec_ast,
                                   ObPLPackageAST &package_ast,
                                   ObPLPackage &package)
 {
@@ -1012,6 +1013,16 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (analyze_package(source, parent_ns,
                       package_ast, package_info.is_for_trigger(), is_wrap));
   OX (package.set_is_wrap(is_wrap));
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(package_spec_ast) && package_ast.get_serially_reusable()
+        != package_spec_ast->get_serially_reusable()) {
+      ret = OB_ERR_PRAGMA_DECL;
+      LOG_WARN("PLS-00709: pragma string must be declared in package specification and body",
+               K(ret),
+               K(package_ast.get_serially_reusable()),
+               K(package_spec_ast->get_serially_reusable()));
+    }
+  }
   int64_t resolve_end = ObTimeUtility::current_time();
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - compile_start);
 
