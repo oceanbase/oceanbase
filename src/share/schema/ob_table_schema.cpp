@@ -2418,10 +2418,12 @@ void ObTableSchema::forbid_auto_partition()
 int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
 {
   int ret = OB_SUCCESS;
-
+  bool is_oracle_mode = false;
   if (!ObSimpleTableSchemaV2::is_valid()) {
     ret = OB_INVALID_ERROR;
     LOG_WARN_RET(OB_INVALID_ERROR, "schema is invalid", K_(error_ret));
+  } else if (OB_FAIL(share::ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id_, is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret));
   }
 
   if (OB_FAIL(ret) || is_view_table()) {
@@ -2508,7 +2510,7 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const
                     K(OB_MAX_VARCHAR_LENGTH));
               } else {
                 if (count_varchar_size_by_byte) {
-                  if (OB_FAIL(column->get_byte_length(varchar_col_len, lib::is_oracle_mode(), false))) {
+                  if (OB_FAIL(column->get_byte_length(varchar_col_len, is_oracle_mode, false))) {
                     LOG_WARN("get_byte_length failed ", K(ret));
                   }
                 } else {
