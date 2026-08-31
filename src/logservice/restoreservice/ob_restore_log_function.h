@@ -53,6 +53,7 @@ public:
       volatile bool &stop_flag) override final;
 
 private:
+  static bool handle_restore_log_error_(int &ret);
   int process_(const share::ObLSID &id,
       const int64_t proposal_id,
       const palf::LSN &lsn,
