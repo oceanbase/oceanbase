@@ -2975,7 +2975,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       func_node.type_ == T_FUN_SYS_SESSIONTIMEZONE ||
       func_node.type_ == T_FUN_SYS_DBTIMEZONE ||
       func_node.type_ == T_FUN_SYS_USER ||
-      func_node.type_ == T_FUN_SYS_UID)) {
+      func_node.type_ == T_FUN_SYS_UID ||
+      func_node.type_ == T_FUN_SYS_GUID)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is NULL", K(func_node.num_child_), K(ret));
   } else {
@@ -2998,6 +2999,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
       ident_name = ObString::make_string("USER");
     } else if (T_FUN_SYS_UID == func_node.type_) {
       ident_name = ObString::make_string("UID");
+    } else if (T_FUN_SYS_GUID == func_node.type_) {
+      ident_name = ObString::make_string("SYS_GUID");
     } else {
       ident_name = ObString(static_cast<int32_t>(
       func_node.children_[0]->str_len_), func_node.children_[0]->str_value_);
@@ -3072,7 +3075,8 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
                     || T_FUN_SYS_SESSIONTIMEZONE == func_node.type_
                     || T_FUN_SYS_DBTIMEZONE == func_node.type_
                     || T_FUN_SYS_USER == func_node.type_
-                    || T_FUN_SYS_UID == func_node.type_) {
+                    || T_FUN_SYS_UID == func_node.type_
+                    || T_FUN_SYS_GUID == func_node.type_) {
             OZ (recursive_resolve(&func_node, func_expr));
           }  else if (func_node.type_ == T_FUN_SYS_XMLPARSE) {
             OZ (process_xmlparse_node(&func_node, func_expr));
@@ -3222,7 +3226,8 @@ int ObRawExprResolverImpl::resolve_left_node_of_obj_access_idents(const ParseNod
              || T_FUN_SYS_SESSIONTIMEZONE == left_node.type_
              || T_FUN_SYS_DBTIMEZONE == left_node.type_
              || T_FUN_SYS_USER == left_node.type_
-             || T_FUN_SYS_UID == left_node.type_) {
+             || T_FUN_SYS_UID == left_node.type_
+             || T_FUN_SYS_GUID == left_node.type_) {
     OZ (resolve_func_node_of_obj_access_idents(left_node, q_name, is_root_expr));
   } else if (left_node.type_ == T_LINK_NODE && left_node.value_ == 3) {
     ret = OB_ERR_PARSER_SYNTAX; // array not in object access ref : array[1]
@@ -6925,6 +6930,8 @@ int ObRawExprResolverImpl::process_call_param_node(const ParseNode *node, ObRawE
           name = ObString::make_string("USER");
         } else if (T_FUN_SYS_UID == inner_node->type_) {
           name = ObString::make_string("UID");
+        } else if (T_FUN_SYS_GUID == inner_node->type_) {
+          name = ObString::make_string("SYS_GUID");
         } else {
           ret = OB_ERR_CALL_WRONG_ARG;
           LOG_WARN("PLS-00306: wrong number or types of arguments in call",
