@@ -378,6 +378,7 @@ public:
   int init(const uint64_t tenant_id);
   int put_item(const ObBackupProviderItem &item);
   int get_item(ObBackupProviderItem &item);
+  bool is_empty() const;
   void reset();
 
   TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(read_count), K_(write_count));
