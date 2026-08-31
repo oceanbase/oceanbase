@@ -1429,6 +1429,19 @@ ObPLTopContext() :
   ObIAllocator &get_exec_state_allocator() { return exec_state_alloc_; }
   ObIArray<ObPLExecState *> *get_exec_stack() { return exec_stack_; }
 
+  bool is_in_trigger_context() const
+  {
+    bool bret = false;
+    if (OB_NOT_NULL(exec_stack_)) {
+      for (int64_t i = exec_stack_->count() - 1; !bret && i >= 0; --i) {
+        if (OB_NOT_NULL(exec_stack_->at(i)) && exec_stack_->at(i)->is_for_trigger()) {
+          bret = true;
+        }
+      }
+    }
+    return bret;
+  }
+
   ObPLExecState *get_current_state()
   {
     ObPLExecState *state = nullptr;

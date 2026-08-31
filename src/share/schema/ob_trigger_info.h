@@ -162,7 +162,8 @@ enum TgTimingEvent
   TG_BEFORE_DELETE,
   TG_AFTER_INSERT,
   TG_AFTER_UPDATE,
-  TG_AFTER_DELETE
+  TG_AFTER_DELETE,
+  TG_TIMING_EVENT_ORACLE_DEFAULT
 };
 
 class ObTriggerInfo : public ObSimpleTriggerSchema
@@ -482,6 +483,8 @@ public:
         t = has_insert_event() ? TG_AFTER_INSERT : (has_update_event() ? TG_AFTER_UPDATE
                                                                        : TG_AFTER_DELETE);
       }
+    } else {
+      t = TG_TIMING_EVENT_ORACLE_DEFAULT;
     }
     return t;
   }
