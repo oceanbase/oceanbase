@@ -30,8 +30,7 @@ ObSqlStatManager::ObSqlStatManager(int64_t tenant_id)
       memory_evict_high_percentage_(MEMORY_EVICT_HIGH_DEFAULT),
       memory_evict_low_percentage_(MEMORY_EVICT_LOW_DEFAULT),
       allocator_(),
-      alloc_handle_(&allocator_, SQL_STAT_MAX_COUNT),
-      sql_stat_infos_(alloc_handle_),
+      sql_stat_infos_(ObSqlStatAlloc(&allocator_, SQL_STAT_MAX_COUNT)),
       mutex_(common::ObLatchIds::SQL_STAT_MGR_LOCK)
 {}
 
@@ -147,13 +146,16 @@ void ObSqlStatManager::wait() {
     LOG_WARN("sql stat manager is not stopped", K(ret));
   } else {
     TG_WAIT_TASK(MTL(omt::ObSharedTimer *)->get_tg_id(), stat_task_);
+    const ObSqlStatAlloc &alloc_handle = sql_stat_infos_.get_alloc_handle();
     sql_stat_infos_.reset();
     //wait for all sql stat values to be freed, or will memory leak
-    while(alloc_handle_.get_alloc_count() > 0) {
+    while(alloc_handle.get_alloc_count() > 0) {
       ob_usleep(1000 * 1000);
-      LOG_WARN("wait sql stat linkhash map to be empty", K(alloc_handle_.get_alloc_count()));
+      LOG_WARN("wait sql stat linkhash map to be empty", K(alloc_handle.get_alloc_count()));
     }
-    LOG_INFO("success to wait sql stat manager", K(MTL_ID()), K(alloc_handle_.get_alloc_count()));
+    sql_stat_infos_.purge();
+    allocator_.purge();
+    LOG_INFO("success to wait sql stat manager", K(MTL_ID()), K(alloc_handle.get_alloc_count()));
   }
 }
 
