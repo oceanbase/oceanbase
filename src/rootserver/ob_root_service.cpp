@@ -10703,7 +10703,7 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
         int64_t cal_timeout = 0;
         int64_t start_time = ObTimeUtility::current_time();
         arg.purge_num_ = purge_sum > PURGE_EACH_RPC ? PURGE_EACH_RPC : purge_sum;
-        if (OB_FAIL(schema_service_->cal_purge_need_timeout(arg, cal_timeout))) {
+        if (OB_FAIL(schema_service_->cal_purge_need_timeout(cal_timeout))) {
           LOG_WARN("fail to cal purge need timeout", KR(ret), K(arg));
         } else if (0 == cal_timeout) {
           LOG_INFO("cal purge need timeout is zero, just exit", K(tenant_id), K(purge_sum));
@@ -10713,7 +10713,7 @@ int ObRootService::purge_recyclebin_objects(int64_t purge_each_time)
               K(current_time), K(expire_time), K(affected_rows), K(arg));
         } else {
           purge_sum -= affected_rows;
-          if (arg.purge_num_ != affected_rows) {
+          if (0 == affected_rows) {
             int64_t cost_time = ObTimeUtility::current_time() - start_time;
             LOG_INFO("purge recycle objects", KR(ret), K(tenant_id), K(cost_time), K(purge_sum),
                                               K(cal_timeout), K(expire_time), K(current_time), K(affected_rows));

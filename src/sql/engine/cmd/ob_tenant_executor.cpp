@@ -932,11 +932,10 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
         ret = OB_TIMEOUT;
         break;
       }
-      //一个租户只purge 10个回收站的对象，防止卡住RS的ddl线程
-      //每次返回purge的行数，只有purge数目少于affected_rows
+      //持续分批清理，直到某一批没有清理任何对象
       int64_t cal_timeout = 0;
       int64_t start_time = ObTimeUtility::current_time();
-      if (OB_FAIL(GSCHEMASERVICE.cal_purge_need_timeout(arg, cal_timeout))) {
+      if (OB_FAIL(GSCHEMASERVICE.cal_purge_need_timeout(cal_timeout))) {
         LOG_WARN("fail to cal purge time out", KR(ret), K(tenant_id));
       } else if (0 == cal_timeout) {
         is_tenant_finish = true;
@@ -947,14 +946,14 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
       } else {
         if (session->is_inner()) {
           purge_sum -= affected_rows;
-          if (arg.purge_num_ != affected_rows || purge_sum <= 0) {
+          if (0 == affected_rows || purge_sum <= 0) {
             is_tenant_finish = true;
           }
           if (!is_tenant_finish) {
             ob_usleep(SLEEP_INTERVAL);
           }
         } else {
-          is_tenant_finish = obrpc::ObPurgeRecycleBinArg::DEFAULT_PURGE_EACH_TIME == affected_rows ? false : true;
+          is_tenant_finish = (0 == affected_rows);
         }
         total_purge_count += affected_rows;
       }
