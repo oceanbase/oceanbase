@@ -1867,6 +1867,7 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_COMMIT == type
                || T_ROLLBACK == type
                || T_VARIABLE_SET == type
+               || T_ALTER_SESSION_SET == type // oracle grammar: alter session set sys_var=val, same as T_VARIABLE_SET
                || T_SET_NAMES == type //read only not restrict it
                || T_SET_CHARSET == type  //read only not restrict it
                || T_XA_START == type
