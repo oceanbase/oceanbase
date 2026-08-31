@@ -241,6 +241,9 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 #undef WRAP_SPI_CALL
 
   sql_proxy_ = &sql_proxy;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(codegen_lock_); ++i) {
+    OZ (codegen_lock_[i].init(1024, common::ObLatchIds::OB_PL_COMPILER_MUTEX));
+  }
   OZ (jit_lock_.first.init(1024, common::ObLatchIds::OB_PL_JIT_DEDUPLICATION_BUCKET_LOCK));
   OZ (jit_lock_.second.init(1024, common::ObLatchIds::OB_PL_JIT_BUCKET_LOCK));
   OZ (interface_service_.init());
@@ -252,6 +255,9 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 
 void ObPL::destory()
 {
+  for (int64_t i = 0; i < ARRAYSIZEOF(codegen_lock_); ++i) {
+    codegen_lock_[i].destroy();
+  }
 }
 
 #if defined(__aarch64__)
@@ -3433,6 +3439,8 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     // not in cache, compile it and add to cache
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
       ParseNode root_node;
+      uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(sql.ptr(), sql.length(), 0);
+      ObBucketHashWLockGuard guard(codegen_lock_[ctx.get_my_session()->get_sql_request_level()], lock_idx);
       // check session status after get lock
       if (OB_FAIL(check_session_alive(*ctx.get_my_session()))) {
         LOG_WARN("query or session is killed after get PL codegen lock", K(ret));
@@ -3555,6 +3563,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
     }
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {  // not in cache, compile it...
       {
+        ObBucketHashWLockGuard guard(codegen_lock_[ctx.get_my_session()->get_sql_request_level()], routine_id);
         // check session status after get lock
         if (OB_FAIL(check_session_alive(*ctx.get_my_session()))){
           LOG_WARN("query or session is killed after get PL codegen lock", K(ret));
