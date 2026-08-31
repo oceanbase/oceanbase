@@ -1287,6 +1287,12 @@ DEF_BOOL(_ob_enable_fast_freeze, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's fast freeze is enabled"
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_minimal_tablet_checksum, OB_TENANT_PARAMETER, "False",
+         "specifies whether to maintain only the first tablet in sys ls in __all_tablet_checksum. "
+         "when enabled, other tablet checksums are not written or verified across clusters, "
+         "and existing tablet checksum records are not garbage-collected. "
+         "Value: True: turned on; False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_adaptive_merge_schedule, OB_TENANT_PARAMETER, "True",
          "specifies whether the tenant's adaptive merge scheduling is enabled"
          "Value: True:turned on;  False: turned off",

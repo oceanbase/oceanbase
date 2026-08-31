@@ -201,6 +201,28 @@ int ObDailyMajorFreezeLauncher::try_gc_freeze_info()
   return ret;
 }
 
+int ObDailyMajorFreezeLauncher::check_need_gc_tablet_checksum(bool &need_gc)
+{
+  int ret = OB_SUCCESS;
+  need_gc = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(tenant_id));
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant config is not valid, skip tablet checksum gc", KR(ret), K_(tenant_id));
+    } else {
+      need_gc = !tenant_config->_enable_minimal_tablet_checksum;
+      if (!need_gc && TC_REACH_TIME_INTERVAL(TABLET_CKM_CHECK_INTERVAL_US)) {
+        LOG_INFO("skip tablet checksum gc in minimal tablet checksum mode", K_(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
 {
   int ret = OB_SUCCESS;
@@ -211,10 +233,13 @@ int ObDailyMajorFreezeLauncher::try_gc_tablet_checksum()
   SCN min_keep_compaction_scn;
   int64_t now = ObTimeUtility::current_time();
   const static int64_t BATCH_DELETE_CNT = 2000;
+  bool need_gc = false;
   if (OB_UNLIKELY(IS_NOT_INIT || OB_ISNULL(sql_proxy_) || OB_ISNULL(merge_info_mgr_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(is_inited), KP(sql_proxy_), KP(merge_info_mgr_));
-  } else {
+  } else if (OB_FAIL(check_need_gc_tablet_checksum(need_gc))) {
+    LOG_WARN("fail to check need gc tablet checksum", KR(ret), K_(tenant_id));
+  } else if (need_gc) {
     SMART_VAR(ObArray<SCN>, all_compaction_scn) {
       // 1. load all distinct compaction_scn, when reach 30 min interval time and no valid
       // tablet_ckm_gc_compaction_scn exists
