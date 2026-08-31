@@ -38,6 +38,7 @@ public:
 
   virtual int push(ObLobDataOutRowCtxList &task, volatile bool &stop_flag) = 0;
   virtual void get_task_count(int64_t &lob_data_list_task_count) const = 0;
+  virtual int get_frag_queue_info(int64_t &total_task_count, int64_t &total_queue_capacity) = 0;
   virtual void print_stat_info() = 0;
 };
 
@@ -62,6 +63,7 @@ public:
   {
     lob_data_list_task_count = ATOMIC_LOAD(&lob_data_list_task_count_);
   }
+  int get_frag_queue_info(int64_t &total_task_count, int64_t &total_queue_capacity);
   void print_stat_info() {}
   int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
 
@@ -149,6 +151,9 @@ private:
   uint64_t                  round_value_;
   // ObLobDataOutRowCtxList
   int64_t                   lob_data_list_task_count_ CACHE_ALIGNED;
+  // Per-thread queue capacity, used to compute total queue capacity:
+  //   total_capacity = thread_num * queue_size_
+  int64_t                   queue_size_ CACHE_ALIGNED;
 
   IObLogErrHandler          *err_handler_;
 

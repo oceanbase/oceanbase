@@ -134,6 +134,8 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
   for(int64_t i = 0; i < normal_priority_part_budget_arr_.count(); i++) {
     PartTransDispatchBudget &budget = normal_priority_part_budget_arr_[i];
     PartTransTask *part_trans_task = budget.part_trans_task_;
+    const int64_t pending_lob_format_count = OB_NOT_NULL(part_trans_task)
+        ? part_trans_task->get_pending_lob_format_count() : 0;
     const static int64_t PRINT_STAT_INTERVAL = 10 * _SEC_;
 
     if (is_new_trans_can_dispatch) {
@@ -143,7 +145,8 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
     } else if (!need_pause
         && average_budget <= 0
         && OB_NOT_NULL(part_trans_task)
-        && is_trans_sorting
+        && (is_trans_sorting
+            || pending_lob_format_count > 0)
         && (part_trans_task->is_dispatched_redo_be_sorted() || lob_data_merger_task_count > 0)) {
 
       const int64_t extra_redo_dispatch_size = is_dispatching_ ?
@@ -157,6 +160,7 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
             K(touch_memory_warn_limit),
             K(lob_data_merger_task_count),
             "is_trans_sorting", is_trans_sorting,
+            "pending_lob_format_count", pending_lob_format_count,
             K_(is_dispatching),
             "extra_redo_dispatch_size", SIZE_TO_STR(extra_redo_dispatch_size),
             "part_trans_task", part_trans_task->get_part_trans_info(),
@@ -172,6 +176,7 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
             K(average_budget),
             K_(is_dispatching),
             K(is_trans_sorting),
+            "pending_lob_format_count", pending_lob_format_count,
             "trans_id", part_trans_task->get_trans_id(),
             "tls_id", part_trans_task->get_tls_id(),
             "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);

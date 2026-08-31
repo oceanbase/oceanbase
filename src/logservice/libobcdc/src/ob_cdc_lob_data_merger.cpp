@@ -28,6 +28,7 @@ ObCDCLobDataMerger::ObCDCLobDataMerger() :
     is_inited_(false),
     round_value_(0),
     lob_data_list_task_count_(0),
+    queue_size_(0),
     err_handler_(nullptr)
 {
 }
@@ -55,6 +56,7 @@ int ObCDCLobDataMerger::init(
     LOG_ERROR("init LobDataMergerThread queue thread fail", K(ret), K(thread_num), K(queue_size));
   } else {
     round_value_ = 0;
+    queue_size_ = queue_size;
     err_handler_ = &err_handler;
     is_inited_ = true;
 
@@ -71,6 +73,7 @@ void ObCDCLobDataMerger::destroy()
 
     is_inited_ = false;
     round_value_ = 0;
+    queue_size_ = 0;
     err_handler_ = nullptr;
 
     LOG_INFO("ObCDCLobDataMerger destroy succ", "thread_num", get_thread_num());
@@ -474,7 +477,7 @@ int ObCDCLobDataMerger::handle_task_(
     ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
     ObLobDataGetCtx &lob_data_get_ctx = task.host_;
     ObLobDataOutRowCtxList *lob_data_out_row_ctx_list = static_cast<ObLobDataOutRowCtxList *>(lob_data_get_ctx.host_);
-    const IStmtTask *stmt_task = lob_data_out_row_ctx_list->get_stmt_task();
+    IStmtTask *stmt_task = lob_data_out_row_ctx_list->get_stmt_task();
     const bool is_new_col = task.is_new_col_;
     const ObLobData *lob_data = lob_data_get_ctx.get_lob_data(is_new_col);
     ObString **fragment_cb_array= lob_data_get_ctx.get_fragment_cb_array(is_new_col);
@@ -490,7 +493,7 @@ int ObCDCLobDataMerger::handle_task_(
     } else if (OB_FAIL(lob_data_get_ctx.get_lob_id(is_new_col, lob_id))) {
       LOG_ERROR("lob_data_get_ctx get_lob_id failed", KR(ret), K(lob_data_get_ctx));
     } else {
-      const PartTransTask &part_trans_task = stmt_task->get_host();
+      PartTransTask &part_trans_task = stmt_task->get_host();
       const int64_t commit_version = part_trans_task.get_trans_commit_version();
       const uint64_t tenant_id = lob_data_out_row_ctx_list->get_tenant_id();
       const transaction::ObTransID &trans_id = lob_data_out_row_ctx_list->get_trans_id();
@@ -503,8 +506,60 @@ int ObCDCLobDataMerger::handle_task_(
       ObIAllocator &allocator = lob_data_out_row_ctx_list->get_allocator();
       // We need retry to get the lob data based on lob_aux_meta_key when return OB_ENTRY_NOT_EXIST,
       // because LobAuxMeta table data and primary table data are processed concurrently.
-      RETRY_FUNC_ON_ERROR_WITH_USLEEP_MS(OB_ENTRY_NOT_EXIST, 1 * _MSEC_, stop_flag, lob_aux_meta_storager, get, allocator, lob_aux_meta_key,
-          lob_data_ptr, lob_data_len);
+      //
+      // Custom retry loop that signals PartTransTask when LobAuxMeta is continuously unavailable
+      // for more than 1 second. This signal allows the redo dispatcher to bypass the
+      // is_trans_sorting check and continue dispatching redo (including LobAuxMeta entries)
+      // for this particular participant even when global dispatch memory budget is exhausted,
+      // breaking the circular deadlock:
+      //   formatter stuck in merger push → merger waits for aux_meta → dispatcher can't
+      //   dispatch LobAuxMeta redo → aux_meta never written → deadlock.
+      {
+        int64_t lob_aux_retry_cnt = 0, MAX_RETRY_CNT = 1000;
+        bool lob_aux_signaled = false;
+        ret = OB_ENTRY_NOT_EXIST;
+
+        while (OB_ENTRY_NOT_EXIST == ret && ! is_in_stop_status(stop_flag)) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(lob_aux_meta_storager.get(allocator, lob_aux_meta_key, lob_data_ptr, lob_data_len))) {
+            if (OB_ENTRY_NOT_EXIST == ret) {
+              lob_aux_retry_cnt++;
+              if (lob_aux_retry_cnt > MAX_RETRY_CNT) {
+                // After ~1s of continuous OB_ENTRY_NOT_EXIST, signal PartTransTask so that
+                // the dispatcher can grant extra dispatch budget to this participant.
+                if (! lob_aux_signaled) {
+                  part_trans_task.inc_pending_lob_format_count();
+                  lob_aux_signaled = true;
+                  LOG_INFO("[STAT] [LobDataMerger] LobAuxMeta still not available after 1s, "
+                      "signal dispatcher via PartTransTask to allow extra redo dispatch",
+                      K(lob_aux_meta_key), K(lob_aux_retry_cnt),
+                      K(tenant_id), K(trans_id),
+                      "tls_id", part_trans_task.get_tls_id());
+                }
+                // Back off with longer sleep to reduce CPU after signaling
+                if (REACH_TIME_INTERVAL(10 * _SEC_)) {
+                  LOG_INFO("[STAT] [LobDataMerger] still waiting for LobAuxMeta after signaling dispatcher",
+                      K(lob_aux_meta_key), K(lob_aux_retry_cnt),
+                      K(tenant_id), K(trans_id),
+                      "tls_id", part_trans_task.get_tls_id());
+                }
+                ob_usleep(100 * _MSEC_);
+              } else {
+                if (lob_aux_retry_cnt % 1000 == 1) {
+                  LOG_INFO("[STAT] [LobDataMerger] waiting for LobAuxMeta",
+                      K(lob_aux_meta_key), K(lob_aux_retry_cnt));
+                }
+                ob_usleep(1 * _MSEC_);
+              }
+            }
+          }
+        }
+
+        // Clear signal on success or stop
+        if (lob_aux_signaled) {
+          part_trans_task.dec_pending_lob_format_count();
+        }
+      }
 
       if (OB_SUCC(ret)) {
         LOG_DEBUG("lob_aux_meta_storager get succ", K(lob_aux_meta_key), K(lob_data_len), K(task), K(lob_data_get_ctx), KPC(lob_data_out_row_ctx_list));
@@ -692,6 +747,27 @@ int ObCDCLobDataMerger::try_to_push_task_into_formatter_(
     } else {
       // stat
       ATOMIC_DEC(&lob_data_list_task_count_);
+    }
+  }
+
+  return ret;
+}
+
+int ObCDCLobDataMerger::get_frag_queue_info(
+    int64_t &total_task_count,
+    int64_t &total_queue_capacity)
+{
+  int ret = OB_SUCCESS;
+  total_task_count = 0;
+  total_queue_capacity = 0;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObCDCLobDataMerger has not been initialized", KR(ret));
+  } else {
+    total_queue_capacity = get_thread_num() * queue_size_;
+    if (OB_FAIL(get_total_task_num(total_task_count))) {
+      LOG_ERROR("get_total_task_num fail", KR(ret));
     }
   }
 

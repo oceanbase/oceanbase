@@ -3096,6 +3096,11 @@ int ObLogInstance::get_task_count_(
     if (OB_SUCC(ret)) {
       int64_t lob_data_list_task_count = 0;
       lob_data_merger_->get_task_count(lob_data_list_task_count);
+      int64_t lob_merger_frag_queue_total = 0;
+      int64_t lob_merger_frag_queue_capacity = 0;
+      lob_data_merger_->get_frag_queue_info(lob_merger_frag_queue_total, lob_merger_frag_queue_capacity);
+      bool lob_merger_frag_queue_full =
+          (lob_merger_frag_queue_capacity > 0 && lob_merger_frag_queue_total >= lob_merger_frag_queue_capacity);
       int64_t committer_ddl_part_trans_task_count = 0;
       int64_t committer_dml_part_trans_task_count = 0;
 
@@ -3143,7 +3148,10 @@ int ObLogInstance::get_task_count_(
         _LOG_INFO("[TASK_COUNT_STAT] [DML_PARSER] [LOG_TASK=%ld]", dml_parser_log_count);
         _LOG_INFO("[TASK_COUNT_STAT] [FORMATTER] [BR=%ld LOG_TASK=%ld LOB_STMT=%ld]",
             formatter_br_count, formatter_log_count, stmt_in_lob_merger_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [LOB_MERGER] [LOB_LIST_TASK=%ld]", lob_data_list_task_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [LOB_MERGER] [LOB_LIST_TASK=%ld] [FRAG_QUEUE=%ld/%ld FULL=%s]",
+            lob_data_list_task_count,
+            lob_merger_frag_queue_total, lob_merger_frag_queue_capacity,
+            lob_merger_frag_queue_full ? "Y" : "N");
         _LOG_INFO("[TASK_COUNT_STAT] [SORTER] [TRANS=%ld]", sorter_task_count);
         _LOG_INFO("[TASK_COUNT_STAT] [COMMITER] [DML_TRANS=%ld DDL_PART_TRANS_TASK=%ld DML_PART_TRANS_TASK=%ld POST_COMMIT_QUEUE=%ld]",
             committer_pending_dml_trans_count,
