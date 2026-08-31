@@ -3720,7 +3720,15 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
                                                           table_item,
                                                           is_reverse_link))) {
         LOG_WARN("resolve base or alias table item for dblink failed", K(ret));
-      } else if (NULL != time_node && OB_FAIL(resolve_flashback_query_node(time_node, table_item))) {
+      } else if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table item should not be null", K(ret));
+      } else if (OB_NOT_NULL(sample_node)
+                 && T_SAMPLE_SCAN == sample_node->type_
+                 && OB_FAIL(resolve_sample_clause(sample_node, *table_item))) {
+        LOG_WARN("resolve sample clause failed", K(ret));
+      } else if (OB_NOT_NULL(time_node)
+                 && OB_FAIL(resolve_flashback_query_node(time_node, table_item))) {
         LOG_WARN("failed to resolve flashback query node", K(ret));
       }
     }
