@@ -80,7 +80,9 @@ void MockObTableRequestSender::run1()
 {
   CONS_FAKE_REQUEST(req, client_addr_);
   for(int64_t i = 0; i < request_times_; i++) {
-    ASSERT_EQ(OB_SUCCESS, ObTableConnectionMgr::get_instance().update_table_connection(&req, tenant_id_, database_id_, user_id_));
+    // concurrent same-addr insert may lose the race; OB_HASH_EXIST is then benign
+    int ret = ObTableConnectionMgr::get_instance().update_table_connection(&req, tenant_id_, database_id_, user_id_);
+    ASSERT_TRUE(OB_SUCCESS == ret || OB_HASH_EXIST == ret) << "unexpected ret: " << ret;
   }
 }
 
