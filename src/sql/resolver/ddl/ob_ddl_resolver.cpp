@@ -12731,8 +12731,17 @@ int ObDDLResolver::try_set_auto_partition_by_config(const ParseNode *node,
         // the index infos of table_schema have not been set in resolver,
         // thus we need to check index with index_arg
         for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); i++) {
+          const obrpc::ObCreateIndexArg &index_arg = index_arg_list.at(i);
+          if (!is_support_split_index_type(index_arg.index_type_)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_INFO("auto-partition doesn't support such index type, "
+                     "not allow to enable auto_partition by default config",
+                     K(table_schema), K(index_arg));
+          }
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); i++) {
           obrpc::ObCreateIndexArg &index_arg = index_arg_list.at(i);
-          if (!index_arg.is_index_scope_specified_ && is_support_split_index_type(index_arg.index_type_) && lib::is_mysql_mode()) {
+          if (!index_arg.is_index_scope_specified_ && lib::is_mysql_mode()) {
             bool is_prefix = false;
             if (OB_FAIL(check_primary_key_prefix_of_index_columns(table_schema, index_arg, is_prefix))) {
               LOG_WARN("check primary key prefix of index columns", K(ret), K(table_schema), K(index_arg));
