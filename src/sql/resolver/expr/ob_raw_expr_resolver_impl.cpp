@@ -2824,6 +2824,9 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
         } else {
           q_name.access_idents_.at(q_name.access_idents_.count() - 1).set_pl_var();
         }
+      } else if (T_OP_GET_PACKAGE_VAR == var->get_expr_type()) {
+        is_pl_var = true;
+        q_name.access_idents_.at(q_name.access_idents_.count() - 1).set_pl_var();
       } else { /*do nothing*/ }
     }
     CANCLE_LOG_CHECK_MODE();
