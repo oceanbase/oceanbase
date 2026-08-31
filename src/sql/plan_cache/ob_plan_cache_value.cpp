@@ -749,6 +749,11 @@ int ObPlanCacheValue::choose_plan_from_plan_sets(ObPlanCacheCtx &pc_ctx,
               }
             }
             if (OB_SUCC(ret)) {
+              if (final_choosed_group_id == share::OBCG_DEFAULT && THIS_WORKER.get_group_id() == share::OBCG_LQ) {
+                final_choosed_group_id = share::OBCG_LQ;
+              }
+            }
+	    if (OB_SUCC(ret)) {
               if (final_choosed_group_id == THIS_WORKER.get_group_id()) {
                 // do nothing if equals to current group id.
               } else if (session.get_is_in_retry()
