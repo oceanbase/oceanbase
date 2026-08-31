@@ -24,6 +24,12 @@ namespace storage
 ERRSIM_POINT_DEF(EN_REBUILD_FAILED_STATUS);
 ERRSIM_POINT_DEF(ALLOW_MIGRATION_STATUS_CHANGED);
 
+uint64_t get_ha_mem_tenant_id()
+{
+  const uint64_t tenant_id = MTL_ID();
+  return is_valid_tenant_id(tenant_id) ? tenant_id : OB_SERVER_TENANT_ID;
+}
+
 /******************ObMigrationOpType*********************/
 static const char *migration_op_type_strs[] = {
     "ADD_LS_OP",
@@ -1685,8 +1691,10 @@ ObCopyMacroRangeInfo::ObCopyMacroRangeInfo()
     end_macro_block_id_(),
     macro_block_count_(0),
     is_leader_restore_(false),
-    start_macro_block_end_key_(datums_, OB_INNER_MAX_ROWKEY_COLUMN_NUMBER),
-    allocator_("CopyMacroRange")
+    start_macro_block_end_key_(),
+    datum_buf_(nullptr),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "CopyMacroRange"),
+               ALLOCATOR_PAGE_SIZE)
 {
 }
 
@@ -1694,26 +1702,55 @@ ObCopyMacroRangeInfo::~ObCopyMacroRangeInfo()
 {
 }
 
-void ObCopyMacroRangeInfo::reset()
+void ObCopyMacroRangeInfo::reset_fields_()
 {
   start_macro_block_id_.reset();
   end_macro_block_id_.reset();
   macro_block_count_ = 0;
-  start_macro_block_end_key_.reset();
   is_leader_restore_ = false;
+  start_macro_block_end_key_.reset();
+  // it points to the memory of allocator_, which is about to be released by the caller
+  datum_buf_ = nullptr;
+}
+
+void ObCopyMacroRangeInfo::reset()
+{
+  reset_fields_();
   allocator_.reset();
 }
 
 void ObCopyMacroRangeInfo::reuse()
 {
-  start_macro_block_id_.reset();
-  end_macro_block_id_.reset();
-  macro_block_count_ = 0;
-  is_leader_restore_ = false;
-  start_macro_block_end_key_.datums_ = datums_;
-  start_macro_block_end_key_.datum_cnt_ = OB_INNER_MAX_ROWKEY_COLUMN_NUMBER;
-  start_macro_block_end_key_.reuse();
+  reset_fields_();
+  // ObArenaAllocator::reuse() keeps the normal pages for the next round and only gives the large
+  // pages(e.g. the datum buffer) back, so filling range infos in a loop does not malloc/free the
+  // small page repeatedly.
   allocator_.reuse();
+}
+
+int ObCopyMacroRangeInfo::prepare_datum_buffer()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(datum_buf_)) {
+    const int64_t buf_size = sizeof(blocksstable::ObStorageDatum) * OB_INNER_MAX_ROWKEY_COLUMN_NUMBER;
+    void *buf = allocator_.alloc(buf_size);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc datum buffer", K(ret), K(buf_size));
+    } else {
+      // The datums must be constructed one by one instead of being MEMSET, because
+      // ObStorageDatum::ptr_ points to the buf_ inlined in the datum itself.
+      datum_buf_ = new (buf) blocksstable::ObStorageDatum[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    start_macro_block_end_key_.datums_ = datum_buf_;
+    start_macro_block_end_key_.datum_cnt_ = OB_INNER_MAX_ROWKEY_COLUMN_NUMBER;
+    // make sure the datums are clean even if the buffer is reused
+    start_macro_block_end_key_.reuse();
+  }
+  return ret;
 }
 
 bool ObCopyMacroRangeInfo::is_valid() const
@@ -1751,26 +1788,73 @@ int ObCopyMacroRangeInfo::assign(const ObCopyMacroRangeInfo &macro_range_info)
   if (!macro_range_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy macro range info is invalid", K(ret), K(macro_range_info));
-  } else if (OB_FAIL(deep_copy_start_end_key(macro_range_info.start_macro_block_end_key_))) {
-    LOG_WARN("failed to deep copy start end key", K(ret), K(macro_range_info));
+  } else if (this == &macro_range_info) {
+    // do nothing
   } else {
-    start_macro_block_id_ = macro_range_info.start_macro_block_id_;
-    end_macro_block_id_ = macro_range_info.end_macro_block_id_;
-    macro_block_count_ = macro_range_info.macro_block_count_;
-    is_leader_restore_ = macro_range_info.is_leader_restore_;
+    // Release the memory hold by the previous content, otherwise assigning to the same range info
+    // repeatedly makes the arena grow one page each time and never shrink until destruction.
+    reuse();
+    // is_valid() allows an empty start rowkey when is_leader_restore_ is true, and restoring a
+    // backup set which does not support quick restore builds the range from macro block ids only
+    // (see ObCopySSTableMacroRestoreReader::build_sstable_range_info_), so there may be nothing to
+    // deep copy here.
+    const bool has_start_end_key = macro_range_info.start_macro_block_end_key_.is_valid();
+    if (has_start_end_key
+        && OB_FAIL(deep_copy_start_end_key(macro_range_info.start_macro_block_end_key_))) {
+      LOG_WARN("failed to deep copy start end key", K(ret), K(macro_range_info));
+    } else {
+      start_macro_block_id_ = macro_range_info.start_macro_block_id_;
+      end_macro_block_id_ = macro_range_info.end_macro_block_id_;
+      macro_block_count_ = macro_range_info.macro_block_count_;
+      is_leader_restore_ = macro_range_info.is_leader_restore_;
+    }
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCopyMacroRangeInfo,
-    start_macro_block_id_, end_macro_block_id_, macro_block_count_, is_leader_restore_, start_macro_block_end_key_);
+OB_DEF_SERIALIZE(ObCopyMacroRangeInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+      start_macro_block_id_, end_macro_block_id_, macro_block_count_, is_leader_restore_,
+      start_macro_block_end_key_);
+  return ret;
+}
 
-/******************ObCopyMacroRangeInfo*********************/
+OB_DEF_SERIALIZE_SIZE(ObCopyMacroRangeInfo)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+      start_macro_block_id_, end_macro_block_id_, macro_block_count_, is_leader_restore_,
+      start_macro_block_end_key_);
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObCopyMacroRangeInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE,
+      start_macro_block_id_, end_macro_block_id_, macro_block_count_, is_leader_restore_);
+  // ObDatumRowkey::deserialize decodes datums into the buffer which datums_ points to, so the
+  // datum buffer must be prepared before decoding it. It is allocated lazily here instead of
+  // being an inlined array, because an inlined array costs
+  // OB_INNER_MAX_ROWKEY_COLUMN_NUMBER * sizeof(ObStorageDatum) bytes for EVERY range info, while
+  // only the ones filled by the producer / deserialize path really need it.
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(prepare_datum_buffer())) {
+    LOG_WARN("failed to prepare datum buffer", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE, start_macro_block_end_key_);
+  }
+  return ret;
+}
+
+/******************ObCopySSTableMacroRangeInfo*********************/
 ObCopySSTableMacroRangeInfo::ObCopySSTableMacroRangeInfo()
   : copy_table_key_(),
     copy_macro_range_array_()
 {
-  lib::ObMemAttr attr(MTL_ID(), "MacroRangeInfo");
+  lib::ObMemAttr attr(get_ha_mem_tenant_id(), "MacroRangeInfo");
   copy_macro_range_array_.set_attr(attr);
 }
 
@@ -1796,8 +1880,13 @@ int ObCopySSTableMacroRangeInfo::assign(const ObCopySSTableMacroRangeInfo &sstab
   if (!sstable_macro_range_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy sstable macro range info is invalid", K(ret), K(sstable_macro_range_info));
+  } else if (this == &sstable_macro_range_info) {
+    // do nothing
   } else if (OB_FAIL(copy_macro_range_array_.assign(sstable_macro_range_info.copy_macro_range_array_))) {
-    LOG_WARN("failed to assign sstable macro range info", K(ret), K(sstable_macro_range_info));
+    // Every element is default constructed and then filled by ObCopyMacroRangeInfo::assign(), so
+    // the rowkey is deep copied into the arena owned by the element itself.
+    LOG_WARN("failed to assign macro range array", K(ret), K(sstable_macro_range_info));
+    reset();
   } else {
     copy_table_key_ = sstable_macro_range_info.copy_table_key_;
   }
@@ -2158,7 +2247,7 @@ ObBackfillTabletsTableMgr::ObTabletTableMgr::ObTabletTableMgr()
     tablet_id_(),
     transfer_seq_(0),
     max_major_end_scn_(SCN::min_scn()),
-    allocator_("Backfill"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "Backfill")),
     table_handle_array_(),
     restore_status_(ObTabletRestoreStatus::RESTORE_STATUS_MAX)
 {

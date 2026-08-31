@@ -37,6 +37,14 @@ namespace oceanbase
 namespace storage
 {
 
+// Memory used by the HA(migration/rebuild/restore) data path must be charged to the tenant which
+// the migrated LS/tablet belongs to. Otherwise it goes to tenant 500(OB_SERVER_TENANT_ID) by the
+// default value of ObArenaAllocator/ModulePageAllocator, escapes the tenant memory limit and can
+// only be observed as an anonymous 500 tenant memory bloat.
+// The HA data path always runs with a valid tenant context, OB_SERVER_TENANT_ID is only kept as a
+// defensive fallback.
+uint64_t get_ha_mem_tenant_id();
+
 enum ObMigrationStatus
 {
   OB_MIGRATION_STATUS_NONE = 0,
@@ -357,6 +365,18 @@ public:
   ObITable::TableKey dest_table_key_;
 };
 
+// ObCopyMacroRangeInfo describes a batch of continuous macro blocks which should be copied
+// together, the batch is identified by the end rowkey of its first macro block.
+//
+// MEMORY NOTE: a tablet may contain millions of macro blocks, which means a single tablet can
+// produce tens of thousands of ObCopyMacroRangeInfo. So this structure must stay small:
+// 1) start_macro_block_end_key_ is deep copied into the arena owned by the object itself. The
+//    arena uses a small page(ALLOCATOR_PAGE_SIZE) so that a ~100B rowkey does not occupy a whole
+//    8KB page. The object is self contained on purpose: it is embedded in a RPC arg and is
+//    deserialized by the RPC framework, so there is no chance to inject an allocator from outside.
+// 2) the datum buffer needed by the producer / deserialize path is allocated on demand (see
+//    prepare_datum_buffer()), so the range infos which are only filled through assign() or
+//    deep_copy_start_end_key() do not pay for it at all.
 struct ObCopyMacroRangeInfo final
 {
   OB_UNIS_VERSION(1);
@@ -364,21 +384,35 @@ public:
   ObCopyMacroRangeInfo();
   ~ObCopyMacroRangeInfo();
   bool is_valid() const;
+  // Go back to the state right after construction, all the arena pages are freed.
   void reset();
+  // Prepare an empty range info for the next range. The memory hold by the previous content is
+  // given back to the arena, but unlike reset() the arena keeps its normal pages, so filling range
+  // infos in a loop does not malloc/free the page repeatedly.
   void reuse();
+  // Allocate the datum buffer of start_macro_block_end_key_ on demand.
+  // ATTENTION: it MUST be called before writing start_macro_block_end_key_.datums_ directly, e.g.
+  // by ObStorageHAUtils::make_macro_id_to_datum(). The deserialize path does it by itself.
+  int prepare_datum_buffer();
   int assign(const ObCopyMacroRangeInfo &copy_macro_range_info);
   int deep_copy_start_end_key(const blocksstable::ObDatumRowkey & start_macro_block_end_key);
 
   TO_STRING_KV(K_(start_macro_block_id), K_(end_macro_block_id),
       K_(macro_block_count), K_(start_macro_block_end_key), K_(is_leader_restore));
 public:
+  static const int64_t ALLOCATOR_PAGE_SIZE = 512;
+private:
+  // reset the members, the memory they reference is released by the caller
+  void reset_fields_();
+public:
   blocksstable::ObLogicMacroBlockId start_macro_block_id_;
   blocksstable::ObLogicMacroBlockId end_macro_block_id_;
   int64_t macro_block_count_;
   bool is_leader_restore_;
-  blocksstable::ObStorageDatum datums_[OB_INNER_MAX_ROWKEY_COLUMN_NUMBER];
   blocksstable::ObDatumRowkey start_macro_block_end_key_;
-  ObArenaAllocator allocator_;
+private:
+  blocksstable::ObStorageDatum *datum_buf_;
+  common::ObArenaAllocator allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroRangeInfo);
 };
@@ -395,6 +429,7 @@ public:
   TO_STRING_KV(K_(copy_table_key), K_(copy_macro_range_array));
 
   ObITable::TableKey copy_table_key_;
+  // Every element owns the memory of its own rowkey, see the memory note of ObCopyMacroRangeInfo.
   common::ObArray<ObCopyMacroRangeInfo> copy_macro_range_array_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfo);
 };

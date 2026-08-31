@@ -1819,7 +1819,7 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     const ObTablet *tablet)
 {
   int ret = OB_SUCCESS;
-  common::ObArenaAllocator allocator("TransferTmpTab");
+  common::ObArenaAllocator allocator(lib::ObMemAttr(get_ha_mem_tenant_id(), "TransferTmpTab"));
   ObMigrationStatus migration_status;
   ObTabletMemberWrapper<ObTabletTableStore> dest_wrapper;
   ObTabletCreateDeleteMdsUserData user_data;

@@ -203,6 +203,7 @@ void ObTabletRestoreCtx::reset()
   status_ = ObCopyTabletStatus::MAX_STATUS;
   ha_table_info_mgr_ = nullptr;
   extra_info_.reset();
+  copy_sstable_info_mgr_.reset();
   backup_size_ = 0;
 }
 
@@ -1860,6 +1861,10 @@ ObTabletRestoreDag::ObTabletRestoreDag()
 ObTabletRestoreDag::~ObTabletRestoreDag()
 {
   int tmp_ret = OB_SUCCESS;
+  // The sstable copy tasks reference the macro range info hold by copy_sstable_info_mgr_. Free the
+  // tasks here explicitly, otherwise they would be freed by ~ObIDag() which runs AFTER the members
+  // of this dag have been destructed.
+  clear_task_list_with_lock();
   if (OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
     if (OB_SUCCESS != (tmp_ret = tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(
         tablet_restore_ctx_.tablet_id_))) {
@@ -2201,8 +2206,7 @@ ObTabletRestoreTask::ObTabletRestoreTask()
     src_info_(),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    copy_table_key_array_(),
-    copy_sstable_info_mgr_()
+    copy_table_key_array_()
 
 {
 }
@@ -2455,7 +2459,9 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
   } else if (OB_FAIL(tablet_restore_ctx_->ha_table_info_mgr_->get_table_info(tablet_restore_ctx_->tablet_id_,
       copy_table_key, init_param.sstable_param_))) {
     LOG_WARN("failed to get table info", K(ret), KPC(tablet_restore_ctx_), K(copy_table_key));
-  } else if (OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
+  } else if (FALSE_IT(init_param.copy_table_key_ = copy_table_key)) {
+  } else if (OB_FAIL(tablet_restore_ctx_->copy_sstable_info_mgr_.get_copy_sstable_macro_range_info_ptr(
+      copy_table_key, init_param.sstable_macro_range_info_))) {
     LOG_WARN("failed to get copy sstable macro range info", K(ret), K(copy_table_key));
   } else if (!init_param.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
@@ -2649,9 +2655,11 @@ int ObTabletRestoreTask::build_copy_sstable_info_mgr_()
     param.svr_rpc_proxy_ = svr_rpc_proxy_;
     param.bandwidth_throttle_ = bandwidth_throttle_;
 
-    if (OB_FAIL(copy_sstable_info_mgr_.init(param))) {
+    // the ctx is owned by the dag and the dag may be retried, reset the mgr before init it again
+    tablet_restore_ctx_->copy_sstable_info_mgr_.reset();
+    if (OB_FAIL(tablet_restore_ctx_->copy_sstable_info_mgr_.init(param))) {
       LOG_WARN("failed to init copy sstable info mgr", K(ret), K(param), KPC(tablet_restore_ctx_));
-    } else if (OB_FAIL(copy_sstable_info_mgr_.check_src_tablet_exist(is_tablet_exist))) {
+    } else if (OB_FAIL(tablet_restore_ctx_->copy_sstable_info_mgr_.check_src_tablet_exist(is_tablet_exist))) {
       LOG_WARN("failed to check src tablet exist", K(ret), KPC(tablet_restore_ctx_));
     } else if (is_tablet_exist) {
       // do nothing

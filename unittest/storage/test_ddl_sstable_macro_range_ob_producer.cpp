@@ -48,6 +48,10 @@ TEST_F(TestDDLCopySSTableMacroRangeObProducer, shared_storage_mode)
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
+  // the datum buffer of start_macro_block_end_key_ is allocated on demand
+  ret = macro_range_info.prepare_datum_buffer();
+  ASSERT_EQ(OB_SUCCESS, ret);
+
   ret = ObStorageHAUtils::make_macro_id_to_datum(macro_block_id_array, buf, buf_size, macro_range_info.start_macro_block_end_key_);
   ASSERT_EQ(OB_SUCCESS, ret);
 

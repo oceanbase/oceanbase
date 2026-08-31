@@ -572,7 +572,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator("HATabBuilder");
+  ObArenaAllocator allocator(lib::ObMemAttr(get_ha_mem_tenant_id(), "HATabBuilder"));
   ObTabletHandle local_tablet_hdl;
   ObTablesHandleArray major_tables;
   ObStorageSchema storage_schema;
@@ -1809,13 +1809,18 @@ int ObStorageHACopySSTableParam::assign(const ObStorageHACopySSTableParam &param
 ObStorageHACopySSTableInfoMgr::ObStorageHACopySSTableInfoMgr()
   : is_inited_(false),
     param_(),
-    allocator_("HACopySSTMgr"),
+    allocator_(lib::ObMemAttr(get_ha_mem_tenant_id(), "HACopySSTMgr")),
     macro_range_info_map_(),
     status_(ObCopyTabletStatus::TABLET_EXIST)
 {
 }
 
 ObStorageHACopySSTableInfoMgr::~ObStorageHACopySSTableInfoMgr()
+{
+  inner_reset_();
+}
+
+void ObStorageHACopySSTableInfoMgr::inner_reset_()
 {
   if (!macro_range_info_map_.created()) {
   } else {
@@ -1825,9 +1830,17 @@ ObStorageHACopySSTableInfoMgr::~ObStorageHACopySSTableInfoMgr()
       sstable_macro_range_info->~ObCopySSTableMacroRangeInfo();
       sstable_macro_range_info = nullptr;
     }
-    macro_range_info_map_.reuse();
+    macro_range_info_map_.destroy();
   }
   allocator_.reset();
+}
+
+void ObStorageHACopySSTableInfoMgr::reset()
+{
+  inner_reset_();
+  param_.reset();
+  status_ = ObCopyTabletStatus::TABLET_EXIST;
+  is_inited_ = false;
 }
 
 int ObStorageHACopySSTableInfoMgr::init(const ObStorageHACopySSTableParam &param)
@@ -2047,12 +2060,13 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_restore_reader_(
   return ret;
 }
 
-int ObStorageHACopySSTableInfoMgr::get_copy_sstable_maro_range_info(
+int ObStorageHACopySSTableInfoMgr::get_copy_sstable_macro_range_info_ptr(
     const ObITable::TableKey &copy_table_key,
-    ObCopySSTableMacroRangeInfo &copy_sstable_macro_range_info)
+    const ObCopySSTableMacroRangeInfo *&copy_sstable_macro_range_info)
 {
   int ret = OB_SUCCESS;
   ObCopySSTableMacroRangeInfo *sstable_macro_range_info_ptr = nullptr;
+  copy_sstable_macro_range_info = nullptr;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2065,10 +2079,8 @@ int ObStorageHACopySSTableInfoMgr::get_copy_sstable_maro_range_info(
   } else if (OB_ISNULL(sstable_macro_range_info_ptr) || !sstable_macro_range_info_ptr->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable macro range info should not be NULL or invalid", K(ret), KPC(sstable_macro_range_info_ptr));
-  } else if (OB_FAIL(copy_sstable_macro_range_info.assign(*sstable_macro_range_info_ptr))) {
-    LOG_WARN("failed to copy sstable macro range info", K(ret), KPC(sstable_macro_range_info_ptr));
   } else {
-    LOG_INFO("succeed get copy sstable macro range info", K(ret), K(copy_table_key), K(copy_sstable_macro_range_info));
+    copy_sstable_macro_range_info = sstable_macro_range_info_ptr;
   }
   return ret;
 }

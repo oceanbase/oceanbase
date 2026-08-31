@@ -41,7 +41,8 @@ ObPhysicalCopyTaskInitParam::ObPhysicalCopyTaskInitParam()
     tablet_id_(),
     src_info_(),
     sstable_param_(nullptr),
-    sstable_macro_range_info_(),
+    copy_table_key_(),
+    sstable_macro_range_info_(nullptr),
     tablet_copy_finish_task_(nullptr),
     ls_(nullptr),
     is_leader_restore_(false),
@@ -68,7 +69,8 @@ bool ObPhysicalCopyTaskInitParam::is_valid() const
              && ls_id_.is_valid()
              && tablet_id_.is_valid()
              && OB_NOT_NULL(sstable_param_)
-             && sstable_macro_range_info_.is_valid()
+             && copy_table_key_.is_valid()
+             && (nullptr == sstable_macro_range_info_ || sstable_macro_range_info_->is_valid())
              && OB_NOT_NULL(tablet_copy_finish_task_)
              && OB_NOT_NULL(ls_)
              && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_);
@@ -93,7 +95,8 @@ void ObPhysicalCopyTaskInitParam::reset()
   tablet_id_.reset();
   src_info_.reset();
   sstable_param_ = nullptr;
-  sstable_macro_range_info_.reset();
+  copy_table_key_.reset();
+  sstable_macro_range_info_ = nullptr;
   tablet_copy_finish_task_ = nullptr;
   ls_ = nullptr;
   is_leader_restore_ = false;
@@ -496,7 +499,9 @@ ObSSTableCopyFinishTask::ObSSTableCopyFinishTask()
     copy_ctx_(),
     lock_(common::ObLatchIds::BACKUP_LOCK),
     sstable_param_(nullptr),
-    sstable_macro_range_info_(),
+    copy_table_key_(),
+    sstable_macro_range_info_(nullptr),
+    empty_macro_range_array_(),
     macro_range_info_index_(0),
     tablet_copy_finish_task_(nullptr),
     ls_(nullptr),
@@ -534,8 +539,6 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
   } else if (FALSE_IT(bandwidth_throttle = GCTX.bandwidth_throttle_)) {
   } else if (FALSE_IT(svr_rpc_proxy = ls_service->get_storage_rpc_proxy())) {
   } else if (FALSE_IT(ha_dag = static_cast<ObStorageHADag *>(this->get_dag()))) {
-  } else if (OB_FAIL(sstable_macro_range_info_.assign(init_param.sstable_macro_range_info_))) {
-    LOG_WARN("failed to assign sstable macro range info", K(ret), K(init_param));
   } else if (OB_FAIL(build_restore_macro_block_id_mgr_(init_param))) {
     LOG_WARN("failed to build restore macro block id mgr", K(ret), K(init_param));
   } else {
@@ -561,6 +564,11 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
     copy_ctx_.extra_info_ = init_param.extra_info_;
     macro_range_info_index_ = 0;
     ls_ = init_param.ls_;
+    // NO deep copy here, the macro range info is owned by ObStorageHACopySSTableInfoMgr which
+    // belongs to the dag and outlives this task. Copying it would duplicate the whole macro range
+    // array (one entry per 128 macro blocks) for every sstable copy task.
+    copy_table_key_ = init_param.copy_table_key_;
+    sstable_macro_range_info_ = init_param.sstable_macro_range_info_;
     sstable_param_ = init_param.sstable_param_;
     tablet_copy_finish_task_ = init_param.tablet_copy_finish_task_;
     int64_t cluster_version = 0;
@@ -571,7 +579,7 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
       LOG_WARN("failed to prepare sstable index builder", K(ret), K(init_param), K(cluster_version));
     } else {
       is_inited_ = true;
-      LOG_INFO("succeed init ObSSTableCopyFinishTask", K(init_param), K(sstable_macro_range_info_));
+      LOG_INFO("succeed init ObSSTableCopyFinishTask", K(init_param), KPC(sstable_macro_range_info_));
     }
   }
   return ret;
@@ -589,14 +597,14 @@ int ObSSTableCopyFinishTask::get_next_macro_block_copy_info(
     LOG_WARN("sstable copy finish task do not init", K(ret));
   } else {
     common::SpinWLockGuard guard(lock_);
-    if (macro_range_info_index_ >= sstable_macro_range_info_.copy_macro_range_array_.count()) {
+    if (macro_range_info_index_ >= get_macro_range_count_()) {
       ret = OB_ITER_END;
     } else {
-      copy_table_key = sstable_macro_range_info_.copy_table_key_;
-      copy_macro_range_info = &sstable_macro_range_info_.copy_macro_range_array_.at(macro_range_info_index_);
+      copy_table_key = copy_table_key_;
+      copy_macro_range_info = &sstable_macro_range_info_->copy_macro_range_array_.at(macro_range_info_index_);
       macro_range_info_index_++;
       LOG_INFO("succeed get macro block copy info", K(copy_table_key), KPC(copy_macro_range_info),
-          K(macro_range_info_index_), K(sstable_macro_range_info_));
+          K(macro_range_info_index_), KPC(sstable_macro_range_info_));
     }
   }
   return ret;
@@ -611,7 +619,7 @@ int ObSSTableCopyFinishTask::check_is_iter_end(bool &is_iter_end)
     LOG_WARN("sstable copy finish task do not init", K(ret));
   } else {
     common::SpinRLockGuard guard(lock_);
-    if (macro_range_info_index_ >= sstable_macro_range_info_.copy_macro_range_array_.count()) {
+    if (macro_range_info_index_ >= get_macro_range_count_()) {
       is_iter_end = true;
     } else {
       is_iter_end = false;
@@ -653,8 +661,13 @@ int ObSSTableCopyFinishTask::get_copy_macro_range_array(const common::ObArray<Ob
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("sstable copy finish task do not init", K(ret));
+  } else if (OB_ISNULL(sstable_macro_range_info_)) {
+    // The sstable does not need to copy any macro block, e.g. a shared macro block sstable during
+    // migration. Return an empty array rather than an error to keep the behavior consistent with
+    // the case that the macro range array exists but is empty.
+    macro_range_array = &empty_macro_range_array_;
   } else {
-    macro_range_array = &sstable_macro_range_info_.copy_macro_range_array_;
+    macro_range_array = &sstable_macro_range_info_->copy_macro_range_array_;
   }
   return ret;
 }
@@ -1042,7 +1055,7 @@ int ObSSTableCopyFinishTask::build_restore_macro_block_id_mgr_(
       LOG_WARN("failed to get tablet", K(ret), K(init_param));
     } else if (OB_FAIL(restore_macro_block_id_mgr->init(init_param.tablet_id_,
                                                         tablet_handle,
-                                                        init_param.sstable_macro_range_info_.copy_table_key_,
+                                                        init_param.copy_table_key_,
                                                         *init_param.restore_base_info_,
                                                         *init_param.meta_index_store_,
                                                         *init_param.second_meta_index_store_))) {

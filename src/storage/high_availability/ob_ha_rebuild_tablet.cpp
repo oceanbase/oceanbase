@@ -130,6 +130,7 @@ void ObRebuildTabletCopyCtx::reset()
   sstable_info_.reset();
   copy_header_.reset();
   status_ = ObCopyTabletStatus::MAX_STATUS;
+  copy_sstable_info_mgr_.reset();
 }
 
 int ObRebuildTabletCopyCtx::set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status)
@@ -165,6 +166,7 @@ void ObRebuildTabletCopyCtx::reuse()
   tablet_allocator_.reset();
   sstable_info_.reset();
   copy_header_.reset();
+  copy_sstable_info_mgr_.reset();
 }
 
 int ObRebuildTabletCopyCtx::get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraInfo *&extra_info)
@@ -1075,6 +1077,10 @@ ObTabletRebuildMajorDag::ObTabletRebuildMajorDag()
 
 ObTabletRebuildMajorDag::~ObTabletRebuildMajorDag()
 {
+  // The copy tasks reference the macro range info hold by copy_sstable_info_mgr_. Free the tasks
+  // here explicitly, otherwise they would be freed by ~ObIDag() which runs AFTER the members of
+  // this dag have been destructed.
+  clear_task_list_with_lock();
 }
 
 bool ObTabletRebuildMajorDag::operator == (const ObIDag &other) const
@@ -1407,8 +1413,7 @@ ObTabletRebuildMajorTask::ObTabletRebuildMajorTask()
     storage_rpc_(nullptr),
     sql_proxy_(nullptr),
     copy_tablet_ctx_(nullptr),
-    copy_table_key_array_(),
-    copy_sstable_info_mgr_()
+    copy_table_key_array_()
 {
 }
 
@@ -1538,7 +1543,7 @@ int ObTabletRebuildMajorTask::generate_physical_copy_task_(
   } else if (FALSE_IT(tablet_rebuild_dag = static_cast<ObTabletRebuildMajorDag *>(dag_))) {
   } else if (OB_FAIL(tablet_rebuild_dag->get_ls(ls))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(copy_sstable_info_mgr_.check_src_tablet_exist(is_tablet_exist))) {
+  } else if (OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.check_src_tablet_exist(is_tablet_exist))) {
     LOG_WARN("failed to check src tablet exist", K(ret), K(copy_table_key));
   } else if (!is_tablet_exist) {
     if (OB_FAIL(tablet_copy_finish_task->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
@@ -1558,7 +1563,10 @@ int ObTabletRebuildMajorTask::generate_physical_copy_task_(
     init_param.sstable_param_ = &copy_tablet_ctx_->sstable_info_.param_;
     init_param.extra_info_ = &copy_tablet_ctx_->extra_info_;
 
-    if (OB_FAIL(copy_sstable_info_mgr_.get_copy_sstable_maro_range_info(copy_table_key, init_param.sstable_macro_range_info_))) {
+    init_param.copy_table_key_ = copy_table_key;
+
+    if (OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.get_copy_sstable_macro_range_info_ptr(
+        copy_table_key, init_param.sstable_macro_range_info_))) {
       LOG_WARN("failed to get copy sstable macro range info", K(ret), K(copy_table_key));
     } else if (!init_param.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1569,7 +1577,8 @@ int ObTabletRebuildMajorTask::generate_physical_copy_task_(
       LOG_WARN("failed to init finish task", K(ret), K(copy_table_key), K(*ctx_));
     } else if (OB_FAIL(finish_task->add_child(*child_task))) {
       LOG_WARN("failed to add child", K(ret));
-    } else if (init_param.sstable_macro_range_info_.copy_macro_range_array_.count() > 0) {
+    } else if (OB_NOT_NULL(init_param.sstable_macro_range_info_)
+        && init_param.sstable_macro_range_info_->copy_macro_range_array_.count() > 0) {
       // parent->copy->finish->child
       if (OB_FAIL(dag_->alloc_task(copy_task))) {
         LOG_WARN("failed to alloc copy task", K(ret));
@@ -1685,7 +1694,9 @@ int ObTabletRebuildMajorTask::build_copy_sstable_info_mgr_()
     param.bandwidth_throttle_ = bandwidth_throttle_;
     param.src_ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_;
 
-    if (OB_FAIL(copy_sstable_info_mgr_.init(param))) {
+    // the ctx is owned by the dag and the dag may be retried, reset the mgr before init it again
+    copy_tablet_ctx_->copy_sstable_info_mgr_.reset();
+    if (OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.init(param))) {
       LOG_WARN("failed to init copy sstable info mgr", K(ret), K(param), KPC(ctx_), KPC(copy_tablet_ctx_));
     }
   }

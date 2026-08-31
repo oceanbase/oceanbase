@@ -280,11 +280,19 @@ public:
   ObStorageHACopySSTableInfoMgr();
   virtual ~ObStorageHACopySSTableInfoMgr();
   int init(const ObStorageHACopySSTableParam &param);
+  // reset the mgr so that it can be inited again, it is needed because the mgr is owned by the
+  // tablet copy ctx now and the dag which holds the ctx may be retried.
+  void reset();
 
-  int get_copy_sstable_maro_range_info(
+  // Return the macro range info hold by this mgr instead of copying it out. The returned pointer
+  // is valid until this mgr is reset or destroyed. It is used to avoid duplicating the whole macro
+  // range array (which may contain tens of thousands of entries) for every sstable copy task.
+  int get_copy_sstable_macro_range_info_ptr(
       const ObITable::TableKey &copy_table_key,
-      ObCopySSTableMacroRangeInfo &copy_sstable_macro_range_info);
+      const ObCopySSTableMacroRangeInfo *&copy_sstable_macro_range_info);
   int check_src_tablet_exist(bool &is_exist);
+private:
+  void inner_reset_();
 private:
   int build_sstable_macro_range_info_map_();
   int get_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
