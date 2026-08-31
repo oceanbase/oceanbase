@@ -505,6 +505,8 @@ TEST_F(TestObSimpleMutilArbServer, active_keepalive_isolation_to_blacklist_and_r
   ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
   ASSERT_NE(nullptr, arb_server);
 
+  ASSERT_EQ(OB_SUCCESS, arb_server->timer_.stop());
+  arb_server->timer_.wait();
   auto &worker = arb_server->timer_.active_keep_alive_worker_;
   worker.addr_set_.clear();
   ASSERT_EQ(OB_SUCCESS, worker.addr_set_.set_refactored(dst, 1));
