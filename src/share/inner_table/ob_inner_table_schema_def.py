@@ -3956,6 +3956,7 @@ def_table_schema(
     ('major_turn_id', 'int', 'false', '0'),
     ('log_file_count', 'int', 'false', '0'),
     ('finish_log_file_count', 'int', 'false', '0'),
+    ('extra_info', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
     ],
 )
 def_table_schema(
@@ -4001,6 +4002,7 @@ def_table_schema(
     ('major_turn_id', 'int', 'false', '0'),
     ('log_file_count', 'int', 'false', '0'),
     ('finish_log_file_count', 'int', 'false', '0'),
+    ('extra_info', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'false', ''),
     ],
 )
 def_table_schema(

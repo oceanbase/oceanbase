@@ -2339,7 +2339,6 @@ bool ObBackupUtils::is_need_retry_error(const int err)
     case OB_LOG_ARCHIVE_STAT_NOT_MATCH :
     case OB_NOT_SUPPORTED :
     case OB_TENANT_HAS_BEEN_DROPPED :
-    case OB_SERVER_OUTOF_DISK_SPACE :
     case OB_HASH_NOT_EXIST:
     case OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA :
     case OB_BACKUP_DELETE_BACKUP_SET_NOT_ALLOWED :
@@ -2369,6 +2368,11 @@ bool ObBackupUtils::is_need_retry_error(const int err)
       break;
   }
   return bret;
+}
+
+bool ObBackupUtils::is_disk_full_error(const int err)
+{
+  return OB_SERVER_OUTOF_DISK_SPACE == err;
 }
 
 int ObBackupUtils::convert_timestamp_to_date(
@@ -4015,8 +4019,65 @@ ObBackupSetTaskAttr::ObBackupSetTaskAttr()
     backup_path_(0),
     retry_cnt_(0),
     result_(0),
-    comment_()
+    comment_(),
+    extra_info_()
 {
+}
+
+int ObBackupExtraInfo::assign(const ObBackupExtraInfo &other)
+{
+  int ret = OB_SUCCESS;
+  sslog_gts_ = other.sslog_gts_;
+  read_scn_ = other.read_scn_;
+  first_disk_full_ts_ = other.first_disk_full_ts_;
+  return ret;
+}
+
+int ObBackupExtraInfo::encode_to_str(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "sslog_gts:%lu,read_scn:%lu,first_disk_full_ts:%ld",
+                     sslog_gts_.is_valid_and_not_min() ? sslog_gts_.get_val_for_gts() : (uint64_t)0,
+                     read_scn_.is_valid_and_not_min() ? read_scn_.get_val_for_gts() : (uint64_t)0,
+                     first_disk_full_ts_))) {
+    LOG_WARN("failed to encode extra_info", K(ret), K(buf_len), K_(sslog_gts), K_(read_scn), K_(first_disk_full_ts));
+  }
+  return ret;
+}
+
+int ObBackupExtraInfo::decode_from_str(const char *str)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_ISNULL(str)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (0 == strlen(str)) {
+    // empty string means not set, return default (reset) values
+  } else {
+    uint64_t gts_value = 0;
+    uint64_t scn_value = 0;
+    int64_t disk_full_ts = 0;
+    int scan_count = sscanf(str, "sslog_gts:%lu,read_scn:%lu,first_disk_full_ts:%ld",
+                            &gts_value, &scn_value, &disk_full_ts);
+    if (scan_count != 3) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("failed to parse extra_info", K(ret), K(str), K(scan_count));
+    } else if (gts_value != 0 && gts_value != OB_INVALID_SCN_VAL
+               && OB_FAIL(sslog_gts_.convert_for_gts(gts_value))) {
+      LOG_WARN("failed to convert gts to scn", K(ret), K(gts_value));
+    } else if (scn_value != 0 && scn_value != OB_INVALID_SCN_VAL
+               && OB_FAIL(read_scn_.convert_for_gts(scn_value))) {
+      LOG_WARN("failed to convert read_scn to scn", K(ret), K(scn_value));
+    } else {
+      first_disk_full_ts_ = disk_full_ts;
+    }
+  }
+  return ret;
 }
 
 bool ObBackupSetTaskAttr::is_valid() const
@@ -4044,6 +4105,8 @@ int ObBackupSetTaskAttr::assign(const ObBackupSetTaskAttr &other)
     LOG_WARN("failed to assign comment", K(ret));
   } else if (OB_FAIL(stats_.assign(other.stats_))) {
     LOG_WARN("failed to assign stats", K(ret));
+  } else if (OB_FAIL(extra_info_.assign(other.extra_info_))) {
+    LOG_WARN("failed to assign extra_info", K(ret), K(other.extra_info_));
   } else {
     incarnation_id_ = other.incarnation_id_;
     task_id_ = other.task_id_;

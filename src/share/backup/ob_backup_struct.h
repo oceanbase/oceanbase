@@ -455,6 +455,7 @@ const char *const OB_STR_CONSISTENT_SCN = "consistent_scn";
 const char *const OB_STR_ROOT_KEY = "root_key";
 const char *const OB_STR_BACKUP_DATA_VERSION = "backup_data_version";
 const char *const OB_STR_CLUSTER_VERSION = "cluster_version";
+const char *const OB_STR_EXTRA_INFO = "extra_info";
 const char *const OB_BACKUP_SUFFIX=".obbak";
 const char *const OB_ARCHIVE_SUFFIX=".obarc";
 const char *const OB_STR_MIN_RESTORE_SCN_DISPLAY = "min_restore_scn_display";
@@ -1168,6 +1169,7 @@ public:
   virtual ~ObBackupUtils() {}
   static int get_backup_info_default_timeout_ctx(common::ObTimeoutCtx &ctx);
   static bool is_need_retry_error(const int err);
+  static bool is_disk_full_error(const int err);
   //format input string split with ',' or ';'
   template<class T>
   static int parse_backup_format_input(
@@ -1600,6 +1602,26 @@ public:
   ObHAResultInfo::Comment comment_;
 };
 
+struct ObBackupExtraInfo final
+{
+  ObBackupExtraInfo() : sslog_gts_(), read_scn_(), first_disk_full_ts_(0) {}
+  ~ObBackupExtraInfo() = default;
+  void reset() { sslog_gts_.reset(); read_scn_.reset(); first_disk_full_ts_ = 0; }
+  bool has_value() const
+  {
+    return sslog_gts_.is_valid_and_not_min() || read_scn_.is_valid_and_not_min()
+           || first_disk_full_ts_ > 0;
+  }
+  int assign(const ObBackupExtraInfo &other);
+  int encode_to_str(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int decode_from_str(const char *str);
+  TO_STRING_KV(K_(sslog_gts), K_(read_scn), K_(first_disk_full_ts));
+
+  SCN sslog_gts_;
+  SCN read_scn_;
+  int64_t first_disk_full_ts_;  // us; 0 means never encountered disk-full
+};
+
 struct ObBackupSetTaskAttr final
 {
 public:
@@ -1611,7 +1633,7 @@ public:
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(incarnation_id), K_(job_id), K_(backup_set_id), K_(start_ts), K_(end_ts),
       K_(start_scn), K_(end_scn), K_(user_ls_start_scn), K_(data_turn_id), K_(meta_turn_id), K_(minor_turn_id),
       K_(major_turn_id), K_(status), K_(encryption_mode), K_(passwd), K_(stats), K_(backup_path), K_(retry_cnt), K_(result),
-      K_(comment));
+      K_(comment), K_(extra_info));
   int64_t task_id_;
   uint64_t tenant_id_;
   int64_t incarnation_id_;
@@ -1634,6 +1656,7 @@ public:
   int64_t retry_cnt_;
   int result_;
   ObHAResultInfo::Comment comment_;
+  ObBackupExtraInfo extra_info_;
 };
 
 struct ObBackupDataTaskType final

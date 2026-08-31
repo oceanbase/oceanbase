@@ -18,6 +18,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_service.cpp
   backup/ob_backup_schedule_task.cpp
   backup/ob_backup_task_scheduler.cpp
+  backup/ob_backup_server_disk_space_filter.cpp
   backup/ob_tenant_archive_scheduler.cpp
   backup/ob_backup_data_scheduler.cpp
   backup/ob_backup_data_set_task_mgr.cpp
