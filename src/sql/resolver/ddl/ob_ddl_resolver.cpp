@@ -7663,7 +7663,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
               K(tmp_default_value), K(tmp_dest_obj), K(tmp_dest_obj_null), KPC(expr), K(ret));
     if (tmp_default_value.is_pl_extend()) {
       int tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_default_value, session_info);
-      if (OB_FAIL(tmp_ret)) {
+      if (OB_SUCCESS != tmp_ret) {
         LOG_WARN("failed to destruct tmp_default_value", K(tmp_ret), K(ret));
       }
     }
