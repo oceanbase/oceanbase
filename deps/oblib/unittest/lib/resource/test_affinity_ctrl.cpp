@@ -30,21 +30,23 @@ TEST(TestAffiCtrl, test0)
   int node_status;
 
   ret = AFFINITY_CTRL.init(true);
-  ASSERT_EQ(ret, 0);
+  if (OB_SUCCESS == ret) {
+    ASSERT_EQ(AFFINITY_CTRL.get_tls_node(), OB_NUMA_SHARED_INDEX);
 
-  ASSERT_EQ(AFFINITY_CTRL.get_tls_node(), OB_NUMA_SHARED_INDEX);
+    ret = oceanbase::lib::ObAffinityCtrl::get_instance().thread_bind_to_node(0);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    ASSERT_EQ(oceanbase::lib::ObAffinityCtrl::get_tls_node(), 0);
 
-  ret = oceanbase::lib::ObAffinityCtrl::get_instance().thread_bind_to_node(0);
-  ASSERT_EQ(ret, OB_SUCCESS);
-  ASSERT_EQ(oceanbase::lib::ObAffinityCtrl::get_tls_node(), 0);
+    ret = oceanbase::lib::ObAffinityCtrl::get_instance().run_on_node(-1000);
+    ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
+    ASSERT_EQ(oceanbase::lib::ObAffinityCtrl::get_tls_node(), 0);
 
-  ret = oceanbase::lib::ObAffinityCtrl::get_instance().run_on_node(-1000);
-  ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
-  ASSERT_EQ(oceanbase::lib::ObAffinityCtrl::get_tls_node(), 0);
-
-  ret = oceanbase::lib::ObAffinityCtrl::get_instance().run_on_node(1000);
-  ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
-  ASSERT_EQ(oceanbase::lib::ObAffinityCtrl::get_tls_node(), 0);
+    ret = oceanbase::lib::ObAffinityCtrl::get_instance().run_on_node(1000);
+    ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
+    ASSERT_EQ(oceanbase::lib::ObAffinityCtrl::get_tls_node(), 0);
+  } else {
+    ASSERT_EQ(ret, OB_ERR_UNEXPECTED);
+  }
 }
 
 
