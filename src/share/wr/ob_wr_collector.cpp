@@ -1403,6 +1403,15 @@ int ObWrCollector::collect_sqltext()
               query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
               ObCStringHelper helper;
               const char* query_sql = helper.convert(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
+              if (OB_ISNULL(query_sql)) {
+                // helper.convert() returns NULL on OB_ALLOCATE_MEMORY_FAILED (e.g. 64MB helper
+                // limit reached or allocator_.alloc() failed under memory pressure). Dereferencing
+                // it via strlen() below would crash the observer (sig=11, sig_addr=0x0), so skip
+                // this sqltext row instead of aborting the whole WR snapshot.
+                LOG_WARN("failed to convert query_sql, skip this row",
+                         K(helper.get_ob_errno()), K(sqltext.sql_id_));
+                continue;
+              }
               if (OB_UNLIKELY(query_timeout <= 0)) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("wr snapshot timeout", KR(tmp_ret), K_(timeout_ts));
