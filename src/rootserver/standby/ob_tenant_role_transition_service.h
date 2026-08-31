@@ -165,6 +165,42 @@ private:
   bool is_valid_;
 };
 
+struct ObTenantRoleTransReadinessError
+{
+public:
+  enum Phase {
+    NONE = 0,
+    SYNC,
+    REPLAY
+  };
+  static const int64_t NOT_READY_INFO_BUF_LEN = 256;
+  ObTenantRoleTransReadinessError() : phase_(NONE), original_ret_(OB_SUCCESS), not_ready_info_() {}
+  ~ObTenantRoleTransReadinessError() {}
+  void reset()
+  {
+    phase_ = NONE;
+    original_ret_ = OB_SUCCESS;
+    not_ready_info_[0] = '\0';
+  }
+  void set(const Phase phase, const int original_ret)
+  {
+    phase_ = phase;
+    original_ret_ = original_ret;
+  }
+  bool is_valid() const { return NONE != phase_ && OB_SUCCESS != original_ret_; }
+  Phase get_phase() const { return phase_; }
+  int get_original_ret() const { return original_ret_; }
+  bool has_not_ready_info() const { return '\0' != not_ready_info_[0]; }
+  char *get_not_ready_info_buf() { return not_ready_info_; }
+  const char *get_not_ready_info() const { return not_ready_info_; }
+  int64_t get_not_ready_info_buf_len() const { return NOT_READY_INFO_BUF_LEN; }
+  TO_STRING_KV(K_(phase), K_(original_ret), KCSTRING(not_ready_info_));
+private:
+  Phase phase_;
+  int original_ret_;
+  char not_ready_info_[NOT_READY_INFO_BUF_LEN];
+};
+
 /*description:
  * for primary to standby and standby to primary
  */
@@ -327,13 +363,17 @@ private:
       bool &is_all_ls_synced,
       ObTenantRoleTransNonSyncInfo *non_sync_info_out = nullptr);
 
-  int check_sync_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
-  int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
-  int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
+  int check_sync_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry,
+      ObTenantRoleTransReadinessError &readiness_error);
+  int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry,
+      ObTenantRoleTransReadinessError &readiness_error);
+  int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready,
+      bool &need_retry, ObTenantRoleTransReadinessError &readiness_error);
   int do_readiness_check_(share::ObAllTenantInfo &tenant_info);
   // Promote the Verify level with the readiness snapshot epoch and broadcast it after commit.
   int try_promote_semi_sync_verify_protection_level_(
       const share::ObAllTenantInfo &expected_tenant_info);
+  int convert_readiness_error_to_not_allow_(const ObTenantRoleTransReadinessError &readiness_error);
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_lossless_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
@@ -358,7 +398,9 @@ private:
     const share::ObAllTenantInfo &cur_tenant_info,
     const ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
     const ObBalanceTaskArray &balance_task_array,
-    const char * const op_str);
+    const char * const op_str,
+    char *error_info,
+    const int64_t error_info_len);
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;

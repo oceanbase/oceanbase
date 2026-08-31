@@ -652,9 +652,11 @@ int ObTenantRoleTransitionService::do_prepare_flashback_(share::ObAllTenantInfo 
 int ObTenantRoleTransitionService::check_sync_readiness_(
     const share::ObAllTenantInfo &tenant_info,
     bool &is_ready,
-    bool &need_retry)
+    bool &need_retry,
+    ObTenantRoleTransReadinessError &readiness_error)
 {
   int ret = OB_SUCCESS;
+  int64_t pos = 0;
   is_ready = true;
   need_retry = true;
   // The all-LS verify check only applies to SWITCHOVER TO PRIMARY.
@@ -675,9 +677,13 @@ int ObTenantRoleTransitionService::check_sync_readiness_(
     } else if (OB_FAIL(check_sync_to_latest_(tenant_id_, true/*only_check_sys_ls*/,
         false/*is_failover*/, tenant_info, is_sys_ls_synced, is_all_ls_synced))) {
       LOG_WARN("fail to check sys ls sync", KR(ret), K(tenant_id_));
+      (void) databuff_printf(readiness_error.get_not_ready_info_buf(),
+          readiness_error.get_not_ready_info_buf_len(), pos, "sys ls");
     } else if (!is_sys_ls_synced) {
       is_ready = false;
       LOG_INFO("sys ls not sync to latest", K(tenant_id_));
+      (void) databuff_printf(readiness_error.get_not_ready_info_buf(),
+          readiness_error.get_not_ready_info_buf_len(), pos, "sys ls");
       ObSqlString err_msg;
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(err_msg.assign_fmt("sys ls not sync to latest, %s is",
@@ -699,12 +705,16 @@ int ObTenantRoleTransitionService::check_sync_readiness_(
       } else if (OB_FAIL(check_sync_to_latest_(tenant_id_, false/*only_check_sys_ls*/,
           false/*is_failover*/, tenant_info, is_sys_ls_synced, is_all_ls_synced, &non_sync_info))) {
         LOG_WARN("fail to check all ls sync", KR(ret), K(tenant_id_));
+        (void) databuff_printf(readiness_error.get_not_ready_info_buf(),
+            readiness_error.get_not_ready_info_buf_len(), pos, "all ls");
       } else if (!is_all_ls_synced) {
         is_ready = false;
         LOG_INFO("not all ls sync to latest", K(tenant_id_), K(non_sync_info));
         const int64_t BUF_LEN = 256;
         char non_sync_buf[BUF_LEN] = "";
         non_sync_info.to_ls_id_string(non_sync_buf, BUF_LEN);
+        (void) databuff_printf(readiness_error.get_not_ready_info_buf(),
+            readiness_error.get_not_ready_info_buf_len(), pos, "%s", non_sync_buf);
         ObSqlString err_msg;
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(err_msg.assign_fmt("not all ls sync to latest(%s), %s is",
@@ -722,7 +732,8 @@ int ObTenantRoleTransitionService::check_sync_readiness_(
 int ObTenantRoleTransitionService::check_replay_readiness_(
     const share::ObAllTenantInfo &tenant_info,
     bool &is_ready,
-    bool &need_retry)
+    bool &need_retry,
+    ObTenantRoleTransReadinessError &readiness_error)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
@@ -744,9 +755,10 @@ int ObTenantRoleTransitionService::check_replay_readiness_(
     LOG_WARN("fail to run transfer tick", KR(ret), K(tenant_id_));
   } else if (!result.is_all_settled()) {
     is_ready = false;
-    (void) try_print_wait_balance_task_user_error_(cur_tenant_info,
+    try_print_wait_balance_task_user_error_(cur_tenant_info,
         result.get_unsettled_helper_tasks(), result.get_unsettled_balance_tasks(),
-        ObSwitchTenantArg::get_alter_type_str(switch_optype_));
+        ObSwitchTenantArg::get_alter_type_str(switch_optype_),
+        readiness_error.get_not_ready_info_buf(), readiness_error.get_not_ready_info_buf_len());
   }
   return ret;
 }
@@ -754,7 +766,8 @@ int ObTenantRoleTransitionService::check_replay_readiness_(
 int ObTenantRoleTransitionService::check_failover_to_primary_readiness_(
     const share::ObAllTenantInfo &tenant_info,
     bool &is_ready,
-    bool &need_retry)
+    bool &need_retry,
+    ObTenantRoleTransReadinessError &readiness_error)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
@@ -763,12 +776,60 @@ int ObTenantRoleTransitionService::check_failover_to_primary_readiness_(
   // FAILOVER_TO_PRIMARY: check balance task replay (both tables) only, no sync check needed
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
-  } else if (OB_FAIL(check_sync_readiness_(tenant_info, is_ready, need_retry))) {
+  } else if (OB_FAIL(check_sync_readiness_(tenant_info, is_ready, need_retry, readiness_error))) {
     LOG_WARN("fail to check sync readiness", KR(ret), K(tenant_id_));
+    readiness_error.set(ObTenantRoleTransReadinessError::SYNC, ret);
   } else if (!is_ready) {
     // sync check not ready, skip replay check
-  } else if (OB_FAIL(check_replay_readiness_(tenant_info, is_ready, need_retry))) {
+    readiness_error.set(ObTenantRoleTransReadinessError::SYNC, OB_TIMEOUT);
+  } else if (OB_FAIL(check_replay_readiness_(tenant_info, is_ready, need_retry, readiness_error))) {
     LOG_WARN("fail to check replay readiness", KR(ret), K(tenant_id_));
+    readiness_error.set(ObTenantRoleTransReadinessError::REPLAY, ret);
+  } else if (!is_ready) {
+    readiness_error.set(ObTenantRoleTransReadinessError::REPLAY, OB_TIMEOUT);
+  }
+  return ret;
+}
+
+int ObTenantRoleTransitionService::convert_readiness_error_to_not_allow_(
+    const ObTenantRoleTransReadinessError &readiness_error)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSqlString err_msg;
+  const char *phase_msg = NULL;
+  if (OB_UNLIKELY(!readiness_error.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid readiness error", KR(ret), K(readiness_error));
+  } else if (ObTenantRoleTransReadinessError::SYNC == readiness_error.get_phase()) {
+    phase_msg = "wait tenant sync to latest failed";
+  } else if (ObTenantRoleTransReadinessError::REPLAY == readiness_error.get_phase()) {
+    phase_msg = "wait tenant replay to latest failed";
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected readiness error phase", KR(ret), K(readiness_error));
+  }
+  if (OB_SUCC(ret)) {
+    if (ObTenantRoleTransReadinessError::REPLAY == readiness_error.get_phase()
+        && readiness_error.has_not_ready_info()) {
+      tmp_ret = err_msg.assign_fmt("%s", readiness_error.get_not_ready_info());
+    } else if (readiness_error.has_not_ready_info()) {
+      tmp_ret = err_msg.assign_fmt("%s(not ready ls: %s, original error code: %d), %s is",
+          phase_msg, readiness_error.get_not_ready_info(), readiness_error.get_original_ret(),
+          ObSwitchTenantArg::get_alter_type_str(switch_optype_));
+    } else {
+      tmp_ret = err_msg.assign_fmt("%s(original error code: %d), %s is",
+          phase_msg, readiness_error.get_original_ret(),
+          ObSwitchTenantArg::get_alter_type_str(switch_optype_));
+    }
+    if (OB_FAIL(tmp_ret)) {
+      LOG_WARN("fail to assign readiness error msg", KR(ret), K(readiness_error));
+    } else {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("convert readiness error to OB_OP_NOT_ALLOW", KR(ret), K(readiness_error),
+          K(tenant_id_), K(is_verify_nowait_));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg.ptr());
+    }
   }
   return ret;
 }
@@ -780,6 +841,8 @@ int ObTenantRoleTransitionService::do_readiness_check_(share::ObAllTenantInfo &t
   bool is_ready = false;
   bool need_continue = false;
   bool need_retry = true;
+  ObTenantRoleTransReadinessError iter_readiness_error;
+  ObTenantRoleTransReadinessError last_readiness_error;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
   } else if (compat_version < DATA_VERSION_4_4_2_2) {
@@ -803,11 +866,12 @@ int ObTenantRoleTransitionService::do_readiness_check_(share::ObAllTenantInfo &t
       tenant_sync_scn + 3s as a reference point, which is a stronger guarantee.
     **/
     do {
-      if (OB_FAIL(check_failover_to_primary_readiness_(tenant_info, is_ready, need_retry))) {
+      iter_readiness_error.reset();
+      if (OB_FAIL(check_failover_to_primary_readiness_(
+          tenant_info, is_ready, need_retry, iter_readiness_error))) {
         LOG_WARN("readiness check failed", KR(ret), K(tenant_id_));
-        // Transient errors like OB_EAGAIN should be retried for VERIFY (wait mode),
-        // consistent with check_sync_to_latest_do_while_() which also retries on
-        // non-fatal errors. Deterministic failures should fail immediately.
+        // Retry transient errors in wait mode and retain the last readiness error
+        // for normalized reporting when the retry window is exhausted.
         if (!logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)
             && need_retry
             && !is_verify_nowait_) {
@@ -815,12 +879,27 @@ int ObTenantRoleTransitionService::do_readiness_check_(share::ObAllTenantInfo &t
           is_ready = false;  // not ready yet, keep checking
         }
       }
+      // Keep the first error within a phase, and replace it only after progressing to replay.
+      if (iter_readiness_error.is_valid()
+          && (!last_readiness_error.is_valid()
+              || (ObTenantRoleTransReadinessError::SYNC == last_readiness_error.get_phase()
+                  && ObTenantRoleTransReadinessError::REPLAY == iter_readiness_error.get_phase()))) {
+        last_readiness_error = iter_readiness_error;
+      }
       need_continue = OB_SUCC(ret) && !is_ready && !is_verify_nowait_;
-      if (need_continue) {
+      if (need_continue && !THIS_WORKER.is_timeout()) {
         ob_usleep(10L * 1000L);
       }
     } while (need_continue && !THIS_WORKER.is_timeout());
-    if (OB_SUCC(ret) && !is_ready) {
+    if (OB_FAIL(ret)
+        && OB_OP_NOT_ALLOW != ret
+        && (OB_TIMEOUT == ret
+            || !logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret))
+        && last_readiness_error.is_valid()) {
+      ret = convert_readiness_error_to_not_allow_(last_readiness_error);
+    } else if (OB_SUCC(ret) && !is_ready && last_readiness_error.is_valid()) {
+      ret = convert_readiness_error_to_not_allow_(last_readiness_error);
+    } else if (OB_SUCC(ret) && !is_ready) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("readiness check failed", KR(ret), K(tenant_id_), K(is_verify_nowait_));
     }
@@ -1258,7 +1337,9 @@ void ObTenantRoleTransitionService::try_print_wait_balance_task_user_error_(
     const share::ObAllTenantInfo &cur_tenant_info,
     const ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
     const ObBalanceTaskArray &balance_task_array,
-    const char * const op_str)
+    const char * const op_str,
+    char *error_info,
+    const int64_t error_info_len)
 {
   ObArray<ObLSID> ls_id_array;
   int ret = OB_SUCCESS;
@@ -1269,8 +1350,6 @@ void ObTenantRoleTransitionService::try_print_wait_balance_task_user_error_(
     if (OB_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos,
           "The tenant fails to replay to the latest log, %s is", op_str))) {
       LOG_WARN("failed to printf to comment", KR(ret), K(op_str));
-    } else {
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, comment);
     }
     if (OB_UNLIKELY(ERRSIM_TENANT_NOT_REPLAY_TO_LATEST)) {
       FLOG_WARN("ERRSIM_TENANT_NOT_REPLAY_TO_LATEST opened", KR(ret), K(cur_tenant_info));
@@ -1316,16 +1395,24 @@ void ObTenantRoleTransitionService::try_print_wait_balance_task_user_error_(
       } else if (OB_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos, "%s is", op_str))) {
         LOG_WARN("failed to printf to comment", KR(ret), K(op_str));
       }
-      if (OB_SUCC(ret)) {
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, comment);
-      }
     } else {
       // Fallback: no specific LS IDs to report, use generic message
       if (OB_FAIL(databuff_printf(comment, COMMENT_LENGTH, pos,
           "balance task not finish, %s is", op_str))) {
         LOG_WARN("failed to printf to comment", KR(ret), K(op_str));
-      } else {
-        LOG_USER_ERROR(OB_OP_NOT_ALLOW, comment);
+      }
+    }
+  }
+  if (OB_SUCC(ret) && '\0' != comment[0]) {
+    if (OB_ISNULL(error_info)) {
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, comment);
+    } else if (error_info_len <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid error info buffer length", KR(ret), K(error_info_len));
+    } else {
+      int64_t error_info_pos = 0;
+      if (OB_FAIL(databuff_printf(error_info, error_info_len, error_info_pos, "%s", comment))) {
+        LOG_WARN("failed to save error info", KR(ret), K(error_info_len), K(comment));
       }
     }
   }
@@ -1389,7 +1476,7 @@ int ObTenantRoleTransitionService::wait_ls_balance_task_finish_()
       int prev_ret = ret;
       ret = OB_OP_NOT_ALLOW;
       (void) try_print_wait_balance_task_user_error_(cur_tenant_info, ls_balance_tasks,
-        balance_task_array, ObSwitchTenantArg::get_alter_type_str(switch_optype_));
+        balance_task_array, ObSwitchTenantArg::get_alter_type_str(switch_optype_), NULL, 0);
       LOG_WARN("failed to wait ls balance task finish", KR(ret), KR(prev_ret), KR(tmp_ret), K(is_finish),
           K(balance_task_array), K(ls_balance_tasks));
     }
