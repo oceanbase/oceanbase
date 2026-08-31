@@ -42,8 +42,6 @@
 #include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "share/ob_all_server_tracer.h" // SVR_TRACER
-#include "share/config/ob_config_helper.h" // ObConfigBoolParser
-#include "share/config/ob_server_config.h" // ENABLE_STANDBY_SEMI_SYNC
 
 namespace oceanbase
 {
@@ -64,6 +62,52 @@ private:
   const ObRecoveryLSService &svc_;
 };
 ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_RESTORE_PRE_MPT_LEVEL_UPDATE_FAIL);
+
+int ObRecoveryLSService::try_restore_pre_mpt_level_on_new_source_log_(
+    const share::ObAllTenantInfo &old_tenant_info,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  bool semi_sync_enabled = false;
+  int64_t unused_target_ver = OB_INVALID_VERSION;
+  ObAllTenantInfo current_tenant_info;
+  int64_t new_switchover_epoch = OB_INVALID_VERSION;
+
+  if (OB_UNLIKELY(!trans.is_started() || !old_tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(old_tenant_info),
+        "trans_started", trans.is_started());
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::get_enable_standby_semi_sync_config(
+      tenant_id_, trans, semi_sync_enabled, unused_target_ver))) {
+    LOG_WARN("failed to read enable_standby_semi_sync", KR(ret), K_(tenant_id));
+  } else if (!semi_sync_enabled) {
+    LOG_TRACE("semi-sync is disabled, no need to restore PRE_MPT level", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+      tenant_id_, &trans, true/* for_update */, current_tenant_info))) {
+    LOG_WARN("failed to load tenant info for update", KR(ret), K_(tenant_id));
+  } else if (!current_tenant_info.is_standby()
+             || !current_tenant_info.get_protection_level().is_sync_level()
+             || current_tenant_info.get_sync_scn() <= old_tenant_info.get_sync_scn()) {
+    LOG_TRACE("no need to restore PRE_MPT level",
+        K_(tenant_id), K(old_tenant_info), K(current_tenant_info));
+  } else if (OB_FAIL(ERRSIM_RESTORE_PRE_MPT_LEVEL_UPDATE_FAIL)) {
+    LOG_WARN("ERRSIM_RESTORE_PRE_MPT_LEVEL_UPDATE_FAIL", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+      tenant_id_, current_tenant_info.get_tenant_role(), &trans,
+      current_tenant_info.get_switchover_epoch()/* expected switchover epoch */,
+      current_tenant_info.get_protection_mode(),
+      ObProtectionLevel(ObProtectionLevel::PRE_MAXIMUM_PROTECTION_LEVEL),
+      current_tenant_info.get_switchover_epoch()/* min new switchover epoch */,
+      new_switchover_epoch, true/* force_inc_switchover_epoch */))) {
+    LOG_WARN("failed to restore PRE_MPT level",
+        KR(ret), K_(tenant_id), K(current_tenant_info), K(new_switchover_epoch));
+  } else {
+    LOG_INFO("restored PRE_MPT level after new source log",
+        K_(tenant_id), K(old_tenant_info), K(current_tenant_info), K(new_switchover_epoch));
+  }
+  return ret;
+}
 
 int ObRecoveryLSService::init()
 {
@@ -278,7 +322,6 @@ int ObRecoveryLSService::check_semi_sync_disable_cfg_converged_(
   const int64_t switchover_epoch = tenant_info.get_switchover_epoch();
   bool target_value = false;
   int64_t target_ver = OB_INVALID_VERSION;
-  bool has_target_config = false;
   cfg_converged = false;
   barrier_satisfied = false;
 
@@ -286,17 +329,15 @@ int ObRecoveryLSService::check_semi_sync_disable_cfg_converged_(
     cfg_converged = true;
     LOG_INFO("reuse semi sync cfg convergence result",
         K_(tenant_id), K(switchover_epoch));
-  } else if (OB_FAIL(get_semi_sync_target_config_(target_value, target_ver, has_target_config))) {
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::get_enable_standby_semi_sync_config(
+      tenant_id_, *proxy_, target_value, target_ver))) {
     LOG_WARN("failed to get semi sync target config", KR(ret), K_(tenant_id));
-  } else if (!has_target_config) {
+  } else if (OB_INVALID_VERSION == target_ver) {
     // No tenant-level override exists. The cluster-wide default is false and there is
     // no target config version to wait for, so only the transactional PRE_MPT recheck
     // in do_promote_to_steady_level_ is needed before leaving the wait state.
     cfg_converged = true;
     barrier_satisfied = true;
-  } else if (OB_UNLIKELY(OB_INVALID_VERSION == target_ver)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid semi sync config version", KR(ret), K_(tenant_id), K(target_value), K(target_ver));
   } else if (target_value) {
     // If enable_standby_semi_sync is true, keep PRE_MPT.
     // If it is false, leave PRE_MPT only after all servers have loaded the target config.
@@ -396,104 +437,21 @@ int ObRecoveryLSService::do_promote_to_steady_level_(const share::ObAllTenantInf
     } else {
       const share::ObProtectionMode &mode = tenant_info.get_protection_mode();
       ObProtectionLevel target_level;
-      if (mode.is_maximum_protection()) {
-        target_level = ObProtectionLevel::MAXIMUM_PROTECTION_LEVEL;
-      } else if (mode.is_maximum_availability()) {
-        target_level = ObProtectionLevel::MAXIMUM_AVAILABILITY_LEVEL;
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected mode for PRE_MPT promotion", KR(ret), K(mode), K_(tenant_id));
+      if (OB_FAIL(standby::ObProtectionModeUtils::get_sync_protection_level(mode, target_level))) {
+        LOG_WARN("failed to get target level for PRE_MPT promotion",
+            KR(ret), K(mode), K_(tenant_id));
       }
 
       if (OB_SUCC(ret) && OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
-          tenant_id_, tenant_info.get_tenant_role(), &trans, tenant_info.get_switchover_epoch(),
-          tenant_info.get_protection_mode(), target_level, tenant_info.get_switchover_epoch(),
+          tenant_id_, tenant_info.get_tenant_role(), &trans,
+          tenant_info.get_switchover_epoch()/* expected switchover epoch */,
+          tenant_info.get_protection_mode(), target_level,
+          tenant_info.get_switchover_epoch()/* min new switchover epoch */,
           new_switchover_epoch, true /* force_inc_switchover_epoch */))) {
         LOG_WARN("failed to promote protection level", KR(ret), K_(tenant_id), K(mode), K(target_level));
       }
     }
     END_TRANSACTION(trans);
-  }
-  return ret;
-}
-
-int ObRecoveryLSService::get_semi_sync_target_config_(
-    bool &target_value,
-    int64_t &target_ver,
-    bool &has_target_config)
-{
-  int ret = OB_SUCCESS;
-  target_value = false;
-  target_ver = OB_INVALID_VERSION;
-  has_target_config = false;
-  // __tenant_parameter holds value and config_version in the same row, written atomically by
-  // ALTER SYSTEM SET, so it is the authoritative latest config. Rows for a user tenant live
-  // under its meta tenant, so read under the meta tenant id.
-  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-  if (OB_ISNULL(proxy_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("sql proxy is null", KR(ret), K_(tenant_id));
-  } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      ObSqlString sql;
-      sqlclient::ObMySQLResult *mysql_result = NULL;
-      if (OB_FAIL(sql.assign_fmt(
-              "select value, config_version from %s where tenant_id = %lu and name = '%s'",
-              OB_TENANT_PARAMETER_TNAME, tenant_id_, ENABLE_STANDBY_SEMI_SYNC))) {
-        LOG_WARN("fail to generate sql", KR(ret), K_(tenant_id));
-      } else if (OB_FAIL(proxy_->read(result, exec_tenant_id, sql.ptr()))) {
-        LOG_WARN("read enable_standby_semi_sync from __tenant_parameter failed",
-            KR(ret), K_(tenant_id), K(exec_tenant_id), K(sql));
-      } else if (OB_ISNULL(mysql_result = result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret), K_(tenant_id), K(sql));
-      } else if (OB_FAIL(mysql_result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          target_value = false;
-          LOG_INFO("no enable_standby_semi_sync row, treat as default false", K_(tenant_id));
-        } else {
-          LOG_WARN("get result next failed", KR(ret), K_(tenant_id), K(sql));
-        }
-      } else {
-        ObString value_str;
-        EXTRACT_VARCHAR_FIELD_MYSQL(*mysql_result, "value", value_str);
-        EXTRACT_INT_FIELD_MYSQL(*mysql_result, "config_version", target_ver, int64_t);
-        if (OB_FAIL(ret)) {
-          LOG_WARN("failed to extract enable_standby_semi_sync config", KR(ret), K_(tenant_id));
-        } else if (OB_FAIL(parse_bool_config_value_(value_str, target_value))) {
-          LOG_WARN("failed to parse enable_standby_semi_sync value", KR(ret), K_(tenant_id), K(value_str));
-        } else {
-          has_target_config = true;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-// 是否有现成方法解析bool value
-int ObRecoveryLSService::parse_bool_config_value_(
-    const common::ObString &value_str,
-    bool &value)
-{
-  int ret = OB_SUCCESS;
-  char value_buf[common::OB_MAX_CONFIG_VALUE_LEN + 1] = {0};
-  bool valid = false;
-  value = false;
-  if (OB_UNLIKELY(value_str.length() > common::OB_MAX_CONFIG_VALUE_LEN)) {
-    ret = OB_INVALID_CONFIG;
-    LOG_WARN("bool config value is too long", KR(ret), K_(tenant_id), K(value_str));
-  } else {
-    if (value_str.length() > 0) {
-      MEMCPY(value_buf, value_str.ptr(), value_str.length());
-    }
-    value_buf[value_str.length()] = '\0';
-    value = common::ObConfigBoolParser::get(value_buf, valid);
-    if (!valid) {
-      ret = OB_INVALID_CONFIG;
-      LOG_WARN("invalid bool config value", KR(ret), K_(tenant_id), K(value_str));
-    }
   }
   return ret;
 }
@@ -2166,6 +2124,7 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     ObLSRecoveryStatOperator ls_recovery;
     ObLSRecoveryStat ls_recovery_stat;
     ObAllTenantInfo tenant_info;
+    ObAllTenantInfo old_tenant_info;
     rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
     //two thread for seed log and recovery_ls_manager
     if (OB_ISNULL(tenant_info_loader)) {
@@ -2185,12 +2144,27 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     }
     CLICK();
 
-    if (FAILEDx(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
-            ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn,
-            real_need_check_sync_scn, trans))) {
-      LOG_WARN("failed to update sys ls recovery stat", KR(ret),
-          K(ls_recovery_stat), K(tenant_info), K(real_need_check_sync_scn));
-    } else {
+    // A readable_scn-only report must not affect Verify state; only a full sync_scn report
+    // needs the pre-report snapshot and may trigger PRE_MPT restoration.
+    if (OB_SUCC(ret)) {
+      // Lock the pre-report sync_scn so the post-report comparison uses one transaction snapshot.
+      if (!only_update_readable_scn && OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+          tenant_id_, &trans, true/* for_update */, old_tenant_info))) {
+        LOG_WARN("failed to load tenant info before reporting sys ls recovery stat",
+            KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
+          ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn,
+          real_need_check_sync_scn, trans))) {
+        LOG_WARN("failed to update sys ls recovery stat", KR(ret),
+            K(ls_recovery_stat), K(tenant_info), K(real_need_check_sync_scn));
+      // A sync_scn advance means new source logs arrived after Verify and invalidates its steady level.
+      } else if (!only_update_readable_scn && OB_FAIL(try_restore_pre_mpt_level_on_new_source_log_(
+          old_tenant_info, trans))) {
+        LOG_WARN("failed to restore PRE_MPT level after reporting sys ls recovery stat",
+            KR(ret), K_(tenant_id), K(old_tenant_info));
+      }
+    }
+    if (OB_SUCC(ret)) {
       last_report_ts_ = ObTimeUtility::current_time();
       if (!only_update_readable_scn && sync_scn >= restore_status_.sync_scn_) {
         //如果汇报了sync_scn，需要把restore_status重置掉

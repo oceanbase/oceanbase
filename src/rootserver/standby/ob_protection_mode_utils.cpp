@@ -21,6 +21,8 @@
 #include "src/rootserver/standby/ob_tenant_role_transition_service.h"
 #include "src/rootserver/standby/ob_standby_service.h"
 #include "src/share/ob_sync_standby_status_operator.h"
+#include "share/config/ob_config_helper.h"
+#include "share/config/ob_server_config.h"
 #define USING_LOG_PREFIX STANDBY
 
 namespace oceanbase {
@@ -99,6 +101,97 @@ int ObProtectionModeUtils::get_sync_standby_status_attr(const uint64_t user_tena
 bool ObProtectionModeUtils::check_cluster_version_for_protection_mode()
 {
   return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_1;
+}
+
+int ObProtectionModeUtils::get_sync_protection_level(
+    const share::ObProtectionMode &protection_mode,
+    share::ObProtectionLevel &protection_level)
+{
+  int ret = OB_SUCCESS;
+  protection_level.reset();
+  if (protection_mode.is_maximum_protection()) {
+    protection_level = share::ObProtectionLevel::MAXIMUM_PROTECTION_LEVEL;
+  } else if (protection_mode.is_maximum_availability()) {
+    protection_level = share::ObProtectionLevel::MAXIMUM_AVAILABILITY_LEVEL;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid synchronous protection mode", KR(ret), K(protection_mode));
+  }
+  return ret;
+}
+
+int ObProtectionModeUtils::parse_bool_config_value(
+    const common::ObString &value_str,
+    bool &value)
+{
+  int ret = OB_SUCCESS;
+  char value_buf[common::OB_MAX_CONFIG_VALUE_LEN + 1] = {0};
+  bool valid = false;
+  value = false;
+  if (OB_UNLIKELY(value_str.length() > common::OB_MAX_CONFIG_VALUE_LEN)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_WARN("bool config value is too long", KR(ret), K(value_str));
+  } else {
+    if (value_str.length() > 0) {
+      MEMCPY(value_buf, value_str.ptr(), value_str.length());
+    }
+    value_buf[value_str.length()] = '\0';
+    value = common::ObConfigBoolParser::get(value_buf, valid);
+    if (!valid) {
+      ret = OB_INVALID_CONFIG;
+      LOG_WARN("invalid bool config value", KR(ret), K(value_str));
+    }
+  }
+  return ret;
+}
+
+int ObProtectionModeUtils::get_enable_standby_semi_sync_config(
+    const uint64_t tenant_id,
+    common::ObISQLClient &client,
+    bool &target_value,
+    int64_t &target_ver)
+{
+  int ret = OB_SUCCESS;
+  target_value = false;
+  target_ver = OB_INVALID_VERSION;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+    ObSqlString sql;
+    sqlclient::ObMySQLResult *mysql_result = nullptr;
+    if (OB_FAIL(sql.assign_fmt(
+            "select value, config_version from %s where tenant_id = %lu and name = '%s'",
+            OB_TENANT_PARAMETER_TNAME, tenant_id, ENABLE_STANDBY_SEMI_SYNC))) {
+      LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(client.read(result, exec_tenant_id, sql.ptr()))) {
+      LOG_WARN("read enable_standby_semi_sync from __tenant_parameter failed",
+          KR(ret), K(tenant_id), K(exec_tenant_id), K(sql));
+    } else if (OB_ISNULL(mysql_result = result.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_FAIL(mysql_result->next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        target_value = false;
+      } else {
+        LOG_WARN("get result next failed", KR(ret), K(tenant_id), K(sql));
+      }
+    } else {
+      ObString value_str;
+      EXTRACT_VARCHAR_FIELD_MYSQL(*mysql_result, "value", value_str);
+      EXTRACT_INT_FIELD_MYSQL(*mysql_result, "config_version", target_ver, int64_t);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to extract enable_standby_semi_sync config", KR(ret), K(tenant_id));
+      } else if (OB_UNLIKELY(OB_INVALID_VERSION == target_ver)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid enable_standby_semi_sync config version",
+            KR(ret), K(tenant_id), K(value_str), K(target_ver));
+      } else if (OB_FAIL(parse_bool_config_value(value_str, target_value))) {
+        LOG_WARN("failed to parse enable_standby_semi_sync config",
+            KR(ret), K(tenant_id), K(value_str), K(target_ver));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObProtectionModeUtils::check_tenant_data_version_for_protection_mode(const uint64_t tenant_id, bool &enable)

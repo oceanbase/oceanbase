@@ -90,6 +90,50 @@ const char* const ObTenantRoleTransitionConstants::SWITCH_TO_PRIMARY_LOG_MOD_STR
 const char* const ObTenantRoleTransitionConstants::SWITCH_TO_STANDBY_LOG_MOD_STR = "SWITCH_TO_STANDBY";
 const char* const ObTenantRoleTransitionConstants::RESTORE_TO_STANDBY_LOG_MOD_STR = "RESTORE_TO_STANDBY";
 
+ERRSIM_POINT_DEF(ERRSIM_VERIFY_SEMI_SYNC_PROTECTION_LEVEL_UPDATE_FAIL);
+
+int ObTenantRoleTransitionService::try_promote_semi_sync_verify_protection_level_(
+    const share::ObAllTenantInfo &expected_tenant_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("inner stat error", KR(ret), K_(tenant_id));
+  } else if (OB_UNLIKELY(!expected_tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant info for semi-sync verify", KR(ret), K(expected_tenant_info));
+  } else if (!expected_tenant_info.is_standby() || !expected_tenant_info.is_normal_status()) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("tenant status changed before promoting semi-sync verify protection level",
+        KR(ret), K(expected_tenant_info));
+  } else if (!expected_tenant_info.get_protection_level().is_pre_maximum_protection()) {
+    LOG_INFO("no need to promote semi-sync verify protection level", K_(tenant_id), K(expected_tenant_info));
+  } else {
+    ObProtectionLevel target_level;
+    int64_t new_switchover_epoch = OB_INVALID_VERSION;
+    if (OB_FAIL(standby::ObProtectionModeUtils::get_sync_protection_level(
+        expected_tenant_info.get_protection_mode(), target_level))) {
+      LOG_WARN("failed to get semi-sync verify target level", KR(ret), K_(tenant_id), K(expected_tenant_info));
+    } else if (OB_FAIL(ERRSIM_VERIFY_SEMI_SYNC_PROTECTION_LEVEL_UPDATE_FAIL)) {
+      LOG_WARN("ERRSIM_VERIFY_SEMI_SYNC_PROTECTION_LEVEL_UPDATE_FAIL",
+          KR(ret), K_(tenant_id), K(expected_tenant_info), K(target_level));
+    // The readiness snapshot epoch and role are SQL predicates that fence concurrent transitions.
+    } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
+        tenant_id_, expected_tenant_info.get_tenant_role(), sql_proxy_,
+        expected_tenant_info.get_switchover_epoch()/* expected switchover epoch */,
+        expected_tenant_info.get_protection_mode(), target_level,
+        expected_tenant_info.get_switchover_epoch()/* min new switchover epoch */,
+        new_switchover_epoch, true/* force_inc_switchover_epoch */))) {
+      LOG_WARN("failed to update semi-sync verify protection level",
+          KR(ret), K_(tenant_id), K(expected_tenant_info), K(target_level), K(new_switchover_epoch));
+    } else {
+      LOG_INFO("promoted semi-sync verify protection level",
+          K_(tenant_id), K(expected_tenant_info), K(target_level), K(new_switchover_epoch));
+      broadcast_tenant_info("SWITCH_TO_PRIMARY_VERIFY_SEMI_SYNC");
+    }
+  }
+  return ret;
+}
+
 ///////////ObTenantRoleTransCostDetail/////////////////
 const char* ObTenantRoleTransCostDetail::type_to_str(CostType type) const
 {
@@ -525,6 +569,12 @@ int ObTenantRoleTransitionService::do_failover_to_primary_(const share::ObAllTen
   }
   if (OB_FAIL(ret)) {
   } else if (is_verify_ || is_verify_nowait_) {
+    // Expose a steady level only after Verify succeeds; new source logs restore PRE_MPT.
+    if (obrpc::ObSwitchTenantArg::OpType::SWITCH_TO_PRIMARY == switch_optype_
+        && OB_FAIL(try_promote_semi_sync_verify_protection_level_(new_tenant_info))) {
+      LOG_WARN("failed to promote semi-sync verify protection level",
+          KR(ret), K_(tenant_id), K(new_tenant_info));
+    }
   } else if (obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY == switch_optype_
       && OB_FAIL(ObServiceNameCommand::clear_service_name(tenant_id_))) {
     LOG_WARN("fail to execute clear_service_name", KR(ret), K(tenant_id_));

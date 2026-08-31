@@ -19,6 +19,7 @@ namespace oceanbase {
 namespace common
 {
 class ObMySQLProxy;
+class ObISQLClient;
 }
 namespace obrpc
 {
@@ -57,6 +58,19 @@ public:
       const share::ObProtectionMode &expected_protection_mode,
       common::ObMySQLProxy *sql_proxy);
   static bool check_cluster_version_for_protection_mode();
+  // Map a synchronous protection mode to its steady protection level.
+  static int get_sync_protection_level(
+      const share::ObProtectionMode &protection_mode,
+      share::ObProtectionLevel &protection_level);
+  // Parse a tenant config value with the standard OceanBase boolean syntax.
+  static int parse_bool_config_value(const common::ObString &value_str, bool &value);
+  // Read the authoritative tenant-level semi-sync value and config version.
+  // target_ver remains invalid when no tenant-level override exists.
+  static int get_enable_standby_semi_sync_config(
+      const uint64_t tenant_id,
+      common::ObISQLClient &client,
+      bool &target_value,
+      int64_t &target_ver);
   static int get_sync_standby_status_attr(const uint64_t user_tenant_id,
       const int64_t switchover_epoch, share::ObSyncStandbyStatusAttr &sync_standby_status_attr);
   static int64_t get_protection_mode_data_version() { return DATA_VERSION_4_4_2_1; }

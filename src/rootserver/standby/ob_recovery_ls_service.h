@@ -109,8 +109,6 @@ private:
  // PRE_MPT promotion: promote PRE_MPT_LEVEL to MPT/MA after all-server cfg convergence.
  int promote_pre_mpt_level_();
  int do_promote_to_steady_level_(const share::ObAllTenantInfo &expected_tenant_info);
- int get_semi_sync_target_config_(bool &target_value, int64_t &target_ver, bool &has_target_config);
- int parse_bool_config_value_(const common::ObString &value_str, bool &value);
  int check_semi_sync_disable_cfg_converged_(const share::ObAllTenantInfo &tenant_info,
      const int64_t tenant_info_ora_rowscn,
      bool &cfg_converged,
@@ -118,6 +116,10 @@ private:
  int check_semi_sync_disable_barrier_if_needed_(const share::ObAllTenantInfo &tenant_info,
      const bool cfg_converged,
      bool &barrier_satisfied);
+ // Restore PRE_MPT in the reporting transaction after a source-log sync_scn advance.
+ int try_restore_pre_mpt_level_on_new_source_log_(
+     const share::ObAllTenantInfo &old_tenant_info,
+     common::ObMySQLTransaction &trans);
  int get_all_servers_for_cfg_convergence_(common::ObIArray<common::ObAddr> &servers);
  int check_server_cfg_converged_result_(const common::ObAddr &server,
      const int64_t target_ver,
@@ -202,6 +204,7 @@ private:
                             common::ObMySQLTransaction &trans);
  int report_sys_ls_recovery_stat_(const share::SCN &sync_scn, const bool only_update_readable_scn,
                                   const char* comment);
+ // Report SYS_LS and restore PRE_MPT atomically.
  int report_sys_ls_recovery_stat_in_trans_(const share::SCN &sync_scn,
                                            const bool only_update_readable_scn,
                                            common::ObMySQLTransaction &trans,

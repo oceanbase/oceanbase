@@ -331,6 +331,9 @@ private:
   int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
   int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
   int do_readiness_check_(share::ObAllTenantInfo &tenant_info);
+  // Promote the Verify level with the readiness snapshot epoch and broadcast it after commit.
+  int try_promote_semi_sync_verify_protection_level_(
+      const share::ObAllTenantInfo &expected_tenant_info);
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_lossless_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
