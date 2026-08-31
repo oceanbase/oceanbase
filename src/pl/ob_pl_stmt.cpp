@@ -2217,7 +2217,11 @@ int ObPLExternalNS::resolve_external_symbol(const common::ObString &name,
     // only reset in pl
     // udf in sql do not reset this error
     ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
-    if (NULL != buf) {
+    if (OB_ISNULL(buf)) {
+      // do nothing
+    } else if (OB_ERR_VIEW_INVALID == ret && buf->get_err_code() == ret) {
+      // do nothing, which means the view exists but is invalid
+    } else {
       buf->reset();
     }
   }
