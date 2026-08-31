@@ -102,6 +102,8 @@ public:
   virtual LogReplicaType get_replica_type() const;
   virtual int get_election_role(common::ObRole &role, int64_t &epoch) const;
   virtual bool is_arb_replica() const;
+  virtual bool is_logonly_replica() const;
+  virtual bool can_be_active_leader() const;
   virtual int set_changing_config_with_arb();
   virtual int reset_changing_config_with_arb();
   virtual bool is_changing_config_with_arb() const;

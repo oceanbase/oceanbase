@@ -84,6 +84,11 @@ TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; pr
   // replica property meta
   LogReplicaPropertyMeta replica_meta1;
   EXPECT_EQ(OB_SUCCESS, replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA));
+  EXPECT_EQ(OB_SUCCESS, replica_meta1.generate(true, LogReplicaType::LOGONLY_REPLICA));
+  char replica_type_buf[OB_MAX_CONFIG_VALUE_LEN] = {'\0'};
+  EXPECT_EQ(OB_SUCCESS, log_replica_type_to_string(LogReplicaType::LOGONLY_REPLICA,
+      replica_type_buf, OB_MAX_CONFIG_VALUE_LEN));
+  EXPECT_STREQ("LOGONLY_REPLICA", replica_type_buf);
 
   const int64_t init_log_proposal_id(0);
   LogConfigMeta log_config_meta;

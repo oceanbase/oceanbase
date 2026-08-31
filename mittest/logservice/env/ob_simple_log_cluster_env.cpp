@@ -303,6 +303,70 @@ int ObSimpleLogClusterTestEnv::create_paxos_group_with_mock_election(
   return create_paxos_group(id, palf_base_info, NULL, leader_idx, with_mock_election, leader);
 }
 
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_logonly(const int64_t id,
+                                                               const int64_t logonly_idx,
+                                                               int64_t &leader_idx,
+                                                               PalfHandleImplGuard &leader)
+{
+  return create_paxos_group_with_logonly(id, get_member_list(), get_member_cnt(),
+      logonly_idx, leader_idx, leader);
+}
+
+int ObSimpleLogClusterTestEnv::create_paxos_group_with_logonly(const int64_t id,
+                                                               const ObMemberList &member_list,
+                                                               const int64_t member_cnt,
+                                                               const int64_t logonly_idx,
+                                                               int64_t &leader_idx,
+                                                               PalfHandleImplGuard &leader)
+{
+  int ret = OB_SUCCESS;
+  PalfBaseInfo palf_base_info;
+  palf_base_info.generate_by_default();
+  const int64_t cluster_size = static_cast<int64_t>(get_cluster().size());
+  if (logonly_idx < 0 || logonly_idx >= member_cnt || member_cnt > cluster_size ||
+      member_cnt != member_list.get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid logonly member list", K(ret), K(logonly_idx),
+        K(member_cnt), K(cluster_size), K(member_list));
+  } else if (OB_FAIL(create_ls_shared_storage(id))) {
+    CLOG_LOG(ERROR, "create_ls_shared_storage failed", K(ret), K(id));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < cluster_size; ++idx) {
+      auto svr = get_cluster()[idx];
+      ObTenantEnv::set_tenant(svr->get_tenant_base());
+      IPalfHandleImpl *handle = NULL;
+      ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer *>(svr);
+      const LogReplicaType replica_type = (idx == logonly_idx) ?
+          LogReplicaType::LOGONLY_REPLICA : LogReplicaType::NORMAL_REPLICA;
+      if (NULL == svr->get_palf_env() || NULL == server) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "svr is invalid", K(ret), KPC(svr), KP(server));
+      } else if (OB_FAIL(server->create_ls_with_replica_type(id, palf::AccessMode::APPEND,
+          palf_base_info, replica_type, handle))) {
+        CLOG_LOG(WARN, "create ls failed", K(ret), K(id), KPC(svr), K(replica_type));
+      } else {
+        handle->set_location_cache_cb(NULL);
+        handle->set_locality_cb(get_cluster()[0]->get_locality_manager());
+        GlobalLearnerList learner_list;
+        if (OB_FAIL(handle->set_initial_member_list(member_list, member_cnt, learner_list))) {
+          CLOG_LOG(WARN, "set_initial_member_list failed", K(ret), K(id), K(member_list), K(replica_type));
+        } else {
+          CLOG_LOG(INFO, "set_initial_member_list success", K(id), "addr", svr->get_addr(),
+              K(member_list), K(replica_type));
+        }
+      }
+      if (NULL != handle) {
+        svr->get_palf_env()->revert_palf_handle_impl(handle);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ret = get_leader(id, leader, leader_idx);
+    ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+  }
+  return ret;
+}
+
 int ObSimpleLogClusterTestEnv::create_paxos_group_with_arb(
   const int64_t id,
   int64_t &arb_replica_idx,

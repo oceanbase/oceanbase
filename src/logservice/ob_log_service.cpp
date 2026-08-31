@@ -19,6 +19,7 @@
 #include "storage/ob_file_system_router.h"
 #include "logservice/ob_net_keepalive_adapter.h"            // ObNetKeepAliveAdapter
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
+#include "share/ob_cluster_version.h"                         // GET_MIN_DATA_VERSION
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "logservice/libpalf/libpalf_env.h"
 #endif
@@ -892,6 +893,7 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   PalfRoleChangeCb *rc_cb = &role_change_service_;
   PalfLocationCacheCb *loc_cache_cb = &location_adapter_;
   const bool is_arb_replica = (replica_type == REPLICA_TYPE_ARBITRATION);
+  palf::LogReplicaType palf_replica_type = palf::LogReplicaType::NORMAL_REPLICA;
   ipalf::IPalfHandle *&log_handler_palf_handle = log_handler.palf_handle_;
   bool palf_exist = false;
   if (false == id.is_valid() ||
@@ -904,10 +906,14 @@ int ObLogService::create_ls_(const share::ObLSID &id,
   } else if (palf_exist) {
     ret = OB_ENTRY_EXIST;
     CLOG_LOG(WARN, "palf has exist", K(ret), K(id), K(tenant_role), K(palf_base_info));
+  } else if (OB_FAIL(get_palf_replica_type_(replica_type, palf_replica_type))) {
+    CLOG_LOG(WARN, "get palf replica type failed", K(ret), K(id), K(replica_type));
   } else {
     if (!is_arb_replica &&
-        OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role), palf_base_info, palf_handle))) { //TODO by ziqi: init sync_mode
-      CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id), K(replica_type));
+        OB_FAIL(palf_env_->create(id.id(), get_palf_access_mode(tenant_role),
+            palf_base_info, palf_replica_type, palf_handle))) { //TODO by ziqi: init sync_mode
+      CLOG_LOG(WARN, "failed to get palf_handle", K(ret), K(id), K(replica_type),
+          K(palf_replica_type));
     } else if (false == allow_log_sync && OB_FAIL(palf_handle->disable_sync())) {
       CLOG_LOG(WARN, "failed to disable_sync", K(ret), K(id));
     } else if (OB_FAIL(apply_service_.add_ls(id))) {
@@ -952,6 +958,24 @@ int ObLogService::create_ls_(const share::ObLSID &id,
         palf_env_->close(palf_handle);
       }
       palf_env_->remove(id.id());
+    }
+  }
+  return ret;
+}
+
+int ObLogService::get_palf_replica_type_(const common::ObReplicaType &replica_type,
+                                         palf::LogReplicaType &palf_replica_type) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  palf_replica_type = palf::LogReplicaType::NORMAL_REPLICA;
+  if (common::REPLICA_TYPE_ARBITRATION == replica_type) {
+    palf_replica_type = palf::LogReplicaType::ARBITRATION_REPLICA;
+  } else if (common::ObReplicaTypeCheck::is_log_replica(replica_type)) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+      CLOG_LOG(WARN, "get tenant data version failed", K(ret), K(replica_type), K(MTL_ID()));
+    } else if (tenant_data_version >= DATA_VERSION_4_4_2_3) {
+      palf_replica_type = palf::LogReplicaType::LOGONLY_REPLICA;
     }
   }
   return ret;

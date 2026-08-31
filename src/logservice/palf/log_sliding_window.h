@@ -222,7 +222,7 @@ public:
                    common::ObILogAllocator *alloc_mgr,
                    LogPlugins *plugins,
                    const PalfBaseInfo &palf_base_info,
-                   const bool is_normal_replica);
+                   const bool need_init_mem);
   virtual int sliding_cb(const int64_t sn, const FixedSlidingWindowSlot *data);
   virtual int64_t get_max_log_id() const;
   virtual const share::SCN get_max_scn() const;

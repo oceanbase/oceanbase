@@ -260,6 +260,8 @@ private:
                  const bool allow_log_sync,
                  ObLogHandler &log_handler,
                  ObLogRestoreHandler &restore_handler);
+  int get_palf_replica_type_(const common::ObReplicaType &replica_type,
+                             palf::LogReplicaType &palf_replica_type) const;
 
   int create_palf_env_(const palf::PalfOptions &options,
                        const char *base_dir,

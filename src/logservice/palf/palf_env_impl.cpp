@@ -366,10 +366,10 @@ void PalfEnvImpl::destroy()
   io_adapter_.destroy();
 }
 
-// NB: not thread safe
 int PalfEnvImpl::create_palf_handle_impl(const int64_t palf_id,
                                          const AccessMode &access_mode,
                                          const PalfBaseInfo &palf_base_info,
+                                         const LogReplicaType replica_type,
                                          IPalfHandleImpl *&palf_handle_impl)
 {
   int ret = OB_SUCCESS;
@@ -378,11 +378,11 @@ int PalfEnvImpl::create_palf_handle_impl(const int64_t palf_id,
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfEnvImpl is not inited", K(ret));
   } else if (OB_FAIL(create_palf_handle_impl_(palf_id, access_mode, palf_base_info,
-          NORMAL_REPLICA, palf_handle_impl))) {
+          replica_type, palf_handle_impl))) {
     palf_handle_impl = NULL;
   } else {
     PALF_LOG(INFO, "PalfEnvImpl create_palf_handle_impl finished", K(ret), K(palf_id), K(access_mode),
-        K(palf_base_info), KPC(this));
+        K(palf_base_info), K(replica_type), KPC(this));
   }
   return ret;
 }

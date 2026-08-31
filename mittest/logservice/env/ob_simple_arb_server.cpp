@@ -267,7 +267,8 @@ int ObSimpleArbServer::create_ls(const int64_t palf_id,
   IPalfEnvImpl *palf_env_impl = get_palf_env();
   if (OB_ISNULL(palf_env_impl)) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(palf_env_impl->create_palf_handle_impl(palf_id, palf::AccessMode::APPEND, base_info, palf_handle_impl))) {
+  } else if (OB_FAIL(palf_env_impl->create_palf_handle_impl(palf_id, palf::AccessMode::APPEND,
+      base_info, palf::LogReplicaType::ARBITRATION_REPLICA, palf_handle_impl))) {
     CLOG_LOG(WARN, "create_palf_handle_impl failed", K(palf_id), K(ret));
   }
   revert_palf_env(palf_env_impl);

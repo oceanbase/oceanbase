@@ -743,6 +743,7 @@ int PalfHandleImpl::handle_config_change_pre_check(const ObAddr &server,
     } else {
       resp.need_update_config_meta_ = (req.config_version_ != curr_config_version);
     }
+    // The field means the target can join config change; logonly replicas may return true.
     resp.is_normal_replica_ = true;
 
     // it's a optimization. To add one F members into 1F1A group,
@@ -2990,6 +2991,7 @@ int PalfHandleImpl::period_freeze_last_log()
 int PalfHandleImpl::check_and_switch_state()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
@@ -3013,6 +3015,9 @@ int PalfHandleImpl::check_and_switch_state()
         PALF_LOG(WARN, "LogConfigMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
       } else if (OB_FAIL(mode_mgr_.leader_do_loop_work())) {
         PALF_LOG(WARN, "LogModeMgr::leader_do_loop_work failed", KR(ret), K_(self), K_(palf_id));
+      }
+      if (OB_TMP_FAIL(config_mgr_.sync_meta_for_logonly_election_leader())) {
+        PALF_LOG(WARN, "sync_meta_for_logonly_election_leader failed", KR(tmp_ret), K_(self), K_(palf_id));
       }
       (void) config_mgr_.forward_initial_config_meta_to_arb();
     } while (0);
@@ -3258,10 +3263,12 @@ int PalfHandleImpl::do_init_mem_(
 {
   int ret = OB_SUCCESS;
   int pret = -1;
-  const bool is_normal_replica = (log_meta.get_log_replica_property_meta().replica_type_ == NORMAL_REPLICA);
+  const LogReplicaType replica_type = log_meta.get_log_replica_property_meta().replica_type_;
+  const bool is_log_sync_replica = (replica_type != ARBITRATION_REPLICA);
+  const bool can_be_active_leader = (replica_type == NORMAL_REPLICA);
   // inner priority seed: smaller means higher priority
   // reserve some bits for future requirements
-  uint64_t election_inner_priority_seed = is_normal_replica ?
+  uint64_t election_inner_priority_seed = can_be_active_leader ?
                                           static_cast<uint64_t>(PRIORITY_SEED_BIT::DEFAULT_SEED) :
                                           0ULL | static_cast<uint64_t>(PRIORITY_SEED_BIT::SEED_NOT_NORMOL_REPLICA_BIT);
   const bool allow_vote = log_meta.get_log_replica_property_meta().allow_vote_;
@@ -3274,7 +3281,7 @@ int PalfHandleImpl::do_init_mem_(
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
   } else if (OB_FAIL(sw_.init(palf_id, self, &state_mgr_, &config_mgr_, &mode_mgr_,
-          &log_engine_, &fs_cb_wrapper_, alloc_mgr, &plugins_, palf_base_info, is_normal_replica))) {
+          &log_engine_, &fs_cb_wrapper_, alloc_mgr, &plugins_, palf_base_info, is_log_sync_replica))) {
     PALF_LOG(WARN, "sw_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(election_.init_and_start(palf_id,
                                               election_timer,
@@ -3295,7 +3302,7 @@ int PalfHandleImpl::do_init_mem_(
   } else if (OB_FAIL(config_mgr_.init(palf_id, self, log_meta.get_log_config_meta(), &log_engine_,
           &sw_, &state_mgr_, &election_, &mode_mgr_, &reconfirm_, &plugins_))) {
     PALF_LOG(WARN, "config_mgr_ init failed", K(ret), K(palf_id));
-  } else if (is_normal_replica && OB_FAIL(reconfirm_.init(palf_id, self, &sw_, &state_mgr_, &config_mgr_, &mode_mgr_, &log_engine_))) {
+  } else if (can_be_active_leader && OB_FAIL(reconfirm_.init(palf_id, self, &sw_, &state_mgr_, &config_mgr_, &mode_mgr_, &log_engine_))) {
     PALF_LOG(WARN, "reconfirm_ init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(mode_mgr_.init(palf_id, self, log_meta.get_log_mode_meta(), &state_mgr_, &log_engine_, &config_mgr_, &sw_))) {
     PALF_LOG(WARN, "mode_mgr_ init failed", K(ret), K(palf_id));

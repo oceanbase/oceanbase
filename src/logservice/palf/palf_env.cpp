@@ -103,6 +103,7 @@ void PalfEnv::destroy_()
 int PalfEnv::create(const int64_t id,
                     const ipalf::AccessMode &access_mode,
                     const palf::PalfBaseInfo &palf_base_info,
+                    const palf::LogReplicaType replica_type,
                     ipalf::IPalfHandle *&handle)
 {
   int ret = OB_SUCCESS;
@@ -118,12 +119,13 @@ int PalfEnv::create(const int64_t id,
   } else if (OB_ISNULL(palf_handle = MTL_NEW(PalfHandle, "PalfHandle"))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "alloca palf handle failed", K(ret));
-  } else if (OB_FAIL(palf_env_impl_.create_palf_handle_impl(palf_id, access_mode, palf_base_info, palf_handle_impl))) {
-    PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(palf_id));
+  } else if (OB_FAIL(palf_env_impl_.create_palf_handle_impl(palf_id, access_mode, palf_base_info,
+      replica_type, palf_handle_impl))) {
+    PALF_LOG(WARN, "create_palf_handle_impl failed", K(ret), K(palf_id), K(replica_type));
   } else if (FALSE_IT(palf_handle->palf_handle_impl_ = palf_handle_impl)) {
   } else {
     handle = palf_handle;
-    PALF_LOG(INFO, "create palf handle success", K(id));
+    PALF_LOG(INFO, "create palf handle success", K(id), K(replica_type));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(palf_handle_impl)) {
     palf_env_impl_.revert_palf_handle_impl(palf_handle_impl);
