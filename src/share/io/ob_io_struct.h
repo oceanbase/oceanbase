@@ -530,6 +530,7 @@ private:
   bool is_device_error_;
   int64_t begin_device_error_ts_;
   int64_t last_device_error_ts_;
+  int64_t last_detect_ts_;
 };
 
 class ObIOTracer final

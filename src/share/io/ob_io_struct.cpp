@@ -3059,7 +3059,8 @@ ObIOFaultDetector::ObIOFaultDetector(const ObIOConfig &io_config)
     last_device_warning_ts_(0),
     is_device_error_(false),
     begin_device_error_ts_(0),
-    last_device_error_ts_(0)
+    last_device_error_ts_(0),
+    last_detect_ts_(0)
 {
 
 }
@@ -3092,6 +3093,7 @@ void ObIOFaultDetector::destroy()
   is_device_error_ = false;
   begin_device_error_ts_ = 0;
   last_device_error_ts_ = 0;
+  last_detect_ts_ = 0;
   is_inited_ = false;
 }
 
@@ -3184,6 +3186,7 @@ void ObIOFaultDetector::handle(void *task)
         }
       }
     }
+    last_detect_ts_ = ObTimeUtility::fast_current_time();
     op_free(const_cast<RetryTask *>(retry_task));
     retry_task = nullptr;
   }
@@ -3197,10 +3200,19 @@ int ObIOFaultDetector::get_device_health_status(ObDeviceHealthStatus &dhs,
   device_abnormal_time = 0;
 
   if (is_device_warning_ && last_device_warning_ts_ > 0 && !is_device_error_) {
-    const int64_t period = ObTimeUtility::fast_current_time() - last_device_warning_ts_;
+    const int64_t current_ts = ObTimeUtility::fast_current_time();
+    const int64_t period = current_ts - last_device_warning_ts_;
     if (period > io_config_.read_failure_black_list_interval_) {
-      last_device_warning_ts_ = 0;
-      is_device_warning_ = false;
+      const bool is_detect_thread_stuck = (last_detect_ts_ > 0) &&
+          (current_ts - last_detect_ts_ > io_config_.read_failure_black_list_interval_);
+      if (!is_detect_thread_stuck) {
+        last_device_warning_ts_ = 0;
+        is_device_warning_ = false;
+      } else {
+        LOG_WARN_RET(OB_IO_ERROR, "disk detect thread may be stuck, skip clearing device warning",
+            K(last_detect_ts_), K(last_device_warning_ts_),
+            "read_failure_black_list_interval", io_config_.read_failure_black_list_interval_);
+      }
     }
   }
 
@@ -3225,6 +3237,7 @@ void ObIOFaultDetector::reset_device_health()
   is_device_error_ = false;
   begin_device_error_ts_ = 0;
   last_device_error_ts_ = 0;
+  last_detect_ts_ = 0;
 }
 
 int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t second_id)
