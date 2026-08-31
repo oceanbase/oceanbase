@@ -891,13 +891,18 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
   obrpc::Int64 affected_rows = 0;
   ObString first_stmt;
   obrpc::ObPurgeRecycleBinArg arg = purge_recyclebin_arg;
-  int64_t recyclebin_object_expire_time = GCONF.recyclebin_object_expire_time;
+  const bool is_scheduled_purge_recyclebin_job =
+      OB_NOT_NULL(session)
+      && OB_NOT_NULL(session->get_job_info())
+      && session->get_job_info()->is_purge_recyclebin_job();
+  const int64_t recyclebin_object_expire_time = GCONF.recyclebin_object_expire_time;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", KR(ret));
-  } else if (session->is_inner() && recyclebin_object_expire_time <= 0) {
-    // background scheduled purge recyclebin task is not enabled
-    LOG_INFO("recyclebin object expire time is 0, no need to purge", KR(ret));
+  } else if (is_scheduled_purge_recyclebin_job
+             && recyclebin_object_expire_time <= 0) {
+    LOG_INFO("auto purge recyclebin is disabled, skip scheduled job",
+             K(recyclebin_object_expire_time), KPC(session->get_job_info()));
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -910,11 +915,10 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
     uint64_t tenant_id = arg.tenant_id_;
     int64_t purge_sum = 1000; // same with background task total limit
     const int64_t SLEEP_INTERVAL = 100 * 1000; // 100ms
-    if (session->is_inner()) {
+    if (is_scheduled_purge_recyclebin_job) {
       // for background scheduled purge recyclebin task
       const int64_t current_time = ObTimeUtility::current_time();
-      const int64_t expire_timeval = GCONF.recyclebin_object_expire_time;
-      arg.expire_time_ = current_time - expire_timeval;
+      arg.expire_time_ = current_time - recyclebin_object_expire_time;
       arg.auto_purge_ = true;
       arg.exec_tenant_id_ = tenant_id;
       arg.ddl_stmt_str_.reset();
@@ -928,7 +932,7 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
     while (OB_SUCC(ret) && !is_tenant_finish) {
       // For scheduled purge recyclebin job, check worker timeout between batches
       // so that the job can be interrupted when max_run_duration is exceeded.
-      if (session->is_inner() && THIS_WORKER.is_timeout()) {
+      if (is_scheduled_purge_recyclebin_job && THIS_WORKER.is_timeout()) {
         ret = OB_TIMEOUT;
         break;
       }
@@ -944,7 +948,7 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
         //如果失败情况下，不需要继续
         is_tenant_finish = false;
       } else {
-        if (session->is_inner()) {
+        if (is_scheduled_purge_recyclebin_job) {
           purge_sum -= affected_rows;
           if (0 == affected_rows || purge_sum <= 0) {
             is_tenant_finish = true;
