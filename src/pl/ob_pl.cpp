@@ -2331,6 +2331,23 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
           MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_, buf, pos);
           trans_ctx.buf_len_ += pos;
         }
+        if (OB_SUCC(ret) && trans_ctx.ps_pc_ctx_->ps_need_parameterized_) {
+          if (param_num != pc_ctx.fp_result_.raw_params_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected param num", K(ret), K(param_num),
+                     K(pc_ctx.fp_result_.raw_params_.count()));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+            ObPCParam *raw_param = pc_ctx.fp_result_.raw_params_.at(i);
+            if (OB_ISNULL(raw_param) || OB_ISNULL(raw_param->node_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid raw param", K(ret), K(i), KP(raw_param));
+            } else if (T_QUESTIONMARK == raw_param->node_->type_
+                       && OB_FAIL(trans_ctx.ps_pc_ctx_->fp_result_.raw_params_.push_back(raw_param))) {
+              LOG_WARN("fail to push back raw param", K(ret), K(i));
+            }
+          }
+        }
       } else {
         buf = (char *)trans_ctx.allocator_->alloc(pc_ctx.raw_sql_.length());
         if (NULL == buf) {
