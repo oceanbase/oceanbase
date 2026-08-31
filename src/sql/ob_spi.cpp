@@ -6321,7 +6321,7 @@ int ObSPIService::spi_new_coll_element(uint64_t collection_id,
   CK (type->is_collection_type());
   CK (OB_NOT_NULL(collection_type = static_cast<const pl::ObCollectionType*>(type)));
   OZ (collection_type->get_element_type().get_size(pl::PL_TYPE_INIT_SIZE, init_size));
-  OZ (collection_type->get_element_type().newx(*allocator, ns, ptr));
+  OZ (collection_type->get_element_type().newx(*allocator, ns, ptr, true));
   if (OB_SUCC(ret)) {
     if (collection_type->get_element_type().is_collection_type()) {
       pl::ObPLCollection *collection = NULL;
