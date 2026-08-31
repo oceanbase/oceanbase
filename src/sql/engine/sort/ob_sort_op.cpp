@@ -88,6 +88,13 @@ int ObSortOp::inner_rescan()
     reset_pd_topn_filter_expr_ctx();
   }
   reset();
+  // reset() frees topn_heap_; clear projected_ so next eval() does not read stale datum.ptr_.
+  for (int64_t i = 0; i < MY_SPEC.all_exprs_.count(); i++) {
+    ObExpr *expr = MY_SPEC.all_exprs_.at(i);
+    if (expr->is_vector_sort_expr()) {
+      expr->get_eval_info(eval_ctx_).clear_evaluated_flag();
+    }
+  }
   iter_end_ = false;
   return ObOperator::inner_rescan();
 }

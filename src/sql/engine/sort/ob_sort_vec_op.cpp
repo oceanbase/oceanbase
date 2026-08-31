@@ -49,7 +49,22 @@ int ObSortVecOp::inner_rescan()
     reset_pd_topn_filter_expr_ctx();
   }
   reset();
+  // reset() frees topn_heap_; clear projected_ so next eval() does not read stale datum.ptr_.
+  clear_vector_sort_expr_eval_flags();
   return ObOperator::inner_rescan();
+}
+
+void ObSortVecOp::clear_vector_sort_expr_eval_flags()
+{
+  const ExprFixedArray *expr_arrays[] = {&MY_SPEC.sk_exprs_, &MY_SPEC.addon_exprs_};
+  for (const ExprFixedArray *exprs : expr_arrays) {
+    for (int64_t i = 0; i < exprs->count(); i++) {
+      ObExpr *expr = exprs->at(i);
+      if (expr->is_vector_sort_expr()) {
+        expr->get_eval_info(eval_ctx_).clear_evaluated_flag();
+      }
+    }
+  }
 }
 
 void ObSortVecOp::reset_pd_topn_filter_expr_ctx()
