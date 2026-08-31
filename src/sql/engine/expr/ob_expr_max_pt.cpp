@@ -59,7 +59,6 @@ void ObExprMaxPt::upper_db_table_name(
 }
 
 int ObExprMaxPt::check_max_pt_privilege(
-  const ObExpr &expr,
   ObEvalCtx &ctx,
   const ObString &db_name,
   const ObString &table_name,
@@ -91,7 +90,6 @@ int ObExprMaxPt::check_max_pt_privilege(
         // Oracle mode: check object privilege
         ObOraNeedPriv ora_need_priv;
         ObPackedObjPriv packed_privs = 0;
-        const uint64_t tenant_id = session_priv.tenant_id_;
 
         if (OB_FAIL(ObPrivPacker::pack_raw_obj_priv(NO_OPTION, OBJ_PRIV_ID_SELECT, packed_privs))) {
           LOG_WARN("fail to pack raw obj priv", K(ret));
@@ -104,13 +102,13 @@ int ObExprMaxPt::check_max_pt_privilege(
           ora_need_priv.obj_privs_ = packed_privs;
           ora_need_priv.check_flag_ = CHECK_FLAG_NORMAL;
           ora_need_priv.owner_id_ = OB_ORA_SYS_USER_ID;
-          ObStmtOraNeedPrivs need_privs;
-          ObExprStrResAlloc expr_res_alloc(expr, ctx);
-          need_privs.need_privs_.set_allocator(&expr_res_alloc);
-          need_privs.need_privs_.set_capacity(10);
-          need_privs.need_privs_.push_back(ora_need_priv);
+          ObEvalCtx::TempAllocGuard tmp_alloc_guard(ctx);
+          ObStmtOraNeedPrivs need_privs(tmp_alloc_guard.get_allocator());
+          need_privs.need_privs_.set_capacity(1);
 
-          if (OB_FAIL(schema_guard->check_ora_priv(
+          if (OB_FAIL(need_privs.need_privs_.push_back(ora_need_priv))) {
+            LOG_WARN("fail to push back oracle need privilege", K(ret), K(ora_need_priv));
+          } else if (OB_FAIL(schema_guard->check_ora_priv(
                   session_priv.tenant_id_, session_priv.user_id_, need_privs, role_array))) {
             LOG_WARN("check oracle mode table privilege failed", K(ret), K(need_privs));
           }
@@ -301,7 +299,7 @@ int ObExprMaxPt::eval_max_pt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
                                               ctx.exec_ctx_.get_my_session(),
                                               name_str, db_name, table_name, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret));
-    } else if (OB_FAIL(check_max_pt_privilege(expr, ctx, db_name.empty() ? cur_db_name : db_name, table_name, table_schema))) {
+    } else if (OB_FAIL(check_max_pt_privilege(ctx, db_name.empty() ? cur_db_name : db_name, table_name, table_schema))) {
       LOG_WARN("max_pt privilege check failed", K(ret), K(db_name), K(table_name), KP(table_schema));
     } else {
       const ObPartitionKeyInfo &partition_key_info = table_schema->get_partition_key_info();

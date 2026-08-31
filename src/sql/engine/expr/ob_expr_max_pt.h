@@ -41,7 +41,6 @@ private:
   static void upper_db_table_name(
     const ObNameCaseMode case_mode, const bool is_oracle_mode, ObString &name);
   static int check_max_pt_privilege(
-    const ObExpr &expr,
     ObEvalCtx &ctx,
     const ObString &db_name,
     const ObString &table_name,
