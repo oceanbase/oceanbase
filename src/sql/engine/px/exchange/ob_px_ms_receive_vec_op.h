@@ -262,7 +262,7 @@ private:
   int process_dump(const common::ObIArray<ObTempRowStore *> &full_dump_array,
                    const common::ObIArray<ObTempRowStore *> &part_dump_array);
 
-  OB_INLINE virtual int64_t get_channel_count() { return task_channels_.count(); }
+  OB_INLINE int64_t get_channel_count() { return task_channels_.count(); }
 private:
   int new_local_order_input(MergeSortInput *&out_msi);
   int get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_ctx);
@@ -281,8 +281,12 @@ private:
     const ObIArray<ObExpr*> &exprs,
     ObEvalCtx &eval_ctx,
     const ObCompactRow *&store_row);
+  static void set_adaptive_block_size(ObTempRowStore &row_store, const int64_t n_channel);
 private:
   static const int64_t MAX_INPUT_NUMBER = 10000L;
+  // When channel count exceeds this threshold, adaptive block sizing is enabled to
+  // reduce minimum undumpable memory in merge sort receive operator.
+  static const int64_t ADAPTIVE_BLOCK_CHANNEL_THRESHOLD = 64L;
   dtl::ObDtlChannelLoop *ptr_row_msg_loop_;
   ObPxInterruptP interrupt_proc_;
   ObRowHeap<ObCompactRowCompare, ObCompactRow> row_heap_;

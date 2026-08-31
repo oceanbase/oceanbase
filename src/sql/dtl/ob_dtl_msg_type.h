@@ -61,6 +61,9 @@ enum ObDtlMsgType {
   DH_JOIN_FILTER_COUNT_ROW_WHOLE_MSG,
   DH_STATISTICS_COLLECTOR_PIECE_MSG, // 50  // placeholder
   DH_STATISTICS_COLLECTOR_WHOLE_MSG, // placeholder
+  DH_DIRECT_INSERT_PIECE_MSG, // placeholder
+  DH_DIRECT_INSERT_WHOLE_MSG, // placeholder
+  DTL_BATCH_MSG,
   MAX
 };
 

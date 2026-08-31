@@ -48,7 +48,7 @@ SQL_MONITOR_STATNAME_DEF(EXCHANGE_DROP_ROW_COUNT, metric::Unit::INT, "drop row c
 // MONITORING DUMP
 SQL_MONITOR_STATNAME_DEF(MONITORING_DUMP_SUM_OUTPUT_HASH, metric::Unit::INT, "sum output hash", "sum of output hash values of monitoring dump", M_FIRST_VAL, metric::Level::AD_HOC)
 // DTL
-SQL_MONITOR_STATNAME_DEF(DTL_SEND_RECV_COUNT, metric::Unit::INT, "processed buffer count", "the count of dtl buffer that received or sended", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(DTL_SEND_RECV_COUNT, metric::Unit::INT, "processed buffer count", "the count of dtl buffer that received or sended", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(EXCHANGE_EOF_TIMESTAMP, metric::Unit::TIMESTAMP, "eof timestamp", "the timestamp of send eof or receive eof", E_MIN | E_MAX, metric::Level::AD_HOC)
 // Auto Memory Management (dump, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(MEMORY_DUMP, metric::Unit::BYTES, "memory dump size", "dump memory to disk when exceeds memory limit", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
@@ -187,6 +187,9 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_COUNT, metr
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page hit size", "parquetPageMgr cached page hit size", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_COUNT, metric::Unit::INT, "parquetPageMgr cached page miss count", "parquetPageMgr cached page miss count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page miss size", "parquetPageMgr cached page miss size", M_SUM, metric::Level::CRITICAL)
+
+SQL_MONITOR_STATNAME_DEF(WORKER_SYNC_WAIT, metric::Unit::TIME_NS, "worker synchronization time", "wait time during thread synchronization", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(WAIT_JOIN_FILTER_MSG_TIME, metric::Unit::TIME_NS, "wait join filter msg time", "wait join filter ready time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)

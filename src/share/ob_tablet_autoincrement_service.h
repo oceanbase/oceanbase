@@ -47,6 +47,7 @@ public:
       next_value_(1),
       last_refresh_ts_(common::ObTimeUtility::current_time()),
       cache_size_(DEFAULT_TABLET_INCREMENT_CACHE_SIZE),
+      prefetching_(false),
       is_inited_(false)
   {}
   virtual ~ObTabletAutoincMgr()
@@ -103,6 +104,7 @@ private:
   int64_t cache_size_;
   ObTabletCacheNode curr_node_;
   ObTabletCacheNode prefetch_node_;
+  bool prefetching_;
   bool is_inited_;
 };
 

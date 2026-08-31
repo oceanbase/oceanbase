@@ -29,6 +29,7 @@
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+class ObDtl;
 
 class ObTenantDfc
 {
@@ -40,16 +41,16 @@ public:
   static int mtl_init(ObTenantDfc *&tenant_dfc);
   static void mtl_destroy(ObTenantDfc *&tenant_dfc);
 
-  OB_INLINE virtual int64_t get_max_size_per_channel();
+  OB_INLINE int64_t get_max_size_per_channel();
 
-  OB_INLINE virtual bool need_block(ObDtlFlowControl *dfc);
-  OB_INLINE virtual bool can_unblock(ObDtlFlowControl *dfc);
+  OB_INLINE bool need_block(ObDtlFlowControl *dfc);
+  OB_INLINE bool can_unblock(ObDtlFlowControl *dfc);
 
-  OB_INLINE virtual void increase(int64_t size);
-  OB_INLINE virtual void decrease(int64_t size);
+  OB_INLINE void increase(int64_t size);
+  OB_INLINE void decrease(int64_t size);
 
-  OB_INLINE virtual void increase_blocked_channel_cnt();
-  OB_INLINE virtual void decrease_blocked_channel_cnt(int64_t unblock_cnt);
+  OB_INLINE void increase_blocked_channel_cnt();
+  OB_INLINE void decrease_blocked_channel_cnt(int64_t unblock_cnt);
 
   int register_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch);
   int unregister_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch);
@@ -69,10 +70,10 @@ public:
   int unblock_channel(ObDtlFlowControl *dfc, int64_t ch_idx);
   int unblock_channels(ObDtlFlowControl *dfc);
 
-  OB_INLINE virtual void increase_channel_cnt(int64_t n_ch);
-  OB_INLINE virtual void decrease_channel_cnt(int64_t n_ch);
+  OB_INLINE void increase_channel_cnt(int64_t n_ch);
+  OB_INLINE void decrease_channel_cnt(int64_t n_ch);
 
-  virtual void calc_max_buffer(int64_t max_parallel_cnt);
+  void calc_max_buffer(int64_t max_parallel_cnt);
   uint64_t get_tenant_id() { return tenant_id_; }
 
   int64_t get_current_buffer_used() { return tenant_dfc_.get_used(); }
@@ -119,6 +120,7 @@ public:
 
 class ObDfcServer
 {
+  friend class ObDtl;
 public:
   ObDfcServer()
   {}
@@ -133,6 +135,7 @@ public:
   int unblock_channel(ObDtlFlowControl *dfc, int64_t ch_idx);
 
   int register_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch);
+  int register_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch, ObTenantDfc *tenant_dfc);
   int unregister_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch);
 
   int register_dfc(ObDtlFlowControl &dfc);

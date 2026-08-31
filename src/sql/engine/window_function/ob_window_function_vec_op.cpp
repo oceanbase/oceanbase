@@ -620,12 +620,14 @@ int ObWindowFunctionVecOp::setup_participator_pby_hash_sets(WFInfoFixedArray &wf
         if (OB_FAIL(pby_expr_cnt_idx_array_.push_back(++idx))) {
           LOG_WARN("push back element failed", K(ret));
         } else {
+          lib::ObMemAttr stored_mem_attr(ctx_.get_my_session()->get_effective_tenant_id(), ObModIds::OB_SQL_WINDOW_ROW_STORE, ObCtxIds::WORK_AREA);
           ReportingWFHashSet *hash_set = OB_NEWx(ReportingWFHashSet, local_allocator_);
           if (OB_ISNULL(hash_set)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("allocate memory failed", K(ret));
           } else if (OB_FAIL(hash_set->create(op_input->get_total_task_count()
-                                              * op_input->get_total_task_count()))) { // dop * dop
+                                              * op_input->get_total_task_count(),
+                                              stored_mem_attr))) { // dop * dop
             LOG_WARN("init hash sets failed", K(ret));
           } else if (OB_FAIL(pby_hash_values_sets_.push_back(hash_set))) {
             LOG_WARN("push back element failed", K(ret));

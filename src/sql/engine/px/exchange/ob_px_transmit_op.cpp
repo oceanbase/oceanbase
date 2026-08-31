@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_px_transmit_op.h"
+#include "sql/dtl/ob_dtl.h"
 #include "sql/dtl/ob_dtl_channel_group.h"
 #include "sql/dtl/ob_dtl_utils.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
@@ -129,6 +130,7 @@ ObPxTransmitOp::ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, Ob
   loop_(op_monitor_info_),
   chs_agent_(),
   use_bcast_opt_(false),
+  dtl_buffer_seal_threshold_(0.5),
   part_ch_info_(),
   ch_info_(nullptr),
   sample_done_(false),
@@ -138,6 +140,7 @@ ObPxTransmitOp::ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, Ob
   batch_param_remain_(false),
   receive_channel_ready_(false),
   data_msg_type_(dtl::ObDtlMsgType::PX_DATUM_ROW),
+  writers_buf_(nullptr),
   params_(px_row_allocator_)
 {
   MEMSET(rand48_buf_, 0, sizeof(rand48_buf_));
@@ -145,6 +148,29 @@ ObPxTransmitOp::ObPxTransmitOp(ObExecContext &exec_ctx, const ObOpSpec &spec, Ob
 
 void ObPxTransmitOp::destroy()
 {
+  if (OB_LOGGER.need_to_print(OB_LOG_LEVEL_TRACE)) {
+    // Print batch send aggregation statistics before destroying groups
+    int64_t total_buffer_cnt = 0;
+    int64_t batch_send_cnt = 0;
+    for (int64_t i = 0; i < server_groups_.count(); ++i) {
+      if (OB_NOT_NULL(server_groups_.at(i))) {
+        dtl::ObDtlServerChannelGroup *g = server_groups_.at(i);
+        if (g->has_rpc_channel_) {
+          total_buffer_cnt += g->total_buffer_cnt_;
+          batch_send_cnt += g->batch_send_cnt_;
+        }
+      }
+    }
+    LOG_TRACE("DTL batch send stats summary",
+             "op_id", get_spec().id_,
+             K(data_msg_type_),
+             K(total_buffer_cnt),
+             K(batch_send_cnt),
+             "output_row_cnt", op_monitor_info_.output_row_count_,
+             "rpc_aggr_ratio", batch_send_cnt > 0
+                 ? (double)total_buffer_cnt / batch_send_cnt : 0.0,
+             "server_group_cnt", server_groups_.count());
+  }
   task_ch_set_.reset();
   px_row_allocator_.reset();
   ch_blocks_.reset();
@@ -153,6 +179,8 @@ void ObPxTransmitOp::destroy()
   dfc_.destroy();
   loop_.reset();
   chs_agent_.~ObDtlChanAgent();
+  dtl::ObDtlChanAgent::destroy_server_groups(server_groups_);
+  server_group_allocator_.reset();
   part_ch_info_.~ObPxPartChInfo();
   has_set_hybrid_key_ = false;
   receive_channel_ready_ = false;
@@ -207,6 +235,7 @@ int ObPxTransmitOp::inner_open()
   } else if (OB_FAIL(ObTransmitOp::inner_open())) {
     LOG_WARN("initialize operator context failed", K(ret));
   } else {
+    dtl_buffer_seal_threshold_ = GCONF._dtl_batch_flush_buffer_fill_pct / 100.0;
     if (get_spec().use_rich_format_) {
       if (OB_FAIL(init_data_msg_type(get_spec().output_))) {
         LOG_WARN("init data_msg_type failed", K(ret));
@@ -347,6 +376,7 @@ int ObPxTransmitOp::init_dfc(ObDtlDfoKey &parent_key, ObDtlSqcInfo &child_info)
     dfc_.set_sender_sqc_info(child_info);
     dfc_.set_op_metric(&metric_);
     dfc_.set_dtl_channel_watcher(&loop_);
+    dfc_.set_server_groups(&server_groups_);
     DTL.get_dfc_server().register_dfc(dfc_);
     LOG_TRACE("Worker init dfc", K(parent_key), K(child_info), K(dfc_.is_receive()),
               K(&dfc_), K(get_spec().get_id()));
@@ -378,7 +408,9 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
     LOG_WARN("Failed to init dfc", K(ret));
   } else if (OB_FAIL(ObPxTransmitOp::link_ch_sets(task_ch_set_, task_channels_, &dfc_))) {
     LOG_WARN("Fail to link data channel", K(ret));
-  } else if (is_vectorized() && OB_FAIL(init_channels_cur_block(task_channels_))) {
+  } else if (OB_FAIL(init_channel_msg_writers())) {
+    LOG_WARN("fail to init channel writers", K(ret));
+  } else if (is_vectorized() && !MY_SPEC.use_rich_format_ && OB_FAIL(init_channels_cur_block(task_channels_))) {
     LOG_WARN("fail to init channels block info", K(ret));
   } else {
     uint64_t min_cluster_version = ctx_.get_physical_plan_ctx()->get_phy_plan()->get_min_cluster_version();
@@ -427,7 +459,6 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
           ch->set_register_dm_info(register_dm_info);
         }
         ch->set_enable_channel_sync(true);
-        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         ch->set_batch_id(px_batch_id);
         ch->set_compression_type(dfc_.get_compressor_type());
         ch->set_operator_owner();
@@ -441,6 +472,17 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
               "task_id", trans_input.get_task_id(),
               "ch_cnt", channels.count(),
               K(ret));
+    // Initialize server channel groups for batch send optimization
+    if (OB_SUCC(ret) && min_cluster_version >= CLUSTER_VERSION_4_4_2_3
+        && GCONF._dtl_batch_flush_buffer_fill_pct < 100) {
+      if (OB_FAIL(dtl::ObDtlChanAgent::init_server_groups(
+              task_channels_,
+              server_group_allocator_,
+              ctx_.get_my_session()->get_effective_tenant_id(),
+              server_groups_))) {
+        LOG_WARN("failed to init server groups for batch send", K(ret));
+      }
+    }
     LOG_TRACE("TIMERECORD ", "reserve:=1 name:=TASK dfoid:", trans_input.get_dfo_id(),
       "sqcid:", trans_input.get_sqc_id(),
       "taskid:", trans_input.get_task_id(),
@@ -448,6 +490,56 @@ int ObPxTransmitOp::init_channel(ObPxTransmitOpInput &trans_input)
   }
   return ret;
 }
+
+#define INIT_DTL_CHANNEL_MSG_WRITERS_CASE(WriterEnum, WriterStruct, InitMethod)    \
+  case dtl::WriterEnum: {                                                          \
+    writers_buf_ = px_row_allocator_.alloc(                                        \
+        channel_cnt * static_cast<int64_t>(sizeof(dtl::WriterStruct)),             \
+        ObMemAttr(tenant_id, "DtlWriterBatch"));                                   \
+    if (OB_ISNULL(writers_buf_)) {                                                 \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                             \
+      LOG_WARN("failed to alloc batch writer buf", K(ret), K(channel_cnt));        \
+    } else {                                                                       \
+      char *buf = static_cast<char*>(writers_buf_);                                \
+      for (int64_t i = 0; OB_SUCC(ret) && i < channel_cnt; ++i) {                  \
+        if (OB_FAIL(static_cast<dtl::ObDtlBasicChannel *>(task_channels_.at(i))    \
+                        ->InitMethod(buf))) {                                      \
+          LOG_WARN("failed to init channel msg writer", K(ret), K(i));             \
+        }                                                                          \
+        buf += static_cast<int64_t>(sizeof(dtl::WriterStruct));                    \
+      }                                                                            \
+    }                                                                              \
+    break;                                                                         \
+  }
+
+int ObPxTransmitOp::init_channel_msg_writers()
+{
+  int ret = OB_SUCCESS;
+  const int64_t channel_cnt = task_channels_.count();
+  if (channel_cnt <= 0) {
+  } else {
+    const dtl::DtlWriterType writer_type = dtl::msg_writer_map[data_msg_type_];
+    uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    switch (writer_type) {
+      INIT_DTL_CHANNEL_MSG_WRITERS_CASE(CONTROL_WRITER, ObDtlControlMsgWriter, init_ctl_msg_writer);
+      INIT_DTL_CHANNEL_MSG_WRITERS_CASE(CHUNK_ROW_WRITER, ObDtlRowMsgWriter, init_row_msg_writer);
+      INIT_DTL_CHANNEL_MSG_WRITERS_CASE(CHUNK_DATUM_WRITER, ObDtlDatumMsgWriter, init_datum_msg_writer);
+      INIT_DTL_CHANNEL_MSG_WRITERS_CASE(VECTOR_WRITER, ObDtlVectorMsgWriter, init_vector_msg_writer);
+      INIT_DTL_CHANNEL_MSG_WRITERS_CASE(VECTOR_FIXED_WRITER, ObDtlVectorFixedMsgWriter, init_vector_fixed_msg_writer);
+      INIT_DTL_CHANNEL_MSG_WRITERS_CASE(VECTOR_ROW_WRITER, ObDtlVectorRowMsgWriter, init_vector_row_msg_writer);
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown writer type", K(ret), K(writer_type));
+        break;
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to init channel msg writers", K(ret), K(writer_type), K(channel_cnt));
+    }
+  }
+  return ret;
+}
+
+#undef INIT_DTL_CHANNEL_MSG_WRITERS_CASE
 
 int ObPxTransmitOp::init_channels_cur_block(common::ObIArray<dtl::ObDtlChannel*> &dtl_chs)
 {
@@ -675,135 +767,6 @@ int ObPxTransmitOp::set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc)
     has_set_hybrid_key_ = true;
   }
   return ret;
-}
-
-void ObPxTransmitOp::fill_batch_ptrs(const int64_t *indexes)
-{
-  for (int64_t i = 0; i < brs_.size_; ++i) {
-    if (brs_.skip_->at(i)) {
-      continue;
-    }
-    if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
-      op_monitor_info_.otherstat_1_value_++;
-      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-    } else {
-      int64_t slice_idx = indexes[i];
-      const int64_t row_size = params_.row_size_array_[i];
-      const int64_t head_pos = params_.heads_[slice_idx];
-      ObTempRowStore::DtlRowBlock *block = params_.blocks_[slice_idx];
-      if (nullptr == block
-          || !params_.channel_unobstructeds_[slice_idx]
-          || row_size > params_.tails_[slice_idx] - head_pos) {
-        params_.fallback_array_[params_.fallback_cnt_++] = i;
-        params_.channel_unobstructeds_[slice_idx] = false;
-      } else {
-        ObCompactRow *ptr = reinterpret_cast<ObCompactRow *> (reinterpret_cast<char *> (block) + head_pos);
-        params_.return_rows_[params_.selector_cnt_] = ptr;
-        params_.heads_[slice_idx] += row_size;
-        const static int64_t MEMSET_SIZE = 128;
-        while (params_.heads_[slice_idx] > params_.init_pos_[slice_idx]) {
-          if (params_.init_pos_[slice_idx] + MEMSET_SIZE < params_.tails_[slice_idx]) {
-            memset(reinterpret_cast<char *> (block) + params_.init_pos_[slice_idx], 0, MEMSET_SIZE);
-            params_.init_pos_[slice_idx] += MEMSET_SIZE;
-          } else {
-            memset(ptr, 0, row_size);
-            params_.init_pos_[slice_idx] = params_.heads_[slice_idx];
-          }
-        }
-        block->cnt_ += 1;
-        params_.selector_array_[params_.selector_cnt_++] = i;
-      }
-    }
-  }
-}
-
-void ObPxTransmitOp::fill_batch_ptrs_fixed(const int64_t *indexes)
-{
-  for (int64_t i = 0; i < brs_.size_; ++i) {
-    if (brs_.skip_->at(i)) {
-      continue;
-    }
-    if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
-      op_monitor_info_.otherstat_1_value_++;
-      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-    } else {
-      int64_t slice_idx = indexes[i];
-      char *header = params_.fixed_payload_headers_[slice_idx];
-      if (nullptr == header
-          || params_.row_cnts_[slice_idx] >= params_.row_limit_) {
-        params_.fallback_array_[params_.fallback_cnt_++] = i;
-      } else {
-        params_.fixed_rows_[params_.selector_cnt_] = header;
-        params_.row_idx_[params_.selector_cnt_] = params_.row_cnts_[slice_idx];
-        params_.row_cnts_[slice_idx] += 1;
-        params_.selector_array_[params_.selector_cnt_++] = i;
-      }
-    }
-  }
-  for (int64_t col_idx = 0; col_idx < get_spec().output_.count(); ++col_idx) {
-    int64_t fixed_len = params_.column_lens_[col_idx];
-    switch (params_.vectors_.at(col_idx)->get_format()) {
-      case VEC_FIXED : {
-        const char *payload = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_data();
-        ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
-        if (!params_.vectors_.at(col_idx)->has_null()) {
-          if (8 == fixed_len) {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * 8,
-                    payload + fixed_len * params_.selector_array_[i], 8);
-            }
-          } else {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                    payload + fixed_len * params_.selector_array_[i], fixed_len);
-            }
-          }
-        } else {
-          ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
-          for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-            if (nulls->at(params_.selector_array_[i])) {
-              ObDtlBasicChannel *channel =
-                        static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
-              ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
-              row_writer.set_null(col_idx, params_.row_idx_[i]);
-            } else {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                  payload + fixed_len * params_.selector_array_[i], fixed_len);
-            }
-          }
-        }
-        break;
-      }
-      case VEC_UNIFORM : {
-        ObDatum *datums = (static_cast<ObUniformBase *> (params_.vectors_.at(col_idx)))->get_datums();
-        for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-          if (datums[params_.selector_array_[i]].is_null()) {
-            ObDtlBasicChannel *channel =
-                      static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
-            ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
-            row_writer.set_null(col_idx, params_.row_idx_[i]);
-          } else {
-            memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                datums[params_.selector_array_[i]].ptr_, fixed_len);
-          }
-        }
-        break;
-      }
-      default : {
-        for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-          if (params_.vectors_.at(col_idx)->is_null(params_.selector_array_[i])) {
-            ObDtlBasicChannel *channel =
-                      static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
-            ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
-            row_writer.set_null(col_idx, params_.row_idx_[i]);
-          } else {
-            memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * params_.column_lens_[col_idx],
-                  params_.vectors_.at(col_idx)->get_payload(params_.selector_array_[i]), params_.column_lens_[col_idx]);
-          }
-        }
-      }
-    }
-  }
 }
 
 void ObPxTransmitOp::fill_batch_ptrs_fixed(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
@@ -1119,6 +1082,82 @@ int ObPxTransmitOp::try_extend_selector_array(int64_t target_count, bool is_fixe
   return ret;
 }
 
+// After a channel's buffer is full and send_row() triggers a flush,
+// check sibling channels in the same server group and seal their
+// partially-filled buffers if usage exceeds 50%. This is safe because
+// we immediately nullify params_.blocks_[sibling_idx] so the next
+// fill_batch_ptrs iteration will re-acquire from the new buffer.
+int ObPxTransmitOp::try_seal_group_buffers(int64_t trigger_slice_idx)
+{
+  int ret = OB_SUCCESS;
+  ObDtlBasicChannel *trigger_ch = static_cast<ObDtlBasicChannel *>(task_channels_.at(trigger_slice_idx));
+  if (trigger_ch->get_channel_type() != ObDtlChannel::DtlChannelType::RPC_CHANNEL
+      || OB_ISNULL(static_cast<ObDtlRpcChannel *>(trigger_ch)->get_server_group())) {
+    // local channel does not participate
+  } else {
+    ObDtlRpcChannel *rpc_ch = static_cast<ObDtlRpcChannel *>(trigger_ch);
+    ObDtlServerChannelGroup *group = rpc_ch->get_server_group();
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < group->basic_channels_.count(); ++i) {
+      ObDtlBasicChannel *basic_ch = group->basic_channels_.at(i);
+      ObDtlRpcChannel *sibling = static_cast<ObDtlRpcChannel *>(basic_ch);
+      int64_t sibling_idx = group->channel_indexes_.at(i);
+      if (sibling == rpc_ch) {
+        continue;  // skip self
+      }
+      // For VECTOR_FIXED, params_.blocks_ is never set — use fixed_payload_headers_ instead.
+      if (data_msg_type_ == dtl::ObDtlMsgType::PX_VECTOR_FIXED) {
+        if (OB_ISNULL(params_.fixed_payload_headers_[sibling_idx])) {
+          continue;
+        }
+      } else if (OB_ISNULL(params_.blocks_[sibling_idx])) {
+        continue;
+      }
+      // Threshold: seal sibling if buffer usage exceeds SEAL_THRESHOLD.
+      // For PX_VECTOR_FIXED, used() returns mem_limit_ (full capacity) which is
+      // always equal to buf_size, so the byte-based check would always pass and
+      // cause every sibling to be sealed on every call — leading to a buffer
+      // allocation storm and DTL memory exhaustion. Use row count ratio instead.
+      bool should_seal = false;
+      if (data_msg_type_ == dtl::ObDtlMsgType::PX_VECTOR_FIXED
+          && sibling->get_vector_fixed_msg_writer().is_inited()
+          && params_.row_limit_ > 0) {
+        should_seal = (params_.row_cnts_[sibling_idx] > params_.row_limit_ * dtl_buffer_seal_threshold_);
+      } else {
+        int64_t used = params_.heads_[sibling_idx];
+        int64_t buf_size = sibling->get_write_buffer()->size();
+        should_seal = (used > buf_size * dtl_buffer_seal_threshold_);
+      }
+      if (!should_seal) {
+        continue;
+      } else {
+        if (nullptr != params_.blocks_[sibling_idx]) {
+          // PX_VECTOR_ROW path: sync ShrinkBuffer head_ from params_.heads_
+          params_.blocks_[sibling_idx]->get_buffer()->fast_update_head(params_.heads_[sibling_idx]);
+        }
+        if (data_msg_type_ == dtl::ObDtlMsgType::PX_VECTOR_FIXED) {
+          ObDtlVectorFixedMsgWriter &fixed_writer = sibling->get_vector_fixed_msg_writer();
+          if (fixed_writer.is_inited()) {
+            // PX_VECTOR_FIXED path: sync writer's internal row_cnt and buffer pos
+            fixed_writer.update_row_cnt(params_.row_cnts_[sibling_idx]);
+            fixed_writer.update_buffer_used();
+          }
+        }
+        LOG_TRACE("seal sibling buffer", K(sibling_idx), K(should_seal));
+      }
+
+      if (OB_FAIL(sibling->seal_write_buffer())) {
+        LOG_WARN("failed to seal sibling write buffer", K(ret), K(sibling_idx));
+      } else {
+        params_.blocks_[sibling_idx] = nullptr;
+        params_.channel_unobstructeds_[sibling_idx] = false;
+        params_.fixed_payload_headers_[sibling_idx] = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard,
                             ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                             ObSliceIdxCalc::EndIdxArray &end_idx_array,
@@ -1153,23 +1192,21 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
           ret = params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
                                 params_.selector_array_, params_.selector_cnt_, idx);
         }
-        if (OB_SUCC(ret)) {
-          for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
-            if (nullptr != params_.blocks_[idx]) {
-              params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
-            }
-          }
-        }
         for (int64_t i = 0; OB_SUCC(ret) && i < params_.fallback_cnt_; i++) {
           batch_info_guard.set_batch_idx(params_.fallback_array_[i]);
           metric_.count();
           ObDtlBasicChannel *channel =
                           static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx));
           ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
+          if (nullptr != params_.blocks_[slice_idx]) {
+            params_.blocks_[slice_idx]->get_buffer()->fast_update_head(params_.heads_[slice_idx]);
+          }
           if (nullptr != row_writer.get_write_buffer()) {
             row_writer.get_write_buffer()->pos() = row_writer.used();
           }
-          if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(),
+          if (OB_FAIL(try_seal_group_buffers(slice_idx))) {
+            LOG_WARN("failed to seal group buffers", K(ret), K(slice_idx));
+          } else if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(),
               params_.fallback_array_[i]))) {
             LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx));
           } else {
@@ -1196,13 +1233,6 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
           ret = params_.vectors_.at(idx)->to_rows(params_.meta_, params_.return_rows_,
                                 params_.selector_array_, params_.selector_cnt_, idx);
         }
-        if (OB_SUCC(ret)) {
-          for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
-            if (nullptr != params_.blocks_[idx]) {
-              params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
-            }
-          }
-        }
         for (int64_t i = 0; OB_SUCC(ret) && i < brs_.size_ && params_.fallback_cnt_ > 0; i++) {
           batch_info_guard.set_batch_idx(i);
           metric_.count();
@@ -1214,10 +1244,15 @@ int ObPxTransmitOp::keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_
             ObDtlBasicChannel *channel =
                             static_cast<ObDtlBasicChannel *> (task_channels_.at(slice_idx));
             ObDtlVectorRowMsgWriter &row_writer = channel->get_vector_row_writer();
+            if (nullptr != params_.blocks_[slice_idx]) {
+              params_.blocks_[slice_idx]->get_buffer()->fast_update_head(params_.heads_[slice_idx]);
+            }
             if (nullptr != row_writer.get_write_buffer()) {
               row_writer.get_write_buffer()->pos() = row_writer.used();
             }
-            if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), i))) {
+            if (OB_FAIL(try_seal_group_buffers(slice_idx))) {
+              LOG_WARN("failed to seal group buffers", K(ret), K(slice_idx));
+            } else if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), i))) {
               LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx));
             } else {
               params_.blocks_[slice_idx] = static_cast<ObDtlBasicChannel *>
@@ -1271,7 +1306,9 @@ int ObPxTransmitOp::keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &
             row_writer.update_row_cnt(params_.row_cnts_[slice_idx]);
             row_writer.update_buffer_used();
           }
-          if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(),
+          if (OB_FAIL(try_seal_group_buffers(slice_idx))) {
+            LOG_WARN("failed to seal group buffers", K(ret), K(slice_idx));
+          } else if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(),
               params_.fallback_array_[i]))) {
             LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx));
           } else if (static_cast<ObDtlBasicChannel *>
@@ -1316,7 +1353,9 @@ int ObPxTransmitOp::keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &
               row_writer.update_row_cnt(params_.row_cnts_[slice_idx]);
               row_writer.update_buffer_used();
             }
-            if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), i))) {
+            if (OB_FAIL(try_seal_group_buffers(slice_idx))) {
+              LOG_WARN("failed to seal group buffers", K(ret), K(slice_idx));
+            } else if (OB_FAIL(send_row(slice_idx, send_row_time_recorder, tablet_id.get_int(), i))) {
               LOG_WARN("fail emit row to interm result", K(ret), K(slice_idx));
             } else if (static_cast<ObDtlBasicChannel *>
                 (task_channels_.at(slice_idx))->get_vector_fixed_msg_writer().is_inited()) {
@@ -1346,6 +1385,17 @@ int ObPxTransmitOp::keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &
   return ret;
 }
 
+void ObPxTransmitOp::update_task_channels_head()
+{
+  if (get_spec().use_rich_format_ && dtl::ObDtlMsgType::PX_VECTOR_ROW == data_msg_type_) {
+    for (int64_t idx = 0; idx < task_channels_.count(); ++idx) {
+      if (nullptr != params_.blocks_[idx]) {
+        params_.blocks_[idx]->get_buffer()->fast_update_head(params_.heads_[idx]);
+      }
+    }
+  }
+}
+
 int ObPxTransmitOp::send_eof_row()
 {
   int ret = OB_SUCCESS;
@@ -1360,9 +1410,12 @@ int ObPxTransmitOp::send_eof_row()
     LOG_WARN("unexpected status: ch info is null", K(ret),
       KP(ch_info_), K(task_channels_.count()));
   } else {
-    ObTransmitEofAsynSender eof_asyn_sender(task_channels_, ch_info_, true, phy_plan_ctx->get_timeout_timestamp(), &eval_ctx_, data_msg_type_);
+    update_task_channels_head();
+    ObTransmitEofAsynSender eof_asyn_sender(
+        task_channels_, ch_info_, true, phy_plan_ctx->get_timeout_timestamp(),
+        &eval_ctx_, data_msg_type_, &server_groups_);
     if (OB_FAIL(eof_asyn_sender.asyn_send())) {
-      LOG_WARN("failed to asyn send drain", K(ret), K(lbt()));
+      LOG_WARN("failed to asyn send eof", K(ret), K(lbt()));
     } else if (GCONF.enable_sql_audit) {
       op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::EXCHANGE_EOF_TIMESTAMP;
       op_monitor_info_.otherstat_2_value_ = oceanbase::common::ObClockGenerator::getClock();
@@ -1564,59 +1617,17 @@ int ObPxTransmitOp::link_ch_sets(ObPxTaskChSet &ch_set,
                                 ObDtlFlowControl *dfc)
 {
   int ret = OB_SUCCESS;
-  dtl::ObDtlChannelInfo ci;
-  int64_t hash_val = 0;
-  int64_t offset = 0;
-  const int64_t DTL_CHANNEL_SIZE = sizeof(ObDtlRpcChannel) > sizeof(ObDtlLocalChannel) ? sizeof(ObDtlRpcChannel) : sizeof(ObDtlLocalChannel);
-  if (OB_FAIL(channels.reserve(ch_set.count()))) {
-    LOG_WARN("fail reserve channels", K(ret), K(ch_set.count()));
-  } else if (OB_FAIL(dfc->reserve(ch_set.count()))) {
-    LOG_WARN("fail reserve dfc channels", K(ret), K(ch_set.count()));
-  } else if (ch_set.count() > 0) {
-    ObMemAttr attr(ctx_.get_my_session()->get_effective_tenant_id(), "SqlDtlTxChan");
+  const int64_t DTL_CHANNEL_SIZE = sizeof(ObDtlRpcChannel) > sizeof(ObDtlLocalChannel)
+                                   ? sizeof(ObDtlRpcChannel) : sizeof(ObDtlLocalChannel);
+  if (ch_set.count() > 0) {
+    const uint64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
+    ObMemAttr attr(tenant_id, "SqlDtlTxChan");
     void *buf = oceanbase::common::ob_malloc(DTL_CHANNEL_SIZE * ch_set.count(), attr);
     if (nullptr == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("malloc channel buf failed", K(ret));
-    } else {
-      uint16_t seed[3] = {0, 0, 0};
-      int64_t time = ObTimeUtility::current_time();
-      if (0 == seed[0] && 0 == seed[1] && 0 == seed[2]) {
-        seed[0] = static_cast<uint16_t>(GETTID());
-        seed[1] = static_cast<uint16_t>(time & 0x0000FFFF);
-        seed[2] = static_cast<uint16_t>((time & 0xFFFF0000) >> 16);
-        seed48(seed);
-      }
-      bool failed_in_push_back_to_channels = false;
-      for (int64_t idx = 0; OB_SUCC(ret) && idx < ch_set.count(); ++idx) {
-        dtl::ObDtlChannel *ch = NULL;
-        hash_val = jrand48(seed);
-        if (OB_FAIL(ch_set.get_channel_info(idx, ci))) {
-          LOG_WARN("fail get channel info", K(idx), K(ret));
-        } else if (nullptr != dfc && ci.type_ == DTL_CT_LOCAL) {
-          ch = new((char*)buf + offset) ObDtlLocalChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val, ObDtlChannel::DtlChannelType::LOCAL_CHANNEL);
-        } else {
-          ch = new((char*)buf + offset) ObDtlRpcChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val, ObDtlChannel::DtlChannelType::RPC_CHANNEL);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (nullptr == ch) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("create channel fail", K(ret), K(ci.tenant_id_), K(ci.chid_));
-        } else if (OB_FAIL(ObDtlChannelGroup::link_channel(ci, ch, dfc))) {
-          LOG_WARN("fail link channel", K(ci), K(ret));
-        } else if (OB_ISNULL(ch)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail add qc channel", K(ret));
-        } else if (OB_FAIL(channels.push_back(ch))) {
-          failed_in_push_back_to_channels = true;
-          LOG_WARN("fail push back channel ptr", K(ci), K(ret));
-        } else {
-          offset += DTL_CHANNEL_SIZE;
-        }
-      }
-      if (0 == channels.count() && !failed_in_push_back_to_channels) {
-        ob_free(buf);
-      }
+    } else if (OB_FAIL(dtl::ObDtlChannelGroup::build_data_channels(buf, DTL_CHANNEL_SIZE, ch_set, channels, dfc, tenant_id))) {
+      LOG_WARN("fail build data channels", K(ret));
     }
   }
   return ret;
