@@ -341,8 +341,8 @@ int ObLogMain::start()
       ret = OB_INIT_FAIL;
     } else {
       ObLogInstance *instance = (ObLogInstance *)obcdc_instance_;
-      // Disable redirected output
-      instance->set_disable_redirect_log(true);
+      // Disable redirected output expect daemon runtime
+      instance->set_disable_redirect_log(!use_daemon_);
 
       if (OB_FAIL(instance->init_with_start_tstamp_usec(config_file_, start_timestamp_usec_, handle_error))) {
         LOG_ERROR("init oblog fail", K(ret), K_(config_file), K_(start_timestamp_usec), KP(handle_error));

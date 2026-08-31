@@ -17,6 +17,7 @@
 #include "libobcdc.h"
 #include <locale.h>
 
+#include "lib/signal/ob_signal_struct.h"
 #include "ob_log_instance.h"        // ObLogInstance
 
 using namespace oceanbase::common;
@@ -27,6 +28,10 @@ namespace libobcdc
 
 ObCDCFactory::ObCDCFactory()
 {
+  // Enable the common signal handler to output CRASH ERROR diagnostics.
+  // If observer minicore files are absent, minicoredump() returns directly.
+  g_redirect_handler = true;
+
   // set max memory limit
   lib::set_memory_limit(get_phy_mem_size() * MAX_MEMORY_USAGE_PERCENT / 100);
 
