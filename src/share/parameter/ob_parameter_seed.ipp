@@ -3313,9 +3313,10 @@ DEF_BOOL(_enable_mv_refresh_queuing, OB_TENANT_PARAMETER, "False",
         "When set to True, refresh requests are submitted to the pending task queue and executed asynchronously. "
         "When set to False, the legacy synchronous refresh engine is used.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(mv_refresh_concurrency, OB_TENANT_PARAMETER, "10", "[1,]",
+DEF_INT(mv_refresh_concurrency, OB_TENANT_PARAMETER, "-1", "[-1,]",
         "The maximum number of materialized view refresh tasks that can run concurrently. "
-        "Range: [1, +∞) in integer",
+        "-1 means automatically using max(2, 2 * unit min_cpu). "
+        "Range: [-1, +∞) in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_pl_null_literal_parameterization, OB_TENANT_PARAMETER, "False",
         "Enable parameterization of NULL literals in anonymous blocks to improve cache hit rate.",
