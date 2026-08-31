@@ -1673,6 +1673,14 @@ int ObResolverUtils::check_anonymous_associative_array(ObIArray<ObRoutineMatchIn
 {
   //Check if there is an anonymous associative array parameter;
   // if so, only keep matches containing the anonymous associative array parameter.
+  // But a candidate whose element type matches exactly (need_cast()==false, set alongside
+  // is_anonymous_associative_array_ in check_type_match's anonymous-array branch) has higher
+  // priority than the associative-array preference and must NOT be pruned out. So prune in
+  // two phases:
+  //   1) if any candidate needs no cast (exact element-type match), drop all the candidates
+  //      that need cast;
+  //   2) among the remaining candidates, if some still carry the anonymous associative-array
+  //      parameter, keep only those.
   int ret = OB_SUCCESS;
   if (match_infos.count() > 0) {
     ObSEArray<ObRoutineMatchInfo, 16> valid_match_infos;
@@ -1687,19 +1695,53 @@ int ObResolverUtils::check_anonymous_associative_array(ObIArray<ObRoutineMatchIn
         }
       }
     }
+    // Pre-compute, for each candidate, whether it is an associative-array candidate (i.e. it
+    // carries the anonymous associative-array parameter at every assoc_array_args position).
+    // is_anonymous_associative_array() returns bool and never fails.
+    ObSEArray<bool, 16> is_assoc_flags;
     for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
-      bool has_assoc_array = true;
-      for (int64_t j = 0; OB_SUCC(ret) && j < assoc_array_args.count(); ++j) {
+      bool is_assoc = true;
+      for (int64_t j = 0; j < assoc_array_args.count(); ++j) {
         // Check bounds: routines with default params may have different parameter counts
         if (assoc_array_args.at(j) >= match_infos.at(i).match_info_.count()
             || !match_infos.at(i).is_anonymous_associative_array(assoc_array_args.at(j))) {
-          OX (has_assoc_array = false);
+          is_assoc = false;
           break;
         }
       }
-      if (has_assoc_array) {
-        OZ (valid_match_infos.push_back(match_infos.at(i)));
+      OZ (is_assoc_flags.push_back(is_assoc));
+    }
+    // Phase 1: exact element-type match (no cast) takes precedence. If any candidate needs no
+    // cast, every candidate that needs cast is dropped.
+    bool has_exact_match = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
+      if (!match_infos.at(i).need_cast()) {
+        has_exact_match = true;
+        break;
       }
+    }
+    // Phase 2: among phase-1 survivors, if some are still associative-array candidates, drop the
+    // non-assoc survivors.
+    bool has_assoc_survivor = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
+      if (has_exact_match && match_infos.at(i).need_cast()) {
+        continue; // dropped by phase 1
+      }
+      if (is_assoc_flags.at(i)) {
+        has_assoc_survivor = true;
+        break;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_infos.count(); ++i) {
+      // Phase 1 filter: drop cast-needing candidates when an exact match exists.
+      if (has_exact_match && match_infos.at(i).need_cast()) {
+        continue;
+      }
+      // Phase 2 filter: once an assoc-array survivor exists, drop non-assoc survivors.
+      if (has_assoc_survivor && !is_assoc_flags.at(i)) {
+        continue;
+      }
+      OZ (valid_match_infos.push_back(match_infos.at(i)));
     }
     OZ (match_infos.assign(valid_match_infos));
   }
