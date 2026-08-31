@@ -277,10 +277,11 @@ public:
   // ------------------------------------------------------------------------
   //          Configurations that do not support dynamic changes
   // ------------------------------------------------------------------------
-  // libobcdc support multiple working mode, default is storage
+  // libobcdc support multiple working mode, default is auto
   // 1. storage: transaction data is stored, can support large transactions
   // 2. memory: transaction data is not stored, it means better performance, but may can not support large transactions
-  DEF_STR(working_mode, OB_CLUSTER_PARAMETER, "storage", "libocdc working mode");
+  // 3. auto: auto select working mode
+  DEF_STR(working_mode, OB_CLUSTER_PARAMETER, "auto", "libocdc working mode");
   // libobcdc support multiple meta_data_refresh_mode, default is data_dict
   // 1. data_dict: through the log of meta data
   // 2. online: through the schema service
