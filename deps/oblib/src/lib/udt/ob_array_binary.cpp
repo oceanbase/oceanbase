@@ -347,18 +347,17 @@ int ObArrayBinary::push_null()
 int ObArrayBinary::escape_append(ObStringBuffer &format_str, ObString elem_str)
 {
   int ret = OB_SUCCESS;
-  ObString split_str = elem_str.split_on('\"');
-  if (OB_ISNULL(split_str.ptr())) {
-    if (OB_FAIL(format_str.append(elem_str))) {
-      OB_LOG(WARN, "fail to append string to format_str", K(ret));
-    }
-  } else {
-    if (OB_FAIL(format_str.append(split_str))) {
+  while (OB_SUCC(ret)) {
+    ObString split_str = elem_str.split_on('\"');
+    if (OB_ISNULL(split_str.ptr())) {
+      if (OB_FAIL(format_str.append(elem_str))) {
+        OB_LOG(WARN, "fail to append string to format_str", K(ret));
+      }
+      break;
+    } else if (OB_FAIL(format_str.append(split_str))) {
       OB_LOG(WARN, "fail to append string to format_str", K(ret));
     } else if (OB_FAIL(format_str.append("\\\""))) {
       OB_LOG(WARN, "fail to append \\\" to format_str", K(ret));
-    } else if (!elem_str.empty()) {
-      ret = escape_append(format_str, elem_str);
     }
   }
   return ret;
