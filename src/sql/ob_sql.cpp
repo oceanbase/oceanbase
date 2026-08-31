@@ -583,6 +583,19 @@ int ObSql::fill_result_set(ObResultSet &result_set,
       break;
     }
 
+    // question_marks_count: determines the loop count for param columns.
+    // - For anonymous blocks / CALL procedures parameterized with enable_ps_parameterize,
+    //   the number of `?` in no_param_sql equals:
+    //   original client `?` count + count of parameterized-injected constants (fixed params),
+    //   which is greater than the actual number of client-bound parameters.
+    //   In this case, the loop index i, pctx->ps_fixed_array_index, and question_mark_idx_
+    //   all share the same coordinate system: "post-parameterization `?` index".
+    //   We must skip fixed params in the loop and only generate param columns for the
+    //   user's original `?` markers.
+    //   Therefore, these two statement types use get_prepare_param_count()
+    //   (post-parameterization `?` count) as the loop upper bound.
+    // - For other statements (DML, etc.), orig_question_mark_cnt (original client `?` count)
+    //   is used as the loop upper bound, which equals the number of client parameters.
     const int64_t question_marks_count = pctx->get_ps_fixed_array_index() != nullptr
           && stmt::T_ANONYMOUS_BLOCK != stmt->get_stmt_type()
           && stmt::T_CALL_PROCEDURE != stmt->get_stmt_type() ?
@@ -605,6 +618,11 @@ int ObSql::fill_result_set(ObResultSet &result_set,
         ObField param_field;
         param_field.type_.set_type(ObIntType); // @bug
         param_field.cname_ = ObString::make_string("?");
+        // Skip parameterized-injected constant params (fixed params): i is the
+        // post-parameterization `?` index, and ps_fixed_array_index also uses
+        // the post-parameterization `?` index — same coordinate system.
+        // Both anonymous blocks and CALL procedures must skip these; otherwise,
+        // constants would be returned to the client as param columns.
         if (OB_NOT_NULL(pctx->get_ps_fixed_array_index()) &&
             (OB_NOT_NULL(anonymous_stmt) || OB_NOT_NULL(call_stmt)) &&
             is_exist_in_fixed_param_idx(i, *pctx->get_ps_fixed_array_index())) {

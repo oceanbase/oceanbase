@@ -8399,7 +8399,9 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null user_type", K(ret));
-          } else if (T_NULL != param0->get_expr_type() && user_type->is_associative_array_type()) {
+          } else if (T_NULL != param0->get_expr_type()
+                     && !pl::ObPLResolver::is_parameterized_null_param(param0)
+                     && user_type->is_associative_array_type()) {
             ret = OB_ERR_EXPRESSION_WRONG_TYPE;
             LOG_WARN("invalid expr cast to associative array", K(ret), K(param0->get_expr_type()));
           }
