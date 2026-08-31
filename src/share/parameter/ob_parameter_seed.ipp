@@ -2336,6 +2336,9 @@ DEF_STR_WITH_CHECKER(global_index_auto_split_policy, OB_TENANT_PARAMETER, "ALL",
 DEF_INT(_inlist_rewrite_threshold, OB_TENANT_PARAMETER, "1000", "[1, 2147483647]"
         "specifies transform how much const params in IN list to values table",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_union_dual_rewrite_threshold, OB_TENANT_PARAMETER, "2", "[2, 2147483647]",
+        "specifies transform how many branches of union all from dual to values table",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_enable_di_experimental_feature_flags, OB_CLUSTER_PARAMETER, "7", "[0, +∞)"
          "enable diagnostic info experimental feature",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
