@@ -875,6 +875,89 @@ TEST_F(ObLoadTasksBatchTest, SvrIpNullYieldsInvalidAddr)
   EXPECT_EQ(0U, t->session_id_);
 }
 
+class ObMinPendingTaskSnapshotTest : public ::testing::Test
+{
+public:
+  void SetUp() override
+  {
+    proxy_ = new common::MockMySQLProxy();
+    fake_  = new FakeMySQLResult();
+
+    EXPECT_CALL(*proxy_, read(_, _, _))
+        .WillRepeatedly(Invoke([this](common::ObISQLClient::ReadResult &res, const uint64_t, const char *) {
+          fake_->reset_cursor();
+          FakeResultHandler *h = nullptr;
+          return res.create_handler(h, fake_);
+        }));
+
+    ASSERT_EQ(OB_SUCCESS, op_.init(proxy_));
+  }
+
+  void TearDown() override
+  {
+    op_.destroy();
+    delete fake_; fake_ = nullptr;
+    delete proxy_; proxy_ = nullptr;
+  }
+
+  common::MockMySQLProxy *proxy_ = nullptr;
+  FakeMySQLResult *fake_ = nullptr;
+  ObMViewPendingTaskTableOperator op_;
+};
+
+TEST_F(ObMinPendingTaskSnapshotTest, NullMinScnLeavesInvalid)
+{
+  fake_->set_min_scn_result(0, true /*is_null*/);
+
+  share::SCN scn;
+  scn.set_invalid();
+  ASSERT_EQ(OB_SUCCESS, op_.get_min_pending_task_snapshot(scn));
+  EXPECT_FALSE(scn.is_valid());
+  EXPECT_FALSE(scn.is_min());
+}
+
+TEST_F(ObMinPendingTaskSnapshotTest, ValidMinScnConverted)
+{
+  fake_->set_min_scn_result(123456789UL, false /*is_null*/);
+
+  share::SCN scn;
+  scn.set_invalid();
+  ASSERT_EQ(OB_SUCCESS, op_.get_min_pending_task_snapshot(scn));
+  EXPECT_TRUE(scn.is_valid());
+  EXPECT_EQ(123456789UL, scn.get_val_for_inner_table_field());
+}
+
+TEST_F(ObMinPendingTaskSnapshotTest, ZeroMinScnIsValidMin)
+{
+  fake_->set_min_scn_result(0, false /*is_null*/);
+
+  share::SCN scn;
+  scn.set_invalid();
+  ASSERT_EQ(OB_SUCCESS, op_.get_min_pending_task_snapshot(scn));
+  EXPECT_TRUE(scn.is_valid());
+  EXPECT_TRUE(scn.is_min());
+}
+
+TEST_F(ObMinPendingTaskSnapshotTest, EmptyResultLeavesInvalid)
+{
+  fake_->set_empty_min_scn_result();
+
+  share::SCN scn;
+  scn.set_invalid();
+  ASSERT_EQ(OB_SUCCESS, op_.get_min_pending_task_snapshot(scn));
+  EXPECT_FALSE(scn.is_valid());
+}
+
+TEST_F(ObMinPendingTaskSnapshotTest, OversizedMinScnFails)
+{
+  fake_->set_min_scn_result(share::OB_MAX_SCN_TS_NS + 1, false /*is_null*/);
+
+  share::SCN scn;
+  scn.set_invalid();
+  EXPECT_EQ(OB_INVALID_ARGUMENT, op_.get_min_pending_task_snapshot(scn));
+  EXPECT_FALSE(scn.is_valid());
+}
+
 int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");

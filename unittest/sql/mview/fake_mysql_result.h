@@ -74,6 +74,7 @@ public:
     int ret = common::OB_SUCCESS;
     rows_.reset();
     cursor_ = -1;
+    min_scn_mode_ = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
       if (OB_FAIL(rows_.push_back(rows[i]))) {
         // propagate
@@ -82,14 +83,33 @@ public:
     return ret;
   }
 
-  void clear() { rows_.reset(); cursor_ = -1; }
+  void clear() { rows_.reset(); cursor_ = -1; min_scn_mode_ = false; }
   void reset_cursor() { cursor_ = -1; }
+
+  void set_min_scn_result(uint64_t min_scn, bool is_null)
+  {
+    min_scn_mode_ = true;
+    min_scn_has_row_ = true;
+    min_scn_ = min_scn;
+    min_scn_is_null_ = is_null;
+    cursor_ = -1;
+  }
+
+  void set_empty_min_scn_result()
+  {
+    min_scn_mode_ = true;
+    min_scn_has_row_ = false;
+    cursor_ = -1;
+  }
 
   // ---------------------------------------------------------------- core
   int64_t get_column_count() const override { return 16; }
   int close() override { return common::OB_SUCCESS; }
   int next() override
   {
+    if (min_scn_mode_) {
+      return (++cursor_ < (min_scn_has_row_ ? 1 : 0)) ? common::OB_SUCCESS : common::OB_ITER_END;
+    }
     return (++cursor_ < rows_.count()) ? common::OB_SUCCESS : common::OB_ITER_END;
   }
 
@@ -128,6 +148,19 @@ public:
 
   int get_uint(const char *col_name, uint64_t &v) const override
   {
+    if (min_scn_mode_) {
+      if (cursor_ != 0 || !min_scn_has_row_) {
+        return common::OB_ERR_UNEXPECTED;
+      }
+      if (0 == strcmp(col_name, "min_scn")) {
+        if (min_scn_is_null_) {
+          return common::OB_ERR_NULL_VALUE;
+        }
+        v = min_scn_;
+        return common::OB_SUCCESS;
+      }
+      return common::OB_ERR_COLUMN_NOT_FOUND;
+    }
     if (cursor_ < 0 || cursor_ >= rows_.count()) {
       return common::OB_ERR_UNEXPECTED;
     }
@@ -225,6 +258,10 @@ private:
 
   common::ObSEArray<FakeRow, 16> rows_;
   int64_t cursor_;
+  bool min_scn_mode_ = false;
+  bool min_scn_has_row_ = false;
+  uint64_t min_scn_ = 0;
+  bool min_scn_is_null_ = false;
 };
 
 // Plug a FakeMySQLResult into ObMySQLProxy::ReadResult via placement-new on its
