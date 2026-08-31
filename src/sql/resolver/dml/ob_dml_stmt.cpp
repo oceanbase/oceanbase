@@ -2137,7 +2137,16 @@ int ObDMLStmt::check_pseudo_column_valid()
       LOG_WARN("get null expr", K(ret));
     } else {
       switch (expr->get_expr_type()) {
-        case T_ORA_ROWSCN:
+        case T_ORA_ROWSCN: {
+          ObPseudoColumnRawExpr *pseudo_col = static_cast<ObPseudoColumnRawExpr*>(expr);
+          const TableItem *table = NULL;
+          if (OB_ISNULL(table = get_table_item_by_id(pseudo_col->get_table_id()))
+              || OB_UNLIKELY(!table->is_basic_table() && !table->is_link_table())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to find table for rowscn pseudo column", K(ret), K(table), K(*expr));
+          }
+          break;
+        }
         case T_PSEUDO_OLD_NEW_COL: {
           ObPseudoColumnRawExpr *pseudo_col = static_cast<ObPseudoColumnRawExpr*>(expr);
           const TableItem *table = NULL;
