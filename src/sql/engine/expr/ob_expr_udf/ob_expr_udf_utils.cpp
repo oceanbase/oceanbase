@@ -627,7 +627,13 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
           if (OB_SUCC(ret)) {
             param.set_extend(pl_obj.get_ext(), pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());
             param.set_param_meta();
-            OZ (deep_in_objs.push_back(pl_obj));
+            if (OB_FAIL(deep_in_objs.push_back(pl_obj))) {
+              LOG_WARN("failed to save deep copied in param", K(ret), K(i));
+              int tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_obj, exec_ctx.get_my_session());
+              if (OB_SUCCESS != tmp_ret) {
+                LOG_WARN("failed to release deep copied in param", K(ret), K(tmp_ret), K(i));
+              }
+            }
           }
         } else if (!objs_stack.at(i).is_null()) {
           param.set_extend(objs_stack.at(i).get_ext(), objs_stack.at(i).get_meta().get_extend_type(), objs_stack.at(i).get_val_len());
@@ -785,7 +791,14 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
         OZ (need_deep_copy_in_parameter(objs_stack, param_num, params_desc, params_type, objs_stack.at(i), need_copy));
         if (need_copy) {
           OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, objs_stack.at(i), param, true));
-          OZ (deep_in_objs.push_back(param));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(deep_in_objs.push_back(param))) {
+            LOG_WARN("failed to save deep copied in param", K(ret), K(i));
+            int tmp_ret = pl::ObUserDefinedType::destruct_obj(param, nullptr);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("failed to release deep copied in param", K(ret), K(tmp_ret), K(i));
+            }
+          }
         } else {
           if (!objs_stack.at(i).is_null()) {
             param.set_extend(objs_stack.at(i).get_ext(), objs_stack.at(i).get_meta().get_extend_type(), objs_stack.at(i).get_val_len());
@@ -814,7 +827,14 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
         if (params_type.at(i).get_type() == ObExtendType) {
           if (params_desc.at(i).is_obj_access_pure_out()) {
             OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, value, param));
-            OZ (deep_in_objs.push_back(param));
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(deep_in_objs.push_back(param))) {
+              LOG_WARN("failed to save deep copied in param", K(ret), K(i));
+              int tmp_ret = pl::ObUserDefinedType::destruct_obj(param, nullptr);
+              if (OB_SUCCESS != tmp_ret) {
+                LOG_WARN("failed to release deep copied in param", K(ret), K(tmp_ret), K(i));
+              }
+            }
           } else {
             param.set_extend(value.get_ext(), value.get_meta().get_extend_type(), value.get_val_len());
             param.set_param_meta();

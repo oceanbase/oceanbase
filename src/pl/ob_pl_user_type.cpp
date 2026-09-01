@@ -722,12 +722,15 @@ int ObUserDefinedType::do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, c
   OZ (serialization::decode(buf, len, pos, pl_type));
 
 #define DESTRUCT_PL_EXTEND(ptr, type) \
-  ObObj tmp_obj; \
-  tmp_obj.set_extend(reinterpret_cast<int64_t>(ptr), type); \
-  int tmp_ret = destruct_obj(tmp_obj, nullptr); \
-  if (OB_SUCCESS != tmp_ret) { \
-    LOG_WARN("failed to destruct pl obj on deserialize failure", K(tmp_ret), K(type)); \
-  }
+  do { \
+    ObObj tmp_obj; \
+    tmp_obj.set_extend(reinterpret_cast<int64_t>(ptr), type); \
+    int tmp_ret = destruct_objparam(allocator, tmp_obj, nullptr); \
+    if (OB_SUCCESS != tmp_ret) { \
+      LOG_WARN("failed to destruct pl obj on deserialize failure", K(tmp_ret), K(type)); \
+    } \
+    ptr = nullptr; \
+  } while (0)
 
   if (OB_SUCC(ret)) {
     switch (pl_type) {
@@ -755,11 +758,12 @@ int ObUserDefinedType::do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, c
             LOG_WARN("unsupported opaque type for deserialization", K(ret), K(opaque_type));
           } break;
           }
-          if (OB_SUCC(ret) && OB_NOT_NULL(new_opaque)) {
-            if (OB_FAIL(new_opaque->deserialize(buf, len, pos))) {
+          if (OB_NOT_NULL(new_opaque)) {
+            if (OB_FAIL(ret)) {
+              DESTRUCT_PL_EXTEND(new_opaque, PL_OPAQUE_TYPE);
+            } else if (OB_FAIL(new_opaque->deserialize(buf, len, pos))) {
               LOG_WARN("failed to deserialize opaque", K(ret), K(opaque_type));
-              new_opaque->~ObPLOpaque();
-              allocator.free(new_opaque);
+              DESTRUCT_PL_EXTEND(new_opaque, PL_OPAQUE_TYPE);
             } else {
               obj.set_extend(reinterpret_cast<int64_t>(new_opaque), PL_OPAQUE_TYPE);
             }
@@ -784,7 +788,7 @@ int ObUserDefinedType::do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, c
             LOG_WARN("failed to allocate memory for record", K(ret), K(init_size), K(count), K(id));
           } else {
             new(new_record) ObPLRecord(id, count);
-            if (OB_FAIL(new_record->init_data(allocator, is_nested))) {
+            if (OB_FAIL(new_record->init_data(allocator, !is_nested))) {
               allocator.free(new_record);
               new_record = NULL;
             }
@@ -814,7 +818,7 @@ int ObUserDefinedType::do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, c
           LOG_WARN("failed to allocator memory for collection", K(ret)); \
         } else { \
           new(new_coll) class(id); \
-          if (OB_FAIL(new_coll->init_allocator(allocator, is_nested))) { \
+          if (OB_FAIL(new_coll->init_allocator(allocator, !is_nested))) { \
             allocator.free(new_coll); \
             new_coll = NULL; \
           } \
