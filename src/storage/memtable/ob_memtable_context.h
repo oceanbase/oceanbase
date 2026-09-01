@@ -480,6 +480,7 @@ public: // callback
     return trans_mgr_.append(head, tail, length);
   }
   int64_t get_pending_log_size() { return trans_mgr_.get_pending_log_size(); }
+  int64_t get_total_write_size() { return trans_mgr_.get_total_write_size(); }
   int64_t get_branch_pending_log_size(const int16_t branch) { return trans_mgr_.get_branch_pending_log_size(branch); }
   int64_t get_flushed_log_size() { return trans_mgr_.get_flushed_log_size(); }
   int acquire_callback_list(const bool new_epoch)

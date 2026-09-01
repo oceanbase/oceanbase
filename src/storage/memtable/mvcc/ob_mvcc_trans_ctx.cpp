@@ -237,6 +237,7 @@ void ObTransCallbackMgr::reset()
   callback_remove_for_rollback_to_count_ = 0;
   callback_ext_info_log_count_ = 0;
   pending_log_size_ = 0;
+  total_write_size_ = 0;
   flushed_log_size_ = 0;
 }
 
@@ -515,6 +516,7 @@ void ObTransCallbackMgr::before_append(ObITransCallback *node)
   } else {
     inc_pending_log_size(size + old_row_size);
   }
+  inc_total_write_size(size + old_row_size);
 }
 
 void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code)
@@ -527,6 +529,7 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
     } else {
       inc_pending_log_size(-1 * (size + old_row_size));
     }
+    inc_total_write_size(-1 * (size + old_row_size));
   }
 }
 
@@ -1309,6 +1312,13 @@ int64_t ObTransCallbackMgr::inc_pending_log_size(const int64_t size)
     }
   }
   return new_size;
+}
+
+void ObTransCallbackMgr::inc_total_write_size(const int64_t size)
+{
+  if (!is_parallel_logging_()) {
+    ATOMIC_FAA(&total_write_size_, size);
+  }
 }
 
 void ObTransCallbackMgr::inc_flushed_log_size(const int64_t size) {

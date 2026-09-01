@@ -1053,7 +1053,7 @@ DEF_BOOL(_enable_fast_recycle_tx_data, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_parallel_redo_logging, OB_CLUSTER_PARAMETER, "True",
          "enable parallel write redo log.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_parallel_redo_logging_trigger, OB_CLUSTER_PARAMETER, "16M", "[0B,)",
+DEF_CAP(_parallel_redo_logging_trigger, OB_CLUSTER_PARAMETER, "2M", "[0B,)",
         "size of single transaction's pending redo log to trigger parallel writes redo log. "
         "Range: [0B,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

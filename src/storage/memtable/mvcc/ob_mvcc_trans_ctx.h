@@ -221,6 +221,7 @@ public:
       callback_remove_for_rollback_to_count_(0),
       callback_ext_info_log_count_(0),
       pending_log_size_(0),
+      total_write_size_(0),
       flushed_log_size_(0),
       cb_allocator_(cb_allocator)
   {
@@ -283,6 +284,8 @@ public:
   void inc_flushed_log_size(const int64_t size);
   void clear_pending_log_size() { ATOMIC_STORE(&pending_log_size_, 0); }
   int64_t get_pending_log_size() const;
+  void inc_total_write_size(const int64_t size);
+  int64_t get_total_write_size() const { return ATOMIC_LOAD(&total_write_size_); }
   int64_t get_branch_pending_log_size(const int16_t branch) const;
   int16_t get_pending_log_size_too_large_list(const int64_t limit) const;
   bool pending_log_size_too_large(const int16_t branch_id, const int64_t limit);
@@ -419,6 +422,8 @@ private:
   int64_t callback_ext_info_log_count_;
   // current log size in leader participant
   int64_t pending_log_size_;
+  // cumulative write size, only maintained during serial logging, used to decide whether to switch to parallel logging
+  int64_t total_write_size_;
   // current flushed log size in leader participant
   int64_t flushed_log_size_;
   ObMemtableCtxCbAllocator &cb_allocator_;

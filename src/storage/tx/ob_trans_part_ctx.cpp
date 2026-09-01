@@ -2005,7 +2005,7 @@ bool ObPartTransCtx::should_switch_to_parallel_logging_()
   bool ok = false;
   if (GCONF._enable_parallel_redo_logging) {
     const int64_t switch_size = GCONF._parallel_redo_logging_trigger;
-    ok = pending_write_ > 1 && mt_ctx_.get_pending_log_size() > switch_size;
+    ok = pending_write_ > 1 && mt_ctx_.get_total_write_size() > switch_size;
 #ifdef ENABLE_DEBUG_LOG
     if (!ok) {
       ok = trans_id_ % 5 == 0;  // force 20% transaction go parallel logging
