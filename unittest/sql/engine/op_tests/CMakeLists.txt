@@ -23,6 +23,13 @@ sql_unittest(test_material_op
   ob_op_test_data_source.cpp
 )
 
+# SUM(decint)->int128 NEON/builtin SIMD fast-path tests
+sql_unittest(test_sum_int128_neon_op
+  test_sum_int128_neon_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
 # Phase 2: OpTestEngine unit tests
 sql_unittest(test_op_test_engine
   test_op_test_engine.cpp
@@ -61,6 +68,14 @@ sql_unittest(test_window_function_op
 # Phase 4: MergeGroupBy operator tests
 sql_unittest(test_merge_groupby_op
   test_merge_groupby_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# MergeGroupBy: rollup + distinct aggregate + HAVING IS UNKNOWN (captured
+# from production SQL via tracing(21,22) hint).
+sql_unittest(test_merge_groupby_rollup_distinct_op
+  test_merge_groupby_rollup_distinct_op.cpp
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )

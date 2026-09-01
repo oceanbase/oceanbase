@@ -215,6 +215,144 @@ TEST_F(CaseExprOpTest, NonZeroBoundStart_8)
   }));
 }
 
+// ============================================================================
+// Optimization path: const-null else (commit ea1372bbf)
+// `CASE WHEN ... ELSE NULL END` should:
+//  1. route unmatched rows to set_null (then_expr_idx = -1)
+//  2. exclude const-null else from check_then_expr_same_type so the homogeneous
+//     then-expressions can take the specialized set_res_vec fast path.
+// ============================================================================
+
+// TC10: All when branches unmatched -> all rows go through the const-null else set_null path
+TEST_F(CaseExprOpTest, ConstNullElse_AllUnmatched)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a < 0 THEN 100 WHEN a > 1000 THEN 200 ELSE NULL END")
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(256, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(256, [](int64_t) -> TestValue {
+    return TestValue::null();
+  }));
+}
+
+// TC11: Partial match; the rest take the const-null else -> set_null path
+TEST_F(CaseExprOpTest, ConstNullElse_PartialMatch)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a % 4 = 0 THEN 10 WHEN a % 4 = 1 THEN 11 ELSE NULL END")
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(256, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(256, [](int64_t i) -> TestValue {
+    int64_t m = i % 4;
+    if (m == 0) return TestValue(static_cast<int64_t>(10));
+    if (m == 1) return TestValue(static_cast<int64_t>(11));
+    return TestValue::null();
+  }));
+}
+
+// TC12: Homogeneous then exprs + const-null else; then exprs read the same column,
+// verifying the specialized set_res_vec fast path. All then exprs use column `a`
+// (same type); ELSE NULL must not block the fast path.
+TEST_F(CaseExprOpTest, ConstNullElse_HomogeneousThenSameColumn)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a % 3 = 0 THEN a WHEN a % 3 = 1 THEN a ELSE NULL END")
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(256, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(256, [](int64_t i) -> TestValue {
+    int64_t m = i % 3;
+    if (m == 2) return TestValue::null();
+    return TestValue(i);
+  }));
+}
+
+// TC13: All matched -> trailing else is never evaluated, but the optimization
+// path still marks else_is_null_const.
+TEST_F(CaseExprOpTest, ConstNullElse_AllMatched)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a % 2 = 0 THEN 0 WHEN a % 2 = 1 THEN 1 ELSE NULL END")
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(256, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(256, [](int64_t i) -> TestValue {
+    return i % 2;
+  }));
+}
+
+// TC14: bound.start() != 0 combined with const-null else, verifying mask and
+// set_null boundary handling.
+TEST_F(CaseExprOpTest, ConstNullElse_NonZeroBoundStart)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a % 4 = 0 THEN 10 WHEN a % 4 = 1 THEN 11 ELSE NULL END")
+      .with_expr_eval_vector_func(eval_case_start<3>)
+      .with_input_skips([](int64_t, int64_t, ObBitVector *skip) {
+        for (int64_t i = 0; i < 3; ++i) { skip->set(i); }
+      })
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(253, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(253, [](int64_t i) -> TestValue {
+    int64_t a = i + 3;
+    int64_t m = a % 4;
+    if (m == 0) return TestValue(static_cast<int64_t>(10));
+    if (m == 1) return TestValue(static_cast<int64_t>(11));
+    return TestValue::null();
+  }));
+}
+
+// TC15: Baseline - non-null const else (constant -1); should take the original
+// else evaluation path.
+TEST_F(CaseExprOpTest, NonNullConstElse_Baseline)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a % 4 = 0 THEN 10 WHEN a % 4 = 1 THEN 11 ELSE -1 END")
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(256, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(256, [](int64_t i) -> TestValue {
+    int64_t m = i % 4;
+    if (m == 0) return TestValue(static_cast<int64_t>(10));
+    if (m == 1) return TestValue(static_cast<int64_t>(11));
+    return TestValue(static_cast<int64_t>(-1));
+  }));
+}
+
+// TC16: Baseline - no else clause (existing logic already takes set_null);
+// used for regression comparison.
+TEST_F(CaseExprOpTest, NoElse_Baseline)
+{
+  auto result = expr_unit_test()
+      .columns("a int")
+      .with_expr("CASE WHEN a % 4 = 0 THEN 10 WHEN a % 4 = 1 THEN 11 END")
+      .with_data_generator(256, gen::sequential(0, 1))
+      .run(engine_);
+
+  EXPECT_EQ(256, result.row_count());
+  EXPECT_TRUE(result.verify_ordered(256, [](int64_t i) -> TestValue {
+    int64_t m = i % 4;
+    if (m == 0) return TestValue(static_cast<int64_t>(10));
+    if (m == 1) return TestValue(static_cast<int64_t>(11));
+    return TestValue::null();
+  }));
+}
+
 int main(int argc, char **argv)
 {
   oceanbase::common::ObLogger::get_logger().set_log_level("WARN");

@@ -18,6 +18,7 @@
 #include "src/sql/ob_eval_bound.h"
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log_module.h"
+#include "lib/container/ob_bit_simd.h"
 
 namespace oceanbase
 {
@@ -63,6 +64,8 @@ public:
   inline bool at(const int64_t idx) const;
   bool contain(const int64_t idx) const { return at(idx); }
   bool exist(const int64_t idx) const { return at(idx); }
+  template <bool IS_FLIP = false>
+  inline void get_bit_as_u8(const int64_t idx, uint8_t &res) const;
   void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t size)
   {
     MEMCPY(data_, src.data_, BYTES_PER_WORD * (size / WORD_BITS));
@@ -82,6 +85,10 @@ public:
   }
     // at(i) |= v;
   inline void bit_or_assign(const int64_t idx, const bool v);
+
+  // at(offset + i) = pred(i);
+  template<typename Predicate>
+  inline void bit_assign(const int64_t offset, const int64_t size, Predicate &&pred);
 
   // bit vector is superset of %other
   inline bool is_superset_of(const ObBitVectorImpl<WordType> &other, const int64_t size) const;
@@ -156,7 +163,6 @@ public:
 
   inline void bit_or(const ObBitVectorImpl<WordType> &src, const int64_t start_idx, const int64_t end_idx);
   inline void bit_or(const ObBitVectorImpl<WordType> &src, const EvalBound &bound);
-
 
   // You should known how ObBitVectorImpl<WordType> implemented, when reinterpret data.
   template <typename T>
@@ -241,10 +247,92 @@ inline bool ObBitVectorImpl<WordType>::at(const int64_t idx) const
 }
 
 template<typename WordType>
+template<bool IS_FLIP>
+inline void ObBitVectorImpl<WordType>::get_bit_as_u8(const int64_t idx, uint8_t &res) const
+{
+  OB_ASSERT(idx >= 0);
+  if (IS_FLIP) {
+    res = static_cast<uint8_t>(((data_[idx / WORD_BITS] >> (idx % WORD_BITS)) & 1ULL) ^ 1ULL);
+  } else {
+    res = static_cast<uint8_t>((data_[idx / WORD_BITS] >> (idx % WORD_BITS)) & 1ULL);
+  }
+}
+
+template<typename WordType>
 inline void ObBitVectorImpl<WordType>::bit_or_assign(const int64_t idx, const bool v)
 {
   OB_ASSERT(idx >= 0);
   data_[idx / WORD_BITS] |= static_cast<WordType>(v) << (idx % WORD_BITS);
+}
+
+template<typename WordType>
+template<typename Predicate>
+inline void ObBitVectorImpl<WordType>::bit_assign(const int64_t offset, const int64_t size, Predicate &&pred)
+{
+  OB_ASSERT(size > 0);
+  static constexpr WordType ALL_NULL_MASK = ~static_cast<WordType>(0);
+  WordType *__restrict__ word_ptr = align_at(offset);
+  int64_t idx = 0;
+
+  // 1) Unaligned head (bit_offset != 0, at most WORD_BITS-1 bits).
+  //    Clear the target range in *word_ptr, then OR in the pred mask, so old
+  //    bits in [offset, offset+n) are overwritten while bits outside the
+  //    range are preserved.
+  const int64_t head_bit_off = offset % WORD_BITS;
+  if (head_bit_off != 0) {
+    const int64_t n = MIN(WORD_BITS - head_bit_off, size);
+    WordType word = 0;
+    for (int64_t i = 0; i < n; ++i) {
+      word |= static_cast<WordType>(pred(i)) << i;
+    }
+    word <<= head_bit_off;
+    const WordType mask = (ALL_NULL_MASK >> (WORD_BITS - n)) << head_bit_off;
+    *word_ptr = (*word_ptr & ~mask) | word;
+    idx += n;
+    ++word_ptr;
+  }
+
+  // 2) Fully-aligned WORD_BITS-row chunks (hot path). Whole-word overwrite.
+  if constexpr (WORD_BITS == 64) {
+    // For 64-bit words, split into 4 independent accumulators to break the
+    // long OR chain into parallel chains, giving better ILP on OoO cores.
+    // Shift amounts are compile-time constants here, which also helps the
+    // compiler fully unroll the inner loop and vectorize simple predicates.
+    while (idx + WORD_BITS <= size) {
+      WordType w0 = 0, w1 = 0, w2 = 0, w3 = 0;
+      for (int64_t i = 0; i < 16; ++i) {
+        w0 |= static_cast<WordType>(pred(idx + i     )) <<  i;
+        w1 |= static_cast<WordType>(pred(idx + i + 16)) << (i + 16);
+        w2 |= static_cast<WordType>(pred(idx + i + 32)) << (i + 32);
+        w3 |= static_cast<WordType>(pred(idx + i + 48)) << (i + 48);
+      }
+      const WordType word = (w0 | w1) | (w2 | w3);
+      *word_ptr = word;
+      idx += WORD_BITS;
+      ++word_ptr;
+    }
+  } else {
+    while (idx + WORD_BITS <= size) {
+      WordType word = 0;
+      for (int64_t i = 0; i < WORD_BITS; ++i) {
+        word |= static_cast<WordType>(pred(idx + i)) << i;
+      }
+      *word_ptr = word;
+      idx += WORD_BITS;
+      ++word_ptr;
+    }
+  }
+
+  // 3) Aligned tail (< WORD_BITS bits).
+  if (idx < size) {
+    const int64_t n = size - idx;
+    WordType word = 0;
+    for (int64_t i = 0; i < n; ++i) {
+      word |= static_cast<WordType>(pred(idx + i)) << i;
+    }
+    const WordType mask = ALL_NULL_MASK >> (WORD_BITS - n);
+    *word_ptr = (*word_ptr & ~mask) | word;
+  }
 }
 
 template<typename WordType>
@@ -452,7 +540,7 @@ template<typename WordType>
 OB_INLINE int64_t ObBitVectorImpl<WordType>::popcount64(uint64_t v)
 {
   int64_t cnt = 0;
-#if __POPCNT__
+#if __POPCNT__ || defined(__aarch64__)
   cnt = __builtin_popcountl(v);
 #else
   if (0 != v) {
@@ -467,17 +555,7 @@ OB_INLINE int64_t ObBitVectorImpl<WordType>::popcount64(uint64_t v)
 template<typename WordType>
 inline int64_t ObBitVectorImpl<WordType>::accumulate_bit_cnt(const int64_t size) const
 {
-  int64_t bit_cnt = 0;
-  const int64_t cnt = size / WORD_BITS;
-  const int64_t remain = size % WORD_BITS;
-  for (int64_t i = 0; i < cnt; i++) {
-    WordType v = data_[i];
-    bit_cnt += popcount64(v);
-  }
-  if (remain > 0) {
-    bit_cnt += popcount64(data_[cnt] & ((1LU << remain) - 1));
-  }
-  return bit_cnt;
+  return common::popcnt_bits(data_, size);
 }
 
 template<typename WordType>

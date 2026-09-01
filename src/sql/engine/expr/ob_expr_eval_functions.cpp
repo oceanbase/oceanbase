@@ -1477,6 +1477,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprImageType::eval_image_type,                           /* 906 */
   NULL, // ObExprRandomPartNextval::eval_nextval,                     /* 907 */
   ObExprGetRoutineParamTypeStr::eval_routine_param_type_str,          /* 908 */
+  NULL, // ObExprNchr::calc_nchr_expr,                                /* 909 */
+  NULL, // ObExprToMonday::calc_to_monday,                            /* 910 */
+  NULL, // ObExprSplitByString::calc_split_by_string,                 /* 911 */
+  ObExprRegexp::eval_re2_regexp,                                      /* 912 */
+  ObExprRegexpCount::eval_re2_regexp_count,                           /* 913 */
+  ObExprRegexpInstr::eval_re2_regexp_instr,                           /* 914 */
+  ObExprRegexpLike::eval_re2_regexp_like,                             /* 915 */
+  ObExprRegexpReplace::eval_re2_regexp_replace,                       /* 916 */
+  ObExprRegexpSubstr::eval_re2_regexp_substr,                         /* 917 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1988,6 +1997,16 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprToFloat64OrNull::eval_to_float64_or_null_vector,        /* 322 */
   NULL, // ObExprNewTime::eval_new_time_vector,                          /* 323 */
   ObExprNLSCharsetId::eval_nls_charset_id_vector,                        /* 324 */
+  NULL, // ObExprCbrt::eval_cbrt_vector,                                 /* 325 */
+  NULL, // ObExprJSONUnquote::eval_json_unquote_vector,                  /* 326 */
+  NULL, // ObExprJSONQuote::eval_json_quote_vector,                      /* 327 */
+  NULL, // ObExprJSONType::eval_json_type_vector,                        /* 328 */
+  NULL, // ObExprJSONLength::eval_json_length_vector,                    /* 329 */
+  NULL, // ObExprJSONKeys::eval_json_keys_vector,                        /* 330 */
+  NULL, // ObExprE::eval_e_vector,                                       /* 331 */
+  NULL, // ObExprCountSubstrings::eval_count_substrings_vector,          /* 332 */
+  NULL, // ObExprImageType::eval_image_type_vector,                      /* 333 */
+  ObExprRegexpReplace::eval_re2_regexp_replace_vector,                   /* 334 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

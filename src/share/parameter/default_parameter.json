@@ -210,6 +210,11 @@
           "name": "default_skip_index_level",
           "value": 1,
           "comment": "for olap workloads, set skip_index_level to 1 by default when creating table"
+        },
+        {
+          "name": "_rowsets_max_rows",
+          "value": 512,
+          "comment": "for olap workload, increate default rowsets to 512 in order to gain better performance"
         }
       ]
     }

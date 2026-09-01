@@ -38,6 +38,17 @@ using namespace common;
   func_arr[0][3] = producer<false, 3>::produce_func(); \
   func_arr[1][3] = producer<true, 3>::produce_func(); \
 
+// two-dimensitional array, 4*2 (val_tag * flag)
+#define INIT_FILTER_OP_FUNCS_4P2(func_arr, producer, produce_func) \
+  func_arr[0][0] = producer<0, 0>::produce_func(); \
+  func_arr[1][0] = producer<1, 0>::produce_func(); \
+  func_arr[2][0] = producer<2, 0>::produce_func(); \
+  func_arr[3][0] = producer<3, 0>::produce_func(); \
+  func_arr[0][1] = producer<0, 1>::produce_func(); \
+  func_arr[1][1] = producer<1, 1>::produce_func(); \
+  func_arr[2][1] = producer<2, 1>::produce_func(); \
+  func_arr[3][1] = producer<3, 1>::produce_func(); \
+
 // two-dimensitional array, 4*6
 #define INIT_FILTER_OP_FUNCS_4P6(func_arr, producer, produce_func) \
   func_arr[0][op_type] = producer<0>::produce_func(static_cast<sql::ObWhiteFilterOperatorType>(op_type)); \
@@ -87,9 +98,6 @@ ObCSFilterFunctionFactory::ObCSFilterFunctionFactory()
 {
   INIT_FILTER_OP_FUNCS_2P4(integer_bt_null_funcs_, ObCSIntegerFilterFuncProducerWithNull, produce_integer_bt_tranverse_with_null);
   INIT_FILTER_OP_FUNCS_2P4(integer_in_null_funcs_, ObCSIntegerFilterFuncProducerWithNull, produce_integer_in_tranverse_with_null);
-  INIT_FILTER_OP_FUNCS_2P4(dict_ref_sort_bt_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_ref_sort_bt_tranverse);
-  INIT_FILTER_OP_FUNCS_2P4(dict_scan_ref_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_tranverse_ref);
-
   INIT_FILTER_OP_FUNCS_2P2P4(integer_bt_funcs_, ObCSIntegerFilterFuncProducer, produce_integer_bt_tranverse);
   INIT_FILTER_OP_FUNCS_2P2P4(integer_in_funcs_, ObCSIntegerFilterFuncProducer, produce_integer_in_tranverse);
 
@@ -98,8 +106,15 @@ ObCSFilterFunctionFactory::ObCSFilterFunctionFactory()
     INIT_FILTER_OP_FUNCS_4P6(dict_val_cmp_funcs_, ObCSDictFilterFuncProducer, produce_dict_val_cmp_tranverse);
   }
 
+  INIT_FILTER_OP_FUNCS_4(dict_ref_sort_bt_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_ref_sort_bt_tranverse);
+  INIT_FILTER_OP_FUNCS_4(dict_scan_ref_funcs_, ObCSDictRefFilterFuncProducer, produce_dict_tranverse_ref);
   INIT_FILTER_OP_FUNCS_4(dict_val_bt_funcs_, ObCSDictFilterFuncProducer, produce_dict_val_bt_tranverse);
   INIT_FILTER_OP_FUNCS_4(dict_val_in_funcs_, ObCSDictFilterFuncProducer, produce_dict_val_in_tranverse);
+
+  INIT_FILTER_OP_FUNCS_4P2(dict_set_bitmap_with_bitset_funcs_,
+                           ObCSDictSetBitmapFuncProducer, produce_set_bitmap_with_bitset);
+  INIT_FILTER_OP_FUNCS_4P2(dict_set_bitmap_with_bitset_const_funcs_,
+                           ObCSDictSetBitmapFuncProducer, produce_set_bitmap_with_bitset_const);
 }
 
 ObCSFilterFunctionFactory &ObCSFilterFunctionFactory::instance()

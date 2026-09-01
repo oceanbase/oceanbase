@@ -352,43 +352,61 @@ int ObExprCase::eval_case_batch(const ObExpr &expr,
 
 template<typename WhenVec>
 static int check_when_is_match(const ObExpr &expr, ObEvalCtx &ctx,
-                          ObBitVector &case_when_match, const EvalBound &bound,
-                          const int64_t &when_expr_idx)
+                          ObBitVector &case_when_match, int64_t *match_then_expr_idx,
+                          const EvalBound &bound, const int64_t &when_expr_idx)
 {
   int ret = OB_SUCCESS;
+  const int64_t then_expr_idx = when_expr_idx + 1;
   WhenVec *when_vec = static_cast<WhenVec *>(expr.args_[when_expr_idx]->get_vector(ctx));
-  for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
-    if (case_when_match.at(j)) {
-      continue;
+  if (when_vec->has_null()) {
+    for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+      if (case_when_match.at(j)) {
+        continue;
+      }
+      if (!when_vec->is_null(j) && when_vec->get_int(j) != 0) {
+        case_when_match.set(j);
+        match_then_expr_idx[j - bound.start()] = then_expr_idx;
+      }
     }
-    if (!when_vec->is_null(j) && when_vec->get_int(j) != 0) {
-      case_when_match.set(j);
+  } else {
+    for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
+      if (case_when_match.at(j)) {
+        continue;
+      }
+      if (when_vec->get_int(j) != 0) {
+        case_when_match.set(j);
+        match_then_expr_idx[j - bound.start()] = then_expr_idx;
+      }
     }
   }
   return ret;
 }
 
 static int dispatch_check_when_is_match(const ObExpr &expr, ObEvalCtx &ctx,
-                                  ObBitVector &case_when_match, const EvalBound &bound,
-                                  const int64_t &when_expr_idx)
+                                  ObBitVector &case_when_match, int64_t *match_then_expr_idx,
+                                  const EvalBound &bound, const int64_t &when_expr_idx)
 {
   int ret = OB_SUCCESS;
   VectorFormat when_format = expr.args_[when_expr_idx]->get_format(ctx);
   switch (when_format) {
     case VEC_FIXED: {
-      ret = check_when_is_match<IntegerFixedVec>(expr, ctx, case_when_match, bound, when_expr_idx);
+      ret = check_when_is_match<IntegerFixedVec>(expr, ctx, case_when_match, match_then_expr_idx,
+                                                 bound, when_expr_idx);
       break;
     }
     case VEC_UNIFORM: {
-      ret = check_when_is_match<IntegerUniVec>(expr, ctx, case_when_match, bound, when_expr_idx);
+      ret = check_when_is_match<IntegerUniVec>(expr, ctx, case_when_match, match_then_expr_idx,
+                                               bound, when_expr_idx);
       break;
     }
     case VEC_UNIFORM_CONST: {
-      ret = check_when_is_match<IntegerUniCVec>(expr, ctx, case_when_match, bound, when_expr_idx);
+      ret = check_when_is_match<IntegerUniCVec>(expr, ctx, case_when_match, match_then_expr_idx,
+                                                bound, when_expr_idx);
       break;
     }
     default: {
-      ret = check_when_is_match<ObVectorBase>(expr, ctx, case_when_match, bound, when_expr_idx);
+      ret = check_when_is_match<ObVectorBase>(expr, ctx, case_when_match, match_then_expr_idx,
+                                              bound, when_expr_idx);
     }
   }
   return ret;
@@ -450,6 +468,146 @@ static int dispatch_eval_match_then(const ObExpr &expr, ObEvalCtx &ctx,
   return ret;
 }
 
+template<typename ThenVec, typename ResVec>
+static int set_res_vec(const ObExpr &expr, ObEvalCtx &ctx,
+                       const int64_t row, const int64_t &then_expr_idx)
+{
+  int ret = OB_SUCCESS;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  if (-1 == then_expr_idx) {
+    res_vec->set_null(row);
+  } else {
+    ThenVec *then_vec = static_cast<ThenVec *>(expr.args_[then_expr_idx]->get_vector(ctx));
+    if (then_vec->is_null(row)) {
+      res_vec->set_null(row);
+    } else {
+      res_vec->set_payload_shallow(row, then_vec->get_payload(row), then_vec->get_length(row));
+    }
+  }
+  return ret;
+}
+
+static int check_then_expr_same_type(const ObExpr &expr, ObEvalCtx &ctx,
+                                     const bool has_else, const int64_t loop,
+                                     bool &then_expr_same_type,
+                                     VectorFormat &then_format,
+                                     VecValueTypeClass &then_vec_tc)
+{
+  int ret = OB_SUCCESS;
+  then_expr_same_type = true;
+  then_format = VEC_INVALID;
+  then_vec_tc = VEC_TC_UNKNOWN;
+
+  for (int64_t expr_idx = 1; OB_SUCC(ret) && then_expr_same_type && expr_idx < loop; expr_idx += 2) {
+    if (then_format == VEC_INVALID) {
+      then_format = expr.args_[expr_idx]->get_format(ctx);
+      if (then_format == VEC_FIXED) {
+        then_vec_tc = expr.args_[expr_idx]->get_vec_value_tc();
+      }
+    } else {
+      VectorFormat curr_format = expr.args_[expr_idx]->get_format(ctx);
+      if (then_format != curr_format) {
+        then_expr_same_type = false;
+      } else if (then_format == VEC_FIXED
+                 && then_vec_tc != expr.args_[expr_idx]->get_vec_value_tc()) {
+        then_expr_same_type = false;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && then_expr_same_type && has_else) {
+    if (then_format == VEC_INVALID) {
+      then_format = expr.args_[expr.arg_cnt_ - 1]->get_format(ctx);
+      if (then_format == VEC_FIXED) {
+        then_vec_tc = expr.args_[expr.arg_cnt_ - 1]->get_vec_value_tc();
+      }
+    } else {
+      VectorFormat curr_format = expr.args_[expr.arg_cnt_ - 1]->get_format(ctx);
+      if (then_format != curr_format) {
+        then_expr_same_type = false;
+      } else if (then_format == VEC_FIXED
+                 && then_vec_tc != expr.args_[expr.arg_cnt_ - 1]->get_vec_value_tc()) {
+        then_expr_same_type = false;
+      }
+    }
+  }
+
+  return ret;
+}
+
+template<typename ResVec>
+static int dispatch_set_res_vec(const ObExpr &expr, ObEvalCtx &ctx,
+                                const ObBitVector &skip, const bool is_same_type,
+                                const VectorFormat then_format, const VecValueTypeClass vec_tc,
+                                int64_t *match_then_expr_idx, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  if (is_same_type) {
+#define SET_RES_VEC_BODY(vec_fmt)                                                 \
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {           \
+      if (skip.at(i)) {                                                           \
+        continue;                                                                 \
+      }                                                                           \
+      int64_t then_expr_idx = match_then_expr_idx[i - bound.start()];             \
+      set_res_vec<vec_fmt, ResVec>(expr, ctx, i, then_expr_idx);                  \
+    }                                                                             \
+    break;
+    switch (then_format) {
+      case VEC_FIXED: {
+        switch (vec_tc) {
+          case VEC_TC_INTEGER: {
+            SET_RES_VEC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>);
+          }
+          case VEC_TC_DEC_INT32: {
+            SET_RES_VEC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT32>>);
+          }
+          case VEC_TC_DEC_INT64: {
+            SET_RES_VEC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT64>>);
+          }
+          case VEC_TC_DEC_INT128: {
+            SET_RES_VEC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT128>>);
+          }
+          case VEC_TC_DEC_INT256: {
+            SET_RES_VEC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT256>>);
+          }
+          case VEC_TC_DEC_INT512: {
+            SET_RES_VEC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT512>>);
+          }
+          default: {
+            SET_RES_VEC_BODY(ObFixedLengthBase);
+          }
+        }
+        break;
+      }
+      case VEC_DISCRETE: {
+        SET_RES_VEC_BODY(ObDiscreteFormat);
+      }
+      case VEC_CONTINUOUS: {
+        SET_RES_VEC_BODY(ObContinuousFormat);
+      }
+      case VEC_UNIFORM: {
+        SET_RES_VEC_BODY(ObUniformFormat<false>);
+      }
+      case VEC_UNIFORM_CONST: {
+        SET_RES_VEC_BODY(ObUniformFormat<true>);
+      }
+      default: {
+        SET_RES_VEC_BODY(ObVectorBase);
+      }
+    }
+#undef SET_RES_VEC_BODY
+  } else {
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
+      if (skip.at(i)) {
+        continue;
+      }
+      int64_t then_expr_idx = match_then_expr_idx[i - bound.start()];
+      set_res_vec<ObVectorBase, ResVec>(expr, ctx, i, then_expr_idx);
+    }
+  }
+  return ret;
+}
+
 template <typename ResVec>
 static int inner_eval_case_vector(const ObExpr &expr,
                                   ObEvalCtx &ctx,
@@ -477,7 +635,13 @@ static int inner_eval_case_vector(const ObExpr &expr,
     // Otherwise, it may cause issues if all_row_active is used for specialized calculations elsewhere.
     EvalBound my_bound(bound.batch_size(), bound.start(), bound.end(), bound.get_all_rows_active());
     void *data_tmp = nullptr;
+    void *data_tmp2 = nullptr;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    ObBitVector *need_eval_mask = nullptr;
+    int64_t *match_then_expr_idx = nullptr;
+    bool then_expr_same_type = false;
+    VectorFormat then_format = VEC_INVALID;
+    VecValueTypeClass then_vec_tc = VEC_TC_UNKNOWN;
     // For single-line scenarios,
     // the additional allocated memory needs to be as small as possible in order to optimize performance.
     // The following approach consumes at most ObBitVector::BYTES_PER_WORD more byte of memory
@@ -487,11 +651,14 @@ static int inner_eval_case_vector(const ObExpr &expr,
     // The unit is byte.
     int64_t mem_size = (((my_bound.end() - 1) / ObBitVector::WORD_BITS) -
                         (my_bound.start() / ObBitVector::WORD_BITS) + 1) * ObBitVector::BYTES_PER_WORD;
-    if (OB_ISNULL(data_tmp = alloc_guard.get_allocator().alloc(mem_size))) {
+    if (OB_ISNULL(data_tmp = alloc_guard.get_allocator().alloc(mem_size))
+        || OB_ISNULL(data_tmp2 = alloc_guard.get_allocator().alloc(mem_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for before_case_when_match", K(ret), K(mem_size));
     } else {
       before_case_when_match = (ObBitVector *)((uint64_t *)data_tmp -
+                                        (my_bound.start() / ObBitVector::WORD_BITS));
+      need_eval_mask = (ObBitVector *)((uint64_t *)data_tmp2 -
                                         (my_bound.start() / ObBitVector::WORD_BITS));
       // There is no need to call reset for initialization here,
       // because the subsequent bit_calculate will override the original values of ObBitVector.
@@ -500,6 +667,24 @@ static int inner_eval_case_vector(const ObExpr &expr,
                               [](const uint64_t l, const uint64_t r) { return (l | r); });
       skip_cnt = case_when_match->accumulate_bit_cnt(my_bound);
       before_case_when_match->deep_copy(*case_when_match, my_bound.start(), my_bound.end());
+      need_eval_mask->deep_copy(*case_when_match, my_bound.start(), my_bound.end());
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(match_then_expr_idx = static_cast<int64_t *>(alloc_guard.get_allocator().alloc(total_cnt * sizeof(int64_t))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory for match_then_expr_idx", K(ret), K(total_cnt));
+      } else {
+        if (has_else) {
+          for (int i = 0; i < total_cnt; ++i) {
+            match_then_expr_idx[i] = expr.arg_cnt_ - 1;
+          }
+        } else {
+          // No else: unmatched rows resolve to NULL directly.
+          for (int i = 0; i < total_cnt; ++i) {
+            match_then_expr_idx[i] = -1;
+          }
+        }
+      }
     }
 
     // E.G
@@ -521,7 +706,8 @@ static int inner_eval_case_vector(const ObExpr &expr,
       if (OB_FAIL(expr.args_[expr_idx]->eval_vector(ctx, *case_when_match, my_bound))) {
         LOG_WARN("failed to eval vector", K(ret), K(expr_idx));
       // first eval when datums
-      } else if (OB_FAIL(dispatch_check_when_is_match(expr, ctx, *case_when_match, my_bound, expr_idx))) {
+      } else if (OB_FAIL(dispatch_check_when_is_match(expr, ctx, *case_when_match, match_then_expr_idx,
+                                                      my_bound, expr_idx))) {
         LOG_WARN("failed to dispatch_check_is_match", K(ret), K(expr_idx));
       } else {  // now eval then datums
         // Reverse case_when_match for use with case_not_match.
@@ -534,8 +720,6 @@ static int inner_eval_case_vector(const ObExpr &expr,
           }
           if (OB_FAIL(expr.args_[expr_idx + 1]->eval_vector(ctx, *case_when_match, my_bound))) {
             LOG_WARN("failed to eval vector", K(ret), K(expr_idx + 1));
-          } else if (OB_FAIL(dispatch_eval_match_then<ResVec>(expr, ctx, *case_when_match, my_bound, expr_idx + 1))) {
-            LOG_WARN("failed to dispatch_eval_match_then", K(ret), K(expr_idx + 1));
           }
         }
         // Reverse case_when_match to be used again as case_when_match.
@@ -550,26 +734,24 @@ static int inner_eval_case_vector(const ObExpr &expr,
       }
     }
     // now set the result of the rest, skip rows already matched (case_when_match)
-    if (OB_SUCC(ret) && skip_cnt < total_cnt) {
-      if (has_else) {
-        if (my_bound.get_all_rows_active() && skip_cnt != 0) {
-          my_bound.set_all_row_active(false);
-        }
-        if (OB_FAIL(expr.args_[expr.arg_cnt_ - 1]->eval_vector(ctx, *case_when_match, my_bound))) {
-          LOG_WARN("failed to eval batch", K(ret));
-          // The calculation method of "else" is consistent with "then".
-        } else if (OB_FAIL(dispatch_eval_match_then<ResVec>(expr, ctx, *case_when_match, my_bound, expr.arg_cnt_ - 1))) {
-          LOG_WARN("failed to dispatch_eval_match_else", K(ret), K(expr.arg_cnt_ - 1));
-        }
-      } else {
-        for (int64_t j = my_bound.start(); OB_SUCC(ret) && j < my_bound.end(); ++j) {
-          if (case_when_match->at(j)) {
-            continue;
-          }
-          ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-          res_vec->set_null(j);
-        }
+    if (OB_SUCC(ret) && skip_cnt < total_cnt && has_else) {
+      if (my_bound.get_all_rows_active() && skip_cnt != 0) {
+        my_bound.set_all_row_active(false);
       }
+      if (OB_FAIL(expr.args_[expr.arg_cnt_ - 1]->eval_vector(ctx, *case_when_match, my_bound))) {
+        LOG_WARN("failed to eval batch", K(ret));
+      }
+    }
+    // Check if all then expressions and else expression have the same type.
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(check_then_expr_same_type(expr, ctx, has_else, loop,
+                                                   then_expr_same_type, then_format, then_vec_tc))) {
+      LOG_WARN("failed to check then expr same type", K(ret));
+    } else if (OB_FAIL(dispatch_set_res_vec<ResVec>(expr, ctx, *need_eval_mask,
+                                             then_expr_same_type, then_format,
+                                             then_vec_tc, match_then_expr_idx,
+                                             my_bound))) {
+      LOG_WARN("failed to set result vector", K(ret));
     }
   }
   return ret;
