@@ -465,9 +465,11 @@ int ObDASBaseAccessP<pcode>::before_process()
   }
 
   {
+    enable_das_scan_iter_reuse_ = false;
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(task.get_task_op()->get_tenant_id()));
     if (tenant_config.is_valid()) {
       is_enable_sqlstat_ = tenant_config->_ob_sqlstat_enable && lib::is_diagnose_info_enabled();
+      enable_das_scan_iter_reuse_ = tenant_config->_enable_das_scan_iter_reuse;
       // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
     }
   }
@@ -527,10 +529,7 @@ int ObDASBaseAccessP<pcode>::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    bool reuse_enable = tenant_config.is_valid()
-                        && tenant_config->_enable_das_scan_iter_reuse
-                        && precheck_remote_iter_reuse(task_ops);
+    bool reuse_enable = enable_das_scan_iter_reuse_ && precheck_remote_iter_reuse(task_ops);
     ObDASScanOp *reusable_scan_op = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       if (OB_ISNULL(task_op = task_ops.at(i))) {

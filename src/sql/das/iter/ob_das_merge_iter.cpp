@@ -16,7 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
 using namespace common;
@@ -341,9 +341,9 @@ int ObDASMergeIter::do_table_scan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr das ref", K(das_ref_), K(ret));
   } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    const bool reuse_config_enabled = tenant_config.is_valid()
-                                      && tenant_config->_enable_das_scan_iter_reuse;
+    ObSQLSessionInfo *session = das_ref_->get_exec_ctx().get_my_session();
+    const bool reuse_config_enabled = OB_NOT_NULL(session)
+                                      && session->enable_das_scan_iter_reuse();
     enable_iter_reuse_ = reuse_config_enabled
                          && SEQUENTIAL_MERGE == merge_type_
                          && nullptr == group_id_expr_;

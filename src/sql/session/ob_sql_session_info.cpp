@@ -4614,6 +4614,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_pl_sql_parameterize_, tenant_config->_enable_pl_sql_parameterize);
       ATOMIC_STORE(&enable_ps_meta_response_optimize_, tenant_config->enable_ps_meta_response_optimize);
       ATOMIC_STORE(&das_deserialize_lib_cache_percentage_, tenant_config->_das_deserialize_lib_cache_percentage);
+      ATOMIC_STORE(&enable_das_scan_iter_reuse_, tenant_config->_enable_das_scan_iter_reuse);
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);

@@ -899,7 +899,8 @@ public:
                                  enable_json_bin_view_(false),
                                  enable_ps_meta_response_optimize_(false),
                                  das_deserialize_lib_cache_percentage_(0),
-                                 session_(session)
+                                 session_(session),
+                                 enable_das_scan_iter_reuse_(false)
     {
     }
     ~ObCachedTenantConfigInfo() {}
@@ -973,6 +974,7 @@ public:
     bool enable_json_bin_view() const { return enable_json_bin_view_; }
     bool enable_ps_meta_response_optimize() const { return enable_ps_meta_response_optimize_; }
     int64_t get_das_deserialize_lib_cache_percentage() const { return ATOMIC_LOAD(&das_deserialize_lib_cache_percentage_); }
+    bool enable_das_scan_iter_reuse() const { return ATOMIC_LOAD(&enable_das_scan_iter_reuse_); }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -1030,6 +1032,7 @@ public:
     bool enable_ps_meta_response_optimize_;
     int64_t das_deserialize_lib_cache_percentage_;
     ObSQLSessionInfo *session_;
+    bool enable_das_scan_iter_reuse_;
   };
 
   class ApplicationInfo {
@@ -1982,6 +1985,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_das_deserialize_lib_cache_percentage();
+  }
+  bool enable_das_scan_iter_reuse()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_das_scan_iter_reuse();
   }
 
   int get_tmp_table_size(uint64_t &size);
