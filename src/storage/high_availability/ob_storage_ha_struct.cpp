@@ -2958,9 +2958,12 @@ int ObMacroBlockReuseMgr::add_macro_block_reuse_info(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("macro block reuse mgr do not init", K(ret));
-  } else if (!table_key.is_valid() || !logic_id.is_valid() || !macro_id.is_valid()) {
+  } else if (!table_key.is_valid()
+      || !logic_id.is_valid()
+      || !macro_id.is_valid()
+      || !macro_id.is_local_id()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(table_key), K(logic_id));
+    LOG_WARN("invalid argument", K(ret), K(table_key), K(logic_id), K(macro_id));
   } else if (OB_FAIL(get_reuse_key_(table_key, reuse_key))) {
     LOG_WARN("failed to get reuse key", K(ret), K(table_key));
   } else if (OB_FAIL(get_reuse_value_(table_key, reuse_map, snapshot_version, co_base_snapshot_version))) {
@@ -3277,7 +3280,14 @@ int ObMacroBlockReuseMgr::build_single_reuse_map_(
               reuse_info.id_ = data_macro_block_meta.get_macro_id();
               reuse_info.data_checksum_ = data_macro_block_meta.get_meta_val().data_checksum_;
 
-              if (OB_FAIL(reuse_value->reuse_map_.insert(logic_id, reuse_info))) {
+              if (!reuse_info.id_.is_local_id()) {
+                // Only local macro blocks can be reused. A backup macro block must be replaced
+                // by a local macro block during RESTORE_REPLACE_REMOTE_SSTABLE, otherwise the
+                // new sstable will still hold backup macro blocks and fail the check in
+                // inner_replace_remote_major_sstable_.
+                LOG_INFO("macro block is not local id, skip to build reuse info",
+                    K(ret), K(logic_id), K(reuse_info));
+              } else if (OB_FAIL(reuse_value->reuse_map_.insert(logic_id, reuse_info))) {
                 LOG_WARN("failed to insert reuse info into reuse map", K(ret), K(logic_id), K(reuse_info), K(table_key));
               }
             }
