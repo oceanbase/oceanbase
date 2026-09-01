@@ -575,7 +575,7 @@ public:
   T_DEF_INT_INFT(output_heartbeat_interval_msec, OB_CLUSTER_PARAMETER, 1000, 1, "output heartbeat interval in seconds");
 
   // Post-commit thread count for async after_trans_handled_ processing, default 1
-  T_DEF_INT_INFT(committer_post_commit_thread_num, OB_CLUSTER_PARAMETER, 2, 1, "committer post-commit thread number");
+  T_DEF_INT_INFT(committer_post_commit_thread_num, OB_CLUSTER_PARAMETER, 1, 1, "committer post-commit thread number");
   // Post-commit queue size for async after_trans_handled_ processing, default 100000
   T_DEF_INT_INFT(committer_post_commit_queue_size, OB_CLUSTER_PARAMETER, 100000, 0, "committer post-commit queue size");
 
