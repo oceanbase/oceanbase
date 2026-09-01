@@ -1859,6 +1859,21 @@ int ObPLResolver::resolve_declare_record_type(const ParseNode *type_node,
               } else {
                 if (OB_NOT_NULL(default_node)) {
                   ObRawExpr *new_default_expr = NULL;
+                  bool is_parameterized_empty = false;
+                  OZ (is_parameterized_empty_string(default_node,
+                                          is_parameterized_empty));
+                  if (OB_SUCC(ret) &&
+                      ((T_CHAR == default_node->type_ && 0 == default_node->str_len_)
+                        || is_parameterized_empty)
+                      && OB_NOT_NULL(data_type.get_data_type())
+                      && (ObCharType == data_type.get_data_type()->get_obj_type()
+                          || ObNCharType == data_type.get_data_type()->get_obj_type())) {
+                    default_node->type_ = T_CHAR;
+                    default_node->str_len_ = 1;
+                    default_node->str_value_ = " ";
+                    default_node->raw_text_ = "' '";
+                    default_node->text_len_ = 3;
+                  }
                   OZ (resolve_expr(default_node, unit_ast, default_expr,
                                   combine_line_and_col(default_node->stmt_loc_), true, &data_type));
                   OZ (check_param_default_expr_legal(default_expr, false));

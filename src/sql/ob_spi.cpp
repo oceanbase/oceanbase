@@ -963,6 +963,11 @@ int ObSPIService::spi_convert(ObSQLSessionInfo *session,
   OX (result.set_meta_type(result_type.get_obj_meta()));
   OX (result = dst);
   OX (result.set_param_meta());
+  OZ (spi_pading_intf(session,
+                      result_type.get_obj_meta().get_type(),
+                      result_type.get_accuracy(),
+                      allocator,
+                      &result));
   return ret;
 }
 
@@ -1022,12 +1027,6 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
       ObIArray<common::ObString> *type_info = NULL;
       OZ (expected_type->get_type_info(type_info));
       OZ (spi_convert(ctx->exec_ctx_->get_my_session(), &tmp_alloc, *src, result_type, value, type_info));
-      // Copy-out padding follows the actual parameter (receiver) type.
-      OZ (spi_pading_intf(ctx->exec_ctx_->get_my_session(),
-                          expected_type->get_data_type()->get_obj_type(),
-                          result_type.get_accuracy(),
-                          &tmp_alloc,
-                          &value));
       OZ (deep_copy_obj(*ctx->allocator_, value, result_value));
       if (OB_SUCC(ret) && need_set) {
         void *ptr = ctx->params_->at(result_idx).get_deep_copy_obj_ptr();
