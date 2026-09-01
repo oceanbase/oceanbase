@@ -202,7 +202,7 @@ public:
   /// whether the result is with rows (true for SELECT statement)
   bool is_with_rows() const;
   // tell mysql if need to do async end trans
-  bool need_end_trans_callback(bool force_sync_resp) const;
+  bool need_end_trans_callback(bool force_sync_resp);
   bool need_end_trans() const;
   // get physical plan
   // we do not want you to change the pointer of the plan. if you indeed to do that, please
@@ -495,6 +495,7 @@ private:
   bool is_init_;
   common::ParamStore ps_params_; // 文本 ps params 记录，用于填入 sql_audit
   common::ObFunction<void(const int, int&)> close_fail_cb_;
+  bool need_reset_pl_async_commit_flag_;
 };
 
 
@@ -572,7 +573,8 @@ inline ObResultSet::ObResultSet(ObSQLSessionInfo &session, common::ObIAllocator 
       wild_str_(),
       ps_sql_(),
       is_init_(false),
-      ps_params_(ObWrapperAllocator(&allocator))
+      ps_params_(ObWrapperAllocator(&allocator)),
+      need_reset_pl_async_commit_flag_(false)
 {
   message_[0] = '\0';
   // Always called in the ObResultSet constructor
