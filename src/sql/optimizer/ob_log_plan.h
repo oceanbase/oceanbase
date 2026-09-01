@@ -1657,8 +1657,11 @@ public:
   int replace_generate_column_exprs(ObLogicalOperator *op);
   int generate_old_column_values_exprs(ObLogicalOperator *root);
   int generate_tsc_replace_exprs_pair(ObLogTableScan *op);
-  int generate_ins_replace_exprs_pair(ObLogDelUpd *op);
   int generate_old_column_exprs(ObIArray<IndexDMLInfo*> &index_dml_infos);
+  // For REPLACE/INSERT ON DUPLICATE KEY UPDATE conflict checker: VGC has no stored
+  // value on the old row, so expand it to dependant_expr for base-column evaluation
+  // (copy-on-replace to avoid polluting exprs shared with the main plan).
+  int replace_gen_col_exprs_for_conflict_checker(ObLogDelUpd *op);
   /**
    * 递归处理expr里的SubQuery，遇到SubLink就生成一个SubPlan
    * @param expr
