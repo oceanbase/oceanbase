@@ -632,6 +632,19 @@ int ObHbaseRowIterator::get_next_row_internal(ResultType *&result)
   }
   if (OB_SUCC(ret) && NULL == curr_cell_.get_ob_row()) {
     ret = next_cell();
+    if (OB_ITER_END == ret && enable_get_optimization_ && !is_wildcard_mode_) {
+      // OB_ITER_END only means that the current qualifier does not exist.
+      // Continue with the remaining explicit qualifiers before ending the Get.
+      ret = OB_SUCCESS;
+      bool loop = true;
+      if (OB_FAIL(move_to_next_qualifier_and_rescan(loop, ObString()))) {
+        LOG_WARN("fail to move to next qualifier", K(ret), K_(current_qualifier_idx));
+      } else if (!loop) {
+        ret = OB_ITER_END;
+      } else {
+        has_more_cells_ = true;
+      }
+    }
   }
   if (OB_SUCC(ret) && matcher_->is_curr_row_empty()) {
     count_per_row_ = 0;
@@ -845,8 +858,9 @@ int ObHbaseRowIterator::get_next_row_internal_normal_with_get_optimization(Resul
           if (OB_FAIL(child_cell_iter->get_next_cell(first_row))) {
             if (OB_ITER_END == ret) {
               // No data for this qualifier, move to next
-              loop = false;
               ret = OB_SUCCESS;
+              current_qualifier_idx_++;
+              continue;
             } else {
               LOG_WARN("fail to get cell for first qualifier in explicit mode", K(ret));
             }
@@ -2321,15 +2335,22 @@ int ObHbaseRowIterator::move_to_next_qualifier_and_rescan(bool &loop, const ObSt
   } else {
     // Explicit qualifiers mode
     const ObIArray<ObString> &qualifiers = htable_filter_.get_columns();
-    current_qualifier_idx_++;
-    if (current_qualifier_idx_ < qualifiers.count()) {
+    // Skip absent qualifiers until one rescan succeeds or all qualifiers are processed.
+    while (OB_SUCC(ret) && ++current_qualifier_idx_ < qualifiers.count()) {
       ObString next_qualifier = hbase_query_.get_qualifier_with_family() ?
                                 qualifiers.at(current_qualifier_idx_).after('.') :
                                 qualifiers.at(current_qualifier_idx_);
       if (OB_FAIL(rescan_for_qualifier(next_qualifier))) {
-        LOG_WARN("fail to rescan for next qualifier", K(ret), K(next_qualifier), K_(current_qualifier_idx));
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to rescan for next qualifier", K(ret), K(next_qualifier), K_(current_qualifier_idx));
+        }
+      } else {
+        break;
       }
-    } else {
+    }
+    if (OB_SUCC(ret) && current_qualifier_idx_ >= qualifiers.count()) {
       // All qualifiers processed
       loop = false;
     }

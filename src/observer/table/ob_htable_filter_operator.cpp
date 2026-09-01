@@ -2229,13 +2229,20 @@ int ObHTableRowIterator::move_to_next_qualifier_and_rescan(bool &loop, const ObS
   } else {
     // Explicit qualifiers mode
     const ObIArray<ObString> &qualifiers = htable_filter_.get_columns();
-    current_qualifier_idx_++;
-    if (current_qualifier_idx_ < qualifiers.count()) {
+    // Skip absent qualifiers until one rescan succeeds or all qualifiers are processed.
+    while (OB_SUCC(ret) && ++current_qualifier_idx_ < qualifiers.count()) {
       ObString next_qualifier = qualifiers.at(current_qualifier_idx_);
       if (OB_FAIL(rescan_for_qualifier(next_qualifier))) {
-        LOG_WARN("fail to rescan for next qualifier", K(ret), K(next_qualifier), K_(current_qualifier_idx));
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to rescan for next qualifier", K(ret), K(next_qualifier), K_(current_qualifier_idx));
+        }
+      } else {
+        break;
       }
-    } else {
+    }
+    if (OB_SUCC(ret) && current_qualifier_idx_ >= qualifiers.count()) {
       // All qualifiers processed
       loop = false;
     }
@@ -2301,9 +2308,9 @@ int ObHTableRowIterator::get_next_result_internal_with_get_optimization(ResultTy
           // in check_and_apply_get_optimization, so we can directly get cell from iterator
           if (OB_FAIL(next_cell())) {
             if (OB_ITER_END == ret) {
-              // No more data for this rowkey
-              loop = false;
+              // No data for this qualifier, move to next
               ret = OB_SUCCESS;
+              current_qualifier_idx_++;
               continue;
             } else {
               LOG_WARN("fail to get cell in explicit mode", K(ret));
