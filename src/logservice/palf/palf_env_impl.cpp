@@ -40,6 +40,17 @@ using namespace common;
 using namespace share;
 namespace palf
 {
+namespace
+{
+int64_t calculate_disk_space_threshold(
+    const int64_t total_disk_space,
+    const int64_t threshold_percentage)
+{
+  return total_disk_space / 100 * threshold_percentage
+      + total_disk_space % 100 * threshold_percentage / 100;
+}
+} // namespace
+
 PalfHandleImpl *PalfHandleImplFactory::alloc()
 {
   return MTL_NEW(PalfHandleImpl, "palf_env");
@@ -116,6 +127,29 @@ bool PalfDiskOptionsWrapper::need_throttling() const
   ObSpinLockGuard guard(disk_opts_lock_);
   const int64_t trigger_size = disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ * disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ / 100;
   return disk_opts_for_stopping_writing_.is_valid() && cur_unrecyclable_log_disk_size_ > trigger_size;
+}
+
+int PalfDiskOptionsWrapper::check_log_disk_under_pressure(
+    bool &log_disk_under_pressure) const
+{
+  int ret = OB_SUCCESS;
+  log_disk_under_pressure = false;
+  ObSpinLockGuard guard(disk_opts_lock_);
+  const PalfDiskOptions &disk_options = disk_opts_for_recycling_blocks_;
+  if (OB_UNLIKELY(!disk_options.is_valid()
+      || cur_unrecyclable_log_disk_size_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "invalid palf disk pressure options", K(ret),
+        K(disk_options), K(cur_unrecyclable_log_disk_size_));
+  } else {
+    const int64_t total_disk_space = disk_options.log_disk_usage_limit_size_;
+    const int64_t gc_trigger_percentage = disk_options.log_disk_utilization_threshold_;
+    // Match the floor division and strict comparison used by try_recycle_blocks().
+    const int64_t gc_trigger_size = calculate_disk_space_threshold(
+        total_disk_space, gc_trigger_percentage);
+    log_disk_under_pressure = cur_unrecyclable_log_disk_size_ > gc_trigger_size;
+  }
+  return ret;
 }
 
 // Concurrent analysis
@@ -724,8 +758,8 @@ int PalfEnvImpl::try_recycle_blocks()
     PALF_LOG_RET(WARN, tmp_ret, "failed to update_disk_info", K(disk_options_wrapper_));
   } else {
     const int64_t usable_disk_size_to_recycle_blocks =
-        total_size_to_recycle_blocks
-        * disk_opts_for_recycling_blocks.log_disk_utilization_threshold_ / 100LL;
+        calculate_disk_space_threshold(total_size_to_recycle_blocks,
+            disk_opts_for_recycling_blocks.log_disk_utilization_threshold_);
     const int64_t usable_disk_limit_size_to_stop_writing =
         total_size_to_stop_write
         * disk_opts_for_stopping_writing.log_disk_utilization_limit_threshold_ / 100LL;
@@ -924,6 +958,20 @@ int PalfEnvImpl::get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_u
   } else {
     total_usable_size_byte = disk_options.log_disk_usage_limit_size_;
     PALF_LOG(INFO, "get_stable_disk_usage", K(ret), "capacity(MB):", total_usable_size_byte/MB, "used(MB):", used_size_byte/MB);
+  }
+  return ret;
+}
+
+int PalfEnvImpl::check_log_disk_under_pressure(bool &log_disk_under_pressure)
+{
+  int ret = OB_SUCCESS;
+  log_disk_under_pressure = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "palf env is not inited", K(ret));
+  } else if (OB_FAIL(disk_options_wrapper_.check_log_disk_under_pressure(
+      log_disk_under_pressure))) {
+    PALF_LOG(WARN, "failed to check whether log disk is under pressure", K(ret));
   }
   return ret;
 }

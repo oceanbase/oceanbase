@@ -856,5 +856,19 @@ int ObLogService::check_disk_space_enough(bool &is_disk_enough)
   return ret;
 }
 
+int ObLogService::check_log_disk_under_pressure(bool &log_disk_under_pressure)
+{
+  int ret = OB_SUCCESS;
+  log_disk_under_pressure = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "log_service is not inited", K(ret));
+  } else if (OB_FAIL(palf_env_->check_log_disk_under_pressure(
+      log_disk_under_pressure))) {
+    CLOG_LOG(WARN, "failed to check whether log disk is under pressure", K(ret));
+  }
+  return ret;
+}
+
 }//end of namespace logservice
 }//end of namespace oceanbase

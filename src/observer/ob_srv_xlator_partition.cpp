@@ -40,6 +40,7 @@
 #include "storage/tx/wrs/ob_weak_read_service_rpc_define.h"  // weak_read_service
 #include "observer/ob_rpc_processor_simple.h"
 #include "observer/ob_srv_task.h"
+#include "storage/tx_storage/ob_get_ls_replica_checkpoint_info_rpc_proxy.h"
 
 #include "observer/table/ob_table_rpc_processor.h"
 #include "observer/table/ob_table_execute_processor.h"
@@ -274,6 +275,9 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   // tenant major freeze
   RPC_PROCESSOR(ObTenantMajorFreezeP);
   RPC_PROCESSOR(ObTenantAdminMergeP);
+
+  // majority min checkpoint scn
+  RPC_PROCESSOR(ObRpcGetLSReplicaCheckpointInfoP);
 
   // checkpoint slog rpc
   RPC_PROCESSOR(ObCheckpointSlogP, gctx_);

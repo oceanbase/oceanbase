@@ -16,25 +16,12 @@
 #include "logservice/ob_log_service.h" // ObLogService
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "rootserver/ob_ls_service_helper.h"//ObLSServiceHelper
-#include "rootserver/ob_ls_recovery_reportor.h"
+#include "share/ob_share_util.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
-
-int ObLSReplicaReadableSCN::init(const common::ObAddr &server, const share::SCN &readable_scn)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!server.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("server is invalid", KR(ret), K(server));
-  } else {
-    server_ = server;
-    readable_scn_ = readable_scn;
-  }
-  return ret;
-}
 
 int ObLSRecoveryGuard::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const int64_t &timeout)
@@ -104,7 +91,8 @@ bool ObLSRecoveryGuard::skip_check_member_list_change_(const uint64_t tenant_id)
   MTL_SWITCH(tenant_id) {
     if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
       bret = false;
-    } else if (OB_FAIL(ObLSRecoveryReportor::check_tenant_enable_logonly_replica(tenant_id, enable_logonly_replica))) {
+    } else if (OB_FAIL(share::ObShareUtil::check_tenant_enable_logonly_replica(
+        tenant_id, enable_logonly_replica))) {
       bret = false;
       LOG_WARN("failed to check tenant enable l replica", KR(ret), K(tenant_id));
     } else if (enable_logonly_replica) {
@@ -193,8 +181,7 @@ void ObLSRecoveryStatHandler::reset(const bool is_init)
   readable_scn_upper_limit_.reset();
   config_version_in_inner_.reset();
   extra_server_.reset();
-  config_version_.reset();
-  replicas_scn_.reset();
+  replica_readable_scn_snapshot_.reset();
   last_dump_ts_ = OB_INVALID_TIMESTAMP;
   if (is_init) {
     ATOMIC_SET(&ref_cnt_, 0);
@@ -347,6 +334,9 @@ int ObLSRecoveryStatHandler::get_all_replica_min_readable_scn(share::SCN &readab
   int ret = OB_SUCCESS;
   palf::PalfStat palf_stat_first;
   palf::PalfStat palf_stat_second;
+  storage::ObLSReplicaSCNSnapshot readable_scn_snapshot;
+  ObArray<common::ObAddr> active_f_member_list;
+  int64_t unused_paxos_replica_number = 0;
   readable_scn = SCN::max_scn();
   logservice::ObLogService *ls_svr = MTL(logservice::ObLogService*);
   int64_t first_proposal_id = 0;
@@ -363,37 +353,40 @@ int ObLSRecoveryStatHandler::get_all_replica_min_readable_scn(share::SCN &readab
   } else if (!is_strong_leader(first_role)) {
     ret = OB_NOT_MASTER;
     LOG_WARN("not master, need retry", KR(ret), K(ls_->get_ls_id()));
+  } else if (OB_FAIL(storage::construct_new_member_list_for_majority_scn_collect(
+      palf_stat_first, active_f_member_list, unused_paxos_replica_number))) {
+    LOG_WARN("failed to construct full member list", KR(ret), K(palf_stat_first));
+  } else if (OB_FAIL(get_replica_readable_scn_snapshot_(
+      palf_stat_first.config_version_, readable_scn_snapshot))) {
+    LOG_WARN("failed to get replica readable scn snapshot",
+        KR(ret), K(palf_stat_first));
   } else {
-    ObMemberList &paxos_member_list = palf_stat_first.paxos_member_list_;
-    SpinRLockGuard guard(lock_);
-    if (palf_stat_first.config_version_ != config_version_) {
+    const ObIArray<storage::ObLSReplicaSCN> &replica_readable_scns =
+        readable_scn_snapshot.get_replica_scns();
+    if (replica_readable_scns.count() < active_f_member_list.count()) {
       ret = OB_NEED_RETRY;
-      LOG_WARN("config version not match", KR(ret), K(config_version_), K(palf_stat_first));
-    } else if (replicas_scn_.count() < paxos_member_list.get_member_number()) {
-      ret = OB_NEED_RETRY;
-      LOG_WARN("not enough replica", KR(ret), K(replicas_scn_), K(paxos_member_list));
+      LOG_WARN("not enough full replica", KR(ret),
+          K(readable_scn_snapshot), K(active_f_member_list));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < paxos_member_list.get_member_number(); ++i) {
-      ObAddr member;
+    for (int64_t i = 0; OB_SUCC(ret) && i < active_f_member_list.count(); ++i) {
+      const ObAddr &member = active_f_member_list.at(i);
       int64_t index = 0;
-      if (OB_FAIL(paxos_member_list.get_server_by_index(i, member))) {
-        LOG_WARN("failed to get server by index", KR(ret), K(i));
-      }
-      for (; OB_SUCC(ret) && index < replicas_scn_.count(); ++index) {
-        if (replicas_scn_.at(index).get_server() == member) {
-          readable_scn = SCN::min(readable_scn, replicas_scn_.at(index).get_readable_scn());
+      for (; OB_SUCC(ret) && index < replica_readable_scns.count(); ++index) {
+        if (replica_readable_scns.at(index).get_server() == member) {
+          readable_scn = SCN::min(
+              readable_scn, replica_readable_scns.at(index).get_scn());
           break;
         }
       }
-      if (OB_SUCC(ret) && index >= replicas_scn_.count()) {
+      if (OB_SUCC(ret) && index >= replica_readable_scns.count()) {
         ret = OB_NEED_RETRY;
-        LOG_WARN("replica has no readable scn", KR(ret), K(member), K(replicas_scn_));
+        LOG_WARN("replica has no readable scn", KR(ret), K(member), K(readable_scn_snapshot));
       }
     }
     //TODO maybe need consider readable scn in inner table
     ObLSID ls_id = ls_->get_ls_id();
-    LOG_INFO("all ls readable scn", KR(ret), K(ls_id), K(readable_scn), K(replicas_scn_),
-        "member_list", paxos_member_list, "replicas config_version", config_version_,
+    LOG_INFO("all ls readable scn", KR(ret), K(ls_id), K(readable_scn), K(readable_scn_snapshot),
+        K(active_f_member_list),
         "current_config_version", palf_stat_first.config_version_);
   }
   if (FAILEDx(get_latest_palf_stat_(palf_stat_second))) {
@@ -436,30 +429,32 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(server));
   } else {
+    SpinRLockGuard guard(lock_);
     SCN readable_scn;
     is_valid = false;
     const int64_t TIME_WAIT = 100 * 1000;
     bool found = false;
-    SpinRLockGuard guard(lock_);
-    for (int64_t i = 0; i < replicas_scn_.count() && OB_SUCC(ret) && !found;
+    const ObIArray<storage::ObLSReplicaSCN> &replica_readable_scns =
+        replica_readable_scn_snapshot_.get_replica_scns();
+    for (int64_t i = 0; i < replica_readable_scns.count() && OB_SUCC(ret) && !found;
          ++i) {
-      if (replicas_scn_.at(i).get_server() == server) {
+      if (replica_readable_scns.at(i).get_server() == server) {
         found = true;
-        readable_scn = replicas_scn_.at(i).get_readable_scn();
+        readable_scn = replica_readable_scns.at(i).get_scn();
         if (readable_scn >= readable_scn_upper_limit_) {
           is_valid = true;
           LOG_INFO("can change member list", K(server), K(readable_scn),
-              K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
+              K_(readable_scn_upper_limit), "ls_id", ls_->get_ls_id());
         } else if (REACH_TENANT_TIME_INTERVAL(TIME_WAIT)) {
           LOG_INFO("server readable scn is not larger enough", K(server),
-                   K(readable_scn), K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
+                   K(readable_scn), K_(readable_scn_upper_limit), "ls_id", ls_->get_ls_id());
         }
       }
     }  // end for
     if (OB_SUCC(ret) && !found && REACH_TENANT_TIME_INTERVAL(TIME_WAIT)) {
       is_valid = false;
-      LOG_INFO("cannot find server readable scn", K(server), K(replicas_scn_),
-          K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
+      LOG_INFO("cannot find server readable scn", K(server), K_(replica_readable_scn_snapshot),
+          K_(readable_scn_upper_limit), "ls_id", ls_->get_ls_id());
     }
   }
   return ret;
@@ -603,55 +598,6 @@ int ObLSRecoveryStatHandler::do_get_ls_level_readable_scn_(SCN &read_scn)
   return ret;
 }
 
-int ObLSRecoveryStatHandler::construct_new_member_list_(
-    const common::ObMemberList &member_list_ori,
-    const common::GlobalLearnerList &degraded_list,
-    const int64_t paxos_replica_number_ori,
-    ObIArray<common::ObAddr> &member_list_new,
-    int64_t &paxos_replica_number_new,
-    int64_t &full_replica_num)
-{
-  int ret = OB_SUCCESS;
-  bool found_me = false;
-  member_list_new.reset();
-  full_replica_num = 0;
-  paxos_replica_number_new = paxos_replica_number_ori;
-  if (OB_UNLIKELY(0 >= member_list_ori.get_member_number()
-        || 0 > degraded_list.get_member_number()
-        || 0 >= paxos_replica_number_ori)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(member_list_ori), K(degraded_list), K(paxos_replica_number_ori));
-  } else {
-    common::ObMember member;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_list_ori.get_member_number(); ++i) {
-      member.reset();
-      if (OB_FAIL(member_list_ori.get_member_by_index(i, member))) {
-        LOG_WARN("get_member_by_index failed", KR(ret), K(i));
-      } else if (OB_UNLIKELY(!member.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("member is invalid", KR(ret), K(member));
-      } else if (degraded_list.contains(member.get_server())) {
-        paxos_replica_number_new--;
-        // do not count degraded member
-      } else if (FALSE_IT(full_replica_num += (member.is_logonly() ? 0 : 1))) {
-      } else if (OB_FAIL(member_list_new.push_back(member.get_server()))) {
-        LOG_WARN("fail to push back member_list_new", KR(ret), K(member), K(member_list_new));
-      } else if (member.get_server() == GCTX.self_addr()) {
-        found_me = true;
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (!found_me) {
-      ret = OB_EAGAIN;
-      LOG_WARN("current leader degraded, try again", KR(ret), K(member_list_ori), K(degraded_list),
-          K(paxos_replica_number_ori), K(member_list_new), K(paxos_replica_number_new));
-    }
-  }
-  return ret;
-}
-
 int ObLSRecoveryStatHandler::try_reload_and_fix_config_version_(
     const palf::LogConfigVersion &current_version)
 {
@@ -768,27 +714,29 @@ int ObLSRecoveryStatHandler::construct_addr_list_(
     ObIArray<common::ObAddr> &addr_list)
 {
   int ret = OB_SUCCESS;
+  int64_t unused_paxos_replica_number = 0;
   addr_list.reset();
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
   } else if (OB_UNLIKELY(!palf_stat.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("palf stat is invalid", KR(ret), K(palf_stat));
+  // A LOGONLY replica cannot return a valid readable SCN from
+  // get_ls_replayed_scn, while a degraded replica is outside the current
+  // readable/checkpoint quorum. The helper therefore keeps only
+  // non-degraded FULL members as RPC targets.
+  } else if (OB_FAIL(storage::construct_new_member_list_for_majority_scn_collect(
+      palf_stat, addr_list, unused_paxos_replica_number))) {
+    LOG_WARN("failed to construct full member list", KR(ret), K(palf_stat));
   } else {
-    common::ObMember member;
-    const common::ObMemberList &member_list = palf_stat.paxos_member_list_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
-      if (OB_FAIL(member_list.get_member_by_index(i, member))) {
-        LOG_WARN("failed to get member by index", KR(ret), K(i));
-      } else if (OB_FAIL(addr_list.push_back(member.get_server()))) {
-        LOG_WARN("failed to push back member", KR(ret), K(member));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      SpinWLockGuard guard(lock_);
-      if (extra_server_.is_valid() && OB_FAIL(addr_list.push_back(extra_server_))) {
-        LOG_WARN("failed to push back member", KR(ret), K(extra_server_));
-      }
+    SpinRLockGuard guard(lock_);
+    // check_can_add_member() only records a non-LOGONLY candidate here. Keep
+    // collecting it until PALF admits it; never re-add an existing L/degraded
+    // member that the helper intentionally filtered out.
+    if (extra_server_.is_valid()
+        && !palf_stat.paxos_member_list_.contains(extra_server_)
+        && OB_FAIL(addr_list.push_back(extra_server_))) {
+      LOG_WARN("failed to push back extra server", KR(ret), K_(extra_server), K(palf_stat));
     }
   }
   return ret;
@@ -805,12 +753,12 @@ int ObLSRecoveryStatHandler::dump_all_replica_readable_scn_(const bool force_dum
     const int64_t PRINT_INTERVAL = 5 * 1000 * 1000L;
     const int64_t now = ObTimeUtility::current_time();
     if (force_dump || now - last_dump_ts_ > PRINT_INTERVAL) {
-      LOG_INFO("ls readable scn in memory", K(ls_id), K(replicas_scn_),
+      LOG_INFO("ls readable scn in memory", K(ls_id), K_(replica_readable_scn_snapshot),
           K(last_dump_ts_), K(force_dump));
       last_dump_ts_ = now;
     } else {
       LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id),
-          K(readable_scn_upper_limit_), K(replicas_scn_));
+          K(readable_scn_upper_limit_), K_(replica_readable_scn_snapshot));
     }
   }
   return ret;
@@ -845,7 +793,7 @@ int ObLSRecoveryStatHandler::check_member_change_valid_(
          "ls_id", ls_->get_ls_id(), K(palf_stat));
     } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000L)) {
       LOG_INFO("can not change member list",  K(new_member_list), K(paxos_replica_num),
-          K(readable_scn), K(readable_scn_upper_limit_),
+          K(readable_scn), K_(readable_scn_upper_limit),
           "ls_id", ls_->get_ls_id(), K(palf_stat));
     }
   }
@@ -880,12 +828,13 @@ int ObLSRecoveryStatHandler::do_get_max_readable_scn_(
 int ObLSRecoveryStatHandler::gather_replica_readable_scn()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObLSReplicaReadableSCN> replicas_scn;
+  storage::ObLSReplicaSCNSnapshot readable_scn_snapshot;
+  storage::ObLSReplicaSCNSnapshot checkpoint_scn_snapshot;
   palf::PalfStat palf_stat_first;
   palf::PalfStat palf_stat_second;
-  ObArray<common::ObAddr> addr_list;
   int tmp_ret = OB_SUCCESS;
   bool is_valid_use = false;
+  bool need_collect_replica_checkpoint = false;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
@@ -896,23 +845,35 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
     LOG_TRACE("not leader", KR(ret), K(palf_stat_first));
   } else if (OB_FAIL(check_can_use_new_version_(is_valid_use))) {
     LOG_WARN("failed to check can use new version", KR(ret));
-  } else if (!is_valid_use) {
+  } else if (OB_FAIL(share::ObShareUtil::check_majority_min_replica_checkpoint_enabled(
+      tenant_id_, need_collect_replica_checkpoint))) {
+    LOG_WARN("failed to check whether majority min replica checkpoint is enabled",
+        KR(ret), K_(tenant_id));
+  } else if (!is_valid_use && !need_collect_replica_checkpoint) {
     ret = OB_NEED_RETRY;
-    LOG_WARN("not valid to use new version", KR(ret));
-  } else if (OB_FAIL(construct_addr_list_(palf_stat_first, addr_list))) {
-    LOG_WARN("failed to construct addr list", KR(ret), K(palf_stat_first));
-  } else if (OB_FAIL(do_get_each_replica_readable_scn_(addr_list, replicas_scn))) {
-    LOG_WARN("failed to get each replica readable", KR(ret), K(addr_list));
+    LOG_WARN("not valid to use new version", KR(ret), K(is_valid_use), K(need_collect_replica_checkpoint));
+  } else if (OB_FAIL(readable_scn_snapshot.init(palf_stat_first))) {
+    LOG_WARN("failed to init replica readable scn snapshot", KR(ret), K(palf_stat_first));
+  } else if (OB_FAIL(checkpoint_scn_snapshot.init(palf_stat_first))) {
+    LOG_WARN("failed to init replica checkpoint scn snapshot", KR(ret), K(palf_stat_first));
+  } else if (OB_FAIL(do_get_each_replica_readable_scn_(
+      palf_stat_first, need_collect_replica_checkpoint,
+      readable_scn_snapshot, checkpoint_scn_snapshot))) {
+    LOG_WARN("failed to get each replica readable", KR(ret), K(palf_stat_first));
   } else if (OB_FAIL(get_palf_stat_(palf_stat_second))) {
     LOG_WARN("failed to get palf stat", KR(ret));
   } else if (palf_stat_second.config_version_ != palf_stat_first.config_version_) {
     ret = OB_NEED_RETRY;
     LOG_WARN("config version change, need retry", KR(ret), K(palf_stat_second), K(palf_stat_first));
   } else {
+    if (need_collect_replica_checkpoint
+      && OB_TMP_FAIL(ls_->update_replica_checkpoint_info(palf_stat_second, checkpoint_scn_snapshot))) {
+      LOG_WARN("failed to update replica checkpoint info", KR(tmp_ret), K(palf_stat_second),
+          K(checkpoint_scn_snapshot));
+    }
     SpinWLockGuard guard(lock_);
-    config_version_ = palf_stat_second.config_version_;
-    if (OB_FAIL(replicas_scn_.assign(replicas_scn))) {
-      LOG_WARN("failed to replicas scn", KR(ret), K(replicas_scn));
+    if (OB_FAIL(replica_readable_scn_snapshot_.assign(readable_scn_snapshot))) {
+      LOG_WARN("failed to cache replica readable scn snapshot", KR(ret), K(readable_scn_snapshot));
     }
   }
   if (is_strong_leader(palf_stat_second.role_) && is_valid_use) {
@@ -930,28 +891,58 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
   return ret;
 }
 
+int ObLSRecoveryStatHandler::get_replica_readable_scn_snapshot_(
+    const palf::LogConfigVersion &config_version,
+    storage::ObLSReplicaSCNSnapshot &readable_scn_snapshot)
+{
+  int ret = OB_SUCCESS;
+  readable_scn_snapshot.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!config_version.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(config_version));
+  } else {
+    SpinRLockGuard guard(lock_);
+    if (replica_readable_scn_snapshot_.get_config_version() != config_version) {
+      ret = OB_NEED_RETRY;
+      LOG_WARN("replica readable scn snapshot is not ready for current config",
+          KR(ret), K(config_version), K_(replica_readable_scn_snapshot));
+    } else if (OB_UNLIKELY(!replica_readable_scn_snapshot_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cached replica readable scn snapshot is invalid",
+          KR(ret), K(config_version), K_(replica_readable_scn_snapshot));
+    } else if (OB_FAIL(readable_scn_snapshot.assign(replica_readable_scn_snapshot_))) {
+      LOG_WARN("failed to copy replica readable scn snapshot",
+          KR(ret), K(config_version), K_(replica_readable_scn_snapshot));
+    }
+  }
+  return ret;
+}
+
 int ObLSRecoveryStatHandler::do_get_member_readable_scn_(
     const ObIArray<common::ObAddr> &ob_member_list,
     const palf::LogConfigVersion &config_version,
     ObIArray<SCN> &replica_readable_scn)
 {
   int ret = OB_SUCCESS;
+  storage::ObLSReplicaSCNSnapshot readable_scn_snapshot;
   replica_readable_scn.reset();
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
   } else if (ob_member_list.count() <= 0 || !config_version.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ob_member_list), K(config_version));
+  } else if (OB_FAIL(get_replica_readable_scn_snapshot_(
+      config_version, readable_scn_snapshot))) {
+    LOG_WARN("failed to get replica readable scn snapshot",
+        KR(ret), K(ob_member_list), K(config_version));
   } else {
-    SpinRLockGuard guard(lock_);
-    if (config_version_ != config_version) {
-      ret = OB_NEED_RETRY;
-      LOG_WARN("config version not match, need retry", KR(ret), K(config_version),
-      K(config_version_));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < replicas_scn_.count(); ++i) {
-      const ObAddr &server = replicas_scn_.at(i).get_server();
-      const SCN &readable_scn = replicas_scn_.at(i).get_readable_scn();
+    const ObIArray<storage::ObLSReplicaSCN> &replica_readable_scns =
+        readable_scn_snapshot.get_replica_scns();
+    for (int64_t i = 0; OB_SUCC(ret) && i < replica_readable_scns.count(); ++i) {
+      const ObAddr &server = replica_readable_scns.at(i).get_server();
+      const SCN &readable_scn = replica_readable_scns.at(i).get_scn();
       if (has_exist_in_array(ob_member_list, server)) {
         if (OB_FAIL(replica_readable_scn.push_back(readable_scn))) {
           LOG_WARN("failed to push back", KR(ret), K(i), K(server), K(readable_scn));
@@ -963,15 +954,30 @@ int ObLSRecoveryStatHandler::do_get_member_readable_scn_(
 }
 
 int ObLSRecoveryStatHandler::do_get_each_replica_readable_scn_(
-    const ObIArray<common::ObAddr> &ob_member_list,
-    ObArray<ObLSReplicaReadableSCN> &replicas_scn)
+    const palf::PalfStat &palf_stat,
+    const bool need_collect_replica_checkpoint,
+    storage::ObLSReplicaSCNSnapshot &readable_scn_snapshot,
+    storage::ObLSReplicaSCNSnapshot &checkpoint_scn_snapshot)
 {
   int ret = OB_SUCCESS;
+  ObArray<common::ObAddr> rpc_addr_list;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(0 >= ob_member_list.count())) {
+  } else if (OB_UNLIKELY(!palf_stat.is_valid()
+      || !palf_stat.config_version_.is_valid()
+      || !readable_scn_snapshot.is_valid()
+      || !checkpoint_scn_snapshot.is_valid()
+      || palf_stat.config_version_ != readable_scn_snapshot.get_config_version()
+      || readable_scn_snapshot.get_config_version()
+          != checkpoint_scn_snapshot.get_config_version())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ob_member_list));
+    LOG_WARN("invalid argument", KR(ret), K(palf_stat),
+        K(readable_scn_snapshot), K(checkpoint_scn_snapshot));
+  } else if (OB_FAIL(construct_addr_list_(palf_stat, rpc_addr_list))) {
+    LOG_WARN("failed to construct rpc address list", KR(ret), K(palf_stat));
+  } else if (OB_UNLIKELY(rpc_addr_list.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rpc address list is empty", KR(ret), K(palf_stat));
   } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rpc proxy is null", KR(ret));
@@ -982,19 +988,20 @@ int ObLSRecoveryStatHandler::do_get_each_replica_readable_scn_(
     ObTimeoutCtx ctx;
     int tmp_ret = OB_SUCCESS;
     ObArray<int> return_code_array;
-    ObLSReplicaReadableSCN replica_scn;
+    storage::ObLSReplicaSCN replica_readable_scn;
+    storage::ObLSReplicaSCN replica_checkpoint_scn;
     int group_id = share::OBCG_DBA_COMMAND;
     if (OB_FAIL(arg.init(tenant_id_, ls_->get_ls_id(), false))) {
       LOG_WARN("failed to init arg", KR(ret), K_(tenant_id), KPC_(ls));
     } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
       LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ob_member_list.count(); ++i) {
-      const ObAddr &member = ob_member_list.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < rpc_addr_list.count(); ++i) {
+      const ObAddr &member = rpc_addr_list.at(i);
       if (OB_TMP_FAIL(proxy.call(member, ctx.get_timeout(),
               GCONF.cluster_id, tenant_id_, group_id, arg))) {
         LOG_WARN("failed to send rpc", KR(ret), KR(tmp_ret), K(member), K(i), K(ctx),
-            K_(tenant_id), K(arg), K(ob_member_list), K(group_id));
+            K_(tenant_id), K(arg), K(rpc_addr_list), K(group_id));
       }
     }
     if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
@@ -1013,10 +1020,19 @@ int ObLSRecoveryStatHandler::do_get_each_replica_readable_scn_(
         if (OB_ISNULL(result)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("result is null", KR(ret), K(i), K(return_code_array));
-        } else if (OB_FAIL(replica_scn.init(result->get_server(), result->get_cur_readable_scn()))) {
+        } else if (OB_FAIL(replica_readable_scn.init(
+            result->get_server(), result->get_cur_readable_scn()))) {
           LOG_WARN("failed to init replica scn", KR(ret), KPC(result));
-        } else if (OB_FAIL(replicas_scn.push_back(replica_scn))) {
-          LOG_WARN("failed to push back", KR(ret), K(replica_scn));
+        } else if (OB_FAIL(readable_scn_snapshot.add_replica_scn(replica_readable_scn))) {
+          LOG_WARN("failed to add replica readable scn", KR(ret), K(replica_readable_scn));
+        } else if (!need_collect_replica_checkpoint) {
+        } else if (!result->has_checkpoint_info()) {
+          // The collector will return OB_EAGAIN if the remaining samples cannot form a quorum.
+        } else if (OB_FAIL(replica_checkpoint_scn.init(
+            result->get_server(), result->get_checkpoint_scn()))) {
+          LOG_WARN("failed to init replica checkpoint scn", KR(ret), KPC(result));
+        } else if (OB_FAIL(checkpoint_scn_snapshot.add_replica_scn(replica_checkpoint_scn))) {
+          LOG_WARN("failed to add replica checkpoint scn", KR(ret), KPC(result));
         }
       }
     }
@@ -1032,9 +1048,6 @@ int ObLSRecoveryStatHandler::get_majority_readable_scn_(
   majority_min_readable_scn = leader_readable_scn;
   palf::PalfStat palf_stat_first;
   palf::PalfStat palf_stat_second;
-  ObArray<common::ObAddr> member_list_new;
-  int64_t paxos_replica_number_new = 0;
-  int64_t full_replica_num = 0;
   bool is_valid_to_use = false;
 
   if (OB_FAIL(check_inner_stat_())) {
@@ -1044,31 +1057,36 @@ int ObLSRecoveryStatHandler::get_majority_readable_scn_(
     LOG_WARN("invalid argument", KR(ret), K(leader_readable_scn));
   } else if (OB_FAIL(get_latest_palf_stat_(palf_stat_first))) {
     LOG_WARN("get latest palf_stat failed", KR(ret), KPC_(ls));
-  } else if (OB_FAIL(construct_new_member_list_(palf_stat_first.paxos_member_list_,
-          palf_stat_first.degraded_list_,
-          palf_stat_first.paxos_replica_num_,
-          member_list_new,
-          paxos_replica_number_new,
-          full_replica_num))) {
-    LOG_WARN("construct_new_member_list failed", KR(ret), KPC_(ls), K(palf_stat_first));
   } else if (OB_FAIL(check_can_use_new_version_(is_valid_to_use))) {
     LOG_WARN("failed to check can use new version", KR(ret));
   } else if (is_valid_to_use) {
     //use readable in memory
-    if (OB_FAIL(do_get_readable_scn_(member_list_new, paxos_replica_number_new,
-            palf_stat_first.config_version_, full_replica_num, majority_min_readable_scn))) {
-      LOG_WARN("failed to get majority readable scn", KR(ret), K(palf_stat_first),
-          K(paxos_replica_number_new), K(member_list_new), K(full_replica_num));
-    } else if (OB_FAIL(set_inner_readable_scn(palf_stat_first.config_version_,
-            majority_min_readable_scn, true))) {
+    if (OB_FAIL(get_majority_readable_scn_from_snapshot_(
+        palf_stat_first, majority_min_readable_scn))) {
+      LOG_WARN("failed to get majority readable scn from snapshot", KR(ret),
+          K(palf_stat_first));
+    } else if (OB_FAIL(set_inner_readable_scn(
+        palf_stat_first.config_version_, majority_min_readable_scn, true))) {
       //尝试更新内存中的可读点
       LOG_WARN("failed to set inner readable scn", KR(ret), K(palf_stat_first),
-        K(majority_min_readable_scn));
+          K(majority_min_readable_scn));
     }
-  } else if (OB_FAIL(do_get_majority_readable_scn_(member_list_new,
-          leader_readable_scn, rootserver::majority(paxos_replica_number_new), majority_min_readable_scn))) {
-    LOG_WARN("do_get_majority_readable_scn_ failed", KR(ret), K(member_list_new), K(leader_readable_scn),
-        K(paxos_replica_number_new), K(palf_stat_first), K(majority_min_readable_scn));
+  } else {
+    ObArray<common::ObAddr> active_f_member_list;
+    int64_t paxos_replica_number_new = 0;
+    if (OB_FAIL(storage::construct_new_member_list_for_majority_scn_collect(
+        palf_stat_first, active_f_member_list, paxos_replica_number_new))) {
+      LOG_WARN("failed to construct member list", KR(ret), KPC_(ls), K(palf_stat_first));
+    } else {
+      const int64_t majority_count = storage::calc_majority_scn_quorum_count(
+          active_f_member_list.count(), paxos_replica_number_new);
+      if (OB_FAIL(do_get_majority_readable_scn_(active_f_member_list,
+          leader_readable_scn, majority_count, majority_min_readable_scn))) {
+        LOG_WARN("do_get_majority_readable_scn_ failed", KR(ret), K(active_f_member_list),
+            K(leader_readable_scn), K(paxos_replica_number_new), K(majority_count),
+            K(palf_stat_first), K(majority_min_readable_scn));
+      }
+    }
   }
   if (FAILEDx(get_latest_palf_stat_(palf_stat_second))) {
     LOG_WARN("get latest palf_stat failed", KR(ret), KPC_(ls));
@@ -1182,33 +1200,51 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_(
 
   return ret;
 }
-int ObLSRecoveryStatHandler::do_get_readable_scn_(
-    const ObIArray<common::ObAddr> &ob_member_list,
-    const int64_t paxos_replica_num,
-    const palf::LogConfigVersion &config_version,
-    const int64_t full_replica_num,
+int ObLSRecoveryStatHandler::get_majority_readable_scn_from_snapshot_(
+    const palf::PalfStat &palf_stat,
     share::SCN &majority_min_readable_scn)
 {
   int ret = OB_SUCCESS;
+  storage::ObLSReplicaSCNSnapshot raw_readable_scn_snapshot;
+  storage::ObLSReplicaSCNSnapshot filtered_readable_scn_snapshot;
+  ObArray<share::SCN> readable_scn_list;
   majority_min_readable_scn = SCN::min_scn();
-  ObArray<SCN> replica_readble_scn;
-  int64_t majority_count = common::min(full_replica_num, rootserver::majority(paxos_replica_num));
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("inner stat error", KR(ret), K_(is_inited));
-  } else if (ob_member_list.count() <= 0
-      || paxos_replica_num <= 0
-      || full_replica_num <= 0
-      || !config_version.is_valid()) {
+  } else if (OB_UNLIKELY(!palf_stat.is_valid()
+      || !palf_stat.config_version_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(paxos_replica_num), K(full_replica_num),
-        K(ob_member_list), K(config_version));
-  } else if (OB_FAIL(do_get_member_readable_scn_(ob_member_list, config_version, replica_readble_scn))) {
-    LOG_WARN("failed to get member readable scns", KR(ret), K(ob_member_list), K(config_version));
-  } else if (OB_FAIL(do_calc_majority_min_readable_scn_(majority_count,
-          replica_readble_scn, majority_min_readable_scn))) {
-    LOG_WARN("failed to calc majority readable scn", KR(ret),
-        K(majority_count), K(replica_readble_scn));
+    LOG_WARN("invalid argument", KR(ret), K(palf_stat));
+  } else if (OB_FAIL(get_replica_readable_scn_snapshot_(
+      palf_stat.config_version_, raw_readable_scn_snapshot))) {
+    LOG_WARN("failed to get replica readable scn snapshot",
+        KR(ret), K(palf_stat));
+  // extra_server may is included in raw_readable_scn_snapshot
+  // majority readable scn should not count extra_server
+  // build filtered_readable_scn_snapshot without extra_server
+  } else if (OB_FAIL(filtered_readable_scn_snapshot.filter_from(
+      palf_stat, raw_readable_scn_snapshot))) {
+    LOG_WARN("failed to filter replica readable scn snapshot", KR(ret),
+        K(palf_stat), K(raw_readable_scn_snapshot));
+  } else {
+    const ObIArray<storage::ObLSReplicaSCN> &replica_scns =
+        filtered_readable_scn_snapshot.get_replica_scns();
+    for (int64_t i = 0; OB_SUCC(ret) && i < replica_scns.count(); ++i) {
+      const storage::ObLSReplicaSCN &replica_scn = replica_scns.at(i);
+      if (OB_FAIL(readable_scn_list.push_back(replica_scn.get_scn()))) {
+        LOG_WARN("failed to collect member readable scn",
+            KR(ret), K(replica_scn), K(filtered_readable_scn_snapshot));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(do_calc_majority_min_readable_scn_(
+        filtered_readable_scn_snapshot.get_quorum_count(),
+        readable_scn_list,
+        majority_min_readable_scn))) {
+      LOG_WARN("failed to calc majority readable scn from snapshot",
+          KR(ret), K(palf_stat), K(filtered_readable_scn_snapshot), K(readable_scn_list));
+    }
   }
   return ret;
 }
@@ -1271,23 +1307,11 @@ int ObLSRecoveryStatHandler::do_calc_majority_min_readable_scn_(
 {
   int ret = OB_SUCCESS;
   majority_min_readable_scn.set_max();
-  if (OB_UNLIKELY(0 >= majority_cnt)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(majority_cnt));
-  } else if (readable_scn_list.count() < majority_cnt) {
-    ret = OB_EAGAIN;
-    LOG_WARN("can not get majority readable_scn count", KR(ret),
-             K(majority_cnt), K(readable_scn_list));
+  if (OB_FAIL(storage::calc_majority_min_scn(
+      majority_cnt, readable_scn_list, majority_min_readable_scn))) {
+    LOG_WARN("failed to calc majority min scn", KR(ret),
+        K(majority_cnt), K(readable_scn_list));
   } else {
-    (void)lib::ob_sort(readable_scn_list.begin(), readable_scn_list.end(),
-                    std::greater<share::SCN>());
-    for (int64_t i = 0;
-         OB_SUCC(ret) && i < readable_scn_list.count() && i < majority_cnt;
-         ++i) {
-      if (majority_min_readable_scn > readable_scn_list.at(i)) {
-        majority_min_readable_scn = readable_scn_list.at(i);
-      }
-    }
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     if (OB_FAIL(ret)) {
     } else if (!tenant_config.is_valid()) {

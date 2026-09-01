@@ -412,6 +412,12 @@ int ObLogHandler::get_max_decided_scn_as_leader(share::SCN &scn) const
   return ret;
 }
 
+int ObLogHandler::get_base_lsn(LSN &lsn) const
+{
+  RLockGuard guard(lock_);
+  return palf_handle_.get_base_lsn(lsn);
+}
+
 int ObLogHandler::advance_base_lsn(const LSN &lsn)
 {
   RLockGuard guard(lock_);

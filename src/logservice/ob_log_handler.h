@@ -116,6 +116,7 @@ public:
   virtual int locate_by_scn_coarsely(const share::SCN &scn, palf::LSN &result_lsn) = 0;
   virtual int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn) = 0;
   virtual int get_max_decided_scn_as_leader(share::SCN &scn) const = 0;
+  virtual int get_base_lsn(palf::LSN &lsn) const = 0;
   virtual int advance_base_lsn(const palf::LSN &lsn) = 0;
   virtual int get_begin_lsn(palf::LSN &lsn) const = 0;
   virtual int get_end_lsn(palf::LSN &lsn) const = 0;
@@ -395,6 +396,9 @@ public:
   //  OB_ERR_UNEXPECTED: unexpected error such as apply_service_ is NULL
   //  OB_SUCCESS
   int get_max_decided_scn_as_leader(share::SCN &scn) const override final;
+  // @brief, get the current recycable lsn.
+  // @param[out] LSN&, recycable lsn.
+  int get_base_lsn(palf::LSN &lsn) const override final;
   // @brief, set the recycable lsn, palf will ensure that the data before recycable lsn readable.
   // @param[in] const LSN&, recycable lsn.
   int advance_base_lsn(const palf::LSN &lsn) override final;

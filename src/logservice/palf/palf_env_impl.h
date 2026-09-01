@@ -124,6 +124,7 @@ public:
   }
   void set_cur_unrecyclable_log_disk_size(const int64_t unrecyclable_log_disk_size);
   bool need_throttling() const;
+  int check_log_disk_under_pressure(bool &log_disk_under_pressure) const;
 
   void get_disk_opts(PalfDiskOptions &disk_opts_for_stopping_writing,
                      PalfDiskOptions &disk_opts_for_recycling_blocks,
@@ -280,6 +281,7 @@ public:
   bool check_disk_space_enough() override final;
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
   int get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
+  int check_log_disk_under_pressure(bool &log_disk_under_pressure);
   int update_options(const PalfOptions &options);
   int get_options(PalfOptions &options);
   int64_t get_rebuild_replica_log_lag_threshold() const

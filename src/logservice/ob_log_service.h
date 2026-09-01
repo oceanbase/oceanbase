@@ -225,6 +225,7 @@ public:
                             int64_t &accum_write_rt);
 
   int check_disk_space_enough(bool &is_disk_enough);
+  int check_log_disk_under_pressure(bool &log_disk_under_pressure);
 
   palf::PalfEnv *get_palf_env() { return palf_env_; }
   // TODO by yunlong: temp solution, will by removed after Reporter be added in MTL

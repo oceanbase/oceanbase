@@ -242,6 +242,12 @@ public:
     return OB_SUCCESS;
   }
 
+  int get_base_lsn(LSN &lsn) const
+  {
+    lsn = base_lsn_;
+    return OB_SUCCESS;
+  }
+
   int locate_by_lsn_coarsely(const palf::LSN &lsn, share::SCN &result_scn)
   {
     result_scn = result_scn_;
@@ -534,4 +540,3 @@ public:
 
 
 #endif
-

@@ -438,7 +438,8 @@ int ObStorageHASrcProvider::check_replica_type_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(member), K(dst));
   } else if (learner_list.is_valid() && learner_list.contains(member.get_server())) { // src is R
-    if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) { // dst is F
+    if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()
+        || common::ObReplicaType::REPLICA_TYPE_LOGONLY == dst.get_replica_type()) { // dst is F or L
       is_replica_type_valid = false;
     } else if (common::ObReplicaType::REPLICA_TYPE_READONLY == dst.get_replica_type()) {
       is_replica_type_valid = true;
@@ -565,6 +566,12 @@ int ObStorageHASrcProvider::check_replica_validity(
   } else if (!member.is_valid() || !dst.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(member), K(dst));
+  } else if (OB_FAIL(check_replica_type_(member, dst, learner_list, is_replica_type_valid))) {
+    LOG_WARN("failed to check replica type", K(ret), K(tenant_id_), K(ls_id_), K(member),
+        K(dst), K(learner_list), K(ls_info));
+  } else if (!is_replica_type_valid) {
+    ret = OB_DATA_SOURCE_NOT_VALID;
+    LOG_WARN("do not choose this src, replica type check failed", K(ret), K(tenant_id_), K(ls_id_), K(member), K(dst), K(learner_list), K(ls_info));
   } else if (OB_FAIL(fetch_ls_meta_info_(tenant_id_, ls_id_, member.get_server(), ls_info))) {
     if (OB_DISK_ERROR == ret) {
       ret = OB_DATA_SOURCE_NOT_VALID; // overwrite ret
@@ -585,12 +592,6 @@ int ObStorageHASrcProvider::check_replica_validity(
     ret = OB_DATA_SOURCE_NOT_VALID;
     LOG_WARN("do not choose this src, parent checkpoint scn check failed", K(ret), K(tenant_id_), K(ls_id_), K(member), K(dst), K(learner_list),
         K(palf_parent_checkpoint_scn_), K(ls_info));
-  } else if (OB_FAIL(check_replica_type_(member, dst, learner_list, is_replica_type_valid))) {
-    LOG_WARN("failed to check replica type", K(ret), K(tenant_id_), K(ls_id_), K(member),
-        K(dst), K(learner_list), K(ls_info));
-  } else if (!is_replica_type_valid) {
-    ret = OB_DATA_SOURCE_NOT_VALID;
-    LOG_WARN("do not choose this src, replica type check failed", K(ret), K(tenant_id_), K(ls_id_), K(member), K(dst), K(learner_list), K(ls_info));
   }
   return ret;
 }

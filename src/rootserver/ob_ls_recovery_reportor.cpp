@@ -17,6 +17,7 @@
 #include "rootserver/ob_ls_service_helper.h"//update_ls_stat_in_trans
 #include "storage/tx_storage/ob_ls_service.h" //ObLSService
 #include "share/ob_schema_status_proxy.h"//ObSchemaStatusProxy
+#include "share/ob_share_util.h"
 #include "logservice/ob_log_service.h"//get_palf_role
 #include "lib/utility/ob_tracepoint.h" // ERRSIM_POINT_DEF
 #include "storage/ls/ob_ls.h"
@@ -101,29 +102,6 @@ void ObLSRecoveryReportor::wakeup()
   }
 }
 
-int ObLSRecoveryReportor::check_tenant_enable_logonly_replica(const uint64_t tenant_id,
-    bool &enabled)
-{
-  int ret = OB_SUCCESS;
-  uint64_t user_data_version = OB_INVALID_VERSION;
-  enabled = false;
-  const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
-  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, user_data_version))) {
-    LOG_WARN("failed to get user data version", KR(ret), K(user_tenant_id));
-  } else if (user_data_version < DATA_VERSION_4_2_5_7) {
-    enabled = false;
-  } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(user_tenant_id));
-    if (!tenant_config.is_valid()) {
-      ret = OB_EAGAIN;
-      LOG_WARN("tenant config is invalid", KR(ret), K(user_tenant_id));
-    } else {
-      enabled = tenant_config->enable_logonly_replica;
-    }
-  }
-  return ret;
-}
-
 int ObLSRecoveryReportor::check_tenant_need_update_ls_recovery_stat(
     const uint64_t tenant_id,
     bool &need_update)
@@ -131,7 +109,7 @@ int ObLSRecoveryReportor::check_tenant_need_update_ls_recovery_stat(
   int ret = OB_SUCCESS;
   need_update = false;
   if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
-    if (OB_FAIL(check_tenant_enable_logonly_replica(tenant_id, need_update))) {
+    if (OB_FAIL(ObShareUtil::check_tenant_enable_logonly_replica(tenant_id, need_update))) {
       need_update = true;
       LOG_WARN("failed to check tenant enable l replica", KR(ret), K(tenant_id));
     }

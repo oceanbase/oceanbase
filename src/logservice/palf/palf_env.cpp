@@ -166,6 +166,11 @@ int PalfEnv::get_options(PalfOptions &options)
   return palf_env_impl_.get_options(options);
 }
 
+int PalfEnv::check_log_disk_under_pressure(bool &log_disk_under_pressure)
+{
+  return palf_env_impl_.check_log_disk_under_pressure(log_disk_under_pressure);
+}
+
 int PalfEnv::update_options(const PalfOptions &options)
 {
   return palf_env_impl_.update_options(options);

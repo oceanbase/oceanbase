@@ -88,7 +88,6 @@ public:
  static int update_tenant_info_in_trans(const share::ObAllTenantInfo &old_tenant_info,
      const bool check_sync_valid, const share::SCN &sys_ls_sync_scn,
      common::ObMySQLTransaction &trans);
- static int check_tenant_enable_logonly_replica(const uint64_t tenant_id, bool &enabled);
  static int check_tenant_need_update_ls_recovery_stat(const uint64_t tenant_id, bool &need_update);
 private:
   static int get_sync_point_(const share::ObLSID &id, share::SCN &scn, share::SCN &read_scn);

@@ -410,6 +410,26 @@ void TestChooseMigrationSourcePolicy::TearDown()
   locality_manager_.destroy();
   storage_rpc_.destroy();
 }
+
+TEST_F(TestChooseMigrationSourcePolicy, readonly_src_cannot_migrate_to_logonly_dst)
+{
+  common::ObAddr src_addr;
+  common::ObAddr dst_addr;
+  EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", src_addr));
+  EXPECT_EQ(OB_SUCCESS, mock_dst_addr(dst_addr));
+  const common::ObMember src_member(src_addr, 0);
+  const common::ObReplicaMember dst_member(
+      dst_addr, 0, common::ObReplicaType::REPLICA_TYPE_LOGONLY);
+  common::GlobalLearnerList learner_list;
+  EXPECT_EQ(OB_SUCCESS, learner_list.add_server(src_addr));
+
+  ObMigrationSrcByLocationProvider provider;
+  bool is_replica_type_valid = true;
+  EXPECT_EQ(OB_SUCCESS, provider.check_replica_type_(
+      src_member, dst_member, learner_list, is_replica_type_valid));
+  EXPECT_FALSE(is_replica_type_valid);
+}
+
 // test checkpoint policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234"]
 // mock condition:
@@ -963,7 +983,6 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
       .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint))
       .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_base_checkpoint))
       .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_large_checkpoint))
-      .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_invalid_type_checkpoint))
       .WillRepeatedly(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint));
   MockMemberList member_list;
   EXPECT_CALL(member_helper_, get_ls_member_list_and_learner_list_(_, _, _, _, _, _))

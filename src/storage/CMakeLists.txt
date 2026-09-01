@@ -358,6 +358,9 @@ ob_set_subtarget(ob_storage tx
 ob_set_subtarget(ob_storage tx_storage
   tx_storage/ob_access_service.cpp
   tx_storage/ob_checkpoint_service.cpp
+  tx_storage/ob_get_ls_replica_checkpoint_info.cpp
+  tx_storage/ob_get_ls_replica_checkpoint_info_rpc_proxy.cpp
+  tx_storage/ob_log_replica_checkpoint_ctx.cpp
   tx_storage/ob_ls_freeze_thread.cpp
   tx_storage/ob_ls_handle.cpp
   tx_storage/ob_ls_map.cpp
@@ -395,6 +398,7 @@ ob_set_subtarget(ob_storage ls
   ls/ob_ls_lock.cpp
   ls/ob_ls_meta.cpp
   ls/ob_ls_meta_package.cpp
+  ls/ob_ls_replica_checkpoint_collector.cpp
   ls/ob_ls_role_handler.cpp
   ls/ob_ls_sync_tablet_seq_handler.cpp
   ls/ob_ls_switch_checker.cpp
@@ -476,6 +480,7 @@ ob_set_subtarget(ob_storage common
   ob_i_store.cpp
   ob_i_table.cpp
   ob_locality_manager.cpp
+  ob_ls_replica_scn_snapshot.cpp
   ob_micro_block_handle_mgr.cpp
   ob_partition_component_factory.cpp
   ob_partition_range_spliter.cpp

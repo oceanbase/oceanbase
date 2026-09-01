@@ -176,7 +176,7 @@ public:
   {UNUSED(scn); UNUSED(lsn); return OB_SUCCESS;}
   int advance_base_lsn(const palf::LSN &lsn)
   {UNUSED(lsn); return OB_SUCCESS;}
-  int get_base_lsn(palf::LSN &lsn)
+  int get_base_lsn(palf::LSN &lsn) const
   {UNUSED(lsn); return OB_SUCCESS;}
   int get_base_scn(share::SCN &base_lsn_scn) const
   {UNUSED(base_lsn_scn); return OB_SUCCESS;}

@@ -15,6 +15,7 @@
 #include "ob_checkpoint_executor.h"
 #include "storage/tx_storage/ob_checkpoint_service.h"
 #include "logservice/ob_log_service.h"
+#include "observer/ob_server_struct.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -191,6 +192,12 @@ int ObCheckpointExecutor::update_clog_checkpoint()
             STORAGE_LOG(ERROR, "[CHECKPOINT] can not advance clog checkpoint", K(checkpoint_scn),
                         K(checkpoint_scn_in_ls_meta), K(ls_id), K(service_type));
           }
+#ifdef ERRSIM
+        } else if (need_errsim_block_clog_checkpoint(MTL_ID(), ls_id)) {
+          FLOG_INFO("[ERRSIM] block full replica clog checkpoint", "tenant_id", MTL_ID(),
+                    K(ls_id), K(checkpoint_scn), K(checkpoint_scn_in_ls_meta),
+                    "self_addr", GCTX.self_addr());
+#endif
         } else if (OB_FAIL(loghandler_->locate_by_scn_coarsely(checkpoint_scn, clog_checkpoint_lsn))) {
           if (OB_ENTRY_NOT_EXIST == ret) {
             STORAGE_LOG(WARN, "no file in disk", K(ret), K(ls_id), K(checkpoint_scn));

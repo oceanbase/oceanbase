@@ -101,6 +101,14 @@ public:
       const uint64_t tenant_id,
       bool &is_compatible);
 
+  static int check_tenant_enable_logonly_replica(
+      const uint64_t tenant_id,
+      bool &enabled);
+
+  static int check_majority_min_replica_checkpoint_enabled(
+      const uint64_t tenant_id,
+      bool &is_enabled);
+
   static int fetch_current_cluster_version(
              common::ObISQLClient &client,
              uint64_t &cluster_version);

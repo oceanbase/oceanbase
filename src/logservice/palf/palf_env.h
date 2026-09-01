@@ -114,6 +114,10 @@ public:
   // @brief get current options
   // @param [out] options
   int get_options(PalfOptions &options);
+  // @brief check whether log disk is under pressure. Pressure means
+  // unrecyclable log disk usage has crossed PALF GC's trigger threshold.
+  // @param [out] log_disk_under_pressure
+  int check_log_disk_under_pressure(bool &log_disk_under_pressure);
   // @brief check the disk space used to palf whether is enough
   bool check_disk_space_enough();
   // for failure detector

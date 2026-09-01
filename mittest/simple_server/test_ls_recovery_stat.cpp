@@ -87,7 +87,8 @@ TEST_F(TestLSRecoveryGuard, user_recovery_guard)
     usleep(3000 * 1000);//sleep 300ms，应该设置成最新
     readable_scn = guard.ls_recovery_stat_->readable_scn_upper_limit_;
     //内存中的scn还是可以推高的
-    SCN readable_scn_memory = guard.ls_recovery_stat_->replicas_scn_.at(0).get_readable_scn();
+    SCN readable_scn_memory = guard.ls_recovery_stat_->replica_readable_scn_snapshot_
+        .get_replica_scns().at(0).get_scn();
     config_version = guard.ls_recovery_stat_->config_version_in_inner_;
     ASSERT_EQ(1, guard.ls_recovery_stat_->ref_cnt_);
     ObLSRecoveryGuard guard1;

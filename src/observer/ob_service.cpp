@@ -3485,6 +3485,7 @@ int ObService::get_ls_replayed_scn(
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
     share::SCN offline_scn;
+    share::SCN checkpoint_scn = SCN::min_scn();
     ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
     if (OB_ISNULL(ls_svr)) {
       ret = OB_INVALID_ARGUMENT;
@@ -3498,6 +3499,7 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("failed to get migration status", K(ret), KPC(ls));
     } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
       cur_readable_scn = SCN::base_scn();
+      checkpoint_scn = SCN::base_scn();
       LOG_INFO("ls migration status cannot report reablase scn, report base scn as readable scn", K(migration_status), "ls_id", ls->get_ls_id());
       if (arg.is_all_replica()) {
         ret = OB_EAGAIN;
@@ -3507,6 +3509,7 @@ int ObService::get_ls_replayed_scn(
     } else {
       if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
         LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
+      } else if (FALSE_IT(checkpoint_scn = ls->get_clog_checkpoint_scn())) {
       } else if (arg.is_all_replica()) {
         if (OB_ISNULL(ls->get_ls_recovery_stat_handler())) {
           ret = OB_ERR_UNEXPECTED;
@@ -3521,9 +3524,11 @@ int ObService::get_ls_replayed_scn(
         LOG_WARN("failed to get migration status", K(ret), KPC(ls));
       } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
         const SCN original_readable_scn = cur_readable_scn;
+        const SCN original_checkpoint_scn = checkpoint_scn;
         cur_readable_scn = SCN::base_scn();
+        checkpoint_scn = SCN::base_scn();
         LOG_INFO("ls migration status cannot report reablase scn, report base scn as readable scn", K(migration_status),
-            "ls_id", ls->get_ls_id(), K(original_readable_scn));
+            "ls_id", ls->get_ls_id(), K(original_readable_scn), K(original_checkpoint_scn));
         if (arg.is_all_replica()) {
           ret = OB_EAGAIN;
           LOG_WARN("leader get all replica min readable scn, but leader migration status is not none, need retry",
@@ -3548,11 +3553,12 @@ int ObService::get_ls_replayed_scn(
     if (FAILEDx(ls->get_offline_scn(offline_scn))) {
       LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));
     } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(),
-            cur_readable_scn, offline_scn, GCTX.self_addr()))) {
-      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn), K(offline_scn));
+            cur_readable_scn, offline_scn, GCTX.self_addr(), checkpoint_scn))) {
+      LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn),
+          K(offline_scn), K(checkpoint_scn));
     } else {
       LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn),
-          K(arg), K(result), K(offline_scn));
+          K(arg), K(result), K(offline_scn), K(checkpoint_scn));
     }
   }
   return ret;

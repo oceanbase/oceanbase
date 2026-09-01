@@ -13,8 +13,10 @@
 #ifndef OCEABASE_STORAGE_OB_CHECKPOINT_SERVICE_
 #define OCEABASE_STORAGE_OB_CHECKPOINT_SERVICE_
 #include "storage/tx_storage/ob_ls_freeze_thread.h"
+#include "storage/tx_storage/ob_log_replica_checkpoint_ctx.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/task/ob_timer.h"
+#include "share/ob_ls_id.h"
 #include "share/scn.h"
 
 namespace oceanbase
@@ -68,10 +70,13 @@ private:
   class ObCheckpointTask : public common::ObTimerTask
   {
   public:
-    ObCheckpointTask() {}
-    virtual ~ObCheckpointTask() {}
+    ObCheckpointTask() : checkpoint_delay_reporter_() {}
+    virtual ~ObCheckpointTask() { destroy(); }
 
+    void destroy();
     virtual void runTimerTask();
+  private:
+    ObLogReplicaCheckpointDelayReporter checkpoint_delay_reporter_;
   };
 
   class ObTraversalFlushTask : public common::ObTimerTask

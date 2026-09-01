@@ -69,6 +69,7 @@
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
 #include "storage/ls/ob_ls_transfer_status.h"
+#include "storage/ls/ob_ls_replica_checkpoint_collector.h"
 
 namespace oceanbase
 {
@@ -929,6 +930,18 @@ public:
   DELEGATE_WITH_RET(ls_meta_, cleanup_transfer_meta_info, int);
 
   int set_ls_migration_gc(bool &allow_gc);
+
+  DELEGATE_WITH_RET(replica_checkpoint_collector_, update_replica_checkpoint_info, int);
+
+  /*
+   * @description: get majority min checkpoint scn from cached replica checkpoint info.
+   * @param[out] checkpoint_scn majority min checkpoint scn
+   * @return:
+   * OB_NOT_MASTER : replica not master, can not get checkpoint_scn of other replica
+   * OB_NEED_RETRY : cached checkpoint info is not ready or config version is changed
+   * OB_EAGAIN : gathered replica checkpoint scn can not satisfy majority
+   */
+  DELEGATE_WITH_RET(replica_checkpoint_collector_, get_majority_min_replica_checkpoint_scn, int);
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);
   void record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_t epoch);
@@ -1021,6 +1034,7 @@ private:
   bool need_delay_resource_recycle_;
   // for transfer MDS phase
   ObLSTransferStatus ls_transfer_status_;
+  ObLSReplicaCheckpointCollector replica_checkpoint_collector_;
 };
 
 }

@@ -18,6 +18,7 @@
 #include "share/ls/ob_ls_recovery_stat_operator.h" // ObLSRecoveryStatOperator
 #include "logservice/palf/palf_handle_impl.h"                  // PalfStat
 #include "logservice/palf/log_meta_info.h"//LogConfigVersion
+#include "storage/ob_ls_replica_scn_snapshot.h"
 
 namespace oceanbase
 {
@@ -31,26 +32,6 @@ namespace rootserver
 {
 class ObLSRecoveryStatHandler;
 class TestLSRecoveryGuard;
-struct ObLSReplicaReadableSCN
-{
-public:
-  ObLSReplicaReadableSCN() : server_(), readable_scn_() {}
-  ~ObLSReplicaReadableSCN() {}
-  int init(const common::ObAddr &server, const share::SCN &readable_scn);
-
-  share::SCN get_readable_scn() const
-  {
-    return readable_scn_;
-  }
-  common::ObAddr get_server() const
-  {
-    return server_;
-  }
-  TO_STRING_KV(K_(server), K_(readable_scn));
-private:
-  common::ObAddr server_;
-  share::SCN readable_scn_;
-};
 
 class ObLSRecoveryGuard
 {
@@ -142,7 +123,7 @@ public:
   void reset_add_replica_server();
   /*
   * @description:
-  * get all ls replica readable and set to replicas_scn_;
+  * get all LS replica readable SCNs and refresh replica_readable_scn_snapshot_.
   */
   int gather_replica_readable_scn();
   /*
@@ -168,11 +149,11 @@ public:
    * */
   int reset_inner_readable_scn();
   /*
-   * @description: get ls all paxos replica min readable_scn
-   * @param[out] min readable_scn of all paxos replica
+   * @description: get the minimum readable_scn of all non-degraded FULL Paxos replicas
+   * @param[out] min readable_scn of all non-degraded FULL Paxos replicas
    * @return:
    * OB_NOT_MASTER : replica not master, can not get readable_scn of other replica
-   * OB_NEED_RETRY : If there's no readable scn with all replicas;
+   * OB_NEED_RETRY : If there's no readable scn with all non-degraded FULL replicas;
    *                 the config_version corresponding to the current cached readable scn does not match the latest config_version;
    *                 or the config_version has changed during the statistical process.
    * */
@@ -237,8 +218,13 @@ private:
   int get_latest_palf_stat_(
       palf::PalfStat &palf_stat);
   int do_get_each_replica_readable_scn_(
-      const ObIArray<common::ObAddr> &ob_member_list,
-      ObArray<ObLSReplicaReadableSCN> &replicas_scn);
+      const palf::PalfStat &palf_stat,
+      const bool need_collect_replica_checkpoint,
+      storage::ObLSReplicaSCNSnapshot &readable_scn_snapshot,
+      storage::ObLSReplicaSCNSnapshot &checkpoint_scn_snapshot);
+  int get_replica_readable_scn_snapshot_(
+      const palf::LogConfigVersion &config_version,
+      storage::ObLSReplicaSCNSnapshot &readable_scn_snapshot);
   int get_majority_readable_scn_(
       const share::SCN &leader_readable_scn,
       share::SCN &majority_min_readable_scn);
@@ -247,11 +233,8 @@ private:
       const share::SCN &leader_readable_scn,
       const int64_t need_query_member_cnt,
       share::SCN &majority_min_readable_scn);
-  int do_get_readable_scn_(
-      const ObIArray<common::ObAddr> &ob_member_list,
-      const int64_t paxos_replica_num,
-      const palf::LogConfigVersion &config_version,
-      const int64_t full_replica_num,
+  int get_majority_readable_scn_from_snapshot_(
+      const palf::PalfStat &palf_stat,
       share::SCN &majority_min_readable_scn);
   int do_get_member_readable_scn_(
       const ObIArray<common::ObAddr> &ob_member_list,
@@ -271,13 +254,6 @@ private:
     const int64_t majority_cnt,
     ObArray<SCN> &readable_scn_list,
     share::SCN &majority_min_readable_scn);
-  int construct_new_member_list_(
-      const common::ObMemberList &member_list_ori,
-      const common::GlobalLearnerList &degraded_list,
-      const int64_t paxos_replica_number_ori,
-      ObIArray<common::ObAddr> &member_list_new,
-      int64_t &paxos_replica_number_new,
-      int64_t &full_replica_num);
   int try_reload_and_fix_config_version_(const palf::LogConfigVersion &current_version);
   int check_can_use_new_version_(bool &vaild_to_use);
   int construct_addr_list_(const palf::PalfStat &palf_stat,
@@ -303,9 +279,8 @@ private:
   palf::LogConfigVersion config_version_in_inner_;//config_version in inner_table
   common::ObAddr extra_server_;//for add replica, need to gather add_replica's readable_scn
   int64_t last_dump_ts_;//用于记录上次打印内存可读点的时间戳
-  palf::LogConfigVersion config_version_;//记录统计可读点replicas_scn_使用的config_version
-  //成员列表里面最多只有OB_MAX_MEMBER_NUMBER，这个时候可能触发迁移，所以需要增加一个成员
-  ObSEArray<ObLSReplicaReadableSCN, OB_MAX_MEMBER_NUMBER + 1, ObNullAllocator> replicas_scn_;//缓存每个副本的可读位点
+  // The PALF config version, quorum and all readable SCN samples gathered under that config.
+  storage::ObLSReplicaSCNSnapshot replica_readable_scn_snapshot_;
 };
 
 template <typename... Args>

@@ -265,6 +265,55 @@ int ObShareUtil::check_compat_version_for_readonly_replica(
   return ret;
 }
 
+int ObShareUtil::check_tenant_enable_logonly_replica(
+    const uint64_t tenant_id,
+    bool &enabled)
+{
+  int ret = OB_SUCCESS;
+  uint64_t user_data_version = OB_INVALID_VERSION;
+  enabled = false;
+  const uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
+  if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, user_data_version))) {
+    LOG_WARN("failed to get user data version", KR(ret), K(user_tenant_id));
+  } else if (user_data_version < DATA_VERSION_4_2_5_7) {
+    enabled = false;
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(user_tenant_id));
+    if (!tenant_config.is_valid()) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tenant config is invalid", KR(ret), K(user_tenant_id));
+    } else {
+      enabled = tenant_config->enable_logonly_replica;
+    }
+  }
+  return ret;
+}
+
+int ObShareUtil::check_majority_min_replica_checkpoint_enabled(
+    const uint64_t tenant_id,
+    bool &is_enabled)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  bool enable_logonly_replica = false;
+  is_enabled = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_tenant_enable_logonly_replica(
+      tenant_id, enable_logonly_replica))) {
+    LOG_WARN("fail to check tenant enable logonly replica", KR(ret), K(tenant_id));
+  } else if (enable_logonly_replica
+      && OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+  } else {
+    is_enabled = enable_logonly_replica
+        && (data_version > DATA_VERSION_4_2_5_8
+            || (data_version == DATA_VERSION_4_2_5_8 && !GCONF.in_upgrade_mode()));
+  }
+  return ret;
+}
+
 int ObShareUtil::fetch_current_cluster_version(
     common::ObISQLClient &client,
     uint64_t &cluster_version)

@@ -21,7 +21,7 @@
 #include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "storage/tx/ob_ts_mgr.h" // OB_TS_MGR
-#include "rootserver/ob_ls_recovery_reportor.h"
+#include "share/ob_share_util.h"
 
 namespace oceanbase
 {
@@ -229,7 +229,8 @@ int ObTenantInfoLoader::check_server_has_logonly_replica_(const uint64_t tenant_
   int ret = OB_SUCCESS;
   has_logonly_replica = false;
   bool logonly_enabled = false;
-  if (OB_FAIL(ObLSRecoveryReportor::check_tenant_enable_logonly_replica(tenant_id, logonly_enabled))) {
+  if (OB_FAIL(ObShareUtil::check_tenant_enable_logonly_replica(
+      tenant_id, logonly_enabled))) {
     LOG_WARN("failed to check tenant enable logonly replica", KR(ret), K(tenant_id));
   } else if (!logonly_enabled) {
     has_logonly_replica = false;

@@ -85,6 +85,7 @@ TEST_F(TestPalfThrottling, test_palf_options)
   wrapper.set_cur_unrecyclable_log_disk_size(unrecyclable_size);
   PALF_LOG(INFO, "test_palf_options trace", K(wrapper));
   ASSERT_EQ(true, wrapper.need_throttling());
+
   //test PalfThrottleOptions
   PalfThrottleOptions throttling_options;
   ASSERT_EQ(false, throttling_options.is_valid());
@@ -98,6 +99,61 @@ TEST_F(TestPalfThrottling, test_palf_options)
   ASSERT_EQ(throttling_options.unrecyclable_disk_space_, unrecyclable_size);
   ASSERT_EQ(true, throttling_options.need_throttling());
   ASSERT_EQ(total_disk_size * (utilization_limit_threshold - throttling_percentage)/100, throttling_options.get_available_size_after_limit());
+}
+
+TEST_F(TestPalfThrottling, test_log_disk_pressure)
+{
+  PalfDiskOptionsWrapper wrapper;
+  PalfDiskOptions disk_options;
+  disk_options.log_disk_usage_limit_size_ = 101;
+  disk_options.log_disk_utilization_threshold_ = 80;
+  disk_options.log_disk_utilization_limit_threshold_ = 95;
+  disk_options.log_disk_throttling_percentage_ = 60;
+  disk_options.log_disk_throttling_maximum_duration_ = 7200 * 1000 * 1000L;
+  disk_options.log_writer_parallelism_ = 1;
+  wrapper.disk_opts_for_stopping_writing_ = disk_options;
+  wrapper.disk_opts_for_recycling_blocks_ = disk_options;
+
+  // Writing throttling is already active at 70%, but disk pressure starts only
+  // after crossing PALF GC's 80% recycling threshold.
+  bool log_disk_under_pressure = false;
+  wrapper.set_cur_unrecyclable_log_disk_size(70);
+  ASSERT_TRUE(wrapper.need_throttling());
+  ASSERT_EQ(OB_SUCCESS,
+      wrapper.check_log_disk_under_pressure(log_disk_under_pressure));
+  ASSERT_FALSE(log_disk_under_pressure);
+
+  // Match PALF GC's floor division and strict-greater-than boundary.
+  wrapper.set_cur_unrecyclable_log_disk_size(80);
+  ASSERT_EQ(OB_SUCCESS,
+      wrapper.check_log_disk_under_pressure(log_disk_under_pressure));
+  ASSERT_FALSE(log_disk_under_pressure);
+  wrapper.set_cur_unrecyclable_log_disk_size(81);
+  ASSERT_EQ(OB_SUCCESS,
+      wrapper.check_log_disk_under_pressure(log_disk_under_pressure));
+  ASSERT_TRUE(log_disk_under_pressure);
+
+  // During log-disk shrinking, PALF GC uses the recycling capacity rather than
+  // the old stopping-writing capacity.
+  wrapper.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = 1000;
+  wrapper.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_ = 500;
+  wrapper.set_cur_unrecyclable_log_disk_size(401);
+  ASSERT_EQ(OB_SUCCESS,
+      wrapper.check_log_disk_under_pressure(log_disk_under_pressure));
+  ASSERT_TRUE(log_disk_under_pressure);
+
+  // The threshold calculation must not overflow for a large configured quota.
+  wrapper.disk_opts_for_recycling_blocks_.log_disk_usage_limit_size_ = INT64_MAX;
+  const int64_t gc_trigger_size = INT64_MAX / 100 * 80
+      + INT64_MAX % 100 * 80 / 100;
+  wrapper.set_cur_unrecyclable_log_disk_size(gc_trigger_size);
+  ASSERT_EQ(OB_SUCCESS,
+      wrapper.check_log_disk_under_pressure(log_disk_under_pressure));
+  ASSERT_FALSE(log_disk_under_pressure);
+  wrapper.set_cur_unrecyclable_log_disk_size(gc_trigger_size + 1);
+  ASSERT_EQ(OB_SUCCESS,
+      wrapper.check_log_disk_under_pressure(log_disk_under_pressure));
+  ASSERT_TRUE(log_disk_under_pressure);
 }
 
 TEST_F(TestPalfThrottling, test_throttling_stat)
