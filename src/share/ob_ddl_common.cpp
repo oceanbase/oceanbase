@@ -1476,6 +1476,7 @@ int ObDDLUtil::clear_ddl_checksum(ObPhysicalPlan *phy_plan)
                                                               phy_plan->get_ddl_table_id(),
                                                               phy_plan->get_ddl_task_id(),
                                                               *GCTX.sql_proxy_,
+                                                              OB_INVALID_INDEX/*tablet_task_id*/,
                                                               false/*is_unique_index_checksum*/))) {
       LOG_WARN("failed to delete checksum", K(ret));
     }
