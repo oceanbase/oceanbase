@@ -6218,7 +6218,6 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   bool has_rollup_opt_param = false;
   bool enable_hash_rollup = false;
   bool force_hash_rollup = false;
-  bool is_groupby_exprs_valid = true;
   ObObj hash_rollup_policy;
   ObQueryCtx *query_ctx = nullptr;
   bool rowsets_enabled = true;
@@ -6254,12 +6253,6 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
                                                                 groupby_helper.force_hash_local_,
                                                                 groupby_helper.force_pushdown_group_by_))) {
       LOG_WARN("failed to get aggregation info from hint", K(ret));
-    } else if (!rollup_exprs.empty() || groupby_helper.grouping_set_info_ != NULL) {
-      OPT_TRACE("group by has rollup or grouping sets, can not push");
-    } else if (OB_FAIL(check_groupby_exprs_valid(group_exprs, is_groupby_exprs_valid))) {
-      LOG_WARN("failed to check group by exprs valid", K(ret));
-    } else if (!is_groupby_exprs_valid) {
-      OPT_TRACE("group by has volatile or non-deterministic expr, can not push");
     } else if (OB_FAIL(check_storage_groupby_pushdown(aggr_items, group_exprs,
                                                       groupby_helper.pushdown_groupby_columns_,
                                                       groupby_helper.can_storage_pushdown_))) {
@@ -12657,6 +12650,7 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
         // we have to do default rewrite
         // otherwise
         bool can_split = false;
+        bool is_groupby_exprs_valid = true;
         ObLogGroupBy * groupby_op = static_cast<ObLogGroupBy*>(top);
         ObLogicalOperator* child = top->get_child(0);
         if (OB_NOT_NULL(current_context)) {
@@ -12667,6 +12661,11 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
           // final agg, do nothing
         } else if (groupby_op->is_three_stage_aggr()) {
           // final agg, do nothing
+        } else if (OB_FAIL(check_groupby_exprs_valid(groupby_op->get_group_by_exprs(),
+                                                     is_groupby_exprs_valid))) {
+          LOG_WARN("failed to check group by exprs valid", K(ret));
+        } else if (!is_groupby_exprs_valid) {
+          // Volatile and non-deterministic group by expressions cannot be pushed down safely.
         } else if (OB_FAIL(is_eligible_for_groupby_pushdown(top, can_split))) {
         } else if (!groupby_op->is_push_down() && !can_split) {
           // not partial and cannot split
@@ -12947,7 +12946,6 @@ int ObLogPlan::is_eligible_for_groupby_pushdown(ObLogicalOperator *&top, bool &i
   ObLogGroupBy *group_by = NULL;
   is_eligible = false;
   bool can_pushdown = true;
-  bool is_groupby_exprs_valid = true;
   ObSEArray<ObAggFunRawExpr *, 4> aggr_items;
   if (OB_ISNULL(top) || OB_ISNULL(top->get_plan()) || OB_ISNULL(top->get_plan()->get_stmt()) ||
       OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
@@ -12972,11 +12970,7 @@ int ObLogPlan::is_eligible_for_groupby_pushdown(ObLogicalOperator *&top, bool &i
       LOG_WARN("failed to check stmt is only full group by", K(ret));
     } else if (!is_only_full_group_by) {
       is_eligible = false;
-    } else if (OB_FALSE_IT(can_pushdown = !(group_by->has_rollup() || group_by->get_grouping_set_info() != NULL))) {
-    } else if (OB_FAIL(check_groupby_exprs_valid(group_by->get_group_by_exprs(), is_groupby_exprs_valid))) {
-      LOG_WARN("failed to check group by exprs valid", K(ret));
-    } else if (!is_groupby_exprs_valid) {
-      can_pushdown = false;
+    } else if (OB_FALSE_IT(can_pushdown = !group_by->has_rollup())) {
     } else if (can_pushdown
                && OB_FAIL(top->get_plan()->check_basic_groupby_pushdown(aggr_items,
                                                                         false,
