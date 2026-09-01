@@ -736,19 +736,20 @@ TEST_F(TestTabletStatusCache, get_read_all_committed_tablet)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
-  // get tablet
+  // get tablet with larger snapshot than transfer scn
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
     ObMDSGetTabletMode::READ_READABLE_COMMITED, 301/*snapshot*/);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
-  // get tablet
+  // get tablet with smaller snapshot than transfer scn
+  // notice: it is allowed because data and tx is ready in dest ls
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
     ObMDSGetTabletMode::READ_READABLE_COMMITED, 100/*snapshot*/);
-  ASSERT_EQ(OB_TABLET_NOT_EXIST, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(!tablet->tablet_status_cache_.is_valid());
 
-  // get tablet
+  // get tablet with older snapshot than create commit version
   ret = ObTabletCreateDeleteHelper::check_and_get_tablet(key, tablet_handle, 1_s,
     ObMDSGetTabletMode::READ_READABLE_COMMITED, 10/*snapshot*/);
   ASSERT_EQ(OB_SNAPSHOT_DISCARDED, ret);
