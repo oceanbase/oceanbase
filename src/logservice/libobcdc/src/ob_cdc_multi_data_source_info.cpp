@@ -70,7 +70,8 @@ MultiDataSourceInfo::MultiDataSourceInfo() :
     has_ddl_trans_op_(false),
     dict_tenant_metas_(),
     dict_database_metas_(),
-    dict_table_metas_()
+    dict_table_metas_(),
+    dict_udt_metas_()
 {}
 
 void MultiDataSourceInfo::reset()
@@ -99,9 +100,17 @@ void MultiDataSourceInfo::reset()
     }
   }
 
+  for (int i = 0; i < dict_udt_metas_.count(); ++i) {
+    const ObDictUdtMeta *meta = dict_udt_metas_.at(i);
+    if (OB_NOT_NULL(meta)) {
+      meta->~ObDictUdtMeta();
+    }
+  }
+
   dict_tenant_metas_.reset();
   dict_database_metas_.reset();
   dict_table_metas_.reset();
+  dict_udt_metas_.reset();
 }
 
 int MultiDataSourceInfo::push_back_ls_table_op(const share::ObLSAttr &ls_attr)
@@ -245,6 +254,35 @@ int MultiDataSourceInfo::get_new_table_meta(
   }
 
   if (OB_SUCC(ret) && ! found) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+
+  return ret;
+}
+
+int MultiDataSourceInfo::get_new_udt_meta(
+    const uint64_t tenant_id,
+    const uint64_t udt_id,
+    const datadict::ObDictUdtMeta *&udt_meta)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  udt_meta = nullptr;
+  const int64_t udt_meta_cnt = dict_udt_metas_.count();
+
+  for (int i = 0; OB_SUCC(ret) && !found && i < udt_meta_cnt; i++) {
+    const ObDictUdtMeta *tmp_udt_meta = dict_udt_metas_[i];
+
+    if (OB_ISNULL(tmp_udt_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid udt_meta", KR(ret), K(tenant_id), K(udt_id));
+    } else if (tmp_udt_meta->get_type_id() == udt_id) {
+      udt_meta = tmp_udt_meta;
+      found = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !found) {
     ret = OB_ENTRY_NOT_EXIST;
   }
 

@@ -341,6 +341,8 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
         const sql::ObSqlExpression *default_expr = var->is_formal_param() ? NULL : get_default_expr(var->get_default());
         if (OB_NOT_NULL(default_expr) &&
             !IS_CONST_TYPE(default_expr->get_expr_items().at(0).get_item_type()) &&
+            !(T_FUN_COLUMN_CONV == default_expr->get_expr_items().at(0).get_item_type() &&
+              OB_NOT_NULL(default_expr->get_expr()) && default_expr->get_expr()->is_static_const_expr()) &&
             lib::is_oracle_mode()) { // has default value, make user var to sync it
           OZ (package_state.update_changed_vars(var_idx));
           OX (resolve_ctx.session_info_.set_pl_can_retry(false));

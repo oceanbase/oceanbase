@@ -201,6 +201,7 @@ int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, DICT_ENT
 template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictTenantMeta &dict_entry);
 template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictDatabaseMeta &dict_entry);
 template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictTableMeta &dict_entry);
+template int ObDataDictIterator::next_dict_entry(const ObDictMetaHeader &header, ObDictUdtMeta &dict_entry);
 
 int ObDataDictIterator::append_log_buf_with_base_header_(const char *buf, const int64_t buf_len)
 {

@@ -26,7 +26,8 @@ ObDictTenantInfo::ObDictTenantInfo() :
     cfifo_allocator_(),
     dict_tenant_meta_(&arena_allocator_),
     db_map_(),
-    table_map_()
+    table_map_(),
+    udt_map_()
 {
 }
 
@@ -50,6 +51,8 @@ int ObDictTenantInfo::init()
     LOG_ERROR("db_map_ init fail", KR(ret));
   } else if (OB_FAIL(table_map_.init("DATADICTTB"))) {
     LOG_ERROR("table_map_ init fail", KR(ret));
+  } else if (OB_FAIL(udt_map_.init("DATADICTUDT"))) {
+    LOG_ERROR("udt_map_ init fail", KR(ret));
   } else {
     cfifo_allocator_.set_label("DictTenantInfo");
     is_inited_ = true;
@@ -71,6 +74,7 @@ void ObDictTenantInfo::destroy()
     dict_tenant_meta_.reset();
     db_map_.destroy();
     table_map_.destroy();
+    udt_map_.destroy();
     arena_allocator_.reset();
     cfifo_allocator_.destroy();
   }
@@ -415,6 +419,124 @@ int ObDictTenantInfo::remove_table_meta(const uint64_t table_id)
   return ret;
 }
 
+int ObDictTenantInfo::alloc_dict_udt_meta(datadict::ObDictUdtMeta *&dict_udt_meta)
+{
+  int ret = OB_SUCCESS;
+  dict_udt_meta = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else if (OB_ISNULL(dict_udt_meta = static_cast<datadict::ObDictUdtMeta *>(
+      cfifo_allocator_.alloc(sizeof(datadict::ObDictUdtMeta))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate dict_udt_meta failed", KR(ret), K(dict_udt_meta));
+  } else {
+    new (dict_udt_meta) datadict::ObDictUdtMeta(&arena_allocator_);
+  }
+
+  return ret;
+}
+
+int ObDictTenantInfo::free_dict_udt_meta(datadict::ObDictUdtMeta *dict_udt_meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else if (OB_ISNULL(dict_udt_meta)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("dict_udt_meta is nullptr", KR(ret));
+  } else {
+    dict_udt_meta->reset();
+    cfifo_allocator_.free(dict_udt_meta);
+    dict_udt_meta = nullptr;
+  }
+
+  return ret;
+}
+
+int ObDictTenantInfo::insert_dict_udt_meta(datadict::ObDictUdtMeta *dict_udt_meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else if (OB_ISNULL(dict_udt_meta)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("dict_udt_meta is nullptr", KR(ret));
+  } else {
+    const uint64_t udt_id = dict_udt_meta->get_type_id();
+    MetaDataKey meta_data_key(udt_id);
+
+    if (OB_UNLIKELY(OB_INVALID_ID == udt_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("expect valid udt_id", KR(ret), K(udt_id), KPC(dict_udt_meta));
+    } else if (OB_FAIL(udt_map_.insert(meta_data_key, dict_udt_meta))) {
+      LOG_ERROR("udt_map_ insert failed", KR(ret), K(meta_data_key), KPC(dict_udt_meta));
+    }
+  }
+
+  return ret;
+}
+
+int ObDictTenantInfo::replace_dict_udt_meta(const datadict::ObDictUdtMeta &new_dict_udt_meta)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else {
+    const uint64_t udt_id = new_dict_udt_meta.get_type_id();
+    MetaDataKey meta_data_key(udt_id);
+    datadict::ObDictUdtMeta *old_udt_meta = nullptr;
+    bool need_insert = false;
+
+    if (OB_FAIL(get_udt_meta(udt_id, old_udt_meta))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("tenant_info get_udt_meta failed", KR(ret), K(udt_id), K(old_udt_meta));
+      } else {
+        ret = OB_SUCCESS;
+        need_insert = true;
+      }
+    } else if (OB_FAIL(free_dict_udt_meta(old_udt_meta))) {
+      LOG_ERROR("free_dict_udt_meta failed", KR(ret), K(udt_id));
+    } else if (OB_FAIL(udt_map_.erase(meta_data_key))) {
+      LOG_ERROR("udt_map_ erase failed", KR(ret), K(meta_data_key));
+    } else {
+      need_insert = true;
+    }
+
+    if (OB_SUCC(ret) && need_insert) {
+      datadict::ObDictUdtMeta *dict_udt_meta = nullptr;
+      if (OB_FAIL(alloc_dict_udt_meta(dict_udt_meta))) {
+        LOG_ERROR("alloc_dict_udt_meta failed", KR(ret), K(udt_id), K(new_dict_udt_meta));
+      } else if (OB_FAIL(dict_udt_meta->assign(new_dict_udt_meta))) {
+        LOG_ERROR("dict_udt_meta assign failed", KR(ret), K(udt_id), K(new_dict_udt_meta));
+      } else if (OB_FAIL(insert_dict_udt_meta(dict_udt_meta))) {
+        LOG_ERROR("tenant_info insert_dict_udt_meta failed", KR(ret), K(udt_id), K(new_dict_udt_meta));
+      } else {
+        dict_udt_meta = nullptr;
+      }
+
+      if (OB_NOT_NULL(dict_udt_meta)) {
+        int free_ret = free_dict_udt_meta(dict_udt_meta);
+        if (OB_SUCCESS != free_ret) {
+          LOG_ERROR("free_dict_udt_meta failed", K(free_ret), K(udt_id));
+          if (OB_SUCC(ret)) {
+            ret = free_ret;
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDictTenantInfo::get_tenant_schema_info(TenantSchemaInfo &tenant_schema_info)
 {
   int ret = OB_SUCCESS;
@@ -493,6 +615,55 @@ int ObDictTenantInfo::get_table_schema(
     LOG_ERROR("get_table_meta failed", KR(ret), K(tenant_id));
   } else {
     table_schema = table_meta;
+  }
+
+  return ret;
+}
+
+int ObDictTenantInfo::get_udt_meta(
+    const uint64_t udt_id,
+    datadict::ObDictUdtMeta *&udt_meta)
+{
+  int ret = OB_SUCCESS;
+  udt_meta = nullptr;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else {
+    MetaDataKey meta_data_key(udt_id);
+    if (OB_FAIL(udt_map_.get(meta_data_key, udt_meta))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("udt_map_ get failed", KR(ret), K(meta_data_key));
+      }
+    } else if (OB_ISNULL(udt_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("udt_meta is nullptr", KR(ret), K(meta_data_key), K(udt_meta));
+    }
+  }
+
+  return ret;
+}
+
+int ObDictTenantInfo::get_udt_schema(
+    const uint64_t tenant_id,
+    const uint64_t udt_id,
+    const share::schema::ObUDTTypeInfo *&udt_schema,
+    int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(tenant_id, timeout);
+  datadict::ObDictUdtMeta *udt_meta = nullptr;
+  udt_schema = nullptr;
+
+  if (OB_FAIL(get_udt_meta(udt_id, udt_meta))) {
+    LOG_ERROR("get_udt_meta failed", KR(ret), K(tenant_id), K(udt_id));
+  } else if (OB_ISNULL(udt_meta)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("udt_meta is nullptr", KR(ret), K(tenant_id), K(udt_id));
+  } else if (OB_ISNULL(udt_schema = udt_meta->get_udt_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("udt info is nullptr", KR(ret), K(tenant_id), K(udt_id), KPC(udt_meta));
   }
 
   return ret;

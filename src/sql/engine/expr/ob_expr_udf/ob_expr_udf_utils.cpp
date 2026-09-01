@@ -17,6 +17,9 @@
 #include "pl/ob_pl_stmt.h"
 #include "ob_udf_result_cache.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "share/object/ob_obj_cast.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -557,10 +560,14 @@ int ObExprUDFUtils::process_in_params(ObExprUDFCtx &udf_ctx, ObIArray<ObObj> &de
   int ret = OB_SUCCESS;
   if (udf_ctx.get_arg_count() > 0) {
     if (udf_ctx.get_info()->is_called_in_sql_) {
+      CK (OB_NOT_NULL(udf_ctx.get_exec_ctx()));
       OZ (process_in_params(udf_ctx.get_obj_stack(),
                             udf_ctx.get_arg_count(),
                             udf_ctx.get_info()->params_type_,
-                            udf_ctx.get_param_store()));
+                            udf_ctx.get_param_store(),
+                            *udf_ctx.get_exec_ctx(),
+                            udf_ctx.get_allocator(),
+                            deep_in_objs));
     } else {
       OZ (process_in_params(udf_ctx.get_obj_stack(),
                             udf_ctx.get_arg_count(),
@@ -591,7 +598,10 @@ int ObExprUDFUtils::process_in_params(ObExprUDFCtx &udf_ctx, ObIArray<ObObj> &de
 int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
                                       int64_t param_num,
                                       const ObIArray<ObExprResType> &params_type,
-                                      pl::ObPLParamArray& iparams)
+                                      pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
+                                      ObIArray<ObObj> &deep_in_objs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
@@ -602,7 +612,22 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
       param.set_is_pl_mock_default_param(true);
     } else {
       if (ObExtendType == params_type.at(i).get_type()) {
-        if (!objs_stack.at(i).is_null()) {
+        if (objs_stack.at(i).is_common_user_defined_sql_type()) {
+          ObObj pl_obj;
+          ObSqlUDTMeta udt_meta;
+          uint16_t subschema_id = objs_stack.at(i).get_meta().get_subschema_id();
+          if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+            LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+          } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+                         &exec_ctx, pl_obj, objs_stack.at(i), udt_meta, &allocator))) {
+            LOG_WARN("failed to convert sql udt to pl extend for UDF param", K(ret), K(i));
+          }
+          if (OB_SUCC(ret)) {
+            param.set_extend(pl_obj.get_ext(), pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());
+            param.set_param_meta();
+            OZ (deep_in_objs.push_back(pl_obj));
+          }
+        } else if (!objs_stack.at(i).is_null()) {
           param.set_extend(objs_stack.at(i).get_ext(), objs_stack.at(i).get_meta().get_extend_type(), objs_stack.at(i).get_val_len());
           param.set_param_meta();
         } else {
@@ -1209,7 +1234,7 @@ int ObExprUDFUtils::ob_adjust_lob_obj(const ObObj &origin_obj,
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(out_obj));
-  if (!is_lob_storage(origin_obj.get_type())) { // null & nop is not lob
+  if (!is_lob_storage(origin_obj.get_type()) || obj_meta.is_xml_sql_type()) { // null & nop & xmltype is not lob
   } else if (origin_obj.has_lob_header() != obj_meta.has_lob_header()) {
     if (origin_obj.has_lob_header()) { // obj_meta does not have lob header, get data only
       // can avoid allocator if no persist lobs call this function,

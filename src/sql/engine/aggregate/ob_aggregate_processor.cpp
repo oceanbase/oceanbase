@@ -27,6 +27,9 @@
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "pl/ob_pl.h"
 #include "pl/external_routine/ob_java_udaf.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "pl/ob_pl_type.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -7748,13 +7751,34 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
         LOG_TRACE("succeed to get pl agg udf result", K(result_obj), K(result));
       }
       if (result_obj.is_pl_extend()) {
-        int tmp_ret = OB_SUCCESS;
-        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = eval_ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
-        tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result_obj);
-        if (OB_SUCCESS != tmp_ret) {
-          LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+        uint64_t udt_id = aggr_info.pl_result_type_.get_udt_id();
+        if (aggr_info.pl_result_type_.is_user_defined_sql_type()) {
+          ObExprStrResAlloc expr_res_alloc(*aggr_info.expr_, eval_ctx_);
+          ObString res_str;
+          ObSqlUDTMeta sql_udt_meta;
+          uint16_t subschema_id = ObInvalidSqlType;
+          if (OB_FAIL(eval_ctx_.exec_ctx_.get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+            LOG_WARN("failed to get subschema id for agg udf result", K(ret));
+          } else if (OB_FAIL(eval_ctx_.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, sql_udt_meta))) {
+            LOG_WARN("failed to get sql udt meta", K(ret));
+          } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(
+                  expr_res_alloc, &eval_ctx_.exec_ctx_, res_str, result_obj, sql_udt_meta))) {
+            LOG_WARN("failed to serialize agg udf result", K(ret));
+          } else if (res_str.empty()) {
+            result.set_null();
+          } else {
+            result.set_string(res_str);
+          }
+          pl::ObUserDefinedType::destruct_obj(result_obj, nullptr);
+        } else {
+          int tmp_ret = OB_SUCCESS;
+          sql::ObPLComplexTypeMgr *pl_complex_type_mgr = eval_ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+          tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result_obj);
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_ERROR("fail to collect pl collection allocator, may be exist memory issue", K(tmp_ret));
+          }
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }

@@ -158,7 +158,9 @@ int ObExprObjAccess::ExtraInfo::parse_serialized_pl_header(const SerializedPLObj
   } else if (OB_FAIL(serialization::decode(slice.data_, slice.len_, pos, pl_type))) {
     LOG_WARN("failed to decode serialized pl type", K(ret), K(slice.len_), K(pos));
   } else if (pl_type != pl::PL_RECORD_TYPE
-             && pl_type != pl::PL_VARRAY_TYPE) {
+             && pl_type != pl::PL_VARRAY_TYPE
+             && pl_type != pl::PL_NESTED_TABLE_TYPE
+             && pl_type != pl::PL_ASSOCIATIVE_ARRAY_TYPE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported serialized pl type for direct access", K(ret), K(pl_type));
   } else if (OB_FAIL(serialization::decode(slice.data_, slice.len_, pos, id))) {
@@ -442,7 +444,9 @@ int ObExprObjAccess::ExtraInfo::locate_collection_elem_slice(const ParamStore &p
   elem_slice = SerializedPLObjSlice();
   if (OB_FAIL(parse_serialized_pl_header(coll_slice, pos, pl_type, id, is_null))) {
     LOG_WARN("failed to parse serialized collection header", K(ret));
-  } else if (pl_type != pl::PL_VARRAY_TYPE) {
+  } else if (pl_type != pl::PL_VARRAY_TYPE
+             && pl_type != pl::PL_NESTED_TABLE_TYPE
+             && pl_type != pl::PL_ASSOCIATIVE_ARRAY_TYPE) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported serialized collection type for direct access", K(ret), K(pl_type));
   } else if (is_null) {

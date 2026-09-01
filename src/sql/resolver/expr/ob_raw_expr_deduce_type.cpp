@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "share/object/ob_obj_cast_util.h"
+#include "share/ob_cluster_version.h"
 #include "sql/resolver/expr/ob_raw_expr_deduce_type.h"
 #include "sql/engine/expr/ob_expr_version.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
@@ -823,7 +824,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         cast_mode |= CM_ZERO_FILL;
       }
       if (ob_is_collection_sql_type(expr.get_result_type().get_type())
-          && !ObObjUDTUtil::ob_is_sys_sql_udt(expr.get_result_type().get_udt_id())) {
+          && !is_inner_pl_udt_id(expr.get_result_type().get_udt_id())) {
         if (expr.get_expr_class() == ObRawExpr::EXPR_OPERATOR
             || expr.get_expr_class() == ObRawExpr::EXPR_SYS_FUNC
             || expr.get_expr_class() == ObRawExpr::EXPR_SET_OP
@@ -2220,7 +2221,6 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         } else {
           ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr.get_pl_agg_udf_expr());
           result_type = udf_expr->get_result_type();
-          expr.set_result_type(udf_expr->get_result_type());
           if (result_type.is_character_type() && result_type.get_length() < 0) {
             if (result_type.is_char() || result_type.is_nchar()) {
               result_type.set_length(OB_MAX_ORACLE_PL_CHAR_LENGTH_BYTE);

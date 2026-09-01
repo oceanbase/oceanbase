@@ -316,7 +316,8 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
       }
     }
     if (OB_SUCC(ret) && lib::is_oracle_mode() &&type.get_type() == ObUserDefinedSQLType) {
-      type.set_subschema_id(ObXMLSqlType);
+      type.set_subschema_id(types_stack[RESULT_TYPE_INDEX].get_subschema_id());
+      type.set_udt_id(types_stack[RESULT_TYPE_INDEX].get_udt_id());
     }
   }
   if (OB_SUCC(ret)) {

@@ -497,7 +497,6 @@ public:
     trigger_ref_cols_(allocator_),
     definer_user_id_(OB_INVALID_ID),
     is_special_pkg_invoke_right_(false),
-    pre_calc_default_values_(),
     readonly_args_()
     {  }
   virtual ~ObPLFunction();
@@ -594,10 +593,6 @@ public:
 
   inline TriggerRefColsTable &get_trigger_ref_cols() { return trigger_ref_cols_; }
 
-  int pre_calc_default_values(ObSQLSessionInfo &session, const ObPLFunctionAST &ast);
-
-  const ObIArray<ObObjParam> &get_pre_calc_default_values() const { return pre_calc_default_values_; }
-
   inline int add_readonly_arg(int64_t var_idx) { return readonly_args_.add_member(var_idx); }
 
   int is_readonly_arg(int64_t var_idx) const { return readonly_args_.has_member(var_idx); }
@@ -618,12 +613,8 @@ public:
                K_(priv_user),
                K_(stat),
                K_(stack_size),
-               K_(pre_calc_default_values),
                "external_routine_type", get_external_routine_type(),
                "external_routine_entry", get_external_routine_entry());
-
-private:
-  static int check_can_pre_calc_default_value(bool &can_calc, const ObRawExpr &expr);
 
 private:
   //符号表信息
@@ -649,7 +640,7 @@ private:
   TriggerRefColsTable trigger_ref_cols_;
   uint64_t definer_user_id_;
   bool is_special_pkg_invoke_right_;
-  common::ObSEArray<ObObjParam, 4> pre_calc_default_values_;
+
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE> readonly_args_;
   ObOraJavaRoutineInfo *ora_java_routine_info_ = nullptr;
 

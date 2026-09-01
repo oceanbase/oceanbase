@@ -63,6 +63,12 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   static int eval_object_construct(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_object_construct_sql_udt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res,
+                                           const ObExprObjectConstructInfo *info,
+                                           ObSQLSessionInfo *session);
+  static int eval_object_construct_pl_extend(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res,
+                                             const ObExprObjectConstructInfo *info,
+                                             ObSQLSessionInfo *session);
 
   static int check_types(ObEvalCtx &ctx, const common::ObObj *objs_stack,
                          const common::ObIArray<ObExprResType> &elem_types,

@@ -80,7 +80,10 @@ public:
   int process_in_params(const pl::ObPLParamArray &objs_stack,
                                       int64_t param_num,
                                       const ObIArray<ObExprResType> &params_type,
-                                      pl::ObPLParamArray& iparams);
+                                      pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
+                                      ObIArray<ObObj> &deep_in_objs);
   static
   int process_return_value(ObObj &result,
                                          ObObj &tmp_result,

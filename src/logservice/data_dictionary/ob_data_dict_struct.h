@@ -26,6 +26,7 @@
 #include "share/ob_ls_id.h" // share::ObLSID
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/schema/ob_udt_info.h"
 #include "share/ls/ob_ls_operator.h"  // ObLSAttr
 #include "share/scn.h"
 
@@ -67,6 +68,7 @@ enum ObDictMetaType : uint8_t
   TENANT_META,
   DATABASE_META,
   TABLE_META,
+  UDT_META,
   MAX_META
 };
 
@@ -584,6 +586,54 @@ private:
   uint64_t data_table_id_;
   uint64_t association_table_id_;
 }; // end of ObDictTableMeta
+
+class ObDictUdtMeta
+{
+public:
+  explicit ObDictUdtMeta(ObIAllocator *allocator);
+  virtual ~ObDictUdtMeta() { reset(); }
+  void reset();
+  bool operator==(const ObDictUdtMeta &other) const;
+
+public:
+  int init(const share::schema::ObUDTTypeInfo &udt_info);
+  int assign(const ObDictUdtMeta &src_udt_meta);
+
+public:
+  OB_INLINE bool is_valid() const
+  {
+    return OB_NOT_NULL(udt_info_)
+        && common::OB_INVALID_ID != udt_info_->get_type_id()
+        && common::OB_INVALID_TENANT_ID != udt_info_->get_tenant_id();
+  }
+  OB_INLINE uint64_t get_tenant_id() const
+  {
+    return OB_ISNULL(udt_info_) ? common::OB_INVALID_TENANT_ID : udt_info_->get_tenant_id();
+  }
+  OB_INLINE uint64_t get_database_id() const
+  {
+    return OB_ISNULL(udt_info_) ? common::OB_INVALID_ID : udt_info_->get_database_id();
+  }
+  OB_INLINE uint64_t get_type_id() const
+  {
+    return OB_ISNULL(udt_info_) ? common::OB_INVALID_ID : udt_info_->get_type_id();
+  }
+  OB_INLINE int64_t get_schema_version() const
+  {
+    return OB_ISNULL(udt_info_) ? common::OB_INVALID_VERSION : udt_info_->get_schema_version();
+  }
+  OB_INLINE const share::schema::ObUDTTypeInfo *get_udt_info() const { return udt_info_; }
+
+  NEED_SERIALIZE_AND_DESERIALIZE_DICT;
+  TO_STRING_KV(KPC_(udt_info));
+
+private:
+  int alloc_udt_info_();
+
+private:
+  ObIAllocator *allocator_;
+  share::schema::ObUDTTypeInfo *udt_info_;
+}; // end of ObDictUdtMeta
 
 } // namespace datadict
 } // namespace oceanbase

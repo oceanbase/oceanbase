@@ -205,11 +205,26 @@ public:
   static int sql_udt_deserialize_to_pl_extend(sql::ObExecContext *exec_ctx,
                                               ObObj &result,
                                               const ObObj &udt_obj,
-                                              ObSqlUDTMeta &udt_meta);
+                                              ObSqlUDTMeta &udt_meta,
+                                              common::ObIAllocator *tmp_alloc = nullptr);
 
+  // Guard overloads are thin wrappers; templates are the only implementation.
+  // SCHEMA_PROVIDER must provide:
+  //   int get_udt_info(tenant_id, udt_id, const ObUDTTypeInfo *&)
+  //   int get_database_schema(tenant_id, database_id, const ObDatabaseSchema *&)
   static int convert_sql_udt_to_string(
       common::ObIAllocator &res_allocator,
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const sql::ObSQLSessionInfo &session,
+      const common::ObTimeZoneInfo *tz_info,
+      const uint64_t udt_id,
+      const common::ObObj &sql_udt_obj,
+      common::ObString &res_str,
+      const bool has_lob_header = true);
+  template <typename SCHEMA_PROVIDER>
+  static int convert_sql_udt_to_string(
+      common::ObIAllocator &res_allocator,
+      SCHEMA_PROVIDER &schema_provider,
       const sql::ObSQLSessionInfo &session,
       const common::ObTimeZoneInfo *tz_info,
       const uint64_t udt_id,
@@ -222,9 +237,25 @@ public:
       const share::schema::ObUDTTypeInfo &udt_info,
       common::ObIAllocator &allocator,
       common::ObString &qualified_name);
+  template <typename SCHEMA_PROVIDER>
+  static int build_qualified_udt_name(
+      SCHEMA_PROVIDER &schema_provider,
+      const share::schema::ObUDTTypeInfo &udt_info,
+      common::ObIAllocator &allocator,
+      common::ObString &qualified_name);
 
   static int serialize_pl_extend_to_string(
       share::schema::ObSchemaGetterGuard &schema_guard,
+      const sql::ObSQLSessionInfo &session,
+      const common::ObTimeZoneInfo *tz_info,
+      const pl::ObUserDefinedType *user_type,
+      const common::ObString &root_qualified_name,
+      common::ObObj &pl_obj,
+      common::ObIAllocator &res_allocator,
+      common::ObString &res_str);
+  template <typename SCHEMA_PROVIDER>
+  static int serialize_pl_extend_to_string(
+      SCHEMA_PROVIDER &schema_provider,
       const sql::ObSQLSessionInfo &session,
       const common::ObTimeZoneInfo *tz_info,
       const pl::ObUserDefinedType *user_type,

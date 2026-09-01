@@ -90,9 +90,20 @@ private:
   int get_snapshot_scn_(share::SCN &snapshot_scn);
   int generate_dict_and_dump_(const share::SCN &snapshot_scn);
   int get_tenant_schema_guard_(
+      const uint64_t tenant_id,
       const int64_t schema_version,
       share::schema::ObSchemaGetterGuard &tenant_guard,
       const bool is_force_fallback);
+  int dump_udt_metas_(
+      const uint64_t tenant_id,
+      const int64_t schema_version,
+      const common::ObIArray<uint64_t> &udt_ids,
+      int64_t &dump_succ_udt_cnt);
+  int get_udt_ids_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      ObIArray<uint64_t> &udt_ids,
+      const bool only_sys_udt = false);
   int check_tenant_status_normal_(
       share::schema::ObSchemaGetterGuard &tenant_schema_guard,
       bool &is_normal);
@@ -100,7 +111,10 @@ private:
       const share::SCN &snapshot_scn,
       const int64_t schema_version,
       ObIArray<uint64_t> &database_ids,
-      ObIArray<uint64_t> &table_ids);
+      ObIArray<uint64_t> &table_ids,
+      ObIArray<uint64_t> &udt_ids,
+      int64_t &sys_schema_version,
+      ObIArray<uint64_t> &sys_inner_udt_ids);
   int get_database_ids_(
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObIArray<uint64_t> &database_ids);
@@ -111,6 +125,11 @@ private:
       const int64_t schema_version,
       const ObIArray<uint64_t> &table_ids,
       int64_t &filter_table_count);
+  int handle_udt_metas_(
+      const int64_t schema_version,
+      const ObIArray<uint64_t> &udt_ids,
+      const int64_t sys_schema_version,
+      const ObIArray<uint64_t> &sys_inner_udt_ids);
   int filter_table_(const share::schema::ObTableSchema &table_schema, bool &is_filtered);
   void try_recycle_dict_history_();
 private:

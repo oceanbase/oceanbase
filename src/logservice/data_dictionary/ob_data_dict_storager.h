@@ -72,6 +72,7 @@ public:
       const ObIArray<const share::schema::ObTenantSchema*> &tenant_schemas,
       const ObIArray<const share::schema::ObDatabaseSchema*> &database_schemas,
       const ObIArray<const share::schema::ObTableSchema*> &table_schemas,
+      const ObIArray<const share::schema::ObUDTTypeInfo*> &udt_schemas,
       char *&buf,
       int64_t &buf_len,
       int64_t &pos,
@@ -84,7 +85,8 @@ public:
       const int64_t pos,
       ObIArray<const ObDictTenantMeta*> &tenant_metas,
       ObIArray<const ObDictDatabaseMeta*> &database_metas,
-      ObIArray<const ObDictTableMeta*> &table_metas);
+      ObIArray<const ObDictTableMeta*> &table_metas,
+      ObIArray<const ObDictUdtMeta*> &udt_metas);
 protected:
   // protected only for unittest.
   virtual int submit_to_palf_();

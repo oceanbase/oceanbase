@@ -267,7 +267,7 @@ public:
     item_type_(T_MAX),
     fast_check_status_times_(0)
     {
-      expr_factory_.set_is_called_sql(false);
+      expr_factory_.set_is_called_sql(is_sql_scope_);
       params_.param_list_ = param_list;
       params_.tg_timing_event_ = tg_timing_event;
     }
@@ -743,6 +743,7 @@ public:
                                  sql::ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard,
                                  bool is_for_trigger = false);
   static bool is_parameterized_null_param(const ObRawExpr *expr);
+  int is_parameterized_empty_string(const ObStmtNodeTree *node, bool &is_empty_string);
 
   static int modify_null_param_using_deduced_type(const ObRawExpr *expr,
                                                 const ObPLDataType &expected_type,
@@ -1213,7 +1214,6 @@ private:
   int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
   int analyze_calc_once_exprs(ObPLFunctionAST &func);
-  int replace_to_const_expr_if_need(ObRawExpr *&expr, bool check_argument_pre_calc = false);
   int build_seq_value_expr(ObRawExpr *&expr,
                            const sql::ObQualifiedName &q_name,
                            uint64_t seq_id);

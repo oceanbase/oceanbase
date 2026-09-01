@@ -177,6 +177,7 @@ ObSqlCtx::ObSqlCtx()
     is_pre_execute_(false),
     is_prepare_with_params_(false),
     is_prepare_stage_(false),
+    disable_sql_udt_deduce_in_pl_(false),
     parse_result_(nullptr),
     prepare_params_(nullptr),
     is_dynamic_sql_(false),
@@ -243,6 +244,7 @@ void ObSqlCtx::reset()
   is_pre_execute_ = false;
   is_prepare_with_params_ = false;
   is_prepare_stage_ = false;
+  disable_sql_udt_deduce_in_pl_ = false;
   parse_result_ = nullptr;
   prepare_params_ = nullptr;
   is_dynamic_sql_ = false;

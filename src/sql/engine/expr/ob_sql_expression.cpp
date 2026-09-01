@@ -30,7 +30,8 @@ ObSqlExpression::ObSqlExpression(common::ObIAllocator &allocator, int64_t item_c
       need_construct_binding_array_(false),
       gen_infix_expr_(false),
       is_pl_mock_default_expr_(false),
-      expr_(NULL)
+      expr_(NULL),
+      need_cur_time_(true)
 {
 }
 

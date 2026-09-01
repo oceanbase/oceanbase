@@ -15,6 +15,7 @@
 
 #include "sql/engine/ob_operator.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
+#include "sql/engine/expr/ob_expr_obj_access.h"
 #include "lib/charset/ob_charset.h"
 
 namespace oceanbase
@@ -44,7 +45,8 @@ public:
     already_calc_(false),
     row_count_(0),
     col_count_(0),
-    value_table_(NULL) 
+    value_table_(NULL),
+    use_serialized_path_(false)
   {}
 
   virtual int inner_open() override;
@@ -56,6 +58,8 @@ public:
   virtual void destroy() override;
 private:
   int inner_get_next_row_udf();
+  int inner_get_next_row_udf_pl_extend();
+  int inner_get_next_row_udf_sql_udt();
   int inner_get_next_row_sys_func();
   int get_current_result(common::ObObj &result);
   int reset_udtf_ctx();
@@ -66,6 +70,8 @@ private:
   int64_t col_count_;
   common::ObObj value_;
   pl::ObPLCollection *value_table_;
+  common::ObString serialized_data_;
+  bool use_serialized_path_;
   int (ObFunctionTableOp::*next_row_func_)();
 };
 

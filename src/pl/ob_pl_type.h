@@ -579,6 +579,11 @@ public:
   int serialize(share::schema::ObSchemaGetterGuard &schema_guard, const sql::ObSQLSessionInfo &session, const common::ObTimeZoneInfo *tz_info,
                 obmysql::MYSQL_PROTOCOL_TYPE type, char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
                 const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int serialize(SCHEMA_PROVIDER &schema_provider, const sql::ObSQLSessionInfo &session,
+                const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
+                char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   int deserialize(share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator, sql::ObSQLSessionInfo *session,
                   const common::ObCharsetType charset, const common::ObCollationType cs_type,
                   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,
@@ -650,6 +655,7 @@ public:
 
   static int obj_is_null(ObObj &obj, bool &is_null);
   static int datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null);
+  static bool is_schema_udt(share::schema::ObSchemaGetterGuard *schema_guard, uint64_t udt_id);
 
   DECLARE_TO_STRING;
 

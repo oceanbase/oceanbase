@@ -390,7 +390,6 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
     OZ (cg.codegen_expression(func));
     OZ (func.get_enum_set_ctx().assgin(func_ast.get_enum_set_ctx()));
     OZ (func.set_variables(func_ast.get_symbol_table()));
-    OZ (func.pre_calc_default_values(session_info_, func_ast));
     OZ (func.set_types(func_ast.get_user_type_table()));
     OZ (func.get_dependency_table().assign(func_ast.get_dependency_table()));
     OZ (func.add_members(func_ast.get_flag()));

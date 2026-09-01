@@ -132,6 +132,9 @@ public:
   void set_expr(const ObExpr *expr) { expr_ = expr; }
 
   virtual const ObExpr *get_expr() const override { return expr_; }
+
+  void set_need_cur_time(bool v) { need_cur_time_ = v; }
+  bool need_cur_time() const { return need_cur_time_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlExpression);
 protected:
@@ -150,6 +153,10 @@ protected:
   // expression for static engine, only used in PL
   bool is_pl_mock_default_expr_;
   const ObExpr *expr_;
+  // whether expr_ tree depends on cur_time, computed at PL code generation.
+  // not serialized: rebuilt together with expr_ during code generation.
+  // default true so any path that does not compute it stays conservative.
+  bool need_cur_time_;
 };
 
 inline void ObSqlExpression::reset(void)
@@ -161,6 +168,7 @@ inline void ObSqlExpression::reset(void)
   infix_expr_.reset();
   need_construct_binding_array_ = false;
   array_param_index_ = common::OB_INVALID_INDEX;
+  need_cur_time_ = true;
 }
 
 inline bool ObSqlExpression::is_empty() const

@@ -14,6 +14,8 @@
 
 #include "ob_expr_collection_construct.h"
 #include "pl/ob_pl_package.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -88,6 +90,8 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
         }
       }
       LOG_WARN("PLS-00306: wrong number or types of arguments in call", K(ret));
+    } else if (sql_udt_matches_ext_elem && !types[i].is_xml_sql_type()) {
+      // keep sql udt type as-is, no cast needed
     } else {
       types[i].set_calc_accuracy(elem_type_.get_accuracy());
       types[i].set_calc_meta(elem_type_.get_meta_type());
@@ -102,9 +106,30 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
       }
     }
   }
-  OX (type.set_type(ObExtendType));
-  OX (type.set_extend_type(type_));
-  OX (type.set_udt_id(udt_id_));
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+    ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+    if (is_called_in_sql()
+        && !is_inner_pl_udt_id(udt_id_)
+        && OB_NOT_NULL(exec_ctx)
+        && pl::ObPLDataType::is_schema_udt(exec_ctx->get_sql_ctx()->schema_guard_, udt_id_)
+        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+        && OB_NOT_NULL(session)
+        && !session->disable_sql_udt_deduce_in_pl()
+        && session->get_local_enable_pl_composite_as_sql_udt()) {
+      type.set_type(ObUserDefinedSQLType);
+      type.set_udt_id(udt_id_);
+      uint16_t subschema_id = ObInvalidSqlType;
+      if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id_, subschema_id))) {
+        LOG_WARN("failed to get subschema id", K(ret), K(udt_id_));
+      }
+      OX (type.set_sql_udt(subschema_id));
+    } else {
+      type.set_type(ObExtendType);
+      type.set_extend_type(type_);
+      type.set_udt_id(udt_id_);
+    }
+  }
   return ret;
 }
 
@@ -211,24 +236,33 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
         LOG_WARN("check type failed", K(ret), K(*e), K(info->elem_type_));
       }
     }else if (ObNullType != e->datum_meta_.type_
-        && e->datum_meta_.type_ != info->elem_type_.get_obj_type()) {
+        && e->datum_meta_.type_ != info->elem_type_.get_obj_type()
+        && !(ObExtendType == info->elem_type_.get_obj_type()
+             && e->obj_meta_.is_common_user_defined_sql_type())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("check type failed", K(ret), K(*e), K(info->elem_type_));
     }
   }
 
+  const bool use_sql_udt_path = expr.is_called_in_sql_ && expr.obj_meta_.is_user_defined_sql_type();
+
   pl::ObPLExecCtx *pl_exec_ctx = nullptr;
   ObIAllocator *alloc = nullptr;
   ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
-  OZ (ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
-  OX (alloc = &pl_complex_type_mgr->alloc_);
-  // for collection construct in pl, use top_expr_allocator
-  // we will destroy this obj in pl final interface
-  if (OB_NOT_NULL(session) &&
-      OB_NOT_NULL(session->get_pl_top_context()) &&
-      OB_NOT_NULL(pl_exec_ctx = session->get_pl_top_context()->get_current_ctx()) &&
-      pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
-    alloc = pl_exec_ctx->get_top_expr_allocator();
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  ObSEArray<ObObj, 4> tmp_sql_udt_exts;
+
+  if (use_sql_udt_path) {
+    alloc = &tmp_alloc_g.get_allocator();
+  } else {
+    OZ (ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
+    OX (alloc = &pl_complex_type_mgr->alloc_);
+    if (OB_NOT_NULL(session) &&
+        OB_NOT_NULL(session->get_pl_top_context()) &&
+        OB_NOT_NULL(pl_exec_ctx = session->get_pl_top_context()->get_current_ctx()) &&
+        pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
+      alloc = pl_exec_ctx->get_top_expr_allocator();
+    }
   }
   if (OB_SUCC(ret)) {
     if (pl::PL_NESTED_TABLE_TYPE == info->type_) {
@@ -346,6 +380,15 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
             CK (OB_NOT_NULL(coll->get_data()));
           }
           OZ(d.to_obj(v, expr.args_[i]->obj_meta_, expr.args_[i]->obj_datum_map_));
+          if (OB_SUCC(ret) && v.is_common_user_defined_sql_type() && !v.is_null()) {
+            ObObj extend_v;
+            ObSqlUDTMeta udt_meta;
+            uint16_t subschema_id = v.get_meta().get_subschema_id();
+            OZ (exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta));
+            OZ (ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(&exec_ctx, extend_v, v, udt_meta, alloc));
+            OZ (tmp_sql_udt_exts.push_back(extend_v));
+            OX (v = extend_v);
+          }
           // check type match first if value is not null
           if (OB_SUCC(ret) && !v.is_null()) {
             if (pl::PL_OPAQUE_TYPE == v.get_meta().get_extend_type()
@@ -591,15 +634,45 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
 
     ObObj result;
     result.set_extend(reinterpret_cast<int64_t>(coll), coll->get_type());
-    OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
-    if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
-    //Collection constructed here must be recorded and destructed at last
-      int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
-      if (OB_SUCCESS != tmp_ret) {
-        int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
-        LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    if (use_sql_udt_path) {
+      ObExprStrResAlloc expr_res_alloc(expr, ctx);
+      ObString res_str;
+      ObSqlUDTMeta sql_udt_meta;
+      uint16_t subschema_id = expr.obj_meta_.get_subschema_id();
+      if (ObInvalidSqlType == subschema_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid subschema id", K(ret), K(expr.obj_meta_), K(info->udt_id_));
       }
+      OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, sql_udt_meta));
+      OZ (ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(
+          expr_res_alloc, &ctx.exec_ctx_, res_str, result, sql_udt_meta));
+      if (OB_SUCC(ret)) {
+        if (res_str.empty()) {
+          expr_datum.set_null();
+        } else {
+          ObObj sql_udt_obj;
+          sql_udt_obj.set_sql_udt(res_str.ptr(), res_str.length(), subschema_id);
+          sql_udt_obj.set_has_lob_header();
+          OZ (expr_datum.from_obj(sql_udt_obj, expr.obj_datum_map_));
+        }
+      }
+      pl::ObUserDefinedType::destruct_obj(result, nullptr);
+    } else {
+      OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
+      if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
+        int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
+        if (OB_SUCCESS != tmp_ret) {
+          int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+          LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; i < tmp_sql_udt_exts.count(); ++i) {
+    int tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_sql_udt_exts.at(i), nullptr);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to destruct tmp sql udt extend", K(tmp_ret), K(i));
     }
   }
 #endif

@@ -51,6 +51,7 @@ int serialize_inc_schema(
   common::ObArray<const share::schema::ObTenantSchema *> tenant_schemas;
   common::ObArray<const share::schema::ObDatabaseSchema *> database_schemas;
   common::ObArray<const share::schema::ObTableSchema *> table_schemas;
+  common::ObArray<const share::schema::ObUDTTypeInfo *> udt_schemas;
   char *buf = nullptr;
   int64_t buf_len = 0;
   int64_t pos = 0;
@@ -63,6 +64,7 @@ int serialize_inc_schema(
                                                                                tenant_schemas,
                                                                                database_schemas,
                                                                                table_schemas,
+                                                                               udt_schemas,
                                                                                buf,
                                                                                buf_len,
                                                                                pos,

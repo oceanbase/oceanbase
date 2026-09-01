@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_coll_pred.h"
 #include "sql/engine/expr/ob_expr_multiset.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "src/pl/ob_pl.h"
 
 namespace oceanbase
@@ -481,6 +482,29 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (OB_FAIL(datum2->to_obj(obj2, expr.args_[1]->obj_meta_))) {
       LOG_WARN("failed to convert to obj", K(ret));
     } else {
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+      ObIAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
+      ObSEArray<ObObj, 2> tmp_sql_udt_exts;
+      ObObj pl_obj1;
+      ObObj pl_obj2;
+      if (OB_SUCC(ret) && ob_is_user_defined_sql_type(obj1.get_type())) {
+        ObSqlUDTMeta udt_meta;
+        uint16_t subschema_id = obj1.get_meta().get_subschema_id();
+        OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta));
+        OZ (ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+            &ctx.exec_ctx_, pl_obj1, obj1, udt_meta, &tmp_alloc));
+        OZ (tmp_sql_udt_exts.push_back(pl_obj1));
+        if (OB_SUCC(ret)) { obj1 = pl_obj1; }
+      }
+      if (OB_SUCC(ret) && ob_is_user_defined_sql_type(obj2.get_type())) {
+        ObSqlUDTMeta udt_meta;
+        uint16_t subschema_id = obj2.get_meta().get_subschema_id();
+        OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta));
+        OZ (ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+            &ctx.exec_ctx_, pl_obj2, obj2, udt_meta, &tmp_alloc));
+        OZ (tmp_sql_udt_exts.push_back(pl_obj2));
+        if (OB_SUCC(ret)) { obj2 = pl_obj2; }
+      }
       switch (info->ms_type_)
       {
       case MULTISET_TYPE_SUBMULTISET: {
@@ -700,6 +724,12 @@ int ObExprCollPred::eval_coll_pred(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
       if (OB_SUCC(ret)) {
         OZ(res.from_obj(result, expr.obj_datum_map_));
         OZ(expr.deep_copy_datum(ctx, res));
+      }
+      for (int64_t i = 0; i < tmp_sql_udt_exts.count(); ++i) {
+        int tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_sql_udt_exts.at(i), nullptr);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to destruct tmp sql udt extend", K(tmp_ret), K(i));
+        }
       }
     }
   }

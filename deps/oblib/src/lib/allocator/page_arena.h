@@ -1129,6 +1129,7 @@ public:
   {
     return arena_.used();
   }
+  ObArenaAllocator &get_arena_allocator() { return arena_; }
 private:
   ObArenaAllocator &arena_;
   ObSpinLock lock_;

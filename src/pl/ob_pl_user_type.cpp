@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX PL
 
 #include "ob_pl_user_type.h"
+#include "ob_pl_user_type.ipp"
+#include "ob_pl_type.ipp"
 #include "observer/mysql/obsm_utils.h"
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_package.h"
@@ -910,89 +912,8 @@ int ObUserDefinedType::text_protocol_prefix_info_for_each_item(share::schema::Ob
                                                                int64_t &pos,
                                                                const bool full_format) const
 {
-  int ret = OB_SUCCESS;
-  if (type.is_collection_type() || type.is_record_type()) {
-    const ObUserDefinedType *user_type = NULL;
-    const ObUDTTypeInfo *udt_info = NULL;
-    const uint64_t udt_id = type.get_user_type_id();
-    const bool is_inner_udt = is_inner_pl_object_id(udt_id);
-    const uint64_t resolved_tenant_id = is_inner_udt ? OB_SYS_TENANT_ID : tenant_id;
-    const_cast<ObPLDataType&>(type).set_charset(get_charset());
-
-    if (!is_udt_type()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support other type except udt type", K(ret), K(get_type_from()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-schema user defined type deserialize");
-    } else if (OB_FAIL(schema_guard.get_udt_info(resolved_tenant_id, udt_id, udt_info))) {
-      LOG_WARN("failed to get udt info", K(ret), K(resolved_tenant_id), K(udt_id));
-    } else if (OB_ISNULL(udt_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("udt info is null", K(ret), K(udt_id));
-    } else if (!full_format) {
-      // legacy server protocol behavior: bare TypeName(
-      if (len - pos < udt_info->get_type_name().length() + 1) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("buffer length is not enough. ", K(udt_info->get_type_name()), K(udt_info->get_type_name().length()), K(len));
-      } else {
-        MEMCPY(buf + pos, udt_info->get_type_name().ptr(), udt_info->get_type_name().length());
-        pos += udt_info->get_type_name().length();
-        MEMCPY(buf + pos, "(", 1);
-        pos += 1;
-      }
-    } else {
-      const ObString &type_name = udt_info->get_type_name();
-      ObString db_name;
-      const share::schema::ObDatabaseSchema *db_schema = NULL;
-      if (is_inner_udt) {
-        db_name = OB_ORA_SYS_SCHEMA_NAME;
-      } else {
-        if (OB_FAIL(schema_guard.get_database_schema(udt_info->get_tenant_id(),
-                                                     udt_info->get_database_id(),
-                                                     db_schema))) {
-          LOG_WARN("get database schema fail", K(ret),
-                   K(udt_info->get_tenant_id()), K(udt_info->get_database_id()));
-        } else if (OB_ISNULL(db_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("database schema is null", K(ret), K(udt_info->get_tenant_id()), K(udt_info->get_database_id()));
-        } else {
-          db_name = db_schema->get_database_name_str();
-        }
-      }
-      CK (!db_name.empty());
-      if (OB_SUCC(ret)) {
-        // "db"."type" => db.length + type.length + 2 quotes + 2 quotes + 1 dot
-        const int64_t need_len = db_name.length() + type_name.length() + 5;
-        if (len - pos < need_len) {
-          ret = OB_SIZE_OVERFLOW;
-          LOG_WARN("buffer length is not enough for qualified udt name",
-                   K(ret), K(need_len), K(len), K(pos));
-        } else {
-          buf[pos++] = '"';
-          MEMCPY(buf + pos, db_name.ptr(), db_name.length());
-          pos += db_name.length();
-          buf[pos++] = '"';
-          buf[pos++] = '.';
-          buf[pos++] = '"';
-          MEMCPY(buf + pos, type_name.ptr(), type_name.length());
-          pos += type_name.length();
-          buf[pos++] = '"';
-          buf[pos++] = '(';
-        }
-      }
-    }
-  } else if (NULL != type.get_meta_type() && (type.get_meta_type()->is_string_or_lob_locator_type()
-                || type.get_meta_type()->is_oracle_temporal_type()
-                || type.get_meta_type()->is_raw())) {
-    if (len - pos < 1) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("buffer length is not enough. ", K(type_name_), K(type_name_.length()), K(len));
-    } else {
-      MEMCPY(buf + pos, "'", 1);
-      pos += 1;
-    }
-  }
-
-  return ret;
+  return text_protocol_prefix_info_for_each_item<share::schema::ObSchemaGetterGuard>(
+      schema_guard, tenant_id, type, buf, len, pos, full_format);
 }
 
 int ObUserDefinedType::text_protocol_suffix_info_for_each_item(const ObPLDataType &type,
@@ -1268,9 +1189,8 @@ int ObUserDefinedSubType::serialize(share::schema::ObSchemaGetterGuard &schema_g
                                     int64_t &dst_pos,
                                     const bool full_format) const
 {
-  int ret = OB_SUCCESS;
-  OZ (base_type_.serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format));
-  return ret;
+  return base_type_.serialize<share::schema::ObSchemaGetterGuard>(
+      schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format);
 }
 
 int ObUserDefinedSubType::deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1980,11 +1900,12 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
       if (OB_INVALID_INDEX != member->get_default()) {
         OZ (buffer_guard.get_objparam_buffer(result));
         if (OB_NOT_NULL(member->get_default_expr())) {
-          OZ (generator.generate_expr(member->get_default(), *stmt, result_idx, result));
+          OZ (generator.generate_expr(member->get_default(), *stmt, result_idx, true, result));
         } else {
           OV (is_package_type(), OB_ERR_UNEXPECTED, KPC(this));
           OZ (generator.generate_spi_package_calc(extract_package_id(get_user_type_id()),
                                                   member->get_default(),
+                                                  true,
                                                   *stmt,
                                                   result));
         }
@@ -2338,98 +2259,8 @@ int ObRecordType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                             int64_t &dst_pos,
                             const bool full_format) const
 {
-  int ret = OB_SUCCESS;
-  int64_t bitmap_bytes = (record_members_.count() + 7 + 2) / 8;
-  char* bitmap = NULL;
-  ObObj* src_obj = reinterpret_cast<ObObj*>(src);
-  ObPLRecord *record = NULL;
-  char* new_src = NULL;
-
-  // 计算空值位图位置
-  if (dst_len - dst_pos < bitmap_bytes) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("size overflow",
-             K(ret), K(dst_len), K(dst_pos), K(bitmap_bytes), K(record_members_.count()));
-  } else if (BINARY == protocl_type) {
-    bitmap = dst + dst_pos;
-    MEMSET(dst + dst_pos, 0, bitmap_bytes);
-    dst_pos += bitmap_bytes;
-  }
-  CK (OB_NOT_NULL(src_obj));
-  if (OB_SUCC(ret) && src_obj->is_ext()) {
-    CK (OB_NOT_NULL(record = reinterpret_cast<ObPLRecord*>(src_obj->get_ext())));
-    CK (OB_NOT_NULL(new_src = reinterpret_cast<char*>(record->get_element())));
-
-    // 序列化值并更新空值位图
-    for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-      const ObPLDataType *type = get_record_member_type(i);
-      ObObj* obj = (reinterpret_cast<ObObj *>(new_src));
-      CK (OB_NOT_NULL(type));
-      CK (OB_NOT_NULL(obj));
-      if (OB_FAIL(ret)) {
-      } else if (ObPLComposite::obj_is_null(obj)) {
-        if (BINARY == protocl_type) {
-          ObMySQLUtil::update_null_bitmap(bitmap, i);
-          new_src += sizeof(ObObj);
-        } else {
-          if (dst_len - dst_pos < 4) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("size overflow", K(ret), K(dst_len), K(dst_pos));
-          } else {
-            MEMCPY(dst + dst_pos, "NULL", 4);
-            dst_pos += 4;
-            new_src += sizeof(ObObj);
-          }
-        }
-      } else if (TEXT == protocl_type && OB_FAIL(text_protocol_prefix_info_for_each_item(schema_guard,
-                                                                 session.get_effective_tenant_id(),
-                                                                 *type,
-                                                                 dst,
-                                                                 dst_len - dst_pos,
-                                                                 dst_pos,
-                                                                 full_format))) {
-        LOG_WARN("set text protocol prefix info fail.", K(ret), K(get_name()));
-      } else if (type->is_collection_type()) {
-#ifdef OB_BUILD_ORACLE_PL
-        char *coll_src = reinterpret_cast<char*>(obj->get_ext());
-        ObPLCollection *coll_table = reinterpret_cast<ObPLCollection *>(coll_src);
-        CK (obj->is_ext());
-        CK (OB_NOT_NULL(coll_table));
-        CK (OB_NOT_NULL(coll_src));
-        if (OB_FAIL(ret)) {
-        } else if (BINARY == protocl_type && !coll_table->is_inited()) {
-          ObMySQLUtil::update_null_bitmap(bitmap, i);
-        } else {
-          OZ (type->serialize(schema_guard, session, tz_info, protocl_type, new_src, dst, dst_len, dst_pos, full_format));
-        }
-#endif
-      } else {
-        int64_t offset_dst_pos = dst_pos;
-        bool has_serialized = false;
-        if (TEXT == protocl_type && OB_FAIL(base_type_serialize_for_text(obj, tz_info, dst, dst_len, dst_pos, has_serialized, session))) {
-          LOG_WARN("serialize for text fail.", K(ret), K(has_serialized));
-        } else if (false == has_serialized) {
-          OZ (type->serialize(schema_guard, session, tz_info, protocl_type, new_src, dst, dst_len, dst_pos, full_format),
-                              K(i), KPC(this));
-        }
-        if (TEXT == protocl_type && !type->is_record_type()) {
-          OZ (text_protocol_base_type_convert(*type, dst, offset_dst_pos, dst_len));
-          OX (dst_pos = offset_dst_pos);
-        }
-      }
-      if (TEXT == protocl_type && !obj->is_invalid_type()) {
-        OZ (text_protocol_suffix_info_for_each_item(*type,
-                                                    dst,
-                                                    dst_len - dst_pos,
-                                                    dst_pos,
-                                                    i < record_members_.count() - 1 ? false : true,
-                                                    ObPLComposite::obj_is_null(obj)));
-      }
-      LOG_DEBUG("serialize element finished!", K(ret), K(*this), K(i), K(src), K(dst), K(dst_len), K(dst_pos));
-    }
-  }
-  OX (src += sizeof(ObObj));
-  return ret;
+  return serialize<share::schema::ObSchemaGetterGuard>(
+      schema_guard, session, tz_info, protocl_type, src, dst, dst_len, dst_pos, full_format);
 }
 
 int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
@@ -3298,107 +3129,8 @@ int ObCollectionType::serialize(share::schema::ObSchemaGetterGuard &schema_guard
                                 int64_t &dst_pos,
                                 const bool full_format) const
 {
-  int ret = OB_SUCCESS;
-  ObObj *src_obj = NULL;
-  ObPLCollection *table = NULL;
-  if (OB_ISNULL(src_obj = reinterpret_cast<ObObj*>(src))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("src is null", K(ret), KP(src_obj), KPC(this));
-  } else if (!src_obj->is_ext()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("src obj not pl extend", K(ret), KPC(src_obj), KPC(this));
-  } else if (OB_ISNULL(table
-      = reinterpret_cast<ObPLCollection *>(src_obj->get_ext()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table is null", K(ret), KPC(table), KPC(this));
-  } else if (!table->is_inited()) {
-    // table未初始化应该序列化为null, 空在空值位图中标识, 上层已经处理过空值位图, 这里什么都不做
-  } else if (BINARY == type && OB_FAIL(ObMySQLUtil::store_length(dst, dst_len, table->get_actual_count(), dst_pos))) {
-    LOG_WARN("failed to stroe_length for table count", K(ret), KPC(this), KPC(table), K(table->get_count()));
-  } else {
-    char* bitmap = NULL;
-    int64_t bitmap_bytes = (table->get_actual_count() + 7 + 2) / 8;
-    if (BINARY == type) {
-      // 计算空值位图位置
-      if ((dst_len - dst_pos) < bitmap_bytes) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("size overflow", K(ret), KPC(this), KPC(table), K(dst_len), K(dst_pos), K(bitmap_bytes));
-      } else {
-        bitmap = dst + dst_pos;
-        MEMSET(dst + dst_pos, 0, bitmap_bytes);
-        dst_pos += bitmap_bytes;
-      }
-    } else {
-      // do nothing
-    }
-    // 序列化值并更新空值位图
-    for (int64_t i = 0; OB_SUCC(ret) && i < table->get_count(); ++i) {
-      char *data = reinterpret_cast<char *>(table->get_data()) + (sizeof(ObObj) * i);
-      ObObj* obj = reinterpret_cast<ObObj*>(data);
-      CK (OB_NOT_NULL(obj));
-      if (OB_FAIL(ret)) {
-      } else if (obj->is_invalid_type()) {
-        // deleted element, do nothing...
-      } else if (ObPLComposite::obj_is_null(obj)) {
-        if (BINARY == type) {
-          ObMySQLUtil::update_null_bitmap(bitmap, i);
-        } else {
-          if (dst_len - dst_pos < 4) {
-            ret = OB_SIZE_OVERFLOW;
-            LOG_WARN("size overflow", K(ret), K(dst_len), K(dst_pos));
-          } else {
-            MEMCPY(dst + dst_pos, "NULL", 4);
-            dst_pos += 4;
-          }
-        }
-      } else if (TEXT == type && OB_FAIL(text_protocol_prefix_info_for_each_item(schema_guard,
-                                                                 session.get_effective_tenant_id(),
-                                                                 element_type_,
-                                                                 dst,
-                                                                 dst_len - dst_pos,
-                                                                 dst_pos,
-                                                                 full_format))) {
-        LOG_WARN("set text protocol prefix info fail.", K(ret), K(get_name()));
-      } else if (element_type_.is_collection_type()) {
-        char *coll_src = reinterpret_cast<char *>(obj->get_ext());
-        ObPLCollection *coll_table = reinterpret_cast<ObPLCollection *>(coll_src);
-        OV (obj->is_ext(), OB_ERR_UNEXPECTED, KP(obj), KP(data), K(i));
-        CK (OB_NOT_NULL(coll_src));
-        CK (OB_NOT_NULL(coll_table));
-        if (OB_FAIL(ret)) {
-        } else if (BINARY == type && !coll_table->is_inited()) {
-          ObMySQLUtil::update_null_bitmap(bitmap, i);
-        } else {
-          OZ (element_type_.serialize(schema_guard, session, tz_info, type, data, dst, dst_len, dst_pos, full_format), KPC(this), K(i));
-        }
-      } else {
-        int64_t offset_dst_pos = dst_pos;
-        bool has_serialized = false;
-        if (TEXT == type && OB_FAIL(base_type_serialize_for_text(obj, tz_info, dst, dst_len, dst_pos, has_serialized, session))) {
-          LOG_WARN("serialize for text fail.", K(ret), K(has_serialized));
-        } else if (false == has_serialized) {
-          OZ (element_type_.serialize(schema_guard, session, tz_info, type, data, dst, dst_len, dst_pos, full_format), KPC(this), K(i));
-        }
-        if (TEXT == type && !element_type_.is_record_type()) {
-          OZ (text_protocol_base_type_convert(element_type_, dst, offset_dst_pos, dst_len));
-          OX (dst_pos = offset_dst_pos);
-        }
-      }
-      if (TEXT == type && !obj->is_invalid_type()) {
-        OZ (text_protocol_suffix_info_for_each_item(element_type_,
-                                                    dst,
-                                                    dst_len - dst_pos,
-                                                    dst_pos,
-                                                    i < table->get_count() - 1 ? false : true,
-                                                    ObPLComposite::obj_is_null(obj)));
-      }
-    }
-    LOG_DEBUG("serialize length", K(ret), KPC(table), KPC(this), K(reinterpret_cast<int64_t>(dst)), K(dst_len), K(dst_pos));
-    if (OB_SUCC(ret)) {
-      src += sizeof(ObObj);
-    }
-  }
-  return ret;
+  return serialize<share::schema::ObSchemaGetterGuard>(
+      schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format);
 }
 
 int ObCollectionType::convert_anonymous_array(ObPLResolveCtx &ctx,
@@ -3756,19 +3488,8 @@ int ObNestedTableType::serialize(share::schema::ObSchemaGetterGuard &schema_guar
                                  int64_t &dst_pos,
                                  const bool full_format) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObCollectionType::serialize(schema_guard,
-                                          session,
-                                          tz_info,
-                                          type,
-                                          src,
-                                          dst,
-                                          dst_len,
-                                          dst_pos,
-                                          full_format))) {
-    LOG_WARN("failed to serialize ObNestedTableType", K(ret));
-  }
-  return ret;
+  return ObCollectionType::serialize<share::schema::ObSchemaGetterGuard>(
+      schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format);
 }
 
 int ObNestedTableType::deserialize(ObSchemaGetterGuard &schema_guard,

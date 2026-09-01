@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_cardinality.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "src/pl/ob_pl.h"
 
 using namespace oceanbase::common;
@@ -52,7 +53,7 @@ int ObExprCardinality::calc_result_type1(ObExprResType &type,
   UNUSED(type_ctx);
   int ret = OB_SUCCESS;
   if (lib::is_oracle_mode()) {
-    if (type1.is_ext()) {
+    if (type1.is_ext() || type1.is_user_defined_sql_type()) {
       type.set_number();
       type.set_scale(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].scale_);
       type.set_precision(common::ObAccuracy::DDL_DEFAULT_ACCURACY[common::ObNumberType].precision_);
@@ -93,31 +94,61 @@ int ObExprCardinality::eval_card(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     LOG_WARN("failed to eval param value", K(ret));
   } else if (OB_FAIL(datum->to_obj(obj, expr.args_[0]->obj_meta_))) {
     LOG_WARN("failed to convert tp obj", K(ret));
-  } else if (lib::is_oracle_mode() && obj.get_meta().is_ext()) {
-    pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj.get_ext());
-    int64_t elem_count = 0;
-    if (OB_ISNULL(c1)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("union udt failed due to null udt", K(ret), K(obj));
-    } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()) {
+  } else if (lib::is_oracle_mode()
+             && (obj.get_meta().is_ext()
+                 || ob_is_user_defined_sql_type(obj.get_type()))) {
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    ObIAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
+    ObObj pl_obj;
+    bool need_destruct_pl_obj = false;
+    if (ob_is_user_defined_sql_type(obj.get_type())) {
+      ObSqlUDTMeta udt_meta;
+      uint16_t subschema_id = obj.get_meta().get_subschema_id();
+      OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta));
+      OZ (ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+          &ctx.exec_ctx_, pl_obj, obj, udt_meta, &tmp_alloc));
+      if (OB_SUCC(ret)) {
+        obj = pl_obj;
+        need_destruct_pl_obj = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!obj.get_meta().is_ext()) {
       ret = OB_ERR_WRONG_TYPE_FOR_VAR;
       LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
-                K(ret), K(c1->get_type()));
+               K(ret), K(obj));
     } else {
-      if (!c1->is_inited()) {
-        result.set_null();
+      pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj.get_ext());
+      int64_t elem_count = 0;
+      if (OB_ISNULL(c1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("union udt failed due to null udt", K(ret), K(obj));
+      } else if (pl::PL_NESTED_TABLE_TYPE != c1->get_type()) {
+        ret = OB_ERR_WRONG_TYPE_FOR_VAR;
+        LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
+                  K(ret), K(c1->get_type()));
       } else {
-        elem_count = c1->get_actual_count();
-        number::ObNumber cardinality;
-        if (OB_FAIL(cardinality.from(elem_count, ctx.exec_ctx_.get_allocator()))) {
-          LOG_WARN("generator cardinality result failed.", K(ret));
+        if (!c1->is_inited()) {
+          result.set_null();
         } else {
-          result.set_number(cardinality);
+          elem_count = c1->get_actual_count();
+          number::ObNumber cardinality;
+          if (OB_FAIL(cardinality.from(elem_count, ctx.exec_ctx_.get_allocator()))) {
+            LOG_WARN("generator cardinality result failed.", K(ret));
+          } else {
+            result.set_number(cardinality);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          OZ(res.from_obj(result, expr.obj_datum_map_));
+          OZ(expr.deep_copy_datum(ctx, res));
         }
       }
-      if (OB_SUCC(ret)) {
-        OZ(res.from_obj(result, expr.obj_datum_map_));
-        OZ(expr.deep_copy_datum(ctx, res));
+    }
+    if (need_destruct_pl_obj) {
+      int tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_obj, nullptr);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to destruct tmp sql udt extend", K(tmp_ret));
       }
     }
   }

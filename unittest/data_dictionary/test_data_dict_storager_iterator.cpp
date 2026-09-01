@@ -222,8 +222,9 @@ TEST(ObDataDictStorage, test_empty_schema)
   ObSEArray<const ObTenantSchema*, 8> tenant_schemas;
   ObSEArray<const ObDatabaseSchema*, 8> database_schemas;
   ObSEArray<const ObTableSchema*, 8> table_schemas;
+  ObSEArray<const ObUDTTypeInfo*, 8> udt_schemas;
   EXPECT_EQ(OB_SUCCESS, ObDataDictStorage::gen_and_serialize_dict_metas(
-      allocator, tenant_schemas, database_schemas, table_schemas, buf, buf_len, pos));
+      allocator, tenant_schemas, database_schemas, table_schemas, udt_schemas, buf, buf_len, pos));
   EXPECT_TRUE(buf_len > 0);
   EXPECT_TRUE(pos > 0);
   EXPECT_TRUE(buf_len >= pos);
@@ -232,10 +233,12 @@ TEST(ObDataDictStorage, test_empty_schema)
   ObSEArray<const ObDictTenantMeta*, 8> tenant_metas;
   ObSEArray<const ObDictDatabaseMeta*, 8> db_metas;
   ObSEArray<const ObDictTableMeta*, 8> tb_metas;
-  EXPECT_EQ(OB_SUCCESS, ObDataDictStorage::parse_dict_metas(allocator, buf, pos, 0, tenant_metas, db_metas, tb_metas));
+  ObSEArray<const ObDictUdtMeta*, 8> udt_metas;
+  EXPECT_EQ(OB_SUCCESS, ObDataDictStorage::parse_dict_metas(allocator, buf, pos, 0, tenant_metas, db_metas, tb_metas, udt_metas));
   EXPECT_EQ(0, tenant_metas.count());
   EXPECT_EQ(0, db_metas.count());
   EXPECT_EQ(0, tb_metas.count());
+  EXPECT_EQ(0, udt_metas.count());
 }
 
 TEST(ObDataDictStorage, test_schema_storage)
@@ -250,6 +253,7 @@ TEST(ObDataDictStorage, test_schema_storage)
   ObSEArray<const ObTenantSchema*, 8> tenant_schemas;
   ObSEArray<const ObDatabaseSchema*, 8> database_schemas;
   ObSEArray<const ObTableSchema*, 8> table_schemas;
+  ObSEArray<const ObUDTTypeInfo*, 8> udt_schemas;
   ObTenantSchema *tenant_schema = NULL;
   for (int i = 0; i < expected_tenant_cnt; i++) {
     tenant_schema = static_cast<ObTenantSchema*>(allocator.alloc(sizeof(ObTableSchema)));
@@ -277,7 +281,7 @@ TEST(ObDataDictStorage, test_schema_storage)
   int64_t buf_len = 0;
   int64_t pos = 0;
   EXPECT_EQ(OB_SUCCESS, ObDataDictStorage::gen_and_serialize_dict_metas(
-      allocator, tenant_schemas, database_schemas, table_schemas, buf, buf_len, pos));
+      allocator, tenant_schemas, database_schemas, table_schemas, udt_schemas, buf, buf_len, pos));
   EXPECT_TRUE(buf_len > 0);
   EXPECT_TRUE(pos > 0);
   EXPECT_TRUE(buf_len >= pos);
@@ -286,10 +290,12 @@ TEST(ObDataDictStorage, test_schema_storage)
   ObSEArray<const ObDictTenantMeta*, 8> tenant_metas;
   ObSEArray<const ObDictDatabaseMeta*, 8> db_metas;
   ObSEArray<const ObDictTableMeta*, 8> tb_metas;
-  EXPECT_EQ(OB_SUCCESS, ObDataDictStorage::parse_dict_metas(allocator, buf, pos, 0, tenant_metas, db_metas, tb_metas));
+  ObSEArray<const ObDictUdtMeta*, 8> udt_metas;
+  EXPECT_EQ(OB_SUCCESS, ObDataDictStorage::parse_dict_metas(allocator, buf, pos, 0, tenant_metas, db_metas, tb_metas, udt_metas));
   EXPECT_EQ(expected_tenant_cnt, tenant_metas.count());
   EXPECT_EQ(expected_db_cnt, db_metas.count());
   EXPECT_EQ(expected_tb_cnt, tb_metas.count());
+  EXPECT_EQ(0, udt_metas.count());
 }
 
 } // namespace datadict

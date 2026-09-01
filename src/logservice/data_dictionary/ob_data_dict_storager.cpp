@@ -186,6 +186,7 @@ int ObDataDictStorage::handle_dict_meta(
 template int ObDataDictStorage::handle_dict_meta(const ObDictTenantMeta &data_dict_meta, ObDictMetaHeader &header);
 template int ObDataDictStorage::handle_dict_meta(const ObDictDatabaseMeta &data_dict_meta, ObDictMetaHeader &header);
 template int ObDataDictStorage::handle_dict_meta(const ObDictTableMeta &data_dict_meta, ObDictMetaHeader &header);
+template int ObDataDictStorage::handle_dict_meta(const ObDictUdtMeta &data_dict_meta, ObDictMetaHeader &header);
 
 int ObDataDictStorage::finish(
     palf::LSN &start_lsn,
@@ -227,6 +228,7 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
     const ObIArray<const ObTenantSchema*> &tenant_schemas,
     const ObIArray<const ObDatabaseSchema*> &database_schemas,
     const ObIArray<const ObTableSchema*> &table_schemas,
+    const ObIArray<const ObUDTTypeInfo*> &udt_schemas,
     char *&buf,
     int64_t &buf_len,
     int64_t &pos,
@@ -240,7 +242,8 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
     LOG_WARN("expect empty input buf", KR(ret), KP(buf), K(buf_len));
   } else if (OB_UNLIKELY((0 >= tenant_schemas.count())
       && (0 >= database_schemas.count())
-      && (0 >= table_schemas.count()))) {
+      && (0 >= table_schemas.count())
+      && (0 >= udt_schemas.count()))) {
     LOG_INFO("all schema_array is empty, use default msg", KCSTRING(DEFAULT_DDL_MDS_MSG));
     buf = static_cast<char*>(allocator.alloc(DEFAULT_DDL_MDS_MSG_LEN + 1)); // with '\0'
 
@@ -284,6 +287,13 @@ int ObDataDictStorage::gen_and_serialize_dict_metas(
         // tablet ids are read within the caller's transaction (visible uncommitted writes).
         SERIALIZE_SCHEMA_TO_BUF(OB_INVALID_VERSION, sql_client);
       }
+
+      ARRAY_FOREACH_N(udt_schemas, idx, count) {
+        const ObUDTTypeInfo *schema = udt_schemas.at(idx);
+        ObDictUdtMeta meta(&allocator);
+        ObDictMetaHeader header(ObDictMetaType::UDT_META);
+        SERIALIZE_SCHEMA_TO_BUF();
+      }
     }
   }
 
@@ -297,7 +307,8 @@ int ObDataDictStorage::parse_dict_metas(
     const int64_t pos,
     ObIArray<const ObDictTenantMeta*> &tenant_metas,
     ObIArray<const ObDictDatabaseMeta*> &database_metas,
-    ObIArray<const ObDictTableMeta*> &table_metas)
+    ObIArray<const ObDictTableMeta*> &table_metas,
+    ObIArray<const ObDictUdtMeta*> &udt_metas)
 {
   int ret = OB_SUCCESS;
   ObDataDictIterator iterator;
@@ -363,6 +374,20 @@ int ObDataDictStorage::parse_dict_metas(
               LOG_WARN("next_dict_entry for table_meta failed", KR(ret), K(header));
             } else if (OB_FAIL(table_metas.push_back(meta))) {
               LOG_WARN("push_back table_meta failed", KR(ret), K(header), KPC(meta));
+            }
+          }
+        } else if (header.get_dict_meta_type() == ObDictMetaType::UDT_META) {
+          ObDictUdtMeta *meta = static_cast<ObDictUdtMeta*>(allocator.alloc(sizeof(ObDictUdtMeta)));
+          if (OB_ISNULL(meta)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc memroy for ObDictUdtMeta failed", KR(ret), KP(meta));
+          } else {
+            new (meta) ObDictUdtMeta(&allocator);
+
+            if (OB_FAIL(iterator.next_dict_entry(header, *meta))) {
+              LOG_WARN("next_dict_entry for udt_meta failed", KR(ret), K(header));
+            } else if (OB_FAIL(udt_metas.push_back(meta))) {
+              LOG_WARN("push_back udt_meta failed", KR(ret), K(header), KPC(meta));
             }
           }
         } else {
@@ -497,6 +522,7 @@ int ObDataDictStorage::serialize_to_palf_buf_(
 template int ObDataDictStorage::serialize_to_palf_buf_(const ObDictMetaHeader &header, const ObDictTenantMeta &data_dict);
 template int ObDataDictStorage::serialize_to_palf_buf_(const ObDictMetaHeader &header, const ObDictDatabaseMeta &data_dict);
 template int ObDataDictStorage::serialize_to_palf_buf_(const ObDictMetaHeader &header, const ObDictTableMeta &data_dict);
+template int ObDataDictStorage::serialize_to_palf_buf_(const ObDictMetaHeader &header, const ObDictUdtMeta &data_dict);
 
 int ObDataDictStorage::segment_dict_buf_to_palf_(ObDictMetaHeader &header)
 {

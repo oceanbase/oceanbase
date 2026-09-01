@@ -18,6 +18,7 @@
 #include "ob_udf_result_cache.h"
 #include "pl/external_routine/ob_java_udf.h"
 #include "pl/external_routine/ob_py_udf.h"
+#include "pl/ob_pl_type.h"
 
 namespace oceanbase
 {
@@ -114,6 +115,11 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
         ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
         LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                  K(i), K(udf_package_id_), K(udf_id_), K(types[i]), K(params_type_.at(i)));
+      } else if (is_called_in_sql()
+                 && params_type_.at(i).is_ext()
+                 && types[i].is_common_user_defined_sql_type()) {
+        // Common SQL UDT input for UDT parameter: skip implicit cast, keep as SQL UDT.
+        // process_in_params() will handle the SQL UDT → PL extend conversion.
       } else {
         types[i].set_calc_accuracy(params_type_.at(i).get_accuracy());
         types[i].set_calc_meta(params_type_.at(i).get_obj_meta());
@@ -140,14 +146,60 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
     }
   }
   if (OB_SUCC(ret)) {
-    type.set_accuracy(result_type_.get_accuracy());
-    type.set_meta(result_type_.get_obj_meta());
+    ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+    ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+    if (is_called_in_sql()
+        && result_type_.is_ext()
+        && pl::PL_REF_CURSOR_TYPE != result_type_.get_extend_type()
+        && result_type_.get_udt_id() != OB_INVALID_ID
+        && OB_NOT_NULL(exec_ctx)
+        && pl::ObPLDataType::is_schema_udt(exec_ctx->get_sql_ctx()->schema_guard_, result_type_.get_udt_id())
+        && !is_inner_pl_udt_id(result_type_.get_udt_id())
+        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+        && OB_NOT_NULL(session)
+        && !session->disable_sql_udt_deduce_in_pl()
+        && session->get_local_enable_pl_composite_as_sql_udt()) {
+      const uint64_t udt_id = result_type_.get_udt_id();
+      uint16_t subschema_id = ObInvalidSqlType;
+      if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+        LOG_WARN("failed to get subschema id", K(ret), K(udt_id));
+      } else {
+        type.set_accuracy(result_type_.get_accuracy());
+        type.set_sql_udt(subschema_id);
+        type.set_udt_id(udt_id);
+      }
+    } else if (!is_called_in_sql()
+               && result_type_.is_user_defined_sql_type()
+               && !is_inner_pl_udt_id(result_type_.get_udt_id())
+               && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+               && OB_NOT_NULL(session)
+               && session->get_local_enable_pl_composite_as_sql_udt()) {
+      // Re-deduce after is_called_in_sql flipped to false: raw expr may still carry
+      // SQL UDT result type from a prior SQL-context deduce pass.
+      const uint64_t udt_id = result_type_.get_udt_id();
+      pl::ObPLType pl_type = pl::PL_RECORD_TYPE;
+      const uint16_t subschema_id = result_type_.get_subschema_id();
+      ObExecContext *exec_ctx = session->get_cur_exec_ctx();
+      if (OB_NOT_NULL(exec_ctx) && subschema_id != ObInvalidSqlType) {
+        ObSqlUDTMeta udt_meta;
+        if (OB_SUCC(exec_ctx->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+          pl_type = static_cast<pl::ObPLType>(udt_meta.pl_type_);
+        }
+      }
+      type.set_accuracy(result_type_.get_accuracy());
+      type.set_type(ObExtendType);
+      type.set_extend_type(pl_type);
+      type.set_udt_id(udt_id);
+    } else {
+      type.set_accuracy(result_type_.get_accuracy());
+      type.set_meta(result_type_.get_obj_meta());
+    }
     if (type.get_type() == ObRawType) {
       type.set_collation_level(CS_LEVEL_NUMERIC);
     } else if (type.is_string_or_lob_locator_type() && udf_package_id_ == T_OBJ_XML) {
       type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
     }
-    if (!type.is_ext()) {
+    if (!type.is_ext() && !type.is_user_defined_sql_type()) {
       if (lib::is_oracle_mode()) {
         type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
       } else {

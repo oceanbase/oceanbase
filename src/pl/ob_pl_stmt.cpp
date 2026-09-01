@@ -44,11 +44,77 @@ int ObPLVar::deep_copy(const ObPLVar &var, ObIAllocator &allocator)
       is_formal_param_ = var.is_formal_param();
       is_referenced_ = var.is_referenced();
       is_default_expr_access_external_state_ = var.is_default_expr_access_external_state();
-      for (int64_t i = 0; OB_SUCC(ret) && i < var.get_trigger_ref_cols().count(); i++) {
-        ObString col;
-        OZ (ob_write_string(allocator, var.get_trigger_ref_cols().at(i).first, col));
-        OZ (trigger_ref_cols_.push_back(std::make_pair(col, var.get_trigger_ref_cols().at(i).second)));
+      is_from_overloaded_routine_ = var.is_from_overloaded_routine();
+    }
+  }
+  return ret;
+}
+
+ObPLSymbolTable::ObPLSymbolTable(ObIAllocator &allocator)
+  : variables_(allocator),
+    trigger_ref_cols_table_(allocator),
+    empty_trigger_ref_cols_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
+    self_param_idx_(OB_INVALID_INDEX),
+    allocator_(allocator)
+{
+}
+
+ObPLSymbolTable::~ObPLSymbolTable()
+{
+  for (int64_t i = 0; i < trigger_ref_cols_table_.count(); ++i) {
+    free_trigger_ref_cols_at(i);
+  }
+}
+
+void ObPLSymbolTable::free_trigger_ref_cols_at(int64_t var_idx)
+{
+  if (0 <= var_idx && var_idx < trigger_ref_cols_table_.count()) {
+    ObPLTriggerRefColsArray *cols = trigger_ref_cols_table_.at(var_idx);
+    if (OB_NOT_NULL(cols)) {
+      cols->~ObPLTriggerRefColsArray();
+      allocator_.free(cols);
+      trigger_ref_cols_table_.at(var_idx) = NULL;
+    }
+  }
+}
+
+const ObIArray<std::pair<ObString, bool>> &ObPLSymbolTable::get_trigger_ref_cols(int64_t var_idx) const
+{
+  const ObIArray<std::pair<ObString, bool>> *result = &empty_trigger_ref_cols_;
+  if (0 <= var_idx && var_idx < trigger_ref_cols_table_.count()) {
+    ObPLTriggerRefColsArray *cols = trigger_ref_cols_table_.at(var_idx);
+    if (OB_NOT_NULL(cols)) {
+      result = cols;
+    }
+  }
+  return *result;
+}
+
+int ObPLSymbolTable::get_or_alloc_trigger_ref_cols(int64_t var_idx,
+                                                   ObIArray<std::pair<ObString, bool>> *&ref_cols)
+{
+  int ret = OB_SUCCESS;
+  ref_cols = NULL;
+  if (var_idx < 0 || var_idx >= variables_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid var idx", K(ret), K(var_idx), K(variables_.count()));
+  } else if (var_idx >= trigger_ref_cols_table_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trigger ref cols table out of sync", K(ret), K(var_idx),
+             K(trigger_ref_cols_table_.count()), K(variables_.count()));
+  } else {
+    ObPLTriggerRefColsArray *&cols = trigger_ref_cols_table_.at(var_idx);
+    if (OB_ISNULL(cols)) {
+      void *buf = allocator_.alloc(sizeof(ObPLTriggerRefColsArray));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc trigger ref cols", K(ret), K(var_idx));
+      } else {
+        cols = new (buf) ObPLTriggerRefColsArray(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_);
       }
+    }
+    if (OB_SUCC(ret)) {
+      ref_cols = cols;
     }
   }
   return ret;
@@ -85,12 +151,17 @@ int ObPLSymbolTable::add_symbol(const ObString &name,
   var.set_dup_declare(is_dup_declare);
   var.set_is_default_expr_has_reroute_factor(has_access_external_state);
   OZ (variables_.push_back(var), var, variables_.count());
+  OZ (trigger_ref_cols_table_.push_back(NULL));
   return ret;
 }
 
 int ObPLSymbolTable::delete_symbol(int64_t symbol_idx)
 {
   int ret = OB_SUCCESS;
+  if (0 <= symbol_idx && symbol_idx < trigger_ref_cols_table_.count()) {
+    free_trigger_ref_cols_at(symbol_idx);
+    OZ (trigger_ref_cols_table_.remove(symbol_idx));
+  }
   OZ (variables_.remove(symbol_idx));
   return ret;
 }
@@ -219,15 +290,18 @@ int ObPLLabelTable::add_label(const common::ObString &name,
                               ObPLStmt *stmt)
 {
   int ret = OB_SUCCESS;
-  if (count_ < 0 || count_ >= FUNC_MAX_LABELS) {
+  if (labels_.count() >= FUNC_MAX_LABELS) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Invalid condition count in condition table", K(get_count()), K(FUNC_MAX_LABELS), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "label count greater than 1024");
   } else {
-    labels_[count_].label_ = name;
-    labels_[count_].type_ = type;
-    labels_[count_].next_stmt_ = stmt;
-    count_++;
+    ObPLLabel label;
+    label.label_ = name;
+    label.type_ = type;
+    label.next_stmt_ = stmt;
+    if (OB_FAIL(labels_.push_back(label))) {
+      LOG_WARN("failed to push back label", K(ret));
+    }
   }
   return ret;
 }
@@ -266,13 +340,16 @@ int ObPLConditionTable::init(ObPLConditionTable &parent_condition_table)
 int ObPLConditionTable::add_condition(const common::ObString &name, const ObPLConditionValue &value)
 {
   int ret = OB_SUCCESS;
-  if (count_ < 0 || count_ >= FUNC_MAX_CONDITIONS) {
+  if (conditions_.count() >= FUNC_MAX_CONDITIONS) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Invalid condition count in condition table", K(get_count()), K(FUNC_MAX_CONDITIONS), K(ret));
   } else {
-    conditions_[count_].set_name(name);
-    conditions_[count_].set_value(value);
-    count_++;
+    ObPLCondition condition;
+    condition.set_name(name);
+    condition.set_value(value);
+    if (OB_FAIL(conditions_.push_back(condition))) {
+      LOG_WARN("failed to push back condition", K(ret));
+    }
   }
   return ret;
 }
@@ -1057,7 +1134,7 @@ int ObPLBlockNS::add_label(const ObString &name,
   } else {
     bool is_dup = false;
     if (OB_FAIL(check_dup_label(name, is_dup))) {
-      LOG_INFO("check dup label fail. ", K(ret), K(name));
+      LOG_WARN("check dup label fail.", K(ret), K(name));
     } else if (is_dup) {
       ret = OB_ERR_REDEFINE_LABEL;
       LOG_WARN("redefining label ", K(name), K(ret));
@@ -1428,7 +1505,6 @@ int ObPLExternalNS::search_in_standard_package(const common::ObString &name,
                                                    user_type,
                                                    false))) {
         if (OB_ERR_SP_UNDECLARED_TYPE == ret) {
-          LOG_INFO("get standard package type not exist!", K(ret), K(standard_package_id), K(name));
           type = ObPLExternalNS::INVALID_VAR;
           ret = OB_SUCCESS;
         } else {
@@ -2702,10 +2778,14 @@ int ObPLBlockNS::find_sub_attr_by_name(const ObUserDefinedType &user_type,
                 LOG_WARN("failed to get var", K(ret), K(parent_access_idx), K(attr_name));
               } else {
                 ObString copy_attr;
-                if (OB_FAIL(ob_write_string(ns->get_symbol_table()->get_allocator(), attr_name, copy_attr))) {
+                ObPLSymbolTable *symbol_table = const_cast<ObPLSymbolTable*>(ns->get_symbol_table());
+                ObIArray<std::pair<ObString, bool>> *ref_cols = NULL;
+                if (OB_FAIL(ob_write_string(symbol_table->get_allocator(), attr_name, copy_attr))) {
                   LOG_WARN("failed to write string", K(ret), K(attr_name));
-                } else if (OB_FAIL((const_cast<ObPLVar*>(var))->get_trigger_ref_cols().push_back(
-                          std::make_pair(copy_attr, false)))) {
+                } else if (OB_FAIL(symbol_table->get_or_alloc_trigger_ref_cols(
+                           parent_access_idx.var_index_, ref_cols))) {
+                  LOG_WARN("failed to get trigger ref cols", K(ret), K(parent_access_idx));
+                } else if (OB_FAIL(ref_cols->push_back(std::make_pair(copy_attr, false)))) {
                   LOG_WARN("failed to add attr_name", K(ret), K(copy_attr));
                 }
               }
@@ -4591,9 +4671,6 @@ int ObPLStmt::set_label_idx(int64_t idx)
   if (OB_ISNULL(get_label_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null label table", K(ret));
-  } else if (label_cnt_ >= FUNC_MAX_LABELS) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected label_cnt count, out of range", K(ret), K(label_cnt_));
   } else {
     ObPLLabelTable *pl_label = const_cast<ObPLLabelTable *>(get_label_table());
     if (0 <= idx && idx < pl_label->get_count()) {
@@ -4603,8 +4680,7 @@ int ObPLStmt::set_label_idx(int64_t idx)
         LOG_WARN("failed to set label idx", K(ret));
       } else {
         pl_label->set_next_stmt(idx, this);
-        labels_[label_cnt_] = idx;
-        label_cnt_++;
+        OZ(labels_.push_back(idx));
       }
     }
   }
@@ -4783,20 +4859,35 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
         } else if (expr->is_const_raw_expr()) { \
           ObObj &const_value = static_cast<ObConstRawExpr*>(expr)->get_value(); \
           if (const_value.is_integer_type() && const_value.get_int() >= INT32_MIN && const_value.get_int() <= INT32_MAX) { \
-            const_value.set_type(ObInt32Type); \
-            static_cast<ObConstRawExpr*>(expr)->set_expr_obj_meta(const_value.get_meta());\
-            expr->set_data_type(ObInt32Type); \
             result = true; \
           } else if (const_value.is_number()) { \
             int64_t int_value = 0; \
             if (const_value.get_number().is_valid_int64(int_value) && int_value >= INT32_MIN && int_value <= INT32_MAX) { \
-              const_value.set_int32(static_cast<int32_t>(int_value)); \
-              static_cast<ObConstRawExpr*>(expr)->set_expr_obj_meta(const_value.get_meta());\
-              expr->set_data_type(ObInt32Type); \
               result = true; \
             } \
           } else { /*do nothing*/ } \
         } else { /*do nothing*/ } \
+      } \
+    } while (0)
+
+#define MODIFY_EXPR(expr) \
+    do { \
+      if (OB_SUCC(ret)) { \
+        if (expr->is_const_raw_expr()) { \
+          ObObj &const_value = static_cast<ObConstRawExpr*>(expr)->get_value(); \
+          if (const_value.is_integer_type()) { \
+            const_value.set_type(ObInt32Type); \
+            static_cast<ObConstRawExpr*>(expr)->set_expr_obj_meta(const_value.get_meta());\
+            expr->set_data_type(ObInt32Type); \
+          } else if (const_value.is_number()) { \
+            int64_t int_value = 0; \
+            if (const_value.get_number().is_valid_int64(int_value)) { \
+              const_value.set_int32(static_cast<int32_t>(int_value)); \
+              static_cast<ObConstRawExpr*>(expr)->set_expr_obj_meta(const_value.get_meta());\
+              expr->set_data_type(ObInt32Type); \
+            } \
+          } else { /*do nothing*/ } \
+        } \
       } \
     } while (0)
 
@@ -4830,6 +4921,9 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
       } else if (T_FUN_COLUMN_CONV == cur_expr->get_expr_type() && cur_expr->get_result_type().is_int32()) {
         cur_expr = cur_expr->get_param_expr(4);
         simple_expr_form = true;
+      } else if (T_FUN_SYS_CAST == cur_expr->get_expr_type() && cur_expr->get_result_type().is_int32()) {
+        cur_expr = cur_expr->get_param_expr(0);
+        simple_expr_form = true;
       } else {
         simple_expr_form = false;
         break;
@@ -4850,6 +4944,12 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child expr is NULL", K(left), K(right), K(ret));
       } else {
+        if (T_FUN_SYS_CAST == left->get_expr_type()) {
+          left = left->get_param_expr(0);
+        }
+        if (T_FUN_SYS_CAST == right->get_expr_type()) {
+          right = right->get_param_expr(0);
+        }
 
         CHECK_BINARY_INTEGER(left, left_binary_integer);
 
@@ -4859,10 +4959,15 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
       if (OB_SUCC(ret)) {
         is_simple = left_binary_integer && right_binary_integer;
         if (is_simple) {
+          MODIFY_EXPR(left);
+          MODIFY_EXPR(right);
           if (T_OP_ADD == op_expr->get_expr_type() || T_OP_MINUS == op_expr->get_expr_type()) {
             op_expr->set_data_type(ObInt32Type);
           }
-          expr = is_simple ? op_expr : expr;
+          CK (OB_NOT_NULL(static_cast<ObOpRawExpr*>(op_expr)));
+          OZ (static_cast<ObOpRawExpr*>(op_expr)->replace_param_expr(0, left));
+          OZ (static_cast<ObOpRawExpr*>(op_expr)->replace_param_expr(1, right));
+          OX (expr = op_expr);
         }
       }
     }
@@ -4870,7 +4975,7 @@ int ObPLCompileUnitAST::check_simple_calc_expr(ObRawExpr *&expr, bool &is_simple
   return ret;
 }
 
-int ObPLCompileUnitAST::add_expr(sql::ObRawExpr* expr, bool is_simple_integer)
+int ObPLCompileUnitAST::add_expr(sql::ObRawExpr* expr, bool is_simple_integer, bool can_simple_calc)
 {
   int ret = OB_SUCCESS;
   bool exists = false;
@@ -4880,7 +4985,8 @@ int ObPLCompileUnitAST::add_expr(sql::ObRawExpr* expr, bool is_simple_integer)
     }
   }
   if (!exists) {
-    if (lib::is_oracle_mode()) {
+    can_simple_calc = can_simple_calc && is_routine();
+    if (can_simple_calc && lib::is_oracle_mode()) {
       bool is_simple_calc = false;
       if (!is_simple_integer && OB_FAIL(check_simple_calc_expr(expr, is_simple_calc))) {
         LOG_WARN("failed to check simple calc expr", K(expr), K(ret));
@@ -5210,7 +5316,7 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_USER_TYPE: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLDeclareUserTypeStmt)));
     if (stmt != NULL) {
-      stmt = new(stmt) ObPLDeclareUserTypeStmt();
+      stmt = new(stmt) ObPLDeclareUserTypeStmt(allocator_);
     }
     break;
   }
@@ -5231,35 +5337,35 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_IF: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLIfStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLIfStmt();
+      stmt = new(stmt)ObPLIfStmt(allocator_);
     }
   }
     break;
   case PL_LEAVE: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLLeaveStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLLeaveStmt();
+      stmt = new(stmt)ObPLLeaveStmt(allocator_);
     }
     break;
   }
   case PL_ITERATE: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLIterateStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLIterateStmt();
+      stmt = new(stmt)ObPLIterateStmt(allocator_);
     }
     break;
   }
   case PL_WHILE: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLWhileStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLWhileStmt();
+      stmt = new(stmt)ObPLWhileStmt(allocator_);
     }
     break;
   }
   case PL_FOR_LOOP: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLForLoopStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLForLoopStmt();
+      stmt = new(stmt)ObPLForLoopStmt(allocator_);
     }
     break;
   }
@@ -5273,28 +5379,28 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_FORALL: {
     stmt = static_cast<ObPLForAllStmt*>(allocator_.alloc(sizeof(ObPLForAllStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLForAllStmt();
+      stmt = new(stmt)ObPLForAllStmt(allocator_);
     }
     break;
   }
   case PL_REPEAT: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLRepeatStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLRepeatStmt();
+      stmt = new(stmt)ObPLRepeatStmt(allocator_);
     }
     break;
   }
   case PL_LOOP: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLLoopStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLLoopStmt();
+      stmt = new(stmt)ObPLLoopStmt(allocator_);
     }
     break;
   }
   case PL_RETURN: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLReturnStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLReturnStmt();
+      stmt = new(stmt)ObPLReturnStmt(allocator_);
     }
   }
     break;
@@ -5315,21 +5421,21 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_EXTEND: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLExtendStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLExtendStmt();
+      stmt = new(stmt)ObPLExtendStmt(allocator_);
     }
   }
     break;
   case PL_DELETE: {
     stmt = static_cast<ObPLDeleteStmt*>(allocator_.alloc(sizeof(ObPLDeleteStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLDeleteStmt();
+      stmt = new(stmt)ObPLDeleteStmt(allocator_);
     }
   }
     break;
   case PL_COND: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLDeclareCondStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLDeclareCondStmt();
+      stmt = new(stmt)ObPLDeclareCondStmt(allocator_);
     }
   }
     break;
@@ -5343,7 +5449,7 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_SIGNAL: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLSignalStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLSignalStmt();
+      stmt = new(stmt)ObPLSignalStmt(allocator_);
     }
   }
     break;
@@ -5357,7 +5463,7 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_CURSOR: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLDeclareCursorStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLDeclareCursorStmt();
+      stmt = new(stmt)ObPLDeclareCursorStmt(allocator_);
     }
   }
     break;
@@ -5385,35 +5491,35 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_CLOSE: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLCloseStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLCloseStmt();
+      stmt = new(stmt)ObPLCloseStmt(allocator_);
     }
   }
     break;
   case PL_NULL: {
       stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLNullStmt)));
       if (NULL != stmt) {
-        stmt = new(stmt)ObPLNullStmt();
+        stmt = new(stmt)ObPLNullStmt(allocator_);
       }
     }
     break;
   case PL_PIPE_ROW: {
     stmt = static_cast<ObPLPipeRowStmt *>(allocator_.alloc(sizeof(ObPLPipeRowStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLPipeRowStmt();
+      stmt = new(stmt)ObPLPipeRowStmt(allocator_);
     }
   }
     break;
   case PL_ROUTINE_DECL: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLRoutineDeclStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLRoutineDeclStmt();
+      stmt = new(stmt)ObPLRoutineDeclStmt(allocator_);
     }
   }
     break;
   case PL_ROUTINE_DEF: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLRoutineDefStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLRoutineDefStmt();
+      stmt = new(stmt)ObPLRoutineDefStmt(allocator_);
     }
   }
     break;
@@ -5434,14 +5540,14 @@ int ObPLStmtFactory::allocate(ObPLStmtType type, const ObPLStmtBlock *block, ObP
   case PL_TRIM: {
     stmt = static_cast<ObPLStmt *>(allocator_.alloc(sizeof(ObPLTrimStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLTrimStmt();
+      stmt = new(stmt)ObPLTrimStmt(allocator_);
     }
   }
     break;
   case PL_INTERFACE: {
     stmt = static_cast<ObPLStmt*>(allocator_.alloc(sizeof(ObPLInterfaceStmt)));
     if (NULL != stmt) {
-      stmt = new(stmt)ObPLInterfaceStmt();
+      stmt = new(stmt)ObPLInterfaceStmt(allocator_);
     }
   }
     break;

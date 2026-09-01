@@ -43,6 +43,7 @@ public:
   int hash(uint64_t &hash_val, uint64_t seed=0) const;
 
   ObBitSet<> default_param_bitmap_;
+  common::ObObjType result_type_;
 };
 
 struct ObPLUDFResultCacheKey : public ObILibCacheKey

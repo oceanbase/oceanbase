@@ -24,7 +24,8 @@ namespace pl
 bool UDFArgRow::operator==(const UDFArgRow &other) const
 {
   bool ret = false;
-  if (default_param_bitmap_ == other.default_param_bitmap_) {
+  if (result_type_ == other.result_type_
+      && default_param_bitmap_ == other.default_param_bitmap_) {
     ret = DatumRow::operator==(other);
   }
   return ret;
@@ -33,7 +34,8 @@ bool UDFArgRow::operator==(const UDFArgRow &other) const
 int UDFArgRow::hash(uint64_t &hash_val, uint64_t seed) const
 {
   int ret = OB_SUCCESS;
-  ret = DatumRow::hash(hash_val, seed);
+  hash_val = murmurhash(&result_type_, sizeof(result_type_), seed);
+  ret = DatumRow::hash(hash_val, hash_val);
   return ret;
 }
 
@@ -198,6 +200,7 @@ int ObPLUDFResultCacheSet::create_new_cache_key(ObPLUDFResultCacheCtx &rc_ctx,
   int ret = OB_SUCCESS;
 
   cache_key.cnt_ = rc_ctx.argument_params_.cnt_;
+  cache_key.result_type_ = rc_ctx.argument_params_.result_type_;
   if (cache_key.cnt_ > 0) {
     if (OB_ISNULL(cache_key.elems_
               = static_cast<ObDatum *> (allocator_.alloc(sizeof(ObDatum) * cache_key.cnt_)))) {

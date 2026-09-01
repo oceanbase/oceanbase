@@ -11597,13 +11597,26 @@ static struct VarsInit{
     ObSysVars[845].alias_ = "OB_SV_UDF_SELECTIVITY" ;
     }();
 
+    [&] (){
+      ObSysVars[846].default_value_ = "0" ;
+      ObSysVars[846].info_ = "Whether to use SQL UDT for PL complex types in SQL scope to optimize memory" ;
+      ObSysVars[846].name_ = "_enable_pl_composite_as_sql_udt" ;
+      ObSysVars[846].data_type_ = ObIntType ;
+      ObSysVars[846].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::INFLUENCE_PL | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[846].id_ = SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT] = 846 ;
+      ObSysVars[846].base_value_ = "0" ;
+    ObSysVars[846].alias_ = "OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 846;
+static int64_t var_amount = 847;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

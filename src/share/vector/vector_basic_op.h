@@ -853,21 +853,8 @@ struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT>
   static const constexpr bool defined_ = true;
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
-    cmp_ret = 0;
-    int ret = OB_SUCCESS;
-    bool calc_end_space =
-      is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
-                             l_meta.get_collation_type(), r_meta.get_collation_type());
-    if (l_meta.get_collation_type() != CS_TYPE_BINARY
-        || r_meta.get_collation_type() != CS_TYPE_BINARY
-        || calc_end_space) {
-      ret = OB_ERR_UNEXPECTED;
-    } else {
-      cmp_ret = ObCharset::strcmpsp(l_meta.get_collation_type(), static_cast<const char *>(l_v),
-                                    l_len, static_cast<const char *>(r_v), r_len, calc_end_space);
-      cmp_ret = (cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0));
-    }
-    return ret;
+    UNUSEDx(l_meta, r_meta, l_v, r_v, l_len, r_len, cmp_ret);
+    return OB_ERR_NO_ORDER_MAP_SQL;
   }
 };
 

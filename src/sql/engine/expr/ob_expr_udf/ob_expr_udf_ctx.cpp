@@ -201,6 +201,9 @@ int ObExprUDFCtx::check_types(const ObExpr &expr)
       if (expr.args_[i]->obj_meta_.get_type() != info_->params_type_.at(i).get_type()) {
         if (info_->params_type_.at(i).is_enum_or_set() && (ObVarcharType == expr.args_[i]->obj_meta_.get_type() || expr.args_[i]->obj_meta_.is_numeric_type())) {
           // do nothing ...
+        } else if (info_->params_type_.at(i).is_ext() && expr.args_[i]->obj_meta_.is_common_user_defined_sql_type()) {
+          // Common SQL UDT input for extend parameter: implicit cast is skipped in calc_result_typeN,
+          // process_in_params() handles the conversion at runtime.
         } else {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("check param type failed", K(ret), K(i));
@@ -304,6 +307,7 @@ int ObExprUDFCtx::construct_key()
 {
   int ret = OB_SUCCESS;
   CK (get_arg_count() == get_obj_stack().count());
+  row_key_.result_type_ = get_info()->result_type_.get_type();
   for (int64_t i = 0; OB_SUCC(ret) && i < get_arg_count(); ++i) {
     if (OB_FAIL(row_key_.elems_[i].from_obj(get_obj_stack().at(i)))) {
       LOG_WARN("failed to construct datum from obj", K(ret), K(i));
@@ -508,6 +512,7 @@ int ObExprUDFDeterministerCache::add_result_to_cache(const pl::UDFArgRow &key, O
   } else {
     int64_t need_size = sizeof(ObDatum) + sizeof(int64_t);
     cache_key.cnt_ = key.cnt_;
+    cache_key.result_type_ = key.result_type_;
     for (int64_t i = 0; i < cache_key.cnt_; ++i) {
       need_size += (key.elems_[i].len_ + sizeof(ObDatum));
     }

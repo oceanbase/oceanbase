@@ -37106,6 +37106,7 @@ int ObDDLSQLTransaction::end(const bool commit)
     ObSEArray<const ObTenantSchema*, 2> tenant_schemas;
     ObSEArray<const ObDatabaseSchema*, 2> database_schemas;
     ObSEArray<const ObTableSchema*, 8> table_schemas;
+    ObSEArray<const ObUDTTypeInfo*, 4> udt_schemas;
     uint64_t data_version = 0;
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
       LOG_WARN("fail to get data version", KR(ret), K_(tenant_id));
@@ -37113,7 +37114,7 @@ int ObDDLSQLTransaction::end(const bool commit)
                && trans_start_schema_version_ > 0) {
       if (OB_FAIL(schema_service_->get_increment_schemas_for_data_dict(
           *this, tenant_id_, trans_start_schema_version_,
-          allocator, tenant_schemas, database_schemas, table_schemas))) {
+          allocator, tenant_schemas, database_schemas, table_schemas, udt_schemas))) {
         LOG_WARN("fail to get increment schemas for data dict",
                  KR(ret), K_(tenant_id), K_(trans_start_schema_version));
       }
@@ -37125,7 +37126,8 @@ int ObDDLSQLTransaction::end(const bool commit)
       // 4. inner tables changed.
       // tenant_schemas/database_schemas/table_schemas are empty will record log like 4.0 for compatibility.
     }
-    if (FAILEDx(serialize_inc_schemas_(allocator, tenant_schemas, database_schemas, table_schemas))) {
+    if (FAILEDx(serialize_inc_schemas_(allocator, tenant_schemas, database_schemas,
+                                       table_schemas, udt_schemas))) {
       LOG_WARN("serialize_inc_schemas_ fail", KR(ret));
     }
   }
@@ -37147,6 +37149,7 @@ int ObDDLSQLTransaction::serialize_inc_schemas(const int64_t start_schema_versio
   ObSEArray<const ObTenantSchema*, 2> tenant_schemas;
   ObSEArray<const ObDatabaseSchema*, 2> database_schemas;
   ObSEArray<const ObTableSchema*, 8> table_schemas;
+  ObSEArray<const ObUDTTypeInfo*, 4> udt_schemas;
   uint64_t data_version = 0;
   if (OB_ISNULL(schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -37163,10 +37166,11 @@ int ObDDLSQLTransaction::serialize_inc_schemas(const int64_t start_schema_versio
     LOG_WARN("data version is less than 4.1", KR(ret), K_(tenant_id), K(data_version));
   } else if (OB_FAIL(schema_service_->get_increment_schemas_for_data_dict(
              *this, tenant_id_, start_schema_version, allocator,
-             tenant_schemas, database_schemas, table_schemas))) {
+             tenant_schemas, database_schemas, table_schemas, udt_schemas))) {
     LOG_WARN("fail to get increment schemas for data dict",
              KR(ret), K_(tenant_id), K(start_schema_version));
-  } else if (OB_FAIL(serialize_inc_schemas_(allocator, tenant_schemas, database_schemas, table_schemas))) {
+  } else if (OB_FAIL(serialize_inc_schemas_(allocator, tenant_schemas, database_schemas,
+                                             table_schemas, udt_schemas))) {
     LOG_WARN("serialize_inc_schemas_ fail", KR(ret), K_(tenant_id), K(start_schema_version));
   }
   return ret;
@@ -37176,7 +37180,8 @@ int ObDDLSQLTransaction::serialize_inc_schemas_(
     ObIAllocator &allocator,
     const ObIArray<const ObTenantSchema*> &tenant_schemas,
     const ObIArray<const ObDatabaseSchema*> &database_schemas,
-    const ObIArray<const ObTableSchema*> &table_schemas)
+    const ObIArray<const ObTableSchema*> &table_schemas,
+    const ObIArray<const ObUDTTypeInfo*> &udt_schemas)
 {
   int ret = OB_SUCCESS;
   char *buf = NULL;
@@ -37188,6 +37193,7 @@ int ObDDLSQLTransaction::serialize_inc_schemas_(
       tenant_schemas,
       database_schemas,
       table_schemas,
+      udt_schemas,
       buf,
       buf_len,
       pos))) {

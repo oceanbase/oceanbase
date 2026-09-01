@@ -39,6 +39,8 @@
 #include "observer/ob_server.h"
 #include "pl/external_routine/ob_java_udf.h"
 #include "observer/mysql/obmp_utils.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "share/object/ob_obj_cast.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "close_modules/oracle_pl/pl/opaque/ob_pl_xmldom.h"
 #endif
@@ -2579,6 +2581,119 @@ int ObPL::transform_tree(PlTransformTreeCtx &trans_ctx, ParseNode *root, ParseNo
   return ret;
 }
 
+// Find the position just past the first "*/" of a block comment that begins at
+// buf[start] ("/*"). Used to copy optimizer hints verbatim; a hint never nests
+// other comments, so locating the first "*/" is sufficient.
+static int64_t find_block_comment_end(const char *buf, int64_t buf_len, int64_t start)
+{
+  int64_t end = buf_len;                     // unterminated: consume to end
+  bool found = false;
+  for (int64_t pos = start + 2; !found && pos + 1 < buf_len; ++pos) {  // skip "/*"
+    if ('*' == buf[pos] && '/' == buf[pos + 1]) {
+      end = pos + 2;                         // just past "*/"
+      found = true;
+    }
+  }
+  return end;
+}
+
+// A removed comment is replaced by a single space so adjacent tokens stay
+// separated (e.g. 'a/* */b' -> 'a b'), but only when the preceding character is
+// not already whitespace, so comment-free layout is never disturbed.
+static void append_comment_separator(char *buf, int64_t &write_pos)
+{
+  bool prev_is_space = write_pos > 0
+      && (' ' == buf[write_pos - 1] || '\t' == buf[write_pos - 1]
+          || '\n' == buf[write_pos - 1] || '\r' == buf[write_pos - 1]);
+  if (write_pos > 0 && !prev_is_space) {
+    buf[write_pos++] = ' ';
+  }
+}
+
+/**
+ * @brief Strip comments from an Oracle-mode parameterized anonymous block, so
+ *        blocks differing only in comments share the same plan cache key.
+ *
+ * Whitespace is preserved verbatim: a comment-free block is left byte for byte
+ * unchanged, so the line/column numbers reported in PL error messages stay
+ * valid. '--' line comments and ordinary '/x ... x/' block comments are removed;
+ * each is replaced by a single space only when not already adjacent to
+ * whitespace, which keeps tokens from merging without disturbing the layout.
+ * Optimizer hints '/x+ ... x/' are kept verbatim because they affect the plan.
+ *
+ * Oracle quoting grammar: '...' single-quoted strings (a doubled quote '' is an
+ * escaped quote) and "..." quoted identifiers (closed by the next ", no ""
+ * escape, matching ObFastParserOracle::process_double_quote). The backslash is
+ * an ordinary character. Contents of both are preserved verbatim so comment-like
+ * characters inside them are never altered.
+ */
+static void normalize_pl_comments_oracle(char *buf, int64_t &buf_len)
+{
+  int64_t read_pos = 0;
+  int64_t write_pos = 0;
+  char quote = 0;             // 0 when outside; '\'' in a string; '"' in an identifier
+
+  while (read_pos < buf_len) {
+    char ch = buf[read_pos];
+
+    // --- inside a string or quoted identifier: copy verbatim until it closes ---
+    if (0 != quote) {
+      if (quote == ch) {
+        // '' inside a '...' string is an escaped quote; a "..." identifier has
+        // no "" escape, so any matching quote closes it.
+        if ('\'' == quote && read_pos + 1 < buf_len && '\'' == buf[read_pos + 1]) {
+          buf[write_pos++] = buf[read_pos++];
+          buf[write_pos++] = buf[read_pos++];
+        } else {
+          // closing quote: a lone ' ends the string, or " ends the identifier
+          quote = 0;
+          buf[write_pos++] = buf[read_pos++];
+        }
+      } else {
+        buf[write_pos++] = buf[read_pos++];
+      }
+      continue;
+    }
+
+    // --- string / quoted-identifier start: ' or " ---
+    if ('\'' == ch || '\"' == ch) {
+      quote = ch;
+      buf[write_pos++] = buf[read_pos++];
+      continue;
+    }
+
+    // --- single-line comment: -- ... (removed; the trailing newline is kept) ---
+    if ('-' == ch && read_pos + 1 < buf_len && '-' == buf[read_pos + 1]) {
+      read_pos += 2;                         // skip "--"
+      while (read_pos < buf_len && '\n' != buf[read_pos]) {
+        read_pos++;                          // skip until end of line
+      }
+      append_comment_separator(buf, write_pos);
+      continue;
+    }
+
+    // --- optimizer hint: /*+ ... */  kept verbatim (it affects the plan) ---
+    if ('/' == ch && read_pos + 1 < buf_len && '*' == buf[read_pos + 1]
+        && read_pos + 2 < buf_len && '+' == buf[read_pos + 2]) {
+      int64_t end = find_block_comment_end(buf, buf_len, read_pos);
+      while (read_pos < end) { buf[write_pos++] = buf[read_pos++]; }
+      continue;
+    }
+
+    // --- multi-line comment: /* ... */  (removed) ---
+    if ('/' == ch && read_pos + 1 < buf_len && '*' == buf[read_pos + 1]) {
+      read_pos = find_block_comment_end(buf, buf_len, read_pos);
+      append_comment_separator(buf, write_pos);
+      continue;
+    }
+
+    // --- any other character (including whitespace): copy verbatim ---
+    buf[write_pos++] = buf[read_pos++];
+  }
+
+  buf_len = write_pos;
+}
+
 int ObPL::parameter_anonymous_block(ObExecContext &ctx,
                               const ObStmtNodeTree *block,
                               ParamStore &params,
@@ -2638,6 +2753,20 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
                     trans_ctx.raw_sql_.ptr() + trans_ctx.copied_idx_,
                     trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_);
             trans_ctx.buf_len_ += trans_ctx.raw_sql_.length() - trans_ctx.copied_idx_;
+          }
+        }
+        // Normalize comments so that anonymous blocks differing only in
+        // comments produce the same plan cache key, consistent with how
+        // regular SQL fast parser strips comments during parameterization.
+        // Anonymous-block parameterization is only enabled in Oracle mode
+        // (forbid_anony_parameter rejects MySQL mode), so reaching here in a
+        // non-Oracle mode indicates an upstream logic error.
+        if (OB_SUCC(ret)) {
+          if (OB_LIKELY(lib::is_oracle_mode())) {
+            normalize_pl_comments_oracle(trans_ctx.buf_, trans_ctx.buf_len_);
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("anonymous block parameterization unexpected in non-oracle mode", K(ret));
           }
         }
         //pc_key.assign_ptr(trans_ctx.buf_, trans_ctx.buf_len_);
@@ -3903,35 +4032,56 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value, bool set_va
 int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  //all composite need to be deep copied and recorded.
   ObObj new_obj;
   if (func_.get_ret_type().is_composite_type() && result_.is_ext()) {
     CK (OB_NOT_NULL(ctx_.exec_ctx_));
     if (OB_SUCC(ret)) {
-      ObIAllocator *alloc = &ctx_.exec_ctx_->get_allocator();
-      ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
-      // we will destroy this obj in pl final interface
-      if (OB_NOT_NULL(session) &&
-         OB_NOT_NULL(session->get_pl_top_context())) {
-        pl::ObPLExecCtx *parent_exec_ctx = nullptr;
-        ObPLTopContext *pl_top_context = session->get_pl_top_context();
-        ObIArray<ObPLExecState *> *exec_stack = nullptr;
-        CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
-        if (OB_SUCC(ret) && exec_stack->count() > 1 &&
-            OB_NOT_NULL(exec_stack->at(exec_stack->count() - 2))) {
-          parent_exec_ctx = &exec_stack->at(exec_stack->count() - 2)->get_exec_ctx();
-          alloc = parent_exec_ctx->get_top_expr_allocator();
+      const uint64_t udt_id = func_.get_ret_type().get_user_type_id();
+      if (is_called_from_sql_
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+          && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())
+          && ctx_.exec_ctx_->get_my_session()->get_local_enable_pl_composite_as_sql_udt()
+          && ObPLDataType::is_schema_udt(ctx_.exec_ctx_->get_sql_ctx()->schema_guard_, udt_id)
+          && !is_inner_pl_udt_id(udt_id)
+          && result_.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+        const ObDataTypeCastParams dtc_params =
+            ObBasicSessionInfo::create_dtc_params(ctx_.exec_ctx_->get_my_session());
+        ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
+        cast_ctx.exec_ctx_ = ctx_.exec_ctx_;
+        uint16_t subschema_id = ObInvalidSqlType;
+        ObObj cast_out;
+        OZ (ctx_.exec_ctx_->get_subschema_id_by_udt_id(udt_id, subschema_id));
+        OX (cast_out.set_subschema_id(subschema_id));
+        OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, result_, cast_out));
+        if (OB_SUCC(ret)) {
+          ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
+          result_ = cast_out;
         }
-      }
-      OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj));
-      ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
-      if (OB_SUCC(ret)) {
-        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
-        OZ (pl_complex_type_mgr->complex_type_objects_.push_back(new_obj));
-        if (OB_FAIL(ret)) {
-          ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
-        } else {
-          result_ = new_obj;
+      } else {
+        ObIAllocator *alloc = &ctx_.exec_ctx_->get_allocator();
+        ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
+        if (OB_NOT_NULL(session) &&
+           OB_NOT_NULL(session->get_pl_top_context())) {
+          pl::ObPLExecCtx *parent_exec_ctx = nullptr;
+          ObPLTopContext *pl_top_context = session->get_pl_top_context();
+          ObIArray<ObPLExecState *> *exec_stack = nullptr;
+          CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+          if (OB_SUCC(ret) && exec_stack->count() > 1 &&
+              OB_NOT_NULL(exec_stack->at(exec_stack->count() - 2))) {
+            parent_exec_ctx = &exec_stack->at(exec_stack->count() - 2)->get_exec_ctx();
+            alloc = parent_exec_ctx->get_top_expr_allocator();
+          }
+        }
+        OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj));
+        ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
+        if (OB_SUCC(ret)) {
+          sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+          OZ (pl_complex_type_mgr->complex_type_objects_.push_back(new_obj));
+          if (OB_FAIL(ret)) {
+            ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
+          } else {
+            result_ = new_obj;
+          }
         }
       }
     }
@@ -4055,9 +4205,9 @@ int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &re
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == package_id) {
-    OZ (ObSPIService::spi_calc_expr_at_idx(this, expr_idx, OB_INVALID_INDEX, false, &result));
+    OZ (ObSPIService::spi_calc_expr_at_idx(this, expr_idx, OB_INVALID_INDEX, false, true, &result));
   } else {
-    OZ (ObSPIService::spi_calc_package_expr(this, package_id, expr_idx, &result));
+    OZ (ObSPIService::spi_calc_package_expr(this, package_id, expr_idx, true, &result));
   }
   return ret;
 }
@@ -4830,6 +4980,19 @@ int ObPLExecState::process_param(const ObPLParamArrayWrapper &params,
                 K(ret), K(params.at(param_idx)), K(result_type), K(is_strict), K(param_idx),
                 K(params.count()), K(func_.get_is_all_sql_stmt()),
                 K(func_.get_variables()));
+    } else if (lib::is_mysql_mode() && STANDALONE_ANONYMOUS != func_.get_proc_type() &&
+               (result.is_character_type() || result.is_binary())) {
+      ObObjParam tmp;
+      *(ObObj*)&tmp = result;
+      if (OB_FAIL(ObSPIService::spi_pading_intf(ctx_.exec_ctx_->get_my_session(),
+                                                     result_type.get_type(),
+                                                     result_type.get_accuracy(),
+                                                     cast_ctx.allocator_v2_,
+                                                     &tmp))) {
+        LOG_WARN("fail to exec pading", K(ret));
+      } else {
+        result = *(ObObj*)&tmp;
+      }
     }
   }
   if (OB_SUCC(ret) && result.is_string_type()) {
@@ -4975,16 +5138,8 @@ do {                                                                  \
         } else if (param.is_pl_mock_default_param()) { // 使用参数默认值
           ObObjParam result;
           int64_t default_idx = func_.get_default_idxs().at(i);
-
-          if (default_idx >= func_.get_expressions().count()) {
-            // default value is pre calculated, use pre_calc_default_values_
-            default_idx -= func_.get_expressions().count();
-            result = func_.get_pre_calc_default_values().at(default_idx);
-          } else {
-            sql::ObSqlExpression *default_expr = func_.get_default_expr(i);
-            OV (OB_NOT_NULL(default_expr), OB_ERR_UNEXPECTED, K(i), K(func_.get_default_idxs()));
-            OZ (ObSPIService::spi_calc_expr(&ctx_, default_expr, OB_INVALID_INDEX, &result));
-          }
+          OV (OB_INVALID_INDEX != default_idx, OB_ERR_UNEXPECTED, K(i), K(func_.get_default_idxs()));
+          OZ (ObSPIService::spi_calc_expr_at_idx(&ctx_, default_idx, OB_INVALID_INDEX, false, true, &result));
           if (OB_FAIL(ret)) {
           } else if (result.is_null()) {
             ObObjMeta null_meta = dst_param.get_meta();
@@ -6177,6 +6332,19 @@ ObPLFunction::~ObPLFunction()
     allocator_.free(di_buf_);
     di_buf_ = NULL;
   }
+
+  for (int64_t i = 0; i < get_expressions().count(); ++i) {
+    ObSqlExpression *expr = get_expressions().at(i);
+    if (OB_NOT_NULL(expr) && expr->get_expr_items().count() > 0) {
+      const ObObj &obj = expr->get_expr_items().at(0).get_obj();
+      if (obj.is_pl_extend()) {
+        int tmp_ret = ObUserDefinedType::destruct_obj(const_cast<ObObj &>(obj), nullptr);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to destruct pre calc composite value", K(tmp_ret));
+        }
+      }
+    }
+  }
 }
 
 
@@ -6213,7 +6381,7 @@ int ObPLFunction::set_variables(const ObPLSymbolTable &symbol_table)
     if (OB_SUCC(ret)) {
       ObString col;
       trigger_ref_cols_.at(i).set_allocator(&allocator_);
-      const ObIArray<std::pair<ObString, bool>>  &ref_cols = symbol_table.get_symbol(i)->get_trigger_ref_cols();
+      const ObIArray<std::pair<ObString, bool>> &ref_cols = symbol_table.get_trigger_ref_cols(i);
       if (OB_FAIL(trigger_ref_cols_.at(i).init(ref_cols.count()))) {
         LOG_WARN("failed to init trigger ref cols", K(i), K(ret));
       } else {
@@ -6655,87 +6823,6 @@ int ObPLFunction::gen_action_from_precompiled(const ObString &name, size_t lengt
   OZ (helper_.add_compiled_object(length, ptr));
   OZ (helper_.get_function_address(name, addr));
   OX (set_action(addr));
-
-  return ret;
-}
-
-int ObPLFunction::pre_calc_default_values(ObSQLSessionInfo &session, const ObPLFunctionAST &ast)
-{
-  int ret = OB_SUCCESS;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_arg_count(); ++i) {
-    int64_t expr_idx = default_idxs_.at(i);
-    bool can_calc = true;
-
-    if (OB_INVALID_INDEX != expr_idx) {
-      const ObRawExpr *expr = ast.get_expr(expr_idx);
-
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL default expr", K(ret), K(expr_idx), K(ast), KPC(this), K(lbt()));
-      } else if (!get_variables().at(i).is_obj_type()
-                   || !expr->is_static_const_expr()) {
-        // do nothing
-      } else if (OB_FAIL(check_can_pre_calc_default_value(can_calc, *expr))) {
-        LOG_WARN("failed to check can pre calc default value", K(ret), K(expr));
-      } else if (!can_calc) {
-        // do nothing
-      } else {
-        ObObj tmp;
-        ObObjParam result;
-        bool success = false;
-
-        if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(session.get_cur_exec_ctx(),
-                                                              expr,
-                                                              tmp,
-                                                              success,
-                                                              ast.get_symbol_table().get_allocator()))) {
-          LOG_WARN("failed to calc const or calculable expr", K(ret), KPC(expr));
-        } else if (!success) {
-          // do nothing
-        } else if (OB_FAIL(deep_copy_obj(allocator_, tmp, result))) {
-          LOG_WARN("failed to deep copy obj", K(ret), K(tmp), K(result));
-        } else if (FALSE_IT(result.set_param_meta(expr->get_result_type()))) {
-          // unreachable
-        } else if (OB_FAIL(pre_calc_default_values_.push_back(result))) {
-          LOG_WARN("failed to push back pre calc result", K(ret), K(result), K(pre_calc_default_values_));
-        } else {
-          default_idxs_.at(i) = expressions_.count() + pre_calc_default_values_.count() - 1;
-          LOG_TRACE("pre calc default value success",
-                    "package_id", get_package_id(),
-                    "routine_id", get_routine_id(),
-                    "routine_name", get_function_name(),
-                    K(i), K(default_idxs_.at(i)), K(result), KPC(expr));
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObPLFunction::check_can_pre_calc_default_value(bool &can_calc, const ObRawExpr &expr)
-{
-  int ret = OB_SUCCESS;
-
-  if (!can_calc) {
-    // do nothing
-  } else if (T_FUN_PL_GET_CURSOR_ATTR == expr.get_expr_type()) {
-    can_calc = false;
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && can_calc && i < expr.get_param_count(); ++i) {
-      const ObRawExpr *curr = expr.get_param_expr(i);
-
-      if (OB_ISNULL(curr)) {
-        // do nothing
-      } else if (OB_FAIL(SMART_CALL(check_can_pre_calc_default_value(can_calc, *curr)))) {
-        LOG_WARN("failed to check can pre calc default value recursively",
-                 K(ret), K(expr), KPC(curr), K(i));
-      } else if (!can_calc) {
-        break;
-      }
-    }
-  }
 
   return ret;
 }

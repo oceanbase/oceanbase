@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX PL
 #include "ob_pl_type.h"
+#include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_user_type.ipp"
+#include "pl/ob_pl_type.ipp"
 #include "lib/utility/ob_print_utils.h"
 #include "sql/ob_spi.h"
 #include "observer/mysql/obsm_utils.h"
@@ -869,6 +872,8 @@ int ObPLDataType::init_session_var(const ObPLResolveCtx &resolve_ctx,
       ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_INIT_SESSION_VAR), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       if (OB_FAIL(ObSQLUtils::calc_sql_expression_without_row(exec_ctx,*default_expr,calc_obj, &tmp_allocator))) {
         LOG_WARN("calc expr failed", K(ret));
+      } else if (OB_FAIL(ObSPIService::spi_pad_char_or_varchar(exec_ctx.get_my_session(), default_expr, &tmp_allocator, &calc_obj))) {
+        LOG_WARN("pad char or varchar failed", K(ret));
       } else if (calc_obj.need_deep_copy()) {
         char *copy_data = NULL;
         int64_t copy_size = calc_obj.get_deep_copy_size();
@@ -1127,82 +1132,8 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                             int64_t &dst_pos,
                             const bool full_format) const
 {
-  int ret = OB_SUCCESS;
-  if (is_obj_type()) {
-    obmysql::EMySQLFieldType mysql_type = obmysql::EMySQLFieldType::MYSQL_TYPE_NOT_DEFINED;
-    uint16_t flags;
-    ObScale num_decimals;
-    ObObj obj;
-    ObField field;
-    if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
-      LOG_WARN("get mysql type failed", K(ret), K(get_obj_type()));
-    } else {
-      obj = *(reinterpret_cast<ObObj *>(src));
-      src += sizeof(ObObj);
-      field.accuracy_ = get_data_type()->get_accuracy();
-      field.flags_ = get_data_type()->is_zero_fill() ? ZEROFILL_FLAG : 0;
-    }
-    if (OB_SUCC(ret)
-        && !obj.is_invalid_type() // deleted element not serialize.
-        && !obj.is_null()) { // null already serialized into null map.
-      if (obj.get_type() != get_obj_type()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to serialize pl data type, data type inconsistent with pl type",
-                 K(get_obj_type()), K(obj.get_type()), K(obj), K(*this), K(ret));
-      } else if (obj.is_lob() || obj.is_lob_locator() || obj.is_json() || obj.is_geometry()) {
-        ObArenaAllocator local_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-        if (OB_FAIL(ObQueryDriver::process_lob_locator_results(obj,
-                                                               session.is_client_use_lob_locator(),
-                                                               session.is_client_support_lob_locatorv2(),
-                                                               &local_allocator,
-                                                               &session,
-                                                               NULL))) {
-          LOG_WARN("failed to process lob locator_results", K(ret), K(obj), K(session.is_client_use_lob_locator()), K(session.is_client_support_lob_locatorv2()));
-        } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
-          LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
-        }
-      } else if (MYSQL_PROTOCOL_TYPE::TEXT == type && obj.is_interval_ym()) {
-        if (OB_FAIL(intervalym_element_cell_str(dst, dst_len, obj.get_interval_ym(), dst_pos, field.accuracy_.get_scale()))) {
-          LOG_WARN("failed to cell intervalym element type of collection", K(ret), K(obj), K(dst_len), K(dst_pos));
-        }
-      } else if (MYSQL_PROTOCOL_TYPE::TEXT == type && obj.is_interval_ds()) {
-        if (OB_FAIL(intervalds_element_cell_str(dst, dst_len, obj.get_interval_ds(), dst_pos, field.accuracy_.get_scale()))) {
-          LOG_WARN("failed to cell intervalds element type of collection", K(ret), K(obj), K(dst_len), K(dst_pos));
-        }
-      } else if (OB_FAIL(ObSMUtils::cell_str(dst, dst_len, obj, type, dst_pos, OB_INVALID_ID, NULL, tz_info, &field, session, NULL))) {
-        LOG_WARN("failed to cell str", K(ret), K(obj), K(dst_len), K(dst_pos));
-      } else {
-        LOG_DEBUG("success serialize pl data type", K(*this), K(obj),
-          K(reinterpret_cast<int64_t>(dst)), K(dst_len), K(type), K(dst_pos));
-      }
-    }
-  } else {
-    const ObUserDefinedType *user_type = NULL;
-    const ObUDTTypeInfo *udt_info = NULL;
-    ObArenaAllocator local_allocator("SerUdtType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    // CDC can't use MTL_ID() to get tenant_id, so use session.get_effective_tenant_id() instead.
-    const uint64_t tenant_id = is_inner_pl_object_id(get_user_type_id())
-                               ? OB_SYS_TENANT_ID
-                               : session.get_effective_tenant_id();
-    if (!is_udt_type()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("not support other type except udt type", K(ret), K(get_type_from()));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-schema user defined type deserialize");
-    } else if (OB_FAIL(schema_guard.get_udt_info(tenant_id, get_user_type_id(), udt_info))) {
-      LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(get_user_type_id()));
-    } else if (OB_ISNULL(udt_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("udt info is null", K(ret), K(get_user_type_id()));
-    } else if (OB_FAIL(udt_info->transform_to_pl_type(local_allocator, schema_guard, user_type))) {
-      LOG_WARN("failed to transform to pl type", K(ret), KPC(udt_info));
-    } else if (OB_ISNULL(user_type)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("user type is null", K(ret), K(user_type));
-    } else if (OB_FAIL(user_type->serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format))) {
-      LOG_WARN("failed to deserialize user type", K(ret));
-    }
-  }
-  return ret;
+  return serialize<share::schema::ObSchemaGetterGuard>(
+      schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format);
 }
 
 int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
@@ -1609,6 +1540,31 @@ int ObPLDataType::obj_is_null(ObObj& obj, bool &is_null)
     LOG_WARN("check obj is null unexcepted error", K(ret), K(obj));
   }
   return ret;
+}
+
+bool ObPLDataType::is_schema_udt(ObSchemaGetterGuard *schema_guard, uint64_t udt_id)
+{
+  bool is_schema = false;
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
+  UNUSED(schema_guard);
+  UNUSED(udt_id);
+#else
+  if (ObObjUDTUtil::ob_is_sys_sql_udt(udt_id)) {
+    is_schema = true;
+  } else if (0 != extract_package_id(udt_id)) {
+  } else if (OB_ISNULL(schema_guard)) {
+  } else {
+    const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+    const ObUDTTypeInfo *udt_info = NULL;
+    if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
+      LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_id));
+    } else if (OB_NOT_NULL(udt_info)) {
+      is_schema = true;
+    }
+  }
+#endif
+  return is_schema;
 }
 
 int ObPLDataType::datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null)

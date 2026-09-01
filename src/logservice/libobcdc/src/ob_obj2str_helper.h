@@ -135,6 +135,22 @@ private:
       common::ObIAllocator &allocator,
       common::ObString &str) const;
 
+  int convert_sql_udt_to_text_with_online_schema_(
+      const uint64_t tenant_id,
+      const uint64_t udt_id,
+      const common::ObObj &obj,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      common::ObIAllocator &allocator,
+      common::ObString &str) const;
+
+  int convert_sql_udt_to_text_with_data_dict_(
+      const uint64_t tenant_id,
+      const uint64_t udt_id,
+      const common::ObObj &obj,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      common::ObIAllocator &allocator,
+      common::ObString &str) const;
+
   int convert_collection_to_text_(
     const common::ObObj &obj,
     common::ObString &str,

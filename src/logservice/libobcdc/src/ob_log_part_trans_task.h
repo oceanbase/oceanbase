@@ -1261,6 +1261,7 @@ public:
   DictTenantArray &get_dict_tenant_array() { return multi_data_source_info_.get_dict_tenant_array(); }
   DictDatabaseArray &get_dict_database_array() { return multi_data_source_info_.get_dict_database_array(); }
   DictTableArray &get_dict_table_array() { return multi_data_source_info_.get_dict_table_array(); }
+  DictUdtArray &get_dict_udt_array() { return multi_data_source_info_.get_dict_udt_array(); }
   // get tenant_schema_info with MultiDataSourceInfo in DDL. get from baseline data_dict if ddl
   // doesn't contains tenant_meta for specifed tenant, otherwise use tenant_meta in inc_data_dict.
   // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.

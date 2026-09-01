@@ -225,7 +225,8 @@ public:
                                           common::ObObj &result,
                                           const ParamStore *params,
                                           common::ObIAllocator &allocator,
-                                          bool force_copy_extend_type = false);
+                                          bool force_copy_extend_type = false,
+                                          ObExecContext *exec_ctx = NULL);
   static int calc_raw_expr_without_row(ObExecContext &exec_ctx,
                                        const ObRawExpr *raw_expr,
                                        ObObj &result,

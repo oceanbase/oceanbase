@@ -6315,7 +6315,7 @@ int ObSelectResolver::resolve_table_column_ref(const ObQualifiedName &q_name, Ob
   //3. object (sequence)
   int ret = OB_SUCCESS;
   if (OB_FAIL(resolve_table_column_expr(q_name, real_ref_expr))) {
-    LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));
+    LOG_WARN("resolve table column expr failed", K(ret), K(q_name));
   }
   return ret;
 }

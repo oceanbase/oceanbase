@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
+#include "share/ob_cluster_version.h"
 
 
 namespace oceanbase
@@ -34,7 +35,8 @@ int ObFunctionTableOp::inner_open()
   if (OB_ISNULL(MY_SPEC.value_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("value expr is not init", K(ret));
-  } else if (ObExtendType == MY_SPEC.value_expr_->datum_meta_.type_) {
+  } else if (ObExtendType == MY_SPEC.value_expr_->datum_meta_.type_
+             || ob_is_user_defined_sql_type(MY_SPEC.value_expr_->datum_meta_.type_)) {
     next_row_func_ = &ObFunctionTableOp::inner_get_next_row_udf;
   } else if (OB_FAIL(reset_udtf_ctx())) {
     LOG_WARN("failed to reset udtf ctx", K(ret));
@@ -139,9 +141,25 @@ int ObFunctionTableOp::inner_get_next_row_udf()
   } else if (OB_ISNULL(MY_SPEC.value_expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("value expr is not init", K(ret));
-  } else if (ObExtendType != MY_SPEC.value_expr_->datum_meta_.type_) {
+  } else if (ObExtendType != MY_SPEC.value_expr_->datum_meta_.type_
+             && !ob_is_user_defined_sql_type(MY_SPEC.value_expr_->datum_meta_.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected value", K(ret), K(MY_SPEC.value_expr_->datum_meta_.type_));
+  } else if (ob_is_user_defined_sql_type(MY_SPEC.value_expr_->datum_meta_.type_)) {
+    OZ (inner_get_next_row_udf_sql_udt());
+  } else {
+    OZ (inner_get_next_row_udf_pl_extend());
+  }
+  return ret;
+}
+
+int ObFunctionTableOp::inner_get_next_row_udf_pl_extend()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get plan ctx", K(ret));
   } else if (FALSE_IT(plan_ctx->set_autoinc_id_tmp(0))) {
   } else if (OB_FAIL(ctx_.check_status())) {
     LOG_WARN("failed to check status ", K(ret));
@@ -224,6 +242,191 @@ int ObFunctionTableOp::inner_get_next_row_udf()
         if (OB_SUCC(ret)) {
           MY_SPEC.column_exprs_.at(i)->set_evaluated_projected(eval_ctx_);
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObFunctionTableOp::inner_get_next_row_udf_sql_udt()
+{
+  int ret = OB_SUCCESS;
+  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  clear_evaluated_flag();
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get plan ctx", K(ret));
+  } else if (FALSE_IT(plan_ctx->set_autoinc_id_tmp(0))) {
+  } else if (OB_FAIL(ctx_.check_status())) {
+    LOG_WARN("failed to check status", K(ret));
+  } else {
+    if (!already_calc_) {
+      ObDatum *value = nullptr;
+      if (OB_FAIL(MY_SPEC.value_expr_->eval(eval_ctx_, value))) {
+        LOG_WARN("failed to eval value expr", K(ret));
+      } else if (value->is_null()) {
+        row_count_ = 0;
+      } else {
+        serialized_data_ = value->get_string();
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&ctx_.get_allocator(),
+                                                              ObLongTextType,
+                                                              CS_TYPE_BINARY,
+                                                              true,
+                                                              serialized_data_))) {
+          LOG_WARN("failed to read real string data for function table", K(ret));
+        } else {
+          ObExprObjAccess::ExtraInfo::SerializedPLObjSlice coll_slice(
+              serialized_data_.ptr(), serialized_data_.length());
+          int64_t pos = 0;
+          pl::ObPLType pl_type = pl::PL_INVALID_TYPE;
+          uint64_t id = OB_INVALID_ID;
+          bool is_null = false;
+          int64_t capacity = 0;
+          if (OB_FAIL(ObExprObjAccess::ExtraInfo::parse_serialized_pl_header(
+                  coll_slice, pos, pl_type, id, is_null))) {
+            LOG_WARN("failed to parse collection header", K(ret));
+          } else if (is_null) {
+            row_count_ = 0;
+          } else {
+            if (pl_type == pl::PL_VARRAY_TYPE) {
+              OZ (serialization::decode(coll_slice.data_, coll_slice.len_, pos, capacity));
+            }
+            int64_t count = 0;
+            OZ (serialization::decode(coll_slice.data_, coll_slice.len_, pos, count));
+            if (OB_SUCC(ret)) {
+              row_count_ = (OB_INVALID_COUNT == count) ? 0 : count;
+              col_count_ = MY_SPEC.column_exprs_.count();
+            }
+          }
+        }
+      }
+      already_calc_ = true;
+    }
+    ObExprObjAccess::ExtraInfo dummy_info(ctx_.get_allocator(), T_OBJ_ACCESS_REF);
+    ObExprObjAccess::ExtraInfo::SerializedPLObjSlice coll_slice(
+        serialized_data_.ptr(), serialized_data_.length());
+    ObExprObjAccess::ExtraInfo::SerializedPLObjSlice elem_slice;
+    ObExprObjAccess::ExtraInfo::SerializedPLObjSlice payload_slice;
+    ObExprObjAccess::ExtraInfo::SqlUdtAccessIdx access_idx;
+    access_idx.is_const_ = true;
+    ObObj elem_obj;
+    bool elem_is_record = false;
+    bool is_deleted = false;
+    do {
+      is_deleted = false;
+      elem_is_record = false;
+      payload_slice = ObExprObjAccess::ExtraInfo::SerializedPLObjSlice();
+      if (node_idx_ >= row_count_) {
+        ret = OB_ITER_END;
+      } else {
+        access_idx.var_index_ = node_idx_ + 1;
+        if (OB_FAIL(dummy_info.locate_collection_elem_slice(
+                ctx_.get_physical_plan_ctx()->get_param_store(),
+                nullptr, 0, coll_slice, access_idx, elem_slice))) {
+          LOG_WARN("failed to locate collection elem", K(ret), K(node_idx_));
+        } else if (!elem_slice.is_null_) {
+          int64_t pos = 0;
+          if (OB_FAIL(elem_obj.meta_.deserialize(elem_slice.data_, elem_slice.len_, pos))) {
+            LOG_WARN("failed to deserialize elem meta", K(ret), K(node_idx_));
+          } else if (elem_obj.is_ext()) {
+            int64_t ext_val = 0;
+            if (OB_FAIL(serialization::decode(elem_slice.data_, elem_slice.len_, pos, ext_val))) {
+              LOG_WARN("failed to decode ext value for collection elem", K(ret), K(node_idx_));
+            } else if (ObObj::is_ext_val(ext_val)) {
+              is_deleted = true; //deleted is serialized as make_max_obj (is_ext_val)
+              ++node_idx_;
+            } else if (pl::PL_RECORD_TYPE == elem_obj.get_meta().get_extend_type()) {
+              elem_is_record = true;
+              if (OB_FAIL(ObExprObjAccess::ExtraInfo::get_serialized_obj_payload(elem_slice, payload_slice))) {
+                LOG_WARN("failed to get elem payload from elem slice", K(ret), K(node_idx_));
+              }
+            }
+          }
+        }
+      }
+    } while (OB_SUCC(ret) && is_deleted);
+    if (OB_SUCC(ret)) {
+      if (elem_slice.is_null_) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
+          MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_).set_null();
+          MY_SPEC.column_exprs_.at(i)->set_evaluated_projected(eval_ctx_);
+        }
+      } else if (elem_is_record) {
+        if (payload_slice.is_null_) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
+            MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_).set_null();
+            MY_SPEC.column_exprs_.at(i)->set_evaluated_projected(eval_ctx_);
+          }
+        } else {
+          ObExprObjAccess::ExtraInfo::SerializedPLObjSlice record_slice(
+              payload_slice.data_, payload_slice.len_);
+          for (int64_t i = 0; OB_SUCC(ret) && i < col_count_; ++i) {
+            ObExprObjAccess::ExtraInfo::SerializedPLObjSlice attr_slice;
+            ObExprObjAccess::ExtraInfo::SqlUdtAccessIdx attr_idx;
+            attr_idx.is_const_ = true;
+            attr_idx.var_index_ = i;
+            if (OB_FAIL(dummy_info.locate_record_attr_slice(record_slice, attr_idx, attr_slice))) {
+              LOG_WARN("failed to locate record attr", K(ret), K(i));
+            } else if (attr_slice.is_null_) {
+              MY_SPEC.column_exprs_.at(i)->locate_datum_for_write(eval_ctx_).set_null();
+            } else {
+              ObExpr *col_expr = MY_SPEC.column_exprs_.at(i);
+              uint16_t sub_id = col_expr->obj_meta_.is_user_defined_sql_type()
+                                ? col_expr->obj_meta_.get_subschema_id()
+                                : ObInvalidSqlType;
+              ObObj obj_val;
+              if (OB_FAIL(ObExprObjAccess::ExtraInfo::deserialize_obj_value(
+                      ctx_.get_allocator(), attr_slice, obj_val, sub_id))) {
+                LOG_WARN("failed to deserialize attr value", K(ret), K(i));
+              } else {
+                ObExpr *col_expr = MY_SPEC.column_exprs_.at(i);
+                ObDatum &datum = col_expr->locate_datum_for_write(eval_ctx_);
+                if (obj_val.is_null()) {
+                  datum.set_null();
+                } else if (OB_FAIL(datum.from_obj(obj_val, col_expr->obj_datum_map_))) {
+                  LOG_WARN("failed to convert datum", K(ret), K(i));
+                } else if (is_lob_storage(obj_val.get_type()) &&
+                           OB_FAIL(ob_adjust_lob_datum(obj_val, col_expr->obj_meta_,
+                                                       col_expr->obj_datum_map_,
+                                                       ctx_.get_allocator(), datum))) {
+                  LOG_WARN("adjust lob datum failed", K(ret));
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              MY_SPEC.column_exprs_.at(i)->set_evaluated_projected(eval_ctx_);
+            }
+          }
+        }
+      } else {
+        ObExpr *col_expr = MY_SPEC.column_exprs_.at(0);
+        uint16_t sub_id = col_expr->obj_meta_.is_user_defined_sql_type()
+                          ? col_expr->obj_meta_.get_subschema_id()
+                          : ObInvalidSqlType;
+        ObObj obj_val;
+        if (OB_FAIL(ObExprObjAccess::ExtraInfo::deserialize_obj_value(
+                ctx_.get_allocator(), elem_slice, obj_val, sub_id))) {
+          LOG_WARN("failed to deserialize elem value", K(ret));
+        } else {
+          ObExpr *col_expr = MY_SPEC.column_exprs_.at(0);
+          ObDatum &datum = col_expr->locate_datum_for_write(eval_ctx_);
+          if (obj_val.is_null()) {
+            datum.set_null();
+          } else if (OB_FAIL(datum.from_obj(obj_val, col_expr->obj_datum_map_))) {
+            LOG_WARN("failed to convert datum", K(ret));
+          } else if (is_lob_storage(obj_val.get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(obj_val, col_expr->obj_meta_,
+                                                 col_expr->obj_datum_map_,
+                                                 ctx_.get_allocator(), datum))) {
+            LOG_WARN("adjust lob datum failed", K(ret));
+          }
+          if (OB_SUCC(ret)) {
+            col_expr->set_evaluated_projected(eval_ctx_);
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ++node_idx_;
       }
     }
   }

@@ -9949,6 +9949,22 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
       if (in_expr->get_udt_id() == elem_udt_id) {
         add_constructor = false;
       }
+    } else if (in_expr->get_result_type().is_common_user_defined_sql_type()
+               && in_expr->get_udt_id() == elem_udt_id) {
+      if (OB_FAIL(ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(ctx_->expr_factory_,
+                                                                 session,
+                                                                 in_expr))) {
+        LOG_WARN("failed to cast sql udt to pl udt", K(ret), K(elem_udt_id), KPC(in_expr));
+      } else {
+        multiset_stmt->get_select_item(0).expr_ = in_expr;
+        multiset_expr->get_column_types().reset();
+        if (OB_FAIL(multiset_expr->get_column_types().push_back(in_expr->get_result_type()))) {
+          LOG_WARN("failed to add result type", K(ret));
+        } else {
+          add_constructor = false;
+          trans_happened = true;
+        }
+      }
     }
   }
 
@@ -10030,6 +10046,7 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
         res_type.set_udt_id(object_type->get_user_type_id());
         object_expr->set_udt_id(object_type->get_user_type_id());
         object_expr->set_result_type(res_type);
+        object_expr->set_is_called_in_sql(false); // CAST(MULTISET ...) consumes PL extend elements; keep constructor on PL path.
         object_expr->set_func_name(object_type->get_name());
         object_expr->set_coll_schema_version(elem_info->get_schema_version());
         // Add udt info to dependency

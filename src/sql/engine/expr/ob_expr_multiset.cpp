@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_multiset.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "pl/ob_pl_type.h"
+#include "share/ob_cluster_version.h"
 #include "src/pl/ob_pl.h"
 
 namespace oceanbase
@@ -64,11 +67,35 @@ int ObExprMultiSet::calc_result_type2(ObExprResType &type,
                                     ObExprResType &type2,
                                     ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type_ctx);
   int ret = OB_SUCCESS;
   if (lib::is_oracle_mode()) {
-    if (type1.is_ext() && type2.is_ext()) {
-      type.set_ext();
+    ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+    ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+    if ((type1.is_ext() || type1.is_user_defined_sql_type())
+        && (type2.is_ext() || type2.is_user_defined_sql_type())) {
+      if (is_called_in_sql()
+          && !is_inner_pl_udt_id(type1.get_udt_id())
+          && !is_inner_pl_udt_id(type2.get_udt_id())
+          && OB_NOT_NULL(exec_ctx)
+          && pl::ObPLDataType::is_schema_udt(exec_ctx->get_sql_ctx()->schema_guard_, type1.get_udt_id())
+          && pl::ObPLDataType::is_schema_udt(exec_ctx->get_sql_ctx()->schema_guard_, type2.get_udt_id())
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+          && OB_NOT_NULL(session)
+          && !session->disable_sql_udt_deduce_in_pl()
+          && session->get_local_enable_pl_composite_as_sql_udt()) {
+        type.set_type(ObUserDefinedSQLType);
+        type.set_udt_id(type1.get_udt_id());
+        uint16_t subschema_id = ObInvalidSqlType;
+        if (OB_NOT_NULL(exec_ctx)) {
+          if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(type1.get_udt_id(), subschema_id))) {
+            LOG_WARN("failed to get subschema id", K(ret), K(type1.get_udt_id()));
+          } else {
+            type.set_sql_udt(subschema_id);
+          }
+        }
+      } else {
+        type.set_ext();
+      }
       type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
       type.set_calc_type(type1.get_calc_type());
@@ -970,8 +997,10 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
   if (OB_FAIL(expr.eval_param_value(ctx, datum1, datum2))) {
     LOG_WARN("failed to eval params", K(ret));
   } else if (lib::is_oracle_mode()
-             && ObExtendType == expr.args_[0]->datum_meta_.type_
-             && ObExtendType == expr.args_[1]->datum_meta_.type_) {
+             && (ObExtendType == expr.args_[0]->datum_meta_.type_
+                 || expr.args_[0]->obj_meta_.is_common_user_defined_sql_type())
+             && (ObExtendType == expr.args_[1]->datum_meta_.type_
+                 || expr.args_[1]->obj_meta_.is_common_user_defined_sql_type())) {
     ObObj obj1;
     ObObj obj2;
     if (OB_FAIL(datum1->to_obj(obj1, expr.args_[0]->obj_meta_))) {
@@ -979,6 +1008,30 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
     } else if (OB_FAIL(datum2->to_obj(obj2, expr.args_[1]->obj_meta_))) {
       LOG_WARN("failed to convert to obj", K(ret));
     } else {
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+      ObIAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
+      ObSEArray<ObObj, 2> tmp_sql_udt_exts;
+      ObObj pl_obj1;
+      ObObj pl_obj2;
+      if (obj1.is_common_user_defined_sql_type()) {
+        ObSqlUDTMeta udt_meta;
+        uint16_t subschema_id = obj1.get_meta().get_subschema_id();
+        OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta));
+        OZ (ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+            &ctx.exec_ctx_, pl_obj1, obj1, udt_meta, &tmp_alloc));
+        OZ (tmp_sql_udt_exts.push_back(pl_obj1));
+        if (OB_SUCC(ret)) { obj1 = pl_obj1; }
+      }
+      if (OB_SUCC(ret) && obj2.is_common_user_defined_sql_type()) {
+        ObSqlUDTMeta udt_meta;
+        uint16_t subschema_id = obj2.get_meta().get_subschema_id();
+        OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta));
+        OZ (ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+            &ctx.exec_ctx_, pl_obj2, obj2, udt_meta, &tmp_alloc));
+        OZ (tmp_sql_udt_exts.push_back(pl_obj2));
+        if (OB_SUCC(ret)) { obj2 = pl_obj2; }
+      }
+    if (OB_SUCC(ret)) {
       pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
       pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
       ObIAllocator &allocator = ctx.exec_ctx_.get_allocator();
@@ -1077,15 +1130,42 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
         }
       }
 
-      OZ(res.from_obj(result, expr.obj_datum_map_));
-      //Collection constructed here must be recorded and destructed at last
-      if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
-        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
-        int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
+      if (OB_SUCC(ret)
+          && expr.is_called_in_sql_
+          && expr.obj_meta_.is_user_defined_sql_type()) {
+        ObExprStrResAlloc expr_res_alloc(expr, ctx);
+        ObString res_str;
+        ObSqlUDTMeta sql_udt_meta;
+        uint16_t subschema_id = ObInvalidSqlType;
+        OZ (ctx.exec_ctx_.get_subschema_id_by_udt_id(coll->get_id(), subschema_id));
+        OZ (ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, sql_udt_meta));
+        OZ (ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(
+            expr_res_alloc, &ctx.exec_ctx_, res_str, result, sql_udt_meta));
+        if (OB_SUCC(ret)) {
+          if (res_str.empty()) {
+            res.set_null();
+          } else {
+            res.set_string(res_str);
+          }
+        }
+        pl::ObUserDefinedType::destruct_obj(result, nullptr);
+      } else {
+        OZ(res.from_obj(result, expr.obj_datum_map_));
+        if (OB_NOT_NULL(coll) && OB_NOT_NULL(coll->get_allocator())) {
+          sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+          int tmp_ret = pl_complex_type_mgr->complex_type_objects_.push_back(result);
+          if (OB_SUCCESS != tmp_ret) {
+            int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+            LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
+            ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          }
+        }
+      }
+    }
+      for (int64_t i = 0; i < tmp_sql_udt_exts.count(); ++i) {
+        int tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_sql_udt_exts.at(i), nullptr);
         if (OB_SUCCESS != tmp_ret) {
-          int tmp = pl::ObUserDefinedType::destruct_obj(result, nullptr);
-          LOG_WARN("fail to collect pl collection allocator, try to free memory", K(tmp_ret), K(tmp));
-          ret = OB_SUCCESS == ret ? tmp_ret : ret;
+          LOG_WARN("failed to destruct tmp sql udt extend", K(tmp_ret), K(i));
         }
       }
     }

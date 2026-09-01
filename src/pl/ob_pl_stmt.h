@@ -114,6 +114,8 @@ public:
 private:
 };
 
+typedef common::ObSEArray<std::pair<common::ObString, bool>, 4, common::ObIAllocator&> ObPLTriggerRefColsArray;
+
 class ObPLVar : public share::schema:: ObIRoutineParam
 {
 public:
@@ -158,8 +160,6 @@ public:
   inline bool is_default_expr_access_external_state() const { return is_default_expr_access_external_state_; }
   inline void set_is_from_overloaded_routine(bool val) { is_from_overloaded_routine_ = val; }
   inline bool is_from_overloaded_routine() const { return is_from_overloaded_routine_; }
-  inline ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() { return trigger_ref_cols_; };
-  inline const ObIArray<std::pair<ObString, bool>> &get_trigger_ref_cols() const { return trigger_ref_cols_; };
 
   TO_STRING_KV(K_(name),
                K_(type),
@@ -182,18 +182,14 @@ private:
   bool is_dup_declare_;
   bool is_referenced_;
   bool is_default_expr_access_external_state_;
-  // 对于 trigger 的入参 rowtype，body 中显示调用的列 <col_name, is_write>>
-  common::ObSEArray<std::pair<ObString, bool>, 4> trigger_ref_cols_;
   bool is_from_overloaded_routine_; // 是否是重载函数调用的参数
 };
 
 class ObPLSymbolTable
 {
 public:
-  ObPLSymbolTable(ObIAllocator &allocator) : variables_(allocator),
-                                             self_param_idx_(OB_INVALID_INDEX),
-                                             allocator_(allocator) {}
-  virtual ~ObPLSymbolTable() {}
+  ObPLSymbolTable(ObIAllocator &allocator);
+  virtual ~ObPLSymbolTable();
 
   inline int64_t get_count() const  { return variables_.count(); }
   inline const ObPLVar *get_symbol(int64_t idx) const { return idx < 0 || idx >= variables_.count() ? NULL : &variables_[idx]; }
@@ -207,6 +203,9 @@ public:
                  const bool is_dup_declare = false,
                  const bool has_access_external_state = false);
   int delete_symbol(int64_t symbol_idx);
+  const common::ObIArray<std::pair<common::ObString, bool>> &get_trigger_ref_cols(int64_t var_idx) const;
+  int get_or_alloc_trigger_ref_cols(int64_t var_idx,
+                                      common::ObIArray<std::pair<common::ObString, bool>> *&ref_cols);
 
   inline void set_self_param_idx() { self_param_idx_ = variables_.count() - 1; }
   inline int64_t get_self_param_idx() const { return self_param_idx_; }
@@ -227,8 +226,11 @@ public:
   TO_STRING_KV(K_(variables), K_(self_param_idx));
 
 private:
+  void free_trigger_ref_cols_at(int64_t var_idx);
   //所有输入输出参数，和PL体内使用的所有变量（包括游标，但是不包括condition，也不包括函数返回值和隐藏的ctx参数）,和ObPLFunction里的符号表一一对应
   ObPLSEArray<ObPLVar> variables_;
+  ObPLSEArray<ObPLTriggerRefColsArray*> trigger_ref_cols_table_;
+  ObPLTriggerRefColsArray empty_trigger_ref_cols_;
   int64_t self_param_idx_; // index of self_param
   common::ObIAllocator &allocator_;
 };
@@ -277,57 +279,62 @@ class ObPLLabelTable
 {
 public:
   enum ObPLLabelType {LABEL_INVALID, LABEL_BLOCK, LABEL_CONTROL};
-public:
-  ObPLLabelTable() : count_(0) {}
-  virtual ~ObPLLabelTable() {}
 
-  inline int64_t get_count() const  { return count_; }
-  inline const common::ObString *get_label(int64_t idx) const { return idx < 0 || idx >= count_ ? NULL : &(labels_[idx].label_); }
-  inline ObPLLabelType get_label_type(int64_t idx) const { return idx < 0 || idx >= count_ ? LABEL_INVALID : labels_[idx].type_; }
-  inline ObPLStmt *get_next_stmt(int64_t idx) const
-  {
-    return idx < 0 || idx >= count_ ? NULL : labels_[idx].next_stmt_;
-  }
-  inline void set_next_stmt(int64_t idx, ObPLStmt *stmt) {
-    if (idx >= 0 && idx < count_) {
-      labels_[idx].next_stmt_ = stmt;
-    }
-  }
-  inline void set_end_flag(int64_t idx, bool end_flag) {
-    if (idx >= 0 && idx < count_) {
-      labels_[idx].is_end_ = end_flag;
-    }
-  }
-  inline bool is_ended(int64_t idx) const {
-    return (idx >= 0 && idx < count_) ? labels_[idx].is_end_ : false;
-  }
-  inline bool get_is_goto_dst(int64_t idx) const {
-    return (idx >= 0 && idx < count_) ? labels_[idx].is_goto_dst_ : false;
-  }
-  inline void set_is_goto_dst(int64_t idx, bool flag) {
-    if (idx >= 0 && idx < count_) {
-      labels_[idx].is_goto_dst_ = flag;
-    }
-  }
-  int add_label(const common::ObString &name, const ObPLLabelType &type, ObPLStmt *stmt);
-
-  TO_STRING_KV(K_(count), K_(labels));
-
-private:
-  int64_t count_;
-  //所有声明的标签（block的标签和普通语句一样，放在父block里）,和ObPLFunction里的标签表一一对应
   typedef struct ObPLLabel
   {
     ObPLLabel() : label_(), type_(LABEL_INVALID), next_stmt_(NULL), is_goto_dst_(false), is_end_(false) {}
     TO_STRING_KV(K_(label), K_(type), K_(next_stmt), K_(is_goto_dst), K_(is_end));
     common::ObString label_;
     ObPLLabelType type_;
-    // 和label关联的stmt
     ObPLStmt *next_stmt_;
     bool is_goto_dst_;
     bool is_end_;
   } ObPLLabel;
-  ObPLLabel labels_[FUNC_MAX_LABELS];
+
+public:
+  ObPLLabelTable(common::ObIAllocator &allocator) : labels_(allocator) {}
+  virtual ~ObPLLabelTable() {}
+
+  inline int64_t get_count() const  { return labels_.count(); }
+  inline const common::ObString *get_label(int64_t idx) const
+  {
+    return idx < 0 || idx >= labels_.count() ? NULL : &(labels_.at(idx).label_);
+  }
+  inline ObPLLabelType get_label_type(int64_t idx) const
+  {
+    return idx < 0 || idx >= labels_.count() ? LABEL_INVALID : labels_.at(idx).type_;
+  }
+  inline ObPLStmt *get_next_stmt(int64_t idx) const
+  {
+    return idx < 0 || idx >= labels_.count() ? NULL : labels_.at(idx).next_stmt_;
+  }
+  inline void set_next_stmt(int64_t idx, ObPLStmt *stmt) {
+    if (idx >= 0 && idx < labels_.count()) {
+      labels_.at(idx).next_stmt_ = stmt;
+    }
+  }
+  inline void set_end_flag(int64_t idx, bool end_flag) {
+    if (idx >= 0 && idx < labels_.count()) {
+      labels_.at(idx).is_end_ = end_flag;
+    }
+  }
+  inline bool is_ended(int64_t idx) const {
+    return (idx >= 0 && idx < labels_.count()) ? labels_.at(idx).is_end_ : false;
+  }
+  inline bool get_is_goto_dst(int64_t idx) const {
+    return (idx >= 0 && idx < labels_.count()) ? labels_.at(idx).is_goto_dst_ : false;
+  }
+  inline void set_is_goto_dst(int64_t idx, bool flag) {
+    if (idx >= 0 && idx < labels_.count()) {
+      labels_.at(idx).is_goto_dst_ = flag;
+    }
+  }
+  int add_label(const common::ObString &name, const ObPLLabelType &type, ObPLStmt *stmt);
+
+  TO_STRING_KV(K_(labels));
+
+private:
+  ObPLSEArray<ObPLLabel> labels_;
 };
 
 class ObPLUserTypeTable
@@ -467,21 +474,26 @@ public:
 class ObPLConditionTable
 {
 public:
-  ObPLConditionTable() : count_(0) {}
+  ObPLConditionTable(common::ObIAllocator &allocator) : conditions_(allocator) {}
   virtual ~ObPLConditionTable() {}
 
-  inline int64_t get_count() const  { return count_; }
-  inline const ObPLCondition *get_conditions() const  { return conditions_; }
-  inline const ObPLCondition *get_condition(int64_t idx) const { return idx < 0 || idx >= count_ ? NULL : &conditions_[idx]; }
+  inline int64_t get_count() const { return conditions_.count(); }
+  inline const ObPLCondition *get_conditions() const
+  {
+    return conditions_.count() == 0 ? NULL : &conditions_.at(0);
+  }
+  inline const ObPLCondition *get_condition(int64_t idx) const
+  {
+    return idx < 0 || idx >= conditions_.count() ? NULL : &conditions_.at(idx);
+  }
 
   int init(ObPLConditionTable &parent_condition_table);
   int add_condition(const common::ObString &name, const ObPLConditionValue &value);
 
-  TO_STRING_KV(K_(count), K_(conditions));
+  TO_STRING_KV(K_(conditions));
 
 private:
-  int64_t count_;
-  ObPLCondition conditions_[FUNC_MAX_CONDITIONS];
+  ObPLSEArray<ObPLCondition> conditions_;
 };
 
 class ObPLSql
@@ -1630,8 +1642,8 @@ public:
        symbol_table_(allocator),
        symbol_debuginfo_table_(allocator),
        user_type_table_(),
-       label_table_(),
-       condition_table_(),
+       label_table_(allocator),
+       condition_table_(allocator),
        cursor_table_(allocator),
        routine_table_(allocator),
        dependency_table_(),
@@ -1672,7 +1684,7 @@ public:
   inline const sql::ObRawExpr* get_expr(int64_t i) const { return exprs_.at(i); }
   inline sql::ObRawExpr* get_expr(int64_t i) { return exprs_.at(i); }
   int set_exprs(common::ObIArray<sql::ObRawExpr*> &exprs);
-  int add_expr(sql::ObRawExpr* expr, bool is_simple_integer = false);
+  int add_expr(sql::ObRawExpr* expr, bool is_simple_integer = false, bool can_simple_calc = true);
   int add_exprs(common::ObIArray<sql::ObRawExpr*> &exprs);
   inline void set_expr(sql::ObRawExpr* expr, int64_t i) { exprs_.at(i) = expr; }
   inline int64_t get_expr_count() const { return exprs_.count(); }
@@ -1932,12 +1944,12 @@ enum ObPLStmtType
 class ObPLStmt
 {
 public:
-  ObPLStmt() : type_(INVALID_PL_STMT), loc_(),
-      level_(OB_INVALID_INDEX), label_cnt_(0), parent_(NULL) {}
-  ObPLStmt(ObPLStmtType type) : type_(type), loc_(),
-      level_(OB_INVALID_INDEX), label_cnt_(0), parent_(NULL) {}
-  ObPLStmt(ObPLStmtBlock *parent) : type_(INVALID_PL_STMT), loc_(),
-    level_(OB_INVALID_INDEX), label_cnt_(0), parent_(parent) {}
+  ObPLStmt(common::ObIAllocator &allocator) : type_(INVALID_PL_STMT), loc_(),
+      level_(OB_INVALID_INDEX), labels_(allocator), parent_(NULL) {}
+  ObPLStmt(ObPLStmtType type, common::ObIAllocator &allocator) : type_(type), loc_(),
+      level_(OB_INVALID_INDEX), labels_(allocator), parent_(NULL) {}
+  ObPLStmt(ObPLStmtBlock *parent, common::ObIAllocator &allocator) : type_(INVALID_PL_STMT), loc_(),
+    level_(OB_INVALID_INDEX), labels_(allocator), parent_(parent) {}
   virtual ~ObPLStmt() {}
 
   virtual int accept(ObPLStmtVisitor &visitor) const = 0;
@@ -1954,11 +1966,11 @@ public:
   inline int64_t get_stmt_id() const { return loc_.loc_; }
   inline int64_t get_level() const { return level_; }
   inline void set_level(int64_t level) { level_ = level; }
-  inline int64_t get_label_cnt() const { return label_cnt_; }
-  inline int64_t get_label_idx(int64_t idx) const { return (idx >= 0 && idx < label_cnt_) ? labels_[idx] : OB_INVALID_INDEX; }
+  inline int64_t get_label_cnt() const { return labels_.count(); }
+  inline int64_t get_label_idx(int64_t idx) const { return (idx >= 0 && idx < labels_.count()) ? labels_.at(idx) : OB_INVALID_INDEX; }
   const common::ObString* get_label(int64_t idx) const;
   int set_label_idx(int64_t idx);
-  inline bool has_label() const { return label_cnt_ > 0; }
+  inline bool has_label() const { return labels_.count() > 0; }
   inline void set_block(const ObPLStmtBlock *block) { parent_ = block;}
   inline const ObPLStmtBlock *get_block() const { return parent_; }
   const ObPLBlockNS *get_namespace() const;
@@ -1985,9 +1997,9 @@ public:
   inline bool get_is_goto_dst() const
   {
     bool ret = false;
-    if (OB_NOT_NULL(get_label_table()) && label_cnt_ > 0) {
-      for (int64_t i = 0; !ret && i < label_cnt_; ++i) {
-        ret = get_label_table()->get_is_goto_dst(labels_[i]);
+    if (OB_NOT_NULL(get_label_table()) && labels_.count() > 0) {
+      for (int64_t i = 0; !ret && i < labels_.count(); ++i) {
+        ret = get_label_table()->get_is_goto_dst(labels_.at(i));
       }
     }
     return ret;
@@ -1995,11 +2007,11 @@ public:
   inline const common::ObString* get_goto_label() const
   {
     const common::ObString *ret = NULL;
-    if (OB_NOT_NULL(get_label_table()) && label_cnt_ > 0) {
+    if (OB_NOT_NULL(get_label_table()) && labels_.count() > 0) {
       int64_t i = 0;
-      for (; i < label_cnt_; ++i) {
-        if (get_label_table()->get_is_goto_dst(labels_[i])) {
-          ret = get_label_table()->get_label(labels_[i]);
+      for (; i < labels_.count(); ++i) {
+        if (get_label_table()->get_is_goto_dst(labels_.at(i))) {
+          ret = get_label_table()->get_label(labels_.at(i));
           break;
         }
       }
@@ -2013,8 +2025,7 @@ protected:
   SourceLocation loc_;
   int64_t level_;
   int64_t label_;
-  int64_t label_cnt_;
-  int64_t labels_[FUNC_MAX_LABELS]; // stmt may has multi lables, like <<a>><<b>>begin null; end;
+  ObPLSEArray<int64_t> labels_; // stmt may has multi labels, like <<a>><<b>>begin null; end;
   const ObPLStmtBlock *parent_;
 };
 
@@ -2024,7 +2035,7 @@ class ObPLStmtBlock : public ObPLStmt
 {
 public:
   ObPLStmtBlock(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_BLOCK),
+    : ObPLStmt(PL_BLOCK, allocator),
       stmts_(allocator),
       forloop_cursor_stmts_(allocator),
       ns_(allocator, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
@@ -2044,7 +2055,7 @@ public:
                 common::ObIArray<sql::ObRawExpr*> *exprs,
                 common::ObIArray<sql::ObRawExpr*> *obj_access_exprs,
                 ObPLExternalNS *external_ns)
-    : ObPLStmt(PL_BLOCK),
+    : ObPLStmt(PL_BLOCK, allocator),
       stmts_(allocator),
       forloop_cursor_stmts_(allocator),
       ns_(allocator, pre_ns, symbol_table, label_table, condition_table, cursor_table, routine_table, exprs, obj_access_exprs, external_ns),
@@ -2141,7 +2152,7 @@ class ObPLDeclareVarStmt : public ObPLStmt
 {
 public:
   ObPLDeclareVarStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_VAR),
+    : ObPLStmt(PL_VAR, allocator),
       idx_(allocator),
       default_(OB_INVALID_INDEX) {}
   virtual ~ObPLDeclareVarStmt() {}
@@ -2166,8 +2177,8 @@ private:
 class ObPLDeclareUserTypeStmt : public ObPLStmt
 {
 public:
-  ObPLDeclareUserTypeStmt()
-    : ObPLStmt(PL_USER_TYPE),
+  ObPLDeclareUserTypeStmt(common::ObIAllocator &allocator)
+    : ObPLStmt(PL_USER_TYPE, allocator),
       user_type_(NULL) {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2182,7 +2193,7 @@ class ObPLAssignStmt : public ObPLStmt
 {
 public:
   ObPLAssignStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_ASSIGN), into_(allocator), value_(allocator) {}
+    : ObPLStmt(PL_ASSIGN, allocator), into_(allocator), value_(allocator) {}
   virtual ~ObPLAssignStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2219,7 +2230,7 @@ public:
 class ObPLIfStmt : public ObPLStmt
 {
 public:
-  ObPLIfStmt() : ObPLStmt(PL_IF), cond_(OB_INVALID_INDEX), then_(NULL), else_(NULL) {}
+  ObPLIfStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_IF, allocator), cond_(OB_INVALID_INDEX), then_(NULL), else_(NULL) {}
   virtual ~ObPLIfStmt() {
     if (NULL != then_) {
       then_->~ObPLStmtBlock();
@@ -2254,7 +2265,7 @@ private:
 class ObPLCaseStmt : public ObPLStmt {
 public:
   ObPLCaseStmt(common::ObIAllocator &allocator)
-      : ObPLStmt(PL_CASE),
+      : ObPLStmt(PL_CASE, allocator),
         case_expr_idx_(OB_INVALID_INDEX), case_var_idx_(OB_INVALID_INDEX),
         when_(allocator), else_(nullptr) {}
   virtual ~ObPLCaseStmt() {
@@ -2387,7 +2398,7 @@ protected:
 class ObPLLoopControl : public ObPLStmt
 {
 public:
-  ObPLLoopControl(ObPLStmtType type) : ObPLStmt(type), next_label_(), cond_(OB_INVALID_INDEX) {}
+  ObPLLoopControl(ObPLStmtType type, common::ObIAllocator &allocator) : ObPLStmt(type, allocator), next_label_(), cond_(OB_INVALID_INDEX) {}
   virtual ~ObPLLoopControl() {}
 
   inline const common::ObString &get_next_label() const { return next_label_; }
@@ -2404,7 +2415,7 @@ private:
 class ObPLLeaveStmt : public ObPLLoopControl
 {
 public:
-  ObPLLeaveStmt() : ObPLLoopControl(PL_LEAVE) {}
+  ObPLLeaveStmt(common::ObIAllocator &allocator) : ObPLLoopControl(PL_LEAVE, allocator) {}
   virtual ~ObPLLeaveStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2416,7 +2427,7 @@ private:
 class ObPLIterateStmt : public ObPLLoopControl
 {
 public:
-  ObPLIterateStmt() : ObPLLoopControl(PL_ITERATE) {}
+  ObPLIterateStmt(common::ObIAllocator &allocator) : ObPLLoopControl(PL_ITERATE, allocator) {}
   virtual ~ObPLIterateStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2428,7 +2439,7 @@ private:
 class ObPLLoop : public ObPLStmt
 {
 public:
-  ObPLLoop(ObPLStmtType type) : ObPLStmt(type), body_(NULL) {}
+  ObPLLoop(ObPLStmtType type, common::ObIAllocator &allocator) : ObPLStmt(type, allocator), body_(NULL) {}
   virtual ~ObPLLoop() {
     if (NULL != body_) {
       body_->~ObPLStmtBlock();
@@ -2450,7 +2461,7 @@ private:
 class ObPLCondLoop : public ObPLLoop
 {
 public:
-  ObPLCondLoop(ObPLStmtType type) : ObPLLoop(type), cond_(OB_INVALID_INDEX) {}
+  ObPLCondLoop(ObPLStmtType type, common::ObIAllocator &allocator) : ObPLLoop(type, allocator), cond_(OB_INVALID_INDEX) {}
   virtual ~ObPLCondLoop() {}
 
   inline int64_t get_cond() const { return cond_; }
@@ -2464,7 +2475,7 @@ private:
 class ObPLWhileStmt : public ObPLCondLoop
 {
 public:
-  ObPLWhileStmt() : ObPLCondLoop(PL_WHILE) {}
+  ObPLWhileStmt(common::ObIAllocator &allocator) : ObPLCondLoop(PL_WHILE, allocator) {}
   virtual ~ObPLWhileStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2505,14 +2516,14 @@ public:
   };
 
 public:
-  ObPLForLoopStmt()
-    : ObPLLoop(PL_FOR_LOOP),
+  ObPLForLoopStmt(common::ObIAllocator &allocator)
+    : ObPLLoop(PL_FOR_LOOP, allocator),
       reverse_(false),
       is_forall_(false),
       ident_idx_(OB_INVALID_INDEX),
       bound_() {}
-  ObPLForLoopStmt(ObPLStmtType type)
-    : ObPLLoop(type),
+  ObPLForLoopStmt(ObPLStmtType type, common::ObIAllocator &allocator)
+    : ObPLLoop(type, allocator),
       reverse_(false),
       is_forall_(false),
       ident_idx_(OB_INVALID_INDEX),
@@ -2576,7 +2587,7 @@ class ObPLCursorForLoopStmt : public ObPLLoop, public ObPLInto
 {
 public:
   ObPLCursorForLoopStmt(common::ObIAllocator &allocator)
-    : ObPLLoop(PL_CURSOR_FOR_LOOP),
+    : ObPLLoop(PL_CURSOR_FOR_LOOP, allocator),
       ObPLInto(allocator),
       index_idx_(OB_INVALID_INDEX),
       cursor_idx_(OB_INVALID_INDEX),
@@ -2671,8 +2682,8 @@ class ObPLExecuteStmt;
 class ObPLForAllStmt : public ObPLForLoopStmt
 {
 public:
-  ObPLForAllStmt()
-    : ObPLForLoopStmt(PL_FORALL),
+  ObPLForAllStmt(common::ObIAllocator &allocator)
+    : ObPLForLoopStmt(PL_FORALL, allocator),
       save_exception_(false),
       binding_array_(false),
       stmt_(NULL),
@@ -2712,7 +2723,7 @@ private:
 class ObPLRepeatStmt : public ObPLCondLoop
 {
 public:
-  ObPLRepeatStmt() : ObPLCondLoop(PL_REPEAT) {}
+  ObPLRepeatStmt(common::ObIAllocator &allocator) : ObPLCondLoop(PL_REPEAT, allocator) {}
   virtual ~ObPLRepeatStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2724,7 +2735,7 @@ private:
 class ObPLLoopStmt : public ObPLLoop
 {
 public:
-  ObPLLoopStmt() : ObPLLoop(PL_LOOP) {}
+  ObPLLoopStmt(common::ObIAllocator &allocator) : ObPLLoop(PL_LOOP, allocator) {}
   virtual ~ObPLLoopStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2736,7 +2747,7 @@ private:
 class ObPLReturnStmt : public ObPLStmt
 {
 public:
-  ObPLReturnStmt() : ObPLStmt(PL_RETURN), ret_(OB_INVALID_INDEX), ref_cursor_type_(false) {}
+  ObPLReturnStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_RETURN, allocator), ret_(OB_INVALID_INDEX), ref_cursor_type_(false) {}
   virtual ~ObPLReturnStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2758,7 +2769,7 @@ class ObPLSqlStmt : public ObPLStmt, public ObPLSql, public ObPLInto
 {
 public:
   ObPLSqlStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_SQL), ObPLSql(allocator), ObPLInto(allocator) {}
+    : ObPLStmt(PL_SQL, allocator), ObPLSql(allocator), ObPLInto(allocator) {}
   virtual ~ObPLSqlStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2826,7 +2837,7 @@ class ObPLExecuteStmt : public ObPLStmt, public ObPLInto, public ObPLUsing
 {
 public:
   ObPLExecuteStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_EXECUTE),
+    : ObPLStmt(PL_EXECUTE, allocator),
       ObPLInto(allocator),
       ObPLUsing(allocator),
       sql_(OB_INVALID_INDEX), is_returning_(false), forall_sql_(false), array_binding_params_(allocator) {}
@@ -2855,8 +2866,8 @@ private:
 class ObPLExtendStmt : public ObPLStmt
 {
 public:
-  ObPLExtendStmt()
-    : ObPLStmt(PL_EXECUTE), extend_(OB_INVALID_INDEX), n_(OB_INVALID_INDEX), i_(OB_INVALID_INDEX) {}
+  ObPLExtendStmt(common::ObIAllocator &allocator)
+    : ObPLStmt(PL_EXECUTE, allocator), extend_(OB_INVALID_INDEX), n_(OB_INVALID_INDEX), i_(OB_INVALID_INDEX) {}
   virtual ~ObPLExtendStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -2879,8 +2890,8 @@ private:
 class ObPLDeleteStmt : public ObPLStmt
 {
 public:
-  ObPLDeleteStmt() :
-    ObPLStmt(PL_DELETE),
+  ObPLDeleteStmt(common::ObIAllocator &allocator) :
+    ObPLStmt(PL_DELETE, allocator),
     delete_(OB_INVALID_INDEX),
     m_(OB_INVALID_INDEX),
     n_(OB_INVALID_INDEX) {}
@@ -2906,8 +2917,8 @@ private:
 class ObPLTrimStmt : public ObPLStmt
 {
 public:
-  ObPLTrimStmt() :
-  ObPLStmt(PL_TRIM),
+  ObPLTrimStmt(common::ObIAllocator &allocator) :
+  ObPLStmt(PL_TRIM, allocator),
   trim_(OB_INVALID_INDEX),
   n_(OB_INVALID_INDEX) {}
 
@@ -2930,7 +2941,7 @@ private:
 class ObPLDeclareCondStmt : public ObPLStmt
 {
 public:
-  ObPLDeclareCondStmt() : ObPLStmt(PL_COND) {}
+  ObPLDeclareCondStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_COND, allocator) {}
   virtual ~ObPLDeclareCondStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3005,7 +3016,7 @@ public:
   };
 
 public:
-  ObPLDeclareHandlerStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_HANDLER), handlers_(allocator) {}
+  ObPLDeclareHandlerStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_HANDLER, allocator), handlers_(allocator) {}
   virtual ~ObPLDeclareHandlerStmt() {
     for (int64_t i = 0; i < handlers_.count(); ++i) {
       if (NULL != handlers_.at(i).get_desc() && !handlers_.at(i).get_desc()->is_continue()) {
@@ -3057,8 +3068,8 @@ class ObPLSignalStmt : public ObPLStmt
   };
 
 public:
-  ObPLSignalStmt()
-    : ObPLStmt(PL_SIGNAL),
+  ObPLSignalStmt(common::ObIAllocator &allocator)
+    : ObPLStmt(PL_SIGNAL, allocator),
       value_(),
       item_to_expr_idx_(),
       ob_error_code_(0),
@@ -3107,7 +3118,7 @@ class ObPLRaiseAppErrorStmt : public ObPLStmt
 {
 public:
   ObPLRaiseAppErrorStmt(common::ObIAllocator &allocator)
-      : ObPLStmt(PL_RAISE_APPLICATION_ERROR), params_(allocator) {}
+      : ObPLStmt(PL_RAISE_APPLICATION_ERROR, allocator), params_(allocator) {}
   virtual ~ObPLRaiseAppErrorStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3125,7 +3136,7 @@ class ObPLCallStmt : public ObPLStmt
 {
 public:
   ObPLCallStmt(common::ObIAllocator &allocator)
-      : ObPLStmt(PL_CALL),
+      : ObPLStmt(PL_CALL, allocator),
         invoker_id_(common::OB_INVALID_ID),
         package_id_(common::OB_INVALID_ID),
         proc_id_(common::OB_INVALID_ID),
@@ -3190,7 +3201,7 @@ class ObPLInnerCallStmt : public ObPLStmt
 {
 public:
   ObPLInnerCallStmt(common::ObIAllocator &allocator)
-      : ObPLStmt(PL_INNER_CALL),
+      : ObPLStmt(PL_INNER_CALL, allocator),
         package_id_(common::OB_INVALID_ID),
         proc_id_(common::OB_INVALID_ID),
         params_(allocator) {}
@@ -3221,7 +3232,7 @@ private:
 class ObPLDeclareCursorStmt : public ObPLStmt
 {
 public:
-  ObPLDeclareCursorStmt() : ObPLStmt(PL_CURSOR), cur_idx_(common::OB_INVALID_INDEX), default_(OB_INVALID_INDEX) {}
+  ObPLDeclareCursorStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_CURSOR, allocator), cur_idx_(common::OB_INVALID_INDEX), default_(OB_INVALID_INDEX) {}
   virtual ~ObPLDeclareCursorStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3246,7 +3257,7 @@ class ObPLOpenStmt : public ObPLStmt
 {
 public:
   ObPLOpenStmt(common::ObIAllocator &allocator, ObPLStmtType type = PL_OPEN)
-      : ObPLStmt(type),
+      : ObPLStmt(type, allocator),
         cur_idx_(common::OB_INVALID_INDEX),
         params_(allocator) {}
   virtual ~ObPLOpenStmt() {}
@@ -3324,7 +3335,7 @@ class ObPLFetchStmt : public ObPLStmt, public ObPLInto
 {
 public:
   ObPLFetchStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_FETCH),
+    : ObPLStmt(PL_FETCH, allocator),
       ObPLInto(allocator),
       pkg_id_(OB_INVALID_ID),
       routine_id_(OB_INVALID_ID),
@@ -3374,8 +3385,8 @@ private:
 class ObPLCloseStmt : public ObPLStmt
 {
 public:
-  ObPLCloseStmt()
-    : ObPLStmt(PL_CLOSE),
+  ObPLCloseStmt(common::ObIAllocator &allocator)
+    : ObPLStmt(PL_CLOSE, allocator),
     pkg_id_(OB_INVALID_ID),
     routine_id_(OB_INVALID_ID),
     idx_(common::OB_INVALID_INDEX) {}
@@ -3405,7 +3416,7 @@ private:
 class ObPLNullStmt : public ObPLStmt
 {
 public:
-  ObPLNullStmt() : ObPLStmt(PL_NULL) {}
+  ObPLNullStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_NULL, allocator) {}
   virtual ~ObPLNullStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3419,7 +3430,7 @@ private:
 class ObPLPipeRowStmt : public ObPLStmt
 {
 public:
-  ObPLPipeRowStmt() : ObPLStmt(PL_PIPE_ROW), row_(OB_INVALID_INDEX), pipe_type_() {}
+  ObPLPipeRowStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_PIPE_ROW, allocator), row_(OB_INVALID_INDEX), pipe_type_() {}
   virtual ~ObPLPipeRowStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3440,8 +3451,8 @@ private:
 class ObPLRoutineDefStmt : public ObPLStmt
 {
 public:
-  ObPLRoutineDefStmt()
-      : ObPLStmt(PL_ROUTINE_DEF), type_(INVALID_PROC_TYPE),
+  ObPLRoutineDefStmt(common::ObIAllocator &allocator)
+      : ObPLStmt(PL_ROUTINE_DEF, allocator), type_(INVALID_PROC_TYPE),
         idx_(common::OB_INVALID_INDEX) {}
   virtual ~ObPLRoutineDefStmt() {}
 
@@ -3460,8 +3471,8 @@ private:
 class ObPLRoutineDeclStmt : public ObPLStmt
 {
 public:
-  ObPLRoutineDeclStmt()
-      : ObPLStmt(PL_ROUTINE_DECL), type_(INVALID_PROC_TYPE),
+  ObPLRoutineDeclStmt(common::ObIAllocator &allocator)
+      : ObPLStmt(PL_ROUTINE_DECL, allocator), type_(INVALID_PROC_TYPE),
         idx_(common::OB_INVALID_INDEX) {}
   virtual ~ObPLRoutineDeclStmt() {}
 
@@ -3500,7 +3511,7 @@ class ObPLGotoStmt : public ObPLStmt
 {
 public:
   ObPLGotoStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_GOTO),
+    : ObPLStmt(PL_GOTO, allocator),
     dst_stmt_(NULL),
     cursor_stmts_(allocator),
     cursor_infos_(allocator),
@@ -3552,7 +3563,7 @@ private:
 class ObPLInterfaceStmt : public ObPLStmt
 {
 public:
-  ObPLInterfaceStmt() : ObPLStmt(PL_INTERFACE), entry_(0) {}
+  ObPLInterfaceStmt(common::ObIAllocator &allocator) : ObPLStmt(PL_INTERFACE, allocator), entry_(0) {}
   virtual ~ObPLInterfaceStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;
@@ -3570,7 +3581,7 @@ class ObPLDoStmt : public ObPLStmt
 {
 public:
   ObPLDoStmt(common::ObIAllocator &allocator)
-    : ObPLStmt(PL_DO), value_(allocator) {}
+    : ObPLStmt(PL_DO, allocator), value_(allocator) {}
   virtual ~ObPLDoStmt() {}
 
   int accept(ObPLStmtVisitor &visitor) const;

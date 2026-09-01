@@ -18,6 +18,10 @@
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 #include "pl/ob_pl_resolver.h"
 #include "sql/engine/expr/vector_cast/vector_cast.h"
+#include "share/ob_cluster_version.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "pl/ob_pl_type.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -757,36 +761,66 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
   ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+  ObRawExpr *cast_raw_expr = type_ctx.get_raw_expr();
+  ObRawExpr *src_expr = OB_NOT_NULL(cast_raw_expr) ? cast_raw_expr->get_param_expr(0) : NULL;
+  const bool is_multiset_cast = OB_NOT_NULL(src_expr) && src_expr->is_multiset_expr();
+  const bool is_explicit_cast = OB_NOT_NULL(cast_raw_expr) && CM_IS_EXPLICIT_CAST(cast_raw_expr->get_cast_mode());
+  if (dst_type.is_ext()
+      && is_called_in_sql()
+      && !is_multiset_cast
+      && is_explicit_cast) {
+    const uint64_t dst_udt_id = dst_type.get_udt_id();
+    if (dst_udt_id != OB_INVALID_ID
+        && !is_inner_pl_udt_id(dst_udt_id)
+        && OB_NOT_NULL(exec_ctx)
+        && pl::ObPLDataType::is_schema_udt(exec_ctx->get_sql_ctx()->schema_guard_, dst_udt_id)
+        && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+        && OB_NOT_NULL(session)
+        && !session->disable_sql_udt_deduce_in_pl()
+        && session->get_local_enable_pl_composite_as_sql_udt()) {
+      dst_type.set_type(ObUserDefinedSQLType);
+    }
+  }
   if (src_type.is_ext()) {
     if (dst_type.is_user_defined_sql_type() || dst_type.is_collection_sql_type()) {
       // phy_plan_ctx_ may not exist during deduce,
       // save subschema mapping on sql_ctx_ before phy_plan ready?
       const uint64_t udt_type_id = src_type.get_udt_id();
+      const uint64_t dst_udt_id = dst_type.get_udt_id();
       uint16_t subschema_id = ObMaxSystemUDTSqlType;
 
-      if (udt_type_id == T_OBJ_XML) {
-        subschema_id = 0;
-      } else if (OB_ISNULL(exec_ctx)) {
-        ret = OB_BAD_NULL_ERROR;
-        LOG_WARN("need ctx to get subschema mapping",
-                 K(ret), K(src_type), K(dst_type), KP(session), KP(exec_ctx));
-      } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_type_id, subschema_id))) {
-        LOG_WARN("failed to get subshcema_meta_info",
-                 K(ret), K(src_type), K(dst_type), K(udt_type_id));
-      } else if (dst_type.get_udt_id() != src_type.get_udt_id()) {
-        ret = OB_ERR_EXPRESSION_WRONG_TYPE;
-        LOG_WARN("udt id mismarch", K(ret), K(src_type), K(dst_type),
-                 K(dst_type.get_udt_id()), K(src_type.get_udt_id()));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (subschema_id == ObMaxSystemUDTSqlType) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("cast unsupported pl udt type to sql udt type",
-                 K(ret), K(src_type), K(dst_type), K(udt_type_id));
+      if (udt_type_id == T_OBJ_XML && dst_udt_id == T_OBJ_XML) {
+        dst_type.set_subschema_id(0);
+        dst_type.set_udt_id(T_OBJ_XML);
       } else {
-        dst_type.set_subschema_id(subschema_id);
-        dst_type.set_udt_id(udt_type_id);
+        if (udt_type_id != dst_udt_id) {
+          if (!is_explicit_cast) {
+            ret = OB_ERR_EXPRESSION_WRONG_TYPE;
+            LOG_WARN("udt id mismarch", K(ret), K(src_type), K(dst_type),
+                      K(dst_udt_id), K(udt_type_id));
+          } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())
+                      || OB_ISNULL(exec_ctx->get_sql_ctx()->schema_guard_)) {
+            ret = OB_BAD_NULL_ERROR;
+            LOG_WARN("need schema guard to check collection cast", K(ret), K(udt_type_id), K(dst_udt_id));
+          } else if (OB_FAIL(ObRawExprUtils::check_collection_cast(udt_type_id,
+                                                                      dst_udt_id,
+                                                                      *exec_ctx->get_sql_ctx()->schema_guard_))) {
+            LOG_WARN("udt cast is not compatible", K(ret), K(src_type), K(dst_type),
+                      K(dst_udt_id), K(udt_type_id));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(dst_udt_id, subschema_id))) {
+          LOG_WARN("failed to get subshcema_meta_info",
+                   K(ret), K(src_type), K(dst_type), K(dst_udt_id));
+        } else if (subschema_id == ObMaxSystemUDTSqlType) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("cast unsupported pl udt type to sql udt type",
+                   K(ret), K(src_type), K(dst_type));
+        } else {
+          dst_type.set_subschema_id(subschema_id);
+          dst_type.set_udt_id(dst_udt_id);
+        }
       }
     } else if (dst_type.is_character_type() && !is_called_in_sql()) {
       ret = OB_ERR_EXPRESSION_WRONG_TYPE;
@@ -842,9 +876,22 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
           udt_id = dst_udt_id;
         }
       } else if (dst_udt_id != src_udt_id) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
-                 K(dst_udt_id), K(src_udt_id));
+        if (!is_explicit_cast) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
+                   K(dst_udt_id), K(src_udt_id));
+        } else if (OB_ISNULL(exec_ctx->get_sql_ctx())
+                   || OB_ISNULL(exec_ctx->get_sql_ctx()->schema_guard_)) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("need schema guard to check collection cast", K(ret), K(src_udt_id), K(dst_udt_id));
+        } else if (OB_FAIL(ObRawExprUtils::check_collection_cast(src_udt_id,
+                                                                 dst_udt_id,
+                                                                 *exec_ctx->get_sql_ctx()->schema_guard_))) {
+          LOG_WARN("udt cast is not compatible", K(ret), K(src_type), K(dst_type),
+                   K(dst_udt_id), K(src_udt_id));
+        } else {
+          udt_id = dst_udt_id;
+        }
       } else {
         udt_id = udt_meta.udt_id_;
       }
@@ -858,12 +905,31 @@ int ObExprCast::adjust_udt_cast_type(const ObExprResType &src_type,
         }
       }
     } else if (dst_type.is_user_defined_sql_type()) {
-      if (dst_udt_id != src_udt_id) {
+      if (dst_udt_id == src_udt_id) {
+        dst_type.set_subschema_id(subschema_id);
+      } else if (!is_explicit_cast) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type),
                  K(dst_udt_id), K(src_udt_id));
+      } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_sql_ctx())
+                 || OB_ISNULL(exec_ctx->get_sql_ctx()->schema_guard_)) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("need schema guard to check collection cast", K(ret), K(src_udt_id), K(dst_udt_id));
+      } else if (OB_FAIL(ObRawExprUtils::check_collection_cast(src_udt_id,
+                                                               dst_udt_id,
+                                                               *exec_ctx->get_sql_ctx()->schema_guard_))) {
+        LOG_WARN("udt cast is not compatible", K(ret), K(src_type), K(dst_type),
+                 K(dst_udt_id), K(src_udt_id));
       } else {
-        dst_type.set_subschema_id(subschema_id);
+        uint16_t dst_subschema_id = ObInvalidSqlType;
+        if (OB_ISNULL(exec_ctx)) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("need ctx to get dst subschema id", K(ret), K(dst_udt_id));
+        } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(dst_udt_id, dst_subschema_id))) {
+          LOG_WARN("failed to get dst subschema id", K(ret), K(dst_udt_id));
+        } else {
+          dst_type.set_subschema_id(dst_subschema_id);
+        }
       }
     }
   } else if ((src_type.is_null() || src_type.is_character_type())

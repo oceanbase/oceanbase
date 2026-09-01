@@ -244,7 +244,7 @@ public:
   int generate_int64_array(const ObIArray<int64_t> &array, jit::ObLLVMValue &result);
   int generate_uint64_array(const ObIArray<uint64_t> &array, jit::ObLLVMValue &result);
   int generate_int8_array(const ObIArray<int8_t> &array, jit::ObLLVMValue &result);
-  int generate_expr(int64_t expr_idx, const ObPLStmt &s, int64_t result_idx, jit::ObLLVMValue &p_result_obj);
+  int generate_expr(int64_t expr_idx, const ObPLStmt &s, int64_t result_idx, bool is_assign_or_default_value, jit::ObLLVMValue &p_result_obj);
   int generate_early_exit(jit::ObLLVMValue &count, int64_t stmt_id, bool in_notfound, bool in_warning);
   int generate_pointer(const void *ptr, jit::ObLLVMValue &value);
   int generate_expression_array(const ObIArray<int64_t> &exprs, jit::ObLLVMValue &value, jit::ObLLVMValue &count);
@@ -735,6 +735,7 @@ public:
   int generate_check_autonomos(const ObPLStmt &s);
   int generate_spi_package_calc(uint64_t package_id,
                                 int64_t expr_idx,
+                                bool is_assign_or_default_value,
                                 const ObPLStmt &s,
                                 jit::ObLLVMValue &p_result_obj);
   int prepare_expression(ObPLCompileUnit &pl_func);
@@ -743,6 +744,10 @@ public:
   ObSQLSessionInfo& get_session_info() const { return session_info_; }
 
 private:
+
+  int try_pre_calc_and_write_back(ObPLCompileUnit &pl_func,
+                                  const sql::ObRawExpr &raw_expr,
+                                  sql::ObSqlExpression &expression);
   int init_spi_service();
   int init_adt_service();
   int init_eh_service();
@@ -792,15 +797,19 @@ private:
 #endif
   int build_record_type(const ObRecordType &record_type, ObIArray<jit::ObLLVMType> &elem_type_array);
   int build_composite(ObIArray<jit::ObLLVMType> &elem_type_array);
+  bool is_foldable_const_obj_type(ObObjType type);
   int generate_spi_calc(int64_t expr_idx,
                         int64_t stmt_id,
                         bool in_notfound,
                         bool in_warning,
                         int64_t result_idx,
+                        bool is_assign_or_default_value,
                         jit::ObLLVMValue &p_result_obj);
   int generate_llvm_calc(int64_t expr_idx, int64_t stmt_id, bool in_notfound,
                          bool in_warning, int64_t result_idx, jit::ObLLVMValue &p_result_obj);
   int generate_const_calc(int32_t value, jit::ObLLVMValue &p_result_obj);
+  int generate_const_expr_calc(const ObConstRawExpr &raw_expr,
+                               jit::ObLLVMValue &p_result_obj);
   int generate_compare_calc(jit::ObLLVMValue &left,
                                                jit::ObLLVMValue &right,
                                                ObItemType type,

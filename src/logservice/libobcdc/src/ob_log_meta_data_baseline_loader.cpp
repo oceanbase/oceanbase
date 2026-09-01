@@ -12,6 +12,8 @@
 
 #include "ob_log_meta_data_baseline_loader.h"
 
+#include "lib/ob_define.h"
+
 #define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
 #define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [LOADER] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
@@ -171,6 +173,44 @@ int ObLogMetaDataBaselineLoader::read(
             } else {
               // TODO debug
               LOG_INFO("table_meta", K(tenant_id), KPC(table_meta));
+            }
+            break;
+          }
+          case datadict::ObDictMetaType::UDT_META:
+          {
+            datadict::ObDictUdtMeta *udt_meta = nullptr;
+
+            if (OB_FAIL(dict_tenant_info->alloc_dict_udt_meta(udt_meta))) {
+              LOG_ERROR("alloc_dict_udt_meta failed", K(ret), K(tenant_id));
+            } else if (OB_FAIL(data_dict_iterator.next_dict_entry(meta_header, *udt_meta))) {
+              LOG_ERROR("data_dict_iterator next_dict_entry for udt_meta failed", K(ret), K(tenant_id),
+                  K(udt_meta));
+            } else {
+              const uint64_t udt_tenant_id = udt_meta->get_tenant_id();
+              const uint64_t udt_id = udt_meta->get_type_id();
+              const bool is_user_tenant_udt = (udt_tenant_id == tenant_id);
+              const bool is_sys_inner_udt = is_inner_pl_object_id(udt_id);
+
+              if (!is_user_tenant_udt && !is_sys_inner_udt) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_ERROR("unexpected udt tenant_id in baseline", KR(ret), K(tenant_id),
+                          K(udt_tenant_id), K(udt_id));
+              } else if (OB_FAIL(dict_tenant_info->insert_dict_udt_meta(udt_meta))) {
+                LOG_ERROR("dict_tenant_info insert_dict_udt_meta failed", KR(ret), K(tenant_id), KPC(udt_meta));
+              } else {
+                LOG_INFO("udt_meta", K(tenant_id), KPC(udt_meta));
+                udt_meta = nullptr;
+              }
+
+              if (OB_NOT_NULL(udt_meta)) {
+                int free_ret = dict_tenant_info->free_dict_udt_meta(udt_meta);
+                if (OB_SUCCESS != free_ret) {
+                  LOG_ERROR("free_dict_udt_meta failed", K(free_ret), K(tenant_id));
+                  if (OB_SUCC(ret)) {
+                    ret = free_ret;
+                  }
+                }
+              }
             }
             break;
           }

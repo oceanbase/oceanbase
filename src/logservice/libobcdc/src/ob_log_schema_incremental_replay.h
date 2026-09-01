@@ -46,6 +46,7 @@ public:
       const ObIArray<const datadict::ObDictTenantMeta*> &tenant_metas,
       const ObIArray<const datadict::ObDictDatabaseMeta*> &database_metas,
       const ObIArray<const datadict::ObDictTableMeta*> &table_metas,
+      const ObIArray<const datadict::ObDictUdtMeta*> &udt_metas,
       ObDictTenantInfo &tenant_info);
 
   TO_STRING_KV(
@@ -67,6 +68,10 @@ private:
   int replay_table_metas_(
       const transaction::ObTransID &trans_id,
       const ObIArray<const datadict::ObDictTableMeta*> &table_metas,
+      ObDictTenantInfo &tenant_info);
+  int replay_udt_metas_(
+      const transaction::ObTransID &trans_id,
+      const ObIArray<const datadict::ObDictUdtMeta*> &udt_metas,
       ObDictTenantInfo &tenant_info);
 
 private:

@@ -29,6 +29,8 @@
 #endif
 #include "pl/ob_pl_dependency_util.h"
 #include "pl/ob_pl_stmt.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/ob_sql_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -175,8 +177,9 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
       &question_mark_cnt_));
     CK (OB_NOT_NULL(default_node));
     OZ (resolve_expr(default_node, func_ast, default_expr,
-         combine_line_and_col(default_node->stmt_loc_), true, &expected_type));
+         combine_line_and_col(default_node->stmt_loc_), false, &expected_type));
     CK (OB_NOT_NULL(default_expr));
+    OZ (func_ast.add_expr(default_expr, false, false));
   }
   return ret;
 }
@@ -1378,15 +1381,13 @@ int ObPLResolver::get_number_literal_value(ObRawExpr *expr, int64_t &result)
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
 
-#define GET_CONST_EXPR_VAL(expr, result) \
-  const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(expr); \
-  CK (OB_NOT_NULL(const_expr)); \
-  CK (const_expr->get_value().is_integer_type() || const_expr->get_value().is_number()); \
+#define GET_CONST_EXPR_VAL(value, result) \
+  CK (value.is_integer_type() || value.is_number()); \
   if (OB_FAIL(ret)) { \
-  } else if (const_expr->get_value().is_integer_type()) { \
-    result = const_expr->get_value().get_int(); \
-  } else if (const_expr->get_value().is_number()) { \
-    OZ (const_expr->get_value().get_number().extract_valid_int64_with_trunc(result)); \
+  } else if (value.is_integer_type()) { \
+    result = value.get_int(); \
+  } else if (value.is_number()) { \
+    OZ (value.get_number().extract_valid_int64_with_trunc(result)); \
   }
 
   if (OB_FAIL(ret)) {
@@ -1397,9 +1398,9 @@ int ObPLResolver::get_number_literal_value(ObRawExpr *expr, int64_t &result)
     ret = OB_ERR_NUMERIC_LITERAL_REQUIRED;
     LOG_WARN("PLS-00491: numeric literal required", K(ret), KPC(expr));
   } else if (T_INT == expr->get_expr_type()) {
-    GET_CONST_EXPR_VAL(expr, result);
+    GET_CONST_EXPR_VAL(static_cast<const ObConstRawExpr*>(expr)->get_value(), result);
   } else if (T_OP_NEG == expr->get_expr_type()) {
-    GET_CONST_EXPR_VAL(expr->get_param_expr(0), result);
+    GET_CONST_EXPR_VAL(static_cast<const ObConstRawExpr*>(expr->get_param_expr(0))->get_value(), result);
     OX (result = (INT64_MIN == result) ? static_cast<uint64_t>(INT64_MAX + 1UL) : -result);
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -1428,12 +1429,31 @@ int ObPLResolver::get_const_number_variable_literal_value(ObRawExpr *expr, int64
       LOG_WARN("unexpected NULL symbol variable", K(ret), KPC(expr),
                K(current_block_->get_symbol_table()), K(idx));
     } else if (!var->is_readonly()
-               || OB_ISNULL(value_expr = current_block_->get_expr(var->get_default()))
-               || (T_NUMBER != value_expr->get_expr_type() && T_INT != value_expr->get_expr_type())) {
+               || OB_ISNULL(value_expr = current_block_->get_expr(var->get_default()))) {
       ret = OB_ERR_NUMERIC_LITERAL_REQUIRED;
       LOG_WARN("PLS-00491: numeric literal required", K(ret), K(var), K(value_expr));
     } else {
-      GET_CONST_EXPR_VAL(value_expr, result);
+      bool pre_calc = false;
+      if (value_expr->is_const_expr() &&
+          !(IS_CONST_TYPE(value_expr->get_expr_type()) && T_QUESTIONMARK != value_expr->get_expr_type())) {
+        pre_calc = true;
+        OZ (check_expr_can_pre_calc(const_cast<ObRawExpr*>(value_expr), pre_calc, false));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (pre_calc && !value_expr->is_const_raw_expr()) {
+        ObObj tmp;
+        OZ (ObSPIService::spi_calc_raw_expr(&(resolve_ctx_.session_info_),
+                                            &(resolve_ctx_.allocator_),
+                                            value_expr,
+                                            &tmp,
+                                            resolve_ctx_.param_list_), KPC(value_expr));
+        GET_CONST_EXPR_VAL(tmp, result);
+      } else if ((T_NUMBER != value_expr->get_expr_type() && T_INT != value_expr->get_expr_type())) {
+        ret = OB_ERR_NUMERIC_LITERAL_REQUIRED;
+        LOG_WARN("PLS-00491: numeric literal required", K(ret), K(var), K(value_expr));
+      } else {
+        GET_CONST_EXPR_VAL(static_cast<const ObConstRawExpr*>(value_expr)->get_value(), result);
+      }
     }
   }
 
@@ -3989,16 +4009,21 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
           }
         }
 
+        bool is_parameterized_empty = false;
+        OZ (is_parameterized_empty_string(default_node->children_[0],
+                                          is_parameterized_empty));
         if (OB_SUCC(ret)
-            && T_CHAR == default_node->children_[0]->type_
-            && default_node->children_[0]->str_len_ == 0
+            && ((T_CHAR == default_node->children_[0]->type_
+                 && 0 == default_node->children_[0]->str_len_)
+                || is_parameterized_empty)
             && OB_NOT_NULL(data_type.get_data_type())
             && (ObCharType == data_type.get_data_type()->get_obj_type()
                 || ObNCharType == data_type.get_data_type()->get_obj_type())) {
-          default_node->children_[0]->str_len_++;
+          default_node->children_[0]->type_ = T_CHAR;
+          default_node->children_[0]->str_len_ = 1;
           default_node->children_[0]->str_value_ = " ";
           default_node->children_[0]->raw_text_ = "' '";
-          default_node->children_[0]->text_len_++;
+          default_node->children_[0]->text_len_ = 3;
         }
         OZ (resolve_expr(default_node->children_[0], unit_ast, default_expr,
                          combine_line_and_col(default_node->children_[0]->stmt_loc_),
@@ -4175,6 +4200,31 @@ bool ObPLResolver::is_parameterized_null_param(const ObRawExpr *expr)
     const sql::ObRawExprResType& result_type = expr->get_result_type();
     if (ObNullType == result_type.get_type() && 4 == result_type.get_accuracy().get_length()) {
         ret = true;
+    }
+  }
+  return ret;
+}
+
+int ObPLResolver::is_parameterized_empty_string(const ObStmtNodeTree *node,
+                                                bool &is_empty_string)
+{
+  int ret = OB_SUCCESS;
+  is_empty_string = false;
+  if (OB_NOT_NULL(node) && T_QUESTIONMARK == node->type_) {
+    const ObPLBlockNS *cur_ns = &(current_block_->get_namespace());
+    const ObPLSymbolTable *symbol_table = NULL;
+    OZ (get_top_anony_symbol_table_for_subprogram(cur_ns, symbol_table));
+    if (OB_SUCC(ret) && OB_NOT_NULL(symbol_table)) {
+      const int64_t param_idx = node->value_;
+      const ObPLVar *var = param_idx >= 0 && param_idx < symbol_table->get_count()
+          ? symbol_table->get_symbol(param_idx) : NULL;
+      const ParamStore *params = resolve_ctx_.param_list_;
+      if (OB_NOT_NULL(var)
+          && var->get_name().prefix_match(ANONYMOUS_ARG)
+          && OB_NOT_NULL(params)
+          && param_idx < params->count()) {
+        is_empty_string = ObSQLUtils::is_oracle_empty_string(params->at(param_idx));
+      }
     }
   }
   return ret;
@@ -4522,10 +4572,30 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
             }
             if (OB_SUCC(ret)) {
               if (lib::is_oracle_mode()) {
+                bool is_parameterized_empty = false;
                 bool is_question_mark = is_question_mark_value(into_expr, &(current_block_->get_namespace()));
                 CK (OB_LIKELY(T_SP_DECL_DEFAULT == value_node->type_));
                 if (OB_SUCC(ret)) {
                   need_expect_type = T_DEFAULT == value_node->children_[0]->type_ ? false : need_expect_type;
+                }
+                OZ (is_parameterized_empty_string(value_node->children_[0], is_parameterized_empty));
+                if (OB_SUCC(ret)
+                    && ((T_CHAR == value_node->children_[0]->type_
+                         && 0 == value_node->children_[0]->str_len_)
+                        || is_parameterized_empty)
+                    && OB_NOT_NULL(expected_type)
+                    && OB_NOT_NULL(expected_type->get_data_type())
+                    && (ObCharType == expected_type->get_data_type()->get_obj_type()
+                        || ObNCharType == expected_type->get_data_type()->get_obj_type())) {
+                  // In Oracle mode, assigning an empty string to a fixed-length
+                  // CHAR/NCHAR variable produces a blank-padded value instead of
+                  // NULL. Keep ordinary assignment consistent with declaration
+                  // initialization, including types derived through %TYPE.
+                  value_node->children_[0]->type_ = T_CHAR;
+                  value_node->children_[0]->str_len_ = 1;
+                  value_node->children_[0]->str_value_ = " ";
+                  value_node->children_[0]->raw_text_ = "' '";
+                  value_node->children_[0]->text_len_ = 3;
                 }
                 OZ (resolve_expr(value_node->children_[0], func, value_expr,
                                  combine_line_and_col(value_node->children_[0]->stmt_loc_),
@@ -6644,7 +6714,18 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
   bool transformed = false;
   OZ (ObTransformPreProcess::transform_expr(expr_factory_,
                                             resolve_ctx_.session_info_, value_expr, transformed));
-  OZ (formalize_expr(*value_expr));
+  if (OB_SUCC(ret)) {
+    ObExecContext *exec_ctx = resolve_ctx_.session_info_.get_cur_exec_ctx();
+    ObSqlCtx *sql_ctx = OB_ISNULL(exec_ctx) ? NULL : exec_ctx->get_sql_ctx();
+    const bool old_disable_sql_udt_deduce_in_pl = OB_NOT_NULL(sql_ctx) && sql_ctx->disable_sql_udt_deduce_in_pl_;
+    if (OB_NOT_NULL(sql_ctx)) {
+      sql_ctx->disable_sql_udt_deduce_in_pl_ = true;
+    }
+    OZ(formalize_expr(*value_expr));
+    if (OB_NOT_NULL(sql_ctx)) {
+      sql_ctx->disable_sql_udt_deduce_in_pl_ = old_disable_sql_udt_deduce_in_pl;
+    }
+  }
   if (OB_SUCC(ret) && OB_NOT_NULL(value_expr) && into_expr_type.is_obj_type()) {
     // The basic type need check whether to add a column convert expr
     bool need_cast = false;
@@ -11380,11 +11461,7 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
     OZ (formalize_expr(*expr));
   }
 
-  // Step 9: const folding opt.
-  if (OB_SUCC(ret) && OB_FAIL(replace_to_const_expr_if_need(expr))) {
-    // 兼容MySQL,Oralce, 计算过程中如果出错不在此阶段报, 执行阶段报
-    ret = OB_SUCCESS;
-  }
+  // Step 9: const folding opt has remove to codegen_expression
 
   //in static typing engine, we wont do implict cast at stage of execution,
   //for some expr like ObExprIn/ObExprArgCase, if type of left is not match with right,
@@ -11406,7 +11483,7 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   // type in some special cases, and this may happen after formalize.
   // Therefore, we need to call formalize again after add expr to ensure
   // that the types are inconsistent with an implicit cast
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !unit_ast.is_simple_calc(unit_ast.get_expr_count() - 1)) {
     OZ (formalize_expr(*expr));
   }
 
@@ -11820,7 +11897,8 @@ int ObPLResolver::check_expr_can_pre_calc(ObRawExpr *expr, bool &pre_calc, bool 
          || (check_argument_pre_calc && T_QUESTIONMARK == expr->get_expr_type() && check_can_pre_calc_argument(expr))
          || T_FUN_SYS_STR_TO_DATE == expr->get_expr_type()
          || T_FUN_SYS_TO_DATE == expr->get_expr_type()
-         || T_FUN_COLUMN_CONV == expr->get_expr_type())) {
+         || T_FUN_COLUMN_CONV == expr->get_expr_type()
+         || T_FUN_SYS_CAST == expr->get_expr_type())) {
     pre_calc = false;
   }
   for (int64_t i = 0; OB_SUCC(ret) && pre_calc && i < expr->get_param_count(); ++i) {
@@ -11847,36 +11925,6 @@ int ObPLResolver::analyze_calc_once_exprs(ObPLFunctionAST &func)
       OZ (func.add_calc_once_expr(i));
     }
   }
-  return ret;
-}
-
-int ObPLResolver::replace_to_const_expr_if_need(ObRawExpr *&expr, bool check_argument_pre_calc)
-{
-  int ret = OB_SUCCESS;
-  bool pre_calc = false;
-  CK (OB_NOT_NULL(expr));
-  LOG_TRACE("start replace to const rawexpr if need", K(ret), KPC(expr));
-  if (OB_SUCC(ret)
-    && expr->is_const_expr()
-    && !(IS_CONST_TYPE(expr->get_expr_type()) && T_QUESTIONMARK != expr->get_expr_type())) {
-    pre_calc = true;
-    OZ (check_expr_can_pre_calc(expr, pre_calc, check_argument_pre_calc));
-  }
-  if (OB_SUCC(ret) && pre_calc && !expr->is_const_raw_expr()) {
-    ObObj result;
-    ObConstRawExpr *const_expr = NULL;
-    OZ (ObSPIService::spi_calc_raw_expr(&(resolve_ctx_.session_info_),
-                                        &(resolve_ctx_.allocator_),
-                                        expr,
-                                        &result,
-                                        resolve_ctx_.param_list_), KPC(expr));
-    OZ (expr_factory_.create_raw_expr(static_cast<ObItemType>(result.get_meta().get_type()),
-                                      const_expr));
-    CK (OB_NOT_NULL(const_expr));
-    OX (const_expr->set_value(result));
-    OX (expr = const_expr);
-  }
-  LOG_TRACE("end replace to const expr if need", K(ret), KPC(expr));
   return ret;
 }
 
@@ -13802,7 +13850,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
-    if (!ObObjUDTUtil::ob_is_sys_sql_udt(expr->get_result_type().get_udt_id())) {
+    if (!is_inner_pl_udt_id(expr->get_result_type().get_udt_id())) {
       OZ (formalize_expr(*expr)); // bugfix: 53193337, need get real type in that case
     }
     OZ (ObTransformPreProcess::transform_expr(expr_factory_,
@@ -16605,6 +16653,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
   ObPLExternalNS::ExternalType type = static_cast<ObPLExternalNS::ExternalType>(access_ident.access_index_);
   ObPLDataType pl_data_type;
   int64_t cnt = access_idxs.count();
+  bool resolved_as_sql_udt_root = false;
 
   if (!is_routine) {
     OZ (check_is_udt_routine(access_ident, ns, access_idxs, is_routine));
@@ -16671,30 +16720,67 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
           CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
           OX (pl_data_type = local_var->get_type());
           if (OB_FAIL(ret)) {
-          } else if (resolve_ctx_.is_sql_scope_ && OB_ISNULL(get_params().secondary_namespace_)) {
-            //sql scope, use :1.c0, resolve as IS_UDF_NS for check whether contain batch stmt parameter
-            ObConstRawExpr *var_expr = NULL;
-            ObObjParam val;
-            ObRawExprResType res_type;
-            OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, var_expr));
-            CK (OB_NOT_NULL(var_expr));
-            if (OB_SUCC(ret)) {
-              val.set_unknown(var_idx);
-              val.set_param_meta();
-              var_expr->set_value(val);
-              res_type.set_type(pl_data_type.get_obj_type());
-              res_type.set_collation_type(pl_data_type.get_charset());
-              res_type.set_collation_level(CS_LEVEL_IMPLICIT);
-              if (pl_data_type.get_obj_type() == ObExtendType) {
-                res_type.set_udt_id(pl_data_type.get_user_type_id());
-              }
-              var_expr->set_result_type(res_type);
-              var_index = reinterpret_cast<int64_t>(var_expr);
-              type = ObPLExternalNS::UDF_NS;
-            }
           } else {
-            OX (type = ObPLExternalNS::LOCAL_VAR);
-            OX (var_index = var_idx);
+            const ObDataType *pl_bind_data_type = pl_data_type.is_obj_type() ? pl_data_type.get_data_type() : NULL;
+            const uint64_t sql_udt_id = (OB_NOT_NULL(pl_bind_data_type) && pl_bind_data_type->get_meta_type().is_common_user_defined_sql_type()) ? pl_bind_data_type->get_accuracy().get_accuracy() : OB_INVALID_ID;
+            const bool is_sql_udt_bind = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+                && OB_INVALID_ID != sql_udt_id
+                && ObPLDataType::is_schema_udt(&resolve_ctx_.schema_guard_, sql_udt_id));
+            if (is_sql_udt_bind) {
+              // SQL UDT bind param (:a.c0): align with udt column path via resolve_sys_func_access.
+              ObConstRawExpr *var_expr = NULL;
+              ObObjParam val;
+              ObRawExprResType res_type;
+              OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, var_expr));
+              CK (OB_NOT_NULL(var_expr));
+              if (OB_SUCC(ret)) {
+                val.set_unknown(var_idx);
+                val.set_param_meta();
+                var_expr->set_value(val);
+                uint16_t subschema_id = ObInvalidSqlType;
+                ObExecContext *exec_ctx = resolve_ctx_.session_info_.get_cur_exec_ctx();
+                if (OB_ISNULL(exec_ctx)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("exec ctx is null when resolve sql udt bind access", K(ret), K(var_idx));
+                } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(sql_udt_id, subschema_id))) {
+                  LOG_WARN("failed to get subschema id for sql udt bind access", K(ret), K(sql_udt_id), K(var_idx));
+                } else if (subschema_id == ObMaxSystemUDTSqlType) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid subschema id for sql udt bind access", K(ret), K(sql_udt_id), K(var_idx));
+                } else {
+                  res_type.set_sql_udt(subschema_id);
+                  res_type.set_udt_id(sql_udt_id);
+                  var_expr->set_result_type(res_type);
+                  OX (access_ident.sys_func_expr_ = var_expr);
+                  OZ (resolve_sys_func_access(access_ident, access_idxs, session_info, ns));
+                  OX (resolved_as_sql_udt_root = true);
+                }
+              }
+            } else if (resolve_ctx_.is_sql_scope_ && OB_ISNULL(get_params().secondary_namespace_)) {
+              //sql scope, use :1.c0, resolve as IS_UDF_NS for check whether contain batch stmt parameter
+              ObConstRawExpr *var_expr = NULL;
+              ObObjParam val;
+              ObRawExprResType res_type;
+              OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, var_expr));
+              CK (OB_NOT_NULL(var_expr));
+              if (OB_SUCC(ret)) {
+                val.set_unknown(var_idx);
+                val.set_param_meta();
+                var_expr->set_value(val);
+                res_type.set_type(pl_data_type.get_obj_type());
+                res_type.set_collation_type(pl_data_type.get_charset());
+                res_type.set_collation_level(CS_LEVEL_IMPLICIT);
+                if (pl_data_type.get_obj_type() == ObExtendType) {
+                  res_type.set_udt_id(pl_data_type.get_user_type_id());
+                }
+                var_expr->set_result_type(res_type);
+                var_index = reinterpret_cast<int64_t>(var_expr);
+                type = ObPLExternalNS::UDF_NS;
+              }
+            } else {
+              OX (type = ObPLExternalNS::LOCAL_VAR);
+              OX (var_index = var_idx);
+            }
           }
         }
       } else {
@@ -16716,6 +16802,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     }
 
     if (OB_FAIL(ret)) {
+    } else if (resolved_as_sql_udt_root) {
+      // access_idxs already filled by resolve_sys_func_access, same as udt column root.
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
       OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
@@ -20192,13 +20280,16 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns,uint64_t var_idx, co
   int ret = OB_SUCCESS;
 #define COLLECT_ASSIGN_COLUMN \
   do {  \
-    ObPLVar *var = NULL;  \
-    CK (OB_NOT_NULL(ns.get_symbol_table())); \
-    CK (OB_NOT_NULL(var = const_cast<ObPLVar*>(ns.get_symbol_table()->get_symbol(var_idx)))); \
-    for (int64_t i = 0; OB_SUCC(ret) && i < var->get_trigger_ref_cols().count(); ++i) { \
-      if (access_idxs.at(1).var_name_.case_compare_equal(var->get_trigger_ref_cols().at(i).first)) {  \
-        var->get_trigger_ref_cols().at(i).second = true;  \
-        break;  \
+    const ObPLSymbolTable *symbol_table = ns.get_symbol_table(); \
+    CK (OB_NOT_NULL(symbol_table)); \
+    if (OB_SUCC(ret)) { \
+      ObIArray<std::pair<ObString, bool>> &ref_cols = \
+        const_cast<ObIArray<std::pair<ObString, bool>>&>(symbol_table->get_trigger_ref_cols(var_idx)); \
+      for (int64_t i = 0; OB_SUCC(ret) && i < ref_cols.count(); ++i) { \
+        if (access_idxs.at(1).var_name_.case_compare_equal(ref_cols.at(i).first)) {  \
+          ref_cols.at(i).second = true;  \
+          break;  \
+        } \
       } \
     } \
   } while (0)
@@ -20621,4 +20712,3 @@ ObPLSwitchDatabaseGuard::~ObPLSwitchDatabaseGuard()
 
 }
 }
-

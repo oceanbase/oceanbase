@@ -1485,7 +1485,7 @@ int ObPhysicalPlanCtx::build_subschema_ctx_by_param_store(share::schema::ObSchem
     ObObjParam &param = param_store->at(i);
     if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
       uint64_t udt_id = param.get_accuracy().get_accuracy();
-      uint16_t subschema_id = 0;
+      uint16_t subschema_id = ObInvalidSqlType;
       if (!ob_is_reserved_udt_id(udt_id)) { // is not reserved subschema id
         if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
           LOG_WARN("subschema ctx init failed", K(ret));
@@ -1493,6 +1493,27 @@ int ObPhysicalPlanCtx::build_subschema_ctx_by_param_store(share::schema::ObSchem
           LOG_WARN("failed to get subschema id", K(ret), K(param), K(udt_id));
         } else if (subschema_id == ObMaxSystemUDTSqlType) {
           LOG_WARN("failed to get subschema id", K(ret), K(param), K(udt_id));
+        } else {
+          param.set_subschema_id(subschema_id);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::adjust_param_subschema_by_plan(share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  ParamStore &param_store = get_param_store_for_update();
+  for (uint32_t i = 0; OB_SUCC(ret) && i < param_store.count(); i++) {
+    ObObjParam &param = param_store.at(i);
+    if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
+      uint64_t udt_id = param.get_accuracy().get_accuracy();
+      if (!ob_is_reserved_udt_id(udt_id)) {
+        uint16_t subschema_id = ObInvalidSqlType;
+        if (OB_FAIL(get_subschema_id_by_udt_id(udt_id, subschema_id, schema_guard))) {
+          LOG_WARN("failed to adjust param subschema id", K(ret), K(udt_id), K(i));
         } else {
           param.set_subschema_id(subschema_id);
         }

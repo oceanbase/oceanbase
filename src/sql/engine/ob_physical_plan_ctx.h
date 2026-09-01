@@ -553,6 +553,7 @@ public:
   int build_subschema_by_fields(const ColumnsFieldIArray *fields,
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);
+  int adjust_param_subschema_by_plan(share::schema::ObSchemaGetterGuard *schema_guard);
   ObSubSchemaCtx &get_subschema_ctx() { return subschema_ctx_; }
   inline int set_subschema_ctx(ObSubSchemaCtx &subschema_ctx) {
     return subschema_ctx_.assgin(subschema_ctx);

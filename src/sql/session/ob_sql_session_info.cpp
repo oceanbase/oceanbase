@@ -604,6 +604,15 @@ bool ObSQLSessionInfo::is_pl_prepare_stage() const
   return bret;
 }
 
+bool ObSQLSessionInfo::disable_sql_udt_deduce_in_pl() const
+{
+  bool bret = false;
+  if (OB_NOT_NULL(cur_exec_ctx_) && OB_NOT_NULL(cur_exec_ctx_->get_sql_ctx())) {
+    bret = cur_exec_ctx_->get_sql_ctx()->disable_sql_udt_deduce_in_pl_;
+  }
+  return bret;
+}
+
 bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
 {
   bool bret = false;

@@ -204,6 +204,130 @@ ObDictMetaHeader::ObDictMetaHeader(const ObDictMetaType &meta_type)
   meta_type_ = meta_type;
 }
 
+ObDictUdtMeta::ObDictUdtMeta(ObIAllocator *allocator)
+  : allocator_(allocator),
+    udt_info_(NULL)
+{
+}
+
+void ObDictUdtMeta::reset()
+{
+  if (OB_NOT_NULL(udt_info_)) {
+    udt_info_->~ObUDTTypeInfo();
+    if (OB_NOT_NULL(allocator_)) {
+      allocator_->free(udt_info_);
+    }
+    udt_info_ = NULL;
+  }
+}
+
+int ObDictUdtMeta::alloc_udt_info_()
+{
+  int ret = OB_SUCCESS;
+  void *buf = NULL;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect valid allocator", KR(ret), K_(allocator));
+  } else if (OB_NOT_NULL(udt_info_)) {
+    // reuse existing object
+  } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(share::schema::ObUDTTypeInfo)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc udt info failed", KR(ret), "alloc_size", sizeof(share::schema::ObUDTTypeInfo));
+  } else {
+    udt_info_ = new (buf) share::schema::ObUDTTypeInfo(allocator_);
+  }
+  return ret;
+}
+
+int ObDictUdtMeta::init(const schema::ObUDTTypeInfo &udt_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(alloc_udt_info_())) {
+    LOG_WARN("alloc udt info failed", KR(ret), K(udt_info));
+  } else if (OB_FAIL(udt_info_->assign(udt_info))) {
+    LOG_WARN("assign udt info failed", KR(ret), K(udt_info));
+  }
+  return ret;
+}
+
+int ObDictUdtMeta::assign(const ObDictUdtMeta &src_udt_meta)
+{
+  int ret = OB_SUCCESS;
+  const schema::ObUDTTypeInfo *src_udt_info = src_udt_meta.get_udt_info();
+  if (this != &src_udt_meta) {
+    reset();
+    if (OB_ISNULL(src_udt_info)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("source udt info is null", KR(ret), K(src_udt_meta));
+    } else if (OB_FAIL(init(*src_udt_info))) {
+      LOG_WARN("init udt meta from source failed", KR(ret), K(src_udt_meta));
+    }
+  }
+  return ret;
+}
+
+DEFINE_EQUAL(ObDictUdtMeta)
+{
+  bool is_equal = true;
+  if (OB_ISNULL(udt_info_) && OB_ISNULL(other.udt_info_)) {
+    // equal
+  } else if (OB_ISNULL(udt_info_) || OB_ISNULL(other.udt_info_)) {
+    is_equal = false;
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "udt info null state not equal", KPC_(udt_info), KPC(other.udt_info_));
+  } else {
+    is_equal = (udt_info_->get_tenant_id() == other.udt_info_->get_tenant_id())
+        && (udt_info_->get_database_id() == other.udt_info_->get_database_id())
+        && (udt_info_->get_schema_version() == other.udt_info_->get_schema_version())
+        && (udt_info_->get_type_id() == other.udt_info_->get_type_id())
+        && (udt_info_->get_typecode() == other.udt_info_->get_typecode())
+        && (udt_info_->get_properties() == other.udt_info_->get_properties())
+        && (udt_info_->get_type_name() == other.udt_info_->get_type_name())
+        && (udt_info_->get_attrs_count() == other.udt_info_->get_attrs_count());
+  }
+  return is_equal;
+}
+
+DEFINE_SERIALIZE(ObDictUdtMeta)
+{
+  PRECHECK_SERIALIZE;
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(udt_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("udt info is null", KR(ret), KPC(this));
+    } else if (OB_FAIL(udt_info_->serialize(buf, buf_len, pos))) {
+      LOG_WARN("serialize udt info failed", KR(ret), KPC(this));
+    }
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE_DATA_DICT(ObDictUdtMeta)
+{
+  PRECHECK_DESERIALIZE;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(alloc_udt_info_())) {
+    LOG_WARN("alloc udt info failed", KR(ret), K(header));
+  } else if (OB_FAIL(udt_info_->deserialize(buf, data_len, pos))) {
+    LOG_WARN("deserialize udt info failed", KR(ret), K(header));
+  } else if (OB_FAIL(udt_info_->set_type_name(udt_info_->get_type_name()))) {
+    LOG_WARN("deep copy type_name failed", KR(ret), K(header));
+  } else if (OB_FAIL(udt_info_->set_externname(udt_info_->get_externname()))) {
+    LOG_WARN("deep copy externname failed", KR(ret), K(header));
+  } else if (OB_FAIL(udt_info_->set_helperclassname(udt_info_->get_helperclassname()))) {
+    LOG_WARN("deep copy helperclassname failed", KR(ret), K(header));
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObDictUdtMeta)
+{
+  int64_t len = 0;
+  if (OB_NOT_NULL(udt_info_)) {
+    len += udt_info_->get_serialize_size();
+  }
+  return len;
+}
+
 void ObDictMetaHeader::reset()
 {
   version_ = DEFAULT_VERSION;

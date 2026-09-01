@@ -164,6 +164,7 @@ public:
   {}
   // setters
   OB_INLINE void set_item_type(ObItemType item_type) { item_type_ = item_type; }
+  OB_INLINE void set_obj(const common::ObObj &obj) { new (&v2_.v1_) common::ObObj(obj); }
   OB_INLINE void set_accuracy(const common::ObAccuracy &accuracy) { accuracy_ = accuracy; }
   int assign(const common::ObObj &obj);
   int assign(ObExprOperator *op);

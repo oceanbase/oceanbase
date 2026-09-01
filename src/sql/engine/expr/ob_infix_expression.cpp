@@ -74,7 +74,7 @@ int ObInfixExprItem::deep_copy(common::ObIAllocator &alloc, const bool only_obj 
   int ret = OB_SUCCESS;
   if (T_REF_COLUMN == item_type_) {
     // do nothing
-  } else if (IS_DATATYPE_OR_QUESTIONMARK_OP(item_type_)) {
+  } else if (IS_DATATYPE_OR_QUESTIONMARK_OP(item_type_) || T_EXTEND == item_type_) {
     ObObj obj;
     if (OB_FAIL(ob_write_obj(alloc, get_obj(), obj))) {
       LOG_WARN("copy object failed", K(ret));

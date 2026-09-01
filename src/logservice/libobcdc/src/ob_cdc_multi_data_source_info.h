@@ -74,6 +74,7 @@ typedef common::ObSEArray<ObCDCTabletChangeInfo, 1> CDCTabletChangeInfoArray;
 typedef common::ObSEArray<const datadict::ObDictTenantMeta*, 1> DictTenantArray;
 typedef common::ObSEArray<const datadict::ObDictDatabaseMeta*, 1> DictDatabaseArray;
 typedef common::ObSEArray<const datadict::ObDictTableMeta*, 1> DictTableArray;
+typedef common::ObSEArray<const datadict::ObDictUdtMeta*, 1> DictUdtArray;
 
 class MultiDataSourceInfo
 {
@@ -94,12 +95,14 @@ public:
   DictTenantArray &get_dict_tenant_array() { return dict_tenant_metas_; }
   DictDatabaseArray &get_dict_database_array() { return dict_database_metas_; }
   DictTableArray &get_dict_table_array() { return dict_table_metas_; }
+  DictUdtArray &get_dict_udt_array() { return dict_udt_metas_; }
 
   bool is_empty_dict_info() const
   {
     return (0 == dict_tenant_metas_.count())
       && (0 == dict_database_metas_.count())
-      && (0 == dict_table_metas_.count());
+      && (0 == dict_table_metas_.count())
+      && (0 == dict_udt_metas_.count());
   }
   bool is_contains_multiple_table_metas() const
   {
@@ -117,6 +120,10 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id,
       const datadict::ObDictTableMeta *&table_meta);
+  int get_new_udt_meta(
+      const uint64_t tenant_id,
+      const uint64_t udt_id,
+      const datadict::ObDictUdtMeta *&udt_meta);
 
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
@@ -131,6 +138,7 @@ private:
   DictTenantArray dict_tenant_metas_;
   DictDatabaseArray dict_database_metas_;
   DictTableArray dict_table_metas_;
+  DictUdtArray dict_udt_metas_;
 };
 
 } // namespace libobcdc

@@ -147,6 +147,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_work_mode.cpp
   ob_ls_worker.cpp
   ob_obj2str_helper.cpp
+  ob_cdc_sql_udt_dict_schema_ctx.cpp
   ob_small_arena.cpp
 )
 

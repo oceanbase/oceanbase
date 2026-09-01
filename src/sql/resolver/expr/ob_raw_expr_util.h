@@ -1080,6 +1080,9 @@ public:
   static int resolve_op_exprs_for_oracle_implicit_cast(ObRawExprFactory &expr_factory,
                                                        const ObSQLSessionInfo *session_info,
                                                        common::ObIArray<ObOpRawExpr*> &op_exprs);
+  static int check_collection_cast(const uint64_t src_udt_id,
+                                   const uint64_t dst_udt_id,
+                                   share::schema::ObSchemaGetterGuard &schema_guard);
   static int check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker, bool is_prepare, bool &skip_check);
   static int add_cast_to_multiset(ObRawExpr *&expr);
 

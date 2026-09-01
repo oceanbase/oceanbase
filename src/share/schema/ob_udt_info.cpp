@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_udt_info.h"
+#include "share/schema/ob_schema_getter_guard.h"
 #include "pl/ob_pl_stmt.h"
 
 namespace oceanbase
@@ -541,135 +542,14 @@ int ObUDTTypeInfo::transform_to_pl_type(const ObUDTCollectionType *coll_info, pl
 
 int ObUDTTypeInfo::transform_to_pl_type(const ObUDTTypeAttr* attr_info, ObSchemaGetterGuard &schema_guard, pl::ObPLDataType &pl_type) const
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(attr_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("attr info is NULL", K(ret), K(attr_info));
-  } else if (attr_info->is_base_type()) {
-    common::ObDataType data_type;
-    data_type.set_obj_type(static_cast<ObObjType>(attr_info->get_type_attr_id()));
-    data_type.set_length(static_cast<int32_t>(attr_info->get_length()));
-    data_type.set_precision(static_cast<int16_t>(attr_info->get_precision()));
-    data_type.set_scale(static_cast<int16_t>(attr_info->get_scale()));
-    data_type.set_zero_fill(static_cast<const bool>(attr_info->get_zero_fill()));
-    data_type.set_collation_type(static_cast<const ObCollationType>(attr_info->get_coll_type()));
-    data_type.set_charset_type(ObCharset::charset_type_by_coll(data_type.get_collation_type()));
-    pl_type.set_data_type(data_type);
-  } else if (attr_info->is_obj_type()) {
-    pl_type.set_user_type_id(pl::ObPLType::PL_RECORD_TYPE,
-                             attr_info->get_type_attr_id());
-    pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
-#ifdef OB_BUILD_ORACLE_PL
-  } else if (attr_info->is_coll_type()) {
-    const ObUDTTypeInfo *udt_info = NULL;
-    pl::ObPLType type = pl::ObPLType::PL_NESTED_TABLE_TYPE;
-    OZ (schema_guard.get_udt_info(attr_info->get_tenant_id(), attr_info->get_type_attr_id(), udt_info));
-    if (OB_NOT_NULL(udt_info)) {
-      type = udt_info->is_varray() ? pl::ObPLType::PL_VARRAY_TYPE : pl::ObPLType::PL_NESTED_TABLE_TYPE;
-    }
-    OX (pl_type.set_user_type_id(type, attr_info->get_type_attr_id()));
-    OX (pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT));
-  } else if (attr_info->is_opaque_type()) {
-    pl_type.set_user_type_id(pl::ObPLType::PL_OPAQUE_TYPE,
-                             attr_info->get_type_attr_id());
-    pl_type.set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
-#endif
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("attr info type is invalid", K(ret), KPC(attr_info));
-  }
-  return ret;
+  return transform_to_pl_type<ObSchemaGetterGuard>(attr_info, schema_guard, pl_type);
 }
 
 int ObUDTTypeInfo::transform_to_pl_type(common::ObIAllocator &allocator,
                                         ObSchemaGetterGuard &schema_guard,
                                         const pl::ObUserDefinedType *&pl_type) const
 {
-  int ret = OB_SUCCESS;
-  void *ptr = NULL;
-  pl::ObUserDefinedType *local_pl_type = NULL;
-  pl_type = NULL;
-#ifdef OB_BUILD_ORACLE_PL
-  if (OB_FAIL(check_dependency_valid(schema_guard))) {
-    LOG_WARN("failed to check_dependency_valid", K(ret));
-  } else if (is_collection()) {
-    pl::ObCollectionType *table_type = NULL;
-    pl::ObPLDataType elem_type;
-    if (OB_ISNULL(ptr = allocator.alloc(is_varray() ? sizeof(pl::ObVArrayType) : sizeof(pl::ObCollectionType)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObNestedTableType", K(ret));
-    } else if (OB_FAIL(transform_to_pl_type(coll_info_, elem_type))) {
-      LOG_WARN("failed get collection elem type", K(ret));
-    } else {
-      if (is_varray()) {
-        table_type = static_cast<pl::ObCollectionType*>(new(ptr)pl::ObVArrayType());
-        pl::ObVArrayType *vt = static_cast<pl::ObVArrayType*> (ptr);
-        //
-        vt->set_capacity(coll_info_->get_upper_bound());
-      } else {
-        table_type = static_cast<pl::ObCollectionType*>(new(ptr)pl::ObNestedTableType());
-      }
-      table_type->set_user_type_id(get_type_id());
-      table_type->set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
-      table_type->set_element_type(elem_type);
-      local_pl_type = table_type;
-    }
-  } else if (is_opaque()) {
-    pl::ObOpaqueType *opaque_type = NULL;
-    if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObOpaqueType)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObOpaqueType", K(ret));
-    } else {
-      opaque_type = new(ptr)pl::ObOpaqueType();
-      opaque_type->set_user_type_id(get_type_id());
-      opaque_type->set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
-      local_pl_type = opaque_type;
-    }
-  } else {
-#endif
-    pl::ObRecordType *record_type = NULL;
-    if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObRecordType)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObRecordType", K(ret));
-    } else {
-      record_type = new(ptr)pl::ObRecordType();
-      record_type->set_user_type_id(get_type_id());
-      record_type->set_type_from(pl::ObPLTypeFrom::PL_TYPE_UDT);
-      OZ (record_type->record_members_init(&allocator, get_attrs_count()));
-      for (int64_t i = 0; OB_SUCC(ret) && i < get_attrs_count(); ++i) {
-        pl::ObPLDataType attr_type;
-        ObString copy_attr_name;
-        if (OB_ISNULL(get_attrs().at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("attribute info is NULL", K(ret), K(i));
-        } else if (OB_FAIL(transform_to_pl_type(get_attrs().at(i), schema_guard, attr_type))) {
-          LOG_WARN("failed to transform to pl type from ObUDTTypeAttr", K(ret));
-        } else if (OB_FAIL(deep_copy_name(allocator, get_attrs().at(i)->get_name(), copy_attr_name))) {
-          LOG_WARN("failed to deep copy attribute name", K(ret));
-        } else if (OB_FAIL(record_type->add_record_member(copy_attr_name, attr_type))) {
-          LOG_WARN("failed to add record member", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        local_pl_type = record_type;
-      }
-    }
-#ifdef OB_BUILD_ORACLE_PL
-  }
-#endif
-  if (OB_SUCC(ret)) {
-    ObString copy_type_name;
-    if (OB_FAIL(deep_copy_name(allocator, get_type_name(), copy_type_name))) {
-      LOG_WARN("failed to deep copy type name", K(ret));
-    } else if (OB_UNLIKELY(OB_ISNULL(local_pl_type))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("local_pl_type is null", K(ret));
-    } else {
-      local_pl_type->set_name(copy_type_name);
-      pl_type = local_pl_type;
-    }
-  }
-  return ret;
+  return transform_to_pl_type<ObSchemaGetterGuard>(allocator, schema_guard, pl_type);
 }
 
 int ObUDTTypeInfo::copy_udt_info_in_require(const ObUDTTypeInfo &old_info)
@@ -698,58 +578,7 @@ int ObUDTTypeInfo::copy_udt_info_in_require(const ObUDTTypeInfo &old_info)
 
 int ObUDTTypeInfo::check_dependency_valid(ObSchemaGetterGuard &schema_guard) const
 {
-  int ret = OB_SUCCESS;
-
-#define CHECK_ELEM_MATCH(elem_id, type_info)                                                                           \
-  do {                                                                                                                 \
-    const ObUDTTypeInfo *elem_info = nullptr;                                                                          \
-    if (OB_INVALID_ID == (elem_id)) {                                                                                  \
-      ret = OB_ERR_UNEXPECTED;                                                                                         \
-      LOG_WARN("unexpected invalid element type id", K(ret), K(*this), KPC(type_info));                                \
-    } else if (OB_SYS_TENANT_ID == pl::get_tenant_id_by_object_id(elem_id)) {                                          \
-      /* do nothing */                                                                                                 \
-    } else if (OB_FAIL(schema_guard.get_udt_info(tenant_id_, elem_id, elem_info))) {                                   \
-      LOG_WARN("failed to get_udt_info", K(ret), K(*this), K(elem_id), KPC(elem_info));                                \
-    } else if (OB_ISNULL(elem_info)) {                                                                                 \
-      /* dependency is dropped, the object must be invalid, do nothing */                                              \
-    } else if ((type_info)->is_coll_type() && !elem_info->is_collection() ||                                           \
-               (type_info)->is_obj_type() && !elem_info->is_obj_type()) {                                              \
-        ret = OB_ERR_OBJECT_INVALID;                                                                                   \
-        LOG_WARN("original element type is replaced by another type",                                                  \
-                 K(ret), K(*this), K(elem_id), KPC(type_info), K((type_info)->get_typecode()), KPC(elem_info));        \
-        LOG_USER_ERROR(OB_ERR_OBJECT_INVALID, get_type_name().length(), get_type_name().ptr());                         \
-    }                                                                                                                  \
-  } while (0)
-
-  if (is_collection()) {
-    if (OB_ISNULL(coll_info_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL coll_info_ of collection type", K(ret), K(*this));
-    } else if (coll_info_->is_base_type()) {
-      // do nothing
-    } else {
-      CHECK_ELEM_MATCH(coll_info_->get_elem_type_id(), coll_info_);
-    }
-  } else if (is_obj_type()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_attrs().count(); ++i) {
-      const ObUDTTypeAttr *curr = get_attrs().at(i);
-
-      if (OB_ISNULL(curr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL attr", K(ret), K(i), K(*this));
-      } else if (curr->is_base_type()) {
-        // do nothing
-      } else {
-        CHECK_ELEM_MATCH(curr->get_type_attr_id(), curr);
-      }
-    }
-  } else {
-    // do nothing
-  }
-
-#undef CHECK_ELEM_MATCH
-
-  return ret;
+  return check_dependency_valid<ObSchemaGetterGuard>(schema_guard);
 }
 
 

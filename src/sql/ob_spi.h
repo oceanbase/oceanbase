@@ -514,9 +514,20 @@ public:
                                const ObRawExpr *rawexpr,
                                ObObj *result,
                                const ParamStore *param_store = nullptr);
+
+  static int spi_pading_intf(pl::ObPLExecCtx *ctx,
+                              const ObSqlExpression *expr,
+                              ObIAllocator *expr_allocator,
+                              ObObjParam *result);
+  static int spi_pading_intf(ObSQLSessionInfo *session_info,
+                             const ObObjType &type,
+                             const ObAccuracy &accuracy,
+                             ObIAllocator *allocator,
+                             ObObjParam *result);
   static int spi_calc_expr(pl::ObPLExecCtx *ctx,
                            const ObSqlExpression *expr,
                            const int64_t result_idx,
+                           bool is_assign_or_default_value,
                            ObObjParam *result);
   static int spi_set_symbol(pl::ObPLExecCtx *ctx,
                                             const int64_t result_idx,
@@ -525,6 +536,7 @@ public:
                                   const int64_t expr_idx,
                                   const int64_t result_idx,
                                   const bool calc_once,
+                                  const bool is_assign_or_default_value,
                                   ObObjParam *result);
 
   static int spi_calc_subprogram_expr(pl::ObPLExecCtx *ctx,
@@ -542,6 +554,7 @@ public:
   static int spi_calc_package_expr(pl::ObPLExecCtx *ctx,
                            uint64_t package_id,
                            int64_t expr_idx,
+                           bool is_assign_or_default_value,
                            ObObjParam *result);
   static int spi_convert(ObSQLSessionInfo &session, ObIAllocator &allocator,
                          ObObj &src, const ObExprResType &result_type, ObObj &dst,
@@ -685,6 +698,7 @@ public:
                                       common::ObIAllocator &allocator,
                                       ObObjParam *param,
                                       ParamStore *&exec_params,
+                                      int64_t stmt_type,
                                       bool is_forall = false);
   static int prepare_forall_batch_params(ObSPIResultSet &spi_result,
                                          ParamStore *&exec_params,
@@ -694,14 +708,16 @@ public:
                                         common::ObIAllocator &allocator,
                                         int64_t exec_param_cnt,
                                         ObObjParam **params,
-                                        ParamStore *&exec_params);
+                                        ParamStore *&exec_params,
+                                        int64_t stmt_type);
 
   static int prepare_dbms_sql_params(pl::ObPLExecCtx *ctx,
                                     ObSPIResultSet &spi_result,
                                     common::ObIAllocator &allocator,
                                     int64_t exec_param_cnt,
                                     ParamStore *params,
-                                    ParamStore *&exec_params);
+                                    ParamStore *&exec_params,
+                                    int64_t stmt_type);
 
   static int convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session);
 

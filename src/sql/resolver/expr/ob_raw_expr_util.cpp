@@ -4309,7 +4309,7 @@ int ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(ObRawExprFactory *expr_factor
       if (subschema_id == ObXMLSqlType) {
         pl_udt_type.set_extend_type(pl::PL_OPAQUE_TYPE);
       } else {
-        // PL_RECORD_TYPE or PL_VARRAY_TYPE is supported
+        // PL_RECORD_TYPE, PL_VARRAY_TYPE or PL_NESTED_TABLE_TYPE is supported
         pl_udt_type.set_extend_type(udt_meta.pl_type_);
       }
       // add implicit cast from sql udt to pl extend
@@ -7331,7 +7331,9 @@ int ObRawExprUtils::init_column_expr(const share::schema::ObColumnSchemaV2 &colu
   if (OB_SUCC(ret) && column_schema.is_collection()) {
     column_expr.set_subschema_id(UINT_MAX16);
   }
-  if (column_schema.is_enum_or_set() || column_schema.is_collection()) {
+  if (column_schema.is_enum_or_set()
+      || column_schema.is_collection()
+      || (column_schema.is_common_user_defined_sql_type())) {
     if (NULL == session_info) {
     // in some ddl case, session is null and the expr will not be formalized
     // then there is no need to init subschema_id
@@ -7372,6 +7374,14 @@ int ObRawExprUtils::init_column_expr_subschema(const share::schema::ObColumnSche
     } else if (OB_FAIL(exec_ctx->get_subschema_id_by_type_string(
                                   column_schema.get_extended_type_info().at(0), subschema_id))) {
       LOG_WARN("failed to get subschema id by type string", K(ret));
+    } else {
+      column_expr.set_subschema_id(subschema_id);
+    }
+  } else if (column_schema.is_common_user_defined_sql_type()) {
+    uint16_t subschema_id = ObInvalidSqlType;
+    const uint64_t udt_id = column_schema.get_sub_data_type();
+    if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+      LOG_WARN("failed to get subschema id by udt id", K(ret), K(udt_id));
     } else {
       column_expr.set_subschema_id(subschema_id);
     }
@@ -7927,6 +7937,45 @@ int ObRawExprUtils::build_ora_decode_expr(ObRawExprFactory *expr_factory,
   return ret;
 }
 
+int ObRawExprUtils::check_collection_cast(const uint64_t src_udt_id,
+                                          const uint64_t dst_udt_id,
+                                          share::schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  if (src_udt_id == dst_udt_id) {
+    // same udt type, compatible
+  } else {
+    const share::schema::ObUDTTypeInfo *src_info = NULL;
+    const share::schema::ObUDTTypeInfo *dest_info = NULL;
+    const uint64_t src_tenant_id = pl::get_tenant_id_by_object_id(src_udt_id);
+    const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(dst_udt_id);
+    OZ (schema_guard.get_udt_info(src_tenant_id, src_udt_id, src_info));
+    OZ (schema_guard.get_udt_info(dest_tenant_id, dst_udt_id, dest_info));
+    if (OB_SUCC(ret) && (OB_ISNULL(src_info) || OB_ISNULL(dest_info))) {
+      ret = OB_ERR_INVALID_CAST_UDT;
+      LOG_WARN("src or dst info can not cast", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (src_info->is_collection() && dest_info->is_collection()) {
+        CK (OB_NOT_NULL(src_info->get_coll_info()), OB_NOT_NULL(dest_info->get_coll_info()));
+        if (OB_SUCC(ret)) {
+          if (src_info->get_coll_info()->get_elem_type_id() != dest_info->get_coll_info()->get_elem_type_id()) {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("collection to cast has different elements",
+                     K(src_info->get_coll_info()->get_elem_type_id()),
+                     K(dest_info->get_coll_info()->get_elem_type_id()),
+                     K(ret));
+          }
+        }
+      } else {
+        ret = OB_ERR_INVALID_CAST_UDT;
+        LOG_WARN("src or dst info can not cast", K(ret), K(src_info->is_collection()), K(dest_info->is_collection()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &schema_checker, bool is_prepare, bool &skip_check)
 {
   int ret = OB_SUCCESS;
@@ -7989,33 +8038,9 @@ int ObRawExprUtils::check_composite_cast(ObRawExpr *&expr, ObSchemaChecker &sche
         } else if (udt_id == src->get_udt_id()) { //同类型cast，直接返回原始表达式
           expr = src;
         } else {
-          const share::schema::ObUDTTypeInfo *src_info = NULL;
-          const share::schema::ObUDTTypeInfo *dest_info = NULL;
-          const uint64_t src_tenant_id = pl::get_tenant_id_by_object_id(src->get_udt_id());
-          const uint64_t dest_tenant_id = pl::get_tenant_id_by_object_id(udt_id);
-          OZ (schema_checker.get_udt_info(src_tenant_id, src->get_udt_id(), src_info));
-          OZ (schema_checker.get_udt_info(dest_tenant_id, udt_id, dest_info));
-          if (OB_SUCC(ret) && (OB_ISNULL(src_info) || OB_ISNULL(dest_info))) { //pl extend type does not support
-            ret = OB_ERR_INVALID_CAST_UDT;
-            LOG_WARN("src or dst info can not cast", K(ret));
-          }
-          if (OB_SUCC(ret)) {
-            if (src_info->is_collection() && dest_info->is_collection()) {
-              CK (OB_NOT_NULL(src_info->get_coll_info()), OB_NOT_NULL(dest_info->get_coll_info()));
-              if (OB_SUCC(ret)) {
-                if (src_info->get_coll_info()->get_elem_type_id() != dest_info->get_coll_info()->get_elem_type_id()) {
-                  ret = OB_ERR_INVALID_TYPE_FOR_OP;
-                  LOG_WARN("collection to cast has different elements",
-                           K(src_info->get_coll_info()->get_elem_type_id()),
-                           K(dest_info->get_coll_info()->get_elem_type_id()),
-                           K(ret));
-                }
-              }
-            } else {
-              ret = OB_ERR_INVALID_CAST_UDT;
-              LOG_WARN("src or dst info can not cast", K(ret), K(src_info->is_collection()), K(dest_info->is_collection()));
-            }
-          }
+          share::schema::ObSchemaGetterGuard *schema_guard = schema_checker.get_schema_guard();
+          CK (OB_NOT_NULL(schema_guard));
+          OZ (check_collection_cast(src->get_udt_id(), udt_id, *schema_guard));
         }
       }
     }
@@ -8878,6 +8903,10 @@ int ObRawExprUtils::check_need_cast_expr(const ObRawExprResType &src_type,
                && src_type.get_subschema_id() != dst_type.get_subschema_id()) {
       // array element cast
       need_cast = true;
+    } else if (src_type.is_user_defined_sql_type()
+               && src_type.get_subschema_id() != dst_type.get_subschema_id()) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("udt id mismatch", K(ret), K(src_type), K(dst_type));
     }
     // mark as scale adjust cast to avoid repeat cast error
     if (need_cast) {

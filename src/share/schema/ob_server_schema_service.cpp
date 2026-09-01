@@ -6155,7 +6155,8 @@ int ObServerSchemaService::get_increment_schemas_for_data_dict(
     common::ObIAllocator &allocator,
     common::ObIArray<const ObTenantSchema *> &tenant_schemas,
     common::ObIArray<const ObDatabaseSchema *> &database_schemas,
-    common::ObIArray<const ObTableSchema *> &table_schemas)
+    common::ObIArray<const ObTableSchema *> &table_schemas,
+    common::ObIArray<const ObUDTTypeInfo *> &udt_schemas)
 {
   int ret = OB_SUCCESS;
   ObSchemaService::SchemaOperationSetWithAlloc schema_operations;
@@ -6180,7 +6181,7 @@ int ObServerSchemaService::get_increment_schemas_for_data_dict(
       // skip
     } else if (OB_FAIL(fetch_increment_schemas_for_data_dict_(
                trans, allocator, tenant_id, schema_keys,
-               tenant_schemas, database_schemas, table_schemas))) {
+               tenant_schemas, database_schemas, table_schemas, udt_schemas))) {
       LOG_WARN("fail to get increment schemas for data dict",
                KR(ret), K(tenant_id), K(start_version));
     }
@@ -6193,6 +6194,7 @@ int ObServerSchemaService::get_increment_schemas_for_data_dict(
 // 1. new_tenant_keys_/alter_tenant_keys_
 // 2. new_table_keys_
 // 3. new_database_keys_
+// 4. new_udt_keys_
 int ObServerSchemaService::get_increment_schema_keys_for_data_dict_(
     const ObSchemaService::SchemaOperationSetWithAlloc &schema_operations,
     AllSchemaKeys &schema_keys)
@@ -6202,6 +6204,8 @@ int ObServerSchemaService::get_increment_schema_keys_for_data_dict_(
   int64_t bucket_size = schema_operations.count();
   if (OB_FAIL(schema_keys.create(bucket_size))) {
     LOG_WARN("fail to create hashset", KR(ret), K(bucket_size));
+  } else if (OB_FAIL(schema_mgr.init())) {
+    LOG_WARN("fail to init empty schema_mgr for data_dict", KR(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < schema_operations.count(); ++i) {
       const ObSchemaOperation &schema_operation = schema_operations.at(i);
@@ -6224,6 +6228,12 @@ int ObServerSchemaService::get_increment_schema_keys_for_data_dict_(
                     schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment table id", KR(ret));
         }
+      } else if (schema_operation.op_type_ > OB_DDL_UDT_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_UDT_OPERATION_END) {
+        if (OB_FAIL(get_increment_udt_keys(
+                    schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment udt id", KR(ret));
+        }
       } else {
         // do nothing
       }
@@ -6240,7 +6250,8 @@ int ObServerSchemaService::fetch_increment_schemas_for_data_dict_(
     const AllSchemaKeys &schema_keys,
     common::ObIArray<const ObTenantSchema *> &tenant_schemas,
     common::ObIArray<const ObDatabaseSchema *> &database_schemas,
-    common::ObIArray<const ObTableSchema *> &table_schemas)
+    common::ObIArray<const ObTableSchema *> &table_schemas,
+    common::ObIArray<const ObUDTTypeInfo *> &udt_schemas)
 {
   int ret = OB_SUCCESS;
   if (!check_inner_stat()) {
@@ -6259,6 +6270,10 @@ int ObServerSchemaService::fetch_increment_schemas_for_data_dict_(
             trans, allocator, tenant_id, schema_keys, table_schemas))) {
     LOG_WARN("fail to fetch increment table schemas",
              KR(ret), K(tenant_id), "new_tables", schema_keys.new_table_keys_);
+  } else if (OB_FAIL(fetch_increment_udt_schemas_for_data_dict_(
+            trans, allocator, tenant_id, schema_keys, udt_schemas))) {
+    LOG_WARN("fail to fetch increment udt schemas",
+             KR(ret), K(tenant_id), "new_udts", schema_keys.new_udt_keys_);
   }
   return ret;
 }
@@ -6431,6 +6446,60 @@ int ObServerSchemaService::fetch_increment_table_schemas_for_data_dict_(
                    "schema_version", table_schema->get_schema_version());
         }
       } // end for
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::fetch_increment_udt_schemas_for_data_dict_(
+    common::ObMySQLTransaction &trans,
+    common::ObIAllocator &allocator,
+    const uint64_t tenant_id,
+    const AllSchemaKeys &schema_keys,
+    common::ObIArray<const ObUDTTypeInfo *> &udt_schemas)
+{
+  int ret = OB_SUCCESS;
+  udt_schemas.reset();
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else {
+    ObArray<uint64_t> udt_ids;
+    FOREACH_X(key, schema_keys.new_udt_keys_, OB_SUCC(ret)) {
+      const uint64_t udt_id = key->first.get_udt_key().get_type_id();
+      if (OB_FAIL(udt_ids.push_back(udt_id))) {
+        LOG_WARN("fail to push back udt key", KR(ret), K(udt_id));
+      }
+    } // end FOREACH_X
+    ObRefreshSchemaStatus status;
+    status.tenant_id_ = tenant_id;
+    int64_t schema_version = INT64_MAX - 1;
+    ObSEArray<ObUDTTypeInfo, 2> tmp_udts;
+    if (OB_SUCC(ret) && udt_ids.count() > 0) {
+      if (FAILEDx(schema_service_->get_batch_udts(
+          status, schema_version, udt_ids, trans, tmp_udts))) {
+        LOG_WARN("get batch udts failed", KR(ret), K(status), K(udt_ids));
+      } else if (tmp_udts.count() != udt_ids.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("udt cnt not match", KR(ret), K(udt_ids), K(tmp_udts));
+      } else {
+        ObUDTTypeInfo *udt_ptr = NULL;
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_udts.count(); i++) {
+          const ObUDTTypeInfo &udt_info = tmp_udts.at(i);
+          if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator, udt_info, udt_ptr))) {
+            LOG_WARN("fail to alloc udt schema", KR(ret), K(udt_info));
+          } else if (OB_ISNULL(udt_ptr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ptr is null", KR(ret), K(udt_info));
+          } else if (OB_FAIL(udt_schemas.push_back(udt_ptr))) {
+            LOG_WARN("fail to push back udt schema", KR(ret), KPC(udt_ptr));
+          } else {
+            LOG_INFO("fetch increment udt schema for data dict", K(tenant_id),
+                     "udt_id", udt_ptr->get_type_id(),
+                     "schema_version", udt_ptr->get_schema_version());
+          }
+        } // end for
+      }
     }
   }
   return ret;

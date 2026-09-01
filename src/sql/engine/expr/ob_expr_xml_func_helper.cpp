@@ -1346,17 +1346,14 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
         if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
+        } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE
+                   || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE
+                   || udt_meta.pl_type_ == pl::PL_NESTED_TABLE_TYPE) {
+          // Keep common SQL UDT in serialized form here. MySQL row encoding will
+          // temporarily cast it to PL extend only when writing the cell.
         } else {
-          ObObj result;
-          if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE) {
-            if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(exec_context, result, value, udt_meta))) {
-              LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(udt_meta.udt_id_));
-            }
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
-          }
-          OX (value = result);
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
         }
       }
     }

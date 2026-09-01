@@ -466,8 +466,24 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
   ObSEArray<ObUDFParamDesc, 4> all_params_desc;
   ObSEArray<ObExprResType, 4> params_type;
   ObSEArray<ObExprResType, 4> all_params_type;
-  result.set_meta_type(result_type_);
-  if (OB_FAIL(params_type.push_back(result_type_))) {
+  ObExprResType result_param_type = result_type_;
+  if (result_type_.is_user_defined_sql_type()) {
+    ObSqlUDTMeta udt_meta;
+    const uint16_t subschema_id = result_type_.get_subschema_id();
+    if (OB_ISNULL(exec_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null exec ctx", K(ret));
+    } else if (OB_FAIL(exec_ctx_->get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+      LOG_WARN("failed to get sql udt meta for pl agg udf result param",
+               K(ret), K(subschema_id), K(result_type_));
+    } else {
+      result_param_type.set_ext();
+      result_param_type.set_extend_type(udt_meta.pl_type_);
+      result_param_type.set_udt_id(result_type_.get_udt_id());
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(params_type.push_back(result_param_type))) {
     LOG_WARN("failed to push back type", K(ret));
   } else if (OB_FAIL(params_desc.push_back(
       ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, 0)))) {
@@ -493,7 +509,7 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
       LOG_WARN("failed to push back type", K(ret));
     } else if (OB_FAIL(all_params_desc.push_back(ObUDFParamDesc()))) {
       LOG_WARN("failed to push back param desc", K(ret));
-    } else if (OB_FAIL(all_params_type.push_back(result_type_))) {
+    } else if (OB_FAIL(all_params_type.push_back(result_param_type))) {
       LOG_WARN("failed to push back type", K(ret));
     } else if (OB_FAIL(all_params_desc.push_back(
         ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, 1)))) {
@@ -533,6 +549,8 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
                 K(ret),
                 K(udf_params.at(1)),
                 K(result_type_));
+    } else if (udf_params.at(1).is_pl_extend()) {
+      udf_params.at(1).copy_value_or_obj(result, true);
     } else if (!ob_is_lob_tc(result_type_.get_type())) {
       ObObj src_obj;
       udf_params.at(1).copy_value_or_obj(src_obj, true);

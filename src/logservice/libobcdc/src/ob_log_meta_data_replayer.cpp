@@ -258,11 +258,12 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
         DictTenantArray &tenant_metas = part_trans_task.get_dict_tenant_array();
         DictDatabaseArray &database_metas = part_trans_task.get_dict_database_array();
         DictTableArray &table_metas = part_trans_task.get_dict_table_array();
+        DictUdtArray &udt_metas = part_trans_task.get_dict_udt_array();
         const common::ObCompatibilityMode &compatible_mode = tenant_info.get_compatibility_mode();
         lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
 
         if (OB_FAIL(schema_inc_replay_.replay(part_trans_task, tenant_metas, database_metas,
-            table_metas, tenant_info))) {
+            table_metas, udt_metas, tenant_info))) {
           LOG_ERROR("schema_inc_replay_ replay failed", KR(ret), K(part_trans_task), K(tenant_info));
         } else if (OB_FAIL(convert_to_compat_mode(compatible_mode, compat_mode))) {
           LOG_ERROR("convert to compat mode fail", KR(ret), K(compatible_mode));

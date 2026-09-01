@@ -417,11 +417,25 @@ public:
   }
 
   int deep_copy_name(common::ObIAllocator &allocator, const common::ObString &src, common::ObString &dst) const;
+  // Guard overloads are thin wrappers; template is the only implementation.
+  // SCHEMA_PROVIDER must provide: get_udt_info(tenant_id, udt_id, const ObUDTTypeInfo *&)
   int transform_to_pl_type(common::ObIAllocator &allocator,
                            ObSchemaGetterGuard &schema_guard,
                            const pl::ObUserDefinedType *&pl_type) const;
   int transform_to_pl_type(const ObUDTTypeAttr* attr_info, ObSchemaGetterGuard &schema_guard, pl::ObPLDataType &pl_type) const;
   int transform_to_pl_type(const ObUDTCollectionType *coll_info, pl::ObPLDataType &pl_type) const;
+  template <typename SCHEMA_PROVIDER>
+  int transform_to_pl_type(common::ObIAllocator &allocator,
+                           SCHEMA_PROVIDER &schema_provider,
+                           const pl::ObUserDefinedType *&pl_type) const;
+  template <typename SCHEMA_PROVIDER>
+  int transform_to_pl_type(const ObUDTTypeAttr* attr_info,
+                           SCHEMA_PROVIDER &schema_provider,
+                           pl::ObPLDataType &pl_type) const;
+
+  int check_dependency_valid(ObSchemaGetterGuard &schema_guard) const;
+  template <typename SCHEMA_PROVIDER>
+  int check_dependency_valid(SCHEMA_PROVIDER &schema_provider) const;
 
   //getter
   OB_INLINE uint64_t get_tenant_id() const { return tenant_id_; }
@@ -563,8 +577,6 @@ public:
     return bret;
   }
 
-  int check_dependency_valid(ObSchemaGetterGuard &schema_guard) const;
-  
   TO_STRING_KV(K_(tenant_id),
                K_(database_id),
                K_(schema_version),
@@ -619,5 +631,7 @@ private:
 }  // namespace schema
 }  // namespace share
 }  // namespace oceanbase
+
+#include "ob_udt_info.ipp"
 
 #endif /* OCEANBASE_SRC_SHARE_SCHEMA_OB_UDT_INFO_H_ */

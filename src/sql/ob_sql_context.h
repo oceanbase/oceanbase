@@ -728,6 +728,7 @@ public:
   bool is_pre_execute_;
   bool is_prepare_with_params_;
   bool is_prepare_stage_;
+  bool disable_sql_udt_deduce_in_pl_;
   ParseResult *parse_result_;
   ParamStore *prepare_params_;
   bool is_dynamic_sql_;

@@ -50,6 +50,10 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
         ObArenaAllocator *arena_allocator = static_cast<ObArenaAllocator *>(parent_allocator_);
         CK (OB_NOT_NULL(arena_allocator));
         OX (memattr_ = arena_allocator->get_arena().get_page_allocator().get_attr());
+      } else if (typeid(*parent_allocator_) == typeid(ObSafeArenaAllocator)) {
+        ObSafeArenaAllocator *safe_arena_allocator = static_cast<ObSafeArenaAllocator *>(parent_allocator_);
+        CK (OB_NOT_NULL(safe_arena_allocator));
+        OX (memattr_ = safe_arena_allocator->get_arena_allocator().get_arena().get_page_allocator().get_attr());
       }
       OX (new (allocator_)ObLiteFIFOAllocator(MTL_ID()));
       OX (static_cast<ObLiteFIFOAllocator *>(allocator_)->init(nullptr, BLOCK_SIZE, memattr_));

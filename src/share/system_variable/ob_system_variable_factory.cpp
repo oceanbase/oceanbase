@@ -576,6 +576,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
+  "_enable_pl_composite_as_sql_udt",
   "_enable_rich_vector_format",
   "_enable_storage_cardinality_estimation",
   "_force_order_preserve_set",
@@ -1425,6 +1426,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
+  SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT,
   SYS_VAR__ENABLE_RICH_VECTOR_FORMAT,
   SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION,
   SYS_VAR__FORCE_ORDER_PRESERVE_SET,
@@ -3108,7 +3110,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "json_float_full_precision",
   "caching_sha2_password_digest_rounds",
   "ob_udf_cost_factor",
-  "ob_udf_selectivity"
+  "ob_udf_selectivity",
+  "_enable_pl_composite_as_sql_udt"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -4159,6 +4162,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarCachingSha2PasswordDigestRounds)
         + sizeof(ObSysVarObUdfCostFactor)
         + sizeof(ObSysVarObUdfSelectivity)
+        + sizeof(ObSysVarEnablePlCompositeAsSqlUdt)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -11779,6 +11783,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_UDF_SELECTIVITY))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObUdfSelectivity));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnablePlCompositeAsSqlUdt())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnablePlCompositeAsSqlUdt", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnablePlCompositeAsSqlUdt));
       }
     }
 
@@ -21094,6 +21107,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObUdfSelectivity())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObUdfSelectivity", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnablePlCompositeAsSqlUdt)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnablePlCompositeAsSqlUdt)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnablePlCompositeAsSqlUdt())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnablePlCompositeAsSqlUdt", K(ret));
       }
       break;
     }

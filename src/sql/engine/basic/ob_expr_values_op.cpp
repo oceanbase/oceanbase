@@ -538,8 +538,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
       bool need_cast_collection_element =
         (src_meta.type_ == ObCollectionSQLType && dst_expr->datum_meta_.type_ == ObCollectionSQLType
          && src_expr->obj_meta_.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id());
-      bool need_cast_sql_udt = (ob_is_user_defined_sql_type(src_meta.type_) && ob_is_user_defined_sql_type(dst_expr->datum_meta_.type_)
-                               && (src_expr->obj_meta_.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id()));
+      bool need_cast_sql_udt = (ob_is_user_defined_sql_type(src_obj_meta.get_type()) && ob_is_user_defined_sql_type(dst_expr->datum_meta_.type_)
+                               && (src_obj_meta.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id()));
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (src_expr == dst_expr) {

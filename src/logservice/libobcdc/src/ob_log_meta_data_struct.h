@@ -175,6 +175,18 @@ public:
   int replace_dict_table_meta(const datadict::ObDictTableMeta &new_dict_table_meta);
   int remove_table_meta(const uint64_t table_id);
 
+  // UDT Meta
+  int alloc_dict_udt_meta(datadict::ObDictUdtMeta *&dict_udt_meta);
+  int free_dict_udt_meta(datadict::ObDictUdtMeta *dict_udt_meta);
+  int insert_dict_udt_meta(datadict::ObDictUdtMeta *dict_udt_meta);
+  int replace_dict_udt_meta(const datadict::ObDictUdtMeta &new_dict_udt_meta);
+  int get_udt_meta(const uint64_t udt_id, datadict::ObDictUdtMeta *&udt_meta);
+  int get_udt_schema(
+      const uint64_t tenant_id,
+      const uint64_t udt_id,
+      const share::schema::ObUDTTypeInfo *&udt_schema,
+      int64_t timeout = 1000);
+
   // Get TenantSchemaInfo
   int get_tenant_schema_info(TenantSchemaInfo &tenant_schema_info);
 
@@ -222,11 +234,13 @@ public:
       K_(is_inited),
       K_(dict_tenant_meta),
       "db_count", db_map_.count(),
-      "table_count", table_map_.count());
+      "table_count", table_map_.count(),
+      "udt_count", udt_map_.count());
 
 private:
   typedef common::ObLinearHashMap<MetaDataKey, datadict::ObDictDatabaseMeta *> DataDictDBMap;
   typedef common::ObLinearHashMap<MetaDataKey, datadict::ObDictTableMeta *> DataDictTableMap;
+  typedef common::ObLinearHashMap<MetaDataKey, datadict::ObDictUdtMeta *> DataDictUDTMap;
   typedef common::ObConcurrentFIFOAllocator CFIFOAllocator;
   static const int64_t ALLOCATOR_TOTAL_LIMIT = 10L * 1024L * 1024L * 1024L;
   static const int64_t ALLOCATOR_HOLD_LIMIT = common::OB_MALLOC_BIG_BLOCK_SIZE;
@@ -246,6 +260,7 @@ private:
   datadict::ObDictTenantMeta dict_tenant_meta_;
   DataDictDBMap db_map_;
   DataDictTableMap table_map_;
+  DataDictUDTMap udt_map_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDictTenantInfo);
 };

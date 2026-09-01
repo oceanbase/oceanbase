@@ -11606,14 +11606,23 @@ CAST_FUNC_NAME(udt, udt)
       LOG_WARN("fail to get udt id from obj meta", K(ret));
     } else if (OB_FAIL(get_udt_id(ctx, out_obj_meta, out_udt_id))) {
       LOG_WARN("fail to get udt id from obj meta", K(ret));
-    } else if (ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(in_udt_id, out_udt_id)
-               || in_udt_id == out_udt_id) {
+    } else if (ObGeometryTypeCastUtil::is_sdo_geometry_udt(in_udt_id)
+               && ObGeometryTypeCastUtil::is_sdo_geometry_udt(out_udt_id)
+               && !ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(in_udt_id, out_udt_id)) {
+      ret = cast_udt_to_other_not_support(expr, ctx, res_datum);
+    } else if (CM_IS_COLUMN_CONVERT(expr.extra_)
+               && in_udt_id != out_udt_id
+               && !(ObGeometryTypeCastUtil::is_sdo_geometry_udt(in_udt_id)
+                    && ObGeometryTypeCastUtil::is_sdo_geometry_udt(out_udt_id))) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("udt id mismatch in column convert", K(ret), K(in_obj_meta), K(out_obj_meta),
+               K(in_udt_id), K(out_udt_id), K(expr.extra_));
+    } else {
+      // compatible collection cast is validated at resolve phase, pass through like pl extend
       ObExprStrResAlloc expr_res_alloc(expr, ctx);
       if (OB_FAIL(res_datum.deep_copy(*child_res, expr_res_alloc))) {
         LOG_WARN("Failed to deep copy from res datum", K(ret));
       }
-    } else {
-      ret = cast_udt_to_other_not_support(expr, ctx, res_datum);
     }
   }
   return ret;
@@ -11902,7 +11911,9 @@ CAST_FUNC_NAME(sql_udt, pl_extend)
       if (OB_FAIL(cast_sql_xml_pl_xml(expr, ctx, res_datum, child_res))) {
         LOG_WARN("failed to cast sql xmltype to pl xmltype", K(ret));
       }
-    } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE) {
+    } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE
+               || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE
+               || udt_meta.pl_type_ == pl::PL_NESTED_TABLE_TYPE) {
       ObObj result;
       ObObj udt_obj;
       if (OB_FAIL(child_res->to_obj(udt_obj, in_obj_meta))) {
@@ -12014,19 +12025,22 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
                K(in_obj_meta.get_type()), K(root_obj.get_meta().get_extend_type()), K(sql_udt.get_udt_meta().pl_type_));
     } else if (root_obj.get_ext() == 0) {
       res_datum.set_null();
-    } else if (sql_udt.get_udt_meta().pl_type_ == pl::PL_VARRAY_TYPE) { // single varray
-      pl::ObPLVArray *varray = reinterpret_cast<pl::ObPLVArray *>(root_obj.get_ext());
-      if (OB_ISNULL(varray)) {
+    } else if (sql_udt.get_udt_meta().pl_type_ == pl::PL_VARRAY_TYPE
+               || sql_udt.get_udt_meta().pl_type_ == pl::PL_NESTED_TABLE_TYPE) { // single collection
+      pl::ObPLCollection *coll = reinterpret_cast<pl::ObPLCollection *>(root_obj.get_ext());
+      if (OB_ISNULL(coll)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("failed to get pl data type info", K(ret));
-      } else if (varray->is_null()) {
+      } else if (coll->is_null()) {
         res_datum.set_null();
-      } else if (varray->get_id() != sql_udt.get_udt_meta().udt_id_) {
+      } else if (CM_IS_COLUMN_CONVERT(expr.extra_) && coll->get_id() != sql_udt.get_udt_meta().udt_id_) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("inconsistent datatypes", K(varray->get_id()), K(sql_udt.get_udt_meta().udt_id_));
+        LOG_WARN("inconsistent datatypes", K(coll->get_id()), K(sql_udt.get_udt_meta().udt_id_));
       } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(expr_res_alloc, &ctx.exec_ctx_, res_str, root_obj, udt_meta))) {
-        LOG_WARN("convert pl record to sql record failed",
+        LOG_WARN("convert pl collection to sql udt failed",
                  K(ret), K(subschema_id), K(udt_meta.udt_id_));
+      } else if (res_str.empty()) {
+        res_datum.set_null();
       } else {
         res_datum.set_string(res_str);
       }
@@ -12049,6 +12063,8 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
                                                                       udt_meta))) {
         LOG_WARN("convert pl record to sql record failed",
                  K(ret), K(subschema_id), K(udt_meta.udt_id_));
+      } else if (res_str.empty()) {
+        res_datum.set_null();
       } else {
         res_datum.set_string(res_str);
       }

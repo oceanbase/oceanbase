@@ -68,6 +68,7 @@ class ObTenantSchema;
 class ObDatabaseSchema;
 class ObTablegroupSchema;
 class ObTableSchema;
+class ObUDTTypeInfo;
 class ObMultiVersionSchemaService;
 class ObNeedPriv;
 class ObSchemaMgr;
@@ -2881,7 +2882,8 @@ private:
       ObIAllocator &allocator,
       const ObIArray<const ObTenantSchema*> &tenant_schemas,
       const ObIArray<const ObDatabaseSchema*> &database_schemas,
-      const ObIArray<const ObTableSchema*> &table_schemas);
+      const ObIArray<const ObTableSchema*> &table_schemas,
+      const ObIArray<const ObUDTTypeInfo*> &udt_schemas);
   // regist multi_data_source data into trans
   int regist_multi_source_data_();
   int lock_ddl_epoch_(common::ObMySQLTransaction &trans);

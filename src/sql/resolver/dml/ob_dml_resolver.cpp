@@ -1074,7 +1074,7 @@ int ObDMLResolver::check_first_node_name(const ObString &node_name, bool &check_
 
   ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
   if (OB_ISNULL(node_name)) {
-    LOG_WARN("node_name input null", K(ret));
+    // do nothing ...
   } else if (OB_FAIL(schema_checker_->get_database_id(session_info_->get_effective_tenant_id(), node_name, database_id))) {
     ret = OB_SUCCESS;
     if (OB_ISNULL(select_stmt)) {
@@ -7860,15 +7860,17 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
     OX (alias_node = parse_tree.children_[1]);
   }
   CK (OB_NOT_NULL(function_table_expr));
+  CK (OB_NOT_NULL(session_info_));
   OZ (function_table_expr->deduce_type(session_info_));
-  // Convert SQL UDT to PL extend for table function
-  if (OB_SUCC(ret) && function_table_expr->get_result_type().is_user_defined_sql_type()) {
+  if (OB_SUCC(ret) && function_table_expr->get_result_type().is_user_defined_sql_type()
+      && (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_3 || !session_info_->get_local_enable_pl_composite_as_sql_udt())) {
     OZ (ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(params_.expr_factory_,
                                                        params_.session_info_,
                                                        function_table_expr));
   }
   if (OB_SUCC(ret)) {
-    if (function_table_expr->get_result_type().is_ext()) {
+    if (function_table_expr->get_result_type().is_ext()
+        || function_table_expr->get_result_type().is_user_defined_sql_type()) {
       // PL collection used in TABLE(), extract PL info from schema
       CK(OB_NOT_NULL(schema_checker_));
       OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= true);
@@ -7882,7 +7884,8 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
         CK (OB_NOT_NULL(package_guard));
         if (OB_FAIL(ret)) {
         } else if (parse_tree.children_[0]->type_ == T_QUESTIONMARK
-          && function_table_expr->get_result_type().is_ext()
+          && (function_table_expr->get_result_type().is_ext()
+              || function_table_expr->get_result_type().is_user_defined_sql_type())
           && is_mocked_anonymous_array_id(function_table_expr->get_udt_id())) {
             const ObCollectionType *coll_type = NULL;
             OZ (get_coll_type_from_anonymous_array(function_table_expr, coll_type, *package_guard));
@@ -13154,7 +13157,8 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_item.function_table_expr_));
   if (OB_SUCC(ret)) {
-    if (table_item.function_table_expr_->get_result_type().is_ext()) {
+    if (table_item.function_table_expr_->get_result_type().is_ext()
+        || table_item.function_table_expr_->get_result_type().is_user_defined_sql_type()) {
       ret = resolve_function_table_column_item_udf(table_item, col_items);
     } else {
       ret = resolve_function_table_column_item_sys_func(table_item, col_items);
@@ -13334,8 +13338,18 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
           OX (meta = pl_type->get_data_type()->get_meta_type());
           OX (accuracy.set_accuracy(pl_type->get_data_type()->get_accuracy()));
         } else {
-          OX (meta.set_ext());
-          OX (meta.set_extend_type(pl_type->get_type()));
+          if (OB_NOT_NULL(session_info_)
+              && OB_NOT_NULL(session_info_->get_cur_exec_ctx())
+              && table_expr->get_result_type().is_user_defined_sql_type()) {
+            meta.set_type(ObUserDefinedSQLType);
+            uint16_t subschema_id = ObInvalidSqlType;
+            OZ (session_info_->get_cur_exec_ctx()->get_subschema_id_by_udt_id(
+                pl_type->get_user_type_id(), subschema_id));
+            OX (meta.set_subschema_id(subschema_id));
+          } else {
+            OX (meta.set_ext());
+            OX (meta.set_extend_type(pl_type->get_type()));
+          }
           OX (accuracy.set_accuracy(pl_type->get_user_type_id()));
         }
       }
@@ -13364,8 +13378,18 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
       ObAccuracy accuracy = ObAccuracy(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
       common::ObObjMeta meta;
       accuracy.set_accuracy(coll_type->get_element_type().get_user_type_id());
-      meta.set_ext();
-      meta.set_extend_type(coll_type->get_element_type().get_type());
+      if (OB_NOT_NULL(session_info_)
+          && OB_NOT_NULL(session_info_->get_cur_exec_ctx())
+          && table_expr->get_result_type().is_user_defined_sql_type()) {
+        meta.set_type(ObUserDefinedSQLType);
+        uint16_t subschema_id = ObInvalidSqlType;
+        OZ (session_info_->get_cur_exec_ctx()->get_subschema_id_by_udt_id(
+            coll_type->get_element_type().get_user_type_id(), subschema_id));
+        OX (meta.set_subschema_id(subschema_id));
+      } else {
+        meta.set_ext();
+        meta.set_extend_type(coll_type->get_element_type().get_type());
+      }
       OZ (resolve_function_table_column_item(table_item,
                                              meta,
                                              accuracy,

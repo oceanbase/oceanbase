@@ -7602,7 +7602,8 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
                                                                             false))) {
       LOG_WARN("resolve expr_default expr failed", K(expr_str), K(column), K(ret));
     } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(
-        params.session_info_, expr, tmp_default_value, params.param_list_, allocator, true))) {
+        params.session_info_, expr, tmp_default_value, params.param_list_, allocator, true,
+        session_info->get_cur_exec_ctx()))) {
       LOG_WARN("Failed to get simple expr value", K(ret));
     } else if (OB_FAIL(add_udt_default_dependency(expr, schema_checker, ddl_arg))) {
       LOG_WARN("Failed to add udt default expr dependency", K(ret), K(expr));
@@ -7618,7 +7619,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
     } else if (column.is_user_defined_sql_type()) {
       //check default value type and udt id
       bool is_type_matched = (expr->get_result_type().get_type() == ObNullType) ||
-                           (expr->get_result_type().get_type() == ObExtendType &&
+                           ((expr->get_result_type().get_type() == ObExtendType || expr->get_result_type().is_user_defined_sql_type()) &&
                             expr->get_result_type().get_udt_id() == column.get_sub_data_type());
       if (!is_type_matched) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;

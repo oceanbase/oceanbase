@@ -496,7 +496,8 @@ int ObSQLUtils::calc_simple_expr_without_row(
     ObObj &result,
     const ParamStore *params,
     ObIAllocator &allocator,
-    bool force_copy_extend_type)
+    bool force_copy_extend_type,
+    ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory expr_factory(allocator);
@@ -511,7 +512,7 @@ int ObSQLUtils::calc_simple_expr_without_row(
     if (OB_FAIL(calc_const_expr(raw_expr, params, result, need_check))) {
       SQL_LOG(WARN, "failed to calc const expr", KPC(raw_expr), K(ret));
     } else { /*do nothing*/ }
-  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params, NULL, force_copy_extend_type))) {
+  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params, exec_ctx, force_copy_extend_type))) {
     SQL_LOG(WARN, "Get const_expr value error", KPC(raw_expr), K(ret));
   }
 
@@ -587,7 +588,12 @@ int ObSQLUtils::calc_sql_expression_without_row(
     LOG_WARN("session is NULL", K(ret));
   } else {
     const sql::ObExpr *new_expr = expr.get_expr();
-    exec_ctx.get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *exec_ctx.get_my_session());
+    // Only fetch cur_time when the expression tree actually depends on it (marked
+    // at PL code generation). need_cur_time() defaults to true for callers that do
+    // not compute the flag, preserving the original behavior.
+    if (!is_pl_expr_eval || static_cast<const ObSqlExpression &>(expr).need_cur_time()) {
+      exec_ctx.get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *exec_ctx.get_my_session());
+    }
     if (NULL == new_expr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("static engine should have implement this function. unexpected null", K(ret));

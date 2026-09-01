@@ -3122,6 +3122,7 @@ int PartTransTask::parse_multi_data_source_data_for_ddl(
   DictTenantArray &tenant_metas = multi_data_source_info_.get_dict_tenant_array();
   DictDatabaseArray &database_metas = multi_data_source_info_.get_dict_database_array();
   DictTableArray &table_metas = multi_data_source_info_.get_dict_table_array();
+  DictUdtArray &udt_metas = multi_data_source_info_.get_dict_udt_array();
 
   ARRAY_FOREACH_N(multi_data_source_node_arr_, idx, count) {
     MultiDataSourceNode &mds_node = multi_data_source_node_arr_.at(idx);
@@ -3132,12 +3133,12 @@ int PartTransTask::parse_multi_data_source_data_for_ddl(
       int64_t pos = 0;
 
       if (OB_FAIL(datadict::ObDataDictStorage::parse_dict_metas(allocator_, mds_data.ptr(), mds_data.length(), pos,
-            tenant_metas, database_metas, table_metas))) {
+            tenant_metas, database_metas, table_metas, udt_metas))) {
         LOG_ERROR("ObDataDictStorage parse_dict_metas failed", KR(ret), K(caller), K(idx), KPC(this));
       } else {
         //TODO DEBUG
         LOG_INFO("parse_dict_metas succ", K(caller), "tenant_id", tls_id_.get_tenant_id(), K_(trans_id),
-            K(tenant_metas), K(database_metas), K(table_metas));
+            K(tenant_metas), K(database_metas), K(table_metas), K(udt_metas));
       }
     }
   }

@@ -90,7 +90,8 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_expr = table_item.function_table_expr_));
 
-  if (OB_SUCC(ret) && table_expr->get_result_type().is_ext()) {
+  if (OB_SUCC(ret) && (table_expr->get_result_type().is_ext()
+                       || table_expr->get_result_type().is_user_defined_sql_type())) {
     CK (table_expr->get_udt_id() != OB_INVALID_ID);
 
     CK (OB_NOT_NULL(params.schema_checker_));
@@ -1382,7 +1383,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                                  src_type_id,
                                                  dst_pl_type,
                                                  is_sys_package))) {
-      LOG_WARN("argument type not match", K(ret), K(i), KPC(expr_params.at(i)), K(src_type), K(dst_pl_type));
+      LOG_WARN("argument type not match", K(ret), K(routine_info->get_routine_name()), K(i), KPC(expr_params.at(i)), K(src_type), K(dst_pl_type));
     }
   }
 
@@ -3941,7 +3942,7 @@ int ObResolverUtils::check_partition_range_value_result_type(const ObPartitionFu
 bool ObResolverUtils::is_expr_can_be_used_in_table_function(const ObRawExpr &expr)
 {
   bool bret = false;
-  if (expr.get_result_type().is_ext()) {
+  if (expr.get_result_type().is_ext() || expr.get_result_type().is_user_defined_sql_type()) {
     // for UDF
     bret = true;
   } else if (T_FUN_SYS_GENERATOR == expr.get_expr_type()) {
@@ -9067,6 +9068,7 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
           result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);   \
         } else if (result_type.is_char() || result_type.is_nchar()) {  \
           result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);   \
+          result_type.set_is_implicit_char_length(1);   \
         }  \
       }  \
       if (LS_INVALIED == result_type.get_length_semantics() && ob_is_string_tc(result_type.get_type())) {  \

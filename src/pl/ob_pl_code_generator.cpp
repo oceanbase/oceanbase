@@ -19,6 +19,7 @@
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "parser/parse_stmt_item_type.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
+#include "sql/ob_sql_utils.h"
 #include "external_routine/ob_java_udf.h"
 
 namespace oceanbase
@@ -28,6 +29,106 @@ using namespace jit;
 using namespace sql;
 namespace pl
 {
+
+namespace
+{
+// Whether the expression type itself reads physical_plan_ctx cur_time during eval.
+// Keep this in sync with the get_cur_time() call sites under src/sql/engine/expr/.
+// Three groups are covered:
+//   A. value IS the current time: now()/sysdate/current_date/...
+//   B. date functions that borrow the current date as base. Only the date-bearing
+//      ones are listed; HOUR/MINUTE/SECOND/MICROSECOND/SEC_TO_TIME/TIME_TO_SEC go
+//      through the with_date=false path and never read cur_time, so are excluded.
+//   json/xml. json_value/json_query/xmlcast may cast their result to a date type
+//      internally (conservatively marked).
+// The cast group (TIME -> date/datetime) is handled separately in
+// is_time_to_date_cast() because T_FUN_SYS_CAST is too common to mark by type alone.
+inline bool is_cur_time_dep_type(ObExprOperatorType type)
+{
+  bool bret = false;
+  switch (type) {
+    // group A: value is current time
+    case T_FUN_SYS_CUR_TIMESTAMP:
+    case T_FUN_SYS_CUR_TIME:
+    case T_FUN_SYS_CUR_DATE:
+    case T_FUN_SYS_UTC_TIME:
+    case T_FUN_SYS_UTC_TIMESTAMP:
+    case T_FUN_SYS_UTC_DATE:
+    case T_FUN_SYS_LOCALTIMESTAMP:
+    case T_FUN_SYS_SYSDATE:
+    case T_FUN_SYS_SYSTIMESTAMP:
+    case T_FUN_SYS_UNIX_TIMESTAMP:
+    // group B: date functions using current date as base
+    case T_FUN_SYS_EXTRACT:
+    case T_FUN_SYS_TIME:
+    case T_FUN_SYS_YEAR:
+    case T_FUN_SYS_MONTH:
+    case T_FUN_SYS_MONTH_NAME:
+    case T_FUN_SYS_DAY_OF_MONTH:
+    case T_FUN_SYS_DAY:
+    case T_FUN_SYS_DAY_OF_WEEK:
+    case T_FUN_SYS_DAY_OF_YEAR:
+    case T_FUN_SYS_DAY_NAME:
+    case T_FUN_SYS_TO_SECONDS:
+    case T_FUN_SYS_WEEK_OF_YEAR:
+    case T_FUN_SYS_WEEKDAY_OF_DATE:
+    case T_FUN_SYS_YEARWEEK_OF_DATE:
+    case T_FUN_SYS_WEEK:
+    case T_FUN_SYS_QUARTER:
+    case T_FUN_SYS_DATE_FORMAT:
+    case T_FUN_SYS_TIME_STAMP_ADD:
+    case T_FUN_SYS_DATE_ADD:
+    case T_FUN_SYS_DATE_SUB:
+    case T_FUN_SYS_FROM_UNIX_TIME:
+    case T_FUN_SYS_ORA_TRUNC:
+    case T_FUN_SYS_ROUND:
+    case T_OP_COLL_PRED:
+    // json/xml: may cast result to date type internally
+    case T_FUN_SYS_JSON_VALUE:
+    case T_FUN_SYS_JSON_QUERY:
+    case T_FUN_SYS_XMLCAST:
+      bret = true;
+      break;
+    default:
+      bret = false;
+      break;
+  }
+  return bret;
+}
+
+// A cast from TIME to a date-bearing type borrows the current date from cur_time
+// (see CAST_FUNC_NAME(time, datetime/date/mdatetime/mdate) in ob_datum_cast.cpp).
+inline bool is_time_to_date_cast(const ObExpr &expr)
+{
+  return T_FUN_SYS_CAST == expr.type_
+      && expr.arg_cnt_ >= 1
+      && OB_NOT_NULL(expr.args_)
+      && OB_NOT_NULL(expr.args_[0])
+      && ob_is_time_tc(expr.args_[0]->datum_meta_.type_)
+      && (ob_is_datetime_tc(expr.datum_meta_.type_)
+          || ob_is_date_tc(expr.datum_meta_.type_)
+          || ob_is_mysql_date_tc(expr.datum_meta_.type_)
+          || ob_is_mysql_datetime_tc(expr.datum_meta_.type_));
+}
+
+// Whether any node in the rt_expr tree depends on cur_time. Walked once at PL code
+// generation; the result is cached on ObSqlExpression so execution can skip the
+// gettimeofday in calc_sql_expression_without_row when not needed.
+bool expr_tree_need_cur_time(const ObExpr *expr)
+{
+  bool need = false;
+  if (OB_NOT_NULL(expr)) {
+    if (is_cur_time_dep_type(expr->type_) || is_time_to_date_cast(*expr)) {
+      need = true;
+    } else {
+      for (int64_t i = 0; !need && i < expr->arg_cnt_; ++i) {
+        need = expr_tree_need_cur_time(expr->args_[i]);
+      }
+    }
+  }
+  return need;
+}
+} // anonymous namespace
 
 int ObPLCodeGenerateVisitor::generate(const ObPLStmt &s)
 {
@@ -281,6 +382,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
       OZ (generator_.generate_expr(s.get_default(),
                                    s,
                                    is_complex_type_var ? OB_INVALID_ID : s.get_index(0),
+                                   is_complex_type_var ? false : true,
                                    p_result_obj));
       CK (OB_NOT_NULL(s.get_default_expr()));
 
@@ -522,7 +624,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
             value_expr = s.get_value_expr(i);
             if (OB_FAIL(right_value_guard.get_objparam_buffer(p_result_obj))) {
               LOG_WARN("failed to get_objparam_buffer", K(ret));
-            } else if (OB_FAIL(generator_.generate_expr(s.get_value_index(i), s, result_idx,
+            } else if (OB_FAIL(generator_.generate_expr(s.get_value_index(i), s, result_idx,true,
                                                  p_result_obj))) {
               LOG_WARN("failed to generate calc_expr func", K(ret));
             }
@@ -668,11 +770,11 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
 
               CK (static_cast<const ObObjAccessRawExpr*>(into_expr)->for_write());
               OZ (tmp_guard.get_objparam_buffer(into_address));
-              OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, into_address));
+              OZ (generator_.generate_expr(s.get_into_index(i), s, OB_INVALID_INDEX, false, into_address));
               OZ (generator_.extract_allocator_and_restore_obobjparam(into_address, allocator));
               if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION
                   && ObObjAccessIdx::has_same_collection_access(s.get_value_expr(i), static_cast<const ObObjAccessRawExpr *>(into_expr))) {
-                OZ (generator_.generate_expr(s.get_value_index(i), s, result_idx, p_result_obj));
+                OZ (generator_.generate_expr(s.get_value_index(i), s, result_idx, true, p_result_obj));
               }
               OZ (static_cast<const ObObjAccessRawExpr*>(into_expr)->get_final_type(final_type));
               if (s.get_value_index(i) != PL_CONSTRUCT_COLLECTION) {
@@ -861,7 +963,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLIfStmt &s)
 
             if (OB_FAIL(buffer_guard.get_objparam_buffer(p_result_obj))) {
               LOG_WARN("failed to get_objparm_buffer", K(ret));
-            } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX,
+            } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX, false,
                                                         p_result_obj))) {
               LOG_WARN("failed to generate calc_expr func", K(ret));
             } else if (OB_FAIL(generator_.extract_value_from_objparam(p_result_obj,
@@ -945,7 +1047,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
         LOG_WARN("failed to set current", K(s), K(ret));
       } else if (OB_FAIL(buffer_guard.get_objparam_buffer(p_result_obj))) {
         LOG_WARN("failed to get_objparam_buffer", K(ret));
-      } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX,
+      } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX, false,
                                                   p_result_obj))) {
         LOG_WARN("failed to generate calc_expr func", K(ret));
       } else if (OB_FAIL(generator_.extract_value_from_objparam(p_result_obj, s.get_cond_expr()->get_data_type(), result))) {
@@ -974,7 +1076,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLWhileStmt &s)
             // do nothing
           } else if (OB_FAIL(generator_.generate_early_exit(generator_.get_current_loop()->count_, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()))) {
             LOG_WARN("failed to generate calc_expr func", K(ret));
-          } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX,
+          } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX, false,
                                                       p_result_obj))) {
             LOG_WARN("failed to generate calc_expr func", K(ret));
           } else if (OB_FAIL(generator_.extract_value_from_objparam(p_result_obj, s.get_cond_expr()->get_data_type(), result))) {
@@ -1088,7 +1190,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLForLoopStmt &s)
           LOG_WARN("failed to create_store", K(ret), K(index_obj), K(generator_.get_current_loop()->index_));
         } else if (OB_FAIL(buffer_guard.get_objparam_buffer(p_value))) {
           LOG_WARN("failed to get_objparam_buffer", K(ret));
-        } else if (OB_FAIL(generator_.generate_expr(s.get_value(), s, s.get_ident(), p_value))) {
+        } else if (OB_FAIL(generator_.generate_expr(s.get_value(), s, s.get_ident(), false, p_value))) {
           LOG_WARN("failed to generate_expr", K(ret));
         }
       }
@@ -1482,7 +1584,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLRepeatStmt &s)
           LOG_WARN("failed to generate calc_expr func", K(ret));
         } else if (OB_FAIL(buffer_guard.get_objparam_buffer(p_result_obj))) {
           LOG_WARN("failed to get_objparam_buffer", K(ret));
-        } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX,
+        } else if (OB_FAIL(generator_.generate_expr(s.get_cond(), s, OB_INVALID_INDEX, false,
                                                     p_result_obj))) {
           LOG_WARN("failed to generate calc_expr func", K(ret));
         } else if (OB_FAIL(generator_.extract_value_from_objparam(p_result_obj, s.get_cond_expr()->get_data_type(), result))) {
@@ -1607,7 +1709,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLReturnStmt &s)
       ObPLCGBufferGuard buffer_guard(generator_);
 
       OZ (buffer_guard.get_objparam_buffer(p_result_obj));
-      OZ (generator_.generate_expr(s.get_ret(), s, OB_INVALID_INDEX, p_result_obj));
+      OZ (generator_.generate_expr(s.get_ret(), s, OB_INVALID_INDEX, false, p_result_obj));
       if (OB_SUCC(ret) && lib::is_oracle_mode()) { // check logic need before store function ret value
         if (generator_.get_ast().is_autonomous() &&
             OB_FAIL(generator_.generate_check_autonomos(s))) {
@@ -1889,7 +1991,7 @@ int ObPLCodeGenerator::generate_dynamic_sql(const ObPLExecuteStmt &s, ObPLCGBuff
         } else if ((!using_expr->is_obj_access_expr() && !(using_expr->get_result_type().is_ext() && s.is_out(i)))
                    || (using_expr->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(using_expr)->for_write()))) {
           OZ (out_param_guard.get_objparam_buffer(p_result_obj));
-          OZ (generate_expr(using_expr_idx, s, OB_INVALID_INDEX, p_result_obj));
+          OZ (generate_expr(using_expr_idx, s, OB_INVALID_INDEX, false, p_result_obj));
         } else {
           ObLLVMValue address, composite_allocator;
           ObPLDataType final_type;
@@ -1912,6 +2014,7 @@ int ObPLCodeGenerator::generate_dynamic_sql(const ObPLExecuteStmt &s, ObPLCGBuff
           OZ (generate_expr(using_expr_idx,
                                       s,
                                       OB_INVALID_INDEX,
+                                      false,
                                       address));
           if (is_need_extract) {
             OZ (extract_allocator_and_restore_obobjparam(address, composite_allocator));
@@ -3086,7 +3189,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
           if ((!s.get_param_expr(i)->is_obj_access_expr() && !(s.get_param_expr(i)->get_result_type().is_ext() && s.is_out(i)))
                || (s.get_param_expr(i)->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write())) {
             OZ (out_param_guard.get_objparam_buffer(p_result_obj));
-            OZ (generator_.generate_expr(s.get_param(i), s, OB_INVALID_INDEX, p_result_obj));
+            OZ (generator_.generate_expr(s.get_param(i), s, OB_INVALID_INDEX, generator_.get_ast().get_expr(s.get_param(i))->has_flag(IS_PL_MOCK_DEFAULT_EXPR), p_result_obj));
           } else {
             ObLLVMValue address, composite_allocator;
             ObPLDataType final_type;
@@ -3111,6 +3214,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                 OZ (generator_.generate_expr(s.get_param(i),
                                              s,
                                              OB_INVALID_INDEX,
+                                             false,
                                              address));
                 if (need_extract_obj) {
                   OZ (generator_.extract_allocator_and_restore_obobjparam(address, composite_allocator));
@@ -3120,6 +3224,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                 OZ (generator_.generate_expr(s.get_param(i),
                                              s,
                                              OB_INVALID_INDEX,
+                                             false,
                                              p_result_obj));
                 if (need_extract_obj) {
                   OZ (generator_.extract_allocator_and_restore_obobjparam(p_result_obj, composite_allocator));
@@ -3298,7 +3403,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareCursorStmt &s)
       ObPLCGBufferGuard default_value_guard(generator_);
 
       OZ (default_value_guard.get_objparam_buffer(p_result_obj));
-      OZ (generator_.generate_expr(s.get_default(), s, OB_INVALID_ID, p_result_obj));
+      OZ (generator_.generate_expr(s.get_default(), s, OB_INVALID_ID, false, p_result_obj));
       CK (OB_NOT_NULL(s.get_default_expr()));
 
       OZ (generator_.generate_check_not_null(s, var->is_not_null(), p_result_obj));
@@ -3538,7 +3643,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLPipeRowStmt &s)
 
       OZ (generator_.set_current(pipe_result_block));
       OZ (buffer_guard.get_objparam_buffer(p_result_obj));
-      OZ (generator_.generate_expr(s.get_row(), s, OB_INVALID_INDEX, p_result_obj));
+      OZ (generator_.generate_expr(s.get_row(), s, OB_INVALID_INDEX, false, p_result_obj));
       OX (args.reset());
       OZ (args.push_back(generator_.get_vars().at(generator_.CTX_IDX))); //PL的执行环境
       OZ (args.push_back(p_result_obj));
@@ -3721,7 +3826,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDoStmt &s)
 
         CK (OB_NOT_NULL(value_expr));
         OZ (buffer_guard.get_objparam_buffer(p_result_obj));
-        OZ (generator_.generate_expr(s.get_value_index(i), s, result_idx,p_result_obj));
+        OZ (generator_.generate_expr(s.get_value_index(i), s, result_idx, false, p_result_obj));
       }
     }
   }
@@ -3752,7 +3857,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCaseStmt &s)
 
       if (OB_FAIL(buffer_guard.get_objparam_buffer(p_result_obj))) {
         LOG_WARN("failed to get_objparam_buffer", K(ret));
-      } else if (OB_FAIL(generator_.generate_expr(case_expr_idx, s, case_var_idx, p_result_obj))) {
+      } else if (OB_FAIL(generator_.generate_expr(case_expr_idx, s, case_var_idx, false, p_result_obj))) {
         LOG_WARN("failed to generate calc_expr func", K(ret));
       }
     }
@@ -3787,7 +3892,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCaseStmt &s)
           } else if (OB_FAIL(buffer_guard.get_objparam_buffer(p_cond))) {
             LOG_WARN("failed to get_objparam_buffer", K(ret));
           } else if (OB_FAIL(generator_.generate_expr(
-                         current_when.expr_, s, OB_INVALID_INDEX, p_cond))) {
+                         current_when.expr_, s, OB_INVALID_INDEX, false, p_cond))) {
             LOG_WARN("failed to generate calc_expr func", K(ret));
           } else if (OB_FAIL(generator_.extract_value_from_objparam(
                          p_cond, expr->get_data_type(), cond))) {
@@ -4349,6 +4454,8 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(obj_param_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
@@ -4365,6 +4472,8 @@ int ObPLCodeGenerator::init_spi_service()
     } else if (OB_FAIL(arg_types.push_back(int64_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int64_type))) {
+      LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(obj_param_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
@@ -5913,7 +6022,7 @@ int ObPLCodeGenerator::generate_fetch(const ObPLStmt &s,
         OZ (get_helper().create_block(ObString("not null block"), get_func(), not_null_block));
 
         OZ (buffer_guard.get_objparam_buffer(p_limit_value));
-        OZ (generate_expr(limit, s, OB_INVALID_INDEX, p_limit_value));
+        OZ (generate_expr(limit, s, OB_INVALID_INDEX, false, p_limit_value));
         OZ (extract_type_ptr_from_objparam(p_limit_value, p_type_value));
         OZ (get_helper().create_load(ObString("load_type"), p_type_value, type_value));
         OZ (get_helper().create_icmp_eq(type_value, ObNullType, is_null));
@@ -6145,7 +6254,7 @@ int ObPLCodeGenerator::generate_expr_next_and_check(const ObPLForLoopStmt &s,
   }
   // 计算NextValue
   OZ (index_guard.get_objparam_buffer(p_index_obj));
-  OZ (generate_expr(s.get_next(), s, s.get_ident(), p_index_obj));
+  OZ (generate_expr(s.get_next(), s, s.get_ident(), false, p_index_obj));
   if (s.is_values_bound()) {
     ObLLVMValue p_tmp_obj;
     OX (p_tmp_obj = get_current_loop()->index_);
@@ -6207,7 +6316,7 @@ int ObPLCodeGenerator::generate_expr_next_and_check(const ObPLForLoopStmt &s,
 
     OZ (set_current(value_block));
     OZ (buffer_guard.get_objparam_buffer(p_value));
-    OZ (generate_expr(s.get_value(), s, s.get_ident(), p_value));
+    OZ (generate_expr(s.get_value(), s, s.get_ident(), false, p_value));
     OZ (get_helper().create_br(do_nothing_block));
     OZ (set_current(do_nothing_block));
   }
@@ -6262,13 +6371,13 @@ int ObPLCodeGenerator::generate_indices_with_between_bound(const ObPLForLoopStmt
                                 get_func(),
                                 not_exist_block));
   OZ (buffer_guard.get_objparam_buffer(p_exist_obj));
-  OZ (generate_expr(s.get_exists(), s, OB_INVALID_INDEX, p_exist_obj));
+  OZ (generate_expr(s.get_exists(), s, OB_INVALID_INDEX, false, p_exist_obj));
   OZ (extract_value_from_objparam(
     p_exist_obj, s.get_exists_expr()->get_data_type(), exist_value));
   OZ (get_helper().create_icmp_eq(exist_value, TRUE, is_exist));
   OZ (get_helper().create_cond_br(is_exist, exist_block, not_exist_block));
   OZ (set_current(not_exist_block));
-  OZ (generate_expr(s.get_next(), s, s.get_ident(), p_exist_obj));
+  OZ (generate_expr(s.get_next(), s, s.get_ident(), false, p_exist_obj));
   OZ (get_helper().create_load(ObString("load_exist_lower_obj"), p_exist_obj, exist_obj));
   OZ (get_helper().create_store(exist_obj, p_lower_obj));
   OZ (get_helper().create_br(exist_block));
@@ -6319,8 +6428,8 @@ int ObPLCodeGenerator::generate_bound_and_check(const ObPLForLoopStmt &s,
     OZ (buffer_guard.get_objparam_buffer(p_upper_obj));
 
     // 计算lower, upper
-    OZ (generate_expr(s.get_lower(), s, s.get_ident(), p_lower_obj));
-    OZ (generate_expr(s.get_upper(), s, OB_INVALID_INDEX, p_upper_obj));
+    OZ (generate_expr(s.get_lower(), s, s.get_ident(), false, p_lower_obj));
+    OZ (generate_expr(s.get_upper(), s, OB_INVALID_INDEX, false, p_upper_obj));
 
     if (s.is_indices_with_between_bound()) {
       OZ (generate_indices_with_between_bound(s, p_lower_obj));
@@ -7190,18 +7299,35 @@ int ObPLCodeGenerator::generate_set_extend(ObLLVMValue &p_obj,
   return ret;
 }
 
+bool ObPLCodeGenerator::is_foldable_const_obj_type(ObObjType type)
+{
+  // Only types whose entire payload fits in ObObj::v_.int64_ are safe to
+  // materialize at compile time via store_objparam + param_meta_ store.
+  return ObNullType == type || (type >= ObTinyIntType && type <= ObUInt64Type);
+}
+
 int ObPLCodeGenerator::generate_spi_calc(int64_t expr_idx,
                                          int64_t stmt_id,
                                          bool in_notfound,
                                          bool in_warning,
                                          int64_t result_idx,
+                                         bool is_assign_or_default_value,
                                          ObLLVMValue &p_result_obj)
 {
   int ret = OB_SUCCESS;
-  const ObSqlExpression *expr = get_expr(expr_idx);
-  if (OB_ISNULL(expr)) {
+  const ObRawExpr *raw_expr = ast_.get_expr(expr_idx);
+  if (OB_ISNULL(raw_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is NULL", K(ret));
+  } else if (!is_assign_or_default_value &&
+             OB_INVALID_INDEX == result_idx &&
+             (T_QUESTIONMARK == raw_expr->get_expr_type() ||
+             (IS_CONST_TYPE(raw_expr->get_expr_type()) &&
+             is_foldable_const_obj_type(raw_expr->get_result_type().get_type())))) {
+    if (OB_FAIL(generate_const_expr_calc(static_cast<const ObConstRawExpr &>(*raw_expr),
+                                          p_result_obj))) {
+      LOG_WARN("failed to generate_const_expr_calc", K(ret), K(expr_idx));
+    }
   } else {
     ObLLVMValue expr_idx_val;
     if (OB_FAIL(helper_.get_int64(expr_idx, expr_idx_val))) {
@@ -7210,7 +7336,8 @@ int ObPLCodeGenerator::generate_spi_calc(int64_t expr_idx,
       ObSEArray<ObLLVMValue, 4> args;
       ObLLVMValue result;
       ObLLVMValue int_value;
-      ObLLVMValue is_calc_once_value;
+      ObLLVMValue is_calc_once_value, is;
+      ObLLVMValue is_assign_or_default_value_value;
       ObLLVMValue package_id;
       int64_t udt_id = ast_.get_expr(expr_idx)->get_result_type().get_udt_id();
 
@@ -7234,6 +7361,10 @@ int ObPLCodeGenerator::generate_spi_calc(int64_t expr_idx,
         LOG_WARN("failed to get int8", K(ret));
       } else if (OB_FAIL(args.push_back(is_calc_once_value))) {
         LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(helper_.get_int8(is_assign_or_default_value, is_assign_or_default_value_value))) {
+        LOG_WARN("failed to get int8", K(ret));
+      } else if (OB_FAIL(args.push_back(is_assign_or_default_value_value))) {
+        LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(args.push_back(p_result_obj))) {
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(helper_.create_call(ObString("calc_expr"), get_spi_service().spi_calc_expr_at_idx_, args, result))) {
@@ -7248,6 +7379,7 @@ int ObPLCodeGenerator::generate_spi_calc(int64_t expr_idx,
 
 int ObPLCodeGenerator::generate_spi_package_calc(uint64_t package_id,
                                                  int64_t expr_idx,
+                                                 bool is_assign_or_default_value,
                                                  const ObPLStmt &s,
                                                  ObLLVMValue &p_result_obj)
 {
@@ -7256,12 +7388,15 @@ int ObPLCodeGenerator::generate_spi_package_calc(uint64_t package_id,
   ObLLVMValue result;
   ObLLVMValue v_package_id;
   ObLLVMValue v_expr_idx;
+  ObLLVMValue v_is_assign_or_default_value;
   CK (OB_NOT_NULL(s.get_block()));
   OZ (args.push_back(vars_.at(CTX_IDX)));
   OZ (helper_.get_int64(package_id, v_package_id));
   OZ (helper_.get_int64(expr_idx, v_expr_idx));
+  OZ (helper_.get_int8(is_assign_or_default_value, v_is_assign_or_default_value));
   OZ (args.push_back(v_package_id));
   OZ (args.push_back(v_expr_idx));
+  OZ (args.push_back(v_is_assign_or_default_value));
   OZ (args.push_back(p_result_obj));
   OZ (helper_.create_call(ObString("calc_package_expr"), get_spi_service().spi_calc_package_expr_, args, result));
   OZ (check_success(result, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
@@ -7380,6 +7515,34 @@ int ObPLCodeGenerator::generate_const_calc(int32_t value, ObLLVMValue &p_result_
   } else if (OB_FAIL(helper_.create_store(calc_result, p_value))) {
     LOG_WARN("failed to create store", K(ret));
   } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObPLCodeGenerator::generate_const_expr_calc(const ObConstRawExpr &raw_expr,
+                                                ObLLVMValue &p_result_obj)
+{
+  int ret = OB_SUCCESS;
+  if (T_QUESTIONMARK == raw_expr.get_expr_type()) {
+    int64_t param_idx = raw_expr.get_value().get_unknown();
+    ObLLVMValue p_objparam;
+    ObLLVMValue objparam;
+    if (OB_FAIL(extract_objparam_from_context(vars_.at(CTX_IDX), param_idx, p_objparam))) {
+      LOG_WARN("failed to extract_objparam_from_context", K(ret), K(param_idx));
+    } else if (OB_FAIL(helper_.create_load("load_question_mark", p_objparam, objparam))) {
+      LOG_WARN("failed to create_load", K(ret), K(param_idx));
+    } else if (OB_FAIL(helper_.create_store(objparam, p_result_obj))) {
+      LOG_WARN("failed to create_store", K(ret), K(param_idx));
+    } else { /*do nothing*/ }
+  } else {
+    ObObjParam objparam;
+    static_cast<ObObj &>(objparam) = raw_expr.get_value();
+    objparam.set_param_meta();
+
+    if (OB_FAIL(store_objparam(objparam, p_result_obj))) {
+      LOG_WARN("failed to store objparam", K(ret), K(objparam));
+    }
+  }
+
   return ret;
 }
 
@@ -7577,6 +7740,7 @@ int ObPLCodeGenerator::generate_arith_calc(ObLLVMValue &left,
 int ObPLCodeGenerator::generate_expr(int64_t expr_idx,
                                      const ObPLStmt &s,
                                      int64_t result_idx,
+                                     bool is_assign_or_default_value,
                                      ObLLVMValue &p_result_obj)
 {
   int ret = OB_SUCCESS;
@@ -7598,6 +7762,7 @@ int ObPLCodeGenerator::generate_expr(int64_t expr_idx,
                                   s.get_block()->in_notfound(),
                                   s.get_block()->in_warning(),
                                   result_idx,
+                                  is_assign_or_default_value,
                                   p_result_obj))) {
       LOG_WARN("failed to create_store", K(ret));
     }
@@ -7714,7 +7879,7 @@ int ObPLCodeGenerator::generate_expression_array(const ObIArray<int64_t> &exprs,
           LOG_WARN("failed to create block", K(ret)); \
         } else if (OB_FAIL(buffer_guard.get_objparam_buffer(p_result_obj))) {  \
           LOG_WARN("failed to get_objparam_buffer", K(ret));  \
-        } else if (OB_FAIL(generate_expr(control.get_cond(), control, OB_INVALID_INDEX, p_result_obj))) { \
+        } else if (OB_FAIL(generate_expr(control.get_cond(), control, OB_INVALID_INDEX, false, p_result_obj))) { \
           LOG_WARN("failed to generate calc_expr func", K(ret)); \
         } else if (OB_FAIL(extract_value_from_objparam(p_result_obj, control.get_cond_expr()->get_data_type(), result))) { \
           LOG_WARN("failed to extract_value_from_objparam", K(ret)); \
@@ -9230,6 +9395,125 @@ int ObPLCodeGenerator::final_expression(ObPLCompileUnit &pl_func)
   return ret;
 }
 
+
+static bool cg_is_all_const_arg_expr(const ObRawExpr &expr)
+{
+  return expr.is_static_const_expr() && !expr.has_flag(sql::CNT_STATIC_PARAM);
+}
+
+static int cg_check_can_pre_calc(const ObRawExpr &expr, bool &can_calc)
+{
+  int ret = OB_SUCCESS;
+  if (!can_calc) {
+    // do nothing
+  } else if (!((IS_CONST_TYPE(expr.get_expr_type()) && T_QUESTIONMARK != expr.get_expr_type())
+            || T_FUN_SYS_STR_TO_DATE == expr.get_expr_type()
+            || T_FUN_SYS_TO_DATE == expr.get_expr_type()
+            || T_FUN_COLUMN_CONV == expr.get_expr_type()
+            || (T_FUN_SYS_CAST == expr.get_expr_type() && lib::is_oracle_mode())
+            || (expr.get_result_type().is_ext() &&
+                expr.get_udt_id() <= OB_MAX_USER_PL_OBJECT_ID &&
+                (T_FUN_PL_COLLECTION_CONSTRUCT == expr.get_expr_type() || T_FUN_PL_OBJECT_CONSTRUCT == expr.get_expr_type())))) {
+    can_calc = false;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && can_calc && i < expr.get_param_count(); ++i) {
+      const ObRawExpr *curr = expr.get_param_expr(i);
+      if (OB_ISNULL(curr)) {
+        // do nothing
+      } else if (OB_FAIL(SMART_CALL(cg_check_can_pre_calc(*curr, can_calc)))) {
+        LOG_WARN("failed to check can pre calc recursively", K(ret), K(expr), KPC(curr), K(i));
+      } else if (!can_calc) {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+static int cg_can_pre_calc_expr(const ObRawExpr &expr, bool &can_calc)
+{
+  int ret = OB_SUCCESS;
+  const ObItemType type = expr.get_expr_type();
+  can_calc = false;
+  if (cg_is_all_const_arg_expr(expr)
+      && !(IS_CONST_TYPE(type) && T_QUESTIONMARK != type)) {
+    can_calc = true;
+    OZ (cg_check_can_pre_calc(expr, can_calc));
+  }
+  return ret;
+}
+
+static int cg_write_back_const_expr(ObIAllocator &alloc, const ObRawExpr &raw_expr, const ObObj &val, ObSqlExpression &expression)
+{
+  int ret = OB_SUCCESS;
+  ObObj value_obj;
+  // basic type will deep copy in add_expr_item intf
+  if (val.is_pl_extend()) {
+    if (OB_FAIL(ObUserDefinedType::deep_copy_obj(alloc, val, value_obj))) {
+      LOG_WARN("failed to deep copy pre calc extend result", K(ret), K(val));
+    }
+  } else {
+    value_obj = val;
+  }
+  if (OB_SUCC(ret)) {
+    ObInfixExpression &infix = expression.get_infix_expr();
+    infix.reset();
+    if (OB_FAIL(infix.set_item_count(1))) {
+      LOG_WARN("failed to set infix item count", K(ret));
+    } else {
+      ObInfixExprItem item;
+      ObItemType item_type = static_cast<ObItemType>(value_obj.get_meta().get_type());
+      if (item_type == T_NULL) {
+        item_type = static_cast<ObItemType>(raw_expr.get_result_type().get_type());
+      }
+      item.set_obj(value_obj);
+      item.set_item_type(item_type);
+      item.set_accuracy(raw_expr.get_accuracy());
+      item.set_param_idx(0);
+      item.set_param_num(0);
+      if (OB_FAIL(infix.add_expr_item(item))) {
+        LOG_WARN("failed to add const infix item", K(ret), K(value_obj));
+      }
+    }
+    if (OB_FAIL(ret) && value_obj.is_pl_extend()) {
+      int tmp = ObUserDefinedType::destruct_obj(value_obj, nullptr);
+      if (tmp != OB_SUCCESS) {
+        LOG_WARN("failed to destruct obj", K(ret), K(value_obj));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPLCodeGenerator::try_pre_calc_and_write_back(ObPLCompileUnit &pl_func,
+                                                   const ObRawExpr &raw_expr,
+                                                   ObSqlExpression &expression)
+{
+  int ret = OB_SUCCESS;
+  bool can_calc = false;
+  if (OB_FAIL(cg_can_pre_calc_expr(raw_expr, can_calc))) {
+    LOG_WARN("failed to check can pre calc expr", K(ret), K(raw_expr));
+  } else if (!can_calc) {
+    // do nothing
+  } else {
+    ObObj result;
+    if (OB_FAIL(ObSPIService::spi_calc_raw_expr(&session_info_,
+                                        &get_ast().get_symbol_table().get_allocator(),
+                                        &raw_expr,
+                                        &result,
+                                        nullptr))) {
+      LOG_WARN("failed to calc raw expr", K(ret), K(raw_expr));
+      // 兼容MySQL,Oralce, 计算过程中如果出错不在此阶段报, 执行阶段报
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(cg_write_back_const_expr(pl_func.get_allocator(), raw_expr, result, expression))) {
+      LOG_WARN("failed to write back pre calc result", K(ret), K(result), K(raw_expr));
+    } else {
+      LOG_TRACE("pre calc const expr success", K(result), K(raw_expr));
+    }
+  }
+  return ret;
+}
+
 int ObPLCodeGenerator::codegen_expression(ObPLCompileUnit &pl_func)
 {
   int ret = OB_SUCCESS;
@@ -9239,8 +9523,10 @@ int ObPLCodeGenerator::codegen_expression(ObPLCompileUnit &pl_func)
   for (int64_t i = 0; OB_SUCC(ret) && i < ast_.get_exprs().count(); i++) {
     ObRawExpr *raw_expr = ast_.get_expr(i);
     CK (OB_NOT_NULL(raw_expr));
-    OZ (ObRawExprUtils::set_call_in_pl(raw_expr));
-    OZ(raw_exprs.append(raw_expr));
+    if (!ast_.is_simple_calc(i)) {
+      OZ (ObRawExprUtils::set_call_in_pl(raw_expr));
+      OZ(raw_exprs.append(raw_expr));
+    }
   }
   sql::ObStaticEngineExprCG se_cg(pl_func.get_allocator(),
                                   &session_info_,
@@ -9261,13 +9547,21 @@ int ObPLCodeGenerator::codegen_expression(ObPLCompileUnit &pl_func)
     if (OB_ISNULL(raw_expr) || OB_ISNULL(expression)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Invalid arguments", K(i), K(raw_expr), K(expression), K(ret));
+    } else if (ast_.is_simple_calc(i)) {
+      // do nothing
     } else {
       // TODO bin.lb: No need to generate expression if static engine enabled
       //
       if (OB_FAIL(expr_generator.generate(*raw_expr, *expression))) {
-        SQL_LOG(WARN, "Generate post_expr error", K(ret), KPC(raw_expr));
-      } else {
-        expression->set_expr(raw_expr->rt_expr_);
+        LOG_WARN("Generate post_expr error", K(ret), KPC(raw_expr));
+      } else if (FALSE_IT(expression->set_expr(raw_expr->rt_expr_))) {
+        // unreachable
+      } else if (!pl_func.is_pkg() && OB_FAIL(try_pre_calc_and_write_back(pl_func, *raw_expr, *expression))) {
+        LOG_WARN("failed to pre calc and write back const expr", K(ret), KPC(raw_expr));
+      } {
+        // mark whether this expression tree needs cur_time, so that
+        // calc_sql_expression_without_row can skip set_cur_time when not needed.
+        expression->set_need_cur_time(expr_tree_need_cur_time(raw_expr->rt_expr_));
       }
     }
   }
@@ -9554,7 +9848,7 @@ int ObPLCodeGenerator::generate_out_param(const ObPLStmt &s,
       //OZ (generate_null(ObIntType, allocator));
       CK (OB_NOT_NULL(obj_access));
       OZ (buffer_guard.get_objparam_buffer(address));
-      OZ (generate_expr(param_desc.at(i).param_, s, OB_INVALID_INDEX, address));
+      OZ (generate_expr(param_desc.at(i).param_, s, OB_INVALID_INDEX, false, address));
       OZ (extract_allocator_and_restore_obobjparam(address, allocator));
       GET_POINTER_TO_ARG(p_arg);
       OZ (obj_access->get_final_type(final_type));
@@ -9963,8 +10257,6 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
      LOG_WARN("failed to assgin enum set ctx", K(ret));
     } else if (OB_FAIL(pl_func.set_variables(get_ast().get_symbol_table()))) {
       LOG_WARN("failed to set variables", K(get_ast().get_symbol_table()), K(ret));
-    } else if (OB_FAIL(pl_func.pre_calc_default_values(get_session_info(), get_ast()))) {
-      LOG_WARN("failed to pre calc default values", K(ret));
     } else if (OB_FAIL(pl_func.get_dependency_table().assign(get_ast().get_dependency_table()))) {
       LOG_WARN("failed to set ref objects", K(get_ast().get_dependency_table()), K(ret));
     } else if (OB_FAIL(pl_func.set_types(get_ast().get_user_type_table()))) {
