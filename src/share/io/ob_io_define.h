@@ -163,9 +163,15 @@ public:
   void set_preread();
   void set_no_preread();
   bool is_preread() const;
+  // 复用调用方的对齐写缓冲区，跳过 IO 层的分配与拷贝。buf、offset 和 size
+  // 必须按 aligned_size 对齐；仅支持带 callback 的异步写。调用方必须保证
+  // buffer 在异步完成前有效且内容不变。
+  void set_use_caller_write_buf(const bool use_caller_write_buf);
+  bool is_use_caller_write_buf() const;
   TO_STRING_KV("mode", common::get_io_mode_string(static_cast<ObIOMode>(mode_)), K(group_id_), K(func_type_),
       K(wait_event_id_), K(is_sync_), K(is_unlimited_), K(is_detect_), K(is_write_through_), K(is_sealed_),
-      K(is_time_detect_), K(need_close_dev_and_fd_), K(is_preread_), K(is_buffered_read_), K(reserved_));
+      K(is_time_detect_), K(need_close_dev_and_fd_), K(is_preread_), K(is_buffered_read_),
+      K(is_use_caller_write_buf_), K(reserved_));
 
 private:
   friend struct ObIOResult;
@@ -191,6 +197,8 @@ private:
   static constexpr int64_t IO_CLOSE_DEV_AND_FD_BIT = 1;
   static constexpr int64_t IO_BUFFERED_READ_BIT = 1; // indicate read mode of the io
   static constexpr int64_t IO_PREREAD_FLAG_BIT = 1;
+  // write with caller-owned aligned buffer directly, without allocating an IO copy buffer.
+  static constexpr int64_t IO_USE_CALLER_WRITE_BUF_BIT = 1;
   static constexpr int64_t IO_RESERVED_BIT = 64 - IO_MODE_BIT
                                                 - IO_WAIT_EVENT_BIT
                                                 - IO_SYNC_FLAG_BIT
@@ -201,7 +209,8 @@ private:
                                                 - IO_TIME_DETECT_FLAG_BIT
                                                 - IO_CLOSE_DEV_AND_FD_BIT
                                                 - IO_BUFFERED_READ_BIT
-                                                - IO_PREREAD_FLAG_BIT;
+                                                - IO_PREREAD_FLAG_BIT
+                                                - IO_USE_CALLER_WRITE_BUF_BIT;
 
   union { // FARM COMPAT WHITELIST
     int64_t flag_;
@@ -218,6 +227,7 @@ private:
       bool need_close_dev_and_fd_ : IO_CLOSE_DEV_AND_FD_BIT;
       bool is_buffered_read_ : IO_BUFFERED_READ_BIT;
       bool is_preread_ : IO_PREREAD_FLAG_BIT;
+      bool is_use_caller_write_buf_ : IO_USE_CALLER_WRITE_BUF_BIT;
       int64_t reserved_ : IO_RESERVED_BIT;
     };
   };
@@ -245,7 +255,8 @@ enum class ObIOCallbackType : uint8_t {
   EXTERNAL_DATA_LOAD_FROM_REMOTE_CALLBACK = 15,
   EXTERNAL_DATA_CACHED_READ_CALLBACK = 16,
   EX_CACHED_READ_CALLBACK = 17,
-  MAX_CALLBACK_TYPE = 18
+  PALF_ASYNC_WRITE_CALLBACK = 18,
+  MAX_CALLBACK_TYPE = 19
 };
 
 bool is_atomic_write_callback(const ObIOCallbackType type);
@@ -634,7 +645,11 @@ private:
   friend class ObTenantIOClock;
   friend class ObTrafficControl;
   friend class backup::ObBackupDeviceHelper;
-  const char *get_io_data_buf();  // get data buf for MEMCPY before io_buf recycle
+  // Return the effective write pointer: the caller buffer in direct-buffer
+  // mode, otherwise the request-owned aligned buffer.
+  const char *get_io_data_buf();
+  bool should_write_with_caller_buf_() const;
+  int check_caller_write_buf_() const;
   int alloc_aligned_io_buf(char *&io_buf);
   virtual int set_block_handle(const ObIOInfo &info);
   virtual int set_fd_cache_handle(const ObIOInfo &io_info);

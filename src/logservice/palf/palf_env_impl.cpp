@@ -17,6 +17,8 @@
 #include "share/ob_local_device.h"                            // ObLocalDevice
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 #include "share/io/ob_io_manager.h"                           // ObIOManager
+#include "share/ob_cluster_version.h"                         // GET_MIN_DATA_VERSION
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase
 {
@@ -24,6 +26,8 @@ using namespace common;
 using namespace share;
 namespace palf
 {
+ERRSIM_POINT_DEF(ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL);
+
 PalfHandleImpl *PalfHandleImplFactory::alloc()
 {
   return MTL_NEW(PalfHandleImpl, "palf_env");
@@ -169,6 +173,9 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_rpc_(),
                              cb_thread_pool_(),
                              log_io_worker_wrapper_(),
+                             enable_async_io_(false),
+                             io_mode_(LogIOMode::INVALID),
+                             async_register_failure_count_(0),
                              log_shared_queue_th_(),
                              block_gc_timer_task_(),
                              log_updater_(),
@@ -177,7 +184,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              disk_not_enough_print_interval_in_gc_thread_(OB_INVALID_TIMESTAMP),
                              disk_not_enough_print_interval_in_loop_thread_(OB_INVALID_TIMESTAMP),
                              self_(),
-                             palf_handle_impl_map_(64),  // 指定min_size=64
+                             palf_handle_impl_map_(64),  // set min_size to 64
                              last_palf_epoch_(0),
                              rebuild_replica_log_lag_threshold_(0),
                              enable_log_cache_(false),
@@ -213,6 +220,7 @@ int PalfEnvImpl::init(
   int ret = OB_SUCCESS;
   int pret = 0;
   const int64_t io_cb_num = PALF_SLIDING_WINDOW_SIZE * 128;
+  LogIOMode io_mode = LogIOMode::INVALID;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "PalfEnvImpl is inited twiced", K(ret));
@@ -222,6 +230,9 @@ int PalfEnvImpl::init(
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), KP(transport), KP(batch_rpc), K(base_dir), K(self), KP(transport),
              KP(log_alloc_mgr), KP(log_block_pool), KP(monitor), KP(log_local_device), KP(resource_manager), KP(io_manager));
+  } else if (OB_FAIL(determine_log_io_mode_(tenant_id, options.enable_async_io_, io_mode))) {
+    PALF_LOG(WARN, "determine log io mode failed", K(ret), K(tenant_id),
+             K(options.enable_async_io_));
   } else if (OB_FAIL(init_log_io_worker_config_(options.disk_options_.log_writer_parallelism_,
                                                 tenant_id,
                                                 log_io_worker_config_))) {
@@ -235,7 +246,9 @@ int PalfEnvImpl::init(
   } else if (OB_FAIL(log_io_worker_wrapper_.init(log_io_worker_config_,
                                                  tenant_id,
                                                  cb_thread_pool_.get_tg_id(),
-                                                 log_alloc_mgr, this))) {
+                                                 log_alloc_mgr,
+                                                 LogIOMode::ASYNC == io_mode,
+                                                 this))) {
     PALF_LOG(ERROR, "LogIOWorker init failed", K(ret));
   } else if (OB_FAIL(log_shared_queue_th_.init(this))) {
     PALF_LOG(ERROR, "LogSharedQueueTh init failed", K(ret));
@@ -270,6 +283,8 @@ int PalfEnvImpl::init(
     monitor_ = monitor;
     self_ = self;
     tenant_id_ = tenant_id;
+    enable_async_io_ = options.enable_async_io_;
+    io_mode_ = io_mode;
     is_inited_ = true;
     is_running_ = true;
     enable_log_cache_ = options.enable_log_cache_;
@@ -281,22 +296,30 @@ int PalfEnvImpl::init(
   return ret;
 }
 
+bool PalfEnvImpl::is_async_io_enabled_by_default_()
+{
+  return false;
+}
+
 int PalfEnvImpl::start()
 {
   int ret = OB_SUCCESS;
+  // 必须先启动 IO worker 和回调线程，再扫描并加载 PALF。加载过程中会注册
+  // 每个 PALF 的异步 ctx，因此扫描完成后提交的第一个任务即可进入已运行的
+  // 异步链路，避免同一 PALF 在启动阶段混用同步和异步 worker。
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
-  } else if (OB_FAIL(scan_all_palf_handle_impl_director_())) {
-    PALF_LOG(WARN, "scan_all_palf_handle_impl_director_ failed", K(ret));
   } else if (OB_FAIL(cb_thread_pool_.start())) {
     PALF_LOG(ERROR, "LogIOTaskThreadPool start failed", K(ret));
   } else if (OB_FAIL(log_io_worker_wrapper_.start())) {
     PALF_LOG(ERROR, "LogIOWorker start failed", K(ret));
+  } else if (OB_FAIL(scan_all_palf_handle_impl_director_())) {
+    PALF_LOG(WARN, "scan_all_palf_handle_impl_director_ failed", KR(ret));
   } else if (OB_FAIL(log_shared_queue_th_.start())) {
     PALF_LOG(ERROR, "LogIOWorker start failed", K(ret));
   } else if (OB_FAIL(block_gc_timer_task_.start())) {
     PALF_LOG(ERROR, "FileCollectTimerTask start failed", K(ret));
-	} else if (OB_FAIL(fetch_log_engine_.start())) {
+  } else if (OB_FAIL(fetch_log_engine_.start())) {
     PALF_LOG(ERROR, "FetchLogEngine start failed", K(ret));
   } else if (OB_FAIL(log_loop_thread_.start())) {
     PALF_LOG(ERROR, "log_loop_thread_ start failed", K(ret));
@@ -311,12 +334,23 @@ int PalfEnvImpl::start()
 
 void PalfEnvImpl::stop()
 {
-  if (is_running_) {
+  bool need_stop = false;
+  {
+    // PALF create holds the same lock through async ctx registration. Once this
+    // write barrier sets is_running_ to false, no ctx can be registered after
+    // wait() has traversed the PALF map.
+    WLockGuard guard(palf_meta_lock_);
+    if (is_running_) {
+      is_running_ = false;
+      need_stop = true;
+    }
+  }
+  if (need_stop) {
     PALF_LOG(INFO, "PalfEnvImpl begin stop", KPC(this));
-    is_running_ = false;
     log_io_worker_wrapper_.stop();
     log_shared_queue_th_.stop();
-    cb_thread_pool_.stop();
+    // Keep the callback pool running until every accepted IO task has finished.
+    // wait() stops it after async ctx unregister and worker drain complete.
     block_gc_timer_task_.stop();
     fetch_log_engine_.stop();
     log_loop_thread_.stop();
@@ -328,7 +362,14 @@ void PalfEnvImpl::stop()
 void PalfEnvImpl::wait()
 {
   PALF_LOG(INFO, "PalfEnvImpl begin wait", KPC(this));
+  // Observer graceful shutdown must unregister every PALF ctx while async
+  // workers are still alive and able to finish accepted tasks. Worker wait then
+  // verifies that every ctx has left its map before joining the thread.
+  if (is_inited_) {
+    unregister_all_async_palf_ctx_();
+  }
   log_io_worker_wrapper_.wait();
+  cb_thread_pool_.stop();
   log_shared_queue_th_.wait();
   cb_thread_pool_.wait();
   block_gc_timer_task_.wait();
@@ -343,8 +384,15 @@ void PalfEnvImpl::destroy()
   PALF_LOG_RET(WARN, OB_SUCCESS, "PalfEnvImpl destroy", KPC(this));
   is_running_ = false;
   is_inited_ = false;
-  palf_handle_impl_map_.destroy();
+  // Normal shutdown has already unregistered every async ctx in wait(). A
+  // partial init failure cannot have registered a PALF ctx yet.
   log_io_worker_wrapper_.destroy();
+  palf_handle_impl_map_.destroy();
+  if (ATOMIC_LOAD(&async_register_failure_count_) > 0) {
+    PALF_LOG_RET(WARN, OB_SUCCESS, "async register had fatal failures over this PalfEnv lifetime",
+                 "failures", ATOMIC_LOAD(&async_register_failure_count_),
+                 K(tenant_id_));
+  }
   log_shared_queue_th_.destroy();
   cb_thread_pool_.destroy();
   log_loop_thread_.destroy();
@@ -355,6 +403,8 @@ void PalfEnvImpl::destroy()
   election_timer_.destroy();
   log_alloc_mgr_ = NULL;
   monitor_ = NULL;
+  enable_async_io_ = false;
+  io_mode_ = LogIOMode::INVALID;
   disk_not_enough_print_interval_in_gc_thread_ = OB_INVALID_TIMESTAMP;
   disk_not_enough_print_interval_in_loop_thread_ = OB_INVALID_TIMESTAMP;
   self_.reset();
@@ -363,6 +413,7 @@ void PalfEnvImpl::destroy()
   disk_options_wrapper_.reset();
   rebuild_replica_log_lag_threshold_ = 0;
   enable_log_cache_ = false;
+  enable_async_io_ = false;
   io_adapter_.destroy();
 }
 
@@ -397,6 +448,8 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
   int pret = 0;
   char base_dir[MAX_PATH_SIZE] = {'\0'};
   PalfHandleImpl *palf_handle_impl = NULL;
+  LogIOWorkerBase *submitter = NULL;
+  bool inserted_into_map = false;
   LSKey hash_map_key(palf_id);
   const int64_t palf_epoch = ATOMIC_AAF(&last_palf_epoch_, 1);
   if (IS_NOT_INIT) {
@@ -423,25 +476,35 @@ int PalfEnvImpl::create_palf_handle_impl_(const int64_t palf_id,
     PALF_LOG(WARN, "alloc palf_handle_impl failed", K(ret));
   } else if (OB_FAIL(create_directory(base_dir))) {
     PALF_LOG(WARN, "prepare_directory_for_creating_ls failed!!!", K(ret), K(palf_id));
-  } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type,
+  } else if (OB_FAIL(log_io_worker_wrapper_.select_palf_io_submitter(palf_id, submitter))) {
+    PALF_LOG(WARN, "select_palf_io_submitter failed", KR(ret), K(palf_id));
+  } else if (OB_FAIL(palf_handle_impl->init(palf_id, access_mode, palf_base_info, replica_type, io_mode_,
       &fetch_log_engine_, base_dir, log_alloc_mgr_, log_block_pool_, &log_rpc_,
-      log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_, this,
+      submitter, &log_shared_queue_th_, this,
       self_, &election_timer_, palf_epoch, &io_adapter_))) {
     PALF_LOG(ERROR, "IPalfHandleImpl init failed", K(ret), K(palf_id));
-    // NB: always insert value into hash map finally.
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id));
   } else {
-    (void) palf_handle_impl->set_monitor_cb(monitor_);
-    palf_handle_impl->set_scan_disk_log_finished();
-    ipalf_handle_impl = palf_handle_impl;
+    inserted_into_map = true;
+    if (OB_FAIL(finish_palf_handle_init_(palf_id, palf_epoch, submitter, palf_handle_impl))) {
+      PALF_LOG(ERROR, "finish_palf_handle_init_ failed",
+               K(ret), K(palf_id), K(palf_epoch), KP(submitter));
+    } else {
+      ipalf_handle_impl = palf_handle_impl;
+    }
   }
 
-  if (OB_FAIL(ret) && NULL != palf_handle_impl) {
-    // if 'palf_handle_impl' has not been inserted into hash map,
-    // need reclaim manually.
-    PalfHandleImplFactory::free(palf_handle_impl);
-    palf_handle_impl = NULL;
+  if (OB_FAIL(ret)) {
+    PALF_LOG(WARN, "create_palf_handle_impl_ failed, cleanup palf handle",
+             K(ret), K(palf_id), K(inserted_into_map), KP(palf_handle_impl));
+    if (NULL == palf_handle_impl) {
+    } else if (inserted_into_map) {
+      cleanup_failed_inserted_palf_handle_impl_(hash_map_key, /* need_revert */ true, palf_handle_impl);
+    } else {
+      PalfHandleImplFactory::free(palf_handle_impl);
+      palf_handle_impl = NULL;
+    }
     if (OB_ENTRY_NOT_EXIST == palf_handle_impl_map_.contains_key(hash_map_key)) {
       remove_directory_while_exist_(base_dir);
     }
@@ -493,11 +556,11 @@ int PalfEnvImpl::disable_palf_handle_impl(const int64_t palf_id)
       palf_handle_impl->mark_deleted_atomic_only();
     }
   }
-  if (OB_SUCC(ret) && NULL != palf_handle_impl) {
-    palf_handle_impl->drain_inflight_readers();
-    PALF_LOG(INFO, "disable_palf_handle_impl success", K(palf_id));
-  }
   if (NULL != palf_handle_impl) {
+    if (OB_SUCC(ret)) {
+      palf_handle_impl->drain_inflight_readers();
+      PALF_LOG(INFO, "disable_palf_handle_impl success", K(palf_id));
+    }
     palf_handle_impl_map_.revert(palf_handle_impl);
   }
   return ret;
@@ -537,7 +600,9 @@ int PalfEnvImpl::get_palf_handle_impl(const int64_t palf_id,
     ipalf_handle_impl = palf_handle_impl;
   }
 
-  if (OB_FAIL(ret) && NULL != palf_handle_impl) {
+  if (NULL != palf_handle_impl && OB_FAIL(ret)) {
+    PALF_LOG(TRACE, "get_palf_handle_impl failed, revert handle",
+             KR(ret), K(palf_id), KP(palf_handle_impl));
     revert_palf_handle_impl(palf_handle_impl);
   }
   return ret;
@@ -983,6 +1048,7 @@ int PalfEnvImpl::get_options(PalfOptions &options)
     options.compress_options_ = log_rpc_.get_compress_opts();
     options.rebuild_replica_log_lag_threshold_ = rebuild_replica_log_lag_threshold_;
     options.enable_log_cache_ = enable_log_cache_;
+    options.enable_async_io_ = enable_async_io_;
   }
   return ret;
 }
@@ -1078,7 +1144,7 @@ int PalfEnvImpl::ReloadPalfHandleImplFunctor::func(const struct dirent *entry)
     if (!is_number) {
       // do nothing, skip invalid block like tmp
     } else {
-      int64_t id = strtol(path, nullptr, 10);
+      int64_t id = strtol(path, NULL, 10);
       if (OB_FAIL(palf_env_impl_->reload_palf_handle_impl_(id))) {
         PALF_LOG(WARN, "reload_palf_handle_impl failed", K(ret));
       }
@@ -1093,11 +1159,13 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
 {
   int ret = OB_SUCCESS;
   int pret = 0;
-  PalfHandleImpl *tmp_palf_handle_impl;
+  PalfHandleImpl *tmp_palf_handle_impl = NULL;
   char base_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   int64_t start_ts = ObTimeUtility::current_time();
   LSKey hash_map_key(palf_id);
   bool is_integrity = true;
+  LogIOWorkerBase *submitter = NULL;
+  bool inserted_into_map = false;
   const int64_t palf_epoch = ATOMIC_AAF(&last_palf_epoch_, 1);
   if (0 > (pret = snprintf(base_dir, MAX_PATH_SIZE, "%s/%ld", log_dir_, palf_id))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1105,32 +1173,55 @@ int PalfEnvImpl::reload_palf_handle_impl_(const int64_t palf_id)
   } else if (NULL == (tmp_palf_handle_impl = PalfHandleImplFactory::alloc())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     PALF_LOG(WARN, "alloc ipalf_handle_impl failed", K(ret));
+  } else if (OB_FAIL(log_io_worker_wrapper_.select_palf_io_submitter(palf_id, submitter))) {
+    PALF_LOG(WARN, "select_palf_io_submitter failed", KR(ret), K(palf_id));
   } else if (OB_FAIL(tmp_palf_handle_impl->load(palf_id, &fetch_log_engine_, base_dir, log_alloc_mgr_,
-          log_block_pool_, &log_rpc_, log_io_worker_wrapper_.get_log_io_worker(palf_id), &log_shared_queue_th_,
-          this, self_, &election_timer_, palf_epoch, &io_adapter_, is_integrity))) {
+          log_block_pool_, &log_rpc_, submitter, &log_shared_queue_th_,
+          this, self_, &election_timer_, palf_epoch, &io_adapter_, io_mode_, is_integrity))) {
     PALF_LOG(ERROR, "PalfHandleImpl init failed", K(ret), K(palf_id));
   } else if (OB_FAIL(palf_handle_impl_map_.insert_and_get(hash_map_key, tmp_palf_handle_impl))) {
     PALF_LOG(WARN, "palf_handle_impl_map_ insert_and_get failed", K(ret), K(palf_id), K(tmp_palf_handle_impl));
   } else {
-    (void) tmp_palf_handle_impl->set_monitor_cb(monitor_);
-    (void) tmp_palf_handle_impl->set_scan_disk_log_finished();
+    inserted_into_map = true;
+    if (false == is_integrity) {
+      PALF_LOG(INFO, "skip handle finalization for incomplete palf",
+               K(palf_id), K(palf_epoch), KP(tmp_palf_handle_impl));
+    } else if (OB_FAIL(finish_palf_handle_init_(palf_id, palf_epoch, submitter,
+                                               tmp_palf_handle_impl))) {
+      PALF_LOG(ERROR, "finish_palf_handle_init_ failed in reload",
+               K(ret), K(palf_id), K(palf_epoch), KP(submitter));
+    } else {
+      PALF_LOG(INFO, "reload handle finalization finished",
+               K(palf_id), K(palf_epoch), KP(submitter));
+    }
     palf_handle_impl_map_.revert(tmp_palf_handle_impl);
     int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
-    PALF_LOG(INFO, "reload_palf_handle_impl success", K(ret), K(palf_id), K(cost_ts), KP(this),
+    PALF_LOG(INFO, "reload_palf_handle_impl_ finished", KR(ret), K(palf_id), K(cost_ts), KP(this),
         KP(&palf_handle_impl_map_));
   }
 
-  if (OB_FAIL(ret) && NULL != tmp_palf_handle_impl) {
-    // if 'tmp_palf_handle_impl' has not been inserted into hash map,
-    // need reclaim manually.
+  if (NULL == tmp_palf_handle_impl) {
+  } else if (OB_SUCC(ret) && false == is_integrity) {
+    PALF_LOG(WARN, "palf instance is not integrity, remove it", K(palf_id));
+    if (OB_FAIL(move_incomplete_palf_into_tmp_dir_(palf_id))) {
+      PALF_LOG(WARN, "move incomplete palf into tmp dir failed", K(ret), K(palf_id));
+    }
+  } else if (OB_SUCC(ret)) {
+  } else if (inserted_into_map) {
     PALF_LOG(ERROR, "reload_palf_handle_impl_ failed, need free tmp_palf_handle_impl", K(ret), K(tmp_palf_handle_impl));
+    // insert_and_get() has transferred the born reference to the map. The
+    // caller reference was reverted after handle finalization, so delete from
+    // map and let PalfHandleImplAlloc::free_value() reclaim the object.
+    cleanup_failed_inserted_palf_handle_impl_(hash_map_key, /* need_revert */ false, tmp_palf_handle_impl);
+  } else {
+    PALF_LOG(ERROR, "reload_palf_handle_impl_ failed, need free tmp_palf_handle_impl", K(ret), K(tmp_palf_handle_impl));
+    // If insertion did not succeed, tmp_palf_handle_impl is still owned by this
+    // function. Keep the original guard: only direct-free when the map does not
+    // already contain the key.
     if (OB_ENTRY_NOT_EXIST == palf_handle_impl_map_.contains_key(hash_map_key)) {
       PalfHandleImplFactory::free(tmp_palf_handle_impl);
       tmp_palf_handle_impl = NULL;
     }
-  } else if (false == is_integrity) {
-    PALF_LOG(WARN, "palf instance is not integrity, remove it", K(palf_id));
-    ret = move_incomplete_palf_into_tmp_dir_(palf_id);
   }
   return ret;
 }
@@ -1251,20 +1342,160 @@ bool PalfEnvImpl::check_can_create_palf_handle_impl_() const
   return bool_ret;
 }
 
+int PalfEnvImpl::determine_log_io_mode_(const int64_t tenant_id,
+                                        const bool enable_async_io,
+                                        LogIOMode &io_mode) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  io_mode = LogIOMode::INVALID;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid tenant id", K(ret), K(tenant_id));
+  } else if (!enable_async_io || !is_user_tenant(tenant_id)) {
+    io_mode = LogIOMode::SYNC;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    PALF_LOG(WARN, "get tenant data version failed", K(ret), K(tenant_id));
+  } else {
+    io_mode = tenant_data_version >= DATA_VERSION_4_4_2_3
+                  ? LogIOMode::ASYNC
+                  : LogIOMode::SYNC;
+  }
+  if (OB_SUCC(ret)) {
+    PALF_LOG(INFO, "determine log io mode success", K(tenant_id), K(enable_async_io),
+             K(tenant_data_version), "io_mode", log_io_mode_to_str(io_mode));
+  }
+  return ret;
+}
+
+int PalfEnvImpl::finish_palf_handle_init_(
+    const int64_t palf_id,
+    const int64_t palf_epoch,
+    LogIOWorkerBase *submitter,
+    PalfHandleImpl *palf_handle_impl)
+{
+  int ret = OB_SUCCESS;
+  ObTimeGuard guard("finish_palf_handle_init", 0);
+  if (!is_valid_palf_id(palf_id) || palf_epoch < 0
+      || OB_ISNULL(submitter) || OB_ISNULL(palf_handle_impl)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(palf_id), K(palf_epoch),
+             KP(submitter), KP(palf_handle_impl));
+  } else {
+    (void)palf_handle_impl->set_monitor_cb(monitor_);
+    if (OB_FAIL(palf_handle_impl->set_scan_disk_log_finished())) {
+      PALF_LOG(WARN, "set_scan_disk_log_finished failed", K(ret), K(palf_id), K(palf_epoch),
+               KPC(palf_handle_impl));
+    } else if (OB_FAIL(ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL)) {
+      PALF_LOG(WARN, "errsim finish palf handle init failed", K(ret), K(palf_id), K(palf_epoch));
+    } else if (OB_FAIL(log_io_worker_wrapper_.register_async_palf_ctx_if_needed(
+                   palf_id, cb_thread_pool_.get_tg_id(), submitter))) {
+      const int64_t cumulative = ATOMIC_AAF(&async_register_failure_count_, 1);
+      PALF_LOG(ERROR, "async ctx registration failed", K(ret), K(palf_id), K_(tenant_id),
+               "cumulative_failures", cumulative);
+    } else {
+      guard.click("finish async ctx registration");
+    }
+    PALF_LOG(INFO, "finish_palf_handle_init_ finished", K(ret), K(palf_id), K(palf_epoch),
+             "io_mode", log_io_mode_to_str(io_mode_), KP(submitter), K(guard));
+  }
+  return ret;
+}
+
+void PalfEnvImpl::unregister_all_async_palf_ctx_()
+{
+  class UnregisterAsyncPalfCtxFunc
+  {
+  public:
+    explicit UnregisterAsyncPalfCtxFunc(LogIOWorkerWrapper &wrapper)
+        : wrapper_(wrapper), all_succeeded_(true)
+    {}
+    void reset() { all_succeeded_ = true; }
+    bool is_all_succeeded() const { return all_succeeded_; }
+    bool operator()(const LSKey &key, IPalfHandleImpl *palf_handle_impl)
+    {
+      const int tmp_ret = wrapper_.unregister_async_palf_ctx(key.id_);
+      UNUSED(palf_handle_impl);
+      if (OB_SUCCESS != tmp_ret && OB_ENTRY_NOT_EXIST != tmp_ret) {
+        all_succeeded_ = false;
+        PALF_LOG_RET(ERROR, tmp_ret,
+                     "unregister async palf ctx during env wait failed, retry",
+                     K(key));
+      }
+      return true;
+    }
+  private:
+    LogIOWorkerWrapper &wrapper_;
+    bool all_succeeded_;
+  };
+  UnregisterAsyncPalfCtxFunc unregister_func(log_io_worker_wrapper_);
+  bool all_unregistered = false;
+  while (!all_unregistered) {
+    unregister_func.reset();
+    const int tmp_ret = palf_handle_impl_map_.for_each(unregister_func);
+    if (OB_SUCCESS != tmp_ret) {
+      PALF_LOG_RET(ERROR, tmp_ret,
+                   "iterate palf handles for async ctx unregister failed, retry");
+    } else {
+      all_unregistered = unregister_func.is_all_succeeded();
+    }
+    if (!all_unregistered) {
+      ob_usleep(100_ms);
+    }
+  }
+}
+
+void PalfEnvImpl::cleanup_failed_inserted_palf_handle_impl_(const LSKey &hash_map_key,
+                                                            const bool need_revert,
+                                                            PalfHandleImpl *&palf_handle_impl)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != palf_handle_impl) {
+    // insert_and_get() gives the caller one extra reference. del() owns value
+    // reclamation through PalfHandleImplAlloc::free_value(), so release the
+    // caller reference first instead of calling PalfHandleImplFactory::free().
+    if (need_revert) {
+      palf_handle_impl_map_.revert(palf_handle_impl);
+    }
+    if (OB_FAIL(palf_handle_impl_map_.del(hash_map_key))) {
+      PALF_LOG(WARN, "del failed inserted palf_handle_impl failed", K(ret), K(hash_map_key));
+    }
+    palf_handle_impl = NULL;
+  }
+}
+
 int PalfEnvImpl::remove_palf_handle_impl_from_map_not_guarded_by_lock_(const int64_t palf_id)
 {
   int ret = OB_SUCCESS;
   LSKey hash_map_key(palf_id);
-  auto set_delete_func = [](const LSKey &key, IPalfHandleImpl *value) {
-    UNUSED(key);
-    value->mark_deleted_atomic_only();
-  };
-  if (OB_FAIL(palf_handle_impl_map_.operate(hash_map_key, set_delete_func))) {
-    PALF_LOG(WARN, "operate palf_handle_impl_map_ failed", K(ret), K(palf_id), KPC(this));
-  } else if (OB_FAIL(palf_handle_impl_map_.del(hash_map_key))) {
-    PALF_LOG(WARN, "palf_handle_impl_map_ del failed", K(ret), K(palf_id));
+  // Drop the async ctx FIRST: unregister_palf_ctx_and_wait blocks until no
+  // producer/callback is still touching it before we destroy the PalfHandleImpl
+  // that the ctx's tasks need.
+  int async_ret = log_io_worker_wrapper_.unregister_async_palf_ctx(palf_id);
+  if (OB_ENTRY_NOT_EXIST == async_ret) {
+    async_ret = OB_SUCCESS;
+  }
+  if (OB_FAIL(async_ret)) {
+    PALF_LOG(WARN, "unregister_async_palf_ctx failed", KR(ret), K(palf_id));
   } else {
-    PALF_LOG(INFO, "remove_palf_handle_impl success", K(ret), K(palf_id));
+    struct SetDeleteFunc
+    {
+      void operator()(const LSKey &key, IPalfHandleImpl *value)
+      {
+        UNUSED(key);
+        if (OB_NOT_NULL(value)) {
+          value->mark_deleted_atomic_only();
+        }
+      }
+    };
+    SetDeleteFunc set_delete_func;
+    if (OB_FAIL(palf_handle_impl_map_.operate(hash_map_key, set_delete_func))) {
+      PALF_LOG(WARN, "operate palf_handle_impl_map_ failed", KR(ret), K(palf_id), KPC(this));
+    } else if (OB_FAIL(palf_handle_impl_map_.del(hash_map_key))) {
+      PALF_LOG(WARN, "palf_handle_impl_map_ del failed", KR(ret), K(palf_id));
+    } else {
+      PALF_LOG(INFO, "remove_palf_handle_impl success", KR(ret), K(palf_id));
+    }
   }
   return ret;
 }
@@ -1342,9 +1573,8 @@ int PalfEnvImpl::get_io_statistic_info(int64_t &last_working_time,
   } else if (OB_FAIL(palf_handle_impl_map_.for_each(functor))) {
     PALF_LOG(WARN, "for_each failed", K(ret), K(functor));
   } else {
-    // use last_working_time of IOWorker to detect
-    // more IO operations including: pwrite, rename, ...
-    last_working_time = log_io_worker_wrapper_.get_last_working_time();
+    // Use the oldest pending IO start time to detect blocked pwrite/AIO.
+    last_working_time = log_io_worker_wrapper_.get_oldest_pending_io_start_ts();
     pending_write_size = functor.pending_write_size_;
     pending_write_count = functor.pending_write_count_;
     pending_write_rt = functor.pending_write_rt_;
@@ -1445,14 +1675,8 @@ int PalfEnvImpl::init_log_io_worker_config_(const int log_writer_parallelism,
 
   constexpr int64_t default_io_queue_cap = 100 * 1024;
   constexpr int64_t default_io_batch_width = 8;
-  // Due to the uniqueness of the log stream ID, using a hash distribution method can
-  // naturally balance the load in a single-unit environment, therefore, we set the
-  // min io queue capacity to PALF_SLIDING_WINDOW_SIZE * 2, and set default_io_batch_width
-  // to 1.
-  // TODO by zjf225077:
-  // to support load balance in a multi-unit environment, LogIOWorker needs to use
-  // a load factor to ensure that the number of log streams on each LogIOWorker is in
-  // a balanced state.
+  // 用户租户由 index 0 服务 SYS PALF，其余 worker 轮询分配数据 LS；只有一个
+  // worker 时两者共享 index 0。队列容量按 worker 数量均分，不做动态负载迁移。
   constexpr int64_t default_min_io_queue_cap = PALF_SLIDING_WINDOW_SIZE * 2;
   constexpr int64_t default_min_batch_width = 1;
   // Assume that a maximum of 100 * 1024 I/O tasks exist simultaneously in single PalfEnvImpl

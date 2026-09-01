@@ -81,12 +81,74 @@ TEST_F(TestLogGroupBuffer, test_get_buffer_pos)
   EXPECT_EQ(OB_NOT_INIT, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
   LSN start_lsn(100);
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  EXPECT_EQ(start_lsn, log_group_buffer_.start_lsn_);
+  EXPECT_EQ(0, log_group_buffer_.buffer_start_lsn_.val_ % LOG_DIO_ALIGN_SIZE);
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
   lsn.val_ = 50;
-  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
+  EXPECT_EQ(50, start_pos);
   lsn.val_ = 110;
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.get_buffer_pos_(lsn, start_pos));
-  EXPECT_EQ(10, start_pos);
+  EXPECT_EQ(110, start_pos);
+}
+
+// Verify the DIO invariant: data_buf_ and buffer_start_lsn_ are both aligned,
+// and (data_buf_ + start_pos) has the same DIO phase as the target lsn.
+TEST_F(TestLogGroupBuffer, test_dio_phase_invariant)
+{
+  const uint64_t align = LOG_DIO_ALIGN_SIZE;
+  LSN start_lsn(align + 777);
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+
+  ASSERT_NE(nullptr, log_group_buffer_.data_buf_);
+  EXPECT_EQ(0, reinterpret_cast<uint64_t>(log_group_buffer_.data_buf_) % align);
+  EXPECT_EQ(start_lsn, log_group_buffer_.start_lsn_);
+  EXPECT_EQ(0, log_group_buffer_.buffer_start_lsn_.val_ % align);
+
+  const int64_t reserved = log_group_buffer_.get_reserved_buffer_size();
+  ASSERT_EQ(0, reserved % static_cast<int64_t>(align));
+  const int64_t deltas[] = {0, 1, 333, 4096, 4096 + 17, reserved - 1, reserved,
+                            reserved + 9, 2 * reserved + 4095};
+  for (int64_t i = 0; i < static_cast<int64_t>(sizeof(deltas) / sizeof(deltas[0])); ++i) {
+    LSN lsn(start_lsn.val_ + deltas[i]);
+    int64_t start_pos = -1;
+    EXPECT_EQ(OB_SUCCESS, log_group_buffer_.get_buffer_pos_(lsn, start_pos)) << "delta=" << deltas[i];
+    const uint64_t buf_phase =
+        reinterpret_cast<uint64_t>(log_group_buffer_.data_buf_ + start_pos) % align;
+    EXPECT_EQ(lsn.val_ % align, buf_phase) << "delta=" << deltas[i] << " start_pos=" << start_pos;
+  }
+}
+
+// Verify data_buf_ is directly aligned when start_lsn is DIO aligned.
+TEST_F(TestLogGroupBuffer, test_dio_phase_zero)
+{
+  const uint64_t align = LOG_DIO_ALIGN_SIZE;
+  LSN start_lsn(4 * align);  // 4K 对齐
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  ASSERT_NE(nullptr, log_group_buffer_.data_buf_);
+  EXPECT_EQ(0, reinterpret_cast<uint64_t>(log_group_buffer_.data_buf_) % align);
+}
+
+TEST_F(TestLogGroupBuffer, test_fill_tail_prefix_after_reset)
+{
+  const int64_t prefix_len = 123;
+  const LSN prefix_begin_lsn(LOG_DIO_ALIGN_SIZE);
+  const LSN tail_lsn(LOG_DIO_ALIGN_SIZE + prefix_len);
+  char prefix_data[prefix_len];
+  char mismatched_data[prefix_len];
+  int64_t start_pos = -1;
+  MEMSET(prefix_data, 'p', sizeof(prefix_data));
+  MEMSET(mismatched_data, 'x', sizeof(mismatched_data));
+
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(tail_lsn));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill_tail_prefix_after_reset(
+      prefix_begin_lsn, tail_lsn, prefix_data, prefix_len));
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.get_buffer_pos_(prefix_begin_lsn, start_pos));
+  EXPECT_EQ(0, MEMCMP(prefix_data, log_group_buffer_.data_buf_ + start_pos, prefix_len));
+
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.fill_tail_prefix_after_reset(
+      prefix_begin_lsn, tail_lsn, mismatched_data, prefix_len - 1));
+  EXPECT_EQ(0, MEMCMP(prefix_data, log_group_buffer_.data_buf_ + start_pos, prefix_len));
 }
 
 TEST_F(TestLogGroupBuffer, test_can_handle_new_log)
@@ -114,6 +176,49 @@ TEST_F(TestLogGroupBuffer, test_can_handle_new_log)
   EXPECT_EQ(true, log_group_buffer_.can_handle_new_log(lsn, len, reuse_lsn));
 }
 
+TEST_F(TestLogGroupBuffer, test_truncate_does_not_rewind_readable_begin)
+{
+  LSN start_lsn(100);
+  char data[100];
+  MEMSET(data, 'x', sizeof(data));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(LSN(LOG_DIO_ALIGN_SIZE)));
+
+  const LSN high_lsn(LOG_DIO_ALIGN_SIZE + log_group_buffer_.get_available_buffer_size()
+                     - static_cast<int64_t>(sizeof(data)));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(high_lsn, data, sizeof(data)));
+  EXPECT_GT(log_group_buffer_.readable_begin_lsn_, start_lsn);
+
+  const LSN readable_begin_lsn = log_group_buffer_.readable_begin_lsn_;
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.truncate(start_lsn));
+  EXPECT_EQ(readable_begin_lsn, log_group_buffer_.readable_begin_lsn_);
+  EXPECT_EQ(start_lsn, log_group_buffer_.data_end_lsn_);
+  EXPECT_EQ(true, log_group_buffer_.can_handle_new_log(start_lsn, sizeof(data), LSN(0)));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(start_lsn, data, sizeof(data)));
+}
+
+TEST_F(TestLogGroupBuffer, test_truncate_aligns_buffer_reuse_lsn)
+{
+  const LSN start_lsn(100);
+  const LSN truncate_lsn(LOG_DIO_ALIGN_SIZE + 123);
+  LSN reuse_lsn;
+
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.truncate(truncate_lsn));
+  log_group_buffer_.get_reuse_lsn(reuse_lsn);
+  EXPECT_EQ(LSN(LOG_DIO_ALIGN_SIZE), reuse_lsn);
+  EXPECT_EQ(truncate_lsn, log_group_buffer_.data_end_lsn_);
+}
+
+TEST_F(TestLogGroupBuffer, test_inc_update_data_end_lsn)
+{
+  const LSN start_lsn(100);
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.inc_update_data_end_lsn_(LSN()));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_data_end_lsn_(LSN(200)));
+  EXPECT_EQ(LSN(200), log_group_buffer_.data_end_lsn_);
+}
+
 TEST_F(TestLogGroupBuffer, test_get_log_buf)
 {
   LSN lsn;
@@ -130,6 +235,44 @@ TEST_F(TestLogGroupBuffer, test_get_log_buf)
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_group_buffer_.get_log_buf(lsn, len, log_buf));
   lsn.val_ = start_lsn.val_;
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.get_log_buf(lsn, len, log_buf));
+}
+
+TEST_F(TestLogGroupBuffer, test_get_log_buf_across_ring_tail)
+{
+  const LSN start_lsn(100);
+  const int64_t first_part_len = 100;
+  const int64_t second_part_len = 100;
+  const int64_t total_len = first_part_len + second_part_len;
+  char data[total_len];
+  char merged_data[total_len];
+  const char *first_buf = NULL;
+  const char *second_buf = NULL;
+  int64_t first_buf_len = 0;
+  int64_t second_buf_len = 0;
+  int64_t buffer_size = 0;
+  LSN log_lsn;
+  LogWriteBuf log_buf;
+  MEMSET(data, 'a', first_part_len);
+  MEMSET(data + first_part_len, 'b', second_part_len);
+  MEMSET(merged_data, 0, sizeof(merged_data));
+
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  buffer_size = log_group_buffer_.get_reserved_buffer_size();
+  log_lsn = LSN(buffer_size - first_part_len);
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(start_lsn));
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.fill(log_lsn, data, total_len));
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.get_log_buf(log_lsn, total_len, log_buf));
+
+  ASSERT_EQ(2, log_buf.get_buf_count());
+  ASSERT_EQ(OB_SUCCESS, log_buf.get_write_buf(0, first_buf, first_buf_len));
+  ASSERT_EQ(OB_SUCCESS, log_buf.get_write_buf(1, second_buf, second_buf_len));
+  EXPECT_EQ(log_group_buffer_.data_buf_ + buffer_size - first_part_len, first_buf);
+  EXPECT_EQ(log_group_buffer_.data_buf_, second_buf);
+  EXPECT_EQ(first_part_len, first_buf_len);
+  EXPECT_EQ(second_part_len, second_buf_len);
+  MEMCPY(merged_data, first_buf, first_buf_len);
+  MEMCPY(merged_data + first_buf_len, second_buf, second_buf_len);
+  EXPECT_EQ(0, MEMCMP(data, merged_data, total_len));
 }
 
 TEST_F(TestLogGroupBuffer, test_fill)
@@ -197,6 +340,30 @@ TEST_F(TestLogGroupBuffer, test_fill_padding)
     lsn.val_ += len;
   }
   EXPECT_GT(lsn + len, buf_end_lsn);
+}
+
+TEST_F(TestLogGroupBuffer, test_fill_padding_updates_data_end_lsn)
+{
+  const LSN start_lsn(0);
+  const int64_t padding_data_len = LogEntryHeader::PADDING_LOG_ENTRY_SIZE;
+  const int64_t padding_tail_len = 128;
+  const int64_t log_body_size = padding_data_len + padding_tail_len;
+  char padding_data[padding_data_len];
+  char padding_tail[padding_tail_len];
+  char expected_tail[padding_tail_len];
+  int64_t out_read_size = 0;
+  MEMSET(padding_data, 'p', sizeof(padding_data));
+  MEMSET(padding_tail, 'x', sizeof(padding_tail));
+  MEMSET(expected_tail, PADDING_LOG_CONTENT_CHAR, sizeof(expected_tail));
+
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.fill_padding_body(
+      start_lsn, padding_data, padding_data_len, log_body_size));
+  EXPECT_EQ(LSN(log_body_size), log_group_buffer_.data_end_lsn_);
+  ASSERT_EQ(OB_SUCCESS, log_group_buffer_.read_data(
+      LSN(padding_data_len), padding_tail_len, padding_tail, out_read_size));
+  EXPECT_EQ(padding_tail_len, out_read_size);
+  EXPECT_EQ(0, MEMCMP(expected_tail, padding_tail, padding_tail_len));
 }
 
 TEST_F(TestLogGroupBuffer, test_fill_padding_cross_bround)
@@ -322,9 +489,10 @@ TEST_F(TestLogGroupBuffer, test_read_data)
   int64_t in_read_size = 100;
   int64_t out_read_size = 0;
   char *out_buf = (char*)malloc(1024);
-  // read nothing because reuse_lsn <= read_begin_lsn
+  // Data can be read after fill even before the buffer-reuse lsn advances.
+  read_begin_lsn = lsn;
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(read_begin_lsn, in_read_size, out_buf, out_read_size));
-  EXPECT_EQ(0, out_read_size);
+  EXPECT_EQ(in_read_size, out_read_size);
   reuse_lsn.val_ = 200;
   EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(reuse_lsn));
   // read data success
@@ -389,6 +557,24 @@ TEST_F(TestLogGroupBuffer, test_read_data)
   EXPECT_EQ(in_read_size, out_read_size);
 
   free(out_buf);
+}
+
+TEST_F(TestLogGroupBuffer, test_read_data_after_aligned_buffer_reuse_lsn)
+{
+  LSN start_lsn(0);
+  const int64_t data_len = LOG_DIO_ALIGN_SIZE + 17;
+  char data[data_len];
+  char out_buf[32];
+  int64_t out_read_size = 0;
+  MEMSET(data, 'x', sizeof(data));
+  MEMSET(out_buf, 0, sizeof(out_buf));
+
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.init(start_lsn));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.fill(start_lsn, data, data_len));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.inc_update_reuse_lsn(LSN(LOG_DIO_ALIGN_SIZE)));
+  EXPECT_EQ(OB_SUCCESS, log_group_buffer_.read_data(LSN(LOG_DIO_ALIGN_SIZE), 17, out_buf, out_read_size));
+  EXPECT_EQ(17, out_read_size);
+  EXPECT_EQ(0, MEMCMP(data + LOG_DIO_ALIGN_SIZE, out_buf, out_read_size));
 }
 
 } // END of unittest

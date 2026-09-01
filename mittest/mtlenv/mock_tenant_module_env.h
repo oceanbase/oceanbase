@@ -1043,11 +1043,10 @@ int MockTenantModuleEnv::start_()
       gc_svr->stop_create_new_gc_task_ = true;
       palf_env_impl->init_log_io_worker_config_(1, mock_tenant_id, new_config);
       new_config.io_worker_num_ = 4;
-      log_iow_wrapper.destory_and_free_log_io_workers_();
+      log_iow_wrapper.destroy_and_free_log_io_workers_();
       if (OB_FAIL(log_iow_wrapper.create_and_init_log_io_workers_(
         new_config, mock_tenant_id, palf_env_impl->cb_thread_pool_.get_tg_id(), palf_env_impl->log_alloc_mgr_, palf_env_impl))) {
         STORAGE_LOG(WARN, "failed to create_and_init_log_io_workers_", K(new_config));
-      } else if (FALSE_IT(log_iow_wrapper.log_writer_parallelism_ = new_config.io_worker_num_)) {
       } else if (FALSE_IT(log_iow_wrapper.is_user_tenant_ = true)) {
       } else if (OB_FAIL(log_iow_wrapper.start_()))  {
         STORAGE_LOG(WARN, "failed to start_ log_iow_wrapper", K(new_config));

@@ -31,10 +31,12 @@ public:
   LogMeta(const LogMeta &rmeta);
 
 public:
+  // Generate the initial complete LogMeta with the actual PALF writer mode.
   int generate_by_palf_base_info(const PalfBaseInfo &palf_base_info,
                                  const AccessMode &access_mode,
                                  const SyncMode &sync_mode,
-                                 const LogReplicaType &replica_type);
+                                 const LogReplicaType &replica_type,
+                                 const LogIOMode io_mode);
 
   int load(const char *buf, int64_t buf_len);
   bool is_valid() const;

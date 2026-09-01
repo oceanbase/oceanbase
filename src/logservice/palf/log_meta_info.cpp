@@ -1418,24 +1418,62 @@ int64_t LogSnapshotMeta::get_version_() const
   return version;
 }
 
-int LogReplicaPropertyMeta::generate(const bool allow_vote, const LogReplicaType replica_type)
+int LogReplicaPropertyMeta::generate(const bool allow_vote,
+                                     const LogReplicaType replica_type,
+                                     const LogIOMode io_mode)
 {
   int ret = OB_SUCCESS;
-  version_ = LOG_REPLICA_PROPERTY_META_VERSION;
-  allow_vote_ = allow_vote;
-  replica_type_ = replica_type;
+  uint64_t tenant_data_version = 0;
+  int64_t meta_version = -1;
+  if (LogReplicaType::INVALID_REPLICA == replica_type || !is_valid_log_io_mode(io_mode)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(replica_type),
+             "io_mode", log_io_mode_to_str(io_mode));
+  } else if (LogReplicaType::ARBITRATION_REPLICA == replica_type
+             && LogIOMode::SYNC == io_mode) {
+    // Arbitration replicas have no async writer and may be initialized without tenant version service.
+    meta_version = LOG_REPLICA_PROPERTY_META_VERSION;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+    if (LogIOMode::SYNC == io_mode) {
+      PALF_LOG(WARN, "get tenant data version failed, generate V1 for sync mode",
+               K(ret), K(replica_type), "io_mode", log_io_mode_to_str(io_mode));
+      ret = OB_SUCCESS;
+      meta_version = LOG_REPLICA_PROPERTY_META_VERSION;
+    } else {
+      PALF_LOG(WARN, "get tenant data version failed", K(ret), K(replica_type),
+               "io_mode", log_io_mode_to_str(io_mode));
+    }
+  } else if (tenant_data_version >= DATA_VERSION_4_4_2_3) {
+    meta_version = LOG_REPLICA_PROPERTY_META_VERSION_V2;
+  } else if (LogIOMode::ASYNC == io_mode) {
+    ret = OB_NOT_SUPPORTED;
+    PALF_LOG(WARN, "async log io mode requires data version 4.4.2.3", K(ret),
+             K(tenant_data_version), K(replica_type));
+  } else {
+    meta_version = LOG_REPLICA_PROPERTY_META_VERSION;
+  }
+
+  if (OB_SUCC(ret)) {
+    version_ = meta_version;
+    allow_vote_ = allow_vote;
+    replica_type_ = replica_type;
+    this->io_mode = io_mode;
+  }
   return ret;
 }
 
 bool LogReplicaPropertyMeta::is_valid() const
 {
-  return LOG_REPLICA_PROPERTY_META_VERSION == version_;
+  return (LOG_REPLICA_PROPERTY_META_VERSION == version_ && LogIOMode::SYNC == io_mode)
+         || (LOG_REPLICA_PROPERTY_META_VERSION_V2 == version_
+             && is_valid_log_io_mode(io_mode));
 }
 
 void LogReplicaPropertyMeta::reset()
 {
   allow_vote_ = false;
   replica_type_ = LogReplicaType::INVALID_REPLICA;
+  io_mode = LogIOMode::INVALID;
   version_ = -1;
 }
 
@@ -1444,18 +1482,27 @@ void LogReplicaPropertyMeta::operator=(const LogReplicaPropertyMeta &replica_met
   this->version_ = replica_meta.version_;
   this->allow_vote_ = replica_meta.allow_vote_;
   this->replica_type_ = replica_meta.replica_type_;
+  this->io_mode = replica_meta.io_mode;
 }
 
 DEFINE_SERIALIZE(LogReplicaPropertyMeta)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
-  if (buf_len - new_pos < get_serialize_size()) {
+  if (OB_ISNULL(buf) || pos < 0 || pos > buf_len || buf_len <= 0 || !is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_len), K(pos), KPC(this));
+  } else if (buf_len - new_pos < get_serialize_size()) {
     ret = OB_BUF_NOT_ENOUGH;
+    PALF_LOG(WARN, "buffer not enough", K(ret), K(buf_len), K(new_pos), KPC(this));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, version_))
             || OB_FAIL(serialization::encode_bool(buf, buf_len, new_pos, allow_vote_))
             || OB_FAIL(serialization::encode_i32(buf, buf_len, new_pos, replica_type_))) {
     PALF_LOG(ERROR, "LogReplicaPropertyMeta serialize failed", K(ret), K(new_pos));
+  } else if (LOG_REPLICA_PROPERTY_META_VERSION_V2 == version_
+             && OB_FAIL(serialization::encode_i64(
+                 buf, buf_len, new_pos, static_cast<int64_t>(io_mode)))) {
+    PALF_LOG(ERROR, "serialize io mode failed", K(ret), K(new_pos), KPC(this));
   } else {
     PALF_LOG(TRACE, "LogReplicaPropertyMeta serialize", K(*this), K(buf+pos), KP(buf), K(pos), K(new_pos));
     pos = new_pos;
@@ -1467,15 +1514,34 @@ DEFINE_DESERIALIZE(LogReplicaPropertyMeta)
 {
   int ret = OB_SUCCESS;
   int64_t new_pos = pos;
-  if (data_len - new_pos < get_serialize_size()) {
-    ret = OB_BUF_NOT_ENOUGH;
-  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_))
-            || OB_FAIL(serialization::decode_bool(buf, data_len, new_pos, &allow_vote_))
-            || OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, reinterpret_cast<int32_t*>(&replica_type_)))) {
+  int64_t io_mode = static_cast<int64_t>(LogIOMode::INVALID);
+  if (OB_ISNULL(buf) || pos < 0 || pos > data_len || data_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &version_))) {
+    PALF_LOG(ERROR, "deserialize version failed", K(ret), K(new_pos));
+  } else if (LOG_REPLICA_PROPERTY_META_VERSION != version_
+             && LOG_REPLICA_PROPERTY_META_VERSION_V2 != version_) {
+    ret = OB_INVALID_DATA;
+    PALF_LOG(WARN, "unsupported log replica property meta version", K(ret), K(version_));
+  } else if (OB_FAIL(serialization::decode_bool(buf, data_len, new_pos, &allow_vote_))
+             || OB_FAIL(serialization::decode_i32(
+                 buf, data_len, new_pos, reinterpret_cast<int32_t *>(&replica_type_)))) {
     PALF_LOG(ERROR, "LogReplicaPropertyMeta deserialize failed", K(ret), K(new_pos));
+  } else if (LOG_REPLICA_PROPERTY_META_VERSION_V2 == version_
+             && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &io_mode))) {
+    PALF_LOG(ERROR, "deserialize io mode failed", K(ret), K(new_pos));
   } else {
-    PALF_LOG(TRACE, "LogReplicaPropertyMeta deserialize", K(*this), K(buf+pos), KP(buf), K(pos), K(new_pos));
-    pos = new_pos;
+    this->io_mode = LOG_REPLICA_PROPERTY_META_VERSION == version_
+                   ? LogIOMode::SYNC
+                   : static_cast<LogIOMode>(io_mode);
+    if (!is_valid()) {
+      ret = OB_INVALID_DATA;
+      PALF_LOG(WARN, "invalid log replica property meta", K(ret), KPC(this));
+    } else {
+      PALF_LOG(TRACE, "LogReplicaPropertyMeta deserialize", K(*this), K(buf+pos), KP(buf), K(pos), K(new_pos));
+      pos = new_pos;
+    }
   }
   return ret;
 }
@@ -1487,6 +1553,9 @@ DEFINE_GET_SERIALIZE_SIZE(LogReplicaPropertyMeta)
   size += serialization::encoded_length_i64(version_);
   size += serialization::encoded_length_bool(allow_vote_);
   size += serialization::encoded_length_i32(replica_type_);
+  if (LOG_REPLICA_PROPERTY_META_VERSION_V2 == version_) {
+    size += serialization::encoded_length_i64(static_cast<int64_t>(io_mode));
+  }
   return size;
 }
 } // end namespace palf

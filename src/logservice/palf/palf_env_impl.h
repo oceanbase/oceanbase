@@ -36,6 +36,7 @@
 #include "log_updater.h"
 #include "log_io_utils.h"
 #include "log_io_adapter.h"
+#include "log_async_io_worker.h"
 namespace oceanbase
 {
 namespace common
@@ -399,7 +400,22 @@ private:
   int init_log_io_worker_config_(const int log_writer_parallelism,
                                  const int64_t tenant_id,
                                  LogIOWorkerConfig &config);
+  static bool is_async_io_enabled_by_default_();
 
+  // Determine the process-lifetime writer mode from tenant type, config, and data version.
+  int determine_log_io_mode_(const int64_t tenant_id,
+                             const bool enable_async_io,
+                             LogIOMode &io_mode) const;
+  // Publish a fully created or recovered handle after its LogMeta is durable.
+  int finish_palf_handle_init_(const int64_t palf_id,
+                               const int64_t palf_epoch,
+                               LogIOWorkerBase *submitter,
+                               PalfHandleImpl *palf_handle_impl);
+  void unregister_all_async_palf_ctx_();
+  // Remove a failed map insertion and optionally release the caller reference.
+  void cleanup_failed_inserted_palf_handle_impl_(const LSKey &hash_map_key,
+                                                 const bool need_revert,
+                                                 PalfHandleImpl *&palf_handle_impl);
   int check_can_update_log_disk_options_(const PalfDiskOptions &disk_options);
   int remove_directory_while_exist_(const char *log_dir);
 private:
@@ -414,6 +430,12 @@ private:
   LogIOTaskCbThreadPool cb_thread_pool_;
   common::ObOccamTimer election_timer_;
   LogIOWorkerWrapper log_io_worker_wrapper_;
+  // PalfEnv keeps the restart-effective config and actual mode for its lifetime.
+  bool enable_async_io_;
+  LogIOMode io_mode_;
+  // Diagnostic counter. Incremented every time async ctx registration fails for
+  // an async PALF. Such failures are fatal to create/reload.
+  int64_t async_register_failure_count_;
   LogSharedQueueTh log_shared_queue_th_;
   BlockGCTimerTask block_gc_timer_task_;
   LogUpdater log_updater_;

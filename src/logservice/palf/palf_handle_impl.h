@@ -38,6 +38,7 @@
 #include "palf_options.h"
 #include "palf_iterator.h"
 #include "log_net_service.h"
+#include "log_async_io_struct.h"        // AsyncPwriteRequest
 #include "logservice/ipalf/ipalf_config_change_handle.h"
 
 namespace oceanbase
@@ -46,6 +47,7 @@ namespace common
 {
 class ObMember;
 class ObILogAllocator;
+class ObIOHandle;
 }
 namespace logservice
 {
@@ -63,12 +65,15 @@ class LogIOTruncateLogTask;
 class LogIOFlushMetaTask;
 class ReadBuf;
 class LogWriteBuf;
-class LogIOWorker;
+class LogIOWorkerWrapper;
+class LogIOWorkerBase;
 class LogSharedQueueTh;
+class IAsyncPalfIOCtx;
 class LogRpc;
 class IPalfEnvImpl;
 class LogEngine;
 class LogCache;
+class IAsyncPalfIOCtx;
 
 struct PalfStat {
   OB_UNIS_VERSION(1);
@@ -473,6 +478,35 @@ public:
   virtual int inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_ctx) = 0;
   virtual int inner_after_truncate_prefix_blocks(const TruncatePrefixBlocksCbCtx &truncate_prefix_cb_ctx) = 0;
   virtual int advance_reuse_lsn(const LSN &flush_log_end_lsn) = 0;
+  // 异步 worker 通过以下 LogEngine 转发接口访问所属 PALF 的存储。实现必须保留
+  // LogStorage 的入参校验、块切换屏障和连续 tail 发布语义。
+  // 提交一笔 DIO 对齐物理写；buffer 在完成前保持不变，ctx 由 callback pin
+  // 保证存活。返回成功不表示对应逻辑区间已经发布。
+  virtual int async_pwrite(const AsyncPwriteRequest &req,
+                           common::ObIOHandle &out_handle) = 0;
+  // 发布一段从当前 storage tail 开始的连续完成区间。
+  virtual int commit_async_append(const LSN &begin_lsn, const LSN &end_lsn)
+    = 0;
+  // 在 storage tail 位于块边界时切换或打开块，并在首笔数据 AIO 前写块头。
+  virtual int prepare_async_block_for_write(const share::SCN &new_block_min_scn)
+    = 0;
+  // 从指定的 DIO 对齐 LSN 读取一页，不校验该页是否为当前 tail page。
+  virtual int read_log_storage_tail_page(const LSN &page_begin_lsn,
+                                         char *buf,
+                                         const int64_t buf_len,
+                                         int64_t &read_size)
+    = 0;
+  // tail reset 后将一个 DIO 页内的有效前缀同步回填到 SlidingWindow 的
+  // LogGroupBuffer. prefix_begin_lsn 必须按页对齐, [prefix_begin_lsn,
+  // tail_lsn) 不超过一页且长度等于 buf_len; 本接口不推进任何缓存位点.
+  virtual int fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                           const LSN &tail_lsn,
+                                           const char *buf,
+                                           const int64_t buf_len)
+    = 0;
+  // 取得已发布 storage tail 与当前块状态的一致快照。
+  virtual void get_async_storage_snapshot(LogStorage::AsyncStorageSnapshot &out) const
+    = 0;
   virtual int inner_after_flashback(const FlashbackCbCtx &flashback_ctx) = 0;
   virtual int inner_append_log(const LSN &lsn,
                                const LogWriteBuf &write_buf,
@@ -681,16 +715,18 @@ class PalfHandleImpl : public IPalfHandleImpl
 public:
   PalfHandleImpl();
   ~PalfHandleImpl() override;
+  // Create a PALF and persist the actual writer mode in its initial LogMeta.
   int init(const int64_t palf_id,
            const AccessMode &access_mode,
            const PalfBaseInfo &palf_base_info,
            const LogReplicaType replica_type,
+           const LogIOMode io_mode,
            FetchLogEngine *fetch_log_engine,
            const char *log_dir,
            ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
            LogRpc *log_rpc,
-           LogIOWorker *log_io_worker,
+           LogIOWorkerBase *io_task_submitter,
            LogSharedQueueTh *log_shared_queue_th,
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
@@ -703,19 +739,21 @@ public:
   // 2. 从meta storage中读最新数据，初始化dio_aligned_buf;
   // 3. 初始化log_storage中的dio_aligned_buf;
   // 4. 初始化palf_handle_impl的其他字段.
+  // Recover using the persisted writer mode and switch to desired_io_mode afterwards.
   int load(const int64_t palf_id,
            FetchLogEngine *fetch_log_engine,
            const char *log_dir,
            ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
            LogRpc *log_rpc,
-           LogIOWorker*log_io_worker,
+           LogIOWorkerBase *io_task_submitter,
            LogSharedQueueTh *log_shared_queue_th,
            IPalfEnvImpl *palf_env_impl,
            const common::ObAddr &self,
            common::ObOccamTimer *election_timer,
            const int64_t palf_epoch,
            LogIOAdapter *io_adapter,
+           const LogIOMode desired_io_mode,
            bool &is_integrity);
   void destroy();
   int start();
@@ -945,6 +983,20 @@ public:
   int inner_append_log(const LSNArray &lsn_array,
                        const LogWriteBufArray &write_buf_array,
                        const SCNArray &scn_array);
+  // Concrete override points for async storage integration.
+  int async_pwrite(const AsyncPwriteRequest &req,
+                   common::ObIOHandle &out_handle) override;
+  int commit_async_append(const LSN &begin_lsn, const LSN &end_lsn) override;
+  int prepare_async_block_for_write(const share::SCN &new_block_min_scn) override;
+  int read_log_storage_tail_page(const LSN &page_begin_lsn,
+                                 char *buf,
+                                 const int64_t buf_len,
+                                 int64_t &read_size) override;
+  int fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                   const LSN &tail_lsn,
+                                   const char *buf,
+                                   const int64_t buf_len) override;
+  void get_async_storage_snapshot(LogStorage::AsyncStorageSnapshot &out) const override;
   int inner_append_meta(const char *buf,
                         const int64_t buf_len) override final;
   int inner_truncate_log(const LSN &lsn) override final;

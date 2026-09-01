@@ -149,12 +149,43 @@ public:
   char *help_buf_;
 };
 
+class TestPalfAsyncWriteCallback : public ObIOCallback
+{
+public:
+  TestPalfAsyncWriteCallback()
+    : ObIOCallback(ObIOCallbackType::PALF_ASYNC_WRITE_CALLBACK)
+  {
+  }
+  virtual ~TestPalfAsyncWriteCallback() {}
+  virtual const char *get_data() override { return NULL; }
+  virtual int64_t size() const override { return sizeof(TestPalfAsyncWriteCallback); }
+  virtual int alloc_data_buf(const char *io_data_buffer, const int64_t data_size) override
+  {
+    UNUSED(io_data_buffer);
+    UNUSED(data_size);
+    return OB_SUCCESS;
+  }
+  virtual int inner_process(const char *data_buffer, const int64_t size) override
+  {
+    UNUSED(data_buffer);
+    UNUSED(size);
+    return OB_SUCCESS;
+  }
+  virtual ObIAllocator *get_allocator() override { return NULL; }
+  virtual const char *get_cb_name() const override { return "TestPalfAsyncWriteCB"; }
+  TO_STRING_KV(KP(this));
+};
+
 TEST_F(TestIOStruct, IOFlag)
 {
   // default invalid
   ObIOFlag flag;
   ObIOFlag flag2;
   ASSERT_FALSE(flag.is_valid());
+  ASSERT_FALSE(flag.is_use_caller_write_buf());
+
+  flag.set_use_caller_write_buf(true /* use_caller_write_buf */);
+  ASSERT_TRUE(flag.is_use_caller_write_buf());
 
   // normal usage
   flag.set_mode(ObIOMode::READ);
@@ -182,6 +213,7 @@ TEST_F(TestIOStruct, IOFlag)
   ASSERT_TRUE(flag2.is_valid());
   flag2.reset();
   ASSERT_FALSE(flag2.is_valid());
+  ASSERT_FALSE(flag2.is_use_caller_write_buf());
 }
 
 TEST_F(TestIOStruct, IOInfo)
@@ -256,6 +288,96 @@ TEST_F(TestIOStruct, IOHandle)
   LOG_INFO("test log io handle", K(handle), K(handle2));
 }
 
+TEST_F(TestIOStruct, PalfAsyncWriteRequestUsesCallerBuffer)
+{
+  ObRefHolder<ObTenantIOManager> holder;
+  ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, holder));
+  ASSERT_NE(nullptr, holder.get_ptr());
+  ObTenantIOManager &tenant_io_mgr = *(holder.get_ptr());
+  TestPalfAsyncWriteCallback callback;
+  char buf[DIO_ALIGN_SIZE] __attribute__ ((aligned (DIO_ALIGN_SIZE))) = { 0 };
+  ObIOInfo io_info;
+  io_info.tenant_id_ = OB_SERVER_TENANT_ID;
+  io_info.fd_.first_id_ = 0;
+  io_info.fd_.second_id_ = 1;
+  io_info.fd_.device_handle_ = &LOCAL_DEVICE_INSTANCE;
+  io_info.flag_.set_write();
+  io_info.flag_.set_use_caller_write_buf(true /* use_caller_write_buf */);
+  io_info.flag_.set_wait_event(100);
+  io_info.offset_ = 0;
+  io_info.size_ = DIO_ALIGN_SIZE;
+  io_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
+  io_info.buf_ = buf;
+  io_info.callback_ = &callback;
+
+  ObIOResult result;
+  ObIORequest req;
+  req.tenant_io_mgr_.hold(&tenant_io_mgr);
+  result.tenant_io_mgr_.hold(&tenant_io_mgr);
+  result.inc_ref();
+  req.inc_ref();
+  ASSERT_SUCC(result.basic_init());
+  result.io_callback_ = io_info.callback_;
+  ASSERT_SUCC(result.init(io_info));
+  ASSERT_SUCC(req.init(io_info, &result));
+  ASSERT_TRUE(req.should_write_with_caller_buf_());
+  ASSERT_EQ(NULL, req.raw_buf_);
+  ASSERT_EQ(0, req.buf_size_);
+  ASSERT_EQ(buf, req.calc_io_buf());
+  ASSERT_EQ(buf, req.get_io_data_buf());
+  ASSERT_TRUE(req.can_callback());
+}
+
+TEST_F(TestIOStruct, CallerWriteBufferValidation)
+{
+  TestPalfAsyncWriteCallback callback;
+  char buf[DIO_ALIGN_SIZE + 1] __attribute__ ((aligned (DIO_ALIGN_SIZE))) = { 0 };
+  ObIOResult result;
+  ObIORequest req;
+  result.inc_ref();
+  req.set_result(result);
+
+  result.flag_.set_write();
+  result.flag_.set_async();
+  result.flag_.set_use_caller_write_buf(true /* use_caller_write_buf */);
+  result.io_callback_ = &callback;
+  result.buf_ = buf;
+  result.offset_ = 0;
+  result.size_ = DIO_ALIGN_SIZE;
+  result.aligned_size_ = DIO_ALIGN_SIZE;
+  ASSERT_EQ(OB_SUCCESS, req.check_caller_write_buf_());
+
+  result.flag_.set_use_caller_write_buf(false /* use_caller_write_buf */);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.flag_.set_use_caller_write_buf(true /* use_caller_write_buf */);
+
+  result.flag_.set_sync();
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.flag_.set_async();
+
+  result.io_callback_ = NULL;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.io_callback_ = &callback;
+
+  result.buf_ = NULL;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.buf_ = buf;
+
+  result.buf_ = buf + 1;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.buf_ = buf;
+
+  result.offset_ = 1;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.offset_ = 0;
+
+  result.size_ = DIO_ALIGN_SIZE - 1;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, req.check_caller_write_buf_());
+  result.size_ = DIO_ALIGN_SIZE;
+
+  ASSERT_EQ(OB_SUCCESS, req.check_caller_write_buf_());
+}
+
 TEST_F(TestIOStruct, IOAllocator)
 {
   ObIOAllocator allocator;
@@ -285,7 +407,8 @@ TEST_F(TestIOStruct, IOAllocator)
 TEST_F(TestIOStruct, IORequest)
 {
   ObRefHolder<ObTenantIOManager> holder;
-  OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, holder);
+  ASSERT_SUCC(OB_IO_MANAGER.get_tenant_io_manager(OB_SERVER_TENANT_ID, holder));
+  ASSERT_NE(nullptr, holder.get_ptr());
   ObTenantIOManager &tenant_io_mgr = *(holder.get_ptr());
   ObIOFd fd;
   fd.first_id_ = 0;
@@ -365,7 +488,10 @@ TEST_F(TestIOStruct, IORequest)
   ASSERT_FAIL(result.init(write_info)); // offset and size aligned, but write buf is null
   ASSERT_TRUE(req.init(write_info ,&result));
 
-  write_info.buf_ = "test_write";
+  char write_buf[DIO_ALIGN_SIZE] = { 0 };
+  MEMSET(write_buf, 0x5A, sizeof(write_buf));
+  write_info.size_ = sizeof(write_buf);
+  write_info.buf_ = write_buf;
   req.reset();
   result.reset();
   req.tenant_io_mgr_.hold(&tenant_io_mgr);
@@ -375,6 +501,11 @@ TEST_F(TestIOStruct, IORequest)
   ASSERT_TRUE(req.is_inited_);
   ASSERT_TRUE(result.is_inited_);
   ASSERT_NE(req.raw_buf_, nullptr); // write buf need copy immediately
+  ASSERT_FALSE(write_info.flag_.is_use_caller_write_buf());
+  ASSERT_NE(req.calc_io_buf(), write_buf);
+  ASSERT_EQ(0, MEMCMP(req.get_io_data_buf(), write_buf, sizeof(write_buf)));
+  write_buf[0] = 0x33;
+  ASSERT_NE(req.get_io_data_buf()[0], write_buf[0]);
 
   req.reset();
 }

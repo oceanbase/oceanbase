@@ -222,6 +222,7 @@ ObIOFlag::ObIOFlag()
       need_close_dev_and_fd_(false),
       is_buffered_read_(true),
       is_preread_(false),
+      is_use_caller_write_buf_(false),
       reserved_(0),
       group_id_(USER_RESOURCE_OTHER_GROUP_ID),
       sys_module_id_(OB_INVALID_ID)
@@ -247,6 +248,7 @@ void ObIOFlag::reset()
   need_close_dev_and_fd_ = false;
   is_buffered_read_ = true;
   is_preread_ = false;
+  is_use_caller_write_buf_ = false;
   reserved_ = 0;
   group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   sys_module_id_ = OB_INVALID_ID;
@@ -458,6 +460,16 @@ void ObIOFlag::set_no_preread()
 bool ObIOFlag::is_preread() const
 {
   return is_preread_;
+}
+
+void ObIOFlag::set_use_caller_write_buf(const bool use_caller_write_buf)
+{
+  is_use_caller_write_buf_ = use_caller_write_buf;
+}
+
+bool ObIOFlag::is_use_caller_write_buf() const
+{
+  return is_use_caller_write_buf_;
 }
 
 
@@ -1214,6 +1226,10 @@ int ObIORequest::init(const ObIOInfo &info, ObIOResult *result)
     } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(*this));
+    } else if (should_write_with_caller_buf_()) {
+      if (OB_FAIL(check_caller_write_buf_())) {
+        LOG_WARN("invalid caller write buffer", K(ret), K(*this));
+      }
     } else if (info.flag_.is_write() && OB_FAIL(alloc_io_buf(io_buf))) {
       // alloc buffer for write request when ObIORequest init
       LOG_WARN("alloc io buffer for write failed", K(ret));
@@ -1382,7 +1398,9 @@ char *ObIORequest::calc_io_buf()
 {
   int ret = OB_SUCCESS;
   char *ret_buf = nullptr;
-  if (OB_NOT_NULL(io_result_)) {
+  if (should_write_with_caller_buf_()) {
+    ret_buf = const_cast<char *>(io_result_->buf_);
+  } else if (OB_NOT_NULL(io_result_)) {
     ret_buf = reinterpret_cast<char *>(upper_align(reinterpret_cast<int64_t>(raw_buf_), io_result_->aligned_size_));
   }
   return ret_buf;
@@ -1407,12 +1425,14 @@ const char *ObIORequest::get_io_data_buf()
 {
   const char *buf = nullptr;
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == raw_buf_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("raw buf is null, maybe has been recycle", K(ret));
-  } else if (OB_ISNULL(io_result_)) {
+  if (OB_ISNULL(io_result_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("io result is null", K(ret));
+  } else if (should_write_with_caller_buf_()) {
+    buf = io_result_->buf_;
+  } else if (OB_UNLIKELY(nullptr == raw_buf_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("raw buf is null, maybe has been recycle", K(ret));
   } else {
     // re-calculate with const parameters, in case of partial return change aligned_buf and so on.
     const int64_t aligned_offset = lower_align(io_result_->offset_, io_result_->aligned_size_);
@@ -1724,7 +1744,40 @@ int ObIORequest::try_alloc_buf_until_timeout(char *&io_buf)
 bool ObIORequest::can_callback() const
 {
   // both async_io and sync_io can callback
-  return nullptr != io_result_ && nullptr != get_callback() && nullptr != raw_buf_;
+  return nullptr != io_result_
+      && nullptr != get_callback()
+      && (nullptr != raw_buf_ || should_write_with_caller_buf_());
+}
+
+bool ObIORequest::should_write_with_caller_buf_() const
+{
+  return nullptr != io_result_
+      && io_result_->flag_.is_write()
+      && io_result_->flag_.is_use_caller_write_buf();
+}
+
+int ObIORequest::check_caller_write_buf_() const
+{
+  int ret = OB_SUCCESS;
+  int64_t aligned_size = 0;
+  if (!should_write_with_caller_buf_()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not caller write buffer request", K(ret), K(*this));
+  } else if (io_result_->flag_.is_sync() || OB_ISNULL(io_result_->io_callback_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("caller write buffer requires async callback", K(ret), K(*this));
+  } else if (OB_ISNULL(io_result_->buf_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("caller write buffer is null", K(ret), K(*this));
+  } else if (FALSE_IT(aligned_size = io_result_->aligned_size_)) {
+  } else if (OB_UNLIKELY(!is_io_aligned(reinterpret_cast<int64_t>(io_result_->buf_), aligned_size)
+                         || !is_io_aligned(io_result_->offset_, aligned_size)
+                         || !is_io_aligned(io_result_->size_, aligned_size))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("caller write buffer is not aligned", K(ret), K(*this),
+             KP(io_result_->buf_), K(aligned_size));
+  }
+  return ret;
 }
 
 void ObIORequest::free_io_buffer()
@@ -2796,4 +2849,3 @@ int ObMClockQueue::pop_with_ready_queue(const int64_t current_ts, ObIORequest *&
   }
   return ret;
 }
-

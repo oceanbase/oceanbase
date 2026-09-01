@@ -549,23 +549,130 @@ TEST(TestLogReplicaPropertyMeta, test_log_replica_property_meta)
   char buf[BUFSIZE];
   LogReplicaPropertyMeta replica_meta;
   LogReplicaPropertyMeta replica_meta1;
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   EXPECT_FALSE(replica_meta.is_valid());
-  EXPECT_EQ(OB_SUCCESS, replica_meta.generate(true, LogReplicaType::NORMAL_REPLICA));
+  EXPECT_EQ(OB_SUCCESS,
+            replica_meta.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::ASYNC));
+  EXPECT_EQ(LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION_V2,
+            replica_meta.version_);
+  EXPECT_EQ(LogIOMode::ASYNC, replica_meta.get_log_io_mode());
   replica_meta.reset();
   EXPECT_FALSE(replica_meta.is_valid());
-  EXPECT_EQ(OB_SUCCESS, replica_meta.generate(false, LogReplicaType::NORMAL_REPLICA));
+  EXPECT_EQ(OB_SUCCESS,
+            replica_meta.generate(false, LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC));
   replica_meta1 = replica_meta;
   EXPECT_EQ(replica_meta.version_, replica_meta1.version_);
   EXPECT_EQ(replica_meta.allow_vote_, replica_meta1.allow_vote_);
+  EXPECT_EQ(replica_meta.get_log_io_mode(), replica_meta1.get_log_io_mode());
 
   int64_t pos = 0;
-  EXPECT_EQ(OB_SUCCESS, replica_meta.generate(true, LogReplicaType::NORMAL_REPLICA));
+  EXPECT_EQ(OB_SUCCESS,
+            replica_meta.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::ASYNC));
   EXPECT_EQ(OB_SUCCESS, replica_meta.serialize(buf, BUFSIZE, pos));
   EXPECT_EQ(pos, replica_meta.get_serialize_size());
   pos = 0;
   EXPECT_EQ(OB_SUCCESS, replica_meta1.deserialize(buf, BUFSIZE, pos));
   EXPECT_EQ(replica_meta.version_, replica_meta1.version_);
   EXPECT_EQ(replica_meta.allow_vote_, replica_meta1.allow_vote_);
+  EXPECT_EQ(replica_meta.get_log_io_mode(), replica_meta1.get_log_io_mode());
+}
+
+TEST(TestLogReplicaPropertyMeta, v1_defaults_to_sync_and_rejects_async)
+{
+  static const int64_t BUFSIZE = 1024;
+  char buf[BUFSIZE];
+  int64_t pos = 0;
+  LogReplicaPropertyMeta v1_meta;
+  LogReplicaPropertyMeta decoded_meta;
+
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_4_2_1);
+  ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_4_2_1);
+  EXPECT_EQ(OB_SUCCESS,
+            v1_meta.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC));
+  EXPECT_EQ(LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION, v1_meta.version_);
+  EXPECT_EQ(LogIOMode::SYNC, v1_meta.get_log_io_mode());
+  EXPECT_EQ(OB_NOT_SUPPORTED,
+            decoded_meta.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::ASYNC));
+  EXPECT_EQ(OB_SUCCESS, v1_meta.serialize(buf, BUFSIZE, pos));
+  EXPECT_EQ(v1_meta.get_serialize_size(), pos);
+
+  pos = 0;
+  EXPECT_EQ(OB_SUCCESS, decoded_meta.deserialize(buf, BUFSIZE, pos));
+  EXPECT_EQ(LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION,
+            decoded_meta.version_);
+  EXPECT_EQ(LogIOMode::SYNC, decoded_meta.get_log_io_mode());
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+}
+
+TEST(TestLogReplicaPropertyMeta, sync_falls_back_to_v1_without_tenant_data_version)
+{
+  LogReplicaPropertyMeta normal_sync_meta;
+  LogReplicaPropertyMeta arbitration_sync_meta;
+  LogReplicaPropertyMeta async_meta;
+
+  // PALF creation can run before tenant data version is available. V1 preserves
+  // the exact SYNC semantics, while ASYNC must never bypass its version barrier.
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(0);
+  EXPECT_EQ(OB_SUCCESS,
+            normal_sync_meta.generate(
+                true, LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC));
+  EXPECT_EQ(LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION,
+            normal_sync_meta.version_);
+  EXPECT_EQ(LogIOMode::SYNC, normal_sync_meta.get_log_io_mode());
+  EXPECT_EQ(OB_SUCCESS,
+            arbitration_sync_meta.generate(
+                false, LogReplicaType::ARBITRATION_REPLICA, LogIOMode::SYNC));
+  EXPECT_EQ(LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION,
+            arbitration_sync_meta.version_);
+  EXPECT_EQ(LogIOMode::SYNC, arbitration_sync_meta.get_log_io_mode());
+  EXPECT_NE(OB_SUCCESS,
+            async_meta.generate(
+                true, LogReplicaType::NORMAL_REPLICA, LogIOMode::ASYNC));
+
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+}
+
+TEST(TestLogReplicaPropertyMeta, rejects_unknown_version_invalid_mode_and_short_v2)
+{
+  static const int64_t BUFSIZE = 1024;
+  char buf[BUFSIZE];
+  int64_t pos = 0;
+  int64_t field_pos = 0;
+  int64_t serialized_size = 0;
+  LogReplicaPropertyMeta meta;
+  LogReplicaPropertyMeta decoded_meta;
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  EXPECT_EQ(OB_SUCCESS,
+            meta.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::ASYNC));
+  EXPECT_EQ(OB_SUCCESS, meta.serialize(buf, BUFSIZE, pos));
+  serialized_size = pos;
+
+  field_pos = serialized_size - serialization::encoded_length_i64(
+                                    static_cast<int64_t>(LogIOMode::ASYNC));
+  EXPECT_EQ(OB_SUCCESS, serialization::encode_i64(
+                            buf, BUFSIZE, field_pos, static_cast<int64_t>(LogIOMode::INVALID)));
+  pos = 0;
+  EXPECT_EQ(OB_INVALID_DATA, decoded_meta.deserialize(buf, serialized_size, pos));
+
+  pos = 0;
+  EXPECT_EQ(OB_SUCCESS, meta.serialize(buf, BUFSIZE, pos));
+  field_pos = 0;
+  EXPECT_EQ(OB_SUCCESS, serialization::encode_i64(buf, BUFSIZE, field_pos, 999));
+  pos = 0;
+  decoded_meta.reset();
+  EXPECT_EQ(OB_INVALID_DATA, decoded_meta.deserialize(buf, serialized_size, pos));
+
+  pos = 0;
+  EXPECT_EQ(OB_SUCCESS, meta.serialize(buf, BUFSIZE, pos));
+  pos = 0;
+  decoded_meta.reset();
+  EXPECT_EQ(OB_DESERIALIZE_ERROR,
+            decoded_meta.deserialize(buf, serialized_size - 1, pos));
 }
 
 TEST(TestLogMetaInfos, test_log_config_version)
@@ -622,4 +729,3 @@ int main(int args, char **argv)
   oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }
-

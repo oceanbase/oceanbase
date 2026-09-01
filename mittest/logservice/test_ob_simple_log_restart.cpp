@@ -302,7 +302,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
-    LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
+    LogIOWorkerBase *iow = leader.palf_handle_impl_->log_engine_.io_task_submitter_;
     int64_t epoch = leader.palf_handle_impl_->log_engine_.palf_epoch_;
     int64_t palf_id = leader.palf_handle_impl_->palf_id_;
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 29, id, log_entry_size));
@@ -343,7 +343,7 @@ TEST_F(TestObSimpleLogClusterRestart, test_restart)
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
     LogStorage *log_storage = &leader.palf_handle_impl_->log_engine_.log_storage_;
-    LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
+    LogIOWorkerBase *iow = leader.palf_handle_impl_->log_engine_.io_task_submitter_;
     int64_t epoch = leader.palf_handle_impl_->log_engine_.palf_epoch_;
     int64_t palf_id = leader.palf_handle_impl_->palf_id_;
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id, log_entry_size));

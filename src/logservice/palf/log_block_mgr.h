@@ -18,6 +18,7 @@
 #include "log_define.h"
 #include "log_reader.h"                   // LogReader
 #include "log_block_handler.h"            // LogBlockHandler
+#include "log_async_io_struct.h"          // AsyncPwriteRequest
 #include "lsn.h"                          // LSN
 #include "log_block_pool_interface.h"     // ILogBlocKMgr
 
@@ -27,6 +28,7 @@ namespace palf
 {
 
 class LogWriteBuf;
+class IAsyncPalfIOCtx;
 class LogGroupEntryHeader;
 
 class LogBlockMgr {
@@ -60,6 +62,15 @@ public:
              const offset_t offset,
              const LogWriteBuf &write_buf);
 
+  // 通过当前可写块的 handler 提交 AIO。块切换屏障必须先准备目标块，因此
+  // block_id 必须等于 curr_writable_block_id_；request buffer 和异步 PALF ctx
+  // 必须存活到 AIO callback 完成。
+  int aio_write(const block_id_t block_id,
+                const offset_t offset,
+                const AsyncPwriteRequest &req,
+                common::ObIOHandle &out_handle);
+
+
   int truncate(const block_id_t block_id,
                const offset_t offset);
   // @brief used to get min block id and max block id
@@ -72,6 +83,9 @@ public:
 
   int load_block_handler(const block_id_t block_id,
                          const offset_t offset);
+
+  // Close the current writable block before it is loaded again.
+  int close_block_handler();
 
 	int create_tmp_block_handler(const block_id_t block_id);
 

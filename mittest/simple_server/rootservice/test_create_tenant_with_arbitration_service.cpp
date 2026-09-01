@@ -17,6 +17,8 @@
 
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
+#include "logservice/ob_log_service.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 
 namespace oceanbase
@@ -54,6 +56,8 @@ TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql.assign("create resource pool arbitration_pool unit = 'arbitration_unit', unit_num = 1;"));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
+  ASSERT_EQ(OB_SUCCESS, sql.assign("alter system set _enable_palf_async_io=true tenant=seed"));
+  ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql.assign("create tenant arbitration_tenant_1 resource_pool_list=('arbitration_pool');"));
   ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   ASSERT_EQ(OB_SUCCESS, sql.assign("select tenant_id "
@@ -89,6 +93,22 @@ TEST_F(TestAddRemoveReplaceArbitrationService, test_add_remove_replace)
     ASSERT_EQ(OB_SUCCESS, result2->next());
     ASSERT_EQ(OB_SUCCESS, result2->get_int("cnt", tmp_cnt));
     ASSERT_EQ(1, tmp_cnt);
+  }
+
+  omt::ObTenantConfigGuard user_tenant_config(TENANT_CONF(tenant_id));
+  ASSERT_TRUE(user_tenant_config.is_valid());
+  ASSERT_TRUE(user_tenant_config->_enable_palf_async_io);
+  omt::ObTenantConfigGuard meta_tenant_config(TENANT_CONF(gen_meta_tenant_id(tenant_id)));
+  ASSERT_TRUE(meta_tenant_config.is_valid());
+  ASSERT_TRUE(meta_tenant_config->compatible.value_updated());
+  {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    ASSERT_EQ(OB_SUCCESS, guard.switch_to(tenant_id));
+    logservice::ObLogService *log_service = MTL(logservice::ObLogService *);
+    ASSERT_NE(nullptr, log_service);
+    palf::PalfOptions palf_options;
+    ASSERT_EQ(OB_SUCCESS, log_service->get_palf_options(palf_options));
+    ASSERT_TRUE(palf_options.enable_async_io_);
   }
 
   ASSERT_EQ(OB_SUCCESS, sql.assign("drop tenant arbitration_tenant_1 force"));

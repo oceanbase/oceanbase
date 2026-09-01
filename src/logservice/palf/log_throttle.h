@@ -27,6 +27,23 @@ namespace palf
 {
 class IPalfEnvImpl;
 typedef ObFunction<bool()> NeedPurgingThrottlingFunc;
+class LogWritingThrottle;
+
+// 租户级异步写限流上下文. 三个成员都由 LogIOWorkerWrapper 持有,
+// AsyncPalfIOCtx 只在自身生命周期内借用; throttle 为空表示无需限流.
+struct AsyncThrottleContext
+{
+  AsyncThrottleContext() : throttle(NULL), purge_func(NULL), purge_task_count(NULL) {}
+  AsyncThrottleContext(LogWritingThrottle *throttle,
+                       const NeedPurgingThrottlingFunc *purge_func,
+                       int64_t *purge_task_count)
+    : throttle(throttle), purge_func(purge_func), purge_task_count(purge_task_count) {}
+  LogWritingThrottle *throttle;
+  const NeedPurgingThrottlingFunc *purge_func;
+  int64_t *purge_task_count;
+  TO_STRING_KV(KP(throttle), KP(purge_func), KP(purge_task_count));
+};
+
 class LogThrottlingStat
 {
 public:
@@ -52,9 +69,10 @@ private:
   int64_t total_throttling_size_;
   int64_t total_throttling_task_cnt_;
 
-//log_size of tasks need for throttling but overlooked
+// Bytes admitted without sleeping, including purge bypass and the first async
+// deferred-admission decision.
   int64_t total_skipped_size_;
-//count of tasks need for throttling but overlooked
+// Number of decisions accounted in total_skipped_size_.
   int64_t total_skipped_task_cnt_;
   int64_t max_throttling_interval_;
 };
@@ -101,6 +119,20 @@ public:
                  const NeedPurgingThrottlingFunc &need_purging_throttling_func,
                  IPalfEnvImpl *palf_env_impl);
   int after_append_log(const int64_t log_size);
+  // 异步写 admission 不在 worker 上 sleep. 本接口复用同步路径的限流计算,
+  // 通过 can_admit=false 和 delay_us 返回下一次尝试时间, 错误原样返回调用方.
+  int try_admit_async(const int64_t logical_bytes,
+                      const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                      IPalfEnvImpl *palf_env_impl,
+                      bool &can_admit,
+                      int64_t &delay_us);
+  // deadline 到期前重新探测限流状态, 但不重复统计 skipped task;
+  // 探测过程中仍会刷新共享限流参数及启停状态.
+  int probe_admit_async(const int64_t logical_bytes,
+                        const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                        IPalfEnvImpl *palf_env_impl,
+                        bool &can_admit,
+                        int64_t &delay_us);
   TO_STRING_KV(K_(last_update_ts),
                K_(need_writing_throttling_notified),
                K_(appended_log_size_cur_round),
@@ -109,27 +141,46 @@ public:
                K_(stat));
 
 private:
-  int update_throtting_options_guarded_by_lock_(IPalfEnvImpl *palf_env_impl, bool &has_recycled_log_disk);
+  int update_throtting_options_guarded_by_lock_(IPalfEnvImpl *palf_env_impl,
+                                                const bool force_update,
+                                                bool &has_recycled_log_disk);
   inline bool need_throttling_with_options_not_guarded_by_lock_() const;
   inline bool need_throttling_not_guarded_by_lock_(const NeedPurgingThrottlingFunc &need_purge_throttling) const;
+  int decide_throttle_(const int64_t io_size,
+                       const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                       IPalfEnvImpl *palf_env_impl,
+                       bool &need_throttle,
+                       int64_t &wait_us,
+                       const bool need_account_skipped_task);
+  int admit_async_(const int64_t logical_bytes,
+                   const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                   IPalfEnvImpl *palf_env_impl,
+                   const bool need_account_skipped_task,
+                   bool &can_admit,
+                   int64_t &delay_us);
+  // 同步 sleep 与异步 admission 共用的限流计算. 调用方必须持有 lock_;
+  // 仅当 need_throttle=true 时 interval_us 才有效.
+  int calc_throttling_interval_guarded_by_lock_(
+      const int64_t io_size,
+      const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+      bool &need_throttle,
+      int64_t &interval_us);
   //reset throttling related member
   void clean_up_not_guarded_by_lock_();
-  bool check_need_update_throtting_options_guarded_by_lock_();
 private:
   typedef common::ObSpinLock SpinLock;
   typedef common::ObSpinLockGuard SpinLockGuard;
   static const int64_t UPDATE_INTERVAL_US = 500 * 1000L;//500ms
   const int64_t DETECT_INTERVAL_US = 30 * 1000L;//30ms
   const int64_t THROTTLING_CHUNK_SIZE = MAX_LOG_BUFFER_SIZE;
-  //ts of lastest updating writing throttling info
+  // lock_ 串行保护限流参数、追加量和统计；GC 通知标记由原子操作更新，计算完整
+  // 限流决定时再在 lock_ 内与 throttling_options_ 一起读取。
   int64_t last_update_ts_;
-  //ts when next log can be appended
-  //log_size can be appended during current round, will be reset when unrecyclable_size changed
-  // notified by gc, local meta may not be ready
   mutable bool need_writing_throttling_notified_;
+  // Log size appended in the current throttle round, reset when unrecyclable
+  // disk space changes.
   int64_t appended_log_size_cur_round_;
   double decay_factor_;
-  //append_speed during current round, Bytes per usecond
   PalfThrottleOptions throttling_options_;
   LogThrottlingStat stat_;
   mutable SpinLock lock_;

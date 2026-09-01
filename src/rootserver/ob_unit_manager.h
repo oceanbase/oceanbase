@@ -209,7 +209,11 @@ public:
       const common::ObIArray<share::ObResourcePoolName> &pool_names,
       const uint64_t tenant_id,
       const uint64_t source_tenant_id,
+      const common::ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
       const bool check_data_version);
+  static int read_parameters_from_seed_tenant(
+      const common::ObIArray<common::ObString> &parameter_names,
+      common::ObConfigPairs &parameter_values);
   virtual int revoke_pools(
       common::ObMySQLTransaction &trans,
       const common::ObIArray<share::ObResourcePoolName> &pool_names,
@@ -754,6 +758,7 @@ private:
                      const lib::Worker::CompatMode compat_mode,
                      const ObIArray<share::ObResourcePoolName> &pool_names,
                      const uint64_t tenant_id,
+                     const common::ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
                      const bool check_data_version);
 
   int do_revoke_pools_(common::ObMySQLTransaction &trans,
@@ -841,6 +846,7 @@ private:
       const share::ObUnit &unit,
       const bool if_not_grant,
       const bool skip_offline_server,
+      const common::ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
       const bool check_data_version);
   int build_notify_create_unit_resource_rpc_arg_(
       const uint64_t tenant_id,
@@ -849,6 +855,7 @@ private:
       const uint64_t unit_config_id,
       const bool if_not_grant,
       const bool fill_data_version,
+      const common::ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
       obrpc::TenantServerUnitConfig &rpc_arg) const;
   int get_meta_and_user_data_version_(
       const uint64_t tenant_id,

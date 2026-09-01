@@ -1202,6 +1202,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "test_iterator_with_flashback");
   OB_LOGGER.set_log_level("TRACE");
+  const int64_t log_disk_size = 10LL * 1024 * 1024 * 1024;
+  EXPECT_EQ(OB_SUCCESS, update_server_log_disk(log_disk_size));
+  EXPECT_EQ(OB_SUCCESS, update_disk_options(log_disk_size / palf::PALF_PHY_BLOCK_SIZE));
   int64_t id = ATOMIC_AAF(&palf_id_, 1);
   int64_t leader_idx = 0;
   PalfHandleImplGuard leader;
@@ -1281,7 +1284,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iterator_with_flashback)
   LSN last_lsn = raw_write_leader.palf_handle_impl_->get_max_lsn();
   SCN last_scn = raw_write_leader.palf_handle_impl_->get_max_scn();
 
-  LogIOWorker *io_worker = raw_write_leader.palf_handle_impl_->log_engine_.log_io_worker_;
+  LogIOWorkerBase *io_worker = raw_write_leader.palf_handle_impl_->log_engine_.io_task_submitter_;
   IOTaskCond cond(id_raw_write, raw_write_leader.palf_env_impl_->last_palf_epoch_);
   io_worker->submit_io_task(&cond);
   std::vector<LSN> lsns;
@@ -1839,7 +1842,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
   {
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-    LogIOWorker *iow = leader.get_palf_handle_impl()->log_engine_.log_io_worker_;
+    ASSERT_FALSE(leader.palf_env_impl_->log_io_worker_wrapper_.enable_async_io_);
+    LogIOWorker *iow = static_cast<LogIOWorker *>(
+        leader.get_palf_handle_impl()->log_engine_.io_task_submitter_);
     IPalfEnvImpl *palf_env_impl = leader.get_palf_handle_impl()->palf_env_impl_;
     ObILogAllocator *allocator = palf_env_impl->get_log_allocator();
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, log_entry_size));
@@ -1876,7 +1881,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
   {
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-    LogIOWorker *iow = leader.get_palf_handle_impl()->log_engine_.log_io_worker_;
+    ASSERT_FALSE(leader.palf_env_impl_->log_io_worker_wrapper_.enable_async_io_);
+    LogIOWorker *iow = static_cast<LogIOWorker *>(
+        leader.get_palf_handle_impl()->log_engine_.io_task_submitter_);
     IPalfEnvImpl *palf_env_impl = leader.get_palf_handle_impl()->palf_env_impl_;
     ObILogAllocator *allocator = palf_env_impl->get_log_allocator();
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 32, leader_idx, log_entry_size));
@@ -1913,7 +1920,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
   {
     PalfHandleImplGuard leader;
     EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-    LogIOWorker *iow = leader.get_palf_handle_impl()->log_engine_.log_io_worker_;
+    ASSERT_FALSE(leader.palf_env_impl_->log_io_worker_wrapper_.enable_async_io_);
+    LogIOWorker *iow = static_cast<LogIOWorker *>(
+        leader.get_palf_handle_impl()->log_engine_.io_task_submitter_);
     IPalfEnvImpl *palf_env_impl = leader.get_palf_handle_impl()->palf_env_impl_;
     bool need_stop = false;
     std::thread throttling_th([palf_env_impl, &need_stop](){

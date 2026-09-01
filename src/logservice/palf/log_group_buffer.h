@@ -50,6 +50,13 @@ public:
                         const char *data,
                         const int64_t data_len,
                         const int64_t log_body_size);
+  // tail reset 后回填尾页中已持久化的有效前缀. prefix_begin_lsn 必须
+  // 4K 对齐, [prefix_begin_lsn, tail_lsn) 不超过一页且长度等于 data_len.
+  // 本接口只同步复制字节, 不推进 readable/data-end/reuse 位点.
+  int fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                   const LSN &tail_lsn,
+                                   const char *data,
+                                   int64_t data_len);
   int get_log_buf(const LSN &lsn, const int64_t total_len, LogWriteBuf &log_buf);
   bool can_handle_new_log(const LSN &lsn,
                           const int64_t total_len) const;
@@ -61,9 +68,10 @@ public:
   int64_t get_reserved_buffer_size() const;
   int to_leader();
   int to_follower();
-  // inc update readable_begin_lsn, used by append_disk_log().
+  // 直接落盘的数据不在 group buffer 中: 同时推进可读下界和数据尾,
+  // 使这段内存保持不可读, 直到后续 fill 写入新的连续数据.
   int inc_update_readable_begin_lsn(const LSN &new_lsn);
-  // inc update reuse_lsn, used for flush log cb case.
+  // Advance the lower bound of memory that the upper buffer may reuse.
   int inc_update_reuse_lsn(const LSN &new_reuse_lsn);
   void get_reuse_lsn(LSN &reuse_lsn) const { return get_reuse_lsn_(reuse_lsn); }
   // Used for truncating log / truncating for rebuild.
@@ -84,37 +92,44 @@ public:
                 const int64_t in_read_size,
                 char *buf,
                 int64_t &out_read_size) const;
-  TO_STRING_KV("log_group_buffer: start_lsn", start_lsn_, "reuse_lsn", reuse_lsn_, "reserved_buffer_size",
-      reserved_buffer_size_, "available_buffer_size", available_buffer_size_, "readable_begin_lsn", readable_begin_lsn_);
+  TO_STRING_KV("log_group_buffer: start_lsn", start_lsn_, "buffer_start_lsn", buffer_start_lsn_,
+      "buffer_reuse_lsn", buffer_reuse_lsn_, "data_end_lsn", data_end_lsn_,
+      "reserved_buffer_size", reserved_buffer_size_, "available_buffer_size",
+      available_buffer_size_, "readable_begin_lsn", readable_begin_lsn_);
 private:
   int get_buffer_pos_(const LSN &lsn, int64_t &start_pos) const;
   void get_buffer_start_lsn_(LSN &start_lsn) const;
   void get_reuse_lsn_(LSN &reuse_lsn) const;
   void get_start_lsn_(LSN &lsn) const;
+  void get_data_end_lsn_(LSN &lsn) const;
   void gen_readable_begin_lsn_for_filling_(const LSN &lsn,
                                            LSN &new_readable_begin_lsn) const;
   void inc_update_readable_begin_lsn_(const LSN &new_readable_begin_lsn);
+  int inc_update_data_end_lsn_(const LSN &new_data_end_lsn);
   void get_readable_begin_lsn_(LSN &readable_begin_lsn) const;
   int fill_(const LSN &lsn,
             const int64_t start_pos,
             const char *data,
             const int64_t data_len);
 private:
-  // buffer起始位置对应的lsn
+  // 真实逻辑起点, 由 init() 传入. 写入路径用它判断新日志是否早于本轮 buffer 生命周期.
   LSN start_lsn_;
-  // buffer可复用起点对应的lsn, 与max_flushed_end_lsn预期最终是相等的.
-  // 所有更新max_flushed_end_lsn的逻辑都要考虑一并更新该值.
-  LSN reuse_lsn_;
+  // 4K 对齐后的环形 buffer 起点. 只用于把 LSN 映射到 data_buf_ 偏移, 可能早于 start_lsn_.
+  LSN buffer_start_lsn_;
+  // 内存可复用下界. async zero-copy 写盘需要保护尾部 4K 页, 因此它可能落后于已持久化位点.
+  LSN buffer_reuse_lsn_;
   // lock for truncate operation.
   mutable common::ObSpinLock truncate_lock_;
-  // This field is used for recording the readable begin lsn.
-  // It won't fallback.
+  // 当前可读数据下界. 在一次 init 生命周期内只单调推进, truncate 不回退;
+  // reset/destroy 会将它清空.
   LSN readable_begin_lsn_;
+  // 当前可读数据上界. 它和 buffer_reuse_lsn_ 分离, 避免把“数据已填充”误当成“内存可复用”.
+  LSN data_end_lsn_;
   // 分配的buffer size
   int64_t reserved_buffer_size_;
   // 当前可用的buffer size
   int64_t available_buffer_size_;
-  // buffer指针
+  // buffer指针, LOG_DIO_ALIGN_SIZE 对齐.
   char *data_buf_;
   bool is_inited_;
 private:

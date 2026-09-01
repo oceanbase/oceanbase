@@ -350,6 +350,7 @@ public:
       batch_rpc_transport_(NULL),
       high_prio_rpc_transport_(NULL),
       log_disk_lock_(common::ObLatchIds::TEST_LATCH_LOCK),
+      enable_async_io_(false),
       log_service_started_for_role_change_(false)
   {
   }
@@ -470,6 +471,8 @@ public:
   int update_server_log_disk(const int64_t log_disk_size);
   int set_mock_ls_ckpt(const int64_t palf_id, const SCN scn, const LSN lsn);
   int get_mock_ls_ckpt(const int64_t palf_id, share::SCN &scn, LSN &lsn) const;
+  // Set the PALF async IO option used by the next server initialization.
+  void set_enable_async_io(const bool enable_async_io) { enable_async_io_ = enable_async_io; }
   int create_ls(const int64_t palf_id,
                 const AccessMode &access_mode,
                 const PalfBaseInfo &base_info,
@@ -540,6 +543,8 @@ private:
   MockElectionMap mock_election_map_;
   // ObTenantUnit以及__all_unit_configs
   ObSpinLock log_disk_lock_;
+  // Preserved across simple_restart() and consumed by the next PalfEnv initialization.
+  bool enable_async_io_;
   // 本地已生效日志盘规格
   palf::PalfDiskOptions disk_opts_;
   // 内部表中记录日志盘规格

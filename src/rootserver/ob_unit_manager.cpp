@@ -3523,46 +3523,88 @@ int ObUnitManager::check_tenant_exist_(
   return ret;
 }
 
+int ObUnitManager::read_parameters_from_seed_tenant(
+    const ObIArray<ObString> &parameter_names,
+    ObConfigPairs &parameter_values)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  ObSqlString name_list;
+  ObString name;
+  ObString value;
+  sqlclient::ObMySQLResult *result = NULL;
+  parameter_values.reset();
+  parameter_values.init(OB_SYS_TENANT_ID);
+  if (0 == parameter_names.count()) {
+    // no parameter needs early init
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < parameter_names.count(); ++i) {
+      const ObString &parameter_name = parameter_names.at(i);
+      if (OB_UNLIKELY(parameter_name.empty())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid parameter name", KR(ret), K(parameter_names));
+      } else if (OB_FAIL(name_list.append_fmt("%s\"%.*s\"",
+                                             0 == i ? "" : ", ",
+                                             parameter_name.length(),
+                                             parameter_name.ptr()))) {
+        LOG_WARN("fail to append parameter name", KR(ret), K(parameter_name));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && 0 < parameter_names.count()) {
+    if (OB_FAIL(sql.append_fmt("SELECT name, value FROM %s WHERE name IN (%s)",
+                               OB_ALL_SEED_PARAMETER_TNAME, name_list.ptr()))) {
+      LOG_WARN("fail to append sql", KR(ret), K(name_list));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+          LOG_WARN("fail to execute sql", KR(ret), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret));
+        } else {
+          while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+            EXTRACT_VARCHAR_FIELD_MYSQL(*result, "name", name);
+            EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", value);
+            if (FAILEDx(parameter_values.add_config(name, value))) {
+              LOG_WARN("fail to add seed parameter", KR(ret), K(name), K(value));
+            }
+          }
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          } else if (OB_SUCCESS != ret) {
+            LOG_WARN("fail to get next row", KR(ret), K(sql));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObUnitManager::read_parameter_from_seed_tenant_(
     const char * parameter_name,
     ObSqlString &parameter_value)
 {
   int ret = OB_SUCCESS;
-  ObSqlString sql;
+  ObString name;
+  ObSEArray<ObString, 1> parameter_names;
+  ObConfigPairs parameter_values;
   parameter_value.reset();
   if (OB_ISNULL(parameter_name)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret));
-  } else if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE name = \"%s\"",
-                         OB_ALL_SEED_PARAMETER_TNAME, parameter_name))) {
-    LOG_WARN("fail to append sql", KR(ret));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy is null", KR(ret));
-  } else {
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      ObString tmp_value;
-      if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
-        LOG_WARN("fail to execute sql", KR(ret), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret));
-      } else if (OB_FAIL(result->next())) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("fail to get next row", KR(ret));
-        }
-      } else {
-        // tmp_value points to MySQLResult-owned buffer; deep copy into parameter_value
-        // before MySQLResult goes out of scope to avoid dangling reference.
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", tmp_value);
-        if (FAILEDx(parameter_value.assign(tmp_value))) {
-          LOG_WARN("fail to deep copy parameter value", KR(ret), K(tmp_value));
-        }
-      }
-    }
+  } else if (FALSE_IT(name = ObString::make_string(parameter_name))) {
+  } else if (OB_FAIL(parameter_names.push_back(name))) {
+    LOG_WARN("fail to push parameter name", KR(ret), K(name));
+  } else if (OB_FAIL(read_parameters_from_seed_tenant(parameter_names, parameter_values))) {
+    LOG_WARN("fail to read parameters from seed tenant", KR(ret), K(name));
+  } else if (parameter_values.get_configs().count() > 0
+             && OB_FAIL(parameter_value.assign(parameter_values.get_configs().at(0).value_))) {
+    LOG_WARN("fail to assign parameter value", KR(ret), K(parameter_values));
   }
   return ret;
 }
@@ -3791,6 +3833,7 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
                                const ObIArray<ObResourcePoolName> &pool_names,
                                const uint64_t tenant_id,
                                const uint64_t source_tenant_id,
+                               const ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
                                /*arg "const bool skip_offline_server" is no longer supported*/
                                const bool check_data_version)
 {
@@ -3836,7 +3879,8 @@ int ObUnitManager::grant_pools(common::ObMySQLTransaction &trans,
     LOG_WARN("fail to check pools unit num legal", KR(ret), K(tenant_id), K(pool_names));
   } else if (OB_FAIL(check_grant_pools_replica_type_legal_(tenant_id, pool_names))) {
     LOG_WARN("fail to check grant pools replica type legal", KR(ret), K(tenant_id), K(pool_names));
-  } else if (OB_FAIL(do_grant_pools_(trans, compat_mode, pool_names, tenant_id, check_data_version))) {
+  } else if (OB_FAIL(do_grant_pools_(trans, compat_mode, pool_names, tenant_id, init_tenant_configs,
+                                     check_data_version))) {
     LOG_WARN("do grant pools failed", KR(ret), K(grant), K(pool_names), K(tenant_id), K(compat_mode));
   }
   LOG_INFO("grant resource pools to tenant", KR(ret), K(pool_names), K(tenant_id));
@@ -4982,6 +5026,7 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
     const share::ObUnit &unit,
     const bool if_not_grant,
     const bool skip_offline_server,
+    const ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
     const bool check_data_version)
 {
   int ret = OB_SUCCESS;
@@ -5004,7 +5049,8 @@ int ObUnitManager::try_notify_tenant_server_unit_resource_(
       const bool fill_data_version = should_check_data_version && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_0_0;
       if (OB_FAIL(build_notify_create_unit_resource_rpc_arg_(
                     tenant_id, unit, compat_mode, unit_config_id, if_not_grant,
-                    fill_data_version, tenant_unit_server_config))) {
+                    fill_data_version, init_tenant_configs,
+                    tenant_unit_server_config))) {
         LOG_WARN("fail to init tenant_unit_server_config", KR(ret), K(tenant_id), K(is_delete));
       } else if (should_check_data_version
                  && !fill_data_version
@@ -5117,11 +5163,12 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
     const uint64_t unit_config_id,
     const bool if_not_grant,
     const bool fill_data_version,
+    const ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
     obrpc::TenantServerUnitConfig &rpc_arg) const
 {
   int ret = OB_SUCCESS;
   // get unit_config
-  share::ObUnitConfig *unit_config = nullptr;
+  share::ObUnitConfig *unit_config = NULL;
   if (OB_FAIL(get_unit_config_by_id(unit_config_id, unit_config))) {
     LOG_WARN("fail to get unit config by id", KR(ret));
   } else if (OB_ISNULL(unit_config)) {
@@ -5201,6 +5248,12 @@ int ObUnitManager::build_notify_create_unit_resource_rpc_arg_(
                                     , meta_tenant_data_version
                                     ))) {
       LOG_WARN("fail to init rpc_arg", KR(ret), K(tenant_id), K(is_delete));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < init_tenant_configs.count(); ++i) {
+    if (OB_FAIL(rpc_arg.add_init_tenant_config(init_tenant_configs.at(i)))) {
+      LOG_WARN("fail to add init tenant config", KR(ret), K(tenant_id), K(init_tenant_configs));
     }
   }
 
@@ -5286,6 +5339,7 @@ int ObUnitManager::rollback_persistent_units_(
   int tmp_ret = OB_SUCCESS;
   const bool is_delete = true;
   ObArray<int> return_ret_array;
+  ObSEArray<obrpc::ObTenantConfigArg, 1> empty_init_tenant_configs;
   notify_proxy.reuse();
   for (int64_t i = 0; i < units.count(); i++) {
     const ObUnit & unit = units.at(i);
@@ -5295,6 +5349,7 @@ int ObUnitManager::rollback_persistent_units_(
         tenant_id, is_delete, notify_proxy,
         dummy_config_id, dummy_mode, unit,
         false/*if_not_grant*/, false/*skip_offline_server*/,
+        empty_init_tenant_configs,
         false /*check_data_version*/))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       LOG_WARN("fail to try notify server unit resource", KR(ret), KR(tmp_ret),
@@ -5555,6 +5610,7 @@ int ObUnitManager::try_persist_unit_info_(
   } else if (OB_FAIL(fetch_new_unit_id(new_unit_id))) {
     LOG_WARN("fetch_new_unit_id failed", KR(ret));
   } else {
+    ObSEArray<obrpc::ObTenantConfigArg, 1> empty_init_tenant_configs;
     unit.unit_id_ = new_unit_id;
     unit.resource_pool_id_ = pool.resource_pool_id_;
     unit.unit_group_id_ = unit_group_id;
@@ -5566,7 +5622,8 @@ int ObUnitManager::try_persist_unit_info_(
     } else if (OB_FAIL(try_notify_tenant_server_unit_resource_(
                            pool.tenant_id_, is_delete, notify_proxy,
                            pool.unit_config_id_, compat_mode, unit, false/*if not grant*/,
-                           false/*skip offline server*/, true /*check_data_version*/))) {
+                           false/*skip offline server*/, empty_init_tenant_configs,
+                           true /*check_data_version*/))) {
       LOG_WARN("fail to try notify server unit resource", KR(ret), K(pool), K(is_delete), K(unit));
     } else if (OB_FAIL(add_unit(client, unit))) {
       LOG_WARN("add_unit failed", KR(ret), K(unit), K(unit));
@@ -8968,6 +9025,7 @@ int ObUnitManager::do_grant_pools_(
     const lib::Worker::CompatMode compat_mode,
     const ObIArray<share::ObResourcePoolName> &pool_names,
     const uint64_t tenant_id,
+    const ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs,
     const bool check_data_version)
 {
   int ret = OB_SUCCESS;
@@ -9014,6 +9072,7 @@ int ObUnitManager::do_grant_pools_(
                   tenant_id, false /*is_delete*/, notify_proxy,
                   new_pool.unit_config_id_, compat_mode, *unit,
                   false/*if_not_grant*/, false/*skip_offline_server*/,
+                  init_tenant_configs,
                   check_data_version))) {
             LOG_WARN("fail to try notify server unit resource", KR(ret));
           } else if (OB_FAIL(persistent_units.push_back(*unit))) {
@@ -9069,6 +9128,7 @@ int ObUnitManager::do_revoke_pools_(
     share::ObResourcePool new_pool;
     ObArray<share::ObResourcePool *> shrinking_expanding_pools;
     ObArray<share::ObResourcePool> pools;
+    ObSEArray<obrpc::ObTenantConfigArg, 1> empty_init_tenant_configs;
     for (int64_t i = 0; OB_SUCC(ret) && i < pool_names.count(); ++i) {
       share::ObResourcePool *pool = NULL;
       bool altering_unit_num = false;
@@ -9100,6 +9160,7 @@ int ObUnitManager::do_revoke_pools_(
                   tenant_id, true /*is_delete*/, notify_proxy,
                   new_pool.unit_config_id_, dummy_mode, *unit,
                   false/*if_not_grant*/, false/*skip_offline_server*/,
+                  empty_init_tenant_configs,
                   false /*check_data_version*/))) {
             LOG_WARN("fail to try notify server unit resource", KR(ret));
           } else if (!ObReplicaTypeCheck::need_to_align_to_ug(unit->replica_type_)) {
@@ -9734,12 +9795,13 @@ int ObUnitManager::do_migrate_unit_notify_resource_(const share::ObResourcePool 
   } else {
     ObNotifyTenantServerResourceProxy notify_proxy(*srv_rpc_proxy_,
                                                   &obrpc::ObSrvRpcProxy::notify_tenant_server_unit_resource);
+    ObSEArray<obrpc::ObTenantConfigArg, 1> empty_init_tenant_configs;
     // only notify new unit resource on dst server here.
     // Old unit on src server will be delete later when doing end_migrate
     if (OB_FAIL(try_notify_tenant_server_unit_resource_(
             pool.tenant_id_, false/*is_delete*/, notify_proxy, // is_delete is false when migrate unit
             pool.unit_config_id_, compat_mode, new_unit, false/*if not grant*/,
-            false/*skip offline server*/,
+            false/*skip offline server*/, empty_init_tenant_configs,
             true /*check_data_version*/))) {
       LOG_WARN("fail to try notify server unit resource", K(ret));
     }

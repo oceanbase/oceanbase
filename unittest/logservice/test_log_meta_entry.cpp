@@ -80,18 +80,29 @@ TEST(TestLogMetaEntry, test_log_meta_entry)
   LogInfo prev_log_info; prev_log_info.generate_by_default();
   EXPECT_EQ(OB_SUCCESS, log_snapshot_meta1.generate(lsn, prev_log_info, lsn));
 
+  LogModeMeta log_mode_meta1;
+  EXPECT_EQ(OB_SUCCESS,
+            log_mode_meta1.generate(proposal_id, proposal_id, AccessMode::APPEND,
+                                    SyncMode::ASYNC, share::SCN::min_scn()));
+
   LogReplicaPropertyMeta replica_meta1;
-  replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA);
+  EXPECT_EQ(OB_SUCCESS,
+            replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC));
 
   LogMeta log_meta1;
   // Test invalid
   EXPECT_FALSE(log_meta1.is_valid());
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_prepare_meta(log_prepare_meta1));
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta1));
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_mode_meta(log_mode_meta1));
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_snapshot_meta(log_snapshot_meta1));
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_replica_property_meta(replica_meta1));
+  EXPECT_TRUE(log_meta1.is_valid());
 
   const int64_t BUFSIZE = 1 << 21;
   char buf[BUFSIZE];
   int64_t pos = 0;
   // Test serialize and deserialize
-  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta1));
   EXPECT_EQ(OB_SUCCESS, log_meta1.serialize(buf, BUFSIZE, pos));
   EXPECT_EQ(pos, log_meta1.get_serialize_size());
 

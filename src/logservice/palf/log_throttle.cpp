@@ -50,9 +50,73 @@ int LogWritingThrottle::update_throttling_options(IPalfEnvImpl *palf_env_impl)
     LOG_WARN("palf_env_impl is NULL", KPC(this));
   } else {
     bool unused_has_freed_up_space = false;
-    if (check_need_update_throtting_options_guarded_by_lock_()
-        && OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl, unused_has_freed_up_space))) {
-      LOG_WARN("failed to update_throttling_info", KPC(this));
+    if (OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl,
+                                                          false /* force_update */,
+                                                          unused_has_freed_up_space))) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        LOG_WARN("failed to update_throttling_info", KPC(this));
+      }
+    }
+  }
+  return ret;
+}
+
+int LogWritingThrottle::calc_throttling_interval_guarded_by_lock_(
+    const int64_t io_size,
+    const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+    bool &need_throttle,
+    int64_t &interval_us)
+{
+  int ret = OB_SUCCESS;
+  need_throttle = false;
+  interval_us = 0;
+  if (need_throttling_not_guarded_by_lock_(need_purging_throttling_func)) {
+    need_throttle = true;
+    const int64_t cur_unrecyclable_size =
+        throttling_options_.unrecyclable_disk_space_ + appended_log_size_cur_round_;
+    const int64_t trigger_base_log_disk_size =
+        throttling_options_.total_disk_space_ * throttling_options_.trigger_percentage_ / 100;
+    if (OB_FAIL(ObThrottlingUtils::get_throttling_interval(
+            THROTTLING_CHUNK_SIZE, io_size, trigger_base_log_disk_size,
+            cur_unrecyclable_size, decay_factor_, interval_us))) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        LOG_WARN("failed to get_throttling_interval", KPC(this), K(io_size));
+      }
+    }
+  }
+  return ret;
+}
+
+int LogWritingThrottle::decide_throttle_(
+    const int64_t io_size,
+    const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+    IPalfEnvImpl *palf_env_impl,
+    bool &need_throttle,
+    int64_t &wait_us,
+    const bool need_account_skipped_task)
+{
+  int ret = OB_SUCCESS;
+  bool has_freed_up_space = false;
+  need_throttle = false;
+  wait_us = 0;
+  if (OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl,
+                                                        false /* force_update */,
+                                                        has_freed_up_space))) {
+    if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+      LOG_WARN("failed to update_throttling_info", KPC(this), K(io_size));
+    }
+  } else {
+    SpinLockGuard guard(lock_);
+    int64_t interval_us = 0;
+    if (OB_FAIL(calc_throttling_interval_guarded_by_lock_(
+            io_size, need_purging_throttling_func, need_throttle, interval_us))) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        LOG_WARN("failed to calc_throttling_interval", KPC(this), K(io_size));
+      }
+    } else if (need_throttle) {
+      wait_us = interval_us;
+    } else if (need_account_skipped_task && need_throttling_with_options_not_guarded_by_lock_()) {
+      stat_.after_throttling(0, io_size);
     }
   }
   return ret;
@@ -66,55 +130,62 @@ int LogWritingThrottle::throttling(const int64_t throttling_size,
   if (!need_purging_throttling_func.is_valid()
       || OB_ISNULL(palf_env_impl)) {
     ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid throttling argument", K(ret), KPC(this), KP(palf_env_impl));
   } else if (throttling_size < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid throttling_size", K(throttling_size), KPC(this));
   } else if (0 == throttling_size) {
     //no need throttling
   } else {
-    // hold lock firstly.
-    lock_.lock();
-    if (need_throttling_not_guarded_by_lock_(need_purging_throttling_func)) {
-      const int64_t cur_unrecyclable_size = throttling_options_.unrecyclable_disk_space_ + appended_log_size_cur_round_;
-      const int64_t trigger_base_log_disk_size = throttling_options_.total_disk_space_ * throttling_options_.trigger_percentage_ /  100;
-      int64_t time_interval = 0;
-      if (OB_FAIL(ObThrottlingUtils::get_throttling_interval(THROTTLING_CHUNK_SIZE, throttling_size, trigger_base_log_disk_size,
-                                                             cur_unrecyclable_size, decay_factor_, time_interval))) {
-        LOG_WARN("failed to get_throttling_interval", KPC(this));
+    bool need_throttle = false;
+    int64_t wait_us = 0;
+    if (OB_FAIL(decide_throttle_(throttling_size, need_purging_throttling_func,
+                                 palf_env_impl, need_throttle, wait_us,
+                                 true /* need_account_skipped_task */))) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        LOG_WARN("failed to decide throttle", KPC(this), K(throttling_size));
       }
-      int64_t remain_interval_us = time_interval;
+    } else if (need_throttle) {
+      int64_t remain_interval_us = wait_us;
       bool has_freed_up_space = false;
-      // release lock_ in progress of ob_usleep, therefore, accessing shared members in LogWritingThrottle need be guarded by lock
-      // in following code block.
-      lock_.unlock();
+      bool still_need_throttling = false;
       while (OB_SUCC(ret) && remain_interval_us > 0) {
         const int64_t real_interval = MIN(remain_interval_us, DETECT_INTERVAL_US);
         ob_usleep<ObWaitEventIds::PALF_THROTTLING>(real_interval);
         remain_interval_us -= real_interval;
         if (remain_interval_us <= 0) {
           //do nothing
-        } else if (OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl, has_freed_up_space))) {
-          LOG_WARN("failed to update_throttling_info_", KPC(this), K(time_interval), K(remain_interval_us));
-        } else if (!need_throttling_not_guarded_by_lock_(need_purging_throttling_func)
-                   || has_freed_up_space) {
-          LOG_TRACE("no need throttling or log disk has been freed up", KPC(this), K(time_interval), K(remain_interval_us), K(has_freed_up_space));
-          break;
+        } else if (OB_FAIL(update_throtting_options_guarded_by_lock_(palf_env_impl,
+                                                                     true /* force_update */,
+                                                                     has_freed_up_space))) {
+          if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+            LOG_WARN("failed to update_throttling_info_", KPC(this),
+                     K(wait_us), K(remain_interval_us));
+          }
+        } else {
+          still_need_throttling = false;
+          {
+            SpinLockGuard guard(lock_);
+            still_need_throttling = need_throttling_not_guarded_by_lock_(need_purging_throttling_func);
+          }
+          if (!still_need_throttling || has_freed_up_space) {
+            LOG_TRACE("no need throttling or log disk has been freed up", KPC(this),
+                      K(wait_us), K(remain_interval_us), K(has_freed_up_space));
+            break;
+          }
         }
       }
-      // hold lock_ after ulseep, therefore, accessing shared members in LogWritingThrottle no need be guarded by lock.
-      lock_.lock();
-      stat_.after_throttling(time_interval - remain_interval_us, throttling_size);
-    } else if (need_throttling_with_options_not_guarded_by_lock_()) {
-      stat_.after_throttling(0, throttling_size);
+      SpinLockGuard guard(lock_);
+      stat_.after_throttling(wait_us - remain_interval_us, throttling_size);
     }
-
-    if (stat_.has_ever_throttled()) {
-      if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
-         PALF_LOG(INFO, "[LOG DISK THROTTLING] [STAT]", KPC(this));
+    if (OB_SUCC(ret)) {
+      SpinLockGuard guard(lock_);
+      if (stat_.has_ever_throttled()) {
+        if (REACH_TIME_INTERVAL(1_s)) {
+           PALF_LOG(INFO, "[LOG DISK THROTTLING] [STAT]", KPC(this));
+        }
       }
     }
-    // release lock lastly.
-    lock_.unlock();
   }
   return ret;
 }
@@ -131,18 +202,85 @@ int LogWritingThrottle::after_append_log(const int64_t log_size)
   return ret;
 }
 
-int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *palf_env_impl, bool &has_freed_up_space)
+int LogWritingThrottle::try_admit_async(const int64_t logical_bytes,
+                                        const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                                        IPalfEnvImpl *palf_env_impl,
+                                        bool &can_admit,
+                                        int64_t &delay_us)
+{
+  return admit_async_(logical_bytes, need_purging_throttling_func, palf_env_impl,
+                      true /* need_account_skipped_task */, can_admit, delay_us);
+}
+
+int LogWritingThrottle::probe_admit_async(const int64_t logical_bytes,
+                                          const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                                          IPalfEnvImpl *palf_env_impl,
+                                          bool &can_admit,
+                                          int64_t &delay_us)
+{
+  return admit_async_(logical_bytes, need_purging_throttling_func, palf_env_impl,
+                      false /* need_account_skipped_task */, can_admit, delay_us);
+}
+
+int LogWritingThrottle::admit_async_(const int64_t logical_bytes,
+                                     const NeedPurgingThrottlingFunc &need_purging_throttling_func,
+                                     IPalfEnvImpl *palf_env_impl,
+                                     const bool need_account_skipped_task,
+                                     bool &can_admit,
+                                     int64_t &delay_us)
 {
   int ret = OB_SUCCESS;
+  can_admit = false;
+  delay_us = 0;
+  if (!need_purging_throttling_func.is_valid() || OB_ISNULL(palf_env_impl) || logical_bytes < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(TRACE, "invalid async throttle argument",
+             K(ret), K(logical_bytes), KP(palf_env_impl), K(need_account_skipped_task));
+  } else if (0 == logical_bytes) {
+    can_admit = true;
+  } else {
+    bool need_throttle = false;
+    int64_t wait_us = 0;
+    if (OB_FAIL(decide_throttle_(logical_bytes, need_purging_throttling_func,
+                                 palf_env_impl, need_throttle, wait_us,
+                                 need_account_skipped_task))) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        LOG_WARN("failed to decide async throttle", KR(ret), K(logical_bytes),
+                 K(need_account_skipped_task));
+      }
+    } else if (need_throttle) {
+      delay_us = wait_us;
+      if (need_account_skipped_task) {
+        SpinLockGuard guard(lock_);
+        stat_.after_throttling(0, logical_bytes);
+      }
+    } else {
+      can_admit = true;
+    }
+  }
+  return ret;
+}
+
+int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *palf_env_impl,
+                                                                  const bool force_update,
+                                                                  bool &has_freed_up_space)
+{
+  int ret = OB_SUCCESS;
+  has_freed_up_space = false;
   SpinLockGuard guard(lock_);
   const int64_t cur_ts = ObClockGenerator::getClock();
-  if (ATOMIC_LOAD(&need_writing_throttling_notified_)) {
+  if (!force_update && cur_ts <= last_update_ts_ + UPDATE_INTERVAL_US) {
+  } else if (ATOMIC_LOAD(&need_writing_throttling_notified_)) {
     PalfThrottleOptions new_throttling_options;
     if (OB_FAIL(palf_env_impl->get_throttling_options(new_throttling_options))) {
-      PALF_LOG(WARN, "failed to get_writing_throttling_option");
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        PALF_LOG(WARN, "failed to get_writing_throttling_option");
+      }
     } else if (OB_UNLIKELY(!new_throttling_options.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
-      PALF_LOG(WARN, "options is invalid", K(new_throttling_options), KPC(this));
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        PALF_LOG(WARN, "options is invalid", K(new_throttling_options), KPC(this));
+      }
     } else {
       const bool need_throttling = new_throttling_options.need_throttling();
       const int64_t new_available_size_after_limit = new_throttling_options.get_available_size_after_limit();
@@ -161,7 +299,9 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
         if (need_update_decay_factor) {
           if (OB_FAIL(ObThrottlingUtils::calc_decay_factor(new_available_size_after_limit, new_maximum_duration,
                   THROTTLING_CHUNK_SIZE, decay_factor_))) {
-            PALF_LOG(ERROR, "failed to calc_decay_factor", K(throttling_options_), K(THROTTLING_CHUNK_SIZE));
+            if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+              PALF_LOG(ERROR, "failed to calc_decay_factor", K(throttling_options_), K(THROTTLING_CHUNK_SIZE));
+            }
           } else {
             PALF_LOG(INFO, "[LOG DISK THROTTLING] success to calc_decay_factor", K(decay_factor_), K(throttling_options_),
                      K(new_throttling_options), K(THROTTLING_CHUNK_SIZE));
@@ -209,13 +349,6 @@ void LogWritingThrottle::clean_up_not_guarded_by_lock_()
   appended_log_size_cur_round_ = 0;
   decay_factor_ = 0;
   throttling_options_.reset();
-}
-
-bool LogWritingThrottle::check_need_update_throtting_options_guarded_by_lock_()
-{
-  SpinLockGuard guard(lock_);
-  int64_t cur_ts = ObClockGenerator::getClock();
-  return cur_ts > last_update_ts_ + UPDATE_INTERVAL_US;
 }
 } // end namespace palf
 } // end namespace oceanbase

@@ -4401,8 +4401,8 @@ int LogSlidingWindow::append_disk_log(const LSN &lsn,
   // be read by hot cache.
   } else if (OB_FAIL(group_buffer_.inc_update_readable_begin_lsn(log_end_lsn))) {
     PALF_LOG(WARN, "inc_update_readable_begin_lsn failed", K(ret), K(log_end_lsn));
-  } else if (OB_FAIL(group_buffer_.inc_update_reuse_lsn(log_end_lsn))) {
-    PALF_LOG(WARN, "inc_update_reuse_lsn failed", K(ret), K(log_end_lsn));
+  } else if (OB_FAIL(advance_group_buffer_reuse_lsn_(log_end_lsn))) {
+    PALF_LOG(WARN, "advance_group_buffer_reuse_lsn_ failed", K(ret), K(log_end_lsn));
   } else {
     // update max_flushed log info
     const int64_t &log_proposal_id = group_entry_header.get_log_proposal_id();
@@ -4617,10 +4617,31 @@ int LogSlidingWindow::advance_reuse_lsn(const LSN &flush_log_end_lsn)
     ret = OB_NOT_INIT;
   } else if (!flush_log_end_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(group_buffer_.inc_update_reuse_lsn(flush_log_end_lsn))) {
-    PALF_LOG(WARN, "inc_update_reuse_lsn failed", K(ret), K_(palf_id), K(flush_log_end_lsn));
+  } else if (OB_FAIL(advance_group_buffer_reuse_lsn_(flush_log_end_lsn))) {
+    PALF_LOG(WARN, "advance_group_buffer_reuse_lsn_ failed", K(ret), K_(palf_id), K(flush_log_end_lsn));
   } else {
     PALF_LOG(TRACE, "advance_reuse_lsn success", K(ret), K_(palf_id), K(flush_log_end_lsn));
+  }
+  return ret;
+}
+
+int LogSlidingWindow::advance_group_buffer_reuse_lsn_(const LSN &flush_log_end_lsn)
+{
+  int ret = OB_SUCCESS;
+  if (!flush_log_end_lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid flush log end lsn", K(ret), K_(palf_id), K(flush_log_end_lsn));
+  } else {
+    // 已持久化位点可以精确推进, 但零拷贝源内存必须保留所在的未完整尾页.
+    const LSN buffer_reuse_lsn(
+        static_cast<offset_t>(lower_align(flush_log_end_lsn.val_, LOG_DIO_ALIGN_SIZE)));
+    if (OB_FAIL(group_buffer_.inc_update_reuse_lsn(buffer_reuse_lsn))) {
+      PALF_LOG(WARN, "inc_update_reuse_lsn failed", K(ret), K_(palf_id),
+               K(flush_log_end_lsn), K(buffer_reuse_lsn));
+    } else {
+      PALF_LOG(TRACE, "advance group buffer reuse lsn success",
+               K_(palf_id), K(flush_log_end_lsn), K(buffer_reuse_lsn));
+    }
   }
   return ret;
 }
@@ -4645,6 +4666,32 @@ int LogSlidingWindow::read_data_from_buffer(const LSN &read_begin_lsn,
     } else {
       PALF_LOG(TRACE, "read_data_from_buffer success", K(ret), K_(palf_id), K(read_begin_lsn),
           K(in_read_size), K(out_read_size));
+    }
+  }
+  return ret;
+}
+
+int LogSlidingWindow::fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                                   const LSN &tail_lsn,
+                                                   const char *buf,
+                                                   const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!prefix_begin_lsn.is_valid() || !tail_lsn.is_valid()
+      || tail_lsn <= prefix_begin_lsn || OB_ISNULL(buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid tail prefix fill argument",
+             K(ret), K_(palf_id), K(prefix_begin_lsn), K(tail_lsn), KP(buf), K(buf_len));
+  } else {
+    WLockGuard guard(group_buffer_lock_);
+    if (OB_FAIL(group_buffer_.fill_tail_prefix_after_reset(prefix_begin_lsn, tail_lsn, buf, buf_len))) {
+      PALF_LOG(WARN, "fill tail prefix to group buffer failed",
+               K(ret), K_(palf_id), K(prefix_begin_lsn), K(tail_lsn), K(buf_len));
+    } else {
+      PALF_LOG(INFO, "fill tail prefix to group buffer success",
+               K(ret), K_(palf_id), K(prefix_begin_lsn), K(tail_lsn), K(buf_len));
     }
   }
   return ret;

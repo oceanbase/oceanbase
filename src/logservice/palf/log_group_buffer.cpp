@@ -11,7 +11,9 @@
  */
 
 #include "log_group_buffer.h"
+#include "lib/literals/ob_literals.h"
 #include "share/rc/ob_tenant_base.h"
+#include "lib/utility/ob_utility.h"
 #include "log_writer_utils.h"
 
 namespace oceanbase
@@ -33,8 +35,10 @@ void LogGroupBuffer::reset()
 {
   is_inited_ = false;
   start_lsn_.reset();
+  buffer_start_lsn_.reset();
   readable_begin_lsn_.reset();
-  reuse_lsn_.reset();
+  data_end_lsn_.reset();
+  buffer_reuse_lsn_.reset();
   data_buf_ = NULL;
   ATOMIC_STORE(&reserved_buffer_size_, 0);
   ATOMIC_STORE(&available_buffer_size_, 0);
@@ -57,37 +61,48 @@ int LogGroupBuffer::init(const LSN &start_lsn)
     //  // group_buffer_size = tenant_config->_log_groupgation_buffer_size;
     //}
     ObMemAttr mem_attr(MTL_ID(), "LogGroupBuffer");
-    if (NULL == (data_buf_ = static_cast<char *>(mtl_malloc(group_buffer_size, mem_attr)))) {
+    if (OB_UNLIKELY(0 != (group_buffer_size & (LOG_DIO_ALIGN_SIZE - 1)))) {
+      ret = OB_ERR_UNEXPECTED;
+      const int64_t dio_align_size = LOG_DIO_ALIGN_SIZE;
+      PALF_LOG(ERROR, "group_buffer_size is not aligned with LOG_DIO_ALIGN_SIZE", K(ret),
+          K(group_buffer_size), K(dio_align_size));
+    } else if (NULL == (data_buf_ = static_cast<char *>(
+            mtl_malloc_align(LOG_DIO_ALIGN_SIZE, group_buffer_size, mem_attr)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      PALF_LOG(ERROR, "alloc memory failed", K(ret));
+      PALF_LOG(ERROR, "alloc memory failed", K(ret), K(group_buffer_size));
     } else {
       memset(data_buf_, 0, group_buffer_size);
       start_lsn_ = start_lsn;
+      buffer_start_lsn_ = LSN(static_cast<offset_t>(lower_align(start_lsn.val_, LOG_DIO_ALIGN_SIZE)));
       readable_begin_lsn_ = start_lsn;
-      reuse_lsn_ = start_lsn;
+      data_end_lsn_ = start_lsn;
+      buffer_reuse_lsn_ = buffer_start_lsn_;
       ATOMIC_STORE(&reserved_buffer_size_, group_buffer_size);
       ATOMIC_STORE(&available_buffer_size_, group_buffer_size);
       is_inited_ = true;
+      PALF_LOG(INFO, "LogGroupBuffer init finished", K(ret), K_(start_lsn), KP(data_buf_),
+          K_(buffer_start_lsn), K_(reserved_buffer_size), K_(available_buffer_size));
     }
     if (OB_FAIL(ret) && NULL != data_buf_) {
-      mtl_free(data_buf_);
+      mtl_free_align(data_buf_);
       data_buf_ = NULL;
     }
-    PALF_LOG(INFO, "LogGroupBuffer init finished", K(ret), K_(start_lsn), KP(data_buf_),
-        K_(reserved_buffer_size), K_(available_buffer_size));
   }
   return ret;
 }
 
 void LogGroupBuffer::destroy()
 {
-  PALF_LOG(INFO, "LogGroupBuffer destroy", K(is_inited_), K_(start_lsn), KP(data_buf_), K_(reserved_buffer_size));
+  PALF_LOG(INFO, "LogGroupBuffer destroy", K(is_inited_), K_(start_lsn), KP(data_buf_),
+      K_(reserved_buffer_size));
   is_inited_ = false;
   start_lsn_.reset();
+  buffer_start_lsn_.reset();
   readable_begin_lsn_.reset();
-  reuse_lsn_.reset();
+  data_end_lsn_.reset();
+  buffer_reuse_lsn_.reset();
   if (NULL != data_buf_) {
-    mtl_free(data_buf_);
+    mtl_free_align(data_buf_);
     data_buf_ = NULL;
   }
   ATOMIC_STORE(&reserved_buffer_size_, 0);
@@ -102,18 +117,18 @@ int LogGroupBuffer::get_buffer_pos_(const LSN &lsn,
   // 如果文件size发生了变化，buffer append到切文件位置时需要做barrier处理
   // 等前一个文件都pop出去后整体reuse为下一个文件
   int ret = OB_SUCCESS;
-  LSN start_lsn;
-  get_buffer_start_lsn_(start_lsn);
+  LSN buffer_start_lsn;
+  get_buffer_start_lsn_(buffer_start_lsn);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid arguments", K(ret), K(lsn));
-  } else if (lsn < start_lsn) {
+  } else if (lsn < buffer_start_lsn) {
     ret = OB_ERR_OUT_OF_LOWER_BOUND;
-    PALF_LOG(WARN, "lsn is less than start_lsn", K(ret), K(lsn), K_(start_lsn));
+    PALF_LOG(WARN, "lsn is less than buffer_start_lsn", K(ret), K(lsn), K(buffer_start_lsn));
   } else {
-    const int64_t diff_len = lsn - start_lsn;
+    const int64_t diff_len = lsn - buffer_start_lsn;
     assert(diff_len >= 0);
     // Use reserved_buffer_size_ to calculate dest pos.
     start_pos = diff_len % get_reserved_buffer_size();
@@ -142,7 +157,7 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   bool bool_ret = false;
   const LSN end_lsn = lsn + total_len;
   LSN start_lsn, reuse_lsn;
-  get_buffer_start_lsn_(start_lsn);
+  get_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
   reuse_lsn = MIN(reuse_lsn, ref_reuse_lsn);
   if (IS_NOT_INIT) {
@@ -151,7 +166,7 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   } else if (lsn < start_lsn) {
     PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
   } else if (end_lsn > reuse_lsn + get_available_buffer_size()) {
-    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+    if (REACH_TIME_INTERVAL(1_s)) {
       PALF_LOG_RET(WARN, OB_EAGAIN, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
           K(reuse_lsn), K_(available_buffer_size));
     }
@@ -167,7 +182,7 @@ int LogGroupBuffer::get_log_buf(const LSN &lsn, const int64_t total_len, LogWrit
   int ret = OB_SUCCESS;
   int64_t start_pos = 0;
   LSN start_lsn;
-  get_buffer_start_lsn_(start_lsn);
+  get_start_lsn_(start_lsn);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (!lsn.is_valid() || total_len <= 0) {
@@ -203,7 +218,7 @@ int LogGroupBuffer::fill(const LSN &lsn,
   int64_t start_pos = 0;
   const LSN end_lsn = lsn + data_len;
   LSN start_lsn, reuse_lsn, new_readable_begin_lsn;
-  get_buffer_start_lsn_(start_lsn);
+  get_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
   const int64_t available_buf_size = get_available_buffer_size();
   if (IS_NOT_INIT) {
@@ -230,6 +245,8 @@ int LogGroupBuffer::fill(const LSN &lsn,
     PALF_LOG(WARN, "inc_update_readable_begin_lsn_ failed", K(ret), K(lsn), K(end_lsn), K(new_readable_begin_lsn));
   } else if (OB_FAIL(fill_(lsn, start_pos, data, data_len))) {
     PALF_LOG(WARN, "fill data failed", K(lsn), K(data_len), KP(data_buf_));
+  } else if (OB_FAIL(inc_update_data_end_lsn_(end_lsn))) {
+    PALF_LOG(WARN, "inc_update_data_end_lsn_ failed", K(ret), K(lsn), K(end_lsn));
   } else {
     PALF_LOG(TRACE, "fill group buffer success", K(ret), K(lsn), K(data_len), KP(data_buf_));
   }
@@ -244,7 +261,7 @@ int LogGroupBuffer::fill_padding_body(const LSN &lsn,
   int ret = OB_SUCCESS;
   const LSN end_lsn = lsn + log_body_size;
   LSN start_lsn, reuse_lsn, new_readable_begin_lsn;
-  get_buffer_start_lsn_(start_lsn);
+  get_start_lsn_(start_lsn);
   get_reuse_lsn_(reuse_lsn);
   const int64_t available_buf_size = get_available_buffer_size();
   const int64_t reserved_buf_size = get_reserved_buffer_size();
@@ -285,6 +302,8 @@ int LogGroupBuffer::fill_padding_body(const LSN &lsn,
     if (OB_FAIL(fill_(lsn, start_pos, data, data_len))) {
       PALF_LOG(WARN, "fill padding data filled", K(ret), K(lsn), K(log_body_size), K(start_pos), K(data_len),
           K(group_buf_tail_len), K(first_part_len), "second_part_len", data_len - first_part_len);
+    } else if (OB_FAIL(inc_update_data_end_lsn_(end_lsn))) {
+      PALF_LOG(WARN, "inc_update_data_end_lsn_ failed", K(ret), K(lsn), K(end_lsn));
     } else {
       PALF_LOG(INFO, "fill padding log success", K(ret), K(lsn), K(log_body_size), K(start_pos), K(data_len),
           K(group_buf_tail_len), K(first_part_len), "second_part_len", data_len - first_part_len);
@@ -294,19 +313,66 @@ int LogGroupBuffer::fill_padding_body(const LSN &lsn,
   return ret;
 }
 
+int LogGroupBuffer::fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                                 const LSN &tail_lsn,
+                                                 const char *data,
+                                                 const int64_t data_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_pos = 0;
+  LSN buffer_start_lsn;
+  const int64_t prefix_len = prefix_begin_lsn.is_valid() && tail_lsn.is_valid()
+                             ? tail_lsn - prefix_begin_lsn
+                             : 0;
+  get_buffer_start_lsn_(buffer_start_lsn);
+  ObSpinLockGuard guard(truncate_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (!prefix_begin_lsn.is_valid() || !tail_lsn.is_valid()
+             || tail_lsn <= prefix_begin_lsn || OB_ISNULL(data)
+             || prefix_len > LOG_DIO_ALIGN_SIZE || data_len != prefix_len) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid tail prefix fill argument",
+             K(ret), K(prefix_begin_lsn), K(tail_lsn), K(prefix_len), KP(data), K(data_len));
+  } else if (0 != prefix_begin_lsn.val_ % LOG_DIO_ALIGN_SIZE) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "tail prefix begin lsn is not DIO aligned",
+             K(ret), K(prefix_begin_lsn), K(tail_lsn));
+  } else if (prefix_begin_lsn < buffer_start_lsn) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
+    PALF_LOG(WARN, "tail prefix is out of group buffer",
+             K(ret), K(prefix_begin_lsn), K(tail_lsn), K(buffer_start_lsn));
+  } else if (OB_FAIL(get_buffer_pos_(prefix_begin_lsn, start_pos))) {
+    PALF_LOG(WARN, "get tail prefix buffer pos failed",
+             K(ret), K(prefix_begin_lsn), K(tail_lsn));
+  } else if (OB_FAIL(fill_(prefix_begin_lsn, start_pos, data, data_len))) {
+    PALF_LOG(WARN, "fill tail prefix after reset failed",
+             K(ret), K(prefix_begin_lsn), K(tail_lsn), K(data_len));
+  } else {
+    PALF_LOG(INFO, "fill tail prefix after reset success",
+             K(ret), K(prefix_begin_lsn), K(tail_lsn), K(data_len));
+  }
+  return ret;
+}
+
 void LogGroupBuffer::get_buffer_start_lsn_(LSN &start_lsn) const
 {
-  start_lsn.val_ = ATOMIC_LOAD(&start_lsn_.val_);
+  start_lsn.val_ = ATOMIC_LOAD(&buffer_start_lsn_.val_);
 }
 
 void LogGroupBuffer::get_reuse_lsn_(LSN &reuse_lsn) const
 {
-  reuse_lsn.val_ = ATOMIC_LOAD(&reuse_lsn_.val_);
+  reuse_lsn.val_ = ATOMIC_LOAD(&buffer_reuse_lsn_.val_);
 }
 
 void LogGroupBuffer::get_start_lsn_(LSN &lsn) const
 {
   lsn.val_ = ATOMIC_LOAD(&start_lsn_.val_);
+}
+
+void LogGroupBuffer::get_data_end_lsn_(LSN &lsn) const
+{
+  lsn.val_ = ATOMIC_LOAD(&data_end_lsn_.val_);
 }
 
 void LogGroupBuffer::get_readable_begin_lsn_(LSN &lsn) const
@@ -406,6 +472,21 @@ void LogGroupBuffer::inc_update_readable_begin_lsn_(const LSN &new_readable_begi
   PALF_LOG(TRACE, "inc_update_readable_begin_lsn_ success", K(old_readable_begin_lsn), K(new_readable_begin_lsn));
 }
 
+int LogGroupBuffer::inc_update_data_end_lsn_(const LSN &new_data_end_lsn)
+{
+  int ret = OB_SUCCESS;
+  LSN old_data_end_lsn;
+  if (!new_data_end_lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid data end lsn", K(ret), K(new_data_end_lsn));
+  } else {
+    get_data_end_lsn_(old_data_end_lsn);
+    inc_update(&data_end_lsn_.val_, new_data_end_lsn.val_);
+    PALF_LOG(TRACE, "inc_update_data_end_lsn_ success", K(old_data_end_lsn), K(new_data_end_lsn));
+  }
+  return ret;
+}
+
 int LogGroupBuffer::inc_update_readable_begin_lsn(const LSN &new_lsn)
 {
   int ret = OB_SUCCESS;
@@ -413,7 +494,13 @@ int LogGroupBuffer::inc_update_readable_begin_lsn(const LSN &new_lsn)
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid argumetns", K(new_lsn));
   } else {
+    // 直接落盘的数据没有写入 group buffer, 因此将 readable begin 和 data end
+    // 都单调推进到 new_lsn. truncate 后 begin 可能已更靠后, 此时缓存继续保持
+    // 不可读, 直到后续 fill 将 data_end_lsn_ 追上.
     inc_update_readable_begin_lsn_(new_lsn);
+    if (OB_FAIL(inc_update_data_end_lsn_(new_lsn))) {
+      PALF_LOG(WARN, "inc_update_data_end_lsn_ failed", K(ret), K(new_lsn));
+    }
   }
   return ret;
 }
@@ -428,7 +515,7 @@ int LogGroupBuffer::inc_update_reuse_lsn(const LSN &new_reuse_lsn)
     LSN curr_reuse_lsn;
     get_reuse_lsn_(curr_reuse_lsn);
     while (new_reuse_lsn > curr_reuse_lsn) {
-      if (ATOMIC_BCAS(&reuse_lsn_.val_, curr_reuse_lsn.val_, new_reuse_lsn.val_)) {
+      if (ATOMIC_BCAS(&buffer_reuse_lsn_.val_, curr_reuse_lsn.val_, new_reuse_lsn.val_)) {
         break;
       } else {
         get_reuse_lsn_(curr_reuse_lsn);
@@ -459,11 +546,12 @@ int LogGroupBuffer::truncate(const LSN &new_lsn)
     get_reuse_lsn_(old_reuse_lsn);
     LSN old_readable_begin_lsn;
     get_readable_begin_lsn_(old_readable_begin_lsn);
-    // Inc update readable_begin_lsn_.
-    // for rebuild scene: readable_begin_lsn_ need be updated to new_lsn.
-    // for truncate log scene: readable_begin_lsn_ cannot fallback.
+    // readable_begin_lsn_ 只单调推进; data_end_lsn_ 重置到新 tail;
+    // buffer_reuse_lsn_ 向下按 4K 对齐, 继续保护尚未写完整的尾页.
     (void) inc_update_readable_begin_lsn_(new_lsn);
-    ATOMIC_STORE(&reuse_lsn_.val_, new_lsn.val_);
+    ATOMIC_STORE(&data_end_lsn_.val_, new_lsn.val_);
+    ATOMIC_STORE(&buffer_reuse_lsn_.val_,
+        static_cast<offset_t>(lower_align(new_lsn.val_, LOG_DIO_ALIGN_SIZE)));
     PALF_LOG(INFO, "LogGroupBuffer truncate success", K(curr_start_lsn), K(old_reuse_lsn),
         K(old_readable_begin_lsn), K_(readable_begin_lsn), K(new_lsn));
   }
@@ -485,14 +573,14 @@ int LogGroupBuffer::read_data(const LSN &read_begin_lsn,
   } else if (OB_FAIL(get_buffer_pos_(read_begin_lsn, start_pos))) {
     PALF_LOG(WARN, "get_buffer_pos_ failed", K(ret), K(read_begin_lsn));
   } else {
-    LSN curr_reuse_lsn;
-    get_reuse_lsn_(curr_reuse_lsn);
+    LSN data_end_lsn;
+    get_data_end_lsn_(data_end_lsn);
     LSN readable_begin_lsn;
     get_readable_begin_lsn_(readable_begin_lsn);
     if (read_begin_lsn < readable_begin_lsn) {
       ret = OB_ERR_OUT_OF_LOWER_BOUND;
-    } else if (curr_reuse_lsn > read_begin_lsn) {
-      const int64_t readable_size = curr_reuse_lsn - read_begin_lsn;
+    } else if (data_end_lsn > read_begin_lsn) {
+      const int64_t readable_size = data_end_lsn - read_begin_lsn;
       int64_t real_read_size = std::min(readable_size, in_read_size);
       const int64_t group_buf_tail_len = get_reserved_buffer_size() - start_pos;
       const int64_t first_part_len = min(group_buf_tail_len, real_read_size);
@@ -515,7 +603,7 @@ int LogGroupBuffer::read_data(const LSN &read_begin_lsn,
       }
     }
     PALF_LOG(TRACE, "read_data finished", K(ret), K(read_begin_lsn), K(in_read_size),
-        K(out_read_size), K(readable_begin_lsn), K(curr_reuse_lsn));
+        K(out_read_size), K(readable_begin_lsn), K(data_end_lsn));
   }
   return ret;
 }

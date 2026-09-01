@@ -83,8 +83,10 @@ TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; pr
 
   // replica property meta
   LogReplicaPropertyMeta replica_meta1;
-  EXPECT_EQ(OB_SUCCESS, replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA));
-  EXPECT_EQ(OB_SUCCESS, replica_meta1.generate(true, LogReplicaType::LOGONLY_REPLICA));
+  EXPECT_EQ(OB_SUCCESS,
+            replica_meta1.generate(true, LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC));
+  EXPECT_EQ(OB_SUCCESS,
+            replica_meta1.generate(true, LogReplicaType::LOGONLY_REPLICA, LogIOMode::SYNC));
   char replica_type_buf[OB_MAX_CONFIG_VALUE_LEN] = {'\0'};
   EXPECT_EQ(OB_SUCCESS, log_replica_type_to_string(LogReplicaType::LOGONLY_REPLICA,
       replica_type_buf, OB_MAX_CONFIG_VALUE_LEN));
@@ -109,13 +111,20 @@ TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; pr
   const int64_t BUFSIZE = 1 << 21;
   char buf[BUFSIZE];
   int64_t pos = 0;
+  PalfBaseInfo serializable_base_info;
+  serializable_base_info.generate_by_default();
+  LogMeta serializable_meta;
+  ASSERT_EQ(OB_SUCCESS,
+            serializable_meta.generate_by_palf_base_info(
+                serializable_base_info, AccessMode::APPEND, SyncMode::ASYNC,
+                LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC));
   // Test serialize and deserialize
-  EXPECT_EQ(OB_SUCCESS, log_meta1.serialize(buf, BUFSIZE, pos));
-  EXPECT_EQ(pos, log_meta1.get_serialize_size());
+  EXPECT_EQ(OB_SUCCESS, serializable_meta.serialize(buf, BUFSIZE, pos));
+  EXPECT_EQ(pos, serializable_meta.get_serialize_size());
   pos = 0;
   LogMeta log_meta2;
   EXPECT_EQ(OB_SUCCESS, log_meta2.deserialize(buf, BUFSIZE, pos));
-  EXPECT_EQ(log_prepare_meta1.log_proposal_id_,
+  EXPECT_EQ(serializable_meta.get_log_prepare_meta().log_proposal_id_,
             log_meta2.get_log_prepare_meta().log_proposal_id_);
 }
 
@@ -137,12 +146,18 @@ TEST(TestLogMeta, test_log_meta_generate)
   log_info.lsn_ = lsn;
   base_info.curr_lsn_ = prev_lsn;
   base_info.prev_log_info_ = log_info;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, SyncMode::ASYNC, palf::NORMAL_REPLICA));
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+            meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, SyncMode::ASYNC,
+                                             palf::NORMAL_REPLICA, LogIOMode::SYNC));
   // valid lsn
   log_info.lsn_ = prev_lsn;
   base_info.curr_lsn_ = lsn;
   base_info.prev_log_info_ = log_info;
-  EXPECT_EQ(OB_SUCCESS, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, SyncMode::ASYNC, palf::NORMAL_REPLICA));
+  EXPECT_EQ(OB_SUCCESS,
+            meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, SyncMode::ASYNC,
+                                             palf::NORMAL_REPLICA, LogIOMode::ASYNC));
+  EXPECT_EQ(LogIOMode::ASYNC,
+            meta1.get_log_replica_property_meta().get_log_io_mode());
   EXPECT_EQ(meta1.log_prepare_meta_.log_proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.curr_.config_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
@@ -151,6 +166,12 @@ TEST(TestLogMeta, test_log_meta_generate)
   EXPECT_EQ(meta1.log_mode_meta_.mode_version_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_snapshot_meta_.base_lsn_, base_info.curr_lsn_);
   EXPECT_EQ(meta1.log_snapshot_meta_.prev_log_info_, base_info.prev_log_info_);
+
+  LogReplicaPropertyMeta property_meta = meta1.get_log_replica_property_meta();
+  property_meta.allow_vote_ = false;
+  EXPECT_EQ(OB_SUCCESS, meta1.update_log_replica_property_meta(property_meta));
+  EXPECT_EQ(LogIOMode::ASYNC,
+            meta1.get_log_replica_property_meta().get_log_io_mode());
 }
 
 TEST(TestLogMeta, test_max_length_learner_list)

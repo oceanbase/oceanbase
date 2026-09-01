@@ -182,6 +182,36 @@ int LogBlockMgr::writev(const block_id_t block_id,
   return ret;
 }
 
+int LogBlockMgr::aio_write(const block_id_t block_id,
+                           const offset_t offset,
+                           const AsyncPwriteRequest &req,
+                           common::ObIOHandle &out_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogBlockMgr not inited", KR(ret), K(block_id), K(offset), K(req));
+  } else if (!req.is_valid() || 0 > offset
+             || log_block_size_ < offset + req.get_aligned_buf_len()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument for aio_write", KR(ret), K(block_id),
+             K(offset), K(req), K(log_block_size_));
+  } else if (block_id != curr_writable_block_id_) {
+    // 块切换屏障必须先把目标块设为当前可写块，数据 AIO 不能跨过该屏障。
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "block_id does not match curr_writable_block_id_", KR(ret),
+             K(block_id), K(curr_writable_block_id_), KPC(this));
+  } else if (OB_FAIL(curr_writable_handler_.aio_write(offset, req, out_handle))) {
+    PALF_LOG(WARN, "LogBlockHandler aio_write failed", KR(ret), K(block_id),
+             K(offset), K(req));
+  } else {
+    PALF_LOG(TRACE, "LogBlockMgr aio_write submit success", K(block_id),
+             K(offset), K(req));
+  }
+  return ret;
+}
+
+
 int LogBlockMgr::truncate(const block_id_t block_id, const offset_t offset)
 {
   int ret = OB_SUCCESS;
@@ -264,6 +294,21 @@ int LogBlockMgr::load_block_handler(const block_id_t block_id, const offset_t of
   } else {
     curr_writable_block_id_ = block_id;
     PALF_LOG(INFO, "load_block_handler success", K(block_id), K(offset));
+  }
+  return ret;
+}
+
+int LogBlockMgr::close_block_handler()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogBlockMgr not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(curr_writable_handler_.close())) {
+    PALF_LOG(WARN, "close current writable block handler failed", K(ret), KPC(this));
+  } else {
+    curr_writable_block_id_ = LOG_INVALID_BLOCK_ID;
+    PALF_LOG(INFO, "close current writable block handler success", KPC(this));
   }
   return ret;
 }
@@ -417,8 +462,12 @@ int LogBlockMgr::check_after_truncate_(const char *block_path, const offset_t of
     PALF_LOG(INFO, "check_after_truncate_ success", KPC(this), K(block_path), K(offset));
   }
 
-  if (!io_fd.is_valid() && OB_FAIL(io_adapter_->close(io_fd))) {
-    PALF_LOG(ERROR, "io_adapter close failed", KPC(this), K(block_path));
+  if (io_fd.is_valid()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(io_adapter_->close(io_fd))) {
+      PALF_LOG(WARN, "io_adapter close failed", K(tmp_ret), KPC(this), K(block_path));
+    }
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
   }
   if (NULL != buf) {
     ob_free_align(buf);

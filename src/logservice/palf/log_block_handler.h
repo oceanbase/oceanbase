@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "log_define.h"                                // block_id_t ...
+#include "log_async_io_struct.h"                       // AsyncPwriteRequest
 #include "share/io/ob_io_struct.h"                     // ObIOInfo
 
 // This block contains the key class for writing a log into stable storage
@@ -27,6 +28,7 @@ namespace palf
 {
 class LogWriteBuf;
 class LogIOAdapter;
+class IAsyncPalfIOCtx;
 // Only this class need to determine the storage system whether is OFS
 //
 class LogDIOAlignedBuf {
@@ -130,6 +132,15 @@ public:
   int writev(const offset_t offset,
              const LogWriteBuf &write_buf);
 
+  // 通过 LogIOAdapter 提交 DIO 对齐写。当前块必须已经打开；offset 是块文件内
+  // 的物理偏移，写入区间不能越过该块。request 不持有 buffer 或异步 PALF ctx，
+  // 二者必须存活到 callback 完成。
+  //
+  // 校验或提交失败会同步返回，不产生 AIO completion event。
+  int aio_write(const offset_t offset,
+                const AsyncPwriteRequest &req,
+                common::ObIOHandle &out_handle);
+
   // @brief get start time of the last ob_pwrite
   int get_io_statistic_info(int64_t &last_working_time,
                             int64_t &last_write_size,
@@ -159,6 +170,7 @@ private:
   int inner_writev_once_(const offset_t offset,
       const LogWriteBuf &write_buf);
   int inner_write_impl_(const ObIOFd &io_fd, const char *buf, const int64_t count, const int64_t offset);
+  void record_write_copy_budget_stat_(const offset_t offset, const int64_t buf_len);
 private:
   static constexpr int64_t RETRY_INTERVAL = 10 * 1000;
   LogDIOAlignedBuf dio_aligned_buf_;
@@ -177,6 +189,17 @@ private:
   int64_t accum_write_rt_;
   int64_t accum_write_count_;
   // === IO Failure Detection ===
+  // Copy-budget totals accumulated since the previous print. The print window
+  // is normally about one second but values are not time-normalized. Sync writes
+  // contribute their logical input length; async writes contribute aligned AIO
+  // length. Head and tail count unaligned bytes, while body counts aligned bytes.
+  int64_t sec_stat_trace_time_;
+  int64_t accum_input_bytes_;
+  int64_t accum_head_pad_bytes_;
+  int64_t accum_tail_pad_bytes_;
+  int64_t accum_body_aligned_bytes_;
+  int64_t accum_write_call_count_;
+  // === Zero-copy three-segment copy-budget telemetry ===
   bool is_inited_;
 };
 } // end of logservice

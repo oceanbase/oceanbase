@@ -201,6 +201,8 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     } else if (0 != unit.meta_tenant_data_version_
         && OB_FAIL(ODV_MGR.set(gen_meta_tenant_id(unit.tenant_id_), unit.meta_tenant_data_version_))) {
       LOG_WARN("fail to set meta tenant data version", KR(ret), K(unit));
+    } else if (OB_FAIL(init_tenant_configs_(unit.init_tenant_configs_))) {
+      LOG_WARN("fail to init tenant configs", KR(ret), K(unit));
     } else if (OB_FAIL(basic_tenant_unit.init(tenant_id,
                                        unit.unit_id_,
                                        ObUnitInfoGetter::ObUnitStatus::UNIT_NORMAL,
@@ -271,6 +273,19 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     }
   }
 
+  return ret;
+}
+
+int ObTenantNodeBalancer::init_tenant_configs_(
+    const ObIArray<obrpc::ObTenantConfigArg> &tenant_configs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_configs.count(); ++i) {
+    const obrpc::ObTenantConfigArg &config = tenant_configs.at(i);
+    if (OB_FAIL(OTC_MGR.init_tenant_config(config))) {
+      LOG_WARN("fail to init tenant config before tenant create", KR(ret), K(config));
+    }
+  }
   return ret;
 }
 

@@ -111,6 +111,12 @@ ob_set_subtarget(ob_logservice ipalf
 ob_set_subtarget(ob_logservice palf
   palf/block_gc_timer_task.cpp
   palf/fetch_log_engine.cpp
+  palf/log_async_fragment.cpp
+  palf/log_async_io_struct.cpp
+  palf/log_async_io_worker.cpp
+  palf/log_async_palf_ctx_diag.cpp
+  palf/log_async_palf_ctx.cpp
+  palf/log_async_write_planner.cpp
   palf/log_block_handler.cpp
   palf/log_block_header.cpp
   palf/log_block_mgr.cpp

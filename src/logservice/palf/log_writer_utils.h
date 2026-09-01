@@ -33,7 +33,6 @@ public:
   int merge(const LogWriteBuf &rhs, bool &has_merged);
   int push_back(const char *buf,
                 const int64_t buf_len);
-  // If can used lambad, the code is more beautiful
   int get_write_buf(const int64_t idx,
                     const char *&buf,
                     int64_t &buf_len) const;
@@ -58,4 +57,3 @@ public:
 } // end namespace oceanbase
 
 #endif
-

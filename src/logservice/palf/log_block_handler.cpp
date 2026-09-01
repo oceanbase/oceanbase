@@ -150,6 +150,12 @@ LogBlockHandler::LogBlockHandler()
     accum_write_size_(0),
     accum_write_rt_(0),
     accum_write_count_(0),
+    sec_stat_trace_time_(OB_INVALID_TIMESTAMP),
+    accum_input_bytes_(0),
+    accum_head_pad_bytes_(0),
+    accum_tail_pad_bytes_(0),
+    accum_body_aligned_bytes_(0),
+    accum_write_call_count_(0),
     is_inited_(false)
 {
 }
@@ -278,6 +284,36 @@ int LogBlockHandler::writev(const offset_t offset,
     PALF_LOG(ERROR, "inner_write_once_ failed", K(ret), K(offset), K(write_buf));
   } else {
     PALF_LOG(TRACE, "writev success", K(ret), K(offset), K(write_buf), KPC(this));
+  }
+  return ret;
+}
+
+int LogBlockHandler::aio_write(const offset_t offset,
+                               const AsyncPwriteRequest &req,
+                               common::ObIOHandle &out_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogBlockHandler not inited", KR(ret));
+  } else if (OB_ISNULL(io_adapter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "io_adapter_ is NULL", KR(ret), KPC(this));
+  } else if (!io_fd_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "io_fd_ is invalid; block not open", KR(ret), KPC(this));
+  } else if (!req.is_valid() || 0 > offset
+             || offset + req.get_aligned_buf_len() > log_block_size_) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument for aio_write", KR(ret), K(offset),
+             K(log_block_size_), K(req));
+  } else if (OB_FAIL(io_adapter_->aio_write(io_fd_, offset, req, out_handle))) {
+    PALF_LOG(WARN, "io_adapter_ aio_write failed", KR(ret), K(io_fd_),
+             K(offset), K(req));
+  } else {
+    record_write_copy_budget_stat_(offset, req.get_aligned_buf_len());
+    PALF_LOG(TRACE, "LogBlockHandler aio_write submit success", K(io_fd_),
+             K(offset), K(req));
   }
   return ret;
 }
@@ -416,8 +452,49 @@ int LogBlockHandler::inner_write_once_(const offset_t offset,
     accum_write_size_ += aligned_buf_len;
     accum_write_count_++;
     accum_write_rt_ += cost_ts;
+    record_write_copy_budget_stat_(offset, buf_len);
   }
   return ret;
+}
+
+void LogBlockHandler::record_write_copy_budget_stat_(const offset_t offset, const int64_t buf_len)
+{
+  // 按 4K 对齐边界拆分传入区间，用于估算可复用调用方 buffer 的字节数，并不
+  // 统计真实 memcpy 次数。同步写传入逻辑区间，异步写传入已对齐的物理区间。
+  const int64_t input_len = buf_len;
+  const int64_t head_pad_capacity =
+      (LOG_DIO_ALIGN_SIZE - (offset % LOG_DIO_ALIGN_SIZE)) % LOG_DIO_ALIGN_SIZE;
+  const int64_t head_copy =
+      (input_len < head_pad_capacity) ? input_len : head_pad_capacity;
+  const int64_t after_head = input_len - head_copy;
+  const int64_t tail_copy = (after_head > 0) ? (after_head % LOG_DIO_ALIGN_SIZE) : 0;
+  const int64_t body_aligned = input_len - head_copy - tail_copy;
+  ATOMIC_AAF(&accum_input_bytes_, input_len);
+  ATOMIC_AAF(&accum_head_pad_bytes_, head_copy);
+  ATOMIC_AAF(&accum_tail_pad_bytes_, tail_copy);
+  ATOMIC_AAF(&accum_body_aligned_bytes_, body_aligned);
+  ATOMIC_AAF(&accum_write_call_count_, 1);
+  if (palf_reach_time_interval(1000 * 1000, sec_stat_trace_time_)) {
+    const int64_t in = ATOMIC_LOAD(&accum_input_bytes_);
+    const int64_t hp = ATOMIC_LOAD(&accum_head_pad_bytes_);
+    const int64_t tp = ATOMIC_LOAD(&accum_tail_pad_bytes_);
+    const int64_t bd = ATOMIC_LOAD(&accum_body_aligned_bytes_);
+    const int64_t calls = ATOMIC_LOAD(&accum_write_call_count_);
+    const int64_t save_pct = (in > 0) ? (bd * 100 / in) : 0;
+    PALF_LOG(INFO, "[PALF STAT WRITE COPY/SEC]", KPC(this),
+             "input_bytes_per_sec", in,
+             "legacy_copy_bytes_per_sec", in,
+             "head_copy_bytes_per_sec", hp,
+             "tail_copy_bytes_per_sec", tp,
+             "body_zerocopy_eligible_bytes_per_sec", bd,
+             "zerocopy_save_pct", save_pct,
+             "write_calls_per_sec", calls);
+    ATOMIC_STORE(&accum_input_bytes_, 0);
+    ATOMIC_STORE(&accum_head_pad_bytes_, 0);
+    ATOMIC_STORE(&accum_tail_pad_bytes_, 0);
+    ATOMIC_STORE(&accum_body_aligned_bytes_, 0);
+    ATOMIC_STORE(&accum_write_call_count_, 0);
+  }
 }
 
 int LogBlockHandler::inner_writev_once_(const offset_t offset,

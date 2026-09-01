@@ -49,6 +49,42 @@ public:
       return false;
     }
   };
+  class TransientFailureLogEngine : public MockLogEngine
+  {
+  public:
+    TransientFailureLogEngine()
+      : failure_ret_(OB_SUCCESS),
+        remaining_failure_count_(0),
+        submit_count_(0)
+    {}
+    virtual ~TransientFailureLogEngine() {}
+
+    int submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
+                              const LogWriteBuf &write_buf) override
+    {
+      UNUSED(flush_log_cb_ctx);
+      UNUSED(write_buf);
+      int ret = OB_SUCCESS;
+      ++submit_count_;
+      if (remaining_failure_count_ > 0) {
+        --remaining_failure_count_;
+        ret = failure_ret_;
+      }
+      return ret;
+    }
+
+    void set_transient_failure(const int ret, const int64_t failure_count)
+    {
+      failure_ret_ = ret;
+      remaining_failure_count_ = failure_count;
+    }
+    int64_t get_submit_count() const { return submit_count_; }
+
+  private:
+    int failure_ret_;
+    int64_t remaining_failure_count_;
+    int64_t submit_count_;
+  };
   class MockLocCb : public PalfLocationCacheCb
   {
     virtual int get_leader(const int64_t id, common::ObAddr &leader)
@@ -86,6 +122,7 @@ public:
   MockLogConfigMgr mock_mm_;
   MockLogModeMgr mock_mode_mgr_;
   MockLogEngine mock_log_engine_;
+  TransientFailureLogEngine transient_failure_log_engine_;
   MockPalfFSCbWrapper palf_fs_cb_;
   ObTenantMutilAllocator *alloc_mgr_;
   LogPlugins *plugins_;
@@ -173,6 +210,23 @@ TEST_F(TestLogSlidingWindow, test_init)
         &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, plugins_, base_info, true));
 }
 
+TEST_F(TestLogSlidingWindow, test_advance_reuse_lsn_keeps_dio_page_prefix)
+{
+  PalfBaseInfo base_info;
+  gen_default_palf_base_info_(base_info);
+
+  EXPECT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, plugins_, base_info, true));
+
+  const LSN flush_log_end_lsn(PALF_INITIAL_LSN_VAL + LOG_DIO_ALIGN_SIZE + 66);
+  const LSN expect_reuse_lsn(
+      static_cast<offset_t>(lower_align(flush_log_end_lsn.val_, LOG_DIO_ALIGN_SIZE)));
+  LSN reuse_lsn;
+  EXPECT_EQ(OB_SUCCESS, log_sw_.advance_reuse_lsn(flush_log_end_lsn));
+  log_sw_.group_buffer_.get_reuse_lsn(reuse_lsn);
+  EXPECT_EQ(expect_reuse_lsn, reuse_lsn);
+}
+
 TEST_F(TestLogSlidingWindow, test_private_func_batch_01)
 {
   LSN lsn, end_lsn;
@@ -214,6 +268,33 @@ TEST_F(TestLogSlidingWindow, test_to_follower_pending)
   buf_len = 2 * 1024 * 1024;
   EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, NULL, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.to_follower_pending(last_lsn));
+}
+
+TEST_F(TestLogSlidingWindow, period_freeze_retries_transient_queue_full_without_new_append)
+{
+  PalfBaseInfo base_info;
+  gen_default_palf_base_info_(base_info);
+  ASSERT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
+        &mock_mm_, &mock_mode_mgr_, &transient_failure_log_engine_, &palf_fs_cb_,
+        alloc_mgr_, plugins_, base_info, true));
+  log_sw_.freeze_mode_ = PERIOD_FREEZE_MODE;
+
+  const int64_t buf_len = 2048;
+  share::SCN ref_scn;
+  LSN lsn;
+  share::SCN scn;
+  ref_scn.convert_for_logservice(99);
+  ASSERT_EQ(OB_SUCCESS, log_sw_.submit_log(data_buf_, buf_len, ref_scn, NULL, lsn, scn));
+  const int64_t expected_log_id = log_sw_.get_max_log_id();
+  const int64_t initial_submit_log_id = log_sw_.get_last_submit_log_id_();
+  ASSERT_GT(expected_log_id, initial_submit_log_id);
+
+  transient_failure_log_engine_.set_transient_failure(
+      OB_SIZE_OVERFLOW, 1 /* failure_count */);
+  ASSERT_EQ(OB_SUCCESS, log_sw_.period_freeze_last_log());
+  EXPECT_EQ(2, transient_failure_log_engine_.get_submit_count());
+  EXPECT_EQ(expected_log_id, log_sw_.get_last_submit_log_id_());
+  EXPECT_EQ(expected_log_id, log_sw_.get_max_log_id());
 }
 
 TEST_F(TestLogSlidingWindow, test_fetch_log)
@@ -972,6 +1053,21 @@ TEST_F(TestLogSlidingWindow, test_append_disk_log)
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_sw_.append_disk_log(lsn, group_entry));
   lsn.val_ = 0;
   EXPECT_EQ(OB_SUCCESS, log_sw_.append_disk_log(lsn, group_entry));
+  {
+    const LSN log_end_lsn = lsn + group_entry_size;
+    const LSN expected_reuse_lsn(
+        static_cast<offset_t>(lower_align(log_end_lsn.val_, LOG_DIO_ALIGN_SIZE)));
+    LSN reuse_lsn;
+    char cached_data = '\0';
+    int64_t out_read_size = 0;
+    log_sw_.group_buffer_.get_reuse_lsn(reuse_lsn);
+    EXPECT_EQ(log_end_lsn, log_sw_.group_buffer_.readable_begin_lsn_);
+    EXPECT_EQ(log_end_lsn, log_sw_.group_buffer_.data_end_lsn_);
+    EXPECT_EQ(expected_reuse_lsn, reuse_lsn);
+    EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND,
+        log_sw_.group_buffer_.read_data(lsn, 1, &cached_data, out_read_size));
+    EXPECT_EQ(0, out_read_size);
+  }
   // gen new group entry
   log_id++;
   uint64_t new_val = max_scn.get_val_for_logservice() + 100;

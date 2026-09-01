@@ -11,6 +11,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "share/ob_cluster_version.h"
 #define private public
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_election.h"
@@ -63,7 +64,8 @@ void TestLogStateMgr::SetUp()
   self_.set_ip_addr("127.0.0.1", 12345);
   LogVotedFor voted_for;
   log_prepare_meta_.generate(voted_for, 1);
-  log_replica_property_meta_.generate(true, LogReplicaType::NORMAL_REPLICA);
+  log_replica_property_meta_.generate(
+      true, LogReplicaType::NORMAL_REPLICA, LogIOMode::SYNC);
 }
 
 void TestLogStateMgr::TearDown()
@@ -83,7 +85,9 @@ TEST_F(TestLogStateMgr, test_init)
 
 TEST_F(TestLogStateMgr, logonly_replica_state_caps)
 {
-  log_replica_property_meta_.generate(true, LogReplicaType::LOGONLY_REPLICA);
+  ASSERT_EQ(OB_SUCCESS,
+            log_replica_property_meta_.generate(
+                true /* allow_vote */, LogReplicaType::LOGONLY_REPLICA, LogIOMode::SYNC));
   EXPECT_EQ(OB_SUCCESS, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_, &mock_election_, &mock_sw_,
         &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_, &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
   EXPECT_TRUE(state_mgr_.is_logonly_replica());
@@ -177,5 +181,7 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level("TRACE");
   PALF_LOG(INFO, "begin unittest::test_log_state_mgr");
   ::testing::InitGoogleTest(&argc, argv);
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

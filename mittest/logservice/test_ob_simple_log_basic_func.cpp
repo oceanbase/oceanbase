@@ -402,7 +402,9 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
   int64_t leader_idx = 0;
   PalfHandleImplGuard leader;
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-  LogIOWorker *iow = leader.palf_handle_impl_->log_engine_.log_io_worker_;
+  ASSERT_FALSE(leader.palf_env_impl_->log_io_worker_wrapper_.enable_async_io_);
+  LogIOWorker *iow = static_cast<LogIOWorker *>(
+      leader.palf_handle_impl_->log_engine_.io_task_submitter_);
 
   iow->batch_io_task_mgr_.handle_count_ = 0;
   std::vector<PalfHandleImplGuard*> palf_list;
@@ -428,7 +430,9 @@ TEST_F(TestObSimpleLogClusterBasicFunc, io_reducer_basic)
     PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "follower is lagged", K(max_lsn), K(lag_follower_max_lsn));
     lag_follower_max_lsn = lag_follower.palf_handle_impl_->sw_.max_flushed_end_lsn_;
   }
-  LogIOWorker *iow_follower = lag_follower.palf_handle_impl_->log_engine_.log_io_worker_;
+  ASSERT_FALSE(lag_follower.palf_env_impl_->log_io_worker_wrapper_.enable_async_io_);
+  LogIOWorker *iow_follower = static_cast<LogIOWorker *>(
+      lag_follower.palf_handle_impl_->log_engine_.io_task_submitter_);
   const int64_t follower_handle_count = iow_follower->batch_io_task_mgr_.handle_count_;
   EXPECT_EQ(OB_SUCCESS, revert_cluster_palf_handle_guard(palf_list));
 

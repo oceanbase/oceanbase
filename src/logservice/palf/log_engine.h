@@ -34,7 +34,7 @@ namespace palf
 class LogRpc;
 class LogGroupEntry;
 class LSN;
-class LogIOWorker;
+class LogIOWorkerBase;
 class LogSharedQueueTh;
 class PalfHandleImpl;
 class LogIOTask;
@@ -42,12 +42,14 @@ class LogHandleSubmitTask;
 class LogIOFlushLogTask;
 class LogIOTruncateLogTask;
 class LogIOFlushMetaTask;
+class IAsyncPalfIOCtx;
 class LogIOTruncatePrefixBlocksTask;
 class FlushLogCbCtx;
 class TruncateLogCbCtx;
 class FlushMetaCbCtx;
 class TruncatePrefixBlocksCbCtx;
 class LogWriteBuf;
+class IAsyncPalfIOCtx;
 class LogGroupEntryHeader;
 class TruncatePrefixBlocksCbCtx;
 class LogIOTruncatePrefixBlocksTask;
@@ -106,7 +108,7 @@ public:
            ILogBlockPool *log_block_pool,
            LogCache *log_cache,
            LogRpc *log_rpc,
-           LogIOWorker *log_io_worker,
+           LogIOWorkerBase *io_task_submitter,
            LogSharedQueueTh *log_shared_queue_th,
            LogPlugins *plugins,
            const int64_t palf_epoch,
@@ -115,13 +117,14 @@ public:
            LogIOAdapter *io_adapter);
   void destroy();
 
+  // Recover redo with the persisted mode, then durably switch to desired_io_mode.
   int load(const int64_t palf_id,
            const char *base_dir,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
            LogCache *log_cache,
            LogRpc *log_rpc,
-           LogIOWorker *log_io_worker,
+           LogIOWorkerBase *io_task_submitter,
            LogSharedQueueTh *log_shared_queue_th,
            LogPlugins *plugins,
            LogGroupEntryHeader &entry_header,
@@ -129,10 +132,10 @@ public:
            const int64_t log_storage_size,
            const int64_t log_meta_storage_size,
            LogIOAdapter *io_adapter,
+           const LogIOMode desired_io_mode,
            bool &is_integrity);
 
-  // ==================== Submit async task start ================
-  //
+  // ======================= Submit IO task ======================
   int submit_flush_log_task(const FlushLogCbCtx &flush_log_cb_ctx,
                             const char *buf,
                             const int64_t buf_len);
@@ -162,13 +165,27 @@ public:
   int submit_flashback_task(const FlashbackCbCtx &flashback_ctx);
   int submit_purge_throttling_task(const PurgeThrottlingType purge_type);
   int submit_fill_cache_task(const LSN &lsn, const int64_t size);
-
   virtual int check_config_meta_size(const LogConfigMeta &config_meta) const;
-  // ==================== Submit aysnc task end ==================
+  // =============================================================
 
   // ====================== LogStorage start =====================
   int append_log(const LSN &lsn, const LogWriteBuf &write_buf, const share::SCN &scn);
   int append_log(const LSNArray &lsn, const LogWriteBufArray &write_buf, const SCNArray &scn_array);
+  // 向 LogStorage 提交一笔单块内的 DIO 对齐物理写。返回成功仅表示 AIO 已提交，
+  // 不表示对应逻辑区间已经发布。
+  int async_pwrite(const AsyncPwriteRequest &req,
+                   common::ObIOHandle &out_handle);
+  // 发布从当前 log tail 开始的连续完成区间，并同步更新块内剩余空间。
+  int commit_async_append(const LSN &begin_lsn, const LSN &end_lsn);
+  // 在 log tail 位于块边界时切换或打开目标块，并在首笔数据 AIO 前写入块头。
+  int prepare_async_block_for_write(const share::SCN &new_block_min_scn);
+  // 从指定的 DIO 对齐 LSN 读取一页；接口不校验该页是否为当前 tail page。
+  int read_log_storage_tail_page(const LSN &page_begin_lsn,
+                                 char *buf,
+                                 const int64_t buf_len,
+                                 int64_t &read_size);
+  // 在 LogStorage 的 tail lock 下取得已发布尾部与当前块状态的一致快照。
+  void get_async_storage_snapshot(LogStorage::AsyncStorageSnapshot &out) const;
   int read_log(const LSN &lsn,
                const int64_t in_read_size,
                ReadBuf &read_buf,
@@ -461,9 +478,14 @@ public:
   TO_STRING_KV(K_(palf_id), K_(is_inited), K_(min_block_max_scn), K_(min_block_id), K_(min_block_min_scn), K_(base_lsn_for_block_gc),
       K_(log_meta), K_(log_meta_storage), K_(log_storage), K_(palf_epoch), K_(last_purge_throttling_ts), KP(this));
 private:
+  int submit_io_task_(LogIOTask *task);
   int submit_flush_meta_task_(const FlushMetaCbCtx &flush_meta_cb_ctx, const LogMeta &log_meta);
   int append_log_meta_(const LogMeta &log_meta);
   int construct_log_meta_(const LSN &lsn, block_id_t &expected_next_block_id);
+  // Read the previous writer mode from the loaded LogMeta before redo recovery.
+  int get_persisted_log_io_mode_(LogIOMode &io_mode) const;
+  // Persist a mode/version transition only after recovery and integrity checks succeed.
+  int update_log_io_mode_after_recovery_(const LogIOMode desired_io_mode);
   // =========== Async callback task generate and destroy ==============
   int generate_flush_log_task_(const FlushLogCbCtx &flush_log_cb_ctx,
                                const LogWriteBuf &write_buf,
@@ -543,7 +565,7 @@ private:
   LogStorage log_storage_;
   LogNetService log_net_service_;
   common::ObILogAllocator *alloc_mgr_;
-  LogIOWorker *log_io_worker_;
+  LogIOWorkerBase *io_task_submitter_;
   LogSharedQueueTh *log_shared_queue_th_;
   LogPlugins *plugins_;
   // Except for LogNetService, this field is just only used for debug

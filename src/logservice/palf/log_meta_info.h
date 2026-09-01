@@ -28,6 +28,28 @@ namespace oceanbase
 namespace palf
 {
 
+// The actual PALF write path persisted for restart recovery.
+enum class LogIOMode : int64_t
+{
+  INVALID = 0,
+  SYNC = 1,
+  ASYNC = 2,
+};
+
+inline const char *log_io_mode_to_str(const LogIOMode mode)
+{
+  switch (mode) {
+    case LogIOMode::SYNC:  return "SYNC";
+    case LogIOMode::ASYNC: return "ASYNC";
+    default:               return "INVALID";
+  }
+}
+
+inline bool is_valid_log_io_mode(const LogIOMode mode)
+{
+  return LogIOMode::SYNC == mode || LogIOMode::ASYNC == mode;
+}
+
 struct LogVotedFor {
   LogVotedFor();
   ~LogVotedFor();
@@ -362,15 +384,27 @@ public:
 
 struct LogReplicaPropertyMeta {
 public:
-  LogReplicaPropertyMeta(): version_(-1), allow_vote_(false), replica_type_(LogReplicaType::INVALID_REPLICA) { }
+  LogReplicaPropertyMeta()
+      : version_(-1),
+        allow_vote_(false),
+        replica_type_(LogReplicaType::INVALID_REPLICA),
+        io_mode(LogIOMode::INVALID)
+  {}
   ~LogReplicaPropertyMeta() { }
 
 public:
-  int generate(const bool allow_vote, const LogReplicaType replica_type);
+  // Generate V1/SYNC before the 4.4.2.3 barrier and V2 afterwards. SYNC safely
+  // falls back to V1 when tenant data version is unavailable; arbitration SYNC is always V1.
+  int generate(const bool allow_vote,
+               const LogReplicaType replica_type,
+               const LogIOMode io_mode);
   bool is_valid() const;
   void reset();
   void operator=(const LogReplicaPropertyMeta &replica_meta);
-  TO_STRING_KV(K_(allow_vote), "replica_type", replica_type_2_str(replica_type_));
+  // V1 has no persisted mode and is always decoded as SYNC.
+  LogIOMode get_log_io_mode() const { return io_mode; }
+  TO_STRING_KV(K_(version), K_(allow_vote), "replica_type", replica_type_2_str(replica_type_),
+               "io_mode", log_io_mode_to_str(io_mode));
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   int64_t version_;
@@ -379,7 +413,10 @@ public:
   bool allow_vote_;
   // persistent replica type flag
   LogReplicaType replica_type_;
+  // The actual writer mode used before the most recent clean or unclean shutdown.
+  LogIOMode io_mode;
   static constexpr int64_t LOG_REPLICA_PROPERTY_META_VERSION = 1;
+  static constexpr int64_t LOG_REPLICA_PROPERTY_META_VERSION_V2 = 2;
 };
 
 } // end namespace palf

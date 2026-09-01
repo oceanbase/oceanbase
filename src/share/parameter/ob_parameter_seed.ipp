@@ -844,6 +844,10 @@ DEF_BOOL(_enable_log_cache, OB_TENANT_PARAMETER, "True",
          "Value:  True:turned on  False: turned off",
          ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_palf_async_io, OB_TENANT_PARAMETER, "False",
+         "Specifies whether to enable the PALF asynchronous write pipeline for user tenants. The new value takes effect after the tenant restarts. Value: True: enabled; False: disabled.",
+         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
 DEF_BOOL(_ob_enable_standby_db_parallel_log_transport, OB_TENANT_PARAMETER, "True",
         "Specifies whether the parallel log transport protocol is enabled on the standby database. "
         "The parallel log transport protocol is enabled only if this parameter is true and "

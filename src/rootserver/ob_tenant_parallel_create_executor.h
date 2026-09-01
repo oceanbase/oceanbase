@@ -29,7 +29,7 @@ public:
     ctx_(), create_tenant_schema_result_(), user_tenant_schema_(), meta_tenant_schema_() {}
   int execute(obrpc::UInt64 &tenant_id);
   int init(
-      obrpc::ObCreateTenantArg create_tenant_arg,
+      const obrpc::ObCreateTenantArg &create_tenant_arg,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       obrpc::ObCommonRpcProxy *common_rpc,
       common::ObMySQLProxy *sql_proxy,

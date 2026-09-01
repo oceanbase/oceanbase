@@ -526,6 +526,7 @@ int ObSimpleLogServer::init_log_service_(const bool is_bootstrap)
   int ret = OB_SUCCESS;
   // init deps of log_service
   palf::PalfOptions opts;
+  opts.enable_async_io_ = enable_async_io_;
   if (disk_opts_.is_valid()) {
     opts.disk_options_ = disk_opts_;
     opts.enable_log_cache_ = true;

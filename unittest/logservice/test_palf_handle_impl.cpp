@@ -11,13 +11,16 @@
  */
 
 #include <cstdio>
+#include <cstring>
 #include <gtest/gtest.h>
 #include <random>
 #include <string>
 #include <unistd.h>
+#define USING_LOG_PREFIX PALF
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include "lib/file/file_directory_utils.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/log_meta_info.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
@@ -25,8 +28,15 @@
 #include "storage/ob_file_system_router.h"
 #include "lib/oblog/ob_log_print_kv.h"
 #include "lib/oblog/ob_log_module.h"
-#include "logservice/palf/log_engine.h"
+#include "logservice/palf/log_io_adapter.h"
+#include "logservice/palf/log_io_worker.h"
+#include "share/ob_device_manager.h"
+#include "share/rc/ob_tenant_base.h"
+#include "share/resource_manager/ob_resource_manager.h"
+#include "share/io/ob_io_manager.h"
+#include "share/ob_cluster_version.h"
 #define private public
+#include "logservice/palf/log_engine.h"
 #include "logservice/palf/palf_handle_impl.h"
 #include "logservice/palf/log_sliding_window.h"
 #include "logservice/palf/lsn_allocator.h"
@@ -35,7 +45,9 @@
 #include "logservice/palf/log_io_task_cb_thread_pool.h"
 #include "logservice/palf/log_reader_utils.h"
 #include "logservice/palf/log_rpc.h"
+#define private public
 #include "logservice/palf/palf_env_impl.h"
+#undef private
 #include "logservice/palf/palf_handle_impl_guard.h"
 #include "logservice/palf/log_entry_header.h"
 #include "logservice/palf/log_entry.h"
@@ -89,6 +101,162 @@ protected:
   PalfEnvImpl palf_env_impl_;
   IPalfHandleImplGuard palf_handle_impl_guard_;
 };
+
+class FinishInitTestPalfHandle : public PalfHandleImpl
+{
+public:
+  FinishInitTestPalfHandle()
+      : scan_finished_count_(0)
+  {}
+  ~FinishInitTestPalfHandle()
+  {}
+
+  int set_scan_disk_log_finished() override
+  {
+    ++scan_finished_count_;
+    return OB_SUCCESS;
+  }
+
+  int64_t get_scan_finished_count() const
+  {
+    return scan_finished_count_;
+  }
+
+private:
+  int64_t scan_finished_count_;
+};
+
+TEST(TestLogStorage, async_recovery_truncate_rejects_non_last_block_and_keeps_manifest)
+{
+  int ret = OB_SUCCESS;
+  int fd = -1;
+  int64_t update_manifest_count = 0;
+  const offset_t restart_tail_offset = MAX_INFO_BLOCK_SIZE + LOG_DIO_ALIGN_SIZE;
+  char dirty_buf[LOG_DIO_ALIGN_SIZE];
+  char read_buf[LOG_DIO_ALIGN_SIZE];
+  char zero_buf[LOG_DIO_ALIGN_SIZE];
+  char base_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  char log_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  share::ObTenantBase tenant_base(OB_SERVER_TENANT_ID);
+  LogIODeviceWrapper device_wrapper;
+  LogIOAdapter io_adapter;
+  LogStorage storage;
+  auto update_manifest_cb = [&update_manifest_count](const block_id_t, const bool) {
+    ++update_manifest_count;
+    return OB_ERR_UNEXPECTED;
+  };
+  MEMSET(dirty_buf, 'x', sizeof(dirty_buf));
+  MEMSET(read_buf, '\0', sizeof(read_buf));
+  MEMSET(zero_buf, '\0', sizeof(zero_buf));
+
+  share::ObTenantEnv::set_tenant(&tenant_base);
+  ret = ObDeviceManager::get_instance().init_devices_env();
+  PALF_LOG(INFO, "init devices env for async recovery truncate test", K(ret));
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  ret = share::ObResourceManager::get_instance().init();
+  PALF_LOG(INFO, "init resource manager for async recovery truncate test", K(ret));
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  ret = ObIOManager::get_instance().init(1000000000);
+  PALF_LOG(INFO, "init io manager for async recovery truncate test", K(ret));
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().start());
+  ASSERT_GT(snprintf(base_dir, OB_MAX_FILE_NAME_LENGTH,
+                     "async_recovery_truncate_%ld", ob_gettid()), 0);
+  FileDirectoryUtils::delete_directory_rec(base_dir);
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::create_directory(base_dir));
+  ASSERT_GT(snprintf(log_dir, OB_MAX_FILE_NAME_LENGTH, "%s/log", base_dir), 0);
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::create_directory(log_dir));
+  ASSERT_GT(snprintf(block_path, OB_MAX_FILE_NAME_LENGTH, "%s/0", log_dir), 0);
+  ASSERT_NE(-1, fd = ::open(block_path, O_RDWR | O_CREAT | O_TRUNC, FILE_OPEN_MODE));
+  ASSERT_EQ(0, ::ftruncate(fd, PALF_BLOCK_SIZE + MAX_INFO_BLOCK_SIZE));
+  ASSERT_EQ(static_cast<ssize_t>(sizeof(dirty_buf)),
+            ::pwrite(fd, dirty_buf, sizeof(dirty_buf), restart_tail_offset));
+  ASSERT_EQ(0, ::close(fd));
+  fd = -1;
+
+  ASSERT_EQ(OB_SUCCESS, device_wrapper.init(base_dir,
+                                            1 /* disk_io_thread_count */,
+                                            16 /* max_io_depth */,
+                                            &ObIOManager::get_instance(),
+                                            &ObDeviceManager::get_instance()));
+  ASSERT_EQ(OB_SUCCESS, io_adapter.init(OB_SERVER_TENANT_ID,
+                                        device_wrapper.get_local_device(),
+                                        &share::ObResourceManager::get_instance(),
+                                        &ObIOManager::get_instance()));
+  ASSERT_EQ(OB_SUCCESS, storage.init(base_dir,
+                                     "log",
+                                     LSN(0),
+                                     1,
+                                     PALF_BLOCK_SIZE,
+                                     LOG_DIO_ALIGN_SIZE,
+                                     LOG_DIO_ALIGNED_BUF_SIZE_REDO,
+                                     update_manifest_cb,
+                                     NULL,
+                                     NULL,
+                                     NULL,
+                                     &io_adapter));
+
+  EXPECT_EQ(OB_INVALID_ARGUMENT, storage.truncate_async_recovery_tail_(LSN(LOG_DIO_ALIGN_SIZE), 1));
+  EXPECT_EQ(0, update_manifest_count);
+  EXPECT_EQ(OB_SUCCESS, storage.truncate_async_recovery_tail_(LSN(LOG_DIO_ALIGN_SIZE), 0));
+  EXPECT_EQ(0, update_manifest_count);
+  ASSERT_NE(-1, fd = ::open(block_path, O_RDONLY, FILE_OPEN_MODE));
+  ASSERT_EQ(static_cast<ssize_t>(sizeof(read_buf)),
+            ::pread(fd, read_buf, sizeof(read_buf), restart_tail_offset));
+  EXPECT_EQ(0, memcmp(read_buf, zero_buf, sizeof(read_buf)));
+  ASSERT_EQ(0, ::close(fd));
+  fd = -1;
+
+  storage.destroy();
+  io_adapter.destroy();
+  device_wrapper.destroy();
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().wait();
+  ObIOManager::get_instance().destroy();
+  share::ObTenantEnv::set_tenant(NULL);
+  FileDirectoryUtils::delete_directory_rec(base_dir);
+}
+
+TEST(TestLogStorage, async_recovery_accepts_partial_log_only_after_valid_entry_in_last_block)
+{
+  LogStorage storage;
+  PalfIterator<LogGroupEntry> iterator;
+  bool is_async_dirty_suffix_candidate = false;
+
+  EXPECT_TRUE(storage.is_tail_locate_result_acceptable_(OB_PARTIAL_LOG,
+                                                       1,
+                                                       1,
+                                                       true /* allow_mid_log_hole */,
+                                                       true /* has_valid_entry */,
+                                                       iterator,
+                                                       is_async_dirty_suffix_candidate));
+  EXPECT_TRUE(is_async_dirty_suffix_candidate);
+  EXPECT_FALSE(storage.is_tail_locate_result_acceptable_(OB_PARTIAL_LOG,
+                                                        1,
+                                                        1,
+                                                        false /* allow_mid_log_hole */,
+                                                        true /* has_valid_entry */,
+                                                        iterator,
+                                                        is_async_dirty_suffix_candidate));
+  EXPECT_FALSE(is_async_dirty_suffix_candidate);
+  EXPECT_FALSE(storage.is_tail_locate_result_acceptable_(OB_PARTIAL_LOG,
+                                                        0,
+                                                        1,
+                                                        true /* allow_mid_log_hole */,
+                                                        true /* has_valid_entry */,
+                                                        iterator,
+                                                        is_async_dirty_suffix_candidate));
+  EXPECT_FALSE(is_async_dirty_suffix_candidate);
+  EXPECT_FALSE(storage.is_tail_locate_result_acceptable_(OB_PARTIAL_LOG,
+                                                        1,
+                                                        1,
+                                                        true /* allow_mid_log_hole */,
+                                                        false /* has_valid_entry */,
+                                                        iterator,
+                                                        is_async_dirty_suffix_candidate));
+  EXPECT_FALSE(is_async_dirty_suffix_candidate);
+}
 
 TestLogService::TestLogService()
   : TestDataFilePrepare(&getter,
@@ -336,6 +504,121 @@ TEST(TestPalfHandleImpl, get_max_lsn_scn_tracks_allocator)
   EXPECT_EQ(scn, impl.get_max_scn());
 }
 
+TEST(TestLogEngine, trusts_persisted_v2_io_mode_below_data_version_barrier)
+{
+  LogEngine log_engine;
+  LogIOMode io_mode = LogIOMode::INVALID;
+  LogReplicaPropertyMeta property_meta;
+  ASSERT_EQ(OB_SUCCESS,
+            property_meta.generate(
+                true, LogReplicaType::NORMAL_REPLICA, LogIOMode::ASYNC));
+  ASSERT_EQ(OB_SUCCESS, log_engine.log_meta_.update_log_replica_property_meta(property_meta));
+
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_4_2_1);
+  ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_4_2_1);
+  // The data-version barrier gates mode creation and transition. Recovery must
+  // trust the persisted mode to interpret the existing log contents correctly.
+  EXPECT_EQ(OB_SUCCESS, log_engine.get_persisted_log_io_mode_(io_mode));
+  EXPECT_EQ(LogIOMode::ASYNC, io_mode);
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+}
+
+TEST(TestPalfEnvImpl, determine_log_io_mode_uses_tenant_config_and_data_version)
+{
+  PalfEnvImpl env;
+  LogIOMode io_mode = LogIOMode::INVALID;
+  const int64_t user_tenant_id = 1002;
+
+  EXPECT_EQ(OB_SUCCESS, env.determine_log_io_mode_(user_tenant_id, true, io_mode));
+  EXPECT_EQ(LogIOMode::ASYNC, io_mode);
+  EXPECT_EQ(OB_SUCCESS, env.determine_log_io_mode_(user_tenant_id, false, io_mode));
+  EXPECT_EQ(LogIOMode::SYNC, io_mode);
+  EXPECT_EQ(OB_SUCCESS,
+            env.determine_log_io_mode_(gen_meta_tenant_id(user_tenant_id), true, io_mode));
+  EXPECT_EQ(LogIOMode::SYNC, io_mode);
+  EXPECT_EQ(OB_SUCCESS, env.determine_log_io_mode_(OB_SYS_TENANT_ID, true, io_mode));
+  EXPECT_EQ(LogIOMode::SYNC, io_mode);
+
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_4_2_1);
+  ObClusterVersion::get_instance().update_data_version(DATA_VERSION_4_4_2_1);
+  EXPECT_EQ(OB_SUCCESS, env.determine_log_io_mode_(user_tenant_id, true, io_mode));
+  EXPECT_EQ(LogIOMode::SYNC, io_mode);
+  ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
+  ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+}
+
+TEST(TestPalfHandleImpl, finish_handle_init_sets_scan_finished)
+{
+  PalfEnvImpl env;
+  FinishInitTestPalfHandle impl;
+  LogIOWorker submitter;
+
+  ASSERT_EQ(OB_SUCCESS, env.finish_palf_handle_init_(1, 1, &submitter, &impl));
+  EXPECT_EQ(1, impl.get_scan_finished_count());
+}
+
+TEST(TestPalfHandleImpl, finish_handle_init_propagates_errsim_failure)
+{
+  PalfEnvImpl env;
+  FinishInitTestPalfHandle impl;
+  LogIOWorker submitter;
+  common::EventItem event_item;
+  common::EventItem reset_item;
+  int ret = OB_SUCCESS;
+  event_item.error_code_ = OB_ERR_UNEXPECTED;
+  event_item.occur_ = 1;
+  event_item.trigger_freq_ = 0;
+  ASSERT_EQ(OB_SUCCESS,
+      common::EventTable::set_event("ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL", event_item));
+
+  ret = env.finish_palf_handle_init_(1, 1, &submitter, &impl);
+  PALF_LOG(INFO, "finish_palf_handle_init_ errsim test returned", K(ret));
+  EXPECT_EQ(OB_SUCCESS,
+      common::EventTable::set_event("ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL", reset_item));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, ret);
+  EXPECT_EQ(1, impl.get_scan_finished_count());
+}
+
+TEST(TestPalfHandleImpl, cleanup_failed_inserted_handle_reverts_create_ref)
+{
+  PalfEnvImpl env;
+  PalfHandleImpl *impl = PalfHandleImplFactory::alloc();
+  const LSKey hash_map_key(1001);
+  ASSERT_NE(static_cast<PalfHandleImpl *>(NULL), impl);
+  ASSERT_EQ(OB_SUCCESS, env.palf_handle_impl_map_.init("TEST_PALF_MAP", OB_SERVER_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, env.palf_handle_impl_map_.insert_and_get(hash_map_key, impl));
+  EXPECT_EQ(1, env.palf_handle_impl_map_.count());
+  EXPECT_EQ(OB_ENTRY_EXIST, env.palf_handle_impl_map_.contains_key(hash_map_key));
+  EXPECT_EQ(common::RefHandle::BORN_REF + 1, impl->get_uref());
+
+  env.cleanup_failed_inserted_palf_handle_impl_(hash_map_key, /* need_revert */ true, impl);
+
+  EXPECT_EQ(static_cast<PalfHandleImpl *>(NULL), impl);
+  EXPECT_EQ(0, env.palf_handle_impl_map_.count());
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, env.palf_handle_impl_map_.contains_key(hash_map_key));
+}
+
+TEST(TestPalfHandleImpl, cleanup_failed_inserted_handle_deletes_reverted_reload_ref)
+{
+  PalfEnvImpl env;
+  PalfHandleImpl *impl = PalfHandleImplFactory::alloc();
+  const LSKey hash_map_key(1002);
+  ASSERT_NE(static_cast<PalfHandleImpl *>(NULL), impl);
+  ASSERT_EQ(OB_SUCCESS, env.palf_handle_impl_map_.init("TEST_PALF_MAP", OB_SERVER_TENANT_ID));
+  ASSERT_EQ(OB_SUCCESS, env.palf_handle_impl_map_.insert_and_get(hash_map_key, impl));
+  const int32_t uref_after_insert = impl->get_uref();
+  EXPECT_EQ(common::RefHandle::BORN_REF + 1, uref_after_insert);
+  env.palf_handle_impl_map_.revert(impl);
+  EXPECT_EQ(common::RefHandle::BORN_REF, impl->get_uref());
+
+  env.cleanup_failed_inserted_palf_handle_impl_(hash_map_key, /* need_revert */ false, impl);
+
+  EXPECT_EQ(static_cast<PalfHandleImpl *>(NULL), impl);
+  EXPECT_EQ(0, env.palf_handle_impl_map_.count());
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, env.palf_handle_impl_map_.contains_key(hash_map_key));
+}
+
 } // END of unittest
 } // end of oceanbase
 
@@ -355,6 +638,8 @@ int main(int argc, char **argv)
   if (NULL == malloc->get_tenant_ctx_allocator(server_tenant_id, 0)) {
     malloc->create_and_add_tenant_allocator(server_tenant_id);
   }
+  oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_CURRENT_VERSION);
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

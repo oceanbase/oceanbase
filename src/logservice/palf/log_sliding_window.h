@@ -326,6 +326,12 @@ public:
                                     const int64_t in_read_size,
                                     char *buf,
                                     int64_t &out_read_size) const;
+  // tail reset 后, 将尾页中已经持久化的有效前缀回填到 LogGroupBuffer.
+  // 本接口只转发一页内的字节复制, 不推进 readable/data-end/reuse 位点.
+  virtual int fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                           const LSN &tail_lsn,
+                                           const char *buf,
+                                           int64_t buf_len);
   int64_t get_last_slide_log_id() const;
   virtual int try_handle_next_submit_log();
   virtual bool is_fetch_stagnant(const int64_t threshold_us);
@@ -368,6 +374,9 @@ private:
   int inc_update_max_flushed_log_info_(const LSN &lsn,
                                        const LSN &end_lsn,
                                        const int64_t &proposal_id);
+  // flush_log_end_lsn 是已持久化终点. 内存复用位点向下按 4K 对齐,
+  // 保留未对齐尾页, 直到后续写入使整页都可以安全复用.
+  int advance_group_buffer_reuse_lsn_(const LSN &flush_log_end_lsn);
   int truncate_max_flushed_log_info_(const LSN &lsn,
                                      const LSN &end_lsn,
                                      const int64_t &log_proposal_id);

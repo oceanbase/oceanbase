@@ -25,6 +25,7 @@ namespace palf
 class PalfHandleImpl;
 class LogMeta;
 class IPalfEnvImpl;
+class IPalfHandleImplGuard;
 
 enum class LogIOTaskType
 {
@@ -32,14 +33,16 @@ enum class LogIOTaskType
   FLUSH_META_TYPE = 2,
   TRUNCATE_PREFIX_TYPE = 3,
   TRUNCATE_LOG_TYPE = 4,
-	FLASHBACK_LOG_TYPE = 5,
+  FLASHBACK_LOG_TYPE = 5,
   PURGE_THROTTLING_TYPE = 6,
+  // Internal reusable async-worker wake token; not a PALF IO operation.
+  ASYNC_MARK_TYPE = 7,
 };
 
 OB_INLINE const char *log_io_task_type_str(const LogIOTaskType type)
 {
 #define IO_TASK_TYPE_NAME(io_type)  case LogIOTaskType::io_type: { str = #io_type; } break
-  const char *str = nullptr;
+  const char *str = NULL;
   switch (type) {
     IO_TASK_TYPE_NAME(FLUSH_LOG_TYPE);
     IO_TASK_TYPE_NAME(FLUSH_META_TYPE);
@@ -47,13 +50,13 @@ OB_INLINE const char *log_io_task_type_str(const LogIOTaskType type)
     IO_TASK_TYPE_NAME(TRUNCATE_LOG_TYPE);
     IO_TASK_TYPE_NAME(FLASHBACK_LOG_TYPE);
     IO_TASK_TYPE_NAME(PURGE_THROTTLING_TYPE);
+    IO_TASK_TYPE_NAME(ASYNC_MARK_TYPE);
     default: str = "UNKNOWN_TYPE";
   }
   return str;
 #undef IO_TASK_TYPE_NAME
 }
 
-class IPalfHandleImplGuard;
 class LogIOTask;
 
 int push_task_into_cb_thread_pool(const int64_t tg_id, LogIOTask *io_task);
@@ -113,11 +116,24 @@ public:
   int init(const FlushLogCbCtx &flush_log_cb_ctx,
            const LogWriteBuf &write_buf);
   void destroy();
+  // 以下接口不转移所有权. get_write_buf() 返回 task 内部描述符, 其中的
+  // source pointer 仍借用 sliding window group buffer; async publish 推进
+  // 内存复用位点前, 上层必须保证这些地址保持有效.
+  // The begin LSN is inclusive and the end LSN is exclusive.
+  const FlushLogCbCtx &get_flush_log_cb_ctx() const { return flush_log_cb_ctx_; }
+  const LogWriteBuf &get_write_buf() const { return write_buf_; }
+  LSN get_flush_begin_lsn() const { return flush_log_cb_ctx_.lsn_; }
+  LSN get_flush_end_lsn() const
+  {
+    return flush_log_cb_ctx_.lsn_.is_valid()
+        ? (flush_log_cb_ctx_.lsn_ + static_cast<offset_t>(flush_log_cb_ctx_.total_len_))
+        : LSN();
+  }
   INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(write_buf), K_(flush_log_cb_ctx), K(is_inited_));
 private:
-  // IO thread will call this function to flush log
+  // Persist the log and queue callback handling on the IO execution path.
   int do_task_(int tg_id, IPalfHandleImplGuard &guard) override final;
-  // IO thread will call this function to submit async task
+  // Finalize the persisted flush on the callback thread.
   int after_consume_(IPalfHandleImplGuard &guard) override final;
   LogIOTaskType get_io_task_type_() const override final { return LogIOTaskType::FLUSH_LOG_TYPE; }
   void free_this_(IPalfEnvImpl *palf_env_impl) override final;
@@ -137,6 +153,8 @@ public:
 
   int init(const TruncateLogCbCtx &truncate_log_cb_ctx);
   void destroy();
+  // Return the target tail position of this truncate control task.
+  LSN get_truncate_lsn() const { return truncate_log_cb_ctx_.lsn_; }
 
   INHERIT_TO_STRING_KV("LogIOTask", LogIOTask, K_(truncate_log_cb_ctx));
 private:

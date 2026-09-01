@@ -43,7 +43,7 @@ public:
            const int64_t base_lsn_ts_ns,
            common::ObILogAllocator *alloc_mgr,
            LogRpc *log_rpc,
-           LogIOWorker *log_io_worker)
+           LogIOWorkerBase *log_io_worker)
   {
     int ret = OB_SUCCESS;
     UNUSED(palf_id);
@@ -62,7 +62,7 @@ public:
            const char *base_dir,
            common::ObILogAllocator *alloc_mgr,
            LogRpc *log_rpc,
-           LogIOWorker *log_io_worker,
+           LogIOWorkerBase *log_io_worker,
            LogGroupEntryHeader &entry_header)
   {
     int ret = OB_SUCCESS;

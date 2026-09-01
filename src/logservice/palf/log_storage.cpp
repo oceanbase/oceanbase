@@ -11,9 +11,12 @@
  */
 
 #define USING_LOG_PREFIX PALF
+#include <stdint.h>
 #include "log_storage.h"
 #include "palf_handle_impl.h"         // LogCache
 #include "log_io_adapter.h"           // LogIOAdapter
+#include "log_group_entry_header.h"   // LogGroupEntryHeader
+#include "log_reader_utils.h"         // ReadBufGuard
 
 namespace oceanbase
 {
@@ -141,13 +144,8 @@ int LogStorage::writev(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &
              > LSN((lsn_2_block(lsn, logical_block_size_) + 1) * logical_block_size_)) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "not support cross-file write", K(ret), KPC(this), K(lsn), K(write_buf));
-  } else if (true == need_switch_block_() && OB_FAIL(inner_switch_block_())) {
-    PALF_LOG(ERROR, "switch_next_block failed", K(ret), K(lsn), K(log_tail_));
-    // For restart, the last block may have no data, however, we need append_block_header_
-    // before first writev opt.
-  } else if (true == need_append_block_header_
-             && OB_FAIL(append_block_header_(lsn, scn))) {
-    PALF_LOG(ERROR, "append_block_header_ failed", K(ret), KPC(this));
+  } else if (OB_FAIL(prepare_block_for_write_(lsn, scn))) {
+    PALF_LOG(ERROR, "prepare block for write failed", K(ret), K(lsn), K(scn), KPC(this));
   } else if (OB_FAIL(block_mgr_.writev(
                  lsn_2_block(lsn, logical_block_size_), get_phy_offset_(lsn), write_buf))) {
     PALF_LOG(ERROR, "LogVirtualFileMgr writev failed", K(ret), K(write_buf), K(lsn));
@@ -342,9 +340,11 @@ int LogStorage::inner_truncate_(const LSN &lsn)
              K(expected_next_block_id),
              KPC(this));
   } else if (OB_FAIL(block_mgr_.truncate(lsn_2_block(lsn, logical_block_size_),
-                                         get_phy_offset_(lsn)))) {
+                                          get_phy_offset_(lsn)))) {
     PALF_LOG(WARN, "block_mgr_ truncate success", K(ret), K(lsn), KPC(this));
   } else {
+    // LogBlockMgr::truncate 会保留目标 block 及其 block header；即使截断点正好位于
+    // block 起点，后续恢复仍应把该 block 视为存在，而不是重新申请一个 block。
     reset_log_tail_for_last_block_(lsn, true);
     PALF_LOG(INFO, "inner_truncate_ success", K(ret), K(lsn), KPC(this));
   }
@@ -544,7 +544,143 @@ const LSN LogStorage::get_end_lsn() const
   ObSpinLockGuard guard(tail_info_lock_);
   return log_tail_;
 }
-  
+
+int LogStorage::locate_last_nonzero_tail_lsn_in_block_(const block_id_t block_id,
+                                                       LSN &last_nonzero_tail_lsn)
+{
+  int ret = OB_SUCCESS;
+  int64_t scan_end_offset = logical_block_size_;
+  LogIOContext io_ctx(MTL_ID(), palf_id_, LogIOUser::RESTART);
+  last_nonzero_tail_lsn.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not inited", K(ret), KPC(this));
+  } else if (!is_valid_block_id(block_id) || logical_block_size_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(block_id), K(logical_block_size_), KPC(this));
+  } else {
+    const int64_t scan_buf_size = MIN(logical_block_size_, MAX_LOG_BUFFER_SIZE);
+    ReadBufGuard read_buf_guard("LogStorage", scan_buf_size);
+    ReadBuf &read_buf = read_buf_guard.read_buf_;
+    if (!read_buf.is_valid()) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      PALF_LOG(WARN, "allocate read buffer failed", K(ret), K(block_id), K(scan_buf_size));
+    }
+    // 从 block 物理末尾按块反向读取；每个读缓冲区内部也从后向前找非零字节，
+    // 因而首次命中的位置就是整个 block 的物理非零 tail。
+    while (OB_SUCC(ret) && scan_end_offset > 0 && !last_nonzero_tail_lsn.is_valid()) {
+      const int64_t read_size = MIN(scan_buf_size, scan_end_offset);
+      const int64_t scan_start_offset = scan_end_offset - read_size;
+      int64_t out_read_size = 0;
+      MEMSET(read_buf.buf_, 0, read_buf.buf_len_);
+      // 这里直接读取物理 block。LogStorage::pread 受已恢复 log_tail_ 限制，无法检查
+      // tail 之后的字节，而诊断异步未发布脏尾正需要读取这段物理后缀。
+      if (OB_FAIL(log_reader_.pread(block_id,
+                                    MAX_INFO_BLOCK_SIZE + scan_start_offset,
+                                    read_size,
+                                    read_buf,
+                                    out_read_size,
+                                    io_ctx))) {
+        PALF_LOG(WARN, "read block suffix failed", K(ret), K(block_id),
+                 K(scan_start_offset), K(read_size), K(out_read_size), KPC(this));
+      } else if (out_read_size != read_size) {
+        ret = OB_ERR_UNEXPECTED;
+        PALF_LOG(WARN, "unexpected short block suffix read", K(ret), K(block_id),
+                 K(scan_start_offset), K(read_size), K(out_read_size), KPC(this));
+      } else {
+        for (int64_t i = out_read_size - 1; OB_SUCC(ret) && i >= 0; --i) {
+          if ('\0' != read_buf.buf_[i]) {
+            last_nonzero_tail_lsn =
+                LSN(block_id * logical_block_size_ + scan_start_offset + i + 1);
+            break;
+          }
+        }
+        scan_end_offset = scan_start_offset;
+      }
+    }
+  }
+  PALF_LOG(INFO, "locate_last_nonzero_tail_lsn_in_block_ finish",
+           K(ret), K(block_id), K(last_nonzero_tail_lsn), KPC(this));
+  return ret;
+}
+
+int LogStorage::detect_last_block_mid_log_hole_(const block_id_t max_block_id,
+                                                const LSN &contiguous_tail_lsn,
+                                                LSN &hole_tail)
+{
+  int ret = OB_SUCCESS;
+  const LSN block_start_lsn(max_block_id * logical_block_size_);
+  const LSN block_end_lsn((max_block_id + 1) * logical_block_size_);
+  LSN last_nonzero_tail_lsn;
+  hole_tail.reset();
+  last_nonzero_tail_lsn.reset();
+  if (!is_valid_block_id(max_block_id) || !contiguous_tail_lsn.is_valid()
+      || contiguous_tail_lsn < block_start_lsn || contiguous_tail_lsn > block_end_lsn) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(max_block_id), K(contiguous_tail_lsn),
+             K(block_start_lsn), K(block_end_lsn), KPC(this));
+  } else if (OB_FAIL(locate_last_nonzero_tail_lsn_in_block_(max_block_id, last_nonzero_tail_lsn))) {
+    PALF_LOG(WARN, "locate_last_nonzero_tail_lsn_in_block_ failed",
+             K(ret), K(max_block_id), K(contiguous_tail_lsn), KPC(this));
+  } else if (!last_nonzero_tail_lsn.is_valid() || last_nonzero_tail_lsn <= contiguous_tail_lsn) {
+    PALF_LOG(INFO, "no async-write dirty suffix found",
+             K(palf_id_), K(max_block_id), K(contiguous_tail_lsn), K(last_nonzero_tail_lsn));
+  } else {
+    // last_nonzero_tail_lsn 指向最后一个非零字节之后，二者距离覆盖逻辑 tail 后的全部
+    // 物理脏尾。异步写最多允许一个 40MB group buffer 在宕机时处于未发布状态；超过该
+    // 范围说明磁盘状态已超出恢复模型，必须报错而不能盲目截断。
+    const int64_t hole_distance = last_nonzero_tail_lsn - contiguous_tail_lsn;
+    hole_tail = contiguous_tail_lsn;
+    if (hole_distance > FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "mid-log hole distance is larger than log group buffer",
+               K(ret), K(palf_id_), K(max_block_id), K(contiguous_tail_lsn),
+               K(last_nonzero_tail_lsn), K(hole_distance),
+               K(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE));
+    } else {
+      PALF_LOG(WARN, "async-write crash recovery: dirty suffix detected below physical tail",
+               K(palf_id_), K(max_block_id), K(contiguous_tail_lsn),
+               K(last_nonzero_tail_lsn), K(hole_distance));
+    }
+  }
+  return ret;
+}
+
+int LogStorage::truncate_async_recovery_tail_(const LSN &restart_tail_lsn,
+                                              const block_id_t max_block_id)
+{
+  int ret = OB_SUCCESS;
+  const block_id_t tail_block_id = lsn_2_block(restart_tail_lsn, logical_block_size_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not inited", K(ret), K(restart_tail_lsn), K(max_block_id));
+  } else if (!restart_tail_lsn.is_valid() || !is_valid_block_id(max_block_id)
+             || tail_block_id != max_block_id) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(restart_tail_lsn),
+             K(tail_block_id), K(max_block_id), KPC(this));
+  } else {
+    // 先把 block handler 定位到连续 tail，再复用通用 truncate 清零其后的物理内容；
+    // truncate 保留最后一个 block。截断完成后关闭 handler，避免严格重扫完成后
+    // load_last_block_ 再次打开同一 handler 时覆盖旧 fd；最终 writable 状态仍统一
+    // 由 load_last_block_ 恢复。
+    if (OB_FAIL(block_mgr_.load_block_handler(tail_block_id, get_phy_offset_(restart_tail_lsn)))) {
+      PALF_LOG(ERROR, "load block handler for async recovery truncate failed",
+               K(ret), K(restart_tail_lsn), K(tail_block_id), K(max_block_id), KPC(this));
+    } else if (OB_FAIL(inner_truncate_(restart_tail_lsn))) {
+      PALF_LOG(ERROR, "truncate async recovery tail failed",
+               K(ret), K(restart_tail_lsn), K(tail_block_id), K(max_block_id), KPC(this));
+    } else if (OB_FAIL(block_mgr_.close_block_handler())) {
+      PALF_LOG(ERROR, "close block handler after async recovery truncate failed",
+               K(ret), K(restart_tail_lsn), K(tail_block_id), K(max_block_id), KPC(this));
+    } else {
+      PALF_LOG(WARN, "async-write crash recovery: truncated unpublished physical suffix",
+               K(restart_tail_lsn), K(tail_block_id), K(max_block_id), KPC(this));
+    }
+  }
+  return ret;
+}
+
 // @brief this function is called for 'switch_next_block'(redo log).
 int LogStorage::update_manifest_used_for_meta_storage(const block_id_t expected_max_block_id)
 {
@@ -811,6 +947,20 @@ int LogStorage::append_block_header_(const LSN &block_min_lsn,
   return update_block_header_(block_id, block_min_lsn, block_min_scn);
 }
 
+int LogStorage::prepare_block_for_write_(const LSN &block_min_lsn,
+                                         const SCN &block_min_scn)
+{
+  int ret = OB_SUCCESS;
+  if (true == need_switch_block_() && OB_FAIL(inner_switch_block_())) {
+    PALF_LOG(ERROR, "switch_next_block failed", K(ret), K(block_min_lsn), K(log_tail_));
+  } else if (true == need_append_block_header_
+             && OB_FAIL(append_block_header_(block_min_lsn, block_min_scn))) {
+    PALF_LOG(ERROR, "append_block_header_ failed", K(ret), K(block_min_lsn), K(block_min_scn),
+             KPC(this));
+  }
+  return ret;
+}
+
 
 void LogStorage::update_log_tail_guarded_by_lock_(const int64_t log_size)
 {
@@ -1075,5 +1225,149 @@ int LogStorage::get_io_statistic_info(int64_t &last_working_time,
   }
   return ret;
 }
+
+// ========================== Async write API ==========================
+
+void LogStorage::get_async_storage_snapshot(AsyncStorageSnapshot &out) const
+{
+  ObSpinLockGuard guard(tail_info_lock_);
+  out.log_tail = log_tail_;
+  out.curr_block_writable_size = curr_block_writable_size_;
+  out.need_append_block_header = need_append_block_header_;
+}
+
+int LogStorage::async_pwrite(const AsyncPwriteRequest &req,
+                             common::ObIOHandle &out_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not inited", KR(ret));
+  } else if (!req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument for async_pwrite", KR(ret), K(req));
+  } else {
+    const LSN &aligned_begin_lsn = req.get_aligned_begin_lsn();
+    const int64_t aligned_buf_len = req.get_aligned_buf_len();
+    const char *aligned_buf = req.get_aligned_buf();
+    const block_id_t block_id = lsn_2_block(aligned_begin_lsn, logical_block_size_);
+    const LSN block_end_lsn = LSN((block_id + 1) * logical_block_size_);
+    const offset_t aligned_phy_offset = get_phy_offset_(aligned_begin_lsn);
+
+    if (aligned_begin_lsn + aligned_buf_len > block_end_lsn) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "async_pwrite crosses block boundary", KR(ret),
+               K(aligned_begin_lsn), K(aligned_buf_len), K(block_id), K(block_end_lsn));
+    } else if (0 != (aligned_phy_offset % LOG_DIO_ALIGN_SIZE)
+               || 0 != (aligned_buf_len % LOG_DIO_ALIGN_SIZE)
+               || 0 != (reinterpret_cast<uintptr_t>(aligned_buf) % LOG_DIO_ALIGN_SIZE)) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(ERROR, "async region not DIO-aligned", KR(ret),
+               K(aligned_phy_offset), K(aligned_buf_len), KP(aligned_buf), K(aligned_begin_lsn));
+    } else if (OB_FAIL(block_mgr_.aio_write(block_id, aligned_phy_offset, req, out_handle))) {
+      PALF_LOG(WARN, "block_mgr_ aio_write failed", KR(ret), K(block_id),
+               K(aligned_phy_offset), K(req));
+    } else {
+      PALF_LOG(TRACE, "async_pwrite success", K(aligned_begin_lsn), K(aligned_buf_len),
+               K(aligned_phy_offset), K(req));
+    }
+  }
+  return ret;
+}
+
+
+int LogStorage::commit_async_append(const LSN &begin_lsn, const LSN &end_lsn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not inited", KR(ret));
+  } else if (!begin_lsn.is_valid() || !end_lsn.is_valid()
+             || end_lsn < begin_lsn) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument for commit_async_append", KR(ret),
+             K(begin_lsn), K(end_lsn));
+  } else {
+    ObSpinLockGuard guard(tail_info_lock_);
+    if (log_tail_.is_valid() && begin_lsn != log_tail_) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(WARN, "begin_lsn does not match published log_tail_", KR(ret),
+               K(begin_lsn), K(log_tail_));
+    } else if (end_lsn < log_tail_) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "end_lsn regresses log_tail_", KR(ret), K(end_lsn),
+               K(log_tail_));
+    } else {
+      log_tail_ = end_lsn;
+      if (readable_log_tail_ < log_tail_) {
+        readable_log_tail_ = log_tail_;
+      }
+      const offset_t tail_offset = lsn_2_offset(log_tail_, logical_block_size_);
+      curr_block_writable_size_ = (0 == tail_offset)
+          ? 0
+          : logical_block_size_ - tail_offset;
+      PALF_LOG(TRACE, "commit_async_append success", K(begin_lsn), K(end_lsn),
+               K_(log_tail), K_(readable_log_tail), K_(curr_block_writable_size),
+               K_(need_append_block_header));
+    }
+  }
+  return ret;
+}
+
+
+int LogStorage::prepare_async_block_for_write(const SCN &new_block_min_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not inited", KR(ret));
+  } else if (!log_tail_.is_valid() || !new_block_min_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KR(ret), K_(log_tail), K(new_block_min_scn));
+  } else if (0 != lsn_2_offset(log_tail_, logical_block_size_)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "log_tail_ not aligned to block boundary", KR(ret),
+             K_(log_tail), K(logical_block_size_));
+  } else if (OB_FAIL(prepare_block_for_write_(log_tail_, new_block_min_scn))) {
+    PALF_LOG(WARN, "prepare async block for write failed", KR(ret),
+             K_(log_tail), K(new_block_min_scn));
+  } else {
+    PALF_LOG(TRACE, "prepare_async_block_for_write success",
+             K_(log_tail), K(new_block_min_scn), K_(curr_block_writable_size));
+  }
+  return ret;
+}
+
+int LogStorage::read_log_storage_tail_page(const LSN &page_begin_lsn,
+                                           char *buf,
+                                           const int64_t buf_len,
+                                           int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  read_size = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage not inited", KR(ret));
+  } else if (!page_begin_lsn.is_valid()
+             || 0 != (page_begin_lsn.val_ % LOG_DIO_ALIGN_SIZE)
+             || OB_ISNULL(buf)
+             || LOG_DIO_ALIGN_SIZE != buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument for read_log_storage_tail_page", KR(ret),
+             K(page_begin_lsn), KP(buf), K(buf_len));
+  } else {
+    LogIOContext io_ctx(MTL_ID(), palf_id_, LogIOUser::DEFAULT);
+    ReadBuf read_buf(buf, buf_len);
+    if (OB_FAIL(pread(page_begin_lsn, buf_len, read_buf, read_size, io_ctx))) {
+      PALF_LOG(WARN, "pread log storage tail page failed", KR(ret),
+               K(page_begin_lsn), K(buf_len), K(read_size));
+    } else {
+      PALF_LOG(TRACE, "read_log_storage_tail_page success",
+               K(page_begin_lsn), K(buf_len), K(read_size));
+    }
+  }
+  return ret;
+}
+
 } // end namespace palf
 } // end namespace oceanbase

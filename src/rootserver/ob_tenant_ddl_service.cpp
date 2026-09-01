@@ -331,6 +331,103 @@ int ObTenantDDLService::init_tenant_config_from_seed_(
 
 }
 
+int ObTenantDDLService::build_tenant_config_arg_(
+    const ObConfigPairs &pairs,
+    ObIAllocator &allocator,
+    obrpc::ObTenantConfigArg &config)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  const int64_t length = pairs.get_config_str_length();
+  config.tenant_id_ = OB_INVALID_TENANT_ID;
+  config.config_str_.reset();
+  if (OB_UNLIKELY(!pairs.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant config pairs", KR(ret), K(pairs));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", KR(ret), K(length));
+  } else {
+    MEMSET(buf, '\0', length);
+    if (OB_FAIL(pairs.get_config_str(buf, length))) {
+      LOG_WARN("fail to get config str", KR(ret), K(length), K(pairs));
+    } else {
+      config.tenant_id_ = pairs.get_tenant_id();
+      config.config_str_.assign_ptr(buf, strlen(buf));
+    }
+  }
+  return ret;
+}
+
+int ObTenantDDLService::build_early_init_tenant_configs_(
+    const ObCreateTenantArg &arg,
+    const uint64_t user_tenant_id,
+    const ObIArray<ObConfigPairs> &init_configs,
+    ObIAllocator &allocator,
+    ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs)
+{
+  int ret = OB_SUCCESS;
+  ObString async_io_name("_enable_palf_async_io");
+  const uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id);
+  ObArray<ObString> seed_parameter_names;
+  ObConfigPairs meta_configs;
+  ObConfigPairs user_configs;
+  ObConfigPairs seed_configs;
+  init_tenant_configs.reset();
+  meta_configs.init(meta_tenant_id);
+  user_configs.init(user_tenant_id);
+  if (OB_UNLIKELY(!is_user_tenant(user_tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid user tenant id", KR(ret), K(user_tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < init_configs.count(); ++i) {
+      const ObConfigPairs &tenant_config = init_configs.at(i);
+      ObConfigPairs *configs = NULL;
+      if (tenant_config.get_tenant_id() == user_tenant_id) {
+        configs = &user_configs;
+      } else if (tenant_config.get_tenant_id() == meta_tenant_id) {
+        configs = &meta_configs;
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && OB_NOT_NULL(configs)
+          && j < tenant_config.get_configs().count(); ++j) {
+        const ObConfigPairs::ObConfigPair &pair = tenant_config.get_configs().at(j);
+        if (OB_FAIL(configs->add_config(pair.key_, pair.value_))) {
+          LOG_WARN("fail to add early init config", KR(ret), K(pair), K(tenant_config));
+        }
+      }
+    }
+  }
+  if (FAILEDx(seed_parameter_names.push_back(async_io_name))) {
+    LOG_WARN("fail to push seed parameter name", KR(ret), K(async_io_name));
+  } else if (OB_FAIL(ObUnitManager::read_parameters_from_seed_tenant(
+                    seed_parameter_names, seed_configs))) {
+    LOG_WARN("fail to read seed parameters", KR(ret), K(seed_parameter_names));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < seed_configs.get_configs().count(); ++i) {
+    const ObConfigPairs::ObConfigPair &pair = seed_configs.get_configs().at(i);
+    if (OB_FAIL(user_configs.add_config(pair.key_, pair.value_))) {
+      LOG_WARN("fail to add user seed config", KR(ret), K(pair));
+    }
+  }
+  if (OB_SUCC(ret) && meta_configs.is_valid()) {
+    obrpc::ObTenantConfigArg meta_config_arg;
+    if (OB_FAIL(build_tenant_config_arg_(meta_configs, allocator, meta_config_arg))) {
+      LOG_WARN("fail to build meta tenant config arg", KR(ret), K(meta_configs));
+    } else if (OB_FAIL(init_tenant_configs.push_back(meta_config_arg))) {
+      LOG_WARN("fail to push meta init tenant config", KR(ret), K(meta_config_arg));
+    }
+  }
+  if (OB_SUCC(ret) && user_configs.is_valid()) {
+    obrpc::ObTenantConfigArg user_config_arg;
+    if (OB_FAIL(build_tenant_config_arg_(user_configs, allocator, user_config_arg))) {
+      LOG_WARN("fail to build user tenant config arg", KR(ret), K(user_configs));
+    } else if (OB_FAIL(init_tenant_configs.push_back(user_config_arg))) {
+      LOG_WARN("fail to push user init tenant config", KR(ret), K(user_config_arg));
+    }
+  }
+  return ret;
+}
+
 int ObTenantDDLService::set_sys_ls_(const uint64_t tenant_id, ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -940,6 +1037,8 @@ int ObTenantDDLService::create_tenant_schema(
     int64_t refreshed_schema_version = OB_INVALID_VERSION;
     ObArray<ObResourcePoolName> pools;
     common::ObArray<uint64_t> new_ug_id_array;
+    ObArenaAllocator early_config_allocator("EarlyTenantCfg");
+    ObSEArray<obrpc::ObTenantConfigArg, 2> init_tenant_configs;
     if (OB_FAIL(get_pools(arg.pool_list_, pools))) {
       LOG_WARN("get_pools failed", KR(ret), K(arg));
     } else if (OB_FAIL(schema_guard.get_schema_version(
@@ -947,6 +1046,11 @@ int ObTenantDDLService::create_tenant_schema(
       LOG_WARN("fail to get schema version", KR(ret), K(refreshed_schema_version));
     } else if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID, refreshed_schema_version))) {
       LOG_WARN("start transaction failed, ", KR(ret), K(refreshed_schema_version));
+    } else if (OB_FAIL(build_early_init_tenant_configs_(
+                   arg, user_tenant_id, init_configs, early_config_allocator,
+                   init_tenant_configs))) {
+      LOG_WARN("fail to build early init tenant configs",
+               KR(ret), K(user_tenant_id), K(meta_tenant_schema), K(init_configs));
     }
 #ifdef OB_BUILD_ARBITRATION
     // check arbitration service if needed
@@ -1030,6 +1134,7 @@ int ObTenantDDLService::create_tenant_schema(
                          compat_mode,
                          pools, user_tenant_id,
                          arg.source_tenant_id_,
+                         init_tenant_configs,
                          false/*check_data_version*/))) {
         LOG_WARN("grant_pools_to_tenant failed", KR(ret), K(arg), K(pools), K(user_tenant_id));
       }
@@ -1039,20 +1144,17 @@ int ObTenantDDLService::create_tenant_schema(
 
     DEBUG_SYNC(AFTER_GRANT_POOLS_BEFORE_GET_SERVERS);
 
-    // 3. persist initial tenant config
+    // 3. initialize tenant config on RS
     if (OB_SUCC(ret)) {
-      FLOG_INFO("[CREATE_TENANT] STEP 1.3. start persist tenant config", K(user_tenant_id));
+      FLOG_INFO("[CREATE_TENANT] STEP 1.3. start init tenant config on RS", K(user_tenant_id));
       const int64_t tmp_start_time = ObTimeUtility::fast_current_time();
-      ObArray<ObAddr> addrs;
-      ObUnitTableOperator unit_operator;
-      if (OB_FAIL(unit_operator.init(*sql_proxy_))) {
-        LOG_WARN("fail to init unit table operator", KR(ret), K(user_tenant_id));
-      } else if (OB_FAIL(unit_operator.get_all_servers_by_pool_names(pools, addrs))) {
-        LOG_WARN("fail to get tenant's servers", KR(ret), K(user_tenant_id));
-      } else if (OB_FAIL(notify_init_tenant_config(*rpc_proxy_, init_configs, addrs))) {
-        LOG_WARN("fail to notify broadcast tenant config", KR(ret), K(addrs), K(init_configs));
+      for (int64_t i = 0; OB_SUCC(ret) && i < init_tenant_configs.count(); ++i) {
+        if (OB_FAIL(OTC_MGR.init_tenant_config(init_tenant_configs.at(i)))) {
+          LOG_WARN("fail to init tenant config on RS", KR(ret), K(i),
+                   K(init_tenant_configs.at(i)), K(GCONF.self_addr_));
+        }
       }
-      FLOG_INFO("[CREATE_TENANT] STEP 1.3. finish persist tenant config",
+      FLOG_INFO("[CREATE_TENANT] STEP 1.3. finish init tenant config on RS",
                KR(ret), K(user_tenant_id), "cost", ObTimeUtility::fast_current_time() - tmp_start_time);
     }
 
@@ -1116,22 +1218,10 @@ int ObTenantDDLService::notify_init_tenant_config(
     for (int64_t i = 0; OB_SUCC(ret) && i < init_configs.count(); i++) {
      const common::ObConfigPairs &pairs = init_configs.at(i);
      obrpc::ObTenantConfigArg config;
-     char *buf = NULL;
-     int64_t length = pairs.get_config_str_length();
-     if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(length)))) {
-       ret = OB_ALLOCATE_MEMORY_FAILED;
-       LOG_WARN("alloc memory failed", KR(ret), K(length));
-     } else {
-       MEMSET(buf, '\0', length);
-       if (OB_FAIL(pairs.get_config_str(buf, length))) {
-         LOG_WARN("fail to get config str", KR(ret), K(length), K(pairs));
-       } else {
-         config.tenant_id_ = pairs.get_tenant_id();
-         config.config_str_.assign_ptr(buf, strlen(buf));
-         if (OB_FAIL(arg.add_tenant_config(config))) {
-           LOG_WARN("fail to add config", KR(ret), K(config));
-         }
-       }
+     if (OB_FAIL(build_tenant_config_arg_(pairs, allocator, config))) {
+       LOG_WARN("fail to build tenant config arg", KR(ret), K(pairs));
+     } else if (OB_FAIL(arg.add_tenant_config(config))) {
+       LOG_WARN("fail to add config", KR(ret), K(config));
      }
     } // end for
     // 2. send rpc
@@ -3389,12 +3479,14 @@ int ObTenantDDLService::modify_and_cal_resource_pool_diff(
       bool is_permitted = false;
       if (new_pool_name_list.count() == old_pool_name_list.count() + 1) {
         grant = true;
+        ObSEArray<obrpc::ObTenantConfigArg, 1> empty_init_tenant_configs;
         if (OB_FAIL(cal_resource_pool_list_diff(
                 new_pool_name_list, old_pool_name_list, diff_pools))) {
           LOG_WARN("fail to cal resource pool list diff", K(ret));
         } else if (OB_FAIL(unit_mgr_->grant_pools(
                 trans, compat_mode, diff_pools, tenant_id,
                 OB_INVALID_TENANT_ID/*source_tenant_id*/,
+                empty_init_tenant_configs,
                 true/*check_data_version*/))) {
           LOG_WARN("fail to grant pools", K(ret));
         }

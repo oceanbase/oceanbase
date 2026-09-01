@@ -22,6 +22,7 @@ void PalfOptions::reset()
   compress_options_.reset();
   rebuild_replica_log_lag_threshold_ = 0;
   enable_log_cache_ = false;
+  enable_async_io_ = false;
 }
 
 bool PalfOptions::is_valid() const

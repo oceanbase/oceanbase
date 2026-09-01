@@ -243,6 +243,16 @@ private:
   int init_tenant_config_from_seed_(
       const uint64_t tenant_id,
       common::ObMySQLTransaction &trans);
+  static int build_tenant_config_arg_(
+      const common::ObConfigPairs &pairs,
+      common::ObIAllocator &allocator,
+      obrpc::ObTenantConfigArg &config);
+  int build_early_init_tenant_configs_(
+      const obrpc::ObCreateTenantArg &arg,
+      const uint64_t user_tenant_id,
+      const common::ObIArray<common::ObConfigPairs> &init_configs,
+      common::ObIAllocator &allocator,
+      common::ObIArray<obrpc::ObTenantConfigArg> &init_tenant_configs);
 
   int init_tenant_sys_stats_(const uint64_t tenant_id,
       common::ObMySQLTransaction &trans);

@@ -959,8 +959,10 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     } else {
       mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = tenant_config->_log_writer_parallelism;
       mtl_init_ctx_->palf_options_.enable_log_cache_ = tenant_config->_enable_log_cache;
+      mtl_init_ctx_->palf_options_.enable_async_io_ = tenant_config->_enable_palf_async_io;
     }
-    LOG_INFO("construct_mtl_init_ctx success", "palf_options", mtl_init_ctx_->palf_options_.disk_options_
+    LOG_INFO("construct_mtl_init_ctx success",
+             "palf_options", mtl_init_ctx_->palf_options_
 #ifdef OB_BUILD_SHARED_STORAGE
              , "init_data_disk_size", mtl_init_ctx_->init_data_disk_size_
 #endif

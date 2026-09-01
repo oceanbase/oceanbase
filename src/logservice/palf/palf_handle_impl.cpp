@@ -95,12 +95,13 @@ int PalfHandleImpl::init(const int64_t palf_id,
                          const AccessMode &access_mode,
                          const PalfBaseInfo &palf_base_info,
                          const LogReplicaType replica_type,
+                         const LogIOMode io_mode,
                          FetchLogEngine *fetch_log_engine,
                          const char *log_dir,
                          ObILogAllocator *alloc_mgr,
                          ILogBlockPool *log_block_pool,
                          LogRpc *log_rpc,
-                         LogIOWorker *log_io_worker,
+                         LogIOWorkerBase *io_task_submitter,
                          LogSharedQueueTh *log_shared_queue_th,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
@@ -120,12 +121,13 @@ int PalfHandleImpl::init(const int64_t palf_id,
              || false == is_valid_access_mode(access_mode)
              || false == palf_base_info.is_valid()
              || INVALID_REPLICA == replica_type
+             || !is_valid_log_io_mode(io_mode)
              || NULL == fetch_log_engine
              || NULL == log_dir
              || NULL == alloc_mgr
              || NULL == log_block_pool
              || NULL == log_rpc
-             || NULL == log_io_worker
+             || NULL == io_task_submitter
              || NULL == log_shared_queue_th
              || NULL == palf_env_impl
              || false == self.is_valid()
@@ -134,16 +136,21 @@ int PalfHandleImpl::init(const int64_t palf_id,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(palf_base_info), K(replica_type),
         K(access_mode), K(log_dir), K(alloc_mgr), K(log_block_pool), K(log_rpc),
-        K(log_io_worker), K(log_shared_queue_th), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
-  } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, sync_mode, replica_type))) {
-    PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(sync_mode), K(replica_type));
+        KP(io_task_submitter), K(log_shared_queue_th), K(palf_env_impl),
+        K(self), K(election_timer), K(palf_epoch));
+  } else if (OB_FAIL(log_meta.generate_by_palf_base_info(
+                 palf_base_info, access_mode, sync_mode, replica_type, io_mode))) {
+    PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info),
+             K(access_mode), K(sync_mode), K(replica_type),
+             "io_mode", log_io_mode_to_str(io_mode));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
-  } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &log_cache_, \
-          log_rpc, log_io_worker, log_shared_queue_th, &plugins_, palf_epoch, PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE, io_adapter))) {
+  } else if (OB_FAIL(log_engine_.init(palf_id, log_dir, log_meta, alloc_mgr, log_block_pool, &log_cache_,
+          log_rpc, io_task_submitter, log_shared_queue_th, &plugins_, palf_epoch,
+          PALF_BLOCK_SIZE, PALF_META_BLOCK_SIZE, io_adapter))) {
     PALF_LOG(WARN, "LogEngine init failed", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
-        K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
+        K(log_rpc), KP(io_task_submitter), K(log_shared_queue_th));
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_meta, log_dir, self, fetch_log_engine,
           alloc_mgr, log_rpc, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
@@ -170,16 +177,18 @@ int PalfHandleImpl::load(const int64_t palf_id,
                          ObILogAllocator *alloc_mgr,
                          ILogBlockPool *log_block_pool,
                          LogRpc *log_rpc,
-                         LogIOWorker *log_io_worker,
+                         LogIOWorkerBase *io_task_submitter,
                          LogSharedQueueTh *log_shared_queue_th,
                          IPalfEnvImpl *palf_env_impl,
                          const common::ObAddr &self,
                          common::ObOccamTimer *election_timer,
                          const int64_t palf_epoch,
                          LogIOAdapter *io_adapter,
+                         const LogIOMode desired_io_mode,
                          bool &is_integrity)
 {
   int ret = OB_SUCCESS;
+  ObTimeGuard guard("PalfHandleImplLoad", 0);
   PalfBaseInfo palf_base_info;
   LogGroupEntryHeader entry_header;
   LSN max_committed_end_lsn;
@@ -191,16 +200,18 @@ int PalfHandleImpl::load(const int64_t palf_id,
              || NULL == fetch_log_engine
              || NULL == alloc_mgr
              || NULL == log_rpc
-             || NULL == log_io_worker
+             || NULL == io_task_submitter
              || NULL == log_shared_queue_th
-             || false == self.is_valid()) {
+             || false == self.is_valid()
+             || !is_valid_log_io_mode(desired_io_mode)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(log_dir), K(alloc_mgr),
-        K(log_rpc), K(log_io_worker), K(log_shared_queue_th));
+        K(log_rpc), KP(io_task_submitter), K(log_shared_queue_th));
   } else if (OB_FAIL(log_engine_.load(palf_id, log_dir, alloc_mgr, log_block_pool, &log_cache_, log_rpc,
-        log_io_worker, log_shared_queue_th, &plugins_, entry_header, palf_epoch, PALF_BLOCK_SIZE,
-        PALF_META_BLOCK_SIZE, io_adapter, is_integrity))) {
+        io_task_submitter, log_shared_queue_th, &plugins_, entry_header, palf_epoch, PALF_BLOCK_SIZE,
+        PALF_META_BLOCK_SIZE, io_adapter, desired_io_mode, is_integrity))) {
     PALF_LOG(WARN, "LogEngine load failed", K(ret), K(palf_id));
+  } else if (FALSE_IT(guard.click("load log engine"))) {
     // NB: when 'entry_header' is invalid, means that there is no data on disk, and set max_committed_end_lsn
     //     to 'base_lsn_', we will generate default PalfBaseInfo or get it from LogSnapshotMeta(rebuild).
   } else if (false == is_integrity) {
@@ -213,10 +224,13 @@ int PalfHandleImpl::load(const int64_t palf_id,
   } else if (OB_FAIL(do_init_mem_(palf_id, palf_base_info, log_engine_.get_log_meta(), log_dir, self,
           fetch_log_engine, alloc_mgr, log_rpc, palf_env_impl, election_timer))) {
     PALF_LOG(WARN, "PalfHandleImpl do_init_mem_ failed", K(ret), K(palf_id));
+  } else if (FALSE_IT(guard.click("init memory"))) {
   } else if (OB_FAIL(append_disk_log_to_sw_(max_committed_end_lsn))) {
     PALF_LOG(WARN, "append_disk_log_to_sw_ failed", K(ret), K(palf_id));
   } else {
-    PALF_EVENT("PalfHandleImpl load success", palf_id_, K(ret), K(palf_base_info), K(log_dir), K(palf_epoch));
+    guard.click("append disk log");
+    PALF_EVENT("PalfHandleImpl load success", palf_id_, KR(ret), K(palf_base_info),
+               K(log_dir), K(palf_epoch), K(guard));
   }
   return ret;
 }
@@ -2327,6 +2341,91 @@ int PalfHandleImpl::inner_append_log(const LSNArray &lsn_array,
     }
   }
   return ret;
+}
+
+int PalfHandleImpl::async_pwrite(const AsyncPwriteRequest &req,
+                                 common::ObIOHandle &out_handle)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl not inited", KR(ret), K_(palf_id));
+  } else if (OB_FAIL(log_engine_.async_pwrite(req, out_handle))) {
+    PALF_LOG(WARN, "LogEngine async_pwrite failed", KR(ret), K_(palf_id),
+             K(req));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::commit_async_append(const LSN &begin_lsn, const LSN &end_lsn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl not inited", KR(ret), K_(palf_id));
+  } else if (OB_FAIL(log_engine_.commit_async_append(begin_lsn, end_lsn))) {
+    PALF_LOG(WARN, "LogEngine commit_async_append failed", KR(ret), K_(palf_id),
+             K(begin_lsn), K(end_lsn));
+  }
+  return ret;
+}
+
+
+int PalfHandleImpl::prepare_async_block_for_write(const SCN &new_block_min_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl not inited", KR(ret), K_(palf_id));
+  } else if (OB_FAIL(log_engine_.prepare_async_block_for_write(new_block_min_scn))) {
+    PALF_LOG(WARN, "LogEngine prepare_async_block_for_write failed", KR(ret),
+             K_(palf_id), K(new_block_min_scn));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::read_log_storage_tail_page(const LSN &page_begin_lsn,
+                                               char *buf,
+                                               const int64_t buf_len,
+                                               int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+  read_size = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl not inited", KR(ret), K_(palf_id));
+  } else if (OB_FAIL(log_engine_.read_log_storage_tail_page(page_begin_lsn, buf,
+                                                            buf_len, read_size))) {
+    PALF_LOG(WARN, "LogEngine read_log_storage_tail_page failed", KR(ret), K_(palf_id),
+             K(page_begin_lsn), KP(buf), K(buf_len), K(read_size));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::fill_tail_prefix_after_reset(const LSN &prefix_begin_lsn,
+                                                 const LSN &tail_lsn,
+                                                 const char *buf,
+                                                 const int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl fill_tail_prefix_after_reset on not inited handle",
+             K(ret), K_(palf_id), K_(is_inited), K(prefix_begin_lsn), K(tail_lsn),
+             KP(buf), K(buf_len));
+  } else if (OB_FAIL(sw_.fill_tail_prefix_after_reset(prefix_begin_lsn, tail_lsn, buf, buf_len))) {
+    PALF_LOG(WARN, "sw fill_tail_prefix_after_reset failed",
+             K(ret), K_(palf_id), K(prefix_begin_lsn), K(tail_lsn), K(buf_len));
+  } else {
+    PALF_LOG(INFO, "PalfHandleImpl fill_tail_prefix_after_reset success",
+             K(ret), K_(palf_id), K(prefix_begin_lsn), K(tail_lsn), K(buf_len));
+  }
+  return ret;
+}
+
+void PalfHandleImpl::get_async_storage_snapshot(LogStorage::AsyncStorageSnapshot &out) const
+{
+  log_engine_.get_async_storage_snapshot(out);
 }
 
 int PalfHandleImpl::inner_append_meta(const char *buf,
@@ -4706,9 +4805,9 @@ int PalfHandleImpl::after_flush_config_change_meta_(const int64_t proposal_id, c
   return ret;
 }
 
-// 1. 更新snapshot_meta串行化, 实现inc update的语义.
-// 2. 应用层先提交truncate任务, 再提交更新meta的任务, 最后开始拉日志.(不再依赖, 上层保证base_lsn不会回退)
-//    NB: TODO by runlin, 在支持多writer后, truncate和和更新meta需要做成'类似'双向barrier的语义
+// truncate 和 snapshot meta 更新按同一 PALF 队列的提交顺序执行。异步模式下
+// 二者都是 control barrier：等待前序 flush/AIO/publish 排空，并阻止后续
+// flush 越过，从而保持 base_lsn 单调更新。
 int PalfHandleImpl::after_flush_snapshot_meta_(const LSN &lsn)
 {
   return log_engine_.update_base_lsn_used_for_gc(lsn);

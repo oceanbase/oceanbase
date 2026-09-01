@@ -12,6 +12,10 @@
 
 #define USING_LOG_PREFIX PALF
 #include "log_io_adapter.h"
+#include "log_async_palf_ctx_interface.h"                     // IAsyncPalfIOCtx
+#include "log_writer_utils.h"                                 // LogWriteBuf
+#include "lib/alloc/ob_malloc_allocator.h"                    // ObMallocAllocator
+#include "lib/time/ob_time_utility.h"                         // ObTimeUtility
 #include "share/ob_local_device.h"                            // ObLocalDevice
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 #include "share/io/ob_io_manager.h"                           // ObIOManager
@@ -102,6 +106,8 @@ int LogIOAdapter::init(const int64_t tenant_id,
     resource_manager_ = resource_manager;
     io_manager_ = io_manager;
     is_inited_ = true;
+    PALF_LOG(INFO, "LogIOAdapter init success", K(tenant_id), KP(log_local_device),
+             KP(resource_manager), KP(io_manager));
   }
 
   return ret;
@@ -109,6 +115,9 @@ int LogIOAdapter::init(const int64_t tenant_id,
 
 void LogIOAdapter::destroy()
 {
+  if (is_inited_) {
+    PALF_LOG(INFO, "LogIOAdapter destroy success", K_(tenant_id));
+  }
   tenant_id_ = OB_INVALID_TENANT_ID;
   log_local_device_ = NULL;
   resource_manager_ = NULL;
@@ -160,6 +169,25 @@ int LogIOAdapter::close(ObIOFd &io_fd)
   return ret;
 }
 
+void LogIOAdapter::init_write_io_info_(const ObIOFd &io_fd,
+                                       const char *buf,
+                                       const int64_t count,
+                                       const int64_t offset,
+                                       const bool use_caller_write_buf,
+                                       ObIOInfo &io_info) const
+{
+  io_info.tenant_id_ = tenant_id_;
+  io_info.fd_ = io_fd;
+  io_info.offset_ = offset;
+  io_info.size_ = count;
+  io_info.flag_.set_mode(ObIOMode::WRITE);
+  io_info.flag_.set_sys_module_id(ObIOModule::CLOG_WRITE_IO);
+  io_info.flag_.set_wait_event(ObWaitEventIds::PALF_WRITE);
+  io_info.flag_.set_use_caller_write_buf(use_caller_write_buf);
+  io_info.buf_ = buf;
+  io_info.callback_ = NULL;
+}
+
 int LogIOAdapter::pwrite(const ObIOFd &io_fd,
                          const char *buf,
                          const int64_t count,
@@ -180,15 +208,8 @@ int LogIOAdapter::pwrite(const ObIOFd &io_fd,
     CONSUMER_GROUP_FUNC_GUARD(share::ObFunctionType::PRIO_CLOG_HIGH);
 
     ObIOInfo io_info;
-    io_info.tenant_id_ = tenant_id_;
-    io_info.fd_ = io_fd;
-    io_info.offset_ = offset;
-    io_info.size_ = count;
-    io_info.flag_.set_mode(ObIOMode::WRITE);
-    io_info.flag_.set_sys_module_id(ObIOModule::CLOG_WRITE_IO);
-    io_info.flag_.set_wait_event(ObWaitEventIds::PALF_WRITE);
-    io_info.buf_ = buf;
-    io_info.callback_ = nullptr;
+    init_write_io_info_(io_fd, buf, count, offset,
+                        false /* use_caller_write_buf */, io_info);
     if (OB_FAIL(io_manager_->pwrite(io_info, write_size))) {
       PALF_LOG(WARN, "io_manager_ pwrite failed", K(ret), K(io_info));
     } else if (write_size != count) {
@@ -232,7 +253,7 @@ int LogIOAdapter::pread(const ObIOFd &io_fd,
     io_info.flag_.set_wait_event(ObWaitEventIds::PALF_READ);
     io_info.buf_ = buf;
     io_info.user_data_buf_ = buf;
-    io_info.callback_ = nullptr;
+    io_info.callback_ = NULL;
     if (OB_FAIL(io_manager_->pread(io_info, out_read_size))) {
       PALF_LOG(WARN, "io_manager_ pread failed", K(ret), K(io_info), K(out_read_size));
     } else if (out_read_size != count) {
@@ -280,6 +301,168 @@ int LogIOAdapter::truncate(const ObIOFd &io_fd, const int64_t offset)
   } else if (0 != ftruncate(io_fd.second_id_, offset)) {
     ret = convert_sys_errno();
     PALF_LOG(WARN, "ftruncate failed", K(ret), K(errno), K(io_fd), K(offset));
+  }
+  return ret;
+}
+
+// ============================ Async write path ============================
+
+int LogIOAdapter::aio_write(const ObIOFd &io_fd,
+                            const int64_t offset,
+                            const AsyncPwriteRequest &req,
+                            common::ObIOHandle &out_handle)
+{
+  int ret = OB_SUCCESS;
+  const char *buf = req.get_aligned_buf();
+  const int64_t count = req.get_aligned_buf_len();
+  IAsyncPalfIOCtx *ctx = req.get_ctx();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "submit async write through uninitialized adapter", KR(ret));
+  } else if (OB_ISNULL(io_manager_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "io_manager_ is NULL", KR(ret), KP(this));
+  } else if (!io_fd.is_valid() || !req.is_valid() || 0 > offset) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(ERROR, "invalid argument for aio_write", KR(ret), K(io_fd),
+             K(offset), K(req));
+  } else {
+    CONSUMER_GROUP_FUNC_GUARD(share::ObFunctionType::PRIO_CLOG_HIGH);
+
+    ObIOInfo io_info;
+    init_write_io_info_(io_fd, buf, count, offset,
+                        true /* use_caller_write_buf */, io_info);
+
+    common::ObIAllocator *cb_allocator = lib::ObMallocAllocator::get_instance();
+    LogAsyncIOCallback *cb = NULL;
+    void *cb_buf = NULL;
+    if (OB_ISNULL(cb_allocator)) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(ERROR, "process allocator is null for async callback", KR(ret), K(req));
+    } else if (OB_ISNULL(cb_buf = cb_allocator->alloc(
+                   sizeof(*cb), ObMemAttr(tenant_id_, "PalfAioCb")))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        PALF_LOG(TRACE, "alloc LogAsyncIOCallback failed", KR(ret), K(req));
+      }
+    } else {
+      cb = new (cb_buf) LogAsyncIOCallback(
+          ctx, req.get_fragment_ref(), req.get_aligned_begin_lsn(),
+          req.get_aligned_begin_lsn()
+              + static_cast<offset_t>(req.get_aligned_buf_len()),
+          req.get_submit_ts());
+      io_info.callback_ = cb;
+      ObIOHandle handle;
+      if (OB_FAIL(io_manager_->aio_write(io_info, handle))) {
+        if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+          PALF_LOG(TRACE, "io_manager_ aio_write failed", KR(ret), K(io_info),
+                   K(req));
+        }
+        handle.clear_io_callback();
+        cb->~LogAsyncIOCallback();
+        cb_allocator->free(cb);
+        cb = NULL;
+      } else {
+        out_handle = handle;
+        if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+          PALF_LOG(TRACE, "aio_write submit success", K(offset), K(count), K(req));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// ============================ LogAsyncIOCallback ==========================
+
+LogAsyncIOCallback::LogAsyncIOCallback()
+  : ObIOCallback(common::ObIOCallbackType::PALF_ASYNC_WRITE_CALLBACK),
+    ctx_(NULL),
+    fragment_ref_(),
+    begin_lsn_(),
+    end_lsn_(),
+    submit_ts_(OB_INVALID_TIMESTAMP)
+{}
+
+LogAsyncIOCallback::LogAsyncIOCallback(IAsyncPalfIOCtx *ctx,
+                                       const FragmentRef &fragment_ref,
+                                       const LSN &begin_lsn,
+                                       const LSN &end_lsn,
+                                       const int64_t submit_ts)
+  : ObIOCallback(common::ObIOCallbackType::PALF_ASYNC_WRITE_CALLBACK),
+    ctx_(ctx),
+    fragment_ref_(fragment_ref),
+    begin_lsn_(begin_lsn),
+    end_lsn_(end_lsn),
+    submit_ts_(submit_ts)
+{
+  if (OB_NOT_NULL(ctx_)) {
+    ctx_->pin();
+  }
+}
+
+LogAsyncIOCallback::~LogAsyncIOCallback()
+{
+  release_ctx_pin_();
+}
+
+common::ObIAllocator *LogAsyncIOCallback::get_allocator()
+{
+  return lib::ObMallocAllocator::get_instance();
+}
+
+void LogAsyncIOCallback::release_ctx_pin_()
+{
+  if (OB_NOT_NULL(ctx_)) {
+    ctx_->unpin();
+    ctx_ = NULL;
+  }
+}
+
+int LogAsyncIOCallback::alloc_data_buf(const char *io_data_buffer,
+                                       const int64_t data_size)
+{
+  // PALF writes do not need a data buffer on completion; ObIOCallback
+  // pure virtual requires an implementation but the body is intentionally
+  // empty so that no allocation happens in the AIO completion path.
+  UNUSED(io_data_buffer);
+  UNUSED(data_size);
+  return OB_SUCCESS;
+}
+
+int LogAsyncIOCallback::inner_process(const char *data_buffer,
+                                      const int64_t size)
+{
+  UNUSED(data_buffer);
+  UNUSED(size);
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "ctx is NULL in LogAsyncIOCallback",
+             KR(ret), K_(fragment_ref));
+  } else {
+    bool need_wake_worker = false;
+    AsyncIOCompletionEvent event;
+    event.ctx.palf_id = ctx_->get_palf_id();
+    event.ctx.fragment_ref = fragment_ref_;
+    event.ctx.begin_lsn = begin_lsn_;
+    event.ctx.end_lsn = end_lsn_;
+    event.ctx.submit_ts = submit_ts_;
+    event.ret_code = OB_SUCCESS;
+    event.finish_ts = ObTimeUtility::fast_current_time();
+    tmp_ret = ctx_->on_aio_complete(event, need_wake_worker);
+    if (OB_SUCCESS != tmp_ret) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        PALF_LOG(TRACE, "on_aio_complete failed",
+                 KR(tmp_ret), K(event), KP_(ctx));
+      }
+    } else if (need_wake_worker && OB_SUCCESS != (tmp_ret = ctx_->request_drive())) {
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        PALF_LOG(TRACE, "request async drive failed", KR(tmp_ret), K(event), KP_(ctx));
+      }
+    }
+    release_ctx_pin_();
   }
   return ret;
 }

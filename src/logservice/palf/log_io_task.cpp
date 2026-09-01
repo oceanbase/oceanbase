@@ -65,7 +65,7 @@ void LogIOTask::reset()
   submit_seq_ = 0;
 }
 
-// NB: if do_task failed, the caller(LogIOWorker) is responsible for freeing LogIOTask.
+// The caller retains ownership and frees the task if do_task() fails.
 int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 {
 	int ret = OB_SUCCESS;
@@ -90,7 +90,7 @@ int LogIOTask::do_task(int tg_id, IPalfEnvImpl *palf_env_impl)
 	return ret;
 }
 
-// NB: after after_consume, the caller(LogIOCb) needs free LogIOTask.
+// The callback thread pool frees the task after after_consume() returns.
 int LogIOTask::after_consume(IPalfEnvImpl *palf_env_impl)
 {
 	int ret = OB_SUCCESS;
@@ -263,12 +263,12 @@ int LogIOTruncateLogTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogIOTruncateLogTask not inited", K(ret));
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_truncate_log(truncate_log_cb_ctx_.lsn_))) {
     PALF_LOG(WARN, "PalfHandleImpl inner_truncate_log failed", K(ret), K(palf_id_),
              K_(truncate_log_cb_ctx));
   } else if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
     PALF_LOG(WARN, "push_task_into_cb_thread_pool failed", K(ret), K(tg_id), KP(this));
-  } else {
   }
   return ret;
 }
@@ -695,8 +695,7 @@ int LogIOFlashbackTask::do_task_(int tg_id, IPalfHandleImplGuard &guard)
   } else if (OB_FAIL(guard.get_palf_handle_impl()->inner_flashback(flashback_ctx_.flashback_scn_))) {
     PALF_LOG(WARN, "inner_flashback failed", KPC(this));
   } else if (OB_FAIL(push_task_into_cb_thread_pool_(tg_id, this))) {
-    PALF_LOG(WARN, "push_flush_cb_to_thread_pool_ failed", K(ret));
-  } else {
+    PALF_LOG(WARN, "push flashback callback to thread pool failed", K(ret), K(tg_id), KP(this));
   }
   return ret;
 }

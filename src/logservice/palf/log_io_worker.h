@@ -22,12 +22,12 @@
 #include "lib/hash/ob_array_hash_map.h"             // ObArrayHashMap
 #include "lib/atomic/ob_atomic.h"                   // ATOMIC_LOAD
 #include "lib/function/ob_function.h"               // ObFunction
-#include "share/ob_thread_pool.h"                   // ObThreadPool
 #include "common/ob_clock_generator.h"              // ObClockGenerator
 #include "log_io_task.h"                            // LogBatchIOFlushLogTask
 #include "log_define.h"                             // PALF_SLIDING_WINDOW_SIZE
 #include "palf_options.h"                           // PalfThrottleOptions
 #include "log_throttle.h"                           // LogWritingThrottle
+#include "log_io_worker_base.h"                     // LogIOWorkerBase
 namespace oceanbase
 {
 namespace common
@@ -67,7 +67,7 @@ struct LogIOWorkerConfig
   TO_STRING_KV(K_(io_worker_num), K_(io_queue_capcity), K_(batch_width), K_(batch_depth));
 };
 
-class LogIOWorker : public share::ObThreadPool
+class LogIOWorker : public LogIOWorkerBase
 {
 public:
   LogIOWorker();
@@ -79,12 +79,14 @@ public:
            LogWritingThrottle *throttle,
            const bool need_ignore_throttle,
            IPalfEnvImpl *palf_env_impl);
-  void destroy();
+  void destroy() override final;
 
   void run1() override final;
-  int submit_io_task(LogIOTask *io_task);
-  int64_t get_last_working_time() const { return ATOMIC_LOAD(&last_working_time_); }
- int notify_need_writing_throttling(const bool &need_throtting);
+  int submit_io_task(LogIOTask *io_task) override final;
+  // Legacy worker reports the start time of its currently executing task, or
+  // OB_INVALID_TIMESTAMP when no task is executing.
+  int64_t get_oldest_pending_io_start_ts() const override final { return ATOMIC_LOAD(&last_working_time_); }
+  int notify_need_writing_throttling(const bool &need_throtting);
   static constexpr int64_t MAX_THREAD_NUM = 1;
   TO_STRING_KV(K_(log_io_worker_num), K_(cb_thread_pool_tg_id), K_(purge_throttling_task_handled_seq), K_(purge_throttling_task_submitted_seq));
 private:

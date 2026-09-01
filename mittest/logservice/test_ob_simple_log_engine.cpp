@@ -13,10 +13,19 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <dirent.h>
+#include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
+#include "lib/utility/ob_tracepoint.h"
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
+#include "logservice/palf/log_entry.h"
+#include "logservice/palf/log_meta_entry.h"
 
 const std::string TEST_NAME = "log_engine";
 
@@ -31,17 +40,22 @@ namespace unittest
 class TestObSimpleLogClusterLogEngine : public ObSimpleLogClusterTestEnv
 {
 public:
-  TestObSimpleLogClusterLogEngine() : ObSimpleLogClusterTestEnv()
+  TestObSimpleLogClusterLogEngine()
+      : ObSimpleLogClusterTestEnv(),
+        id_(INVALID_PALF_ID),
+        palf_epoch_(0),
+        leader_idx_(-1),
+        last_reloaded_writable_size_(-1),
+        last_reloaded_need_block_header_(false),
+        log_engine_(NULL)
   {
-    palf_epoch_ = 0;
   }
   ~TestObSimpleLogClusterLogEngine() { destroy(); }
   int init()
   {
     int ret = OB_SUCCESS;
-    int64_t leader_idx = 0;
     id_ = ATOMIC_AAF(&palf_id_, 1);
-    if (OB_FAIL(create_paxos_group(id_, leader_idx, leader_))) {
+    if (OB_FAIL(create_paxos_group(id_, leader_idx_, leader_))) {
       PALF_LOG(ERROR, "create_paxos_group failed", K(ret));
     } else {
       log_engine_ = &leader_.palf_handle_impl_->log_engine_;
@@ -56,12 +70,14 @@ public:
     bool is_integrity = true;
     ObILogAllocator *alloc_mgr = log_engine_->alloc_mgr_;
     LogRpc *log_rpc = log_engine_->log_net_service_.log_rpc_;
-    LogIOWorker *log_io_worker = log_engine_->log_io_worker_;
+    LogIOWorkerBase *log_io_worker = log_engine_->io_task_submitter_;
     LogSharedQueueTh *log_shared_queue_th = log_engine_->log_shared_queue_th_;
     palf::LogPlugins *plugins = log_engine_->plugins_;
+    const LogIOMode desired_io_mode = log_engine_->log_meta_
+        .get_log_replica_property_meta().get_log_io_mode();
+    LogIOAdapter io_adapter;
     LogEngine log_engine;
     ILogBlockPool *log_block_pool = log_engine_->log_storage_.block_mgr_.log_block_pool_;
-    LogIOAdapter io_adapter;
     if (OB_FAIL(io_adapter.init(1002, LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
       PALF_LOG(WARN, "io_adapter init failed", K(ret));
     } else if (OB_FAIL(log_engine.load(leader_.palf_handle_impl_->palf_id_,
@@ -78,6 +94,7 @@ public:
                                 PALF_BLOCK_SIZE,
                                 PALF_META_BLOCK_SIZE,
                                 &io_adapter,
+                                desired_io_mode,
                                 is_integrity))) {
       PALF_LOG(WARN, "load failed", K(ret));
     } else if (log_tail_redo != log_engine.log_storage_.log_tail_
@@ -86,7 +103,55 @@ public:
       ret = OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "reload failed", K(ret), K(log_engine), KPC(log_engine_), K(log_tail_redo), K(log_tail_meta), K(base_lsn));
     } else {
+      last_reloaded_writable_size_ = log_engine.log_storage_.curr_block_writable_size_;
+      last_reloaded_need_block_header_ = log_engine.log_storage_.need_append_block_header_;
       PALF_LOG(INFO, "reload success", K(log_engine), KPC(log_engine_));
+    }
+    return ret;
+  }
+  int restart_current_palf()
+  {
+    int ret = OB_SUCCESS;
+    const int64_t restart_server_idx = leader_idx_;
+    leader_.reset();
+    log_engine_ = NULL;
+    if (OB_FAIL(restart_server(restart_server_idx))) {
+      PALF_LOG(WARN, "restart server failed", K(ret), K(restart_server_idx), K(id_));
+    } else if (OB_FAIL(get_leader(id_, leader_, leader_idx_))) {
+      PALF_LOG(WARN, "get leader after restart failed", K(ret), K(id_), K(restart_server_idx));
+    } else {
+      log_engine_ = &leader_.palf_handle_impl_->log_engine_;
+    }
+    return ret;
+  }
+
+  int persist_log_io_mode(const LogIOMode io_mode)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(log_engine_)) {
+      ret = OB_NOT_INIT;
+      PALF_LOG(WARN, "log engine is null", K(ret));
+    } else if (OB_FAIL(log_engine_->update_log_io_mode_after_recovery_(io_mode))) {
+      PALF_LOG(WARN, "persist log io mode failed", K(ret),
+               "io_mode", log_io_mode_to_str(io_mode));
+    }
+    return ret;
+  }
+
+  int persist_log_replica_property_meta(const LogReplicaPropertyMeta &property_meta)
+  {
+    int ret = OB_SUCCESS;
+    LogMeta next_log_meta;
+    if (OB_ISNULL(log_engine_) || !property_meta.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid argument", K(ret), KP(log_engine_), K(property_meta));
+    } else if (FALSE_IT(next_log_meta = log_engine_->log_meta_)) {
+    } else if (OB_FAIL(next_log_meta.update_log_replica_property_meta(property_meta))) {
+      PALF_LOG(WARN, "update log replica property meta failed", K(ret), K(property_meta));
+    } else if (OB_FAIL(log_engine_->append_log_meta_(next_log_meta))) {
+      PALF_LOG(WARN, "append log meta failed", K(ret), K(property_meta));
+    } else {
+      log_engine_->log_meta_ = next_log_meta;
     }
     return ret;
   }
@@ -94,14 +159,477 @@ public:
   int delete_block_by_human(const block_id_t block_id)
   {
     int ret = OB_SUCCESS;
+    int pret = 0;
     char file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    char backup_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
     const char *log_dir = log_engine_->log_storage_.block_mgr_.log_dir_;
     if (OB_FAIL(convert_to_normal_block(log_dir, block_id, file_path, OB_MAX_FILE_NAME_LENGTH))) {
       PALF_LOG(WARN, "convert_to_normal_block failed", K(ret), K(log_dir), K(block_id));
-    } else if (0 != unlink(file_path)){
+    } else if (0 > (pret = snprintf(backup_path, sizeof(backup_path), "%s/deleted_block_%ld_%ld",
+                                    TEST_NAME.c_str(), id_, block_id))
+               || pret >= static_cast<int>(sizeof(backup_path))) {
+      ret = OB_BUF_NOT_ENOUGH;
+      PALF_LOG(WARN, "construct deleted block backup path failed", K(ret), K(pret),
+               K(id_), K(block_id));
+    } else if (0 != rename(file_path, backup_path)) {
       ret = convert_sys_errno();
-      PALF_LOG(WARN, "unlink failed", K(ret), K(block_id), K(file_path));
+      PALF_LOG(WARN, "move block out of log directory failed", K(ret), K(block_id),
+               K(file_path), K(backup_path));
     }
+    return ret;
+  }
+  int restore_block_by_human(const block_id_t block_id)
+  {
+    int ret = OB_SUCCESS;
+    int pret = 0;
+    char file_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    char backup_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    const char *log_dir = log_engine_->log_storage_.block_mgr_.log_dir_;
+    if (OB_FAIL(convert_to_normal_block(log_dir, block_id, file_path, OB_MAX_FILE_NAME_LENGTH))) {
+      PALF_LOG(WARN, "convert_to_normal_block failed", K(ret), K(log_dir), K(block_id));
+    } else if (0 > (pret = snprintf(backup_path, sizeof(backup_path), "%s/deleted_block_%ld_%ld",
+                                    TEST_NAME.c_str(), id_, block_id))
+               || pret >= static_cast<int>(sizeof(backup_path))) {
+      ret = OB_BUF_NOT_ENOUGH;
+      PALF_LOG(WARN, "construct deleted block backup path failed", K(ret), K(pret),
+               K(id_), K(block_id));
+    } else if (0 != rename(backup_path, file_path)) {
+      ret = convert_sys_errno();
+      PALF_LOG(WARN, "restore block to log directory failed", K(ret), K(block_id),
+               K(file_path), K(backup_path));
+    }
+    return ret;
+  }
+  int write_test_page_to_block_(LogStorage &log_storage,
+                                const block_id_t block_id,
+                                const offset_t write_offset,
+                                char *write_buf)
+  {
+    int ret = OB_SUCCESS;
+    char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+    ObIOFd io_fd;
+    LogIOAdapter io_adapter;
+    int64_t write_size = 0;
+    if (!is_valid_block_id(block_id) || write_offset < 0
+        || 0 != write_offset % LOG_DIO_ALIGN_SIZE
+        || write_offset + LOG_DIO_ALIGN_SIZE > log_storage.logical_block_size_
+        || OB_ISNULL(write_buf)) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid test page write argument", K(ret), K(block_id),
+               K(write_offset), K(log_storage.logical_block_size_), KP(write_buf));
+    } else if (OB_FAIL(convert_to_normal_block(log_storage.block_mgr_.log_dir_,
+                                               block_id,
+                                               block_path,
+                                               OB_MAX_FILE_NAME_LENGTH))) {
+      PALF_LOG(WARN, "convert_to_normal_block failed", K(ret), K(block_id),
+               K(log_storage.block_mgr_.log_dir_));
+    } else if (OB_FAIL(io_adapter.init(1002, LOG_IO_DEVICE_WRAPPER.get_local_device(),
+                                       &G_RES_MGR, &OB_IO_MANAGER))) {
+      PALF_LOG(WARN, "io_adapter init failed", K(ret));
+    } else if (OB_FAIL(io_adapter.open(block_path, LOG_WRITE_FLAG, FILE_OPEN_MODE, io_fd))) {
+      PALF_LOG(WARN, "open block file failed", K(ret), K(block_path));
+    // 直接修改目标 block 文件，避免测试辅助逻辑改变 LogBlockMgr 当前 writable handler
+    // 或 server log pool 的 block 分配状态。
+    } else if (OB_FAIL(io_adapter.pwrite(io_fd,
+                                         write_buf,
+                                         LOG_DIO_ALIGN_SIZE,
+                                         MAX_INFO_BLOCK_SIZE + write_offset,
+                                         write_size))) {
+      PALF_LOG(WARN, "write test page failed", K(ret), K(block_id), K(write_offset), K(write_size));
+    } else if (write_size != LOG_DIO_ALIGN_SIZE) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(WARN, "unexpected test page write size", K(ret), K(block_id), K(write_offset), K(write_size));
+    }
+    if (io_fd.is_valid()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(io_adapter.close(io_fd))) {
+        PALF_LOG(WARN, "close block file failed", K(tmp_ret), K(io_fd));
+      }
+      if (OB_SUCC(ret) && OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;
+        PALF_LOG(WARN, "close block file overrides return code", K(ret), K(io_fd));
+      }
+    }
+    return ret;
+  }
+  int read_test_page_from_block_(LogStorage &log_storage,
+                                 const block_id_t block_id,
+                                 const offset_t read_offset,
+                                 char *read_buf)
+  {
+    int ret = OB_SUCCESS;
+    int64_t read_size = 0;
+    ReadBufGuard read_buf_guard("TestLogEngine", LOG_DIO_ALIGN_SIZE);
+    ReadBuf &raw_read_buf = read_buf_guard.read_buf_;
+    LogIOContext io_ctx(MTL_ID(), log_storage.palf_id_, LogIOUser::RESTART);
+    if (!is_valid_block_id(block_id) || read_offset < 0
+        || 0 != read_offset % LOG_DIO_ALIGN_SIZE
+        || read_offset + LOG_DIO_ALIGN_SIZE > log_storage.logical_block_size_
+        || OB_ISNULL(read_buf) || !raw_read_buf.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid test page read argument", K(ret), K(block_id),
+               K(read_offset), K(log_storage.logical_block_size_), KP(read_buf));
+    } else if (OB_FAIL(log_storage.log_reader_.pread(block_id,
+                                                     MAX_INFO_BLOCK_SIZE + read_offset,
+                                                     LOG_DIO_ALIGN_SIZE,
+                                                     raw_read_buf,
+                                                     read_size,
+                                                     io_ctx))) {
+      PALF_LOG(WARN, "read test page failed", K(ret), K(block_id), K(read_offset));
+    } else if (LOG_DIO_ALIGN_SIZE != read_size) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(WARN, "unexpected test page read size", K(ret), K(block_id),
+               K(read_offset), K(read_size));
+    } else {
+      MEMCPY(read_buf, raw_read_buf.buf_, LOG_DIO_ALIGN_SIZE);
+    }
+    return ret;
+  }
+  int count_open_fds_for_file_(const char *file_path, int64_t &fd_count)
+  {
+    int ret = OB_SUCCESS;
+    DIR *fd_dir = NULL;
+    struct dirent *entry = NULL;
+    char *end_ptr = NULL;
+    long parsed_fd = -1;
+    struct stat target_stat;
+    struct stat fd_stat;
+    fd_count = 0;
+    if (OB_ISNULL(file_path)) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid argument", K(ret), KP(file_path));
+    } else if (0 != ::stat(file_path, &target_stat)) {
+      ret = convert_sys_errno();
+      PALF_LOG(WARN, "stat target file failed", K(ret), K(file_path), K(errno));
+    } else if (OB_ISNULL(fd_dir = ::opendir("/proc/self/fd"))) {
+      ret = convert_sys_errno();
+      PALF_LOG(WARN, "open process fd directory failed", K(ret), K(errno));
+    } else {
+      while (OB_SUCC(ret)) {
+        errno = 0;
+        entry = ::readdir(fd_dir);
+        if (OB_ISNULL(entry)) {
+          if (0 != errno) {
+            ret = convert_sys_errno();
+            PALF_LOG(WARN, "read process fd directory failed", K(ret), K(errno));
+          }
+          break;
+        }
+        end_ptr = NULL;
+        errno = 0;
+        parsed_fd = ::strtol(entry->d_name, &end_ptr, 10);
+        if (0 == errno && end_ptr != entry->d_name && '\0' == *end_ptr
+            && 0 <= parsed_fd && parsed_fd <= INT_MAX
+            && 0 == ::fstat(static_cast<int>(parsed_fd), &fd_stat)
+            && target_stat.st_dev == fd_stat.st_dev && target_stat.st_ino == fd_stat.st_ino) {
+          ++fd_count;
+        }
+      }
+    }
+    if (OB_NOT_NULL(fd_dir) && 0 != ::closedir(fd_dir)) {
+      const int tmp_ret = convert_sys_errno();
+      PALF_LOG(WARN, "close process fd directory failed", K(tmp_ret), K(errno));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+        PALF_LOG(WARN, "close process fd directory overrides return code", K(ret));
+      }
+    }
+    return ret;
+  }
+  int write_dirty_byte_after_tail_at_distance(const LSN &tail_lsn,
+                                              const offset_t dirty_tail_distance,
+                                              LSN &dirty_lsn)
+  {
+    int ret = OB_SUCCESS;
+    LogStorage &log_storage = leader_.palf_handle_impl_->log_engine_.log_storage_;
+    char *write_buf = NULL;
+    dirty_lsn.reset();
+    if (!tail_lsn.is_valid() || dirty_tail_distance <= 0 || log_storage.logical_block_size_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid dirty suffix position", K(ret), K(tail_lsn),
+               K(dirty_tail_distance), K(log_storage.logical_block_size_));
+    } else {
+      const LSN nonzero_tail_lsn = tail_lsn + dirty_tail_distance;
+      dirty_lsn = nonzero_tail_lsn - 1;
+      const block_id_t block_id = lsn_2_block(tail_lsn, log_storage.logical_block_size_);
+      const block_id_t dirty_block_id = lsn_2_block(dirty_lsn, log_storage.logical_block_size_);
+      const offset_t dirty_offset = lsn_2_offset(dirty_lsn, log_storage.logical_block_size_);
+      const offset_t write_offset = lower_align(dirty_offset, LOG_DIO_ALIGN_SIZE);
+      const offset_t dirty_page_offset = dirty_offset - write_offset;
+      if (dirty_block_id != block_id || write_offset + LOG_DIO_ALIGN_SIZE > log_storage.logical_block_size_) {
+        ret = OB_INVALID_ARGUMENT;
+        PALF_LOG(WARN, "invalid dirty suffix position", K(ret), K(tail_lsn), K(dirty_lsn),
+                 K(block_id), K(dirty_block_id), K(dirty_offset), K(write_offset),
+                 K(log_storage.logical_block_size_));
+      } else if (OB_ISNULL(write_buf = reinterpret_cast<char *>(
+                     ob_malloc_align(LOG_DIO_ALIGN_SIZE, LOG_DIO_ALIGN_SIZE, "TestLogEngine")))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        PALF_LOG(WARN, "allocate dirty suffix buffer failed", K(ret), K(tail_lsn), K(dirty_lsn));
+      } else if (FALSE_IT(MEMSET(write_buf, 0, LOG_DIO_ALIGN_SIZE))) {
+      } else if (FALSE_IT(write_buf[dirty_page_offset] = '\x7f')) {
+      } else if (OB_FAIL(write_test_page_to_block_(log_storage, block_id, write_offset, write_buf))) {
+        PALF_LOG(WARN, "write dirty suffix byte failed", K(ret), K(tail_lsn), K(dirty_lsn),
+                 K(block_id), K(write_offset), K(dirty_page_offset));
+      } else {
+        PALF_LOG(INFO, "write dirty suffix byte success", K(tail_lsn), K(dirty_lsn),
+                 K(dirty_tail_distance), K(block_id), K(write_offset), K(dirty_page_offset));
+      }
+    }
+    if (NULL != write_buf) {
+      ob_free_align(write_buf);
+    }
+    return ret;
+  }
+  int write_dirty_byte_after_tail(const LSN &tail_lsn, LSN &dirty_lsn)
+  {
+    int ret = OB_SUCCESS;
+    LogStorage &log_storage = leader_.palf_handle_impl_->log_engine_.log_storage_;
+    if (!tail_lsn.is_valid() || log_storage.logical_block_size_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid dirty suffix position", K(ret), K(tail_lsn),
+               K(log_storage.logical_block_size_));
+    } else {
+      const offset_t tail_offset = lsn_2_offset(tail_lsn, log_storage.logical_block_size_);
+      const offset_t dirty_offset = upper_align(tail_offset + 1, LOG_DIO_ALIGN_SIZE);
+      const offset_t dirty_tail_distance = dirty_offset + 1 - tail_offset;
+      if (OB_FAIL(write_dirty_byte_after_tail_at_distance(tail_lsn, dirty_tail_distance, dirty_lsn))) {
+        PALF_LOG(WARN, "write dirty byte after tail failed", K(ret), K(tail_lsn),
+                 K(dirty_tail_distance));
+      }
+    }
+    return ret;
+  }
+  int write_valid_group_header_after_tail(const LSN &tail_lsn,
+                                          const offset_t header_distance,
+                                          LSN &header_lsn)
+  {
+    int ret = OB_SUCCESS;
+    LogStorage &log_storage = leader_.palf_handle_impl_->log_engine_.log_storage_;
+    char *write_buf = NULL;
+    char dummy_data = '\0';
+    LogWriteBuf log_write_buf;
+    LogGroupEntryHeader header;
+    int64_t data_checksum = 0;
+    int64_t pos = 0;
+    header_lsn.reset();
+    if (!tail_lsn.is_valid() || header_distance <= 0 || log_storage.logical_block_size_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid group header position", K(ret), K(tail_lsn),
+               K(header_distance), K(log_storage.logical_block_size_));
+    } else {
+      header_lsn = tail_lsn + header_distance;
+      const block_id_t block_id = lsn_2_block(tail_lsn, log_storage.logical_block_size_);
+      const block_id_t header_block_id = lsn_2_block(header_lsn, log_storage.logical_block_size_);
+      const offset_t header_offset = lsn_2_offset(header_lsn, log_storage.logical_block_size_);
+      const offset_t write_offset = lower_align(header_offset, LOG_DIO_ALIGN_SIZE);
+      const offset_t header_page_offset = header_offset - write_offset;
+      if (header_block_id != block_id
+          || header_page_offset + LogGroupEntryHeader::HEADER_SER_SIZE > LOG_DIO_ALIGN_SIZE
+          || write_offset + LOG_DIO_ALIGN_SIZE > log_storage.logical_block_size_) {
+        ret = OB_INVALID_ARGUMENT;
+        PALF_LOG(WARN, "invalid group header position", K(ret), K(tail_lsn), K(header_lsn),
+                 K(block_id), K(header_block_id), K(header_offset), K(write_offset),
+                 K(header_page_offset), K(log_storage.logical_block_size_));
+      } else if (OB_ISNULL(write_buf = reinterpret_cast<char *>(
+                     ob_malloc_align(LOG_DIO_ALIGN_SIZE, LOG_DIO_ALIGN_SIZE, "TestLogEngine")))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        PALF_LOG(WARN, "allocate group header buffer failed", K(ret), K(tail_lsn), K(header_lsn));
+      } else if (OB_FAIL(log_write_buf.push_back(&dummy_data, sizeof(dummy_data)))) {
+        PALF_LOG(WARN, "push dummy data failed", K(ret));
+      } else if (OB_FAIL(header.generate(false /* is_raw_write */,
+                                         true /* is_padding_log */,
+                                         log_write_buf,
+                                         0 /* data_len */,
+                                         share::SCN::base_scn(),
+                                         1,
+                                         tail_lsn,
+                                         1,
+                                         data_checksum))) {
+        PALF_LOG(WARN, "generate group entry header failed", K(ret), K(tail_lsn), K(header_lsn));
+      } else {
+        header.update_header_checksum();
+        MEMSET(write_buf, 0, LOG_DIO_ALIGN_SIZE);
+        pos = header_page_offset;
+        if (OB_FAIL(header.serialize(write_buf, LOG_DIO_ALIGN_SIZE, pos))) {
+          PALF_LOG(WARN, "serialize group entry header failed", K(ret), K(header), K(pos), K(header_lsn));
+        } else if (OB_FAIL(write_test_page_to_block_(log_storage, block_id, write_offset, write_buf))) {
+          PALF_LOG(WARN, "write group entry header failed", K(ret), K(tail_lsn), K(header_lsn),
+                   K(block_id), K(write_offset), K(header_page_offset));
+        } else {
+          PALF_LOG(INFO, "write group entry header after tail success", K(tail_lsn), K(header_lsn),
+                   K(header_distance), K(block_id), K(write_offset), K(header_page_offset), K(header));
+        }
+      }
+    }
+    if (NULL != write_buf) {
+      ob_free_align(write_buf);
+    }
+    return ret;
+  }
+  int write_meta_entry_after_tail(LogStorage &log_storage,
+                                  const LSN &tail_lsn,
+                                  const offset_t entry_distance,
+                                  const bool corrupt_entry,
+                                  LSN &entry_lsn)
+  {
+    int ret = OB_SUCCESS;
+    char *write_buf = NULL;
+    const char meta_data = 'm';
+    LogMetaEntryHeader header;
+    LogMetaEntry entry;
+    int64_t pos = 0;
+    entry_lsn.reset();
+    if (!tail_lsn.is_valid() || entry_distance < 0 || log_storage.logical_block_size_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid meta entry position", K(ret), K(tail_lsn),
+               K(entry_distance), K(log_storage.logical_block_size_));
+    } else {
+      entry_lsn = tail_lsn + entry_distance;
+      const block_id_t block_id = lsn_2_block(tail_lsn, log_storage.logical_block_size_);
+      const block_id_t entry_block_id = lsn_2_block(entry_lsn, log_storage.logical_block_size_);
+      const offset_t entry_offset = lsn_2_offset(entry_lsn, log_storage.logical_block_size_);
+      const offset_t write_offset = lower_align(entry_offset, LOG_DIO_ALIGN_SIZE);
+      const offset_t page_offset = entry_offset - write_offset;
+      if (entry_block_id != block_id
+          || page_offset + LogMetaEntryHeader::HEADER_SER_SIZE + sizeof(meta_data)
+                 > LOG_DIO_ALIGN_SIZE
+          || write_offset + LOG_DIO_ALIGN_SIZE > log_storage.logical_block_size_) {
+        ret = OB_INVALID_ARGUMENT;
+        PALF_LOG(WARN, "invalid meta entry position", K(ret), K(tail_lsn), K(entry_lsn),
+                 K(block_id), K(entry_block_id), K(entry_offset), K(write_offset),
+                 K(page_offset), K(log_storage.logical_block_size_));
+      } else if (OB_ISNULL(write_buf = reinterpret_cast<char *>(
+                     ob_malloc_align(LOG_DIO_ALIGN_SIZE, LOG_DIO_ALIGN_SIZE, "TestLogEngine")))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        PALF_LOG(WARN, "allocate meta entry buffer failed", K(ret), K(tail_lsn), K(entry_lsn));
+      } else if (OB_FAIL(header.generate(&meta_data, sizeof(meta_data)))) {
+        PALF_LOG(WARN, "generate meta entry header failed", K(ret), K(entry_lsn));
+      } else if (OB_FAIL(entry.generate(header, &meta_data))) {
+        PALF_LOG(WARN, "generate meta entry failed", K(ret), K(entry_lsn));
+      } else {
+        MEMSET(write_buf, 0, LOG_DIO_ALIGN_SIZE);
+        pos = page_offset;
+        if (OB_FAIL(entry.serialize(write_buf, LOG_DIO_ALIGN_SIZE, pos))) {
+          PALF_LOG(WARN, "serialize meta entry failed", K(ret), K(entry_lsn), K(pos));
+        } else if (corrupt_entry && FALSE_IT(write_buf[page_offset] ^= 1)) {
+        } else if (OB_FAIL(write_test_page_to_block_(log_storage, block_id, write_offset, write_buf))) {
+          PALF_LOG(WARN, "write meta entry after tail failed", K(ret), K(tail_lsn), K(entry_lsn));
+        }
+      }
+    }
+    if (NULL != write_buf) {
+      ob_free_align(write_buf);
+    }
+    return ret;
+  }
+  int write_valid_log_entry_at_tail(LogStorage &log_storage, const LSN &tail_lsn)
+  {
+    int ret = OB_SUCCESS;
+    char *write_buf = NULL;
+    const char log_data = 'l';
+    LogEntryHeader header;
+    int64_t pos = 0;
+    if (!tail_lsn.is_valid() || log_storage.logical_block_size_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid log entry position", K(ret), K(tail_lsn),
+               K(log_storage.logical_block_size_));
+    } else {
+      const block_id_t block_id = lsn_2_block(tail_lsn, log_storage.logical_block_size_);
+      const offset_t entry_offset = lsn_2_offset(tail_lsn, log_storage.logical_block_size_);
+      const offset_t write_offset = lower_align(entry_offset, LOG_DIO_ALIGN_SIZE);
+      const offset_t page_offset = entry_offset - write_offset;
+      if (page_offset + LogEntryHeader::HEADER_SER_SIZE + sizeof(log_data) > LOG_DIO_ALIGN_SIZE) {
+        ret = OB_INVALID_ARGUMENT;
+        PALF_LOG(WARN, "log entry crosses test page", K(ret), K(tail_lsn),
+                 K(entry_offset), K(write_offset), K(page_offset));
+      } else if (OB_ISNULL(write_buf = reinterpret_cast<char *>(
+                     ob_malloc_align(LOG_DIO_ALIGN_SIZE, LOG_DIO_ALIGN_SIZE, "TestLogEngine")))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        PALF_LOG(WARN, "allocate log entry buffer failed", K(ret), K(tail_lsn));
+      } else if (OB_FAIL(read_test_page_from_block_(log_storage, block_id, write_offset, write_buf))) {
+        PALF_LOG(WARN, "read page before writing log entry failed", K(ret), K(tail_lsn));
+      } else if (OB_FAIL(header.generate_header(&log_data, sizeof(log_data), share::SCN::base_scn()))) {
+        PALF_LOG(WARN, "generate log entry header failed", K(ret), K(tail_lsn));
+      } else {
+        pos = page_offset;
+        if (OB_FAIL(header.serialize(write_buf, LOG_DIO_ALIGN_SIZE, pos))) {
+          PALF_LOG(WARN, "serialize log entry header failed", K(ret), K(tail_lsn), K(pos));
+        } else if (FALSE_IT(write_buf[pos] = log_data)) {
+        } else if (OB_FAIL(write_test_page_to_block_(log_storage, block_id, write_offset, write_buf))) {
+          PALF_LOG(WARN, "write log entry at tail failed", K(ret), K(tail_lsn));
+        }
+      }
+    }
+    if (NULL != write_buf) {
+      ob_free_align(write_buf);
+    }
+    return ret;
+  }
+  int read_byte_at_lsn(LogStorage &log_storage, const LSN &lsn, char &byte)
+  {
+    int ret = OB_SUCCESS;
+    int64_t out_read_size = 0;
+    ReadBufGuard read_buf_guard("TestLogEngine", LOG_DIO_ALIGN_SIZE);
+    ReadBuf &read_buf = read_buf_guard.read_buf_;
+    LogIOContext io_ctx(MTL_ID(), log_storage.palf_id_, LogIOUser::RESTART);
+    byte = '\0';
+    if (!lsn.is_valid() || !read_buf.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), K(read_buf));
+    } else if (OB_FAIL(log_storage.log_reader_.pread(lsn_2_block(lsn, log_storage.logical_block_size_),
+                                                     MAX_INFO_BLOCK_SIZE
+                                                     + lsn_2_offset(lsn, log_storage.logical_block_size_),
+                                                     sizeof(byte),
+                                                     read_buf,
+                                                     out_read_size,
+                                                     io_ctx))) {
+      PALF_LOG(WARN, "read byte at lsn failed", K(ret), K(lsn));
+    } else if (out_read_size != sizeof(byte)) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(WARN, "unexpected read size", K(ret), K(lsn), K(out_read_size));
+    } else {
+      byte = read_buf.buf_[0];
+    }
+    return ret;
+  }
+  int read_byte_at_lsn_from_dir(const char *log_dir,
+                                const int64_t palf_id,
+                                const int64_t logical_block_size,
+                                const LSN &lsn,
+                                char &byte)
+  {
+    int ret = OB_SUCCESS;
+    int64_t out_read_size = 0;
+    LogIOAdapter io_adapter;
+    LogReader log_reader;
+    ReadBufGuard read_buf_guard("TestLogEngine", LOG_DIO_ALIGN_SIZE);
+    ReadBuf &read_buf = read_buf_guard.read_buf_;
+    LogIOContext io_ctx(MTL_ID(), palf_id, LogIOUser::RESTART);
+    byte = '\0';
+    if (OB_ISNULL(log_dir) || '\0' == log_dir[0] || palf_id < 0 || logical_block_size <= 0
+        || !lsn.is_valid() || !read_buf.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "invalid argument", K(ret), KP(log_dir), K(palf_id),
+               K(logical_block_size), K(lsn), K(read_buf));
+    } else if (OB_FAIL(io_adapter.init(1002, LOG_IO_DEVICE_WRAPPER.get_local_device(),
+                                       &G_RES_MGR, &OB_IO_MANAGER))) {
+      PALF_LOG(WARN, "io_adapter init failed", K(ret));
+    } else if (OB_FAIL(log_reader.init(log_dir, logical_block_size + MAX_INFO_BLOCK_SIZE, &io_adapter))) {
+      PALF_LOG(WARN, "log_reader init failed", K(ret), K(log_dir), K(logical_block_size));
+    } else if (OB_FAIL(log_reader.pread(lsn_2_block(lsn, logical_block_size),
+                                        MAX_INFO_BLOCK_SIZE + lsn_2_offset(lsn, logical_block_size),
+                                        sizeof(byte),
+                                        read_buf,
+                                        out_read_size,
+                                        io_ctx))) {
+      PALF_LOG(WARN, "read byte at lsn failed", K(ret), K(lsn), K(log_dir));
+    } else if (out_read_size != sizeof(byte)) {
+      ret = OB_ERR_UNEXPECTED;
+      PALF_LOG(WARN, "unexpected read size", K(ret), K(lsn), K(out_read_size), K(log_dir));
+    } else {
+      byte = read_buf.buf_[0];
+    }
+    log_reader.destroy();
     return ret;
   }
   int write_several_blocks(const block_id_t base_block_id, const int block_count)
@@ -169,6 +697,9 @@ public:
   void destroy() {}
   int64_t id_;
   int64_t palf_epoch_;
+  int64_t leader_idx_;
+  int64_t last_reloaded_writable_size_;
+  bool last_reloaded_need_block_header_;
   LogEngine *log_engine_;
   PalfHandleImplGuard leader_;
 };
@@ -316,6 +847,8 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   EXPECT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
   // 此时最后一个block是空的
   EXPECT_EQ(log_storage->log_tail_, LSN(truncate_block_id * PALF_BLOCK_SIZE));
+  EXPECT_EQ(PALF_BLOCK_SIZE, log_storage->curr_block_writable_size_);
+  EXPECT_TRUE(log_storage->need_append_block_header_);
   EXPECT_EQ(truncate_block_id, max_block_id);
   EXPECT_EQ(lsn_2_block(log_engine_->log_meta_storage_.log_block_header_.min_lsn_, PALF_BLOCK_SIZE), truncate_block_id + 1);
 
@@ -429,14 +962,609 @@ TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
   EXPECT_EQ(OB_SUCCESS, log_engine_->get_block_id_range(min_block_id, max_block_id));
   EXPECT_EQ(OB_SUCCESS, delete_block_by_human(max_block_id));
   EXPECT_EQ(OB_ERR_UNEXPECTED, reload(log_engine_->log_storage_.log_tail_, log_engine_->log_meta_storage_.log_tail_, log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  EXPECT_EQ(OB_SUCCESS, restore_block_by_human(max_block_id));
   EXPECT_EQ(OB_SUCCESS, delete_block_by_human(min_block_id));
   EXPECT_EQ(OB_ERR_UNEXPECTED, reload(log_engine_->log_storage_.log_tail_, log_engine_->log_meta_storage_.log_tail_, log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  EXPECT_EQ(OB_SUCCESS, restore_block_by_human(min_block_id));
 
   if (OB_NOT_NULL(long_buf)) {
     ob_free(long_buf);
   }
   leader_.reset();
   PALF_LOG(INFO, "end exception_path");
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_restart_truncate_dirty_suffix)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_restart_truncate_dirty_suffix");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  const int64_t logical_block_size = log_storage->logical_block_size_;
+  const int64_t palf_id = log_storage->palf_id_;
+  char log_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  int64_t open_fd_count_before_recovery = 0;
+  int64_t open_fd_count_after_recovery = 0;
+  LSN dirty_lsn;
+  char dirty_byte = '\0';
+  ASSERT_TRUE(expected_tail.is_valid());
+  ASSERT_LT(0, snprintf(log_dir, sizeof(log_dir), "%s", log_storage->block_mgr_.log_dir_));
+  ASSERT_EQ(OB_SUCCESS,
+            convert_to_normal_block(log_dir,
+                                    log_storage->block_mgr_.curr_writable_block_id_,
+                                    block_path,
+                                    sizeof(block_path)));
+  ASSERT_EQ(max_lsn, expected_tail);
+  // 模拟异步写宕机镜像：逻辑 tail 连续，但最后一个 block 在 tail 之后仍残留本批次
+  // 尚未发布的非零字节，重启应截断该物理后缀。
+  ASSERT_EQ(OB_SUCCESS, write_dirty_byte_after_tail(expected_tail, dirty_lsn));
+  ASSERT_TRUE(dirty_lsn.is_valid());
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, dirty_lsn, dirty_byte));
+  ASSERT_NE('\0', dirty_byte);
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+  ASSERT_EQ(OB_SUCCESS, count_open_fds_for_file_(block_path, open_fd_count_before_recovery));
+  ASSERT_LT(0, open_fd_count_before_recovery);
+
+  ASSERT_EQ(OB_SUCCESS,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  // 临时 recovery engine 已经析构，此时该 block 的 fd 数应回到原始 engine 持有的基线；
+  // 如果截断留下的 handler 未关闭，后续 load_last_block_ 再次打开时会多泄漏一个 fd。
+  ASSERT_EQ(OB_SUCCESS, count_open_fds_for_file_(block_path, open_fd_count_after_recovery));
+  EXPECT_EQ(open_fd_count_before_recovery, open_fd_count_after_recovery);
+  leader_.reset();
+  ASSERT_EQ(OB_SUCCESS,
+            read_byte_at_lsn_from_dir(log_dir, palf_id, logical_block_size, dirty_lsn, dirty_byte));
+  EXPECT_EQ('\0', dirty_byte);
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_restart_recovers_before_mode_rewrite_and_remains_appendable)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_restart_recovers_before_mode_rewrite_and_remains_appendable");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader_, max_lsn));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  LSN dirty_lsn;
+  char dirty_byte = '\0';
+  PalfOptions options;
+  ASSERT_EQ(OB_SUCCESS, leader_.palf_env_impl_->get_options(options));
+  ASSERT_FALSE(options.enable_async_io_);
+  ASSERT_EQ(max_lsn, expected_tail);
+  ASSERT_NE(0, lsn_2_offset(expected_tail, log_storage->logical_block_size_));
+  ASSERT_EQ(OB_SUCCESS, write_dirty_byte_after_tail(expected_tail, dirty_lsn));
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+
+  // Recovery must first use the persisted ASYNC mode to remove the old dirty
+  // suffix, then append the current SYNC mode to LogMeta.
+  ASSERT_EQ(OB_SUCCESS, restart_current_palf());
+  log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  EXPECT_EQ(LogIOMode::SYNC,
+            leader_.palf_handle_impl_->log_engine_.log_meta_
+                .get_log_replica_property_meta().get_log_io_mode());
+  EXPECT_EQ(expected_tail, log_storage->log_tail_);
+  EXPECT_EQ(log_storage->logical_block_size_
+                - lsn_2_offset(expected_tail, log_storage->logical_block_size_),
+            log_storage->curr_block_writable_size_);
+  EXPECT_FALSE(log_storage->need_append_block_header_);
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, dirty_lsn, dirty_byte));
+  EXPECT_EQ('\0', dirty_byte);
+
+  LSN appended_lsn;
+  share::SCN appended_scn;
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader_, appended_lsn, appended_scn));
+  EXPECT_EQ(expected_tail + LogGroupEntryHeader::HEADER_SER_SIZE, appended_lsn);
+  const LSN appended_tail = leader_.palf_handle_impl_->get_max_lsn();
+  ASSERT_GT(appended_tail, appended_lsn);
+  ASSERT_EQ(OB_SUCCESS, wait_lsn_until_flushed(appended_tail, leader_));
+  ASSERT_EQ(OB_SUCCESS, wait_until_has_committed(leader_, appended_tail));
+
+  ASSERT_EQ(OB_SUCCESS, restart_current_palf());
+  EXPECT_EQ(appended_tail, leader_.palf_handle_impl_->get_max_lsn());
+  PalfGroupBufferIterator iterator;
+  LogGroupEntry entry;
+  LSN read_lsn;
+  ASSERT_EQ(OB_SUCCESS,
+            leader_.palf_handle_impl_->alloc_palf_group_buffer_iterator(expected_tail, iterator));
+  ASSERT_EQ(OB_SUCCESS, iterator.next());
+  ASSERT_EQ(OB_SUCCESS, iterator.get_entry(entry, read_lsn));
+  EXPECT_EQ(expected_tail, read_lsn);
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_restart_accepts_dirty_suffix_at_group_buffer_limit)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_restart_accepts_dirty_suffix_at_group_buffer_limit");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  const int64_t logical_block_size = log_storage->logical_block_size_;
+  const int64_t palf_id = log_storage->palf_id_;
+  char log_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  LSN dirty_lsn;
+  char dirty_byte = '\0';
+  ASSERT_LT(0, snprintf(log_dir, sizeof(log_dir), "%s", log_storage->block_mgr_.log_dir_));
+  ASSERT_EQ(max_lsn, expected_tail);
+  ASSERT_EQ(OB_SUCCESS,
+            write_dirty_byte_after_tail_at_distance(expected_tail,
+                                                    FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE,
+                                                    dirty_lsn));
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, dirty_lsn, dirty_byte));
+  ASSERT_NE('\0', dirty_byte);
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+
+  ASSERT_EQ(OB_SUCCESS,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  leader_.reset();
+  ASSERT_EQ(OB_SUCCESS,
+            read_byte_at_lsn_from_dir(log_dir, palf_id, logical_block_size, dirty_lsn, dirty_byte));
+  EXPECT_EQ('\0', dirty_byte);
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_restart_rejects_dirty_suffix_over_group_buffer)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_restart_rejects_dirty_suffix_over_group_buffer");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  LSN dirty_lsn;
+  char dirty_byte = '\0';
+  ASSERT_TRUE(expected_tail.is_valid());
+  ASSERT_EQ(max_lsn, expected_tail);
+  ASSERT_EQ(OB_SUCCESS,
+            write_dirty_byte_after_tail_at_distance(expected_tail,
+                                                    FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE + 1,
+                                                    dirty_lsn));
+  ASSERT_TRUE(dirty_lsn.is_valid());
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, dirty_lsn, dirty_byte));
+  ASSERT_NE('\0', dirty_byte);
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+
+  EXPECT_EQ(OB_ERR_UNEXPECTED,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_restart_rejects_empty_last_block_after_non_full_block)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_restart_rejects_empty_last_block_after_non_full_block");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
+  block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
+  ASSERT_TRUE(expected_tail.is_valid());
+  ASSERT_EQ(max_lsn, expected_tail);
+  ASSERT_EQ(0, lsn_2_block(expected_tail, log_storage->logical_block_size_));
+  ASSERT_LT(lsn_2_offset(expected_tail, log_storage->logical_block_size_),
+            log_storage->logical_block_size_);
+  ASSERT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+  ASSERT_EQ(0, min_block_id);
+  ASSERT_EQ(0, max_block_id);
+  const block_id_t empty_block_id = max_block_id + 1;
+
+  // Async recovery accepts an invalid tail only in the last block. After the
+  // empty last block is skipped, invalid data in the previous non-full block
+  // must be returned without treating it as a recoverable dirty suffix.
+  ASSERT_EQ(OB_SUCCESS, log_storage->block_mgr_.switch_next_block(empty_block_id));
+  ASSERT_EQ(OB_SUCCESS, log_storage->update_manifest_(empty_block_id + 1));
+  ASSERT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+  ASSERT_EQ(empty_block_id, max_block_id);
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+
+  EXPECT_EQ(OB_INVALID_DATA,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_restart_recovers_dirty_empty_last_block_after_full_block)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_restart_recovers_dirty_empty_last_block_after_full_block");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, write_several_blocks(0, 1));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
+  block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
+  ASSERT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+  ASSERT_LT(min_block_id, max_block_id);
+  const block_id_t empty_block_id = max_block_id;
+  const LSN expected_tail(empty_block_id * log_storage->logical_block_size_);
+  const int64_t logical_block_size = log_storage->logical_block_size_;
+  const int64_t palf_id = log_storage->palf_id_;
+  char log_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  LSN dirty_lsn;
+  char dirty_byte = '\0';
+  ASSERT_LT(0, snprintf(log_dir, sizeof(log_dir), "%s", log_storage->block_mgr_.log_dir_));
+
+  // 正常 switch_next_block() 前一个 block 已写满。truncate 保留新建的最后 block，
+  // 但删除其中全部有效 entry；随后写入的字节模拟该 block 内未发布的异步 fragment。
+  ASSERT_EQ(OB_SUCCESS, log_storage->truncate(expected_tail));
+  ASSERT_EQ(expected_tail, log_storage->log_tail_);
+  ASSERT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+  ASSERT_EQ(empty_block_id, max_block_id);
+  ASSERT_EQ(OB_SUCCESS, write_dirty_byte_after_tail(expected_tail, dirty_lsn));
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, dirty_lsn, dirty_byte));
+  ASSERT_NE('\0', dirty_byte);
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+
+  ASSERT_EQ(OB_SUCCESS,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  EXPECT_EQ(logical_block_size, last_reloaded_writable_size_);
+  EXPECT_TRUE(last_reloaded_need_block_header_);
+  leader_.reset();
+  ASSERT_EQ(OB_SUCCESS,
+            read_byte_at_lsn_from_dir(log_dir, palf_id, logical_block_size, dirty_lsn, dirty_byte));
+  EXPECT_EQ('\0', dirty_byte);
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, sync_restart_rejects_mid_log_hole_but_async_recovers)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "sync_restart_rejects_mid_log_hole_but_async_recovers");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  const int64_t logical_block_size = log_storage->logical_block_size_;
+  const int64_t palf_id = log_storage->palf_id_;
+  char log_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  LSN header_lsn;
+  char header_byte = '\0';
+  ASSERT_TRUE(expected_tail.is_valid());
+  ASSERT_LT(0, snprintf(log_dir, sizeof(log_dir), "%s", log_storage->block_mgr_.log_dir_));
+  ASSERT_EQ(max_lsn, expected_tail);
+  // 在 expected_tail 后留出全零区再写入合法 header，保证解析错误后仍有物理数据。
+  // 同步恢复必须报错；异步恢复可把它视为未发布脏尾并截断。
+  ASSERT_EQ(OB_SUCCESS,
+            write_valid_group_header_after_tail(expected_tail, LOG_DIO_ALIGN_SIZE, header_lsn));
+  ASSERT_TRUE(header_lsn.is_valid());
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, header_lsn, header_byte));
+  ASSERT_NE('\0', header_byte);
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::SYNC));
+  EXPECT_EQ(OB_INVALID_DATA,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+  ASSERT_EQ(OB_SUCCESS,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  leader_.reset();
+  ASSERT_EQ(OB_SUCCESS,
+            read_byte_at_lsn_from_dir(log_dir, palf_id, logical_block_size, header_lsn, header_byte));
+  EXPECT_EQ('\0', header_byte);
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_mode_does_not_relax_meta_storage_recovery)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_mode_does_not_relax_meta_storage_recovery");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  LogStorage *meta_storage = &log_engine_->log_meta_storage_;
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+  const LSN expected_meta_tail = meta_storage->log_tail_;
+  LSN entry_lsn;
+  char entry_byte = '\0';
+  ASSERT_EQ(OB_SUCCESS,
+            write_meta_entry_after_tail(*meta_storage,
+                                        expected_meta_tail,
+                                        LOG_DIO_ALIGN_SIZE,
+                                        false /* corrupt_entry */,
+                                        entry_lsn));
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*meta_storage, entry_lsn, entry_byte));
+  ASSERT_NE('\0', entry_byte);
+
+  // The persisted mode only relaxes redo-tail recovery. Meta storage always
+  // uses the strict synchronous integrity rules.
+  EXPECT_EQ(OB_INVALID_DATA,
+            reload(log_engine_->log_storage_.log_tail_,
+                   expected_meta_tail,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*meta_storage, entry_lsn, entry_byte));
+  EXPECT_NE('\0', entry_byte);
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, log_meta_storage_falls_back_from_torn_latest_entry)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "log_meta_storage_falls_back_from_torn_latest_entry");
+  OB_LOGGER.set_log_level("TRACE");
+  ASSERT_EQ(OB_SUCCESS, init());
+  LogStorage *meta_storage = &log_engine_->log_meta_storage_;
+  const LSN expected_meta_tail = meta_storage->log_tail_;
+  LSN corrupt_entry_lsn;
+  char corrupt_byte = '\0';
+  ASSERT_EQ(OB_SUCCESS,
+            write_meta_entry_after_tail(*meta_storage,
+                                        expected_meta_tail,
+                                        0,
+                                        true /* corrupt_entry */,
+                                        corrupt_entry_lsn));
+  ASSERT_EQ(expected_meta_tail, corrupt_entry_lsn);
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*meta_storage, corrupt_entry_lsn, corrupt_byte));
+  ASSERT_NE('\0', corrupt_byte);
+
+  // A torn latest LogMeta entry has an invalid outer checksum. The shared meta
+  // storage recovery must keep the previous valid entry and its logical tail.
+  EXPECT_EQ(OB_SUCCESS,
+            reload(log_engine_->log_storage_.log_tail_,
+                   expected_meta_tail,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, sync_restart_rejects_partial_log_but_async_recovers)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "sync_restart_rejects_partial_log_but_async_recovers");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader_, 1, id_, 16 * 1024));
+  LSN max_lsn = leader_.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_lsn_until_flushed(max_lsn, leader_));
+  LogStorage *log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  const LSN expected_tail = log_storage->log_tail_;
+  char partial_log_byte = '\0';
+  ASSERT_EQ(max_lsn, expected_tail);
+  ASSERT_EQ(OB_SUCCESS, write_valid_log_entry_at_tail(*log_storage, expected_tail));
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, expected_tail, partial_log_byte));
+  ASSERT_NE('\0', partial_log_byte);
+
+  // 异步 DIO 写对齐尾页时，可能把最后一个完整 group 后的裸 LogEntryHeader 一并落盘。
+  // 相同磁盘内容在同步恢复下必须报错，在异步恢复下应截断这段未发布后缀。
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::SYNC));
+  EXPECT_EQ(OB_PARTIAL_LOG,
+            reload(expected_tail,
+                   log_engine_->log_meta_storage_.log_tail_,
+                   log_engine_->log_meta_.log_snapshot_meta_.base_lsn_));
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, expected_tail, partial_log_byte));
+  EXPECT_NE('\0', partial_log_byte);
+
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+  ASSERT_EQ(OB_SUCCESS, restart_current_palf());
+  log_storage = &leader_.palf_handle_impl_->log_engine_.log_storage_;
+  EXPECT_EQ(expected_tail, log_storage->log_tail_);
+  ASSERT_EQ(OB_SUCCESS, read_byte_at_lsn(*log_storage, expected_tail, partial_log_byte));
+  EXPECT_EQ('\0', partial_log_byte);
+
+  LSN appended_lsn;
+  share::SCN appended_scn;
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader_, appended_lsn, appended_scn));
+  EXPECT_EQ(expected_tail + LogGroupEntryHeader::HEADER_SER_SIZE, appended_lsn);
+  const LSN appended_tail = leader_.palf_handle_impl_->get_max_lsn();
+  ASSERT_GT(appended_tail, appended_lsn);
+  ASSERT_EQ(OB_SUCCESS, wait_lsn_until_flushed(appended_tail, leader_));
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, async_io_option_changes_only_after_reinit)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "async_io_option_changes_only_after_reinit");
+  OB_LOGGER.set_log_level("TRACE");
+  EXPECT_EQ(OB_SUCCESS, init());
+  ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer *>(get_cluster()[leader_idx_]);
+  PalfOptions options;
+  PalfOptions observed_options;
+  ASSERT_NE(static_cast<ObSimpleLogServer *>(NULL), server);
+  ASSERT_EQ(OB_SUCCESS, leader_.palf_env_impl_->get_options(options));
+  ASSERT_FALSE(options.enable_async_io_);
+  options.enable_async_io_ = true;
+
+  // Runtime option refresh cannot change the process-lifetime writer mode.
+  // A PalfEnv reinitialization applies the new config and persists it in LogMeta.
+  ASSERT_EQ(OB_SUCCESS, leader_.palf_env_impl_->update_options(options));
+  ASSERT_EQ(OB_SUCCESS, leader_.palf_env_impl_->get_options(observed_options));
+  EXPECT_FALSE(observed_options.enable_async_io_);
+  EXPECT_EQ(LogIOMode::SYNC,
+            log_engine_->log_meta_.get_log_replica_property_meta().get_log_io_mode());
+
+  server->set_enable_async_io(true);
+  ASSERT_EQ(OB_SUCCESS, restart_current_palf());
+  ASSERT_EQ(OB_SUCCESS, leader_.palf_env_impl_->get_options(observed_options));
+  EXPECT_TRUE(observed_options.enable_async_io_);
+  EXPECT_EQ(LogIOMode::ASYNC,
+            log_engine_->log_meta_.get_log_replica_property_meta().get_log_io_mode());
+
+  // Restore the shared mittest server to its default for later cases.
+  server->set_enable_async_io(false);
+  ASSERT_EQ(OB_SUCCESS, restart_current_palf());
+  ASSERT_EQ(OB_SUCCESS, leader_.palf_env_impl_->get_options(observed_options));
+  EXPECT_FALSE(observed_options.enable_async_io_);
+  EXPECT_EQ(LogIOMode::SYNC,
+            log_engine_->log_meta_.get_log_replica_property_meta().get_log_io_mode());
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, restart_upgrades_v1_sync_mode_to_v2)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "restart_upgrades_v1_sync_mode_to_v2");
+  OB_LOGGER.set_log_level("TRACE");
+  ASSERT_EQ(OB_SUCCESS, init());
+  LogReplicaPropertyMeta property_meta =
+      log_engine_->log_meta_.get_log_replica_property_meta();
+  property_meta.version_ = LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION;
+  property_meta.io_mode = LogIOMode::SYNC;
+  ASSERT_TRUE(property_meta.is_valid());
+  ASSERT_EQ(OB_SUCCESS, persist_log_replica_property_meta(property_meta));
+  const LSN v1_meta_tail = log_engine_->log_meta_storage_.log_tail_;
+
+  ASSERT_EQ(OB_SUCCESS, restart_current_palf());
+  property_meta = log_engine_->log_meta_.get_log_replica_property_meta();
+  EXPECT_EQ(LogReplicaPropertyMeta::LOG_REPLICA_PROPERTY_META_VERSION_V2,
+            property_meta.version_);
+  EXPECT_EQ(LogIOMode::SYNC, property_meta.get_log_io_mode());
+  EXPECT_GT(log_engine_->log_meta_storage_.log_tail_, v1_meta_tail);
+  leader_.reset();
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, log_io_mode_update_failure_cleans_reload_state)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "log_io_mode_update_failure_cleans_reload_state");
+  OB_LOGGER.set_log_level("TRACE");
+  ASSERT_EQ(OB_SUCCESS, init());
+  ASSERT_EQ(OB_SUCCESS, persist_log_io_mode(LogIOMode::ASYNC));
+  PalfEnvImpl *env = leader_.palf_env_impl_;
+  const LSKey key(id_);
+  char palf_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  bool dir_exist = false;
+  common::EventItem event_item;
+  common::EventItem reset_item;
+  event_item.error_code_ = OB_ERR_UNEXPECTED;
+  event_item.occur_ = 1;
+  event_item.trigger_freq_ = 0;
+  ASSERT_NE(static_cast<PalfEnvImpl *>(NULL), env);
+  ASSERT_GT(snprintf(palf_dir, sizeof(palf_dir), "%s/%ld", env->log_dir_, id_), 0);
+
+  leader_.reset();
+  {
+    PalfEnvImpl::WLockGuard guard(env->palf_meta_lock_);
+    ASSERT_EQ(OB_SUCCESS, env->palf_handle_impl_map_.del(key));
+  }
+  const int64_t baseline_count = env->palf_handle_impl_map_.count();
+  ASSERT_EQ(OB_SUCCESS,
+            common::EventTable::set_event("ERRSIM_PALF_UPDATE_LOG_IO_MODE_FAIL", event_item));
+  const int reload_ret = env->reload_palf_handle_impl_(id_);
+  EXPECT_EQ(OB_SUCCESS,
+            common::EventTable::set_event("ERRSIM_PALF_UPDATE_LOG_IO_MODE_FAIL", reset_item));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, reload_ret);
+  EXPECT_EQ(baseline_count, env->palf_handle_impl_map_.count());
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, env->palf_handle_impl_map_.contains_key(key));
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::is_exists(palf_dir, dir_exist));
+  EXPECT_TRUE(dir_exist);
+
+  ASSERT_EQ(OB_SUCCESS, env->reload_palf_handle_impl_(id_));
+  EXPECT_EQ(baseline_count + 1, env->palf_handle_impl_map_.count());
+  IPalfHandleImpl *handle = NULL;
+  ASSERT_EQ(OB_SUCCESS, env->get_palf_handle_impl(id_, handle));
+  PalfHandleImpl *impl = dynamic_cast<PalfHandleImpl *>(handle);
+  ASSERT_NE(static_cast<PalfHandleImpl *>(NULL), impl);
+  EXPECT_EQ(LogIOMode::SYNC,
+            impl->log_engine_.log_meta_.get_log_replica_property_meta().get_log_io_mode());
+  env->revert_palf_handle_impl(handle);
+  ASSERT_EQ(OB_SUCCESS, env->remove_palf_handle_impl(id_));
+}
+
+TEST_F(TestObSimpleLogClusterLogEngine, finish_handle_init_failure_cleans_create_and_reload_state)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "finish_handle_init_failure_cleans_create_and_reload_state");
+  OB_LOGGER.set_log_level("TRACE");
+  ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer *>(get_cluster()[0]);
+  ASSERT_NE(static_cast<ObSimpleLogServer *>(NULL), server);
+  PalfEnvImpl *env = dynamic_cast<PalfEnvImpl *>(server->get_palf_env());
+  ASSERT_NE(static_cast<PalfEnvImpl *>(NULL), env);
+  const int64_t baseline_count = env->palf_handle_impl_map_.count();
+  PalfBaseInfo base_info;
+  base_info.generate_by_default();
+  common::EventItem event_item;
+  common::EventItem reset_item;
+  event_item.error_code_ = OB_ERR_UNEXPECTED;
+  event_item.occur_ = 1;
+  event_item.trigger_freq_ = 0;
+
+  const int64_t create_palf_id = ATOMIC_AAF(&palf_id_, 1);
+  const LSKey create_key(create_palf_id);
+  char create_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  bool create_dir_exist = true;
+  IPalfHandleImpl *handle = NULL;
+  ASSERT_GT(snprintf(create_dir, sizeof(create_dir), "%s/%ld", env->log_dir_, create_palf_id), 0);
+  ASSERT_EQ(OB_SUCCESS,
+            common::EventTable::set_event("ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL", event_item));
+  const int create_ret = env->create_palf_handle_impl(
+      create_palf_id, AccessMode::APPEND, base_info, LogReplicaType::NORMAL_REPLICA, handle);
+  EXPECT_EQ(OB_SUCCESS,
+            common::EventTable::set_event("ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL", reset_item));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, create_ret);
+  EXPECT_EQ(static_cast<IPalfHandleImpl *>(NULL), handle);
+  EXPECT_EQ(baseline_count, env->palf_handle_impl_map_.count());
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, env->palf_handle_impl_map_.contains_key(create_key));
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::is_exists(create_dir, create_dir_exist));
+  EXPECT_FALSE(create_dir_exist);
+
+  const int64_t reload_palf_id = ATOMIC_AAF(&palf_id_, 1);
+  id_ = reload_palf_id;
+  const LSKey reload_key(reload_palf_id);
+  char reload_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  bool reload_dir_exist = false;
+  ASSERT_GT(snprintf(reload_dir, sizeof(reload_dir), "%s/%ld", env->log_dir_, reload_palf_id), 0);
+  ASSERT_EQ(OB_SUCCESS,
+            env->create_palf_handle_impl(reload_palf_id,
+                                         AccessMode::APPEND,
+                                         base_info,
+                                         LogReplicaType::NORMAL_REPLICA,
+                                         handle));
+  ASSERT_NE(static_cast<IPalfHandleImpl *>(NULL), handle);
+  env->revert_palf_handle_impl(handle);
+  handle = NULL;
+  ASSERT_EQ(baseline_count + 1, env->palf_handle_impl_map_.count());
+  {
+    PalfEnvImpl::WLockGuard guard(env->palf_meta_lock_);
+    // PalfEnv::destroy() 只销毁 map，不把 PALF 标记为已删除，因此目录会保留，
+    // 下一次初始化仍能走 reload 路径。
+    ASSERT_EQ(OB_SUCCESS, env->palf_handle_impl_map_.del(reload_key));
+  }
+  ASSERT_EQ(baseline_count, env->palf_handle_impl_map_.count());
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::is_exists(reload_dir, reload_dir_exist));
+  ASSERT_TRUE(reload_dir_exist);
+
+  ASSERT_EQ(OB_SUCCESS,
+            common::EventTable::set_event("ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL", event_item));
+  const int reload_ret = env->reload_palf_handle_impl_(reload_palf_id);
+  EXPECT_EQ(OB_SUCCESS,
+            common::EventTable::set_event("ERRSIM_PALF_FINISH_HANDLE_INIT_FAIL", reset_item));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, reload_ret);
+  EXPECT_EQ(baseline_count, env->palf_handle_impl_map_.count());
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, env->palf_handle_impl_map_.contains_key(reload_key));
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::is_exists(reload_dir, reload_dir_exist));
+  EXPECT_TRUE(reload_dir_exist);
+
+  // 再次 reload 成功可同时证明上一次失败清除了 map 中的残留值和调用方引用。
+  ASSERT_EQ(OB_SUCCESS, env->reload_palf_handle_impl_(reload_palf_id));
+  EXPECT_EQ(baseline_count + 1, env->palf_handle_impl_map_.count());
+  ASSERT_EQ(OB_SUCCESS, env->get_palf_handle_impl(reload_palf_id, handle));
+  PalfHandleImpl *reloaded_handle = dynamic_cast<PalfHandleImpl *>(handle);
+  ASSERT_NE(static_cast<PalfHandleImpl *>(NULL), reloaded_handle);
+  EXPECT_EQ(common::RefHandle::BORN_REF + 1, reloaded_handle->get_uref());
+  env->revert_palf_handle_impl(handle);
+  handle = NULL;
+  EXPECT_EQ(common::RefHandle::BORN_REF, reloaded_handle->get_uref());
+  ASSERT_EQ(OB_SUCCESS, env->remove_palf_handle_impl(reload_palf_id));
+  EXPECT_EQ(baseline_count, env->palf_handle_impl_map_.count());
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::is_exists(reload_dir, reload_dir_exist));
+  EXPECT_FALSE(reload_dir_exist);
 }
 
 
@@ -454,7 +1582,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_1, leader_idx_1, leader_1));
   EXPECT_EQ(OB_SUCCESS, get_palf_env(leader_idx_1, palf_env));
 
-  LogIOWorker *log_io_worker = leader_1.palf_handle_impl_->log_engine_.log_io_worker_;
+  LogIOWorkerBase *log_io_worker = leader_1.palf_handle_impl_->log_engine_.io_task_submitter_;
 
   int64_t prev_log_id_1 = 0;
 	LogEngine *log_engine = &leader_1.palf_handle_impl_->log_engine_;
@@ -500,7 +1628,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
 	IOTaskCond io_task_cond_2(id_2, leader_2.get_palf_handle_impl()->log_engine_.palf_epoch_);
   IOTaskVerify io_task_verify_2(id_2, leader_2.get_palf_handle_impl()->log_engine_.palf_epoch_);
   {
-    LogIOWorker *log_io_worker = leader_2.palf_handle_impl_->log_engine_.log_io_worker_;
+    LogIOWorkerBase *log_io_worker = leader_2.palf_handle_impl_->log_engine_.io_task_submitter_;
     // 聚合度为1的忽略
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_2));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 1, id_1, 110));
@@ -566,7 +1694,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
 	IOTaskCond io_task_cond_3(id_3, leader_3.get_palf_handle_impl()->log_engine_.palf_epoch_);
   IOTaskVerify io_task_verify_3(id_3, leader_3.get_palf_handle_impl()->log_engine_.palf_epoch_);
   {
-    LogIOWorker *log_io_worker = leader_3.palf_handle_impl_->log_engine_.log_io_worker_;
+    LogIOWorkerBase *log_io_worker = leader_3.palf_handle_impl_->log_engine_.io_task_submitter_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_3));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_1, 1, id_1, 110));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_2, 1, id_2, 110));
@@ -613,7 +1741,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
 	IOTaskCond io_task_cond_4(id_4, leader_4.get_palf_handle_impl()->log_engine_.palf_epoch_);
 	IOTaskVerify io_task_verify_4(id_4, leader_4.get_palf_handle_impl()->log_engine_.palf_epoch_);
   {
-    LogIOWorker *log_io_worker = leader_4.palf_handle_impl_->log_engine_.log_io_worker_;
+    LogIOWorkerBase *log_io_worker = leader_4.palf_handle_impl_->log_engine_.io_task_submitter_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_4));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_4, 10, id_4, 110));
     sleep(1);
@@ -648,7 +1776,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   TruncateLogCbCtx ctx(LSN(0));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_5, leader_idx_5, leader_5));
   {
-    LogIOWorker *log_io_worker = leader_5.palf_handle_impl_->log_engine_.log_io_worker_;
+    LogIOWorkerBase *log_io_worker = leader_5.palf_handle_impl_->log_engine_.io_task_submitter_;
     EXPECT_EQ(OB_SUCCESS, log_io_worker->submit_io_task(&io_task_cond_5));
     EXPECT_EQ(OB_SUCCESS, submit_log(leader_5, 10, id_5, 110));
     LSN max_lsn = leader_5.palf_handle_impl_->sw_.get_max_lsn();
@@ -676,7 +1804,7 @@ TEST_F(TestObSimpleLogClusterLogEngine, io_reducer_basic_func)
   IOTaskVerify io_task_verify_6(id_6, log_engine->palf_epoch_);
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id_6, leader_idx_6, leader_6));
   {
-     LogIOWorker *log_io_worker = leader_6.palf_handle_impl_->log_engine_.log_io_worker_;
+     LogIOWorkerBase *log_io_worker = leader_6.palf_handle_impl_->log_engine_.io_task_submitter_;
     {
       EXPECT_EQ(OB_SUCCESS, submit_log(leader_6, 15, id_6, log_entry_size));
       sleep(2);
@@ -736,7 +1864,9 @@ TEST_F(TestObSimpleLogClusterLogEngine, limit_reduce_task)
   IOTaskVerify io_task_verify_7(id_7, log_engine->palf_epoch_);
   {
     BatchLogIOFlushLogTask::SINGLE_TASK_MAX_SIZE = 1*1024*1024;
-    LogIOWorker *log_io_worker = leader_7.palf_handle_impl_->log_engine_.log_io_worker_;
+    ASSERT_FALSE(leader_7.palf_env_impl_->log_io_worker_wrapper_.enable_async_io_);
+    LogIOWorker *log_io_worker = static_cast<LogIOWorker *>(
+        leader_7.palf_handle_impl_->log_engine_.io_task_submitter_);
     log_io_worker->batch_io_task_mgr_.handle_count_ = 0;
     // case1: 测试单条日志超过SINGLE_TASK_MAX_SIZE
     // 阻塞提交
