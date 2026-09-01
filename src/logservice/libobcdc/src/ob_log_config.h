@@ -486,6 +486,8 @@ public:
   // ------------------------------------------------------------------------
   // Test mode, used only in obtest and other test tool scenarios
   T_DEF_BOOL(test_mode_on, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  DEF_CAP(test_mode_data_dict_allocator_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]",
+      "data dictionary allocator limit under test mode, 0 means disabled");
   // Test mode fail while init
   T_DEF_BOOL(test_mode_init_fail, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 

@@ -141,7 +141,7 @@ int ObDictTenantInfo::alloc_dict_db_meta(datadict::ObDictDatabaseMeta *&dict_db_
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate dict_db_meta failed", KR(ret), K(dict_db_meta));
   } else {
-    new (dict_db_meta) datadict::ObDictDatabaseMeta(&arena_allocator_);
+    new (dict_db_meta) datadict::ObDictDatabaseMeta(&cfifo_allocator_);
   }
 
   return ret;
@@ -158,6 +158,7 @@ int ObDictTenantInfo::free_dict_db_meta(datadict::ObDictDatabaseMeta *dict_db_me
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dict_db_meta is nullptr", KR(ret));
   } else {
+    dict_db_meta->~ObDictDatabaseMeta();
     cfifo_allocator_.free(dict_db_meta);
     dict_db_meta = nullptr;
   }
@@ -205,9 +206,9 @@ int ObDictTenantInfo::replace_dict_db_meta(
     datadict::ObDictDatabaseMeta *old_db_meta = nullptr;
     bool need_insert = false;
 
-    if (OB_FAIL(get_db_meta(db_id, old_db_meta))) {
+    if (OB_FAIL(db_map_.erase(meta_data_key, old_db_meta))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_ERROR("tenant_info get_db_meta failed", KR(ret), K(db_id), K(old_db_meta));
+        LOG_ERROR("db_map_ erase failed", KR(ret), K(meta_data_key));
       } else {
         // Does not exist locally, insert directly
         ret = OB_SUCCESS;
@@ -217,8 +218,6 @@ int ObDictTenantInfo::replace_dict_db_meta(
       // Exist locally, replace it
       if (OB_FAIL(free_dict_db_meta(old_db_meta))) {
         LOG_ERROR("free_dict_db_meta failed", KR(ret));
-      } else if (OB_FAIL(db_map_.erase(meta_data_key))) {
-        LOG_ERROR("db_map_ erase failed", KR(ret), K(meta_data_key));
       } else {
         need_insert = true;
       }
@@ -233,6 +232,13 @@ int ObDictTenantInfo::replace_dict_db_meta(
         LOG_ERROR("dict_db_meta assign failed", KR(ret), K(db_id), K(new_dict_db_meta));
       } else if (OB_FAIL(insert_dict_db_meta(dict_db_meta))) {
         LOG_ERROR("tenant_info insert_dict_db_meta failed", KR(ret), K(db_id), K(new_dict_db_meta));
+      }
+
+      if (OB_SUCCESS != ret && OB_NOT_NULL(dict_db_meta)) {
+        const int free_ret = free_dict_db_meta(dict_db_meta);
+        if (OB_SUCCESS != free_ret) {
+          LOG_ERROR("free_dict_db_meta failed", KR(free_ret), K(db_id), K(dict_db_meta));
+        }
       }
     }
   }
@@ -279,7 +285,7 @@ int ObDictTenantInfo::alloc_dict_table_meta(datadict::ObDictTableMeta *&dict_tab
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate dict_table_meta failed", KR(ret), K(dict_table_meta));
   } else {
-    new (dict_table_meta) datadict::ObDictTableMeta(&arena_allocator_);
+    new (dict_table_meta) datadict::ObDictTableMeta(&cfifo_allocator_);
   }
 
   return ret;
@@ -296,7 +302,7 @@ int ObDictTenantInfo::free_dict_table_meta(datadict::ObDictTableMeta *dict_table
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dict_table_meta is nullptr", KR(ret));
   } else {
-    dict_table_meta->reset();
+    dict_table_meta->~ObDictTableMeta();
     cfifo_allocator_.free(dict_table_meta);
     dict_table_meta = nullptr;
   }
@@ -319,9 +325,9 @@ int ObDictTenantInfo::replace_dict_table_meta(
     datadict::ObDictTableMeta *old_table_meta = nullptr;
     bool need_insert = false;
 
-    if (OB_FAIL(get_table_meta(table_id, old_table_meta))) {
+    if (OB_FAIL(table_map_.erase(meta_data_key, old_table_meta))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_ERROR("tenant_info get_table_meta failed", KR(ret), K(table_id), K(old_table_meta));
+        LOG_ERROR("table_map_ erase failed", KR(ret), K(meta_data_key));
       } else {
         // Does not exist locally, insert directly
         ret = OB_SUCCESS;
@@ -333,8 +339,6 @@ int ObDictTenantInfo::replace_dict_table_meta(
       // Exist locally, replace it
       if (OB_FAIL(free_dict_table_meta(old_table_meta))) {
         LOG_ERROR("free_dict_table_meta failed", KR(ret));
-      } else if (OB_FAIL(table_map_.erase(meta_data_key))) {
-        LOG_ERROR("db_map_ erase failed", KR(ret), K(meta_data_key));
       } else {
         need_insert = true;
       }
@@ -346,9 +350,33 @@ int ObDictTenantInfo::replace_dict_table_meta(
       if (OB_FAIL(alloc_dict_table_meta(dict_table_meta))) {
         LOG_ERROR("alloc_dict_table_meta failed", KR(ret), K(table_id), K(new_dict_table_meta));
       } else if (OB_FAIL(dict_table_meta->assign(new_dict_table_meta))) {
-        LOG_ERROR("dict_db_meta assign failed", KR(ret), K(table_id), K(new_dict_table_meta));
+        LOG_ERROR("dict_table_meta assign failed", KR(ret), K(table_id), K(new_dict_table_meta));
       } else if (OB_FAIL(insert_dict_table_meta(dict_table_meta))) {
         LOG_ERROR("tenant_info insert_dict_table_meta failed", KR(ret), K(table_id), K(new_dict_table_meta));
+      }
+
+      if (OB_SUCCESS != ret && OB_NOT_NULL(dict_table_meta)) {
+        const int free_ret = free_dict_table_meta(dict_table_meta);
+        if (OB_SUCCESS != free_ret) {
+          LOG_ERROR("free_dict_table_meta failed", KR(free_ret), K(table_id), K(dict_table_meta));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && 0 != TCONF.test_mode_on) {
+    const int64_t allocator_limit = TCONF.test_mode_data_dict_allocator_limit.get();
+    if (0 < allocator_limit) {
+      const int64_t arena_total = arena_allocator_.total();
+      const int64_t cfifo_allocated = cfifo_allocator_.allocated();
+      if (arena_total >= allocator_limit) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("arena allocator reaches data dictionary test limit",
+            KR(ret), K(arena_total), K(allocator_limit));
+      } else if (cfifo_allocated >= allocator_limit) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("cfifo allocator reaches data dictionary test limit",
+            KR(ret), K(cfifo_allocated), K(allocator_limit));
       }
     }
   }
@@ -368,19 +396,17 @@ int ObDictTenantInfo::remove_table_meta(const uint64_t table_id)
   } else {
     MetaDataKey meta_data_key(table_id);
     datadict::ObDictTableMeta *old_table_meta = nullptr;
-    if (OB_FAIL(get_table_meta(table_id, old_table_meta))) {
+    if (OB_FAIL(table_map_.erase(meta_data_key, old_table_meta))) {
       if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_ERROR("tenant_info get_table_meta failed", KR(ret), K(table_id), K(old_table_meta));
+        LOG_ERROR("table_map_ erase failed", KR(ret), K(meta_data_key));
       } else {
-        // Does not exist locally, insert directly
+        // Does not exist locally, do nothing
         ret = OB_SUCCESS;
       }
     } else {
       // Exist locally, free it
       if (OB_FAIL(free_dict_table_meta(old_table_meta))) {
         LOG_ERROR("free_dict_table_meta failed", KR(ret), K(table_id));
-      } else if (OB_FAIL(table_map_.erase(meta_data_key))) {
-        LOG_ERROR("db_map_ erase failed", KR(ret), K(meta_data_key));
       } else {
         LOG_INFO("remove_table_meta success", K(table_id));
       }

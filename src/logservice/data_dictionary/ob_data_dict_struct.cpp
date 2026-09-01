@@ -634,8 +634,19 @@ void ObDictColumnMeta::reset()
   column_flags_ = -1;
   charset_type_ = ObCharsetType::CHARSET_INVALID;
   collation_type_ = ObCollationType::CS_TYPE_INVALID;
+  if (nullptr != allocator_ && orig_default_value_.need_deep_copy()) {
+    allocator_->free(orig_default_value_.get_deep_copy_obj_ptr());
+  }
   orig_default_value_.reset();
+  if (nullptr != allocator_ && cur_default_value_.need_deep_copy()) {
+    allocator_->free(cur_default_value_.get_deep_copy_obj_ptr());
+  }
   cur_default_value_.reset();
+  if (nullptr != allocator_) {
+    for (int64_t i = 0; i < extended_type_info_.count(); i++) {
+      allocator_->free(extended_type_info_.at(i).ptr());
+    }
+  }
   extended_type_info_.reset();
   column_ref_ids_.reset();
   udt_set_id_ = 0;
@@ -908,8 +919,11 @@ ObDictTableMeta::ObDictTableMeta(ObIAllocator *allocator)
   : allocator_(allocator),
     table_name_(),
     column_count_(0),
+    col_metas_(nullptr),
     rowkey_column_count_(0),
-    index_column_count_(0)
+    rowkey_cols_(nullptr),
+    index_column_count_(0),
+    index_cols_(nullptr)
 {
   reset();
 }
