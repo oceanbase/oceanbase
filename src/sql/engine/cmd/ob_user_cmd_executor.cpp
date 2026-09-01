@@ -15,6 +15,7 @@
 
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/encrypt/ob_sm3_crypt.h"
 #include "sql/resolver/dcl/ob_create_user_stmt.h"
 #include "sql/resolver/dcl/ob_drop_user_stmt.h"
 #include "sql/resolver/dcl/ob_lock_user_stmt.h"
@@ -54,22 +55,35 @@ int ObCreateUserExecutor::encrypt_passwd(const common::ObString& pwd,
       if (OB_FAIL(ObEncryptedHelper::encrypt_passwd_to_stage2(pwd, encrypted_pwd))) {
         SQL_ENG_LOG(WARN, "failed to encrypt passwd", K(ret));
       }
-    } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
-      // Use caching_sha2_password encryption
-      // Get digest_rounds from system variable
-      int64_t digest_rounds = OB_SHA256_ROUNDS_DEFAULT;
+    } else if (ObEncryptedHelper::is_secure_password_plugin(plugin)) {
+      // Use secure password encryption (caching_sha2_password / ob_sm3_password); the two
+      // plugins differ only in the rounds sysvar and the crypt implementation
+      const bool is_sm3 = ObEncryptedHelper::is_ob_sm3_password_plugin(plugin);
+      int64_t digest_rounds = OB_CRYPT_AUTH_ROUNDS_DEFAULT;
       bool is_supported = true;
       if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
                                                                         session_info->get_effective_tenant_id(),
                                                                         is_supported))) {
-        SQL_ENG_LOG(WARN, "failed to check data version for auth plugin", K(ret));
+        SQL_ENG_LOG(WARN, "failed to check data version for auth plugin", K(ret), K(plugin));
       } else if (!is_supported) {
         ret = OB_NOT_SUPPORTED;
-        SQL_ENG_LOG(WARN, "caching_sha2_password is not supported", K(ret));
-      } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS, digest_rounds))) {
-        SQL_ENG_LOG(WARN, "failed to get caching_sha2_password_digest_rounds, use default", K(ret));
-      } else if (OB_FAIL(ObSha256Crypt::encrypt_passwd_to_caching_sha2(pwd, encrypted_pwd, enc_buf, buf_len, digest_rounds))) {
-        SQL_ENG_LOG(WARN, "failed to encrypt passwd with caching_sha2_password", K(ret), K(plugin));
+        SQL_ENG_LOG(WARN, "auth plugin is not supported", K(ret), K(plugin));
+      } else if (OB_FAIL(session_info->get_sys_variable(is_sm3 ? SYS_VAR_OB_SM3_PASSWORD_DIGEST_ROUNDS
+                                                               : SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS,
+                                                        digest_rounds))) {
+        SQL_ENG_LOG(WARN, "failed to get password digest rounds", K(ret), K(plugin));
+      } else if (is_sm3) {
+        if (OB_FAIL(ObSm3Crypt::encrypt_passwd_to_ob_sm3(pwd, encrypted_pwd, enc_buf, buf_len, digest_rounds))) {
+          SQL_ENG_LOG(WARN, "failed to encrypt passwd with ob_sm3_password", K(ret), K(plugin));
+        }
+      } else {
+        if (OB_FAIL(ObSha256Crypt::encrypt_passwd_to_caching_sha2(pwd,
+                                                                  encrypted_pwd,
+                                                                  enc_buf,
+                                                                  buf_len,
+                                                                  digest_rounds))) {
+          SQL_ENG_LOG(WARN, "failed to encrypt passwd with caching_sha2_password", K(ret), K(plugin));
+        }
       }
     } else {
       ret = OB_NOT_SUPPORTED;
@@ -212,9 +226,9 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
         if (ObString::make_string("YES") == need_enc) {
           if (pwd.length() > 0) {
             ObString pwd_enc;
-            // 使用更大的缓冲区以支持 caching_sha2_password
-            char enc_buf[CACHING_SHA2_PASSWD_BUF_LEN] = {0};
-            if (OB_FAIL(encrypt_passwd(pwd, plugin, pwd_enc, enc_buf, CACHING_SHA2_PASSWD_BUF_LEN, ctx.get_my_session()))) {
+            // 使用更大的缓冲区以支持 secure password plugins (caching_sha2_password / ob_sm3_password)
+            char enc_buf[SECURE_PASSWD_BUF_LEN] = {0};
+            if (OB_FAIL(encrypt_passwd(pwd, plugin, pwd_enc, enc_buf, SECURE_PASSWD_BUF_LEN, ctx.get_my_session()))) {
               LOG_WARN("Encrypt password failed", K(ret), K(plugin));
             } else if (OB_FAIL(user_info.set_passwd(pwd_enc))) {
               LOG_WARN("set password failed", K(ret));

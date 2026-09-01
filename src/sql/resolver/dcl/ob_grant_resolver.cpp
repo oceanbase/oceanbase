@@ -133,12 +133,12 @@ int ObGrantResolver::resolve_grant_user(
             LOG_WARN("failed to check data version for auth plugin", K(ret));
           } else if (OB_UNLIKELY(!is_plugin_supported)) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+            LOG_WARN("auth plugin is not supported in current data version", K(ret), K(auth_plugin));
           }
         }
       }
     } else {
-      user_name.assign_ptr(const_cast<char *>(grant_user->str_value_), 
+      user_name.assign_ptr(const_cast<char *>(grant_user->str_value_),
                            static_cast<int32_t>(grant_user->str_len_));
     }
   }
@@ -1179,7 +1179,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
             LOG_WARN("failed to check data version for auth plugin", K(ret));
           } else if (OB_UNLIKELY(!is_plugin_supported)) {
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+            LOG_WARN("auth plugin is not supported in current data version", K(ret), K(plugin));
           } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                      session_info_->get_priv_user_id(),
                                                      user_name,
@@ -1549,7 +1549,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   LOG_WARN("failed to check data version for auth plugin", K(ret));
                 } else if (OB_UNLIKELY(!is_plugin_supported)) {
                   ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+                  LOG_WARN("auth plugin is not supported in current data version", K(ret), K(plugin));
                 } else if (OB_FAIL(check_dcl_on_inner_user(node->type_,
                                                            session_info_->get_priv_user_id(),
                                                            user_name,

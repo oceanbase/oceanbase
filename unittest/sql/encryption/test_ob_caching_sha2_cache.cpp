@@ -12,7 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include <gtest/gtest.h>
-#include "lib/encrypt/ob_caching_sha2_cache.h"
+#include "lib/encrypt/ob_auth_digest_cache.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/oblog/ob_log.h"
@@ -110,22 +110,22 @@ TEST_F(TestCachingSha2Cache, test_digest_basic)
   ASSERT_EQ(0, digest.get_digest_len());
 
   // Create a test digest (32-byte SHA256 digest)
-  char test_digest[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest[i] = static_cast<char>(i);
   }
 
   // Set digest
-  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_SHA256_DIGEST_LENGTH));
-  ASSERT_EQ(OB_SHA256_DIGEST_LENGTH, digest.get_digest_len());
+  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
+  ASSERT_EQ(OB_CRYPT_RAW_DIGEST_LEN32, digest.get_digest_len());
 
   // Validate digest content
   const char *result = digest.get_digest();
   ASSERT_NE(nullptr, result);
-  ASSERT_EQ(0, MEMCMP(result, test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(0, MEMCMP(result, test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
 
   // Test invalid arguments
-  ASSERT_EQ(OB_INVALID_ARGUMENT, digest.set_digest(nullptr, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, digest.set_digest(nullptr, OB_CRYPT_RAW_DIGEST_LEN32));
   ASSERT_EQ(OB_INVALID_ARGUMENT, digest.set_digest(test_digest, 16)); // Incorrect length
 }
 
@@ -135,13 +135,13 @@ TEST_F(TestCachingSha2Cache, test_digest_deep_copy)
   ObCachingSha2Digest digest1;
 
   // Create test digest
-  char test_digest[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest[i] = static_cast<char>(i);
   }
 
   // Set digest1
-  ASSERT_EQ(OB_SUCCESS, digest1.set_digest(test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest1.set_digest(test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
 
   // Allocate buffer
   int64_t buf_size = digest1.size();
@@ -157,7 +157,7 @@ TEST_F(TestCachingSha2Cache, test_digest_deep_copy)
 
   // Validate copy result
   ASSERT_EQ(digest1.get_digest_len(), digest2->get_digest_len());
-  ASSERT_EQ(0, MEMCMP(digest1.get_digest(), digest2->get_digest(), OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(0, MEMCMP(digest1.get_digest(), digest2->get_digest(), OB_CRYPT_RAW_DIGEST_LEN32));
 }
 
 // Test basic functionality of ObCachingSha2Key
@@ -264,11 +264,11 @@ TEST_F(TestCachingSha2Cache, test_cache_put_get)
 
   // Create digest
   ObCachingSha2Digest digest;
-  char test_digest[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest[i] = static_cast<char>(i * 2);
   }
-  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
 
   // Put into cache
   ASSERT_EQ(OB_SUCCESS, cache_.put_row(key, digest));
@@ -279,8 +279,8 @@ TEST_F(TestCachingSha2Cache, test_cache_put_get)
   ASSERT_NE(nullptr, handle.digest_);
 
   // Validate retrieved digest
-  ASSERT_EQ(OB_SHA256_DIGEST_LENGTH, handle.digest_->get_digest_len());
-  ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_CRYPT_RAW_DIGEST_LEN32, handle.digest_->get_digest_len());
+  ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
 }
 
 // Test get for non-existent key from the cache
@@ -307,11 +307,11 @@ TEST_F(TestCachingSha2Cache, test_cache_put_and_fetch)
 
   // Create digest
   ObCachingSha2Digest digest;
-  char test_digest[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest[i] = static_cast<char>(i * 3);
   }
-  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
 
   // Put and fetch
   ObCachingSha2Handle handle;
@@ -319,8 +319,8 @@ TEST_F(TestCachingSha2Cache, test_cache_put_and_fetch)
   ASSERT_NE(nullptr, handle.digest_);
 
   // Validate retrieved digest
-  ASSERT_EQ(OB_SHA256_DIGEST_LENGTH, handle.digest_->get_digest_len());
-  ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_CRYPT_RAW_DIGEST_LEN32, handle.digest_->get_digest_len());
+  ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
 }
 
 // Test overwrite operation of the cache
@@ -333,27 +333,27 @@ TEST_F(TestCachingSha2Cache, test_cache_overwrite)
 
   // First put
   ObCachingSha2Digest digest1;
-  char test_digest1[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest1[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest1[i] = static_cast<char>(i);
   }
-  ASSERT_EQ(OB_SUCCESS, digest1.set_digest(test_digest1, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest1.set_digest(test_digest1, OB_CRYPT_RAW_DIGEST_LEN32));
   ASSERT_EQ(OB_SUCCESS, cache_.put_row(key, digest1));
 
   // Second put (overwrite)
   ObCachingSha2Digest digest2;
-  char test_digest2[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest2[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest2[i] = static_cast<char>(i + 100);
   }
-  ASSERT_EQ(OB_SUCCESS, digest2.set_digest(test_digest2, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest2.set_digest(test_digest2, OB_CRYPT_RAW_DIGEST_LEN32));
   ASSERT_EQ(OB_SUCCESS, cache_.put_row(key, digest2));
 
   // Get should retrieve the second value
   ObCachingSha2Handle handle;
   ASSERT_EQ(OB_SUCCESS, cache_.get_row(key, handle));
   ASSERT_NE(nullptr, handle.digest_);
-  ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digest2, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digest2, OB_CRYPT_RAW_DIGEST_LEN32));
 }
 
 // Test cache for multiple different users
@@ -362,7 +362,7 @@ TEST_F(TestCachingSha2Cache, test_cache_multiple_users)
   const int num_users = 5;
   ObCachingSha2Key keys[num_users];
   ObCachingSha2Digest digests[num_users];
-  char test_digests[num_users][OB_SHA256_DIGEST_LENGTH];
+  char test_digests[num_users][OB_CRYPT_RAW_DIGEST_LEN32];
   char user_bufs[num_users][32];  // Keep the string valid for the whole test
   char host_bufs[num_users][32];
 
@@ -376,10 +376,10 @@ TEST_F(TestCachingSha2Cache, test_cache_multiple_users)
     keys[i] = ObCachingSha2Key(user_name, host_name, 1, 0);
 
     // Generate different digests
-    for (int j = 0; j < OB_SHA256_DIGEST_LENGTH; j++) {
+    for (int j = 0; j < OB_CRYPT_RAW_DIGEST_LEN32; j++) {
       test_digests[i][j] = static_cast<char>(i * 10 + j);
     }
-    ASSERT_EQ(OB_SUCCESS, digests[i].set_digest(test_digests[i], OB_SHA256_DIGEST_LENGTH));
+    ASSERT_EQ(OB_SUCCESS, digests[i].set_digest(test_digests[i], OB_CRYPT_RAW_DIGEST_LEN32));
 
     // Put into cache
     ASSERT_EQ(OB_SUCCESS, cache_.put_row(keys[i], digests[i]));
@@ -390,7 +390,7 @@ TEST_F(TestCachingSha2Cache, test_cache_multiple_users)
     ObCachingSha2Handle handle;
     ASSERT_EQ(OB_SUCCESS, cache_.get_row(keys[i], handle));
     ASSERT_NE(nullptr, handle.digest_);
-    ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digests[i], OB_SHA256_DIGEST_LENGTH));
+    ASSERT_EQ(0, MEMCMP(handle.digest_->get_digest(), test_digests[i], OB_CRYPT_RAW_DIGEST_LEN32));
   }
 }
 
@@ -403,11 +403,11 @@ TEST_F(TestCachingSha2Cache, test_handle_assign)
   ObCachingSha2Key key(user_name, host_name, 1, 0);
 
   ObCachingSha2Digest digest;
-  char test_digest[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest[i] = static_cast<char>(i);
   }
-  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
   ASSERT_EQ(OB_SUCCESS, cache_.put_row(key, digest));
 
   // Get handle1
@@ -423,7 +423,7 @@ TEST_F(TestCachingSha2Cache, test_handle_assign)
   // Validate both handles point to the same data
   ASSERT_EQ(handle1.digest_, handle2.digest_);
   ASSERT_EQ(0, MEMCMP(handle1.digest_->get_digest(), handle2.digest_->get_digest(),
-                      OB_SHA256_DIGEST_LENGTH));
+                      OB_CRYPT_RAW_DIGEST_LEN32));
 }
 
 // Test move operation of Handle
@@ -435,11 +435,11 @@ TEST_F(TestCachingSha2Cache, test_handle_move)
   ObCachingSha2Key key(user_name, host_name, 1, 0);
 
   ObCachingSha2Digest digest;
-  char test_digest[OB_SHA256_DIGEST_LENGTH];
-  for (int i = 0; i < OB_SHA256_DIGEST_LENGTH; i++) {
+  char test_digest[OB_CRYPT_RAW_DIGEST_LEN32];
+  for (int i = 0; i < OB_CRYPT_RAW_DIGEST_LEN32; i++) {
     test_digest[i] = static_cast<char>(i);
   }
-  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_SHA256_DIGEST_LENGTH));
+  ASSERT_EQ(OB_SUCCESS, digest.set_digest(test_digest, OB_CRYPT_RAW_DIGEST_LEN32));
   ASSERT_EQ(OB_SUCCESS, cache_.put_row(key, digest));
 
   // Get handle1

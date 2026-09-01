@@ -6103,7 +6103,7 @@ public:
 class ObSysVarCachingSha2PasswordDigestRounds : public ObIntSysVar
 {
 public:
-  ObSysVarCachingSha2PasswordDigestRounds() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds, NULL, NULL, NULL, NULL) {}
+  ObSysVarCachingSha2PasswordDigestRounds() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(843); }
 };
@@ -6128,6 +6128,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ENABLE_PL_COMPOSITE_AS_SQL_UDT; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(846); }
 };
+class ObSysVarObSm3PasswordDigestRounds : public ObIntSysVar
+{
+public:
+  ObSysVarObSm3PasswordDigestRounds() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_SM3_PASSWORD_DIGEST_ROUNDS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(847); }
+};
 
 
 class ObSysVarFactory
@@ -6151,7 +6158,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 748;
+  const static int64_t OB_SYS_VARS_COUNT = 749;
   const static int64_t OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT = 10;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;

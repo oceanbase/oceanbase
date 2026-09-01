@@ -509,7 +509,7 @@ int ObDCLResolver::resolve_user_host(const ParseNode *user_pass,
         LOG_WARN("failed to check data version for auth plugin", K(ret));
       } else if (OB_UNLIKELY(!is_plugin_supported)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+        LOG_WARN("auth plugin is not supported in current data version", K(ret), K(auth_plugin));
       }
     }
     if (OB_SUCC(ret) && lib::is_oracle_mode() && 0 != host_name.compare(OB_DEFAULT_HOST_NAME)) {

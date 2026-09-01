@@ -98,8 +98,8 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("known ssl_type", K(ssl_type), K(ret));
     } else {
-      // 使用更大的缓冲区以支持 caching_sha2_password
-      char enc_buf[CACHING_SHA2_PASSWD_BUF_LEN] = {0};
+      // Use a larger buffer to support secure password plugins (caching_sha2_password / ob_sm3_password)
+      char enc_buf[SECURE_PASSWD_BUF_LEN] = {0};
       ObSetPasswdArg arg;
       arg.tenant_id_ = tenant_id;
       arg.user_ = user_name;
@@ -116,7 +116,7 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
       arg.retain_current_password_ = stmt.get_retain_current_password();
       arg.discard_old_password_ = stmt.get_discard_old_password();
       if (stmt.get_need_enc()) {
-        if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, plugin, arg.passwd_, enc_buf, CACHING_SHA2_PASSWD_BUF_LEN, session))) {
+        if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, plugin, arg.passwd_, enc_buf, SECURE_PASSWD_BUF_LEN, session))) {
           LOG_WARN("Encrypt passwd failed", K(ret));
         }
       } else {

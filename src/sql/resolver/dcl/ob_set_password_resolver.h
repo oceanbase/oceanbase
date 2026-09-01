@@ -30,7 +30,7 @@ public:
 
   static bool is_valid_mysql41_passwd(const common::ObString &str);
 
-  static bool is_valid_mysql70_passwd(const common::ObString &str);
+  static bool is_valid_secure_auth_string(const common::ObString &str, const common::ObString &plugin);
 
   static bool is_valid_encrypted_passwd(const common::ObString &str, const common::ObString &plugin);
 private:

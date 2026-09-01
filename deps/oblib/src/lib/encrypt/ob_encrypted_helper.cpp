@@ -784,11 +784,16 @@ int ObEncryptedHelper::check_data_version_for_auth_plugin(const ObString &plugin
   if (OB_UNLIKELY(!is_valid_auth_plugin(plugin))) {
     ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
     LOG_WARN("invalid auth plugin", K(plugin), K(tenant_id), K(ret));
-  } else if (!is_caching_sha2_password_plugin(plugin)) {
-    // do nothing
+  } else if (!is_caching_sha2_password_plugin(plugin)
+             && !is_ob_sm3_password_plugin(plugin)) {
+    // native password plugins: no data version check needed
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get min data version", K(ret));
-  } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_4_2_0)) {
+  } else if (is_ob_sm3_password_plugin(plugin)
+             && OB_UNLIKELY(data_version < DATA_VERSION_4_4_2_3)) {
+    is_supported = false;
+  } else if (is_caching_sha2_password_plugin(plugin)
+             && OB_UNLIKELY(data_version < DATA_VERSION_4_4_2_0)) {
     is_supported = false;
   }
   return ret;

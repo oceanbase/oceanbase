@@ -33367,6 +33367,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
                   LOG_WARN("set_passwd error", "tenant_id", arg.tenant_id_, K(user_name), K(host_name), K(ret));
                 } else if (OB_FAIL(user_info.set_plugin(plugin))) {
                   LOG_WARN("set_plugin error", "tenant_id", arg.tenant_id_, K(user_name), K(host_name), K(ret));
+                } else if (FALSE_IT(user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
                 } else if (OB_FAIL(create_user(user_info,
                                                OB_INVALID_ID,
                                                user_id))) {

@@ -15,12 +15,14 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/encrypt/ob_sm3_crypt.h"
 #include "lib/net/ob_net_util.h"
 #include "lib/allocator/ob_allocator.h"
+#include "lib/allocator/ob_malloc.h"
 #include "lib/time/ob_time_utility.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
-#include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
+#include "lib/encrypt/ob_auth_digest_cache_mgr.h"
 
 namespace oceanbase
 {
@@ -713,62 +715,20 @@ int ObSchemaGetterGuard::verify_user_password_authentication(
             //found it
           }
         }
-      } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
-        // [caching_sha2_password authentication]
-        LOG_DEBUG("caching_sha2_password authentication",
+      } else if (ObEncryptedHelper::is_secure_password_plugin(plugin)) {
+        // [secure password authentication: caching_sha2_password / ob_sm3_password]
+        LOG_DEBUG("secure password authentication", K(plugin),
                   K(login_info.user_name_), K(login_info.passwd_.length()),
                   K(login_info.is_passwd_plaintext_));
 
         if (login_info.is_passwd_plaintext_) {
           // Full authentication mode: verify with plaintext password
-          if (OB_FAIL(ObSha256Crypt::check_sha256_password(
-                  login_info.passwd_,
-                  login_info.scramble_str_,
-                  user_info->get_passwd_str(),
-                  is_found))) {
-            LOG_WARN("Failed to check caching_sha2_password with plaintext", K(ret), K(login_info));
-          } else if (!is_found) {
-            LOG_INFO("caching_sha2_password full authentication failed",
-                     "tenant_name", login_info.tenant_name_,
-                     "user_name", login_info.user_name_,
-                     "client_ip", login_info.client_ip_,
-                     "host_name", user_info->get_host_name_str());
-          } else {
-            // Full authentication succeeded; generate and cache double SHA256 digest
-            unsigned char digest_buf[OB_SHA256_DIGEST_LENGTH];
-            int tmp_ret = OB_SUCCESS;
-
-            if (OB_SUCCESS != (tmp_ret = ObSha256Crypt::generate_sha2_digest_for_cache(
-                                                        login_info.passwd_.ptr(),
-                                                        login_info.passwd_.length(),
-                                                        digest_buf,
-                                                        OB_SHA256_DIGEST_LENGTH))) {
-              LOG_WARN("failed to generate sha2 digest for cache", K(tmp_ret));
-              // Cache failure does not affect authentication success, continue
-            } else if (OB_SUCCESS != (tmp_ret = ObCachingSha2CacheMgr::get_instance().put_digest(
-                                                    login_info.user_name_,
-                                                    user_info->get_host_name_str(),
-                                                    tenant_id,
-                                                    user_info->get_password_last_changed(),
-                                                    digest_buf,
-                                                    OB_SHA256_DIGEST_LENGTH))) {
-              LOG_WARN("failed to put digest to cache", K(tmp_ret),
-                       K(login_info.user_name_), K(user_info->get_host_name_str()));
-              // Cache failure does not affect authentication success, continue
-            } else {
-              LOG_INFO("successfully cached sha2 digest for fast auth",
-                       K(login_info.user_name_),
-                       K(user_info->get_host_name_str()),
-                       K(tenant_id),
-                       K(user_info->get_password_last_changed()));
-            }
-
-            // Clear sensitive data
-            MEMSET(digest_buf, 0, sizeof(digest_buf));
+          if (OB_FAIL(verify_secure_password_and_cache(login_info, *user_info, plugin,
+                                                       tenant_id, is_found))) {
+            LOG_WARN("Failed to verify secure password", K(ret), K(plugin), K(login_info));
           }
         } else {
-          // Fast authentication mode: verify with scramble response
-          // Fast authentication is already done at connect time, no need to repeat in this phase
+          // Fast authentication mode: already verified at connect time
           is_found = true;
         }
       } else {
@@ -867,30 +827,132 @@ int ObSchemaGetterGuard::check_ssl_access(const ObUserInfo &user_info, SSL *ssl_
   return ret;
 }
 
-int ObSchemaGetterGuard::try_caching_sha2_fast_auth_verify(const ObUserLoginInfo &login_info,
-                                                           const common::ObString &host_name,
-                                                           uint64_t tenant_id,
-                                                           int64_t password_last_changed_timestamp,
-                                                           bool &fast_auth_success_flag)
+// Full authentication for secure password plugins (caching_sha2_password / ob_sm3_password):
+// verify the plaintext password against the stored auth string, and on success cache the
+// double digest so subsequent logins can take the fast auth path.
+int ObSchemaGetterGuard::verify_secure_password_and_cache(const ObUserLoginInfo &login_info,
+                                                          const ObUserInfo &user_info,
+                                                          const common::ObString &plugin,
+                                                          uint64_t tenant_id,
+                                                          bool &is_found)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t digest_len = 0;
+  unsigned char *digest_buf = nullptr;
+  const bool is_sm3 = ObEncryptedHelper::is_ob_sm3_password_plugin(plugin);
+  if (is_sm3) {
+    ret = ObSm3Crypt::check_sm3_password(login_info.passwd_,
+                                         login_info.scramble_str_,
+                                         user_info.get_passwd_str(),
+                                         is_found);
+  } else {
+    ret = ObSha256Crypt::check_sha256_password(login_info.passwd_,
+                                               login_info.scramble_str_,
+                                               user_info.get_passwd_str(),
+                                               is_found);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("Failed to check secure password with plaintext", K(ret), K(plugin), K(login_info));
+  } else if (!is_found) {
+    LOG_INFO("secure password full authentication failed",
+             K(plugin),
+             "tenant_name",
+             login_info.tenant_name_,
+             "user_name",
+             login_info.user_name_,
+             "client_ip",
+             login_info.client_ip_,
+             "host_name",
+             user_info.get_host_name_str());
+  } else {
+    // Full authentication succeeded; generate and cache double digest.
+    // Cache failure does not affect authentication success.
+    digest_len = ObEncryptedHelper::get_secure_password_digest_len(plugin);
+    if (OB_UNLIKELY(digest_len <= 0)) {
+      tmp_ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid secure password digest length", K(tmp_ret), K(plugin), K(digest_len));
+    } else if (OB_FALSE_IT(digest_buf = static_cast<unsigned char *>(ob_malloc(digest_len,
+                                                                               ObModIds::OB_SCHEMA_GETTER_GUARD)))
+               || OB_ISNULL(digest_buf)) {
+      tmp_ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate digest buffer", K(tmp_ret), K(plugin), K(digest_len));
+    } else if (is_sm3) {
+      tmp_ret = ObSm3Crypt::generate_sm3_digest_for_cache(login_info.passwd_.ptr(),
+                                                          login_info.passwd_.length(),
+                                                          digest_buf,
+                                                          digest_len);
+    } else {
+      tmp_ret = ObSha256Crypt::generate_sha2_digest_for_cache(login_info.passwd_.ptr(),
+                                                              login_info.passwd_.length(),
+                                                              digest_buf,
+                                                              digest_len);
+    }
+    if (OB_FAIL(tmp_ret)) {
+      LOG_WARN("failed to generate digest for cache", K(tmp_ret), K(plugin));
+    } else if (OB_TMP_FAIL(ObAuthDigestCacheMgr::get_instance().put_digest(login_info.user_name_,
+                                                                           user_info.get_host_name_str(),
+                                                                           tenant_id,
+                                                                           user_info.get_password_last_changed(),
+                                                                           digest_buf,
+                                                                           digest_len))) {
+      LOG_WARN("failed to put digest to cache",
+               K(tmp_ret),
+               K(plugin),
+               K(login_info.user_name_),
+               K(user_info.get_host_name_str()));
+    } else {
+      LOG_INFO("successfully cached digest for fast auth",
+               K(plugin),
+               K(login_info.user_name_),
+               K(user_info.get_host_name_str()),
+               K(tenant_id),
+               K(user_info.get_password_last_changed()));
+    }
+    // Clear sensitive data
+    if (OB_NOT_NULL(digest_buf)) {
+      MEMSET(digest_buf, 0, digest_len);
+      ob_free(digest_buf);
+      digest_buf = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObSchemaGetterGuard::try_secure_fast_auth_verify(const ObUserLoginInfo &login_info,
+                                                     const common::ObString &host_name,
+                                                     uint64_t tenant_id,
+                                                     int64_t password_last_changed_timestamp,
+                                                     const common::ObString &plugin,
+                                                     bool &fast_auth_success_flag)
 {
   int ret = OB_SUCCESS;
   fast_auth_success_flag = false;
-  ObCachingSha2Handle cache_handle;
+  ObAuthDigestHandle cache_handle;
   ObString user_name = login_info.user_name_;
-  int cache_ret = ObCachingSha2CacheMgr::get_instance().get_digest(user_name,
-                                                                   host_name,
-                                                                   tenant_id,
-                                                                   password_last_changed_timestamp,
-                                                                   cache_handle);
+  int cache_ret = ObAuthDigestCacheMgr::get_instance().get_digest(user_name,
+                                                                  host_name,
+                                                                  tenant_id,
+                                                                  password_last_changed_timestamp,
+                                                                  cache_handle);
   if (OB_SUCCESS == cache_ret && OB_NOT_NULL(cache_handle.digest_)) {
     // Cache hit, try fast auth
-    LOG_TRACE("caching_sha2_password: cache hit, attempting fast auth", K(user_name), K(host_name));
+    LOG_TRACE("try fast auth verify: cache hit", K(user_name), K(host_name), K(plugin));
     ObString cached_digest(cache_handle.digest_->get_digest_len(), cache_handle.digest_->get_digest());
-    if (OB_FAIL(ObSha256Crypt::verify_fast_auth_scramble(login_info.passwd_,
-                                                         ObString(SCRAMBLE_LENGTH, login_info.scramble_str_.ptr()),
-                                                         cached_digest,
-                                                         fast_auth_success_flag))) {
-      LOG_WARN("Failed to verify fast auth scramble", K(ret), K(login_info));
+    ObString scramble(SCRAMBLE_LENGTH, login_info.scramble_str_.ptr());
+    if (ObEncryptedHelper::is_ob_sm3_password_plugin(plugin)) {
+      ret = ObSm3Crypt::verify_fast_auth_scramble(login_info.passwd_,
+                                                  scramble,
+                                                  cached_digest,
+                                                  fast_auth_success_flag);
+    } else {
+      ret = ObSha256Crypt::verify_fast_auth_scramble(login_info.passwd_,
+                                                     scramble,
+                                                     cached_digest,
+                                                     fast_auth_success_flag);
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("Failed to verify fast auth scramble", K(ret), K(plugin), K(login_info));
     }
   } else {
     // Cache miss, fast_auth_success_flag remains false

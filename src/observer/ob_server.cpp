@@ -85,7 +85,7 @@
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "storage/reorganization_info_table/ob_tablet_reorg_info_table_schema_helper.h"
 #include "share/ob_license_utils.h"
-#include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
+#include "lib/encrypt/ob_auth_digest_cache_mgr.h"
 #include "lib/encrypt/ob_rsa_getter.h"
 #include "observer/ob_sandbox_manager.h"
 

@@ -14,6 +14,7 @@
 #include "sql/resolver/dcl/ob_set_password_resolver.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/encrypt/ob_sm3_crypt.h"
 #include "lib/time/ob_time_utility.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/parser/parse_node.h"
@@ -58,21 +59,21 @@ bool ObSetPasswordResolver::is_valid_mysql41_passwd(const ObString &str)
   return bret;
 }
 
-bool ObSetPasswordResolver::is_valid_mysql70_passwd(const ObString &str)
+// Validate a serialized secure auth string (caching_sha2_password / ob_sm3_password)
+bool ObSetPasswordResolver::is_valid_secure_auth_string(const ObString &str, const ObString &plugin)
 {
   bool bret = false;
-  if (str.length() != 70) {
-    bret = false;
-  } else {
+  if (str.length() == OB_CRYPT_AUTH_STRING_LEN) { // serialized length excludes the trailing '\0'
     ObString salt;
     ObString digest;
     int64_t iterations = 0;
-    int ret = ObSha256Crypt::deserialize_auth_string(str, salt, digest, iterations);
-    if (OB_SUCCESS == ret) {
-      bret = true;
+    int ret = OB_SUCCESS;
+    if (ObEncryptedHelper::is_ob_sm3_password_plugin(plugin)) {
+      ret = ObSm3Crypt::deserialize_auth_string(str, salt, digest, iterations);
     } else {
-      bret = false;
+      ret = ObSha256Crypt::deserialize_auth_string(str, salt, digest, iterations);
     }
+    bret = (OB_SUCCESS == ret);
   }
   return bret;
 }
@@ -85,9 +86,8 @@ bool ObSetPasswordResolver::is_valid_encrypted_passwd(const ObString &str, const
   } else if (ObEncryptedHelper::is_native_password_plugin(plugin)) {
     // For mysql_native_password plugin, use mysql41 format validation
     bret = is_valid_mysql41_passwd(str);
-  } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
-    // For caching_sha2_password plugin, use mysql70 format validation
-    bret = is_valid_mysql70_passwd(str);
+  } else if (ObEncryptedHelper::is_secure_password_plugin(plugin)) {
+    bret = is_valid_secure_auth_string(str, plugin);
   } else {
     // For unknown plugins, use mysql41 format validation by default (for compatibility)
     bret = is_valid_mysql41_passwd(str);
@@ -362,7 +362,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to check data version for auth plugin", K(ret));
       } else if (OB_UNLIKELY(!is_plugin_supported)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+        LOG_WARN("auth plugin is not supported in current data version", K(ret), K(plugin));
       } else if (OB_FAIL(set_pwd_stmt->set_user_password(user_name,
                                                          host_name,
                                                          password,

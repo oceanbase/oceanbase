@@ -98,8 +98,8 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
           if (pwd.length() > 0) {
             char *enc_buf = NULL;
             // 根据 plugin 类型选择合适的缓冲区长度
-            const int64_t buf_len = ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)
-                                    ? CACHING_SHA2_PASSWD_BUF_LEN : ENC_BUF_LEN;
+            const int64_t buf_len = ObEncryptedHelper::is_secure_password_plugin(plugin)
+                                    ? SECURE_PASSWD_BUF_LEN : ENC_BUF_LEN;
             if (NULL == (enc_buf = static_cast<char *>(allocator.alloc(buf_len)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_ERROR("Failed to allocate memory", K(ret), K(buf_len));

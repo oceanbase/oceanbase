@@ -27,7 +27,7 @@
 #include "rpc/obmysql/packet/ompk_rsa_public_key.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
-#include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
+#include "lib/encrypt/ob_auth_digest_cache_mgr.h"
 #include "lib/encrypt/ob_rsa_getter.h"
 #include "common/ob_version_def.h"
 #include "lib/net/ob_net_util.h"
@@ -830,20 +830,20 @@ int ObMPBase::handle_auth_switch_if_needed(
   int ret = OB_SUCCESS;
   bool is_empty_passwd = false;
   ObString client_plugin = ObEncryptedHelper::convert_plugin_name_from_client(hsr.get_auth_plugin_name());
-  // When the client's auth plugin is caching_sha2_password, force auth switch to send a new scramble.
+  // When the client's auth plugin is a secure password plugin, force auth switch to send a new scramble.
   // Most clients (mysql8, obclient, etc.) do not use the scramble from the initial handshake
-  // to generate the password hash for caching_sha2_password; they require an explicit auth switch.
+  // to generate the password hash for secure password plugins; they require an explicit auth switch.
   // This applies uniformly to all connections (direct and proxy).
-  bool force_auth_switch = ObEncryptedHelper::is_caching_sha2_password_plugin(client_plugin);
+  bool force_auth_switch = ObEncryptedHelper::is_secure_password_plugin(client_plugin);
   if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
     LOG_WARN("failed to check if user account has empty password", K(ret), K(login_info.passwd_));
   } else if (conn->is_proxy_
-             && ObEncryptedHelper::is_caching_sha2_password_plugin(required_plugin)
+             && ObEncryptedHelper::is_secure_password_plugin(required_plugin)
              && conn->proxy_version_ < PROXY_VERSION_4_4_0_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("caching_sha2_password is not supported below 4.4.0 proxy version",
-             K(ret), K(conn->proxy_version_));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "caching_sha2_password is not supported below 4.4.0 proxy version");
+    LOG_WARN("secure password auth is not supported below 4.4.0 proxy version",
+             K(ret), K(conn->proxy_version_), K(required_plugin));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "secure password auth plugin is not supported below 4.4.0 proxy version");
   } else if ((!is_empty_passwd || force_auth_switch) &&
              GCONF._enable_auth_switch &&
              !hsr.get_auth_plugin_name().empty() && // keep compatibility with old clients, empty plugin name means mysql_native_password
@@ -941,8 +941,8 @@ int ObMPBase::receive_auth_switch_response(
     int64_t expected_auth_data_len = 0;
     if (ObEncryptedHelper::is_native_password_plugin(required_plugin)) {
       expected_auth_data_len = ObSMConnection::SCRAMBLE_BUF_SIZE; // 20 bytes
-    } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(required_plugin)) {
-      expected_auth_data_len = OB_SHA256_DIGEST_LENGTH; // 32 bytes
+    } else if (ObEncryptedHelper::is_secure_password_plugin(required_plugin)) {
+      expected_auth_data_len = ObEncryptedHelper::get_secure_password_digest_len(required_plugin);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected plugin", K(ret), K(required_plugin));
@@ -983,7 +983,7 @@ int ObMPBase::receive_auth_switch_response(
   return ret;
 }
 
-int ObMPBase::handle_caching_sha2_authentication_if_need(
+int ObMPBase::handle_secure_password_authentication_if_need(
     share::schema::ObUserLoginInfo &login_info,
     ObSMConnection *conn,
     sql::ObSQLSessionInfo &session,
@@ -994,24 +994,24 @@ int ObMPBase::handle_caching_sha2_authentication_if_need(
 {
   int ret = OB_SUCCESS;
 
-  if (!ObEncryptedHelper::is_caching_sha2_password_plugin(required_plugin)) {
+  if (!ObEncryptedHelper::is_secure_password_plugin(required_plugin)) {
     // do nothing
   } else {
     bool need_full_auth = false;
     if (login_info.passwd_.length() == 0) {
       need_full_auth = false;
-    } else if (login_info.passwd_.length() != OB_SHA256_DIGEST_LENGTH) {
+    } else if (login_info.passwd_.length() != ObEncryptedHelper::get_secure_password_digest_len(required_plugin)) {
       // Unexpected length, need full auth
       need_full_auth = true;
-      LOG_WARN("caching_sha2_password: unexpected auth data length, need full auth",
+      LOG_WARN("secure_auth: unexpected auth data length, need full auth",
                 K(login_info.passwd_.length()));
-    } else if (OB_FAIL(try_caching_sha2_fast_auth(login_info, conn, session,
+    } else if (OB_FAIL(try_secure_fast_auth(login_info, conn, session,
                                                   matched_user_info, need_full_auth))) {
       LOG_WARN("failed to try fast auth", K(ret));
     }
     // Perform full authentication if needed
     if (OB_SUCC(ret) && need_full_auth) {
-      if (OB_FAIL(perform_caching_sha2_full_auth(login_info, conn, session, ssl_st, mem_pool))) {
+      if (OB_FAIL(perform_secure_full_auth(login_info, conn, session, ssl_st, mem_pool))) {
         LOG_WARN("failed to perform full auth", K(ret));
       }
     }
@@ -1019,7 +1019,7 @@ int ObMPBase::handle_caching_sha2_authentication_if_need(
   return ret;
 }
 
-int ObMPBase::try_caching_sha2_fast_auth(ObUserLoginInfo &login_info,
+int ObMPBase::try_secure_fast_auth(ObUserLoginInfo &login_info,
                                          ObSMConnection *conn,
                                          ObSQLSessionInfo &session,
                                          const ObUserInfo *matched_user_info,
@@ -1046,11 +1046,12 @@ int ObMPBase::try_caching_sha2_fast_auth(ObUserLoginInfo &login_info,
     uint64_t user_id = matched_user_info->get_user_id();
     if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(conn->tenant_id_, is_oracle_mode))) {
       LOG_WARN("fail to check compat mode", K(ret), K(conn->tenant_id_));
-    } else if (OB_FAIL(schema_guard.try_caching_sha2_fast_auth_verify(login_info,
-                                                                      host_name,
-                                                                      conn->tenant_id_,
-                                                                      password_last_changed_timestamp,
-                                                                      fast_auth_success_flag))) {
+    } else if (OB_FAIL(schema_guard.try_secure_fast_auth_verify(login_info,
+                                                                host_name,
+                                                                conn->tenant_id_,
+                                                                password_last_changed_timestamp,
+                                                                matched_user_info->get_plugin_str(),
+                                                                fast_auth_success_flag))) {
       LOG_WARN("Failed to verify fast auth", K(ret), K(login_info));
     } else if (!fast_auth_success_flag && old_password_start_time != OB_INVALID_TIMESTAMP) {
       // try to check dual password
@@ -1066,18 +1067,20 @@ int ObMPBase::try_caching_sha2_fast_auth(ObUserLoginInfo &login_info,
         need_try_old_password = (ObTimeUtility::current_time() < expire_ts);
       }
       if (OB_SUCC(ret) && need_try_old_password
-          && OB_FAIL(schema_guard.try_caching_sha2_fast_auth_verify(login_info,
-                                                                    host_name,
-                                                                    conn->tenant_id_,
-                                                                    old_password_start_time,
-                                                                    fast_auth_success_flag))) {
+          && OB_FAIL(schema_guard.try_secure_fast_auth_verify(login_info,
+                                                              host_name,
+                                                              conn->tenant_id_,
+                                                              old_password_start_time,
+                                                              matched_user_info->get_plugin_str(),
+                                                              fast_auth_success_flag))) {
         LOG_WARN("Failed to verify fast auth", K(ret), K(login_info));
       }
     }
     if (OB_SUCC(ret) && fast_auth_success_flag) {
       // Fast auth succeeded, send FAST_AUTH_SUCCESS flag
       need_full_auth = false;
-      LOG_TRACE("caching_sha2_password: fast auth succeeded, sending fast_auth_success", K(user_name), K(host_name));
+      LOG_TRACE("secure_auth: fast auth succeeded, sending fast_auth_success", K(user_name), K(host_name));
+      // SM3 reuses the same wire protocol packet format as caching_sha2_password
       OMPKCachingSha2Response fast_auth_response(FAST_AUTH_SUCCESS);
       if (OB_FAIL(packet_sender_.response_packet(fast_auth_response, &session))) {
         ret = OB_ERR_UNEXPECTED;
@@ -1091,13 +1094,13 @@ int ObMPBase::try_caching_sha2_fast_auth(ObUserLoginInfo &login_info,
     } else {
       // Fast auth failed (password mismatch) or cache miss
       need_full_auth = true;
-      LOG_TRACE("caching_sha2_password: fast auth failed or cache miss, need full auth", K(user_name), K(host_name));
+      LOG_TRACE("secure_auth: fast auth failed or cache miss, need full auth", K(user_name), K(host_name));
     }
   }
   return ret;
 }
 
-int ObMPBase::perform_caching_sha2_full_auth(
+int ObMPBase::perform_secure_full_auth(
   share::schema::ObUserLoginInfo &login_info,
   ObSMConnection *conn,
   sql::ObSQLSessionInfo &session,
@@ -1107,6 +1110,7 @@ int ObMPBase::perform_caching_sha2_full_auth(
   int ret = OB_SUCCESS;
   bool is_secure = (conn->is_in_ssl_connect_phase() || OB_NOT_NULL(ssl_st));
   // Send perform_full_authentication flag (0x04)
+  // SM3 reuses the same wire protocol packet format as caching_sha2_password
   OMPKCachingSha2Response full_auth_response(PERFORM_FULL_AUTHENTICATION);
   // Set auth_switch phase BEFORE flush so that flush_buffer's compensation mechanism
   // sets OB_IS_LAST_PACKET=true in OB 2.0 protocol, while keeping is_last=false
@@ -1121,14 +1125,14 @@ int ObMPBase::perform_caching_sha2_full_auth(
   } else {
     // Choose different authentication paths based on connection security
     if (is_secure) {
-      LOG_INFO("caching_sha2_password: performing SSL full authentication");
+      LOG_INFO("secure_auth: performing SSL full authentication");
       // SSL/TLS secure connection: receive plaintext password
       if (OB_FAIL(perform_ssl_full_auth(login_info, mem_pool))) {
         LOG_WARN("failed to perform SSL full authentication", K(ret));
       }
     } else {
       // Insecure connection: use RSA encrypted authentication
-      LOG_INFO("caching_sha2_password: performing RSA full authentication");
+      LOG_INFO("secure_auth: performing RSA full authentication");
       if (OB_FAIL(perform_rsa_full_auth(login_info, session, mem_pool))) {
         LOG_WARN("failed to perform RSA full authentication", K(ret));
       }
@@ -1213,7 +1217,7 @@ int ObMPBase::perform_rsa_full_auth(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("RSA keys not loaded, cannot perform RSA authentication", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-        "caching_sha2_password authentication over insecure channel without RSA keys");
+        "secure password authentication over insecure channel without RSA keys");
   }
 
   // Step 2: Receive client RSA request
@@ -1287,7 +1291,7 @@ int ObMPBase::handle_rsa_public_key_request(
   // Check if client is requesting public key (0x02)
   if (client_data_len != 1 || static_cast<uint8_t>(client_data[0]) != REQUEST_PUBLIC_KEY) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("caching_sha2_password: client not requesting RSA public key", K(ret));
+    LOG_WARN("secure_auth: client not requesting RSA public key", K(ret));
   } else {
     // Send RSA public key
     if (OB_FAIL(send_rsa_public_key(session))) {
@@ -1318,7 +1322,7 @@ int ObMPBase::send_rsa_public_key(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get RSA public key", K(ret));
   } else {
-    LOG_TRACE("caching_sha2_password: sending RSA public key", K(public_key.length()));
+    LOG_TRACE("secure_auth: sending RSA public key", K(public_key.length()));
     OMPKRsaPublicKey rsa_key_pkt(public_key.ptr(), public_key.length());
 
     if (OB_FAIL(packet_sender_.response_packet(rsa_key_pkt, &session))) {
@@ -1418,7 +1422,7 @@ int ObMPBase::decrypt_rsa_password(
       MEMCPY(pwd_buf, decrypted_pwd, plaintext_pwd_len);
       login_info.passwd_.assign_ptr(static_cast<const char*>(pwd_buf), plaintext_pwd_len);
       login_info.is_passwd_plaintext_ = true;
-      LOG_INFO("caching_sha2_password: RSA password decrypted successfully");
+      LOG_INFO("secure_auth: RSA password decrypted successfully");
     }
   }
   return ret;

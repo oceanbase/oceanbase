@@ -10,31 +10,31 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef _OB_CACHING_SHA2_CACHE_H_
-#define _OB_CACHING_SHA2_CACHE_H_
+#ifndef _OB_AUTH_DIGEST_CACHE_H_
+#define _OB_AUTH_DIGEST_CACHE_H_
 
 #include "lib/allocator/ob_allocator.h"
 #include "lib/string/ob_string.h"
 #include "share/cache/ob_kv_storecache.h"
-#include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/encrypt/ob_crypt_common.h"
 
 namespace oceanbase
 {
 namespace common
 {
-class ObCachingSha2Handle;
+class ObAuthDigestHandle;
 
 /**
- * Caching SHA2 authentication digest value class
- * Stores 32-byte SHA256 digest
+ * Authentication digest value class.
+ * Stores 32-byte digest (SHA256 or SM3).
  */
-class ObCachingSha2Digest : public common::ObIKVCacheValue
+class ObAuthDigest : public common::ObIKVCacheValue
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObCachingSha2Digest();
-  explicit ObCachingSha2Digest(common::ObIAllocator &allocator);
-  ~ObCachingSha2Digest() { reset(); }
+  ObAuthDigest();
+  explicit ObAuthDigest(common::ObIAllocator &allocator);
+  ~ObAuthDigest() { reset(); }
 
   void reset();
 
@@ -52,26 +52,26 @@ public:
   TO_STRING_KV(K_(digest_len));
 
 private:
-  char digest_[OB_SHA256_DIGEST_LENGTH];  // 32-byte SHA256 digest
-  int64_t digest_len_;                     // Digest length (should always be 32)
+  char digest_[OB_CRYPT_RAW_DIGEST_LEN32];  // 32-byte digest
+  int64_t digest_len_;                     // Digest length
 };
 
 /**
- * Caching SHA2 cache Key class
- * Composed of tenant_id + user_name + host_name + password_last_changed_timestamp
+ * Authentication digest cache Key class.
+ * Composed of tenant_id + user_name + host_name + password_last_changed_timestamp.
  *
- * Important: password_last_changed_timestamp as part of the key automatically solves cache invalidation after password change
- * When password changes, timestamp changes, forming a new cache key, old cache automatically becomes invalid
+ * password_last_changed_timestamp as part of the key automatically solves
+ * cache invalidation after password change.
  */
-class ObCachingSha2Key : public common::ObIKVCacheKey
+class ObAuthDigestKey : public common::ObIKVCacheKey
 {
 public:
-  ObCachingSha2Key();
-  ObCachingSha2Key(const common::ObString &user_name,
+  ObAuthDigestKey();
+  ObAuthDigestKey(const common::ObString &user_name,
                    const common::ObString &host_name,
                    uint64_t tenant_id,
                    int64_t password_last_changed_timestamp);
-  ~ObCachingSha2Key() {}
+  ~ObAuthDigestKey() {}
 
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
@@ -100,56 +100,45 @@ private:
 };
 
 /**
- * Caching SHA2 cache class
- * Used to cache user's SHA256 authentication digest
+ * Authentication digest cache class.
+ * Used to cache user's authentication digest (SHA256 or SM3).
  */
-class ObCachingSha2Cache : public common::ObKVCache<ObCachingSha2Key, ObCachingSha2Digest>
+class ObAuthDigestCache : public common::ObKVCache<ObAuthDigestKey, ObAuthDigest>
 {
 public:
-  ObCachingSha2Cache() {}
-  ~ObCachingSha2Cache() {}
+  ObAuthDigestCache() {}
+  ~ObAuthDigestCache() {}
 
   /**
-   * Get user's authentication digest from cache
-   * @param[in] key  Cache key (username and hostname)
-   * @param[out] handle  Handle object holding the digest
-   * @return Error code
+   * Get user's authentication digest from cache.
    */
-  int get_row(const ObCachingSha2Key &key, ObCachingSha2Handle &handle);
+  int get_row(const ObAuthDigestKey &key, ObAuthDigestHandle &handle);
 
   /**
-   * Put user's authentication digest into cache
-   * @param[in] key  Cache key (username and hostname)
-   * @param[in] value  Authentication digest value
-   * @return Error code
+   * Put user's authentication digest into cache.
    */
-  int put_row(const ObCachingSha2Key &key, const ObCachingSha2Digest &value);
+  int put_row(const ObAuthDigestKey &key, const ObAuthDigest &value);
 
   /**
-   * Put user's authentication digest into cache and get handle
-   * @param[in] key  Cache key (username and hostname)
-   * @param[in] value  Authentication digest value
-   * @param[out] handle  Handle object holding the digest
-   * @return Error code
+   * Put user's authentication digest into cache and get handle.
    */
-  int put_and_fetch_row(const ObCachingSha2Key &key,
-                        const ObCachingSha2Digest &value,
-                        ObCachingSha2Handle &handle);
+  int put_and_fetch_row(const ObAuthDigestKey &key,
+                        const ObAuthDigest &value,
+                        ObAuthDigestHandle &handle);
 };
 
 /**
- * Caching SHA2 Handle class
- * Used to hold authentication digest object in cache, preventing it from being released
- * As long as this instance exists, the pointer remains valid (even if the object is removed from cache)
+ * Authentication digest Handle class.
+ * Holds authentication digest object in cache, preventing it from being released.
  */
-class ObCachingSha2Handle
+class ObAuthDigestHandle
 {
 public:
-  friend class ObCachingSha2Cache;
-  ObCachingSha2Handle() : digest_(nullptr), cache_(nullptr) {}
-  ~ObCachingSha2Handle() { digest_ = nullptr; cache_ = nullptr; }
+  friend class ObAuthDigestCache;
+  ObAuthDigestHandle() : digest_(nullptr), cache_(nullptr) {}
+  ~ObAuthDigestHandle() { digest_ = nullptr; cache_ = nullptr; }
 
-  int assign(const ObCachingSha2Handle& other)
+  int assign(const ObAuthDigestHandle& other)
   {
     int ret = OB_SUCCESS;
     if (OB_FAIL(handle_.assign(other.handle_))) {
@@ -163,7 +152,7 @@ public:
     return ret;
   }
 
-  void move_from(ObCachingSha2Handle& other)
+  void move_from(ObAuthDigestHandle& other)
   {
     this->digest_ = other.digest_;
     this->cache_ = other.cache_;
@@ -173,15 +162,24 @@ public:
 
   void reset() { digest_ = nullptr; cache_ = nullptr; handle_.reset(); }
 
-  const ObCachingSha2Digest *digest_;
+  const ObAuthDigest *digest_;
   TO_STRING_KV(K(digest_));
 
 private:
-  ObCachingSha2Cache *cache_;
+  ObAuthDigestCache *cache_;
   ObKVCacheHandle handle_;
 };
+
+// ========== Backward-compatible aliases ==========
+// Old names preserved so existing callers don't break.
+// New code should use the ObAuthDigest* names directly.
+
+typedef ObAuthDigest ObCachingSha2Digest;
+typedef ObAuthDigestKey ObCachingSha2Key;
+typedef ObAuthDigestCache ObCachingSha2Cache;
+typedef ObAuthDigestHandle ObCachingSha2Handle;
 
 } // end of namespace common
 } // end of namespace oceanbase
 
-#endif /* _OB_CACHING_SHA2_CACHE_H_ */
+#endif /* _OB_AUTH_DIGEST_CACHE_H_ */

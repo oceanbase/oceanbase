@@ -3654,7 +3654,7 @@ int ObSysVarUtils::log_bounds_error_or_warning(ObExecContext &ctx,
   return ret;
 }
 
-int ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds(ObExecContext &ctx,
+int ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds(ObExecContext &ctx,
                                                                                const ObSetVar &set_var,
                                                                                const ObBasicSysVar &sys_var,
                                                                                const ObObj &in_val,
@@ -3665,7 +3665,8 @@ int ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds(
     // do nothing
   } else if (!in_val.is_int()) {
     ret = OB_ERR_WRONG_TYPE_FOR_VAR;
-    LOG_WARN("wrong type for caching_sha2_password_digest_rounds", K(ret), K(in_val));
+    LOG_WARN("wrong type for password digest_rounds sysvar",
+             K(ret), K(set_var.var_name_), K(in_val));
   } else {
     int64_t digest_rounds = 0;
     if (OB_FAIL(in_val.get_int(digest_rounds))) {

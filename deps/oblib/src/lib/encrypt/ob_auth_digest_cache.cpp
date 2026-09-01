@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lib/encrypt/ob_caching_sha2_cache.h"
+#include "lib/encrypt/ob_auth_digest_cache.h"
 #include "lib/oblog/ob_log.h"
 
 namespace oceanbase
@@ -18,43 +18,43 @@ namespace oceanbase
 namespace common
 {
 
-// ========== ObCachingSha2Digest Implementation ==========
+// ========== ObAuthDigest Implementation ==========
 
-ObCachingSha2Digest::ObCachingSha2Digest()
+ObAuthDigest::ObAuthDigest()
   : digest_len_(0)
 {
   MEMSET(digest_, 0, sizeof(digest_));
 }
 
-ObCachingSha2Digest::ObCachingSha2Digest(common::ObIAllocator &allocator)
+ObAuthDigest::ObAuthDigest(common::ObIAllocator &allocator)
   : digest_len_(0)
 {
   UNUSED(allocator);
   MEMSET(digest_, 0, sizeof(digest_));
 }
 
-void ObCachingSha2Digest::reset()
+void ObAuthDigest::reset()
 {
   MEMSET(digest_, 0, sizeof(digest_));
   digest_len_ = 0;
 }
 
-int64_t ObCachingSha2Digest::size() const
+int64_t ObAuthDigest::size() const
 {
-  return sizeof(ObCachingSha2Digest);
+  return sizeof(ObAuthDigest);
 }
 
-int ObCachingSha2Digest::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
+int ObAuthDigest::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const
 {
   int ret = OB_SUCCESS;
-  ObCachingSha2Digest *tmp = NULL;
+  ObAuthDigest *tmp = NULL;
 
   if (NULL == buf || buf_len < size()) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid arguments", KP(buf), K(buf_len), K(size()), K(ret));
   } else {
-    tmp = new (buf) ObCachingSha2Digest();
-    if (digest_len_ > OB_SHA256_DIGEST_LENGTH) {
+    tmp = new (buf) ObAuthDigest();
+    if (digest_len_ > OB_CRYPT_RAW_DIGEST_LEN32) {
       ret = OB_INVALID_ARGUMENT;
       COMMON_LOG(WARN, "invalid digest length", K(ret), K(digest_len_));
     } else {
@@ -67,11 +67,11 @@ int ObCachingSha2Digest::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheV
   return ret;
 }
 
-int ObCachingSha2Digest::set_digest(const char *digest, int64_t digest_len)
+int ObAuthDigest::set_digest(const char *digest, int64_t digest_len)
 {
   int ret = OB_SUCCESS;
 
-  if (NULL == digest || digest_len != OB_SHA256_DIGEST_LENGTH) {
+  if (NULL == digest || digest_len != OB_CRYPT_RAW_DIGEST_LEN32) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid digest", K(ret), KP(digest), K(digest_len));
   } else {
@@ -83,13 +83,13 @@ int ObCachingSha2Digest::set_digest(const char *digest, int64_t digest_len)
 }
 
 // Serialization method implementation
-int ObCachingSha2Digest::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+int ObAuthDigest::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, digest_len_))) {
     COMMON_LOG(WARN, "failed to serialize digest_len", K(ret));
-  } else if (digest_len_ > 0 && digest_len_ <= OB_SHA256_DIGEST_LENGTH) {
+  } else if (digest_len_ > 0 && digest_len_ <= OB_CRYPT_RAW_DIGEST_LEN32) {
     if (pos + digest_len_ > buf_len) {
       ret = OB_BUF_NOT_ENOUGH;
       COMMON_LOG(WARN, "buffer not enough", K(ret), K(pos), K(digest_len_), K(buf_len));
@@ -102,13 +102,13 @@ int ObCachingSha2Digest::serialize(char *buf, const int64_t buf_len, int64_t &po
   return ret;
 }
 
-int ObCachingSha2Digest::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
+int ObAuthDigest::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &digest_len_))) {
     COMMON_LOG(WARN, "failed to deserialize digest_len", K(ret));
-  } else if (digest_len_ < 0 || digest_len_ > OB_SHA256_DIGEST_LENGTH) {
+  } else if (digest_len_ < 0 || digest_len_ > OB_CRYPT_RAW_DIGEST_LEN32) {
     ret = OB_INVALID_DATA;
     COMMON_LOG(WARN, "invalid digest_len", K(ret), K(digest_len_));
   } else if (digest_len_ > 0) {
@@ -124,7 +124,7 @@ int ObCachingSha2Digest::deserialize(const char *buf, const int64_t data_len, in
   return ret;
 }
 
-int64_t ObCachingSha2Digest::get_serialize_size() const
+int64_t ObAuthDigest::get_serialize_size() const
 {
   int64_t len = 0;
   len += serialization::encoded_length_i64(digest_len_);
@@ -132,9 +132,9 @@ int64_t ObCachingSha2Digest::get_serialize_size() const
   return len;
 }
 
-// ========== ObCachingSha2Key Implementation ==========
+// ========== ObAuthDigestKey Implementation ==========
 
-ObCachingSha2Key::ObCachingSha2Key()
+ObAuthDigestKey::ObAuthDigestKey()
   : tenant_id_(OB_SERVER_TENANT_ID),
     user_name_(),
     host_name_(),
@@ -142,10 +142,10 @@ ObCachingSha2Key::ObCachingSha2Key()
 {
 }
 
-ObCachingSha2Key::ObCachingSha2Key(const common::ObString &user_name,
-                                   const common::ObString &host_name,
-                                   uint64_t tenant_id,
-                                   int64_t password_last_changed_timestamp)
+ObAuthDigestKey::ObAuthDigestKey(const common::ObString &user_name,
+                                 const common::ObString &host_name,
+                                 uint64_t tenant_id,
+                                 int64_t password_last_changed_timestamp)
   : tenant_id_(tenant_id),
     user_name_(user_name),
     host_name_(host_name),
@@ -153,7 +153,7 @@ ObCachingSha2Key::ObCachingSha2Key(const common::ObString &user_name,
 {
 }
 
-uint64_t ObCachingSha2Key::hash() const
+uint64_t ObAuthDigestKey::hash() const
 {
   uint64_t hash_val = 0;
 
@@ -178,30 +178,30 @@ uint64_t ObCachingSha2Key::hash() const
   return hash_val;
 }
 
-int ObCachingSha2Key::hash(uint64_t &hash_val) const
+int ObAuthDigestKey::hash(uint64_t &hash_val) const
 {
   hash_val = hash();
   return OB_SUCCESS;
 }
 
-bool ObCachingSha2Key::operator==(const ObIKVCacheKey &other) const
+bool ObAuthDigestKey::operator==(const ObIKVCacheKey &other) const
 {
-  const ObCachingSha2Key &other_key = reinterpret_cast<const ObCachingSha2Key&>(other);
+  const ObAuthDigestKey &other_key = reinterpret_cast<const ObAuthDigestKey&>(other);
   return tenant_id_ == other_key.tenant_id_
       && user_name_ == other_key.user_name_
       && host_name_ == other_key.host_name_
       && password_last_changed_timestamp_ == other_key.password_last_changed_timestamp_;
 }
 
-int64_t ObCachingSha2Key::size() const
+int64_t ObAuthDigestKey::size() const
 {
-  return sizeof(ObCachingSha2Key) + user_name_.length() + host_name_.length();
+  return sizeof(ObAuthDigestKey) + user_name_.length() + host_name_.length();
 }
 
-int ObCachingSha2Key::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
+int ObAuthDigestKey::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const
 {
   int ret = OB_SUCCESS;
-  ObCachingSha2Key *tmp_key = NULL;
+  ObAuthDigestKey *tmp_key = NULL;
   int64_t pos = 0;
 
   if (NULL == buf || buf_len < size()) {
@@ -209,10 +209,10 @@ int ObCachingSha2Key::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey 
     COMMON_LOG(WARN, "invalid arguments", KP(buf), K(buf_len), K(size()), K(ret));
   } else {
     // Construct Key object
-    tmp_key = new (buf) ObCachingSha2Key();
+    tmp_key = new (buf) ObAuthDigestKey();
     tmp_key->tenant_id_ = tenant_id_;
     tmp_key->password_last_changed_timestamp_ = password_last_changed_timestamp_;
-    pos += sizeof(ObCachingSha2Key);
+    pos += sizeof(ObAuthDigestKey);
 
     // Deep copy user_name
     if (user_name_.length() > 0) {
@@ -234,21 +234,21 @@ int ObCachingSha2Key::deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey 
   return ret;
 }
 
-bool ObCachingSha2Key::is_valid() const
+bool ObAuthDigestKey::is_valid() const
 {
   // user_name cannot be empty, host_name can be empty (represents any host)
   return !user_name_.empty();
 }
 
-// ========== ObCachingSha2Cache Implementation ==========
+// ========== ObAuthDigestCache Implementation ==========
 
-int ObCachingSha2Cache::get_row(const ObCachingSha2Key &key, ObCachingSha2Handle &handle)
+int ObAuthDigestCache::get_row(const ObAuthDigestKey &key, ObAuthDigestHandle &handle)
 {
   int ret = OB_SUCCESS;
 
   if (!key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid caching sha2 cache key", K(key), K(ret));
+    COMMON_LOG(WARN, "invalid auth digest cache key", K(key), K(ret));
   } else if (OB_FAIL(get(key, handle.digest_, handle.handle_))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       COMMON_LOG(WARN, "fail to get key from cache", K(key), K(ret));
@@ -260,13 +260,13 @@ int ObCachingSha2Cache::get_row(const ObCachingSha2Key &key, ObCachingSha2Handle
   return ret;
 }
 
-int ObCachingSha2Cache::put_row(const ObCachingSha2Key &key, const ObCachingSha2Digest &value)
+int ObAuthDigestCache::put_row(const ObAuthDigestKey &key, const ObAuthDigest &value)
 {
   int ret = OB_SUCCESS;
 
   if (!key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid caching sha2 cache key", K(key), K(ret));
+    COMMON_LOG(WARN, "invalid auth digest cache key", K(key), K(ret));
   } else if (OB_FAIL(put(key, value, true/*overwrite*/))) {
     COMMON_LOG(WARN, "put value in cache failed", K(key), K(ret));
   }
@@ -274,15 +274,15 @@ int ObCachingSha2Cache::put_row(const ObCachingSha2Key &key, const ObCachingSha2
   return ret;
 }
 
-int ObCachingSha2Cache::put_and_fetch_row(const ObCachingSha2Key &key,
-                                          const ObCachingSha2Digest &value,
-                                          ObCachingSha2Handle &handle)
+int ObAuthDigestCache::put_and_fetch_row(const ObAuthDigestKey &key,
+                                          const ObAuthDigest &value,
+                                          ObAuthDigestHandle &handle)
 {
   int ret = OB_SUCCESS;
 
   if (!key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    COMMON_LOG(WARN, "invalid caching sha2 cache key", K(key), K(ret));
+    COMMON_LOG(WARN, "invalid auth digest cache key", K(key), K(ret));
   } else if (OB_FAIL(put_and_fetch(key, value, handle.digest_, handle.handle_, true /*overwrite*/))) {
     COMMON_LOG(WARN, "fail to put kvpair to cache", K(ret));
   } else {

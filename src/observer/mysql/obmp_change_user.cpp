@@ -281,20 +281,20 @@ int ObMPChangeUser::process()
             LOG_WARN("failed to handle auth switch", K(ret));
           }
 
-          // ========== Step 3: Handle caching_sha2_password authentication ==========
+          // ========== Step 3: Handle secure password authentication ==========
           if (OB_SUCC(ret)) {
-            if (OB_FAIL(handle_caching_sha2_authentication_if_need(login_info,
+            if (OB_FAIL(handle_secure_password_authentication_if_need(login_info,
                                                                    get_conn(),
                                                                    *session,
                                                                    required_plugin,
                                                                    matched_user_info,
                                                                    ssl_st,
                                                                    asr_mem_pool_))) {
-              LOG_WARN("failed to handle caching_sha2_password authentication", K(ret));
+              LOG_WARN("failed to handle secure password authentication", K(ret));
             }
           }
 
-          // Update session login_info with the updated password after auth switch/caching_sha2
+          // Update session login_info with the updated password after auth switch/secure auth
           if (OB_SUCC(ret)) {
             if (OB_FAIL(session->set_login_info(login_info))) {
               LOG_WARN("failed to update login_info after auth switch", K(ret));

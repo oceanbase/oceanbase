@@ -122,9 +122,9 @@ int ObCreateRoleResolver::resolve(const ParseNode &parse_tree)
         create_role_stmt->set_need_enc(false);
       }
       if (OB_FAIL(ret)) {
-      } else if (ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
+      } else if (ObEncryptedHelper::is_secure_password_plugin(plugin)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("caching_sha2_password is not supported for role", K(ret));
+        LOG_WARN("secure password plugin is not supported for role", K(ret));
       } else if (!create_role_stmt->get_need_enc() &&
                  OB_FAIL(ObSetPasswordResolver::is_valid_encrypted_passwd(password, plugin))) {
         ret = OB_ERR_PASSWORD_FORMAT;

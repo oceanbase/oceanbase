@@ -221,7 +221,7 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
               LOG_WARN("failed to check data version for auth plugin", K(ret));
             } else if (OB_UNLIKELY(!is_plugin_supported)) {
               ret = OB_NOT_SUPPORTED;
-              LOG_WARN("caching_sha2_password is not supported when MIN_DATA_VERSION is below 4_4_2_0", K(ret));
+              LOG_WARN("auth plugin is not supported in current data version", K(ret), K(plugin));
             } else if (OB_FAIL(create_user_stmt->add_user(user_name,
                                                           host_name,
                                                           password,

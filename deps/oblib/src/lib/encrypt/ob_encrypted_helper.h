@@ -18,6 +18,7 @@
 #include <string.h>
 #include "lib/string/ob_string.h"
 #include "lib/encrypt/ob_sha256_crypt.h"
+#include "lib/encrypt/ob_sm3_crypt.h"
 #include "lib/worker.h"
 
 #define SHA1_HASH_SIZE 20 /* Hash size in bytes */
@@ -28,6 +29,11 @@
 #define AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD "mysql_native_password"
 #define AUTH_PLUGIN_OB_NATIVE_PASSWORD "ob_native_password"
 #define AUTH_PLUGIN_CACHING_SHA2_PASSWORD "caching_sha2_password"
+#define AUTH_PLUGIN_OB_SM3_PASSWORD "ob_sm3_password"
+
+// Unified buffer length for secure password plugins: SHA2 / SM3 share the same
+// serialized auth string length, so one buffer fits any secure plugin format
+#define SECURE_PASSWD_BUF_LEN (OB_CRYPT_AUTH_STRING_LEN + 1)
 
 namespace oceanbase
 {
@@ -64,7 +70,8 @@ public:
     return plugin.empty() ||
            plugin.case_compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD) == 0 ||
            plugin.case_compare(AUTH_PLUGIN_OB_NATIVE_PASSWORD) == 0 ||
-           plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD) == 0;
+           plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD) == 0 ||
+           plugin.case_compare(AUTH_PLUGIN_OB_SM3_PASSWORD) == 0;
   }
 
   static int check_data_version_for_auth_plugin(const ObString &plugin,
@@ -83,16 +90,47 @@ public:
     return plugin.case_compare(AUTH_PLUGIN_CACHING_SHA2_PASSWORD) == 0;
   }
 
+  static bool is_ob_sm3_password_plugin(const ObString &plugin)
+  {
+    return plugin.case_compare(AUTH_PLUGIN_OB_SM3_PASSWORD) == 0;
+  }
+
+  // Returns true if plugin uses secure password mechanism (SHA2 or SM3 fast/full auth)
+  static bool is_secure_password_plugin(const ObString &plugin)
+  {
+    return is_caching_sha2_password_plugin(plugin) || is_ob_sm3_password_plugin(plugin);
+  }
+
+  static int64_t get_secure_password_digest_len(const ObString &plugin)
+  {
+    int64_t digest_len = 0;
+    if (is_ob_sm3_password_plugin(plugin)) {
+      digest_len = OB_SM3_DIGEST_LENGTH;
+    } else if (is_caching_sha2_password_plugin(plugin)) {
+      digest_len = OB_SHA256_DIGEST_LENGTH;
+    }
+    return digest_len;
+  }
+
   static bool is_same_auth_plugin(const ObString &plugin1, const ObString &plugin2)
   {
     return (is_native_password_plugin(plugin1) && is_native_password_plugin(plugin2))
-           || (is_caching_sha2_password_plugin(plugin1) && is_caching_sha2_password_plugin(plugin2));
+           || (is_caching_sha2_password_plugin(plugin1) && is_caching_sha2_password_plugin(plugin2))
+           || (is_ob_sm3_password_plugin(plugin1) && is_ob_sm3_password_plugin(plugin2));
   }
 
   // The client does not recognize the ob_native_password plugin and needs to convert it to a client-recognizable name
   static ObString convert_plugin_name_for_client(const ObString &plugin)
   {
-    return is_native_password_plugin(plugin) ? AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD : AUTH_PLUGIN_CACHING_SHA2_PASSWORD;
+    ObString result;
+    if (is_native_password_plugin(plugin)) {
+      result = ObString::make_string(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD);
+    } else if (is_ob_sm3_password_plugin(plugin)) {
+      result = ObString::make_string(AUTH_PLUGIN_OB_SM3_PASSWORD);
+    } else if (is_caching_sha2_password_plugin(plugin)) {
+      result = ObString::make_string(AUTH_PLUGIN_CACHING_SHA2_PASSWORD);
+    }
+    return result;
   }
 
   // If client use mysql_native_password plugin, we need to convert it to ob_native_password in oracle mode
@@ -108,11 +146,15 @@ public:
 
   static ObString format_plugin_name(const ObString &plugin)
   {
+    ObString result;
     if (is_native_password_plugin(plugin)) {
-      return ObString::make_string(get_native_password_plugin());
+      result = ObString::make_string(get_native_password_plugin());
+    } else if (is_ob_sm3_password_plugin(plugin)) {
+      result = ObString::make_string(AUTH_PLUGIN_OB_SM3_PASSWORD);
     } else {
-      return ObString::make_string(AUTH_PLUGIN_CACHING_SHA2_PASSWORD);
+      result = ObString::make_string(AUTH_PLUGIN_CACHING_SHA2_PASSWORD);
     }
+    return result;
   }
 
   // Get native password plugin name based on current runtime context

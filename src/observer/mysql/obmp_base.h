@@ -200,8 +200,8 @@ protected:
       obmysql::ObICSMemPool &mem_pool,
       sql::ObSQLSessionInfo &session);
 
-  // caching_sha2_password authentication methods
-  int handle_caching_sha2_authentication_if_need(
+  // secure password authentication methods
+  int handle_secure_password_authentication_if_need(
       share::schema::ObUserLoginInfo &login_info,
       ObSMConnection *conn,
       sql::ObSQLSessionInfo &session,
@@ -210,14 +210,14 @@ protected:
       SSL *ssl_st,
       obmysql::ObICSMemPool &mem_pool);
 
-  int try_caching_sha2_fast_auth(
+  int try_secure_fast_auth(
       share::schema::ObUserLoginInfo &login_info,
       ObSMConnection *conn,
       sql::ObSQLSessionInfo &session,
       const share::schema::ObUserInfo *matched_user_info,
       bool &need_full_auth);
 
-  int perform_caching_sha2_full_auth(
+  int perform_secure_full_auth(
       share::schema::ObUserLoginInfo &login_info,
       ObSMConnection *conn,
       sql::ObSQLSessionInfo &session,

@@ -91,9 +91,9 @@ int ObAlterRoleResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("Wrong password format", K(password), K(plugin), K(ret));
         }
       }
-      if (OB_SUCC(ret) && ObEncryptedHelper::is_caching_sha2_password_plugin(plugin)) {
+      if (OB_SUCC(ret) && ObEncryptedHelper::is_secure_password_plugin(plugin)) {
         ret = OB_NOT_SUPPORTED;
-        LOG_WARN("caching_sha2_password plugin is not supported for role", K(ret));
+        LOG_WARN("secure password plugin is not supported for role", K(ret));
       }
       OX (alter_role_stmt->set_password(password);)
       OX (alter_role_stmt->set_plugin(ObEncryptedHelper::format_plugin_name(plugin));)

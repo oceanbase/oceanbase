@@ -11559,7 +11559,7 @@ static struct VarsInit{
       ObSysVars[843].min_val_ = "5000" ;
       ObSysVars[843].max_val_ = "4095000" ;
       ObSysVars[843].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[843].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[843].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds" ;
       ObSysVars[843].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 843 ;
@@ -11610,13 +11610,29 @@ static struct VarsInit{
     ObSysVars[846].alias_ = "OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT" ;
     }();
 
+    [&] (){
+      ObSysVars[847].default_value_ = "5000" ;
+      ObSysVars[847].info_ = "Number of SM3 iterations for password hash stored to disk" ;
+      ObSysVars[847].name_ = "ob_sm3_password_digest_rounds" ;
+      ObSysVars[847].data_type_ = ObIntType ;
+      ObSysVars[847].min_val_ = "5000" ;
+      ObSysVars[847].max_val_ = "4095000" ;
+      ObSysVars[847].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[847].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds" ;
+      ObSysVars[847].id_ = SYS_VAR_OB_SM3_PASSWORD_DIGEST_ROUNDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SM3_PASSWORD_DIGEST_ROUNDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_SM3_PASSWORD_DIGEST_ROUNDS] = 847 ;
+      ObSysVars[847].base_value_ = "5000" ;
+    ObSysVars[847].alias_ = "OB_SV_SM3_PASSWORD_DIGEST_ROUNDS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 847;
+static int64_t var_amount = 848;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

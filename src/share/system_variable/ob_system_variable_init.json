@@ -11894,7 +11894,7 @@
     "flags": "GLOBAL",
     "min_val": "5000",
     "max_val": "4095000",
-    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds",
     "publish_version": "",
     "info_cn": "存储到磁盘的密码哈希所使用的 SHA256 迭代次数",
     "background_cn": "",
@@ -11940,6 +11940,22 @@
     "flags": "SESSION | GLOBAL | NEED_SERIALIZE | INFLUENCE_PLAN | INFLUENCE_PL | ORACLE_ONLY",
     "publish_version": "4.4.2.3",
     "info_cn": "控制 SQL 作用域内 PL 复杂类型是否使用 SQL UDT 以优化内存",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_sm3_password_digest_rounds": {
+    "id": 10768,
+    "name": "ob_sm3_password_digest_rounds",
+    "default_value": "5000",
+    "base_value": "5000",
+    "data_type": "int",
+    "info": "Number of SM3 iterations for password hash stored to disk",
+    "flags": "GLOBAL",
+    "min_val": "5000",
+    "max_val": "4095000",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_password_digest_rounds",
+    "publish_version": "",
+    "info_cn": "存储到磁盘的密码哈希所使用的 SM3 迭代次数",
     "background_cn": "",
     "ref_url": ""
   }

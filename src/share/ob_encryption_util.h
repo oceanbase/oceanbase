@@ -13,6 +13,7 @@
 #include "lib/ob_define.h"
 #include <openssl/evp.h>
 #include "lib/container/ob_se_array.h"
+#include "lib/encrypt/ob_sm3_crypt.h"
 
 #ifndef OCEANBASE_SHARE_OB_ENCRYPTION_UTIIL_H
 #define OCEANBASE_SHARE_OB_ENCRYPTION_UTIIL_H
@@ -279,7 +280,7 @@ enum ObHashAlgorithm {
   OB_HASH_MAX
 };
 
-const int64_t OB_SM3_DIGEST_LENGTH = 32;  // 256 bits
+using common::OB_SM3_DIGEST_LENGTH;  // Re-export from ob_sm3_crypt.h for share-layer code
 
 class ObHashUtil
 {

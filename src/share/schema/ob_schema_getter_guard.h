@@ -494,12 +494,17 @@ public:
                         common::ObIArray<uint64_t> &enable_role_id_array,
                         SSL *ssl_st,
                         const ObUserInfo *&sel_user_info);
-  int try_caching_sha2_fast_auth_verify(
-      const ObUserLoginInfo &login_info,
-      const common::ObString &host_name,
-      uint64_t tenant_id,
-      int64_t password_last_changed_timestamp,
-      bool &fast_auth_success_flag);
+  int try_secure_fast_auth_verify(const ObUserLoginInfo &login_info,
+                                  const common::ObString &host_name,
+                                  uint64_t tenant_id,
+                                  int64_t password_last_changed_timestamp,
+                                  const common::ObString &plugin,
+                                  bool &fast_auth_success_flag);
+  int verify_secure_password_and_cache(const ObUserLoginInfo &login_info,
+                                       const ObUserInfo &user_info,
+                                       const common::ObString &plugin,
+                                       uint64_t tenant_id,
+                                       bool &is_found);
   int check_catalog_access(const ObSessionPrivInfo &session_priv,
                            const common::ObIArray<uint64_t> &enable_role_id_array,
                            const common::ObString &catalog_name);

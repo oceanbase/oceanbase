@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include <gtest/gtest.h>
+#include "deps/oblib/src/lib/encrypt/ob_encrypted_helper.h"
 #include "deps/oblib/src/lib/encrypt/ob_sha256_crypt.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/allocator/page_arena.h"
@@ -264,7 +265,7 @@ TEST_F(TestObSha256CryptMySQLCompat, GenerateSha2MultiHash) {
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_FALSE(output.empty());
 
-  // Verify output format: Should start with $5$
+  // Verify output format: Should start with $5$ (unix-crypt intermediate form)
   ASSERT_TRUE(output.length() > 3);
   ASSERT_EQ(memcmp(output.ptr(), "$5$", 3), 0);
 
@@ -572,6 +573,29 @@ TEST_F(TestObSha256CryptMySQLCompat, AuthStringErrorHandling) {
   std::cout << "Auth string error handling test passed" << std::endl;
 }
 
+TEST_F(TestObSha256CryptMySQLCompat, AuthStringRejectsIterationOverflow) {
+  ObArenaAllocator allocator;
+  const char salt[CRYPT_SALT_LENGTH + 1] = "01234567899876543210";
+  const char digest[STORED_SHA256_DIGEST_LENGTH + 1] =
+      "./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcde";
+  ObString output;
+
+  int ret = ObSha256Crypt::serialize_auth_string(
+      salt, CRYPT_SALT_LENGTH,
+      digest, STORED_SHA256_DIGEST_LENGTH,
+      4095000, allocator, output);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_EQ(output.length(), 70);
+
+  output.reset();
+  ret = ObSha256Crypt::serialize_auth_string(
+      salt, CRYPT_SALT_LENGTH,
+      digest, STORED_SHA256_DIGEST_LENGTH,
+      4096000, allocator, output);
+  ASSERT_NE(ret, OB_SUCCESS);
+  ASSERT_TRUE(output.empty());
+}
+
 // Test 13.3: Auth String MySQL format compatibility test
 TEST_F(TestObSha256CryptMySQLCompat, AuthStringMySQLCompatibility) {
   ObArenaAllocator allocator;
@@ -692,7 +716,7 @@ TEST_F(TestObSha256CryptMySQLCompat, AuthStringMySQLExactFormat) {
   ASSERT_NE(salt_begin, nullptr);
   ASSERT_NE(salt_end, nullptr);
 
-  // Extract digest part (after $5$salt$)
+  // Extract digest part (after $5$XXX$salt$)
   const char *hash_begin = salt_end + 1; // skip $
   int hash_len = password_hash.length() - (hash_begin - password_hash.ptr());
 
@@ -964,7 +988,7 @@ TEST_F(TestObSha256CryptMySQLCompat, MySQLAuthStringCompatibilityVerification) {
 
     ASSERT_GT(extracted_salt_len, 0) << "Salt extraction failed, test case: " << (i + 1);
 
-    // 提取 digest 部分
+    // 提取 digest 部分 (unix intermediate: $5$XXX$salt$digest)
     const char *hash_begin = salt_end + 1;
     int hash_len = generated_hash.length() - (hash_begin - generated_hash.ptr());
     ASSERT_EQ(hash_len, 43) << "Generated digest length incorrect, test case: " << (i + 1);
@@ -981,6 +1005,98 @@ TEST_F(TestObSha256CryptMySQLCompat, MySQLAuthStringCompatibilityVerification) {
   }
 
   std::cout << "[OK] MySQL authentication string兼容性测试共通过 " << passed << " / " << test_count << " 个用例" << std::endl;
+}
+
+// Test 18: check_sha256_password with empty stored_auth_string.
+// Empty stored string matches only an empty plaintext password (unified with SM3 semantics).
+TEST_F(TestObSha256CryptMySQLCompat, CheckPasswordEmptyStoredAuthString) {
+  ObString empty_stored;
+  ObString scramble;
+  bool is_match = true;
+
+  // Empty stored + empty password => match, OB_SUCCESS
+  ObString empty_password;
+  int ret = ObSha256Crypt::check_sha256_password(empty_password, scramble, empty_stored, is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(is_match);
+
+  // Empty stored + non-empty password => no match, OB_SUCCESS
+  ObString non_empty_password("some_password");
+  is_match = true;
+  ret = ObSha256Crypt::check_sha256_password(non_empty_password, scramble, empty_stored, is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(is_match);
+}
+
+// Test 19: check_sha256_password full-verification path (correct vs wrong password)
+TEST_F(TestObSha256CryptMySQLCompat, CheckPasswordFullVerification) {
+  ObString password("HahaH0hO1234#$@#%");
+  char enc_buf[SECURE_PASSWD_BUF_LEN];
+  MEMSET(enc_buf, 0, sizeof(enc_buf));
+  ObString encrypted_pass;
+
+  int ret = ObSha256Crypt::encrypt_passwd_to_caching_sha2(password, encrypted_pass, enc_buf, sizeof(enc_buf));
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObString scramble;
+  bool is_match = false;
+  ret = ObSha256Crypt::check_sha256_password(password, scramble, encrypted_pass, is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(is_match);
+
+  ObString wrong_password("wrong_password");
+  is_match = true;
+  ret = ObSha256Crypt::check_sha256_password(wrong_password, scramble, encrypted_pass, is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(is_match);
+}
+
+// Test 20: encrypt_passwd_to_caching_sha2 with empty password.
+// Empty password produces an empty auth string and OB_SUCCESS (unified with SM3 semantics).
+TEST_F(TestObSha256CryptMySQLCompat, EncryptEmptyPasswordProducesEmptyAuthString) {
+  ObString empty_password;
+  char enc_buf[SECURE_PASSWD_BUF_LEN];
+  MEMSET(enc_buf, 0, sizeof(enc_buf));
+  ObString encrypted_pass;
+
+  int ret = ObSha256Crypt::encrypt_passwd_to_caching_sha2(empty_password, encrypted_pass, enc_buf, sizeof(enc_buf));
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(encrypted_pass.empty());
+}
+
+// Test 21: encrypt_passwd_to_caching_sha2 rounds strict validation.
+// rounds must be > OB_CRYPT_AUTH_ROUNDS_DEFAULT(5000) and a multiple of 1000,
+// otherwise it falls back to OB_CRYPT_AUTH_ROUNDS_DEFAULT.
+TEST_F(TestObSha256CryptMySQLCompat, EncryptRoundsStrictValidation) {
+  ObString password("test_password");
+
+  // rounds=1000 does not satisfy (>5000 && multiple of 1000) => falls back to default 5000
+  {
+    char enc_buf[SECURE_PASSWD_BUF_LEN];
+    MEMSET(enc_buf, 0, sizeof(enc_buf));
+    ObString encrypted_pass;
+    int ret = ObSha256Crypt::encrypt_passwd_to_caching_sha2(password, encrypted_pass, enc_buf, sizeof(enc_buf), 1000);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ObString salt, digest;
+    int64_t iterations = 0;
+    ASSERT_EQ(OB_SUCCESS, ObSha256Crypt::deserialize_auth_string(encrypted_pass, salt, digest, iterations));
+    ASSERT_EQ(5000, iterations);
+  }
+
+  // rounds=6000 satisfies (>5000 && multiple of 1000) => takes effect
+  {
+    char enc_buf[SECURE_PASSWD_BUF_LEN];
+    MEMSET(enc_buf, 0, sizeof(enc_buf));
+    ObString encrypted_pass;
+    int ret = ObSha256Crypt::encrypt_passwd_to_caching_sha2(password, encrypted_pass, enc_buf, sizeof(enc_buf), 6000);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ObString salt, digest;
+    int64_t iterations = 0;
+    ASSERT_EQ(OB_SUCCESS, ObSha256Crypt::deserialize_auth_string(encrypted_pass, salt, digest, iterations));
+    ASSERT_EQ(6000, iterations);
+  }
 }
 
 int main(int argc, char **argv)

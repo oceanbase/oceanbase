@@ -16,41 +16,30 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/ob_errno.h"
 #include "lib/string/ob_string.h"
+#include "lib/encrypt/ob_crypt_common.h"
 
 namespace oceanbase {
 namespace common {
 
-// Server-generated scramble length, consistent with ObSMConnection::SCRAMBLE_BUF_SIZE
-#define SCRAMBLE_LENGTH 20
+// SHA256 digest length (byte semantics)
+#define OB_SHA256_DIGEST_LENGTH OB_CRYPT_RAW_DIGEST_LEN32
 
-// SHA256-crypt related constant definitions
-#define OB_SHA256_DIGEST_LENGTH 32  // SHA256 digest length (byte semantics)
-#define OB_SHA256_MIXCHARS 32       // Number of mix characters
-#define OB_SHA256_SALT_LENGTH 20    // Salt length
-#define OB_SHA256_ROUNDS_DEFAULT 5000 // Default rounds
-#define OB_SHA256_ROUNDS_MIN 1000     // Minimum rounds
-#define OB_SHA256_ROUNDS_MAX 999999999 // Maximum rounds
-#define OB_SHA256_MAX_PASSWORD_SIZE 256 // Maximum password length
-
-// Auth string serialization related constants
-#define OB_AUTH_STRING_DELIMITER '$'
-#define OB_AUTH_STRING_DIGEST_TYPE 'A'  // SHA256
-#define OB_AUTH_STRING_ITERATION_LENGTH 3 // Iteration count length (hexadecimal)
-#define OB_AUTH_STRING_SALT_LENGTH 20     // Salt length
-#define OB_AUTH_STRING_DIGEST_LENGTH 43   // Digest length (after Base64 encoding, byte semantics)
-#define OB_AUTH_STRING_ITERATION_MULTIPLIER 1000 // Iteration count multiplier
-#define CACHING_SHA2_PASSWD_BUF_LEN (1 + 1 + 1 + OB_AUTH_STRING_ITERATION_LENGTH + 1 + OB_AUTH_STRING_SALT_LENGTH + OB_AUTH_STRING_DIGEST_LENGTH + 1) // Authentication string buffer length (including '\0', byte semantics)
+// SHA256 magic character for the final stored auth string ('$A$...')
+#define OB_AUTH_STRING_DIGEST_TYPE 'A'
 
 // SHA256-crypt algorithm implementation
 class ObSha256Crypt {
 public:
   /**
-   * Generate SHA256-crypt hash value
+   * Generate SHA256-crypt multi-round hash in unix-crypt intermediate form:
+   * $5$[3-digit-hex]$salt$base64_digest
+   * Final stored auth string ($A$...) is produced by serialize_auth_string.
+   *
    * @param plaintext Plaintext password
    * @param plaintext_len Plaintext password length
    * @param salt Salt value
    * @param salt_len Salt length
-   * @param rounds Hash rounds (optional, default uses OB_SHA256_ROUNDS_DEFAULT)
+   * @param rounds Hash rounds (optional, default uses OB_CRYPT_AUTH_ROUNDS_DEFAULT)
    * @param allocator Memory allocator
    * @param output Output hash string
    * @return Error code
@@ -73,7 +62,8 @@ public:
   static int generate_user_salt(char *buffer, const int64_t buffer_len);
 
   /**
-   * Extract user salt from encrypted string
+   * Extract user salt from unix-crypt intermediate string
+   * Format: $5$XXX$salt$digest (salt is between the 3rd and 4th $)
    * @param crypt_str Encrypted string
    * @param crypt_str_len Encrypted string length
    * @param salt_begin Salt start position (output)
@@ -201,22 +191,15 @@ public:
    * @param encrypted_pass Output encrypted password string
    * @param enc_buf Output buffer
    * @param buf_len Buffer length
-   * @param digest_rounds Number of SHA256 iterations (default: OB_SHA256_ROUNDS_DEFAULT if 0)
+   * @param digest_rounds Number of SHA256 iterations (default: OB_CRYPT_AUTH_ROUNDS_DEFAULT)
    * @return Error code
    */
   static int encrypt_passwd_to_caching_sha2(const ObString &password,
                                               ObString &encrypted_pass,
                                               char *enc_buf,
                                               const int64_t buf_len,
-                                              const int64_t digest_rounds = OB_SHA256_ROUNDS_DEFAULT);
+                                              const int64_t digest_rounds = OB_CRYPT_AUTH_ROUNDS_DEFAULT);
 
-private:
-  // Internal helper functions
-  static int base64_encode_24bit(const unsigned char *data,
-                                 char *output,
-                                 int64_t &output_len,
-                                 int64_t max_output_len);
-  static void clear_sensitive_data(unsigned char *data, int64_t len);
 };
 
 } // namespace common
