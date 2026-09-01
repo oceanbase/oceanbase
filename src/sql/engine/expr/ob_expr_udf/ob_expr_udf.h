@@ -55,6 +55,7 @@ public:
       is_result_cache_(false),
       is_deterministic_(false),
       has_out_param_(false),
+      has_udt_self_param_(false),
       external_routine_type_(ObExternalRoutineType::INTERNAL_ROUTINE),
       external_routine_entry_(),
       external_routine_url_(),
@@ -90,6 +91,7 @@ public:
   bool is_result_cache_;
   bool is_deterministic_;
   bool has_out_param_;
+  bool has_udt_self_param_;
   ObExternalRoutineType external_routine_type_;
   common::ObString external_routine_entry_;
   common::ObString external_routine_url_;
