@@ -62,7 +62,7 @@ int ObAllVirtualTenantMviewRunningJob::inner_get_next_row(ObNewRow *&row)
         MTL_SWITCH(cur_tenant_id)
         {
           ObMViewMaintenanceService *mview_service = MTL(ObMViewMaintenanceService *);
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
           omt::ObTenantConfigGuard tenant_config(TENANT_CONF(cur_tenant_id));
           const bool refresh_queuing_enabled = tenant_config.is_valid() && tenant_config->_enable_mv_refresh_queuing;
           // New engine: pending task manager is the source of truth for
@@ -257,7 +257,7 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::check_fill_param() const
   return ret;
 }
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
     const ObMViewPendingRunningJobInfo &job_info)
 {

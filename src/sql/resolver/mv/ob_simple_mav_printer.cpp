@@ -26,6 +26,11 @@ int ObSimpleMAVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
   dml_stmts.reuse();
   const TableItem *source_table = NULL;
   ObMergeStmt *merge_stmt = NULL;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  if (OB_FAIL(check_enable_min_max_opt())) {
+    LOG_WARN("failed to check enable min max optimization", K(ret));
+  } else
+#endif
   if (OB_UNLIKELY(1 != mv_def_stmt_.get_table_size()
       || OB_ISNULL(source_table = mv_def_stmt_.get_table_item(0)))) {
     ret = OB_ERR_UNEXPECTED;
@@ -62,6 +67,11 @@ int ObSimpleMAVPrinter::gen_real_time_view(ObSelectStmt *&sel_stmt)
   sel_stmt = NULL;
   TableItem *view_table = NULL;
   ObSelectStmt *view_stmt = NULL;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  if (OB_FAIL(check_enable_min_max_opt())) {
+    LOG_WARN("failed to check enable min max optimization", K(ret));
+  } else
+#endif
   if (OB_FAIL(create_simple_stmt(sel_stmt))) {
     LOG_WARN("failed to create simple stmt", K(ret));
   } else if (OB_FAIL(gen_inner_real_time_view_for_mav(view_stmt))) {
@@ -570,7 +580,14 @@ int ObSimpleMAVPrinter::gen_update_assignments(const TableItem &target_table,
   }
 
   // 3. other select exprs except group by exprs
-  if (OB_SUCC(ret) && OB_FAIL(add_replaced_expr_for_group_recalculate_aggr(source_table, copier))) {
+  if (OB_FAIL(ret)) {
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  } else if (enable_min_max_opt_) {
+    if (OB_FAIL(add_min_max_opt_update_exprs(target_table, source_table, copier))) {
+      LOG_WARN("failed to add min max optimized update exprs", K(ret));
+    }
+#endif
+  } else if (OB_FAIL(add_replaced_expr_for_group_recalculate_aggr(source_table, copier))) {
     LOG_WARN("failed to add replace pair for min max aggr", K(ret));
   }
 
@@ -792,6 +809,13 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
       LOG_WARN("failed to pushback", K(ret));
     }
   }
+
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+  if (OB_SUCC(ret) && enable_min_max_opt_
+      && OB_FAIL(gen_min_max_delta_select_items(copier, dml_factor, select_items))) {
+    LOG_WARN("failed to generate min max delta select items", K(ret));
+  }
+#endif
   return ret;
 }
 
@@ -1129,16 +1153,31 @@ int ObSimpleMAVPrinter::gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt,
     ObRawExpr *l_expr = NULL;
     ObRawExpr *r_expr = NULL;
     ObRawExpr *match_cond = NULL;
+    ObRawExpr *extra_cond = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < delta_sel_items.count(); ++i) {
       SelectItem sel_item;
       sel_item.alias_name_ = delta_sel_items.at(i).alias_name_;
       sel_item.is_real_alias_ = true;
-      if (OB_FAIL(create_simple_column_expr(left_table->get_table_name(), sel_item.alias_name_, left_table->table_id_, sel_item.expr_))) {
+      if (OB_ISNULL(delta_sel_items.at(i).expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(i), K(delta_sel_items));
+      } else if (ObMVChecker::is_group_recalculate_aggr(*delta_sel_items.at(i).expr_)) {
+        /* do nothing */
+      } else if (OB_FAIL(create_simple_column_expr(left_table->get_table_name(),
+                                                   sel_item.alias_name_,
+                                                   left_table->table_id_,
+                                                   sel_item.expr_))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else if (OB_FAIL(delta_stmt->get_select_items().push_back(sel_item))) {
         LOG_WARN("failed to pushback", K(ret));
       }
     }
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    if (OB_SUCC(ret) && enable_min_max_opt_
+        && OB_FAIL(add_min_max_opt_extra_cond(*left_table, *joined_table, extra_cond))) {
+      LOG_WARN("failed to add min max optimized join condition", K(ret));
+    }
+#endif
     for (int64_t i = 0; OB_SUCC(ret) && i < calc_aggr_sel_items.count(); ++i) {
       SelectItem sel_item;
       sel_item.alias_name_ = calc_aggr_sel_items.at(i).alias_name_;
@@ -1148,8 +1187,19 @@ int ObSimpleMAVPrinter::gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt,
         LOG_WARN("unexpected null", K(ret), K(i), K(calc_aggr_sel_items));
       } else if (!ObMVChecker::is_group_recalculate_aggr(*calc_aggr_sel_items.at(i).expr_)) {
         /* do nothing */
-      } else if (OB_FAIL(create_simple_column_expr(right_table->get_table_name(), sel_item.alias_name_, right_table->table_id_, sel_item.expr_))) {
+      } else if (OB_FAIL(create_simple_column_expr(right_table->get_table_name(),
+                                                   sel_item.alias_name_,
+                                                   right_table->table_id_,
+                                                   sel_item.expr_))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+      } else if (enable_min_max_opt_
+                 && OB_FAIL(gen_min_max_opt_expr(*left_table,
+                                                 extra_cond,
+                                                 sel_item.alias_name_,
+                                                 sel_item.expr_))) {
+        LOG_WARN("failed to generate min max optimized expr", K(ret));
+#endif
       } else if (OB_FAIL(delta_stmt->get_select_items().push_back(sel_item))) {
         LOG_WARN("failed to pushback", K(ret));
       }

@@ -14,7 +14,7 @@
 
 #include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 #include "rootserver/mview/ob_mview_pending_task_define.h"
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
 #endif
@@ -350,7 +350,7 @@ int ObMViewExecutorUtil::resolve_mview_list_and_method(ObSchemaGetterGuard *sche
   return ret;
 }
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
                                            uint64_t tenant_id,
                                            int64_t refresh_id,

@@ -15,7 +15,7 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
 #endif
 #include "share/ob_global_stat_proxy.h"
@@ -861,7 +861,7 @@ int ObMViewSchedJobUtils::kill_mview_refreshes(
                           const bool is_drop)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   obrpc::ObKillMViewRefreshArg arg;
   arg.tenant_id_ = tenant_id;
   arg.mview_id_ = mview_id;

@@ -57,7 +57,7 @@ public:
                                            uint64_t &mview_id,
                                            share::schema::ObMVRefreshMethod &refresh_method);
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   // Polling helpers for DBMS_MVIEW.REFRESH sync-wait loop.
   // Polls __all_mview_refresh_pending_task until done, then reads
   // __all_mview_refresh_run_stats.result. Returns the task error code on

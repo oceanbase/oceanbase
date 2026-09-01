@@ -149,7 +149,7 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument for materialized view refresh", K(ret));
     }
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
     // tenant_config must be read after tenant_id is populated (TENANT_CONF(OB_INVALID_TENANT_ID) always returns invalid).
     ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     const bool refresh_queuing_enabled = (data_version >= DATA_VERSION_4_4_2_2)
@@ -163,7 +163,7 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
   UNUSEDx(async, force);
 #endif
     if (OB_FAIL(ret)) {
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
     } else if (refresh_queuing_enabled) {
       share::schema::ObMVRefreshMethod refresh_method = share::schema::ObMVRefreshMethod::MAX;
       rootserver::ObMViewMaintenanceService *mview_maintenance_service = MTL(rootserver::ObMViewMaintenanceService *);
@@ -366,7 +366,7 @@ int ObDBMSMViewMysql::kill(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &resul
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_MV_REFRESH_QUEUEING
+#ifndef OB_BUILD_MV_CLOSE_MODULES
   UNUSEDx(pl_ctx, params);
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("kill mview refresh is not supported in this build", KR(ret));

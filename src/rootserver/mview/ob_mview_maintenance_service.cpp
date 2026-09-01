@@ -82,7 +82,7 @@ int ObMViewMaintenanceService::init()
       LOG_WARN("fail to create mview refresh info cache", KR(ret));
     } else if (OB_FAIL(mview_mds_map_.create(bucket_num, attr))) {
       LOG_WARN("fail to create mview mds map", KR(ret));
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
     } else if (OB_FAIL(pending_task_manager_.init())) {
       LOG_WARN("fail to init pending task manager", KR(ret));
 #endif
@@ -124,7 +124,7 @@ void ObMViewMaintenanceService::sys_ls_task_stop_()
   collect_mv_merge_info_task_.stop();
   mview_clean_snapshot_task_.stop();
   mview_mds_task_.stop();
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   pending_task_manager_.stop();
 #endif
 }
@@ -141,7 +141,7 @@ void ObMViewMaintenanceService::wait()
   mview_clean_snapshot_task_.wait();
   mview_update_cache_task_.wait();
   mview_mds_task_.wait();
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   pending_task_manager_.wait();
 #endif
 }
@@ -161,7 +161,7 @@ void ObMViewMaintenanceService::destroy()
   mview_refresh_info_cache_.destroy();
   mview_mds_task_.destroy();
   mview_mds_map_.destroy();
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   pending_task_manager_.destroy();
 #endif
 }
@@ -200,7 +200,7 @@ int ObMViewMaintenanceService::inner_switch_to_leader()
     } else if (OB_FAIL(MTL(logservice::ObLogService *)->
                        get_palf_role(share::SYS_LS, role, proposal_id))) {
       LOG_WARN("fail to get palf role", KR(ret), K(role), K(proposal_id));
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
     } else if (OB_FAIL(pending_task_manager_.start())) {
       LOG_WARN("fail to start pending task manager", KR(ret));
 #endif
@@ -547,7 +547,7 @@ int ObMViewMaintenanceService::get_min_mview_mds_snapshot(share::SCN &scn)
 int ObMViewMaintenanceService::get_min_mview_pending_task_snapshot(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   if (OB_FAIL(pending_task_manager_.get_min_pending_task_snapshot(scn))) {
     LOG_WARN("fail to get min mview pending task snapshot", K(ret));
   }

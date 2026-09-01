@@ -23,4 +23,8 @@ DEF_MV_COMPAT_FEATURE(DISABLE_SEMI_TO_INNER_HINT,
     "Remove built-in SEMI_TO_INNER hint, rely on kernel semi to inner transform",
     CLUSTER_VERSION_4_4_2_2)
 
+DEF_MV_COMPAT_FEATURE(MIN_MAX_RECALC_OPT,
+    "Optimize MIN/MAX recalculation for simple mav",
+    CLUSTER_VERSION_4_4_2_3)
+
 #endif

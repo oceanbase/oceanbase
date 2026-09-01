@@ -184,6 +184,7 @@ public:
   static const ObString WIN_ROW_NUM_COL_NAME;
   static const ObString WIN_CNT_ALL_COL_NAME;
   static const ObString WIN_CNT_NOT_NULL_COL_NAME;
+  static const ObString DELETE_ROW_COUNT_COL_NAME;
 
   int print_mv_operators(ObIAllocator &str_alloc, ObIArray<ObString> &operators);
   int gen_child_refresh_dmls_for_union_all(ObIArray<ObDMLStmt*> &dml_stmts);

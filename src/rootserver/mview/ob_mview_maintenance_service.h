@@ -24,7 +24,7 @@
 #include "rootserver/mview/ob_replica_safe_check_task.h"
 #include "rootserver/mview/ob_mview_update_cache_task.h"
 #include "rootserver/mview/ob_mview_mds_op_task.h"
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
 #endif
 
@@ -160,7 +160,7 @@ public:
                                    share::SCN &target_data_sync_scn);
   int64_t get_proposal_id() { return proposal_id_; }
 
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   ObMViewPendingTaskManager *get_pending_task_manager() { return &pending_task_manager_; }
   const ObMViewPendingTaskManager *get_pending_task_manager() const { return &pending_task_manager_; }
 #endif
@@ -190,7 +190,7 @@ private:
   int64_t mview_mds_timestamp_;
   MViewMdsOpMap mview_mds_map_;
   int64_t proposal_id_;
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
   ObMViewPendingTaskManager pending_task_manager_;
 #endif
 };

@@ -58,7 +58,7 @@ private:
       output_column_ids_() {}
     virtual ~FillScanner() {}
     int operator()(const common::hash::HashMapPair<transaction::ObTransID, storage::ObMViewOpArg> &entry);
-#ifdef OB_BUILD_MV_REFRESH_QUEUEING
+#ifdef OB_BUILD_MV_CLOSE_MODULES
     int operator()(const rootserver::ObMViewPendingRunningJobInfo &job_info);
 #endif
     int init(uint64_t effective_tenant_id,

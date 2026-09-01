@@ -40,6 +40,7 @@ const ObString ObMVPrinter::WIN_MIN_SEQ_COL_NAME  = "MINSEQ$$";
 const ObString ObMVPrinter::WIN_ROW_NUM_COL_NAME  = "RN$$";
 const ObString ObMVPrinter::WIN_CNT_ALL_COL_NAME  = "CNT_A$$";
 const ObString ObMVPrinter::WIN_CNT_NOT_NULL_COL_NAME  = "CNT_N$$";
+const ObString ObMVPrinter::DELETE_ROW_COUNT_COL_NAME  = "DEL_ROW_CNT$$";
 
 int ObMVPrinter::print_mv_operators(ObIAllocator &str_alloc,
                                     ObIArray<ObString> &operators)

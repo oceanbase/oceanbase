@@ -27,7 +27,8 @@ public:
                               const share::schema::ObTableSchema &mv_container_schema,
                               const ObSelectStmt &mv_def_stmt,
                               const MlogSchemaPairIArray &mlog_tables)
-    : ObMVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, &mlog_tables)
+    : ObMVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, &mlog_tables),
+      enable_min_max_opt_(false)
     {}
 
   ~ObSimpleMAVPrinter() {}
@@ -36,6 +37,7 @@ protected:
   virtual int gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts) override;
   virtual int gen_real_time_view(ObSelectStmt *&sel_stmt) override;
   virtual int gen_inner_delta_mav_for_mav(ObIArray<ObSelectStmt*> &inner_delta_mavs);
+  int check_enable_min_max_opt();
   int gen_real_time_view_filter_for_mav(ObSelectStmt &sel_stmt);
   int gen_inner_real_time_view_for_mav(ObSelectStmt *&inner_rt_view);
   int gen_merge_for_simple_mav(ObMergeStmt *&merge_stmt);
@@ -54,6 +56,11 @@ protected:
                                           ObRawExpr *target_sum,
                                           ObRawExpr *source_sum,
                                           ObRawExpr *&calc_sum);
+  int gen_calc_expr_for_update_clause_min_max(const ObItemType aggr_type,
+                                              ObRawExpr *extra_cond,
+                                              ObRawExpr *target_value,
+                                              ObRawExpr *source_value,
+                                              ObRawExpr *&calc_value);
   int gen_update_assignments(const TableItem &target_table,
                              const TableItem &source_table,
                              ObIArray<ObAssignment> &assignments);
@@ -64,6 +71,9 @@ protected:
                                           const int64_t explicit_dml_factor,
                                           const ObIArray<ObRawExpr*> &group_by_exprs,
                                           ObIArray<SelectItem> &select_items);
+  int gen_min_max_delta_select_items(ObRawExprCopier &copier,
+                                     ObRawExpr *dml_factor,
+                                     ObIArray<SelectItem> &select_items);
   int gen_simple_join_mav_basic_select_list(const TableItem &table,
                                             ObIArray<SelectItem> &select_items,
                                             ObIArray<ObRawExpr*> *group_by_exprs);
@@ -73,11 +83,23 @@ protected:
                           ObRawExpr *&aggr_print_expr);
   int add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr);
   int add_any_value_above_expr(ObRawExpr *expr, ObRawExpr *&res_expr);
-  int add_replaced_expr_for_group_recalculate_aggr(const TableItem &source_table, ObRawExprCopier &copier);
+  int add_replaced_expr_for_group_recalculate_aggr(const TableItem &source_table,
+                                                   ObRawExprCopier &copier);
+  int add_min_max_opt_update_exprs(const TableItem &target_table,
+                                   const TableItem &source_table,
+                                   ObRawExprCopier &copier);
   int get_inner_sel_name_for_aggr(const ObAggFunRawExpr &aggr, ObString &sel_name);
   int gen_group_recalculate_aggr_view(ObSelectStmt *&view_stmt);
   int gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt, ObSelectStmt *&delta_stmt);
+  int add_min_max_opt_extra_cond(const TableItem &left_table,
+                                 JoinedTable &joined_table,
+                                 ObRawExpr *&extra_cond);
+  int gen_min_max_opt_expr(const TableItem &left_table,
+                           ObRawExpr *extra_cond,
+                           const ObString &column_name,
+                           ObRawExpr *&recalculate_expr);
 protected:
+  bool enable_min_max_opt_;
   DISALLOW_COPY_AND_ASSIGN(ObSimpleMAVPrinter);
 };
 

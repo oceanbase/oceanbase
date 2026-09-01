@@ -53,7 +53,7 @@ if(OB_BUILD_SPM)
   )
 endif()
 
-if(OB_BUILD_MV_REFRESH_QUEUEING)
+if(OB_BUILD_MV_CLOSE_MODULES)
   target_include_directories(
     oblib_base_without_pass INTERFACE
     ${CMAKE_SOURCE_DIR}/close_modules/mview
