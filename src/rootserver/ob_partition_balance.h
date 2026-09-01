@@ -192,6 +192,12 @@ private:
       const ObBalanceGroup &bg,
       const ObLSID &ls_id,
       ObBalanceGroupInfo *&bg_info);
+  int get_bg_ls_info_pair_(
+      const ObArray<ObBalanceGroupInfo *> &bg_ls_array,
+      const ObLSID &src_ls_id,
+      const ObLSID &dest_ls_id,
+      ObBalanceGroupInfo *&src_bg_ls_info,
+      ObBalanceGroupInfo *&dest_bg_ls_info);
   int get_or_create_bg_ls_array_(
       ObBalanceGroupMap &bg_map,
       const ObBalanceGroup &bg,
@@ -206,19 +212,64 @@ private:
       const int64_t cnt,
       const int64_t size,
       const int64_t balance_weight);
+  template <typename Desc>
+  int balance_partition_disk_between_desc_array_(
+      const ObBalanceGroup::Scope scope,
+      ObArray<Desc *> &desc_array,
+      bool &has_progress);
+  template <typename Desc>
   int try_swap_part_group_(
       const ObBalanceGroup::Scope scope,
-      ObLSDesc &src_ls,
-      ObLSDesc &dest_ls,
+      Desc &src_desc,
+      Desc &dest_desc,
       int64_t part_group_min_size,
       int64_t &swap_cnt);
+  template <typename Desc>
   int try_swap_part_group_in_bg_(
       ObBalanceGroupMap::iterator &iter,
-      ObLSDesc &src_ls,
-      ObLSDesc &dest_ls,
+      Desc &src_desc,
+      Desc &dest_desc,
       int64_t part_group_min_size,
       int64_t &swap_cnt);
-  bool check_ls_need_swap_(int64_t ls_more_size, int64_t ls_less_size);
+  template <typename Desc>
+  int try_swap_part_group_between_bgs_(
+      const ObBalanceGroup::Scope scope,
+      Desc &src_desc,
+      Desc &dest_desc,
+      int64_t part_group_min_size,
+      int64_t &swap_cnt);
+  template <typename Desc>
+  int try_swap_part_group_between_bg_pair_(
+      ObLSDesc &src_ls,
+      ObLSDesc &dest_ls,
+      ObBalanceGroupInfo &src_bg1_ls_info,
+      ObBalanceGroupInfo &dest_bg1_ls_info,
+      ObBalanceGroupInfo &src_bg2_ls_info,
+      ObBalanceGroupInfo &dest_bg2_ls_info,
+      Desc &src_desc,
+      Desc &dest_desc,
+      int64_t part_group_min_size,
+      int64_t &swap_cnt);
+  // disk balance move: move one part group when no swap is generated for this desc pair.
+  template <typename Desc>
+  int try_move_part_group_(
+      const ObBalanceGroup::Scope scope,
+      Desc &src_desc,
+      Desc &dest_desc,
+      int64_t &move_cnt);
+  template <typename Desc>
+  int try_move_part_group_in_bg_(
+      ObBalanceGroupMap::iterator &iter,
+      Desc &src_desc,
+      Desc &dest_desc,
+      int64_t &move_cnt);
+  int prepare_ls_group_desc_(
+      const ObArray<ObLSDesc *> &ls_desc_array,
+      ObArray<ObLSGroupDesc> &ls_group_desc_array);
+  template <typename Desc>
+  bool check_disk_need_balance_between_desc_(
+      const Desc &more_desc,
+      const Desc &less_desc);
   bool is_bg_with_balance_weight_(const ObArray<ObBalanceGroupInfo *> &ls_pg_desc_arr);
   int filter_bg_ls_by_primary_zone_(
       const ObArray<ObBalanceGroupInfo *> &bg_ls_array,

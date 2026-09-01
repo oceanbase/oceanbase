@@ -286,6 +286,51 @@ int ObBalanceGroupInfo::inner_swap_for_smallest_pg_(
   return ret;
 }
 
+int ObBalanceGroupInfo::transfer_out_part_group(
+    ObPartGroupInfo *const part_group,
+    ObBalanceGroupInfo &dest_bg_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(part_group)
+      || OB_UNLIKELY(!is_valid()
+      || !part_group->is_valid()
+      || !dest_bg_info.is_valid()
+      || bg_id_ != dest_bg_info.bg_id_
+      || ls_id_ == dest_bg_info.ls_id_)) {
+    // dest_bg_info must have different ls id from this
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(part_group), K(*this), K(dest_bg_info));
+  } else if (OB_ISNULL(pg_container_) || OB_ISNULL(dest_bg_info.pg_container_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part group container is null", KR(ret), KP(pg_container_), KP(dest_bg_info.pg_container_));
+  } else if (OB_FAIL(pg_container_->remove_part_group(part_group))) {
+    LOG_WARN("remove failed", KR(ret), KPC(pg_container_), KPC(part_group));
+  } else if (OB_FAIL(dest_bg_info.pg_container_->append_part_group(part_group))) {
+    LOG_WARN("append failed", KR(ret), K(dest_bg_info), KPC(part_group));
+  }
+  return ret;
+}
+
+int ObBalanceGroupInfo::get_closest_pg_to_target(
+    const int64_t max_size,
+    const int64_t target_size,
+    ObPartGroupInfo *&part_group) const
+{
+  int ret = OB_SUCCESS;
+  part_group = nullptr;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(pg_container_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_), KP(pg_container_));
+  } else if (OB_FAIL(pg_container_->get_closest_pg_to_target(max_size, target_size, part_group))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_TRACE("closest pg to target not found", KR(ret), KPC(pg_container_), K(max_size), K(target_size));
+    } else {
+      LOG_WARN("fail to get closest pg to target", KR(ret), KPC(pg_container_), K(max_size), K(target_size));
+    }
+  }
+  return ret;
+}
+
 int ObBalanceGroupInfo::get_balance_weight_array(
     ObIArray<int64_t> &weight_arr)
 {

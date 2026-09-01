@@ -87,6 +87,9 @@ public:
       ObPartGroupInfo *&part_group) const;
   int get_largest_part_group(ObPartGroupInfo *&pg) const;
   int get_smallest_part_group(ObPartGroupInfo *&pg) const;
+  // Select the part group closest to target_size whose data size is in (0, max_size],
+  // used to transfer out a part group for disk balance. pg may be null if none fits.
+  int get_closest_pg_to_target(const int64_t max_size, const int64_t target_size, ObPartGroupInfo *&pg) const;
   int64_t get_part_group_count() const;
   int64_t get_data_size() const;
   int64_t get_balance_weight() const;
@@ -226,6 +229,28 @@ private:
         return OB_SUCCESS;
       }
       int64_t &min_size_;
+      ObPartGroupInfo *&pg_;
+    };
+
+    // Select the part group whose data size is in (0, max_size] and closest to
+    // target_size. Used by disk balance move: max_size is the caller-provided
+    // upper bound, target_size (= diff/2) is the optimal move amount.
+    struct GetClosestPGToTarget
+    {
+      GetClosestPGToTarget(const int64_t max_size, const int64_t target_size, ObPartGroupInfo *&pg)
+          : max_size_(max_size), target_size_(target_size), pg_(pg) {}
+      int operator()(ObPartGroupInfo &tmp_pg) {
+        if (tmp_pg.get_data_size() > 0
+            && tmp_pg.get_data_size() <= max_size_
+            && (nullptr == pg_
+                || std::abs(tmp_pg.get_data_size() - target_size_)
+                   < std::abs(pg_->get_data_size() - target_size_))) {
+          pg_ = &tmp_pg;
+        }
+        return OB_SUCCESS;
+      }
+      int64_t max_size_;
+      int64_t target_size_;
       ObPartGroupInfo *&pg_;
     };
 

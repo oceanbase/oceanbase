@@ -63,6 +63,77 @@ bool ObLSDesc::compare_by_primary_zone(const ObLSDesc *left, const ObLSDesc *rig
   return false;
 }
 
+bool ObLSGroupDesc::less_data_size(const ObLSGroupDesc *left, const ObLSGroupDesc *right)
+{
+  bool bret = false;
+  if (OB_ISNULL(left) || OB_ISNULL(right)) {
+    // return false by default
+  } else if (left->get_data_size() < right->get_data_size()) {
+    bret = true;
+  } else if (left->get_data_size() == right->get_data_size()) {
+    bret = left->get_ls_group_id() > right->get_ls_group_id();
+  }
+  return bret;
+}
+
+int ObLSGroupDesc::add_ls_desc(ObLSDesc *ls_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(nullptr == ls_desc
+     || ls_desc->get_ls_group_id() != ls_group_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls_desc", KR(ret), KP(ls_desc), K(ls_group_id_));
+  } else if (OB_FAIL(ls_desc_array_.push_back(ls_desc))) {
+    LOG_WARN("push back failed", KR(ret), KPC(ls_desc));
+  }
+  return ret;
+}
+
+int64_t ObLSGroupDesc::get_data_size() const
+{
+  int64_t data_size = 0;
+  for (int64_t idx = 0; idx < ls_desc_array_.count(); ++idx) {
+    ObLSDesc *ls_desc = ls_desc_array_.at(idx);
+    if (OB_ISNULL(ls_desc)) {
+      // Should not happen: ls_group desc is built from valid LS descs; skip defensively.
+      SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "ls_desc is null", K(idx), K(ls_desc_array_));
+    } else {
+      data_size += ls_desc->get_data_size();
+    }
+  }
+  return data_size;
+}
+
+ObLSDesc *ObLSGroupDesc::get_max_size_ls() const
+{
+  ObLSDesc *max_size_ls = nullptr;
+  for (int64_t idx = 0; idx < ls_desc_array_.count(); ++idx) {
+    ObLSDesc *ls_desc = ls_desc_array_.at(idx);
+    if (OB_ISNULL(ls_desc)) {
+      // Should not happen: ls_group desc is built from valid LS descs; skip defensively.
+      SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "ls_desc is null", K(idx), K(ls_desc_array_));
+    } else if (OB_ISNULL(max_size_ls) || ls_desc->get_data_size() > max_size_ls->get_data_size()) {
+      max_size_ls = ls_desc;
+    }
+  }
+  return max_size_ls;
+}
+
+ObLSDesc *ObLSGroupDesc::get_min_size_ls() const
+{
+  ObLSDesc *min_size_ls = nullptr;
+  for (int64_t idx = 0; idx < ls_desc_array_.count(); ++idx) {
+    ObLSDesc *ls_desc = ls_desc_array_.at(idx);
+    if (OB_ISNULL(ls_desc)) {
+      // Should not happen: ls_group desc is built from valid LS descs; skip defensively.
+      SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "ls_desc is null", K(idx), K(ls_desc_array_));
+    } else if (OB_ISNULL(min_size_ls) || ls_desc->get_data_size() < min_size_ls->get_data_size()) {
+      min_size_ls = ls_desc;
+    }
+  }
+  return min_size_ls;
+}
+
 ObPartTransferJobGenerator::ObPartTransferJobGenerator()
     : inited_(false),
       tenant_id_(OB_INVALID_TENANT_ID),

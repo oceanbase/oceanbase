@@ -105,6 +105,29 @@ private:
   common::ObZone primary_zone_;
 };
 
+class ObLSGroupDesc
+{
+public:
+  ObLSGroupDesc() : ls_group_id_(OB_INVALID_INDEX) {}
+  ObLSGroupDesc(uint64_t ls_group_id) : ls_group_id_(ls_group_id) {}
+  ~ObLSGroupDesc() {}
+  void reset() {
+    ls_group_id_ = OB_INVALID_INDEX;
+    ls_desc_array_.reset();
+  }
+  static bool less_data_size(const ObLSGroupDesc *left, const ObLSGroupDesc *right);
+  uint64_t get_ls_group_id() const { return ls_group_id_; }
+  int64_t get_ls_count() const { return ls_desc_array_.count(); }
+  int add_ls_desc(ObLSDesc *ls_desc);
+  int64_t get_data_size() const;
+  ObLSDesc *get_max_size_ls() const;
+  ObLSDesc *get_min_size_ls() const;
+  TO_STRING_KV(K_(ls_group_id), K_(ls_desc_array));
+private:
+  uint64_t ls_group_id_;
+  common::ObArray<ObLSDesc *> ls_desc_array_;
+};
+
 typedef common::hash::ObHashMap<share::ObLSID, uint64_t> ObLSGroupIDMap;
 
 // Record the partitions to be transferred and generate the corresponding balance job and tasks.

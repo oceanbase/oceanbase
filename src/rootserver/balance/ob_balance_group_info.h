@@ -78,6 +78,12 @@ public:
       ObPartGroupInfo *&part_group);
   int swap_largest_for_smallest_pg(ObBalanceGroupInfo &dest_bg_info);
   int swap_for_smallest_pg(ObPartGroupInfo *const inner_pg, ObBalanceGroupInfo &dest_bg_info);
+  // transfer the specified part group (which must be in this bg info) to dest_bg_info,
+  // without taking any part group back (one-way transfer for disk balance)
+  int transfer_out_part_group(ObPartGroupInfo *const part_group, ObBalanceGroupInfo &dest_bg_info);
+  // select the part group closest to target_size whose data size is in (0, max_size],
+  // to be transferred out for disk balance. part_group may be null if none fits.
+  int get_closest_pg_to_target(const int64_t max_size, const int64_t target_size, ObPartGroupInfo *&part_group) const;
   int get_largest_part_group(ObPartGroupInfo *&part_group) const;
   int get_smallest_part_group(ObPartGroupInfo *&part_group) const;
   int get_balance_weight_array(ObIArray<int64_t> &weight_arr);

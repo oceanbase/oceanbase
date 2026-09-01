@@ -42,6 +42,36 @@ const int64_t PART_GROUP_SIZE_SEGMENT[] = {
   100 * 1024L * 1024L         // 100M
 };
 
+namespace
+{
+template <typename Desc>
+struct DiskBalanceDescTraits
+{
+};
+
+template <>
+struct DiskBalanceDescTraits<ObLSDesc>
+{
+  static ObLSDesc *get_src_ls(ObLSDesc &desc) { return &desc; }
+  static ObLSDesc *get_dest_ls(ObLSDesc &desc) { return &desc; }
+  static int64_t get_disk_threshold(const ObLSDesc &, const int64_t tenant_disk_threshold)
+  {
+    return tenant_disk_threshold;
+  }
+};
+
+template <>
+struct DiskBalanceDescTraits<ObLSGroupDesc>
+{
+  static ObLSDesc *get_src_ls(ObLSGroupDesc &desc) { return desc.get_max_size_ls(); }
+  static ObLSDesc *get_dest_ls(ObLSGroupDesc &desc) { return desc.get_min_size_ls(); }
+  static int64_t get_disk_threshold(const ObLSGroupDesc &desc, const int64_t tenant_disk_threshold)
+  {
+    return desc.get_ls_count() * tenant_disk_threshold;
+  }
+};
+}
+
 int ObPartitionBalance::ZoneBGItem::init(
     const ObBalanceGroup &bg,
     const int64_t data_disk,
@@ -481,6 +511,46 @@ int ObPartitionBalance::get_bg_info_by_ls_id_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no LS found", KR(ret), K(ls_id), K(bg));
     }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::get_bg_ls_info_pair_(
+    const ObArray<ObBalanceGroupInfo *> &bg_ls_array,
+    const ObLSID &src_ls_id,
+    const ObLSID &dest_ls_id,
+    ObBalanceGroupInfo *&src_bg_ls_info,
+    ObBalanceGroupInfo *&dest_bg_ls_info)
+{
+  int ret = OB_SUCCESS;
+  src_bg_ls_info = nullptr;
+  dest_bg_ls_info = nullptr;
+  if (OB_UNLIKELY(0 == bg_ls_array.count()
+      || !src_ls_id.is_valid()
+      || !dest_ls_id.is_valid()
+      || src_ls_id == dest_ls_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(bg_ls_array), K(src_ls_id), K(dest_ls_id));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < bg_ls_array.count(); ++idx) {
+      ObBalanceGroupInfo *bg_ls_info = bg_ls_array.at(idx);
+      CHECK_NOT_NULL(bg_ls_info);
+      if (OB_FAIL(ret)) {
+      } else if (bg_ls_info->get_ls_id() == src_ls_id) {
+        src_bg_ls_info = bg_ls_info;
+      } else if (bg_ls_info->get_ls_id() == dest_ls_id) {
+        dest_bg_ls_info = bg_ls_info;
+      }
+      if (OB_NOT_NULL(src_bg_ls_info) && OB_NOT_NULL(dest_bg_ls_info)) {
+        break;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(src_bg_ls_info) || OB_ISNULL(dest_bg_ls_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not found ls", KR(ret), K(src_ls_id), K(dest_ls_id),
+        KP(src_bg_ls_info), KP(dest_bg_ls_info));
   }
   return ret;
 }
@@ -1897,7 +1967,7 @@ int ObPartitionBalance::process_balance_partition_disk_()
   }
   // STEP 2: CLUSTER scope BGs disk balance across all LSes.
   // prepare_ls_desc_() uses ALL BGs (no scope filter) so that max/min LSes are
-  // determined by total disk usage, but only CLUSTER BGs are swapped.
+  // determined by total disk usage, but only CLUSTER BGs are swapped/moved.
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(prepare_ls_desc_())) {
     LOG_WARN("prepare ls desc failed", KR(ret));
@@ -1914,152 +1984,506 @@ int ObPartitionBalance::balance_partition_disk_within_ls_desc_array_(
     ObArray<ObLSDesc *> &ls_desc_array)
 {
   int ret = OB_SUCCESS;
-  int64_t ls_cnt = ls_desc_array.count();
-  if (OB_UNLIKELY(ls_cnt == 0 || scope == ObBalanceGroup::BG_SCOPE_MAX)) {
+  ObArray<ObLSGroupDesc> ls_group_desc_array;
+  ObArray<ObLSGroupDesc *> ls_group_desc_ptr_array;
+  if (OB_UNLIKELY(ls_desc_array.count() == 0 || scope == ObBalanceGroup::BG_SCOPE_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(scope), K(ls_desc_array));
-  }
-  while (OB_SUCC(ret)) {
-    lib::ob_sort(ls_desc_array.begin(), ls_desc_array.end(), ObLSDesc::less_data_size);
-    ObLSDesc *ls_max = ls_desc_array.at(ls_cnt - 1);
-    ObLSDesc *ls_min = ls_desc_array.at(0);
-    CHECK_NOT_NULL(ls_max);
-    CHECK_NOT_NULL(ls_min);
-    if (OB_FAIL(ret)) {
-    } else if (!check_ls_need_swap_(ls_max->get_data_size(), ls_min->get_data_size())) {
-      // disk has balance
-      break;
-    } else {
-      LOG_INFO("[PART_BALANCE] disk_balance", KPC(ls_max), KPC(ls_min));
-    }
-
-    /*
-     * select swap part_group by size segment
-     */
-    int64_t swap_cnt = 0;
-    for (int64_t idx = 0; OB_SUCC(ret) && idx < sizeof(PART_GROUP_SIZE_SEGMENT) / sizeof(PART_GROUP_SIZE_SEGMENT[0]); idx++) {
-      if (OB_FAIL(try_swap_part_group_(scope, *ls_max, *ls_min, PART_GROUP_SIZE_SEGMENT[idx], swap_cnt))) {
-        LOG_WARN("try_swap_part_group fail", KR(ret), KPC(ls_max), KPC(ls_min), K(PART_GROUP_SIZE_SEGMENT[idx]));
-      } else if (swap_cnt > 0) {
-        break;
+  } else if (OB_FAIL(prepare_ls_group_desc_(ls_desc_array, ls_group_desc_array))) {
+    LOG_WARN("prepare ls group desc failed", KR(ret));
+  } else {
+    ARRAY_FOREACH(ls_group_desc_array, idx) {
+      if (OB_FAIL(ls_group_desc_ptr_array.push_back(&ls_group_desc_array.at(idx)))) {
+        LOG_WARN("push back failed", KR(ret), K(idx), K(ls_group_desc_array));
       }
     }
-    if (swap_cnt == 0) {
-      // nothing to do
-      break;
+    while (OB_SUCC(ret)) {
+      bool has_progress = false; // true if any step has progress
+      // STEP 1: balance disk between LSes until LS-level balance can not move any part group.
+      if (OB_SUCC(ret) && ls_desc_array.count() > 1) {
+        bool step_has_progress = false;
+        if (OB_FAIL(balance_partition_disk_between_desc_array_<ObLSDesc>(scope, ls_desc_array, step_has_progress))) {
+          LOG_WARN("balance partition disk between ls failed", KR(ret), K(scope), K(ls_desc_array));
+        } else {
+          has_progress |= step_has_progress;
+        }
+      }
+      // STEP 2: balance disk between LS groups on the simulated layout updated by STEP 1.
+      if (OB_SUCC(ret) && ls_group_desc_ptr_array.count() > 1) {
+        bool step_has_progress = false;
+        if (OB_FAIL(balance_partition_disk_between_desc_array_<ObLSGroupDesc>(
+            scope, ls_group_desc_ptr_array, step_has_progress))) {
+          LOG_WARN("balance partition disk between ls group failed", KR(ret), K(scope), K(ls_group_desc_ptr_array));
+        } else {
+          has_progress |= step_has_progress;
+        }
+      }
+      // STEP 3: stop when both levels have reached local balance in the same round.
+      if (OB_SUCC(ret) && !has_progress) {
+        break;
+      }
     }
   }
   LOG_INFO("[PART_BALANCE] balance partition disk within ls desc array end", KR(ret), K(tenant_id_), K(scope), K(ls_desc_array));
   return ret;
 }
 
-bool ObPartitionBalance::check_ls_need_swap_(int64_t ls_more_size, int64_t ls_less_size)
-{
-  bool need_swap = false;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-  if (!tenant_config.is_valid()) {
-    SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id_));
-  } else if (ls_more_size > tenant_config->_partition_balance_disk_threshold) {
-    if ((ls_more_size - ls_more_size / 100 * GCONF.balancer_tolerance_percentage) > ls_less_size) {
-      need_swap = true;
-    }
-  }
-  return need_swap;
-}
-
-int ObPartitionBalance::try_swap_part_group_(
+// Desc could be ObLSDesc or ObLSGroupDesc, regarding the balance level.
+template <typename Desc>
+int ObPartitionBalance::balance_partition_disk_between_desc_array_(
     const ObBalanceGroup::Scope scope,
-    ObLSDesc &src_ls,
-    ObLSDesc &dest_ls,
-    int64_t part_group_min_size,
-    int64_t &swap_cnt)
+    ObArray<Desc *> &desc_array,
+    bool &has_progress)
 {
   int ret = OB_SUCCESS;
-  FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
-    if (!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size())) {
-      break;
-    } else if (iter->first.scope() != scope) {
-      continue;
-    } else if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_ls, dest_ls, part_group_min_size, swap_cnt))) {
-      LOG_WARN("try swap part group in bg failed", KR(ret),
-          K(src_ls), K(dest_ls), K(part_group_min_size), K(swap_cnt));
-    }
+  has_progress = false;
+  const int64_t desc_cnt = desc_array.count();
+  if (OB_UNLIKELY(desc_cnt == 0 || scope == ObBalanceGroup::BG_SCOPE_MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(scope), K(desc_array));
   }
-  FOREACH_X(iter, weighted_bg_map_, OB_SUCC(ret)) {
-    if (!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size())) {
+  while (OB_SUCC(ret)) {
+    lib::ob_sort(desc_array.begin(), desc_array.end(), Desc::less_data_size);
+    Desc *max_desc = desc_array.at(desc_cnt - 1);
+    Desc *min_desc = desc_array.at(0);
+    CHECK_NOT_NULL(max_desc);
+    CHECK_NOT_NULL(min_desc);
+    if (OB_FAIL(ret)) {
+    } else if (!check_disk_need_balance_between_desc_(*max_desc, *min_desc)) {
+      // disk has balance
       break;
-    } else if (iter->first.scope() != scope) {
-      continue;
-    } else if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_ls, dest_ls, part_group_min_size, swap_cnt))) {
-      LOG_WARN("try swap part group in bg failed", KR(ret),
-          K(src_ls), K(dest_ls), K(part_group_min_size), K(swap_cnt));
+    } else {
+      LOG_INFO("[PART_BALANCE] disk_balance", KPC(max_desc), KPC(min_desc));
+    }
+
+    int64_t swap_cnt = 0;
+    int64_t move_cnt = 0;
+    // select swap part_group by size segment
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < sizeof(PART_GROUP_SIZE_SEGMENT) / sizeof(PART_GROUP_SIZE_SEGMENT[0]); idx++) {
+      if (OB_FAIL(try_swap_part_group_(scope, *max_desc, *min_desc, PART_GROUP_SIZE_SEGMENT[idx], swap_cnt))) {
+        LOG_WARN("try_swap_part_group fail", KR(ret), KPC(max_desc), KPC(min_desc), K(PART_GROUP_SIZE_SEGMENT[idx]));
+      } else if (swap_cnt > 0) {
+        break;
+      }
+    }
+    // try moving one part group when can not swap anymore
+    if (OB_SUCC(ret) && 0 == swap_cnt && OB_FAIL(try_move_part_group_(
+        scope, *max_desc, *min_desc, move_cnt))) {
+      LOG_WARN("try_move_part_group fail", KR(ret), KPC(max_desc), KPC(min_desc));
+    }
+
+    // check this round has progress, if no progress, break the loop
+    if (OB_FAIL(ret)) {
+    } else if (swap_cnt == 0 && move_cnt == 0) {
+      // nothing to do
+      break;
+    } else {
+      has_progress = true;
     }
   }
   return ret;
 }
 
-int ObPartitionBalance::try_swap_part_group_in_bg_(
-    ObBalanceGroupMap::iterator &iter,
-    ObLSDesc &src_ls,
-    ObLSDesc &dest_ls,
+template <typename Desc>
+bool ObPartitionBalance::check_disk_need_balance_between_desc_(
+    const Desc &more_desc,
+    const Desc &less_desc)
+{
+  bool need_balance = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+  if (!tenant_config.is_valid()) {
+    SHARE_LOG_RET(WARN, OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id_));
+  } else {
+    const int64_t more_size = more_desc.get_data_size();
+    const int64_t less_size = less_desc.get_data_size();
+    const int64_t disk_threshold = DiskBalanceDescTraits<Desc>::get_disk_threshold(
+        more_desc, tenant_config->_partition_balance_disk_threshold);
+    if (more_size > disk_threshold
+        && (more_size - more_size / 100 * GCONF.balancer_tolerance_percentage) > less_size) {
+      need_balance = true;
+    }
+  }
+  return need_balance;
+}
+
+template <typename Desc>
+int ObPartitionBalance::try_swap_part_group_(
+    const ObBalanceGroup::Scope scope,
+    Desc &src_desc,
+    Desc &dest_desc,
     int64_t part_group_min_size,
     int64_t &swap_cnt)
 {
   int ret = OB_SUCCESS;
-  // find ls_more/ls_less
-  ObBalanceGroupInfo *ls_more = nullptr;
-  ObBalanceGroupInfo *ls_less = nullptr;
-  ObPartGroupInfo *largest_pg = nullptr;
-  ObPartGroupInfo *smallest_pg = nullptr;
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < iter->second.count(); idx++) {
-    if (iter->second.at(idx)->get_ls_id() == src_ls.get_ls_id()) {
-      ls_more = iter->second.at(idx);
-    } else if (iter->second.at(idx)->get_ls_id() == dest_ls.get_ls_id()) {
-      ls_less = iter->second.at(idx);
-    }
-    if (ls_more != nullptr && ls_less != nullptr) {
+  // STEP 1: try swap part group in each bg
+  FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
+    if (!check_disk_need_balance_between_desc_(src_desc, dest_desc)) {
       break;
+    } else if (iter->first.scope() != scope) {
+      // skip bg with different scope
+    } else if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_desc, dest_desc, part_group_min_size, swap_cnt))) {
+      LOG_WARN("try swap part group in bg failed", KR(ret),
+          K(src_desc), K(dest_desc), K(part_group_min_size), K(swap_cnt));
     }
   }
-  if (OB_ISNULL(ls_more) || OB_ISNULL(ls_less)) {
+  FOREACH_X(iter, weighted_bg_map_, OB_SUCC(ret)) {
+    if (!check_disk_need_balance_between_desc_(src_desc, dest_desc)) {
+      break;
+    } else if (iter->first.scope() != scope) {
+      // skip bg with different scope
+    } else if (OB_FAIL(try_swap_part_group_in_bg_(iter, src_desc, dest_desc, part_group_min_size, swap_cnt))) {
+      LOG_WARN("try swap part group in bg failed", KR(ret),
+          K(src_desc), K(dest_desc), K(part_group_min_size), K(swap_cnt));
+    }
+  }
+  // STEP 2: try swap part group between bgs if no swap in step 1
+  if (OB_SUCC(ret) && 0 == swap_cnt) {
+    // Cross-BG swap only uses unweighted BGs. Weighted BGs must keep their weight balance unchanged.
+    if (OB_FAIL(try_swap_part_group_between_bgs_(scope, src_desc, dest_desc, part_group_min_size, swap_cnt))) {
+      LOG_WARN("try swap part group between bgs failed", KR(ret),
+          K(src_desc), K(dest_desc), K(part_group_min_size), K(swap_cnt));
+    }
+  }
+  return ret;
+}
+
+template <typename Desc>
+int ObPartitionBalance::try_swap_part_group_in_bg_(
+    ObBalanceGroupMap::iterator &iter,
+    Desc &src_desc,
+    Desc &dest_desc,
+    int64_t part_group_min_size,
+    int64_t &swap_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObLSDesc *src_ls = DiskBalanceDescTraits<Desc>::get_src_ls(src_desc);
+  ObLSDesc *dest_ls = DiskBalanceDescTraits<Desc>::get_dest_ls(dest_desc);
+  // find src/dest bg ls info
+  ObBalanceGroupInfo *src_bg_ls_info = nullptr;
+  ObBalanceGroupInfo *dest_bg_ls_info = nullptr;
+  ObPartGroupInfo *largest_pg = nullptr;
+  ObPartGroupInfo *smallest_pg = nullptr;
+  CHECK_NOT_NULL(src_ls);
+  CHECK_NOT_NULL(dest_ls);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_bg_ls_info_pair_(
+      iter->second, src_ls->get_ls_id(), dest_ls->get_ls_id(), src_bg_ls_info, dest_bg_ls_info))) {
+    LOG_WARN("get bg ls info pair failed", KR(ret), K(iter->first), KPC(src_ls), KPC(dest_ls));
+  } else if (OB_ISNULL(src_bg_ls_info) || OB_ISNULL(dest_bg_ls_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not found ls", KR(ret), K(ls_more), K(ls_less));
-  } else if (OB_UNLIKELY(!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size()))) {
+    LOG_WARN("not found ls", KR(ret), KP(src_bg_ls_info), KP(dest_bg_ls_info));
+  } else if (OB_UNLIKELY(!check_disk_need_balance_between_desc_(src_desc, dest_desc))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls do not need swap", KR(ret), K(src_ls), K(dest_ls));
-  } else  if (ls_more->get_part_groups_count() == 0 || ls_less->get_part_groups_count() == 0) {
+    LOG_WARN("balance desc does not need swap", KR(ret), K(src_desc), K(dest_desc));
+  } else  if (src_bg_ls_info->get_part_groups_count() == 0 || dest_bg_ls_info->get_part_groups_count() == 0) {
     // do nothing
   } else {
     int64_t swap_size = 0;
-    int64_t ls_diff_size = src_ls.get_data_size() - dest_ls.get_data_size();
-    if (OB_FAIL(ls_more->get_largest_part_group(largest_pg))) {
-      LOG_WARN("failed to get the largest pg", KR(ret), KPC(ls_more));
-    } else if (OB_FAIL(ls_less->get_smallest_part_group(smallest_pg))) {
-      LOG_WARN("failed to get the smallest pg", KR(ret), KPC(ls_less));
+    const int64_t ls_diff_size = src_ls->get_data_size() - dest_ls->get_data_size();
+    const int64_t desc_diff = src_desc.get_data_size() - dest_desc.get_data_size();
+    if (OB_FAIL(src_bg_ls_info->get_largest_part_group(largest_pg))) {
+      LOG_WARN("failed to get the largest pg", KR(ret), KPC(src_bg_ls_info));
+    } else if (OB_FAIL(dest_bg_ls_info->get_smallest_part_group(smallest_pg))) {
+      LOG_WARN("failed to get the smallest pg", KR(ret), KPC(dest_bg_ls_info));
     } else if (OB_ISNULL(largest_pg) || OB_ISNULL(smallest_pg)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null ptr", KR(ret), KP(largest_pg), KP(smallest_pg));
     } else if (FALSE_IT(swap_size = largest_pg->get_data_size() - smallest_pg->get_data_size())) {
+    // swap_size must be strictly smaller than desc_diff to make it converge,
+    // meanwhile, it also should be no greater than ls_diff_size to avoid enlarging the ls diff when
+    // desc is ObLSGroupDesc.
     } else if (swap_size >= part_group_min_size
-        && ls_diff_size > swap_size
+        && ls_diff_size >= swap_size
+        && desc_diff > swap_size
         && largest_pg->get_weight() == smallest_pg->get_weight()) {
       LOG_INFO("[PART_BALANCE] swap_partition", KPC(largest_pg), KPC(smallest_pg),
-          K(src_ls), K(dest_ls), K(swap_size), K(ls_diff_size), K(part_group_min_size));
+          KPC(src_ls), KPC(dest_ls), K(swap_size), K(ls_diff_size), K(part_group_min_size), K(desc_diff));
       if (OB_FAIL(add_transfer_task_(
-          ls_more->get_ls_id(),
-          ls_less->get_ls_id(),
+          src_bg_ls_info->get_ls_id(),
+          dest_bg_ls_info->get_ls_id(),
           largest_pg))) {
-        LOG_WARN("add transfer task failed", KR(ret), KPC(ls_more), KPC(ls_less), KPC(largest_pg));
+        LOG_WARN("add transfer task failed", KR(ret), KPC(src_bg_ls_info), KPC(dest_bg_ls_info), KPC(largest_pg));
       } else if (OB_FAIL(add_transfer_task_(
-          ls_less->get_ls_id(),
-          ls_more->get_ls_id(),
+          dest_bg_ls_info->get_ls_id(),
+          src_bg_ls_info->get_ls_id(),
           smallest_pg))) {
-        LOG_WARN("add transfer task failed", KR(ret), KPC(ls_more), KPC(ls_less), KPC(smallest_pg));
-      } else if (OB_FAIL(ls_more->swap_largest_for_smallest_pg(*ls_less))) {
+        LOG_WARN("add transfer task failed", KR(ret), KPC(src_bg_ls_info), KPC(dest_bg_ls_info), KPC(smallest_pg));
+      } else if (OB_FAIL(src_bg_ls_info->swap_largest_for_smallest_pg(*dest_bg_ls_info))) {
         LOG_WARN("transfer out by data size largest pg failed",
-            KR(ret), KPC(largest_pg), KPC(smallest_pg), KPC(ls_more), KPC(ls_less));
+            KR(ret), KPC(largest_pg), KPC(smallest_pg), KPC(src_bg_ls_info), KPC(dest_bg_ls_info));
       } else {
         swap_cnt++;
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Desc>
+int ObPartitionBalance::try_swap_part_group_between_bgs_(
+    const ObBalanceGroup::Scope scope,
+    Desc &src_desc,
+    Desc &dest_desc,
+    int64_t part_group_min_size,
+    int64_t &swap_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObLSDesc *src_ls = DiskBalanceDescTraits<Desc>::get_src_ls(src_desc);
+  ObLSDesc *dest_ls = DiskBalanceDescTraits<Desc>::get_dest_ls(dest_desc);
+  CHECK_NOT_NULL(src_ls);
+  CHECK_NOT_NULL(dest_ls);
+  // Find two different BGs with opposite count skews between src_ls and dest_ls:
+  // bg1 has more PGs on src_ls, while bg2 has more PGs on dest_ls.
+  FOREACH_X(bg_iter1, bg_map_, OB_SUCC(ret) && 0 == swap_cnt) {
+    ObBalanceGroupInfo *src_bg1_ls_info = nullptr;
+    ObBalanceGroupInfo *dest_bg1_ls_info = nullptr;
+    if (!check_disk_need_balance_between_desc_(src_desc, dest_desc)) {
+      break;
+    } else if (bg_iter1->first.scope() != scope) {
+      // skip bg with different scope
+    } else if (OB_FAIL(get_bg_ls_info_pair_(
+        bg_iter1->second, src_ls->get_ls_id(), dest_ls->get_ls_id(),
+        src_bg1_ls_info, dest_bg1_ls_info))) {
+      LOG_WARN("get bg ls info pair failed", KR(ret), K(bg_iter1->first), KPC(src_ls), KPC(dest_ls));
+    } else if (src_bg1_ls_info->get_part_groups_count() <= dest_bg1_ls_info->get_part_groups_count()) {
+      // bg1 must have extra PGs on src_ls.
+    } else {
+      FOREACH_X(bg_iter2, bg_map_, OB_SUCC(ret) && 0 == swap_cnt) {
+        ObBalanceGroupInfo *src_bg2_ls_info = nullptr;
+        ObBalanceGroupInfo *dest_bg2_ls_info = nullptr;
+        if (!check_disk_need_balance_between_desc_(src_desc, dest_desc)) {
+          break;
+        } else if (bg_iter2->first.scope() != scope) {
+          // skip bg with different scope
+        } else if (bg_iter2->first == bg_iter1->first) {
+          // cross-BG swap needs two different BGs.
+        } else if (OB_FAIL(get_bg_ls_info_pair_(
+            bg_iter2->second, src_ls->get_ls_id(), dest_ls->get_ls_id(),
+            src_bg2_ls_info, dest_bg2_ls_info))) {
+          LOG_WARN("get bg ls info pair failed", KR(ret), K(bg_iter2->first), KPC(src_ls), KPC(dest_ls));
+        } else if (dest_bg2_ls_info->get_part_groups_count()
+            <= src_bg2_ls_info->get_part_groups_count()) {
+          // bg2 must have extra PGs on dest_ls.
+        } else if (OB_FAIL(try_swap_part_group_between_bg_pair_(
+            *src_ls, *dest_ls,
+            *src_bg1_ls_info, *dest_bg1_ls_info,
+            *src_bg2_ls_info, *dest_bg2_ls_info,
+            src_desc, dest_desc, part_group_min_size, swap_cnt))) {
+          LOG_WARN("try swap part group between bg pair failed", KR(ret),
+              K(bg_iter1->first), K(bg_iter2->first), K(src_desc), K(dest_desc));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Try cross-BG swap for one BG pair.
+// src_ls/dest_ls: selected LS pair for this disk balance action.
+// src_bg1_ls_info/dest_bg1_ls_info: BG1 info on src_ls/dest_ls. BG1 has more PGs on src_ls,
+//                                   and its selected PG moves from src_ls to dest_ls.
+// src_bg2_ls_info/dest_bg2_ls_info: BG2 info on src_ls/dest_ls. BG2 has more PGs on dest_ls,
+//                                   and its selected PG moves from dest_ls to src_ls.
+// src_desc/dest_desc: selected balance descs, which can be LS or LSGroup.
+// part_group_min_size: lower bound of swap_size for the current size segment.
+// swap_cnt: output counter, increased when one cross-BG swap is generated.
+template <typename Desc>
+int ObPartitionBalance::try_swap_part_group_between_bg_pair_(
+    ObLSDesc &src_ls,
+    ObLSDesc &dest_ls,
+    ObBalanceGroupInfo &src_bg1_ls_info,
+    ObBalanceGroupInfo &dest_bg1_ls_info,
+    ObBalanceGroupInfo &src_bg2_ls_info,
+    ObBalanceGroupInfo &dest_bg2_ls_info,
+    Desc &src_desc,
+    Desc &dest_desc,
+    int64_t part_group_min_size,
+    int64_t &swap_cnt)
+{
+  int ret = OB_SUCCESS;
+  ObPartGroupInfo *src_pg = nullptr;
+  ObPartGroupInfo *dest_pg = nullptr;
+  // bg1 should provide src_pg from src_ls to dest_ls; bg2 should provide dest_pg from dest_ls to src_ls.
+  if (src_bg1_ls_info.get_part_groups_count() <= dest_bg1_ls_info.get_part_groups_count()
+      || dest_bg2_ls_info.get_part_groups_count() <= src_bg2_ls_info.get_part_groups_count()) {
+    // Cross-BG swap must exchange PGs from two BGs whose count skews are opposite.
+  } else if (OB_UNLIKELY(!check_disk_need_balance_between_desc_(src_desc, dest_desc))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("balance desc does not need swap", KR(ret), K(src_desc), K(dest_desc));
+  } else if (OB_FAIL(src_bg1_ls_info.get_largest_part_group(src_pg))) {
+    LOG_WARN("failed to get the largest pg", KR(ret), K(src_bg1_ls_info));
+  } else if (OB_FAIL(dest_bg2_ls_info.get_smallest_part_group(dest_pg))) {
+    LOG_WARN("failed to get the smallest pg", KR(ret), K(dest_bg2_ls_info));
+  } else if (OB_ISNULL(src_pg) || OB_ISNULL(dest_pg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", KR(ret), KP(src_pg), KP(dest_pg));
+  } else {
+    const int64_t swap_size = src_pg->get_data_size() - dest_pg->get_data_size();
+    const int64_t ls_diff_size = src_ls.get_data_size() - dest_ls.get_data_size();
+    const int64_t desc_diff = src_desc.get_data_size() - dest_desc.get_data_size();
+    // The swapped size must strictly reduce desc diff and must not enlarge the selected LS pair diff.
+    if (swap_size >= part_group_min_size
+        && ls_diff_size >= swap_size
+        && desc_diff > swap_size
+        && src_pg->get_weight() == dest_pg->get_weight()) {
+      LOG_INFO("[PART_BALANCE] cross_bg_swap_partition", KPC(src_pg), KPC(dest_pg),
+          K(src_ls), K(dest_ls), K(swap_size), K(ls_diff_size), K(part_group_min_size), K(desc_diff),
+          K(src_bg1_ls_info), K(dest_bg1_ls_info), K(src_bg2_ls_info), K(dest_bg2_ls_info));
+      if (OB_FAIL(add_transfer_task_(
+          src_bg1_ls_info.get_ls_id(), dest_bg1_ls_info.get_ls_id(), src_pg))) {
+        LOG_WARN("add transfer task failed", KR(ret),
+            K(src_bg1_ls_info), K(dest_bg1_ls_info), KPC(src_pg));
+      } else if (OB_FAIL(add_transfer_task_(
+          dest_bg2_ls_info.get_ls_id(), src_bg2_ls_info.get_ls_id(), dest_pg))) {
+        LOG_WARN("add transfer task failed", KR(ret),
+            K(dest_bg2_ls_info), K(src_bg2_ls_info), KPC(dest_pg));
+      } else if (OB_FAIL(src_bg1_ls_info.transfer_out_part_group(src_pg, dest_bg1_ls_info))) {
+        LOG_WARN("transfer out part group failed", KR(ret),
+            KPC(src_pg), K(src_bg1_ls_info), K(dest_bg1_ls_info));
+      } else if (OB_FAIL(dest_bg2_ls_info.transfer_out_part_group(dest_pg, src_bg2_ls_info))) {
+        LOG_WARN("transfer out part group failed", KR(ret),
+            KPC(dest_pg), K(dest_bg2_ls_info), K(src_bg2_ls_info));
+      } else {
+        swap_cnt++;
+      }
+    }
+  }
+  return ret;
+}
+
+// Move for disk balance: try to move one part group for this desc pair.
+// At most one move per desc pair per round, because count-balance constraint
+// (intra-bg and inter-bg) only tolerates a count diff of 1.
+template <typename Desc>
+int ObPartitionBalance::try_move_part_group_(
+    const ObBalanceGroup::Scope scope,
+    Desc &src_desc,
+    Desc &dest_desc,
+    int64_t &move_cnt)
+{
+  int ret = OB_SUCCESS;
+  // single-direction move only scans bg_map_; weighted PGs have been split into weighted_bg_map_.
+  // this is for not breaking weight balance.
+  FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
+    if (!check_disk_need_balance_between_desc_(src_desc, dest_desc)) {
+      break;
+    } else if (iter->first.scope() != scope) {
+      // skip bg with different scope
+    } else if (OB_FAIL(try_move_part_group_in_bg_(iter, src_desc, dest_desc, move_cnt))) {
+      LOG_WARN("try move part group in bg failed", KR(ret), K(src_desc), K(dest_desc));
+    } else if (move_cnt > 0) {
+      // Found a move, break the loop.
+      break;
+    }
+  }
+  return ret;
+}
+
+// Move one part group in given bg from src to dest desc pair.
+template <typename Desc>
+int ObPartitionBalance::try_move_part_group_in_bg_(
+    ObBalanceGroupMap::iterator &iter,
+    Desc &src_desc,
+    Desc &dest_desc,
+    int64_t &move_cnt)
+{
+  int ret = OB_SUCCESS;
+  // get src/dest ls:
+  // * LS-level: src_desc and dest_desc themselves.
+  // * LSGroup-level: the max-ls of src_desc and min-ls of dest_desc.
+  ObLSDesc *src_ls = DiskBalanceDescTraits<Desc>::get_src_ls(src_desc);
+  ObLSDesc *dest_ls = DiskBalanceDescTraits<Desc>::get_dest_ls(dest_desc);
+  CHECK_NOT_NULL(src_ls);
+  CHECK_NOT_NULL(dest_ls);
+  if (OB_FAIL(ret)) {
+  } else if (src_ls->get_unweighted_partgroup_cnt() <= dest_ls->get_unweighted_partgroup_cnt()) {
+    // src ls pg count not larger than dest ls pg count, can not move any pg
+  } else {
+    ObBalanceGroupInfo *src_bg_ls_info = nullptr;
+    ObBalanceGroupInfo *dest_bg_ls_info = nullptr;
+    if (OB_FAIL(get_bg_ls_info_pair_(
+        iter->second, src_ls->get_ls_id(), dest_ls->get_ls_id(), src_bg_ls_info, dest_bg_ls_info))) {
+      LOG_WARN("get bg ls info pair failed", KR(ret), K(iter->first), KPC(src_ls), KPC(dest_ls));
+    } else if (OB_ISNULL(src_bg_ls_info) || OB_ISNULL(dest_bg_ls_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null ptr", KR(ret), KP(src_bg_ls_info), KP(dest_bg_ls_info));
+    } else if (src_bg_ls_info->get_part_groups_count() <= dest_bg_ls_info->get_part_groups_count()) {
+      // pg count in this bg in src ls not larger than that in dest ls,
+      // move would break intra_bg part group count balance, do nothing
+    } else {
+      const int64_t ls_diff_size = src_ls->get_data_size() - dest_ls->get_data_size();
+      const int64_t desc_diff = src_desc.get_data_size() - dest_desc.get_data_size();
+      // size of pg to move must be strictly smaller than desc_diff to make it converge,
+      // meanwhile, it also should be no greater than ls_diff_size to avoid enlarging the ls diff when
+      // desc is ObLSGroupDesc.
+      const int64_t max_movable_pg_size = MIN(ls_diff_size, desc_diff - 1);
+      // size of pg to move should be as close to desc_diff / 2 as possible, making the desc_diff
+      // closer to 0 after the move.
+      const int64_t optimal_pg_size_to_move = desc_diff / 2;
+      ObPartGroupInfo *move_pg = nullptr;
+      if (max_movable_pg_size <= 0 || optimal_pg_size_to_move <= 0) {
+        // gap too small to move any pg, skip
+      } else if (OB_FAIL(src_bg_ls_info->get_closest_pg_to_target(
+          max_movable_pg_size, optimal_pg_size_to_move, move_pg))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // no suitable part group to move in this bg, skip
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("get closest pg failed", KR(ret), KPC(src_bg_ls_info),
+              K(max_movable_pg_size), K(optimal_pg_size_to_move));
+        }
+      } else if (OB_ISNULL(move_pg)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("closest pg is null", KR(ret), KP(move_pg));
+      } else if (OB_UNLIKELY(move_pg->get_weight() != 0)) {
+        // Defensive check to avoid breaking weight balance, do not move weighted pg.
+        // Should not happen, because iter should be from bg_map_, not weighted_bg_map_.
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("weighted pg should not be moved", KR(ret), K(iter->first), KPC(move_pg));
+      } else {
+        LOG_INFO("[PART_BALANCE] move_partition", KPC(move_pg), KPC(src_ls), KPC(dest_ls), K(desc_diff));
+        if (OB_FAIL(add_transfer_task_(src_bg_ls_info->get_ls_id(), dest_bg_ls_info->get_ls_id(), move_pg))) {
+          LOG_WARN("add transfer task failed", KR(ret), KPC(src_bg_ls_info), KPC(dest_bg_ls_info), KPC(move_pg));
+        } else if (OB_FAIL(src_bg_ls_info->transfer_out_part_group(move_pg, *dest_bg_ls_info))) {
+          LOG_WARN("transfer out part group failed", KR(ret), KPC(move_pg), KPC(src_bg_ls_info), KPC(dest_bg_ls_info));
+        } else {
+          move_cnt++;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPartitionBalance::prepare_ls_group_desc_(
+    const ObArray<ObLSDesc *> &ls_desc_array,
+    ObArray<ObLSGroupDesc> &ls_group_desc_array)
+{
+  int ret = OB_SUCCESS;
+  ls_group_desc_array.reset();
+  ARRAY_FOREACH(ls_desc_array, i) {
+    ObLSDesc *ls_desc = ls_desc_array.at(i);
+    CHECK_NOT_NULL(ls_desc);
+    int64_t lsg_idx = OB_INVALID_INDEX;
+    if (OB_FAIL(ret)) {
+    } else {
+      for (int64_t idx = 0; idx < ls_group_desc_array.count(); ++idx) {
+        if (ls_group_desc_array.at(idx).get_ls_group_id() == ls_desc->get_ls_group_id()) {
+          lsg_idx = idx;
+          break;
+        }
+      }
+      if (OB_INVALID_INDEX != lsg_idx) {
+        if (OB_FAIL(ls_group_desc_array.at(lsg_idx).add_ls_desc(ls_desc))) {
+          LOG_WARN("add ls desc failed", KR(ret), KPC(ls_desc), K(lsg_idx));
+        }
+      } else {
+        ObLSGroupDesc ls_group_desc(ls_desc->get_ls_group_id());
+        if (OB_FAIL(ls_group_desc_array.push_back(ls_group_desc))) {
+          LOG_WARN("push back failed", KR(ret), K(ls_group_desc));
+        } else if (OB_FAIL(ls_group_desc_array.at(ls_group_desc_array.count() - 1).add_ls_desc(ls_desc))) {
+          LOG_WARN("add ls desc failed", KR(ret), KPC(ls_desc));
+        }
       }
     }
   }

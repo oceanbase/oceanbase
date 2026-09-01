@@ -477,6 +477,31 @@ int ObPartGroupContainer::get_smallest_part_group(ObPartGroupInfo *&pg) const
   return ret;
 }
 
+int ObPartGroupContainer::get_closest_pg_to_target(
+    const int64_t max_size,
+    const int64_t target_size,
+    ObPartGroupInfo *&pg) const
+{
+  int ret = OB_SUCCESS;
+  pg = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(max_size <= 0 || target_size <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(max_size), K(target_size));
+  } else {
+    PGFunctor::GetClosestPGToTarget get_closest_pg(max_size, target_size, pg);
+    if (OB_FAIL(for_each_(get_closest_pg))) {
+      LOG_WARN("traverse failed", KR(ret), K(max_size), K(target_size));
+    } else if (OB_ISNULL(pg)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_TRACE("get closest pg to target failed", KR(ret), K(max_size), K(target_size), K(*this));
+    }
+  }
+  return ret;
+}
+
 int64_t ObPartGroupContainer::get_part_group_count() const
 {
   int64_t cnt = 0;
