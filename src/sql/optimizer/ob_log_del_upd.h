@@ -206,9 +206,6 @@ public:
 };
 
 class ObDelUpdLogPlan;
-class ObRawExprCopier;
-class ObIRawExprReplacer;
-class ObRawExprUniqueSet;
 class ObLogDelUpd: public ObLogicalOperator
 {
 public:
@@ -301,6 +298,8 @@ public:
   bool is_gi_above() const override { return gi_charged_; }
   const ObRawExpr *get_stmt_id_expr() const { return stmt_id_expr_; }
   const common::ObIArray<ObColumnRefRawExpr*> *get_table_columns() const;
+  int get_gen_col_replace_exprs(ObIArray<ObRawExpr *> &from_exprs,
+                                ObIArray<ObRawExpr *> &to_exprs) const;
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info)
   {
     table_partition_info_ = table_partition_info;
@@ -348,9 +347,6 @@ public:
   int replace_dml_info_exprs(
         ObRawExprReplacer &replacer,
         const ObIArray<IndexDMLInfo *> &index_dml_infos);
-  int copy_on_replace_dml_info_exprs(const common::ObIArray<ObRawExpr *> &from_exprs,
-                                     const common::ObIArray<ObRawExpr *> &to_exprs,
-                                     const common::ObIArray<IndexDMLInfo *> &index_dml_infos);
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override = 0;
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   void set_das_dop(int64_t dop) { das_dop_ = dop; }
@@ -476,47 +472,6 @@ private:
   bool pdml_is_returning_; // 如果计划是pdml计划，表示当前逻辑算子转化为的物理算子是否需要吐/返回行
   // add for error logging
   ObErrLogDefine err_log_define_;
-
-  struct ReplaceVisitor
-  {
-    ObLogDelUpd &op_;
-    ObRawExprReplacer &replacer_;
-    ReplaceVisitor(ObLogDelUpd &op, ObRawExprReplacer &r) : op_(op), replacer_(r) {}
-    int process(ObRawExpr *&expr);
-  };
-
-  struct CopyOnReplaceVisitor
-  {
-    ObLogDelUpd &op_;
-    ObRawExprCopier &copier_;
-    const ObSQLSessionInfo *session_info_;
-    ObRawExprUniqueSet &all_exprs_;
-    CopyOnReplaceVisitor(ObLogDelUpd &op,
-                         ObRawExprCopier &copier,
-                         const ObSQLSessionInfo *session_info,
-                         ObRawExprUniqueSet &all_exprs)
-      : op_(op), copier_(copier), session_info_(session_info), all_exprs_(all_exprs) {}
-    int process(ObRawExpr *&expr);
-  };
-
-  // Common traversal of all replaceable IndexDMLInfo expression slots.
-  // Calls action.process(expr) for each slot in canonical order.
-  // Excludes: column_exprs_, assignments_[i].column_expr_, lookup_part_id_expr_,
-  //           trans_info_expr_, fk_lookup_part_id_expr_ (intentionally not in replace contract).
-  template <typename Action>
-  int traverse_index_dml_info_exprs(share::schema::ObSchemaGetterGuard *schema_guard,
-                                    IndexDMLInfo &index_dml_info,
-                                    Action &action);
-  int copy_on_replace_action(ObRawExprCopier &copier,
-                             ObIRawExprReplacer *replacer,
-                             const ObSQLSessionInfo *session_info,
-                             ObRawExprUniqueSet &all_exprs,
-                             ObRawExpr *&expr);
-  int check_should_process_old_value_expr(share::schema::ObSchemaGetterGuard *schema_guard,
-                                          const IndexDMLInfo &dml_info,
-                                          ObRawExpr *expr,
-                                          bool &should_process);
-
 protected:
   // 对于非分区表而言，pdml中的dml是不需要分配partition id expr
   // 但是对于非分区表，pdml中的dml是需要分配partition id expr
