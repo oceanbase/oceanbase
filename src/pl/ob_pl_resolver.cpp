@@ -6704,6 +6704,9 @@ static int add_implicit_cast_for_in_param(ObRawExpr *&expr)
 int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &into_expr_type)
 {
   int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = resolve_ctx_.session_info_.get_cur_exec_ctx();
+  ObSqlCtx *sql_ctx = OB_ISNULL(exec_ctx) ? NULL : exec_ctx->get_sql_ctx();
+  const bool old_disable_sql_udt_deduce_in_pl = OB_NOT_NULL(sql_ctx) && sql_ctx->disable_sql_udt_deduce_in_pl_;
   CK (OB_NOT_NULL(value_expr));
   CK (OB_NOT_NULL(current_block_));
   OZ (replace_seq_expr_recursively(value_expr, &current_block_->get_namespace()));
@@ -6714,18 +6717,11 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
   bool transformed = false;
   OZ (ObTransformPreProcess::transform_expr(expr_factory_,
                                             resolve_ctx_.session_info_, value_expr, transformed));
-  if (OB_SUCC(ret)) {
-    ObExecContext *exec_ctx = resolve_ctx_.session_info_.get_cur_exec_ctx();
-    ObSqlCtx *sql_ctx = OB_ISNULL(exec_ctx) ? NULL : exec_ctx->get_sql_ctx();
-    const bool old_disable_sql_udt_deduce_in_pl = OB_NOT_NULL(sql_ctx) && sql_ctx->disable_sql_udt_deduce_in_pl_;
-    if (OB_NOT_NULL(sql_ctx)) {
-      sql_ctx->disable_sql_udt_deduce_in_pl_ = true;
-    }
-    OZ(formalize_expr(*value_expr));
-    if (OB_NOT_NULL(sql_ctx)) {
-      sql_ctx->disable_sql_udt_deduce_in_pl_ = old_disable_sql_udt_deduce_in_pl;
-    }
+  // Keep disable_sql_udt_deduce_in_pl_ through all subsequent formalize paths
+  if (OB_SUCC(ret) && OB_NOT_NULL(sql_ctx)) {
+    sql_ctx->disable_sql_udt_deduce_in_pl_ = true;
   }
+  OZ(formalize_expr(*value_expr));
   if (OB_SUCC(ret) && OB_NOT_NULL(value_expr) && into_expr_type.is_obj_type()) {
     // The basic type need check whether to add a column convert expr
     bool need_cast = false;
@@ -6755,6 +6751,9 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
                                         value_expr));
       OZ (formalize_expr(*value_expr));
     }
+  }
+  if (OB_NOT_NULL(sql_ctx)) {
+    sql_ctx->disable_sql_udt_deduce_in_pl_ = old_disable_sql_udt_deduce_in_pl;
   }
   return ret;
 }

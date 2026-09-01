@@ -648,34 +648,50 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
                                          ObObj &tmp_result,
                                          ObEvalCtx &eval_ctx,
                                          ObExprUDFCtx &udf_ctx,
+                                         const ObObjMeta &result_meta,
                                          ObExprUDFEnvGuard &guard)
 {
   int ret = OB_SUCCESS;
-  if (udf_ctx.get_info()->is_called_in_sql_) { // Call In SQL
-    int64_t cur_obj_count = guard.get_cur_obj_count();
-    if (tmp_result.is_pl_extend()
-        && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { // memory of ref cursor on session, do not copy it.
+  const bool is_called_in_sql = udf_ctx.get_info()->is_called_in_sql_;
+  const bool is_complex_result = tmp_result.is_pl_extend()
+                                 && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE;
+  if (is_called_in_sql) {
+    if (is_complex_result && result_meta.is_common_user_defined_sql_type()) {
+      ObSQLSessionInfo *session = eval_ctx.exec_ctx_.get_my_session();
+      CK (OB_NOT_NULL(session));
+      if (OB_SUCC(ret)) {
+        const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+        ObCastCtx cast_ctx(&udf_ctx.get_allocator(), &dtc_params, CM_NONE,
+                           ObCharset::get_system_collation());
+        ObObj cast_out;
+        cast_ctx.exec_ctx_ = &eval_ctx.exec_ctx_;
+        OX (cast_out.set_subschema_id(result_meta.get_subschema_id()));
+        OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, tmp_result, cast_out));
+        if (OB_SUCC(ret)) {
+          eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(
+              guard.get_cur_obj_count());
+          tmp_result.set_null();
+          OX (result = cast_out);
+        }
+      }
+    } else if (is_complex_result) {
       int tmp_ret = OB_SUCCESS;
-      ObIAllocator *alloc = nullptr;
       ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
       OZ (eval_ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
-      OX (alloc = &pl_complex_type_mgr->alloc_);
-      OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
+      OZ (pl::ObUserDefinedType::deep_copy_obj(pl_complex_type_mgr->alloc_, tmp_result, result, true));
       if (OB_SUCC(ret)) {
-        eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(cur_obj_count);
+        eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(guard.get_cur_obj_count());
+        tmp_result.set_null();
         OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
         if (OB_FAIL(ret)) {
-          if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+          if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+                result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
             LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
           }
         }
       }
-      if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
-        LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
-        ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      }
     } else {
-      // Basic result & RefCursor, shadow copy result. What if failed with pl.execute for RefCursor?
+      // Basic result & RefCursor, shadow copy result.
       result = tmp_result;
     }
   } else { // Call IN PL, shadow copy result.

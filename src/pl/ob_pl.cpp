@@ -2069,8 +2069,6 @@ int ObPL::execute(ObExecContext &ctx,
   int64_t execute_start = rdtsc();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
-  bool udf_from_sql = routine.is_function() && is_called_from_sql;
-  bool is_return_complex_type = routine.is_function() && routine.get_ret_type().is_composite_type();
   ObPLASHGuard guard(routine.get_package_id(), routine.get_routine_id(), routine.get_function_name());
   ObIAllocator *top_pl_sym_allocator = nullptr;
   ObPLContext *pl_ctx = ctx.get_pl_stack_ctx();
@@ -2086,7 +2084,7 @@ int ObPL::execute(ObExecContext &ctx,
   CK (OB_NOT_NULL(top_pl_sym_allocator));
   if (OB_SUCC(ret)) {
     ObPLExecState pl(top_pl_sym_allocator,
-                     is_return_complex_type ? nullptr : &allocator,
+                     &allocator,
                      pl_ctx,
                      pl_ctx->get_allocator(),
                      ctx,
@@ -2103,7 +2101,7 @@ int ObPL::execute(ObExecContext &ctx,
     OZ (pl.init(params, is_anonymous));
     OZ (pl.execute(is_first_execute));
     pl.try_clear_complex_obj();
-    OZ (pl.deep_copy_result_if_need(allocator));
+    OZ (pl.register_complex_result_if_need());
     pl.final(ret);
     if (OB_SUCC(ret)) {
       // process out arguments
@@ -4026,66 +4024,6 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value, bool set_va
     }
   }
   OX (params->at(var_idx).set_param_meta());
-  return ret;
-}
-
-int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  ObObj new_obj;
-  if (func_.get_ret_type().is_composite_type() && result_.is_ext()) {
-    CK (OB_NOT_NULL(ctx_.exec_ctx_));
-    if (OB_SUCC(ret)) {
-      const uint64_t udt_id = func_.get_ret_type().get_user_type_id();
-      if (is_called_from_sql_
-          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
-          && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())
-          && ctx_.exec_ctx_->get_my_session()->get_local_enable_pl_composite_as_sql_udt()
-          && ObPLDataType::is_schema_udt(ctx_.exec_ctx_->get_sql_ctx()->schema_guard_, udt_id)
-          && !is_inner_pl_udt_id(udt_id)
-          && result_.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-        const ObDataTypeCastParams dtc_params =
-            ObBasicSessionInfo::create_dtc_params(ctx_.exec_ctx_->get_my_session());
-        ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, ObCharset::get_system_collation());
-        cast_ctx.exec_ctx_ = ctx_.exec_ctx_;
-        uint16_t subschema_id = ObInvalidSqlType;
-        ObObj cast_out;
-        OZ (ctx_.exec_ctx_->get_subschema_id_by_udt_id(udt_id, subschema_id));
-        OX (cast_out.set_subschema_id(subschema_id));
-        OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, result_, cast_out));
-        if (OB_SUCC(ret)) {
-          ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
-          result_ = cast_out;
-        }
-      } else {
-        ObIAllocator *alloc = &ctx_.exec_ctx_->get_allocator();
-        ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
-        if (OB_NOT_NULL(session) &&
-           OB_NOT_NULL(session->get_pl_top_context())) {
-          pl::ObPLExecCtx *parent_exec_ctx = nullptr;
-          ObPLTopContext *pl_top_context = session->get_pl_top_context();
-          ObIArray<ObPLExecState *> *exec_stack = nullptr;
-          CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
-          if (OB_SUCC(ret) && exec_stack->count() > 1 &&
-              OB_NOT_NULL(exec_stack->at(exec_stack->count() - 2))) {
-            parent_exec_ctx = &exec_stack->at(exec_stack->count() - 2)->get_exec_ctx();
-            alloc = parent_exec_ctx->get_top_expr_allocator();
-          }
-        }
-        OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj));
-        ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
-        if (OB_SUCC(ret)) {
-          sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
-          OZ (pl_complex_type_mgr->complex_type_objects_.push_back(new_obj));
-          if (OB_FAIL(ret)) {
-            ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
-          } else {
-            result_ = new_obj;
-          }
-        }
-      }
-    }
-  }
   return ret;
 }
 
@@ -6027,6 +5965,22 @@ int ObPLExecState::check_pl_priv(
     }
   }
     // check func self priv
+  return ret;
+}
+
+int ObPLExecState::register_complex_result_if_need()
+{
+  int ret = OB_SUCCESS;
+  if (func_.is_function()
+      && func_.get_ret_type().is_composite_type()
+      && result_.is_pl_extend()
+      && result_.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
+    CK (OB_NOT_NULL(ctx_.exec_ctx_));
+    if (OB_SUCC(ret)) {
+      ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
+      OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result_)); //if failed, result_ will be released in pl::final()
+    }
+  }
   return ret;
 }
 

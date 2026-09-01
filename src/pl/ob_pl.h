@@ -940,7 +940,7 @@ public:
   int init_params(const ObPLParamArrayWrapper *params = NULL, bool is_anonymous = false);
   int execute(bool is_first_execute = true);
   int final(int ret);
-  int deep_copy_result_if_need(common::ObIAllocator &allocator);
+  int register_complex_result_if_need();
   int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
   inline const common::ObObj &get_result() const { return result_; }
   inline common::ObIAllocator *get_allocator() { return ctx_.allocator_; }

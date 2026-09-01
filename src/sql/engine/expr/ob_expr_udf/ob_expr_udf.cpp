@@ -530,16 +530,9 @@ ObExprUDFEnvGuard::~ObExprUDFEnvGuard()
       }
     }
   }
-  if (OB_FAIL(ret)
-      && udf_ctx_.get_info()->is_called_in_sql_) {
+  if (OB_FAIL(ret)) {
     ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(get_cur_obj_count());
-  }
-  // Release return value when pl eval failed,
-  // if pl eval success, return value will released by process_return_value call.
-  int tmp_ret = OB_SUCCESS;
-  if (OB_FAIL(ret) && (tmp_ret =
-        pl::ObUserDefinedType::destruct_obj(tmp_result_, ctx_.exec_ctx_.get_my_session())) != OB_SUCCESS) {
-    LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+    tmp_result_.set_null();
   }
   if (need_end_stmt_) {
     udf_ctx_.get_session_info()->set_end_stmt();
@@ -832,7 +825,8 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
       if (OB_SUCC(ret) && OB_FAIL(process_out_params(udf_ctx, eval_ctx))) {
         LOG_WARN("failed to process out params", K(ret));
       }
-      if (OB_SUCC(ret) && OB_FAIL(process_return_value(result, tmp_result, eval_ctx, udf_ctx, env_guard))) {
+      if (OB_SUCC(ret) && OB_FAIL(process_return_value(
+            result, tmp_result, eval_ctx, udf_ctx, expr.obj_meta_, env_guard))) {
         LOG_WARN("failed to process return value", K(ret), K(result), K(tmp_result));
       }
       if (OB_SUCC(ret) && OB_FAIL(adjust_return_value(result, expr.obj_meta_, udf_ctx.get_allocator(), udf_ctx))) {

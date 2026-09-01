@@ -89,6 +89,7 @@ public:
                                          ObObj &tmp_result,
                                          ObEvalCtx &eval_ctx,
                                          ObExprUDFCtx &udf_ctx,
+                                         const common::ObObjMeta &result_meta,
                                          ObExprUDFEnvGuard &guard);
   static
   int process_in_params(const pl::ObPLParamArray &objs_stack,
