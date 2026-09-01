@@ -43,6 +43,7 @@ public:
   ~SessionGuard();
   void set_session(sql::ObSQLSessionInfo *session_ptr);
   bool is_valid() const;
+  int copy_current_query_string(ObStringHolder &query_str);
   sql::ObSQLSessionInfo &get_session() const;
   sql::ObSQLSessionInfo *operator->() const;
   TO_STRING_KV(K_(sess_ptr));

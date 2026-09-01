@@ -79,10 +79,12 @@ int LocalDeadLockCollectCallBack::operator()(const ObDependencyHolder &, ObDetec
   char * buffer_row_key = nullptr;
   char * buffer_current_sql = nullptr;
   SessionGuard sess_guard;
+  ObStringHolder cur_query_str;
   int step = 0;
   if (++step && OB_FAIL(ObTransDeadlockDetectorAdapter::get_session_info(sess_id_pair_, sess_guard))) {
   } else if (++step && !sess_guard.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (++step && OB_FAIL(sess_guard.copy_current_query_string(cur_query_str))) {
   } else if (OB_UNLIKELY(nullptr == (buffer_trans_id = (char*)mtl_malloc(trans_id_str_len, "deadlockCB")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else if (OB_UNLIKELY(nullptr == (buffer_row_key = (char*)mtl_malloc(row_key_str_len, "deadlockCB")))) {
@@ -109,11 +111,10 @@ int LocalDeadLockCollectCallBack::operator()(const ObDependencyHolder &, ObDetec
                                                                       NODE_KEY_BUFFER_MAX_LENGTH,
                                                                       buffer_row_key,
                                                                       row_key_str_len);
-    const ObString &cur_query_str = sess_guard->get_current_query_string();
     int64_t pos = 0;
     databuff_printf(buffer_current_sql, current_sql_str_len, pos, "%s:", helper.convert(trace_id_));
-     ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(cur_query_str.ptr(),
-                                                                        cur_query_str.length(),
+     ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(cur_query_str.get_ob_string().ptr(),
+                                                                        cur_query_str.get_ob_string().length(),
                                                                         buffer_current_sql + pos,
                                                                         current_sql_str_len - pos);
 
