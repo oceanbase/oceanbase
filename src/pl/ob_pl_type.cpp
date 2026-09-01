@@ -2519,6 +2519,13 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool cl
       if (OB_NOT_NULL(spi_result)) {
         if (OB_NOT_NULL(spi_result->get_result_set())) {
           OZ (spi_result->set_cursor_env(session));
+          if (OB_SUCC(ret)) {
+            // handle_audit_record() resets the cursor audit_record after each fetch,
+            // so restore accumulated cursor times before close-time plan_stat update.
+            ObAuditRecordData &audit_record = session.get_raw_audit_record();
+            audit_record.cursor_executor_t_ = get_cursor_total_exec_time();
+            audit_record.cursor_elapsed_ = get_cursor_total_elapsed_time();
+          }
           spi_result->destruct_exec_params(session);
           int close_ret = spi_result->close_result_set();
           if (OB_SUCCESS != close_ret) {

@@ -229,12 +229,31 @@ int ObSPIResultSet::close_result_set()
       if (OB_NOT_NULL(plan) && streaming_stat_pending_) {
         ObAuditRecordData &audit_record = result_set_->get_session().get_raw_audit_record();
         int64_t saved_cursor_executor_t = audit_record.cursor_executor_t_;
-        // A nonzero dummy value makes is_streaming_cursor_record() retain the actual cursor elapsed time.
-        audit_record.cursor_executor_t_ = 1;
-        // TODO: update_plan_stat is also required here to maintain plan cache plan stat
-        // for streaming cursor scenarios. Current maintenance is incomplete, only SPM is supported here.
-        plan->update_evolution_stat(audit_record);
+        int64_t saved_cursor_elapsed = audit_record.cursor_elapsed_;
+        if (audit_record.cursor_executor_t_ <= 0) {
+          audit_record.cursor_executor_t_ = 1;
+        }
+        ObIArray<ObTableRowCount> *table_row_count_list = NULL;
+        ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(result_set_->get_exec_context());
+        if (OB_NOT_NULL(plan_ctx)) {
+          table_row_count_list = &(plan_ctx->get_table_row_count_list());
+        }
+        if (result_set_->get_session().get_local_ob_enable_plan_cache()
+            && !sql_ctx_.self_add_plan_ && sql_ctx_.plan_cache_hit_) {
+          plan->update_plan_stat(audit_record,
+                                 false,
+                                 table_row_count_list);
+        } else if (result_set_->get_session().get_local_ob_enable_plan_cache()
+                   && sql_ctx_.self_add_plan_) {
+          plan->update_plan_stat(audit_record,
+                                 true,
+                                 table_row_count_list);
+        } else {
+          plan->update_evolution_stat(audit_record);
+        }
         audit_record.cursor_executor_t_ = saved_cursor_executor_t;
+        audit_record.cursor_elapsed_ = saved_cursor_elapsed;
+        streaming_stat_pending_ = false;
       }
 
       if (result_set_->get_errcode() != OB_SUCCESS) {
