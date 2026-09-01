@@ -182,6 +182,22 @@ else()
   set(OB_BUILD_CLOSE_MODULES ON)
 endif()
 
+# BUILD_CDC_ONLY selects the CDC packaging flow. These two switches select
+# which CDC components participate in that flow. Keep the historical defaults:
+# commercial builds package both components, while open-source builds only
+# package libobcdc because cdc_service belongs to the closed-source tree.
+ob_define(BUILD_LIBOBCDC ON)
+ob_define(BUILD_CDC_SERVICE ${OB_BUILD_CLOSE_MODULES})
+
+if(BUILD_CDC_ONLY)
+  if(NOT BUILD_LIBOBCDC AND NOT BUILD_CDC_SERVICE)
+    message(FATAL_ERROR "No CDC component selected: enable BUILD_LIBOBCDC and/or BUILD_CDC_SERVICE")
+  endif()
+  if(BUILD_CDC_SERVICE AND NOT OB_BUILD_CLOSE_MODULES)
+    message(FATAL_ERROR "BUILD_CDC_SERVICE is unavailable in open-source builds")
+  endif()
+endif()
+
 # close modules features for loongarch64
 if(${ARCHITECTURE} STREQUAL "loongarch64")
   set(BUILD_DEFAULT OFF)

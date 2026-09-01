@@ -164,7 +164,7 @@ install(FILES
 endif()
 
 ## oceanbase-cdc
-if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
+if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY AND BUILD_LIBOBCDC)
   list(APPEND CPACK_COMPONENTS_ALL cdc)
   include(GNUInstallDirs)
   install(
@@ -211,7 +211,7 @@ if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
 endif()
 
 ## oceanbase-cdc-service
-if (BUILD_CDC_ONLY AND OB_BUILD_CLOSE_MODULES)
+if (BUILD_CDC_ONLY AND BUILD_CDC_SERVICE)
   list(APPEND CPACK_COMPONENTS_ALL cdc-service)
 
   # ob_cdc_server binary

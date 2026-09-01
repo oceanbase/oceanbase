@@ -274,7 +274,7 @@ endif()
 # build cdc service
 if(OB_BUILD_CLOSE_MODULES AND EXISTS ${CMAKE_SOURCE_DIR}/ob_cdc)
   add_subdirectory(ob_cdc EXCLUDE_FROM_ALL)
-  if(CMAKE_BUILD_RPM AND BUILD_CDC_ONLY)
+  if(CMAKE_BUILD_RPM AND BUILD_CDC_ONLY AND BUILD_CDC_SERVICE)
     add_dependencies(rpm ob_cdc_server)
   endif()
 endif()

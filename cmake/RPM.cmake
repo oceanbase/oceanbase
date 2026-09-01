@@ -2,9 +2,13 @@ set(CPACK_GENERATOR "RPM")
 # use separated RPM SPECs and generate different RPMs
 set(CPACK_COMPONENTS_IGNORE_GROUPS 1)
 set(CPACK_RPM_COMPONENT_INSTALL ON)
-# use "server" as main component so its RPM filename won't have "server"
+# Keep the primary package name from getting an extra component suffix.
 if (BUILD_CDC_ONLY)
-  set(CPACK_RPM_MAIN_COMPONENT "cdc")
+  if (BUILD_LIBOBCDC)
+    set(CPACK_RPM_MAIN_COMPONENT "cdc")
+  else()
+    set(CPACK_RPM_MAIN_COMPONENT "cdc-service")
+  endif()
 else()
   set(CPACK_RPM_MAIN_COMPONENT "server")
 endif()
@@ -111,16 +115,25 @@ if (BUILD_CDC_ONLY)
   message(STATUS "oceanbase build cdc only")
   # Use python3 for brp-python-bytecompile of CDC Python helper scripts.
   string(APPEND CPACK_RPM_SPEC_MORE_DEFINE "\n%global __python /usr/bin/python3")
-  set(CPACK_COMPONENTS_ALL cdc)
-  if (OB_BUILD_CLOSE_MODULES)
+  set(CPACK_COMPONENTS_ALL)
+  if (BUILD_LIBOBCDC)
+    list(APPEND CPACK_COMPONENTS_ALL cdc)
+  endif()
+  if (BUILD_CDC_SERVICE)
     list(APPEND CPACK_COMPONENTS_ALL cdc-service)
   endif()
-  set(CPACK_PACKAGE_NAME "oceanbase-cdc")
-  if (OB_BUILD_OPENSOURCE)
-    set(CPACK_PACKAGE_NAME "oceanbase-ce-cdc")
+  if (BUILD_LIBOBCDC)
+    set(CPACK_PACKAGE_NAME "oceanbase-cdc")
+    if (OB_BUILD_OPENSOURCE)
+      set(CPACK_PACKAGE_NAME "oceanbase-ce-cdc")
+    endif()
+  else()
+    # CPack ignores component-specific package names for the main component,
+    # so service-only builds must use the service package name globally.
+    set(CPACK_PACKAGE_NAME "oceanbase-cdc-service")
   endif()
-  # cdc-service component package naming
-  if (OB_BUILD_CLOSE_MODULES)
+  # Override the package name when cdc-service is a non-main component.
+  if (BUILD_LIBOBCDC AND BUILD_CDC_SERVICE)
     set(CPACK_RPM_CDC-SERVICE_PACKAGE_NAME "oceanbase-cdc-service")
   endif()
 else()
@@ -160,6 +173,7 @@ install(FILES
   COMPONENT server)
 
 message(STATUS "Cpack Components:${CPACK_COMPONENTS_ALL}")
+message(STATUS "Cpack Package Name:${CPACK_PACKAGE_NAME}")
 
 # refs https://stackoverflow.com/questions/48711342/what-does-the-cpack-preinstall-target-do
 # see https://cmake.org/cmake/help/latest/module/CPack.html
@@ -174,7 +188,7 @@ add_custom_target(rpm
   )
 
 if (BUILD_CDC_ONLY)
-  if (NOT OB_SO_CACHE)
+  if (BUILD_LIBOBCDC AND NOT OB_SO_CACHE)
     add_dependencies(rpm obcdc obcdc_tailf)
   endif()
 else()
