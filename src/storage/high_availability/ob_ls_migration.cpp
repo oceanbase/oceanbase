@@ -298,6 +298,7 @@ ObCopyTabletCtx::ObCopyTabletCtx()
 {
   ObMemAttr attr(MTL_ID(), "HaTabletHdl");
   tablet_allocator_.set_attr(attr);
+  copy_table_key_array_.set_attr(ObMemAttr(get_ha_mem_tenant_id(), "MigTableKey"));
 }
 
 ObCopyTabletCtx::~ObCopyTabletCtx()
@@ -320,6 +321,7 @@ void ObCopyTabletCtx::reset()
   status_ = ObCopyTabletStatus::MAX_STATUS;
   extra_info_.reset();
   copy_sstable_info_mgr_.reset();
+  copy_table_key_array_.reset();
 }
 
 int ObCopyTabletCtx::set_copy_tablet_status(const ObCopyTabletStatus::STATUS &status)
@@ -3186,6 +3188,7 @@ int ObTabletMigrationDag::inner_reset_status_for_retry()
       copy_tablet_ctx_.extra_info_.reset();
       copy_tablet_ctx_.macro_block_reuse_mgr_.reset();
       copy_tablet_ctx_.copy_sstable_info_mgr_.reset();
+      copy_tablet_ctx_.copy_table_key_array_.reset();
       const ObTabletMapKey map_key(ctx->arg_.ls_id_, copy_tablet_ctx_.tablet_id_);
       if (OB_ISNULL(ls = ls_handle_.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -3232,8 +3235,7 @@ ObTabletMigrationTask::ObTabletMigrationTask()
     svr_rpc_proxy_(nullptr),
     storage_rpc_(nullptr),
     sql_proxy_(nullptr),
-    copy_tablet_ctx_(nullptr),
-    copy_table_key_array_()
+    copy_tablet_ctx_(nullptr)
 {
 }
 
@@ -3268,7 +3270,6 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
     storage_rpc_ = migration_dag_net->get_storage_rpc();
     sql_proxy_ = migration_dag_net->get_sql_proxy();
     copy_tablet_ctx_ = &copy_tablet_ctx;
-    copy_table_key_array_.set_attr(ObMemAttr(get_ha_mem_tenant_id(), "MigTableKey"));
     is_inited_ = true;
     LOG_INFO("succeed init tablet migration task", "ls id", ctx_->arg_.ls_id_, "tablet_id", copy_tablet_ctx.tablet_id_,
         "dag_id", *ObCurTraceId::get_trace_id(), "dag_net_id", ctx_->task_id_);
@@ -3375,22 +3376,19 @@ int ObTabletMigrationTask::process()
 }
 
 // task running dag map
-   // copy minor sstables task ->
-   // copy major sstables task ->
-   // copy ddl sstables task   ->
+   // copy chain driver task -> (lazily generates one sstable copy chain per round) ->
    // tablet copy finish task  ->
 
 // task function introduce
-   // copy minor sstables task is copy needed minor sstable from remote
-   // copy major sstables task is copy needed major sstable from remote
-   // copy ddl sstables task is copy needed ddl tables from remote
+   // copy chain driver task rolls over copy_table_key_array_ in snapshot version order
+   // and generates at most one sstable copy chain (copy -> finish -> next driver) per process()
    // tablet copy finish task is using copyed sstables to create new table store
 int ObTabletMigrationTask::generate_migration_tasks_()
 {
   int ret = OB_SUCCESS;
-  ObITask *parent_task = this;
   ObTabletCopyFinishTask *tablet_copy_finish_task = nullptr;
   ObTabletFinishMigrationTask *tablet_finish_migration_task = nullptr;
+  ObTabletCopyChainDriverTask *first_driver_task = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_ERROR("not inited", K(ret));
@@ -3399,27 +3397,30 @@ int ObTabletMigrationTask::generate_migration_tasks_()
     LOG_WARN("no need to generate minor task", K(ret), K(ctx_->arg_));
   } else if (OB_FAIL(generate_tablet_copy_finish_task_(tablet_copy_finish_task))) {
     LOG_WARN("failed to generate tablet copy finish task", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(generate_mds_copy_tasks_(tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate migrate mds tasks", K(ret), K(*ctx_));
-  } else if (OB_FAIL(generate_minor_copy_tasks_(tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate migrate minor tasks", K(ret), K(*ctx_));
-  } else if (OB_FAIL(generate_major_copy_tasks_(tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate migrate major tasks", K(ret), K(*ctx_));
-  } else if (OB_FAIL(generate_ddl_copy_tasks_(tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate ddl copy tasks", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_tablet_finish_migration_task_(tablet_finish_migration_task))) {
     LOG_WARN("failed to generate tablet finish migration task", K(ret), K(ctx_->arg_));
+  } else if (OB_FAIL(dag_->alloc_task(first_driver_task))) {
+    LOG_WARN("failed to alloc tablet copy chain driver task", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(first_driver_task->init(ctx_, copy_tablet_ctx_, bandwidth_throttle_,
+      svr_rpc_proxy_, tablet_copy_finish_task, 0 /*next_index*/))) {
+    LOG_WARN("failed to init tablet copy chain driver task", K(ret), KPC(copy_tablet_ctx_));
+  } else if (OB_FAIL(this->add_child(*first_driver_task))) {
+    LOG_WARN("failed to add first driver task as child", K(ret), KPC(ctx_));
+    // the sink is always hung under the latest active driver, so its indegree never drops
+    // to 0 (which would make it scheduled prematurely) before the last driver finishes
+  } else if (OB_FAIL(first_driver_task->add_child(*tablet_copy_finish_task))) {
+    LOG_WARN("failed to add tablet copy finish task as child of first driver", K(ret), KPC(ctx_));
   } else if (OB_FAIL(tablet_copy_finish_task->add_child(*tablet_finish_migration_task))) {
     LOG_WARN("failed to add child finsih task for parent", K(ret), KPC(tablet_finish_migration_task));
-  } else if (OB_FAIL(parent_task->add_child(*tablet_copy_finish_task))) {
-    LOG_WARN("failed to add tablet copy finish task as child", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(dag_->add_task(*first_driver_task))) {
+    LOG_WARN("failed to add first driver task", K(ret), KPC(ctx_));
   } else if (OB_FAIL(dag_->add_task(*tablet_copy_finish_task))) {
     LOG_WARN("failed to add tablet copy finish task", K(ret), KPC(ctx_));
   } else if (OB_FAIL(dag_->add_task(*tablet_finish_migration_task))) {
     LOG_WARN("failed to add tablet finish migration task", K(ret));
   } else {
     LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_),
-        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_tablet_ctx_->copy_table_key_array_));
   }
   return ret;
 }
@@ -3439,7 +3440,7 @@ int ObTabletMigrationTask::generate_tablet_finish_migration_task_(
     LOG_WARN("failed to alloc tablet finish task", K(ret), KPC(ctx_));
   } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(tablet_finish_migration_task->init(task_gen_time, copy_table_key_array_.count(), *copy_tablet_ctx_, *ls))) {
+  } else if (OB_FAIL(tablet_finish_migration_task->init(task_gen_time, copy_tablet_ctx_->copy_table_key_array_.count(), *copy_tablet_ctx_, *ls))) {
     LOG_WARN("failed to init tablet copy finish task", K(ret), KPC(ctx_), KPC(copy_tablet_ctx_));
   } else {
     LOG_INFO("generate tablet migration finish task", "ls_id", ls->get_ls_id().id(), "tablet_id", copy_tablet_ctx_->tablet_id_);
@@ -3447,187 +3448,19 @@ int ObTabletMigrationTask::generate_tablet_finish_migration_task_(
   return ret;
 }
 
-int ObTabletMigrationTask::generate_minor_copy_tasks_(
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
-{
-  int ret = OB_SUCCESS;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
-  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_minor_sstable, tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate copy minor tasks", K(ret), KPC(copy_tablet_ctx_));
-  }
-  return ret;
-}
-
-int ObTabletMigrationTask::generate_major_copy_tasks_(
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
-{
-  int ret = OB_SUCCESS;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
-  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_major_sstable, tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate copy major tasks", K(ret), KPC(copy_tablet_ctx_));
-  }
-  return ret;
-}
-
-int ObTabletMigrationTask::generate_ddl_copy_tasks_(
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
-  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_ddl_dump_sstable, tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate copy ddl tasks", K(ret), KPC(copy_tablet_ctx_));
-  }
-  return ret;
-}
-
-int ObTabletMigrationTask::generate_physical_copy_task_(
-    const ObStorageHASrcInfo &src_info,
-    const ObITable::TableKey &copy_table_key,
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    ObITask *parent_task,
-    ObITask *child_task)
-{
-  int ret = OB_SUCCESS;
-  ObPhysicalCopyTask *copy_task = NULL;
-  ObSSTableCopyFinishTask *finish_task = NULL;
-  const int64_t task_idx = 0;
-  ObLS *ls = nullptr;
-  ObPhysicalCopyTaskInitParam init_param;
-  ObTabletMigrationDag *tablet_migration_dag = nullptr;
-  bool is_tablet_exist = true;
-  bool need_copy = true;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (!src_info.is_valid() || !copy_table_key.is_valid() || OB_ISNULL(tablet_copy_finish_task)
-      || OB_ISNULL(parent_task) || OB_ISNULL(child_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate physical copy task get invalid argument", K(ret),
-        K(src_info), KP(parent_task), KP(child_task));
-  } else if (FALSE_IT(tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag_))) {
-  } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
-    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.check_src_tablet_exist(is_tablet_exist))) {
-    LOG_WARN("failed to check src tablet exist", K(ret), K(copy_table_key));
-  } else if (!is_tablet_exist) {
-    if (OB_FAIL(tablet_copy_finish_task->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
-      LOG_WARN("failed to set tablet status", K(ret), K(copy_table_key), KPC(copy_tablet_ctx_));
-    } else if (OB_FAIL(parent_task->add_child(*child_task))) {
-      LOG_WARN("failed to add chiild task", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
-    }
-  } else {
-    if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
-      LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
-    } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(*init_param.sstable_param_,
-                                                                          false /* is_leader_restore */,
-                                                                          need_copy))) {
-      LOG_WARN("failed to check need copy macro blocks", K(ret), K(init_param), K(copy_table_key));
-    } else if (FALSE_IT(init_param.tenant_id_ = ctx_->tenant_id_)) {
-    } else if (FALSE_IT(init_param.ls_id_ = ctx_->arg_.ls_id_)) {
-    } else if (FALSE_IT(init_param.tablet_id_ = copy_tablet_ctx_->tablet_id_)) {
-    } else if (FALSE_IT(init_param.src_info_ = src_info)) {
-    } else if (FALSE_IT(init_param.tablet_copy_finish_task_ = tablet_copy_finish_task)) {
-    } else if (FALSE_IT(init_param.ls_ = ls)) {
-    } else if (FALSE_IT(init_param.need_sort_macro_meta_ = false)) {
-    } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
-    } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_)) {
-    } else if (FALSE_IT(init_param.macro_block_reuse_mgr_ = ObITable::is_major_sstable(copy_table_key.table_type_) ? &copy_tablet_ctx_->macro_block_reuse_mgr_ : nullptr)) {
-    } else if (FALSE_IT(init_param.extra_info_ = &copy_tablet_ctx_->extra_info_)) {
-    } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
-      LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
-    } else if (FALSE_IT(init_param.copy_table_key_ = copy_table_key)) {
-    } else if (need_copy && OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.get_copy_sstable_macro_range_info_ptr(
-        copy_table_key, init_param.sstable_macro_range_info_))) {
-      LOG_WARN("failed to get copy sstable macro range info", K(ret), K(copy_table_key));
-    } else if (!init_param.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("physical copy task init param not valid", K(ret), K(init_param), KPC(ctx_));
-    } else if (OB_FAIL(dag_->alloc_task(finish_task))) {
-      LOG_WARN("failed to alloc finish task", K(ret));
-    } else if (OB_FAIL(finish_task->init(init_param))) {
-      LOG_WARN("failed to init finish task", K(ret), K(copy_table_key), K(*ctx_));
-    } else if (OB_FAIL(finish_task->add_child(*child_task))) {
-      LOG_WARN("failed to add child", K(ret));
-    } else if (need_copy) {
-      //shared ddl sstable only put other block id into sstable, no need copy macro block which already in shared storage.
-      // parent->copy->finish->child
-      if (OB_FAIL(dag_->alloc_task(copy_task))) {
-        LOG_WARN("failed to alloc copy task", K(ret));
-      } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task))) {
-        LOG_WARN("failed to init copy task", K(ret));
-      } else if (OB_FAIL(parent_task->add_child(*copy_task))) {
-        LOG_WARN("failed to add child copy task", K(ret));
-      } else if (OB_FAIL(copy_task->add_child(*finish_task))) {
-        LOG_WARN("failed to add child finish task", K(ret));
-      } else if (OB_FAIL(dag_->add_task(*copy_task))) {
-        LOG_WARN("failed to add copy task to dag", K(ret));
-      }
-    } else if (init_param.sstable_param_->is_empty_sstable()) {
-      if (OB_FAIL(parent_task->add_child(*finish_task))) {
-        LOG_WARN("failed to add child finish_task for parent", K(ret));
-      }
-    } else {
-      ObSSTableCopyStartTask *start_task = nullptr;
-      if (OB_FAIL(dag_->alloc_task(start_task))) {
-        LOG_WARN("failed to alloc finish task", K(ret));
-      } else if (OB_FAIL(start_task->init(finish_task->get_copy_ctx(), finish_task))) {
-        LOG_WARN("failed to init finish task", K(ret), K(copy_table_key), K(*ctx_));
-      } else if (OB_FAIL(parent_task->add_child(*start_task))) {
-        LOG_WARN("failed to add child finish_task for parent", K(ret));
-      } else if (OB_FAIL(start_task->add_child(*finish_task))) {
-        LOG_WARN("failed to add child finish task", K(ret));
-      } else if (OB_FAIL(dag_->add_task(*start_task))) {
-        LOG_WARN("failed to add start task to dag", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(dag_->add_task(*finish_task))) {
-        LOG_WARN("failed to add finish task to dag", K(ret));
-      } else {
-        FLOG_INFO("succeed to generate physical copy task",
-            K(copy_table_key), K(src_info), KPC(copy_task), KPC(finish_task));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTabletMigrationTask::build_copy_table_key_info_()
 {
   int ret = OB_SUCCESS;
-  common::ObArray<ObITable::TableKey> table_key_array;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_keys(copy_tablet_ctx_->tablet_id_, copy_table_key_array_))) {
+  } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_keys(copy_tablet_ctx_->tablet_id_, copy_tablet_ctx_->copy_table_key_array_))) {
     LOG_WARN("failed to get copy table keys", K(ret), KPC(copy_tablet_ctx_));
     // sort copy table key array by snapshot version, copy major sstable from low version to high version
-  } else if (FALSE_IT(ObStorageHAUtils::sort_table_key_array_by_snapshot_version(copy_table_key_array_))) {
+  } else if (FALSE_IT(ObStorageHAUtils::sort_table_key_array_by_snapshot_version(copy_tablet_ctx_->copy_table_key_array_))) {
   } else {
     LOG_INFO("succeed to build copy table key info",
-        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_tablet_ctx_->copy_table_key_array_));
   }
   return ret;
 }
@@ -3641,9 +3474,9 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_FAIL(get_need_copy_sstable_info_key_(copy_table_key_array_, filter_table_key_array))) {
+  } else if (OB_FAIL(get_need_copy_sstable_info_key_(copy_tablet_ctx_->copy_table_key_array_, filter_table_key_array))) {
     LOG_WARN("failed to get need copy sstable info key", K(ret),
-        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_tablet_ctx_->copy_table_key_array_));
   } else if (OB_FAIL(param.copy_table_key_array_.assign(filter_table_key_array))) {
     LOG_WARN("failed to assign copy table key info array", K(ret),
         "filter_table_key_array", ObTableKeyArrayLogWrap(filter_table_key_array));
@@ -3666,62 +3499,6 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     copy_tablet_ctx_->copy_sstable_info_mgr_.reset();
     if (OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.init(param))) {
       LOG_WARN("failed to init copy sstable info mgr", K(ret), K(param), KPC(ctx_), KPC(copy_tablet_ctx_));
-    }
-  }
-  return ret;
-}
-
-int ObTabletMigrationTask::generate_copy_tasks_(
-    IsRightTypeSSTableFunc is_right_type_sstable,
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
-{
-  int ret = OB_SUCCESS;
-  bool is_batch_copy_tasks_generated = false;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate copy task get invalid argument", K(ret), KP(parent_task));
-  } else if (OB_FAIL(ObBatchSSTableCopyTaskGenerator::try_generate_copy_tasks(
-                 *this,
-                 is_right_type_sstable,
-                 tablet_copy_finish_task,
-                 parent_task,
-                 is_batch_copy_tasks_generated))) {
-    LOG_WARN("failed to try generating batch CG copy tasks", K(ret));
-  } else if (is_batch_copy_tasks_generated) {
-    // This stage is fully wired by ObBatchSSTableCopyTaskGenerator.
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_key_array_.count(); ++i) {
-      const ObITable::TableKey &copy_table_key = copy_table_key_array_.at(i);
-      ObFakeTask *wait_finish_task = nullptr;
-      bool need_copy = true;
-
-      if (!copy_table_key.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("copy table key info is invalid", K(ret), K(copy_table_key));
-      } else if (!is_right_type_sstable(copy_table_key.table_type_)) {
-        //do nothing
-      } else {
-        if (OB_FAIL(check_need_copy_sstable_(copy_table_key, need_copy))) {
-          LOG_WARN("failed to check need copy sstable", K(ret), K(copy_table_key));
-        } else if (!need_copy) {
-          LOG_INFO("local contains the sstable, no need copy", K(copy_table_key));
-        } else if (OB_FAIL(dag_->alloc_task(wait_finish_task))) {
-          LOG_WARN("failed to alloc wait finish task", K(ret));
-        } else if (OB_FAIL(generate_physical_copy_task_(ctx_->minor_src_,
-            copy_table_key, tablet_copy_finish_task, parent_task, wait_finish_task))) {
-          LOG_WARN("failed to generate_physical copy task", K(ret), K(*ctx_), K(copy_table_key));
-        } else if (OB_FAIL(dag_->add_task(*wait_finish_task))) {
-          LOG_WARN("failed to add wait finish task", K(ret));
-        } else {
-          parent_task = wait_finish_task;
-          LOG_INFO("succeed to generate_sstable_copy_task", "minor src", ctx_->minor_src_, K(copy_table_key));
-        }
-      }
     }
   }
   return ret;
@@ -3918,28 +3695,6 @@ int ObTabletMigrationTask::update_ha_expected_status_(
   return ret;
 }
 
-int ObTabletMigrationTask::check_need_copy_sstable_(
-    const ObITable::TableKey &table_key,
-    bool &need_copy)
-{
-  int ret = OB_SUCCESS;
-  need_copy = true;
-  const blocksstable::ObMigrationSSTableParam *copy_table_info = nullptr;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (!table_key.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("check need copy sstable get invlaid argument", K(ret), K(table_key));
-  } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, table_key, copy_table_info))) {
-    LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(table_key));
-  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, false /* is_restore */, copy_tablet_ctx_->tablet_handle_, need_copy))) {
-    LOG_WARN("failed to check need copy sstable", K(ret), KPC(copy_tablet_ctx_), K(table_key));
-  }
-  return ret;
-}
-
 int ObTabletMigrationTask::check_transfer_seq_equal_(
     const ObMigrationTabletParam *src_tablet_meta)
 {
@@ -3962,24 +3717,6 @@ int ObTabletMigrationTask::check_transfer_seq_equal_(
   } else if (tablet->get_tablet_meta().transfer_info_.transfer_seq_ != src_tablet_meta->transfer_info_.transfer_seq_) {
     ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
     LOG_WARN("tablet transfer seq not eq with transfer seq", KPC(tablet), KPC(src_tablet_meta));
-  }
-  return ret;
-}
-
-int ObTabletMigrationTask::generate_mds_copy_tasks_(
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
-{
-  int ret = OB_SUCCESS;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task do not init", K(ret));
-  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
-  } else if (OB_FAIL(generate_copy_tasks_(ObITable::is_mds_sstable, tablet_copy_finish_task, parent_task))) {
-    LOG_WARN("failed to generate copy minor tasks", K(ret), KPC(copy_tablet_ctx_));
   }
   return ret;
 }
@@ -4017,6 +3754,323 @@ int ObTabletMigrationTask::get_need_copy_sstable_info_key_(
           "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array),
           "filter_table_key_array", ObTableKeyArrayLogWrap(filter_table_key_array));
     }
+  }
+  return ret;
+}
+
+/******************ObTabletMigrationCopyChainDriverOps*********************/
+ObTabletMigrationCopyChainDriverOps::ObTabletMigrationCopyChainDriverOps()
+  : is_inited_(false),
+    ctx_(nullptr),
+    copy_tablet_ctx_(nullptr),
+    bandwidth_throttle_(nullptr),
+    svr_rpc_proxy_(nullptr)
+{
+}
+
+ObTabletMigrationCopyChainDriverOps::~ObTabletMigrationCopyChainDriverOps()
+{
+}
+
+int ObTabletMigrationCopyChainDriverOps::init(
+    ObMigrationCtx *ctx,
+    ObCopyTabletCtx *copy_tablet_ctx,
+    common::ObInOutBandwidthThrottle *bandwidth_throttle,
+    obrpc::ObStorageRpcProxy *svr_rpc_proxy)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tablet migration copy chain driver ops init twice", K(ret));
+  } else if (OB_ISNULL(ctx) || !ctx->is_valid()
+      || OB_ISNULL(copy_tablet_ctx) || !copy_tablet_ctx->is_valid()
+      || OB_ISNULL(bandwidth_throttle) || OB_ISNULL(svr_rpc_proxy)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet migration copy chain driver ops init get invalid argument", K(ret),
+        KPC(ctx), KPC(copy_tablet_ctx), KP(bandwidth_throttle), KP(svr_rpc_proxy));
+  } else {
+    ctx_ = ctx;
+    copy_tablet_ctx_ = copy_tablet_ctx;
+    bandwidth_throttle_ = bandwidth_throttle;
+    svr_rpc_proxy_ = svr_rpc_proxy;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+const common::ObIArray<ObITable::TableKey> &ObTabletMigrationCopyChainDriverOps::get_copy_table_key_array() const
+{
+  return copy_tablet_ctx_->copy_table_key_array_;
+}
+
+bool ObTabletMigrationCopyChainDriverOps::is_ctx_failed() const
+{
+  return ctx_->is_failed();
+}
+
+int ObTabletMigrationCopyChainDriverOps::generate_physical_task(
+    share::ObIDag *dag,
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    const ObITable::TableKey &copy_table_key,
+    share::ObITask *parent_task,
+    share::ObITask *child_task)
+{
+  int ret = OB_SUCCESS;
+  ObSSTableCopyFinishTask *finish_task = NULL;
+  ObLS *ls = nullptr;
+  ObPhysicalCopyTaskInitParam init_param;
+  ObTabletMigrationDag *tablet_migration_dag = nullptr;
+  bool is_tablet_exist = true;
+  bool need_copy = true;
+  ObSSTableCopyTopology topology = BYPASS_TO_NEXT;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration copy chain driver ops do not init", K(ret));
+  } else if (OB_ISNULL(dag) || OB_ISNULL(tablet_copy_finish_task)
+      || !ctx_->minor_src_.is_valid() || !copy_table_key.is_valid()
+      || OB_ISNULL(parent_task) || OB_ISNULL(child_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate physical copy task get invalid argument", K(ret),
+        K(copy_table_key), K(ctx_->minor_src_), KP(dag), KP(tablet_copy_finish_task),
+        KP(parent_task), KP(child_task));
+  } else if (FALSE_IT(tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag))) {
+  } else if (OB_FAIL(tablet_migration_dag->get_ls(ls))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.check_src_tablet_exist(is_tablet_exist))) {
+    LOG_WARN("failed to check src tablet exist", K(ret), K(copy_table_key));
+  } else if (!is_tablet_exist) {
+    if (OB_FAIL(tablet_copy_finish_task->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
+      LOG_WARN("failed to set tablet status", K(ret), K(copy_table_key), KPC(copy_tablet_ctx_));
+    } else if (OB_FAIL(ObSSTableCopyChainBuilder::build_sstable_copy_chain(dag, parent_task, child_task,
+        nullptr /* finish_task */, BYPASS_TO_NEXT))) {
+      LOG_WARN("failed to build bypass copy chain", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
+    }
+  } else if (OB_FAIL(prepare_physical_copy_param_(dag, tablet_copy_finish_task, copy_table_key, ls, init_param, need_copy))) {
+    LOG_WARN("failed to prepare physical copy param", K(ret), K(copy_table_key), KPC(copy_tablet_ctx_));
+  } else if (FALSE_IT(topology = choose_copy_topology_(need_copy, init_param.sstable_param_->is_empty_sstable()))) {
+  } else if (OB_FAIL(dag->alloc_task(finish_task))) {
+    LOG_WARN("failed to alloc finish task", K(ret));
+  } else if (OB_FAIL(finish_task->init(init_param))) {
+    LOG_WARN("failed to init finish task", K(ret), K(copy_table_key), K(*ctx_));
+  } else if (OB_FAIL(ObSSTableCopyChainBuilder::build_sstable_copy_chain(dag, parent_task, child_task,
+      finish_task, topology))) {
+    LOG_WARN("failed to build sstable copy chain", K(ret), K(copy_table_key), K(topology));
+  } else {
+    FLOG_INFO("succeed to generate physical copy task",
+        K(copy_table_key), K(ctx_->minor_src_), K(topology), KPC(finish_task));
+  }
+  return ret;
+}
+
+int ObTabletMigrationCopyChainDriverOps::prepare_physical_copy_param_(
+    share::ObIDag *dag,
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    const ObITable::TableKey &copy_table_key,
+    ObLS *ls,
+    ObPhysicalCopyTaskInitParam &init_param,
+    bool &need_copy)
+{
+  int ret = OB_SUCCESS;
+  need_copy = true;
+  if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, copy_table_key, init_param.sstable_param_))) {
+    LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
+  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_macro_blocks(*init_param.sstable_param_,
+                                                                        false /* is_leader_restore */,
+                                                                        need_copy))) {
+    LOG_WARN("failed to check need copy macro blocks", K(ret), K(init_param), K(copy_table_key));
+  } else {
+    init_param.tenant_id_ = ctx_->tenant_id_;
+    init_param.ls_id_ = ctx_->arg_.ls_id_;
+    init_param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
+    init_param.src_info_ = ctx_->minor_src_;
+    init_param.tablet_copy_finish_task_ = tablet_copy_finish_task;
+    init_param.ls_ = ls;
+    init_param.need_sort_macro_meta_ = false;
+    init_param.need_check_seq_ = true;
+    init_param.ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_;
+    init_param.macro_block_reuse_mgr_ = ObITable::is_major_sstable(copy_table_key.table_type_) ? &copy_tablet_ctx_->macro_block_reuse_mgr_ : nullptr;
+    init_param.extra_info_ = &copy_tablet_ctx_->extra_info_;
+    init_param.copy_table_key_ = copy_table_key;
+
+    if (need_copy && OB_FAIL(copy_tablet_ctx_->copy_sstable_info_mgr_.get_copy_sstable_macro_range_info_ptr(
+        copy_table_key, init_param.sstable_macro_range_info_))) {
+      LOG_WARN("failed to get copy sstable macro range info", K(ret), K(copy_table_key));
+    } else if (!init_param.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("physical copy task init param not valid", K(ret), K(init_param), KPC(ctx_));
+    }
+  }
+  return ret;
+}
+
+ObSSTableCopyTopology ObTabletMigrationCopyChainDriverOps::choose_copy_topology_(
+    const bool need_copy,
+    const bool is_empty_sstable) const
+{
+  //shared ddl sstable only put other block id into sstable, no need copy macro block which already in shared storage.
+  ObSSTableCopyTopology topology = START_THEN_FINISH;
+  if (need_copy) {
+    topology = COPY_MACRO_BLOCKS;
+  } else if (is_empty_sstable) {
+    topology = DIRECT_TO_FINISH;
+  }
+  return topology;
+}
+
+int ObTabletMigrationCopyChainDriverOps::check_need_copy_sstable(
+    const ObITable::TableKey &table_key,
+    bool &need_copy)
+{
+  int ret = OB_SUCCESS;
+  need_copy = true;
+  const blocksstable::ObMigrationSSTableParam *copy_table_info = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration copy chain driver ops do not init", K(ret));
+  } else if (!table_key.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check need copy sstable get invlaid argument", K(ret), K(table_key));
+  } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, table_key, copy_table_info))) {
+    LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(table_key));
+  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, false /* is_restore */, copy_tablet_ctx_->tablet_handle_, need_copy))) {
+    LOG_WARN("failed to check need copy sstable", K(ret), KPC(copy_tablet_ctx_), K(table_key));
+  }
+  return ret;
+}
+
+void ObTabletMigrationCopyChainDriverOps::build_batch_copy_plan_param_(
+    ObBatchSSTableCopyPlanParam &param) const
+{
+  param.tenant_id_ = ctx_->tenant_id_;
+  param.op_type_ = ctx_->arg_.type_;
+  param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
+  param.table_info_mgr_ = &ctx_->ha_table_info_mgr_;
+  param.copy_sstable_info_mgr_ = &copy_tablet_ctx_->copy_sstable_info_mgr_;
+}
+
+int ObTabletMigrationCopyChainDriverOps::plan_copy_unit(
+    const int64_t start_index,
+    ObSSTableCopyUnit &unit)
+{
+  int ret = OB_SUCCESS;
+  ObBatchSSTableCopyPlanParam param;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration copy chain driver ops do not init", K(ret));
+  } else if (FALSE_IT(build_batch_copy_plan_param_(param))) {
+  } else if (OB_FAIL(ObBatchSSTableCopyTaskGenerator::plan_batch_copy_unit(param,
+      copy_tablet_ctx_->copy_table_key_array_, start_index, *this /* scan_policy */, unit))) {
+    LOG_WARN("failed to plan batch copy unit", K(ret), K(param), K(start_index));
+  }
+  return ret;
+}
+
+int ObTabletMigrationCopyChainDriverOps::build_batch_copy_task_param_(
+    share::ObIDag *dag,
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    ObBatchSSTableCopyTaskParam &param) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletMigrationDag *tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag);
+
+  if (OB_FAIL(tablet_migration_dag->get_ls(param.ls_))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_tablet_meta(copy_tablet_ctx_->tablet_id_,
+      param.src_tablet_meta_))) {
+    LOG_WARN("failed to get src tablet meta", K(ret), KPC(copy_tablet_ctx_));
+  } else {
+    param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
+    param.src_info_ = ctx_->minor_src_;
+    param.table_info_mgr_ = &ctx_->ha_table_info_mgr_;
+    param.copy_sstable_info_mgr_ = &copy_tablet_ctx_->copy_sstable_info_mgr_;
+    param.tablet_copy_finish_task_ = tablet_copy_finish_task;
+    param.extra_info_ = &copy_tablet_ctx_->extra_info_;
+    param.bandwidth_throttle_ = bandwidth_throttle_;
+    param.svr_rpc_proxy_ = svr_rpc_proxy_;
+    param.src_ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_;
+    param.macro_block_reuse_mgr_ = &copy_tablet_ctx_->macro_block_reuse_mgr_;
+  }
+  return ret;
+}
+
+int ObTabletMigrationCopyChainDriverOps::generate_batch_task(
+    share::ObIDag *dag,
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    const common::ObIArray<ObITable::TableKey> &batch_keys,
+    share::ObITask *parent_task,
+    share::ObITask *child_task)
+{
+  int ret = OB_SUCCESS;
+  ObBatchSSTableCopyTaskParam param;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration copy chain driver ops do not init", K(ret));
+  } else if (OB_ISNULL(dag) || OB_ISNULL(tablet_copy_finish_task)
+      || OB_ISNULL(parent_task) || OB_ISNULL(child_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate batch task get invalid argument", K(ret), KP(dag),
+        KP(tablet_copy_finish_task), KP(parent_task), KP(child_task));
+  } else if (OB_FAIL(build_batch_copy_task_param_(dag, tablet_copy_finish_task, param))) {
+    LOG_WARN("failed to build batch sstable copy task param", K(ret), KPC(copy_tablet_ctx_));
+  } else if (OB_FAIL(ObBatchSSTableCopyTaskGenerator::generate_batch_copy_task(param,
+      batch_keys, dag, parent_task, child_task))) {
+    LOG_WARN("failed to generate batch sstable copy task", K(ret), K(param),
+        "batch_key_count", batch_keys.count());
+  }
+  return ret;
+}
+
+/******************ObTabletCopyChainDriverTask*********************/
+ObTabletCopyChainDriverTask::ObTabletCopyChainDriverTask()
+  : ObTabletCopyChainDriverTaskBase(),
+    ops_()
+{
+}
+
+ObTabletCopyChainDriverTask::~ObTabletCopyChainDriverTask()
+{
+}
+
+int ObTabletCopyChainDriverTask::init(
+    ObMigrationCtx *ctx,
+    ObCopyTabletCtx *copy_tablet_ctx,
+    common::ObInOutBandwidthThrottle *bandwidth_throttle,
+    obrpc::ObStorageRpcProxy *svr_rpc_proxy,
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    const int64_t next_index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ops_.init(ctx, copy_tablet_ctx, bandwidth_throttle, svr_rpc_proxy))) {
+    LOG_WARN("failed to init migration copy chain driver ops", K(ret),
+        KPC(ctx), KPC(copy_tablet_ctx));
+  } else if (OB_FAIL(inner_init(&ops_, tablet_copy_finish_task, next_index))) {
+    LOG_WARN("failed to init tablet copy chain driver task", K(ret), K(next_index));
+  }
+  return ret;
+}
+
+int ObTabletCopyChainDriverTask::alloc_and_init_next_driver_(
+    const int64_t next_index,
+    ObTabletCopyChainDriverTaskBase *&next_driver_task)
+{
+  int ret = OB_SUCCESS;
+  ObTabletCopyChainDriverTask *next_task = nullptr;
+  next_driver_task = nullptr;
+  if (!ops_.is_inited()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet copy chain driver task do not init", K(ret));
+  } else if (OB_FAIL(dag_->alloc_task(next_task))) {
+    LOG_WARN("failed to alloc next driver task", K(ret));
+  } else if (OB_FAIL(next_task->init(ops_.get_ctx(), ops_.get_copy_tablet_ctx(),
+      ops_.get_bandwidth_throttle(), ops_.get_svr_rpc_proxy(),
+      tablet_copy_finish_task_, next_index))) {
+    LOG_WARN("failed to init next driver task", K(ret), K(next_index));
+  } else {
+    next_driver_task = next_task;
   }
   return ret;
 }

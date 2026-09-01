@@ -373,6 +373,25 @@ bool ObTabletRestoreAction::need_restore_major_sstable(const ACTION &action)
          || ACTION::RESTORE_REPLACE_REMOTE_SSTABLE == action;
 }
 
+int ObTabletRestoreAction::need_restore_sstable(const ACTION &action, const ObITable::TableType table_type, bool &need_restore)
+{
+  int ret = OB_SUCCESS;
+  need_restore = false;
+  if (ObITable::is_mds_sstable(table_type)) {
+    need_restore = need_restore_mds_sstable(action);
+  } else if (ObITable::is_minor_sstable(table_type)) {
+    need_restore = need_restore_minor_sstable(action);
+  } else if (ObITable::is_major_sstable(table_type)) {
+    need_restore = need_restore_major_sstable(action);
+  } else if (ObITable::is_ddl_dump_sstable(table_type)) {
+    need_restore = need_restore_ddl_sstable(action);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sstable type for restore action", K(ret), K(action), K(table_type));
+  }
+  return ret;
+}
+
 bool ObTabletRestoreAction::need_verify_table_store(const ACTION &action)
 {
   return need_restore_major_sstable(action);

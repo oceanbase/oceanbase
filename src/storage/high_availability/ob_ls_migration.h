@@ -26,6 +26,8 @@
 #include "ob_physical_copy_task.h"
 #include "ob_storage_ha_dag.h"
 #include "ob_storage_ha_tablet_builder.h"
+#include "ob_sstable_copy_chain_utils.h"
+#include "ob_batch_sstable_copy_task.h"
 
 namespace oceanbase
 {
@@ -150,6 +152,11 @@ public:
   // finishes (see ObIDag::inner_finish_task) while the macro range info is still referenced by the
   // sstable copy tasks generated later.
   ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
+  // Table keys of every sstable to be copied for this tablet, sorted by snapshot version.
+  // It is put into the tablet copy ctx (which is owned by the dag) instead of the task,
+  // because the sstable copy chains are generated lazily by ObTabletCopyChainDriverTask
+  // across many task process() rounds, while a task is freed as soon as it finishes.
+  common::ObArray<ObITable::TableKey> copy_table_key_array_;
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -459,9 +466,9 @@ protected:
 };
 
 class ObTabletFinishMigrationTask;
+class ObTabletCopyFinishTask;
 class ObTabletMigrationTask : public share::ObITask
 {
-  friend class ObBatchSSTableCopyTaskGenerator;
 public:
   ObTabletMigrationTask();
   virtual ~ObTabletMigrationTask();
@@ -469,27 +476,7 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletMigrationTask"), KP(this), KPC(ctx_));
 private:
-  typedef bool (*IsRightTypeSSTableFunc)(const ObITable::TableType table_type);
   int generate_migration_tasks_();
-  int generate_minor_copy_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_major_copy_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_ddl_copy_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_copy_tasks_(
-      IsRightTypeSSTableFunc is_right_type_sstable,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_physical_copy_task_(
-      const ObStorageHASrcInfo &src_info,
-      const ObITable::TableKey &copy_table_key,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      ObITask *parent_task,
-      ObITask *child_task);
   int generate_tablet_finish_migration_task_(
       ObTabletFinishMigrationTask *&tablet_finish_migration_task);
   int build_copy_table_key_info_();
@@ -499,14 +486,8 @@ private:
   int record_server_event_(const int64_t cost_us, const int64_t result);
   int try_update_tablet_();
   int update_ha_expected_status_(const ObCopyTabletStatus::STATUS &status);
-  int check_need_copy_sstable_(
-      const ObITable::TableKey &table_key,
-      bool &need_copy);
   int check_transfer_seq_equal_(
       const ObMigrationTabletParam *src_tablet_meta);
-  int generate_mds_copy_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
   int get_need_copy_sstable_info_key_(
       const common::ObIArray<ObITable::TableKey> &copy_table_key_array,
       common::ObIArray<ObITable::TableKey> &filter_table_key_array);
@@ -519,9 +500,99 @@ private:
   storage::ObStorageRpc *storage_rpc_;
   common::ObMySQLProxy *sql_proxy_;
   ObCopyTabletCtx *copy_tablet_ctx_;
-  common::ObArray<ObITable::TableKey> copy_table_key_array_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletMigrationTask);
+};
+
+// Migration path ops of the tablet copy chain driver: everything that differs from the
+// restore path (ctx type, failed-check, per-sstable copy chain wiring, copy filter) is
+// collected here; the shared skeleton lives in ObTabletCopyChainDriverTaskBase.
+class ObTabletMigrationCopyChainDriverOps final : public ObITabletCopyChainDriverOps
+{
+public:
+  ObTabletMigrationCopyChainDriverOps();
+  virtual ~ObTabletMigrationCopyChainDriverOps();
+  int init(
+      ObMigrationCtx *ctx,
+      ObCopyTabletCtx *copy_tablet_ctx,
+      common::ObInOutBandwidthThrottle *bandwidth_throttle,
+      obrpc::ObStorageRpcProxy *svr_rpc_proxy);
+  bool is_inited() const { return is_inited_; }
+  ObMigrationCtx *get_ctx() const { return ctx_; }
+  ObCopyTabletCtx *get_copy_tablet_ctx() const { return copy_tablet_ctx_; }
+  common::ObInOutBandwidthThrottle *get_bandwidth_throttle() const { return bandwidth_throttle_; }
+  obrpc::ObStorageRpcProxy *get_svr_rpc_proxy() const { return svr_rpc_proxy_; }
+  virtual const common::ObIArray<ObITable::TableKey> &get_copy_table_key_array() const override;
+  virtual bool is_ctx_failed() const override;
+  // ObISSTableCopyScanPolicy: whether the local replica does not contain the sstable yet
+  virtual int check_need_copy_sstable(const ObITable::TableKey &table_key, bool &need_copy) override;
+  virtual int generate_physical_task(
+      share::ObIDag *dag,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const ObITable::TableKey &copy_table_key,
+      share::ObITask *parent_task,
+      share::ObITask *child_task) override;
+  // batch the next run of CG sstables into one copy task when possible,
+  // see ObBatchSSTableCopyTaskGenerator
+  virtual int plan_copy_unit(
+      const int64_t start_index,
+      ObSSTableCopyUnit &unit) override;
+  virtual int generate_batch_task(
+      share::ObIDag *dag,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const common::ObIArray<ObITable::TableKey> &batch_keys,
+      share::ObITask *parent_task,
+      share::ObITask *child_task) override;
+  INHERIT_TO_STRING_KV("ObITabletCopyChainDriverOps", ObITabletCopyChainDriverOps,
+      K_(is_inited), KPC_(ctx), KPC_(copy_tablet_ctx));
+private:
+  int prepare_physical_copy_param_(
+      share::ObIDag *dag,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const ObITable::TableKey &copy_table_key,
+      ObLS *ls,
+      ObPhysicalCopyTaskInitParam &init_param,
+      bool &need_copy);
+  ObSSTableCopyTopology choose_copy_topology_(
+      const bool need_copy,
+      const bool is_empty_sstable) const;
+  void build_batch_copy_plan_param_(ObBatchSSTableCopyPlanParam &param) const;
+  int build_batch_copy_task_param_(
+      share::ObIDag *dag,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      ObBatchSSTableCopyTaskParam &param) const;
+private:
+  bool is_inited_;
+  ObMigrationCtx *ctx_;               // on dag net, long lifecycle
+  ObCopyTabletCtx *copy_tablet_ctx_;  // on dag, long lifecycle
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
+  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletMigrationCopyChainDriverOps);
+};
+
+// Migration flavour of the shared copy chain driver task: it only embeds the migration
+// ops by value and knows how to allocate the next driver of the same type; all the
+// scheduling skeleton (process / roll to next key / hang the sink) is in the base.
+class ObTabletCopyChainDriverTask final : public ObTabletCopyChainDriverTaskBase
+{
+public:
+  ObTabletCopyChainDriverTask();
+  virtual ~ObTabletCopyChainDriverTask();
+  int init(
+      ObMigrationCtx *ctx,
+      ObCopyTabletCtx *copy_tablet_ctx,
+      common::ObInOutBandwidthThrottle *bandwidth_throttle,
+      obrpc::ObStorageRpcProxy *svr_rpc_proxy,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const int64_t next_index);
+  INHERIT_TO_STRING_KV("ObTabletCopyChainDriverTaskBase", ObTabletCopyChainDriverTaskBase, K_(ops));
+protected:
+  virtual int alloc_and_init_next_driver_(
+      const int64_t next_index,
+      ObTabletCopyChainDriverTaskBase *&next_driver_task) override;
+private:
+  ObTabletMigrationCopyChainDriverOps ops_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletCopyChainDriverTask);
 };
 
 class ObHATabletGroupCOConvertCtx;

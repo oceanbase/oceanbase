@@ -14,6 +14,7 @@
 #include "ob_ha_rebuild_tablet.h"
 #include "observer/ob_server.h"
 #include "ob_physical_copy_task.h"
+#include "ob_sstable_copy_chain_utils.h"
 #include "share/rc/ob_tenant_base.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/tablet/ob_tablet_common.h"
@@ -1525,13 +1526,13 @@ int ObTabletRebuildMajorTask::generate_physical_copy_task_(
     ObITask *child_task)
 {
   int ret = OB_SUCCESS;
-  ObPhysicalCopyTask *copy_task = NULL;
   ObSSTableCopyFinishTask *finish_task = NULL;
   const int64_t task_idx = 0;
   ObLS *ls = nullptr;
   ObPhysicalCopyTaskInitParam init_param;
   ObTabletRebuildMajorDag *tablet_rebuild_dag = nullptr;
   bool is_tablet_exist = true;
+  ObSSTableCopyTopology topology = BYPASS_TO_NEXT;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1549,8 +1550,9 @@ int ObTabletRebuildMajorTask::generate_physical_copy_task_(
   } else if (!is_tablet_exist) {
     if (OB_FAIL(tablet_copy_finish_task->set_tablet_status(ObCopyTabletStatus::TABLET_NOT_EXIST))) {
       LOG_WARN("failed to set tablet status", K(ret), K(copy_table_key), KPC(copy_tablet_ctx_));
-    } else if (OB_FAIL(parent_task->add_child(*child_task))) {
-      LOG_WARN("failed to add chiild task", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
+    } else if (OB_FAIL(ObSSTableCopyChainBuilder::build_sstable_copy_chain(dag_, parent_task, child_task,
+        nullptr /* finish_task */, BYPASS_TO_NEXT))) {
+      LOG_WARN("failed to build bypass copy chain", K(ret), KPC(copy_tablet_ctx_), K(copy_table_key));
     }
   } else {
     init_param.tenant_id_ = ctx_->tenant_id_;
@@ -1572,39 +1574,19 @@ int ObTabletRebuildMajorTask::generate_physical_copy_task_(
     } else if (!init_param.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("physical copy task init param not valid", K(ret), K(init_param), KPC(ctx_));
+    } else if (FALSE_IT(topology = (OB_NOT_NULL(init_param.sstable_macro_range_info_)
+        && init_param.sstable_macro_range_info_->copy_macro_range_array_.count() > 0)
+        ? COPY_MACRO_BLOCKS : DIRECT_TO_FINISH)) {
     } else if (OB_FAIL(dag_->alloc_task(finish_task))) {
       LOG_WARN("failed to alloc finish task", K(ret));
     } else if (OB_FAIL(finish_task->init(init_param))) {
       LOG_WARN("failed to init finish task", K(ret), K(copy_table_key), K(*ctx_));
-    } else if (OB_FAIL(finish_task->add_child(*child_task))) {
-      LOG_WARN("failed to add child", K(ret));
-    } else if (OB_NOT_NULL(init_param.sstable_macro_range_info_)
-        && init_param.sstable_macro_range_info_->copy_macro_range_array_.count() > 0) {
-      // parent->copy->finish->child
-      if (OB_FAIL(dag_->alloc_task(copy_task))) {
-        LOG_WARN("failed to alloc copy task", K(ret));
-      } else if (OB_FAIL(copy_task->init(finish_task->get_copy_ctx(), finish_task))) {
-        LOG_WARN("failed to init copy task", K(ret));
-      } else if (OB_FAIL(parent_task->add_child(*copy_task))) {
-        LOG_WARN("failed to add child copy task", K(ret));
-      } else if (OB_FAIL(copy_task->add_child(*finish_task))) {
-        LOG_WARN("failed to add child finish task", K(ret));
-      } else if (OB_FAIL(dag_->add_task(*copy_task))) {
-        LOG_WARN("failed to add copy task to dag", K(ret));
-      }
+    } else if (OB_FAIL(ObSSTableCopyChainBuilder::build_sstable_copy_chain(dag_, parent_task, child_task,
+        finish_task, topology))) {
+      LOG_WARN("failed to build sstable copy chain", K(ret), K(copy_table_key), K(topology));
     } else {
-      if (OB_FAIL(parent_task->add_child(*finish_task))) {
-        LOG_WARN("failed to add child finish_task for parent", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(dag_->add_task(*finish_task))) {
-        LOG_WARN("failed to add finish task to dag", K(ret));
-      } else {
-        FLOG_INFO("succeed to generate physical copy task",
-            K(copy_table_key), K(src_info), KPC(copy_task), KPC(finish_task));
-      }
+      FLOG_INFO("succeed to generate physical copy task",
+          K(copy_table_key), K(src_info), K(topology), KPC(finish_task));
     }
   }
   return ret;

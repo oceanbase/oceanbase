@@ -6,7 +6,6 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_batch_sstable_copy_task.h"
-#include "ob_ls_migration.h"
 #include "ob_physical_copy_ctx.h"
 #include "ob_sstable_copy_ops.h"
 #include "ob_storage_ha_dag.h"
@@ -348,289 +347,197 @@ int ObBatchSSTableCopyTask::process()
   return ret;
 }
 
+ObBatchSSTableCopyPlanParam::ObBatchSSTableCopyPlanParam()
+  : tenant_id_(OB_INVALID_ID),
+    op_type_(ObMigrationOpType::MAX_LS_OP),
+    tablet_id_(),
+    table_info_mgr_(nullptr),
+    copy_sstable_info_mgr_(nullptr)
+{
+}
+
+bool ObBatchSSTableCopyPlanParam::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_
+      && ObMigrationOpType::is_valid(op_type_)
+      && tablet_id_.is_valid()
+      && OB_NOT_NULL(table_info_mgr_)
+      && OB_NOT_NULL(copy_sstable_info_mgr_);
+}
+
 void ObBatchSSTableCopyTaskGenerator::check_batch_cg_copy_enabled_(
-    const ObTabletMigrationTask &migration_task,
+    const ObBatchSSTableCopyPlanParam &param,
     bool &enabled)
 {
   enabled = false;
   uint64_t data_version = 0;
   int tmp_ret = OB_SUCCESS;
-  const ObMigrationCtx *ctx = migration_task.ctx_;
 
-  if (OB_ISNULL(ctx) || GCTX.is_shared_storage_mode()) {
+  if (GCTX.is_shared_storage_mode()) {
     // The inline copy ops only support shared-nothing migration.
-  } else if (ObMigrationOpType::MIGRATE_LS_OP != ctx->arg_.type_
-      && ObMigrationOpType::ADD_LS_OP != ctx->arg_.type_
-      && ObMigrationOpType::REBUILD_TABLET_OP != ctx->arg_.type_) {
+  } else if (ObMigrationOpType::MIGRATE_LS_OP != param.op_type_
+      && ObMigrationOpType::ADD_LS_OP != param.op_type_
+      && ObMigrationOpType::REBUILD_TABLET_OP != param.op_type_) {
     // Keep all other migration/restore operations on the legacy path.
   } else if (OB_SUCCESS !=
-      (tmp_ret = GET_MIN_DATA_VERSION(ctx->tenant_id_, data_version))) {
+      (tmp_ret = GET_MIN_DATA_VERSION(param.tenant_id_, data_version))) {
     LOG_WARN_RET(tmp_ret,
         "failed to get tenant data version, disable batch CG copy",
-        K(tmp_ret), "tenant_id", ctx->tenant_id_);
+        K(tmp_ret), "tenant_id", param.tenant_id_);
   } else {
     enabled = data_version >= DATA_VERSION_4_4_2_2;
   }
 
-  // Per tablet-stage and called for every CG tablet; keep at DEBUG to avoid
+  // Per driver round and called for every CG tablet; keep at DEBUG to avoid
   // flooding the log on wide column-store clusters.
   LOG_DEBUG("check batch CG sstable copy",
-      K(enabled), K(data_version),
-      "op_type", OB_ISNULL(ctx) ? ObMigrationOpType::MAX_LS_OP : ctx->arg_.type_);
+      K(enabled), K(data_version), "op_type", param.op_type_);
 }
 
-int ObBatchSSTableCopyTaskGenerator::classify_copy_keys_(
-    ObTabletMigrationTask &migration_task,
-    IsRightTypeSSTableFunc is_right_type_sstable,
-    common::ObIArray<ObITable::TableKey> &batch_keys,
-    common::ObIArray<ObITable::TableKey> &legacy_keys)
+int ObBatchSSTableCopyTaskGenerator::check_key_batch_eligible_(
+    const ObBatchSSTableCopyPlanParam &param,
+    const ObITable::TableKey &key,
+    bool &is_eligible)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObMigrationSSTableParam *src_param = nullptr;
+  is_eligible = false;
+
+  if (!key.is_cg_sstable()) {
+    // Only CG sstables are batched, a normal sstable keeps its own copy chain.
+  } else if (OB_FAIL(param.table_info_mgr_->get_table_info(param.tablet_id_, key, src_param))) {
+    LOG_WARN("failed to get CG sstable info", K(ret), K(key));
+  } else if (OB_ISNULL(src_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("CG sstable info is null", K(ret), K(key));
+  } else if (src_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()
+      || src_param->is_shared_sstable()) {
+    // A shared sstable needs the copy start task of the legacy chain.
+  } else if (src_param->basic_meta_.data_macro_block_count_
+      > 2 * ObSSTableCopyOps::MACRO_RANGE_MAX_MACRO_COUNT) {
+    // Batch copies an SSTable's ranges serially in one worker, while the
+    // legacy path fans them out as parallel ObPhysicalCopyTasks. Keep at
+    // most two standard ranges in batch to avoid a long serial-copy tail.
+    LOG_DEBUG("CG sstable is too large to batch copy", K(key),
+        "data_macro_block_count", src_param->basic_meta_.data_macro_block_count_);
+  } else {
+    is_eligible = true;
+  }
+  return ret;
+}
+
+int ObBatchSSTableCopyTaskGenerator::plan_batch_copy_unit(
+    const ObBatchSSTableCopyPlanParam &param,
+    const common::ObIArray<ObITable::TableKey> &copy_table_key_array,
+    const int64_t start_index,
+    ObISSTableCopyScanPolicy &scan_policy,
+    ObSSTableCopyUnit &unit)
 {
   int ret = OB_SUCCESS;
   bool enabled = false;
-  bool has_cg_key = false;
   bool is_src_tablet_exist = true;
-  batch_keys.reset();
-  legacy_keys.reset();
+  unit.reset();
 
-  for (int64_t i = 0;
-       !has_cg_key && i < migration_task.copy_table_key_array_.count();
-       ++i) {
-    const ObITable::TableKey &key =
-        migration_task.copy_table_key_array_.at(i);
-    has_cg_key = key.is_valid()
-        && is_right_type_sstable(key.table_type_)
-        && key.is_cg_sstable();
-  }
-
-  if (has_cg_key) {
-    check_batch_cg_copy_enabled_(migration_task, enabled);
-  }
-  if (enabled
-      && OB_FAIL(migration_task.copy_tablet_ctx_->copy_sstable_info_mgr_.
-          check_src_tablet_exist(is_src_tablet_exist))) {
-    LOG_WARN("failed to check source tablet status", K(ret));
+  if (OB_UNLIKELY(!param.is_valid()
+      || start_index < 0
+      || start_index >= copy_table_key_array.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("plan batch copy unit get invalid argument", K(ret), K(param), K(start_index),
+        "key_count", copy_table_key_array.count());
+    // The scanner has already checked that the sstable at start_index needs copy, so a
+    // non-CG sstable here means this round copies one sstable by the legacy copy chain.
+    // Skip the version / tablet checks in that (common) case, they are not free.
+  } else if (!copy_table_key_array.at(start_index).is_cg_sstable()) {
+    unit.consumed_count_ = 1;
+  } else if (FALSE_IT(check_batch_cg_copy_enabled_(param, enabled))) {
+  } else if (!enabled) {
+    unit.consumed_count_ = 1;
+  } else if (OB_FAIL(param.copy_sstable_info_mgr_->check_src_tablet_exist(is_src_tablet_exist))) {
+    LOG_WARN("failed to check source tablet status", K(ret), K(param));
   } else if (!is_src_tablet_exist) {
-    enabled = false;
-  }
-
-  for (int64_t i = 0;
-       OB_SUCC(ret) && i < migration_task.copy_table_key_array_.count();
-       ++i) {
-    const ObITable::TableKey &key =
-        migration_task.copy_table_key_array_.at(i);
-    bool need_copy = true;
-    const blocksstable::ObMigrationSSTableParam *src_param = nullptr;
-
-    if (!key.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid copy table key", K(ret), K(key));
-    } else if (!is_right_type_sstable(key.table_type_)) {
-      // Belongs to another stage.
-    } else if (OB_FAIL(
-                   migration_task.check_need_copy_sstable_(key, need_copy))) {
-      LOG_WARN("failed to check whether sstable needs copying", K(ret), K(key));
-    } else if (!need_copy) {
-      LOG_INFO("local tablet already contains sstable", K(key));
-    } else if (enabled && key.is_cg_sstable()) {
-      if (OB_FAIL(migration_task.ctx_->ha_table_info_mgr_.get_table_info(
-              migration_task.copy_tablet_ctx_->tablet_id_, key, src_param))) {
-        LOG_WARN("failed to get CG sstable info", K(ret), K(key));
-      } else if (OB_ISNULL(src_param)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("CG sstable info is null", K(ret), K(key));
-      } else if (src_param->basic_meta_.table_shared_flag_.
-                     is_shared_macro_blocks()
-                 || src_param->is_shared_sstable()) {
-        if (OB_FAIL(legacy_keys.push_back(key))) {
-          LOG_WARN("failed to append shared CG to legacy keys", K(ret), K(key));
-        }
-      } else if (src_param->basic_meta_.data_macro_block_count_
-                 > 2 * ObSSTableCopyOps::MACRO_RANGE_MAX_MACRO_COUNT) {
-        // Batch copies an SSTable's ranges serially in one worker, while the
-        // legacy path fans them out as parallel ObPhysicalCopyTasks. Keep at
-        // most two standard ranges in batch to avoid a long serial-copy tail.
-        if (OB_FAIL(legacy_keys.push_back(key))) {
-          LOG_WARN("failed to append large CG to legacy keys", K(ret), K(key),
-              "data_macro_block_count",
-              src_param->basic_meta_.data_macro_block_count_);
-        }
-      } else if (OB_FAIL(batch_keys.push_back(key))) {
+    // The legacy copy chain reports the vanished source tablet to the tablet copy finish task.
+    unit.consumed_count_ = 1;
+  } else {
+    // Collect the run of batch-eligible CG sstables starting at start_index. The run stops at
+    // the first sstable that still needs copy but cannot be batched, so that sstable is copied
+    // by the legacy chain in the next driver round; the sstables the local replica already
+    // contains are consumed here, exactly like the lazy scan would skip them.
+    bool is_run_end = false;
+    for (int64_t i = start_index;
+         OB_SUCC(ret) && !is_run_end && i < copy_table_key_array.count()
+             && unit.batch_keys_.count() < ObBatchSSTableCopyTask::MAX_SSTABLE_PER_BATCH;
+         ++i) {
+      const ObITable::TableKey &key = copy_table_key_array.at(i);
+      bool need_copy = true;
+      bool is_eligible = false;
+      if (OB_FAIL(ObSSTableCopyChainScanner::check_one_key(key, scan_policy, need_copy))) {
+        LOG_WARN("failed to check copy table key", K(ret), K(key));
+      } else if (!need_copy) {
+        unit.consumed_count_ = i + 1 - start_index;
+      } else if (OB_FAIL(check_key_batch_eligible_(param, key, is_eligible))) {
+        LOG_WARN("failed to check whether sstable can be batch copied", K(ret), K(key));
+      } else if (!is_eligible) {
+        is_run_end = true;
+      } else if (OB_FAIL(unit.batch_keys_.push_back(key))) {
         LOG_WARN("failed to append batch CG key", K(ret), K(key));
+      } else {
+        unit.consumed_count_ = i + 1 - start_index;
       }
-    } else if (OB_FAIL(legacy_keys.push_back(key))) {
-      LOG_WARN("failed to append legacy sstable key", K(ret), K(key));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (unit.batch_keys_.empty()) {
+        // the sstable at start_index needs copy but cannot be batched
+        unit.reset();
+        unit.consumed_count_ = 1;
+      } else {
+        LOG_INFO("succeed to plan batch CG sstable copy unit", "tablet_id", param.tablet_id_,
+            K(start_index), K(unit));
+      }
     }
   }
   return ret;
 }
 
-int ObBatchSSTableCopyTaskGenerator::build_batch_copy_tasks_(
-    ObTabletMigrationTask &migration_task,
+int ObBatchSSTableCopyTaskGenerator::generate_batch_copy_task(
+    const ObBatchSSTableCopyTaskParam &param,
     const common::ObIArray<ObITable::TableKey> &batch_keys,
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
+    share::ObIDag *dag,
+    share::ObITask *parent_task,
+    share::ObITask *child_task)
 {
   int ret = OB_SUCCESS;
-  share::ObIDag *dag = migration_task.get_dag();
-  ObTabletMigrationDag *tablet_migration_dag = nullptr;
-  ObBatchSSTableCopyTaskParam param;
+  ObBatchSSTableCopyTask *batch_task = nullptr;
   ObBatchSSTableKeysHolder keys_holder(get_ha_mem_tenant_id());
 
-  if (batch_keys.empty()) {
-    // Nothing to build.
-  } else if (OB_ISNULL(dag)
+  if (OB_UNLIKELY(!param.is_valid()
+      || batch_keys.empty()
+      || batch_keys.count() > ObBatchSSTableCopyTask::MAX_SSTABLE_PER_BATCH
+      || OB_ISNULL(dag)
       || OB_ISNULL(parent_task)
-      || OB_ISNULL(tablet_copy_finish_task)) {
+      || OB_ISNULL(child_task))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid batch copy chain argument", K(ret),
-        KP(dag), KP(parent_task), KP(tablet_copy_finish_task));
-  } else if (FALSE_IT(
-                 tablet_migration_dag =
-                     static_cast<ObTabletMigrationDag *>(dag))) {
-  } else if (OB_FAIL(tablet_migration_dag->get_ls(param.ls_))) {
-    LOG_WARN("failed to get migration LS", K(ret));
-  } else if (OB_FAIL(migration_task.ctx_->ha_table_info_mgr_.get_tablet_meta(
-                 migration_task.copy_tablet_ctx_->tablet_id_,
-                 param.src_tablet_meta_))) {
-    LOG_WARN("failed to get source tablet meta", K(ret));
+    LOG_WARN("invalid batch copy task argument", K(ret), K(param),
+        "batch_key_count", batch_keys.count(), KP(dag), KP(parent_task), KP(child_task));
   } else if (OB_FAIL(keys_holder.assign(batch_keys))) {
-    LOG_WARN("failed to assign batch CG keys", K(ret));
+    LOG_WARN("failed to assign batch CG keys", K(ret), "batch_key_count", batch_keys.count());
+  } else if (OB_FAIL(dag->alloc_task(batch_task))) {
+    LOG_WARN("failed to allocate batch sstable copy task", K(ret));
+    // the whole run fits into one task, see ObBatchSSTableKeysHolder::take_next
+  } else if (OB_FAIL(batch_task->init(param, keys_holder))) {
+    LOG_WARN("failed to initialize batch sstable copy task", K(ret), K(keys_holder));
+  } else if (OB_UNLIKELY(keys_holder.has_more())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch sstable copy task did not take all planned keys", K(ret), K(keys_holder));
+  } else if (OB_FAIL(parent_task->add_child(*batch_task))) {
+    LOG_WARN("failed to add batch sstable copy task as child of parent", K(ret));
+  } else if (OB_FAIL(batch_task->add_child(*child_task))) {
+    LOG_WARN("failed to add child task of batch sstable copy task", K(ret));
+  } else if (OB_FAIL(dag->add_task(*batch_task))) {
+    LOG_WARN("failed to add batch sstable copy task to dag", K(ret));
   } else {
-    param.tablet_id_ = migration_task.copy_tablet_ctx_->tablet_id_;
-    param.src_info_ = migration_task.ctx_->minor_src_;
-    param.table_info_mgr_ = &migration_task.ctx_->ha_table_info_mgr_;
-    param.copy_sstable_info_mgr_ =
-        &migration_task.copy_tablet_ctx_->copy_sstable_info_mgr_;
-    param.tablet_copy_finish_task_ = tablet_copy_finish_task;
-    param.extra_info_ = &migration_task.copy_tablet_ctx_->extra_info_;
-    param.bandwidth_throttle_ = migration_task.bandwidth_throttle_;
-    param.svr_rpc_proxy_ = migration_task.svr_rpc_proxy_;
-    param.src_ls_rebuild_seq_ = migration_task.ctx_->src_ls_rebuild_seq_;
-    param.macro_block_reuse_mgr_ =
-        &migration_task.copy_tablet_ctx_->macro_block_reuse_mgr_;
-
-    int64_t task_count = 0;
-    while (OB_SUCC(ret) && keys_holder.has_more()) {
-      ObBatchSSTableCopyTask *batch_task = nullptr;
-      if (OB_FAIL(dag->alloc_task(batch_task))) {
-        LOG_WARN("failed to allocate batch sstable copy task",
-            K(ret), K(task_count));
-      } else if (OB_FAIL(batch_task->init(param, keys_holder))) {
-        LOG_WARN("failed to initialize batch sstable copy task",
-            K(ret), K(task_count));
-      } else if (OB_FAIL(parent_task->add_child(*batch_task))) {
-        LOG_WARN("failed to chain batch sstable copy task",
-            K(ret), K(task_count));
-      } else if (OB_FAIL(dag->add_task(*batch_task))) {
-        LOG_WARN("failed to add batch sstable copy task",
-            K(ret), K(task_count));
-      } else {
-        parent_task = batch_task;
-        ++task_count;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      LOG_INFO("built batch CG sstable copy chain",
-          "tablet_id", param.tablet_id_,
-          "key_count", batch_keys.count(),
-          K(task_count));
-    }
-  }
-  return ret;
-}
-
-int ObBatchSSTableCopyTaskGenerator::build_legacy_copy_tasks_(
-    ObTabletMigrationTask &migration_task,
-    const common::ObIArray<ObITable::TableKey> &legacy_keys,
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task)
-{
-  int ret = OB_SUCCESS;
-  share::ObIDag *dag = migration_task.get_dag();
-  if (legacy_keys.empty()) {
-    // Nothing to build.
-  } else if (OB_ISNULL(dag)
-      || OB_ISNULL(parent_task)
-      || OB_ISNULL(tablet_copy_finish_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid legacy copy chain argument", K(ret),
-        KP(dag), KP(parent_task), KP(tablet_copy_finish_task));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < legacy_keys.count(); ++i) {
-      const ObITable::TableKey &key = legacy_keys.at(i);
-      share::ObFakeTask *wait_finish_task = nullptr;
-      if (OB_FAIL(dag->alloc_task(wait_finish_task))) {
-        LOG_WARN("failed to allocate legacy wait task", K(ret), K(key));
-      } else if (OB_FAIL(migration_task.generate_physical_copy_task_(
-                     migration_task.ctx_->minor_src_,
-                     key,
-                     tablet_copy_finish_task,
-                     parent_task,
-                     wait_finish_task))) {
-        LOG_WARN("failed to generate legacy physical copy task",
-            K(ret), K(key));
-      } else if (OB_FAIL(dag->add_task(*wait_finish_task))) {
-        LOG_WARN("failed to add legacy wait task", K(ret), K(key));
-      } else {
-        parent_task = wait_finish_task;
-        LOG_INFO("generated legacy sstable copy task", K(key));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBatchSSTableCopyTaskGenerator::try_generate_copy_tasks(
-    ObTabletMigrationTask &migration_task,
-    IsRightTypeSSTableFunc is_right_type_sstable,
-    ObTabletCopyFinishTask *tablet_copy_finish_task,
-    share::ObITask *&parent_task,
-    bool &is_generated)
-{
-  int ret = OB_SUCCESS;
-  common::ObArray<ObITable::TableKey> batch_keys;
-  common::ObArray<ObITable::TableKey> legacy_keys;
-  is_generated = false;
-
-  if (!migration_task.is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("tablet migration task is not initialized", K(ret));
-  } else if (OB_ISNULL(is_right_type_sstable)
-      || OB_ISNULL(tablet_copy_finish_task)
-      || OB_ISNULL(parent_task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sstable copy generator argument", K(ret),
-        KP(is_right_type_sstable),
-        KP(tablet_copy_finish_task),
-        KP(parent_task));
-  } else if (OB_FAIL(classify_copy_keys_(
-                 migration_task,
-                 is_right_type_sstable,
-                 batch_keys,
-                 legacy_keys))) {
-    LOG_WARN("failed to classify sstable copy keys", K(ret));
-  } else if (batch_keys.empty()) {
-    // Preserve the original per-SSTable path when this stage has no eligible
-    // CG SSTable. Besides reducing behavior changes, this keeps the legacy
-    // implementation in ObTabletMigrationTask intact.
-  } else if (OB_FAIL(build_batch_copy_tasks_(
-                 migration_task,
-                 batch_keys,
-                 tablet_copy_finish_task,
-                 parent_task))) {
-    LOG_WARN("failed to build batch CG copy tasks", K(ret));
-  } else if (OB_FAIL(build_legacy_copy_tasks_(
-                 migration_task,
-                 legacy_keys,
-                 tablet_copy_finish_task,
-                 parent_task))) {
-    LOG_WARN("failed to build legacy sstable copy tasks", K(ret));
-  } else {
-    is_generated = true;
-    LOG_INFO("generated staged sstable copy tasks",
-        "tablet_id", migration_task.copy_tablet_ctx_->tablet_id_,
-        "batch_count", batch_keys.count(),
-        "legacy_count", legacy_keys.count());
+    LOG_INFO("succeed to generate batch CG sstable copy task",
+        "tablet_id", param.tablet_id_, "batch_key_count", batch_keys.count());
   }
   return ret;
 }

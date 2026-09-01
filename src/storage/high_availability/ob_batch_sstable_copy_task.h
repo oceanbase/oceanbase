@@ -9,6 +9,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
+#include "storage/high_availability/ob_sstable_copy_chain_utils.h"
 #include "storage/high_availability/ob_storage_ha_struct.h"
 #include "storage/ob_i_table.h"
 
@@ -32,7 +33,6 @@ class ObLS;
 class ObStorageHACopySSTableInfoMgr;
 class ObStorageHATableInfoMgr;
 class ObTabletCopyFinishTask;
-class ObTabletMigrationTask;
 
 // Holds all CG SSTable keys selected for one batch chain. Each task claims a
 // bounded slice during init(), so no task keeps a pointer to the holder.
@@ -116,40 +116,57 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBatchSSTableCopyTask);
 };
 
-// Low-conflict adapter used by ObTabletMigrationTask. It takes over one
-// MDS/minor/major/DDL stage only when that stage has eligible CG SSTables,
-// batches those keys, and builds the legacy chain for the remaining keys.
+// Read-only inputs of the batch copy planner. Built per driver round by the migration
+// copy chain driver ops; every pointer is owned by the enclosing migration DAG.
+struct ObBatchSSTableCopyPlanParam
+{
+  ObBatchSSTableCopyPlanParam();
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(op_type), K_(tablet_id),
+      KP_(table_info_mgr), KP_(copy_sstable_info_mgr));
+
+  uint64_t tenant_id_;
+  ObMigrationOpType::TYPE op_type_;
+  common::ObTabletID tablet_id_;
+  ObStorageHATableInfoMgr *table_info_mgr_;
+  ObStorageHACopySSTableInfoMgr *copy_sstable_info_mgr_;
+};
+
+// Low-conflict adapter driven by the migration copy chain driver
+// (ObTabletMigrationCopyChainDriverOps). Every driver round asks it whether the next
+// sstables of the copy table key array are eligible CG SSTables that can be copied
+// inline in one batch task; if not, the driver falls back to the per-sstable copy chain.
 class ObBatchSSTableCopyTaskGenerator final
 {
 public:
-  typedef bool (*IsRightTypeSSTableFunc)(const ObITable::TableType table_type);
+  // Plan the batch copy unit starting at start_index: walk forward while the keys are
+  // batch-eligible CG SSTables and collect at most MAX_SSTABLE_PER_BATCH of them.
+  // unit.is_batch() == false means the sstable at start_index must be copied by the
+  // per-sstable copy chain, in which case the unit consumes that one sstable only.
+  static int plan_batch_copy_unit(
+      const ObBatchSSTableCopyPlanParam &param,
+      const common::ObIArray<ObITable::TableKey> &copy_table_key_array,
+      const int64_t start_index,
+      ObISSTableCopyScanPolicy &scan_policy,
+      ObSSTableCopyUnit &unit);
 
-  static int try_generate_copy_tasks(
-      ObTabletMigrationTask &migration_task,
-      IsRightTypeSSTableFunc is_right_type_sstable,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task,
-      bool &is_generated);
+  // Build the batch copy task of batch_keys: parent_task -> batch task -> child_task.
+  static int generate_batch_copy_task(
+      const ObBatchSSTableCopyTaskParam &param,
+      const common::ObIArray<ObITable::TableKey> &batch_keys,
+      share::ObIDag *dag,
+      share::ObITask *parent_task,
+      share::ObITask *child_task);
 
 private:
   static void check_batch_cg_copy_enabled_(
-      const ObTabletMigrationTask &migration_task,
+      const ObBatchSSTableCopyPlanParam &param,
       bool &enabled);
-  static int classify_copy_keys_(
-      ObTabletMigrationTask &migration_task,
-      IsRightTypeSSTableFunc is_right_type_sstable,
-      common::ObIArray<ObITable::TableKey> &batch_keys,
-      common::ObIArray<ObITable::TableKey> &legacy_keys);
-  static int build_batch_copy_tasks_(
-      ObTabletMigrationTask &migration_task,
-      const common::ObIArray<ObITable::TableKey> &batch_keys,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  static int build_legacy_copy_tasks_(
-      ObTabletMigrationTask &migration_task,
-      const common::ObIArray<ObITable::TableKey> &legacy_keys,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
+  // whether this single CG sstable can be copied by a batch task
+  static int check_key_batch_eligible_(
+      const ObBatchSSTableCopyPlanParam &param,
+      const ObITable::TableKey &key,
+      bool &is_eligible);
 
 private:
   ObBatchSSTableCopyTaskGenerator() = delete;

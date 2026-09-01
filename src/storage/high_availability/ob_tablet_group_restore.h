@@ -25,6 +25,7 @@
 #include "ob_physical_copy_task.h"
 #include "ob_storage_ha_dag.h"
 #include "ob_storage_ha_tablet_builder.h"
+#include "ob_sstable_copy_chain_utils.h"
 
 //ObTabletGroupRestoreDagNet is a tablet group restore dag net
 //ObInitialTabletGroupRestoreDag is the dag net first dag. It creates two dags :
@@ -115,6 +116,12 @@ public:
   // finishes (see ObIDag::inner_finish_task) while the macro range info is still referenced by the
   // sstable copy tasks generated later.
   ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;
+  // Table keys of every sstable to be copied for this tablet, sorted by snapshot version.
+  // It is put into the tablet ctx (which is owned by the dag) instead of the task,
+  // because the sstable copy chains are generated lazily by
+  // ObTabletRestoreCopyChainDriverTask across many task process() rounds, while a task
+  // is freed as soon as it finishes.
+  common::ObArray<ObITable::TableKey> copy_table_key_array_;
 private:
   common::SpinRWLock lock_;
   ObCopyTabletStatus::STATUS status_;
@@ -393,6 +400,7 @@ protected:
   DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreDag);
 };
 
+class ObTabletFinishRestoreTask;
 class ObTabletRestoreTask : public share::ObITask
 {
 public:
@@ -402,51 +410,24 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletRestoreTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
 private:
-  typedef bool (*IsRightTypeSSTableFunc)(const ObITable::TableType table_type);
   int generate_restore_tasks_();
-  int generate_minor_restore_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_major_restore_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_ddl_restore_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
-  int generate_physical_restore_task_(
-      const ObITable::TableKey &copy_table_key,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      ObITask *parent_task,
-      ObITask *child_task);
   int generate_finish_restore_task_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      ObITask *parent_task);
+      ObTabletFinishRestoreTask *&tablet_finish_restore_task);
   int get_src_info_();
-  int generate_restore_task_(
-      IsRightTypeSSTableFunc is_right_type_sstable,
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
   int build_copy_table_key_info_();
   int build_copy_sstable_info_mgr_();
   int generate_tablet_copy_finish_task_(
       ObTabletCopyFinishTask *&tablet_copy_finish_task);
   int try_update_tablet_();
   int update_ha_status_(const ObCopyTabletStatus::STATUS &status);
-  int check_need_copy_sstable_(
-      const ObITable::TableKey &table_key,
-      bool &need_copy);
-  int check_need_copy_macro_blocks_(
-      const ObMigrationSSTableParam &param,
-      bool &need_copy);
-  int check_remote_sstable_exist_in_table_store_(
-    const ObITable::TableKey &table_key,
-    bool &is_exist,
-    bool &need_copy);
   int record_server_event_();
   int check_src_sstable_exist_();
-  int generate_mds_restore_tasks_(
-      ObTabletCopyFinishTask *tablet_copy_finish_task,
-      share::ObITask *&parent_task);
+  // For replace-remote restore, fail fast with OB_EAGAIN when any remote sstable
+  // key of the snapshot is already gone from the local table store, checked before
+  // any copy chain is hung. Otherwise the lazy driver chain would only hit the
+  // missing key after all the chains before it finished copying, and the retry
+  // would throw their work away.
+  int precheck_remote_sstable_exist_();
 private:
   bool is_inited_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
@@ -458,8 +439,84 @@ private:
   ObStorageHASrcInfo src_info_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
-  common::ObArray<ObITable::TableKey> copy_table_key_array_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreTask);
+};
+
+// Restore path ops of the tablet copy chain driver: everything that differs from the
+// migration path (ctx type, failed-check, per-sstable copy chain wiring, copy filter) is
+// collected here; the shared skeleton lives in ObTabletCopyChainDriverTaskBase.
+class ObTabletRestoreCopyChainDriverOps final : public ObITabletCopyChainDriverOps
+{
+public:
+  ObTabletRestoreCopyChainDriverOps();
+  virtual ~ObTabletRestoreCopyChainDriverOps();
+  int init(
+      ObIHADagNetCtx *ha_dag_net_ctx,
+      ObTabletRestoreCtx *tablet_restore_ctx,
+      storage::ObLS *ls,
+      const ObStorageHASrcInfo &src_info);
+  bool is_inited() const { return is_inited_; }
+  ObIHADagNetCtx *get_ha_dag_net_ctx() const { return ha_dag_net_ctx_; }
+  ObTabletRestoreCtx *get_tablet_restore_ctx() const { return tablet_restore_ctx_; }
+  storage::ObLS *get_ls() const { return ls_; }
+  const ObStorageHASrcInfo &get_src_info() const { return src_info_; }
+  virtual const common::ObIArray<ObITable::TableKey> &get_copy_table_key_array() const override;
+  virtual bool is_ctx_failed() const override;
+  // ObISSTableCopyScanPolicy: whether the restore action needs this sstable
+  // and the local replica does not contain it yet
+  virtual int check_need_copy_sstable(const ObITable::TableKey &table_key, bool &need_copy) override;
+  virtual int generate_physical_task(
+      share::ObIDag *dag,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const ObITable::TableKey &copy_table_key,
+      share::ObITask *parent_task,
+      share::ObITask *child_task) override;
+  INHERIT_TO_STRING_KV("ObITabletCopyChainDriverOps", ObITabletCopyChainDriverOps,
+      K_(is_inited), KPC_(tablet_restore_ctx), K_(src_info));
+private:
+  int prepare_physical_restore_param_(
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const ObITable::TableKey &copy_table_key,
+      ObPhysicalCopyTaskInitParam &init_param);
+  ObSSTableCopyTopology choose_copy_topology_(const bool need_copy) const;
+  int check_need_copy_macro_blocks_(
+      const ObMigrationSSTableParam &param,
+      bool &need_copy);
+  int check_remote_sstable_exist_in_table_store_(
+      const ObITable::TableKey &table_key,
+      bool &is_exist,
+      bool &need_copy);
+private:
+  bool is_inited_;
+  ObIHADagNetCtx *ha_dag_net_ctx_;          // on dag net, long lifecycle
+  ObTabletRestoreCtx *tablet_restore_ctx_;  // on dag, long lifecycle
+  storage::ObLS *ls_;
+  ObStorageHASrcInfo src_info_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreCopyChainDriverOps);
+};
+
+// Restore flavour of the shared copy chain driver task: it only embeds the restore ops
+// by value and knows how to allocate the next driver of the same type; all the
+// scheduling skeleton (process / roll to next key / hang the sink) is in the base.
+class ObTabletRestoreCopyChainDriverTask final : public ObTabletCopyChainDriverTaskBase
+{
+public:
+  ObTabletRestoreCopyChainDriverTask();
+  virtual ~ObTabletRestoreCopyChainDriverTask();
+  int init(
+      ObIHADagNetCtx *ha_dag_net_ctx,
+      ObTabletRestoreCtx *tablet_restore_ctx,
+      ObTabletCopyFinishTask *tablet_copy_finish_task,
+      const ObStorageHASrcInfo &src_info,
+      const int64_t next_index);
+  INHERIT_TO_STRING_KV("ObTabletCopyChainDriverTaskBase", ObTabletCopyChainDriverTaskBase, K_(ops));
+protected:
+  virtual int alloc_and_init_next_driver_(
+      const int64_t next_index,
+      ObTabletCopyChainDriverTaskBase *&next_driver_task) override;
+private:
+  ObTabletRestoreCopyChainDriverOps ops_;
+  DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreCopyChainDriverTask);
 };
 
 class ObTabletFinishRestoreTask : public share::ObITask
