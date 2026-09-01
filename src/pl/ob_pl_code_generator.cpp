@@ -2784,9 +2784,15 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
   int ret = OB_SUCCESS;
   if (NULL == generator_.get_current().get_v()) {
       //控制流已断，后面的语句不再处理
-  } else if (OB_FAIL(generator_.generate_istore_stmt_id(s.get_stmt_id()))) {
-    LOG_WARN("failed to generate store stmt id", K(ret), K(s));
   } else {
+    int64_t resume_stmt_id = s.get_stmt_id();
+    if (0 == resume_stmt_id
+        && OB_INVALID_INDEX != generator_.get_case_mock_signal_resume_stmt_id()) {
+      resume_stmt_id = generator_.get_case_mock_signal_resume_stmt_id();
+    }
+    if (OB_FAIL(generator_.generate_istore_stmt_id(resume_stmt_id))) {
+      LOG_WARN("failed to generate store stmt id", K(ret), K(s));
+    } else {
     OZ (generator_.get_helper().set_insert_point(generator_.get_current()));
     OZ (generator_.set_debug_location(s));
     OZ (generator_.generate_goto_label(s));
@@ -2926,6 +2932,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLSignalStmt &s)
     OZ (generator_.register_dispatch_map(s.get_stmt_id(), generator_.get_current()), s);
 
     OZ (generator_.generate_spi_pl_profiler_after_record(s));
+    }
   }
   return ret;
 }
@@ -3812,8 +3819,10 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCaseStmt &s)
       if (OB_ISNULL(else_clause)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("else in CASE stmt is NULL in CG", K(s), K(ret));
+      } else if (FALSE_IT(generator_.set_case_mock_signal_resume_stmt_id(s.get_stmt_id()))) {
       } else if (OB_FAIL(visit(*else_clause))) {
         LOG_WARN("failed to visit else clause for case stmt", K(ret));
+      } else if (FALSE_IT(generator_.set_case_mock_signal_resume_stmt_id(OB_INVALID_INDEX))) {
       } else if (OB_FAIL(generator_.finish_current(continue_branch))) {
         LOG_WARN("failed to finish current", K(ret));
       } else if (OB_FAIL(generator_.set_current(continue_branch))) {

@@ -222,6 +222,7 @@ public:
     int32_buffer_(allocator),
     objparam_buffer_(allocator),
     dispatch_map_(),
+    case_mock_signal_resume_stmt_id_(OB_INVALID_INDEX),
     bb_id_(0)
     { }
 
@@ -889,6 +890,8 @@ public:
   jit::ObLLVMValue &get_dispatch_stmt_id() { return dispatch_stmt_id_; }
   int generate_istore_stmt_id(int64_t stmt_id);
   int generate_load_stmt_id(jit::ObLLVMValue &stmt_id);
+  int64_t get_case_mock_signal_resume_stmt_id() const { return case_mock_signal_resume_stmt_id_; }
+  void set_case_mock_signal_resume_stmt_id(int64_t stmt_id) { case_mock_signal_resume_stmt_id_ = stmt_id; }
   int register_dispatch_map(const uint64_t stmt_id, const jit::ObLLVMBasicBlock &continue_block);
   int generate_init_continue_handler_dispatcher();
 private:
@@ -988,6 +991,7 @@ private:
   jit::ObLLVMBasicBlock continue_handler_dispatcher_;
   jit::ObLLVMSwitch dispatch_switch_inst_;
   jit::ObLLVMValue dispatch_stmt_id_;
+  int64_t case_mock_signal_resume_stmt_id_;
 
   // mysql check_success
   jit::ObLLVMBasicBlock mysql_ob_fail_branch_;
