@@ -67,6 +67,7 @@ private:
   void do_start_working_retry_(ObLS * ls);
   void do_log_cb_pool_adjust_(ObLS *ls, const common::ObRole role);
   void do_palf_kv_gc_(ObLS *ls, const common::ObRole role);
+  void ERRSIM_test_for_do_logonly_replica_inner_sql_repro_(ObLS *ls);
   void refresh_tenant_config_();
 
 private:
