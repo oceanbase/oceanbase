@@ -1375,7 +1375,18 @@ int ObBasicTabletMergeCtx::check_medium_info(
     const ObMediumCompactionInfo &next_medium_info,
     const int64_t last_major_snapshot)
 {
-  return ObMediumListChecker::check_next_schedule_medium(next_medium_info, last_major_snapshot, true/*force_check*/);
+  int ret = OB_SUCCESS;
+  share::SCN unused_scn;
+  int64_t truncate_commit_version = 0;
+  if (OB_FAIL(get_tablet()->get_tablet_truncate_scn_and_version(
+      unused_scn, truncate_commit_version))) {
+    LOG_WARN("failed to get tablet truncate scn and version", K(ret), KPC(get_tablet()));
+  } else if (OB_FAIL(ObMediumListChecker::check_next_schedule_medium(
+      next_medium_info, last_major_snapshot, truncate_commit_version, true/*force_check*/))) {
+    LOG_WARN("failed to check next schedule medium", K(ret), K(next_medium_info),
+        K(last_major_snapshot), K(truncate_commit_version));
+  }
+  return ret;
 }
 
 int ObBasicTabletMergeCtx::swap_tablet(ObGetMergeTablesResult &get_merge_table_result)

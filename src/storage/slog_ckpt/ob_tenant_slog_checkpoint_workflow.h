@@ -346,6 +346,14 @@ private:
     static const int64_t MIN_WRITE_CHECKPOINT_LOG_CNT = 1e5; // 100,000
 
   private:
+    /// @brief Check whether this slog truncate run must abort.
+    ///
+    /// A tablet may transition from a disked tablet back to a memory tablet after the
+    /// new Oracle GTT TRUNCATE path. Continuing the truncate in that situation would break
+    /// correct recovery after restart, so the task must be cancelled.
+    static int fail_if_truncate_need_abort_(const ObTablet &tablet);
+
+  private:
     /// NOTE: To avoid too many redundant validity checks, all private methods
     /// assume that @c ctx_ is valid, the validity of @c ctx_ should be checked
     /// at outside.

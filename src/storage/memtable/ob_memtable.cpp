@@ -391,6 +391,9 @@ int ObMemtable::multi_set(
                          || param.get_schema_rowkey_count() > columns->count())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "Invalid param", K(ret), K(param), K(columns->count()));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(
+                       param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
 #ifdef OB_BUILD_TDE_SECURITY
   //TODO: table_id is just used as encrypt_index, we may rename it in the
   //      future. If the function(set) no longer passes in this
@@ -574,6 +577,9 @@ int ObMemtable::set(
              || (update_idx == NULL && new_row->count_ < columns->count())) {
     TRANS_LOG(WARN, "invalid param", K(param), K(columns->count()), K(new_row->count_));
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(
+                       param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
 #ifdef OB_BUILD_TDE_SECURITY
   //TODO: table_id is just used as encrypt_index, we may rename it in the
   //      future. If the function(set) no longer passes in this
@@ -644,6 +650,8 @@ int ObMemtable::lock(
     // actually, there is no circumstance in where locking the index table is need.
     ret = OB_NOT_SUPPORTED;
     TRANS_LOG(WARN, "locking the non-unique local index is not supported", K(ret), K(row), K(param));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, acc_ctx))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else if (OB_FAIL(rowkey_helper.convert_store_rowkey(datum_rowkey, col_desc, tmp_key))) {
     LOG_WARN("Failed to convert store rowkey from datum rowkey", K(ret), K(row), K(datum_rowkey));
   } else if (OB_FAIL(mtk.encode(col_desc, &tmp_key))) {
@@ -690,6 +698,8 @@ int ObMemtable::lock(
     // actually, there is no circumstance in where locking the index table is need.
     ret = OB_NOT_SUPPORTED;
     TRANS_LOG(WARN, "locking the non-unique local index is not supported", K(ret), K(param));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, acc_ctx))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &rowkey.get_store_rowkey()))) {
     TRANS_LOG(WARN, "encode mtk failed", K(ret), K(param));
   } else if (acc_ctx.write_flag_.is_check_row_locked()) {
@@ -746,6 +756,52 @@ void ObMemtable::scan_end(ObMvccAccessCtx &ctx, int ret)
   EVENT_ADD(MEMSTORE_SCAN_TIME, ObTimeUtility::current_time() - ctx.handle_start_time_);
 }
 
+int ObMemtable::setup_truncate_filter_on_mvcc_acc_ctx(
+    const storage::ObTableIterParam &param,
+    ObMvccAccessCtx &mvcc_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  // Only the fast path is supported: the tablet handle must be pre-populated on
+  // iter_param by the upper layer (e.g. ObTablet::prepare_param /
+  // ObMultipleMerge::init for normal reads, or by init_merge_param for
+  // compaction/dump).  We deliberately avoid an MDS get_tablet() lookup here
+  // because this is on the per-row read/scan hot path; callers that need the
+  // truncate filter are responsible for forwarding the tablet handle.
+  if (OB_NOT_NULL(param.tablet_handle_) && param.tablet_handle_->is_valid()) {
+    tablet = param.tablet_handle_->get_obj();
+  }
+
+  // A transfer-in tablet may still read source memtables whose truncate filter
+  // state is not reflected by the target tablet's replica-local flag.
+  if (OB_NOT_NULL(tablet)
+      && (tablet->need_memtable_filter_after_truncate_tablet()
+          || tablet->get_tablet_meta().has_transfer_table())) {
+    share::SCN truncate_scn;
+    int64_t truncate_version = 0;
+    if (OB_FAIL(tablet->get_tablet_truncate_scn_and_version(truncate_scn, truncate_version))) {
+      TRANS_LOG(WARN, "get tablet truncate scn and version failed", K(ret), K(key_));
+    } else {
+      mvcc_ctx.set_truncate_filter(truncate_version, truncate_scn);
+    }
+  } else if (mvcc_ctx.need_memtable_filter_after_truncate_tablet_) {
+    // The acc_ctx was previously set up with a truncate filter but this call did
+    // not receive a tablet handle.  This is expected when a reused acc_ctx moves
+    // to a non-truncated tablet, but it can also mean a caller on a truncated
+    // tablet forgot to forward the tablet handle, in which case stale pre-truncate
+    // data would be read.  We cannot tell the two apart cheaply here, so clear the
+    // residual filter and emit a throttled warning so the latter case is at least
+    // observable online.
+    if (OB_ISNULL(tablet) && REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL/*10 seconds*/)) {
+      TRANS_LOG(WARN, "truncate filter was set on acc_ctx but tablet handle is missing, "
+                "clearing residual filter; verify the caller forwards tablet_handle "
+                "for truncated tablets", K(key_), KP(param.tablet_handle_));
+    }
+    mvcc_ctx.clear_truncate_filter();
+  }
+  return ret;
+}
+
 int ObMemtable::get(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,
@@ -768,6 +824,8 @@ int ObMemtable::get(
   } else if (OB_ISNULL(read_info = param.get_read_info(context.use_fuse_row_cache_))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "Unexpected null read info", K(ret), K(param), K(context.use_fuse_row_cache_));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else {
     const ObColDescIArray &out_cols = read_info->get_columns_desc();
     ObStoreRowLockState lock_state;
@@ -878,6 +936,8 @@ int ObMemtable::get(
              || !context.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument, ", K(ret), K(param), K(context));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else {
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
         ObMemtableGetIterator,
@@ -930,6 +990,8 @@ int ObMemtable::scan(const ObTableIterParam &param,
   } else if (!context.store_ctx_->mvcc_acc_ctx_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "read_ctx is invalid", K(ret), KPC(context.store_ctx_));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else {
     const void *query_range = nullptr;
     if (param.is_multi_version_minor_merge_) {
@@ -982,6 +1044,8 @@ int ObMemtable::multi_get(
              || (0 == rowkeys.count()))) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument, ", K(ret), K(param), K(context), K(rowkeys));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else {
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
         ObMemtableMGetIterator,
@@ -1029,6 +1093,8 @@ int ObMemtable::multi_scan(
              || (0 == ranges.count()))) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument, ", K(ret), K(param), K(context), K(ranges));
+  } else if (OB_FAIL(setup_truncate_filter_on_mvcc_acc_ctx(param, context.store_ctx_->mvcc_acc_ctx_))) {
+    TRANS_LOG(WARN, "setup truncate filter on mvcc acc ctx failed", K(ret), K_(key));
   } else {
     ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
         ObMemtableMScanIterator,

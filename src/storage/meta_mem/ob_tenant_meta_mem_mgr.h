@@ -41,6 +41,7 @@
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #include "storage/meta_mem/ob_tenant_meta_obj_pool.h"
 #include "storage/meta_mem/ob_tablet_leak_checker.h"
+#include "storage/meta_mem/ob_tablet_truncate_map.h"
 #include "storage/tablet/ob_tablet_memtable_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_full_tablet_creator.h"
@@ -233,6 +234,19 @@ public:
       const ObTabletMapKey &key,
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
+  int acquire_full_truncate_tablet(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      ObTabletHandle &old_handle,
+      ObTabletHandle &tablet_handle);
+  int get_pending_truncate_tablet(
+      const ObTabletMapKey &key,
+      ObPendingTruncateTabletMap::MapValue &value);
+  int try_release_pending_truncate_tablet(
+      const ObTabletMapKey &key,
+      const bool restore_old_tablet_read_flag,
+      const char *reason);
+
   int create_tmp_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
@@ -310,6 +324,14 @@ public:
   int has_tablet(const ObTabletMapKey &key, bool &is_exist);
   int del_tablet(const ObTabletMapKey &key);
   int check_all_meta_mem_released(bool &is_released, const char *module);
+  int check_if_tablet_cas_is_enabled(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_handle,
+      bool &b_ret);
+  int check_if_tablet_cas_is_enabled(
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &old_addr,
+      bool &b_ret);
   // only used for replay and compat, others mustn't call this func
   int compare_and_swap_tablet(
       const ObTabletMapKey &key,
@@ -323,6 +345,12 @@ public:
       const ObTabletHandle &old_handle,
       const ObTabletHandle &new_handle,
       const ObUpdateTabletPointerParam &update_tablet_pointer_param);
+  int compare_and_swap_truncate_tablet(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_handle,
+      const ObTabletHandle &new_handle,
+      const ObUpdateTabletPointerParam &update_tablet_pointer_param);
+
   int update_tablet_buffer_header(ObTablet *old_obj, ObTablet *new_obj);
   int try_wash_tablet(const std::type_info &type_info, void *&obj);
   int get_meta_mem_status(common::ObIArray<ObTenantMetaMemStatus> &info) const;
@@ -570,6 +598,12 @@ private:
       TabletBufferList &header,
       void *&free_obj);
   void init_pool_arr();
+  int inner_compare_and_swap_tablet_without_lock(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_handle,
+      const ObTabletHandle &new_handle,
+      const ObUpdateTabletPointerParam &update_tablet_pointer_param,
+      const bool is_for_truncate);
   void *release_tablet(ObTablet *tablet, const bool return_buf_ptr_after_release);
   void release_tablet_from_pool(ObTablet *tablet, const bool give_back_tablet_into_pool);
   void release_memtable(memtable::ObMemtable *memtable);
@@ -594,6 +628,16 @@ private:
   void batch_destroy_memtable_(memtable::ObMemtableSet *memtable_set);
   bool is_tablet_handle_leak_checker_enabled();
   int push_tablet_pointer_to_fly_map_if_need_(const ObTabletMapKey &key);
+  int add_tablet_to_waiting_free_list_if_need(
+      const ObTabletMapKey &key,
+      const ObTabletHandle &old_tablet_hdl);
+  /// ATTENTION: must be called without holding @c t3m::bucket_lock_, otherwise
+  /// might cause deadlock.(discontructor of @c ObTabletHandle will call
+  /// ObTenantMetaMemMgr::push_tablet_into_gc_queue)
+  int try_remove_tablet_from_waiting_free_list(
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &cas_old_addr,
+      const ObMetaDiskAddr &cas_new_addr);
 
 private:
   common::SpinRWLock wash_lock_;
@@ -605,6 +649,8 @@ private:
   ObFlyingTabletPointerMap flying_tablet_map_;
   ObExternalTabletCntMap external_tablet_cnt_map_;
   ObSSTabletLocalCacheMap ss_tablet_local_cache_map_;
+  ObWaitingFreeTruncatedTabletList waiting_free_truncated_tablet_list_; // for new oracle temp table truncate
+  ObPendingTruncateTabletMap pending_truncate_tablet_map_; // for new oracle temp table truncate, guarded by bucket_lock_
   int tg_id_; // t3m thread id
   int oracle_temp_table_gc_tg_id_; // oracle temp table gc thread id
   int persist_tg_id_; // since persist task may cost too much time, we use another thread to exec.

@@ -165,6 +165,9 @@ int ObDirectLoadTableGuard::do_create_memtable_(ObLSHandle &ls_handle)
     ret = OB_SUCCESS;
   } else if (FALSE_IT(arg.clog_checkpoint_scn_ = clog_checkpoint_scn)) {
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->create_memtable(tablet_id_, arg))) {
+    if (OB_NOT_THE_OBJECT == ret) {
+      ret = OB_EAGAIN;
+    }
     STORAGE_LOG(WARN, "fail to create a boundary memtable", K(ret), KPC(this));
   }
   return ret;

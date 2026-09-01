@@ -26,7 +26,7 @@ namespace oceanbase
 {
 namespace storage
 {
-using DiskedTabletFilterOp = ObTenantSlogCkptUtil::DiskedTabletFilterOp;
+using DummyTabletFilterOp = ObTenantSlogCkptUtil::DummyTabletFilterOp;
 using TabletDfgtPicker = ObTenantSlogCkptUtil::TabletDefragmentPicker;
 // =================================
 //  ObTenantSlogCheckpointWorkflow
@@ -506,8 +506,8 @@ int ObTenantSlogCheckpointWorkflow::TabletDefragmentHelper::do_defragment(
       if (OB_FAIL(ObTenantSlogCkptUtil::write_and_apply_tablet(storage_param, ctx_.t3m_,
                                                                ctx_.ls_service_, ctx_.tenant_smeta_svr_,
                                                                allocator, skipped))) {
-          STORAGE_LOG(WARN, "failed to write and install tablet, give up handling defragment", K(ret), K(storage_param), K(progress_printer));
-          break;
+        STORAGE_LOG(WARN, "failed to write and install tablet, give up handling defragment", K(ret), K(storage_param), K(progress_printer));
+        break;
       } else {
         total_skipped_cnt += skipped ? 1 : 0;
       }
@@ -819,7 +819,7 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_ls_tablets_(
 
   char slog_buf[sizeof(ObUpdateTabletLog)];
 
-  DiskedTabletFilterOp iter_op; // skip in mem tablet
+  DummyTabletFilterOp iter_op;
   /// @c mode_ seems unused in ObLSTabletFastIter(only for validity check)
   ObLSTabletFastIter tablet_iter(iter_op, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
 
@@ -859,6 +859,29 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_ls_tablets_(
   return ret;
 }
 
+
+/// Assumes that tablet addr @c is_memory() returns true
+int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::fail_if_truncate_need_abort_(const ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  const ObTabletMeta &tablet_meta = tablet.get_tablet_meta();
+  const share::SCN &mds_ckpt_scn = tablet_meta.mds_checkpoint_scn_;
+  const ObTabletCreateDeleteMdsUserData &last_persisted_committed_tablet_status = tablet_meta.last_persisted_committed_tablet_status_;
+
+  if (!last_persisted_committed_tablet_status.is_valid()
+      || !mds_ckpt_scn.is_valid()
+      || !last_persisted_committed_tablet_status.get_create_scn().is_valid()) {
+    // do nothing
+    STORAGE_LOG(INFO, "mds has not been checkpoint yet", K(ret), K(last_persisted_committed_tablet_status),
+      K(mds_ckpt_scn));
+  } else if (mds_ckpt_scn >= last_persisted_committed_tablet_status.get_create_scn()) {
+    ret = OB_NEED_WAIT;
+    STORAGE_LOG(WARN, "tablet is persisted before but now in memory, need to abort slog truncate", K(ret),
+      K(mds_ckpt_scn), K(last_persisted_committed_tablet_status));
+  }
+  return ret;
+}
+
 int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_tablet_(
     ObTabletHandle &tablet_handle,
     const int64_t ls_epoch,
@@ -880,6 +903,13 @@ int ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::record_single_tablet_(
   } else if (OB_UNLIKELY(!old_addr.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected invalid tablet addr", K(ret), K(old_addr));
+  } else if (old_addr.is_memory())  {
+    if (OB_FAIL(fail_if_truncate_need_abort_(*tablet))) {
+      STORAGE_LOG(WARN, "abort this truncate", K(ret), KPC(tablet));
+    } else {
+      // do nothing
+      STORAGE_LOG(INFO, "skip in memory tablet", K(ret), K(old_addr), K(tablet_handle));
+    }
   } else if (OB_UNLIKELY(!old_addr.is_disked())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non disked tablet", K(tablet->get_tablet_addr()));

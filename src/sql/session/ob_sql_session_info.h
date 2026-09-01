@@ -1142,6 +1142,43 @@ public:
       const uint64_t session_id,
       const bool is_index_table,
       common::ObMySQLTransaction &trans);
+  int truncate_oracle_temp_table_v2(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t sequence,
+      const uint64_t session_id,
+      const bool is_index_table,
+      const int64_t schema_version,
+      common::ObMySQLTransaction &trans,
+      common::ObIArray<common::ObTabletID> &tablet_ids_for_seq_reset);
+  int truncate_aux_tables_for_oracle_temp_v2_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t sequence,
+      const uint64_t session_id,
+      const int64_t schema_version,
+      common::ObMySQLTransaction &trans,
+      common::ObIArray<common::ObTabletID> &tablet_ids_for_seq_reset);
+  // helpers extracted from delete_from_oracle_temp_tables to keep that orchestrator readable
+  int collect_oracle_temp_table_ids_(
+      const share::schema::ObTableType table_type,
+      common::ObIArray<uint64_t> *&table_ids,
+      int64_t &sequence_for_gtt_v2);
+  int process_oracle_temp_table_v2_entry_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableType table_type,
+      const share::schema::ObTableSchema &table_schema,
+      common::ObMySQLTransaction &trans,
+      common::ObIArray<common::ObTabletID> &tablet_ids_for_seq_reset);
+  int delete_oracle_temp_table_v1_(
+      common::ObCommonSqlProxy &user_sql_proxy,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableType table_type,
+      const share::schema::ObTableSchema &table_schema);
+  int cleanup_inactive_trx_tablets_on_session_disconnect_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      common::ObMySQLTransaction &trans);
 
   //To generate an unique key for Oracle Global Temporary Table
   int64_t get_gtt_session_scope_unique_id() const { return gtt_session_scope_unique_id_; }
@@ -1154,6 +1191,7 @@ public:
   int64_t get_trans_gtt_v2_sequence();
   void update_trans_gtt_v2_sequence();
   uint64_t get_min_data_version_of_init_sess();
+  static bool is_gtt_truncate_tablet_enabled_(const uint64_t tenant_id);
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   int add_dblink_sequence_schema(ObSequenceSchema *schema);

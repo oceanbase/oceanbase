@@ -55,6 +55,7 @@
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "storage/tablelock/ob_table_lock_live_detector.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "rootserver/standby/ob_recovery_ls_service.h"
@@ -899,6 +900,21 @@ int ObRpcTabletMajorFreezeP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->tablet_major_freeze(arg_, result_);
+  }
+  return ret;
+}
+
+int ObRpcTruncateTabletFreezeP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    const int64_t abs_timeout_us =
+        nullptr == rpc_pkt_ ? 0 : get_receive_timestamp() + rpc_pkt_->get_timeout();
+    ret = storage::ObSessionTabletTruncateHelper::freeze_tablet(
+        arg_, result_, abs_timeout_us);
   }
   return ret;
 }

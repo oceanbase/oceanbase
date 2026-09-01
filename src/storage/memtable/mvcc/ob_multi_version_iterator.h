@@ -92,6 +92,20 @@ private:
       const transaction::ObTransID &trans_id,
       int64_t &state,
       uint64_t &cluster_version);
+  enum class DumpIterPhase
+  {
+    COMPACT_ROW,
+    MULTI_VERSION_ROW,
+  };
+
+  int normalize_dump_iter_(
+      ObMvccTransNode *&iter,
+      const DumpIterPhase phase) const;
+  // True when a truncate filter is active and the given dump node carries data
+  // produced before the truncate point (old data), so the dump must skip it.
+  // Always false when no truncate filter is set, leaving the legacy dump path intact.
+  bool is_truncated_dump_node(const ObMvccTransNode &node) const
+  { return truncate_filter_.is_valid() && truncate_filter_.is_truncated(node); }
   DISALLOW_COPY_AND_ASSIGN(ObMultiVersionValueIterator);
 private:
   bool is_inited_;
@@ -105,6 +119,7 @@ private:
   bool is_node_compacted_;
   bool has_multi_commit_trans_;
   share::SCN merge_scn_;
+  ObMemtableTruncateFilter truncate_filter_;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

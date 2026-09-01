@@ -196,6 +196,7 @@ int ObTabletMdsMinorMergeCtx::init_mds_minor_filter(
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
   const int64_t multi_version_start = tablet.get_multi_version_start();
+  const share::SCN clog_checkpoint_scn = tablet.get_clog_checkpoint_scn();
   int64_t first_major_snapshot = 0;
   const ObITable *first_major_sstable = nullptr;
   if (tablet.get_major_table_count() <= 1) {
@@ -211,10 +212,15 @@ int ObTabletMdsMinorMergeCtx::init_mds_minor_filter(
   } else {
     first_major_snapshot = first_major_sstable->get_snapshot_version();
   }
-  if (FAILEDx(filter.init(first_major_snapshot, last_major_snapshot, multi_version_start))) {
-    LOG_WARN("failed to init mds compaction_filter", K(ret), K(last_major_snapshot), K(multi_version_start));
+  if (FAILEDx(filter.init(first_major_snapshot,
+                          last_major_snapshot,
+                          multi_version_start,
+                          clog_checkpoint_scn))) {
+    LOG_WARN("failed to init mds compaction_filter", K(ret), K(last_major_snapshot), K(multi_version_start),
+      K(clog_checkpoint_scn));
   } else {
-    FLOG_INFO("success to init mds compaction filter", K(ret), K(first_major_snapshot), K(last_major_snapshot), K(multi_version_start));
+    FLOG_INFO("success to init mds compaction filter", K(ret), K(first_major_snapshot), K(last_major_snapshot), K(multi_version_start),
+      K(clog_checkpoint_scn));
   }
   return ret;
 }

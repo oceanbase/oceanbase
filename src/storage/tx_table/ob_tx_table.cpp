@@ -489,6 +489,9 @@ int ObTxTable::load_tx_ctx_table_()
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_CTX_TABLET, arg/* use default arg */))) {
+    if (OB_NOT_THE_OBJECT == ret) {
+      ret = OB_EAGAIN;
+    }
     LOG_WARN("failed to create memtable", K(ret));
   } else if (OB_FAIL(ls_tablet_svr->get_tx_ctx_memtable_mgr(mgr_handle))) {
     LOG_WARN("failed to get memtable mgr", K(ret));

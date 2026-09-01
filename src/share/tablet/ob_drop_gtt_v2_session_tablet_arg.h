@@ -10,6 +10,7 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/ob_define.h"
+#include "storage/tablet/ob_session_tablet_info_map.h"
 
 namespace oceanbase
 {
@@ -52,6 +53,7 @@ public:
   const common::ObIArray<uint64_t> &get_table_ids() const { return table_ids_; }
   int64_t get_sequence() const { return sequence_; }
   uint64_t get_session_id() const { return session_id_; }
+  bool is_matched(const storage::ObSessionTabletInfo &info) const;
   TO_STRING_KV(K_(tenant_id), K_(table_ids), K_(sequence), K_(session_id));
 public:
   uint64_t tenant_id_;
@@ -59,6 +61,35 @@ public:
   int64_t sequence_;
   uint64_t session_id_;
 };
+
+class ObBatchDropGTTV2SessionTabletArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBatchDropGTTV2SessionTabletArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      exclude_active_session_trx_tablet_(false),
+      tablet_infos_()
+  {
+  }
+  ~ObBatchDropGTTV2SessionTabletArg() = default;
+  int init(
+    const uint64_t tenant_id,
+    const bool exclude_active_session_trx_tablet,
+    const common::ObIArray<storage::ObSessionTabletInfo> &tablet_infos);
+  bool is_valid() const;
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  bool is_matched(const storage::ObSessionTabletInfo &info) const;
+  bool exclude_active_session_trx_tablet() const { return exclude_active_session_trx_tablet_; }
+  const common::ObIArray<storage::ObSessionTabletInfo> &get_tablet_infos() const { return tablet_infos_; }
+  TO_STRING_KV(K_(tenant_id), K_(exclude_active_session_trx_tablet), K_(tablet_infos));
+
+public:
+  uint64_t tenant_id_;
+  bool exclude_active_session_trx_tablet_;
+  common::ObSEArray<storage::ObSessionTabletInfo, ObDropGTTV2SessionTabletArg::DEFAULT_TABLE_ID_COUNT> tablet_infos_;
+};
+
 
 // RPC result. local_map_hit_ is true if this observer found at least one
 // matching entry in some session's gtt_tablet_info_map_ (regardless of creator

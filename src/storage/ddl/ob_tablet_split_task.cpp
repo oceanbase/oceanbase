@@ -1583,7 +1583,7 @@ int ObTabletSplitWriteTask::process_rows_for_reuse_task(
   int64_t rewrite_row_cnt = 0;
   ObDatumRange whole_range;
   whole_range.set_whole_range();
-  ObSplitScanParam row_scan_param(param_->table_id_, *(context_->tablet_handle_.get_obj()), whole_range, clipped_storage_schema);
+  ObSplitScanParam row_scan_param(param_->table_id_, context_->tablet_handle_, whole_range, clipped_storage_schema);
   if (OB_FAIL(row_scan_iter.init(row_scan_param, data_macro_desc, *sstable_))) {
     LOG_WARN("init row scan iterator failed", K(ret), K(data_macro_desc));
   } else {
@@ -1673,7 +1673,7 @@ int ObTabletSplitWriteTask::process_rows_for_rewrite_task(
   } else {
     // rewrite each row.
     ObRowScan row_scan_iter;
-    ObSplitScanParam row_scan_param(param_->table_id_, *(context_->tablet_handle_.get_obj()), query_range, clipped_storage_schema);
+    ObSplitScanParam row_scan_param(param_->table_id_, context_->tablet_handle_, query_range, clipped_storage_schema);
     if (OB_FAIL(row_scan_iter.init(row_scan_param, *sstable_))) {
       LOG_WARN("init row scan iterator failed", K(ret));
     } else {
@@ -3241,7 +3241,8 @@ int ObRowScan::construct_access_param(
   } else if (OB_FAIL(build_rowkey_read_info(param))) {
     LOG_WARN("build rowkey read info failed", K(ret), K(param));
   } else if (OB_FAIL(access_param_.init_merge_param(
-        param.table_id_, param.src_tablet_.get_tablet_meta().tablet_id_, *rowkey_read_info_, false/*is_multi_version_minor_merge*/, false/*is_delete_insert*/))) {
+        param.table_id_, param.get_src_tablet().get_tablet_meta().tablet_id_, *rowkey_read_info_,
+        param.src_tablet_handle_, false/*is_multi_version_minor_merge*/, false/*is_delete_insert*/))) {
     LOG_WARN("init table access param failed", K(ret), KPC(rowkey_read_info_), K(param));
   }
   LOG_INFO("construct table access param finished", K(ret), K(access_param_));
@@ -3337,7 +3338,7 @@ int ObRowScan::init(
     LOG_WARN("invalid args", K(ret), K(param), K(sstable));
   } else if (OB_FAIL(construct_access_param(param))) {
     LOG_WARN("construct access param failed", K(ret), K(param));
-  } else if (OB_FAIL(construct_access_ctx(param.src_tablet_.get_tablet_meta().ls_id_, param.src_tablet_.get_tablet_meta().tablet_id_))) {
+  } else if (OB_FAIL(construct_access_ctx(param.get_src_tablet().get_tablet_meta().ls_id_, param.get_src_tablet().get_tablet_meta().tablet_id_))) {
     LOG_WARN("construct access param failed", K(ret), K(param));
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3379,7 +3380,7 @@ int ObRowScan::init(
     LOG_WARN("invalid args", K(ret), K(param), K(macro_desc), K(sstable));
   } else if (OB_FAIL(construct_access_param(param))) {
     LOG_WARN("construct access param failed", K(ret), K(param));
-  } else if (OB_FAIL(construct_access_ctx(param.src_tablet_.get_tablet_meta().ls_id_, param.src_tablet_.get_tablet_meta().tablet_id_))) {
+  } else if (OB_FAIL(construct_access_ctx(param.get_src_tablet().get_tablet_meta().ls_id_, param.get_src_tablet().get_tablet_meta().tablet_id_))) {
     LOG_WARN("construct access param failed", K(ret), K(param));
   } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObSSTableRowWholeScanner)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3473,8 +3474,8 @@ int ObSnapshotRowScan::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
   } else {
-    const ObTabletID &tablet_id = param.src_tablet_.get_tablet_meta().tablet_id_;
-    const ObLSID &ls_id = param.src_tablet_.get_tablet_meta().ls_id_;
+    const ObTabletID &tablet_id = param.get_src_tablet().get_tablet_meta().tablet_id_;
+    const ObLSID &ls_id = param.get_src_tablet().get_tablet_meta().ls_id_;
     ObQueryFlag query_flag(ObQueryFlag::Forward,
         false, /* daily merge*/
         true,  /* use *optimize */
@@ -3505,7 +3506,7 @@ int ObSnapshotRowScan::init(
     } else if (OB_FAIL(write_row_.init(allocator_, read_info_.get_columns_desc().count() + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt()))) {
       LOG_WARN("Fail to init write row", K(ret));
     } else if (OB_FALSE_IT(write_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT))) {
-    } else if (OB_FAIL(construct_access_param(param.table_id_, tablet_id, read_info_))) {
+    } else if (OB_FAIL(construct_access_param(param.table_id_, tablet_id, read_info_, tablet_handle))) {
       LOG_WARN("failed to init access param", K(ret), K(param));
     } else if (OB_FAIL(construct_range_ctx(query_flag, ls_id))) {
       LOG_WARN("failed to init access ctx", K(ret));
@@ -3524,7 +3525,8 @@ int ObSnapshotRowScan::init(
 int ObSnapshotRowScan::construct_access_param(
     const uint64_t table_id,
     const common::ObTabletID &tablet_id,
-    const ObITableReadInfo &read_info)
+    const ObITableReadInfo &read_info,
+    const ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   const int64_t column_cnt = read_info.get_columns_desc().count();
@@ -3540,6 +3542,7 @@ int ObSnapshotRowScan::construct_access_param(
   } else if (OB_FAIL(access_param_.init_merge_param(table_id,
                                                     tablet_id,
                                                     read_info,
+                                                    tablet_handle,
                                                     false/*is_multi_version_minor_merge*/,
                                                     false/*is_delete_insert*/))) {
     LOG_WARN("failed to init access param", K(ret));

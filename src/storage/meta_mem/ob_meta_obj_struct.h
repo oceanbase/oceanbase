@@ -97,6 +97,7 @@ public:
       const int64_t offset,
       const int64_t size);
 
+
   // just for compatibility, the old version ObMetaDiskAddr is serialized directly by memcpy in some scenarios
   int memcpy_deserialize(const char* buf, const int64_t data_len, int64_t& pos);
 

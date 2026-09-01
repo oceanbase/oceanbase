@@ -51,7 +51,8 @@ ObMergeParameter::ObMergeParameter(
     trans_state_mgr_(nullptr),
     error_location_(nullptr),
     mview_merge_param_(nullptr),
-    allocator_(nullptr)
+    allocator_(nullptr),
+    tablet_handle_ptr_(nullptr)
 {
 }
 
@@ -77,6 +78,7 @@ void ObMergeParameter::reset()
     mview_merge_param_ = nullptr;
   }
   allocator_ = nullptr;
+  tablet_handle_ptr_ = nullptr;
 }
 
 int ObMergeParameter::init(
@@ -134,6 +136,12 @@ int ObMergeParameter::init(
     } else if (schema->is_mv_major_refresh_table() && is_major_merge_type(static_param_.get_merge_type()) && OB_FAIL(init_mview_merge_param(allocator))) {
       STORAGE_LOG(WARN, "failed to init mview merge param", K(ret));
     }
+  }
+  if (OB_SUCC(ret)) {
+    // Snapshot the tablet handle owned by merge_ctx so iter-level callers can
+    // forward it to ObTableAccessParam without an extra get_tablet() lookup.
+    // merge_ctx outlives ObMergeParameter, so storing a pointer is safe.
+    tablet_handle_ptr_ = &merge_ctx.get_tablet_handle();
   }
   if (OB_SUCC(ret)) {
     FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), K_(merge_version_range), K_(merge_rowid_range));

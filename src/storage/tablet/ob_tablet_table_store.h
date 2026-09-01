@@ -30,6 +30,7 @@ class ObTablet;
 class ObTableStoreIterator;
 class ObCachedTableHandle;
 class ObStorageMetaHandle;
+class ObSSTableTruncateFilter;
 struct ObTabletHAStatus;
 
 enum class ObGetReadTablesMode : uint8_t
@@ -95,7 +96,8 @@ public:
       ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
+      const ObTabletTableStore &old_store,
+      const ObSSTableTruncateFilter *sstable_filter);
 #ifdef OB_BUILD_SHARED_STORAGE
   // init for shared storage major compaction
   int init_for_shared_storage(
@@ -120,6 +122,12 @@ public:
       ObArenaAllocator &allocator,
       const ObTablet &tablet,
       const ObTabletTableStore &old_store);
+  int init_for_truncate(
+      ObArenaAllocator &allocator,
+      const ObTablet &tablet,
+      const ObTabletTableStore &old_store,
+      const share::SCN &mds_checkpoint_scn,
+      const blocksstable::ObSSTable *empty_major);
   virtual int64_t get_deep_copy_size() const override;
   virtual int64_t get_try_cache_size() const;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
@@ -193,8 +201,10 @@ public:
   int build_ha_new_table_store(
       common::ObArenaAllocator &allocator,
       ObTablet &tablet,
+      const ObTablet &old_tablet,
       const ObBatchUpdateTableStoreParam &param,
-      const ObTabletTableStore &old_store);
+      const ObTabletTableStore &old_store,
+      const ObSSTableTruncateFilter *sstable_filter);
   // Asynchronously batch cache sstable meta according to the specified memory size.
   //  - Here remain_size doesn't include the size of the table store itself.
   //  - Taking the bypass don't pollute the meta cache.

@@ -452,6 +452,7 @@ int ObTableAccessParam::init_merge_param(
     const uint64_t table_id,
     const common::ObTabletID &tablet_id,
     const ObITableReadInfo &read_info,
+    const ObTabletHandle &tablet_handle,
     const bool is_multi_version_minor_merge,
     const bool is_delete_insert)
 {
@@ -467,7 +468,9 @@ int ObTableAccessParam::init_merge_param(
     iter_param_.read_info_ = &read_info;
     iter_param_.rowkey_read_info_ = &read_info;
     iter_param_.is_delete_insert_ = is_multi_version_minor_merge && is_delete_insert;
-    // merge_query will not goto ddl_merge_query, no need to pass tablet
+    // Forward the tablet handle so the memtable read path can build the
+    // truncate filter after a GTT truncate-tablet without an extra get_tablet().
+    iter_param_.set_tablet_handle(&tablet_handle);
     is_inited_ = true;
   }
   return ret;

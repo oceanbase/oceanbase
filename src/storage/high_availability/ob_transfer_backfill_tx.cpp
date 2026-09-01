@@ -1813,6 +1813,7 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERR_REPLACE_SSTABLE_TABLET_ID)
 int ObTransferReplaceTableTask::transfer_replace_tables_(
     ObLS *ls,
     const ObTabletBackfillInfo &tablet_info,
@@ -1869,6 +1870,10 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
                           "tablet_id", tablet_info.tablet_id_.id(),
                           "tablet_status", ObTabletStatus::get_str(user_data.tablet_status_),
                           "has_transfer_table", tablet->get_tablet_meta().has_transfer_table());
+    if (tablet_info.tablet_id_.id() == -ERR_REPLACE_SSTABLE_TABLET_ID) {
+      LOG_INFO("errsim debug sync before transfer build tablet with batch tables", K(ret), K(tablet_info));
+      DEBUG_SYNC(BEFORE_TRANSFER_BUILD_TABLET_WITH_BATCH_TABLES);
+    }
 #endif
     if (OB_FAIL(ctx_->get_src_ls(src_ls))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));

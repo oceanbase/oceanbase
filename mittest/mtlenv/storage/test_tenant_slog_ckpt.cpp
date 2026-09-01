@@ -81,6 +81,27 @@ static bool verify_tablet_num(const int64_t &expected_tablet_num)
   return expected_tablet_num + t3m->tablet_buffer_pool_.inner_used_num_ == t3m->tablet_map_.map_.size();
 }
 
+class DiskedTabletFilterOp final : public ObITabletFilterOp
+{
+public:
+  int do_filter(const ObTabletResidentInfo &info, bool &is_skipped) override
+  {
+    int ret = OB_SUCCESS;
+    is_skipped = false;
+    if (OB_UNLIKELY(!info.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "tablet resident info is invalid", K(ret), K(info));
+    } else if (info.addr_.is_none()) {
+      ret = OB_NEED_RETRY; // (?)
+      STORAGE_LOG(WARN,  "tablet addr is none", K(ret), K(info));
+    } else if (info.addr_.is_memory()) {
+      is_skipped = true;
+      STORAGE_LOG(INFO, "skip in mem tablet", K(ret), K(info));
+    }
+    return ret;
+  }
+};
+
 struct DummyFilterOp final : public ObITabletFilterOp {
     int do_filter(const ObTabletResidentInfo &info, bool &is_skipped) override {
         is_skipped = false;
@@ -172,7 +193,7 @@ static double cal_shared_macro_block_size_amp(bool ignore_current_block)
   int ret = OB_SUCCESS;
   ObTenantSlogCkptUtil::TabletDefragmentPicker picker(ObMemAttr(MTL_ID(), TAG));
   EXPECT_SUCC(picker.create(1024));
-  traverse_all_tablets(ObTenantSlogCkptUtil::DiskedTabletFilterOp(), [&](const ObTabletHandle &tablet_handle){
+  traverse_all_tablets(DiskedTabletFilterOp(), [&](const ObTabletHandle &tablet_handle){
           ObTablet *tablet = tablet_handle.get_obj();
           EXPECT_NE(nullptr, tablet);
           if (tablet->is_empty_shell()) {
@@ -934,6 +955,11 @@ public:
       if (nullptr == tablet) {
         return OB_INVALID_ARGUMENT;
       }
+      if (OB_SUCC(ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::fail_if_truncate_need_abort_(*tablet))) {
+      } else if (FALSE_IT(tablet->tablet_meta_.last_persisted_committed_tablet_status_.create_commit_scn_ = share::SCN::scn_inc(tablet->get_mds_checkpoint_scn()))) {
+      } else if (OB_FAIL(ObTenantSlogCheckpointWorkflow::SlogTruncateHelper::fail_if_truncate_need_abort_(*tablet))) {
+        return ret;
+      }
       if (persist_tablet) {
         uint64_t data_version = 0;
         if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
@@ -1213,7 +1239,7 @@ TEST_F(TestTenantSlogCkpt, test_disked_filter) {
   verify_tablet_num(expected_tablet_num);
   {
     bool ok = true;
-    ASSERT_SUCC(traverse_all_tablets(ObTenantSlogCkptUtil::DiskedTabletFilterOp(), [&](const ObTabletHandle &tablet_handle){
+    ASSERT_SUCC(traverse_all_tablets(DiskedTabletFilterOp(), [&](const ObTabletHandle &tablet_handle){
         ObCStringHelper helper;
         if (!tablet_handle.is_valid()) {
           ok = false;

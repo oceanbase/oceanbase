@@ -272,6 +272,7 @@ public:
   OB_INLINE const ObStorageSchema *get_schema() const { return static_param_.schema_; }
   OB_INLINE ObLS *get_ls() const { return static_param_.ls_handle_.get_ls(); }
   ObTablet *get_tablet() const { return tablet_handle_.get_obj(); }
+  const ObTabletHandle &get_tablet_handle() const { return tablet_handle_; }
   OB_INLINE int64_t get_snapshot() const { return static_param_.version_range_.snapshot_version_; }
   OB_INLINE const SCN & get_end_scn() const { return static_param_.scn_range_.end_scn_; }
   virtual const share::ObPreWarmerParam &get_pre_warm_param() const { return static_param_.pre_warm_param_; }

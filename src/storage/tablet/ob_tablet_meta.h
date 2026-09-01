@@ -47,6 +47,7 @@ namespace oceanbase
 namespace storage
 {
 struct ObMigrationTabletParam;
+
 class ObTabletMeta final
 {
   friend class ObTablet;
@@ -96,6 +97,10 @@ public:
   int init(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
+  // for new oracle GTT v2 truncate
+  int init_for_truncate(
+      const ObTabletMeta &old_tablet_meta,
+      const bool is_replay);
 #ifdef OB_BUILD_SHARED_STORAGE
   int init_for_share_storage(const ObTabletMeta &old_tablet_meta);
   int update_for_share_storage(const ObTabletMeta &new_tablet_meta);
@@ -175,6 +180,7 @@ public:
                K_(space_usage),
                K_(is_empty_shell),
                K_(micro_index_clustered),
+               K_(need_memtable_filter_after_truncate_tablet),
                K_(ddl_replay_status),
                K_(split_info),
                K_(has_truncate_info),
@@ -243,6 +249,8 @@ public:
   bool has_next_tablet_; // alignment: 1B, size: 2B (abandoned, don't use this field)
   bool is_empty_shell_; // alignment: 1B, size: 2B
   bool micro_index_clustered_; // alignment: 1B, size: 2B
+  // TODO(fanyin): placeholder 44X
+  bool need_memtable_filter_after_truncate_tablet_; // alignment: 1B
   share::ObSplitTabletInfo split_info_; // alignment: 8B, size: 16B
   bool has_truncate_info_; // be True after first major with truncate info
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
@@ -262,6 +270,7 @@ private:
   {
     min_ss_tablet_version_ = min_ss_tablet_version;
   }
+
 private:
   static const int32_t TABLET_META_VERSION = 1;
 private:
@@ -338,7 +347,8 @@ public:
                K_(split_info),
                K_(has_truncate_info),
                K_(min_ss_tablet_version),
-               K_(inc_major_snapshot));
+               K_(inc_major_snapshot),
+               K_(need_memtable_filter_after_truncate_tablet));
 private:
   int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
@@ -399,6 +409,8 @@ public:
 
   share::SCN min_ss_tablet_version_;
   int64_t inc_major_snapshot_; // recording the latest inc major merge snapshot
+  // TODO(fanyin): placeholder 44X
+  bool need_memtable_filter_after_truncate_tablet_;
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema
 };

@@ -272,6 +272,7 @@ public:
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,
+                       const ObTabletHandle &tablet_handle,
                        const bool is_multi_version_merge = false,
                        const bool is_delete_insert = false);
   // used for get unique index conflict row

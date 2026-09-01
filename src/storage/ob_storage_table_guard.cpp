@@ -185,7 +185,12 @@ int ObStorageTableGuard::refresh_and_protect_memtable_for_replay()
     }
   } while ((OB_SUCC(ret) || OB_ENTRY_NOT_EXIST == ret || OB_EAGAIN == ret) && need_retry);
 
-  if (OB_LS_OFFLINE == ret) {
+  if (OB_NOT_THE_OBJECT == ret) {
+    // The tablet held by this guard is stale. Do not retry with it in this loop; let the upper
+    // replay task retry and reacquire the latest tablet.
+    ret = OB_EAGAIN;
+    STORAGE_LOG(INFO, "reset ret code to OB_EAGAIN to refresh tablet for replay", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_LS_OFFLINE == ret) {
     ret = OB_EAGAIN;
     STORAGE_LOG(INFO, "reset ret code to OB_EAGAIN to avoid error log", KR(ret), K(ls_id), K(tablet_id));
   }
@@ -465,7 +470,11 @@ bool ObStorageTableGuard::need_to_refresh_table(ObTableStoreIterator &iter)
     CreateMemtableArg arg;
     arg.for_replay_ = for_replay_;
     if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->create_memtable(tablet_id, arg))) {
-      LOG_WARN("fail to create a boundary memtable", K(ret), K(tablet_id));
+      if (OB_NOT_THE_OBJECT == ret) {
+        LOG_INFO("tablet object has changed, refresh read tables", K(ret), K(tablet_id));
+      } else {
+        LOG_WARN("fail to create a boundary memtable", K(ret), K(tablet_id));
+      }
     }
     bool_ret = true;
     exit_flag = 0;

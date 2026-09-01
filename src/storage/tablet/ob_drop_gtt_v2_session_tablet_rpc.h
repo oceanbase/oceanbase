@@ -16,6 +16,16 @@ namespace oceanbase
 {
 namespace storage
 {
+struct ObDropGTTV2SessionTabletUtil final
+{
+public:
+  static int handle_in_tenant(
+    const share::ObDropGTTV2SessionTabletArg &arg,
+    share::ObDropGTTV2SessionTabletRes &result);
+  static int handle_in_tenant(
+    const share::ObBatchDropGTTV2SessionTabletArg &arg,
+    share::ObDropGTTV2SessionTabletRes &result);
+};
 
 class ObRpcDropGTTV2SessionTabletP : public obrpc::ObRpcProcessor<
     obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_DROP_GTT_V2_SESSION_TABLET>>
@@ -25,12 +35,19 @@ public:
   virtual ~ObRpcDropGTTV2SessionTabletP() = default;
 protected:
   int process() override;
-public:
-  static int handle_in_tenant(const share::ObDropGTTV2SessionTabletArg &arg,
-                              share::ObDropGTTV2SessionTabletRes &result);
 private:
-  static int do_delete_as_creator(const share::ObDropGTTV2SessionTabletArg &arg,
-                                  common::ObIArray<ObSessionTabletInfo> &creator_tablet_infos);
+  const observer::ObGlobalContext &gctx_;
+};
+
+class ObRpcBatchDropGTTV2SessionTabletP : public obrpc::ObRpcProcessor<
+    obrpc::ObSrvRpcProxy::ObRpc<obrpc::OB_BATCH_DROP_GTT_V2_SESSION_TABLET>>
+{
+public:
+  explicit ObRpcBatchDropGTTV2SessionTabletP(const observer::ObGlobalContext &gctx) : gctx_(gctx) {}
+  virtual ~ObRpcBatchDropGTTV2SessionTabletP() = default;
+protected:
+  int process() override;
+private:
   const observer::ObGlobalContext &gctx_;
 };
 

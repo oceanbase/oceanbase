@@ -418,6 +418,10 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_create_mds_helper.cpp
   tablet/ob_tablet_delete_mds_helper.cpp
   tablet/ob_tablet_delete_replay_executor.cpp
+  tablet/ob_sstable_truncate_filter.cpp
+  tablet/ob_tablet_truncate_mds_helper.cpp
+  tablet/ob_tablet_truncate_mds_replay_executor.cpp
+  tablet/ob_tablet_truncate_mds_user_data.cpp
   tablet/ob_tablet_full_medium_info.cpp
   tablet/ob_tablet_full_memory_mds_data.cpp
   tablet/ob_tablet_mds_data.cpp
@@ -779,6 +783,7 @@ ob_set_subtarget(ob_storage common_mixed
   checkpoint/ob_freeze_checkpoint.cpp
   meta_mem/ob_external_tablet_cnt_map.cpp
   meta_mem/ob_flying_tablet_pointer_map.cpp
+  meta_mem/ob_tablet_truncate_map.cpp
   meta_mem/ob_meta_obj_struct.cpp
   meta_mem/ob_ss_tablet_local_cache_map.cpp
   meta_mem/ob_storage_meta_cache.cpp
@@ -922,6 +927,7 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
   multi_data_source/ob_abort_transfer_in_mds_ctx.cpp
   multi_data_source/ob_tablet_create_mds_ctx.cpp
+  multi_data_source/ob_tablet_truncate_mds_ctx.cpp
   multi_data_source/ob_tablet_mds_merge_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
   multi_data_source/mds_key_serialize_util.cpp

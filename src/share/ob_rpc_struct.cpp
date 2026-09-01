@@ -6578,6 +6578,10 @@ OB_SERIALIZE_MEMBER(ObTabletMajorFreezeArg,
                     ls_id_,
                     tablet_id_,
                     is_rebuild_column_group_);
+OB_SERIALIZE_MEMBER(ObTruncateTabletFreezeArg,
+                    tenant_id_,
+                    ls_id_,
+                    tablet_id_);
 
 OB_SERIALIZE_MEMBER(ObSyncPGPartitionMTFinishArg, server_, version_);
 

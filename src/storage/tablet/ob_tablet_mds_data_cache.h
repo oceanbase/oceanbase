@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include "storage/tablet/ob_tablet_status.h"
+#include "share/scn.h"
 
 namespace oceanbase
 {
@@ -22,6 +23,7 @@ namespace storage
 {
 class ObTabletCreateDeleteMdsUserData;
 class ObTabletBindingMdsUserData;
+class ObTabletTruncateMdsUserData;
 
 // Only for cache the most frequent case, Nomal tablet status
 class ObTabletStatusCache final
@@ -148,6 +150,42 @@ private:
   uint8_t replay_seq_;
 };
 
+class ObTabletTruncateCache final
+{
+public:
+  ObTabletTruncateCache()
+    : truncate_commit_scn_(),
+      truncate_commit_version_(OB_INVALID_VERSION)
+  {
+  }
+  ~ObTabletTruncateCache() { reset(); }
+  void set_value(const ObTabletTruncateMdsUserData &data);
+  void set_empty()
+  {
+    truncate_commit_scn_.set_min();
+    truncate_commit_version_ = 0;
+  }
+  bool is_empty() const
+  {
+    return truncate_commit_scn_.is_min() && 0 == truncate_commit_version_;
+  }
+  bool is_valid() const
+  {
+    return truncate_commit_scn_.is_valid() && OB_INVALID_VERSION != truncate_commit_version_;
+  }
+  const share::SCN &get_truncate_commit_scn() const { return truncate_commit_scn_; }
+  int64_t get_truncate_commit_version() const { return truncate_commit_version_; }
+  void reset()
+  {
+    truncate_commit_scn_.reset();
+    truncate_commit_version_ = OB_INVALID_VERSION;
+  }
+  TO_STRING_KV(K_(truncate_commit_scn), K_(truncate_commit_version));
+
+private:
+  share::SCN truncate_commit_scn_;
+  int64_t truncate_commit_version_;
+};
 } // namespace storage
 } // namespace oceanbase
 

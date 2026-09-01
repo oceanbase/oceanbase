@@ -75,6 +75,9 @@ public:
       tx_scn_(),
       write_flag_(),
       handle_start_time_(OB_INVALID_TIMESTAMP),
+      truncate_commit_scn_(),
+      truncate_commit_version_(0),
+      need_memtable_filter_after_truncate_tablet_(false),
       lock_wait_start_ts_(0),
       is_inited_(false)
   {}
@@ -118,6 +121,9 @@ public:
       major_snapshot_ = 0;
       lock_wait_start_ts_ = 0;
       mds_filter_.reset();
+      truncate_commit_scn_.reset();
+      truncate_commit_version_ = 0;
+      need_memtable_filter_after_truncate_tablet_ = false;
       is_inited_ = false;
     }
   }
@@ -303,6 +309,24 @@ public:
   int init_mds_filter(ObMvccMdsFilter &mds_filter)
   { return mds_filter_.init(mds_filter); }
   void clear_mds_filter() { mds_filter_.reset(); }
+  // Truncate-tablet filter: enabled by callers that read a tablet whose
+  // truncate-tablet MDS has been applied.  All three fields move together;
+  // use the setter/clearer rather than touching the public members directly
+  // so they stay consistent.
+  void set_truncate_filter(const int64_t truncate_commit_version,
+                           const share::SCN truncate_commit_scn)
+  {
+    truncate_commit_version_ = truncate_commit_version;
+    truncate_commit_scn_ = truncate_commit_scn;
+    need_memtable_filter_after_truncate_tablet_ = truncate_commit_version > 0
+                                                  || truncate_commit_scn.is_valid();
+  }
+  void clear_truncate_filter()
+  {
+    truncate_commit_version_ = 0;
+    truncate_commit_scn_.reset();
+    need_memtable_filter_after_truncate_tablet_ = false;
+  }
   TO_STRING_KV(K_(type),
                K_(is_inited),
                K_(abs_lock_timeout_ts),
@@ -357,6 +381,12 @@ public: // NOTE: those field should only be accessed by txn relative routine
   // this was used for runtime metric
   int64_t handle_start_time_;
   ObMvccMdsFilter mds_filter_; // to record filter info on ObTableAccessContext
+  // Set when the tablet has been truncated via MDS.  When true, reads and
+  // dump must exclude data committed before truncate_commit_version_ and
+  // whose redo SCN < truncate_commit_scn_.
+  share::SCN truncate_commit_scn_;
+  int64_t truncate_commit_version_;
+  bool need_memtable_filter_after_truncate_tablet_;
 protected:
   int64_t lock_wait_start_ts_;
 private:

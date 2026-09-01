@@ -179,6 +179,12 @@ private:
                    storage::ObTablet *tablet,
                    memtable::ObMemtableMutatorIterator *mmi_ptr);
   int get_compat_mode_(const ObTabletID &tablet_id, lib::Worker::CompatMode &mode);
+  // For Oracle GTT (and other tablets that have ever been truncated), if this redo's
+  // log_ts_ns is strictly less than the tablet's truncate_commit_scn, the redo is
+  // logically truncated and should be skipped to avoid wasted memtable writes that
+  // would later be filtered out at read time.
+  // Returns OB_NO_NEED_UPDATE when the redo should be skipped.
+  int check_skip_replay_dml_for_truncate_(storage::ObTablet &tablet);
   bool can_replay() const;
 
   void rewrite_replay_retry_code_(int &ret_code);

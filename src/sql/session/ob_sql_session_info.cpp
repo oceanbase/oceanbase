@@ -35,6 +35,7 @@
 #include "pl/external_routine/ob_external_resource.h"
 #include "pl/external_routine/ob_java_udf_proxy.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
+#include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 #include "pl/external_routine/ob_java_udf.h"
 
 using namespace oceanbase::sql;
@@ -952,22 +953,16 @@ int ObSQLSessionInfo::close_all_ps_stmt()
 int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg &const_drop_table_arg)
 {
   int ret = OB_SUCCESS;
-  common::ObSqlString sql;
   common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
-  common::ObCommonSqlProxy *user_sql_proxy;
   common::ObOracleSqlProxy oracle_sql_proxy;
   ObSchemaGetterGuard schema_guard;
-  const ObDatabaseSchema *database_schema = NULL;
-  //ObSEArray<const ObSimpleTableSchemaV2 *, 512> table_schemas;
   obrpc::ObDropTableArg &drop_table_arg = const_cast<obrpc::ObDropTableArg &>(const_drop_table_arg);
   const share::schema::ObTableType table_type = drop_table_arg.table_type_;
   const uint64_t tenant_id = drop_table_arg.tenant_id_;
-  const ObTableSchema *table_schema = NULL;
-  user_sql_proxy = &oracle_sql_proxy;
+  int64_t sequence_for_gtt_v2 = 0;
+  common::ObSEArray<common::ObTabletID, 4> tablet_ids_for_seq_reset;
 
-  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-              tenant_id,
-              schema_guard))) {
+  if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("get schema guard failed.", K(ret), K(tenant_id));
   } else if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
@@ -977,25 +972,17 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
   } else if (TMP_TABLE_ORA_SESS == table_type || TMP_TABLE_ORA_TRX == table_type) {
     // atomic delete from oracle temporary table
     common::ObMySQLTransaction trans;
-    ObIArray<uint64_t> &table_ids = table_type == share::schema::TMP_TABLE_ORA_TRX ?
-          get_gtt_trans_scope_ids() : get_gtt_session_scope_ids();
-    const int64_t sequence_for_gtt_v2 = table_type == share::schema::TMP_TABLE_ORA_TRX ?
-          get_trans_gtt_v2_sequence() : get_session_gtt_v2_sequence();
-    if (!gtt_tablet_info_map_.is_empty()) {
-      const uint64_t session_id = get_sessid_for_table();
-      common::ObArray<uint64_t> tmp_table_ids;
-      if (OB_FAIL(gtt_tablet_info_map_.get_table_ids_by_session_id_and_sequence(session_id, sequence_for_gtt_v2, tmp_table_ids))) {
-        LOG_WARN("failed to get table ids by session id and sequence", K(ret), K(session_id), K(sequence_for_gtt_v2));
-      } else if (OB_FAIL(append_array_no_dup(table_ids, tmp_table_ids))) {
-        LOG_WARN("failed to append array", K(ret), K(tmp_table_ids), K(table_ids));
-      }
+    common::ObIArray<uint64_t> *table_ids = nullptr;
+    if (OB_FAIL(collect_oracle_temp_table_ids_(table_type, table_ids, sequence_for_gtt_v2))) {
+      LOG_WARN("failed to collect oracle temp table ids", K(ret), K(table_type));
     }
-    LOG_INFO("delete temp table", K(table_type), K(table_ids), K(sequence_for_gtt_v2));
+    LOG_INFO("delete temp table", K(table_type), KPC(table_ids), K(sequence_for_gtt_v2));
     if (FAILEDx(trans.start(sql_proxy, tenant_id))) {
       LOG_WARN("failed to begin transaction", K(ret), K(tenant_id));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
-      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_ids.at(i), table_schema))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_ids->count(); i++) {
+      const ObTableSchema *table_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_ids->at(i), table_schema))) {
         LOG_WARN("fail to get table schema", K(ret));
       } else if (OB_ISNULL(table_schema)) {
         //table may be dropped, ignore
@@ -1003,72 +990,28 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tenant_id not match", K(ret), K(tenant_id), "table_id", table_schema->get_table_id());
       } else if (table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()) {
-        const bool is_tmp_table_v2_index_table = table_schema->is_oracle_tmp_table_v2_index_table();
-        const share::schema::ObTableSchema *data_schema = nullptr;
-        if (is_tmp_table_v2_index_table) {
-          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema->get_data_table_id(), data_schema))) {
-            LOG_WARN("fail to get data table schema", K(ret));
-          } else if (OB_ISNULL(data_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("data table schema is null", K(ret));
-          }
-        } else {
-          data_schema = table_schema;
-        }
-        const bool is_trx_tmp_table_v2 = data_schema->is_oracle_trx_tmp_table_v2();
-        const int64_t sequence = is_trx_tmp_table_v2 ? get_trans_gtt_v2_sequence() : get_session_gtt_v2_sequence();
-        const bool need_skip = is_trx_tmp_table_v2 ^ (TMP_TABLE_ORA_TRX == table_type);
-        LOG_INFO("delete temp table", K(table_type), K(is_trx_tmp_table_v2), K(sequence), K(get_sessid_for_table()), K(need_skip), KPC(data_schema));
-        if (OB_FAIL(ret) || need_skip) {
-          // do nothing
-        } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *table_schema, sequence, get_sessid_for_table(),
-                                                     is_tmp_table_v2_index_table, trans))) {
-          LOG_WARN("failed to delete from oracle temporary table", K(ret), K(*table_schema), K(sequence), K(get_sessid_for_table()));
+        if (OB_FAIL(process_oracle_temp_table_v2_entry_(schema_guard, table_type, *table_schema, trans, tablet_ids_for_seq_reset))) {
+          LOG_WARN("failed to process oracle temp table v2 entry", K(ret));
         }
       } else if (((TMP_TABLE_ORA_SESS == table_type && table_schema->is_oracle_tmp_table())
                   || (TMP_TABLE_ORA_TRX == table_type && table_schema->is_oracle_trx_tmp_table()))
                   && table_schema->is_normal_schema()) {
-        database_schema = NULL;
-        if (OB_FAIL(schema_guard.get_database_schema(table_schema->get_tenant_id(),
-            table_schema->get_database_id(), database_schema))) {
-          LOG_WARN("failed to get database schema", K(ret));
-        } else if (OB_ISNULL(database_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("database schema is null", K(ret));
-        } else if (database_schema->is_in_recyclebin() || table_schema->is_in_recyclebin()) {
-          LOG_DEBUG("skip table schema in recyclebin", K(*table_schema));
-        } else {
-          const int64_t unique_id = table_type == share::schema::TMP_TABLE_ORA_TRX ?
-            get_gtt_trans_scope_unique_id() : get_gtt_session_scope_unique_id();
-          ret = sql.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE %s = %ld",
-                                database_schema->get_database_name_str().length(),
-                                database_schema->get_database_name_str().ptr(),
-                                table_schema->get_table_name_str().length(),
-                                table_schema->get_table_name_str().ptr(),
-                                OB_HIDDEN_SESSION_ID_COLUMN_NAME, unique_id);
-
-          if (OB_SUCC(ret)) {
-            int64_t affect_rows = 0;
-            int64_t cur_time = ObTimeUtility::current_time();
-            int64_t cur_timeout_backup = THIS_WORKER.get_timeout_ts();
-            THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
-            if (OB_FAIL(user_sql_proxy->write(tenant_id, sql.ptr(), affect_rows))) {
-              LOG_WARN("execute sql failed", K(ret), K(sql));
-            }
-            if (OB_SUCC(ret)) {
-              LOG_DEBUG("succeed to delete rows in oracle temporary table", K(sql), K(affect_rows));
-              //delete relation temp table stats.
-              int64_t affect_rows = 0;
-              if (OB_FAIL(ObOptStatManager::get_instance().delete_table_stat(tenant_id,
-                                                      table_schema->get_table_id(), affect_rows))) {
-                LOG_WARN("failed to delete table stats", K(ret));
-              }
-            }
-            LOG_INFO("delete rows in oracle temporary table", K(ret), K(affect_rows),
-                     "clean_time", ObTimeUtility::current_time() - cur_time, K(sql));
-            THIS_WORKER.set_timeout_ts(cur_timeout_backup);
-          }
+        if (OB_FAIL(delete_oracle_temp_table_v1_(oracle_sql_proxy, schema_guard, table_type, *table_schema))) {
+          LOG_WARN("failed to delete oracle temp table v1", K(ret));
         }
+      }
+    }
+
+    if (OB_SUCC(ret) && !tablet_ids_for_seq_reset.empty()) {
+      if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_update_sequence(
+              trans, tenant_id, tablet_ids_for_seq_reset, storage::OB_GTT_V2_TRX_TABLET_INACTIVE_SEQUENCE))) {
+        LOG_WARN("failed to reset sequence to sentinel after truncate", K(ret), K(tenant_id), K(tablet_ids_for_seq_reset));
+      }
+    }
+
+    if (OB_SUCC(ret) && TMP_TABLE_ORA_SESS == table_type && is_gtt_truncate_tablet_enabled_(tenant_id)) {
+      if (OB_FAIL(cleanup_inactive_trx_tablets_on_session_disconnect_(schema_guard, tenant_id, trans))) {
+        LOG_WARN("failed to cleanup inactive trx tablets on session disconnect", K(ret));
       }
     }
 
@@ -1077,7 +1020,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
       gen_gtt_trans_scope_unique_id();
       update_trans_gtt_v2_sequence();
       if (gtt_session_scope_ids_.count() == 0) {
-        if (OB_FAIL(set_session_temp_table_used(*this, false, false))) {
+        if (FAILEDx(set_session_temp_table_used(*this, false, false))) {
           LOG_WARN("fail to set session temp table unused", K(ret));
         }
       }
@@ -1089,6 +1032,172 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
       if (OB_TMP_FAIL(trans.end(is_commit))) {
         LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
         ret = is_commit ? tmp_ret : ret;
+      } else if (!is_commit || tablet_ids_for_seq_reset.empty()) {
+        // do nothing
+      } else if (OB_FAIL(gtt_tablet_info_map_.batch_update_tablet_sequences(
+                  get_sessid_for_table(),
+                  tablet_ids_for_seq_reset,
+                  sequence_for_gtt_v2,
+                  storage::OB_GTT_V2_TRX_TABLET_INACTIVE_SEQUENCE))) {
+        LOG_WARN("failed to update all tablet sequences", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::collect_oracle_temp_table_ids_(
+    const share::schema::ObTableType table_type,
+    common::ObIArray<uint64_t> *&table_ids,
+    int64_t &sequence_for_gtt_v2)
+{
+  int ret = OB_SUCCESS;
+  table_ids = (table_type == share::schema::TMP_TABLE_ORA_TRX)
+              ? &get_gtt_trans_scope_ids() : &get_gtt_session_scope_ids();
+  sequence_for_gtt_v2 = (table_type == share::schema::TMP_TABLE_ORA_TRX)
+                        ? get_trans_gtt_v2_sequence() : get_session_gtt_v2_sequence();
+  if (!gtt_tablet_info_map_.is_empty()) {
+    const uint64_t session_id = get_sessid_for_table();
+    common::ObArray<uint64_t> tmp_table_ids;
+    if (OB_FAIL(gtt_tablet_info_map_.get_table_ids_by_session_id_and_sequence(session_id, sequence_for_gtt_v2, tmp_table_ids))) {
+      LOG_WARN("failed to get table ids by session id and sequence", K(ret), K(session_id), K(sequence_for_gtt_v2));
+    } else if (OB_FAIL(append_array_no_dup(*table_ids, tmp_table_ids))) {
+      LOG_WARN("failed to append array", K(ret), K(tmp_table_ids), KPC(table_ids));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::process_oracle_temp_table_v2_entry_(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObTableType table_type,
+    const share::schema::ObTableSchema &table_schema,
+    common::ObMySQLTransaction &trans,
+    common::ObIArray<common::ObTabletID> &tablet_ids_for_seq_reset)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const bool is_tmp_table_v2_index_table = table_schema.is_oracle_tmp_table_v2_index_table();
+  const share::schema::ObTableSchema *data_schema = nullptr;
+  if (is_tmp_table_v2_index_table) {
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_schema.get_data_table_id(), data_schema))) {
+      LOG_WARN("fail to get data table schema", K(ret));
+    } else if (OB_ISNULL(data_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("data table schema is null", K(ret));
+    }
+  } else {
+    data_schema = &table_schema;
+  }
+  if (OB_SUCC(ret)) {
+    const bool is_trx_tmp_table_v2 = data_schema->is_oracle_trx_tmp_table_v2();
+    const int64_t sequence = is_trx_tmp_table_v2 ? get_trans_gtt_v2_sequence() : get_session_gtt_v2_sequence();
+    const bool need_skip = is_trx_tmp_table_v2 ^ (TMP_TABLE_ORA_TRX == table_type);
+    int64_t schema_version = OB_INVALID_VERSION;
+    LOG_INFO("delete temp table", K(table_type), K(is_trx_tmp_table_v2), K(sequence), K(get_sessid_for_table()), K(need_skip), KPC(data_schema));
+    if (need_skip) {
+      // do nothing
+    } else if (is_trx_tmp_table_v2 && TMP_TABLE_ORA_TRX == table_type && is_gtt_truncate_tablet_enabled_(tenant_id)) {
+      // Truncate path runs at commit-time only: drop_temp_tables() sets
+      // table_type to TMP_TABLE_ORA_TRX on commit and TMP_TABLE_ORA_SESS on
+      // disconnect, so disconnect always falls through to the delete-tablet branch.
+      if (get_is_deserialized()) {
+        // In remote execute scenarios, salve session don't truncate tablet.
+      } else if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema service is null", K(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.schema_service_->gen_new_schema_version(tenant_id, schema_version))) {
+        LOG_WARN("failed to generate schema version for truncate", K(ret), K(tenant_id));
+      } else if (OB_FAIL(truncate_oracle_temp_table_v2(schema_guard, table_schema, sequence, get_sessid_for_table(),
+                                                       is_tmp_table_v2_index_table, schema_version, trans,
+                                                       tablet_ids_for_seq_reset))) {
+        LOG_WARN("failed to truncate oracle temporary table", K(ret), K(table_schema), K(sequence), K(get_sessid_for_table()));
+      }
+    } else if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, table_schema, sequence, get_sessid_for_table(),
+                                                       is_tmp_table_v2_index_table, trans))) {
+      LOG_WARN("failed to delete from oracle temporary table", K(ret), K(table_schema), K(sequence), K(get_sessid_for_table()));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::delete_oracle_temp_table_v1_(
+    common::ObCommonSqlProxy &user_sql_proxy,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObTableType table_type,
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const ObDatabaseSchema *database_schema = NULL;
+  if (OB_FAIL(schema_guard.get_database_schema(table_schema.get_tenant_id(),
+                                               table_schema.get_database_id(), database_schema))) {
+    LOG_WARN("failed to get database schema", K(ret));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null", K(ret));
+  } else if (database_schema->is_in_recyclebin() || table_schema.is_in_recyclebin()) {
+    LOG_DEBUG("skip table schema in recyclebin", K(table_schema));
+  } else {
+    const int64_t unique_id = table_type == share::schema::TMP_TABLE_ORA_TRX ?
+        get_gtt_trans_scope_unique_id() : get_gtt_session_scope_unique_id();
+    common::ObSqlString sql;
+    ret = sql.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE %s = %ld",
+                          database_schema->get_database_name_str().length(),
+                          database_schema->get_database_name_str().ptr(),
+                          table_schema.get_table_name_str().length(),
+                          table_schema.get_table_name_str().ptr(),
+                          OB_HIDDEN_SESSION_ID_COLUMN_NAME, unique_id);
+    if (OB_SUCC(ret)) {
+      int64_t affect_rows = 0;
+      int64_t cur_time = ObTimeUtility::current_time();
+      int64_t cur_timeout_backup = THIS_WORKER.get_timeout_ts();
+      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + OB_MAX_USER_SPECIFIED_TIMEOUT);
+      if (OB_FAIL(user_sql_proxy.write(tenant_id, sql.ptr(), affect_rows))) {
+        LOG_WARN("execute sql failed", K(ret), K(sql));
+      }
+      if (OB_SUCC(ret)) {
+        LOG_DEBUG("succeed to delete rows in oracle temporary table", K(sql), K(affect_rows));
+        //delete relation temp table stats.
+        int64_t affect_rows = 0;
+        if (OB_FAIL(ObOptStatManager::get_instance().delete_table_stat(tenant_id,
+                                                table_schema.get_table_id(), affect_rows))) {
+          LOG_WARN("failed to delete table stats", K(ret));
+        }
+      }
+      LOG_INFO("delete rows in oracle temporary table", K(ret), K(affect_rows),
+               "clean_time", ObTimeUtility::current_time() - cur_time, K(sql));
+      THIS_WORKER.set_timeout_ts(cur_timeout_backup);
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::cleanup_inactive_trx_tablets_on_session_disconnect_(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<uint64_t, 4> trx_table_ids;
+  const uint64_t sess_id = get_sessid_for_table();
+  if (!gtt_tablet_info_map_.is_empty() && OB_FAIL(gtt_tablet_info_map_.get_table_ids_by_session_id_and_sequence(
+          sess_id, storage::OB_GTT_V2_TRX_TABLET_INACTIVE_SEQUENCE, trx_table_ids))) {
+    LOG_WARN("failed to get inactive trans table ids from map", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < trx_table_ids.count(); i++) {
+    const uint64_t table_id = trx_table_ids.at(i);
+    const share::schema::ObTableSchema *trx_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, trx_schema))) {
+      LOG_WARN("fail to get trans table schema", K(ret), K(table_id));
+    } else if (OB_ISNULL(trx_schema)) {
+      // table may be dropped during session lifetime, skip
+      LOG_INFO("trans table schema is null, may be dropped", K(table_id));
+    } else  {
+      const bool is_tmp_table_v2_index_table = trx_schema->is_oracle_tmp_table_v2_index_table();
+      if (OB_FAIL(delete_from_oracle_temp_table_v2(schema_guard, *trx_schema, storage::OB_GTT_V2_TRX_TABLET_INACTIVE_SEQUENCE,
+         sess_id, is_tmp_table_v2_index_table, trans))) {
+        LOG_WARN("failed to delete trans-scope tablet during session cleanup", K(ret), K(table_id));
       }
     }
   }
@@ -1172,6 +1281,105 @@ int ObSQLSessionInfo::delete_from_oracle_temp_table_v2(
   return ret;
 }
 
+int ObSQLSessionInfo::truncate_oracle_temp_table_v2(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObTableSchema &table_schema,
+    const int64_t sequence,
+    const uint64_t session_id,
+    const bool is_index_table,
+    const int64_t schema_version,
+    common::ObMySQLTransaction &trans,
+    common::ObIArray<common::ObTabletID> &tablet_ids_for_seq_reset)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  ObSessionTabletInfoKey info_key(table_schema.get_table_id(), sequence, session_id);
+  ObSessionTabletInfo session_tablet_info;
+  if (false == trans.is_started()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transaction is not started", K(ret));
+  } else if (OB_FAIL(gtt_tablet_info_map_.get_session_tablet(info_key, session_tablet_info))) {
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_WARN("failed to get session tablet", K(ret), K(info_key));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_INFO("session tablet not exist, skip truncate", K(ret), K(info_key));
+    }
+  } else if (common::is_contain(tablet_ids_for_seq_reset, session_tablet_info.get_tablet_id())) {
+    LOG_INFO("this session tablet is already processed, skip it", K(ret), K(session_tablet_info), K(tablet_ids_for_seq_reset));
+  } else {
+    storage::ObSessionTabletTruncateHelper truncate_helper(tenant_id, session_tablet_info, trans, schema_version);
+    if (OB_FAIL(truncate_helper.do_work())) {
+      LOG_WARN("failed to truncate session tablet", K(ret), K(session_tablet_info));
+    } else if (OB_FAIL(tablet_ids_for_seq_reset.push_back(session_tablet_info.get_tablet_id()))) {
+      LOG_WARN("failed to push back tablet id for sequence reset", K(ret), K(session_tablet_info));
+    } else {
+      LOG_INFO("[TRUNCATE TABLET] succeed to truncate oracle temp table v2", K(tenant_id), K(session_tablet_info));
+    }
+  }
+  if (OB_SUCC(ret) && !is_index_table) {
+    if (OB_FAIL(truncate_aux_tables_for_oracle_temp_v2_(schema_guard, table_schema, sequence, session_id,
+                                                        schema_version, trans, tablet_ids_for_seq_reset))) {
+      LOG_WARN("failed to truncate aux tables for oracle temp table", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::truncate_aux_tables_for_oracle_temp_v2_(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObTableSchema &table_schema,
+    const int64_t sequence,
+    const uint64_t session_id,
+    const int64_t schema_version,
+    common::ObMySQLTransaction &trans,
+    common::ObIArray<common::ObTabletID> &tablet_ids_for_seq_reset)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("fail to get simple index infos", K(ret), K(table_schema));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+      const share::schema::ObTableSchema *index_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+        LOG_WARN("failed to get index table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index table schema is null", K(ret), K(simple_index_infos.at(i).table_id_));
+      } else if (OB_FAIL(truncate_oracle_temp_table_v2(schema_guard, *index_schema, sequence, session_id,
+                                                       true, schema_version, trans, tablet_ids_for_seq_reset))) {
+        LOG_WARN("failed to truncate oracle temporary table index", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && table_schema.has_lob_aux_table()) {
+      const uint64_t aux_lob_meta_tid = table_schema.get_aux_lob_meta_tid();
+      const uint64_t aux_lob_piece_tid = table_schema.get_aux_lob_piece_tid();
+      const share::schema::ObTableSchema *aux_lob_meta_schema = nullptr;
+      const share::schema::ObTableSchema *aux_lob_piece_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, aux_lob_meta_tid, aux_lob_meta_schema))) {
+        LOG_WARN("failed to get aux lob meta table schema", K(ret), K(tenant_id), K(aux_lob_meta_tid));
+      } else if (OB_ISNULL(aux_lob_meta_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aux lob meta table schema is null", K(ret), K(aux_lob_meta_tid));
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, aux_lob_piece_tid, aux_lob_piece_schema))) {
+        LOG_WARN("failed to get aux lob piece table schema", K(ret), K(tenant_id), K(aux_lob_piece_tid));
+      } else if (OB_ISNULL(aux_lob_piece_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("aux lob piece table schema is null", K(ret), K(aux_lob_piece_tid));
+      } else if (OB_FAIL(truncate_oracle_temp_table_v2(schema_guard, *aux_lob_meta_schema, sequence, session_id,
+                                                       true, schema_version, trans, tablet_ids_for_seq_reset))) {
+        LOG_WARN("failed to truncate oracle temporary table lob meta", K(ret));
+      } else if (OB_FAIL(truncate_oracle_temp_table_v2(schema_guard, *aux_lob_piece_schema, sequence, session_id,
+                                                       true, schema_version, trans, tablet_ids_for_seq_reset))) {
+        LOG_WARN("failed to truncate oracle temporary table lob piece", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 //mysql租户: 如果session创建过临时表, 直连模式: session断开时drop temp table;
 //oracle租户, commit时为了清空数据也会调用此接口, 但仅清除事务级别的临时表;
 //            session断开时则清理掉事务级和会话级的临时表;
@@ -1185,13 +1393,20 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
   bool ac = false;
   bool is_sess_disconn = is_disconn;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  // Inner/job sessions may clear job_info before destroy and skip the normal
+  // temp-table flags after commit; still enter to cleanup leftover inactive
+  // (sequence=0) trx GTT tablets on session disconnect.
+  const bool need_cleanup_inactive_trx_session_tablet =
+    is_disconn &&
+    gtt_tablet_info_map_.has_inactive_trx_session_tablet();
   if (OB_FAIL(get_autocommit(ac))) {
     LOG_WARN("get autocommit error", K(ret), K(ac));
-  } else if ((!(is_inner() && !is_user_session()) || get_job_info() != nullptr)
-             && (get_has_temp_table_flag()
+  } else if ((((!(is_inner() && !is_user_session()) || get_job_info() != nullptr)
+                && (get_has_temp_table_flag()
                  || has_accessed_session_level_temp_table()
                  || has_tx_level_temp_table()
-                 || is_xa_trans)
+                 || is_xa_trans))
+                || need_cleanup_inactive_trx_session_tablet)
              && (!get_is_deserialized() || ac)) {
     bool need_drop_temp_table = false;
     //mysql: 1. 直连 & sess 断开时  2. reset connection
@@ -4836,6 +5051,13 @@ uint64_t ObSQLSessionInfo::get_min_data_version_of_init_sess()
     ATOMIC_VCASx(&min_data_version_of_init_sess_, 0, data_version, LA_ATOMIC_ID);
   }
   return ATOMIC_LOAD(&min_data_version_of_init_sess_);
+}
+
+bool ObSQLSessionInfo::is_gtt_truncate_tablet_enabled_(const uint64_t tenant_id)
+{
+  // Delegated to storage::ObSessionTabletInfoMap so the SQL-side commit
+  // path and the storage-side reuse path read the same gate.
+  return storage::ObSessionTabletInfoMap::is_gtt_truncate_tablet_enabled(tenant_id);
 }
 
 int64_t ObSQLSessionInfo::get_trans_gtt_v2_sequence()

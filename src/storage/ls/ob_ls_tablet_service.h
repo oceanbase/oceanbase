@@ -82,6 +82,7 @@ struct ObTruncateTabletArg;
 namespace storage
 {
 class ObLS;
+struct ObTabletTruncateMdsArg;
 struct ObMetaDiskAddr;
 class ObRowReshape;
 class ObDMLRunningCtx;
@@ -300,6 +301,11 @@ public:
       const ObTabletID &tablet_id,
       ObTabletTransferInfo &tablet_transfer_info);
 
+  /// @brief Create a memtable for the specified tablet.
+  /// @retval OB_NOT_THE_OBJECT The tablet object can no longer be used for CAS, typically because
+  /// a truncate tablet transaction commits concurrently with memtable creation. This error is
+  /// RETRYABLE. The caller may convert it to OB_EAGAIN according to its retry policy and should
+  /// reacquire the latest tablet before retrying.
   int create_memtable(const common::ObTabletID &tablet_id, CreateMemtableArg &arg);
   int get_read_tables(
       const common::ObTabletID tablet_id,
@@ -347,6 +353,32 @@ public:
   int replay_set_truncate_info(
       const share::SCN &scn,
       const rootserver::ObTruncateTabletArg &arg,
+      mds::MdsCtx &ctx);
+
+  // new oracle GTT truncate
+  int start_tablet_truncate_mds(
+      const common::ObTabletID &tablet_id,
+      const storage::ObCreateTabletSchema &table_schema,
+      const int64_t schema_version,
+      const bool is_replay,
+      const share::SCN &replay_scn,
+      bool &need_skip_replay,
+      bool &need_replay_mds_only);
+  int commit_tablet_truncate_mds(
+      const common::ObTabletID &tablet_id,
+      const share::SCN &truncate_commit_scn);
+  int end_tablet_truncate_mds(
+      const common::ObTabletID &tablet_id,
+      const bool is_commit);
+  int set_truncate_mds_data(
+      const ObTabletID &tablet_id,
+      const ObTabletTruncateMdsUserData &truncate_data,
+      mds::MdsCtx &ctx,
+      const int64_t timeout_us);
+  int replay_set_truncate_mds_data(
+      const ObTabletID &tablet_id,
+      const share::SCN &scn,
+      const ObTabletTruncateMdsUserData &truncate_data,
       mds::MdsCtx &ctx);
 
   // DAS interface

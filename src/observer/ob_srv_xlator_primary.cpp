@@ -94,6 +94,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcKillSessionP, gctx_);
   // drop oracle gtt v2 session tablet across observers
   RPC_PROCESSOR(storage::ObRpcDropGTTV2SessionTabletP, gctx_);
+  RPC_PROCESSOR(storage::ObRpcBatchDropGTTV2SessionTabletP, gctx_);
 
   // BatchRpc
   RPC_PROCESSOR(ObBatchP);

@@ -860,6 +860,9 @@ int ObMemtableMultiVersionScanIterator::switch_to_committed_scan_state()
     scan_state_ = SCAN_COMPACT_ROW;
     if (OB_FAIL(value_iter_->init_multi_version_iter())) {
       LOG_WARN("Fail to init multi version iter", K(ret), K_(scan_state), KPC_(value_iter));
+    } else if (value_iter_->is_compact_iter_end()) {
+      // The truncate filter may remove the whole committed tail during init.
+      scan_state_ = SCAN_END;
     }
   } else {
     scan_state_ = SCAN_END;

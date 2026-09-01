@@ -118,19 +118,26 @@ TEST_F(TestMediumListChecker, test_validate_medium_info_list)
     ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
 
     ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, medium_compat_version, 10/*last_medium_scn_of_first_medium_info*/));
-    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
+    ret = ObMediumListChecker::validate_medium_info_list(
+        extra_info, &array, 100/*last_major_snapshot*/, 0/*truncate_commit_version*/);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    ret = ObMediumListChecker::validate_medium_info_list(
+        extra_info, &array, 100/*last_major_snapshot*/, 400/*truncate_commit_version*/);
+    ASSERT_EQ(OB_SUCCESS, ret);
 
     array.reset();
     ASSERT_EQ(OB_SUCCESS, construct_array("200, 400, 500", array, medium_compat_version, 100/*last_medium_scn_of_first_medium_info*/));
-    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 50/*last_major_snapshot*/);
+    ret = ObMediumListChecker::validate_medium_info_list(
+        extra_info, &array, 50/*last_major_snapshot*/, 0/*truncate_commit_version*/);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
-    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
+    ret = ObMediumListChecker::validate_medium_info_list(
+        extra_info, &array, 100/*last_major_snapshot*/, 0/*truncate_commit_version*/);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     extra_info.last_medium_scn_ = 1000;
-    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 1000/*last_major_snapshot*/);
+    ret = ObMediumListChecker::validate_medium_info_list(
+        extra_info, &array, 1000/*last_major_snapshot*/, 0/*truncate_commit_version*/);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     // push item without clear array
@@ -146,19 +153,28 @@ TEST_F(TestMediumListChecker, test_check_extra_info)
   ObExtraMediumInfo extra_info;
 
   extra_info.last_medium_scn_ = 0;
-  ret = ObMediumListChecker::check_extra_info(extra_info, 50/*last_major_snapshot*/);
+  ret = ObMediumListChecker::check_extra_info(extra_info, 50/*last_major_snapshot*/, 0/*truncate_commit_version*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   extra_info.last_medium_scn_ = 100;
-  ret = ObMediumListChecker::check_extra_info(extra_info, 0/*last_major_snapshot*/);
+  ret = ObMediumListChecker::check_extra_info(extra_info, 0/*last_major_snapshot*/, 0/*truncate_commit_version*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   extra_info.last_medium_scn_ = 100;
-  ret = ObMediumListChecker::check_extra_info(extra_info, 50/*last_major_snapshot*/);
+  ret = ObMediumListChecker::check_extra_info(extra_info, 50/*last_major_snapshot*/, 0/*truncate_commit_version*/);
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+
+  // extra info generated before tablet truncate, skip check
+  extra_info.last_medium_scn_ = 100;
+  ret = ObMediumListChecker::check_extra_info(extra_info, 50/*last_major_snapshot*/, 100/*truncate_commit_version*/);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  extra_info.last_medium_scn_ = 100;
+  ret = ObMediumListChecker::check_extra_info(extra_info, 50/*last_major_snapshot*/, 99/*truncate_commit_version*/);
   ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
   extra_info.last_medium_scn_ = 100;
-  ret = ObMediumListChecker::check_extra_info(extra_info, 100/*last_major_snapshot*/);
+  ret = ObMediumListChecker::check_extra_info(extra_info, 100/*last_major_snapshot*/, 0/*truncate_commit_version*/);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
@@ -173,15 +189,24 @@ TEST_F(TestMediumListChecker, test_check_next_schedule_medium)
     medium_info.medium_snapshot_ = 130;
     medium_info.last_medium_snapshot_ = 100;
 
-    ret = ObMediumListChecker::check_next_schedule_medium(medium_info, 100/*last_major_snapshot*/);
+    ret = ObMediumListChecker::check_next_schedule_medium(
+        medium_info, 100/*last_major_snapshot*/, 0/*truncate_commit_version*/);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ret = ObMediumListChecker::check_next_schedule_medium(medium_info, 120/*last_major_snapshot*/);
+    ret = ObMediumListChecker::check_next_schedule_medium(
+        medium_info, 120/*last_major_snapshot*/, 0/*truncate_commit_version*/);
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    ret = ObMediumListChecker::check_next_schedule_medium(
+        medium_info, 120/*last_major_snapshot*/, 100/*truncate_commit_version*/);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObMediumListChecker::check_next_schedule_medium(
+        medium_info, 120/*last_major_snapshot*/, 99/*truncate_commit_version*/);
     ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
     // medium from different cluster
     medium_info.cluster_id_ = OTHER_CLUSTER_ID;
-    ret = ObMediumListChecker::check_next_schedule_medium(medium_info, 50/*last_major_snapshot*/);
+    ret = ObMediumListChecker::check_next_schedule_medium(
+        medium_info, 50/*last_major_snapshot*/, 0/*truncate_commit_version*/);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 }
@@ -195,15 +220,28 @@ TEST_F(TestMediumListChecker, test_filter_finish_medium_info)
     ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
     ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, medium_compat_version));
     int64_t next_medium_info_idx = 0;
-    ret = ObMediumListChecker::filter_finish_medium_info(array, 100, next_medium_info_idx);
+    ret = ObMediumListChecker::filter_finish_medium_info(
+        array, 100, 0/*truncate_commit_version*/, next_medium_info_idx);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(next_medium_info_idx, 0);
 
-    ret = ObMediumListChecker::filter_finish_medium_info(array, 500, next_medium_info_idx);
+    ret = ObMediumListChecker::filter_finish_medium_info(
+        array, 100, 300/*truncate_commit_version*/, next_medium_info_idx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(next_medium_info_idx, 1);
+
+    ret = ObMediumListChecker::filter_finish_medium_info(
+        array, 100, 500/*truncate_commit_version*/, next_medium_info_idx);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(next_medium_info_idx, 3);
 
-    ret = ObMediumListChecker::filter_finish_medium_info(array, 400, next_medium_info_idx);
+    ret = ObMediumListChecker::filter_finish_medium_info(
+        array, 500, 0/*truncate_commit_version*/, next_medium_info_idx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(next_medium_info_idx, 3);
+
+    ret = ObMediumListChecker::filter_finish_medium_info(
+        array, 400, 0/*truncate_commit_version*/, next_medium_info_idx);
     ASSERT_EQ(OB_SUCCESS, ret);
     ASSERT_EQ(next_medium_info_idx, 2);
   }

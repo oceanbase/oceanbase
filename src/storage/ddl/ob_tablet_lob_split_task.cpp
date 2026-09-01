@@ -2155,7 +2155,7 @@ int ObTabletLobSplitUtil::open_rowscan_iters(const share::ObSplitSSTableType &sp
         ObSSTable *sst = static_cast<ObSSTable*>(table);
         // preprare row scan iter
         if (OB_SUCC(ret)) {
-          ObSplitScanParam scan_param(table_id, *tablet, query_range, main_table_storage_schema);
+          ObSplitScanParam scan_param(table_id, tablet_handle, query_range, main_table_storage_schema);
           ObRowScan *new_scanner = nullptr;
           void* buff = allocator.alloc(sizeof(ObRowScan));
           if (OB_ISNULL(buff)) {
@@ -2239,7 +2239,7 @@ int ObTabletLobSplitUtil::open_uncommitted_scan_iters(ObLobSplitParam *param,
         } else if (OB_FAIL(write_sstable_ctx_array.push_back(write_sstable_ctx))) {
           LOG_WARN("push back write sstable ctx failed", K(ret));
         } else {
-          ObSplitScanParam scan_param(table_id, *tablet, query_range, *lob_meta_storage_schema);
+          ObSplitScanParam scan_param(table_id, tablet_handle, query_range, *lob_meta_storage_schema);
           ObUncommittedRowScan *new_scanner = nullptr;
           void *buff = ctx->allocator_.alloc(sizeof(ObUncommittedRowScan));
           if (OB_ISNULL(buff)) {
@@ -2343,7 +2343,7 @@ int ObTabletLobSplitUtil::open_snapshot_scan_iters(ObLobSplitParam *param,
     } else if (OB_FAIL(aux_lob_meta_schema.get_store_column_ids(col_descs))) {
       LOG_WARN("failed to get store column ids", K(ret));
     } else {
-      ObSplitScanParam scan_param(table_id, *tablet, query_range, *lob_meta_storage_schema);
+      ObSplitScanParam scan_param(table_id, tablet_handle, query_range, *lob_meta_storage_schema);
       ObSnapshotRowScan *new_scanner = nullptr;
       void *buff = ctx->allocator_.alloc(sizeof(ObSnapshotRowScan));
       if (OB_ISNULL(buff)) {

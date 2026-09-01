@@ -11,6 +11,7 @@
  */
 
 #include "ob_mvcc_row.h"
+#include "ob_mvcc_iterator.h"
 #include "storage/memtable/ob_row_compactor.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "storage/tx/ob_trans_part_ctx.h"
@@ -828,6 +829,8 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   if (ctx.get_mds_filter().is_valid() && OB_FAIL(row_filter.init())) {
     TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.get_mds_filter()));
   }
+  ObMemtableTruncateFilter truncate_filter(ctx.mvcc_acc_ctx_.truncate_commit_version_,
+                                           ctx.mvcc_acc_ctx_.truncate_commit_scn_);
   while (OB_SUCC(ret) && need_retry) {
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so we set node to be the new head
@@ -859,8 +862,11 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         bool complete = true;
-        bool filtered = false;
-        if (iter->is_committed()
+        bool filtered = ctx.mvcc_acc_ctx_.need_memtable_filter_after_truncate_tablet_
+                        && truncate_filter.is_valid()
+                        && truncate_filter.is_truncated(*iter);
+        if (!filtered
+            && iter->is_committed()
             && row_filter.is_inited()
             && OB_FAIL(row_filter.read_row_and_check(*iter, complete, filtered))) {
           TRANS_LOG(WARN, "failed to check trans node filtered", KR(ret), K(ctx.mvcc_acc_ctx_.mds_filter_), KPC(iter));
@@ -1116,6 +1122,8 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
   if (ctx.mds_filter_.is_valid() && OB_FAIL(row_filter.init())) {
     TRANS_LOG(WARN, "failed to init row filter", KR(ret), K(ctx.mds_filter_));
   }
+  ObMemtableTruncateFilter truncate_filter(ctx.truncate_commit_version_,
+                                           ctx.truncate_commit_scn_);
   while (OB_SUCC(ret) && need_retry) {
     if (OB_ISNULL(iter)) {
       // Case 1: head is empty, so node currently is not be locked
@@ -1136,8 +1144,11 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so node currently is not be locked
         bool complete = true;
-        bool filtered = false;
-        if (iter->is_committed()
+        bool filtered = ctx.need_memtable_filter_after_truncate_tablet_
+                        && truncate_filter.is_valid()
+                        && truncate_filter.is_truncated(*iter);
+        if (!filtered
+            && iter->is_committed()
             && row_filter.is_inited()
             && OB_FAIL(row_filter.read_row_and_check(*iter, complete, filtered))) {
           TRANS_LOG(WARN, "failed to check trans node filtered", KR(ret), K(ctx.mds_filter_), KPC(iter));

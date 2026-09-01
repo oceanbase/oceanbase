@@ -1278,7 +1278,7 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
       LOG_WARN("unexpected error", K(ret));
     }
   } else {
-    ObSQLSessionInfo *my_session = NULL;
+    ObSQLSessionInfo *my_session = ctx.get_my_session();
     obrpc::ObAlterTableRes res;
     bool is_sync_ddl_user = false;
     bool need_modify_fk_validate = false;
@@ -1287,23 +1287,25 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
     bool is_oracle_mode = false;
     const int64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
     ObArenaAllocator allocator(ObModIds::OB_SQL_EXECUTOR);
-    if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+    if (NULL == my_session) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get my session", K(ret), K(ctx));
+    // need to set seesion_id_ before check_alter_part_key since it get a new guard and get session_id_
+    } else if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
       LOG_WARN("get first statement failed", K(ret));
-    } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(tenant_id,
-        alter_table_arg.alter_table_schema_.get_origin_database_name(), alter_table_arg.alter_table_schema_.get_origin_table_name(), &alter_table_arg))) {
-      LOG_WARN("table has active session or error checking", KR(ret), K(alter_table_arg.alter_table_schema_));
+    } else if (OB_FAIL(storage::ObSessionTabletDeleteHelper::cleanup_inactive_trx_session_tablets_and_do_check(
+                tenant_id,
+                alter_table_arg.alter_table_schema_.get_origin_database_name(),
+                alter_table_arg.alter_table_schema_.get_origin_table_name(),
+                &alter_table_arg))) {
+      LOG_WARN("failed to cleanup inactive trx session tablets and do check", K(ret), K(alter_table_arg));
     } else {
       alter_table_arg.ddl_stmt_str_ = first_stmt;
       exchange_partition_arg.ddl_stmt_str_ = first_stmt;
-      my_session = ctx.get_my_session();
-      if (NULL == my_session) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get my session", K(ret), K(ctx));
-      // need to set seesion_id_ before check_alter_part_key since it get a new guard and get session_id_
-      } else if (OB_INVALID_ID == alter_table_arg.session_id_
-                 && 0 != my_session->get_sessid_for_table()
-                 && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
-                 //impossible
+      if (OB_INVALID_ID == alter_table_arg.session_id_
+          && 0 != my_session->get_sessid_for_table()
+          && FALSE_IT(alter_table_arg.session_id_ = my_session->get_sessid_for_table())) {
+        //impossible
       } else if (FALSE_IT(alter_table_arg.sql_mode_ = my_session->get_sql_mode())) {
         // do nothing
       } else if (FALSE_IT(alter_table_arg.parallelism_ = stmt.get_parallelism())) {
@@ -2374,8 +2376,11 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
       if (OB_SUCC(ret) && lib::Worker::CompatMode::ORACLE == tmp_arg.compat_mode_ ) {
         ARRAY_FOREACH(drop_table_arg.tables_, idx) {
           const ObTableItem &table_item = drop_table_arg.tables_.at(idx);
-          if (OB_FAIL(storage::ObSessionTabletGCHelper::is_table_has_active_session(drop_table_arg.tenant_id_, table_item.database_name_, table_item.table_name_))) {
-            LOG_WARN("table has active session or error checking", KR(ret), K(drop_table_arg), K(table_item));
+          if (OB_FAIL(storage::ObSessionTabletDeleteHelper::cleanup_inactive_trx_session_tablets_and_do_check(
+                drop_table_arg.tenant_id_,
+                table_item.database_name_,
+                table_item.table_name_))) {
+            LOG_WARN("failed to cleanup inactive trx session tablets and do check", K(ret), K(drop_table_arg), K(table_item));
           }
         }
       }
@@ -2609,10 +2614,10 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
                                                 K(res));
         }
       }
-    } else if (stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_TRX
-            || stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_TRX_V2) {
+    } else if (stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_TRX) {
       //do nothing
-    } else if (stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_SESS_V2) {
+    } else if (stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_SESS_V2
+               || stmt.get_oracle_temp_table_type() == share::schema::TMP_TABLE_ORA_TRX_V2) {
       const uint64_t tenant_id = truncate_table_arg.tenant_id_;
       const uint64_t table_id = truncate_table_arg.table_id_;
       if (OB_FAIL(storage::ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(

@@ -46,6 +46,10 @@ namespace share
 class ObLSID;
 struct ObTabletAutoincInterval;
 struct ObTabletReplicaChecksumItem;
+namespace schema
+{
+class ObTableSchema;
+}
 }
 
 namespace logservice
@@ -106,6 +110,7 @@ class ObMdsMiniMergeOperator;
 struct ObTabletDirectLoadInsertParam;
 struct ObTruncateInfoArray;
 class ObSSTabletTableStoreMetaInfo;
+class ObSSTableTruncateFilter;
 
 struct ObTableStoreCache
 {
@@ -203,6 +208,14 @@ public:
   int64_t dec_ref();
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_cnt_); }
   int64_t get_wash_score() const { return ATOMIC_LOAD(&wash_score_); }
+  bool not_allow_read_due_to_truncate() const
+  {
+    return ATOMIC_LOAD(&not_allow_read_due_to_truncate_);
+  }
+  void set_not_allow_read_due_to_truncate(const bool not_allow_read)
+  {
+    ATOMIC_STORE(&not_allow_read_due_to_truncate_, not_allow_read);
+  }
   int get_rec_log_scn(share::SCN &rec_scn, bool &is_frozen_memtable);
   int get_max_sync_medium_scn(int64_t &max_medium_scn) const;
   inline int64_t get_last_major_snapshot_version() const { return table_store_cache_.last_major_snapshot_version_; }
@@ -253,7 +266,8 @@ public:
   int init_for_merge(
       common::ObArenaAllocator &allocator,
       const ObUpdateTableStoreParam &param,
-      const ObTablet &old_tablet);
+      const ObTablet &old_tablet,
+      const ObSSTableTruncateFilter &sstable_filter);
 #ifdef OB_BUILD_SHARED_STORAGE
   int init_for_shared_storge_first_creation(
       common::ObArenaAllocator &allocator,
@@ -285,7 +299,8 @@ public:
   int init_for_sstable_replace(
       common::ObArenaAllocator &allocator,
       const ObBatchUpdateTableStoreParam &param,
-      const ObTablet &old_tablet);
+      const ObTablet &old_tablet,
+      const ObSSTableTruncateFilter *sstable_filter);
   // update medium compaction info mgr and build new tablet
   int init_with_update_medium_info(
       common::ObArenaAllocator &allocator,
@@ -323,6 +338,13 @@ public:
   int init_empty_shell(
       ObArenaAllocator &allocator,
       const ObTablet &old_tablet);
+  // for new oracle GTT v2 truncate
+  int init_for_truncate(
+      const ObTablet &old_tablet,
+      const storage::ObCreateTabletSchema &table_schema,
+      const int64_t schema_version,
+      const bool need_generate_cs_replica_cg_array,
+      const bool is_replay);
 
   bool is_valid() const;
   // refresh memtable and update tablet_addr_ and table_store_addr_ sequence, only used by slog ckpt
@@ -363,6 +385,7 @@ public:
   ObTablet *get_next_tablet() { return next_tablet_; }
   ObArenaAllocator *get_allocator() const { return allocator_; }
   bool is_empty_shell() const;
+  bool need_memtable_filter_after_truncate_tablet() const { return tablet_meta_.need_memtable_filter_after_truncate_tablet_; }
   // major merge or medium merge call
   bool is_data_complete() const;
   int get_ready_for_read_param(ObReadyForReadParam &parm) const;
@@ -694,6 +717,26 @@ public:
       const ObTruncateInfoKey &key,
       const ObTruncateInfo &value,
       mds::MdsCtx &ctx);
+  // new oracle GTT truncate
+  int set_truncate_mds_data(
+      const ObTabletTruncateMdsUserData &truncate_data,
+      mds::MdsCtx &ctx,
+      const int64_t lock_timeout_us);
+  int replay_set_truncate_mds_data(
+      const share::SCN &scn,
+      const ObTabletTruncateMdsUserData &truncate_data,
+      mds::MdsCtx &ctx);
+  int get_tablet_truncate_scn_and_version(
+      share::SCN &truncate_scn,
+      int64_t &truncate_version);
+
+  /// @param is_mds_merge: if true, return a dummy filter to save the overhead
+  ///                      of querying mds (mds sstables are never filtered);
+  ///                      if false, return a filter initialized with the
+  ///                      tablet's truncate commit scn and version.
+  int get_tablet_sstable_truncate_filter(
+      const bool is_mds_merge,
+      ObSSTableTruncateFilter &filter);
   int set_frozen_for_all_memtables();
 
   // different from the is_valid() function
@@ -835,6 +878,8 @@ private:
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const bool with_major);
+  int try_update_memtable_filter_flag(
+      const ObSSTableTruncateFilter &sstable_filter);
 #ifdef OB_BUILD_SHARED_STORAGE
   int try_update_min_ss_tablet_version(const ObUpdateTableStoreParam &param);
 #endif // OB_BUILD_SHARED_STORAGE
@@ -843,6 +888,10 @@ private:
       const int64_t table_version_for_read,
       const int64_t data_max_schema_version,
       const uint64_t table_id);
+  int build_table_store_for_truncate_(
+      const ObTablet &old_tablet,
+      const ObStorageSchema &storage_schema,
+      ObTabletTableStore &new_table_store);
 
   static int prepare_memtable(
       ObRelativeTable &relative_table,
@@ -906,6 +955,9 @@ private:
   int allow_to_read_();
 
   int check_medium_list() const;
+  int get_tablet_truncate_scn_and_version_bypass_cache_(
+      share::SCN &truncate_scn,
+      int64_t &truncate_version) const;
   int check_sstable_column_checksum() const;
   int check_no_backup_data() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
@@ -914,9 +966,6 @@ private:
   int inner_get_mds_table(
       mds::MdsTableHandle &mds_table,
       bool not_exist_create = false) const;
-  int validate_medium_info_list(
-      const int64_t finish_medium_scn,
-      const ObTabletMdsData &mds_data) const;
   int read_medium_array(
       common::ObArenaAllocator &allocator,
       common::ObIArray<compaction::ObMediumCompactionInfo*> &medium_info_array) const;
@@ -1093,6 +1142,7 @@ private:
                                                              // size: 8B, alignment: 8B
   ObTabletStatusCache tablet_status_cache_;                  // size: 24B, alignment: 8B
   ObDDLInfoCache ddl_data_cache_;                            // size: 24B, alignment: 8B
+  ObTabletTruncateCache tablet_truncate_cache_;              // size: 16B, alignment: 8B
   ObTruncateInfoCache truncate_info_cache_;                  // size: 8B, alignment: 8B
   ObTableStoreCache table_store_cache_; // no need to serialize, should be initialized after table store is initialized.
                                                              // size: 48B, alignment: 8B
@@ -1102,6 +1152,7 @@ private:
   bool gc_occupy_flag_;                                      // size: 4B, alignment: 1B
   bool hold_ref_cnt_;                                        // size: 4B, alignment: 1B
   bool is_inited_;                                           // size: 4B, alignment: 1B
+  bool not_allow_read_due_to_truncate_;                      // pure in-memory flag
   const bool is_external_tablet_;                                  // size: 4B, alignment: 1B
 };
 
@@ -1146,7 +1197,7 @@ inline bool ObTablet::is_snapshot_not_advance(const ObStorageSnapshotInfo &snaps
 
 inline int ObTablet::allow_to_read_()
 {
-  return tablet_meta_.ha_status_.check_allow_read() ? common::OB_SUCCESS : common::OB_REPLICA_NOT_READABLE;
+  return (!tablet_meta_.ha_status_.check_allow_read() || not_allow_read_due_to_truncate()) ? common::OB_REPLICA_NOT_READABLE : OB_SUCCESS;
 }
 
 inline void ObTablet::update_wash_score(const int64_t score)

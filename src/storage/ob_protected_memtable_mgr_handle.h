@@ -113,8 +113,10 @@ public:
   int reset();
   TO_STRING_KV(K(memtable_mgr_handle_));
 
-  int release_memtables_and_try_reset_memtable_mgr_handle(const ObTabletID &tablet_id,
+  int release_memtables_and_try_reset_memtable_mgr_handle(
+      const ObTabletID &tablet_id,
       const share::SCN &scn);
+
   bool has_active_memtable()
   {
     bool ret = false;
@@ -164,7 +166,6 @@ public:
   DELEGATE_FOR_MEMTABLE_MGR(get_last_frozen_memtable, false);
   DELEGATE_FOR_MEMTABLE_MGR(get_memtable_for_replay, false);
   DELEGATE_FOR_MEMTABLE_MGR(get_direct_load_memtables_for_write, true);
-
   DELEGATE_FOR_MEMTABLE_MGR_WITH_CREATE(create_memtable);
 
 private:

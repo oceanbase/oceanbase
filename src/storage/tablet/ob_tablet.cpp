@@ -22,6 +22,7 @@
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "storage/tablet/ob_tablet_medium_info_reader.h"
 #include "storage/tablet/ob_tablet_mds_node_dump_operator.h"
+#include "storage/tablet/ob_sstable_truncate_filter.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/truncate_info/ob_tablet_truncate_info_reader.h"
 #include "storage/truncate_info/ob_truncate_info_array.h"
@@ -224,10 +225,11 @@ ObTablet::ObTablet(const bool is_external_tablet)
     gc_occupy_flag_(false),
     hold_ref_cnt_(false),
     is_inited_(false),
+    not_allow_read_due_to_truncate_(false),
     is_external_tablet_(is_external_tablet)
 {
 #if defined(__x86_64__) && !defined(ENABLE_OBJ_LEAK_CHECK)
-  check_size<ObTablet, ObRowkeyReadInfo, 1520>();
+  check_size<ObTablet, ObRowkeyReadInfo, 1536>();
 #endif
   MEMSET(memtables_, 0x0, sizeof(memtables_));
 }
@@ -271,6 +273,7 @@ void ObTablet::reset()
   next_tablet_ = nullptr;
   hold_ref_cnt_ = false;
   is_inited_ = false;
+  not_allow_read_due_to_truncate_ = false;
 }
 
 int64_t ObTablet::get_try_cache_size() const
@@ -416,7 +419,8 @@ void record_truncate_flag(
 int ObTablet::init_for_merge(
     common::ObArenaAllocator &allocator,
     const ObUpdateTableStoreParam &param,
-    const ObTablet &old_tablet)
+    const ObTablet &old_tablet,
+    const ObSSTableTruncateFilter &sstable_filter)
 {
   int ret = OB_SUCCESS;
   int64_t max_sync_schema_version = 0;
@@ -431,6 +435,7 @@ int ObTablet::init_for_merge(
   ObStorageSchema *old_storage_schema = nullptr;
   const bool need_report_major = param.need_report_major();
   const bool is_convert_co_merge = is_convert_co_major_merge(param.compaction_info_.merge_type_);
+  const bool is_mds_merge = compaction::is_mds_merge(param.compaction_info_.merge_type_);
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -468,7 +473,7 @@ int ObTablet::init_for_merge(
   } else if (OB_FAIL(pull_memtables(allocator))) {
     LOG_WARN("failed to pull memtable", K(ret));
   } else {
-    ALLOC_AND_INIT(allocator, table_store_addr_, (*this), param, (*old_table_store));
+    ALLOC_AND_INIT(allocator, table_store_addr_, (*this), param, (*old_table_store), &sstable_filter);
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(ddl_kv_count_ != table_store_addr_.get_ptr()->get_ddl_memtable_count())) {
       // This is defense code. If it runs at here, it must be a bug.
@@ -512,6 +517,8 @@ int ObTablet::init_for_merge(
     LOG_ERROR("find error while checking tablet schema mismatch", K(ret), KPC(param.storage_schema_), K(old_tablet), K(param.compaction_info_));
   } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_addr_.get_ptr()))) {
     LOG_WARN("failed to check table store flag match with table store", K(ret), K(old_tablet), K_(table_store_addr));
+  } else if (!is_mds_merge && OB_FAIL(try_update_memtable_filter_flag(sstable_filter))) {
+    LOG_WARN("failed to try update memtable filter flag", K(ret), K(param));
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
   /* NOTICE!!!
@@ -918,7 +925,7 @@ int ObTablet::init_with_migrate_param(
           LOG_WARN("fail to init tmp table store", K(ret));
         } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
           LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
-        } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this, mds_param, tmp_table_store))) {
+        } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this, mds_param, tmp_table_store, nullptr/*sstable_filter*/))) {
           LOG_WARN("fail to init table store", K(ret), K(mds_param));
         } else if (OB_FAIL(try_update_start_scn())) {
           LOG_WARN("failed to update start scn", K(ret), K(mds_param), K(table_store_addr_));
@@ -1121,7 +1128,8 @@ int ObTablet::update_restore_status_for_split_(const ObTabletTableStore &table_s
 int ObTablet::init_for_sstable_replace(
     common::ObArenaAllocator &allocator,
     const ObBatchUpdateTableStoreParam &param,
-    const ObTablet &old_tablet)
+    const ObTablet &old_tablet,
+    const ObSSTableTruncateFilter *sstable_filter)
 {
   int ret = OB_SUCCESS;
   allocator_ = &allocator;
@@ -1183,7 +1191,12 @@ int ObTablet::init_for_sstable_replace(
   } else if (is_tablet_split && OB_FAIL(table_store_addr_.ptr_->build_split_new_table_store(
       allocator, *this, param, *old_table_store, tablet_meta_.split_info_.get_split_start_scn()))) {
     LOG_WARN("failed to init split tablet table store", K(ret), K(old_tablet));
-  } else if (!is_tablet_split && OB_FAIL(table_store_addr_.ptr_->build_ha_new_table_store(allocator, *this, param, *old_table_store))) {
+  } else if (!is_tablet_split && OB_FAIL(table_store_addr_.ptr_->build_ha_new_table_store(allocator,
+                                                                                          *this,
+                                                                                          old_tablet,
+                                                                                          param,
+                                                                                          *old_table_store,
+                                                                                          sstable_filter))) {
     LOG_WARN("failed to init table store", K(ret), K(old_tablet));
   } else if (OB_FAIL(ObStorageSchemaUtil::update_tablet_storage_schema(
     tablet_meta_.tablet_id_, *allocator_, *old_storage_schema, *storage_schema, storage_schema_addr_.ptr_))) {
@@ -1952,7 +1965,7 @@ int ObTablet::init_with_mds_sstable(
     LOG_WARN("fail to pull memtable", K(ret));
   } else if (CLICK_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
-  } else if (CLICK_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, param, *old_table_store))) {
+  } else if (CLICK_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, param, *old_table_store, nullptr/*sstable_filter*/))) {
     LOG_WARN("fail to init table store", K(ret), K(param), KPC(old_table_store));
   } else if (OB_FAIL(try_update_start_scn())) {
     LOG_WARN("failed to update start scn", K(ret), K(param), K(table_store_addr_));
@@ -2124,7 +2137,7 @@ int ObTablet::inner_init_compat_normal_tablet(
                 sstable->get_end_scn() /*clog_checkpoint_scn*/,
                 false /*need_report*/, false /*has_truncate_info*/)))) {
       LOG_WARN("failed to init with compaction info", KR(ret));
-    } else if (CLICK_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, mds_param, *old_table_store))) {
+    } else if (CLICK_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, mds_param, *old_table_store, nullptr/*sstable_filter*/))) {
       LOG_WARN("fail to init table store", K(ret), KPC(old_table_store), K(mds_mini_sstable));
     }
   } else if (CLICK_FAIL(table_store_addr_.get_ptr()->init(allocator, *this, *old_table_store))) {
@@ -2226,6 +2239,169 @@ int ObTablet::init_empty_shell(
 
   return ret;
 }
+
+// Assumes that allocator_ is not NULL
+int ObTablet::build_table_store_for_truncate_(
+    const ObTablet &old_tablet,
+    const ObStorageSchema &storage_schema,
+    ObTabletTableStore &new_table_store)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  const ObTabletTableStore *old_store_ptr = nullptr;
+  ObTableHandleV2 empty_major_handle;
+  ObSSTable *empty_major_ptr = nullptr;
+
+  if (OB_UNLIKELY(!tablet_meta_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tablet meta", K(ret), KPC(this));
+  } else if (OB_FAIL(old_tablet.fetch_table_store(wrapper))) {
+    LOG_WARN("failed to fetch old table store", K(ret));
+  } else if (OB_ISNULL(old_store_ptr = wrapper.get_member())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null old table store", K(ret), K(wrapper));
+  } else if (tablet_meta_.transfer_info_.has_transfer_table())  {
+    LOG_INFO("tablet still has transfer table, don't create empty major", K(ret), K_(tablet_meta));
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_empty_sstable(*allocator_,
+                                                                      storage_schema,
+                                                                      get_tablet_id(),
+                                                                      tablet_meta_.snapshot_version_,
+                                                                      empty_major_handle))) {
+    LOG_WARN("failed to create empty sstable", K(ret), K(storage_schema), K(tablet_meta_));
+  } else if (OB_ISNULL(empty_major_ptr = static_cast<ObSSTable *>(empty_major_handle.get_table()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table", K(ret), K(empty_major_handle));
+  }
+
+  if (FAILEDx(new_table_store.init_for_truncate(*allocator_,
+                                                (*this),
+                                                *old_store_ptr,
+                                                tablet_meta_.mds_checkpoint_scn_,
+                                                empty_major_ptr))) {
+    LOG_WARN("failed to init tablet store", K(ret));
+  } else {
+    if (nullptr != empty_major_ptr) {
+      tablet_meta_.table_store_flag_.set_with_major_sstable();
+    } else {
+      tablet_meta_.table_store_flag_.set_without_major_sstable();
+    }
+  }
+  return ret;
+}
+
+int ObTablet::init_for_truncate(
+    const ObTablet &old_tablet,
+    const storage::ObCreateTabletSchema &table_schema,
+    const int64_t schema_version,
+    const bool need_generate_cs_replica_cg_array,
+    const bool is_replay)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  ObStorageSchema *old_storage_schema_ptr = nullptr;
+  ObStorageSchema *&storage_schema_ptr = storage_schema_addr_.ptr_;
+  ObTabletTableStore *&table_store_ptr = table_store_addr_.ptr_;
+  ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "InitForTruncate"));
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tablet has been inited", K(ret));
+  } else if (OB_UNLIKELY(!old_tablet.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected invalid old tablet", K(ret), K(old_tablet));
+  } else if (OB_UNLIKELY(!table_schema.is_valid() || schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_schema), K(schema_version));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
+    LOG_WARN("fail to get tenant data version", K(ret));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tablet arena", K(ret), KP(allocator_));
+  } else if (OB_FAIL(old_tablet.load_storage_schema(tmp_allocator, old_storage_schema_ptr))) {
+    LOG_WARN("fail to load storage schema from old tablet", K(ret), K(old_tablet));
+  } else if (OB_UNLIKELY(schema_version < old_storage_schema_ptr->schema_version_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the schema version of truncate arg is older than current", K(ret), K(schema_version), K(table_schema),
+      "cur_schema_version", old_storage_schema_ptr->schema_version_);
+  } else if (OB_FAIL(tablet_meta_.init_for_truncate(old_tablet.tablet_meta_, is_replay))) {
+    LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet.tablet_meta_));
+  }
+
+  if (OB_SUCC(ret)) {
+    const ObStorageSchema *target_schema = nullptr;
+    if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(*allocator_, storage_schema_ptr))) {
+      LOG_WARN("fail to allocate and new storage schema", K(ret));
+    } else if (table_schema.get_schema_version() > old_storage_schema_ptr->get_schema_version()) {
+      target_schema = &table_schema;
+    } else {
+      target_schema = old_storage_schema_ptr;
+      LOG_INFO("keep old tablet storage schema for truncate",
+        "table_schema_version", table_schema.get_schema_version(),
+        "old_storage_schema_version", old_storage_schema_ptr->get_schema_version());
+    }
+    const bool generate_cs = (target_schema == &table_schema) && need_generate_cs_replica_cg_array;
+    if (FAILEDx(storage_schema_ptr->init(
+          *allocator_,
+          *target_schema,
+          false /*skip_column_info*/,
+          nullptr /*column_group_schema*/,
+          generate_cs))) {
+      LOG_WARN("fail to build storage schema for truncate", K(ret), K(table_schema),
+          KPC(old_storage_schema_ptr), K(need_generate_cs_replica_cg_array));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!old_tablet.is_row_store() && storage_schema_ptr->is_row_store())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is column store but storage schema is row store", K(ret), K(old_tablet),
+      KPC(storage_schema_ptr));
+  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(*allocator_, table_store_ptr))) {
+    LOG_WARN("fail to allocate and new table store", K(ret));
+  } else if (OB_FAIL(build_table_store_for_truncate_(old_tablet,
+                                                     *storage_schema_ptr,
+                                                     *table_store_ptr))) {
+    LOG_WARN("fail to build tablet table store", K(ret), KPC(this), KPC(storage_schema_ptr));
+  } else if (OB_FAIL(build_read_info(*allocator_,
+                                     nullptr /*tablet*/,
+                                     storage_schema_addr_.get_ptr()->is_cs_replica_compat()))) {
+    LOG_WARN("failed to build read info", K(ret));
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("fail to try update start scn", K(ret));
+  } else if (OB_FAIL(table_store_cache_.init(table_store_ptr->get_major_sstables(),
+                                             table_store_ptr->get_minor_sstables(),
+                                             storage_schema_ptr->is_row_store(),
+                                             storage_schema_ptr->is_tablet_referenced_by_collect_mv()))) {
+    LOG_WARN("fail to init table store cache", K(ret), KPC(table_store_ptr), KPC(storage_schema_ptr));
+  } else if (OB_FAIL(check_sstable_column_checksum())) { // maybe unnecessary？
+    LOG_WARN("fail to check sstable column checksum", K(ret), KPC(this));
+  } else if (OB_FAIL(init_aggregated_info(*allocator_, nullptr/*link writer*/))) {
+    LOG_WARN("fail to init aggregated info", K(ret));
+  } else if (FALSE_IT(set_initial_addr())) {
+  } else if (OB_FAIL(check_table_store_flag_match_with_table_store_(table_store_ptr))) {
+    LOG_WARN("fail to check table store match with table store", K(ret), K(tablet_meta_.table_store_flag_),
+      KPC(table_store_ptr));
+  } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+    LOG_WARN("fail to increase macro ref cnt", K(ret));
+  } else {
+    is_inited_ = true;
+    LOG_INFO("succeed to init tablet for truncate", K(ret), KPC(this), K(old_tablet), K(is_replay));
+  }
+  if (OB_SUCC(ret)) {
+    const ObSSTable *last_major = static_cast<const ObSSTable *>(table_store_addr_.get_ptr()->get_major_sstables().get_boundary_table(true/*last*/));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_ISNULL(last_major)) { // init tablet with no major table, skip to init report info
+    } else if (OB_TMP_FAIL(ObTabletMeta::init_report_info(last_major,
+      old_tablet.tablet_meta_.report_status_.cur_report_version_, tablet_meta_.report_status_))) {
+      LOG_WARN("failed to init report info", K(tmp_ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    reset();
+  }
+  return ret;
+}
+
 
 int ObTablet::check_sstable_column_checksum() const
 {
@@ -4372,7 +4548,7 @@ int ObTablet::get_read_tables(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(allow_to_read_())) {
-    LOG_WARN("not allowed to read", K(ret), K(tablet_meta_));
+    LOG_WARN("not allowed to read", K(ret), K(tablet_meta_), K(not_allow_read_due_to_truncate()));
   } else if (OB_UNLIKELY(!iter.is_valid() || iter.get_tablet() != this)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(iter), K(this));
@@ -4576,7 +4752,7 @@ int ObTablet::get_read_major_sstable(
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(allow_to_read_())) {
-    LOG_WARN("not allowed to read", K(ret), K(tablet_meta_));
+    LOG_WARN("not allowed to read", K(ret), K(tablet_meta_), K(not_allow_read_due_to_truncate()));
   } else if (OB_UNLIKELY(!iter.is_valid() || iter.get_tablet() != this)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(iter), K(this));
@@ -5764,6 +5940,32 @@ int ObTablet::try_update_table_store_flag(const bool with_major)
   return ret;
 }
 
+int ObTablet::try_update_memtable_filter_flag(
+    const ObSSTableTruncateFilter &sstable_filter)
+{
+  int ret = OB_SUCCESS;
+  bool &flag = tablet_meta_.need_memtable_filter_after_truncate_tablet_;
+  if (OB_UNLIKELY(!tablet_meta_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tablet meta", K(ret), K_(tablet_meta));
+  } else if (!flag) {
+    // do nothing if flag is already false
+  } else if (!tablet_meta_.ha_status_.is_data_status_complete()) {
+    // do nothing if data is incomplete
+    LOG_INFO("data status is incomplete, skip update", K(ret), K_(tablet_meta));
+  } else if (OB_UNLIKELY(!sstable_filter.is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sstable truncate filter is not inited", K(ret), K(sstable_filter));
+  } else if (tablet_meta_.clog_checkpoint_scn_ > sstable_filter.get_truncate_commit_scn()) {
+    flag = false;
+    LOG_INFO("tablet's clog checkpoint scn has exceeded last committed truncate commit scn", K(ret),
+      "new_clog_checkpoint_scn", tablet_meta_.clog_checkpoint_scn_,
+      "truncate_commit_scn", sstable_filter.get_truncate_commit_scn(),
+      "truncate_commit_version", sstable_filter.get_truncate_commit_version());
+  }
+  return ret;
+}
+
 int ObTablet::build_migration_tablet_param(
     ObMigrationTabletParam &mig_tablet_param) const
 {
@@ -5808,7 +6010,7 @@ int ObTablet::build_migration_tablet_param(
     mig_tablet_param.has_truncate_info_ = tablet_meta_.has_truncate_info_;
     mig_tablet_param.min_ss_tablet_version_ = tablet_meta_.min_ss_tablet_version_;
     mig_tablet_param.inc_major_snapshot_ = tablet_meta_.inc_major_snapshot_;
-
+    mig_tablet_param.need_memtable_filter_after_truncate_tablet_ = tablet_meta_.need_memtable_filter_after_truncate_tablet_;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_migration_tablet_param_storage_schema(mig_tablet_param))) {
       LOG_WARN("fail to build storage schema", K(ret));
@@ -7618,6 +7820,44 @@ int ObTablet::get_table_store_meta_info(ObSSTabletTableStoreMetaInfo &table_stor
 
 #endif // OB_BUILD_SHARED_STORAGE
 
+// check_medium_list() can run before tablet initialization completes, so this helper
+// reads MDS directly instead of using the public interface guarded by IS_NOT_INIT.
+int ObTablet::get_tablet_truncate_scn_and_version_bypass_cache_(
+    share::SCN &truncate_scn,
+    int64_t &truncate_version) const
+{
+  int ret = OB_SUCCESS;
+  truncate_scn.reset();
+  truncate_version = OB_INVALID_VERSION;
+  ObITabletMdsInterface *src = nullptr;
+  ObTabletHandle src_tablet_handle;
+  ObTabletTruncateMdsUserData data;
+  if (tablet_meta_.has_transfer_table()
+      && OB_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+    LOG_WARN("failed to get src tablet handle", K(ret), K_(tablet_meta));
+  } else if (OB_FAIL(get_latest_committed(data))) {
+    if (OB_EMPTY_RESULT == ret && OB_NOT_NULL(src)) {
+      ret = src_tablet_handle.get_obj()->get_latest_committed(data);
+    }
+    if (OB_EMPTY_RESULT == ret) {
+      data.set_default_value();
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get committed tablet truncate mds data", K(ret), K_(tablet_meta));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!data.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid committed tablet truncate mds data", K(ret), K(data), K_(tablet_meta));
+  } else {
+    truncate_scn = data.truncate_commit_scn_;
+    truncate_version = data.truncate_commit_version_;
+  }
+  return ret;
+}
+
 int ObTablet::check_medium_list() const
 {
   int ret = OB_SUCCESS;
@@ -7630,17 +7870,24 @@ int ObTablet::check_medium_list() const
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_NOT_NULL(last_major = table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/))) {
       ObArenaAllocator allocator("check_medium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      share::SCN unused_scn;
+      int64_t truncate_commit_version = OB_INVALID_VERSION;
       if (share::is_reserve_mode()) {
         allocator.set_ctx_id(ObCtxIds::MERGE_RESERVE_CTX_ID);
       }
       common::ObSEArray<compaction::ObMediumCompactionInfo*, 1> medium_info_array;
-      if (OB_FAIL(read_medium_array(allocator, medium_info_array))) {
+      if (OB_FAIL(get_tablet_truncate_scn_and_version_bypass_cache_(
+          unused_scn, truncate_commit_version))) {
+        LOG_WARN("failed to get tablet truncate scn and version", K(ret), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(read_medium_array(allocator, medium_info_array))) {
         LOG_WARN("fail to read medium info from mds sstable", K(ret));
       } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(
           tablet_meta_.extra_medium_info_,
           &medium_info_array,
-          last_major->get_snapshot_version()))) {
-        LOG_WARN("fail to validate medium info list", K(ret), K(ls_id), K(tablet_id), K(medium_info_array), KPC(last_major));
+          last_major->get_snapshot_version(),
+          truncate_commit_version))) {
+        LOG_WARN("fail to validate medium info list", K(ret), K(ls_id), K(tablet_id),
+            K(truncate_commit_version), K(medium_info_array), KPC(last_major));
       }
 
       // always free medium info
@@ -8580,31 +8827,6 @@ int ObTablet::calc_sstable_occupy_size(
   return ret;
 }
 
-int ObTablet::validate_medium_info_list(
-    const int64_t finish_medium_scn,
-    const ObTabletMdsData &mds_data) const
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
-  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  const ObTabletDumpedMediumInfo *medium_info_list = mds_data.medium_info_list_.ptr_;
-  // const ObExtraMediumInfo &extra_info = mds_data.extra_medium_info_;
-  // TODO: @baichangmin.bcm after mds_mvs joint debugging completed
-  const ObExtraMediumInfo &extra_info = tablet_meta_.extra_medium_info_;
-
-  if (mds_data.medium_info_list_.is_none_object()) {
-    LOG_INFO("medium info list addr is none, no need to validate", K(ret), K(ls_id), K(tablet_id), K(finish_medium_scn), "medium_info_list_complex_addr", mds_data.medium_info_list_);
-  } else if (OB_ISNULL(medium_info_list)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("medium info list is null", K(ret), K(ls_id), K(tablet_id), K(finish_medium_scn), KP(medium_info_list));
-  } else if (OB_FAIL(ObMediumListChecker::validate_medium_info_list(extra_info, &medium_info_list->medium_info_list_, finish_medium_scn))) {
-    LOG_WARN("failed to validate medium info list", KR(ret), K(ls_id), K(tablet_id), K(mds_data), K(finish_medium_scn));
-  }
-  return ret;
-}
-
-
-
 int ObTablet::check_new_mds_with_cache(
     const int64_t snapshot_version)
 {
@@ -9025,6 +9247,140 @@ int ObTablet::replay_set_truncate_info(
       LOG_WARN("failed to replay set truncate info", K(ret));
     } else {
       truncate_info_cache_.replay_truncate_info();
+    }
+  }
+  return ret;
+}
+
+int ObTablet::set_truncate_mds_data(
+    const ObTabletTruncateMdsUserData &truncate_data,
+    mds::MdsCtx &ctx,
+    const int64_t lock_timeout_us)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    SpinWLockGuard wguard(mds_cache_lock_);
+    if (OB_FAIL(ObITabletMdsInterface::set(truncate_data, ctx, lock_timeout_us))) {
+      LOG_WARN("failed to set truncate mds data", K(ret));
+    } else {
+      tablet_truncate_cache_.reset();
+    }
+  }
+  return ret;
+}
+
+int ObTablet::replay_set_truncate_mds_data(
+    const share::SCN &scn,
+    const ObTabletTruncateMdsUserData &truncate_data,
+    mds::MdsCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    SpinWLockGuard wguard(mds_cache_lock_);
+    if (OB_FAIL(ObITabletMdsInterface::replay(truncate_data, ctx, scn))) {
+      LOG_WARN("failed to replay set truncate mds data", K(ret));
+    } else {
+      tablet_truncate_cache_.reset();
+    }
+  }
+  return ret;
+}
+
+// TODO(fanyin): quick access for mysql mode?
+int ObTablet::get_tablet_truncate_scn_and_version(
+    share::SCN &truncate_scn,
+    int64_t &truncate_version)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else {
+    truncate_scn.reset();
+    truncate_version = OB_INVALID_VERSION;
+    bool cache_hit = false;
+    {
+      SpinRLockGuard rguard(mds_cache_lock_);
+      if (tablet_truncate_cache_.is_valid()) {
+        truncate_scn = tablet_truncate_cache_.get_truncate_commit_scn();
+        truncate_version = tablet_truncate_cache_.get_truncate_commit_version();
+        cache_hit = true;
+      }
+    }
+    if (!cache_hit) {
+      SpinWLockGuard wguard(mds_cache_lock_);
+      if (tablet_truncate_cache_.is_valid()) { // double check
+        truncate_scn = tablet_truncate_cache_.get_truncate_commit_scn();
+        truncate_version = tablet_truncate_cache_.get_truncate_commit_version();
+      } else {
+        ObTabletTruncateMdsUserData data;
+        mds::MdsWriter unused_writer;
+        mds::TwoPhaseCommitState trans_stat = mds::TwoPhaseCommitState::STATE_INIT;
+        share::SCN unused_trans_version;
+        if (OB_FAIL(ObITabletMdsInterface::get_latest_truncate_data(data,
+                                                                    unused_writer,
+                                                                    trans_stat,
+                                                                    unused_trans_version))) {
+          if (OB_EMPTY_RESULT == ret) {
+            trans_stat = mds::TwoPhaseCommitState::ON_COMMIT;
+            data.set_default_value();
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get latest truncate data", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
+          // set result and cache truncate data
+          truncate_scn = data.truncate_commit_scn_;
+          truncate_version = data.truncate_commit_version_;
+          tablet_truncate_cache_.set_value(data);
+        } else if (OB_FAIL(get_truncate_mds_data(data))) {
+          LOG_WARN("failed to get tablet truncate mds data", K(ret));
+        } else {
+          // set result only
+          truncate_scn = data.truncate_commit_scn_;
+          truncate_version = data.truncate_commit_version_;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTablet::get_tablet_sstable_truncate_filter(
+    const bool is_mds_merge,
+    ObSSTableTruncateFilter &filter)
+{
+  int ret = OB_SUCCESS;
+  filter.reset();
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet is not inited", K(ret), K_(is_inited));
+  } else if (is_mds_merge || !tablet_meta_.ha_status_.is_data_status_complete()) {
+    /// NOTE: data status would be set as incomplete during LS migration,
+    /// and it will cause MDS read returns -4023. At this case, just returns
+    /// dummy filter(don't filter any sstables).
+    filter = ObSSTableTruncateFilter::dummy_filter();
+    // TODO(fanyin): change to debug later
+    LOG_INFO("return sstable truncate dummy filter", K(ret), K(is_mds_merge), K_(tablet_meta_.ha_status));
+  } else {
+    share::SCN truncate_commit_scn;
+    int64_t truncate_commit_version = OB_INVALID_VERSION;
+    if (OB_FAIL(get_tablet_truncate_scn_and_version(truncate_commit_scn, truncate_commit_version))) {
+      LOG_WARN("failed to get tablet truncate scn and version", K(ret));
+    } else if (OB_FAIL(filter.init(truncate_commit_scn, truncate_commit_version))) {
+      LOG_WARN("failed to init truncate filter", K(ret), K(truncate_commit_scn),
+        K(truncate_commit_version));
     }
   }
   return ret;

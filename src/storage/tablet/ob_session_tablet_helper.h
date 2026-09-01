@@ -24,10 +24,18 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObTabletTruncateMdsArg;
 
 class ObSessionTabletCreateHelper final
 {
 public:
+  // do_work() owns its own transaction (started/committed inside). This
+  // helper does NOT call back into the map: any reuse-path classification
+  // must be performed by the caller (via ObSessionTabletInfoMap::
+  // try_reuse_truncated_tablets, which runs in its own separate trans)
+  // and then plumbed in via set_reuse_result() before do_work(). When
+  // set_reuse_result() is not called, do_work() treats every entry as
+  // to-create.
   ObSessionTabletCreateHelper(
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -40,6 +48,8 @@ public:
       session_id_(session_id),
       ls_id_(),
       tablet_ids_(),
+      to_create_indices_(),
+      reuse_result_set_(false),
       trans_(),
       tablet_creator_(tenant_id, share::SCN::base_scn(), trans_),
       session_tablet_map_(session_tablet_map)
@@ -57,16 +67,29 @@ public:
       session_id_(session_id),
       ls_id_(),
       tablet_ids_(),
+      to_create_indices_(),
+      reuse_result_set_(false),
       trans_(),
       tablet_creator_(tenant_id, share::SCN::base_scn(), trans_),
       session_tablet_map_(session_tablet_map)
   {}
   int set_table_ids(const common::ObIArray<uint64_t> &table_ids);
+  // Plumb in the result of ObSessionTabletInfoMap::try_reuse_truncated_tablets.
+  // - reused_tablet_ids: parallel to set_table_ids() input. Valid id => reused;
+  //   reset() (invalid) => still needs creation. to_create_indices_ is derived
+  //   from this array.
+  // - resolved_ls_id: common LS the caller pinned for the reuse path; ignored
+  //   when invalid.
+  // Must be called AFTER set_table_ids().
+  int set_reuse_result(
+      const common::ObIArray<common::ObTabletID> &reused_tablet_ids,
+      const share::ObLSID &resolved_ls_id);
   int do_work();
   static int is_ls_leader(const share::ObLSID &ls_id, bool &is_leader);
   ~ObSessionTabletCreateHelper() = default;
   const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   const common::ObIArray<uint64_t> &get_table_ids() const { return table_ids_; }
+  const common::ObIArray<int64_t> &get_to_create_indices() const { return to_create_indices_; }
   share::ObLSID get_ls_id() const { return ls_id_; }
   TO_STRING_KV(K_(tenant_id), K_(table_ids), K_(sequence), K_(session_id), K_(ls_id), K(tablet_ids_));
 
@@ -88,7 +111,8 @@ private:
     share::schema::ObLatestSchemaGuard &schema_guard,
     const uint64_t tenant_data_version,
     const share::schema::ObTableSchema *table_schema,
-    const share::schema::ObTablegroupSchema *tablegroup_schema);
+    const share::schema::ObTablegroupSchema *tablegroup_schema,
+    const common::ObIArray<int64_t> &to_create_indices);
 
 private:
   uint64_t tenant_id_;
@@ -97,6 +121,8 @@ private:
   uint64_t session_id_;
   share::ObLSID ls_id_;
   common::ObSEArray<common::ObTabletID, DEFAULT_TABLE_CREATE_COUNT> tablet_ids_;
+  common::ObSEArray<int64_t, DEFAULT_TABLE_CREATE_COUNT> to_create_indices_;
+  bool reuse_result_set_;
   common::ObMySQLTransaction trans_;
   rootserver::ObTabletCreator tablet_creator_;
   ObSessionTabletInfoMap &session_tablet_map_;
@@ -107,15 +133,17 @@ struct ObSessionTabletGCTaskSummary final
 public:
   ObSessionTabletGCTaskSummary()
     : total_cnt_(0),
+      ignored_tablets_cnt_(0),
       schema_missing_tablets_cnt_(0),
       failed_cnt_(0)
   {
   }
   ~ObSessionTabletGCTaskSummary() = default;
-  TO_STRING_KV(K_(total_cnt), K_(schema_missing_tablets_cnt), K_(failed_cnt));
+  TO_STRING_KV(K_(total_cnt), K_(ignored_tablets_cnt), K_(schema_missing_tablets_cnt), K_(failed_cnt));
 
 public:
   int64_t total_cnt_;
+  int64_t ignored_tablets_cnt_;
   int64_t schema_missing_tablets_cnt_;
   int64_t failed_cnt_;
 };
@@ -142,11 +170,18 @@ public:
   {}
   ~ObSessionTabletDeleteHelper() = default;
   int do_work();
+  /// ATTENTION: This method must NOT be called in trans
   static int delete_session_tablets_by_table_id(
       sql::ObSQLSessionInfo &session_info,
       const uint64_t tenant_id,
       const uint64_t table_id);
-  /// @brief Delete session tablets with GC-oriented batch(For GC only).
+  static int cleanup_inactive_trx_session_tablets_and_do_check(
+      const uint64_t tenant_id,
+      const ObString &database_name,
+      const ObString &table_name,
+      const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
+
+  /// @brief Delete session tablets with GC-oriented batch.
   ///   per-table failures are filtered
   ///   (see remove_failed_tables inside check_and_lock_tables) so tablets that
   ///   passed checks can still be deleted in the same invocation.
@@ -179,6 +214,10 @@ private:
   static int collect_oracle_temp_table_v2_related_ids(
       const share::schema::ObTableSchema &table_schema,
       common::ObIArray<uint64_t> &table_ids);
+  static int inner_cleanup_inactive_session_tablets(
+      const uint64_t tenant_id,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema &table_schema);
 private:
   int lock_table_for_delete(
       const ObTableSchema &table_schema,
@@ -210,7 +249,8 @@ private:
       share::schema::ObSchemaGetterGuard &schema_guard,
       /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
       /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
-      /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos);
+      /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos,
+      /*out*/int64_t &ignored_tablets_cnt);
   int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
   int delete_schema_missing_tablets(const ObIArray<ObSessionTabletInfo *> &tablet_infos, const int64_t schema_version);
   int mds_remove_tablet(
@@ -226,6 +266,40 @@ private:
   common::ObArenaAllocator allocator_;
   int64_t schema_version_;
   int64_t timeout_us_;
+};
+
+class ObSessionTabletTruncateHelper final
+{
+public:
+  ObSessionTabletTruncateHelper(
+      const uint64_t tenant_id,
+      const ObSessionTabletInfo &tablet_info,
+      common::ObMySQLTransaction &trans,
+      const int64_t schema_version)
+    : tenant_id_(tenant_id),
+      tablet_info_(tablet_info),
+      trans_(trans),
+      schema_version_(schema_version)
+  {}
+  ~ObSessionTabletTruncateHelper() = default;
+  int do_work();
+  static int freeze_tablet(
+      const obrpc::ObTruncateTabletFreezeArg &arg,
+      obrpc::Int64 &result,
+      const int64_t abs_timeout_us);
+  TO_STRING_KV(K_(tenant_id), K_(tablet_info), K_(schema_version));
+private:
+  int lock_table_for_truncate();
+  int freeze_tablet();
+  int mds_truncate_tablet();
+  int prepare_truncate_mds_arg(
+      ObTabletTruncateMdsArg &arg);
+
+private:
+  uint64_t tenant_id_;
+  const ObSessionTabletInfo &tablet_info_;
+  common::ObMySQLTransaction &trans_;
+  int64_t schema_version_;
 };
 
 class ObSessionTabletGCHelper final
@@ -245,11 +319,7 @@ public:
   static int is_table_has_active_session(
     const share::schema::ObSimpleTableSchemaV2 *table_schema,
     const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
-  static int is_table_has_active_session(
-    const uint64_t tenant_id,
-    const ObString &db_name,
-    const ObString &table_name,
-    const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
+
   /// @brief: batch interface for drop database
   static int is_any_table_has_active_session(
       const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
@@ -292,18 +362,6 @@ private:
 private:
   uint64_t tenant_id_;
 };
-
-/// Broadcast drop GTT v2 session tablet to all alive observers; the creator
-/// observer performs the storage delete for all is_creator_ entries in one
-/// inner transaction. @p table_ids should carry the main table along with its
-/// index and lob aux tables so the broadcast is atomic per truncate.
-/// See ob_drop_gtt_v2_session_tablet_rpc.
-int dispatch_drop_gtt_v2_session_tablet_on_creator(
-    const uint64_t tenant_id,
-    const common::ObIArray<uint64_t> &table_ids,
-    const int64_t sequence,
-    const uint64_t session_id);
-
 } // namespace storage
 } // namespace oceanbase
 #endif // OCEANBASE_STORAGE_TABLET_OB_SESSION_TABLET_HELPER_H

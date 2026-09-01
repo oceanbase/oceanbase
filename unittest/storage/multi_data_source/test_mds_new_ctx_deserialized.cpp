@@ -15,6 +15,7 @@
 #define protected public
 
 #include "src/storage/multi_data_source/adapter_define/mds_dump_node.h"
+#include "storage/multi_data_source/ob_tablet_truncate_mds_ctx.h"
 namespace oceanbase {
 namespace storage
 {
@@ -80,6 +81,91 @@ TEST_F(TestMdsNewCtxDeserialized, deserialized_from_mds_ctx) {
   pos = 0;
   ObFinishTransferInMdsCtx new_ctx3;
   ASSERT_EQ(OB_SUCCESS, new_ctx3.deserialize(buffer, buffer_len, pos));
+}
+
+TEST_F(TestMdsNewCtxDeserialized, truncate_ctx_assign_keeps_cleanup_ownership_local) {
+  const transaction::ObTransID tx_id(1);
+  ObTabletTruncateMdsCtx source_ctx{MdsWriter(tx_id)};
+  source_ctx.set_ls_id(ObLSID(1001));
+  source_ctx.set_tablet_id(ObTabletID(200001));
+  source_ctx.state_ = TwoPhaseCommitState::ON_PREPARE;
+  source_ctx.set_nop(false);
+
+  ObTabletTruncateMdsCtx copied_ctx;
+  EXPECT_EQ(OB_SUCCESS, copied_ctx.assign(source_ctx));
+  EXPECT_EQ(source_ctx.get_writer(), copied_ctx.get_writer());
+  EXPECT_EQ(source_ctx.state_, copied_ctx.state_);
+  EXPECT_EQ(source_ctx.ls_id_, copied_ctx.ls_id_);
+  EXPECT_EQ(source_ctx.tablet_id_, copied_ctx.tablet_id_);
+  EXPECT_TRUE(copied_ctx.nop_);
+
+  // Keep teardown side-effect free even when this test runs against the buggy implementation.
+  source_ctx.set_nop(true);
+  copied_ctx.set_nop(true);
+}
+
+TEST_F(TestMdsNewCtxDeserialized, truncate_ctx_rejects_missing_magic) {
+  MdsCtx base_ctx;
+  base_ctx.set_writer(MdsWriter(transaction::ObTransID(1)));
+  base_ctx.set_binding_type_id(TupleTypeIdx<mds::BufferCtxTupleHelper, ObTabletTruncateMdsCtx>::value);
+
+  char buffer[1024];
+  for (auto &ch : buffer) {
+    ch = 0;
+  }
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, base_ctx.serialize(buffer, sizeof(buffer), pos));
+  const int64_t base_ctx_len = pos;
+
+  ObTabletTruncateMdsCtx truncate_ctx;
+  pos = 0;
+  EXPECT_NE(OB_SUCCESS, truncate_ctx.deserialize(buffer, base_ctx_len, pos));
+}
+
+TEST_F(TestMdsNewCtxDeserialized, truncate_ctx_rejects_bad_magic_before_next_ctx) {
+  MdsCtx base_ctx;
+  base_ctx.set_writer(MdsWriter(transaction::ObTransID(1)));
+  base_ctx.set_binding_type_id(TupleTypeIdx<mds::BufferCtxTupleHelper, ObTabletTruncateMdsCtx>::value);
+  ObTabletTruncateMdsCtx next_ctx{MdsWriter(transaction::ObTransID(2))};
+  next_ctx.set_ls_id(ObLSID(1001));
+  next_ctx.set_tablet_id(ObTabletID(200001));
+
+  char buffer[1024];
+  for (auto &ch : buffer) {
+    ch = 0;
+  }
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, base_ctx.serialize(buffer, sizeof(buffer), pos));
+  const int64_t base_ctx_len = pos;
+  ASSERT_EQ(OB_SUCCESS, next_ctx.serialize(buffer, sizeof(buffer), pos));
+  const int64_t total_len = pos;
+
+  int64_t magic_pos = base_ctx_len;
+  int32_t decoded_magic = -1;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode(buffer, total_len, magic_pos, decoded_magic));
+  ASSERT_NE(ObTabletTruncateMdsCtx::MAGIC, decoded_magic);
+
+  ObTabletTruncateMdsCtx truncate_ctx;
+  pos = 0;
+  EXPECT_NE(OB_SUCCESS, truncate_ctx.deserialize(buffer, total_len, pos));
+}
+
+TEST_F(TestMdsNewCtxDeserialized, truncate_ctx_rejects_corrupted_new_extension) {
+  MdsCtx base_ctx;
+  base_ctx.set_writer(MdsWriter(transaction::ObTransID(1)));
+  base_ctx.set_binding_type_id(TupleTypeIdx<mds::BufferCtxTupleHelper, ObTabletTruncateMdsCtx>::value);
+  char buffer[1024];
+  for (auto &ch : buffer) {
+    ch = 0;
+  }
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, base_ctx.serialize(buffer, sizeof(buffer), pos));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(buffer, sizeof(buffer), pos, ObTabletTruncateMdsCtx::MAGIC));
+  const int64_t corrupted_len = pos;
+
+  ObTabletTruncateMdsCtx truncate_ctx;
+  pos = 0;
+  EXPECT_NE(OB_SUCCESS, truncate_ctx.deserialize(buffer, corrupted_len, pos));
 }
 
 }

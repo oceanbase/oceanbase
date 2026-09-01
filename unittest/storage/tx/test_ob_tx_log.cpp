@@ -106,6 +106,14 @@ struct NewTestLog
 
 OB_TX_SERIALIZE_MEMBER(NewTestLog, compat_bytes_, tx_id_1, tx_id_2, tx_id_3);
 
+TEST_F(TestObTxLog, truncate_tablet_mds_needs_pre_replay_barrier)
+{
+  EXPECT_EQ(logservice::ObReplayBarrierType::PRE_BARRIER,
+            ObTxLogTypeChecker::need_replay_barrier(
+                ObTxLogType::TX_MULTI_DATA_SOURCE_LOG,
+                ObTxDataSourceType::TRUNCATE_TABLET));
+}
+
 // test ObTxLogBlockHeader
 TEST_F(TestObTxLog, tx_log_block_header)
 {

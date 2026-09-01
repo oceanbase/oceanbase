@@ -18,6 +18,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObTabletTruncateMdsUserData;
 
 // ObITabletMdsCustomizedInterface is for MDS users to customize their own wrapper needs.
 // All interfaces in ObITabletMdsInterface are type independent, but some users may want read MDS with more operations.
@@ -28,6 +29,7 @@ public:
   // customized get_latest_committed
   int get_ddl_data(ObTabletBindingMdsUserData &ddl_data);
   int get_autoinc_seq(share::ObTabletAutoincSeq &inc_seq, ObIAllocator &allocator);
+  int get_truncate_mds_data(ObTabletTruncateMdsUserData &truncate_data);
 
   // customized get_latest
   int get_latest_split_data(ObTabletSplitMdsUserData &data,

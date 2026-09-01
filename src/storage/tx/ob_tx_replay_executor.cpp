@@ -895,6 +895,11 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "[Replay Tx] invaild arguments", K(ret), KP(mmi_ptr));
   } else if (FALSE_IT(timeguard.click("start"))) {
+  } else if (OB_FAIL(check_skip_replay_dml_for_truncate_(*tablet))) {
+    if (OB_NO_NEED_UPDATE != ret) {
+      TRANS_LOG(WARN, "[Replay Tx] check skip replay dml for truncate failed",
+          K(ret), K(ls_id), K(tablet_id), K(log_ts_ns_));
+    }
   } else if (OB_FAIL(guard_cache_.prepare_memtable_for_replay(tablet, log_ts_ns_, mem_ptr))) {
     if (OB_NO_NEED_UPDATE == ret) {
       TRANS_LOG(DEBUG, "[Replay Tx] Not need replay row for tablet",
@@ -976,6 +981,27 @@ int ObTxReplayExecutor::get_compat_mode_(const ObTabletID &tablet_id, lib::Worke
   return ret;
 }
 
+int ObTxReplayExecutor::check_skip_replay_dml_for_truncate_(ObTablet &tablet)
+{
+  int ret = OB_SUCCESS;
+  share::SCN truncate_commit_scn;
+  int64_t unused_truncate_version = OB_INVALID_VERSION;
+  const ObTabletMapKey key(tablet.get_ls_id(), tablet.get_tablet_id());
+  if (tablet.get_tablet_meta().compat_mode_ != lib::Worker::CompatMode::ORACLE) {
+    // only check for oracle gtt v2
+  } else if (!tablet.need_memtable_filter_after_truncate_tablet()) {
+    // do nothing if tablet has no memtable filter
+  } else if (OB_FAIL(tablet.get_tablet_truncate_scn_and_version(truncate_commit_scn,
+                                                                unused_truncate_version))) {
+    TRANS_LOG(WARN, "failed to get tablet truncate scn and version", K(ret), K(key));
+  } else if (log_ts_ns_ < truncate_commit_scn) {
+    ret = OB_NO_NEED_UPDATE;
+    TRANS_LOG(INFO, "[Replay Tx] skip dml replay because tablet truncate_commit_scn "
+      "has exceeded this redo's log_ts", K(ret), K(key), K(log_ts_ns_), K(truncate_commit_scn));
+  }
+  return ret;
+}
+
 void ObTxReplayExecutor::rewrite_replay_retry_code_(int &ret_code)
 {
   if (ret_code == OB_MINOR_FREEZE_NOT_ALLOW || ret_code == OB_SCN_OUT_OF_BOUND ||
@@ -988,4 +1014,3 @@ void ObTxReplayExecutor::rewrite_replay_retry_code_(int &ret_code)
 
 }
 } // namespace oceanbase
-

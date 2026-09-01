@@ -23,7 +23,6 @@ namespace oceanbase
 {
 namespace storage
 {
-using DiskedTabletFilterOp = ObTenantSlogCkptUtil::DiskedTabletFilterOp;
 using TabletDfgtPicker = ObTenantSlogCkptUtil::TabletDefragmentPicker;
 using MetaBlockListApplier = ObTenantSlogCkptUtil::MetaBlockListApplier;
 using ParallelStartupTaskHdl = ObTenantSlogCkptUtil::ParallelStartupTaskHandler;

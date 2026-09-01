@@ -23,6 +23,7 @@
 #include "storage/tablet/ob_tablet_mds_node_filter.h"
 #include "storage/tablet/ob_tablet_member_wrapper.h"
 #include "storage/tablet/ob_tablet_obj_load_helper.h"
+#include "storage/tablet/ob_tablet_truncate_mds_user_data.h"
 #include "storage/ls/ob_ls_switch_checker.h"
 
 namespace oceanbase
@@ -85,6 +86,11 @@ public:
                           mds::TwoPhaseCommitState &trans_stat,
                           share::SCN &trans_version,
                           const int64_t read_seq = 0) const;
+  int get_latest_truncate_data(ObTabletTruncateMdsUserData &data,
+                               mds::MdsWriter &writer,
+                               mds::TwoPhaseCommitState &trans_stat,
+                               share::SCN &trans_version,
+                               const int64_t read_seq = 0) const;
   int get_ddl_data(const share::SCN &snapshot,
                    ObTabletBindingMdsUserData &data,
                    const int64_t timeout = ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US) const;
@@ -339,6 +345,19 @@ struct ReadSplitDataPartkeyCompareOp
   const ObITableReadInfo &rowkey_read_info_;
   const ObIArray<uint64_t> &partkey_projector_;
   int &cmp_ret_;
+};
+
+struct ReadTabletTruncateDataOp
+{
+  ReadTabletTruncateDataOp(ObTabletTruncateMdsUserData &data)
+    : truncate_data_(data)
+  {
+  }
+  int operator()(const ObTabletTruncateMdsUserData &data)
+  {
+    return truncate_data_.assign(data);
+  }
+  ObTabletTruncateMdsUserData &truncate_data_;
 };
 
 }

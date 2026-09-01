@@ -284,6 +284,7 @@
   RPC_S(PR5 clear_sync_standby_dest_cache, OB_CLEAR_SYNC_STANDBY_DEST_CACHE, (obrpc::ObClearSyncStandbyDestCacheArg));
   RPC_S(PR5 admin_alter_ls, OB_ADMIN_ALTER_LS, (share::ObAlterLSArg), share::ObAlterLSRes);
   RPC_AP(PR5 tablet_major_freeze, OB_TABLET_MAJOR_FREEZE, (ObTabletMajorFreezeArg), obrpc::Int64);
+  RPC_S(PR5 truncate_tablet_freeze, OB_TRUNCATE_TABLET_FREEZE, (ObTruncateTabletFreezeArg), obrpc::Int64);
   RPC_AP(PR5 shared_storage_net_throt_predict, OB_SHARED_STORAGE_NET_THROT_PREDICT, (obrpc::ObSSNTEndpointArg), obrpc::ObSharedDeviceResourceArray);
   RPC_AP(PR5 shared_storage_net_throt_set, OB_SHARED_STORAGE_NET_THROT_SET, (obrpc::ObSharedDeviceResourceArray), obrpc::ObSSNTSetRes);
   RPC_AP(PR5 kill_client_session, OB_KILL_CLIENT_SESSION, (ObKillClientSessionArg), ObKillClientSessionRes);
@@ -306,6 +307,7 @@
   RPC_S(PR5 broadcast_config_version, OB_BROADCAST_CONFIG_VERSION, (ObBroadcastConfigVersionArg));
   RPC_S(PR5 notify_ls_restore_finish, OB_NOTIFY_LS_RESTORE_FINISH, (obrpc::ObNotifyLSRestoreFinishArg));
   RPC_AP(PR5 drop_gtt_v2_session_tablet, OB_DROP_GTT_V2_SESSION_TABLET, (share::ObDropGTTV2SessionTabletArg), share::ObDropGTTV2SessionTabletRes);
+  RPC_AP(PR5 batch_drop_gtt_v2_session_tablet, OB_BATCH_DROP_GTT_V2_SESSION_TABLET, (share::ObBatchDropGTTV2SessionTabletArg), share::ObDropGTTV2SessionTabletRes);
   RPC_S(PR5 notify_start_archive, OB_NOTIFY_START_ARCHIVE, (obrpc::ObNotifyStartArchiveArg));
   RPC_S(PR5 ha_rebuild_tablet, OB_HA_REBUILD_TABLET, (obrpc::ObRebuildTabletArg));
   RPC_S(PR5 trigger_dump_data_dict, OB_DATA_DICT_TRIGGER_DUMP, (ObTriggerDumpDataDictArg));

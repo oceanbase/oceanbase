@@ -31,11 +31,13 @@ public:
   int init(
     const int64_t first_major_snapshot,
     const int64_t last_major_snapshot,
-    const int64_t multi_version_start);
+    const int64_t multi_version_start,
+    const share::SCN &clog_checkpoint_scn);
   void reset()
   {
     last_major_snapshot_ = 0;
     truncate_filter_snapshot_ = 0;
+    clog_checkpoint_scn_.reset();
     is_inited_ = false;
   }
   virtual CompactionFilterType get_filter_type() const override { return MDS_MINOR_FILTER_DATA; }
@@ -51,10 +53,16 @@ private:
     const blocksstable::ObDatumRow &row,
     const mds::MdsDumpKVStorageAdapter &kv_adapter,
     ObFilterRet &filter_ret);
+  // TODO(trx_temp_table_opt): add filter method for tablet truncate mds data
+  int filter_tablet_truncate_data(
+    const blocksstable::ObDatumRow &row,
+    const mds::MdsDumpKVStorageAdapter &kv_adapter,
+    ObFilterRet &filter_ret);
 private:
   bool is_inited_;
   int64_t last_major_snapshot_;
   int64_t truncate_filter_snapshot_;
+  share::SCN clog_checkpoint_scn_;
   ObArenaAllocator allocator_;
 };
 

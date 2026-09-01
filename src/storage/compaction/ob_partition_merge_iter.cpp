@@ -194,6 +194,7 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
   } else if (OB_FAIL(access_param_.init_merge_param(tablet_id_.id(),
                                                     tablet_id_,
                                                     *read_info_,
+                                                    merge_param.get_tablet_handle(),
                                                     is_multi_version_merge(static_param.get_merge_type()),
                                                     static_param.schema_->is_delete_insert_merge_engine()))) {
     LOG_WARN("Failed to init table access param", K(ret), KPC(this));

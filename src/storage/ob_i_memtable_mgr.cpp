@@ -171,6 +171,8 @@ int ObIMemtableMgr::release_memtables(const SCN &scn)
             STORAGE_LOG(INFO, "succeed to release memtable", K(ret), K(i), K(scn));
           }
         } else {
+          STORAGE_LOG(DEBUG, "can not release memtable", K(ret), K(i), K(scn), "can_minor",
+            memtable->can_be_minor_merged(), KPC(memtable));
           break;
         }
       }

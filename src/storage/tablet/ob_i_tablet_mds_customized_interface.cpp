@@ -41,6 +41,18 @@ int ObITabletMdsCustomizedInterface::get_autoinc_seq(share::ObTabletAutoincSeq &
   return ret;
 }
 
+int ObITabletMdsCustomizedInterface::get_truncate_mds_data(ObTabletTruncateMdsUserData &truncate_data)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_latest_committed_data(truncate_data))) {
+    if (OB_EMPTY_RESULT == ret) {
+      truncate_data.set_default_value(); // use default value
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
 int ObITabletMdsCustomizedInterface::get_latest_split_data(
     ObTabletSplitMdsUserData &data,
     mds::MdsWriter &writer,

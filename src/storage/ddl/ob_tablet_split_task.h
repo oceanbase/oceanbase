@@ -523,21 +523,22 @@ struct ObSplitScanParam final
 public:
   ObSplitScanParam(
     const int64_t table_id,
-    ObTablet &src_tablet,
+    const ObTabletHandle &src_tablet_handle,
     const ObDatumRange &query_range,
     const ObStorageSchema &storage_schema) :
-    table_id_(table_id), src_tablet_(src_tablet), query_range_(&query_range),
+    table_id_(table_id), src_tablet_handle_(src_tablet_handle), query_range_(&query_range),
     storage_schema_(&storage_schema)
   { }
   ~ObSplitScanParam() = default;
   bool is_valid() const {
-    return table_id_ > 0 && src_tablet_.is_valid() && nullptr != query_range_
+    return table_id_ > 0 && src_tablet_handle_.is_valid() && nullptr != query_range_
         && (nullptr != storage_schema_ && storage_schema_->is_valid());
   }
-  TO_STRING_KV(K_(table_id), K_(src_tablet), KPC_(query_range), KPC_(storage_schema));
+  ObTablet &get_src_tablet() const { return *src_tablet_handle_.get_obj(); }
+  TO_STRING_KV(K_(table_id), K_(src_tablet_handle), KPC_(query_range), KPC_(storage_schema));
 public:
   int64_t table_id_;
-  ObTablet &src_tablet_; // split source tablet.
+  const ObTabletHandle &src_tablet_handle_; // split source tablet handle.
   const ObDatumRange *query_range_; // whole_range for sstable scan.
   const ObStorageSchema *storage_schema_;
 };
@@ -599,7 +600,8 @@ public:
   int construct_access_param(
       const uint64_t table_id,
       const common::ObTabletID &tablet_id,
-      const ObITableReadInfo &read_info);
+      const ObITableReadInfo &read_info,
+      const ObTabletHandle &tablet_handle);
   int construct_range_ctx(ObQueryFlag &query_flag, const share::ObLSID &ls_id);
   int construct_multiple_scan_merge(const ObTabletTableIterator &table_iter, const ObDatumRange &range);
   int add_extra_rowkey(const ObDatumRow &row);

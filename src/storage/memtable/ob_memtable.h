@@ -351,6 +351,19 @@ public: // derived from ObITable
       const common::ObIArray<blocksstable::ObDatumRange> &ranges,
       storage::ObStoreRowIterator *&row_iter) override;
 
+  // Populate or clear the truncate-tablet filter on mvcc_acc_ctx based on the
+  // current state of the tablet this memtable belongs to. Called by memtable
+  // scan iterators before they enter ObMvccEngine::scan, so the row iterator
+  // can route to the SCN-based filter path when needed.
+  // Uses iter_param.tablet_handle_ (pre-populated by the caller) exclusively;
+  // it deliberately performs NO get_tablet() MDS lookup because this is on the
+  // per-row read/scan hot path. When the iter_param does not carry a tablet
+  // handle, the filter is left cleared and the read proceeds via the legacy
+  // path, so callers that need the truncate filter must forward the handle.
+  int setup_truncate_filter_on_mvcc_acc_ctx(
+      const storage::ObTableIterParam &param,
+      ObMvccAccessCtx &mvcc_ctx) const;
+
   // replay_row is used to replay rows in redo log for follower
   // ctx is the writer tx's context, we need the scn, tx_id for fulfilling the tx node
   // mmi is mutator iterator for replay

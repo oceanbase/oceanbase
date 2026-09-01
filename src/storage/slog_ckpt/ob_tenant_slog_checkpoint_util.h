@@ -125,8 +125,7 @@ struct ObTenantSlogCkptUtil
         ObSlogCheckpointFdDispenser *fd_dispenser,
         const ObMemAttr &mem_attr);
 
-
-  class DiskedTabletFilterOp final : public ObITabletFilterOp
+  class DummyTabletFilterOp final : public ObITabletFilterOp
   {
   public:
     int do_filter(const ObTabletResidentInfo &info, bool &is_skipped) override
@@ -137,11 +136,8 @@ struct ObTenantSlogCkptUtil
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "tablet resident info is invalid", K(ret), K(info));
       } else if (info.addr_.is_none()) {
-        ret = OB_NEED_RETRY; // (?)
-        STORAGE_LOG(WARN,  "tablet addr is none", K(ret), K(info));
-      } else if (info.addr_.is_memory()) {
-        is_skipped = true;
-        STORAGE_LOG(INFO, "skip in mem tablet", K(ret), K(info));
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected none addr", K(ret), K(info));
       }
       return ret;
     }

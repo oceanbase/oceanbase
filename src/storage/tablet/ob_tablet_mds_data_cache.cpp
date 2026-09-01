@@ -14,6 +14,7 @@
 
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 #include "storage/tablet/ob_tablet_binding_mds_user_data.h"
+#include "storage/tablet/ob_tablet_truncate_mds_user_data.h"
 
 using namespace oceanbase::transaction;
 
@@ -82,6 +83,12 @@ void ObDDLInfoCache::reset()
   redefined_ = false;
   schema_version_ = INT64_MAX;
   snapshot_version_ = INT64_MAX;
+}
+
+void ObTabletTruncateCache::set_value(const ObTabletTruncateMdsUserData &data)
+{
+  truncate_commit_scn_ = data.truncate_commit_scn_;
+  truncate_commit_version_ = data.truncate_commit_version_;
 }
 
 } // namespace storage

@@ -38,7 +38,8 @@ ObMultiVersionValueIterator::ObMultiVersionValueIterator()
       cur_trans_version_(SCN::min_scn()),
       is_node_compacted_(false),
       has_multi_commit_trans_(false),
-      merge_scn_(SCN::max_scn())
+      merge_scn_(SCN::max_scn()),
+      truncate_filter_()
 {
 }
 
@@ -67,6 +68,43 @@ int ObMultiVersionValueIterator::init(ObMvccAccessCtx *ctx,
     is_inited_ = true;
     version_range_ = version_range;
     ctx_ = ctx;
+    if (OB_NOT_NULL(ctx) && ctx->need_memtable_filter_after_truncate_tablet_) {
+      truncate_filter_ = ObMemtableTruncateFilter(ctx->truncate_commit_version_,
+                                                  ctx->truncate_commit_scn_);
+    }
+  }
+  return ret;
+}
+
+int ObMultiVersionValueIterator::normalize_dump_iter_(
+    ObMvccTransNode *&iter,
+    const DumpIterPhase phase) const
+{
+  int ret = OB_SUCCESS;
+  if (truncate_filter_.is_valid()) {
+    while (OB_SUCC(ret) && OB_NOT_NULL(iter)) {
+      // Dump nodes before the truncate point are committed. Both phases share
+      // truncate filtering, while the multi-version phase additionally skips a
+      // retained compact marker above multi_version_start_.
+      if (is_truncated_dump_node(*iter)) {
+        if (NDT_COMPACT == iter->type_) {
+          iter = nullptr;
+        } else {
+          iter = iter->prev_;
+        }
+      } else if (DumpIterPhase::MULTI_VERSION_ROW == phase
+          && NDT_COMPACT == iter->type_
+          && iter->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
+        iter = iter->prev_;
+        if (OB_ISNULL(iter)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "multi version iter should not be NULL after compact node",
+              K(ret), K_(version_range));
+        }
+      } else {
+        break;
+      }
+    }
   }
   return ret;
 }
@@ -74,38 +112,54 @@ int ObMultiVersionValueIterator::init(ObMvccAccessCtx *ctx,
 int ObMultiVersionValueIterator::init_multi_version_iter()
 {
   int ret = OB_SUCCESS;
-  ObMvccTransNode *iter = version_iter_;
+  ObMvccTransNode *iter = nullptr;
   has_multi_commit_trans_ = false;
-  // find the first non-compacted trans_node and use its dml_type for the compacted row
-  while (NULL != iter && NDT_COMPACT == iter->type_) {
-    iter = iter->prev_;
-  }
+  multi_version_iter_ = nullptr;
 
-  max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_.get_val_for_tx() : -1;
-  // NB: It will assign -1 to cur_trans_version_, while it will not
-  // cause any wrong logic, but take care of it
-  multi_version_iter_ = iter;
-  if (OB_FAIL(cur_trans_version_.convert_for_tx(max_committed_trans_version_))) {
-    TRANS_LOG(ERROR, "failed to convert scn", K(ret), K_(max_committed_trans_version));
-  } else if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
-    //如果多版本的开始版本大于等于当前以提交的最大版本
-    //则只迭代出所有trans node compact结果
+  if (OB_FAIL(normalize_dump_iter_(version_iter_, DumpIterPhase::COMPACT_ROW))) {
+    TRANS_LOG(WARN, "failed to normalize compact row iter", K(ret), KPC_(version_iter));
   } else {
-    while (OB_SUCC(ret) && NULL != iter && max_committed_trans_version_ > 0) {
-      // TODO: we need handle INT64_MAX and -1
-      if (iter->trans_version_.get_val_for_tx() < max_committed_trans_version_) {
-        has_multi_commit_trans_ = true;
-        break;
-      } else if (iter->trans_version_.get_val_for_tx() > max_committed_trans_version_) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), K_(max_committed_trans_version),
-            KPC(iter));
-      }
+    iter = version_iter_;
+    // find the first non-compacted trans_node and use its dml_type for the compacted row
+    while (NULL != iter && NDT_COMPACT == iter->type_) {
       iter = iter->prev_;
+    }
+
+    max_committed_trans_version_ = (NULL != version_iter_) ? version_iter_->trans_version_.get_val_for_tx() : -1;
+    if (OB_ISNULL(version_iter_)) {
+      // All committed nodes may be removed by the truncate filter. Treat the
+      // result as a valid empty iterator instead of converting the -1 sentinel.
+      cur_trans_version_ = SCN::min_scn();
+    } else if (OB_FAIL(cur_trans_version_.convert_for_tx(max_committed_trans_version_))) {
+      TRANS_LOG(ERROR, "failed to convert scn", K(ret), K_(max_committed_trans_version));
+    } else if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
+      //如果多版本的开始版本大于等于当前以提交的最大版本
+      //则只迭代出所有trans node compact结果
+    } else if (OB_FAIL(normalize_dump_iter_(iter, DumpIterPhase::MULTI_VERSION_ROW))) {
+      TRANS_LOG(WARN, "failed to normalize multi version iter", K(ret), KPC(iter));
+    } else {
+      multi_version_iter_ = iter;
+      while (OB_SUCC(ret) && NULL != iter && max_committed_trans_version_ > 0) {
+        // TODO: we need handle INT64_MAX and -1
+        if (iter->trans_version_.get_val_for_tx() < max_committed_trans_version_) {
+          has_multi_commit_trans_ = true;
+          break;
+        } else if (iter->trans_version_.get_val_for_tx() > max_committed_trans_version_) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), K_(max_committed_trans_version),
+              KPC(iter));
+        } else {
+          iter = iter->prev_;
+          if (OB_FAIL(normalize_dump_iter_(iter, DumpIterPhase::MULTI_VERSION_ROW))) {
+            TRANS_LOG(WARN, "failed to normalize multi version iter", K(ret), KPC(iter));
+          }
+        }
+      }
     }
   }
   if (OB_SUCC(ret) && !has_multi_commit_trans_) {
-    // no multi commit trans row, only need to output the first compact row
+    // No second committed version remains after filtering. Output the compacted
+    // result as a normal row instead of generating a dangling shadow row.
     multi_version_iter_ = NULL;
   }
   return ret;
@@ -147,6 +201,11 @@ int ObMultiVersionValueIterator::get_next_uncommitted_node(
         if (REACH_TIME_INTERVAL(100_ms)) {
           TRANS_LOG(INFO, "skip txn-node log sync failed", KPC(version_iter_), K(merge_scn_));
         }
+        version_iter_ = version_iter_->prev_;
+      } else if (is_truncated_dump_node(*version_iter_)) {
+        // redo of this node is before the truncate point (old data): drop it.
+        // Skipping before resolving the tx state is safe because the data is
+        // invisible regardless of whether the tx eventually commits or aborts.
         version_iter_ = version_iter_->prev_;
       } else {
         bool need_get_state = version_iter_->get_tx_end_scn() > merge_scn_;
@@ -206,8 +265,9 @@ int ObMultiVersionValueIterator::check_next_sql_sequence(
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "ObMultiVersionValueIterator is not inited", K(ret));
   } else {
-    while (nullptr != version_iter_
-        && NDT_COMPACT == version_iter_->type_) {
+    while (OB_NOT_NULL(version_iter_)
+        && (NDT_COMPACT == version_iter_->type_
+            || is_truncated_dump_node(*version_iter_))) {
       version_iter_ = version_iter_->prev_;
     }
     if (nullptr != version_iter_) {
@@ -274,31 +334,42 @@ int ObMultiVersionValueIterator::get_trans_status(const transaction::ObTransID &
 int ObMultiVersionValueIterator::get_next_node(const void *&tnode)
 {
   int ret = OB_SUCCESS;
+  tnode = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
-  } else if (OB_ISNULL(version_iter_)
-      || version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
-    version_iter_ = NULL;
-    ret = OB_ITER_END;
   } else {
-    if (!version_iter_->is_committed() && !version_iter_->is_aborted()) {
-      ret = OB_EAGAIN;
-      TRANS_LOG(WARN, "TransNode status is invalid, need retry", K(ret), KPC(version_iter_));
-    }
-    if (NDT_COMPACT == version_iter_->type_) {
-      tnode = static_cast<const void*>(version_iter_);
-      version_iter_ = NULL;
-    } else {
-      ObMvccTransNode *cur_iter = version_iter_;
-      tnode = static_cast<const void*>(version_iter_);
-      version_iter_ = version_iter_->prev_;
-      if (OB_NOT_NULL(version_iter_) && cur_iter->trans_version_ < version_iter_->trans_version_) {
-        ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), KPC(cur_iter),
-            KPC_(version_iter));
+    while (OB_SUCC(ret) && OB_ISNULL(tnode) && OB_NOT_NULL(version_iter_)) {
+      if (version_iter_->trans_version_.get_val_for_tx() <= version_range_.base_version_) {
+        version_iter_ = nullptr;
+        break;
+      }
+      if (!version_iter_->is_committed() && !version_iter_->is_aborted()) {
+        ret = OB_EAGAIN;
+        TRANS_LOG(WARN, "TransNode status is invalid, need retry", K(ret), KPC(version_iter_));
+      } else if (truncate_filter_.is_valid() && truncate_filter_.is_truncated(*version_iter_)) {
+        if (NDT_COMPACT == version_iter_->type_) {
+          version_iter_ = nullptr;
+        } else {
+          version_iter_ = version_iter_->prev_;
+        }
+      } else if (NDT_COMPACT == version_iter_->type_) {
+        tnode = static_cast<const void*>(version_iter_);
+        version_iter_ = nullptr;
+      } else {
+        ObMvccTransNode *cur_iter = version_iter_;
+        tnode = static_cast<const void*>(version_iter_);
+        version_iter_ = version_iter_->prev_;
+        if (OB_NOT_NULL(version_iter_) && cur_iter->trans_version_ < version_iter_->trans_version_) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), KPC(cur_iter),
+              KPC_(version_iter));
+        }
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(tnode)) {
+    ret = OB_ITER_END;
   }
   return ret;
 }
@@ -306,26 +377,38 @@ int ObMultiVersionValueIterator::get_next_node(const void *&tnode)
 int ObMultiVersionValueIterator::get_next_node_for_compact(const void *&tnode)
 {
   int ret = OB_SUCCESS;
+  tnode = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret), KP(this));
-  } else if (OB_ISNULL(version_iter_)) {
-    version_iter_ = nullptr;
-    ret = OB_ITER_END;
-  } else if (!version_iter_->is_committed() && !version_iter_->is_aborted()) {
-    ret = OB_EAGAIN;
-    TRANS_LOG(WARN, "TransNode status is invalid, need retry", K(ret), KPC(version_iter_));
-  } else if (NDT_COMPACT == version_iter_->type_) { // meet compact node, end loop TransNode list
-    tnode = static_cast<const void*>(version_iter_);
-    version_iter_ = NULL;
   } else {
-    ObMvccTransNode *cur_iter = version_iter_;
-    tnode = static_cast<const void*>(version_iter_);
-    version_iter_ = version_iter_->prev_;
-    if (OB_NOT_NULL(version_iter_)
-        && cur_iter->trans_version_ < version_iter_->trans_version_) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), KPC(cur_iter), KPC_(version_iter));
+    // Loop so that committed nodes produced before the truncate point (old data)
+    // are skipped instead of being handed to the compactor. Aborted / not-yet-
+    // decided nodes keep their legacy handling untouched.
+    while (OB_SUCC(ret) && OB_ISNULL(tnode) && OB_NOT_NULL(version_iter_)) {
+      if (!version_iter_->is_committed() && !version_iter_->is_aborted()) {
+        ret = OB_EAGAIN;
+        TRANS_LOG(WARN, "TransNode status is invalid, need retry", K(ret), KPC(version_iter_));
+      } else if (version_iter_->is_committed() && is_truncated_dump_node(*version_iter_)) {
+        // committed data before the truncate point (old data): drop it
+        if (NDT_COMPACT == version_iter_->type_) {
+          version_iter_ = NULL;
+        } else {
+          version_iter_ = version_iter_->prev_;
+        }
+      } else if (NDT_COMPACT == version_iter_->type_) { // meet compact node, end loop TransNode list
+        tnode = static_cast<const void*>(version_iter_);
+        version_iter_ = NULL;
+      } else {
+        ObMvccTransNode *cur_iter = version_iter_;
+        tnode = static_cast<const void*>(version_iter_);
+        version_iter_ = version_iter_->prev_;
+        if (OB_NOT_NULL(version_iter_)
+            && cur_iter->trans_version_ < version_iter_->trans_version_) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), KPC(cur_iter), KPC_(version_iter));
+        }
+      }
     }
   }
   if (OB_SUCC(ret) && OB_ISNULL(version_iter_) && OB_ISNULL(tnode)) {
@@ -378,6 +461,10 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
           multi_version_iter_ = NULL;
           break;
         }
+      } else if (is_truncated_dump_node(*multi_version_iter_)) {
+        // Defensive fallback for a normal node reached after the cursor was
+        // advanced inside this loop. Old compact nodes are terminated by
+        // normalize_dump_iter_().
       } else { // not compacted node
         if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.multi_version_start_) {
           is_node_compacted_ = true;
@@ -404,16 +491,18 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
         ret = OB_EAGAIN;
         TRANS_LOG(WARN, "TransNode status is invalid, meet running trans node in iterate "
             "committed row phase, need retry", K(ret), KPC(record_node));
+      } else if (OB_NOT_NULL(multi_version_iter_)
+                 && cur_trans_version < multi_version_iter_->trans_version_) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), K(cur_trans_version),
+            KPC_(multi_version_iter));
+      } else if (OB_FAIL(normalize_dump_iter_(
+                     multi_version_iter_, DumpIterPhase::MULTI_VERSION_ROW))) {
+        TRANS_LOG(WARN, "failed to normalize multi version iter", K(ret), KPC_(multi_version_iter));
       } else {
         tnode = static_cast<const void*>(record_node);
         cur_trans_version_ = record_node->trans_version_;
       }
-    }
-    if (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_)
-        && cur_trans_version < multi_version_iter_->trans_version_) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "meet trans node with larger trans version", K(ret), K(cur_trans_version),
-          KPC_(multi_version_iter));
     }
   }
   return ret;
@@ -450,7 +539,7 @@ bool ObMultiVersionValueIterator::is_cur_multi_version_row_end() const
 
 void ObMultiVersionValueIterator::reset()
 {
-  is_inited_ = true;
+  is_inited_ = false;
   value_ = NULL;
   version_iter_ = NULL;
   multi_version_iter_ = NULL;
@@ -460,6 +549,7 @@ void ObMultiVersionValueIterator::reset()
   has_multi_commit_trans_ = false;
   ctx_ = NULL;
   version_range_.reset();
+  truncate_filter_.reset();
 }
 
 bool ObMultiVersionValueIterator::is_multi_version_iter_end() const
@@ -557,13 +647,10 @@ int ObMultiVersionRowIterator::get_next_row(
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(try_cleanout_mvcc_row_(value))) {
       TRANS_LOG(WARN, "try cleanout mvcc row failed", K(ret), "ctx", *ctx_);
-    } else if (OB_FAIL(value_iter_.init(ctx_,
-                                        version_range_,
-                                        tmp_key,
-                                        value))) {
-      TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
+    } else if (OB_FAIL(value_iter_.init(ctx_, version_range_, tmp_key, value))) {
+      TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value));
     } else if (!value_iter_.is_exist()) {
-      // continue
+      // no visible node, continue
     } else {
       key = tmp_key;
       value_iter = &value_iter_;

@@ -7881,6 +7881,26 @@ public:
   bool is_rebuild_column_group_;
 };
 
+struct ObTruncateTabletFreezeArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTruncateTabletFreezeArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      ls_id_(),
+      tablet_id_()
+  {}
+  ~ObTruncateTabletFreezeArg() = default;
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && ls_id_.is_valid() && tablet_id_.is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id));
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+};
+
 struct ObSyncPGPartitionMTFinishArg
 {
   OB_UNIS_VERSION(1);

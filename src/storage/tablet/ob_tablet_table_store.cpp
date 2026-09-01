@@ -20,6 +20,7 @@
 #include "storage/ddl/ob_ddl_merge_task.h"
 #include "storage/ddl/ob_tablet_split_util.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/tablet/ob_sstable_truncate_filter.h"
 
 namespace oceanbase
 {
@@ -227,7 +228,8 @@ int ObTabletTableStore::init(
     ObArenaAllocator &allocator,
     const ObTablet &tablet,
     const ObUpdateTableStoreParam &param,
-    const ObTabletTableStore &old_store)
+    const ObTabletTableStore &old_store,
+    const ObSSTableTruncateFilter *sstable_filter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -236,7 +238,14 @@ int ObTabletTableStore::init(
   } else if (OB_UNLIKELY(!param.is_valid() || !old_store.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid arguments", K(ret), K(param), K(old_store));
-  } else if (OB_FAIL(build_new_table_store(allocator, tablet, param, old_store))) {
+  } else if (OB_ISNULL(sstable_filter)) {
+  } else if (OB_FAIL(sstable_filter->check_if_need_merge(param))) {
+    if (OB_NO_NEED_MERGE != ret) {
+      LOG_WARN("failed to check if need merge", K(ret), K(param), KPC(sstable_filter));
+    }
+  }
+
+  if (FAILEDx(build_new_table_store(allocator, tablet, param, old_store))) {
     LOG_WARN("failed to build new table store with old store", K(ret), K(old_store), K(param), K(tablet));
   }
   return ret;
@@ -571,6 +580,42 @@ int ObTabletTableStore::init(
       }
       FLOG_INFO("succeed to assign table store", K(ret), K(PRINT_TS(*this)));
     }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::init_for_truncate(
+    ObArenaAllocator &allocator,
+    const ObTablet &tablet,
+    const ObTabletTableStore &old_store,
+    const share::SCN &mds_checkpoint_scn,
+    const blocksstable::ObSSTable *empty_major)
+{
+  int ret = OB_SUCCESS;
+  const int64_t inc_pos = 0;
+  ObArray<ObITable *> old_mds_tables;
+
+  if (OB_FAIL(init(allocator, tablet, empty_major))) {
+    LOG_WARN("failed to init table store with empty major", K(ret), K(tablet));
+  } else if (OB_FAIL(old_store.mds_sstables_.get_all_tables(old_mds_tables))) {
+    LOG_WARN("failed to get all mds sstables from old table store", K(ret), K(old_store));
+  } else if (old_mds_tables.empty()) {
+    // do nothing
+  } else if (OB_UNLIKELY(old_mds_tables.at(old_mds_tables.count() - 1)->get_end_scn() != mds_checkpoint_scn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mds checkpoint scn must be equal to the last mds sstable's end scn", K(ret),
+      K(old_mds_tables), K(mds_checkpoint_scn));
+  } else if (OB_FAIL(init_minor_sstable_array_with_check(mds_sstables_,
+                                                         allocator,
+                                                         old_mds_tables,
+                                                         inc_pos))) {
+    LOG_WARN("failed to init minor sstable array", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    reset();
+  } else {
+    LOG_INFO("succeed to init tablet table store for truncate", K(ret), KPC(empty_major), K(old_mds_tables));
   }
   return ret;
 }
@@ -2627,8 +2672,10 @@ int ObTabletTableStore::need_remove_old_table(
 int ObTabletTableStore::build_ha_new_table_store(
     common::ObArenaAllocator &allocator,
     ObTablet &tablet,
+    const ObTablet &old_tablet,
     const ObBatchUpdateTableStoreParam &param,
-    const ObTabletTableStore &old_store)
+    const ObTabletTableStore &old_store,
+    const ObSSTableTruncateFilter *sstable_filter)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -2639,6 +2686,14 @@ int ObTabletTableStore::build_ha_new_table_store(
     LOG_WARN("init tablet table store get invalid argument", K(ret), K(tablet), K(param), K(old_store));
   } else if (OB_FAIL(init(allocator, tablet))) {
     LOG_WARN("failed to init a new empty table store", K(ret));
+  } else if (OB_NOT_NULL(sstable_filter)) {
+    // rebuild new batch update param
+    ObBatchUpdateTableStoreParam new_param;
+    if (OB_FAIL(sstable_filter->rebuild_param_for_transfer_replace(allocator, old_tablet, param, new_param))) {
+      LOG_WARN("failed to rebuild param for transfer replace", K(ret));
+    } else if (OB_FAIL(build_ha_new_table_store_(allocator, tablet, new_param, old_store))) {
+      LOG_WARN("failed to build new table store with old store and sstable filter", K(ret));
+    }
   } else if (OB_FAIL(build_ha_new_table_store_(allocator, tablet, param, old_store))) {
     LOG_WARN("failed to build new table store with old store", K(ret));
   }

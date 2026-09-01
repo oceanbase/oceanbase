@@ -79,6 +79,17 @@ struct ObMergeParameter {
   share::ObDiagnoseLocation *error_location_;
   ObMviewMergeParameter *mview_merge_param_;
   ObIAllocator *allocator_;
+  // pointer to the tablet handle owned by the merge ctx; nullptr until init().
+  // exposed so iter-level callers (e.g. ObPartitionMergeIter) can forward the
+  // tablet down to ObTableAccessParam::init_merge_param and avoid an extra
+  // get_tablet() MDS lookup in the memtable read path.
+  const storage::ObTabletHandle *tablet_handle_ptr_;
+
+  OB_INLINE const storage::ObTabletHandle &get_tablet_handle() const
+  {
+    OB_ASSERT(OB_NOT_NULL(tablet_handle_ptr_));
+    return *tablet_handle_ptr_;
+  }
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:

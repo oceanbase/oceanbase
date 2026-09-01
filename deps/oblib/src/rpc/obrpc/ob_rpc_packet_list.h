@@ -1416,11 +1416,9 @@ PCODE_DEF(OB_MODIFY_JAVA_POLICY, 0x1691)
 
 PCODE_DEF(OB_GET_TENANT_MEMORY_INFO, 0x1692)
 PCODE_DEF(OB_ASYNC_RUN_INSPECTION, 0x1694)
-PCODE_DEF(OB_DTL_BATCH_SEND, 0x1697)
-
-
 PCODE_DEF(OB_CLEAR_SYNC_STANDBY_DEST_CACHE, 0x1695)
 PCODE_DEF(OB_GET_LS_STANDBY_SYNC_SCN, 0x1696)
+PCODE_DEF(OB_DTL_BATCH_SEND, 0x1697)
 
 PCODE_DEF(OB_DROP_GTT_V2_SESSION_TABLET, 0x169F)
 PCODE_DEF(OB_RUN_MVIEW_PENDING_TASK, 0x16A0)
@@ -1429,27 +1427,29 @@ PCODE_DEF(OB_KILL_MVIEW_REFRESH, 0x16A2)
 PCODE_DEF(OB_ASYNC_GET_INSPECTION_STATUS, 0x16A3)
 PCODE_DEF(OB_CHECK_TENANT_CONFIG_AND_INFO, 0x16A6)
 PCODE_DEF(OB_QUERY_DEPLOY_MODE_INFO, 0x16A7)
+PCODE_DEF(OB_BATCH_DROP_GTT_V2_SESSION_TABLET, 0x16A8)
+PCODE_DEF(OB_TRUNCATE_TABLET_FREEZE, 0x16A9)
 
 // ===============================================================
 // CDC Instance RPC PCODEs (0x2000 - 0x2400 reserved for CDC Instance)
 // These are used for CDC Instance inter-process communication
 // ===============================================================
-PCODE_DEF(OB_CDC_INSTANCE_HEARTBEAT, 0x2000)         // Process-level heartbeat RPC
-PCODE_DEF(OB_CDC_VALIDATE_CLIENT_TOKEN, 0x2001)      // Validate client token for push task
-PCODE_DEF(OB_CDC_GET_STREAM_PLACEMENT_HEADER, 0x2002)// Get stream placement header
-PCODE_DEF(OB_CDC_ASSIGN_FETCH_TASK, 0x2003)          // Assign fetch task for rebalance
-PCODE_DEF(OB_CDC_ASSIGN_WORKER_TASK, 0x2004)         // Assign cdcworker task for rebalance
+PCODE_DEF(OB_CDC_INSTANCE_HEARTBEAT, 0x2000)          // Process-level heartbeat RPC
+PCODE_DEF(OB_CDC_VALIDATE_CLIENT_TOKEN, 0x2001)       // Validate client token for push task
+PCODE_DEF(OB_CDC_GET_STREAM_PLACEMENT_HEADER, 0x2002) // Get stream placement header
+PCODE_DEF(OB_CDC_ASSIGN_FETCH_TASK, 0x2003)           // Assign fetch task for rebalance
+PCODE_DEF(OB_CDC_ASSIGN_WORKER_TASK, 0x2004)          // Assign cdcworker task for rebalance
+PCODE_DEF(OB_CDC_NOTIFY_CHANNEL_CHANGE, 0x2005)       // Notify channel placement change
+PCODE_DEF(OB_CDC_BATCH_PUSH_MESSAGE, 0x2006)          // CDC worker batch push message RPC
+PCODE_DEF(OB_CDC_REGISTER_PUSH_TASK, 0x2007)          // MsgService register push task RPC
+PCODE_DEF(OB_CDC_FETCH_REDO_PAYLOAD_BY_LSN, 0x2008)   // Fetch redo payload by LSN
+PCODE_DEF(OB_CDC_PUSH_PART_TRANS_INFO, 0x2009)        // Push part trans info to cdc worker
 PCODE_DEF(OB_CDC_RECONCILE_DATA_RANGE_RUNTIME, 0x200A) // Unified reconcile data range runtime
-PCODE_DEF(OB_CDC_NOTIFY_CHANNEL_CHANGE, 0x2005)      // Notify channel placement change
-PCODE_DEF(OB_CDC_BATCH_PUSH_MESSAGE, 0x2006)      // CDC worker batch push message RPC
-PCODE_DEF(OB_CDC_REGISTER_PUSH_TASK, 0x2007)      // MsgService register push task RPC
-PCODE_DEF(OB_CDC_FETCH_REDO_PAYLOAD_BY_LSN, 0x2008)  // Fetch redo payload by LSN
-PCODE_DEF(OB_CDC_PUSH_PART_TRANS_INFO, 0x2009)       // Push part trans info to cdc worker
-PCODE_DEF(OB_CDC_FETCH_REDO_LOG, 0x2010)             // Fetch redo log raw data
-PCODE_DEF(OB_CDC_REFRESH_CONFIG, 0x2011)             // Refresh runtime config immediately
-PCODE_DEF(OB_CDC_BUMP_STREAM_CHANNEL_EPOCH, 0x2012)  // Bump stream channel epoch for rebuild
-PCODE_DEF(OB_CDC_FLOW_CONTROL_DATA_RANGE, 0x2013)   // worker -> fetchservice data_range flow control
-PCODE_DEF(OB_CDC_HEALTH_HEARTBEAT, 0x2014)          // Lightweight server health heartbeat
+PCODE_DEF(OB_CDC_FETCH_REDO_LOG, 0x2010)              // Fetch redo log raw data
+PCODE_DEF(OB_CDC_REFRESH_CONFIG, 0x2011)              // Refresh runtime config immediately
+PCODE_DEF(OB_CDC_BUMP_STREAM_CHANNEL_EPOCH, 0x2012)   // Bump stream channel epoch for rebuild
+PCODE_DEF(OB_CDC_FLOW_CONTROL_DATA_RANGE, 0x2013)     // worker -> fetchservice data_range flow control
+PCODE_DEF(OB_CDC_HEALTH_HEARTBEAT, 0x2014)            // Lightweight server health heartbeat
 // Reserved: 0x2015 - 0x2400
 
 //**** 注意：在此行之前增加新的RPC ID ******

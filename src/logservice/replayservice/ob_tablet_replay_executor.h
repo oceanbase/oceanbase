@@ -130,6 +130,11 @@ protected:
       const rootserver::ObTruncateTabletArg &mds,
       storage::mds::MdsCtx &ctx,
       const share::SCN &scn);
+  int replay_to_mds_table_(
+      storage::ObTabletHandle &tablet_handle,
+      const ObTabletTruncateMdsUserData &mds,
+      storage::mds::MdsCtx &ctx,
+      const share::SCN &scn);
   template <typename K, typename V>
   int replay_to_mds_table_(
       storage::ObTabletHandle &tablet_handle,

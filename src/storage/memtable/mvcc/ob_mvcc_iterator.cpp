@@ -36,6 +36,9 @@ int ObMvccValueIterator::init(ObMvccAccessCtx &ctx,
   ctx_ = &ctx;
   if (OB_UNLIKELY(!ctx.get_snapshot_version().is_valid())) {
     ret = OB_ERR_UNEXPECTED;
+  } else if (OB_UNLIKELY(ctx.need_memtable_filter_after_truncate_tablet_)
+             && OB_FAIL(setup_truncate_filter_(ctx))) {
+    TRANS_LOG(WARN, "fail to setup truncate filter", K(ret));
   } else if (OB_ISNULL(value)) {
     // row not exist
     is_inited_ = true;
@@ -299,6 +302,7 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
 int ObMvccValueIterator::try_cleanout_tx_node_(ObMvccTransNode *tnode)
 {
   int ret = OB_SUCCESS;
+  OB_ASSERT(OB_NOT_NULL(ctx_));
   ObTxTableGuards &tx_table_guards = ctx_->get_tx_table_guards();
   if (!(tnode->is_committed() || tnode->is_aborted())
       && tnode->is_delayed_cleanout()
@@ -323,6 +327,35 @@ void ObMvccValueIterator::get_trans_stat_row(concurrency_control::ObTransStatRow
   }
 }
 
+int ObMvccValueIterator::setup_truncate_filter_(ObMvccAccessCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  // Caller guarantees ctx.need_memtable_filter_after_truncate_tablet_ is true.
+  // Truncate is DDL and weak reads are not supported, so the reader's
+  // snapshot must be >= truncate_commit_version.  Reject otherwise.  Under
+  // this invariant every node passing truncate_filter_ (tx_version >=
+  // truncate_commit_version) is also visible to the reader's snapshot, while
+  // snapshot/seq/uncommitted resolution still goes through lock_for_read_.
+  if (ctx.truncate_commit_version_ > 0
+      && ctx.get_snapshot_version().get_val_for_tx() < ctx.truncate_commit_version_) {
+    ret = OB_SNAPSHOT_DISCARDED;
+    TRANS_LOG(WARN, "reader snapshot precedes truncate commit version, "
+              "truncate is DDL and weak read is not supported",
+              K(ret), "snapshot", ctx.get_snapshot_version(),
+              K(ctx.truncate_commit_version_));
+  } else {
+    ObMemtableTruncateFilter filter(ctx.truncate_commit_version_, ctx.truncate_commit_scn_);
+    if (OB_UNLIKELY(!filter.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid truncate filter argument", K(ret), K(filter));
+    } else {
+      truncate_filter_ = filter;
+      has_truncate_filter_ = true;
+    }
+  }
+  return ret;
+}
+
 int ObMvccValueIterator::get_next_node(const void *&tnode)
 {
   int ret = OB_SUCCESS;
@@ -340,9 +373,10 @@ int ObMvccValueIterator::get_next_node(const void *&tnode)
         TRANS_LOG(WARN, "fail to cleanout tnode", K(ret), K(*version_iter_));
       } else if (OB_FAIL(version_iter_->is_lock_node(is_lock_node))) {
         TRANS_LOG(WARN, "fail to check is lock node", K(ret), K(*version_iter_));
-      } else if (!(version_iter_->is_aborted()              // skip abort version
-                   || is_lock_node)) {                      // skip lock node
-        tnode = static_cast<const void *>(version_iter_);
+      } else if (!(version_iter_->is_aborted() || is_lock_node)) {
+        if (OB_LIKELY(!has_truncate_filter_) || !truncate_filter_.is_truncated(*version_iter_)) {
+          tnode = static_cast<const void *>(version_iter_);
+        }
       }
 
       move_to_next_node_();
@@ -459,7 +493,7 @@ int ObMvccRowIterator::get_next_row(
     } else if (OB_FAIL(value_iter_.init(*ctx_, tmp_key, value, memtable_ls_id_, query_flag_))) {
       TRANS_LOG(WARN, "value iter init fail", K(ret), "ctx", *ctx_, KP(value), K(*value));
     } else if (!value_iter_.is_exist()) {
-      // mvcc row is empty(no tnode), so we continue
+      // mvcc row is empty(no visible tnode), so we continue
     } else {
       key = tmp_key;
       value_iter = &value_iter_;

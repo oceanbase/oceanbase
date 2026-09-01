@@ -145,6 +145,48 @@ int ObITabletMdsInterface::get_latest_ddl_data(
   #undef PRINT_WRAPPER
 }
 
+int ObITabletMdsInterface::get_latest_truncate_data(
+    ObTabletTruncateMdsUserData &data,
+    mds::MdsWriter &writer,
+    mds::TwoPhaseCommitState &trans_stat,
+    share::SCN &trans_version,
+    const int64_t read_seq) const
+{
+  #define PRINT_WRAPPER KR(ret), K(data)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!check_is_inited_())) {
+    ret = OB_NOT_INIT;
+    MDS_LOG_GET(WARN, "not inited");
+  } else {
+    ObITabletMdsInterface *src = nullptr;
+    ObTabletHandle src_tablet_handle;
+    if (get_tablet_meta_().has_transfer_table()) {
+      if (CLICK_FAIL(get_src_tablet_handle_and_base_ptr_(src_tablet_handle, src))) {
+        MDS_LOG(WARN, "fail to get src tablet handle", K(ret), K(get_tablet_meta_()));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (CLICK_FAIL((cross_ls_get_latest<ObTabletTruncateMdsUserData>(
+        src,
+        ReadTabletTruncateDataOp(data),
+        writer,
+        trans_stat,
+        trans_version,
+        read_seq)))) {
+      if (OB_EMPTY_RESULT != ret) {
+        MDS_LOG_GET(WARN, "fail to cross ls get latest", K(lbt()));
+      }
+    } else if (!data.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      MDS_LOG_GET(WARN, "invalid user data", K(lbt()));
+    }
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int ObITabletMdsInterface::get_ddl_data(
     const share::SCN &snapshot,
     ObTabletBindingMdsUserData &data,

@@ -13,6 +13,7 @@
 #define OCEANBASE_STORAGE_TABLET_OB_SESSION_TABLET_INFO_MAP_H
 
 #include "lib/hash/ob_hashmap.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/ob_ls_id.h"
 #include "common/ob_tablet_id.h"
 
@@ -20,7 +21,19 @@ namespace oceanbase
 {
 namespace storage
 {
+// Sentinel value used by session-scope GTT tablets in
+// __all_tablet_to_global_temporary_table when data_version >= 4.4.2.1, so all
+// session-scope rows share the same sequence and can be looked up uniformly.
 const int64_t OB_GTT_V2_SESS_TABLET_SEQUENCE = -1;
+// Inactive sentinel for transaction-level GTT tablets whose data has been
+// drained by the truncate-tablet MDS path on commit. The row stays in
+// __all_tablet_to_global_temporary_table for GC / reuse, but DDL liveness
+// treats it as inactive and the next first-write reuses the tablet by
+// bumping the sequence back to a fresh trans-scope value. Distinct from the
+// session-scope sentinel above so callers can tell the two states apart
+// (live trans sequences are derived from combine_server_id() and are always
+// strictly positive, so 0 cannot collide with an active trans sequence).
+const int64_t OB_GTT_V2_TRX_TABLET_INACTIVE_SEQUENCE = 0;
 
 struct ObGTTTabletInfo final
 {
@@ -169,17 +182,33 @@ public:
       const uint64_t session_id);
   int get_session_tablet(
       const ObSessionTabletInfoKey &session_tablet_info_key,
-      ObSessionTabletInfo &session_tablet_info);
+      ObSessionTabletInfo &session_tablet_info,
+      const bool local_only = false);
   int get_session_tablet_if_not_exist_add(
       const ObSessionTabletInfoKey &session_tablet_info_key,
       ObSessionTabletInfo &session_tablet_info);
   int remove_session_tablet(const uint64_t table_id);
+  int remove_session_tablet(const ObSessionTabletInfoKey &session_tablet_info_key);
+  int batch_update_tablet_sequences(
+      const uint64_t session_id,
+      const common::ObIArray<common::ObTabletID> &updated_tablet_ids,
+      const int64_t old_sequence,
+      const int64_t new_sequence);
   void reset() { tablet_infos_.reset(); }
   bool is_empty() const { return tablet_infos_.count() == 0; }
   int get_table_ids_by_session_id_and_sequence(
       const uint64_t session_id,
       const int64_t sequence,
       common::ObIArray<uint64_t> &table_ids);
+  int try_reuse_truncated_tablets(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      const int64_t sequence,
+      const uint64_t session_id,
+      common::ObIArray<common::ObTabletID> &reused_tablet_ids,
+      share::ObLSID &resolved_ls_id);
+  bool has_inactive_trx_session_tablet();
+  static bool is_gtt_truncate_tablet_enabled(const uint64_t tenant_id);
   TO_STRING_KV(K_(tablet_infos));
 private:
   const static int64_t MAX_SESSION_TABLET_COUNT = 64;
@@ -187,7 +216,33 @@ private:
       const uint64_t table_id,
       const int64_t sequence,
       const uint64_t session_id,
-      ObSessionTabletInfo &session_tablet_info);
+      ObSessionTabletInfo &session_tablet_info,
+      const bool local_only = false);
+  static void reset_reuse_outputs(
+      common::ObIArray<common::ObTabletID> &reused_tablet_ids,
+      share::ObLSID &resolved_ls_id);
+  int classify_tables_for_reuse(
+      const uint64_t tenant_id,
+      common::ObMySQLTransaction &trans,
+      const common::ObIArray<uint64_t> &table_ids,
+      const int64_t sequence,
+      const uint64_t session_id,
+      common::ObIArray<common::ObTabletID> &reused_tablet_ids,
+      share::ObLSID &resolved_ls_id,
+      common::ObIArray<ObSessionTabletInfo> &infos_to_truncate,
+      common::ObIArray<common::ObTabletID> &tablets_to_bump_seq);
+  int run_reuse_path(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      const int64_t sequence,
+      const uint64_t session_id,
+      common::ObIArray<common::ObTabletID> &reused_tablet_ids,
+      share::ObLSID &resolved_ls_id);
+  int update_session_tablet_sequence_without_lock(
+      const uint64_t table_id,
+      const ObTabletID &tablet_id,
+      const uint64_t session_id,
+      const int64_t new_sequence);
 private:
   common::ObSEArray<ObSessionTabletInfo, MAX_SESSION_TABLET_COUNT> tablet_infos_;
   lib::ObMutex mutex_;
