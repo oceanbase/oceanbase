@@ -1480,6 +1480,8 @@ public:
                                      GroupByPushdownContext *&context,
                                      GroupByPushdownResult *&result);
 
+  int check_set_child_types_same(const ObLogSet *set_op, bool &is_same);
+
   int check_and_add_const_to_group_by(GroupByPushdownContext *&context);
 
   int partial_limit_pushdown(ObLogicalOperator *&top,

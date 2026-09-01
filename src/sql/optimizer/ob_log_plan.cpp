@@ -11878,6 +11878,54 @@ int GroupByPushdownResult::init(ObIAllocator *allocator, GroupByPushdownResult* 
   return ret;
 }
 
+int ObLogPlan::check_set_child_types_same(const ObLogSet *set_op, bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = true;
+  ObSEArray<ObRawExpr *, 8> first_child_exprs;
+  ObSEArray<ObRawExpr *, 8> child_exprs;
+  if (OB_ISNULL(set_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(set_op));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_same && i < set_op->get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = set_op->get_child(i);
+    const ObSelectStmt *child_stmt = NULL;
+    child_exprs.reset();
+    if (OB_ISNULL(child) || OB_ISNULL(child->get_plan()) ||
+        OB_ISNULL(child_stmt = static_cast<const ObSelectStmt *>(child->get_plan()->get_stmt()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(child), K(child_stmt));
+    } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
+    } else if (OB_FAIL(child_stmt->get_select_exprs(child_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (0 == i) {
+      if (OB_FAIL(first_child_exprs.assign(child_exprs))) {
+        LOG_WARN("failed to assign select exprs", K(ret));
+      }
+    } else if (first_child_exprs.count() != child_exprs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected set child expr count", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && is_same && j < child_exprs.count(); ++j) {
+        if (OB_ISNULL(first_child_exprs.at(j)) || OB_ISNULL(child_exprs.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(first_child_exprs.at(j)), K(child_exprs.at(j)));
+        } else {
+          const ObRawExprResType &first_type = first_child_exprs.at(j)->get_result_type();
+          const ObRawExprResType &child_type = child_exprs.at(j)->get_result_type();
+          is_same = first_type == child_type &&
+                    first_type.get_obj_meta().get_scale() == child_type.get_obj_meta().get_scale() &&
+                    first_type.get_result_flag() == child_type.get_result_flag();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::prepare_partial_groupby_info(GroupByPushdownResult *&result,
                                             ObLogicalOperator *&top)
 {
@@ -12260,8 +12308,13 @@ int ObLogPlan::partial_group_by_pushdown(ObLogicalOperator *&top,
         } else if (set_op -> is_recursive_union()) {
           // do nothing
         } else {
+          bool child_types_same = false;
           if (!(ObSelectStmt::UNION == set_op->get_set_op() && !set_op->is_set_distinct())) {
             // only union all
+          } else if (OB_FAIL(check_set_child_types_same(set_op, child_types_same))) {
+            LOG_WARN("failed to check set child types", K(ret));
+          } else if (!child_types_same) {
+            // do not push group by through union all if child types are different
           } else {
             default_rewrite = false;
             bool has_pushed_down = false;

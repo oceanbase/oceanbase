@@ -754,23 +754,41 @@ int ObTransformGroupByPushdown::transform_non_basic_child_stmt(
   return ret;
 }
 
-int ObTransformGroupByPushdown::transform_union_stmt(
-    ObSelectStmt *union_stmt,
-    ObIArray<ObSelectStmt *> &child_stmts) {
+int ObTransformGroupByPushdown::transform_union_stmt(ObSelectStmt *union_stmt, ObIArray<ObSelectStmt *> &child_stmts)
+{
   int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt *, 4> left_stmts;
+  ObSEArray<ObExprResType, 8> left_types;
   // check ctx
   if (OB_ISNULL(union_stmt) || OB_UNLIKELY(child_stmts.count() < 2) ||
       OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
       OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(union_stmt), K(child_stmts));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    if (OB_ISNULL(child_stmts.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child stmt is null", K(ret), K(i));
+    } else if (i > 0
+               && OB_FAIL(ObOptimizerUtil::try_add_cast_to_set_child_list(ctx_->allocator_,
+                                                                          ctx_->session_info_,
+                                                                          ctx_->expr_factory_,
+                                                                          union_stmt->is_set_distinct(),
+                                                                          left_stmts,
+                                                                          child_stmts.at(i),
+                                                                          left_types,
+                                                                          false, NULL, true))) {
+      LOG_WARN("failed to add cast to set child list", K(ret), K(i));
+    } else if (OB_FAIL(left_stmts.push_back(child_stmts.at(i)))) {
+      LOG_WARN("failed to add child stmt to left set list", K(ret), K(i));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(ctx_->allocator_,
                                                           ctx_->session_info_,
                                                           ctx_->expr_factory_,
                                                           union_stmt))) {
-    // TODO tuliwei.tlw
-    // Here's the issue: If a view is created to represent this UNION statement
-    // and triggers a rewrite, the name of this UNION statement would vanish,
-    // meaning during an EXPLAIN, the name of the view would not be displayed.
     LOG_WARN("failed to get set target list", K(ret));
   } else if (OB_FAIL(union_stmt->formalize_stmt(ctx_->session_info_, false))) {
     LOG_WARN("failed to formalize union_stmt info", K(ret));
