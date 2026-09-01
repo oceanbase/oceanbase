@@ -3204,6 +3204,14 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
       OX (max_count = (0 == max_count) ? tab_count : max_count);
       OX (count = tab_count);
       CK (max_count >= count);
+      if (OB_SUCC(ret) && is_varray_type()) {
+        const int64_t capacity = static_cast<const ObVArrayType *>(this)->get_capacity();
+        if (OB_UNLIKELY(static_cast<int64_t>(max_count) > capacity)) {
+          ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
+          LOG_WARN("varray count exceeds defined capacity during deserialize",
+                   K(ret), K(count), K(max_count), K(capacity), KPC(this));
+        }
+      }
       if (OB_SUCC(ret) && OB_LIKELY(0 != max_count)) {
         int64_t bitmap_bytes = ((count + 7) / 8);
         const char* bitmap = src;
