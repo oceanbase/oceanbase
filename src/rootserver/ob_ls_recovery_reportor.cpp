@@ -507,6 +507,9 @@ int ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
     if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(tenant_id, &trans, true, tenant_info))) {
       LOG_WARN("failed to load tenant info for update", KR(ret), K(tenant_id));
     } else if (tenant_info.get_tenant_role() != tenant_role
+               // In SWITCHING TO STANDBY status, tenant_info.sync_scn may be stale,
+               // so recovery must not iterate logs from that too-small start SCN.
+               || tenant_info.is_switching_to_standby_status()
                || tenant_info.get_switchover_status().is_general_flashback_status()
                   // flashback status need a fixed sync_scn, so we cannnot report here
                   // if sync_scn is changing during flashback, we might truncate replayed logs
