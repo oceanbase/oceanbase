@@ -23,7 +23,7 @@
 #include "share/ob_global_stat_proxy.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/backup/ob_backup_clean_operator.h"
-#include "storage/tablelock/ob_lock_utils.h"
+#include "share/backup/ob_archive_persist_helper.h"
 
 namespace oceanbase
 {
@@ -623,10 +623,27 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
         LOG_WARN("fail to check leader", K(ret));
       } else if (job_attr.plus_archivelog_) {
         ObArray<ObBackupCleanJobAttr> clean_jobs;
-        if (OB_FAIL(transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(trans, gen_meta_tenant_id(job_attr.tenant_id_),
-                              share::OB_ALL_BACKUP_DELETE_POLICY_TID, transaction::tablelock::SHARE_ROW_EXCLUSIVE, false))) {
-          LOG_WARN("[DATA_BACKUP]failed to acquire backup-clean coordination lock", K(ret), K(job_attr));
-        } else if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(trans, job_attr.tenant_id_, false /*need_lock*/, clean_jobs))) {
+        ObArchivePersistHelper archive_helper;
+        ObBackupPathString backup_archive_path;
+        // Lock the backup archive dest row. It materializes the mutex with delete input clean
+        // jobs(see ObUserTenantBackupDeleteMgr::persist_backup_clean_task_, which takes the same
+        // row lock), and serializes the job insertion against backup archive dest modification.
+        if (OB_FAIL(archive_helper.init(job_attr.tenant_id_))) {
+          LOG_WARN("[DATA_BACKUP]failed to init archive helper", K(ret), K(job_attr));
+        } else if (OB_FAIL(archive_helper.get_backup_archive_dest(trans, true /*need_lock*/, backup_archive_path))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            // Dest not configured: proceed without lock. Locking a non-existent row locks
+            // nothing(no gap lock), so this may race with a concurrent first-time dest set and
+            // bypass check_no_conflict_backup_jobs_. Still safe: this job never writes
+            // backup_file_status, and a delete input clean job needs a BACKED_UP piece, which
+            // requires a backup archive job finished after the dest set -- by then this trans
+            // is committed and visible to the clean job's scan.
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("[DATA_BACKUP]failed to lock backup archive dest", K(ret), K(job_attr));
+          }
+        }
+        if (FAILEDx(ObBackupCleanJobOperator::get_jobs(trans, job_attr.tenant_id_, false /*need_lock*/, clean_jobs))) {
           LOG_WARN("[DATA_BACKUP]failed to get clean jobs", K(ret), K(job_attr));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < clean_jobs.count(); ++i) {

@@ -1919,11 +1919,23 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
   } else {
     if (job_attr_->is_delete_obsolete_backup()) {
       ObArray<ObBackupJobAttr> jobs;
-      if (OB_FAIL(oceanbase::transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(
-          trans, gen_meta_tenant_id(tenant_id_), share::OB_ALL_BACKUP_DELETE_POLICY_TID,
-          transaction::tablelock::SHARE_ROW_EXCLUSIVE, false))) {
-        LOG_WARN("failed to acquire archive-clean coordination lock", K(ret));
-      } else if (OB_FAIL(ObBackupJobOperator::get_jobs(trans, tenant_id_, false /*need_lock*/, jobs))) {
+      ObArchivePersistHelper archive_helper;
+      ObBackupPathString backup_archive_path;
+      // Lock the backup archive dest row to materialize the mutex with backup archive jobs(see
+      // ObBackupArchiveScheduler::insert_job_, which takes the same row lock).
+      if (OB_FAIL(archive_helper.init(tenant_id_))) {
+        LOG_WARN("failed to init archive helper", K(ret), K_(tenant_id));
+      } else if (OB_FAIL(archive_helper.get_backup_archive_dest(trans, true /*need_lock*/, backup_archive_path))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          // Backup archive dest is not configured, no alive backup archive job can exist and all
+          // pieces' backup_file_status have been reset, defensively skip cleaning backup archive.
+          ret = OB_SUCCESS;
+          archive_piece_list.reset();
+        } else {
+          LOG_WARN("failed to lock backup archive dest", K(ret), K_(tenant_id));
+        }
+      }
+      if (FAILEDx(ObBackupJobOperator::get_jobs(trans, tenant_id_, false /*need_lock*/, jobs))) {
         LOG_WARN("failed to get backup jobs", K(ret), K_(tenant_id));
       }
 
@@ -1939,12 +1951,18 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
     if (OB_FAIL(ret)) {
     } else if (job_attr_->is_delete_backed_up_archive_piece()) {
       ObArray<ObBackupJobAttr> jobs;
-      if (OB_FAIL(oceanbase::transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(
-          trans, gen_meta_tenant_id(tenant_id_), share::OB_ALL_BACKUP_DELETE_POLICY_TID,
-          transaction::tablelock::SHARE_ROW_EXCLUSIVE, false))) {
-        LOG_WARN("failed to acquire backup-clean coordination lock", K(ret), K_(tenant_id));
-        if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret || OB_TIMEOUT == ret || OB_TRANS_TIMEOUT == ret || OB_TRANS_STMT_TIMEOUT == ret) {
+      ObArchivePersistHelper archive_helper;
+      ObBackupPathString backup_archive_path;
+      // Lock the backup archive dest row to materialize the mutex with plus archivelog backup
+      // jobs(see ObBackupDataScheduler::start_tenant_backup_data_, which takes the same row lock)
+      // and with backup archive dest modification.
+      if (OB_FAIL(archive_helper.init(tenant_id_))) {
+        LOG_WARN("failed to init archive helper", K(ret), K_(tenant_id));
+      } else if (OB_FAIL(archive_helper.get_backup_archive_dest(trans, true /*need_lock*/, backup_archive_path))) {
+        if (OB_ENTRY_NOT_EXIST == ret) { // backup archive dest has been cleared, no need to do delete input clean job
           ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+        } else {
+          LOG_WARN("failed to lock backup archive dest", K(ret), K_(tenant_id));
         }
       } else if (OB_FAIL(ObBackupJobOperator::get_jobs(trans, tenant_id_, false /*need_lock*/, jobs))) {
         LOG_WARN("failed to get backup jobs", K(ret), K_(tenant_id));

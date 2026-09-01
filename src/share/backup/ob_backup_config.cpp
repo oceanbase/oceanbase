@@ -1074,7 +1074,11 @@ int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(
   } else if (OB_FAIL(check_dest_changed_(trans, helper, is_dest_changed))) {
     LOG_WARN("fail to check backup archive dest changed", K(ret), K_(tenant_id), K_(backup_dest));
   } else if (is_empty_) {
-    if (is_dest_changed && OB_FAIL(helper.reset_all_pieces_backup_file_status(trans))) {
+    // recheck conflicting backup jobs under the backup archive dest row lock before resetting
+    // pieces backup file status, so that no conflicting job can be committed concurrently.
+    if (is_dest_changed && OB_FAIL(check_no_conflict_backup_jobs_(trans))) {
+      LOG_WARN("fail to check no conflict backup jobs", K(ret), K_(tenant_id), K_(backup_dest));
+    } else if (is_dest_changed && OB_FAIL(helper.reset_all_pieces_backup_file_status(trans))) {
       LOG_WARN("fail to reset pieces backup file status", K(ret), K_(tenant_id), K_(backup_dest));
     } else if (OB_FAIL(helper.del_dest(trans, dest_no_))) {
       LOG_WARN("fail to del backup archive dest", K(ret), K_(dest_no));
@@ -1084,6 +1088,11 @@ int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(
       LOG_WARN("fail to set backup archive dest", K(ret));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, tenant_id_, dest, dest_id))) {
       LOG_WARN("fail to get dest id", K(ret), K_(tenant_id));
+    } else if ((is_dest_changed || old_dest_id != dest_id)
+        && OB_FAIL(check_no_conflict_backup_jobs_(trans))) {
+      // recheck conflicting backup jobs under the backup archive dest row lock, see comment above
+      LOG_WARN("fail to check no conflict backup jobs", K(ret), K_(tenant_id), K_(backup_dest),
+                                                        K(is_dest_changed), K(old_dest_id), K(dest_id));
     } else if ((is_dest_changed || old_dest_id != dest_id /*same dest reinitialized*/ )
         && OB_FAIL(helper.reset_all_pieces_backup_file_status(trans))) {
       LOG_WARN("fail to reset pieces backup file status", K(ret), K_(tenant_id), K_(backup_dest),
@@ -1197,6 +1206,11 @@ int ObBackupArchiveDestConfigParser::check_before_update_inner_config(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("A backup cleaning is in progress, set it again is not allowed", K(ret), K_(tenant_id), K_(backup_dest));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "cleaning of this dest is in progress, set it again ");
+  } else if (OB_FAIL(check_no_conflict_backup_jobs_(trans))) {
+    // Precheck without the dest lock to fail fast before writing the format file, which cannot be
+    // rollback. The authoritative recheck is done under the backup archive
+    // dest row lock in update_backup_archive_dest_config_().
+    LOG_WARN("fail to check no conflict backup jobs", K(ret), K_(tenant_id), K_(backup_dest));
   } else {
     const char *extension = backup_dest.get_storage_info()->get_extension();
     char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
@@ -1250,6 +1264,45 @@ int ObBackupArchiveDestConfigParser::check_path_not_same_with_log_archive_dest_(
     LOG_WARN("backup archive dest should be different from log archive dest",
         K(ret), K(log_archive_dest), K(backup_archive_dest));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "backup archive dest must differ from log archive dest");
+  }
+  return ret;
+}
+
+int ObBackupArchiveDestConfigParser::check_no_conflict_backup_jobs_(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupJobAttr> backup_jobs;
+  ObArray<ObBackupCleanJobAttr> clean_jobs;
+  // NOTE: "lock dest row then scan job tables" relies on READ COMMITTED(per-statement snapshot):
+  // a conflicting job insert either committed before we got the lock(visible below) or blocks.
+  if (OB_FAIL(ObBackupJobOperator::get_jobs(trans, tenant_id_, false /*need_lock*/, backup_jobs))) {
+    LOG_WARN("fail to get backup jobs", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(trans, tenant_id_, false /*need_lock*/, clean_jobs))) {
+    LOG_WARN("fail to get backup clean jobs", K(ret), K_(tenant_id));
+  }
+  ARRAY_FOREACH_X(backup_jobs, i, cnt, OB_SUCC(ret)) {
+    const ObBackupJobAttr &job = backup_jobs.at(i);
+    if (job.status_.is_backup_finish()) {
+      // job has finished, skip
+    } else if (job.backup_type_.is_backup_archive()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("a backup archive job is in progress, modifying backup archive dest is not allowed", K(ret), K_(tenant_id), K(job));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "modifying backup archive dest while a backup archive job is in progress is");
+    } else if (job.plus_archivelog_) { // plus archivelog backup job maybe copy the pieces on backup archive dest, which relies on backup file status
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("a plus archivelog backup job is in progress, modifying backup archive dest is not allowed", K(ret), K_(tenant_id), K(job));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "modifying backup archive dest while a plus archivelog backup job is in progress is");
+    }
+  }
+  ARRAY_FOREACH_X(clean_jobs, i, cnt, OB_SUCC(ret)) {
+    const ObBackupCleanJobAttr &job = clean_jobs.at(i);
+    if (job.status_.is_finish()) {
+      // job has finished, skip
+    } else if (job.is_delete_backed_up_archive_piece()) { // delete backed up archive piece job maybe delete the pieces on backup archive dest, which relies on backup file status
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("a backed up archive piece clean job is in progress, modifying backup archive dest is not allowed", K(ret), K_(tenant_id), K(job));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "modifying backup archive dest while a backed up archive piece clean job is in progress is");
+    }
   }
   return ret;
 }

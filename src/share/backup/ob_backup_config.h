@@ -243,6 +243,15 @@ private:
   int check_path_not_same_with_log_archive_dest_(common::ObISQLClient &trans);
   // check whether the backup archive dest path is really switched(or cleared)
   int check_dest_changed_(common::ObISQLClient &trans, share::ObArchivePersistHelper &helper, bool &is_dest_changed);
+  // Reject(OB_OP_NOT_ALLOW) running backup archive(delete input) / delete piece clean /
+  // plus archivelog jobs, which conflict with resetting pieces' backup_file_status on dest
+  // change. Called twice: fail fast before writing format file, then recheck under the dest
+  // row lock(authoritative). Their job inserts take the same row lock, except plus archivelog
+  // when the dest row is absent -- tolerated, see OB_ENTRY_NOT_EXIST comment in
+  // ObBackupDataScheduler::start_tenant_backup_data_. Delete obsolete jobs are exempted:
+  // their stale CAS on backup_file_status(old=BACKED_UP) never matches after the reset, as
+  // insert_job_ forbids new backup archive jobs while such a job is alive.
+  int check_no_conflict_backup_jobs_(common::ObISQLClient &trans);
   DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveDestConfigParser);
 };
 

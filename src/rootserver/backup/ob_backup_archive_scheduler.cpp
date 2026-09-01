@@ -19,7 +19,6 @@
 #include "observer/omt/ob_tenant_config.h"
 #include "share/backup/ob_backup_config.h"  // for ENABLE_BACKUP_ARCHIVE_VERSION
 #include "share/backup/ob_backup_clean_operator.h"  // for ObBackupCleanJobOperator
-#include "storage/tablelock/ob_lock_utils.h"
 
 namespace oceanbase
 {
@@ -206,6 +205,11 @@ int ObBackupArchiveScheduler::insert_job_(const ObBackupJobAttr &job_attr)
   ObBackupJobAttr new_job_attr;
   ObMySQLTransaction trans;
   ObArray<ObBackupCleanJobAttr> clean_jobs;
+  ObArchivePersistHelper archive_helper;
+  ObBackupPathString cur_path;
+  ObBackupDest cur_dest;
+  ObBackupDest job_dest;
+  bool is_path_equal = false;
   if (!job_attr.is_tmplate_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[BACKUP_ARCHIVE]invalid job template", K(ret), K(job_attr));
@@ -217,14 +221,37 @@ int ObBackupArchiveScheduler::insert_job_(const ObBackupJobAttr &job_attr)
     LOG_WARN("[BACKUP_ARCHIVE]failed to get next job id", K(ret), K(new_job_attr));
   } else if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("[BACKUP_ARCHIVE]failed to check leader", K(ret));
-  } else if (OB_FAIL(transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(
-                     trans, gen_meta_tenant_id(new_job_attr.tenant_id_), share::OB_ALL_BACKUP_DELETE_POLICY_TID,
-                     transaction::tablelock::SHARE_ROW_EXCLUSIVE, false))) {
-    LOG_WARN("[BACKUP_ARCHIVE]failed to acquire archive-clean coordination lock", K(ret), K(new_job_attr));
+  } else if (OB_FAIL(archive_helper.init(new_job_attr.tenant_id_))) {
+    LOG_WARN("[BACKUP_ARCHIVE]failed to init archive helper", K(ret), K(new_job_attr));
+  } else if (OB_FAIL(archive_helper.get_backup_archive_dest(trans, true /*need_lock*/, cur_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_BACKUP_CAN_NOT_START;
+      LOG_WARN("[BACKUP_ARCHIVE]backup archive dest has been cleared", K(ret), K(new_job_attr));
+      LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "backup archive dest has been cleared, cannot do backup archive");
+    } else {
+      LOG_WARN("[BACKUP_ARCHIVE]failed to get backup archive dest", K(ret), K(new_job_attr));
+    }
+  } else if (cur_path.is_empty()) {
+    ret = OB_BACKUP_CAN_NOT_START;
+    LOG_WARN("[BACKUP_ARCHIVE]backup archive dest has been cleared", K(ret), K(new_job_attr));
+    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "backup archive dest has been changed, please retry");
+  } else if (OB_FAIL(cur_dest.set(cur_path.ptr()))) {
+    LOG_WARN("[BACKUP_ARCHIVE]failed to set current backup archive dest", K(ret), K(new_job_attr));
+  } else if (OB_FAIL(job_dest.set(new_job_attr.backup_path_.ptr()))) {
+    LOG_WARN("[BACKUP_ARCHIVE]failed to set job backup dest", K(ret), K(new_job_attr));
+  } else if (OB_FAIL(cur_dest.is_backup_path_equal(job_dest, is_path_equal))) {
+    LOG_WARN("[BACKUP_ARCHIVE]failed to compare backup path", K(ret), K(new_job_attr));
+  } else if (!is_path_equal) {
+    ret = OB_BACKUP_CAN_NOT_START;
+    LOG_WARN("[BACKUP_ARCHIVE]backup archive dest has been changed", K(ret), K(cur_path), K(new_job_attr));
+    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "backup archive dest has been changed, please retry");
   } else if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(trans, new_job_attr.tenant_id_, false /*need_lock*/, clean_jobs))) {
     LOG_WARN("[BACKUP_ARCHIVE]failed to get clean jobs", K(ret), K(new_job_attr));
   }
 
+  // This check also guarantees no piece turns BACKED_UP while a delete obsolete clean job is
+  // alive, which check_no_conflict_backup_jobs_ relies on to exempt such jobs on dest change.
+  // Do not remove it without revisiting that.
   for (int64_t i = 0; OB_SUCC(ret) && i < clean_jobs.count(); ++i) {
     const ObBackupCleanJobAttr &job = clean_jobs.at(i);
     if (job.is_delete_obsolete_backup() && !job.status_.is_finish()) {
