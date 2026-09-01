@@ -2071,21 +2071,24 @@ int ObTransformWinMagic::check_join_push_down(ObDMLStmt *main_stmt,
     }
 
     if (OB_FAIL(ret) || !is_valid) {
-      //do nothing
-    } else if (!has_view_join_cond) {
-      is_valid = false;
-    } else if (OB_FAIL(check_win_func_duplication_safe(*view_table->ref_query_,
-                                                       is_duplication_safe))) {
+      // do nothing
+    } else if (has_view_join_cond
+               && OB_FAIL(
+                   check_win_func_duplication_safe(*view_table->ref_query_, is_duplication_safe))) {
       LOG_WARN("check win func duplication safe failed", K(ret));
-    } else if (is_duplication_safe &&
-               OB_FAIL(check_win_func_full_partition(*view_table->ref_query_, is_full_partition))) {
+    } else if (has_view_join_cond && is_duplication_safe
+               && OB_FAIL(
+                   check_win_func_full_partition(*view_table->ref_query_, is_full_partition))) {
       LOG_WARN("check win func full partition failed", K(ret));
-    } else if (is_duplication_safe && is_full_partition) {
+    } else if (has_view_join_cond && is_duplication_safe && is_full_partition) {
       // window functions are immune to row duplication, skip uniqueness check
       LOG_TRACE("skip uniqueness check: win funcs are duplication safe");
-    } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(*main_stmt, push_down_table,
-                                    exprs_unqiue_check,
-                                    ctx_->session_info_, ctx_->schema_checker_, is_valid))) {
+    } else if (OB_FAIL(ObTransformUtils::check_exprs_unique(*main_stmt,
+                                                            push_down_table,
+                                                            exprs_unqiue_check,
+                                                            ctx_->session_info_,
+                                                            ctx_->schema_checker_,
+                                                            is_valid))) {
       LOG_WARN("check exprs unique failed", K(ret));
     }
   }
