@@ -590,6 +590,7 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
           LOG_WARN("ps text shoudle be handled as normal query, not cmd", K(ret));
         } else {
           DEFINE_EXECUTE_CMD(ObExecuteStmt, ObExecuteExecutor);
+          sql_text = ObString::make_empty_string();  // do not record
         }
         break;
       }
