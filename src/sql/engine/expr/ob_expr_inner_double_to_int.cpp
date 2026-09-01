@@ -33,6 +33,62 @@ const double MIN_DOUBLE_TO_INT64 = -9.223372036854776e+18;
 const double MIN_DOUBLE_TO_UINT64 = 0.;
 const double MAX_DOUBLE_TO_UINT64 = 1.8446744073709552e+19;
 const int MAX_DOUBLE_PRINT_SIZE = 512;
+
+static const double FIXED_DOUBLE_CMP_TOLERANCE[] =
+{
+  5/1e001, 5/1e002, 5/1e003, 5/1e004, 5/1e005, 5/1e006, 5/1e007, 5/1e008,
+  5/1e009, 5/1e010, 5/1e011, 5/1e012, 5/1e013, 5/1e014, 5/1e015, 5/1e016,
+  5/1e017, 5/1e018, 5/1e019, 5/1e020, 5/1e021, 5/1e022, 5/1e023, 5/1e024,
+  5/1e025, 5/1e026, 5/1e027, 5/1e028, 5/1e029, 5/1e030, 5/1e031
+};
+
+static int expand_fixed_double_range(const ObScale input_scale,
+                                     const bool is_start,
+                                     double &val,
+                                     bool &is_expanded)
+{
+  int ret = OB_SUCCESS;
+  is_expanded = lib::is_mysql_mode() &&
+                SCALE_UNKNOWN_YET != input_scale &&
+                DBL_MAX != val &&
+                DBL_MIN != val &&
+                -DBL_MAX != val &&
+                -DBL_MIN != val;
+  if (is_expanded) {
+    // Keep the tolerance identical to ObObjCmpFuncs::fixed_double_cmp().
+    const double cmp_tolerance = FIXED_DOUBLE_CMP_TOLERANCE[input_scale];
+    const double delta = is_start ? -cmp_tolerance : cmp_tolerance;
+    const double range_boundary = val + delta;
+    const double virtual_delta = range_boundary - val;
+    // TwoSum residual: the exact boundary is range_boundary + roundoff.
+    const double roundoff = (val - (range_boundary - virtual_delta)) +
+                            (delta - virtual_delta);
+    double expanded_val = 0;
+    val = range_boundary;
+    // Expand only when floating-point addition rounded the boundary inward.
+    if ((is_start && roundoff < 0.) || (!is_start && roundoff > 0.)) {
+      if ((val > 0. && !is_start) ||
+          (val < 0. && is_start)) {
+        if (OB_FAIL(ObExprInnerDoubleToInt::add_double_bit_1(val, expanded_val))) {
+          LOG_WARN("failed to expand fixed double range boundary",
+                   KR(ret), K(input_scale), K(is_start), K(val));
+        } else {
+          val = expanded_val;
+        }
+      } else if ((val > 0. && is_start) ||
+                 (val < 0. && !is_start)) {
+        if (OB_FAIL(ObExprInnerDoubleToInt::sub_double_bit_1(val, expanded_val))) {
+          LOG_WARN("failed to expand fixed double range boundary",
+                   KR(ret), K(input_scale), K(is_start), K(val));
+        } else {
+          val = expanded_val;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 ObExprInnerDoubleToInt::ObExprInnerDoubleToInt(ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_INNER_DOUBLE_TO_INT, N_INNER_DOUBLE_TO_INT, 1,
                          NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION,
@@ -245,16 +301,24 @@ int ObExprInnerDoubleToInt::eval_inner_double_to_int(const ObExpr &expr, ObEvalC
   bool is_equal = (expr.extra_ & 2) == 2;
   bool is_unsigned = (expr.extra_ & 4) == 4;
   bool is_decimal = (expr.extra_ & 8) == 8;
+  bool need_fixed_double_range = false;
+  const ObScale input_scale = expr.args_[0]->datum_meta_.scale_;
   if (OB_FAIL(expr.args_[0]->eval(ctx, val_datum))) {
     LOG_WARN("fail to eval conv", K(ret), K(expr));
   } else if (val_datum->is_null()) {
     expr_datum.set_null();
   } else if (OB_FALSE_IT(val = val_datum->get_double())) {
+  } else if (OB_FAIL(expand_fixed_double_range(input_scale,
+                                                is_start,
+                                                val,
+                                                need_fixed_double_range))) {
+    LOG_WARN("failed to expand fixed double range", KR(ret), K(input_scale), K(is_start), K(val));
   } else if (is_decimal) {
     ObNumStackOnceAlloc tmp_alloc;
     number::ObNumber number;
     double tmp_d;
-    if (val == DBL_MAX || val == DBL_MIN ||
+    if (need_fixed_double_range ||
+        val == DBL_MAX || val == DBL_MIN ||
         val == -DBL_MAX || val == -DBL_MIN) {
       // do nothing
     } else if ((val > 0. && !is_start) ||
@@ -285,7 +349,7 @@ int ObExprInnerDoubleToInt::eval_inner_double_to_int(const ObExpr &expr, ObEvalC
       floor_val = floorl(val);
       if (ceil_val == floor_val) {
         expr_datum.set_int(static_cast<int64_t>(val));
-      } else if (is_equal) {
+      } else if (is_equal && !need_fixed_double_range) {
         expr_datum.set_int(is_start ? INT64_MAX : INT64_MIN);
       } else if (is_start) {
         expr_datum.set_int(static_cast<int64_t>(ceil_val));
@@ -293,13 +357,13 @@ int ObExprInnerDoubleToInt::eval_inner_double_to_int(const ObExpr &expr, ObEvalC
         expr_datum.set_int(static_cast<int64_t>(floor_val));
       }
     } else if (val > MAX_DOUBLE_TO_INT64) {
-      if (is_equal) {
+      if (is_equal && !need_fixed_double_range) {
         expr_datum.set_int(is_start ? INT64_MAX : INT64_MIN);
       } else {
         expr_datum.set_int(INT64_MAX);
       }
     } else if (val < MIN_DOUBLE_TO_INT64) {
-      if (is_equal) {
+      if (is_equal && !need_fixed_double_range) {
         expr_datum.set_int(is_start ? INT64_MAX : INT64_MIN);
       } else {
         expr_datum.set_int(INT64_MIN);
@@ -320,7 +384,7 @@ int ObExprInnerDoubleToInt::eval_inner_double_to_int(const ObExpr &expr, ObEvalC
       floor_val = floorl(val);
       if (ceil_val == floor_val) {
         expr_datum.set_uint(static_cast<uint64_t>(val));
-      } else if (is_equal) {
+      } else if (is_equal && !need_fixed_double_range) {
         expr_datum.set_uint(is_start ? UINT64_MAX : 0);
       } else if (is_start) {
         expr_datum.set_uint(static_cast<uint64_t>(ceil_val));
@@ -328,13 +392,13 @@ int ObExprInnerDoubleToInt::eval_inner_double_to_int(const ObExpr &expr, ObEvalC
         expr_datum.set_uint(static_cast<uint64_t>(floor_val));
       }
     } else if (val > MAX_DOUBLE_TO_UINT64) {
-      if (is_equal) {
+      if (is_equal && !need_fixed_double_range) {
         expr_datum.set_uint(is_start ? UINT64_MAX : 0);
       } else {
         expr_datum.set_uint(UINT64_MAX);
       }
     } else if (val < MIN_DOUBLE_TO_UINT64) {
-      if (is_equal) {
+      if (is_equal && !need_fixed_double_range) {
         expr_datum.set_uint(is_start ? UINT64_MAX : 0);
       } else {
         expr_datum.set_uint(0);

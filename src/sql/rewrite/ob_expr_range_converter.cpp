@@ -3749,6 +3749,10 @@ int ObExprRangeConverter::set_extract_implicit_is_precise(const ObColumnRefRawEx
     if (ObNumberTC == column_tc &&
         (const_tc == ObDoubleTC || const_tc == ObFloatTC)) {
       is_precise = false;
+    } else if ((ObIntTC == column_tc || ObUIntTC == column_tc) &&
+               (const_tc == ObDoubleTC || const_tc == ObFloatTC) &&
+               SCALE_UNKNOWN_YET != const_expr.get_result_type().get_scale()) {
+      is_precise = false;
     }
   } else {
     is_precise = false;
