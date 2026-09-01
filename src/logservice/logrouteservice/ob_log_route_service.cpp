@@ -942,8 +942,9 @@ int ObLogRouteService::resolve_route_server_addr_(common::ObAddr &route_addr) co
         KR(ret), K(external_addr_config), K(route_addr));
   } else if (ObLogExternalAddrSource::CDC_RS_LIST
       == external_addr_config.source_) {
-    // CDC RS-list mode has cluster-wide topology and must prove that the source
-    // has exactly one loopback observer before translating its route address.
+    // CDC RS-list mode uses cluster-wide topology. A single loopback observer
+    // may need external IP translation, while multiple observers keep their
+    // own loopback addresses and distinct RPC ports.
     ObLogClusterTopology topology;
     if (OB_FAIL(all_svr_cache_.get_cluster_topology(topology))) {
       LOG_WARN("get cluster topology failed", KR(ret), K(route_addr));
@@ -952,6 +953,10 @@ int ObLogRouteService::resolve_route_server_addr_(common::ObAddr &route_addr) co
       LOG_WARN("resolve loopback route address failed",
           KR(ret), K(external_addr_config), K(topology), K(route_addr));
     }
+  } else if (ObLogExternalAddrSource::NONE == external_addr_config.source_
+      && !external_addr_config.is_provided()) {
+    // No external address context means that the caller does not request
+    // translation. Preserve the observer-provided loopback route.
   } else {
     // The restore source may not have been loaded yet during tenant startup.
     // Retry instead of guessing an external address domain for a loopback route.

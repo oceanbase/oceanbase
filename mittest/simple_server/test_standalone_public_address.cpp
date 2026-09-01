@@ -25,7 +25,9 @@
 #include "share/ob_log_restore_proxy.h"
 #include "share/ob_ls_id.h"
 #include "share/scn.h"
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
 #include "logservice/logrouteservice/ob_log_route_service.h"
+#endif
 #include "share/ob_define.h"  // is_server_down_error
 
 namespace oceanbase
@@ -36,7 +38,6 @@ namespace unittest
 using namespace common;
 using namespace share;
 using namespace obrpc;
-using namespace logservice;
 
 // standalone IP 解耦 mittest。用例统一 OB_SYS_TENANT_ID（探测 RPC 不消费 tenant）。
 // 用例列表：
@@ -46,7 +47,7 @@ using namespace logservice;
 //   枚举：CENTRALIZED / DISTRIBUTED / INVALID | is_standalone | assign
 //   SET 学地址：只学 rpc_port、公网 IP 不被覆盖 | set_sql_addr 覆盖语义 | 入参不一致
 //   场景1：check_peer_form_for_set_command 全链路
-//   场景3/4：LRS 使用 CDC external address 映射单 server loopback 路由
+//   standalone MTL：无 restore source 时保留原 loopback 路由
 //   防御：query/get_leader 非法入参
 
 class TestStandalonePublicAddress : public ObSimpleClusterTestBase
@@ -539,130 +540,20 @@ TEST_F(TestStandalonePublicAddress, test_check_peer_form_for_set_command_after_l
 }
 #endif
 
-TEST_F(TestStandalonePublicAddress, test_route_addr_mapping_single_loopback_server)
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+TEST_F(TestStandalonePublicAddress, test_route_addr_without_restore_source_keeps_loopback)
 {
-  ObLogAllSvrCache all_svr_cache;
-  ObAllServerInfo all_server_info;
-  ASSERT_EQ(OB_SUCCESS, all_server_info.init(1));
-  AllServerRecord record;
-  record.svr_id_ = 1;
-  ASSERT_TRUE(record.server_.set_ip_addr("127.0.0.1", 2882));
-  record.status_ = ObServerStatus::OB_SERVER_ACTIVE;
-  ASSERT_EQ(OB_SUCCESS, all_server_info.add(record));
-  all_svr_cache.publish_cluster_topology_(all_server_info);
-
-  ObLogExternalAddrConfig config;
-  ObArray<ObAddr> addr_list;
-  ObAddr external_addr;
-  ASSERT_TRUE(external_addr.set_ip_addr("192.0.2.10", 2881));
-  ASSERT_EQ(OB_SUCCESS, addr_list.push_back(external_addr));
-  ASSERT_EQ(OB_SUCCESS, config.assign(
-      ObLogExternalAddrSource::CDC_RS_LIST, addr_list, 7));
-
-  ObAddr route_addr;
-  ASSERT_TRUE(route_addr.set_ip_addr("127.0.0.1", 4882));
-  ObLogClusterTopology topology;
-  ASSERT_EQ(OB_SUCCESS, all_svr_cache.get_cluster_topology(topology));
-  ASSERT_EQ(OB_SUCCESS, topology.resolve_cluster_route_addr(config, route_addr));
-  ObAddr expected;
-  ASSERT_TRUE(expected.set_ip_addr("192.0.2.10", 4882));
-  ASSERT_EQ(expected, route_addr);
-  ASSERT_EQ(7, config.version_);
-}
-
-TEST_F(TestStandalonePublicAddress, test_route_addr_mapping_reject_multi_server)
-{
-  ObLogAllSvrCache all_svr_cache;
-  ObAllServerInfo all_server_info;
-  ASSERT_EQ(OB_SUCCESS, all_server_info.init(1));
-  for (int64_t idx = 0; idx < 2; ++idx) {
-    AllServerRecord record;
-    record.svr_id_ = idx + 1;
-    ASSERT_TRUE(record.server_.set_ip_addr("127.0.0.1", 2882 + idx));
-    record.status_ = ObServerStatus::OB_SERVER_ACTIVE;
-    ASSERT_EQ(OB_SUCCESS, all_server_info.add(record));
-  }
-  all_svr_cache.publish_cluster_topology_(all_server_info);
-
-  ObLogExternalAddrConfig config;
-  ObArray<ObAddr> addr_list;
-  ObAddr external_addr;
-  ASSERT_TRUE(external_addr.set_ip_addr("192.0.2.10", 2881));
-  ASSERT_EQ(OB_SUCCESS, addr_list.push_back(external_addr));
-  ASSERT_EQ(OB_SUCCESS, config.assign(
-      ObLogExternalAddrSource::CDC_RS_LIST, addr_list));
-
-  ObAddr route_addr;
-  ASSERT_TRUE(route_addr.set_ip_addr("127.0.0.1", 4882));
-  ObLogClusterTopology topology;
-  ASSERT_EQ(OB_SUCCESS, all_svr_cache.get_cluster_topology(topology));
-  ASSERT_EQ(OB_STATE_NOT_MATCH, topology.resolve_cluster_route_addr(config, route_addr));
-}
-
-TEST_F(TestStandalonePublicAddress, test_external_addr_config_ambiguous)
-{
-  ObLogExternalAddrConfig config;
-  ObArray<ObAddr> addr_list;
-  ObAddr addr;
-  ASSERT_TRUE(addr.set_ip_addr("192.0.2.10", 2881));
-  ASSERT_EQ(OB_SUCCESS, addr_list.push_back(addr));
-  ASSERT_TRUE(addr.set_ip_addr("192.0.2.11", 2881));
-  ASSERT_EQ(OB_SUCCESS, addr_list.push_back(addr));
-  ASSERT_EQ(OB_SUCCESS, config.assign(
-      ObLogExternalAddrSource::CDC_TENANT_ENDPOINT, addr_list));
-  ASSERT_EQ(ObLogExternalAddrState::AMBIGUOUS, config.state_);
-  ASSERT_FALSE(config.external_addr_.is_valid());
-}
-
-TEST_F(TestStandalonePublicAddress, test_tenant_sync_loopback_mapping_not_supported)
-{
-  ObLogClusterTopology topology;
-  ObLogExternalAddrConfig config;
-  config.source_ = ObLogExternalAddrSource::CDC_TENANT_ENDPOINT;
-  ObAddr route_addr;
-  ASSERT_TRUE(route_addr.set_ip_addr("127.0.0.1", 4882));
-  ASSERT_EQ(OB_NOT_SUPPORTED, topology.resolve_cluster_route_addr(config, route_addr));
-}
-
-TEST_F(TestStandalonePublicAddress, test_restore_source_loopback_mapping_without_cluster_topology)
-{
-  ObLogRouteService route_service;
-  route_service.is_tenant_mode_ = true;
-
-  ObArray<ObAddr> addr_list;
-  ObAddr external_addr;
-  ASSERT_TRUE(external_addr.set_ip_addr("192.0.2.10", 2881));
-  ASSERT_EQ(OB_SUCCESS, addr_list.push_back(external_addr));
-  ASSERT_EQ(OB_SUCCESS, route_service.external_addr_config_.assign(
-      ObLogExternalAddrSource::RESTORE_SOURCE, addr_list));
-
+  logservice::ObLogRouteService route_service;
   ObAddr route_addr;
   ObAddr expected_addr;
+  ASSERT_FALSE(route_service.external_addr_config_.is_provided());
   ASSERT_TRUE(route_addr.set_ip_addr("127.0.0.1", 4882));
-  ASSERT_TRUE(expected_addr.set_ip_addr("192.0.2.10", 4882));
+  ASSERT_TRUE(expected_addr.set_ip_addr("127.0.0.1", 4882));
+
   ASSERT_EQ(OB_SUCCESS, route_service.resolve_route_server_addr_(route_addr));
   ASSERT_EQ(expected_addr, route_addr);
 }
-
-TEST_F(TestStandalonePublicAddress, test_restore_source_mapping_rejects_non_tenant_mode)
-{
-  ObLogRouteService route_service;
-  route_service.is_tenant_mode_ = false;
-
-  ObArray<ObAddr> addr_list;
-  ObAddr external_addr;
-  ASSERT_TRUE(external_addr.set_ip_addr("192.0.2.10", 2881));
-  ASSERT_EQ(OB_SUCCESS, addr_list.push_back(external_addr));
-  ASSERT_EQ(OB_SUCCESS, route_service.external_addr_config_.assign(
-      ObLogExternalAddrSource::RESTORE_SOURCE, addr_list));
-
-  ObAddr route_addr;
-  ObAddr original_addr;
-  ASSERT_TRUE(route_addr.set_ip_addr("127.0.0.1", 4882));
-  ASSERT_TRUE(original_addr.set_ip_addr("127.0.0.1", 4882));
-  ASSERT_EQ(OB_STATE_NOT_MATCH, route_service.resolve_route_server_addr_(route_addr));
-  ASSERT_EQ(original_addr, route_addr);
-}
+#endif
 
 TEST_F(TestStandalonePublicAddress, test_get_primary_ls_leader_addr_by_rpc_self)
 {

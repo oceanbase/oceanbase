@@ -132,7 +132,12 @@ int ObLogClusterTopology::resolve_cluster_route_addr(
     ret = OB_NEED_RETRY;
     LOG_WARN("cluster topology is not ready for loopback route mapping",
         KR(ret), KPC(this), K(route_addr));
-  } else if (1 != active_server_count_ || !only_server_.is_loopback()) {
+  } else if (1 < active_server_count_) {
+    // Multiple observers can run on the same host with distinct RPC ports.
+    // Their loopback routes are already usable and must remain unchanged.
+    LOG_TRACE("keep observer loopback route for multi-server topology",
+        KPC(this), K(route_addr), K(external_addr_config));
+  } else if (!only_server_.is_loopback()) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("loopback route does not match standalone cluster topology",
         KR(ret), KPC(this), K(route_addr));
