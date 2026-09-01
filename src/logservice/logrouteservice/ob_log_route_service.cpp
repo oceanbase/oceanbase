@@ -143,9 +143,9 @@ int ObLogRouteService::init(ObISQLClient *proxy,
 #endif
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
-  } else if (OB_FAIL(systable_queryer_.get_logservice_model_info(source_tenant_id, logservice_model_info_))) {
-    LOG_WARN("failed to get logservice model info", KR(ret), K(source_tenant_id));
   } else {
+    // 4.4.x physical standby only supports fetching logs from a normal PALF source.
+    logservice_model_info_.reset(false);
     cluster_id_ = cluster_id;
     source_tenant_id_ = source_tenant_id;
     self_tenant_id_ = self_tenant_id;

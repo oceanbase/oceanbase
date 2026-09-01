@@ -454,6 +454,22 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
           new_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "ObRestoreHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
         K(new_role), K(new_proposal_id));
+  // NB: When switching over to primary, sync_mode and access_mode are changed by two separate RPCs.
+  //     The sync_mode change (handled as LEADER_2_LEADER via SYNC_MODE_EVENT) keeps restore_handler
+  //     as LEADER, and the subsequent access_mode change to APPEND triggers this ROLE_CHANGE_CB_EVENT
+  //     while palf role/proposal_id stay unchanged. In that case need_execute_role_change() returns
+  //     false and the restore_handler's residual LEADER role would be leaked. In APPEND mode the
+  //     restore_handler must never stay LEADER (otherwise ObRestoreMajorFreezeService keeps active and
+  //     conflicts with ObPrimaryMajorFreezeService, e.g. major freeze reports -4023), so force it to
+  //     FOLLOWER here even when palf role is not changed.
+  } else if (!is_pending_state && only_need_change_to_follower && LEADER == curr_role) {
+    if (OB_FAIL(switch_leader_to_follower_forcedly_restore_(new_proposal_id, ls))) {
+      CLOG_LOG(WARN, "force switch restore_handler leader to follower failed", K(ret), K(curr_role),
+          K(curr_proposal_id), K(new_role), K(new_proposal_id), K(curr_access_mode), KPC(ls));
+    } else {
+      CLOG_LOG(INFO, "force switch restore_handler leader to follower when only_need_change_to_follower",
+          K(curr_role), K(curr_proposal_id), K(new_role), K(new_proposal_id), K(curr_access_mode), KPC(ls));
+    }
   } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
         new_role, is_pending_state, log_handler_is_offline)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),

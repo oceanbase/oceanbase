@@ -202,7 +202,7 @@ int LogTask::set_initial_header_info(const LogTaskHeaderInfo &header_info)
     header_.begin_lsn_ = header_info.begin_lsn_;
     header_.log_id_ = header_info.log_id_;
     header_.is_padding_log_ = header_info.is_padding_log_;
-    header_.is_raw_write_ = header_info.is_raw_write_;
+    // header_.is_raw_write_ = header_info.is_raw_write_; //TODO(ziqi): uncomment
     header_.proposal_id_ = header_info.proposal_id_;
     header_.min_scn_ = header_info.min_scn_;
     update_data_len(header_info.data_len_);

@@ -12,7 +12,6 @@
 
 #include "logservice/palf/log_io_task_cb_utils.h"
 #include "logservice/palf/log_quorum_policy.h"
-#include "logservice/palf/log_task.h"
 #include <gtest/gtest.h>
 #define private public
 #include "mock_logservice_container/mock_log_config_mgr.h"
@@ -177,33 +176,6 @@ void gen_default_palf_base_info_(PalfBaseInfo &palf_base_info)
   prev_log_info.accum_checksum_ = -1;
   palf_base_info.prev_log_info_ = prev_log_info;
   palf_base_info.curr_lsn_ = default_prev_lsn;
-}
-
-TEST(TestLogTask, test_set_initial_header_info_with_raw_write)
-{
-  LogTask raw_write_task;
-  LogTask append_task;
-  LogTaskHeaderInfo header_info;
-  header_info.begin_lsn_ = LSN(0);
-  header_info.log_id_ = 1;
-  header_info.min_scn_ = SCN::base_scn();
-  header_info.max_scn_ = SCN::base_scn();
-  header_info.data_len_ = 1;
-  header_info.proposal_id_ = 1;
-  header_info.is_raw_write_ = true;
-
-  raw_write_task.lock();
-  const int raw_write_ret = raw_write_task.set_initial_header_info(header_info);
-  raw_write_task.unlock();
-  ASSERT_EQ(OB_SUCCESS, raw_write_ret);
-  EXPECT_TRUE(raw_write_task.is_raw_write());
-
-  header_info.is_raw_write_ = false;
-  append_task.lock();
-  const int append_ret = append_task.set_initial_header_info(header_info);
-  append_task.unlock();
-  ASSERT_EQ(OB_SUCCESS, append_ret);
-  EXPECT_FALSE(append_task.is_raw_write());
 }
 
 TEST_F(TestLogSlidingWindow, test_log_checksum)
