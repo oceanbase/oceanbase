@@ -837,7 +837,10 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (context->session_info_->is_varparams_sql_prepare() && !context->is_dbms_sql_) {
+        bool is_user_sql_expr = expr->get_result_type().is_user_defined_sql_type() ||
+                                expr->get_result_type().is_collection_sql_type() ||
+                                ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode());
+        if (context->session_info_->is_varparams_sql_prepare() && !context->is_dbms_sql_ && !is_user_sql_expr) {
           // question mark expr has no valid result type in prepare stage
           if (!expr->get_result_type().is_ext()
               && !expr->get_result_type().is_user_defined_sql_type()
@@ -848,9 +851,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
                     field.length_, static_cast<ObCollationType>(field.charsetnr_)))) {
             LOG_WARN("get length failed", K(ret), KPC(expr));
           }
-        } else if (expr->get_result_type().is_user_defined_sql_type() ||
-            expr->get_result_type().is_collection_sql_type() ||
-            ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode())) {//oracle gis ps protocol
+        } else if (is_user_sql_expr) {//oracle gis ps protocol
           uint16_t subschema_id = expr->get_result_type().get_subschema_id();
           uint16_t tmp_subschema_id = ObInvalidSqlType;
           uint64_t udt_id = expr->get_result_type().get_udt_id();
