@@ -56,7 +56,6 @@ void ILogEntryHeader::reset()
 {
     is_inited_ = false;
     palf_log_header_ = NULL;
-    enable_logservice_ = false;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
     libpalf_log_header_ = NULL;
 #endif

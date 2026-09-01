@@ -247,10 +247,16 @@ IPalfIterator() :
         PALF_LOG(WARN, "IPalfIterator is not inited", K(ret));
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
     } else if (enable_logservice_) {
-        ret = get_entry_libpalf_iterator_(entry, lsn);
+        if (OB_FAIL(get_entry_libpalf_iterator_(entry, lsn))) {
+            PALF_LOG(WARN, "get_entry_libpalf_iterator_ failed", K(ret), K(lsn));
+        } else if (OB_FAIL(entry.init(entry.libpalf_log_entry_))) {
+            PALF_LOG(WARN, "entry init failed", K(ret), K(lsn));
+        }
 #endif
-    } else {
-        ret = palf_iterator_.get_entry(entry.palf_log_entry_, lsn);
+    } else if (OB_FAIL(palf_iterator_.get_entry(entry.palf_log_entry_, lsn))) {
+        PALF_LOG(WARN, "palf_iterator_ get_entry failed", K(ret), K(lsn));
+    } else if (OB_FAIL(entry.init(entry.palf_log_entry_))) {
+        PALF_LOG(WARN, "entry init failed", K(ret), K(lsn));
     }
     return ret;
   }
@@ -270,13 +276,17 @@ IPalfIterator() :
     } else if (enable_logservice_) {
         if (OB_FAIL(get_entry_libpalf_iterator_(entry, lsn))) {
             PALF_LOG(WARN, "get_entry_libpalf_iterator_ failed", K(ret));
+        } else if (OB_FAIL(entry.init(entry.libpalf_log_entry_))) {
+            PALF_LOG(WARN, "entry init failed", K(ret), K(lsn));
         } else {
             buffer = entry.get_data_buf() - entry.get_header_size();
             PALF_LOG(TRACE, "IPalfIterator get_entry success", K(ret), KPC(this), K(entry));
         }
 #endif
-    } else {
-        ret = palf_iterator_.get_entry(buffer, entry.palf_log_entry_, lsn);
+    } else if (OB_FAIL(palf_iterator_.get_entry(buffer, entry.palf_log_entry_, lsn))) {
+        PALF_LOG(WARN, "palf_iterator_ get_entry failed", K(ret), K(lsn));
+    } else if (OB_FAIL(entry.init(entry.palf_log_entry_))) {
+        PALF_LOG(WARN, "entry init failed", K(ret), K(lsn));
     }
     return ret;
   }

@@ -46,7 +46,6 @@ void IGroupEntryHeader::reset()
 {
     is_inited_ = false;
     palf_log_header_ = nullptr;
-    enable_logservice_ = false;
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
     libpalf_log_header_ = nullptr;
 #endif
