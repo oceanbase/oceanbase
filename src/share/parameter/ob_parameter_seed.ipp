@@ -568,6 +568,13 @@ DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3
 DEF_BOOL(_enable_memtable_hash_index, OB_TENANT_PARAMETER, "True",
          "use memtable hash index if enable",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_memstore_small_pool, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable memstore small pool for cold/hot memory separation",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_memstore_small_pool_promote_threshold, OB_TENANT_PARAMETER, "65536", "[0,)",
+        "promote a memstore allocation handle from small pool to large pool when the aligned "
+        "allocation bytes reach this threshold; 0 means always promote",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

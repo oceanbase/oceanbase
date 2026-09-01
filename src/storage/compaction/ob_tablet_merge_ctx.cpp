@@ -105,6 +105,48 @@ int ObTabletMergeCtx::update_block_info(
 /*
  *  ----------------------------------------------ObTabletMiniMergeCtx--------------------------------------------------
  */
+ObTabletMiniMergeCtx::~ObTabletMiniMergeCtx()
+{
+  unset_merging_allocator();
+}
+
+int ObTabletMiniMergeCtx::build_ctx(bool &finish_flag)
+{
+  int ret = ObTabletMergeCtx::build_ctx(finish_flag);
+  if (OB_SUCC(ret) && !finish_flag) {
+    set_merging_allocator();
+  }
+  return ret;
+}
+
+void ObTabletMiniMergeCtx::set_merging_allocator()
+{
+  if (!merging_allocator_set_ && !get_tablet_id().is_ls_inner_tablet()) {
+    const ObTablesHandleArray &tables_handle = get_tables_handle();
+    for (int64_t i = 0; i < tables_handle.get_count(); ++i) {
+      ObITable *table = tables_handle.get_table(i);
+      if (OB_NOT_NULL(table) && table->is_data_memtable()) {
+        static_cast<memtable::ObMemtable *>(table)->set_merging_allocator();
+      }
+    }
+    merging_allocator_set_ = true;
+  }
+}
+
+void ObTabletMiniMergeCtx::unset_merging_allocator()
+{
+  if (merging_allocator_set_ && !get_tablet_id().is_ls_inner_tablet()) {
+    const ObTablesHandleArray &tables_handle = get_tables_handle();
+    for (int64_t i = 0; i < tables_handle.get_count(); ++i) {
+      ObITable *table = tables_handle.get_table(i);
+      if (OB_NOT_NULL(table) && table->is_data_memtable()) {
+        static_cast<memtable::ObMemtable *>(table)->unset_merging_allocator();
+      }
+    }
+    merging_allocator_set_ = false;
+  }
+}
+
 int ObTabletMiniMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;

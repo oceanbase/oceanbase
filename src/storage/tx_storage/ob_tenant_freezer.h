@@ -103,6 +103,8 @@ class ObTenantFreezer
 {
 friend ObTenantTxDataFreezeGuard;
 friend class ObFreezer;
+struct SmallPoolFreezeGroupMap;
+struct SmallPoolFreezeScanner;
 struct PeriodicalUpdateValueCache {
   PeriodicalUpdateValueCache() : value_(false), update_ts_(0) {}
   void reset()
@@ -255,6 +257,10 @@ public:
 
   // record major frozen scn and reset freeze cnt
   int update_frozen_scn(const int64_t frozen_scn);
+  int64_t get_small_pool_batch_freeze_tablet_cnt() const
+  { return ATOMIC_LOAD(&batch_freeze_tablet_cnt_); }
+  int64_t get_small_pool_pressure_freeze_round_cnt() const
+  { return ATOMIC_LOAD(&force_freeze_cnt_); }
 
 private:
   int get_tenant_memstore_cond_(int64_t &active_memstore_used,
@@ -304,6 +310,9 @@ private:
   int check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx);
   int check_and_freeze_tx_data_();
   int check_and_freeze_mds_table_();
+  int check_and_batch_freeze_small_pool_();
+  int prepare_small_pool_freeze_group_map_();
+  void destroy_small_pool_freeze_group_map_();
 
   int get_tx_data_info_for_freeze_(int64_t &tenant_tx_data_frozen_mem_used,
                                    int64_t &tenant_tx_data_active_mem_used,
@@ -318,9 +327,24 @@ private:
                                   int64_t &ls_tx_data_active_mem_used,
                                   bool for_statistic_print = false);
 
+  static const int64_t BATCH_FREEZE_INTERVAL = 30_s;
+  static const int64_t BATCH_FREEZE_AGE_THRESHOLD = 5 * 60 * 1000 * 1000L; // 5 minutes
+  static const int64_t BATCH_FREEZE_SCAN_COUNT = 4096;                     // max active handles scanned under the allocator lock per round
+  static const int64_t BATCH_FREEZE_MAX_COUNT = 1024;                      // max tablet freeze candidates collected per round
+  static const int64_t SMALL_POOL_HOLD_RATIO = 20;                         // 20% of memstore limit
+
 private:
   bool is_inited_;
   bool is_freezing_tx_data_;
+  int64_t last_batch_freeze_ts_;
+  int64_t batch_freeze_tablet_cnt_;     // cumulative tablets successfully submitted by small pool batch freeze
+  int64_t force_freeze_cnt_;            // cumulative pressure-triggered scan rounds
+  int64_t batch_freeze_fail_cnt_;       // cumulative failed LS batch attempts
+  int64_t batch_freeze_full_cnt_;       // cumulative rounds that hit the 1024-candidate cap
+  // Used only by the single freeze-trigger thread. It is created lazily when
+  // grouping is first needed, and retained after disable until SMALL_ACTIVE
+  // handles have been drained so compatibility freezing can continue.
+  SmallPoolFreezeGroupMap *small_pool_freeze_group_map_;
   ObTenantInfo tenant_info_;                  // store the mem limit, memstore limit and etc.
   obrpc::ObTenantFreezerRpcProxy rpc_proxy_;  // used to trigger minor/major freeze
   obrpc::ObTenantFreezerRpcCb tenant_mgr_cb_; // callback after the trigger rpc finish.

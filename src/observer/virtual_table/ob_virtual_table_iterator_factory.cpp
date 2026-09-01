@@ -719,6 +719,17 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID: {
+            ObAllVirtualTenantMemstoreDiagnoseInfo *tenant_memstore_diagnose_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualTenantMemstoreDiagnoseInfo,
+                                          tenant_memstore_diagnose_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualTenantMemstoreDiagnoseInfo construct failed", K(ret));
+            } else {
+              tenant_memstore_diagnose_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(tenant_memstore_diagnose_info);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_MEMORY_INFO_TID: {
             ObAllVirtualMemoryInfo *all_virtual_memory_info = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualMemoryInfo, all_virtual_memory_info))) {

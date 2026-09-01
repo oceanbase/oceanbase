@@ -139,6 +139,8 @@ public:
   int64_t hazard() const { return ATOMIC_LOAD(&hazard_); }
   DLink* next(DLink* iter) { return total_list_.next(iter); }
   DLink* prev(DLink* iter) { return total_list_.prev(iter); }
+  // The caller must hold the allocator lock while traversing active_list_.
+  DLink* prev_active(DLink* iter) { return active_list_.prev(iter); }
 protected:
   void set_frozen_(Handle& handle);
   int64_t alloc_id() { return ATOMIC_AAF(&id_, 1); }

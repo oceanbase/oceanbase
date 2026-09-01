@@ -62,12 +62,11 @@ namespace share
 // override the function
 int ObMemstoreAllocator::set_memstore_threshold_without_lock()
 {
-  int64_t memstore_threshold = INT64_MAX;
-  arena_.set_memstore_threshold(memstore_threshold);
   return OB_SUCCESS;
 }
-void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+void* ObMemstoreAllocator::alloc(AllocHandle& handle, int64_t size, const int64_t expire_ts)
 {
+  UNUSED(expire_ts);
   int64_t align_size = upper_align(size, sizeof(int64_t));
   if (!handle.is_id_valid()) {
     COMMON_LOG(TRACE, "MTALLOC.first_alloc", KP(&handle.mt_));
@@ -166,7 +165,13 @@ public:
     ObLSHandle ls_handle;
     ls_handle.set_ls(ls_map_, ls_, ObLSGetMod::DATA_MEMTABLE_MOD);
 
-    return mt_table.init(table_key, ls_handle, &freezer_, &memtable_mgr_, schema_version, freeze_clock);
+    return mt_table.init(table_key,
+                         ls_handle,
+                         &freezer_,
+                         &memtable_mgr_,
+                         schema_version,
+                         freeze_clock,
+                         true /*use_hash_index*/);
   }
   int mock_col_desc()
   {
@@ -299,26 +304,27 @@ public:
   }
 
   int write(int64_t key, int64_t val, ObMemtable &mt, ObDatumRowkey &row_key, int64_t snapshot_version = 1000) {
+    int ret = OB_SUCCESS;
     ObStoreCtx store_ctx;
     ObTxSnapshot snapshot;
-    ObTxTableGuard tx_table_guard;
     concurrent_control::ObWriteFlag write_flag;
-    tx_table_guard.init((ObTxTable*)0x100);
     snapshot.version_.convert_for_gts(snapshot_version);
-    store_ctx.mvcc_acc_ctx_.init_write(trans_ctx_,
-                                       mem_ctx_,
-                                       tx_desc_.tx_id_,
-                                       ObTxSEQ(1000, 0),
-                                       tx_desc_,
-                                       tx_table_guard,
-                                       snapshot,
-                                       INT64_MAX,
-                                       INT64_MAX,
-                                       write_flag);
+    if (OB_FAIL(store_ctx.mvcc_acc_ctx_.init_write(trans_ctx_,
+                                                   mem_ctx_,
+                                                   tx_desc_.tx_id_,
+                                                   ObTxSEQ(1000, 0),
+                                                   tx_desc_,
+                                                   reinterpret_cast<ObTxTable *>(0x100),
+                                                   snapshot,
+                                                   INT64_MAX,
+                                                   INT64_MAX,
+                                                   write_flag))) {
+    }
     ObTableStoreIterator table_iter;
     store_ctx.table_iter_ = &table_iter;
     ObStoreRow write_row;
-    tm_->mock_row(key, val, row_key, write_row);
+    if (OB_SUCC(ret) && OB_FAIL(tm_->mock_row(key, val, row_key, write_row))) {
+    }
 
     ObArenaAllocator allocator;
     ObTableAccessContext context;
@@ -332,15 +338,30 @@ public:
     query_flag.use_row_cache_ = ObQueryFlag::DoNotUseCache;
     query_flag.read_latest_ = read_latest & ObQueryFlag::OBSF_MASK_READ_LATEST;
 
-    context.init(query_flag, store_ctx, allocator, trans_version_range);
+    if (OB_SUCC(ret) && OB_FAIL(context.init(query_flag, store_ctx, allocator, trans_version_range))) {
+    }
 
     ObStoreRowkey tmp_key;
     ObMemtableKey mtk;
+    ObDatumRow datum_row;
 
-    tmp_key.assign(write_row.row_val_.cells_, tm_->iter_param_.get_schema_rowkey_count());
-    mtk.encode(tm_->columns_, &tmp_key);
-
-    return mt.set_(tm_->iter_param_, tm_->columns_, write_row, nullptr, nullptr, mtk, context);
+    if (OB_SUCC(ret)) {
+      tmp_key.assign(write_row.row_val_.cells_, tm_->iter_param_.get_schema_rowkey_count());
+    }
+    if (OB_SUCC(ret) && OB_FAIL(mtk.encode(tm_->columns_, &tmp_key))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(datum_row.init(write_row.row_val_.count_))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(datum_row.from_store_row(write_row))) {
+    } else if (OB_SUCC(ret)) {
+      const ObMemtableSetArg arg(&datum_row,
+                                 &tm_->columns_,
+                                 nullptr, /*update_idx*/
+                                 nullptr, /*old_row*/
+                                 1,       /*row_count*/
+                                 false,   /*check_exist*/
+                                 nullptr /*encrypt_meta*/);
+      ret = mt.set_(tm_->iter_param_, context, arg, mtk);
+    }
+    return ret;
   }
   int write(int64_t key, int64_t val, ObMemtable &mt, int64_t snapshot_version = 1000) {
     ObDatumRowkey row_key;
@@ -544,6 +565,323 @@ TEST_F(TestMemtable, multi_key)
   EXPECT_EQ(OB_SUCCESS, rg2.mem_ctx_.do_trans_end(true, val_900, val_900, 0));
   print(mvcc_row);
   print(mvcc_row2);
+}
+
+class TestMemstoreSmallPool : public testing::Test
+{
+public:
+  TestMemstoreSmallPool() : tenant_base_(1) {}
+  void SetUp() override
+  {
+    share::ObTenantEnv::set_tenant(&tenant_base_);
+  }
+  void TearDown() override
+  {
+    share::ObTenantEnv::set_tenant(nullptr);
+  }
+
+  share::ObTenantBase tenant_base_;
+};
+
+struct HandleScanCounter
+{
+  HandleScanCounter(const int64_t return_at = INT64_MAX, const int return_code = OB_SUCCESS)
+      : return_at_(return_at), return_code_(return_code), count_(0) {}
+
+  int operator()(common::ObDLink *link)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(link)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (++count_ == return_at_) {
+      ret = return_code_;
+    }
+    return ret;
+  }
+
+  int64_t return_at_;
+  int return_code_;
+  int64_t count_;
+};
+
+TEST_F(TestMemstoreSmallPool, promote_threshold)
+{
+  const int64_t threshold = 64 * 1024;
+  EXPECT_TRUE(share::ObMemstoreAllocator::should_promote(0, 1, 0));
+  EXPECT_FALSE(share::ObMemstoreAllocator::should_promote(0, threshold - 1, threshold));
+  EXPECT_TRUE(share::ObMemstoreAllocator::should_promote(0, threshold, threshold));
+  EXPECT_FALSE(share::ObMemstoreAllocator::should_promote(threshold - 8, 7, threshold));
+  EXPECT_TRUE(share::ObMemstoreAllocator::should_promote(threshold - 8, 8, threshold));
+  EXPECT_TRUE(share::ObMemstoreAllocator::should_promote(threshold, 0, threshold));
+  EXPECT_TRUE(share::ObMemstoreAllocator::should_promote(threshold + 1, 0, threshold));
+  EXPECT_TRUE(share::ObMemstoreAllocator::should_promote(INT64_MAX - 8, 8, INT64_MAX));
+}
+
+TEST_F(TestMemstoreSmallPool, state_transition)
+{
+  share::ObMemstoreAllocator allocator;
+  ObMemtable memtable;
+  share::ObMemstoreAllocator::AllocHandle active_handle(memtable);
+  share::ObMemstoreAllocator::AllocHandle retired_handle(memtable);
+  share::ObMemstoreAllocator::AllocHandle inactive_handle(memtable);
+  share::ObMemstoreAllocator::AllocHandle frozen_handle(memtable);
+
+  allocator.mark_small_active(inactive_handle);
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_INACTIVE,
+            inactive_handle.get_small_pool_state());
+  EXPECT_EQ(0, allocator.get_small_pool_active_count());
+
+  ASSERT_TRUE(active_handle.set_active());
+  allocator.mark_small_active(active_handle);
+  allocator.mark_small_active(active_handle);
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_ACTIVE,
+            active_handle.get_small_pool_state());
+  EXPECT_EQ(1, allocator.get_small_pool_active_count());
+
+  allocator.promote(active_handle);
+  allocator.promote(active_handle);
+  allocator.mark_small_active(active_handle);
+  allocator.retire_small_active(active_handle);
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_PROMOTED,
+            active_handle.get_small_pool_state());
+  EXPECT_EQ(0, allocator.get_small_pool_active_count());
+  EXPECT_EQ(1, allocator.get_promoted_cnt());
+  EXPECT_EQ(1, allocator.get_total_promoted_cnt());
+
+  ASSERT_TRUE(retired_handle.set_active());
+  allocator.mark_small_active(retired_handle);
+  EXPECT_EQ(1, allocator.get_small_pool_active_count());
+  allocator.retire_small_active(retired_handle);
+  allocator.retire_small_active(retired_handle);
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_INACTIVE,
+            retired_handle.get_small_pool_state());
+  EXPECT_EQ(0, allocator.get_small_pool_active_count());
+
+  allocator.hlist_.init_handle(frozen_handle);
+  frozen_handle.set_clock(0);
+  allocator.hlist_.set_active(frozen_handle);
+  allocator.set_frozen(frozen_handle);
+  allocator.mark_small_active(frozen_handle);
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_INACTIVE,
+            frozen_handle.get_small_pool_state());
+
+  allocator.promote(inactive_handle);
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_PROMOTED,
+            inactive_handle.get_small_pool_state());
+  EXPECT_EQ(2, allocator.get_promoted_cnt());
+  EXPECT_EQ(2, allocator.get_total_promoted_cnt());
+  allocator.destroy_handle(frozen_handle);
+}
+
+TEST_F(TestMemstoreSmallPool, set_frozen_retires_active_state)
+{
+  share::ObMemstoreAllocator allocator;
+  ObMemtable memtable;
+  share::ObMemstoreAllocator::AllocHandle handle(memtable);
+  allocator.hlist_.init_handle(handle);
+  handle.set_clock(0);
+  allocator.hlist_.set_active(handle);
+  allocator.mark_small_active(handle);
+  ASSERT_EQ(1, allocator.get_small_pool_active_count());
+
+  allocator.set_frozen(handle);
+  EXPECT_TRUE(handle.is_frozen());
+  EXPECT_EQ(share::ObMemstoreAllocator::AllocHandle::SMALL_INACTIVE,
+            handle.get_small_pool_state());
+  EXPECT_EQ(0, allocator.get_small_pool_active_count());
+  allocator.destroy_handle(handle);
+}
+
+TEST_F(TestMemstoreSmallPool, config_disable_retires_cached_page)
+{
+  share::ObMemstoreAllocator allocator;
+  share::ObMemstoreAllocator::ArenaHandle handle;
+  handle.reset();
+  ASSERT_EQ(OB_SUCCESS, allocator.small_arena_.init());
+  allocator.small_arena_.update_nway_per_group(1);
+  char *ptr = static_cast<char *>(allocator.small_arena_.alloc(0, handle, 32));
+  ASSERT_NE(nullptr, ptr);
+  memset(ptr, 0x5a, 32);
+  ASSERT_NE(nullptr, allocator.small_arena_.cur_pages_[0]);
+
+  allocator.apply_small_pool_config(true, 0);
+  EXPECT_TRUE(allocator.is_small_pool_enabled());
+  EXPECT_EQ(0, ATOMIC_LOAD(&allocator.promote_threshold_));
+  allocator.apply_small_pool_config(false, 64 * 1024);
+  EXPECT_FALSE(allocator.is_small_pool_enabled());
+  EXPECT_EQ(64 * 1024, ATOMIC_LOAD(&allocator.promote_threshold_));
+  EXPECT_EQ(nullptr, allocator.small_arena_.cur_pages_[0]);
+  EXPECT_GT(allocator.get_small_arena_hold(), 0);
+  for (int64_t i = 0; i < 32; ++i) {
+    EXPECT_EQ(0x5a, static_cast<unsigned char>(ptr[i]));
+  }
+
+  allocator.apply_small_pool_config(false, 64 * 1024);
+  allocator.small_arena_.free(handle);
+  EXPECT_EQ(0, allocator.get_small_arena_hold());
+  allocator.apply_small_pool_config(false, 64 * 1024);
+}
+
+TEST_F(TestMemstoreSmallPool, cached_page_lifetime)
+{
+  common::ObMemstoreSmallFifoArena arena;
+  common::ObFifoArenaBase::Handle first_handle;
+  common::ObFifoArenaBase::Handle second_handle;
+  common::ObFifoArenaBase::Handle new_page_handle;
+  first_handle.reset();
+  second_handle.reset();
+  new_page_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, arena.init());
+  arena.update_nway_per_group(1);
+
+  char *first = static_cast<char *>(arena.alloc(0, first_handle, 32));
+  char *second = static_cast<char *>(arena.alloc(0, second_handle, 32));
+  ASSERT_NE(nullptr, first);
+  ASSERT_NE(nullptr, second);
+  memset(first, 0x11, 32);
+  memset(second, 0x22, 32);
+  common::ObFifoArenaBase::Page *old_page = arena.cur_pages_[0];
+  ASSERT_NE(nullptr, old_page);
+  EXPECT_EQ(old_page, first_handle.ref_[0]->page_);
+  EXPECT_EQ(old_page, second_handle.ref_[0]->page_);
+  const int64_t old_page_hold = arena.hold();
+
+  arena.retire_cached_pages();
+  EXPECT_EQ(nullptr, arena.cur_pages_[0]);
+  EXPECT_EQ(old_page_hold, arena.hold());
+  const int64_t retired = arena.retired();
+  arena.retire_cached_pages();
+  EXPECT_EQ(retired, arena.retired());
+  for (int64_t i = 0; i < 32; ++i) {
+    EXPECT_EQ(0x11, static_cast<unsigned char>(first[i]));
+    EXPECT_EQ(0x22, static_cast<unsigned char>(second[i]));
+  }
+
+  char *on_new_page = static_cast<char *>(arena.alloc(0, new_page_handle, 32));
+  ASSERT_NE(nullptr, on_new_page);
+  ASSERT_NE(nullptr, arena.cur_pages_[0]);
+  EXPECT_NE(old_page, arena.cur_pages_[0]);
+  memset(on_new_page, 0x33, 32);
+  arena.retire_cached_pages();
+  EXPECT_EQ(nullptr, arena.cur_pages_[0]);
+
+  arena.free(first_handle);
+  EXPECT_GT(arena.hold(), 0);
+  arena.free(second_handle);
+  EXPECT_GT(arena.hold(), 0);
+  for (int64_t i = 0; i < 32; ++i) {
+    EXPECT_EQ(0x33, static_cast<unsigned char>(on_new_page[i]));
+  }
+  arena.free(new_page_handle);
+  EXPECT_EQ(0, arena.hold());
+  EXPECT_EQ(0, arena.get_carved());
+}
+
+TEST_F(TestMemstoreSmallPool, fifo_arena_argument_and_nway_boundaries)
+{
+  const int64_t max_nway = common::ObMemstoreSmallFifoArenaSpec::MAX_NWAY;
+  common::ObMemstoreSmallFifoArena arena;
+  common::ObFifoArenaBase::Handle handle;
+  handle.reset();
+  EXPECT_EQ(nullptr, arena.alloc(0, handle, 8));
+  ASSERT_EQ(OB_SUCCESS, arena.init());
+  EXPECT_EQ(OB_INIT_TWICE, arena.init());
+  EXPECT_EQ(nullptr, arena.alloc(0, handle, 8));
+
+  arena.update_nway_per_group(0);
+  EXPECT_EQ(1, ATOMIC_LOAD(&arena.nway_));
+  EXPECT_EQ(nullptr, arena.alloc(-1, handle, 8));
+  EXPECT_EQ(nullptr, arena.alloc(0, handle, -1));
+  EXPECT_EQ(nullptr, arena.alloc(0, handle, INT64_MAX));
+
+  arena.update_nway_per_group(max_nway + 1);
+  EXPECT_EQ(max_nway, ATOMIC_LOAD(&arena.nway_));
+  arena.update_nway_per_group(1);
+  EXPECT_EQ(1, ATOMIC_LOAD(&arena.nway_));
+}
+
+TEST_F(TestMemstoreSmallPool, scan_active_handles)
+{
+  share::ObMemstoreAllocator allocator;
+  ObMemtable memtable;
+  share::ObMemstoreAllocator::AllocHandle first(memtable);
+  share::ObMemstoreAllocator::AllocHandle second(memtable);
+  share::ObMemstoreAllocator::AllocHandle third(memtable);
+  allocator.hlist_.init_handle(first);
+  allocator.hlist_.init_handle(second);
+  allocator.hlist_.init_handle(third);
+  first.set_clock(1);
+  second.set_clock(2);
+  third.set_clock(3);
+  allocator.hlist_.set_active(first);
+  allocator.hlist_.set_active(second);
+  allocator.hlist_.set_active(third);
+
+  int64_t scanned_count = 0;
+  HandleScanCounter first_round;
+  EXPECT_EQ(OB_SUCCESS, allocator.scan_small_pool_active_handles(first_round, 2, scanned_count));
+  EXPECT_EQ(2, scanned_count);
+  EXPECT_EQ(2, first_round.count_);
+  EXPECT_EQ(&third.active_list_, allocator.small_pool_scan_cursor_);
+
+  HandleScanCounter second_round;
+  EXPECT_EQ(OB_SUCCESS, allocator.scan_small_pool_active_handles(second_round, 2, scanned_count));
+  EXPECT_EQ(1, scanned_count);
+  EXPECT_EQ(1, second_round.count_);
+  EXPECT_EQ(nullptr, allocator.small_pool_scan_cursor_);
+
+  HandleScanCounter iter_end_scanner(1, OB_ITER_END);
+  EXPECT_EQ(OB_SUCCESS, allocator.scan_small_pool_active_handles(iter_end_scanner, 3, scanned_count));
+  EXPECT_EQ(1, scanned_count);
+  EXPECT_EQ(1, iter_end_scanner.count_);
+  EXPECT_EQ(&second.active_list_, allocator.small_pool_scan_cursor_);
+
+  HandleScanCounter error_scanner(1, OB_ERR_UNEXPECTED);
+  EXPECT_EQ(OB_ERR_UNEXPECTED,
+            allocator.scan_small_pool_active_handles(error_scanner, 3, scanned_count));
+  EXPECT_EQ(1, scanned_count);
+  EXPECT_EQ(1, error_scanner.count_);
+  EXPECT_EQ(&third.active_list_, allocator.small_pool_scan_cursor_);
+
+  allocator.destroy_handle(first);
+  allocator.destroy_handle(second);
+  allocator.destroy_handle(third);
+}
+
+TEST_F(TestMemstoreSmallPool, page_churn_sample_and_reset)
+{
+  share::ObMemstoreAllocator allocator;
+  ATOMIC_STORE(&allocator.arena_.allocated_, 4096);
+  ATOMIC_STORE(&allocator.arena_.reclaimed_, 1024);
+  ATOMIC_STORE(&allocator.small_arena_.allocated_, 2048);
+  ATOMIC_STORE(&allocator.small_arena_.reclaimed_, 512);
+
+  allocator.sample_page_churn();
+  EXPECT_EQ(0, allocator.get_page_create_rate());
+  EXPECT_EQ(0, allocator.get_page_reclaim_rate());
+  EXPECT_EQ(6144, allocator.churn_sample_.last_allocated_);
+  EXPECT_EQ(1536, allocator.churn_sample_.last_reclaimed_);
+
+  allocator.churn_sample_.last_ts_us_ = common::ObTimeUtility::fast_current_time() - 1000 * 1000;
+  allocator.churn_sample_.last_allocated_ = 2048;
+  allocator.churn_sample_.last_reclaimed_ = 512;
+  allocator.sample_page_churn();
+  EXPECT_GT(allocator.get_page_create_rate(), 0);
+  EXPECT_GT(allocator.get_page_reclaim_rate(), 0);
+
+  allocator.churn_sample_.last_ts_us_ = common::ObTimeUtility::fast_current_time() - 1000 * 1000;
+  allocator.churn_sample_.last_allocated_ = 8192;
+  allocator.churn_sample_.last_reclaimed_ = 2048;
+  allocator.sample_page_churn();
+  EXPECT_EQ(0, allocator.get_page_create_rate());
+  EXPECT_EQ(0, allocator.get_page_reclaim_rate());
+
+  allocator.reset_page_churn_sample();
+  EXPECT_EQ(0, allocator.churn_sample_.last_ts_us_);
+  EXPECT_EQ(0, allocator.churn_sample_.last_allocated_);
+  EXPECT_EQ(0, allocator.churn_sample_.last_reclaimed_);
+  EXPECT_EQ(0, allocator.get_page_create_rate());
+  EXPECT_EQ(0, allocator.get_page_reclaim_rate());
 }
 
 

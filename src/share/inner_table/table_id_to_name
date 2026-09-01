@@ -1402,6 +1402,7 @@
 # 12616: __all_mview_dep  # BASE_TABLE_NAME
 # 12617: __all_virtual_mview_refresh_pending_task
 # 12617: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
+# 12624: __all_virtual_tenant_memstore_diagnose_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2184,6 +2185,8 @@
 # 15554: __all_virtual_log_transport_stat  # BASE_TABLE_NAME
 # 15557: ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT
 # 15557: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
+# 15559: ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO
+# 15559: __all_virtual_tenant_memstore_diagnose_info  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

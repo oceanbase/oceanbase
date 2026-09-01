@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_tablet_memtable_mgr.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/memtable/ob_memtable.h"
 
 namespace oceanbase
 {
@@ -814,6 +815,9 @@ int ObTabletMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
       memtable->set_frozen();
       memtable->report_memtable_diagnose_info(UpdateReleaseTime());
 
+      if (memtable->is_data_memtable()) {
+        static_cast<memtable::ObMemtable *>(memtable)->set_released_allocator();
+      }
       FLOG_INFO("succeed to release head data memtable", K(ret), K(occupy_size), KPC(memtable));
       release_head_memtable();
 

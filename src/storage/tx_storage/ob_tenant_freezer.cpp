@@ -16,6 +16,7 @@
 #include "observer/ob_srv_network_frame.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "storage/memtable/ob_memtable.h"
 #include "share/ash/ob_di_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
@@ -35,6 +36,12 @@ double ObTenantFreezer::MDS_TABLE_FREEZE_TRIGGER_TENANT_PERCENTAGE = 2;
 ObTenantFreezer::ObTenantFreezer()
 	: is_inited_(false),
     is_freezing_tx_data_(false),
+    last_batch_freeze_ts_(0),
+    batch_freeze_tablet_cnt_(0),
+    force_freeze_cnt_(0),
+    batch_freeze_fail_cnt_(0),
+    batch_freeze_full_cnt_(0),
+    small_pool_freeze_group_map_(nullptr),
     svr_rpc_proxy_(nullptr),
     common_rpc_proxy_(nullptr),
     rs_mgr_(nullptr),
@@ -57,6 +64,11 @@ void ObTenantFreezer::destroy()
 {
   freeze_trigger_timer_.destroy();
   is_freezing_tx_data_ = false;
+  last_batch_freeze_ts_ = 0;
+  batch_freeze_tablet_cnt_ = 0;
+  force_freeze_cnt_ = 0;
+  batch_freeze_fail_cnt_ = 0;
+  batch_freeze_full_cnt_ = 0;
   self_.reset();
   svr_rpc_proxy_ = nullptr;
   common_rpc_proxy_ = nullptr;
@@ -65,6 +77,7 @@ void ObTenantFreezer::destroy()
   freezer_history_.reset();
   throttle_is_skipping_cache_.reset();
   memstore_remain_memory_is_exhausting_cache_.reset();
+  destroy_small_pool_freeze_group_map_();
 
   is_inited_ = false;
 }
@@ -122,6 +135,7 @@ int ObTenantFreezer::start()
                            [this]() {
                              LOG_INFO("====== tenant freeze timer task ======");
                              this->do_freeze_diagnose();
+                             MTL(ObSharedMemAllocMgr *)->memstore_allocator().sample_page_churn();
                              this->check_and_do_freeze();
                              return false; // TODO: false means keep running, true means won't run again
                            }))) {
@@ -835,6 +849,7 @@ void ObTenantFreezer::record_freezer_source_event(const ObLSID &ls_id,
       FREEZE_SOURCE_EVENT_CASE(TEST_MODE, FREEZE_BY_TEST_MODE_COUNT)
       FREEZE_SOURCE_EVENT_CASE(TABLET_SPLIT, FREEZE_BY_TABLET_SPLIT_COUNT)
       FREEZE_SOURCE_EVENT_CASE(GC_TABLET, FREEZE_BY_GC_TABLET_COUNT)
+      FREEZE_SOURCE_EVENT_CASE(SMALL_FREEZE_TRIGGER, FREEZE_BY_SMALL_FREEZE_TRIGGER_COUNT)
       default:
         break;
     }
@@ -866,6 +881,7 @@ static void get_freeze_source_cnt(ObDiagnoseTenantInfo &diag_info,
     FREEZE_SOURCE_GET_CASE(TEST_MODE, FREEZE_BY_TEST_MODE_COUNT)
     FREEZE_SOURCE_GET_CASE(TABLET_SPLIT, FREEZE_BY_TABLET_SPLIT_COUNT)
     FREEZE_SOURCE_GET_CASE(GC_TABLET, FREEZE_BY_GC_TABLET_COUNT)
+    FREEZE_SOURCE_GET_CASE(SMALL_FREEZE_TRIGGER, FREEZE_BY_SMALL_FREEZE_TRIGGER_COUNT)
     default:
       break;
   }
@@ -942,6 +958,11 @@ int ObTenantFreezer::check_and_do_freeze()
     tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(check_and_freeze_mds_table_())) {
       LOG_WARN("[TenantFreezer] check and freeze mds table failed.", KR(tmp_ret));
+    }
+
+    tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(check_and_batch_freeze_small_pool_())) {
+      LOG_WARN("[TenantFreezer] check and batch freeze small pool failed.", KR(tmp_ret));
     }
   }
 
@@ -1709,6 +1730,15 @@ int ObTenantFreezer::print_tenant_usage(
   } else if (OB_FAIL(get_tenant_mem_stat_(stat))) {
     LOG_WARN("[TenantFreezer] fail to get tenant mem stat", KR(ret), K(tenant_info_.tenant_id_));
   } else {
+    share::ObMemstoreAllocator &allocator =
+        MTL(share::ObSharedMemAllocMgr *)->memstore_allocator();
+    const int64_t real_used = allocator.get_total_real_used();
+    const int64_t page_util_pct =
+        stat.total_memstore_hold_ > 0 ? real_used * 100 / stat.total_memstore_hold_ : 0;
+    const int64_t small_arena_hold = allocator.get_small_arena_hold();
+    const int64_t small_real_used = allocator.get_small_arena_real_used();
+    const int64_t small_page_util_pct =
+        small_arena_hold > 0 ? small_real_used * 100 / small_arena_hold : 0;
     ret = databuff_printf(print_buf, buf_len, pos,
                           "[TENANT_MEMORY] "
                           "tenant_id=% '9ld "
@@ -1723,7 +1753,20 @@ int ObTenantFreezer::print_tenant_usage(
                           "max_mem_memstore_can_get_now=% '15ld "
                           "memstore_alloc_pos=% '15ld "
                           "memstore_frozen_pos=% '15ld "
-                          "memstore_reclaimed_pos=% '15ld\n",
+                          "memstore_reclaimed_pos=% '15ld "
+                          "real_used=% '15ld "
+                          "page_util_pct=% '4ld "
+                          "frozen_used=% '15ld "
+                          "merging_used=% '15ld "
+                          "released_used=% '15ld "
+                          "page_alloc_fail_cnt=% '15ld "
+                          "page_create_bytes_per_sec=% '15ld "
+                          "page_reclaim_bytes_per_sec=% '15ld "
+                          "small_arena_hold=% '15ld "
+                          "small_real_used=% '15ld "
+                          "small_page_util_pct=% '4ld "
+                          "small_page_alloc_fail_cnt=% '15ld "
+                          "promoted_cnt=% '15ld\n",
                           tenant_info_.tenant_id_,
                           ObClockGenerator::getClock(),
                           stat.active_memstore_used_,
@@ -1736,7 +1779,20 @@ int ObTenantFreezer::print_tenant_usage(
                           stat.memstore_can_get_now_,
                           stat.memstore_allocated_pos_,
                           stat.memstore_frozen_pos_,
-                          stat.memstore_reclaimed_pos_);
+                          stat.memstore_reclaimed_pos_,
+                          real_used,
+                          page_util_pct,
+                          allocator.get_frozen_used(),
+                          allocator.get_merging_used(),
+                          allocator.get_released_used(),
+                          allocator.get_page_alloc_fail_cnt(),
+                          allocator.get_page_create_rate(),
+                          allocator.get_page_reclaim_rate(),
+                          small_arena_hold,
+                          small_real_used,
+                          small_page_util_pct,
+                          allocator.get_small_arena_page_alloc_fail_cnt(),
+                          allocator.get_promoted_cnt());
   }
 
   return ret;
@@ -2083,6 +2139,261 @@ void ObTenantFreezerStatHistory::reset()
   length_ = 0;
 }
 
+struct SmallPoolFreezeCandidate
+{
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+};
+
+// Collect an active memtable as a small-pool freeze candidate only when it
+// still has data in the small arena and has not been promoted, and either:
+// 1. its age reaches BATCH_FREEZE_AGE_THRESHOLD; or
+// 2. force_freeze_ is set because small-arena hold exceeds the pressure limit.
+struct ObTenantFreezer::SmallPoolFreezeScanner
+{
+  SmallPoolFreezeScanner(int64_t now, bool force_freeze)
+      : now_(now), force_freeze_(force_freeze),
+        frozen_count_(0), unpromoted_active_cnt_(0), oldest_age_us_(0) {}
+
+  int operator()(ObDLink* link)
+  {
+    int ret = OB_SUCCESS;
+    share::ObMemstoreAllocator::AllocHandle* handle = CONTAINER_OF(link, share::ObMemstoreAllocator::AllocHandle, active_list_);
+    if (OB_ISNULL(handle)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (!handle->is_active() ||
+               !handle->is_id_valid() ||
+               share::ObMemstoreAllocator::AllocHandle::SMALL_ACTIVE != handle->get_small_pool_state()) {
+      // skip
+    } else {
+      memtable::ObMemtable& mt = handle->mt_;
+      int64_t age = now_ - mt.get_timestamp();
+      unpromoted_active_cnt_++;
+      if (age > oldest_age_us_) {
+        oldest_age_us_ = age;
+      }
+      if (force_freeze_ || age >= BATCH_FREEZE_AGE_THRESHOLD) {
+        share::ObLSID ls_id = mt.get_ls_id();
+        common::ObTabletID tablet_id = mt.get_tablet_id();
+        if (ls_id.is_valid() && tablet_id.is_valid()) {
+          if (frozen_count_ < 0 || frozen_count_ >= BATCH_FREEZE_MAX_COUNT) {
+            ret = OB_SIZE_OVERFLOW;
+          } else {
+            candidates_[frozen_count_].ls_id_ = ls_id;
+            candidates_[frozen_count_].tablet_id_ = tablet_id;
+            frozen_count_++;
+            if (frozen_count_ >= BATCH_FREEZE_MAX_COUNT) {
+              ret = OB_ITER_END;
+            }
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  int64_t now_;
+  bool force_freeze_;
+  int64_t frozen_count_;           // candidates collected so far, not the number successfully frozen
+  int64_t unpromoted_active_cnt_;  // valid SMALL_ACTIVE handles visited in this partial scan
+  int64_t oldest_age_us_;
+  SmallPoolFreezeCandidate candidates_[BATCH_FREEZE_MAX_COUNT];
+};
+
+struct ObTenantFreezer::SmallPoolFreezeGroupMap
+{
+  typedef common::ObSEArray<common::ObTabletID, 16> TabletIDArray;
+  typedef common::hash::ObHashMap<share::ObLSID,
+                                  TabletIDArray,
+                                  common::hash::NoPthreadDefendMode> GroupMap;
+  typedef GroupMap::iterator iterator;
+
+  int init()
+  {
+    return groups_.create(BATCH_FREEZE_MAX_COUNT,
+                          "SmPoolFrzBkt",
+                          "SmPoolFrzNode",
+                          MTL_ID());
+  }
+
+  int reuse()
+  {
+    return groups_.reuse();
+  }
+
+  void destroy()
+  {
+    (void)groups_.destroy();
+  }
+
+  int add_candidate(const SmallPoolFreezeCandidate& candidate)
+  {
+    int ret = OB_SUCCESS;
+    TabletIDArray *tablet_ids = nullptr;
+    if (!candidate.ls_id_.is_valid() || !candidate.tablet_id_.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_NOT_NULL(tablet_ids = groups_.get(candidate.ls_id_))) {
+      if (OB_FAIL(tablet_ids->push_back(candidate.tablet_id_))) {
+        LOG_WARN("[TenantFreezer] fail to append small pool freeze candidate",
+                 KR(ret), K(candidate.ls_id_), K(candidate.tablet_id_));
+      }
+    } else {
+      TabletIDArray new_tablet_ids;
+      if (OB_FAIL(new_tablet_ids.push_back(candidate.tablet_id_))) {
+        LOG_WARN("[TenantFreezer] fail to create small pool freeze group",
+                 KR(ret), K(candidate.ls_id_), K(candidate.tablet_id_));
+      } else if (OB_FAIL(groups_.set_refactored(candidate.ls_id_, new_tablet_ids))) {
+        LOG_WARN("[TenantFreezer] fail to insert small pool freeze group",
+                 KR(ret), K(candidate.ls_id_), K(candidate.tablet_id_));
+      }
+    }
+    return ret;
+  }
+
+  iterator begin() { return groups_.begin(); }
+  iterator end() { return groups_.end(); }
+
+  GroupMap groups_;
+};
+
+int ObTenantFreezer::prepare_small_pool_freeze_group_map_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(small_pool_freeze_group_map_)) {
+    void *buf = mtl_malloc(sizeof(SmallPoolFreezeGroupMap), "SmPoolFrzMap");
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("[TenantFreezer] fail to allocate small pool freeze group map", KR(ret));
+    } else {
+      SmallPoolFreezeGroupMap *group_map = new(buf) SmallPoolFreezeGroupMap();
+      if (OB_FAIL(group_map->init())) {
+        LOG_WARN("[TenantFreezer] fail to init small pool freeze group map", KR(ret));
+        group_map->destroy();
+        group_map->~SmallPoolFreezeGroupMap();
+        mtl_free(group_map);
+      } else {
+        small_pool_freeze_group_map_ = group_map;
+        LOG_INFO("[TenantFreezer] create small pool freeze group map");
+      }
+    }
+  } else if (OB_FAIL(small_pool_freeze_group_map_->reuse())) {
+    LOG_WARN("[TenantFreezer] fail to reuse small pool freeze group map", KR(ret));
+  }
+  return ret;
+}
+
+void ObTenantFreezer::destroy_small_pool_freeze_group_map_()
+{
+  if (OB_NOT_NULL(small_pool_freeze_group_map_)) {
+    small_pool_freeze_group_map_->destroy();
+    small_pool_freeze_group_map_->~SmallPoolFreezeGroupMap();
+    mtl_free(small_pool_freeze_group_map_);
+    small_pool_freeze_group_map_ = nullptr;
+    LOG_INFO("[TenantFreezer] destroy small pool freeze group map");
+  }
+}
+
+int ObTenantFreezer::check_and_batch_freeze_small_pool_()
+{
+  int ret = OB_SUCCESS;
+  int64_t now = ObTimeUtil::current_time();
+  share::ObMemstoreAllocator &allocator =
+      MTL(share::ObSharedMemAllocMgr *)->memstore_allocator();
+  const bool enable_small_pool = allocator.is_small_pool_enabled();
+  const int64_t small_pool_active_count = allocator.get_small_pool_active_count();
+  if (now - last_batch_freeze_ts_ < BATCH_FREEZE_INTERVAL) {
+    // do nothing
+  } else if (FALSE_IT(last_batch_freeze_ts_ = now)) {
+  } else if (small_pool_active_count <= 0) {
+    // Disabling only stops new small-pool allocations. Keep the grouping map
+    // until every existing SMALL_ACTIVE handle has left the active list so the
+    // compatibility freeze path can continue draining data written before the
+    // switch was disabled. Map cleanup shares the 30-second batch interval.
+    if (!enable_small_pool) {
+      destroy_small_pool_freeze_group_map_();
+    }
+  } else {
+    int64_t small_hold = allocator.get_small_arena_hold();
+    int64_t memstore_limit = 0;
+    if (OB_FAIL(get_tenant_memstore_limit(memstore_limit))) {
+      LOG_WARN("[TenantFreezer] fail to get memstore limit for batch freeze", KR(ret));
+    } else {
+      int64_t scanned_count = 0;
+      ObLSService *ls_srv = nullptr;
+      bool force_freeze = memstore_limit > 0 && small_hold * 100 > memstore_limit * SMALL_POOL_HOLD_RATIO;
+      SmallPoolFreezeScanner scanner(now, force_freeze);
+
+      if (force_freeze) {
+        ATOMIC_INC(&force_freeze_cnt_);
+      }
+      if (OB_FAIL(allocator.scan_small_pool_active_handles(scanner, BATCH_FREEZE_SCAN_COUNT, scanned_count))) {
+        LOG_WARN("[TenantFreezer] fail to scan small pool handles", KR(ret));
+      } else {
+        if (scanner.frozen_count_ >= BATCH_FREEZE_MAX_COUNT) {
+          ATOMIC_INC(&batch_freeze_full_cnt_);
+        }
+        // The allocator lock has been released here. Build the LS groups
+        // outside that lock because grouping can be more expensive than
+        // reading the bounded 4096 handles. The member map retains its buckets
+        // across rounds and is created only when at least one candidate exists.
+        if (0 == scanner.frozen_count_) {
+          // do nothing
+        } else if (OB_FAIL(prepare_small_pool_freeze_group_map_())) {
+          LOG_WARN("[TenantFreezer] fail to prepare small pool freeze group map", KR(ret));
+        } else {
+          for (int64_t i = 0; i < scanner.frozen_count_; i++) {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(small_pool_freeze_group_map_->add_candidate(scanner.candidates_[i]))) {
+              LOG_WARN("[TenantFreezer] fail to group small pool freeze candidate", KR(tmp_ret), K(i));
+              ret = OB_SUCC(ret) ? tmp_ret : ret;
+            }
+          }
+
+          if (OB_ISNULL(ls_srv = MTL(ObLSService *))) {
+            ret = OB_SUCC(ret) ? OB_ERR_UNEXPECTED : ret;
+            LOG_WARN("[TenantFreezer] ls service is null", KR(ret));
+          } else {
+            for (SmallPoolFreezeGroupMap::iterator iter = small_pool_freeze_group_map_->begin(); iter != small_pool_freeze_group_map_->end(); ++iter) {
+              int tmp_ret = OB_SUCCESS;
+              const share::ObLSID &ls_id = iter->first;
+              const SmallPoolFreezeGroupMap::TabletIDArray &tablet_ids = iter->second;
+              ObLSHandle handle;
+              ObLS *ls = nullptr;
+              if (OB_TMP_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+                LOG_WARN("[TenantFreezer] fail to get ls for small pool batch freeze", KR(tmp_ret), K(ls_id));
+              } else if (OB_ISNULL(ls = handle.get_ls())) {
+                tmp_ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("[TenantFreezer] ls is null for small pool batch freeze", KR(tmp_ret), K(ls_id));
+              } else if (OB_TMP_FAIL(ls->tablet_freeze(checkpoint::INVALID_TRACE_ID,
+                                                       tablet_ids,
+                                                       false, /* is_sync */
+                                                       0,     /* input_abs_timeout_ts */
+                                                       false, /* need_rewrite_meta */
+                                                       ObFreezeSourceFlag::SMALL_FREEZE_TRIGGER))) {
+                LOG_WARN("[TenantFreezer] fail to submit small pool batch freeze", KR(tmp_ret), K(ls_id), K(tablet_ids));
+              } else {
+                ATOMIC_FAA(&batch_freeze_tablet_cnt_, tablet_ids.count());
+              }
+
+              if (OB_TMP_FAIL(tmp_ret)) {
+                ret = OB_SUCC(ret) ? tmp_ret : ret;
+                ATOMIC_INC(&batch_freeze_fail_cnt_);
+              }
+            }
+          }
+        }
+        LOG_INFO("[TenantFreezer] batch freeze small pool snapshot",
+                  K(scanned_count), "candidate_count", scanner.frozen_count_,
+                  K(small_hold), K(memstore_limit), K(force_freeze), K(enable_small_pool),
+                  K(small_pool_active_count), K(scanner.unpromoted_active_cnt_), K(scanner.oldest_age_us_),
+                  K(ATOMIC_LOAD(&batch_freeze_tablet_cnt_)), K(ATOMIC_LOAD(&force_freeze_cnt_)),
+                  K(ATOMIC_LOAD(&batch_freeze_fail_cnt_)), K(ATOMIC_LOAD(&batch_freeze_full_cnt_)));
+      }
+    }
+  }
+
+  return ret;
+}
 
 
 }

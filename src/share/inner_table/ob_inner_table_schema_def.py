@@ -18094,6 +18094,47 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_mview_refresh_pending_task'],
   in_tenant_space = True))
 
+def_table_schema(
+  owner = 'laibingzheng.lbz',
+  table_name = '__all_virtual_tenant_memstore_diagnose_info',
+  table_id = '12624',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('memstore_used', 'int'),
+  ('memstore_limit', 'int'),
+  ('freeze_trigger', 'int'),
+  ('real_used', 'int'),
+  ('page_util_pct', 'int'),
+  ('frozen_used', 'int'),
+  ('merging_used', 'int'),
+  ('released_used', 'int'),
+  ('page_alloc_fail_cnt', 'int'),
+  ('page_create_bytes_per_sec', 'int'),
+  ('page_reclaim_bytes_per_sec', 'int'),
+  ('small_arena_hold', 'int'),
+  ('small_real_used', 'int'),
+  ('small_page_util_pct', 'int'),
+  ('small_page_alloc_fail_cnt', 'int'),
+  ('promoted_cnt', 'int'),
+  ('total_promoted_cnt', 'int'),
+  ('small_pool_batch_freeze_tablet_cnt', 'int'),
+  ('small_pool_pressure_freeze_round_cnt', 'int'),
+  ('large_retired_pending_hold', 'int'),
+  ('small_retired_pending_hold', 'int'),
+  ('status', 'varchar:OB_DEFAULT_STATUS_LENTH'),
+  ('diagnose_info', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18685,6 +18726,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15553', all_def_keyword
 
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15554', all_def_keywords['__all_virtual_log_transport_stat']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_keywords['__all_mview_refresh_pending_task']))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15559', all_def_keywords['__all_virtual_tenant_memstore_diagnose_info'])))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位

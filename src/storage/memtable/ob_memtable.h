@@ -253,6 +253,9 @@ public: // derived from ObITabletMemtable
   virtual void print_ready_for_flush() override;
   virtual void set_allow_freeze(const bool allow_freeze) override;
   virtual int set_frozen() override { local_allocator_.set_frozen(); return OB_SUCCESS; }
+  void set_merging_allocator() { local_allocator_.set_merging(); }
+  void unset_merging_allocator() { local_allocator_.unset_merging(); }
+  void set_released_allocator() { local_allocator_.set_released(); }
   virtual bool is_inited() const override { return is_inited_; }
   virtual int64_t dec_write_ref() override;
   virtual bool is_frozen_memtable() override;
