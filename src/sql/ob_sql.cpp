@@ -4807,7 +4807,7 @@ int ObSql::get_outline_data(ObPlanCacheCtx &pc_ctx,
                K(database_id),
                K(signature_sql));
       if (OB_FAIL(ObOutlineTemplateMatcher::try_match_template_outline(
-          pc_ctx, schema_guard, session, database_id, signature_sql, allocator, outline_info))) {
+          pc_ctx, schema_guard, session, database_id, signature_sql, outline_info))) {
         ret = OB_SUCCESS; // non-fatal
       }
     }

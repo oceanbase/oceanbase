@@ -389,7 +389,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
         } else { /* do nothing */ }
       }
       if (OB_SUCC(ret)) {
-        const common::ObString &cached_sig = pc_ctx.sql_ctx_.outline_match_template_signature_;
+        const common::ObString &cached_sig = pc_ctx.outline_match_template_signature_;
         if (!cached_sig.empty()
             && OB_FAIL(ob_write_string(*pc_alloc_, cached_sig, cached_template_signature_))) {
           SQL_PC_LOG(WARN, "fail to deep-copy cached_template_signature_", K(ret));

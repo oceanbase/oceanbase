@@ -382,6 +382,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       allocator_(allocator),
       sql_ctx_(sql_ctx),
       exec_ctx_(exec_ctx),
+      outline_match_template_signature_(),
       fp_result_(),
       not_param_info_(allocator),
       not_param_var_(allocator),
@@ -504,6 +505,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   common::ObIAllocator &allocator_; //result mem_pool
   ObSqlCtx &sql_ctx_;
   ObExecContext &exec_ctx_;
+  common::ObString outline_match_template_signature_; //lives with pc_ctx; buffer on allocator_
   ObFastParserResult fp_result_; //result after fast parser
   common::ObFixedArray<NotParamInfo, common::ObIAllocator> not_param_info_; //used for match pcv in pcv_set, gen when add plan
   common::ObFixedArray<PsNotParamInfo, common::ObIAllocator> not_param_var_; //used for ps mode not param

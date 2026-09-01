@@ -54,7 +54,6 @@ public:
       ObSQLSessionInfo *session,
       uint64_t database_id,
       const common::ObString &signature_sql,
-      common::ObIAllocator &allocator,
       const share::schema::ObOutlineInfo *&outline_info);
 
   /**

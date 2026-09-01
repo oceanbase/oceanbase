@@ -731,8 +731,6 @@ public:
   bool disable_sql_udt_deduce_in_pl_;
   ParseResult *parse_result_;
   ParseResult *outline_match_parse_result_;
-  // Template signature cached from try_match_template_outline for PCV::init.
-  common::ObString outline_match_template_signature_;
   ParamStore *prepare_params_;
   bool is_dynamic_sql_;
   bool is_dbms_sql_;

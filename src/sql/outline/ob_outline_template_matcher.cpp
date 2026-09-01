@@ -907,7 +907,7 @@ int ObOutlineTemplateMatcher::try_gen_template_signature(
   } else if (session->is_real_inner_session()) {
     // skip background inner SQL (e.g. WR snapshots); use is_real_inner_session()
     // (not is_inner()) so PL-originated user SQL still gets a signature
-  } else if (!sql_ctx.outline_match_template_signature_.empty()) {
+  } else if (!pc_ctx.outline_match_template_signature_.empty()) {
     // already produced by try_match_template_outline()
   } else if (stmt_parse_tree_has_hint(parse_result)) {
     // hinted SQL never participates in matching
@@ -919,11 +919,11 @@ int ObOutlineTemplateMatcher::try_gen_template_signature(
             parse_result, session, pc_ctx.allocator_, false/*need_format*/,
             template_signature)
         && !template_signature.empty()) {
-      sql_ctx.outline_match_template_signature_ = template_signature;
+      pc_ctx.outline_match_template_signature_ = template_signature;
     }
   }
   LOG_DEBUG("[OUTLINE] try_gen_template_signature",
-            K(sql_ctx.outline_match_template_signature_));
+            K(pc_ctx.outline_match_template_signature_));
   return ret;
 }
 
@@ -933,7 +933,6 @@ int ObOutlineTemplateMatcher::try_match_template_outline(
     ObSQLSessionInfo *session,
     uint64_t database_id,
     const ObString &signature_sql,
-    ObIAllocator &allocator,
     const ObOutlineInfo *&outline_info)
 {
   int ret = OB_SUCCESS;
@@ -962,14 +961,10 @@ int ObOutlineTemplateMatcher::try_match_template_outline(
       // Generate template signature via parse-tree text surgery (no resolve).
       ObString template_signature;
       int ast_ret = generate_signature_from_parse_result(
-          parse_result, session, allocator, false/*need_format*/, template_signature);
+          parse_result, session, pc_ctx.allocator_, false/*need_format*/, template_signature);
       LOG_DEBUG("[OUTLINE] generated template signature", K(ast_ret), K(template_signature));
       if (OB_SUCCESS == ast_ret) {
-        if (OB_FAIL(ob_write_string(pc_ctx.allocator_, template_signature,
-                                    pc_ctx.sql_ctx_.outline_match_template_signature_))) {
-          LOG_WARN("fail to deep-copy template signature", K(ret));
-          pc_ctx.sql_ctx_.outline_match_template_signature_.reset();
-        }
+        pc_ctx.outline_match_template_signature_ = template_signature;
       } else {
         LOG_WARN("failed to generate template signature from parse tree",
                  K(ast_ret), "original_sql_sig", signature_sql);
