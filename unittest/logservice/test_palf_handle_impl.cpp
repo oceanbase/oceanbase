@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <gtest/gtest.h>
@@ -256,6 +257,163 @@ TEST(TestLogStorage, async_recovery_accepts_partial_log_only_after_valid_entry_i
                                                         iterator,
                                                         is_async_dirty_suffix_candidate));
   EXPECT_FALSE(is_async_dirty_suffix_candidate);
+}
+
+TEST(TestLogStorage, async_recovery_restarts_with_all_two_byte_dirty_tail_prefixes)
+{
+  int ret = OB_SUCCESS;
+  int fd = -1;
+  const int64_t palf_id = 1;
+  const int64_t logical_block_size = 3 * LOG_DIO_ALIGN_SIZE;
+  const int64_t valid_group_size = LOG_DIO_ALIGN_SIZE;
+  const int64_t group_header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
+  const int64_t entry_header_size = LogEntryHeader::HEADER_SER_SIZE;
+  const int64_t payload_size = valid_group_size - group_header_size - entry_header_size;
+  const offset_t dirty_suffix_offset = MAX_INFO_BLOCK_SIZE + valid_group_size;
+  char block_header_buf[MAX_INFO_BLOCK_SIZE];
+  char valid_group[LOG_DIO_ALIGN_SIZE];
+  char dirty_suffix[LOG_DIO_ALIGN_SIZE];
+  char base_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  char log_dir[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  char block_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  std::mt19937 generator(20260805);
+  std::uniform_int_distribution<int> distribution(0, 0xff);
+  share::SCN scn;
+  share::ObTenantBase tenant_base(OB_SERVER_TENANT_ID);
+  LogBlockHeader block_header;
+  LogEntryHeader log_entry_header;
+  LogGroupEntryHeader group_header;
+  LogWriteBuf write_buf;
+  LogIODeviceWrapper device_wrapper;
+  LogIOAdapter io_adapter;
+  int64_t data_checksum = 0;
+  int64_t pos = 0;
+  auto update_manifest_cb = [](const block_id_t, const bool) { return OB_SUCCESS; };
+
+  MEMSET(block_header_buf, '\0', sizeof(block_header_buf));
+  MEMSET(valid_group, 'x', sizeof(valid_group));
+  ASSERT_EQ(OB_SUCCESS, scn.convert_for_logservice(1));
+  ASSERT_EQ(OB_SUCCESS, block_header.generate(palf_id, 0, LSN(0), scn));
+  ASSERT_EQ(OB_SUCCESS,
+            block_header.serialize(block_header_buf, sizeof(block_header_buf), pos));
+  ASSERT_EQ(OB_SUCCESS,
+            log_entry_header.generate_header(valid_group + group_header_size + entry_header_size,
+                                             payload_size,
+                                             scn));
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            log_entry_header.serialize(valid_group + group_header_size,
+                                       valid_group_size - group_header_size,
+                                       pos));
+  ASSERT_EQ(OB_SUCCESS, write_buf.push_back(valid_group, valid_group_size));
+  ASSERT_EQ(OB_SUCCESS,
+            group_header.generate(false /* is_raw_write */,
+                                  false /* is_padding_log */,
+                                  write_buf,
+                                  valid_group_size - group_header_size,
+                                  scn,
+                                  1 /* log_id */,
+                                  LSN(0) /* committed_end_lsn */,
+                                  1 /* proposal_id */,
+                                  data_checksum));
+  group_header.update_accumulated_checksum(data_checksum);
+  group_header.update_header_checksum();
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, group_header.serialize(valid_group, sizeof(valid_group), pos));
+
+  share::ObTenantEnv::set_tenant(&tenant_base);
+  ret = ObDeviceManager::get_instance().init_devices_env();
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  ret = share::ObResourceManager::get_instance().init();
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  ret = ObIOManager::get_instance().init(1000000000);
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret);
+  ASSERT_EQ(OB_SUCCESS, ObIOManager::get_instance().start());
+  ASSERT_GT(snprintf(base_dir, OB_MAX_FILE_NAME_LENGTH,
+                     "async_recovery_header_%ld", ob_gettid()), 0);
+  FileDirectoryUtils::delete_directory_rec(base_dir);
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::create_directory(base_dir));
+  ASSERT_GT(snprintf(log_dir, OB_MAX_FILE_NAME_LENGTH, "%s/log", base_dir), 0);
+  ASSERT_EQ(OB_SUCCESS, FileDirectoryUtils::create_directory(log_dir));
+  ASSERT_GT(snprintf(block_path, OB_MAX_FILE_NAME_LENGTH, "%s/0", log_dir), 0);
+  ASSERT_NE(-1, fd = ::open(block_path, O_RDWR | O_CREAT | O_TRUNC, FILE_OPEN_MODE));
+  ASSERT_EQ(0, ::ftruncate(fd, logical_block_size + MAX_INFO_BLOCK_SIZE));
+  ASSERT_EQ(static_cast<ssize_t>(sizeof(block_header_buf)),
+            ::pwrite(fd, block_header_buf, sizeof(block_header_buf), 0));
+  ASSERT_EQ(static_cast<ssize_t>(sizeof(valid_group)),
+            ::pwrite(fd, valid_group, sizeof(valid_group), MAX_INFO_BLOCK_SIZE));
+  ASSERT_EQ(OB_SUCCESS, device_wrapper.init(base_dir,
+                                            1 /* disk_io_thread_count */,
+                                            16 /* max_io_depth */,
+                                            &ObIOManager::get_instance(),
+                                            &ObDeviceManager::get_instance()));
+  ASSERT_EQ(OB_SUCCESS, io_adapter.init(OB_SERVER_TENANT_ID,
+                                        device_wrapper.get_local_device(),
+                                        &share::ObResourceManager::get_instance(),
+                                        &ObIOManager::get_instance()));
+
+  OB_LOGGER.set_log_level("ERROR");
+  // Each iteration writes one aligned async-I/O page after a complete group, then
+  // executes the restart loader. The fixed seed keeps failures reproducible.
+  for (int64_t magic_number = INT16_MIN; magic_number <= INT16_MAX; ++magic_number) {
+    for (int64_t idx = 0; idx < static_cast<int64_t>(sizeof(dirty_suffix)); ++idx) {
+      dirty_suffix[idx] = static_cast<char>(distribution(generator));
+    }
+    dirty_suffix[sizeof(dirty_suffix) - 1] = '\x7f';
+    pos = 0;
+    if (OB_SUCCESS != serialization::encode_i16(dirty_suffix,
+                                                sizeof(dirty_suffix),
+                                                pos,
+                                                static_cast<int16_t>(magic_number))) {
+      ADD_FAILURE() << "encode magic number failed: " << magic_number;
+      break;
+    } else if (static_cast<ssize_t>(sizeof(dirty_suffix))
+               != ::pwrite(fd,
+                           dirty_suffix,
+                           sizeof(dirty_suffix),
+                           dirty_suffix_offset)) {
+      ADD_FAILURE() << "write dirty suffix failed: " << magic_number;
+      break;
+    } else {
+      LogStorage recovery_storage;
+      LogGroupEntryHeader recovered_header;
+      LSN recovered_lsn;
+      ret = recovery_storage.load(base_dir,
+                                  "log",
+                                  LSN(0),
+                                  palf_id,
+                                  logical_block_size,
+                                  LOG_DIO_ALIGN_SIZE,
+                                  LOG_DIO_ALIGN_SIZE,
+                                  update_manifest_cb,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  &io_adapter,
+                                  recovered_header,
+                                  recovered_lsn,
+                                  true /* enable_async_recovery */);
+      if (OB_SUCCESS != ret || LSN(0) != recovered_lsn
+          || LSN(valid_group_size) != recovery_storage.get_end_lsn()) {
+        ADD_FAILURE() << "restart failed: magic_number=" << magic_number
+                      << ", ret=" << ret
+                      << ", recovered_lsn=" << recovered_lsn.val_
+                      << ", recovered_tail=" << recovery_storage.get_end_lsn().val_;
+        break;
+      }
+    }
+  }
+  OB_LOGGER.set_log_level("INFO");
+
+  ASSERT_EQ(0, ::close(fd));
+  fd = -1;
+  io_adapter.destroy();
+  device_wrapper.destroy();
+  ObIOManager::get_instance().stop();
+  ObIOManager::get_instance().wait();
+  ObIOManager::get_instance().destroy();
+  share::ObTenantEnv::set_tenant(NULL);
+  FileDirectoryUtils::delete_directory_rec(base_dir);
 }
 
 TestLogService::TestLogService()

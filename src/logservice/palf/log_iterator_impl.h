@@ -42,7 +42,7 @@ enum class LogEntryType
   LOG_ENTRY_HEADER = 1,
   LOG_INFO_BLOCK_HEADER = 2,
   LOG_META_ENTRY_HEADER = 3,
-  LOG_TYPE_MAX = 4
+  LOG_TYPE_MAX
 };
 // =========== LogEntryType end =============
 
@@ -842,12 +842,13 @@ int LogIteratorImpl<ENTRY>::parse_one_entry_(const SCN &replayable_point_scn,
                                              IterateEndInfo &info)
 {
   int ret = OB_SUCCESS;
-  const int MAGIC_NUMBER_SIZE = sizeof(int16_t);
-  int16_t magic_number = 0;
+  static_assert(static_cast<int64_t>(LogEntryType::LOG_TYPE_MAX) == 4,
+                "LogEntryType changed, update parse_one_entry_");
   LogEntryType actual_log_entry_type = LogEntryType::LOG_TYPE_MAX;
   do {
     if (OB_FAIL(get_log_entry_type_(actual_log_entry_type))) {
-    } else {
+    } else if (OB_LIKELY(actual_log_entry_type >= LogEntryType::GROUP_ENTRY_HEADER
+                         && actual_log_entry_type < LogEntryType::LOG_TYPE_MAX)) {
       switch (actual_log_entry_type) {
         case LogEntryType::GROUP_ENTRY_HEADER:
           {
@@ -859,6 +860,11 @@ int LogIteratorImpl<ENTRY>::parse_one_entry_(const SCN &replayable_point_scn,
             ret = parse_log_entry_(replayable_point_scn, info);
             break;
           }
+        case LogEntryType::LOG_INFO_BLOCK_HEADER:
+          {
+            ret = OB_INVALID_DATA;
+            break;
+          }
         case LogEntryType::LOG_META_ENTRY_HEADER:
           {
             ret = parse_meta_entry_();
@@ -868,6 +874,8 @@ int LogIteratorImpl<ENTRY>::parse_one_entry_(const SCN &replayable_point_scn,
           ret = OB_ERR_UNEXPECTED;
           break;
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
     }
   } while (OB_EAGAIN == ret);
 
