@@ -75,6 +75,9 @@ void ObBackupService::run2()
   LOG_INFO("[backupService]backup service start");
   int64_t last_trigger_ts = ObTimeUtility::current_time();
   while (!has_set_stop()) {
+    // Per-iteration idle reset. Code paths inside process() (e.g., finish_(),
+    // check_disk_full_timeout_()) may further shorten it for a specific
+    // iteration via set_idle_time().
     set_idle_time(ObBackupBaseService::OB_MIDDLE_IDLE_TIME);
     ObCurTraceId::init(GCONF.self_addr_);
     share::schema::ObSchemaGetterGuard schema_guard;

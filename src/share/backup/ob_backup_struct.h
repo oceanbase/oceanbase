@@ -1438,7 +1438,9 @@ public:
   ObBackupStatus &operator=(const Status &status);
   operator Status() const { return status_; }
   bool is_valid() const;
-
+  // true when the set_task is in an active backup phase, i.e. after LS tasks have
+  // been persisted and before the task reaches a terminal/canceling status.
+  bool is_task_doing_status() const;
   bool is_backup_meta() const { return BACKUP_SYS_META == status_ || BACKUP_USER_META == status_; }
   bool is_backup_user() const { return BACKUP_USER_DATA == status_; }
   bool is_backup_log_phase() const { return PREPARE_BACKUP_LOG == status_ || BEFORE_BACKUP_LOG == status_ || BACKUP_LOG == status_; }
