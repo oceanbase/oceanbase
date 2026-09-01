@@ -1184,8 +1184,13 @@ int ObSPIService::spi_pading_intf(ObSQLSessionInfo *session_info,
                                   ObObjParam *result)
 {
   int ret = OB_SUCCESS;
+  bool enable_new_padding = false;
 
-  if (result->is_binary() && result->get_val_len() < accuracy.get_length()) {
+  CK (OB_NOT_NULL(session_info));
+  OZ (session_info->check_feature_enable(
+      ObCompatFeatureType::PL_CHAR_BINARY_PADDING, enable_new_padding));
+  if (OB_FAIL(ret) || !enable_new_padding) {
+  } else if (result->is_binary() && result->get_val_len() < accuracy.get_length()) {
     OZ (spi_pad_binary(session_info, accuracy, allocator, result));
   } else if (result->is_character_type()) {
     OZ (spi_pad_char_or_varchar(session_info, type, accuracy, allocator, result));
