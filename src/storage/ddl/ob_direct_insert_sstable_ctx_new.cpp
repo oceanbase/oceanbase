@@ -1289,27 +1289,40 @@ int ObTabletDirectLoadMgr::update(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (!build_param.is_replay_ && !sqc_build_ctx_.slice_mgr_map_.created()) {
-    // 1. Create slice_mgr_map if the tablet_direct_load_mgr is created firstly.
-    // 2. Create slice_mgr_map if the node is switched from follower to leader.
+  } else if (!build_param.is_replay_) {
+    // 1. Init one-shot resources (allocator/cond) only once.
+    //    Do not couple with slice_mgr_map_.created(): fill_column_group may destroy the map
+    //    while allocator/cond remain valid; re-init would leak TabletDLMgr and hit OB_INIT_TWICE.
+    // 2. Recreate slice_mgr_map if destroyed (e.g. after fill_column_group) or first create
+    //    (including follower -> leader switch).
     const uint64_t tenant_id = MTL_ID();
     lib::ObMemAttr attr(tenant_id, "TabletDLMgr");
     lib::ObMemAttr slice_writer_attr(tenant_id, "SliceWriter");
     lib::ObMemAttr slice_writer_map_attr(tenant_id, "SliceWriterMap");
-    if (OB_FAIL(sqc_build_ctx_.allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
-      attr.label_, tenant_id, memory_limit))) {
-      LOG_WARN("init alloctor failed", K(ret));
-    } else if (OB_FAIL(sqc_build_ctx_.slice_writer_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
-      slice_writer_attr.label_, tenant_id, memory_limit))) {
-      LOG_WARN("init allocator failed", K(ret));
-    } else if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.create(bucket_num,
+    if (!cond_.is_inited()) {
+      // Roll back already-inited allocators on later failure so retry can re-init cleanly
+      // instead of leaking TabletDLMgr or hitting OB_INIT_TWICE on a half-inited mgr.
+      if (OB_FAIL(sqc_build_ctx_.allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
+        attr.label_, tenant_id, memory_limit))) {
+        LOG_WARN("init alloctor failed", K(ret));
+      } else if (OB_FAIL(sqc_build_ctx_.slice_writer_allocator_.init(OB_MALLOC_MIDDLE_BLOCK_SIZE,
+        slice_writer_attr.label_, tenant_id, memory_limit))) {
+        LOG_WARN("init allocator failed", K(ret));
+        sqc_build_ctx_.allocator_.destroy();
+      } else if (OB_FAIL(cond_.init(ObWaitEventIds::COLUMN_STORE_DDL_RESCAN_LOCK_WAIT))) {
+        LOG_WARN("init condition failed", K(ret));
+        sqc_build_ctx_.slice_writer_allocator_.destroy();
+        sqc_build_ctx_.allocator_.destroy();
+      } else {
+        sqc_build_ctx_.allocator_.set_attr(attr);
+        sqc_build_ctx_.slice_writer_allocator_.set_attr(slice_writer_attr);
+      }
+    }
+    if (OB_SUCC(ret) && !sqc_build_ctx_.slice_mgr_map_.created()) {
+      if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.create(bucket_num,
                                                       slice_writer_map_attr, slice_writer_map_attr))) {
-      LOG_WARN("create slice writer map failed", K(ret));
-    } else if (OB_FAIL(cond_.init(ObWaitEventIds::COLUMN_STORE_DDL_RESCAN_LOCK_WAIT))) {
-      LOG_WARN("init condition failed", K(ret));
-    } else {
-      sqc_build_ctx_.allocator_.set_attr(attr);
-      sqc_build_ctx_.slice_writer_allocator_.set_attr(slice_writer_attr);
+        LOG_WARN("create slice writer map failed", K(ret));
+      }
     }
   }
 
