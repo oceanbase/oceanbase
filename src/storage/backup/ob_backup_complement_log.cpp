@@ -1052,6 +1052,8 @@ int ObBackupLSLogTask::calc_backup_file_range_(const int64_t dest_id, const shar
     LOG_WARN("failed to get piece id by ts", K(ret), K(tenant_id), K(end_scn));
   } else if (OB_FAIL(get_all_pieces_(tenant_id, dest_id, start_piece_id, end_piece_id, piece_list))) {
     LOG_WARN("failed to get all round pieces", K(ret), K(tenant_id), K(start_piece_id), K(end_piece_id));
+  } else if (OB_FAIL(rewrite_piece_read_path_(piece_list))) {
+    LOG_WARN("failed to rewrite piece read path", K(ret), K(tenant_id), K(ls_id));
   } else if (OB_FAIL(wait_pieces_frozen_(piece_list))) {
     LOG_WARN("failed to wait pieces frozen", K(ret), K(piece_list));
   } else if (OB_FAIL(get_all_piece_file_list_(tenant_id, ls_id, piece_list, start_scn, end_scn, file_list))) {
@@ -1230,6 +1232,91 @@ int ObBackupLSLogTask::check_piece_frozen_(const share::ObTenantArchivePieceAttr
     LOG_WARN("failed to get pieces by range", K(ret), K(piece));
   } else {
     is_frozen = cur_piece.status_.is_frozen();
+  }
+  return ret;
+}
+
+
+int ObBackupLSLogTask::rewrite_piece_read_path_(ObIArray<ObTenantArchivePieceAttr> &piece_list)
+{
+  int ret = OB_SUCCESS;
+  bool need_route = false;
+  for (int64_t i = 0; !need_route && i < piece_list.count(); ++i) {
+    need_route = ObBackupFileStatus::BACKUP_FILE_DELETED == piece_list.at(i).file_status_
+              || ObBackupFileStatus::BACKUP_FILE_DELETING == piece_list.at(i).file_status_;
+  }
+
+  ObBackupPathString backup_archive_path;
+  ObBackupDest backup_archive_dest;
+  ObArchiveStore backup_store;
+  if (!need_route) {
+    // do nothing
+  } else if (OB_FAIL(resolve_backup_archive_dest_(backup_archive_path, backup_archive_dest))) {
+    LOG_WARN("failed to resolve backup archive dest", K(ret));
+  } else if (OB_FAIL(backup_store.init(backup_archive_dest))) {
+    LOG_WARN("failed to init backup archive store", K(ret), K(backup_archive_dest));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < piece_list.count(); ++i) {
+    ObTenantArchivePieceAttr &piece = piece_list.at(i);
+    bool is_exist = false;
+    if (ObBackupFileStatus::BACKUP_FILE_DELETED != piece.file_status_ &&
+        ObBackupFileStatus::BACKUP_FILE_DELETING != piece.file_status_) {
+      // Still on the log archive dest, keep reading from there.
+    } else if (ObBackupFileStatus::BACKUP_FILE_AVAILABLE != piece.backup_file_status_) {
+      ret = OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA;
+      LOG_WARN("no readable piece required by complement log", K(ret), K_(ls_id), K(piece), K(backup_archive_dest));
+    } else if (OB_FAIL(backup_store.is_single_piece_file_exist(piece.key_.dest_id_,
+                       piece.key_.round_id_, piece.key_.piece_id_, is_exist))) {
+      LOG_WARN("failed to check single piece file exist on backup archive dest", K(ret), K(piece), K(backup_archive_dest));
+    } else if (!is_exist) {
+      ret = OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA;
+      LOG_WARN("no readable piece required by complement log", K(ret), K_(ls_id), K(piece), K(backup_archive_dest));
+    } else if (OB_FAIL(piece.path_.assign(backup_archive_path))) {
+      LOG_WARN("failed to assign backup archive path", K(ret), K(backup_archive_path));
+    } else {
+      LOG_INFO("route piece read path to backup archive dest", K_(ls_id), K(piece));
+    }
+  }
+  return ret;
+}
+
+int ObBackupLSLogTask::resolve_backup_archive_dest_(
+    ObBackupPathString &normalized_path,
+    share::ObBackupDest &backup_archive_dest)
+{
+  int ret = OB_SUCCESS;
+  ObArchivePersistHelper helper;
+  ObBackupPathString raw_path;
+  ObBackupDest tmp_dest;
+  normalized_path.reset();
+  backup_archive_dest.reset();
+
+  if (OB_UNLIKELY(nullptr == ctx_ || nullptr == ctx_->report_ctx_.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null ctx or sql proxy", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(helper.init(ctx_->tenant_id_))) {
+    LOG_WARN("failed to init archive persist helper", K(ret), KPC_(ctx));
+  } else if (OB_FAIL(helper.get_backup_archive_dest(*ctx_->report_ctx_.sql_proxy_, false /*need_lock*/, raw_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA;
+      LOG_WARN("backup archive dest is not configured, no readable copy of the deleted piece", K(ret), KPC_(ctx));
+    } else {
+      LOG_WARN("failed to get backup archive dest", K(ret), KPC_(ctx));
+    }
+  } else if (raw_path.is_empty()) {
+    ret = OB_ARCHIVE_LOG_NOT_CONTINUES_WITH_DATA;
+    LOG_WARN("backup archive dest is empty, no readable copy of the deleted piece", K(ret), KPC_(ctx));
+  } else if (OB_FAIL(tmp_dest.set_storage_path(raw_path.str()))) {
+    LOG_WARN("failed to parse backup archive dest", K(ret), K(raw_path));
+  } else if (OB_FAIL(tmp_dest.get_backup_path_str(normalized_path.ptr(), normalized_path.capacity()))) {
+    LOG_WARN("failed to get normalized backup archive path", K(ret), K(raw_path));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*ctx_->report_ctx_.sql_proxy_,
+      ctx_->tenant_id_, normalized_path, backup_archive_dest))) {
+    // NOTE: do NOT use get_archive_backup_dest_ here, it has the side effect of
+    // overwriting the member archive_dest_, which is still expected to point to
+    // the original log archive dest at this stage.
+    LOG_WARN("failed to get backup archive dest by path", K(ret), K(normalized_path));
   }
   return ret;
 }

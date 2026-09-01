@@ -20,6 +20,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/backup/ob_tenant_archive_mgr.h"
 #include "share/backup/ob_backup_clean_util.h"
+#include "share/backup/ob_backup_clean_operator.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_license_utils.h"
 #include "share/ob_tenant_info_proxy.h"
@@ -1027,35 +1028,55 @@ int ObBackupArchiveDestConfigParser::update_inner_config_table(common::ObISQLCli
   int ret = OB_SUCCESS;
   ObBackupDestMgr dest_mgr;
   ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_BACKUP_ARCHIVE_LOG;
+  ObBackupDest dest;
+  int64_t old_dest_id = 0;
   if (!type_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid parser", K(ret), KPC(this));
   } else if (is_empty_) {
+  } else if (OB_FAIL(dest.set(backup_dest_.ptr()))) {
+    LOG_WARN("fail to set backup archive dest", K(ret), K_(backup_dest));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, tenant_id_, dest, old_dest_id))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      old_dest_id = 0; // the path has not been registered before
+    } else {
+      LOG_WARN("fail to get old dest id", K(ret), K_(tenant_id), K_(backup_dest));
+    }
+  }
+
+  if (OB_FAIL(ret) || is_empty_) {
   } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
     LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id));
   } else if (OB_FAIL(dest_mgr.write_format_file())) {
     LOG_WARN("fail to write format file", K(ret), K_(tenant_id));
   }
 
-  if (FAILEDx(update_backup_archive_dest_config_(trans))) {
+  if (FAILEDx(update_backup_archive_dest_config_(trans, old_dest_id))) {
     LOG_WARN("fail to update backup archive dest config", K(ret), K_(tenant_id));
   }
   return ret;
 }
 
-int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(common::ObISQLClient &trans)
+int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(
+    common::ObISQLClient &trans, const int64_t old_dest_id)
 {
   int ret = OB_SUCCESS;
   share::ObArchivePersistHelper helper;
   ObBackupDest dest;
   int64_t dest_id = 0;
   bool is_exist = false;
+  bool is_dest_changed = false;
   if (OB_FAIL(helper.init(tenant_id_))) {
     LOG_WARN("fail to init archive persist helper", K(ret), K(tenant_id_));
   } else if (OB_FAIL(helper.lock_backup_archive_dest(trans, is_exist))) {
     LOG_WARN("fail to lock backup archive dest", K(ret), K_(dest_no));
+  } else if (OB_FAIL(check_dest_changed_(trans, helper, is_dest_changed))) {
+    LOG_WARN("fail to check backup archive dest changed", K(ret), K_(tenant_id), K_(backup_dest));
   } else if (is_empty_) {
-    if (OB_FAIL(helper.del_dest(trans, dest_no_))) {
+    if (is_dest_changed && OB_FAIL(helper.reset_all_pieces_backup_file_status(trans))) {
+      LOG_WARN("fail to reset pieces backup file status", K(ret), K_(tenant_id), K_(backup_dest));
+    } else if (OB_FAIL(helper.del_dest(trans, dest_no_))) {
       LOG_WARN("fail to del backup archive dest", K(ret), K_(dest_no));
     }
   } else {
@@ -1063,6 +1084,10 @@ int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(common::
       LOG_WARN("fail to set backup archive dest", K(ret));
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, tenant_id_, dest, dest_id))) {
       LOG_WARN("fail to get dest id", K(ret), K_(tenant_id));
+    } else if ((is_dest_changed || old_dest_id != dest_id /*same dest reinitialized*/ )
+        && OB_FAIL(helper.reset_all_pieces_backup_file_status(trans))) {
+      LOG_WARN("fail to reset pieces backup file status", K(ret), K_(tenant_id), K_(backup_dest),
+                                                          K(is_dest_changed), K(old_dest_id), K(dest_id));
     } else if (OB_FALSE_IT(archive_dest_.dest_id_ = dest_id)) {
     } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(archive_dest_.dest_))) {
       LOG_WARN("fail to set default checksum type", K(ret), "backup_dest", archive_dest_.dest_);
@@ -1083,6 +1108,47 @@ int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(common::
         LOG_WARN("fail to set backup archive dest config", K(ret), K(prefixed_key), K(config_item.value_));
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupArchiveDestConfigParser::check_dest_changed_(
+    common::ObISQLClient &trans,
+    share::ObArchivePersistHelper &helper,
+    bool &is_dest_changed)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString old_path;
+  is_dest_changed = false;
+  if (OB_FAIL(helper.get_backup_archive_dest(trans, true /* need_lock */, old_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // backup archive dest has never been set before, no piece can be backed up to any dest.
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get old backup archive dest", K(ret), K_(tenant_id));
+    }
+  } else if (old_path.is_empty()) {
+    // no old dest
+  } else if (is_empty_) {
+    is_dest_changed = true; // backup archive dest is being cleared, clear backup file status
+  } else {
+    ObBackupDest old_dest;
+    ObBackupDest new_dest;
+    bool is_equal = false;
+    if (OB_FAIL(old_dest.set(old_path.ptr()))) {
+      LOG_WARN("fail to set old backup archive dest", K(ret), K(old_path));
+    } else if (OB_FAIL(new_dest.set(backup_dest_.ptr()))) {
+      LOG_WARN("fail to set new backup archive dest", K(ret), K_(backup_dest));
+    } else if (OB_FAIL(old_dest.is_backup_path_equal(new_dest, is_equal))) {
+      LOG_WARN("fail to compare backup path", K(ret), K(old_dest), K(new_dest));
+    } else {
+      // only the path matters here, changing the access key of the same path should do nothing
+      is_dest_changed = !is_equal;
+    }
+  }
+
+  if (OB_SUCC(ret) && is_dest_changed) {
+    LOG_INFO("backup archive dest is changed", K_(tenant_id), K(old_path), K_(backup_dest), K_(is_empty));
   }
   return ret;
 }

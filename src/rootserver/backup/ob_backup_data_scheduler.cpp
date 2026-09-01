@@ -22,6 +22,8 @@
 #include "rootserver/restore/ob_restore_util.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/schema/ob_mview_info.h"
+#include "share/backup/ob_backup_clean_operator.h"
+#include "storage/tablelock/ob_lock_utils.h"
 
 namespace oceanbase
 {
@@ -619,7 +621,27 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
           0/*no parent job*/ : new_job_attr.initiator_job_id_)) {
       } else if (OB_FAIL(backup_service_->check_leader())) {
         LOG_WARN("fail to check leader", K(ret));
-      } else if (OB_FAIL(ObBackupJobOperator::insert_job(trans, new_job_attr))) {
+      } else if (job_attr.plus_archivelog_) {
+        ObArray<ObBackupCleanJobAttr> clean_jobs;
+        if (OB_FAIL(transaction::tablelock::ObInnerTableLockUtil::lock_inner_table_in_trans(trans, gen_meta_tenant_id(job_attr.tenant_id_),
+                              share::OB_ALL_BACKUP_DELETE_POLICY_TID, transaction::tablelock::SHARE_ROW_EXCLUSIVE, false))) {
+          LOG_WARN("[DATA_BACKUP]failed to acquire backup-clean coordination lock", K(ret), K(job_attr));
+        } else if (OB_FAIL(ObBackupCleanJobOperator::get_jobs(trans, job_attr.tenant_id_, false /*need_lock*/, clean_jobs))) {
+          LOG_WARN("[DATA_BACKUP]failed to get clean jobs", K(ret), K(job_attr));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < clean_jobs.count(); ++i) {
+            const ObBackupCleanJobAttr &clean_job = clean_jobs.at(i);
+            if (clean_job.is_delete_backed_up_archive_piece() && !clean_job.status_.is_finish()) {
+              ret = OB_BACKUP_CAN_NOT_START;
+              LOG_WARN("[DATA_BACKUP]delete input clean job is running, rollback", K(ret), K(clean_job), K(job_attr));
+              LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START,
+                  "backup database plus archivelog can't start because backup archive delete input is running");
+            }
+          }
+        }
+      }
+
+      if (FAILEDx(ObBackupJobOperator::insert_job(trans, new_job_attr))) {
         LOG_WARN("[DATA_BACKUP]failed to create new backup job", K(ret), K(job_attr));
       } else {
         LOG_INFO("succeed insert user tenant backup job", K(new_job_attr));

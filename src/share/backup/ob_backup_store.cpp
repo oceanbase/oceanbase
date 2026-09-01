@@ -751,8 +751,9 @@ int ObBackupDestMgr::updata_backup_file_status_()
         }
       }
     }
-  } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == dest_type_
-          || ObBackupDestType::TYPE::DEST_TYPE_BACKUP_ARCHIVE_LOG == dest_type_) {
+  } else if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_ARCHIVE_LOG == dest_type_) {
+    // do nothing
+  } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == dest_type_) {
     ObArchivePersistHelper archive_table_op;
     ObSArray<ObTenantArchivePieceAttr> backup_piece_infos;
     if (OB_FAIL(archive_table_op.init(tenant_id_))) {

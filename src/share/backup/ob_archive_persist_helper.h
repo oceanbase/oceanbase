@@ -162,6 +162,7 @@ public:
   int mark_piece_backup_file_status(common::ObISQLClient &proxy, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObBackupFileStatus::STATUS old_status,
       const ObBackupFileStatus::STATUS new_status) const;
+  int reset_all_pieces_backup_file_status(common::ObISQLClient &proxy) const;
   int get_unbackuped_frozen_pieces(common::ObISQLClient &proxy, const int64_t dest_id,
       common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
   // get all frozen pieces that have been backed up to the backup_archive_dest
@@ -195,6 +196,11 @@ public:
       const share::SCN &start_scn, const share::SCN &end_scn, bool &is_continuous) const;
 
 private:
+  // Build a version gated predicate filtering out pieces which are unavailable on both
+  // the log archive dest and the BACKUP_ARCHIVE_DEST. The 'backup_file_status' column
+  // does not exist before ENABLE_BACKUP_ARCHIVE_VERSION, so it is not referred in the
+  // predicate under old data version.
+  int build_available_piece_predicate_(common::ObSqlString &predicate) const;
   int parse_round_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObTenantArchiveRoundAttr> &rounds) const;
   int parse_piece_result_(sqlclient::ObMySQLResult &result, common::ObIArray<ObTenantArchivePieceAttr> &pieces) const;
   int parse_dest_round_summary_result_(sqlclient::ObMySQLResult &result, ObDestRoundSummary &summary) const;

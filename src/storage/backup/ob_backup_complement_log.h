@@ -241,6 +241,8 @@ private:
   int wait_pieces_frozen_(const common::ObArray<share::ObTenantArchivePieceAttr> &piece_list);
   int wait_piece_frozen_(const share::ObTenantArchivePieceAttr &piece);
   int check_piece_frozen_(const share::ObTenantArchivePieceAttr &piece, bool &is_frozen);
+  int rewrite_piece_read_path_(common::ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int resolve_backup_archive_dest_(share::ObBackupPathString &normalized_path, share::ObBackupDest &backup_archive_dest);
   int get_all_piece_file_list_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObIArray<share::ObTenantArchivePieceAttr> &piece_list, const share::SCN &start_scn, const share::SCN &end_scn,
       common::ObIArray<ObBackupPieceFile> &piece_file_list);

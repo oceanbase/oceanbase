@@ -1582,7 +1582,8 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
       continue;
     }
 
-    if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE) {
+    if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE &&
+        cur.backup_file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE) {
       // Filter unavailable piece
       ++i;
       continue;

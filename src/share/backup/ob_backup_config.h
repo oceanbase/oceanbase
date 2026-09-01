@@ -31,6 +31,7 @@ namespace share
 class ObBackupDest;
 class ObBackupHelper;
 class ObBackupFormatDesc;
+class ObArchivePersistHelper;
 
 
 #define ENABLE_BACKUP_ARCHIVE_VERSION DATA_VERSION_4_4_2_3
@@ -237,8 +238,11 @@ public:
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
 private:
-  int update_backup_archive_dest_config_(common::ObISQLClient &trans);
+  // old_dest_id is the dest id of the target path before write_format_file(), 0 means not registered.
+  int update_backup_archive_dest_config_(common::ObISQLClient &trans, const int64_t old_dest_id);
   int check_path_not_same_with_log_archive_dest_(common::ObISQLClient &trans);
+  // check whether the backup archive dest path is really switched(or cleared)
+  int check_dest_changed_(common::ObISQLClient &trans, share::ObArchivePersistHelper &helper, bool &is_dest_changed);
   DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveDestConfigParser);
 };
 

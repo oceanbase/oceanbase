@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "share/backup/ob_archive_persist_helper.h"
+#include "share/backup/ob_backup_config.h"
+#include "share/ob_cluster_version.h"
 #include "share/ob_tenant_info_proxy.h"
 
 using namespace oceanbase;
@@ -943,6 +945,25 @@ int ObArchivePersistHelper::get_pieces(
   return ret;
 }
 
+int ObArchivePersistHelper::build_available_piece_predicate_(common::ObSqlString &predicate) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("failed to get min data version", K(ret), K_(tenant_id));
+  } else if (data_version < ENABLE_BACKUP_ARCHIVE_VERSION) {
+    // 'backup_file_status' column does not exist before ENABLE_BACKUP_ARCHIVE_VERSION,
+    if (OB_FAIL(predicate.assign_fmt("file_status != '%s'", OB_STR_DELETED))) {
+      LOG_WARN("failed to assign predicate", K(ret));
+    }
+  } else if (OB_FAIL(predicate.assign_fmt("(file_status != '%s' or backup_file_status = '%s')",
+      OB_STR_DELETED, ObBackupFileStatus::get_str(ObBackupFileStatus::BACKUP_FILE_AVAILABLE)))) {
+    // A piece deleted on log archive dest maybe still available on BACKUP_ARCHIVE_DEST, let it pass.
+    LOG_WARN("failed to assign predicate", K(ret));
+  }
+  return ret;
+}
+
 int ObArchivePersistHelper::get_frozen_pieces(
     common::ObISQLClient &proxy,
     const int64_t dest_id,
@@ -951,20 +972,25 @@ int ObArchivePersistHelper::get_frozen_pieces(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ObSqlString predicate;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (dest_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret),  K(dest_id));
+  } else if (OB_FAIL(build_available_piece_predicate_(predicate))) {
+    LOG_WARN("failed to build available piece predicate", K(ret));
   } else {
     ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s='%s' and %s!='%s' and %s<%ld order by %s asc",
-          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, 
-          dest_id, OB_STR_STATUS, frozen.to_status_str(), OB_STR_FILE_STATUS, OB_STR_DELETED,
-          OB_STR_PIECE_ID, upper_piece_id, OB_STR_PIECE_ID))) {
+      // Filter unavailable pieces in sql to avoid pulling the whole archive history back.
+      // A deleted log archive dest piece maybe available on BACKUP_ARCHIVE_DEST, the version
+      // gated predicate lets it pass, and avoids referring to the new 'backup_file_status'
+      // column in sql during upgrade.
+      if (OB_FAIL(sql.assign_fmt("select * from %s where tenant_id=%lu and dest_id=%ld and status='%s' and %s and piece_id<%ld order by piece_id asc",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, tenant_id_, dest_id, frozen.to_status_str(), predicate.ptr(), upper_piece_id))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql));
@@ -1141,6 +1167,27 @@ int ObArchivePersistHelper::mark_piece_backup_file_status(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), K(key), K(old_status), K(new_status));
   }
+  return ret;
+}
+
+int ObArchivePersistHelper::reset_all_pieces_backup_file_status(common::ObISQLClient &proxy) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const char *incomplete_str = ObBackupFileStatus::get_str(ObBackupFileStatus::BACKUP_FILE_INCOMPLETE);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("update %s set backup_file_status = '%s' where tenant_id = %lu and backup_file_status != '%s'",
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, incomplete_str, tenant_id_, incomplete_str))) {
+    LOG_WARN("failed to assign sql", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(proxy.write(get_exec_tenant_id(), sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql));
+  } else {
+    LOG_INFO("succeed to reset all pieces backup file status", K_(tenant_id), K(affected_rows), K(sql));
+  }
+
   return ret;
 }
 
@@ -1377,6 +1424,7 @@ int ObArchivePersistHelper::get_piece_by_scn(common::ObISQLClient &proxy, const 
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ObSqlString predicate;
   ObArray<ObTenantArchivePieceAttr> piece_list;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1384,14 +1432,15 @@ int ObArchivePersistHelper::get_piece_by_scn(common::ObISQLClient &proxy, const 
   } else if (dest_id <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret),  K(dest_id));
-  } else {
-    ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
+  } else if (OB_FAIL(build_available_piece_predicate_(predicate))) {
+    LOG_WARN("failed to build available piece predicate", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld order by %s asc limit 1",
-          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_,
-          OB_STR_DEST_ID, dest_id, OB_STR_FILE_STATUS, OB_STR_DELETED,
-          OB_STR_CHECKPOINT_SCN, scn.get_val_for_inner_table_field(), OB_STR_PIECE_ID))) {
+      if (OB_FAIL(sql.assign_fmt("select * from %s where tenant_id=%lu and dest_id=%ld and %s and checkpoint_scn>=%ld order by piece_id asc limit 1",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, tenant_id_, dest_id, predicate.ptr(), scn.get_val_for_inner_table_field()))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql));
@@ -1427,22 +1476,34 @@ int ObArchivePersistHelper::get_pieces_by_range(common::ObISQLClient &proxy, con
     LOG_WARN("invalid argument", K(ret),  K(dest_id));
   } else {
     ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
+    ObArray<ObTenantArchivePieceAttr> tmp_piece_list;
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
       ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld and %s<=%ld order by %s asc",
-          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID,
-          dest_id, OB_STR_FILE_STATUS, OB_STR_DELETED,
-          OB_STR_PIECE_ID, start_piece_id, OB_STR_PIECE_ID, end_piece_id, OB_STR_PIECE_ID))) {
+      // Do not filter deleted pieces in sql, a deleted log archive dest piece maybe available on BACKUP_ARCHIVE_DEST.
+      // Filtering after parsing also avoids referring to the new 'backup_file_status' column in sql during upgrade.
+      if (OB_FAIL(sql.assign_fmt("select * from %s where tenant_id=%lu and dest_id=%ld and piece_id>=%ld and piece_id<=%ld order by piece_id asc",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, tenant_id_, dest_id, start_piece_id, end_piece_id))) {
         LOG_WARN("failed to append fmt", K(ret));
       } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("result is null", K(ret), K(sql));
-      } else if (OB_FAIL(parse_piece_result_(*result, pieces))) {
+      } else if (OB_FAIL(parse_piece_result_(*result, tmp_piece_list))) {
         LOG_WARN("failed to parse result", K(ret));
       } else {
-        LOG_INFO("success get piece", K(sql));
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_piece_list.count(); ++i) {
+          const ObTenantArchivePieceAttr &piece = tmp_piece_list.at(i);
+          if (piece.file_status_ == ObBackupFileStatus::BACKUP_FILE_DELETED &&
+              piece.backup_file_status_ != ObBackupFileStatus::BACKUP_FILE_AVAILABLE) {
+            // Filter the piece which is not available on both archive dest.
+          } else if (OB_FAIL(pieces.push_back(piece))) {
+            LOG_WARN("failed to push back piece", K(ret), K(piece));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          LOG_INFO("success get piece", K(sql));
+        }
       }
     }
   }
@@ -1712,6 +1773,7 @@ int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  ObSqlString predicate;
   ObArray<ObTenantArchivePieceAttr> piece_list;
   ObTenantArchivePieceAttr floor_piece;
   ObTenantArchivePieceAttr ceil_piece;
@@ -1723,17 +1785,14 @@ int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
   } else if (dest_id <= 0 || !start_scn.is_valid() || !end_scn.is_valid() || start_scn >= end_scn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(dest_id), K(start_scn), K(end_scn));
+  } else if (OB_FAIL(build_available_piece_predicate_(predicate))) {
+    LOG_WARN("failed to build available piece predicate", K(ret));
   }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(sql.assign_fmt( // Get the latest piece whose start_scn <= start_scn
-        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s<=%ld order by %s desc limit 1",
-        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
-        OB_STR_TENANT_ID, tenant_id_,
-        OB_STR_DEST_ID, dest_id,
-        OB_STR_FILE_STATUS, OB_STR_DELETED,
-        OB_STR_START_SCN, start_scn.get_val_for_inner_table_field(),
-        OB_STR_PIECE_ID))) {
+        "select * from %s where tenant_id = %lu and dest_id = %ld and %s and start_scn <= %ld order by piece_id desc limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, tenant_id_, dest_id, predicate.ptr(), start_scn.get_val_for_inner_table_field()))) {
       LOG_WARN("failed to assign sql format for floor piece", K(ret));
     } else {
       HEAP_VAR(ObMySQLProxy::ReadResult, res) {
@@ -1757,13 +1816,8 @@ int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
     piece_list.reset();
     sql.reset();
     if (OB_FAIL(sql.assign_fmt( // Get the first piece whose checkpoint_scn >= end_scn
-        "select * from %s where %s=%lu and %s=%ld and %s!='%s' and %s>=%ld order by %s limit 1",
-        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME,
-        OB_STR_TENANT_ID, tenant_id_,
-        OB_STR_DEST_ID, dest_id,
-        OB_STR_FILE_STATUS, OB_STR_DELETED,
-        OB_STR_CHECKPOINT_SCN, end_scn.get_val_for_inner_table_field(),
-        OB_STR_PIECE_ID))) {
+        "select * from %s where tenant_id = %lu and dest_id = %ld and %s and checkpoint_scn >= %ld order by piece_id limit 1",
+        OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, tenant_id_, dest_id, predicate.ptr(), end_scn.get_val_for_inner_table_field()))) {
       LOG_WARN("failed to assign sql format for ceil piece", K(ret));
     } else {
       HEAP_VAR(ObMySQLProxy::ReadResult, res) {

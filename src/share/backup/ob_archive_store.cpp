@@ -1507,7 +1507,14 @@ int ObArchiveStore::get_piece_paths_in_range(const SCN &start_scn, const SCN &en
         continue;
       }
 
-      if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE) {
+      bool is_usable = cur.file_status_ == ObBackupFileStatus::BACKUP_FILE_AVAILABLE;
+      if (!is_usable && cur.backup_file_status_ == ObBackupFileStatus::BACKUP_FILE_AVAILABLE) {
+        const ObPieceKey cur_key(cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_);
+        for (int64_t i = 0; !is_usable && i < piece_keys.count(); ++i) {
+          is_usable = piece_keys.at(i) == cur_key;
+        }
+      }
+      if (!is_usable) {
         // Filter unavailable piece
         ++i;
         continue;
@@ -2773,7 +2780,13 @@ int ObDualArchiveStore::check_curr_pieces_continuous_(
   const int64_t pieces_cnt = frozen_pieces.count();
   while (OB_SUCC(ret) && i < pieces_cnt) {
     const ObTenantArchivePieceAttr &cur = frozen_pieces.at(i);
-    if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE || cur.end_scn_ <= start_scn) {
+
+    bool is_usable = cur.file_status_ == ObBackupFileStatus::BACKUP_FILE_AVAILABLE;
+    if (!is_usable && cur.backup_file_status_ == ObBackupFileStatus::BACKUP_FILE_AVAILABLE) {
+      const ObPieceKey cur_key(cur.key_.dest_id_, cur.key_.round_id_, cur.key_.piece_id_);
+      is_usable = contains_piece_key_(primary_keys, cur_key) || contains_piece_key_(backup_keys, cur_key);
+    }
+    if (!is_usable || cur.end_scn_ <= start_scn) {
       ++i;
       continue;
     } else if (cur.start_scn_ >= end_scn) {
