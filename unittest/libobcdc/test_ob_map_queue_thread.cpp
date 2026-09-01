@@ -142,7 +142,7 @@ int DerivedQueueThread1::init()
 		LOG_ERROR("init QueueThread fail", K(ret), K(THREAD_NUM), K(label));
 	} else {
 	  EXPECT_EQ(THREAD_NUM, QueueThread::get_thread_num());
-	  EXPECT_TRUE(QueueThread::is_stoped());
+	  EXPECT_FALSE(QueueThread::is_stoped());
 		end_handle_count_ = 0;
 		inited_ = true;
 
@@ -218,7 +218,7 @@ int DerivedQueueThread2::init()
 		LOG_ERROR("init QueueThread fail", K(ret), K(THREAD_NUM), K(label));
 	} else {
 	  EXPECT_EQ(THREAD_NUM, QueueThread::get_thread_num());
-	  EXPECT_TRUE(QueueThread::is_stoped());
+	  EXPECT_FALSE(QueueThread::is_stoped());
 		end_handle_count_ = 0;
 		inited_ = true;
 

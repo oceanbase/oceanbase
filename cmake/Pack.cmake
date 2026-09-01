@@ -210,6 +210,43 @@ if (NOT OB_SO_CACHE AND BUILD_CDC_ONLY)
   endif()
 endif()
 
+## oceanbase-cdc-service
+if (BUILD_CDC_ONLY AND OB_BUILD_CLOSE_MODULES)
+  list(APPEND CPACK_COMPONENTS_ALL cdc-service)
+
+  # ob_cdc_server binary
+  install(PROGRAMS
+    ${CMAKE_BINARY_DIR}/ob_cdc/src/ob_cdc_server
+    DESTINATION bin
+    COMPONENT cdc-service)
+
+  # package README
+  install(FILES
+    tools/cdc_tools/README_FOR_RPM.md
+    DESTINATION "."
+    RENAME README.md
+    COMPONENT cdc-service)
+
+  # conf/ - configuration templates
+  install(DIRECTORY
+    tools/cdc_tools/conf/
+    DESTINATION conf
+    COMPONENT cdc-service)
+
+  # sql/ - SQL scripts
+  install(DIRECTORY
+    tools/cdc_tools/sql/
+    DESTINATION sql
+    COMPONENT cdc-service)
+
+  # monitoring/dashboards/ - Grafana dashboard definitions only
+  install(DIRECTORY
+    tools/cdc_tools/monitoring/dashboards/
+    DESTINATION monitoring/dashboards
+    COMPONENT cdc-service
+    FILES_MATCHING PATTERN "*.json")
+endif()
+
 ## oceanbase-sql-parser
 if (OB_BUILD_LIBOB_SQL_PROXY_PARSER)
 

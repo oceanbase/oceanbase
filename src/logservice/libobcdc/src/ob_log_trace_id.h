@@ -44,20 +44,38 @@ class ObLogTraceIdGuard
 {
 public:
   ObLogTraceIdGuard()
+    : old_trace_id_(),
+      is_old_trace_saved_(false)
   {
+    if (NULL != common::ObCurTraceId::get_trace_id()) {
+      old_trace_id_ = *common::ObCurTraceId::get_trace_id();
+      is_old_trace_saved_ = true;
+    }
     init_trace_id();
   }
 
   explicit ObLogTraceIdGuard(const common::ObCurTraceId::TraceId &trace_id)
+    : old_trace_id_(),
+      is_old_trace_saved_(false)
   {
+    if (NULL != common::ObCurTraceId::get_trace_id()) {
+      old_trace_id_ = *common::ObCurTraceId::get_trace_id();
+      is_old_trace_saved_ = true;
+    }
     set_trace_id(trace_id);
   }
 
   ~ObLogTraceIdGuard()
   {
-    clear_trace_id();
+    if (is_old_trace_saved_) {
+      set_trace_id(old_trace_id_);
+    } else {
+      clear_trace_id();
+    }
   }
 private:
+  common::ObCurTraceId::TraceId old_trace_id_;
+  bool is_old_trace_saved_;
   DISALLOW_COPY_AND_ASSIGN(ObLogTraceIdGuard);
 };
 

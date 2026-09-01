@@ -385,7 +385,8 @@ int ObLogSequencer::handle_trans_in_seq_queue_()
   return ret;
 }
 
-int ObLogSequencer::handle_sequenced_trans_(
+int ObLogSequencer::
+handle_sequenced_trans_(
     TransCtx *trans_ctx,
     volatile bool &stop_flag)
 {
@@ -956,7 +957,7 @@ int ObLogSequencer::handle_dml_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, 
       LOG_ERROR("push trans into redo dispatcher failed", KR(ret), K(trans_ctx), K(stop_flag));
     }
   } else {
-    // TODO  statistic
+    do_trans_stat_(static_cast<uint64_t>(tenant_id));
   }
 
   return ret;
@@ -993,6 +994,8 @@ int ObLogSequencer::handle_ddl_trans_(ObLogTenant &tenant, TransCtx &trans_ctx, 
       LOG_ERROR("push_task_into_committer_ fail", KR(ret), K(tenant_id), K(participant_list),
           K(participant_count), K(tenant));
     }
+  } else {
+    do_trans_stat_(static_cast<uint64_t>(tenant_id));
   }
 
   return ret;
@@ -1384,26 +1387,21 @@ void ObLogSequencer::do_stat_for_part_trans_task_count_(
   }
 }
 
-int ObLogSequencer::do_trans_stat_(const uint64_t tenant_id,
-    const int64_t total_stmt_cnt)
+void ObLogSequencer::do_trans_stat_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-
   if (OB_ISNULL(trans_stat_mgr_)) {
-    LOG_ERROR("trans_stat_mgr_ is null", K(trans_stat_mgr_));
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id) || OB_UNLIKELY(total_stmt_cnt < 0)) {
-    LOG_ERROR("invalid argument", K(tenant_id), K(total_stmt_cnt));
-    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("trans_stat_mgr_ is null", KR(ret), KP_(trans_stat_mgr));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    LOG_ERROR("invalid argument", K(tenant_id));
   } else {
     trans_stat_mgr_->do_tps_stat();
-    trans_stat_mgr_->do_rps_stat_before_filter(total_stmt_cnt);
-    if (OB_FAIL(trans_stat_mgr_->do_tenant_tps_rps_stat(tenant_id, total_stmt_cnt))) {
-      LOG_ERROR("do tenant rps stat before filter", KR(ret), K(tenant_id), K(total_stmt_cnt));
+    const int tmp_ret = trans_stat_mgr_->do_tenant_sequencer_tps_stat(tenant_id);
+    if (OB_FAIL(tmp_ret)) {
+      LOG_ERROR("do tenant sequencer tps stat failed", KR(tmp_ret), K(tenant_id));
     }
   }
-
-  return ret;
 }
 
 int ObLogSequencer::need_acquire_new_schema_(const PartTransTask &task, bool &need_new_schema)

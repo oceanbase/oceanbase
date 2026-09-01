@@ -62,6 +62,8 @@
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
+#include "lib/file/file_directory_utils.h"
+#include <dirent.h>
 
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
 #include "close_modules/shared_log_service/logservice/libpalf/libpalf_logger.h" // libpalf logger
@@ -457,10 +459,13 @@ int ObLogInstance::init_logger_()
   } else {
     const int64_t max_log_file_count = TCONF.max_log_file_count;
     const bool enable_log_limit = (1 == TCONF.enable_log_limit);
+    const bool reuse_process_logger = disable_redirect_log_;
     easy_log_level = EASY_LOG_INFO;
     OB_LOGGER.set_max_file_size(MAX_LOG_FILE_SIZE);
     OB_LOGGER.set_max_file_index(max_log_file_count);
-    if (!OB_LOGGER.is_svr_file_opened()) {
+    // When cdc_server already owns the process logger, reuse ob_cdc.log instead of
+    // switching libobcdc back to its default libobcdc.log.
+    if (!reuse_process_logger && !OB_LOGGER.is_svr_file_opened()) {
       OB_LOGGER.set_file_name(log_file, disable_redirect_log_, false);
     }
     OB_LOGGER.set_log_level("INFO");
@@ -2977,46 +2982,93 @@ void ObLogInstance::dump_pending_trans_info_()
 
 void ObLogInstance::clean_log_()
 {
-  int64_t cycle_time = log_clean_cycle_time_us_;
-  const static int64_t PRINT_TIME_BUF_SIZE = 64;
-  const static int64_t CMD_BUF_SIZE = 1024;
-  static char print_time_buf[PRINT_TIME_BUF_SIZE];
-  static char cmd_buf[CMD_BUF_SIZE];
-  static const char *print_time_format = "%Y-%m-%d %H:%i:%s";
-  static const char *cmd_time_format = "%Y%m%d%H%i%s";
-  static const char *log_file = "removed_log_files";
+  int ret = OB_SUCCESS;
+  const int64_t cycle_time = log_clean_cycle_time_us_;
+  // Log file name format: libobcdc.log.<YYYYMMDDHHMMSS><mmm>. Take the first 14 chars
+  // (second-level timestamp) of the segment after the tag and compare with base time;
+  // files older than base time are cleaned up.
+  const static int64_t SEC_TS_LEN = 14;
+  const static int64_t TS_BUF_SIZE = 64;
+  const static char *LOG_FILE_TAG = "libobcdc.log.";
+  const static char *ERR_TAG = "err";
+  const static char *REMOVED_LIST_NAME = "removed_log_files";
 
   if (cycle_time > 0) {
-    int64_t print_time_pos = 0;
-    int64_t cmd_pos = 0;
-    int64_t base_time = get_timestamp() - cycle_time;
-    int64_t begin_time = get_timestamp();
+    const int64_t begin_time = get_timestamp();
+    const int64_t base_time = begin_time - cycle_time;
+    char base_ts_buf[TS_BUF_SIZE] = {0};
+    int64_t base_ts_pos = 0;
+    int64_t base_ts_num = 0;
+    const char *log_dir = is_assign_log_dir_valid_ ? assign_log_dir_ : DEFAULT_LOG_DIR;
+    char removed_list_path[OB_MAX_FILE_NAME_LENGTH] = {0};
+    DIR *dir = NULL;
+    int64_t removed_count = 0;
 
-    (void)ObTimeUtility2::usec_format_to_str(base_time, print_time_format,
-        print_time_buf, PRINT_TIME_BUF_SIZE, print_time_pos);
+    // base time(us) -> 14-char second-level string -> integer, to compare with file timestamp
+    (void)ObTimeUtility2::usec_format_to_str(base_time, "%Y%m%d%H%i%s",
+        base_ts_buf, TS_BUF_SIZE, base_ts_pos);
+    base_ts_num = atoll(base_ts_buf);
 
-    (void)databuff_printf(cmd_buf, CMD_BUF_SIZE, cmd_pos,
-        "echo `date` > log/%s; base_time=", log_file);
+    (void)snprintf(removed_list_path, sizeof(removed_list_path), "%s/%s", log_dir, REMOVED_LIST_NAME);
 
-    (void)ObTimeUtility2::usec_format_to_str(base_time, cmd_time_format,
-        cmd_buf, CMD_BUF_SIZE, cmd_pos);
+    if (OB_ISNULL(dir = opendir(log_dir))) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("open log dir for clean fail", KR(ret), K(log_dir), K(errno));
+    } else {
+      FILE *removed_list = fopen(removed_list_path, "w");
+      struct dirent *entry = NULL;
 
-    (void)databuff_printf(cmd_buf, CMD_BUF_SIZE, cmd_pos, "; "
-        "for file in `find log/ | grep \"libobcdc.log.\" | grep -v err`; "
-        "do "
-        "num=`echo $file | cut -d '.' -f 3 | cut -c 1-14`; "
-        "if [ $num -lt $base_time ]; "
-        "then "
-        "echo $file >> log/%s; "
-        "rm $file -f; "
-        "fi "
-        "done", log_file);
+      if (OB_NOT_NULL(removed_list)) {
+        char date_buf[TS_BUF_SIZE] = {0};
+        int64_t date_pos = 0;
+        (void)ObTimeUtility2::usec_format_to_str(begin_time, "%Y-%m-%d %H:%i:%s",
+            date_buf, TS_BUF_SIZE, date_pos);
+        (void)fprintf(removed_list, "%.*s\n", (int)date_pos, date_buf);
+      }
 
-    (void)system(cmd_buf);
+      while (NULL != (entry = readdir(dir))) {
+        const char *fname = entry->d_name;
+        const char *ts_seg = NULL;
 
-    _LOG_INFO("[STAT] [CLEAN_LOG] BASE_TIME='%.*s' EXE_TIME=%ld CYCLE_TIME=%ld CMD=%s",
-        (int)print_time_pos, print_time_buf, get_timestamp() - begin_time,
-        cycle_time, cmd_buf);
+        if (0 != strncmp(fname, LOG_FILE_TAG, strlen(LOG_FILE_TAG))) {
+          // not a libobcdc.log.* file, skip
+        } else if (OB_NOT_NULL(strstr(fname, ERR_TAG))) {
+          // err log is not cleaned up
+        } else if (FALSE_IT(ts_seg = fname + strlen(LOG_FILE_TAG))) {
+          // take the timestamp segment (the part after LOG_FILE_TAG)
+        } else if (static_cast<int64_t>(strlen(ts_seg)) < SEC_TS_LEN) {
+          // timestamp segment too short, file name unexpected, skip
+        } else {
+          char sec_ts_buf[SEC_TS_LEN + 1] = {0};
+          MEMCPY(sec_ts_buf, ts_seg, SEC_TS_LEN);
+          const int64_t file_ts_num = atoll(sec_ts_buf);
+
+          if (file_ts_num > 0 && file_ts_num < base_ts_num) {
+            char file_path[OB_MAX_FILE_NAME_LENGTH] = {0};
+            (void)snprintf(file_path, sizeof(file_path), "%s/%s", log_dir, fname);
+
+            if (OB_NOT_NULL(removed_list)) {
+              (void)fprintf(removed_list, "%s\n", file_path);
+            }
+            if (OB_FAIL(common::FileDirectoryUtils::delete_file(file_path))) {
+              LOG_WARN("delete expired log file fail", KR(ret), K(file_path));
+              ret = OB_SUCCESS; // a single file deletion failure does not block subsequent cleanup
+            } else {
+              ++removed_count;
+            }
+          }
+        }
+      } // while
+
+      if (OB_NOT_NULL(removed_list)) {
+        (void)fclose(removed_list);
+      }
+      (void)closedir(dir);
+    }
+
+    _LOG_INFO("[STAT] [CLEAN_LOG] BASE_TIME='%.*s' EXE_TIME=%ld CYCLE_TIME=%ld LOG_DIR=%s REMOVED_COUNT=%ld",
+        (int)base_ts_pos, base_ts_buf, get_timestamp() - begin_time,
+        cycle_time, log_dir, removed_count);
   }
 }
 

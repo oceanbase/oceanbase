@@ -109,7 +109,7 @@ public:
   int64_t get_data_len() const;
   const share::SCN get_scn() const;
   const char *get_data_buf() const;
-  const IGroupEntryHeader &get_header();
+  const IGroupEntryHeader &get_header() const;
   int64_t get_serialize_size(const palf::LSN &lsn) const;
   int64_t get_group_entry_size(const palf::LSN &lsn) const;
   int serialize(const palf::LSN &lsn, char * buf, int64_t size, int64_t &pos) const;

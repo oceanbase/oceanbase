@@ -202,7 +202,7 @@ private:
   // TODO add
   // 1. statistics on transaction tps and rps (rps before and after Formatter filtering)
   // 2. count tenant rps information
-  int do_trans_stat_(const uint64_t tenant_id, const int64_t total_stmt_cnt);
+  void do_trans_stat_(const uint64_t tenant_id);
   int need_acquire_new_schema_(const PartTransTask &task, bool &need_new_schema);
   int update_table_id_cache_(IObLogPartMgr &part_mgr, const PartTransTask *task);
 

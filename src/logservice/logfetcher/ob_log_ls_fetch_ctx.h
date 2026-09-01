@@ -30,13 +30,14 @@
 #include "ob_log_start_lsn_locator.h"         // StartLSNLocateReq
 #include "ob_log_dlist.h"                     // ObLogDList, ObLogDListNode
 #include "ob_log_fetch_stream_type.h"         // FetchStreamType
-#include "ob_log_fetcher_ls_ctx_additional_info.h" // ObILogFetcherLSCtxAddInfo
+#include "ob_log_fetcher_ls_ctx_additional_info.h" // ObILogFetcherLSCtxAddInfo, PartTransDispatchInfo
 #include "ob_log_part_serve_info.h"           // PartServeInfo
-#include "ob_log_fetcher_ls_ctx_additional_info.h"     // PartTransDispatchInfo
 #include "logservice/common_util/ob_log_ls_define.h"        // logservice::TenantLSID
 #include "ob_log_fetcher_start_parameters.h"  // ObLogFetcherStartParameters
 #include "logservice/logfetcher/ob_log_fetcher_err_handler.h" // IObLogErrHandler
 #include "logservice/cdcservice/ob_cdc_raw_log_req.h"
+#include "logservice/logfetcher/ob_log_ls_progress.h"
+#include "ob_log_fetcher_user.h"
 
 namespace oceanbase
 {
@@ -104,6 +105,16 @@ public:
 
   void set_host(IObLogLSFetchMgr &ls_fetch_mgr) { ls_fetch_mgr_ = &ls_fetch_mgr; }
 
+  IObLogLSFetchMgr *get_ls_fetch_mgr() { return ls_fetch_mgr_; }
+
+  PartServeInfo &get_serve_info() { return serve_info_; }
+
+  bool get_is_loading_data_dict_baseline_data() { return is_loading_data_dict_baseline_data_; }
+
+  datadict::ObDataDictIterator &get_data_dict_iterator() { return data_dict_iterator_; }
+
+  ObLogFetcherStartParameters &get_start_parameters() { return start_parameters_; }
+
   void set_fetch_stream_host(FetchStream *fetch_stream_host) { fetch_stream_host_ = fetch_stream_host;}
   FetchStream *get_fetch_stream_host() { return fetch_stream_host_; }
 
@@ -123,7 +134,7 @@ public:
   int get_log_entry_iterator(
       const ipalf::IGroupEntry &group_entry,
       const palf::LSN &start_lsn,
-      palf::MemPalfBufferIterator &entry_iter);
+      ipalf::IPalfIterator<ipalf::ILogEntry> &entry_iter);
 
   // The synchronous interface, which is called when the results of an RPC round are processed
   // 1. For OBCDC, This interface is used to synchronize data to the downstream modules
@@ -232,7 +243,15 @@ public:
   // This value will be used as the basis for sending the heartbeat timestamp downstream
   int get_dispatch_progress(int64_t &progress, PartTransDispatchInfo &dispatch_info);
 
-  struct LSProgress;
+  ///////////////////////////////// LSProgress /////////////////////////////////
+  //
+  // At the moment of startup, only the startup timestamp of the LS is known, not the specific log progress, using the following convention.
+  // 1. set the start timestamp to the log_progress
+  // 2. next_lsn is invalid
+  // 3. wait for the start lsn locator to look up the start_lsn and set it to next_lsn
+  // 4. start lsn may have fallback, during fetch the fallback log, the log_progress is not updated,
+  // since the lag log progress is less than the start timestamp, the log progress remains unchanged; but touch_tstamp remains updated
+  using LSProgress = logfetcher::LSProgress;
   void get_progress_struct(LSProgress &prog) const { progress_.atomic_copy(prog); }
   int64_t get_progress() const { return progress_.get_progress(); }
   const palf::LSN &get_next_lsn() const { return progress_.get_next_lsn(); }
@@ -326,61 +345,6 @@ private:
   typedef common::ObSEArray<common::ObAddr, DEFAULT_SERVER_NUM> LocateSvrList;
   // Periodic deletion of history
   int init_locate_req_svr_list_(StartLSNLocateReq &req, LocateSvrList &svr_list);
-
-public:
-  ///////////////////////////////// LSProgress /////////////////////////////////
-  //
-  // At the moment of startup, only the startup timestamp of the LS is known, not the specific log progress, using the following convention.
-  // 1. set the start timestamp to the log_progress
-  // 2. next_lsn is invalid
-  // 3. wait for the start lsn locator to look up the start_lsn and set it to next_lsn
-  // 4. start lsn may have fallback, during fetch the fallback log, the log_progress is not updated,
-  // since the lag log progress is less than the start timestamp, the log progress remains unchanged; but touch_tstamp remains updated
-  struct LSProgress
-  {
-    // Log progress
-    // 1. log_progress normally refers to the lower bound of the next log timestamp
-    // 2. log_progress and next_lsn are invalid at startup
-    palf::LSN next_lsn_;            // next LSN
-    int64_t   log_progress_;        // log progress(nanosecond)
-    int64_t   log_touch_tstamp_;    // Log progress last update time
-
-    // Lock: Keeping read and write operations atomic
-    mutable common::ObByteLock  lock_;
-
-    LSProgress() : lock_(common::ObLatchIds::LS_PROGRESS_LOCK) { reset(); }
-    ~LSProgress() { reset(); }
-
-    TO_STRING_KV(K_(next_lsn),
-        "log_progress", NTS_TO_STR(log_progress_),
-        "log_touch_tstamp", TS_TO_STR(log_touch_tstamp_));
-
-    void reset();
-    // Note: start_lsn may be invalid, but start_tstamp_ns should be valid
-    void reset(const palf::LSN start_lsn, const int64_t start_tstamp_ns);
-
-    const palf::LSN &get_next_lsn() const { return next_lsn_; }
-    void set_next_lsn(const palf::LSN start_lsn) { next_lsn_ = start_lsn; }
-
-    // Get current progress
-    int64_t get_progress() const { return log_progress_; }
-    int64_t get_touch_tstamp() const { return log_touch_tstamp_; }
-
-    // Copy the entire progress item to ensure atomicity
-    void atomic_copy(LSProgress &prog) const;
-
-    // Update the touch timestamp if progress is greater than the upper limit
-    void update_touch_tstamp_if_progress_beyond_upper_limit(const int64_t upper_limit);
-
-    // Update log progress
-    // Update both the LSN and the log progress
-    // Require LSN to be updated sequentially, otherwise return OB_LOG_NOT_SYNC
-    //
-    // Update log progress once for each log parsed to ensure sequential update
-    int update_log_progress(const palf::LSN &new_next_lsn,
-        const int64_t new_lsn_length,
-        const int64_t log_progress);
-  };
 
 public:
   ///////////////////////////////// FetchModule /////////////////////////////////
@@ -483,6 +447,8 @@ public:
     }
     return str;
   }
+
+  FetchState get_state() { return state_; }
 
 public:
   TO_STRING_KV_WITH_HELPER("type", "FETCH_TASK",

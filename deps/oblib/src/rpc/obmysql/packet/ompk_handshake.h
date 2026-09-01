@@ -69,6 +69,15 @@ public:
     server_capabilities_lower_.capability_flag_.OB_SERVER_SSL = (use_ssl ? 1 : 0);
   }
 
+  // Disable/enable the SESSION_VARIABLE_TRACK capability advertisement.
+  // Servers that do not implement session state tracking must set this to false
+  // so that clients do not send CLIENT_SESSION_TRACK in HandshakeResponse and
+  // expect SESSION_TRACK-encoded OK packets.
+  inline void set_session_track_cap(const bool enable)
+  {
+    server_capabilities_upper_.capability_flag_.OB_SERVER_SESSION_VARIABLE_TRACK = (enable ? 1 : 0);
+  }
+
   struct CapabilitiesFlagLower
   {
     uint16_t OB_SERVER_LONG_PASSWORD:1;

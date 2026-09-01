@@ -11,6 +11,7 @@
 *.o
 *.orig
 *.patch
+*.class
 *.pyc
 *.pyc
 *.reject
@@ -25,6 +26,7 @@
 .auth_file
 .auth_file
 .autotools
+.clang-format
 .clangd
 .clang_complete
 .configured
@@ -42,6 +44,9 @@
 .review/
 .vscode/
 .cursor/
+!.cursor/
+!.cursor/skills/
+!.cursor/skills/**
 /.obdev
 /.settings/
 BROWSE
@@ -243,6 +248,18 @@ tools/ObRestore/mvn_repository
 tools/agentserver/agentserver
 tools/agentserver/incbackupserver
 tools/agentserver/ob_inc_backup/incbackupserver
+tools/cdc_tools/bin/
+tools/cdc_tools/integration_test/logs/
+tools/cdc_tools/performance_test/logs/
+tools/cdc_tools/stability_test/logs/
+tools/cdc_tools/logs/
+tools/cdc_tools/mysqltest/cdc_mysql_farm.yaml
+tools/cdc_tools/mysqltest/logs/
+tools/cdc_tools/mysqltest/output/
+tools/cdc_tools/mysqltest/runtime/
+tools/cdc_tools/monitoring/.cdc_monitor_stack/
+tools/cdc_tools/monitoring/.obcdc_monitor_stack/
+tools/cdc_tools/single.yaml
 tools/condor/results
 tools/deploy/admin
 tools/deploy/avg_rt_*
@@ -418,6 +435,15 @@ unittest/storage/transaction/performance
 tools/ob-configserver/bin/*
 tools/ob-configserver/tests/*.log
 tools/ob-configserver/tests/*.out
+
+############# monitor stack #############
+.obcdc_monitor_stack/grafana/
+
+############# ob_cdc #############
+ob_cdc/src/access_layer/java-sdk/target/
+
+############# ebpf #############
+ebpf_profile_agent/
 
 ############# deps #############
 deps/oblib/src/common/storage/ob_io_selector.h

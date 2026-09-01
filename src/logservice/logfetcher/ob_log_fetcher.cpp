@@ -283,7 +283,7 @@ int ObLogFetcher::start()
 {
   int ret = OB_SUCCESS;
   int pthread_ret = 0;
-  LOG_INFO("LogFetcher start begin");
+  LOG_INFO("LogFetcher start begin", K_(source_tenant_id));
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -864,15 +864,20 @@ int ObLogFetcher::check_progress(
 
 void ObLogFetcher::print_stat()
 {
+  print_stat(false);
+}
+
+void ObLogFetcher::print_stat(const bool force_print)
+{
   // Periodic printing progress slowest k LS
-  if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_K_SLOWEST_LS)) {
+  if (force_print || REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_K_SLOWEST_LS)) {
     fs_container_mgr_.print_stat();
     // Print upper_limt, fetcher_delay
     print_fetcher_stat_();
     // Print the slowest k LS
     ls_fetch_mgr_.print_k_slowest_ls();
     // Print delay
-    (void)print_delay();
+    (void)print_delay(force_print);
   }
 }
 
@@ -981,7 +986,7 @@ int ObLogFetcher::init_self_addr_()
   return ret;
 }
 
-int ObLogFetcher::print_delay()
+int ObLogFetcher::print_delay(const bool force_print)
 {
   int ret = OB_SUCCESS;
   FetchCtxMapHBFunc hb_func(g_print_ls_heartbeat_info);
@@ -995,7 +1000,7 @@ int ObLogFetcher::print_delay()
     logservice::TenantLSID min_progress_tls_id = hb_func.min_progress_ls_;
     logservice::TenantLSID max_progress_tls_id = hb_func.max_progress_ls_;
 
-    if (REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_HEARTBEAT_INTERVAL) || g_print_ls_heartbeat_info) {
+    if (force_print || REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_HEARTBEAT_INTERVAL) || g_print_ls_heartbeat_info) {
       // Calculation of the minimum and maximum progress, and the corresponding LS
       int64_t min_progress = hb_func.min_progress_;
       int64_t max_progress = hb_func.max_progress_;

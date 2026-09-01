@@ -62,7 +62,8 @@ public:
       const share::ObLSID &ls_id,
       const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
       const common::ObAddr &svr,
-      const int64_t timeout);
+      const int64_t timeout,
+      const int64_t progress = OB_INVALID_TIMESTAMP);
 
   int set_resp(const obrpc::ObRpcResultCode &rcode,
       const obrpc::ObCdcLSFetchLogResp *resp);
@@ -77,7 +78,8 @@ private:
   int build_request_(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
-      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array);
+      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+      const int64_t progress = OB_INVALID_TIMESTAMP);
 
 private:
   ////////////////////////////// RpcCB //////////////////////////////

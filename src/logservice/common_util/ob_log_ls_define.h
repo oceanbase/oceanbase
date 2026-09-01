@@ -14,6 +14,7 @@
 #define OCEANBASE_LOGSERVICE_COMMON_LS_DEFINE_H_
 
 #include "share/ob_ls_id.h"
+#include "lib/utility/ob_unify_serialize.h"
 
 namespace oceanbase
 {
@@ -21,6 +22,7 @@ namespace logservice
 {
 class TenantLSID
 {
+  OB_UNIS_VERSION(1);
 public:
   TenantLSID() { reset(); }
   TenantLSID(const uint64_t tenant_id, const share::ObLSID &ls_id)

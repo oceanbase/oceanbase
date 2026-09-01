@@ -163,7 +163,7 @@ const share::SCN IGroupEntry::get_scn() const
     return scn;
 }
 
-const IGroupEntryHeader &IGroupEntry::get_header()
+const IGroupEntryHeader &IGroupEntry::get_header() const
 {
     return header_;
 }

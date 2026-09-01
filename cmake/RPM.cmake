@@ -109,10 +109,19 @@ endif()
 
 if (BUILD_CDC_ONLY)
   message(STATUS "oceanbase build cdc only")
+  # Use python3 for brp-python-bytecompile of CDC Python helper scripts.
+  string(APPEND CPACK_RPM_SPEC_MORE_DEFINE "\n%global __python /usr/bin/python3")
   set(CPACK_COMPONENTS_ALL cdc)
+  if (OB_BUILD_CLOSE_MODULES)
+    list(APPEND CPACK_COMPONENTS_ALL cdc-service)
+  endif()
   set(CPACK_PACKAGE_NAME "oceanbase-cdc")
   if (OB_BUILD_OPENSOURCE)
     set(CPACK_PACKAGE_NAME "oceanbase-ce-cdc")
+  endif()
+  # cdc-service component package naming
+  if (OB_BUILD_CLOSE_MODULES)
+    set(CPACK_RPM_CDC-SERVICE_PACKAGE_NAME "oceanbase-cdc-service")
   endif()
 else()
   add_custom_target(bitcode_to_elf ALL

@@ -363,7 +363,7 @@ int LSFetchCtx::get_next_remote_group_entry(
 int LSFetchCtx::get_log_entry_iterator(
     const ipalf::IGroupEntry &group_entry,
     const palf::LSN &start_lsn,
-    palf::MemPalfBufferIterator &entry_iter)
+    ipalf::IPalfIterator<ipalf::ILogEntry> &entry_iter)
 {
   int ret = OB_SUCCESS;
   palf::GetFileEndLSN entry_iter_end_func = [&](){ return start_lsn + group_entry.get_group_entry_size(start_lsn); };
@@ -378,6 +378,22 @@ int LSFetchCtx::get_log_entry_iterator(
 int LSFetchCtx::sync(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  // TODO by xiyu : 添加一个筛选是不是CDC的选择分支
+
+  int64_t pending_task_count = 0;
+
+  if (OB_ISNULL(ls_ctx_add_info_)) {
+    // 如果没有 add_info，说明可能不是 CDC 模式，直接返回成功
+    LOG_DEBUG("ls_ctx_add_info_ is NULL, skip sync", K_(tls_id));
+  } else {
+    ret = ls_ctx_add_info_->sync(stop_flag, pending_task_count, progress_, last_sync_progress_);
+    if (OB_IN_STOP_STATE != ret && OB_SUCCESS != ret) {
+      LOG_ERROR("ls_ctx_add_info sync failed", KR(ret), K_(tls_id), K(pending_task_count));
+    } else {
+      LOG_DEBUG("sync ready tasks success", K_(tls_id), K(pending_task_count));
+    }
+  }
+
   return ret;
 }
 
@@ -416,6 +432,20 @@ int LSFetchCtx::update_progress(
 int LSFetchCtx::offline(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  ISTAT("[OFFLINE_PART] begin", K_(tls_id), "state", print_state(state_), K_(discarded));
+  if (OB_ISNULL(ls_ctx_add_info_)) {
+    ret = OB_INVALID_ERROR;
+    LOG_ERROR("invalid part trans resolver", KR(ret), K(ls_ctx_add_info_));
+  }
+  // launch offline_ls task
+  else if (OB_FAIL(ls_ctx_add_info_->offline(stop_flag))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("delete ls by part trans resolver fail", KR(ret));
+    }
+  } else {
+    // success
+    ISTAT("[OFFLINE_PART] end", K_(tls_id), "state", print_state(state_), K_(discarded));
+  }
   return ret;
 }
 
@@ -874,18 +904,77 @@ int LSFetchCtx::get_dispatch_progress(int64_t &dispatch_progress, PartTransDispa
   if (OB_ISNULL(ls_ctx_add_info_)) {
     ret = OB_NOT_INIT;
     LOG_ERROR("invalid part trans resolver", KR(ret), K(ls_ctx_add_info_));
-  } else if (OB_FAIL(ls_ctx_add_info_->get_dispatch_progress(
-      tls_id_.get_ls_id(),
-      dispatch_progress,
-      dispatch_info))) {
-    if (OB_LS_NOT_EXIST != ret) {
-      LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K(tls_id_));
+  // } else if (OB_FAIL(ls_ctx_add_info_->get_dispatch_progress(
+  //     tls_id_.get_ls_id(),
+  //     dispatch_progress,
+  //     dispatch_info))) {
+  //   if (OB_LS_NOT_EXIST != ret) {
+  //     LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K(tls_id_));
+  //   } else {
+  //     LOG_INFO("ls_not_exist when trying to get_dispatch_progress", K(tls_id_));
+  //   }
+  // } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == dispatch_progress)) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_ERROR("dispatch_progress is invalid", KR(ret), K(dispatch_progress), K(tls_id_), K(dispatch_info));
+  } else {
+    // Get log progress for monitoring
+    LSProgress cur_progress;
+    progress_.atomic_copy(cur_progress);
+    int64_t log_progress = cur_progress.get_progress();
+    palf::LSN next_lsn = cur_progress.get_next_lsn();
+    int64_t log_touch_tstamp = cur_progress.get_touch_tstamp();
+
+    if (OB_FAIL(ls_ctx_add_info_->get_dispatch_progress(
+        tls_id_.get_ls_id(),
+        dispatch_progress,
+        dispatch_info))) {
+      if (OB_LS_NOT_EXIST != ret) {
+        LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K(tls_id_));
+        // Add monitoring log for other errors
+        if (REACH_TIME_INTERVAL_THREAD_LOCAL(1 * _SEC_)) {
+          LOG_WARN("[MONITOR] [LS_FETCH_CTX] [DISPATCH_PROGRESS] [GET_DISPATCH_PROGRESS_FAIL]",
+              K_(tls_id),
+              KR(ret),
+              "log_progress", NTS_TO_STR(log_progress),
+              "log_next_lsn", next_lsn);
+        }
+      } else {
+        // Add monitoring log for OB_LS_NOT_EXIST case
+        if (REACH_TIME_INTERVAL_THREAD_LOCAL(1 * _SEC_)) {
+          LOG_INFO("[MONITOR] [LS_FETCH_CTX] [DISPATCH_PROGRESS] [LS_NOT_EXIST]",
+              K_(tls_id),
+              "log_progress", NTS_TO_STR(log_progress),
+              "log_next_lsn", next_lsn,
+              "log_touch_tstamp", TS_TO_STR(log_touch_tstamp));
+        }
+        LOG_INFO("ls_not_exist when trying to get_dispatch_progress", K(tls_id_));
+      }
+    } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == dispatch_progress)) {
+      ret = OB_ERR_UNEXPECTED;
+      // Add monitoring log for invalid dispatch_progress
+      if (REACH_TIME_INTERVAL_THREAD_LOCAL(1 * _SEC_)) {
+        LOG_WARN("[MONITOR] [LS_FETCH_CTX] [DISPATCH_PROGRESS] [INVALID_DISPATCH_PROGRESS]",
+            K_(tls_id),
+            "dispatch_progress", dispatch_progress,
+            "log_progress", NTS_TO_STR(log_progress),
+            "log_next_lsn", next_lsn,
+            K(dispatch_info));
+      }
+      LOG_ERROR("dispatch_progress is invalid", KR(ret), K(dispatch_progress), K(tls_id_), K(dispatch_info));
     } else {
-      LOG_INFO("ls_not_exist when trying to get_dispatch_progress", K(tls_id_));
+      // Log monitoring information
+      if (REACH_TIME_INTERVAL_THREAD_LOCAL(1 * _SEC_)) {
+        LOG_INFO("[MONITOR] [LS_FETCH_CTX] [DISPATCH_PROGRESS]",
+            K_(tls_id),
+            "log_progress", NTS_TO_STR(log_progress),
+            "log_next_lsn", next_lsn,
+            "log_touch_tstamp", TS_TO_STR(log_touch_tstamp),
+            "dispatch_progress", NTS_TO_STR(dispatch_progress),
+            "dispatch_log_lsn", dispatch_info.last_dispatch_log_lsn_,
+            "pending_task_count", dispatch_info.pending_task_count_,
+            "current_checkpoint", dispatch_info.current_checkpoint_);
+      }
     }
-  } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == dispatch_progress)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("dispatch_progress is invalid", KR(ret), K(dispatch_progress), K(tls_id_), K(dispatch_info));
   }
 
   return ret;
@@ -1005,90 +1094,6 @@ void LSFetchCtx::handle_error(const share::ObLSID &ls_id,
   if (OB_NOT_NULL(err_handler_)) {
     err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
   }
-}
-
-/////////////////////////////////// LSProgress ///////////////////////////////////
-
-void LSFetchCtx::LSProgress::reset()
-{
-  next_lsn_.reset();
-  log_progress_ = OB_INVALID_TIMESTAMP;
-  log_touch_tstamp_ = OB_INVALID_TIMESTAMP;
-}
-
-// start_lsn refers to the start LSN, which may not be valid
-// start_tstamp_ns refers to the LS start timestamp, not the start_lsn log timestamp
-//
-// Therefore, this function sets start_tstamp_ns to the current progress
-void LSFetchCtx::LSProgress::reset(const palf::LSN start_lsn, const int64_t start_tstamp_ns)
-{
-  // Update next_sn
-  next_lsn_ = start_lsn;
-  // Set start-up timestamp to progress
-  log_progress_ = start_tstamp_ns;
-  log_touch_tstamp_ = get_timestamp();
-}
-
-// If the progress is greater than the upper limit, the touch timestamp of the corresponding progress is updated
-// NOTE: The purpose of this function is to prevent the touch timestamp from not being updated for a long time if the progress
-// is greater than the upper limit, which could lead to a false detection of a progress timeout if the upper limit suddenly increases.
-void LSFetchCtx::LSProgress::update_touch_tstamp_if_progress_beyond_upper_limit(const int64_t upper_limit)
-{
-  ObByteLockGuard guard(lock_);
-
-  if (OB_INVALID_TIMESTAMP != log_progress_
-      && OB_INVALID_TIMESTAMP != upper_limit
-      && log_progress_ >= upper_limit) {
-    log_touch_tstamp_ = get_timestamp();
-  }
-}
-
-int LSFetchCtx::LSProgress::update_log_progress(const palf::LSN &new_next_lsn,
-    const int64_t new_lsn_length,
-    const int64_t new_log_progress)
-{
-  ObByteLockGuard guard(lock_);
-
-  int ret = OB_SUCCESS;
-
-  // Require next_lsn to be valid
-  if (OB_UNLIKELY(! next_lsn_.is_valid())) {
-    ret = OB_INVALID_ERROR;
-    LOG_ERROR("invalid next_lsn", KR(ret), K(next_lsn_), K_(log_progress));
-  }
-  // Verifying log continuity
-  else if (OB_UNLIKELY((next_lsn_ + new_lsn_length) != new_next_lsn)) {
-    ret = OB_LOG_NOT_SYNC;
-    LOG_ERROR("log not sync", KR(ret), K(next_lsn_), K(new_next_lsn), K(new_lsn_length));
-  } else {
-    next_lsn_ = new_next_lsn;
-
-    // Update log progress if it is invalid, or if log progress has been updated
-    if (OB_INVALID_TIMESTAMP == log_progress_ ||
-        (OB_INVALID_TIMESTAMP != new_log_progress && new_log_progress > log_progress_)) {
-      log_progress_ = new_log_progress;
-    }
-
-    // Log progress update, update the log_touch_tstamp_, the reason is:
-    //
-    // 1. Normally, if the log progress is updated, indicating that the log was fetched and that the progress was updated anyway
-    // 2. At startup, if there is a log rollback and the progress is equal to the startup timestamp and cannot be rolled back,
-    // so the fetched log progress is less than the start progress and the update of the log progress does not update the progress,
-    // but the LS does fetched the log, in which case the "update timestamp of progress" needs to be updated
-    log_touch_tstamp_ = get_timestamp();
-  }
-
-  return ret;
-}
-
-void LSFetchCtx::LSProgress::atomic_copy(LSProgress &prog) const
-{
-  // protected by lock
-  ObByteLockGuard guard(lock_);
-
-  prog.next_lsn_ = next_lsn_;
-  prog.log_progress_ = log_progress_;
-  prog.log_touch_tstamp_ = log_touch_tstamp_;
 }
 
 ///////////////////////////////// FetchModule /////////////////////////////////

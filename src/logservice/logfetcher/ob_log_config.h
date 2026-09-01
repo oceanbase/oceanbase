@@ -59,6 +59,7 @@ namespace logfetcher
 {
 class ObLogFetcherConfig : public common::ObBaseConfig
 {
+public:
   typedef std::map<std::string, std::string> ConfigMap;
 
 public:
@@ -246,7 +247,7 @@ public:
 
 #undef OB_CLUSTER_PARAMETER
 
-private:
+public:
   bool is_inited_;
 
 private:

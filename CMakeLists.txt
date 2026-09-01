@@ -259,3 +259,7 @@ else()
   endif()
 endif()
 
+# build cdc service
+if(OB_BUILD_CLOSE_MODULES AND EXISTS ${CMAKE_SOURCE_DIR}/ob_cdc)
+  add_subdirectory(ob_cdc)
+endif()

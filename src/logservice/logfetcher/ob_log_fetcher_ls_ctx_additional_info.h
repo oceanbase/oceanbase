@@ -16,11 +16,16 @@
 #include "logservice/palf/lsn.h"
 #include "share/ob_ls_id.h"
 #include "logservice/common_util/ob_log_ls_define.h"
+#include "lib/lock/ob_small_spin_lock.h"  // ObByteLock
+#include "logservice/logfetcher/ob_log_ls_progress.h"
 
 namespace oceanbase
 {
 namespace logfetcher
 {
+// 前向声明，避免循环依赖
+class LSFetchCtx;
+
 struct PartTransDispatchInfo
 {
   PartTransDispatchInfo() :
@@ -75,6 +80,17 @@ public:
       const share::ObLSID &ls_id,
       int64_t &progress,
       PartTransDispatchInfo &dispatch_info) = 0;
+
+  /// sync/dispatch ready tasks to downstream
+  /// This method should be called after reading logs to dispatch ready tasks
+  /// @param [in] stop_flag  stop flag
+  /// @param [out] pending_task_count  number of pending tasks
+  /// @retval OB_SUCCESS  success
+  /// @retval OB_IN_STOP_STATE  in stop state
+  /// @retval other error codes  failed
+  virtual int sync(volatile bool &stop_flag, int64_t &pending_task_count, LSProgress &progress, int64_t &last_sync_progress) = 0;
+
+  virtual int offline(volatile bool &stop_flag) = 0;
 };
 } // namespace logfetcher
 } // namespace oceanbase

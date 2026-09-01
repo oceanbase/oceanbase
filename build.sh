@@ -21,6 +21,7 @@ ASAN_OPTION=ON
 STATIC_LINK_LGPL_DEPS_OPTION=ON
 ENABLE_BOLT_OPTION=ON
 BUILD_STAND_ALONE=OFF
+BUILD_DIR_SUFFIX="${OB_BUILD_DIR_SUFFIX:-}"
 
 echo "$0 ${ALL_ARGS[@]}"
 
@@ -105,7 +106,7 @@ function try_init
 function prepare_build_dir
 {
     TYPE=$1
-    mkdir -p $TOPDIR/build_$TYPE && cd $TOPDIR/build_$TYPE
+    mkdir -p "$TOPDIR/build_${TYPE}${BUILD_DIR_SUFFIX}" && cd "$TOPDIR/build_${TYPE}${BUILD_DIR_SUFFIX}"
 }
 
 # dep_create

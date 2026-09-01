@@ -16,6 +16,9 @@ namespace oceanbase
 {
 namespace logservice
 {
+
+OB_SERIALIZE_MEMBER(TenantLSID, tenant_id_, ls_id_);
+
 int TenantLSID::compare(const TenantLSID &other) const
 {
   int cmp_ret = 0;

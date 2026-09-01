@@ -74,14 +74,15 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
     const share::ObLSID &ls_id,
     const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
     const common::ObAddr &svr,
-    const int64_t timeout)
+    const int64_t timeout,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
 
   reset();
 
   // build request
-  if (OB_FAIL(build_request_(tenant_id, ls_id, miss_log_array))) {
+  if (OB_FAIL(build_request_(tenant_id, ls_id, miss_log_array, progress))) {
     LOG_ERROR("build request fail", KR(ret), K(tenant_id), K(ls_id));
   }
   // Send asynchronous fetch log RPC
@@ -111,7 +112,8 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
 int FetchLogSRpc::build_request_(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array)
+    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -119,6 +121,9 @@ int FetchLogSRpc::build_request_(
   // Set request parameters
   req_.set_ls_id(ls_id);
   req_.set_client_pid(static_cast<uint64_t>(getpid()));
+  if (OB_INVALID_TIMESTAMP != progress) {
+    req_.set_progress(progress);
+  }
 
   ARRAY_FOREACH_N(miss_log_array, idx, count) {
     const ObCdcLSFetchMissLogReq::MissLogParam &miss_log_param = miss_log_array.at(idx);
@@ -1320,6 +1325,7 @@ int FetchLogARpc::generate_rpc_result_(RawLogFileRpcRequest &rpc_req,
   const int64_t rpc_result_count_per_rpc_upper_limit =
       ATOMIC_LOAD(&g_rpc_result_count_per_rpc_upper_limit) / 4;
   const int64_t res_queue_cnt = res_queue_.count();
+  const bool force_stop_rpc = rpc_req.get_stop_flag();
   bool is_state_idle = false;
 
   need_stop_rpc = false;
@@ -1346,7 +1352,10 @@ int FetchLogARpc::generate_rpc_result_(RawLogFileRpcRequest &rpc_req,
       need_stop_rpc = true;
       rpc_stop_reason = RpcStopReason::RESULT_NOT_READABLE;
     } else {
-      if (get_fetch_log_proto() != rpc_req.get_proto_type()) {
+      if (force_stop_rpc) {
+        need_stop_rpc = true;
+        rpc_stop_reason = RpcStopReason::FORCE_STOP_RPC;
+      } else if (get_fetch_log_proto() != rpc_req.get_proto_type()) {
         need_stop_rpc = true;
         rpc_stop_reason = RpcStopReason::RPC_PROTO_NOT_MATCH;
       } else if (0 >= result->data_len_) {

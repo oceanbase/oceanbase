@@ -702,5 +702,17 @@ int ObLogRestoreNetDriver::LogFetcherLSCtxAddInfo::get_dispatch_progress(
 
   return ret;
 }
+
+int ObLogRestoreNetDriver::LogFetcherLSCtxAddInfo::sync(volatile bool &stop_flag, int64_t &pending_task_count, logfetcher::LSProgress &progress, int64_t &last_sync_progress)
+{
+  UNUSED(stop_flag);
+  // For restore service, we don't need to dispatch tasks, so this is a no-op
+  pending_task_count = 0;
+  return OB_SUCCESS;
+}
+int ObLogRestoreNetDriver::LogFetcherLSCtxAddInfo::offline(volatile bool &stop_flag)
+{
+  return OB_SUCCESS;
+}
 } // namespace logservice
 } // namespace oceanbase

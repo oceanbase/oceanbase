@@ -193,7 +193,7 @@ int RawLogFileRpcRequest::prepare(const uint64_t self_tenant_id,
       }
     }
     prepare_end_time_ = get_timestamp();
-    LOG_INFO("request finish to prepare", KPC(this));
+    LOG_TRACE("request finish to prepare", KPC(this));
   }
 
   return ret;

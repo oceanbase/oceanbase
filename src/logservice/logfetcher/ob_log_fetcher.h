@@ -280,18 +280,21 @@ public:
       int64_t &cur_progress);
 
   virtual void print_stat();
+  void print_stat(const bool force_print);
   void *alloc_decompression_buf(int64_t size);
   common::ObIAllocator *get_decompression_allocator() {return &decompression_alloc_;}
   void free_decompression_buf(void *buf);
 
   int update_fetch_log_protocol(const obrpc::ObCdcFetchLogProtocolType proto);
 
+  TO_STRING_KV(K_(source_tenant_id), K_(is_loading_data_dict_baseline_data));
+
 private:
   int suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
       const int64_t max_res_cnt);
   int init_self_addr_();
   void print_fetcher_stat_();
-  int print_delay();
+  int print_delay(const bool force_print = false);
 
   int wait_for_ls_to_be_removed_(const share::ObLSID &ls_id,
       const int64_t timeout);

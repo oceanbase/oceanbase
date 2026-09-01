@@ -138,6 +138,23 @@ void SorterStatInfo::calc_and_print_stat(int64_t delta_time)
   }
 }
 
+void RedoRpcFetchStatInfo::calc_and_print_stat(int64_t delta_time)
+{
+  int64_t fetch_task_cnt = 0;
+  int64_t fetch_bytes_window = 0;
+
+  get_and_reset_window(fetch_task_cnt, fetch_bytes_window);
+
+  if (delta_time > 0) {
+    const double fetch_task_tps = (double)(fetch_task_cnt) * 1000000.0 / (double)delta_time;
+    const double delta_mb = (double)(fetch_bytes_window) / (double)_M_;
+    const double fetch_mb_rate = delta_mb * 1000000.0 / (double)delta_time;
+    const double fetch_total_gb = (double)(ATOMIC_LOAD(&total_fetched_bytes_)) / (double)_G_;
+    _ISTAT("[REDO_RPC_FETCH_STAT] FETCH_TASK_TPS=%.3lf FETCH_RATE=%.5fM/s FETCH_TOTAL_SIZE=%.5fG",
+        fetch_task_tps, fetch_mb_rate, fetch_total_gb);
+  }
+}
+
 void UpdateSplitMergeStatInfo::calc_and_print_stat(int64_t delta_time)
 {
   // Snapshot cumulative counters, then derive interval deltas from the last snapshot.
@@ -217,6 +234,7 @@ ObLogTransStatMgr::ObLogTransStatMgr() :
     dispatcher_stat_(),
     auto_mode_dispatch_stat_(),
     sorter_stat_(),
+    redo_rpc_fetch_stat_(),
     update_split_merge_stat_(),
     last_stat_time_(0)
 {
@@ -248,6 +266,7 @@ int ObLogTransStatMgr::init()
     dispatcher_stat_.reset();
     auto_mode_dispatch_stat_.reset();
     sorter_stat_.reset();
+    redo_rpc_fetch_stat_.reset();
     update_split_merge_stat_.reset();
     last_stat_time_ = 0;
     inited_ = true;
@@ -271,6 +290,7 @@ void ObLogTransStatMgr::destroy()
     dispatcher_stat_.reset();
     auto_mode_dispatch_stat_.reset();
     sorter_stat_.reset();
+    redo_rpc_fetch_stat_.reset();
     update_split_merge_stat_.reset();
     last_stat_time_ = 0;
     inited_ = false;
@@ -342,6 +362,11 @@ void ObLogTransStatMgr::do_sort_br_stat()
   sorter_stat_.inc_sorted_br_count();
 }
 
+void ObLogTransStatMgr::do_redo_rpc_fetch_stat(const int64_t redo_bytes)
+{
+  redo_rpc_fetch_stat_.record_fetch(redo_bytes);
+}
+
 void ObLogTransStatMgr::print_stat_info()
 {
   int ret = OB_SUCCESS;
@@ -354,6 +379,7 @@ void ObLogTransStatMgr::print_stat_info()
   dispatcher_stat_.calc_and_print_stat(delta_time);
   auto_mode_dispatch_stat_.calc_and_print_stat(delta_time);
   sorter_stat_.calc_and_print_stat(delta_time);
+  redo_rpc_fetch_stat_.calc_and_print_stat(delta_time);
   update_split_merge_stat_.calc_and_print_stat(delta_time);
 
   double create_tps = tps_stat_info_.calc_tps(delta_time);
@@ -476,6 +502,28 @@ int ObLogTransStatMgr::do_tenant_tps_rps_stat(const uint64_t tenant_id, int64_t 
   return ret;
 }
 
+int ObLogTransStatMgr::do_tenant_sequencer_tps_stat(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    LOG_ERROR("ObLogTransStatMgr has not inited");
+    ret = OB_NOT_INIT;
+  } else {
+    TenantSequencerTpsUpdater updater(tenant_id);
+    TenantID tid(tenant_id);
+    if (OB_FAIL(tenant_stat_info_map_.operate(tid, updater))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("do tenant sequencer tps stat fail", KR(ret), K(tid));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObLogTransStatMgr::do_tenant_rps_stat_after_filter(const uint64_t tenant_id, int64_t record_count)
 {
   int ret = OB_SUCCESS;
@@ -524,6 +572,19 @@ bool ObLogTransStatMgr::TenantRpsBeforeFilterUpdater::operator()(const TenantID 
     } else {
       ts_info->tps_stat_info_.do_tps_stat();
       ts_info->rps_stat_info_before_filter_.do_rps_stat(record_count_);
+    }
+  }
+
+  return tid.tenant_id_ == tenant_id_;
+}
+
+bool ObLogTransStatMgr::TenantSequencerTpsUpdater::operator()(const TenantID &tid, TenantStatInfo *ts_info)
+{
+  if (tid.tenant_id_ == tenant_id_) {
+    if (OB_ISNULL(ts_info)) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tenant stat info is null", K(tid), KPC(ts_info));
+    } else {
+      ts_info->tps_stat_info_.do_tps_stat();
     }
   }
 

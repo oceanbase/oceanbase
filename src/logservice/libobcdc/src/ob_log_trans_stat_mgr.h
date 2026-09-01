@@ -213,6 +213,37 @@ struct SorterStatInfo
   void calc_and_print_stat(int64_t delta_time);
 };
 
+struct RedoRpcFetchStatInfo
+{
+  int64_t fetched_task_count_;
+  int64_t window_bytes_;
+  int64_t total_fetched_bytes_;
+
+  void reset()
+  {
+    ATOMIC_SET(&fetched_task_count_, 0);
+    ATOMIC_SET(&window_bytes_, 0);
+    ATOMIC_SET(&total_fetched_bytes_, 0);
+  }
+
+  void record_fetch(const int64_t redo_bytes)
+  {
+    ATOMIC_INC(&fetched_task_count_);
+    if (redo_bytes > 0) {
+      ATOMIC_AAF(&window_bytes_, redo_bytes);
+      ATOMIC_AAF(&total_fetched_bytes_, redo_bytes);
+    }
+  }
+
+  void get_and_reset_window(int64_t &task_cnt, int64_t &bytes_sum)
+  {
+    task_cnt = ATOMIC_TAS(&fetched_task_count_, 0);
+    bytes_sum = ATOMIC_TAS(&window_bytes_, 0);
+  }
+
+  void calc_and_print_stat(int64_t delta_time);
+};
+
 // Single struct gathering ALL update-split-merge monitoring metrics.
 // Two tiers mirror the two physical locations a DELETE payload can live in:
 //   T1 kept_in_stmt   — cache retains the original DmlStmtTask pointer
@@ -325,6 +356,7 @@ public:
   virtual int drop_served_tenant(const uint64_t tenant_id) = 0;
   // tenant tps and rps(before filter) stat
   virtual int do_tenant_tps_rps_stat(const uint64_t tenant_id, int64_t record_count) = 0;
+  virtual int do_tenant_sequencer_tps_stat(const uint64_t tenant_id) = 0;
   virtual int do_tenant_rps_stat_after_filter(const uint64_t tenant_id, int64_t record_count) = 0;
 
   // drc stat
@@ -343,6 +375,7 @@ public:
   // sorter
   virtual void do_sort_trans_stat() = 0;
   virtual void do_sort_br_stat() = 0;
+  virtual void do_redo_rpc_fetch_stat(const int64_t redo_bytes) = 0;
 
   // update split merge
   // Single access entry for all merge-related metrics bumps.
@@ -372,6 +405,7 @@ public:
   int add_served_tenant(const char *tenant_name, const uint64_t tenant_id);
   int drop_served_tenant(const uint64_t tenant_id);
   int do_tenant_tps_rps_stat(const uint64_t tenant_id, int64_t record_count);
+  int do_tenant_sequencer_tps_stat(const uint64_t tenant_id);
   int do_tenant_rps_stat_after_filter(const uint64_t tenant_id, int64_t record_count);
 
   void do_drc_consume_tps_stat();
@@ -384,6 +418,7 @@ public:
   void do_auto_mode_dispatch_to_parser_stat(const int64_t redo_bytes);
   void do_sort_trans_stat();
   void do_sort_br_stat();
+  void do_redo_rpc_fetch_stat(const int64_t redo_bytes);
 
   UpdateSplitMergeStatInfo &get_update_split_merge_stat() override
   { return update_split_merge_stat_; }
@@ -474,6 +509,15 @@ private:
     bool operator()(const TenantID &tid, TenantStatInfo *ts_info);
   };
 
+  struct TenantSequencerTpsUpdater
+  {
+    uint64_t tenant_id_;
+
+    explicit TenantSequencerTpsUpdater(const uint64_t tenant_id) : tenant_id_(tenant_id) {}
+
+    bool operator()(const TenantID &tid, TenantStatInfo *ts_info);
+  };
+
   // Update filtered rps information for a given tenant
   struct TenantRpsAfterFilterUpdater
   {
@@ -532,6 +576,7 @@ private:
   DispatcherStatInfo    dispatcher_stat_ CACHE_ALIGNED;
   AutoModeDispatchStatInfo auto_mode_dispatch_stat_ CACHE_ALIGNED;
   SorterStatInfo        sorter_stat_ CACHE_ALIGNED;
+  RedoRpcFetchStatInfo  redo_rpc_fetch_stat_ CACHE_ALIGNED;
   UpdateSplitMergeStatInfo update_split_merge_stat_ CACHE_ALIGNED;
 
   // 记录统计时间

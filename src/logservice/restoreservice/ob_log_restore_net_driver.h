@@ -162,6 +162,11 @@ private:
       const share::ObLSID &ls_id,
       int64_t &progress,
       logfetcher::PartTransDispatchInfo &dispatch_info);
+
+  /// sync/dispatch ready tasks to downstream
+  /// For restore service, this is a no-op since we don't need to dispatch tasks
+  virtual int sync(volatile bool &stop_flag, int64_t &pending_task_count, logfetcher::LSProgress &progress, int64_t &last_sync_progress) override;
+  virtual int offline(volatile bool &stop_flag) override;
   };
 private:
   typedef common::RWLock RWLock;

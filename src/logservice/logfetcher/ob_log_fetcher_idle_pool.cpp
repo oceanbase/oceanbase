@@ -65,16 +65,34 @@ int ObLogFetcherIdlePool::init(
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::LogFetcherIdlePool, tg_id_))) {
     LOG_ERROR("TG_CREATE_TENANT failed", KR(ret), K(thread_num));
+  } else if (FALSE_IT(fetcher_host_ = fetcher_host)) {
+  } else if (FALSE_IT(log_fetcher_user_ = log_fetcher_user)) {
+  } else if (FALSE_IT(cfg_ = &cfg)) {
+  } else if (FALSE_IT(err_handler_ = &err_handler)) {
+  } else if (FALSE_IT(stream_worker_ = &stream_worker)) {
+  } else if (FALSE_IT(start_lsn_locator_ = &start_lsn_locator)) {
+  } else if (OB_FAIL(TG_SET_HANDLER(tg_id_, *this))) {
+    // For MAP_QUEUE_THREAD, push_task depends on handler initialization (qth_ created in set_handler()).
+    LOG_WARN("TG_SET_HANDLER failed", KR(ret), K(tg_id_));
   } else {
-    fetcher_host_ = fetcher_host;
-    log_fetcher_user_ = log_fetcher_user;
-    cfg_ = &cfg;
-    err_handler_ = &err_handler;
-    stream_worker_ = &stream_worker;
-    start_lsn_locator_ = &start_lsn_locator;
     inited_ = true;
 
     LOG_INFO("init fetcher idle pool succ", K(thread_num), K(this));
+  }
+
+  if (OB_SUCCESS != ret) {
+    // rollback partial init
+    if (-1 != tg_id_) {
+      TG_DESTROY(tg_id_);
+      tg_id_ = -1;
+    }
+    inited_ = false;
+    cfg_ = nullptr;
+    err_handler_ = NULL;
+    stream_worker_ = NULL;
+    start_lsn_locator_ = NULL;
+    fetcher_host_ = nullptr;
+    log_fetcher_user_ = LogFetcherUser::UNKNOWN;
   }
 
   return ret;
@@ -113,7 +131,7 @@ int ObLogFetcherIdlePool::push(LSFetchCtx *task)
   } else {
     task->dispatch_in_idle_pool();
 
-    LOG_TRACE("[STAT] [IDLE_POOL] [DISPATCH_IN]", K(task), KPC(task));
+    LOG_TRACE("[STAT] [IDLE_POOL] [DISPATCH_IN]", K(task), KPC(task), K(tg_id_));
 
     if (OB_FAIL(TG_PUSH_TASK(tg_id_, task, task->hash()))) {
       LOG_ERROR("push task into thread queue fail", KR(ret), K(task));
@@ -139,8 +157,8 @@ int ObLogFetcherIdlePool::start()
   } else if (OB_FAIL(LOG_FETCHER_IDLE_POOL_START_FAIL)) {
     LOG_ERROR("ERRSIM: LOG_FETCHER_IDLE_POOL_START_FAIL");
 #endif
-  } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
-    LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    LOG_WARN("TG_START failed", KR(ret), K(tg_id_));
   } else {
     LOG_INFO("start fetcher idle pool succ", "thread_num", get_thread_cnt());
   }

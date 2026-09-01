@@ -125,7 +125,7 @@ private:
   // hold all prev_redo_log_lsn in all TxLog:
   // 1. prev_redo_lsn_arr recorded by RecordLog/CommitInfoLog
   // 2. lsn of commit_info_log_entry that contains redo_log.
-  ObLogLSNArray recorded_lsn_arr_;
+  libobcdc::ObLogLSNArray recorded_lsn_arr_;
 };
 
 // Redo log structure

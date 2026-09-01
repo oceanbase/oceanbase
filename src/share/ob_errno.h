@@ -2076,8 +2076,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4588,6 +4588,24 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERROR_DURING_COMMIT__USER_ERROR_MSG "Got error during COMMIT: %s"
 #define OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES__USER_ERROR_MSG "Privilege not allowed for sensitive rules"
 #define OB_ERR_INVALID_USERENV_PARAMETER__USER_ERROR_MSG "invalid USERENV parameter"
+#define OB_CDC_STREAM_ALREADY_EXISTS__USER_ERROR_MSG "CDC stream '%.*s' already exists"
+#define OB_CDC_STREAM_NOT_FOUND__USER_ERROR_MSG "CDC stream '%.*s' not found"
+#define OB_CDC_STREAM_STATE_NOT_MATCH__USER_ERROR_MSG "CDC stream '%.*s' state not match"
+#define OB_CDC_STREAM_INVALID_ARGUMENT__USER_ERROR_MSG "Invalid CDC stream argument: %.*s"
+#define OB_CDC_CLIENT_CHANNEL_OCCUPIED__USER_ERROR_MSG "CDC channel conflict on stream %ld channel %d (owned by client %ld)"
+#define OB_CDC_CLIENT_PARAM_MISMATCH__USER_ERROR_MSG "CDC client '%.*s' already registered with different stream/channels"
+#define OB_CDC_CLIENT_CHANNEL_OUT_OF_RANGE__USER_ERROR_MSG "CDC channel %d out of range [0, %d) for stream %ld"
+#define OB_CDC_CLIENT_NOT_ACTIVE__USER_ERROR_MSG "CDC client %ld is not in Active state"
+#define OB_CDC_CHANNEL_INVALID__USER_ERROR_MSG "CDC channel %d not in client %ld channel_list"
+#define OB_CDC_INVALID_ARGUMENT__USER_ERROR_MSG "Invalid CDC ACK argument: %.*s"
+#define OB_CDC_METADB_UNAVAILABLE__USER_ERROR_MSG "CDC MetaDB write failed for stream %ld"
+#define OB_CDC_NO_ACTIVE_ONLINE_SERVER__USER_ERROR_MSG "CDC no active online server available for stream resume"
+#define OB_CDC_TOKEN_VERSION_NOT_MATCH__USER_ERROR_MSG "CDC connection rejected due to token version conflict"
+#define OB_CDC_FLOW_CONTROL__USER_ERROR_MSG "CDC flow control triggered"
+#define OB_CDC_EPOCH_MISMATCH__USER_ERROR_MSG "CDC epoch mismatch"
+#define OB_CDC_SEQ_GAP__USER_ERROR_MSG "CDC non-contiguous sequence gap"
+#define OB_CDC_STREAM_RUNTIME_FAILED__USER_ERROR_MSG "CDC stream runtime FAILED, rebalance dispatch retry budget exhausted"
+#define OB_CDC_NOT_LEADER__USER_ERROR_MSG "CDC server is not leader, current leader: %s:%d"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -4595,8 +4613,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9615,6 +9633,42 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11127, Privilege not allowed for sensitive rules"
 #define OB_ERR_INVALID_USERENV_PARAMETER__ORA_USER_ERROR_MSG "ORA-02003: invalid USERENV parameter"
 #define OB_ERR_INVALID_USERENV_PARAMETER__OBE_USER_ERROR_MSG "OBE-02003: invalid USERENV parameter"
+#define OB_CDC_STREAM_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
+#define OB_CDC_STREAM_ALREADY_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
+#define OB_CDC_STREAM_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12001, CDC stream '%.*s' not found"
+#define OB_CDC_STREAM_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12001, CDC stream '%.*s' not found"
+#define OB_CDC_STREAM_STATE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12002, CDC stream '%.*s' state not match"
+#define OB_CDC_STREAM_STATE_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12002, CDC stream '%.*s' state not match"
+#define OB_CDC_STREAM_INVALID_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12003, Invalid CDC stream argument: %.*s"
+#define OB_CDC_STREAM_INVALID_ARGUMENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12003, Invalid CDC stream argument: %.*s"
+#define OB_CDC_CLIENT_CHANNEL_OCCUPIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12004, CDC channel conflict on stream %ld channel %d (owned by client %ld)"
+#define OB_CDC_CLIENT_CHANNEL_OCCUPIED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12004, CDC channel conflict on stream %ld channel %d (owned by client %ld)"
+#define OB_CDC_CLIENT_PARAM_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12005, CDC client '%.*s' already registered with different stream/channels"
+#define OB_CDC_CLIENT_PARAM_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12005, CDC client '%.*s' already registered with different stream/channels"
+#define OB_CDC_CLIENT_CHANNEL_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12006, CDC channel %d out of range [0, %d) for stream %ld"
+#define OB_CDC_CLIENT_CHANNEL_OUT_OF_RANGE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12006, CDC channel %d out of range [0, %d) for stream %ld"
+#define OB_CDC_CLIENT_NOT_ACTIVE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12007, CDC client %ld is not in Active state"
+#define OB_CDC_CLIENT_NOT_ACTIVE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12007, CDC client %ld is not in Active state"
+#define OB_CDC_CHANNEL_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12008, CDC channel %d not in client %ld channel_list"
+#define OB_CDC_CHANNEL_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12008, CDC channel %d not in client %ld channel_list"
+#define OB_CDC_INVALID_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12009, Invalid CDC ACK argument: %.*s"
+#define OB_CDC_INVALID_ARGUMENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12009, Invalid CDC ACK argument: %.*s"
+#define OB_CDC_METADB_UNAVAILABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12010, CDC MetaDB write failed for stream %ld"
+#define OB_CDC_METADB_UNAVAILABLE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12010, CDC MetaDB write failed for stream %ld"
+#define OB_CDC_NO_ACTIVE_ONLINE_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12011, CDC no active online server available for stream resume"
+#define OB_CDC_NO_ACTIVE_ONLINE_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12011, CDC no active online server available for stream resume"
+#define OB_CDC_TOKEN_VERSION_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12012, CDC connection rejected due to token version conflict"
+#define OB_CDC_TOKEN_VERSION_NOT_MATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12012, CDC connection rejected due to token version conflict"
+#define OB_CDC_FLOW_CONTROL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12013, CDC flow control triggered"
+#define OB_CDC_FLOW_CONTROL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12013, CDC flow control triggered"
+#define OB_CDC_EPOCH_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12014, CDC epoch mismatch"
+#define OB_CDC_EPOCH_MISMATCH__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12014, CDC epoch mismatch"
+#define OB_CDC_SEQ_GAP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12015, CDC non-contiguous sequence gap"
+#define OB_CDC_SEQ_GAP__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12015, CDC non-contiguous sequence gap"
+#define OB_CDC_STREAM_RUNTIME_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12016, CDC stream runtime FAILED, rebalance dispatch retry budget exhausted"
+#define OB_CDC_STREAM_RUNTIME_FAILED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12016, CDC stream runtime FAILED, rebalance dispatch retry budget exhausted"
+#define OB_CDC_NOT_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12017, CDC server is not leader, current leader: %s:%d"
+#define OB_CDC_NOT_LEADER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12017, CDC server is not leader, current leader: %s:%d"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR__OBE_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -9629,12 +9683,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2515];
+extern int g_all_ob_errnos[2533];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
