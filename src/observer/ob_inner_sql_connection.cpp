@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_inner_sql_connection.h"
+#include "sql/ob_spi.h"
 #include "share/ob_time_utility2.h"
 #include "observer/ob_server.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -642,12 +643,16 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
   ObExecStatUtils::record_exec_timestamp(time_record, first_record, exec_timestamp);
   audit_record.exec_timestamp_ = exec_timestamp;
   audit_record.exec_timestamp_.update_stage_time();
+  audit_record.cursor_executor_t_ = 0;
+  audit_record.cursor_elapsed_ = 0;
 
   if (OB_NOT_NULL(cursor) && cursor->is_streaming()) {
     int64_t current_exec_time = audit_record.exec_timestamp_.executor_t_;
     cursor->add_cursor_exec_time(current_exec_time);
     int64_t current_elapsed_time = audit_record.get_elapsed_time();
     cursor->add_cursor_elapsed_time(current_elapsed_time);
+    audit_record.cursor_executor_t_ = cursor->get_cursor_total_exec_time();
+    audit_record.cursor_elapsed_ = cursor->get_cursor_total_elapsed_time();
   }
 
   audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
@@ -765,22 +770,39 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
     }
 
     //update v$sql statistics
-    if (((OB_SUCC(last_ret) && OB_ISNULL(cursor))|| (OB_NOT_NULL(cursor) && OB_READ_NOTHING == last_ret)) && session.get_local_ob_enable_plan_cache()) {
-      int64_t old_total_time = audit_record.exec_timestamp_.executor_t_;
-      audit_record.exec_timestamp_.executor_t_ = OB_NOT_NULL(cursor) ? cursor->get_cursor_total_exec_time() : audit_record.exec_timestamp_.executor_t_;
-      audit_record.cursor_elapsed_ = OB_NOT_NULL(cursor) ? cursor->get_cursor_total_elapsed_time() : 0;
-      if (NULL != plan) {
+    if (OB_NOT_NULL(plan) && session.get_local_ob_enable_plan_cache()) {
+      bool need_update_plan_stat = false;
+      if (OB_NOT_NULL(cursor) && cursor->is_streaming()) {
+        // cursor_elapsed_ holds accumulated total; zero it so get_elapsed_time() returns
+        // per-fetch elapsed_t_ for update_evolution_stat_time (which uses ATOMIC_AAF).
+        int64_t saved_cursor_elapsed = audit_record.cursor_elapsed_;
+        audit_record.cursor_elapsed_ = 0;
+        plan->update_evolution_stat_time(audit_record.exec_timestamp_.executor_t_,
+                                         audit_record.get_elapsed_time(),
+                                         audit_record.exec_timestamp_.executor_end_ts_);
+        audit_record.cursor_elapsed_ = saved_cursor_elapsed;
+      }
+      if (OB_ISNULL(cursor) || !cursor->is_streaming()) {
+        need_update_plan_stat = true;
+      } else if (OB_SUCCESS != last_ret) {
+        need_update_plan_stat = true;
+      }
+
+      if (need_update_plan_stat) {
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 false, // false mean not first update plan stat
                                 table_row_count_list);
-        } else if (sql_ctx.self_add_plan_ && !sql_ctx.plan_cache_hit_) {
+        } else if (sql_ctx.self_add_plan_) {
           plan->update_plan_stat(audit_record,
                                 true,
                                 table_row_count_list);
         }
+        if (OB_NOT_NULL(cursor) && cursor->is_streaming()
+            && OB_NOT_NULL(cursor->get_cursor_handler())) {
+          cursor->get_cursor_handler()->set_streaming_stat_pending(false);
+        }
       }
-      audit_record.exec_timestamp_.executor_t_ = old_total_time;
     }
   }
   return ret;

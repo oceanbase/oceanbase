@@ -375,6 +375,7 @@ struct ObAuditRecordData {
     ccl_match_time_ = 0;
     cursor_elapsed_ = 0;
     request_id_ = 0;
+    cursor_executor_t_ = 0;
   }
 
   int64_t get_elapsed_time() const
@@ -390,6 +391,16 @@ struct ObAuditRecordData {
       }
     }
     return elapsed_time;
+  }
+
+  int64_t get_executor_time() const
+  {
+    return cursor_executor_t_ > 0 ? cursor_executor_t_ : exec_timestamp_.executor_t_;
+  }
+
+  inline bool is_streaming_cursor_record() const
+  {
+    return cursor_executor_t_ > 0 || cursor_elapsed_ > 0;
   }
 
   int64_t get_process_time() const
@@ -509,6 +520,7 @@ struct ObAuditRecordData {
   int64_t ccl_rule_id_;
   int64_t ccl_match_time_;
   int64_t cursor_elapsed_;
+  int64_t cursor_executor_t_;
 };
 
 inline void print_sql_trace_info(const ObAuditRecordData &audit_record)

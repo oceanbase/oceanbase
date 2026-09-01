@@ -363,6 +363,7 @@ int ObMPBase::init_process_var(sql::ObSqlCtx &ctx,
     }
 #ifdef OB_BUILD_SPM
     ctx.spm_ctx_.baseline_plan_hash_array_.set_allocator(&CURRENT_CONTEXT->get_arena_allocator());
+    ctx.spm_ctx_.receive_ts_ = get_receive_timestamp();
 #endif
     // construct sql context
     ctx.multi_stmt_item_ = multi_stmt_item;

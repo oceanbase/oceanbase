@@ -225,6 +225,18 @@ int ObSPIResultSet::close_result_set()
   int ret = OB_SUCCESS;
   if (is_inited_result_set_) {
     WITH_CONTEXT(mem_context_) {
+      ObPhysicalPlan *plan = result_set_->get_physical_plan();
+      if (OB_NOT_NULL(plan) && streaming_stat_pending_) {
+        ObAuditRecordData &audit_record = result_set_->get_session().get_raw_audit_record();
+        int64_t saved_cursor_executor_t = audit_record.cursor_executor_t_;
+        // A nonzero dummy value makes is_streaming_cursor_record() retain the actual cursor elapsed time.
+        audit_record.cursor_executor_t_ = 1;
+        // TODO: update_plan_stat is also required here to maintain plan cache plan stat
+        // for streaming cursor scenarios. Current maintenance is incomplete, only SPM is supported here.
+        plan->update_evolution_stat(audit_record);
+        audit_record.cursor_executor_t_ = saved_cursor_executor_t;
+      }
+
       if (result_set_->get_errcode() != OB_SUCCESS) {
         IGNORE_RETURN result_set_->close(); // result set already failed before close, ignore error code.
       } else {
@@ -2045,6 +2057,10 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         bool is_retry = false;
         ObPLSqlAuditRecord audit_record(sql::PLSql);
         ObQueryRetryCtrl retry_ctrl;
+        ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, *session, ret);
+#ifdef OB_BUILD_SPM
+        spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+#endif
         ObSPIExecEnvGuard env_guard(*session);
         ctx->set_saved_sql_code_info();
         if (lib::is_oracle_mode()) {
@@ -2060,7 +2076,6 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           bool can_retry = true;
           int64_t row_count = 0;
           {
-            ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, *session, ret);
             ObPLSubPLSqlTimeGuard guard(ctx);
             ObPLSqlAuditGuard audit_guard(
               *(ctx->exec_ctx_), *(session), *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
@@ -2085,6 +2100,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                            *spi_result,
                            spi_result->get_out_params(),
                            &array_params));
+            audit_guard.set_exec_start_timestamp();
             OZ (inner_fetch(ctx,
                             can_retry,
                             *spi_result,
@@ -4209,12 +4225,15 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   if (OB_SUCC(ret)) {
 
     {
+#ifdef OB_BUILD_SPM
+      spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+#endif
       ObSPIExecEnvGuard env_guard(session_info, cursor.is_ps_cursor());
+      ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
       bool is_retry = false;
     do {
       {
         ObPLSubPLSqlTimeGuard guard(ctx);
-        ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
         ObPLSqlAuditGuard audit_guard(
           *(ctx->exec_ctx_), session_info, *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type),
           cursor.is_ps_cursor(), &cursor);
@@ -4252,6 +4271,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
                          *spi_result,
                          spi_result->get_out_params()));
         }
+        audit_guard.set_exec_start_timestamp();
         CK (OB_NOT_NULL(spi_result->get_result_set()->get_field_columns()));
         if (OB_SUCC(ret) && is_dbms_cursor) {
           ObDbmsCursorInfo &dbms_cursor = static_cast<ObDbmsCursorInfo&>(cursor);
@@ -4357,6 +4377,10 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
 
       ObPLSqlAuditRecord audit_record(sql::PLSql);
       ObQueryRetryCtrl retry_ctrl;
+      ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
+#ifdef OB_BUILD_SPM
+      spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+#endif
       ObSPIExecEnvGuard env_guard(session_info, cursor.is_ps_cursor());
       bool is_retry = false;
 
@@ -4365,7 +4389,6 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
         uint64_t size = 0;
         {
           ObPLSubPLSqlTimeGuard guard(ctx);
-          ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
           ObPLSqlAuditGuard audit_guard(
             *(ctx->exec_ctx_), session_info, *spi_result, audit_record, ret, (sql != NULL ? sql : ps_sql), retry_ctrl, trace_id_guard, static_cast<stmt::StmtType>(type));
 
@@ -4387,6 +4410,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
                          0,
                          *spi_result,
                          spi_result->get_out_params()));
+          audit_guard.set_exec_start_timestamp();
           OZ (session_info.get_tmp_table_size(size));
           OZ (cursor.prepare_spi_cursor(spi_cursor,
                                         session_info.get_effective_tenant_id(),
@@ -4807,6 +4831,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
       ObPLSubPLSqlTimeGuard guard(ctx);                                               \
       ObPLSqlAuditGuard audit_guard(                                                  \
         *(ctx->exec_ctx_), *session, *spi_result, audit_record, ret, ps_sql, retry_ctrl, trace_id_guard, spi_result->get_sql_ctx().stmt_type_, false, cursor); \
+      audit_guard.set_exec_start_timestamp();                                         \
       if (cursor->get_sql_trace_id()->is_invalid()                                    \
             && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {                           \
         cursor->get_sql_trace_id()->set(*ObCurTraceId::get_trace_id());               \
@@ -10670,6 +10695,7 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
         }
       }
     }
+    audit_guard.set_exec_start_timestamp();
     if (OB_SUCC(ret) && !ps_cursor.is_async()) {
       if (OB_FAIL(fill_ps_cursor(*session, ps_cursor))) {
         LOG_WARN("fill ps cursor failed", K(ret));
