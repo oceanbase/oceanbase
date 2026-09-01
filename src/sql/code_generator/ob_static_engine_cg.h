@@ -235,7 +235,8 @@ public:
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
 
   static int check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
-                                    const bool plan_use_rich_format, bool &disable_vectorize);
+                                    const bool plan_use_rich_format, bool &disable_vectorize,
+                                    bool &force_disable_batch_row_wrapper);
   static int exist_registered_vec_op(ObLogicalOperator &op, const bool is_root_job, bool &exist);
 
 private:

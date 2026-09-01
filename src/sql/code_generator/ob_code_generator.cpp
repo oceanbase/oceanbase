@@ -140,6 +140,9 @@ int ObCodeGenerator::detect_batch_size(
                                                      log_plan.get_plan_root(),
                                                      true));
     }
+    if (OB_SUCC(ret) && force_disable_batch_row_wrapper) {
+      vectorize = false;
+    }
     const bool use_batch_row_wrapper =
         log_plan.get_optimizer_context().get_enable_vec_batch_accum()
         && !force_disable_batch_row_wrapper;

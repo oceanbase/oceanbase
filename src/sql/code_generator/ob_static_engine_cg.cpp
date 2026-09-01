@@ -314,6 +314,7 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
   ObPhyOperatorType type = PHY_INVALID;
   ObSqlSchemaGuard *schema_guard = nullptr;
   bool op_disable_vectorize = false;
+  bool op_force_disable_batch_row_wrapper = false;  // only a placeholder, unused here
   bool plan_use_rich_format =
     (phy_plan_ == NULL ? false : phy_plan_->is_vectorized() && phy_plan_->get_use_rich_format());
   EnableOpRichFormat tmp_enable_rich_format(0, false);
@@ -322,7 +323,8 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
              || OB_ISNULL(schema_guard = op.get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguments", K(ret), K(op.get_plan()), K(schema_guard));
-  } else if (OB_FAIL(check_op_vectorization(&op, schema_guard, plan_use_rich_format, op_disable_vectorize))) {
+  } else if (OB_FAIL(check_op_vectorization(&op, schema_guard, plan_use_rich_format, op_disable_vectorize,
+                                            op_force_disable_batch_row_wrapper))) {
     LOG_WARN("check op vectorization failed", K(ret));
   } else if (op_disable_vectorize && OB_FAIL(get_phy_op_type(op, type, in_root_job, tmp_enable_rich_format))) {
     LOG_WARN("failed to get phy op type", K(ret));
@@ -696,7 +698,12 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         support = true;
       }
 
-      ret = check_op_vectorization(op, schema_guard, session->use_rich_format(), disable_vectorize);
+      bool op_force_disable_batch_row_wrapper = false;
+      ret = check_op_vectorization(op, schema_guard, session->use_rich_format(), disable_vectorize,
+                                   op_force_disable_batch_row_wrapper);
+      if (OB_SUCC(ret) && op_force_disable_batch_row_wrapper) {
+        force_disable_batch_row_wrapper = true;
+      }
       if (OB_FAIL(ret)) {
       } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
         double range_row_count = static_cast<ObLogTableScan *>(op)->get_phy_query_range_row_count();
@@ -704,21 +711,27 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         scan_cardinality = common::max(scan_cardinality, range_row_count);
       }
       if (OB_SUCC(ret) && !disable_vectorize) {
-        const ObDMLStmt *stmt = NULL;
-        if (OB_ISNULL(stmt = op->get_stmt())) {
+        const ObDMLStmt *stmt = op->get_stmt();
+        if (OB_ISNULL(stmt)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("dml stmt is null", K(ret));
+          LOG_WARN("get unexpected null stmt", K(ret));
         } else {
-          const ObIArray<ObUserVarIdentRawExpr *> &user_vars = stmt->get_user_vars();
-          for (int64_t i = 0; i < user_vars.count() && OB_SUCC(ret); i++) {
-            const ObUserVarIdentRawExpr *user_var_expr = NULL;
-            if (OB_ISNULL(user_var_expr = user_vars.at(i))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("user var expr is null", K(ret));
-            } else if (user_var_expr->get_is_contain_assign()) {
-              disable_vectorize = true;
-              force_disable_batch_row_wrapper = true;  // user var assignment requires strict row-by-row execution
-              break;
+          const ObQueryCtx *query_ctx = stmt->get_query_ctx();
+          if (OB_ISNULL(query_ctx)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("query ctx is null", K(ret));
+          } else {
+            const ObIArray<ObUserVarIdentRawExpr *> &all_vars = query_ctx->all_user_variable_;
+            for (int64_t i = 0; OB_SUCC(ret) && i < all_vars.count(); ++i) {
+              const ObUserVarIdentRawExpr *user_var_expr = all_vars.at(i);
+              if (OB_ISNULL(user_var_expr)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("user var expr is null", K(ret));
+              } else if (user_var_expr->get_is_contain_assign()) {
+                disable_vectorize = true;
+                force_disable_batch_row_wrapper = true;
+                break;
+              }
             }
           }
         }
@@ -11277,10 +11290,12 @@ int ObStaticEngineCG::check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_id
 }
 
 int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
-                                             const bool plan_use_rich_format, bool &disable_vectorize)
+                                             const bool plan_use_rich_format, bool &disable_vectorize,
+                                             bool &force_disable_batch_row_wrapper)
 {
   int ret = OB_SUCCESS;
   disable_vectorize = false;
+  force_disable_batch_row_wrapper = false;
   if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
     // FIXME: bin.lb: disable vectorization for virtual table and virtual column.
     ObLogTableScan *tsc = static_cast<ObLogTableScan *>(op);
@@ -11362,6 +11377,7 @@ int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaG
     if (OB_SUCC(ret) && NULL != rownum_op) {
       LOG_DEBUG("rownum expr is in count operator's subplan tree. Stop vectorization exec");
       disable_vectorize = true;
+      force_disable_batch_row_wrapper = true;
     }
   } else if (log_op_def::LOG_JOIN == op->get_type()) {
     ObPhyOperatorType phy_type = PHY_INVALID;
