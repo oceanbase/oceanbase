@@ -172,8 +172,8 @@ int ObTransformJoinElimination::do_join_elimination_self_key(ObDMLStmt *stmt,
     LOG_WARN("failed to adjust table items", K(ret));
   } else if (OB_FAIL(trans_table_item(stmt, source_table, target_table))) {
     LOG_WARN("failed to transform target into source", K(ret));
-  } else if (OB_FAIL(append(ctx_->equal_param_constraints_, stmt_map_info.equal_param_map_))) {
-    LOG_WARN("failed to append equal params constraints", K(ret));
+  } else if (OB_FAIL(stmt_map_info.append_constraints_to_trans_ctx(*ctx_))) {
+    LOG_WARN("failed to append constraints to trans ctx", K(ret));
   } else {
     trans_happened = true;
     LOG_TRACE("do join elimination for", K(*source_table), K(*target_table));
@@ -1715,9 +1715,9 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
         LOG_WARN("adjust table items failed", K(ret));
       } else if (OB_FAIL(trans_semi_table_item(stmt, right_table))) {
         LOG_WARN("transform semi right table item failed", K(ret));
-      } else if (OB_FAIL(append(ctx_->equal_param_constraints_, stmt_map_info.equal_param_map_))) {
-        LOG_WARN("failed to append equal params constraints", K(ret));
-      } else { 
+      } else if (OB_FAIL(stmt_map_info.append_constraints_to_trans_ctx(*ctx_))) {
+        LOG_WARN("failed to append constraints to trans ctx", K(ret));
+      } else {
         has_removed_semi_info = true;
         trans_happened = true;
       }
@@ -1742,9 +1742,8 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
       OPT_TRACE("eliminate right tables", right_tables, "with left tables", left_tables);
       trans_happened = true;
       for (int64_t i = 0; OB_SUCC(ret) && i < stmt_map_infos.count(); ++i) {
-        if (OB_FAIL(append(ctx_->equal_param_constraints_,
-                           stmt_map_infos.at(i).equal_param_map_))) {
-          LOG_WARN("failed to append equal params constraints", K(ret));
+        if (OB_FAIL(stmt_map_infos.at(i).append_constraints_to_trans_ctx(*ctx_))) {
+          LOG_WARN("failed to append constraints to trans ctx", K(ret));
         }
       }
     }

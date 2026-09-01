@@ -246,9 +246,8 @@ int ObTransformWinMagic::do_transform(common::ObIArray<ObParentDMLStmt> &parent_
     LOG_TRACE("win magic transform not accpeted", K(ret));
   } else if (OB_FAIL(add_transform_hint(*stmt, &trans_basic_tables))) {
     LOG_WARN("failed to add transform hint", K(ret));
-  } else if (OB_FAIL(append(stmt->get_query_ctx()->all_equal_param_constraints_,
-                            map_info.equal_param_map_))) {
-    LOG_WARN("failed to append equal params constraints", K(ret));
+  } else if (OB_FAIL(map_info.append_constraints_to_query_ctx(*stmt->get_query_ctx()))) {
+    LOG_WARN("failed to append constraints to query ctx", K(ret));
   } else {
     add_trans_type(ctx_->happened_cost_based_trans_, WIN_MAGIC);
     trans_happened = true;
@@ -1637,10 +1636,10 @@ int ObTransformWinMagic::adjust_view_for_trans(ObDMLStmt *main_stmt,
           if (OB_FAIL(agg_in_roll.push_back(roll_up_stmt->get_aggr_item(i))) ||
               OB_FAIL(agg_in_drill.push_back(drill_down_stmt->get_aggr_item(j)))) {
             LOG_WARN("push back expr into array failed", K(ret));
-          } else if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-            LOG_WARN("failed to append equal param map", K(ret));
+          } else if (OB_FAIL(context.append_constraints_to_map_info(map_info))) {
+            LOG_WARN("failed to append constraints to map info", K(ret));
           } else {
-            context.equal_param_info_.reset();
+            context.reuse();
           }
         } 
       }
@@ -1825,10 +1824,10 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
     for (int64_t j = 0; OB_SUCC(ret) && sel_idx == -1 && j < drill_down_stmt->get_select_item_size(); j++) {
       if (drill_down_stmt->get_select_item(j).expr_->same_as(*agg_expr, &context)) {
         sel_idx = j;
-        if (OB_FAIL(append(map_info.equal_param_map_, context.equal_param_info_))) {
-          LOG_WARN("failed to append equal param map", K(ret));
+        if (OB_FAIL(context.append_constraints_to_map_info(map_info))) {
+          LOG_WARN("failed to append constraints to map info", K(ret));
         } else {
-          context.equal_param_info_.reset();
+          context.reuse();
         }
       }
     }

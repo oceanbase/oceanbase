@@ -1228,7 +1228,7 @@ int ObTransformSimplifyExpr::inner_remove_dummy_case_when(ObQueryCtx* query_ctx,
     ObRawExpr *then = case_expr->get_then_param_expr(i);
     ObCaseOpRawExpr *child_case_expr = NULL;
     ObRawExpr *child_when = NULL;
-    context.equal_param_info_.reset();
+    context.reuse();
     if (OB_ISNULL(when) || OB_ISNULL(then)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null case when expr", K(when), K(then), K(ret));
@@ -1249,8 +1249,8 @@ int ObTransformSimplifyExpr::inner_remove_dummy_case_when(ObQueryCtx* query_ctx,
                                                                         case_expr->get_then_param_expr(i),
                                                                         ctx_->session_info_))) {
         LOG_WARN("failed to add cast for replace if need", K(ret));
-      } else if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
-        LOG_WARN("append equal param info failed", K(ret));
+      } else if (OB_FAIL(context.append_constraints_to_trans_ctx(*ctx_))) {
+        LOG_WARN("failed to append constraints to trans ctx", K(ret));
       } else {
         trans_happened = true;
       }
@@ -3252,6 +3252,7 @@ int ObTransformSimplifyExpr::get_intersection(ObDMLStmt *stmt,
     ObSEArray<ObRawExpr *, 4> temp_result;
     for (int64_t j = 0; OB_SUCC(ret) && j < params.count(); j++) {
       bool find = false;
+      context.reuse();
       if (OB_FAIL(ObTransformUtils::find_expr(params_sets.at(i), params.at(j), find, &context))) {
         LOG_WARN("failed to find expr", K(ret));
       } else if (!find) {
@@ -3264,9 +3265,6 @@ int ObTransformSimplifyExpr::get_intersection(ObDMLStmt *stmt,
       is_valid = false;
     } else if (OB_FAIL(params.assign(temp_result))) {
       LOG_WARN("fail to assign array", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      context.equal_param_info_.reset();
     }
   }
   if (OB_SUCC(ret) && is_valid && OB_FAIL(intersection.assign(params))) {
@@ -3291,19 +3289,15 @@ int ObTransformSimplifyExpr::remove_intersect_item(ObDMLStmt *stmt,
     ObSEArray<ObRawExpr *, 4> temp_result;
     for (int64_t j = 0; OB_SUCC(ret) && j < params_sets.at(i).count(); j++) {
       bool find = false;
+      context.reuse();
       if (OB_FAIL(ObTransformUtils::find_expr(intersection, params_sets.at(i).at(j), find, &context))) {
         LOG_WARN("failed to find expr", K(ret));
       } else if (find) {
-        if (!context.equal_param_info_.empty()) {
-          if (OB_FAIL(append(ctx_->equal_param_constraints_, context.equal_param_info_))) {
-            LOG_WARN("append equal param info failed", K(ret));
-          }
-          context.equal_param_info_.reset();
+        if (OB_FAIL(context.append_constraints_to_trans_ctx(*ctx_))) {
+          LOG_WARN("failed to append constraints to trans ctx", K(ret));
         }
       } else if (OB_FAIL(temp_result.push_back(params_sets.at(i).at(j)))) {
         LOG_WARN("failed to push back expr", K(ret));
-      } else if (!context.equal_param_info_.empty()) {
-        context.equal_param_info_.reset();
       }
     }
     if (OB_FAIL(ret)) {

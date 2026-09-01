@@ -461,6 +461,8 @@ private:
   ObSEArray<ObRawExpr *, 4> null_constraints_;
   ObSEArray<ObRawExpr *, 4> not_null_constraints_;
   ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
+  ObSEArray<ObPCConstParamInfo, 4> const_param_constraints_;
+  ObSEArray<ObExprConstraint, 4> expr_constraints_;
   /*
    * the following two arrays are used to record the predicates pullup status of each stmt
    * to skip re-pullup predicates for one stmt in pullup_predicates_for_view/set_stmt().

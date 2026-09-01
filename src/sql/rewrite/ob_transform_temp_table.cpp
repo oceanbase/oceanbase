@@ -1305,8 +1305,8 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
     } else if (OB_FAIL(try_trans_helper.finish(trans_happened, root_stmt.get_query_ctx(), ctx_))) {
       LOG_WARN("failed to finish try_trans_helper", K(ret));
     } else if (!trans_happened) {
-    } else if (OB_FAIL(append(ctx_->equal_param_constraints_, common_map_info.equal_param_map_))) {
-      LOG_WARN("failed to append equal param constraints", K(ret));
+    } else if (OB_FAIL(common_map_info.append_constraints_to_trans_ctx(*ctx_))) {
+      LOG_WARN("failed to append constraints to trans ctx", K(ret));
     } else if (OB_FAIL(add_materialize_stmts(accept_stmts))) {
       LOG_WARN("failed to add stmts", K(ret));
     } else if (OB_FAIL(temp_table_query->get_qb_name(temp_query_name))) {
@@ -1315,9 +1315,8 @@ int ObTransformTempTable::create_temp_table(ObDMLStmt &root_stmt,
       LOG_WARN("failed to push back", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < compare_info.stmt_map_infos_.count(); i ++) {
-        if (OB_FAIL(append(ctx_->equal_param_constraints_,
-                           compare_info.stmt_map_infos_.at(i).equal_param_map_))) {
-          LOG_WARN("failed to append equal param constraints", K(ret));
+        if (OB_FAIL(compare_info.stmt_map_infos_.at(i).append_constraints_to_trans_ctx(*ctx_))) {
+          LOG_WARN("failed to append constraints to trans ctx", K(ret));
         }
       }
       LOG_TRACE("succeed to create temp table", KPC(temp_table_query));
@@ -1341,8 +1340,8 @@ int ObTransformTempTable::compute_common_map_info(ObIArray<ObStmtMapInfo>& map_i
       if (OB_FAIL(common_map_info.assign(map_info))) {
         LOG_WARN("failed to assign map info", K(ret));
       }
-    } else if (OB_FAIL(append(common_map_info.equal_param_map_, map_info.equal_param_map_))) {
-      LOG_WARN("failed to append equal param", K(ret));
+    } else if (OB_FAIL(common_map_info.merge_constraints(map_info))) {
+      LOG_WARN("failed to merge constraints", K(ret));
     } else {
       //compute common condi map
       if (OB_FAIL(compute_common_map(map_info.cond_map_, common_map_info.cond_map_))) {

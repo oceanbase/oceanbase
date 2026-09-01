@@ -11048,8 +11048,7 @@ int ObTransformUtils::replace_with_groupby_exprs(ObSelectStmt *select_stmt,
         for (int64_t j = 0; OB_SUCC(ret) && !is_existed && j < grouping_sets_exprs.count(); j++) {
           ObIArray<ObRawExpr*> &groupby_exprs = grouping_sets_exprs.at(j).groupby_exprs_;
           for (int64_t k = 0; OB_SUCC(ret) && !is_existed && k < groupby_exprs.count(); k++) {
-            check_context.param_expr_.reset();
-            check_context.equal_param_info_.reset();
+            check_context.reuse();
             check_context.ora_numeric_cmp_for_grouping_items_ = true;
             if (OB_ISNULL(groupby_exprs.at(k))) {
               ret = OB_ERR_UNEXPECTED;
