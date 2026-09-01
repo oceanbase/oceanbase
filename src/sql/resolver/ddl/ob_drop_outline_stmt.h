@@ -31,6 +31,8 @@ public:
   void set_outline_name(const common::ObString &outline_name) { drop_outline_arg_.outline_name_ = outline_name; }
   void set_tenant_id(uint64_t tenant_id) { drop_outline_arg_.tenant_id_ = tenant_id; }
   void set_is_format(bool is_format) { drop_outline_arg_.is_format_ = is_format; }
+  void set_scope(int64_t scope) { drop_outline_arg_.scope_ = scope; }
+  int64_t get_scope() const { return drop_outline_arg_.scope_; }
   obrpc::ObDropOutlineArg &get_drop_outline_arg() { return drop_outline_arg_; }
   const obrpc::ObDropOutlineArg &get_drop_outline_arg() const { return drop_outline_arg_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_outline_arg_; }

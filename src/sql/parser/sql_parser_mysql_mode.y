@@ -136,6 +136,7 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 %left CNNOP
 %left NEG '~'
 %nonassoc LOWER_PARENS
+%nonassoc BINDING_RULE /*for solve conflict: BINDING_RULE is both unreserved identifier and outline clause keyword after explainable_stmt*/
 %left '(' ')'
 %nonassoc SQL_CACHE SQL_NO_CACHE HIGH_PRIORITY SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT CHARSET DATABASE_ID REPLICA_NUM/*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
 %nonassoc LOW_PRIORITY QUICK
@@ -276,7 +277,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
         ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
-        BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
+        BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING BINDING_RULE SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
         BADFILE BOUNDARY_COLUMN BOUNDARY_COLUMN_UNIT BUFFER_SIZE BIGINT_PRECISION BYTEORDERMARK
@@ -413,7 +414,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> subpartition_template_option subpartition_individual_option opt_hash_partition_list hash_partition_list hash_partition_element opt_hash_subpartition_list hash_subpartition_list hash_subpartition_element opt_subpartition_list opt_engine_option
 %type <node> date_unit date_params timestamp_params
 %type <node> drop_table_stmt table_list drop_view_stmt table_or_tables
-%type <node> explain_stmt explainable_stmt format_name kill_stmt help_stmt create_outline_stmt alter_outline_stmt drop_outline_stmt opt_outline_target
+%type <node> explain_stmt explainable_stmt format_name kill_stmt help_stmt create_outline_stmt alter_outline_stmt drop_outline_stmt drop_outline_scope_opt opt_outline_target binding_rule_opt scope_binding map_binding scope_value map_item_list map_item
 %type <node> expr_list expr expr_const conf_const simple_expr simple_expr_list expr_or_default bit_expr bool_pri predicate explain_or_desc pl_expr_stmt
 %type <node> column_ref multi_delete_table
 %type <node> case_expr func_expr in_expr sub_query_flag search_expr
@@ -16402,7 +16403,7 @@ ROWS
  *
  *****************************************************************************/
 create_outline_stmt:
-create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON explainable_stmt opt_outline_target
+create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON explainable_stmt opt_outline_target binding_rule_opt
 {
   ParseNode *name_node = NULL;
   ParseNode *flag_node = new_terminal_node(result->malloc_pool_, T_DEFAULT);
@@ -16411,7 +16412,7 @@ create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON explainab
   (void)($1);
   malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $5);
   dup_node_string($5, name_node, result->malloc_pool_);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 6, $2, name_node, flag_node, $7, $8, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 7, $2, name_node, flag_node, $7, $8, $3, $9);
   dup_expr_string($7, result, @7.first_column, @7.last_column);
 }
 |
@@ -16426,7 +16427,7 @@ create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON STRING_VA
   if ($10 != NULL) {
     dup_expr_string($10, result, @10.first_column, @10.last_column);
   }
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 6, $2, name_node, flag_node, $10, $7, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 7, $2, name_node, flag_node, $10, $7, $3, NULL);
 }
 ;
 
@@ -16453,9 +16454,20 @@ ALTER outline_type OUTLINE relation_name ADD explainable_stmt opt_outline_target
  *
  *****************************************************************************/
 drop_outline_stmt:
-DROP outline_type OUTLINE relation_factor
+DROP outline_type OUTLINE relation_factor drop_outline_scope_opt
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_OUTLINE, 2, $4, $2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_OUTLINE, 3, $4, $2, $5);
+}
+;
+
+drop_outline_scope_opt:
+/* empty */
+{
+  $$ = NULL;
+}
+| BINDING_RULE '(' scope_binding ')'
+{
+  $$ = $3;
 }
 ;
 
@@ -16482,6 +16494,87 @@ TO explainable_stmt
 {
 $$ = NULL;
 };
+
+/*****************************************************************************
+ *
+ *      BINDING_RULE grammar for SaaS outline
+ *
+ *****************************************************************************/
+binding_rule_opt:
+/* empty */
+{
+  $$ = NULL;
+}
+| BINDING_RULE '(' scope_binding ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, $3, NULL);
+}
+| BINDING_RULE '(' map_binding ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, NULL, $3);
+}
+| BINDING_RULE '(' scope_binding ',' map_binding ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, $3, $5);
+}
+| BINDING_RULE '(' map_binding ',' scope_binding ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, $3, $5);
+}
+;
+
+scope_binding:
+SCOPE opt_equal_mark scope_value
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_SCOPE, 1, $3);
+}
+;
+
+map_binding:
+MAP opt_equal_mark '{' map_item_list '}'
+{
+  (void)($2);
+  merge_nodes($$, result, T_BINDING_RULE_MAP, $4);
+}
+;
+
+scope_value:
+DATABASE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0; // OUTLINE_SCOPE_DATABASE (see ObOutlineScope in ob_rpc_struct.h)
+  $$->is_hidden_const_ = 1;
+}
+| TENANT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1; // OUTLINE_SCOPE_TENANT (see ObOutlineScope in ob_rpc_struct.h)
+  $$->is_hidden_const_ = 1;
+}
+;
+
+map_item_list:
+map_item
+{
+  $$ = $1;
+}
+| map_item_list ',' map_item
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+map_item:
+relation_factor TO STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_MAP_ITEM, 3, $1, $3, NULL);
+}
+| relation_factor TO STRING_VALUE '.' STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_MAP_ITEM, 3, $1, $3, $5);
+}
+;
 
 /*****************************************************************************
  *
@@ -27190,6 +27283,7 @@ ACCESS_INFO
 |       BINARY_FORMAT
 |       BIGINT_PRECISION
 |       BINDING
+|       BINDING_RULE
 |       BINLOG
 |       BIT
 |       BIT_AND

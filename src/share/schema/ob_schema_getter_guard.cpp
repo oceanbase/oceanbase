@@ -4576,7 +4576,8 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
     const uint64_t database_id,
     const common::ObString &paramlized_sql,
     const bool is_format,
-    bool &exist)
+    bool &exist,
+    const common::ObString &pattern_rules)
 {
   int ret= OB_SUCCESS;
   const ObSchemaMgr *mgr = NULL;
@@ -4597,7 +4598,7 @@ int ObSchemaGetterGuard::check_outline_exist_with_sql(
   } else {
     const ObSimpleOutlineSchema *schema = NULL;
     if (OB_FAIL(mgr->outline_mgr_.get_outline_schema_with_signature(tenant_id, database_id,
-        paramlized_sql, is_format, schema))) {
+        paramlized_sql, is_format, schema, pattern_rules))) {
       LOG_WARN("get outline schema failed", KR(ret),
                K(tenant_id), K(database_id), K(paramlized_sql));
     } else if (NULL != schema) {
@@ -5735,6 +5736,83 @@ int ObSchemaGetterGuard::get_outline_info_with_sql_id(
   }
   return ret;
 }
+
+// Template outline matching for BINDING_RULE
+int ObSchemaGetterGuard::get_outline_infos_with_signature(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const common::ObString &signature,
+    const bool is_format,
+    common::ObIArray<const ObOutlineInfo *> &outline_infos)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  outline_infos.reset();
+
+  common::ObArray<const ObSimpleOutlineSchema *> simple_outlines;
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id || signature.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), K(database_id), K(signature), KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->outline_mgr_.get_outline_infos_with_signature(tenant_id,
+      database_id, signature, is_format, simple_outlines))) {
+    LOG_WARN("get outline infos failed", KR(ret), K(tenant_id), K(database_id), K(signature));
+  } else {
+    for (int64_t i = 0; i < simple_outlines.count() && OB_SUCC(ret); ++i) {
+      const ObSimpleOutlineSchema *simple_outline = simple_outlines.at(i);
+      const ObOutlineInfo *outline_info = NULL;
+      if (OB_ISNULL(simple_outline)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL simple outline", K(ret), K(i));
+      } else if (OB_FAIL(get_schema(OUTLINE_SCHEMA,
+                                    simple_outline->get_tenant_id(),
+                                    simple_outline->get_outline_id(),
+                                    outline_info,
+                                    simple_outline->get_schema_version()))) {
+        LOG_WARN("get outline schema failed", KR(ret), K(tenant_id), KPC(simple_outline));
+      } else if (OB_ISNULL(outline_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL outline info", KR(ret));
+      } else if (OB_FAIL(outline_infos.push_back(outline_info))) {
+        LOG_WARN("push back outline info failed", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSchemaGetterGuard::has_template_outline(
+    const uint64_t tenant_id,
+    bool &has_template)
+{
+  int ret = OB_SUCCESS;
+  const ObSchemaMgr *mgr = NULL;
+  has_template = false;
+
+  if (!check_inner_stat()) {
+    ret = OB_INNER_STAT_ERROR;
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(tenant_id), KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
+    LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mgr->outline_mgr_.has_template_outline(tenant_id, has_template))) {
+    LOG_WARN("has_template_outline failed", KR(ret), K(tenant_id));
+  }
+
+  return ret;
+}
+
 
 int ObSchemaGetterGuard::get_package_info(
     const uint64_t tenant_id,

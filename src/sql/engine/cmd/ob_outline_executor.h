@@ -14,8 +14,10 @@
 #define OCEANBASE_SQL_OB_CREATE_OUTLINE_EXECUTOR_H_
 
 #include "lib/container/ob_vector.h"
+#include "lib/string/ob_sql_string.h"
 #include "sql/parser/parse_node.h"
 #include "sql/resolver/ob_stmt_type.h"
+#include "sql/resolver/ddl/ob_outline_binding_rule.h"
 namespace oceanbase
 {
 namespace common
@@ -58,7 +60,18 @@ protected:
                             ObLogPlan *&logical_plan);
   bool is_valid_outline_stmt_type(stmt::StmtType type);
   int print_outline(ObExecContext &ctx, ObLogPlan *log_plan, common::ObString &outline);
+  // BINDING_RULE support: copy precomputed template signature into outline_info,
+  // emit DB_/TB_ placeholders into outline_content, and serialize pattern_rules.
+  // The template signature itself is computed in the resolver (so it captures the
+  // pristine AST before transform_stmt() rewrites outline_stmt).
+  int generate_binding_rule_info(ObExecContext &ctx,
+                                 ObCreateOutlineStmt *stmt,
+                                 share::schema::ObOutlineInfo &outline_info);
 private:
+  static int replace_table_with_placeholder_by_hint(ObDMLStmt *outline_stmt,
+                                                    ObOutlineBindingRule &binding_rule,
+                                                    common::ObIAllocator &allocator,
+                                                    common::ObSqlString &result);
   DISALLOW_COPY_AND_ASSIGN(ObOutlineExecutor);
 };
 

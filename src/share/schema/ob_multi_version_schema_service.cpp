@@ -3158,7 +3158,8 @@ int ObMultiVersionSchemaService::check_outline_exist_with_sql(const uint64_t ten
                                                               const uint64_t database_id,
                                                               const common::ObString &paramlized_sql,
                                                               bool is_format,
-                                                              bool &exist)
+                                                              bool &exist,
+                                                              const common::ObString &pattern_rules)
 
 {
   int ret = OB_SUCCESS;
@@ -3180,7 +3181,8 @@ int ObMultiVersionSchemaService::check_outline_exist_with_sql(const uint64_t ten
                 database_id,
                 paramlized_sql,
                 is_format,
-                exist))) {
+                exist,
+                pattern_rules))) {
       LOG_WARN("failed to check outline sql exist", K(tenant_id), K(database_id),
                K(paramlized_sql), K(ret));
     } else {/*do nothing*/}

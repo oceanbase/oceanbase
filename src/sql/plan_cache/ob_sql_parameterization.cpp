@@ -27,7 +27,8 @@ SqlInfo::SqlInfo() :
   ps_need_parameterized_(true),
   need_check_fp_(false),
   origin_pl_param_count_(0),
-  enable_pl_sql_parameterize_(false)
+  enable_pl_sql_parameterize_(false),
+  has_binding_rule_(false)
 {
 }
 
@@ -199,20 +200,27 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
         SQL_PC_LOG(WARN, "fail to transform syntax tree", K(ret));
       }
     } else if (is_transform_outline && (INT64_MAX != children_node->value_)
-               && (children_node->value_ != ctx.paramlized_questionmask_count_)) {
+               && (children_node->value_ > ctx.paramlized_questionmask_count_)) {
+      // Use '>' instead of '!=': Oracle ":N" (int_num) placeholders in normal PL/PS mode emit
+      // T_QUESTIONMARK without bumping count_, so paramlized_count can exceed value_.
       ret = OB_INVALID_OUTLINE;
       LOG_USER_ERROR(OB_INVALID_OUTLINE, "? appears at invalid position in sql_text");
       SQL_PC_LOG(WARN, "? appear at invalid position", "total count of questionmasks in query", children_node->value_,
                 "paramlized_questionmask_count", ctx.paramlized_questionmask_count_, K(ret));
     } else if (OB_NOT_NULL(raw_params)
                && OB_NOT_NULL(select_item_param_infos)) {
-      if (sql_info.total_ != raw_params->count()) {
+      // BINDING_RULE clause contains pattern strings that fast parse counts as constants
+      // but normal parse doesn't traverse, so we skip the count mismatch check
+      if (sql_info.total_ != raw_params->count() && !sql_info.has_binding_rule_) {
         ret = OB_NOT_SUPPORTED;
         SQL_PC_LOG(TRACE, "const number of fast parse and normal parse is different",
                 "fast_parse_const_num", raw_params->count(),
                 "normal_parse_const_num", sql_info.total_,
                 K(session.get_current_query_string()),
                 "result_tree_", SJ(ObParserResultPrintWrapper(*ctx.top_node_)));
+      } else if (sql_info.has_binding_rule_) {
+        LOG_DEBUG("[BINDING_RULE] skip const count check for binding_rule",
+                 K(sql_info.total_), K(raw_params->count()));
       } else {
         select_item_param_infos->set_capacity(ctx.project_list_.count());
         for (int64_t i = 0; OB_SUCC(ret) && i < ctx.project_list_.count(); i++) {
@@ -255,8 +263,12 @@ int ObSqlParameterization::is_fast_parse_const(TransformTreeCtx &ctx)
     ctx.is_fast_parse_const_ = false;
   } else {
     //如果其节点为T_HINT_OPTION_LIST则该节点及其子节点中常量都不是fp可识别的参数参数。
-    if (T_HINT_OPTION_LIST == ctx.tree_->type_) {
+    if (T_HINT_OPTION_LIST == ctx.tree_->type_
+        || T_BINDING_RULE_CLAUSE == ctx.tree_->type_) {
       ctx.enable_contain_param_ = false;
+      if (T_BINDING_RULE_CLAUSE == ctx.tree_->type_) {
+        ctx.sql_info_->has_binding_rule_ = true;
+      }
     }
     if (ctx.enable_contain_param_) {
       //当该node为T_NULL/T_VARCHAR类型且is_hidden_const_为true时表示该node在fast parse中不能识别为常量
@@ -338,6 +350,9 @@ bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
     bool is_vec_idx_query = is_vector_index_query(tree);
     ret_bool = is_vec_idx_query ? false : true;
   } else if (T_HINT_OPTION_LIST == tree->type_) {
+    ret_bool = true;
+  } else if (T_BINDING_RULE_CLAUSE == tree->type_) {
+    // BINDING_RULE 子树不应参数化（MAP 中的 pattern 字符串包含特殊语法）
     ret_bool = true;
   } else if (T_COLLATION == tree->type_) {
     ret_bool = true;
@@ -864,7 +879,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
     bool ignore_scale_check = ctx.ignore_scale_check_;
     for (int32_t i = 0;
          OB_SUCC(ret) && i < root->num_child_ && root->type_ != T_QUESTIONMARK
-         && root->type_ != T_VARCHAR && root->type_ != T_CHAR && root->type_ != T_NCHAR;
+         && root->type_ != T_VARCHAR && root->type_ != T_CHAR && root->type_ != T_NCHAR
+         && root->type_ != T_BINDING_RULE_CLAUSE;
          ++i) {
       //如果not_param本来就是true则不需要再判断；因为某结点判断为true，则该结点子树均为true；
       if (OB_ISNULL(root->children_)) {
@@ -1060,7 +1076,9 @@ int ObSqlParameterization::check_and_generate_param_info(const ObIArray<ObPCPara
                                                          ObIArray<ObPCParam *> &special_params)
 {
   int ret = OB_SUCCESS;
-  if (sql_info.total_ != raw_params.count()) {
+  // BINDING_RULE clause contains pattern strings that fast parse counts as constants
+  // but normal parse doesn't traverse, so we skip the count mismatch check
+  if (sql_info.total_ != raw_params.count() && !sql_info.has_binding_rule_) {
     ret = OB_NOT_SUPPORTED;
     if (sql_info.need_check_fp_) {
       SQL_PC_LOG(ERROR, "const number of fast parse and normal parse is different",
@@ -2187,6 +2205,10 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
         }
       }
     }
+  } else if (T_BINDING_RULE_CLAUSE == node->type_) {
+    // BINDING_RULE nodes are not recognized by fast parse at all.
+    // Do NOT add them to sql_info.total_ to avoid mismatch with raw_params.count()
+    // Just skip this node entirely - no action needed
   } else {
     if (pl_sql_parameterize && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(sql_info.total_++))) {
       LOG_WARN("pushback offset failed", K(node->value_));

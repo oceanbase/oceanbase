@@ -35,6 +35,7 @@ namespace share
 namespace schema
 {
   class ObSchemaGetterGuard;
+  class ObOutlineInfo;
 }
 } //namespace share end
 
@@ -316,6 +317,14 @@ private:
   int get_outline_version(share::schema::ObSchemaGetterGuard &schema_guard,
                           const uint64_t tenant_id,
                           share::schema::ObSchemaObjVersion &local_outline_version);
+  // Select a template-outline candidate matching cached_template_signature_.
+  // match_object_id picks the bound outline by object_id; otherwise the first
+  // enabled candidate (eviction sentinel). See the definition for details.
+  int select_template_outline_(share::schema::ObSchemaGetterGuard &schema_guard,
+                               const uint64_t tenant_id,
+                               const uint64_t database_id,
+                               const bool match_object_id,
+                               const share::schema::ObOutlineInfo *&outline_info);
 
   int get_outline_param_index(ObExecContext &exec_ctx, int64_t &param_idx) const;
   /**
@@ -487,6 +496,7 @@ private:
   // Force miss match plan cache. e.g. contain lake table or mview
   bool force_miss_match_;
   uint64_t next_plan_set_id_;
+  common::ObString cached_template_signature_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPlanCacheValue);
 };

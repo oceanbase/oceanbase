@@ -2591,6 +2591,8 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
         result, format_sql_id, outline_info, true, ignore_column_error, ObString::make_string(""));
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
         result, format_outline, outline_info, bool, true, ignore_column_error, false);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, pattern_rules, outline_info, true, ignore_column_error, ObString::make_string(""));
   }
   return ret;
 }
@@ -4927,6 +4929,7 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
   EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, outline_id, outline_schema, tenant_id);
   EXTRACT_INT_FIELD_MYSQL(result, "is_deleted", is_deleted, bool);
   if (!is_deleted) {
+    ObString pattern_rules;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, outline_schema, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_TENANT_ID(result, database_id, outline_schema, tenant_id);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL(result, name, outline_schema);
@@ -4937,6 +4940,28 @@ int ObSchemaRetrieveUtils::fill_outline_schema(
       result, format_sql_id, outline_schema, true, ignore_column_error, ObString::make_string(""));
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
         result, format_outline, outline_schema, bool, true, ignore_column_error, false);
+    if (OB_SUCC(ret)) {
+      int tmp_ret = result.get_varchar("pattern_rules", pattern_rules);
+      if (OB_SUCCESS == tmp_ret) {
+        // use extracted value below
+      } else if (OB_ERR_COLUMN_NOT_FOUND == tmp_ret || OB_ERR_NULL_VALUE == tmp_ret) {
+        pattern_rules.reset();
+      } else {
+        ret = tmp_ret;
+        SHARE_SCHEMA_LOG(WARN, "fail to get outline pattern_rules", KR(ret), K(tenant_id));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(outline_schema.init_template_metadata(pattern_rules))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to init outline template metadata", KR(ret), K(tenant_id),
+                       K(outline_schema));
+    }
+    if (OB_SUCC(ret)) {
+      LOG_DEBUG("[OUTLINE] fill_outline_schema_for_cache",
+               K(tenant_id),
+               "outline_name", outline_schema.get_name(),
+               "is_template", outline_schema.is_template(),
+               "pattern_rules_len", pattern_rules.length());
+    }
   }
   return ret;
 }

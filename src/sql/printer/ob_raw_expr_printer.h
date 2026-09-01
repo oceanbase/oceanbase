@@ -26,6 +26,8 @@ class ObTimeZoneInfo;
 }
 namespace sql
 {
+class ObDMLStmt;
+
 class ObRawExprPrinter
 {
 #define LEN_AND_PTR(str) (str.length()), (str.ptr())
@@ -119,6 +121,7 @@ public:
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObSchemaGetterGuard *schema_guard,
             ObObjPrintParams print_params, const ParamStore *param_store = NULL);
+  void set_stmt(const ObDMLStmt *stmt) { stmt_ = stmt; }
   // stmt中会出现若干expr, 为了避免反复实例化，这里将expr作为do_print的参数
   int do_print(ObRawExpr *expr, ObStmtScope scope, bool only_column_namespace = false, bool print_cte = false);
   int pre_check_treat_opt(ObRawExpr *expr, bool &is_treat);
@@ -197,6 +200,7 @@ private:
   const ParamStore *param_store_;
   ObSchemaGetterGuard *schema_guard_;
   bool print_cte_;
+  const ObDMLStmt *stmt_;
 };
 
 } // end namespace sql

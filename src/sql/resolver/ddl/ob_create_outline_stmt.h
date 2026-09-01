@@ -15,6 +15,7 @@
 
 #include "lib/string/ob_string.h"
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
+#include "sql/resolver/ddl/ob_outline_binding_rule.h"
 namespace oceanbase
 {
 namespace sql
@@ -26,7 +27,9 @@ public:
       ObDDLStmt(stmt::T_CREATE_OUTLINE),
       create_outline_arg_(),
       max_concurrent_(-1),
-      outline_stmt_(NULL)
+      outline_stmt_(NULL),
+      binding_rule_(),
+      template_signature_()
   {}
   ~ObCreateOutlineStmt() { }
   void set_replace() { create_outline_arg_.or_replace_ = true; }
@@ -53,9 +56,34 @@ public:
   common::ObString &get_hint() { return hint_; }
   common::ObString &get_sql_id() { return sql_id_; }
   common::ObString &get_format_sql_id() { return format_sql_id_; }
+  // Binding rule methods
+  ObOutlineBindingRule &get_binding_rule() { return binding_rule_; }
+  const ObOutlineBindingRule &get_binding_rule() const { return binding_rule_; }
+  int set_binding_rule(const ObOutlineBindingRule &rule)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(binding_rule_.assign(rule))) {
+      LOG_WARN("failed to assign binding_rule", K(ret));
+    }
+    return ret;
+  }
+  bool has_binding_rule() const { return binding_rule_.is_valid(); }
+  // BINDING_RULE template signature precomputed in resolver from the pristine
+  // outline AST (before transform_stmt() rewrites it). Empty for non-binding-rule
+  // outlines. Memory is owned by get_stmt_allocator() (the ObDDLStmt arena);
+  // set_template_signature is a shallow assignment — caller must ensure sig is
+  // allocated on a compatible allocator (typically by passing
+  // get_stmt_allocator() to the producer).
+  const common::ObString &get_template_signature() const { return template_signature_; }
+  void set_template_signature(const common::ObString &sig) { template_signature_ = sig; }
+  // Long-lived arena owned by ObDDLStmt; outlives both resolve and execute phases
+  // for this DDL. Used by binding_rule signature/precomputed data.
+  common::ObIAllocator &get_stmt_allocator() { return allocator_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_outline_arg_; }
   TO_STRING_KV(K_(create_outline_arg),
-               K_(outline_stmt));
+               K_(outline_stmt),
+               K_(binding_rule),
+               K_(template_signature));
 private:
   obrpc::ObCreateOutlineArg create_outline_arg_; //这个是需要在执行的过程中填充的，
   common::ObString sql_id_; //给定sql_id的情况
@@ -63,6 +91,8 @@ private:
   common::ObString hint_; //给定的hint是什么
   int64_t max_concurrent_;
   ObStmt *outline_stmt_;//the stmt for outline, 通过这个值是否为null来判断是那种情况
+  ObOutlineBindingRule binding_rule_; // BINDING_RULE structure
+  common::ObString template_signature_; // BINDING_RULE: precomputed in resolver
   DISALLOW_COPY_AND_ASSIGN(ObCreateOutlineStmt);
 };
 }//namespace sql

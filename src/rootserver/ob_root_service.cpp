@@ -6290,8 +6290,11 @@ int ObRootService::create_outline(const ObCreateOutlineArg &arg)
     } else if (OB_INVALID_ID == db_schema->get_database_id()) {
       ret = OB_ERR_BAD_DATABASE;
       LOG_WARN("database id is invalid", K(tenant_id), K(*db_schema), K(ret));
-    } else {
+    } else if (outline_info.get_database_id() != OB_PUBLIC_SCHEMA_ID) {
+      // Don't override if executor already set OB_PUBLIC_SCHEMA_ID for SCOPE=TENANT BINDING_RULE
       outline_info.set_database_id(db_schema->get_database_id());
+    } else {
+      // SCOPE=TENANT case: preserve OB_PUBLIC_SCHEMA_ID (1) for cross-database matching
     }
 
     bool is_update = false;

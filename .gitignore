@@ -29,6 +29,7 @@
 .clang-format
 .clangd
 .clang_complete
+.claude
 .configured
 .configured
 .cproject

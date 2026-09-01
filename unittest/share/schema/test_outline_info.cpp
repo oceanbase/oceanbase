@@ -18,7 +18,9 @@
 #include "sql/parser/ob_parser.h"
 #include "sql/ob_sql_mode_manager.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "share/schema/ob_outline_mgr.h"
 #include "share/schema/ob_schema_struct.h"
+#include "sql/outline/ob_pattern_matcher.h"
 
 namespace oceanbase
 {
@@ -30,6 +32,22 @@ namespace share
 namespace schema
 {
 static const int64_t BUF_SIZE = 1024*10;
+
+void serialize_obstring(const ObString &raw, ObIAllocator &allocator, ObString &serialized)
+{
+  int64_t size = raw.get_serialize_size();
+  char *buf = static_cast<char *>(allocator.alloc(size));
+  ASSERT_NE(static_cast<char *>(NULL), buf);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, raw.serialize(buf, size, pos));
+  serialized.assign_ptr(buf, static_cast<ObString::obstr_size_t>(pos));
+}
+
+void deserialize_obstring(const ObString &serialized, ObString &raw)
+{
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, raw.deserialize(serialized.ptr(), serialized.length(), pos));
+}
 
 void judge_outline_info_equal(const ObOutlineInfo &info_l, const ObOutlineInfo &info_r)
 {
@@ -90,7 +108,8 @@ TEST(ObSchemaStructTest, test_deep_copy_outline_info)
   //copy outline_info
   ObOutlineInfo *new_outline = NULL;
   const int64_t size = outline_info.get_convert_size();
-  char *buf = static_cast<char *>(ob_malloc(size));
+  ObArenaAllocator allocator;
+  char *buf = static_cast<char *>(allocator.alloc(size));
   ObDataBuffer data_buf(buf + sizeof(ObOutlineInfo), size - sizeof(ObOutlineInfo));
   ASSERT_NE(static_cast<char *>(NULL), buf);
   new_outline = new (buf) ObOutlineInfo(&data_buf);
@@ -175,12 +194,184 @@ TEST(ObSchemaStructTest, test_gen_limit_sql)
 TEST(ObSchemaStructTest, test_question_makr_pos)
 {
   ObArenaAllocator allocator;
-  ObSQLModeManager mod_mgr;
+  ObSQLMode sql_mode = 0;
   ObString sql("select * from t1 where c1 > ? and c2 = ? and c3 = '?'");
-  ObParser parser(allocator, mod_mgr.get_sql_mode());
+  ObParser parser(allocator, sql_mode);
   ParseResult parse_result;
   EXPECT_EQ(OB_SUCCESS, parser.parse(sql, parse_result, FP_MODE));
   EXPECT_EQ(3, parse_result.param_node_num_);
+}
+
+TEST(ObSchemaStructTest, test_simple_outline_template_metadata)
+{
+  ObSimpleOutlineSchema non_template;
+  ObArenaAllocator allocator;
+  non_template.set_tenant_id(1);
+  non_template.set_outline_id(1);
+  non_template.set_schema_version(1);
+  non_template.set_database_id(1);
+  ASSERT_EQ(OB_SUCCESS, non_template.set_name(ObString::make_string("ntl")));
+
+  ObString serialized_plain_sig;
+  serialize_obstring(ObString::make_string("select * from t1 where c1 = ?"), allocator, serialized_plain_sig);
+  ASSERT_EQ(OB_SUCCESS, non_template.set_signature(serialized_plain_sig));
+  ASSERT_EQ(OB_SUCCESS, non_template.init_template_metadata(ObString()));
+  EXPECT_FALSE(non_template.is_template());
+  EXPECT_TRUE(non_template.get_pattern_rules_str().empty());
+
+  ObSimpleOutlineSchema templ;
+  templ.set_tenant_id(1);
+  templ.set_outline_id(2);
+  templ.set_schema_version(1);
+  templ.set_database_id(1);
+  ASSERT_EQ(OB_SUCCESS, templ.set_name(ObString::make_string("tpl")));
+
+  // Clean signature — no #PR hack needed anymore
+  ObString serialized_template_sig;
+  serialize_obstring(ObString::make_string("select * from * where c1 = ?"), allocator, serialized_template_sig);
+  ASSERT_EQ(OB_SUCCESS, templ.set_signature(serialized_template_sig));
+  ASSERT_EQ(OB_SUCCESS, templ.init_template_metadata(ObString::make_string("[]")));
+  EXPECT_TRUE(templ.is_template());
+  EXPECT_EQ(ObString::make_string("[]"), templ.get_pattern_rules_str());
+}
+
+TEST(ObSchemaStructTest, test_outline_mgr_binding_map_only_for_template)
+{
+  ObOutlineMgr mgr;
+  ASSERT_EQ(OB_SUCCESS, mgr.init());
+  ObArenaAllocator allocator;
+  bool has_template = true;
+  ObArray<const ObSimpleOutlineSchema *> candidates;
+  const ObSimpleOutlineSchema *exact_match = NULL;
+
+  // Non-template outline
+  ObSimpleOutlineSchema non_template;
+  non_template.set_tenant_id(1);
+  non_template.set_outline_id(10);
+  non_template.set_schema_version(1);
+  non_template.set_database_id(1);
+  ASSERT_EQ(OB_SUCCESS, non_template.set_name(ObString::make_string("ntl")));
+  ObString serialized_plain_sig;
+  serialize_obstring(ObString::make_string("select * from t1 where c1 = ?"), allocator, serialized_plain_sig);
+  ASSERT_EQ(OB_SUCCESS, non_template.set_signature(serialized_plain_sig));
+  ASSERT_EQ(OB_SUCCESS, non_template.init_template_metadata(ObString()));
+
+  ASSERT_EQ(OB_SUCCESS, mgr.add_outline(non_template));
+  ASSERT_EQ(OB_SUCCESS, mgr.has_template_outline(1, has_template));
+  EXPECT_FALSE(has_template);
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_infos_with_signature(
+      1, 1, non_template.get_signature_str(), false, candidates));
+  EXPECT_EQ(0, candidates.count());
+
+  // Template outline — clean signature, no #PR hack
+  ObSimpleOutlineSchema templ;
+  templ.set_tenant_id(1);
+  templ.set_outline_id(11);
+  templ.set_schema_version(1);
+  templ.set_database_id(1);
+  ASSERT_EQ(OB_SUCCESS, templ.set_name(ObString::make_string("tpl")));
+  ObString serialized_template_sig;
+  serialize_obstring(ObString::make_string("select * from * where c1 = ?"), allocator, serialized_template_sig);
+  ASSERT_EQ(OB_SUCCESS, templ.set_signature(serialized_template_sig));
+  ASSERT_EQ(OB_SUCCESS, templ.init_template_metadata(ObString::make_string("[]")));
+
+  ASSERT_EQ(OB_SUCCESS, mgr.add_outline(templ));
+  ASSERT_EQ(OB_SUCCESS, mgr.has_template_outline(1, has_template));
+  EXPECT_TRUE(has_template);
+
+  // Dedup lookup with matching pattern_rules should find the outline
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_schema_with_signature(
+      1, 1, templ.get_signature_str(), false, exact_match,
+      ObString::make_string("[]")));
+  ASSERT_NE(static_cast<const ObSimpleOutlineSchema *>(NULL), exact_match);
+  EXPECT_EQ(templ.get_outline_id(), exact_match->get_outline_id());
+
+  // Dedup lookup with empty pattern_rules should NOT find the template outline
+  exact_match = NULL;
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_schema_with_signature(
+      1, 1, templ.get_signature_str(), false, exact_match));
+  EXPECT_EQ(static_cast<const ObSimpleOutlineSchema *>(NULL), exact_match);
+
+  // Binding match (1:N) should find it by signature alone
+  candidates.reset();
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_infos_with_signature(
+      1, 1, templ.get_signature_str(), false, candidates));
+  ASSERT_EQ(1, candidates.count());
+  ASSERT_NE(static_cast<const ObSimpleOutlineSchema *>(NULL), candidates.at(0));
+  EXPECT_EQ(templ.get_outline_id(), candidates.at(0)->get_outline_id());
+
+  // Second template with same signature but different pattern_rules
+  ObSimpleOutlineSchema templ2;
+  templ2.set_tenant_id(1);
+  templ2.set_outline_id(12);
+  templ2.set_schema_version(1);
+  templ2.set_database_id(1);
+  ASSERT_EQ(OB_SUCCESS, templ2.set_name(ObString::make_string("tpl2")));
+  ASSERT_EQ(OB_SUCCESS, templ2.set_signature(templ.get_signature_str()));
+  ASSERT_EQ(OB_SUCCESS, templ2.init_template_metadata(ObString::make_string("[{\"x\":1}]")));
+
+  ASSERT_EQ(OB_SUCCESS, mgr.add_outline(templ2));
+
+  // Both templates in binding_match_map (1:N)
+  candidates.reset();
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_infos_with_signature(
+      1, 1, templ.get_signature_str(), false, candidates));
+  ASSERT_EQ(2, candidates.count());
+
+  // Dedup: each findable with its own pattern_rules
+  exact_match = NULL;
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_schema_with_signature(
+      1, 1, templ.get_signature_str(), false, exact_match,
+      ObString::make_string("[]")));
+  ASSERT_NE(static_cast<const ObSimpleOutlineSchema *>(NULL), exact_match);
+  EXPECT_EQ(11u, exact_match->get_outline_id());
+
+  exact_match = NULL;
+  ASSERT_EQ(OB_SUCCESS, mgr.get_outline_schema_with_signature(
+      1, 1, templ.get_signature_str(), false, exact_match,
+      ObString::make_string("[{\"x\":1}]")));
+  ASSERT_NE(static_cast<const ObSimpleOutlineSchema *>(NULL), exact_match);
+  EXPECT_EQ(12u, exact_match->get_outline_id());
+}
+
+TEST(ObSchemaStructTest, test_pattern_parser_strips_spaces)
+{
+  sql::ObPatternVarInfo var_info;
+
+  // Case 1: No spaces (baseline)
+  ASSERT_EQ(OB_SUCCESS, sql::ObPatternMatcher::parse_pattern(
+      ObString::make_string("orders_${S:[a-z]+}"), var_info));
+  EXPECT_TRUE(var_info.has_var_);
+  EXPECT_EQ(ObString::make_string("orders_"), var_info.prefix_);
+  EXPECT_EQ(ObString::make_string("S"), var_info.var_name_);
+  EXPECT_EQ(ObString::make_string("[a-z]+"), var_info.var_regex_);
+  EXPECT_TRUE(var_info.suffix_.empty());
+
+  // Case 2: Spaces around var_name and regex
+  var_info.reset();
+  ASSERT_EQ(OB_SUCCESS, sql::ObPatternMatcher::parse_pattern(
+      ObString::make_string("orders_${ S : [a-z]+ }"), var_info));
+  EXPECT_TRUE(var_info.has_var_);
+  EXPECT_EQ(ObString::make_string("orders_"), var_info.prefix_);
+  EXPECT_EQ(ObString::make_string("S"), var_info.var_name_);
+  EXPECT_EQ(ObString::make_string("[a-z]+"), var_info.var_regex_);
+
+  // Case 3: Spaces in reference variable (no regex)
+  var_info.reset();
+  ASSERT_EQ(OB_SUCCESS, sql::ObPatternMatcher::parse_pattern(
+      ObString::make_string("products_${ S }"), var_info));
+  EXPECT_TRUE(var_info.has_var_);
+  EXPECT_EQ(ObString::make_string("products_"), var_info.prefix_);
+  EXPECT_EQ(ObString::make_string("S"), var_info.var_name_);
+  EXPECT_TRUE(var_info.var_regex_.empty());
+
+  // Case 4: Only leading spaces
+  var_info.reset();
+  ASSERT_EQ(OB_SUCCESS, sql::ObPatternMatcher::parse_pattern(
+      ObString::make_string("t_${  X:[0-9]+}"), var_info));
+  EXPECT_TRUE(var_info.has_var_);
+  EXPECT_EQ(ObString::make_string("X"), var_info.var_name_);
+  EXPECT_EQ(ObString::make_string("[0-9]+"), var_info.var_regex_);
 }
 
 }//schema

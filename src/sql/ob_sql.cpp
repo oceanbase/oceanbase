@@ -13,7 +13,9 @@
 #define USING_LOG_PREFIX SQL
 #include "sql/ob_sql.h"
 #include "lib/json/ob_json_print_utils.h"
+#include "lib/container/ob_array.h"
 #include "lib/profile/ob_perf_event.h"
+#include "sql/outline/ob_outline_template_matcher.h"
 #include "share/ob_truncated_string.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "sql/plan_cache/ob_pcv_set.h"
@@ -3645,6 +3647,10 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
              pc_ctx->allocator_, result.get_session(), sql_ctx, ObString(parse_result.input_sql_len_, parse_result.input_sql_),
              mode == PC_PS_MODE, pc_ctx->fp_result_.parameterized_params_, pc_ctx->sql_ctx_.format_sql_id_, CclRuleContainsInfo::DATABASE_AND_TABLE, &parse_result, basic_stmt))) {
       LOG_WARN("fail to match ccl rule", K(ret));
+    } else if (OB_NOT_NULL(pc_ctx)
+               && basic_stmt->is_dml_stmt()
+               && OB_FAIL(ObOutlineTemplateMatcher::try_gen_template_signature(*pc_ctx))) {
+      LOG_WARN("failed to fill template signature from hard-parse stmt", K(ret));
     } else if (OB_FAIL(generate_plan(parse_result, pc_ctx, sql_ctx, result, mode, basic_stmt,
                                      stmt_need_privs, stmt_ora_need_privs))) {
       LOG_WARN("failed to generate plan", K(ret));
@@ -4670,6 +4676,7 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
   return ret;
 }
 
+
 int ObSql::get_outline_data(ObSqlCtx &context,
                             ObPlanCacheCtx &pc_ctx,
                             const ObString &signature_sql,
@@ -4821,10 +4828,31 @@ int ObSql::get_outline_data(ObPlanCacheCtx &pc_ctx,
       LOG_WARN("failed to get outline info", K(session->get_effective_tenant_id()), K(ret));
       ret = OB_SUCCESS;
     }
+
+    // Step 4: Template outline matching (BINDING_RULE)
+    if (OB_SUCC(ret) && NULL == outline_info) {
+      LOG_DEBUG("[OUTLINE] trying template outline match",
+               K(session->get_effective_tenant_id()),
+               K(database_id),
+               K(signature_sql));
+      if (OB_FAIL(ObOutlineTemplateMatcher::try_match_template_outline(
+          pc_ctx, schema_guard, session, database_id, signature_sql, allocator, outline_info))) {
+        ret = OB_SUCCESS; // non-fatal
+      }
+    }
   }
 
   if (OB_SUCC(ret) && NULL != outline_info) {
     ObString outline_content_copy = outline_info->get_outline_content_str();
+
+    // For template outlines, reconstruct outline_content with actual table names
+    if (!outline_info->get_pattern_rules_str().empty()) {
+      if (OB_FAIL(ObOutlineTemplateMatcher::reconstruct_content_if_needed(
+          pc_ctx, outline_info, pc_ctx.allocator_, outline_content_copy))) {
+        ret = OB_SUCCESS; // fallback to original content
+      }
+    }
+
     if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(pc_ctx.allocator_,
                                                                      session->get_dtc_params(),
                                                                      outline_content_copy))) {
@@ -5712,6 +5740,11 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
       LOG_WARN("fail to match ccl rule", K(ret));
     }
   }
+
+  // Make parse_result available for template outline matching (BINDING_RULE).
+  // ObOutlineTemplateMatcher walks this parse tree to generate the template
+  // signature via position-based text surgery (no resolve).
+  context.outline_match_parse_result_ = &parse_result;
 
   if (OB_FAIL(ret)) {
     // do nothing

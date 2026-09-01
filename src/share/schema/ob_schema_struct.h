@@ -6600,6 +6600,8 @@ public:
   void set_enabled(const bool enabled) { enabled_ = enabled;}
   void set_format(const ObHintFormat hint_format) { format_ = hint_format;}
   void set_format_outline(bool is_format) { format_outline_ = is_format;}
+  int set_pattern_rules(const char *rules) { return deep_copy_str(rules, pattern_rules_); }
+  int set_pattern_rules(const common::ObString &rules) { return deep_copy_str(rules, pattern_rules_); }
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }
   inline uint64_t get_owner_id() const { return owner_id_; }
@@ -6640,6 +6642,9 @@ public:
   ObOutlineParamsWrapper &get_outline_params_wrapper() { return outline_params_wrapper_; }
   bool is_format() { return format_outline_; }
   bool is_format() const { return format_outline_; }
+  bool is_template() const { return !pattern_rules_.empty(); }
+  const char *get_pattern_rules() const { return extract_str(pattern_rules_); }
+  const common::ObString &get_pattern_rules_str() const { return pattern_rules_; }
   bool has_outline_params() const { return outline_params_wrapper_.get_outline_params().count() > 0; }
   int has_concurrent_limit_param(bool &has) const;
   int gen_valid_allocator();
@@ -6690,6 +6695,7 @@ protected:
   common::ObString format_sql_text_;
   common::ObString format_sql_id_;
   bool format_outline_;
+  common::ObString pattern_rules_;
 };
 
 class ObDbLinkBaseInfo : public ObSchema
@@ -7426,6 +7432,11 @@ public:
   {}
   ~ObOutlineSignatureHashWrapper() {}
   inline uint64_t hash() const;
+  inline int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return common::OB_SUCCESS;
+  }
   inline bool operator ==(const ObOutlineSignatureHashWrapper &rv) const;
   inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   inline void set_database_id(uint64_t database_id) { database_id_ = database_id; }
@@ -7503,6 +7514,81 @@ inline bool ObOutlineSignatureHashWrapper::operator ==(const ObOutlineSignatureH
 {
   return (tenant_id_ == rv.tenant_id_) && (database_id_ == rv.database_id_)
       && (signature_ == rv.signature_) && (is_format_ == rv.is_format_);
+}
+
+// Dedup key for signature_map_: extends 4-field key with pattern_rules
+// hash() includes pattern_rules hash for bucket distribution
+// operator==() compares full pattern_rules string for zero-collision correctness
+class ObOutlineSignatureDedupKey
+{
+public:
+  ObOutlineSignatureDedupKey()
+    : tenant_id_(common::OB_INVALID_ID),
+      database_id_(common::OB_INVALID_ID),
+      signature_(),
+      is_format_(false),
+      pattern_rules_(),
+      pattern_rules_hash_(0) {}
+  ObOutlineSignatureDedupKey(const uint64_t tenant_id,
+                             const uint64_t database_id,
+                             const common::ObString &signature,
+                             bool is_format,
+                             const common::ObString &pattern_rules)
+    : tenant_id_(tenant_id),
+      database_id_(database_id),
+      signature_(signature),
+      is_format_(is_format),
+      pattern_rules_(pattern_rules),
+      pattern_rules_hash_(pattern_rules.hash()) {}
+  ~ObOutlineSignatureDedupKey() {}
+  inline uint64_t hash() const;
+  inline int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return common::OB_SUCCESS;
+  }
+  inline bool operator ==(const ObOutlineSignatureDedupKey &rv) const;
+  inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
+  inline void set_database_id(uint64_t database_id) { database_id_ = database_id; }
+  inline void set_signature(const common::ObString &signature) { signature_ = signature; }
+  inline void set_is_format(bool is_format) { is_format_ = is_format; }
+  inline void set_pattern_rules(const common::ObString &pattern_rules)
+  {
+    pattern_rules_ = pattern_rules;
+    pattern_rules_hash_ = pattern_rules.hash();
+  }
+  inline uint64_t get_tenant_id() const { return tenant_id_; }
+  inline uint64_t get_database_id() const { return database_id_; }
+  inline const common::ObString &get_signature() const { return signature_; }
+  inline bool is_format() const { return is_format_; }
+  inline const common::ObString &get_pattern_rules() const { return pattern_rules_; }
+private:
+  uint64_t tenant_id_;
+  uint64_t database_id_;
+  common::ObString signature_;
+  bool is_format_;
+  common::ObString pattern_rules_;
+  uint64_t pattern_rules_hash_;
+};
+
+inline uint64_t ObOutlineSignatureDedupKey::hash() const
+{
+  uint64_t hash_ret = 0;
+  hash_ret = common::murmurhash(&tenant_id_, sizeof(uint64_t), 0);
+  hash_ret = common::murmurhash(&database_id_, sizeof(uint64_t), hash_ret);
+  hash_ret = common::murmurhash(signature_.ptr(), signature_.length(), hash_ret);
+  hash_ret = common::murmurhash(&is_format_, sizeof(bool), hash_ret);
+  hash_ret = common::murmurhash(&pattern_rules_hash_, sizeof(uint64_t), hash_ret);
+  return hash_ret;
+}
+
+inline bool ObOutlineSignatureDedupKey::operator ==(const ObOutlineSignatureDedupKey &rv) const
+{
+  return (tenant_id_ == rv.tenant_id_)
+      && (database_id_ == rv.database_id_)
+      && (signature_ == rv.signature_)
+      && (is_format_ == rv.is_format_)
+      && (pattern_rules_ == rv.pattern_rules_);
 }
 
 class ObSysTableChecker

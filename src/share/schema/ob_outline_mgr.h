@@ -62,11 +62,15 @@ public:
   inline const common::ObString &get_name_str() const { return name_; }
   inline int set_signature(const common::ObString &signature)
   { return deep_copy_str(signature, signature_); }
+  inline int set_pattern_rules(const common::ObString &pattern_rules)
+  { return deep_copy_str(pattern_rules, pattern_rules_); }
   inline int set_sql_id(const common::ObString &sql_id)
   { return deep_copy_str(sql_id, sql_id_); }
   inline const char *get_signature() const { return extract_str(signature_); }
   inline const char *get_sql_id() const { return extract_str(sql_id_); }
   inline const common::ObString &get_signature_str() const { return signature_; }
+  inline const common::ObString &get_pattern_rules_str() const
+  { return pattern_rules_; }
   inline const common::ObString &get_sql_id_str() const { return sql_id_; }
   inline const char *get_format_sql_id() const { return extract_str(format_sql_id_); }
   inline const common::ObString &get_format_sql_id_str() const { return format_sql_id_; }
@@ -74,6 +78,8 @@ public:
   { return ObTenantOutlineId(tenant_id_, outline_id_); }
   void set_format_outline(bool is_format) { format_outline_ = is_format;}
   inline bool is_format() const { return format_outline_; }
+  inline bool is_template() const { return is_template_; }
+  int init_template_metadata(const common::ObString &pattern_rules);
 
 private:
   uint64_t tenant_id_;
@@ -82,9 +88,11 @@ private:
   uint64_t database_id_;
   common::ObString name_;
   common::ObString signature_;
+  common::ObString pattern_rules_;
   common::ObString sql_id_;
   common::ObString format_sql_id_;
   bool format_outline_;
+  bool is_template_;
 };
 
 template<class T, class V>
@@ -139,6 +147,23 @@ struct ObGetOutlineKeyV3<ObOutlineSignatureHashWrapper, ObSimpleOutlineSchema *>
 };
 
 template<>
+struct ObGetOutlineKeyV3<ObOutlineSignatureDedupKey, ObSimpleOutlineSchema *>
+{
+  ObOutlineSignatureDedupKey operator()(const ObSimpleOutlineSchema *outline_schema) const
+  {
+    ObOutlineSignatureDedupKey key;
+    if (!OB_ISNULL(outline_schema)) {
+      key.set_tenant_id(outline_schema->get_tenant_id());
+      key.set_database_id(outline_schema->get_database_id());
+      key.set_signature(outline_schema->get_signature_str());
+      key.set_is_format(outline_schema->is_format());
+      key.set_pattern_rules(outline_schema->get_pattern_rules_str());
+    }
+    return key;
+  }
+};
+
+template<>
 struct ObGetOutlineKeyV3<ObOutlineSqlIdHashWrapper, ObSimpleOutlineSchema *>
 {
   ObOutlineSqlIdHashWrapper operator()(const ObSimpleOutlineSchema *outline_schema) const
@@ -165,10 +190,14 @@ class ObOutlineMgr
       ObGetOutlineKeyV3, 128> OutlineIdMap;
   typedef common::hash::ObPointerHashMap<ObOutlineNameHashWrapper, ObSimpleOutlineSchema *,
       ObGetOutlineKeyV3, 128> OutlineNameMap;
-  typedef common::hash::ObPointerHashMap<ObOutlineSignatureHashWrapper, ObSimpleOutlineSchema *,
+  typedef common::hash::ObPointerHashMap<ObOutlineSignatureDedupKey, ObSimpleOutlineSchema *,
       ObGetOutlineKeyV3, 128> SignatureMap;
   typedef common::hash::ObPointerHashMap<ObOutlineSqlIdHashWrapper, ObSimpleOutlineSchema *,
       ObGetOutlineKeyV3, 128> SqlIdMap;
+  // Template outline matching: 1:N map (signature -> multiple outline candidates)
+  // Uses simplified ObHashMap - ObOutlineSignatureHashWrapper has hash() and operator==()
+  typedef common::hash::ObHashMap<ObOutlineSignatureHashWrapper,
+                                   common::ObSEArray<ObSimpleOutlineSchema *, 4>> BindingMatchMap;
   typedef OutlineInfos::iterator OutlineIter;
   typedef OutlineInfos::const_iterator ConstOutlineIter;
 public:
@@ -197,12 +226,20 @@ public:
                                         const uint64_t database_id,
                                         const common::ObString &signature,
                                         const bool is_format,
-                                        const ObSimpleOutlineSchema *&outline_schema) const;
+                                        const ObSimpleOutlineSchema *&outline_schema,
+                                        const common::ObString &pattern_rules = common::ObString()) const;
   int get_outline_schema_with_sql_id(const uint64_t tenant_id,
                                      const uint64_t database_id,
                                      const common::ObString &sql_id,
                                      const bool is_format,
                                      const ObSimpleOutlineSchema *&outline_schema) const;
+  // Template outline interfaces for BINDING_RULE matching
+  int get_outline_infos_with_signature(const uint64_t tenant_id,
+                                        const uint64_t database_id,
+                                        const common::ObString &signature,
+                                        const bool is_format,
+                                        common::ObIArray<const ObSimpleOutlineSchema *> &outline_infos) const;
+  int has_template_outline(const uint64_t tenant_id, bool &has_template) const;
   int get_outline_schemas_in_tenant(const uint64_t tenant_id,
       common::ObIArray<const ObSimpleOutlineSchema *> &outline_schemas) const;
   int get_outline_schemas_in_database(const uint64_t tenant_id,
@@ -211,6 +248,7 @@ public:
   int del_schemas_in_tenant(const uint64_t tenant_id);
   int get_outline_schema_count(int64_t &outline_schema_count) const;
   int get_schema_statistics(ObSchemaStatisticsInfo &schema_info) const;
+
 private:
   inline bool check_inner_stat() const;
   inline static bool compare_outline(const ObSimpleOutlineSchema *lhs,
@@ -222,6 +260,8 @@ private:
   inline static bool equal_with_tenant_outline_id(const ObSimpleOutlineSchema *lhs,
                                                   const ObTenantOutlineId &tenant_outline_id);
   int rebuild_outline_hashmap();
+  int build_binding_match_map(const ObSimpleOutlineSchema *outline_schema);
+  int remove_from_binding_match_map_(const ObSimpleOutlineSchema *outline_schema);
 private:
   common::ObArenaAllocator local_allocator_;
   common::ObIAllocator &allocator_;
@@ -230,6 +270,8 @@ private:
   OutlineNameMap outline_name_map_;
   SignatureMap signature_map_;
   SqlIdMap sql_id_map_;
+  // Template outline map for BINDING_RULE matching (1:N)
+  BindingMatchMap binding_match_map_;
 };
 
 } //end of schema

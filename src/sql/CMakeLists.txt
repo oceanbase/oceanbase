@@ -1190,6 +1190,12 @@ ob_set_subtarget(ob_sql monitor
   monitor/ob_sql_stat_manager.cpp
 )
 
+ob_set_subtarget(ob_sql outline
+  outline/ob_pattern_matcher.cpp
+  outline/ob_outline_template_matcher.cpp
+  parser/ob_pattern_parser.cpp
+)
+
 ob_set_subtarget(ob_sql optimizer
   optimizer/ob_access_path_estimation.cpp
   optimizer/ob_conflict_detector.cpp
@@ -1450,6 +1456,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_create_mlog_resolver.cpp
   resolver/ddl/ob_create_mlog_stmt.cpp
   resolver/ddl/ob_create_outline_resolver.cpp
+  resolver/ddl/ob_outline_binding_rule.cpp
   resolver/ddl/ob_create_package_resolver.cpp
   resolver/ddl/ob_create_profile_resolver.cpp
   resolver/ddl/ob_create_profile_stmt.cpp

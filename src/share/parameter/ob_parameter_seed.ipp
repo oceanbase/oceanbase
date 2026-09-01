@@ -494,6 +494,7 @@ DEF_BOOL(_enable_constant_type_demotion, OB_TENANT_PARAMETER, "True",
          "Controls whether to enable constant type demotion to optimize comparisons between "
          "constants and columns by downgrading the constant's type to match the column's type.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_STR_WITH_CHECKER(_non_standard_comparison_level, OB_TENANT_PARAMETER, "NONE",
         common::ObConfigNonStdCmpLevelChecker,
         "Enable non-standard comparisons to optimize filtering by aligning constants with column "

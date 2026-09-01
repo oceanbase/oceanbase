@@ -44,6 +44,7 @@ ObDMLStmtPrinter::ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, con
     param_store_(param_store),
     session_(session)
 {
+  expr_printer_.set_stmt(stmt_);
 }
 
 ObDMLStmtPrinter::~ObDMLStmtPrinter()
@@ -57,6 +58,7 @@ void ObDMLStmtPrinter::init(char *buf, int64_t buf_len, int64_t *pos, ObDMLStmt 
   pos_ = pos;
   stmt_ = stmt;
   print_cte_ = false;
+  expr_printer_.set_stmt(stmt_);
 }
 
 int ObDMLStmtPrinter::prepare_dblink_hint(ObQueryHint &query_hint_dblink)

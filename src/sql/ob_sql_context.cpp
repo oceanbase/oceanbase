@@ -179,6 +179,8 @@ ObSqlCtx::ObSqlCtx()
     is_prepare_stage_(false),
     disable_sql_udt_deduce_in_pl_(false),
     parse_result_(nullptr),
+    outline_match_parse_result_(nullptr),
+    outline_match_template_signature_(),
     prepare_params_(nullptr),
     is_dynamic_sql_(false),
     is_dbms_sql_(false),
@@ -246,6 +248,8 @@ void ObSqlCtx::reset()
   is_prepare_stage_ = false;
   disable_sql_udt_deduce_in_pl_ = false;
   parse_result_ = nullptr;
+  outline_match_parse_result_ = nullptr;
+  outline_match_template_signature_.reset();
   prepare_params_ = nullptr;
   is_dynamic_sql_ = false;
   is_remote_sql_ = false;

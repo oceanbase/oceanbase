@@ -335,6 +335,7 @@ static const NonReservedKeyword MYSQL_NON_RESERVED_KEYWORDS[] =
   {"bigint_precision", BIGINT_PRECISION},
   {"binary_format", BINARY_FORMAT},
   {"binding", BINDING},
+  {"binding_rule", BINDING_RULE},
   {"binlog", BINLOG},
   {"bit_and", BIT_AND},
   {"bit_or", BIT_OR},

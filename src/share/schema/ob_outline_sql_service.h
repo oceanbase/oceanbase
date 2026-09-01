@@ -53,6 +53,10 @@ public:
   static bool is_formatoutline_compat(uint64_t compat_version) {
     return compat_version < DATA_VERSION_4_3_0_0 || compat_version >= DATA_VERSION_4_3_4_0;
   }
+  // BINDING_RULE pattern_rules column support - requires DATA_VERSION_4_4_2_3
+  static bool is_binding_rule_compat(uint64_t compat_version) {
+    return compat_version >= DATA_VERSION_4_4_2_3;
+  }
 private:
   int add_outline(common::ObISQLClient &sql_client, const ObOutlineInfo &outline_info,
                   const bool only_history = false);

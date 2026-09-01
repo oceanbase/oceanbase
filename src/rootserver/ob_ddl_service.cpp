@@ -35173,7 +35173,8 @@ int ObDDLService::check_outline_exist(share::schema::ObOutlineInfo &outline_info
                  outline_info.get_database_id(),
                  outline_info.get_signature_str(),
                  outline_info.is_format(),
-                 is_outline_exist_with_signature_or_sql_id))) {
+                 is_outline_exist_with_signature_or_sql_id,
+                 outline_info.get_pattern_rules_str()))) {
           LOG_WARN("failed to check if signature exist", K(outline_info), K(ret));
         }
       } else {
@@ -35468,13 +35469,55 @@ int ObDDLService::drop_outline(const obrpc::ObDropOutlineArg &arg)
     int64_t refreshed_schema_version = 0;
     if (OB_FAIL(ret)) {
       //do nothing
-    } else if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, database_id,
-                                                                      outline_name, outline_id,
-                                                                      arg.is_format_, outline_exist))) {
-      LOG_WARN("check_outline_exist failed", K(tenant_id), K(database_name), K(outline_name), K(ret));
-    } else if (!outline_exist) {
-      ret = OB_OUTLINE_NOT_EXIST;
-      LOG_USER_ERROR(OB_OUTLINE_NOT_EXIST, database_name.length(), database_name.ptr(), outline_name.length(), outline_name.ptr());
+    } else if (arg.scope_ == obrpc::OUTLINE_SCOPE_TENANT) {
+      // Precise mode: only look in OB_PUBLIC_SCHEMA_ID (TENANT scope)
+      if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                                                  outline_name, outline_id,
+                                                                  arg.is_format_, outline_exist))) {
+        LOG_WARN("check_outline_exist for tenant scope failed", K(ret), K(tenant_id), K(outline_name));
+      } else if (!outline_exist) {
+        ret = OB_OUTLINE_NOT_EXIST;
+        LOG_USER_ERROR(OB_OUTLINE_NOT_EXIST, database_name.length(), database_name.ptr(), outline_name.length(), outline_name.ptr());
+      } else {
+        database_id = OB_PUBLIC_SCHEMA_ID;
+      }
+    } else if (arg.scope_ == obrpc::OUTLINE_SCOPE_DATABASE) {
+      // Precise mode: only look in current database_id, no fallback
+      if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, database_id,
+                                                                  outline_name, outline_id,
+                                                                  arg.is_format_, outline_exist))) {
+        LOG_WARN("check_outline_exist for database scope failed", K(ret), K(tenant_id), K(database_name), K(outline_name));
+      } else if (!outline_exist) {
+        ret = OB_OUTLINE_NOT_EXIST;
+        LOG_USER_ERROR(OB_OUTLINE_NOT_EXIST, database_name.length(), database_name.ptr(), outline_name.length(), outline_name.ptr());
+      }
+    } else {
+      // OUTLINE_SCOPE_UNSPECIFIED: original fallback logic (DB -> TENANT)
+      if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, database_id,
+                                                                  outline_name, outline_id,
+                                                                  arg.is_format_, outline_exist))) {
+        LOG_WARN("check_outline_exist failed", K(tenant_id), K(database_name), K(outline_name), K(ret));
+      } else if (!outline_exist) {
+        // Fallback: check if this is a SCOPE=TENANT outline (stored with OB_PUBLIC_SCHEMA_ID)
+        bool tenant_outline_exist = false;
+        uint64_t tenant_outline_id = OB_INVALID_ID;
+        if (OB_FAIL(schema_service_->check_outline_exist_with_name(tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                                                    outline_name, tenant_outline_id,
+                                                                    arg.is_format_, tenant_outline_exist))) {
+          LOG_WARN("check_outline_exist for tenant-level failed", K(ret), K(tenant_id), K(outline_name));
+        } else if (tenant_outline_exist) {
+          // Found as tenant-level outline, use OB_PUBLIC_SCHEMA_ID
+          outline_exist = true;
+          outline_id = tenant_outline_id;
+          database_id = OB_PUBLIC_SCHEMA_ID;
+        } else {
+          ret = OB_OUTLINE_NOT_EXIST;
+          LOG_USER_ERROR(OB_OUTLINE_NOT_EXIST, database_name.length(), database_name.ptr(), outline_name.length(), outline_name.ptr());
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {

@@ -1,0 +1,2 @@
+sql_unittest(test_outline_template_matcher)
+sql_unittest(test_outline_binding_rule)

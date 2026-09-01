@@ -19,6 +19,7 @@
 #include "sql/udr/ob_udr_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "sql/plan_cache/ob_values_table_compression.h"
+#include "sql/parser/ob_parser.h"
 
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
@@ -174,7 +175,8 @@ ObPlanCacheValue::ObPlanCacheValue(uint64_t id)
     stmt_type_(stmt::T_MAX),
     switchover_epoch_(OB_INVALID_VERSION),
     force_miss_match_(false),
-    next_plan_set_id_(0)
+    next_plan_set_id_(0),
+    cached_template_signature_()
 {
   MEMSET(sql_id_, 0, sizeof(sql_id_));
   MEMSET(format_sql_id_, 0, sizeof(format_sql_id_));
@@ -385,6 +387,14 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
             // do nothing
           }
         } else { /* do nothing */ }
+      }
+      if (OB_SUCC(ret)) {
+        const common::ObString &cached_sig = pc_ctx.sql_ctx_.outline_match_template_signature_;
+        if (!cached_sig.empty()
+            && OB_FAIL(ob_write_string(*pc_alloc_, cached_sig, cached_template_signature_))) {
+          SQL_PC_LOG(WARN, "fail to deep-copy cached_template_signature_", K(ret));
+          cached_template_signature_.reset();
+        }
       }
     }
 
@@ -1646,6 +1656,10 @@ void ObPlanCacheValue::reset()
       pc_alloc_->free(outline_format_signature_.ptr());
       outline_format_signature_.reset();
     }
+    if (NULL != cached_template_signature_.ptr()) {
+      pc_alloc_->free(cached_template_signature_.ptr());
+      cached_template_signature_.reset();
+    }
     if (NULL != constructed_sql_.ptr()) {
       pc_alloc_->free(constructed_sql_.ptr());
       constructed_sql_.reset();
@@ -1729,7 +1743,7 @@ int ObPlanCacheValue::check_value_version_for_get(share::schema::ObSchemaGetterG
   ObSchemaObjVersion local_outline_version;
   result = false;
   if (OB_ISNULL(schema_guard)) {
-    int ret = OB_INVALID_ARGUMENT;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(schema_guard));
   } else if (need_check_schema
              &&OB_FAIL(get_outline_version(*schema_guard,
@@ -1831,6 +1845,7 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
              || ObLibCacheNameSpace::NS_SFC == pcv_set_->get_plan_cache_key().namespace_
              || ObLibCacheNameSpace::NS_PKG == pcv_set_->get_plan_cache_key().namespace_
              || ObLibCacheNameSpace::NS_ANON == pcv_set_->get_plan_cache_key().namespace_) {
+    // outline version is irrelevant for PL caches and entries without a valid db id
     //do nothing
   } else {
     const ObString &signature = outline_signature_;
@@ -1849,7 +1864,7 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
                       format_signature,
                       true,
                       outline_info))) {
-        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
+      LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
     // try normal
     } else if (NULL == outline_info && !ObString::make_string(sql_id_).empty() &&
               OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
@@ -1857,7 +1872,7 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
                       ObString::make_string(sql_id_),
                       false,
                       outline_info))) {
-        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
+      LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
     // try format
     } else if (NULL == outline_info && !ObString::make_string(format_sql_id_).empty() &&
               OB_FAIL(schema_guard.get_outline_info_with_sql_id(tenant_id,
@@ -1865,7 +1880,33 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
                       ObString::make_string(format_sql_id_),
                       true,
                       outline_info))) {
-        LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
+      LOG_WARN("failed to get_outline_info", K(tenant_id), K(database_id), K(signature));
+    // Template outline, already bound: track version by object_id. Do not re-discover
+    // by signature here -- template sig hit != MAP rule hit would cause re-parse storms.
+    } else if (NULL == outline_info && !cached_template_signature_.empty()
+               && common::OB_INVALID_ID != outline_state_.outline_version_.object_id_) {
+      if (OB_FAIL(select_template_outline_(schema_guard, tenant_id, database_id,
+                                           true/*match_object_id*/, outline_info))) {
+        LOG_WARN("failed to get template outline version", K(ret), K(tenant_id), K(database_id));
+      }
+    // unbound case (object_id_ == INVALID): nothing found above, so probe for a
+    // newly matching template outline to evict this pcv and let the next
+    // hard-parse bind to it (best-effort, tmp_ret swallowed to not block a hit)
+    } else if (NULL == outline_info && !cached_template_signature_.empty()
+               && common::OB_INVALID_ID == outline_state_.outline_version_.object_id_) {
+      int tmp_ret = OB_SUCCESS;
+      bool has_template = false;
+      if (OB_SUCCESS != (tmp_ret = schema_guard.has_template_outline(
+                     tenant_id, has_template))) {
+        SQL_PC_LOG(WARN, "fail to check has_template_outline", K(tmp_ret), K(tenant_id));
+      } else if (!has_template) {
+        // fast path: no template outlines in this tenant
+      } else if (OB_SUCCESS != (tmp_ret = select_template_outline_(
+                     schema_guard, tenant_id, database_id,
+                     false/*match_object_id*/, outline_info))) {
+        SQL_PC_LOG(WARN, "fail to discover template outline",
+                   K(tmp_ret), K(tenant_id), K(database_id), K(cached_template_signature_));
+      }
     }
     if (OB_SUCC(ret)) {
       if (NULL == outline_info) {
@@ -1874,6 +1915,38 @@ int ObPlanCacheValue::get_outline_version(ObSchemaGetterGuard &schema_guard,
         local_outline_version.object_id_ = outline_info->get_outline_id();
         local_outline_version.version_ = outline_info->get_schema_version();
         local_outline_version.object_type_ = DEPENDENCY_OUTLINE;
+      }
+    }
+  }
+  return ret;
+}
+
+// Pick a candidate matching cached_template_signature_:
+//   match_object_id == true : the one whose outline_id == the bound object_id.
+//   match_object_id == false: the first enabled one (eviction sentinel).
+int ObPlanCacheValue::select_template_outline_(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const bool match_object_id,
+    const ObOutlineInfo *&outline_info)
+{
+  int ret = OB_SUCCESS;
+  outline_info = NULL;
+  common::ObSEArray<const share::schema::ObOutlineInfo *, 4> candidates;
+  if (OB_FAIL(schema_guard.get_outline_infos_with_signature(
+          tenant_id, database_id, cached_template_signature_, false/*is_format*/, candidates))) {
+    SQL_PC_LOG(WARN, "fail to lookup template candidates",
+               K(ret), K(tenant_id), K(database_id), K(cached_template_signature_));
+  } else {
+    for (int64_t i = 0; OB_ISNULL(outline_info) && i < candidates.count(); ++i) {
+      const share::schema::ObOutlineInfo *info = candidates.at(i);
+      if (OB_ISNULL(info)) {
+        // defensive: skip null candidate
+      } else if (match_object_id
+                     ? (info->get_outline_id() == outline_state_.outline_version_.object_id_)
+                     : info->is_enabled()) {
+        outline_info = info;
       }
     }
   }

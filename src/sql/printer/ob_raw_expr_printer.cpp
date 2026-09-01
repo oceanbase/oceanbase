@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL
 #include "ob_raw_expr_printer.h"
 #include "sql/printer/ob_select_stmt_printer.h"
+#include "sql/outline/ob_outline_template_matcher.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/expr/ob_json_param_type.h"
 #include "sql/engine/expr/ob_expr_demote_cast.h"
@@ -33,7 +34,8 @@ ObRawExprPrinter::ObRawExprPrinter()
       tz_info_(NULL),
       param_store_(NULL),
       schema_guard_(NULL),
-      print_cte_(false)
+      print_cte_(false),
+      stmt_(NULL)
 {
 }
 
@@ -48,7 +50,8 @@ ObRawExprPrinter::ObRawExprPrinter(char *buf, int64_t buf_len, int64_t *pos, ObS
       print_params_(print_params),
       param_store_(param_store),
       schema_guard_(schema_guard),
-      print_cte_(false)
+      print_cte_(false),
+      stmt_(NULL)
 {
 }
 
@@ -463,6 +466,17 @@ int ObRawExprPrinter::print(ObColumnRefRawExpr *expr)
       PRINT_IDENT_WITH_QUOT(col_name);
     } else if (expr->is_from_alias_table()) {
       PRINT_IDENT_WITH_QUOT(expr->get_table_name());
+      DATA_PRINTF(".");
+      PRINT_IDENT_WITH_QUOT(col_name);
+    } else if (print_params_.print_dbtbname_as_wildcard_ && OB_NOT_NULL(stmt_)) {
+      ObString star_str = ObString::make_string("*");
+      const TableItem *table_item = stmt_->get_table_item_by_id(expr->get_table_id());
+      if (OB_NOT_NULL(table_item)
+          && ObOutlineTemplateMatcher::has_explicit_db_prefix(table_item)) {
+        PRINT_IDENT_WITH_QUOT(star_str);
+        DATA_PRINTF(".");
+      }
+      PRINT_IDENT_WITH_QUOT(star_str);
       DATA_PRINTF(".");
       PRINT_IDENT_WITH_QUOT(col_name);
     } else {

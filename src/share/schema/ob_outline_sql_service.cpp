@@ -377,6 +377,18 @@ int ObOutlineSqlService::add_outline(common::ObISQLClient &sql_client,
                                         outline_info.get_format_sql_text_str().length(), "format_sql_text");
         SQL_COL_APPEND_VALUE(sql, values, outline_info.is_format(), "format_outline", "%d");
       }
+      // BINDING_RULE support: pattern_rules column only exists in __all_outline when data version >= 4.4.2.2
+      // Error if pattern_rules is non-empty but version is too old (mixed-version safety)
+      if (!outline_info.get_pattern_rules_str().empty()) {
+        if (!is_binding_rule_compat(compat_version)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("BINDING_RULE pattern_rules not supported under current data version",
+                   KR(ret), K(compat_version));
+        } else {
+          SQL_COL_APPEND_ESCAPE_STR_VALUE(sql, values, outline_info.get_pattern_rules(),
+                                          outline_info.get_pattern_rules_str().length(), "pattern_rules");
+        }
+      }
       if (0 == STRCMP(tname[i], OB_ALL_OUTLINE_HISTORY_TNAME)) {
         SQL_COL_APPEND_VALUE(sql, values, "false", "is_deleted", "%s");
       }

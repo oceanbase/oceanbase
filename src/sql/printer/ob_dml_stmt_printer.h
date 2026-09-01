@@ -16,6 +16,7 @@
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/printer/ob_raw_expr_printer.h"
+#include "sql/outline/ob_outline_template_matcher.h"
 #include "share/schema/ob_schema_struct.h"
 #include "share/catalog/ob_catalog_utils.h"
 
@@ -35,30 +36,43 @@ namespace sql
 
 #define PRINT_TABLE_NAME_NORMAL(table_item)                                 \
   do {                                                                		  \
+    if (print_params_.print_dbtbname_as_wildcard_                              \
+        && table_item->cte_type_ == TableItem::NOT_CTE                      \
+        && (table_item->is_basic_table() || table_item->is_link_table()     \
+            || (table_item->is_generated_table()                            \
+                && table_item->is_view_table_))) {                          \
+      ObString star_str = ObString::make_string("*");                       \
+      if (ObOutlineTemplateMatcher::has_explicit_db_prefix(table_item)) {   \
+        PRINT_IDENT_WITH_QUOT(star_str);                                    \
+        DATA_PRINTF(".");                                                   \
+      }                                                                     \
+      PRINT_IDENT_WITH_QUOT(star_str);                                      \
+    } else {                                                                \
     ObString catalog_name = table_item->catalog_name_;                      \
-    ObString database_name = table_item->synonym_name_.empty() ?         \
+    ObString database_name = table_item->synonym_name_.empty() ?            \
                             ( table_item->is_link_table() ?                 \
                               table_item->link_database_name_ :             \
-                              table_item->database_name_ ) :                 \
+                              table_item->database_name_ ) :                \
                              table_item->synonym_db_name_;                  \
     ObString table_name = table_item->synonym_name_.empty() ? table_item->table_name_ : table_item->synonym_name_ ; \
     if (table_item->cte_type_ == TableItem::NOT_CTE) {								      \
       if (!catalog_name.empty() && table_item->type_ == TableItem::BASE_TABLE && need_print_catalog_name(catalog_name)) { \
-        PRINT_IDENT_WITH_QUOT(catalog_name);                               \
+        PRINT_IDENT_WITH_QUOT(catalog_name);                                \
         DATA_PRINTF(".");                                                   \
       }                                                                     \
       if (!database_name.empty()) {                                         \
         PRINT_IDENT_WITH_QUOT(database_name);                               \
         DATA_PRINTF(".");                                                   \
       }                                                                     \
-      PRINT_IDENT_WITH_QUOT(table_name);                                      \
-      if (table_item->synonym_name_.empty() && table_item->is_link_type()) {  \
-        const ObString &dblink_name = table_item->dblink_name_;               \
-        DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                       \
-      } \
+      PRINT_IDENT_WITH_QUOT(table_name);                                    \
+      if (table_item->synonym_name_.empty() && table_item->is_link_type()) {\
+        const ObString &dblink_name = table_item->dblink_name_;             \
+        DATA_PRINTF("@%.*s", LEN_AND_PTR(dblink_name));                     \
+      }                                                                     \
     } else {																																\
       PRINT_IDENT_WITH_QUOT(table_name);                                    \
-    }																																				\
+    }                                                                       \
+    }                                                                       \
   } while (0)
 
 #define PRINT_TABLE_NAME_FOR_DBLINK(table_item)                             \

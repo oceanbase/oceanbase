@@ -749,7 +749,8 @@ public:
                                    const uint64_t database_id,
                                    const common::ObString &paramlized_sql,
                                    const bool is_format,
-                                   bool &exist);
+                                   bool &exist,
+                                   const common::ObString &pattern_rules = common::ObString());
   int check_outline_exist_with_sql_id(const uint64_t tenant_id,
                                    const uint64_t database_id,
                                    const common::ObString &sql_id,
@@ -892,6 +893,13 @@ public:
                                       const common::ObString &sql_id,
                                       const bool is_format,
                                       const ObOutlineInfo *&outline_info) ;
+  // Template outline interfaces for BINDING_RULE matching
+  int get_outline_infos_with_signature(const uint64_t tenant_id,
+                                        const uint64_t database_id,
+                                        const common::ObString &signature,
+                                        const bool is_format,
+                                        common::ObIArray<const ObOutlineInfo *> &outline_infos);
+  int has_template_outline(const uint64_t tenant_id, bool &has_template);
   //about user define function
   int check_udf_exist_with_name(const uint64_t tenant_id,
                                 const common::ObString &name,

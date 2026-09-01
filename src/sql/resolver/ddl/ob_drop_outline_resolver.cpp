@@ -72,6 +72,25 @@ int ObDropOutlineResolver::resolve(const ParseNode &parse_tree)
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "format outline not supported under oceanbase 4.3.4");
         LOG_WARN("format outline not supported under oceanbase 4.3.4", K(ret));
       }
+      // resolve scope (children_[2], may be NULL)
+      if (OB_SUCC(ret)) {
+        ParseNode *scope_node = node->children_[2];
+        if (OB_NOT_NULL(scope_node)) {
+          if (scope_node->type_ != T_BINDING_RULE_SCOPE
+              || OB_ISNULL(scope_node->children_)
+              || OB_ISNULL(scope_node->children_[0])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid scope node", K(ret));
+          } else if (!oceanbase::share::schema::ObOutlineSqlService::is_binding_rule_compat(compat_version)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "DROP OUTLINE with SCOPE is not supported under current data version");
+            LOG_WARN("DROP OUTLINE with SCOPE is not supported under current data version", K(ret));
+          } else {
+            int64_t scope_value = scope_node->children_[0]->value_;
+            static_cast<ObDropOutlineStmt *>(stmt_)->set_scope(scope_value);
+          }
+        }
+      }
     }
     if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
       CK (OB_NOT_NULL(schema_checker_)); 

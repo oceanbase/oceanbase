@@ -58,10 +58,13 @@ ObSimpleOutlineSchema &ObSimpleOutlineSchema::operator =(const ObSimpleOutlineSc
     schema_version_ = other.schema_version_;
     database_id_ = other.database_id_;
     format_outline_ = other.format_outline_;
+    is_template_ = other.is_template_;
     if (OB_FAIL(deep_copy_str(other.name_, name_))) {
       LOG_WARN("Fail to deep copy outline name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.signature_, signature_))) {
       LOG_WARN("Fail to deep copy signature", K(ret));
+    } else if (OB_FAIL(deep_copy_str(other.pattern_rules_, pattern_rules_))) {
+      LOG_WARN("Fail to deep copy pattern_rules", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.sql_id_, sql_id_))) {
       LOG_WARN("Fail to deep copy sql_id", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.format_sql_id_, format_sql_id_))) {
@@ -86,7 +89,9 @@ bool ObSimpleOutlineSchema::operator ==(const ObSimpleOutlineSchema &other) cons
       database_id_ == other.database_id_ &&
       name_ == other.name_ &&
       signature_ == other.signature_ &&
+      pattern_rules_ == other.pattern_rules_ &&
       format_outline_ == other.format_outline_ &&
+      is_template_ == other.is_template_ &&
       format_sql_id_ == other.format_sql_id_ &&
       sql_id_ == other.sql_id_) {
     ret = true;
@@ -103,8 +108,10 @@ void ObSimpleOutlineSchema::reset()
   schema_version_ = OB_INVALID_VERSION;
   database_id_ = OB_INVALID_ID;
   format_outline_ = false;
+  is_template_ = false;
   name_.reset();
   signature_.reset();
+  pattern_rules_.reset();
   sql_id_.reset();
   format_sql_id_.reset();
 }
@@ -131,10 +138,23 @@ int64_t ObSimpleOutlineSchema::get_convert_size() const
   convert_size += sizeof(ObSimpleOutlineSchema);
   convert_size += name_.length() + 1;
   convert_size += signature_.length() + 1;
+  convert_size += pattern_rules_.length() + 1;
   convert_size += sql_id_.length() + 1;
   convert_size += format_sql_id_.length() + 1;
 
   return convert_size;
+}
+
+int ObSimpleOutlineSchema::init_template_metadata(const ObString &pattern_rules)
+{
+  int ret = OB_SUCCESS;
+  is_template_ = !pattern_rules.empty();
+  if (is_template_) {
+    if (OB_FAIL(set_pattern_rules(pattern_rules))) {
+      LOG_WARN("failed to deep copy pattern_rules", K(ret), K_(tenant_id), K_(outline_id));
+    }
+  }
+  return ret;
 }
 
 ObOutlineMgr::ObOutlineMgr()
@@ -144,7 +164,8 @@ ObOutlineMgr::ObOutlineMgr()
       outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
       outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE)),
-      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE))
+      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      binding_match_map_()
 {
 }
 
@@ -155,7 +176,8 @@ ObOutlineMgr::ObOutlineMgr(ObIAllocator &allocator)
       outline_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_ID_MAP, ObCtxIds::SCHEMA_SERVICE)),
       outline_name_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_NAME_MAP, ObCtxIds::SCHEMA_SERVICE)),
       signature_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE)),
-      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE))
+      sql_id_map_(SET_USE_500(ObModIds::OB_SCHEMA_OUTLINE_SQL_MAP, ObCtxIds::SCHEMA_SERVICE)),
+      binding_match_map_()
 {
 }
 
@@ -175,8 +197,9 @@ int ObOutlineMgr::init()
     LOG_WARN("init signature map failed", K(ret));
   } else if (OB_FAIL(sql_id_map_.init())) {
     LOG_WARN("init signature map failed", K(ret));
+  } else if (OB_FAIL(binding_match_map_.create(64, SET_USE_500("BindMatchMap", ObCtxIds::SCHEMA_SERVICE)))) {
+    LOG_WARN("init binding_match_map failed", K(ret));
   }
-
 
   return ret;
 }
@@ -196,6 +219,12 @@ void ObOutlineMgr::reset()
     outline_name_map_.clear();
     signature_map_.clear();
     sql_id_map_.clear();
+    // Destroy SEArray values before reuse — ObHashMap::reuse() does raw free without destructors
+    for (BindingMatchMap::iterator it = binding_match_map_.begin();
+         it != binding_match_map_.end(); ++it) {
+      it->second.destroy();
+    }
+    binding_match_map_.reuse();
   }
 }
 
@@ -233,6 +262,19 @@ int ObOutlineMgr::assign(const ObOutlineMgr &other)
     ASSIGN_FIELD(signature_map_);
     ASSIGN_FIELD(sql_id_map_);
     #undef ASSIGN_FIELD
+    // Rebuild binding_match_map_ from the copied outlines.
+    // Cannot use ASSIGN_FIELD because ObHashMap doesn't support assign().
+    if (OB_SUCC(ret)) {
+      for (ConstOutlineIter iter = outline_infos_.begin();
+           iter != outline_infos_.end() && OB_SUCC(ret); ++iter) {
+        ObSimpleOutlineSchema *outline_schema = *iter;
+        if (OB_NOT_NULL(outline_schema) && outline_schema->is_template()) {
+          if (OB_FAIL(build_binding_match_map(outline_schema))) {
+            LOG_WARN("build binding match map failed during assign", K(ret));
+          }
+        }
+      }
+    }
   }
 
   return ret;
@@ -380,11 +422,12 @@ int ObOutlineMgr::add_outline(const ObSimpleOutlineSchema &outline_schema)
     }
     if (OB_SUCC(ret)) {
       if (0 != new_outline_schema->get_signature_str().length()) {
-        ObOutlineSignatureHashWrapper outline_signature_wrapper(new_outline_schema->get_tenant_id(),
-                                                                new_outline_schema->get_database_id(),
-                                                                new_outline_schema->get_signature_str(),
-                                                                new_outline_schema->is_format());
-        hash_ret = signature_map_.set_refactored(outline_signature_wrapper,
+        ObOutlineSignatureDedupKey outline_signature_key(new_outline_schema->get_tenant_id(),
+                                                         new_outline_schema->get_database_id(),
+                                                         new_outline_schema->get_signature_str(),
+                                                         new_outline_schema->is_format(),
+                                                         new_outline_schema->get_pattern_rules_str());
+        hash_ret = signature_map_.set_refactored(outline_signature_key,
                                                  new_outline_schema, over_write);
         if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
           ret = OB_ERR_UNEXPECTED;
@@ -408,6 +451,13 @@ int ObOutlineMgr::add_outline(const ObSimpleOutlineSchema &outline_schema)
                    "format outline", new_outline_schema->get_format_sql_id_str(),
                    "is_format", new_outline_schema->is_format());
         }
+      }
+    }
+    // Build template outline maps for BINDING_RULE matching
+    // Template outlines have non-empty pattern_rules
+    if (OB_SUCC(ret) && new_outline_schema->is_template()) {
+      if (OB_FAIL(build_binding_match_map(new_outline_schema))) {
+        LOG_WARN("build binding match map failed", K(ret));
       }
     }
   }
@@ -495,11 +545,12 @@ int ObOutlineMgr::del_outline(const ObTenantOutlineId &outline)
     }
     if (OB_SUCC(ret)) {
       if (0 != schema_to_del->get_signature_str().length()) {
-        ObOutlineSignatureHashWrapper outline_signature_wrapper(schema_to_del->get_tenant_id(),
-                                                                schema_to_del->get_database_id(),
-                                                                schema_to_del->get_signature_str(),
-                                                                schema_to_del->is_format());
-        hash_ret = signature_map_.erase_refactored(outline_signature_wrapper);
+        ObOutlineSignatureDedupKey outline_signature_key(schema_to_del->get_tenant_id(),
+                                                         schema_to_del->get_database_id(),
+                                                         schema_to_del->get_signature_str(),
+                                                         schema_to_del->is_format(),
+                                                         schema_to_del->get_pattern_rules_str());
+        hash_ret = signature_map_.erase_refactored(outline_signature_key);
         if (OB_SUCCESS != hash_ret) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed delete outline from signature hashmap, ",
@@ -528,6 +579,13 @@ int ObOutlineMgr::del_outline(const ObTenantOutlineId &outline)
                    "format outline", schema_to_del->get_format_sql_id_str(),
                    "is format", schema_to_del->is_format());
         }
+      }
+    }
+    // Remove from binding_match_map_ (BINDING_RULE template matching)
+    if (OB_SUCC(ret) && schema_to_del->is_template()) {
+      if (OB_FAIL(remove_from_binding_match_map_(schema_to_del))) {
+        LOG_WARN("remove from binding match map failed", K(ret),
+                 "outline_id", schema_to_del->get_outline_id());
       }
     }
   }
@@ -625,7 +683,8 @@ int ObOutlineMgr::get_outline_schema_with_signature(
   const uint64_t database_id,
   const ObString &signature,
   const bool is_format,
-  const ObSimpleOutlineSchema *&outline_schema) const
+  const ObSimpleOutlineSchema *&outline_schema,
+  const ObString &pattern_rules) const
 {
   int ret = OB_SUCCESS;
   outline_schema = NULL;
@@ -640,9 +699,9 @@ int ObOutlineMgr::get_outline_schema_with_signature(
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(database_id), K(signature));
   } else {
     ObSimpleOutlineSchema *tmp_schema = NULL;
-    const ObOutlineSignatureHashWrapper outline_signature_wrapper(tenant_id, database_id,
-                                                                  signature, is_format);
-    int hash_ret = signature_map_.get_refactored(outline_signature_wrapper, tmp_schema);
+    const ObOutlineSignatureDedupKey key(tenant_id, database_id,
+                                         signature, is_format, pattern_rules);
+    int hash_ret = signature_map_.get_refactored(key, tmp_schema);
     if (OB_SUCCESS == hash_ret) {
       if (OB_ISNULL(tmp_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -687,6 +746,76 @@ int ObOutlineMgr::get_outline_schema_with_sql_id(
         outline_schema = tmp_schema;
       }
     }
+  }
+
+  return ret;
+}
+
+// ==================== Template Outline Matching Interfaces ====================
+
+int ObOutlineMgr::get_outline_infos_with_signature(
+  const uint64_t tenant_id,
+  const uint64_t database_id,
+  const ObString &signature,
+  const bool is_format,
+  common::ObIArray<const ObSimpleOutlineSchema *> &outline_infos) const
+{
+  int ret = OB_SUCCESS;
+  outline_infos.reset();
+
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || signature.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(database_id), K(signature));
+  } else {
+    // First try current database_id
+    const ObOutlineSignatureHashWrapper sig_wrapper(tenant_id, database_id, signature, is_format);
+    common::ObSEArray<ObSimpleOutlineSchema *, 4> candidates;
+    int hash_ret = binding_match_map_.get_refactored(sig_wrapper, candidates);
+    if (OB_SUCCESS == hash_ret) {
+      for (int64_t i = 0; i < candidates.count() && OB_SUCC(ret); ++i) {
+        if (OB_ISNULL(candidates.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("NULL outline in candidates", K(ret), K(i));
+        } else if (OB_FAIL(outline_infos.push_back(candidates.at(i)))) {
+          LOG_WARN("push back outline failed", K(ret));
+        }
+      }
+    }
+
+    // Then try OB_PUBLIC_SCHEMA_ID (tenant-level outlines)
+    if (OB_SUCC(ret) && database_id != OB_PUBLIC_SCHEMA_ID) {
+      const ObOutlineSignatureHashWrapper pub_sig_wrapper(tenant_id, OB_PUBLIC_SCHEMA_ID, signature, is_format);
+      candidates.reset();
+      hash_ret = binding_match_map_.get_refactored(pub_sig_wrapper, candidates);
+      if (OB_SUCCESS == hash_ret) {
+        for (int64_t i = 0; i < candidates.count() && OB_SUCC(ret); ++i) {
+          if (OB_ISNULL(candidates.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("NULL outline in candidates", K(ret), K(i));
+          } else if (OB_FAIL(outline_infos.push_back(candidates.at(i)))) {
+            LOG_WARN("push back outline failed", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObOutlineMgr::has_template_outline(const uint64_t tenant_id, bool &has_template) const
+{
+  int ret = OB_SUCCESS;
+  has_template = false;
+
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else {
+    has_template = (binding_match_map_.size() > 0);
   }
 
   return ret;
@@ -811,6 +940,111 @@ int ObOutlineMgr::get_schema_statistics(ObSchemaStatisticsInfo &schema_info) con
   return ret;
 }
 
+
+// Build template outline map for BINDING_RULE matching
+int ObOutlineMgr::build_binding_match_map(const ObSimpleOutlineSchema *outline_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(outline_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL outline schema", K(ret));
+  } else {
+    const ObString &signature = outline_schema->get_signature_str();
+    const uint64_t tenant_id = outline_schema->get_tenant_id();
+    const uint64_t database_id = outline_schema->get_database_id();
+    const bool is_format = outline_schema->is_format();
+
+    if (!outline_schema->is_template()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("non-template outline should not build binding match map", K(ret), KPC(outline_schema));
+    } else if (signature.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("template outline missing signature", K(ret), KPC(outline_schema));
+    } else {
+      ObOutlineSignatureHashWrapper sig_wrapper(tenant_id, database_id, signature, is_format);
+      ObSimpleOutlineSchema *non_const_outline = const_cast<ObSimpleOutlineSchema *>(outline_schema);
+
+      // Add to binding_match_map_ (1:N)
+      // get_refactored copies the value out, so we get+modify+set back
+      common::ObSEArray<ObSimpleOutlineSchema *, 4> candidates;
+      int hash_ret = binding_match_map_.get_refactored(sig_wrapper, candidates);
+      if (OB_SUCCESS == hash_ret) {
+        // Already exists, append and overwrite
+        if (OB_FAIL(candidates.push_back(non_const_outline))) {
+          LOG_WARN("push back to candidates failed", K(ret));
+        } else if (OB_FAIL(binding_match_map_.set_refactored(sig_wrapper, candidates, 1/*overwrite*/))) {
+          LOG_WARN("overwrite binding match map failed", K(ret));
+        }
+      } else if (OB_HASH_NOT_EXIST == hash_ret) {
+        // Create new entry
+        common::ObSEArray<ObSimpleOutlineSchema *, 4> new_candidates;
+        if (OB_FAIL(new_candidates.push_back(non_const_outline))) {
+          LOG_WARN("push back to new candidates failed", K(ret));
+        } else if (OB_FAIL(binding_match_map_.set_refactored(sig_wrapper, new_candidates))) {
+          LOG_WARN("set binding match map failed", K(ret));
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get binding match map failed", K(ret), K(hash_ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObOutlineMgr::remove_from_binding_match_map_(const ObSimpleOutlineSchema *outline_schema)
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("[saas_outline_binding_rule][share_schema] remove_from_binding_match_map_ enter",
+           KP(outline_schema));
+  if (OB_ISNULL(outline_schema)) {
+    // nothing to do
+  } else {
+    const ObString &signature = outline_schema->get_signature_str();
+    if (outline_schema->is_template()) {
+      const uint64_t tenant_id = outline_schema->get_tenant_id();
+      const uint64_t database_id = outline_schema->get_database_id();
+      const bool is_format = outline_schema->is_format();
+      const uint64_t outline_id = outline_schema->get_outline_id();
+      if (signature.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("template outline missing signature", K(ret), KPC(outline_schema));
+      } else {
+        ObOutlineSignatureHashWrapper sig_wrapper(tenant_id, database_id, signature, is_format);
+        common::ObSEArray<ObSimpleOutlineSchema *, 4> candidates;
+        int hash_ret = binding_match_map_.get_refactored(sig_wrapper, candidates);
+        if (OB_SUCCESS == hash_ret) {
+          // Filter out the deleted outline by outline_id
+          common::ObSEArray<ObSimpleOutlineSchema *, 4> remaining;
+          for (int64_t i = 0; i < candidates.count() && OB_SUCC(ret); ++i) {
+            if (OB_NOT_NULL(candidates.at(i)) &&
+                candidates.at(i)->get_outline_id() != outline_id) {
+              if (OB_FAIL(remaining.push_back(candidates.at(i)))) {
+                LOG_WARN("push back remaining candidate failed", K(ret));
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (remaining.empty()) {
+              int erase_ret = binding_match_map_.erase_refactored(sig_wrapper);
+              if (OB_SUCCESS != erase_ret && OB_HASH_NOT_EXIST != erase_ret) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("erase binding match map entry failed", K(ret), K(erase_ret), K(outline_id));
+              }
+            } else if (OB_FAIL(binding_match_map_.set_refactored(sig_wrapper, remaining, 1/*overwrite*/))) {
+              LOG_WARN("update binding match map failed", K(ret), K(outline_id));
+            }
+          }
+        }
+        // OB_HASH_NOT_EXIST means outline wasn't in the map -- not an error
+      }
+    }
+  }
+  return ret;
+}
+
 // TODO@xiyu: which case will cause in-consistent for outline?
 int ObOutlineMgr::rebuild_outline_hashmap()
 {
@@ -824,6 +1058,12 @@ int ObOutlineMgr::rebuild_outline_hashmap()
     outline_name_map_.clear();
     signature_map_.clear();
     sql_id_map_.clear();
+    // Clear and rebuild template outline maps for BINDING_RULE matching
+    for (BindingMatchMap::iterator it = binding_match_map_.begin();
+         it != binding_match_map_.end(); ++it) {
+      it->second.destroy();
+    }
+    binding_match_map_.reuse();
     for (ConstOutlineIter iter = outline_infos_.begin();
         iter != outline_infos_.end() && OB_SUCC(ret); ++iter) {
       ObSimpleOutlineSchema *outline_schema = *iter;
@@ -856,11 +1096,12 @@ int ObOutlineMgr::rebuild_outline_hashmap()
         }
         if (OB_SUCC(ret)) {
           if (0 != outline_schema->get_signature_str().length()) {
-            ObOutlineSignatureHashWrapper outline_signature_wrapper(outline_schema->get_tenant_id(),
-                                                                    outline_schema->get_database_id(),
-                                                                    outline_schema->get_signature_str(),
-                                                                    outline_schema->is_format());
-            hash_ret = signature_map_.set_refactored(outline_signature_wrapper,
+            ObOutlineSignatureDedupKey outline_signature_key(outline_schema->get_tenant_id(),
+                                                             outline_schema->get_database_id(),
+                                                             outline_schema->get_signature_str(),
+                                                             outline_schema->is_format(),
+                                                             outline_schema->get_pattern_rules_str());
+            hash_ret = signature_map_.set_refactored(outline_signature_key,
                                                      outline_schema, over_write);
             if (OB_SUCCESS != hash_ret) {
               ret = OB_ERR_UNEXPECTED;
@@ -884,6 +1125,12 @@ int ObOutlineMgr::rebuild_outline_hashmap()
                        "sql_id", outline_schema->get_sql_id_str());
             }
           }
+        // Build template outline maps for BINDING_RULE matching
+        if (OB_SUCC(ret) && outline_schema->is_template()) {
+          if (OB_FAIL(build_binding_match_map(outline_schema))) {
+            LOG_WARN("build binding match map failed", K(ret));
+          }
+        }
         }
       }
     }

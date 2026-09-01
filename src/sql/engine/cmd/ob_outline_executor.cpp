@@ -13,12 +13,17 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_outline_executor.h"
 
+#include <regex.h>  // For regex validation (regcomp, regerror, regfree)
 #include "sql/ob_sql.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/resolver/ddl/ob_create_outline_stmt.h"
 #include "sql/resolver/ddl/ob_alter_outline_stmt.h"
 #include "sql/resolver/ddl/ob_drop_outline_stmt.h"
+#include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/monitor/ob_sql_plan.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "share/schema/ob_schema_struct.h"
 namespace oceanbase
 {
 
@@ -28,7 +33,6 @@ using namespace obrpc;
 
 namespace sql
 {
-
 
 int ObOutlineExecutor::generate_outline_info2(ObExecContext &ctx,
                                              ObCreateOutlineStmt *create_outline_stmt,
@@ -334,6 +338,11 @@ int ObCreateOutlineExecutor::execute(ObExecContext &ctx, ObCreateOutlineStmt &st
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_outline_info(ctx, &stmt, outline_info))) {
     LOG_WARN("generate_outline_info failed", K(ret));
+  } else if (stmt.has_binding_rule()
+             && (stmt.get_binding_rule().is_tenant_scope()
+                 || stmt.get_binding_rule().get_map_item_count() > 0)
+             && OB_FAIL(generate_binding_rule_info(ctx, &stmt, outline_info))) {
+    LOG_WARN("generate_binding_rule_info failed", K(ret));
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed", K(ret));
@@ -346,7 +355,7 @@ int ObCreateOutlineExecutor::execute(ObExecContext &ctx, ObCreateOutlineStmt &st
     LOG_WARN("common rpc proxy should not be null", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->create_outline(arg))) {
     LOG_WARN("rpc proxy create outline failed", "dst", common_rpc_proxy->get_server(), K(ret));
-  } else {/*do nothing*/ }
+  }
   return ret;
 }
 
@@ -422,6 +431,9 @@ int ObDropOutlineExecutor::execute(ObExecContext &ctx, ObDropOutlineStmt &stmt)
   } else {
     arg.ddl_stmt_str_ = first_stmt;
   }
+  // SCOPE=TENANT outlines are stored with database_id = OB_PUBLIC_SCHEMA_ID.
+  // The rootserver drop_outline() already handles fallback lookup from current db
+  // to OB_PUBLIC_SCHEMA_ID when outline is not found.
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -438,5 +450,442 @@ int ObDropOutlineExecutor::execute(ObExecContext &ctx, ObDropOutlineStmt &stmt)
 
   return ret;
 }
+// Helper: check if character is part of an identifier [a-zA-Z0-9_]
+static inline bool is_identifier_char(char c)
+{
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+         (c >= '0' && c <= '9') || c == '_';
+}
+
+// ==================== BINDING_RULE helper: case-insensitive find with word boundary ====================
+static int64_t ob_find_str_ci(const char *haystack, int64_t hay_len,
+                              const char *needle, int64_t needle_len)
+{
+  if (NULL == haystack || NULL == needle || needle_len <= 0 || needle_len > hay_len) {
+    return -1;
+  }
+  for (int64_t i = 0; i <= hay_len - needle_len; ++i) {
+    if (0 == strncasecmp(haystack + i, needle, needle_len)) {
+      // Word boundary check: avoid matching inside longer identifiers
+      bool left_ok = (i == 0) || !is_identifier_char(haystack[i - 1]);
+      bool right_ok = (i + needle_len >= hay_len) || !is_identifier_char(haystack[i + needle_len]);
+      if (left_ok && right_ok) {
+        return i;
+      }
+      // else continue searching
+    }
+  }
+  return -1;
+}
+
+
+// Helper: replace table name with placeholder for a single ObTableInHint
+static int replace_single_table_in_hint(ObTableInHint *table_in_hint,
+                                        ObOutlineBindingRule &binding_rule,
+                                        ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  bool matched = false;
+  for (int64_t m = 0; OB_SUCC(ret) && !matched && m < binding_rule.get_map_item_count(); ++m) {
+    const ObOutlineRuleMapping &mapping = binding_rule.get_map_item(m);
+    if (mapping.needs_placeholder()) {
+      bool table_match = (0 == table_in_hint->table_name_.case_compare(
+                                   mapping.get_original_table_name()));
+      bool db_match = table_in_hint->db_name_.empty() ||
+                      mapping.get_original_db_name().empty() ||
+                      (0 == table_in_hint->db_name_.case_compare(
+                                mapping.get_original_db_name()));
+      if (table_match && db_match) {
+        matched = true;
+        int64_t position = mapping.get_ast_position();
+        uint64_t tb_obj_id = mapping.get_tb_obj_id();
+        ObSqlString tb_ph;
+        if (OB_INVALID_ID == tb_obj_id) {
+          const ObString &tbl = mapping.get_original_table_name();
+          if (OB_FAIL(tb_ph.assign_fmt("TB_%.*s$%ld", tbl.length(), tbl.ptr(), position))) {
+            LOG_WARN("fail to build tb placeholder", K(ret));
+          }
+        } else if (OB_FAIL(tb_ph.assign_fmt("TB_%lu$%ld", tb_obj_id, position))) {
+          LOG_WARN("fail to build tb placeholder", K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          ObString deep_copy_tb;
+          if (OB_FAIL(ob_write_string(allocator, tb_ph.string(), deep_copy_tb))) {
+            LOG_WARN("fail to deep copy tb placeholder", K(ret));
+          } else {
+            table_in_hint->table_name_ = deep_copy_tb;
+          }
+        }
+        if (OB_SUCC(ret) && mapping.has_db_prefix() && !table_in_hint->db_name_.empty()) {
+          uint64_t db_obj_id = mapping.get_db_obj_id();
+          ObSqlString db_ph;
+          if (OB_INVALID_ID == db_obj_id) {
+            const ObString &db = mapping.get_original_db_name();
+            if (OB_FAIL(db_ph.assign_fmt("DB_%.*s$%ld", db.length(), db.ptr(), position))) {
+              LOG_WARN("fail to build db placeholder", K(ret));
+            }
+          } else if (OB_FAIL(db_ph.assign_fmt("DB_%lu$%ld", db_obj_id, position))) {
+            LOG_WARN("fail to build db placeholder", K(ret));
+          }
+          if (OB_SUCC(ret)) {
+            ObString deep_copy_db;
+            if (OB_FAIL(ob_write_string(allocator, db_ph.string(), deep_copy_db))) {
+              LOG_WARN("fail to deep copy db placeholder", K(ret));
+            } else {
+              table_in_hint->db_name_ = deep_copy_db;
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Helper: replace table names with placeholders in a single ObHints array
+static int replace_table_in_hints_array(ObIArray<ObHints> &hints_array,
+                                        ObOutlineBindingRule &binding_rule,
+                                        ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTableInHint*, 16> all_tables;
+  for (int64_t h = 0; OB_SUCC(ret) && h < hints_array.count(); ++h) {
+    ObHints &hints = hints_array.at(h);
+    for (int64_t i = 0; OB_SUCC(ret) && i < hints.hints_.count(); ++i) {
+      ObHint *hint = hints.hints_.at(i);
+      all_tables.reuse();
+      if (OB_ISNULL(hint)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("hint is null", K(ret), K(h), K(i));
+      } else if (OB_FAIL(hint->get_all_table_in_hint(all_tables))) {
+        LOG_WARN("failed to get all table in hint", K(ret));
+      }
+      for (int64_t t = 0; OB_SUCC(ret) && t < all_tables.count(); ++t) {
+        ObTableInHint *table_in_hint = all_tables.at(t);
+        if (OB_ISNULL(table_in_hint)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table_in_hint is null", K(ret), K(h), K(i), K(t));
+        } else if (!table_in_hint->table_name_.empty()) {
+          if (OB_FAIL(replace_single_table_in_hint(table_in_hint, binding_rule, allocator))) {
+            LOG_WARN("failed to replace table in hint", K(ret), K(t));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// ==================== BINDING_RULE: replace_table_with_placeholder_by_hint ====================
+// Use hint AST to precisely replace table names with placeholders.
+// This is more robust than string replacement because it only touches actual table references
+// in hints (ObTableInHint), avoiding false matches on index names or substrings.
+int ObOutlineExecutor::replace_table_with_placeholder_by_hint(
+    ObDMLStmt *outline_stmt,
+    ObOutlineBindingRule &binding_rule,
+    ObIAllocator &allocator,
+    ObSqlString &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(outline_stmt) || OB_ISNULL(outline_stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("outline_stmt or query_ctx is NULL", K(ret));
+  } else {
+    ObQueryHint &query_hint = outline_stmt->get_query_ctx()->get_query_hint_for_update();
+
+    // Step 1: Replace table names with placeholders in all hint arrays
+    if (OB_FAIL(replace_table_in_hints_array(query_hint.qb_hints_, binding_rule, allocator))) {
+      LOG_WARN("failed to replace tables in qb_hints", K(ret));
+    } else if (OB_FAIL(replace_table_in_hints_array(query_hint.stmt_id_hints_, binding_rule, allocator))) {
+      LOG_WARN("failed to replace tables in stmt_id_hints", K(ret));
+    }
+
+    // Step 2: Re-print all hints into outline_content string via print_outline_data
+    if (OB_SUCC(ret)) {
+      const int64_t buf_size = OB_MAX_SQL_LENGTH;  // 64KB
+      char *buf = static_cast<char*>(allocator.alloc(buf_size));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc buffer for hint printing", K(ret), K(buf_size));
+      } else {
+        PlanText plan_text;
+        plan_text.buf_ = buf;
+        plan_text.buf_len_ = buf_size;
+        plan_text.pos_ = 0;
+        plan_text.is_oneline_ = true;
+        plan_text.is_outline_data_ = true;
+
+        BUF_PRINT_CONST_STR("/*+", plan_text);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(query_hint.print_outline_data(plan_text))) {
+          LOG_WARN("failed to print outline data", K(ret));
+        } else {
+          BUF_PRINT_CONST_STR("*/", plan_text);
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(result.assign(ObString(plan_text.pos_, buf)))) {
+            LOG_WARN("fail to build final outline content", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// ==================== BINDING_RULE: generate_binding_rule_info ====================
+int ObOutlineExecutor::generate_binding_rule_info(ObExecContext &ctx,
+                                                  ObCreateOutlineStmt *stmt,
+                                                  ObOutlineInfo &outline_info)
+{
+  int ret = OB_SUCCESS;
+  ObOutlineBindingRule &binding_rule = stmt->get_binding_rule();  // Need non-const for auto-generating map_items
+  ObIAllocator &allocator = ctx.get_allocator();
+  ObSQLSessionInfo *session = ctx.get_my_session();
+
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else {
+    // is_template is derived from pattern_rules being non-empty (no explicit field)
+
+    // Handle SCOPE=TENANT: set database_id to OB_PUBLIC_SCHEMA_ID
+    if (binding_rule.is_tenant_scope()) {
+      outline_info.set_database_id(OB_PUBLIC_SCHEMA_ID);
+    }
+
+    // 1. Template Signature: produced by the resolver from the pristine outline AST
+    //    (before transform_stmt() rewrites it). Executor is purely a carrier here —
+    //    if the resolver did not produce one, treat it as an internal error rather
+    //    than re-deriving from the now-possibly-rewritten outline_stmt.
+    if (OB_SUCC(ret)) {
+      const ObString &ast_sig = stmt->get_template_signature();
+      if (ast_sig.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("template signature missing from stmt; resolver should have produced it",
+                 K(ret),
+                 "outline_name", stmt->get_create_outline_arg().outline_info_.get_name_str());
+      } else if (OB_FAIL(outline_info.set_signature(ast_sig))) {
+        LOG_WARN("fail to set template signature on outline_info", K(ret));
+      } else {
+        LOG_DEBUG("[OUTLINE] create template outline signature",
+                  "outline_name", stmt->get_create_outline_arg().outline_info_.get_name_str(),
+                  K(ast_sig));
+      }
+    }
+
+    // 2. Replace table references with DB_[objid]$N / TB_[objid]$N placeholders in outline_content
+    // Use hint AST approach: modify ObTableInHint objects directly and re-print.
+    // This is more robust than string replacement (avoids false matches on index names).
+    if (OB_SUCC(ret) && binding_rule.get_map_item_count() > 0) {
+      ObDMLStmt *outline_stmt = static_cast<ObDMLStmt *>(stmt->get_outline_stmt());
+      if (OB_NOT_NULL(outline_stmt)) {
+        ObSqlString new_content;
+        if (OB_FAIL(replace_table_with_placeholder_by_hint(outline_stmt, binding_rule,
+                                                           allocator, new_content))) {
+          LOG_WARN("fail to replace table with placeholder by hint AST", K(ret));
+        } else if (OB_FAIL(outline_info.set_outline_content(new_content.string()))) {
+          LOG_WARN("fail to set outline content with placeholders", K(ret));
+        }
+      }
+    }
+
+    // 2a. Store generated placeholder strings back into map items for JSON serialization
+    // Must happen BEFORE to_json_string so pattern_rules contains tb_placeholder/db_placeholder
+    // CRITICAL: Must deep copy strings using allocator, as ObSqlString tb_ph/db_ph are destroyed
+    // after each loop iteration. Shallow assignment causes tb_placeholder_ to point to freed memory.
+    if (OB_SUCC(ret) && binding_rule.get_map_item_count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < binding_rule.get_map_item_count(); ++i) {
+        ObOutlineRuleMapping &item = binding_rule.get_map_item(i);
+        if (!item.needs_placeholder()) {
+          continue;
+        }
+        int64_t placeholder_n = item.get_ast_position();
+        uint64_t tb_obj_id = item.get_tb_obj_id();
+        uint64_t db_obj_id = item.get_db_obj_id();
+        ObSqlString tb_ph;
+        ObString tb_ph_str;
+        if (OB_INVALID_ID == tb_obj_id) {
+          const ObString &tbl = item.get_original_table_name();
+          if (OB_FAIL(tb_ph.assign_fmt("TB_%.*s$%ld", tbl.length(), tbl.ptr(), placeholder_n))) {
+            LOG_WARN("fail to build tb placeholder string", K(ret));
+          }
+        } else {
+          if (OB_FAIL(tb_ph.assign_fmt("TB_%lu$%ld", tb_obj_id, placeholder_n))) {
+            LOG_WARN("fail to build tb placeholder string", K(ret));
+          }
+        }
+        // Deep copy into allocator so string persists after tb_ph is destroyed
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(ob_write_string(allocator, tb_ph.string(), tb_ph_str))) {
+            LOG_WARN("fail to deep copy tb placeholder string", K(ret), K(i));
+          } else if (OB_FAIL(item.set_tb_placeholder(tb_ph_str))) {
+            LOG_WARN("fail to set tb_placeholder on mapping", K(ret), K(i));
+          }
+        }
+        if (OB_SUCC(ret) && item.has_db_prefix()) {
+          ObSqlString db_ph;
+          ObString db_ph_str;
+          if (OB_INVALID_ID == db_obj_id) {
+            const ObString &db = item.get_original_db_name();
+            if (OB_FAIL(db_ph.assign_fmt("DB_%.*s$%ld", db.length(), db.ptr(), placeholder_n))) {
+              LOG_WARN("fail to build db placeholder string", K(ret));
+            }
+          } else {
+            if (OB_FAIL(db_ph.assign_fmt("DB_%lu$%ld", db_obj_id, placeholder_n))) {
+              LOG_WARN("fail to build db placeholder string", K(ret));
+            }
+          }
+          // Deep copy into allocator so string persists after db_ph is destroyed
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ob_write_string(allocator, db_ph.string(), db_ph_str))) {
+              LOG_WARN("fail to deep copy db placeholder string", K(ret), K(i));
+            } else if (OB_FAIL(item.set_db_placeholder(db_ph_str))) {
+              LOG_WARN("fail to set db_placeholder on mapping", K(ret), K(i));
+            }
+          }
+        }
+      }
+    }
+
+    // 2b. Strip database name from outline_content for SCOPE=TENANT
+    if (OB_SUCC(ret) && binding_rule.is_tenant_scope()) {
+      ObString oc = outline_info.get_outline_content_str();
+      if (!oc.empty()) {
+        ObSqlString working;
+        ObSqlString temp;
+        if (OB_FAIL(working.assign(oc))) {
+          LOG_WARN("fail to copy outline content for db strip", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < binding_rule.get_map_item_count(); ++i) {
+          const ObOutlineRuleMapping &item = binding_rule.get_map_item(i);
+          ObString db_name = item.get_original_db_name();
+          if (db_name.empty()) {
+            db_name = session->get_database_name();
+          }
+          if (!db_name.empty()) {
+            // Build pattern: "db_name".  (quoted db name followed by dot)
+            ObSqlString db_prefix;
+            if (OB_FAIL(db_prefix.append("\"")) ||
+                OB_FAIL(db_prefix.append(db_name)) ||
+                OB_FAIL(db_prefix.append("\"."))) {
+              LOG_WARN("fail to build db prefix pattern", K(ret), K(db_name));
+            } else {
+              bool found = true;
+              while (OB_SUCC(ret) && found) {
+                int64_t pos = ob_find_str_ci(working.ptr(), working.length(),
+                                             db_prefix.ptr(), db_prefix.length());
+                if (pos < 0) {
+                  found = false;
+                } else {
+                  temp.reset();
+                  if (OB_FAIL(temp.append(working.ptr(), pos))) {
+                    LOG_WARN("fail to append prefix", K(ret));
+                  } else if (OB_FAIL(temp.append(working.ptr() + pos + db_prefix.length(),
+                                                 working.length() - pos - db_prefix.length()))) {
+                    LOG_WARN("fail to append suffix", K(ret));
+                  } else {
+                    working.reset();
+                    if (OB_FAIL(working.assign(temp.string()))) {
+                      LOG_WARN("fail to assign temp", K(ret));
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(outline_info.set_outline_content(working.string()))) {
+            LOG_WARN("fail to set outline content without db name", K(ret));
+          } else {
+            LOG_DEBUG("stripped db name from outline_content for SCOPE=TENANT",
+                     "new_content", working.string());
+          }
+        }
+      }
+    }
+
+    // 3. Validate regex patterns (fail-fast before persistence)
+    // Invalid regex should be caught at CREATE time, not MATCH time
+    // Prevents invalid regex like "[a-z" (missing ]) from being persisted
+    static const int64_t REGEX_MAX_LEN = 128;  // Same as OB_PATTERN_MAX_REGEX_LEN in ob_pattern_matcher.h
+    if (OB_SUCC(ret) && binding_rule.get_map_item_count() > 0) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < binding_rule.get_map_item_count(); ++i) {
+        const ObOutlineRuleMapping &item = binding_rule.get_map_item(i);
+        // Validate db_var_regex if present
+        const ObString &db_regex = item.get_db_var_regex();
+        if (!db_regex.empty()) {
+          regex_t test_regex;
+          char regex_buf[REGEX_MAX_LEN + 8];
+          if (db_regex.length() > REGEX_MAX_LEN) {
+            ret = OB_ERR_REGEXP_ERROR;
+            LOG_WARN("db_var_regex exceeds max length, cannot create outline",
+                     K(ret), K(i), "length", db_regex.length(), K(REGEX_MAX_LEN));
+          } else {
+            MEMCPY(regex_buf, db_regex.ptr(), db_regex.length());
+            regex_buf[db_regex.length()] = '\0';
+            int reg_ret = regcomp(&test_regex, regex_buf, REG_EXTENDED | REG_NOSUB);
+            if (0 != reg_ret) {
+              ret = OB_ERR_REGEXP_ERROR;
+              LOG_WARN("invalid db_var_regex, cannot create outline with invalid regex pattern",
+                       K(ret), K(i), K(db_regex));
+            } else {
+              regfree(&test_regex);
+            }
+          }
+        }
+        // Validate table_var_regex if present
+        if (OB_SUCC(ret)) {
+          const ObString &tbl_regex = item.get_table_var_regex();
+          if (!tbl_regex.empty()) {
+            regex_t test_regex;
+            char regex_buf[REGEX_MAX_LEN + 8];
+            if (tbl_regex.length() > REGEX_MAX_LEN) {
+              ret = OB_ERR_REGEXP_ERROR;
+              LOG_WARN("table_var_regex exceeds max length, cannot create outline",
+                       K(ret), K(i), "length", tbl_regex.length(), K(REGEX_MAX_LEN));
+            } else {
+              MEMCPY(regex_buf, tbl_regex.ptr(), tbl_regex.length());
+              regex_buf[tbl_regex.length()] = '\0';
+              int reg_ret = regcomp(&test_regex, regex_buf, REG_EXTENDED | REG_NOSUB);
+              if (0 != reg_ret) {
+                ret = OB_ERR_REGEXP_ERROR;
+                LOG_WARN("invalid table_var_regex, cannot create outline with invalid regex pattern",
+                         K(ret), K(i), K(tbl_regex));
+              } else {
+                regfree(&test_regex);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Serialize binding_rule to JSON for pattern_rules
+    if (OB_SUCC(ret)) {
+      const int64_t json_buf_len = OB_MAX_SQL_LENGTH;
+      char *json_buf = static_cast<char *>(allocator.alloc(json_buf_len));
+      if (OB_ISNULL(json_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc json buffer", K(ret));
+      } else {
+        int64_t json_pos = 0;
+        if (OB_FAIL(binding_rule.to_json_string(json_buf, json_buf_len, json_pos))) {
+          LOG_WARN("fail to serialize binding rule to json", K(ret));
+        } else {
+          ObString json_str(json_pos, json_buf);
+          if (OB_FAIL(outline_info.set_pattern_rules(json_str))) {
+            LOG_WARN("fail to set pattern_rules", K(ret));
+          }
+        }
+      }
+    }
+
+  }
+  return ret;
+}
+
 }//namespace sql
 }//namespace oceanbase

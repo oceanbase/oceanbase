@@ -59,6 +59,7 @@ struct SqlInfo: public ParameterizationHashValue
     ps_need_parameterized_ = that.ps_need_parameterized_;
     parse_infos_ = that.parse_infos_;
     need_check_fp_ = that.need_check_fp_;
+    has_binding_rule_ = that.has_binding_rule_;
     fmt_int_or_ch_decint_idx_ = that.fmt_int_or_ch_decint_idx_;
     enable_pl_sql_parameterize_ = that.enable_pl_sql_parameterize_;
     return *this;
@@ -96,7 +97,7 @@ struct SqlInfo: public ParameterizationHashValue
   common::ObSEArray<ObPCParamConstraint *, 4> params_constraint_;
   int32_t origin_pl_param_count_;
   bool enable_pl_sql_parameterize_;
-
+  bool has_binding_rule_;  // BINDING_RULE clause present - skip fp count check
   SqlInfo();
 };
 

@@ -344,7 +344,8 @@ public:
       const uint64_t database_id,
       const common::ObString &paramlized_sql,
       bool is_format,
-      bool &exist) ;
+      bool &exist,
+      const common::ObString &pattern_rules = common::ObString()) ;
   int check_synonym_exist(const uint64_t tenant_id,
       const uint64_t database_id,
       const common::ObString &synonym_sql,

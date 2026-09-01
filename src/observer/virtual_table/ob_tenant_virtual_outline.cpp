@@ -294,6 +294,20 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
           cells[cell_idx].set_int(static_cast<int64_t>(outline_info->is_format()));
           break;
         }
+        case PATTERN_RULES : {
+          ObString pattern_rules;
+          if (OB_FAIL(ob_write_string(*allocator_, outline_info->get_pattern_rules_str(),
+                                      pattern_rules))) {
+            LOG_WARN("fail to deep copy obstring", K(ret),
+                      K(outline_info->get_pattern_rules_str()), K(pattern_rules));
+          } else {
+            cells[cell_idx].set_lob_value(ObLongTextType, pattern_rules.ptr(),
+                                          static_cast<int32_t>(pattern_rules.length()));
+            cells[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
+        }
         default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected column id", K(col_id), K(cell_idx), K(ret));
