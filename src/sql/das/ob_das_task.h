@@ -370,7 +370,6 @@ public:
   bool get_global_lookup_generated_task() const { return global_lookup_generated_task_; }
   ObDASGTSOptInfo &get_das_gts_opt_info() { return das_gts_opt_info_; }
   int init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level);
-  virtual int64_t get_write_buffer_mem_used() const { return 0; }
   // The real row_extend_size_ fixed when the DAS write buffer was first created.
   // Used to locate the trailing update_split_trace_id slot from the buffer's own
   // reservation instead of a per-row recomputed extend_size, guaranteeing the
@@ -523,7 +522,6 @@ class ObDASTaskArg
 {
   OB_UNIS_VERSION(1);
 public:
-  static const int64_t META_SERIALIZE_SIZE_ESTIMATE = 8000L;
   ObDASTaskArg();
   ~ObDASTaskArg() { }
 
@@ -539,7 +537,6 @@ public:
   bool is_local_task() const { return ctrl_svr_ == runner_svr_; }
   void set_timeout_ts(int64_t ts) { timeout_ts_ = ts; }
   int64_t get_timeout_ts() const { return timeout_ts_; }
-  int64_t get_estimated_serialize_size() const;
   TO_STRING_KV(K_(timeout_ts),
                K_(ctrl_svr),
                K_(runner_svr),
@@ -722,10 +719,6 @@ private:
   uint64_t tenant_id_;
   int64_t request_id_;
   const ObDASTaskArg *task_arg_;
-  // Set by fill_buffer() when serialization overflows the estimated buffer.
-  // Once true, get_req_size() falls back to exact encoded_length() instead of
-  // the fast but approximate get_estimated_serialize_size()
-  mutable bool estimate_failed_;
 };
 
 class ObDASLookupBatchResult : public obrpc::ObIFill
