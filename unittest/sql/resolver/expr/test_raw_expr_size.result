@@ -9,7 +9,7 @@
 | ObQueryRefRawExpr | 288 |
 | ObColumnRefRawExpr | 320 |
 | ObSetOpRawExpr | 184 |
-| ObAliasRefRawExpr | 192 |
+| ObAliasRefRawExpr | 200 |
 | ObNonTerminalRawExpr | 184 |
 | ObOpRawExpr | 232 |
 | ObCaseOpRawExpr | 288 |

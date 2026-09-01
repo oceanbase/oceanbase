@@ -530,7 +530,7 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
     // check group by exprs exists in select list
     const ObIArray<ObRawExpr*> &group_exprs = stmt.get_group_exprs();
     for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
-      ObRawExpr *group_expr = group_exprs.at(i);
+      ObRawExpr *group_expr = ObRawExpr::unwrap_select_alias_ref(group_exprs.at(i));
       if (OB_ISNULL(group_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i), K(group_exprs));
@@ -568,7 +568,8 @@ int ObMVChecker::check_is_valid_mysql_mode_group_by(const ObSelectStmt &stmt, bo
                                         && !need_on_query_computation_;
     ObRawExpr *expr = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); ++i) {
-      uint64_t key = reinterpret_cast<uint64_t>(group_exprs.at(i));
+      uint64_t key = reinterpret_cast<uint64_t>(
+          ObRawExpr::unwrap_select_alias_ref(group_exprs.at(i)));
       if (OB_FAIL(expr_set.set_refactored(key, 0))) {
         if (OB_HASH_EXIST == ret) {
           ret = OB_SUCCESS;

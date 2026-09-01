@@ -2041,6 +2041,7 @@ public:
   inline bool is_win_func_expr() const { return EXPR_WINDOW == expr_class_; }
   inline bool is_pseudo_column_expr() const { return EXPR_PSEUDO_COLUMN == expr_class_; }
   inline bool is_alias_ref_expr() const { return EXPR_ALIAS_REF == expr_class_; }
+  bool is_select_alias_ref() const;
   inline bool is_match_against_expr() const { return EXPR_MATCH_AGAINST == expr_class_; }
   inline bool is_unpivot_expr() const { return EXPR_UNPIVOT == expr_class_; }
   inline bool is_terminal_expr() const { return is_var_expr()
@@ -2407,6 +2408,9 @@ public:
                                             ObLocalSessionVar &dep_vars);
 
   int has_exec_param(bool &bool_ret) const;
+
+  static const ObRawExpr *unwrap_select_alias_ref(const ObRawExpr *expr);
+  static ObRawExpr *unwrap_select_alias_ref(ObRawExpr *expr);
 
 private:
   const ObRawExpr *get_same_identify(const ObRawExpr *e,
@@ -3482,14 +3486,17 @@ class ObAliasRefRawExpr : public ObRawExpr
 public:
   ObAliasRefRawExpr()
     : ObRawExpr(),
-      ref_expr_(NULL)
+      ref_expr_(NULL),
+      project_index_(OB_INVALID_INDEX),
+      is_select_alias_ref_(false)
   {
     set_expr_class(EXPR_ALIAS_REF);
   }
   ObAliasRefRawExpr(common::ObIAllocator &alloc)
       : ObRawExpr(alloc),
       ref_expr_(NULL),
-      project_index_(OB_INVALID_INDEX)
+      project_index_(OB_INVALID_INDEX),
+      is_select_alias_ref_(false)
   {
     set_expr_class(EXPR_ALIAS_REF);
   }
@@ -3502,6 +3509,13 @@ public:
   const ObRawExpr *get_ref_expr() const;
   ObRawExpr *get_ref_expr();
   void set_ref_expr(ObRawExpr *ref_expr) { ref_expr_ = ref_expr; }
+  void set_select_alias_ref(const common::ObString &alias_name)
+  {
+    is_select_alias_ref_ = true;
+    set_alias_column_name(alias_name);
+  }
+  bool is_select_alias_ref() const { return is_select_alias_ref_; }
+  const common::ObString &get_select_alias_name() const { return get_alias_column_name(); }
   bool is_ref_query_output() const
   { return ref_expr_->is_query_ref_expr() && project_index_ != OB_INVALID_INDEX; }
   int64_t get_project_index() const { return project_index_; }
@@ -3523,11 +3537,13 @@ public:
                                             N_EXPR_INFO, info_,
                                             N_REL_ID, rel_ids_,
                                             N_VALUE, ref_expr_,
+                                            K_(is_select_alias_ref),
                                             K_(expr_hash));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAliasRefRawExpr);
   ObRawExpr *ref_expr_;
   int64_t project_index_; // project index of the subquery
+  bool is_select_alias_ref_; // explicit SELECT-item alias reference used by statement printing
 };
 
 ////////////////////////////////////////////////////////////////

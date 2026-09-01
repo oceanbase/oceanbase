@@ -320,7 +320,7 @@ int ObSimpleMAVPrinter::gen_select_items_for_mav(const TableItem &table,
     if (OB_ISNULL(orig_expr = orig_select_items.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(orig_select_items));
-    } else if (!(ObOptimizerUtil::find_item(orig_group_by_exprs, orig_expr)
+    } else if (!(ObRawExprUtils::find_expr_ignore_select_alias(orig_group_by_exprs, orig_expr)
                  || (lib::is_mysql_mode() && !orig_expr->has_flag(CNT_AGG) && orig_expr->has_flag(CNT_COLUMN))
                  || ObMVChecker::is_basic_count(*orig_expr))) {
       select_item.expr_ = NULL;
@@ -508,7 +508,7 @@ int ObSimpleMAVPrinter::gen_update_assignments(const TableItem &target_table,
     if (OB_ISNULL(expr = select_items.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(select_items));
-    } else if (!ObOptimizerUtil::find_item(group_by_exprs, expr)
+    } else if (!ObRawExprUtils::find_expr_ignore_select_alias(group_by_exprs, expr)
                && !ObMVChecker::is_basic_count(*expr)) {
       // do nothing
     } else if (copier.is_existed(expr)) {
@@ -661,7 +661,7 @@ int ObSimpleMAVPrinter::gen_merge_conds(ObMergeStmt &merge_stmt)
         delete_count_expr = target_columns.at(i);
         insert_count_expr = values_exprs.at(i);
       }
-    } else if (!ObOptimizerUtil::find_item(group_by_exprs, expr)) {
+    } else if (!ObRawExprUtils::find_expr_ignore_select_alias(group_by_exprs, expr)) {
       /* do nothing */
     } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(ctx_.expr_factory_, T_OP_NSEQ, target_columns.at(i), values_exprs.at(i), match_cond))) {
       LOG_WARN("failed to build null safe equal expr", K(ret));
@@ -782,7 +782,9 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
     if (OB_ISNULL(ori_select_item.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(ori_select_item));
-    } else if (ObOptimizerUtil::find_item(orig_group_by_exprs, ori_select_item.expr_, &group_by_idx)) {
+    } else if (ObRawExprUtils::find_expr_ignore_select_alias(orig_group_by_exprs,
+                                                            ori_select_item.expr_,
+                                                            &group_by_idx)) {
       if (OB_UNLIKELY(group_by_idx < 0 || group_by_idx >= group_by_exprs.count())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected group by idx", K(ret), K(group_by_idx), K(ori_select_item));
@@ -843,7 +845,8 @@ int ObSimpleMAVPrinter::gen_simple_join_mav_basic_select_list(const TableItem &t
     if (OB_ISNULL(orig_select_items.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(orig_select_items));
-    } else if (ObOptimizerUtil::find_item(orig_group_by_exprs, orig_select_items.at(i).expr_)) {
+    } else if (ObRawExprUtils::find_expr_ignore_select_alias(orig_group_by_exprs,
+                                                            orig_select_items.at(i).expr_)) {
       if (OB_FAIL(create_simple_column_expr(table.get_table_name(),
                                             sel_item.alias_name_,
                                             table.table_id_,
@@ -1084,7 +1087,9 @@ int ObSimpleMAVPrinter::gen_group_recalculate_aggr_view(ObSelectStmt *&view_stmt
       const SelectItem &ori_select_item = mv_def_stmt_.get_select_item(i);
       SelectItem sel_item;
       int64_t group_by_idx = -1;
-      if (!ObOptimizerUtil::find_item(mv_def_stmt_.get_group_exprs(), ori_select_item.expr_, &group_by_idx)) {
+      if (!ObRawExprUtils::find_expr_ignore_select_alias(mv_def_stmt_.get_group_exprs(),
+                                                         ori_select_item.expr_,
+                                                         &group_by_idx)) {
         // do nothing
       } else if (OB_UNLIKELY(group_by_idx < 0 || group_by_idx >= view_stmt->get_group_exprs().count())) {
         ret = OB_ERR_UNEXPECTED;
@@ -1206,7 +1211,8 @@ int ObSimpleMAVPrinter::gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt,
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_select_item_size(); ++i) {
       const SelectItem &sel_item = mv_def_stmt_.get_select_item(i);
-      if (!ObOptimizerUtil::find_item(mv_def_stmt_.get_group_exprs(), sel_item.expr_)) {
+      if (!ObRawExprUtils::find_expr_ignore_select_alias(mv_def_stmt_.get_group_exprs(),
+                                                         sel_item.expr_)) {
         // do nothing
       } else if (OB_FAIL(create_simple_column_expr(left_table->get_table_name(), sel_item.alias_name_, left_table->table_id_, l_expr))
                  || OB_FAIL(create_simple_column_expr(right_table->get_table_name(), sel_item.alias_name_, right_table->table_id_, r_expr))) {

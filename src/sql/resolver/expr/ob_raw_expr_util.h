@@ -932,6 +932,9 @@ public:
                                    ObIArray<ObRawExpr *> &param_exprs);
   template <typename T>
   static bool find_expr(const common::ObIArray<T> &exprs, const ObRawExpr* expr);
+  static bool find_expr_ignore_select_alias(const common::ObIArray<ObRawExpr *> &exprs,
+                                            const ObRawExpr *expr,
+                                            int64_t *idx = NULL);
   static int find_expr(ObRawExpr *root, const ObRawExpr *expected, bool &found);
   template <typename T>
   static int64_t get_expr_idx(const common::ObIArray<T> &exprs, const ObRawExpr* expr);
@@ -961,6 +964,10 @@ public:
                                ObColumnRefRawExpr *&column_expr);
   static bool is_same_column_ref(const ObRawExpr *column_ref1, const ObRawExpr *column_ref2);
   static int build_alias_column_expr(ObRawExprFactory &expr_factory, ObRawExpr *ref_expr, int32_t alias_level, ObAliasRefRawExpr *&alias_expr);
+  static int build_select_alias_ref_expr(ObRawExprFactory &expr_factory,
+                                         ObRawExpr *ref_expr,
+                                         const common::ObString &alias_name,
+                                         ObAliasRefRawExpr *&alias_expr);
   static int build_query_output_ref(ObRawExprFactory &expr_factory,
                                     ObQueryRefRawExpr *query_ref,
                                     int64_t project_index,

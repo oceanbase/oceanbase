@@ -398,6 +398,13 @@ struct ObResolverParams
   {}
   int assign(const ObResolverParams &other);
   bool is_force_trace_log() { return force_trace_log_; }
+  bool need_print_stmt() const
+  {
+    return is_from_create_view_ ||
+           is_from_create_table_ ||
+           is_returning_ ||
+           is_mview_definition_sql_;
+  }
 
 public:
   common::ObIAllocator *allocator_;

@@ -1709,7 +1709,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     ctx.is_from_show_resolver_ = params_.is_from_show_resolver_;
     ctx.is_expanding_view_ = params_.is_expanding_view_;
     ctx.is_in_system_view_ = params_.is_in_sys_view_;
-    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
+    ctx.is_need_print_ = params_.need_print_stmt();
     ObRawExprResolverImpl expr_resolver(ctx);
     ObIArray<ObUserVarIdentRawExpr *> &user_var_exprs = get_stmt()->get_user_vars();
     bool is_multi_stmt = session_info_->get_cur_exec_ctx() != NULL &&
@@ -9230,7 +9230,7 @@ int ObDMLResolver::resolve_and_split_sql_expr(const ParseNode &node, ObIArray<Ob
     ctx.session_info_ = session_info_;
     ctx.secondary_namespace_ = params_.secondary_namespace_;
     ctx.query_ctx_ = params_.query_ctx_;
-    ctx.is_need_print_ = params_.is_from_create_view_ || params_.is_from_create_table_ || params_.is_returning_;
+    ctx.is_need_print_ = params_.need_print_stmt();
     if (OB_FAIL(ObInListResolver::try_merge_inlists(ctx, true, &node, merged_node))) {
       LOG_WARN("fail to merge inlist", K(ret));
     } else if (OB_ISNULL(merged_node)) {

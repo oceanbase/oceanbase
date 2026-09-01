@@ -6330,6 +6330,8 @@ int ObSelectResolver::resolve_alias_column_ref(
   //select 1 as a, a; ->error
   ObSelectStmt *select_stmt = get_select_stmt();
   real_ref_expr = NULL;
+  bool is_select_alias_ref = false;
+  ObString select_alias_name;
   if (OB_ISNULL(select_stmt) || OB_ISNULL(q_name.ref_expr_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("select stmt is null", K(select_stmt), K_(q_name.ref_expr));
@@ -6398,7 +6400,9 @@ int ObSelectResolver::resolve_alias_column_ref(
               ret = column_namespace_checker_.check_table_column_namespace(q_name, table_item);
             }
             if (OB_SUCC(ret)) {
-             real_ref_expr = cur_item->expr_;
+              real_ref_expr = cur_item->expr_;
+              is_select_alias_ref = true;
+              select_alias_name = cur_item->alias_name_;
             }
           } else if (real_ref_expr != cur_item->expr_) {
             ret = OB_NON_UNIQ_ERROR;
@@ -6445,7 +6449,18 @@ int ObSelectResolver::resolve_alias_column_ref(
     }
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(wrap_alias_column_ref(q_name, real_ref_expr))) {
+  if (OB_FAIL(ret)) {
+  } else if (is_select_alias_ref && lib::is_mysql_mode() && params_.need_print_stmt()) {
+    ObAliasRefRawExpr *alias_ref_expr = NULL;
+    if (OB_FAIL(ObRawExprUtils::build_select_alias_ref_expr(*params_.expr_factory_,
+                                                            real_ref_expr,
+                                                            select_alias_name,
+                                                            alias_ref_expr))) {
+      LOG_WARN("build select alias ref expr failed", K(ret), K(q_name));
+    } else {
+      real_ref_expr = alias_ref_expr;
+    }
+  } else if (OB_FAIL(wrap_alias_column_ref(q_name, real_ref_expr))) {
     LOG_WARN("wrap alias column ref failed", K(ret), K(q_name));
   }
   return ret;
@@ -8198,6 +8213,11 @@ int ObSelectResolver::resolve_shared_order_item(OrderItem &order_item, ObSelectS
     LOG_WARN("get unexpected null pointer", K(ret));
   } else if (select_stmt->is_order_siblings()) {
     // do noting
+  } else if (OB_NOT_NULL(order_item.expr_) && order_item.expr_->is_select_alias_ref()) {
+    // Keep an explicit alias reference distinct from its SELECT expression. Replacing it with a
+    // shared SELECT expression loses which alias was written when multiple aliases refer to the
+    // same expression, for example: SELECT c1 + 1 AS a, c1 + 1 AS b ORDER BY a, b.
+    find = true;
   } else if (OB_FAIL(select_stmt->get_select_exprs(select_exprs))) {
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (ObOptimizerUtil::find_item(select_exprs, order_item.expr_)) {

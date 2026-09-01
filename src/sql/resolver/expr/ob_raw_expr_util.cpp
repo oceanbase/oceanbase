@@ -3394,6 +3394,23 @@ bool ObRawExprUtils::is_same_raw_expr(const ObRawExpr *src, const ObRawExpr *dst
   return is_same;
 }
 
+bool ObRawExprUtils::find_expr_ignore_select_alias(const ObIArray<ObRawExpr *> &exprs,
+                                                   const ObRawExpr *expr,
+                                                   int64_t *idx)
+{
+  bool found = false;
+  const ObRawExpr *real_expr = ObRawExpr::unwrap_select_alias_ref(expr);
+  for (int64_t i = 0; OB_NOT_NULL(real_expr) && !found && i < exprs.count(); ++i) {
+    if (ObRawExpr::unwrap_select_alias_ref(exprs.at(i)) == real_expr) {
+      found = true;
+      if (OB_NOT_NULL(idx)) {
+        *idx = i;
+      }
+    }
+  }
+  return found;
+}
+
 //把计算表达式中的所有column表达式替换掉
 int ObRawExprUtils::replace_all_ref_column(ObRawExpr *&raw_expr, const common::ObIArray<ObRawExpr *> &exprs, int64_t &offset)
 {
@@ -7220,6 +7237,20 @@ int ObRawExprUtils::build_alias_column_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("alias column expr is null", K(ret));
   } else {
     alias_expr->set_ref_expr(ref_expr);
+  }
+  return ret;
+}
+
+int ObRawExprUtils::build_select_alias_ref_expr(ObRawExprFactory &expr_factory,
+                                                ObRawExpr *ref_expr,
+                                                const ObString &alias_name,
+                                                ObAliasRefRawExpr *&alias_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(build_alias_column_expr(expr_factory, ref_expr, 0, alias_expr))) {
+    LOG_WARN("failed to build alias column expr", K(ret));
+  } else {
+    alias_expr->set_select_alias_ref(alias_name);
   }
   return ret;
 }

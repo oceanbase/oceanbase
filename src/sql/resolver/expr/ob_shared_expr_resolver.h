@@ -90,6 +90,7 @@ private:
   inline bool is_blacklist_share_expr(const ObRawExpr &expr)
   {
     return expr.is_column_ref_expr()
+           || expr.is_select_alias_ref()
            || expr.is_aggr_expr()
            || expr.is_win_func_expr()
            || expr.is_query_ref_expr()

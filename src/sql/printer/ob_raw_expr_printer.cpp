@@ -256,6 +256,16 @@ int ObRawExprPrinter::print(ObRawExpr *expr)
       PRINT_EXPR(set_op_expr);
       break;
     }
+    case ObRawExpr::EXPR_ALIAS_REF: {
+      ObAliasRefRawExpr *alias_ref_expr = static_cast<ObAliasRefRawExpr *>(expr);
+      if (OB_ISNULL(alias_ref_expr->get_ref_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alias ref expr has no referenced expr", K(ret));
+      } else {
+        PRINT_EXPR(alias_ref_expr->get_ref_expr());
+      }
+      break;
+    }
     case ObRawExpr::EXPR_MATCH_AGAINST: {
       ObMatchFunRawExpr *match_against_expr = static_cast<ObMatchFunRawExpr *>(expr);
       PRINT_EXPR(match_against_expr);
@@ -5699,19 +5709,14 @@ int ObRawExprPrinter::print_alias_for_expr(ObRawExpr* expr, ObStmtScope scope, b
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is NULL", K(ret));
-
-  } else if (lib::is_mysql_mode() &&
-             !expr->get_alias_column_name().empty() &&
-             !expr->is_column_ref_expr() &&
-             !expr->is_aggr_expr() &&
-             !expr->is_pseudo_column_expr() &&
-             // quertionmark 是一个const expr，如果是prepare，需要打印成:0这样的东西，不能用alias来代替
-             T_QUESTIONMARK != expr->get_expr_type() &&
-             (scope == T_HAVING_SCOPE ||
-             (scope == T_GROUP_SCOPE && expr->is_const_or_param_expr()))) {
-    //expr is a alias column ref
-    //alias column target list
-    print_alias = true;
+  } else if (T_GROUP_SCOPE == scope ||
+             T_HAVING_SCOPE == scope ||
+             T_ORDER_SCOPE == scope) {
+    // Do not blindly print a SELECT alias in GROUP BY, HAVING, or ORDER BY, because the
+    // alias may have the same name as a column from the FROM clause and change the semantics.
+    // For example, "SELECT substr(c1, 1, 10) AS c1 FROM t1 GROUP BY substr(c1, 1, 10)" differs from
+    // "SELECT substr(c1, 1, 10) AS c1 FROM t1 GROUP BY c1".
+    print_alias = expr->is_select_alias_ref();
   }
   return ret;
 }

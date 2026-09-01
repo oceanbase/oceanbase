@@ -591,6 +591,8 @@ const ObRawExpr *ObRawExpr::get_same_identify(const ObRawExpr *e,
       if (NULL != static_cast<const ObExecParamRawExpr *>(e)->get_ref_expr()) {
         e = static_cast<const ObExecParamRawExpr *>(e)->get_ref_expr();
       }
+    } else if (e->is_select_alias_ref()) {
+      e = static_cast<const ObAliasRefRawExpr *>(e)->get_ref_expr();
     } else if (NULL != check_ctx && check_ctx->ignore_implicit_cast_
                && check_ctx->recursion_level_ > 1
                && T_FUN_SYS_CAST == e->get_expr_type()
@@ -2446,6 +2448,7 @@ int ObAliasRefRawExpr::assign(const ObRawExpr &other)
           static_cast<const ObAliasRefRawExpr &>(other);
       ref_expr_ = alias_expr.ref_expr_;
       project_index_ = alias_expr.project_index_;
+      is_select_alias_ref_ = alias_expr.is_select_alias_ref_;
     }
   }
   return ret;
@@ -2540,8 +2543,42 @@ bool ObAliasRefRawExpr::inner_same_as(const ObRawExpr &expr,
 
 void ObAliasRefRawExpr::inner_calc_hash()
 {
-  expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
-  expr_hash_ = common::do_hash(get_ref_expr(), expr_hash_);
+  if (is_select_alias_ref() && OB_NOT_NULL(get_ref_expr())) {
+    expr_hash_ = get_ref_expr()->get_expr_hash();
+  } else {
+    expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
+    expr_hash_ = common::do_hash(get_ref_expr(), expr_hash_);
+  }
+}
+
+bool ObRawExpr::is_select_alias_ref() const
+{
+  return is_alias_ref_expr() &&
+         static_cast<const ObAliasRefRawExpr *>(this)->is_select_alias_ref();
+}
+
+const ObRawExpr *ObRawExpr::unwrap_select_alias_ref(const ObRawExpr *expr)
+{
+  const ObRawExpr *result = expr;
+  if (OB_NOT_NULL(expr) && expr->is_select_alias_ref()) {
+    const ObAliasRefRawExpr *alias_ref_expr = static_cast<const ObAliasRefRawExpr *>(expr);
+    if (OB_NOT_NULL(alias_ref_expr->get_ref_expr())) {
+      result = alias_ref_expr->get_ref_expr();
+    }
+  }
+  return result;
+}
+
+ObRawExpr *ObRawExpr::unwrap_select_alias_ref(ObRawExpr *expr)
+{
+  ObRawExpr *result = expr;
+  if (OB_NOT_NULL(expr) && expr->is_select_alias_ref()) {
+    ObAliasRefRawExpr *alias_ref_expr = static_cast<ObAliasRefRawExpr *>(expr);
+    if (OB_NOT_NULL(alias_ref_expr->get_ref_expr())) {
+      result = alias_ref_expr->get_ref_expr();
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////////////////////////////////////
