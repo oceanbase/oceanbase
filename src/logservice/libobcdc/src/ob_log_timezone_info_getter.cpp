@@ -395,7 +395,7 @@ int ObCDCTimeZoneInfoGetter::create_tenant_tz_info_(
       // 1. query the initial timezone_info_version
       // 2. refresh timezone_info until successful
       // 3. initialize tz_info_wrap_
-      const int64_t start_ts = get_timestamp();
+      const int64_t start_ts = get_timestamp_cached();
       if (OB_ISNULL(tenant_tz_info = static_cast<ObCDCTenantTimeZoneInfo*>(allocator_.alloc()))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("oblog_tz_info is not valid", KR(ret), K(tenant_id), KP(tenant_tz_info));
@@ -442,7 +442,7 @@ int ObCDCTimeZoneInfoGetter::create_tenant_tz_info_(
         } else if (OB_FAIL(oblog_tz_info_map_.set_refactored(exec_tenant_id, tenant_tz_info))) {
           LOG_ERROR("insert obcdc_tenant_tz_info into tz_info_map failed", KR(ret), K(tenant_id));
         } else {
-          const int64_t cost_time_usec = get_timestamp() - start_ts;
+          const int64_t cost_time_usec = get_timestamp_cached() - start_ts;
           LOG_INFO("create tenant timezone info for obcdc success", KR(ret), K(tenant_id), K(exec_tenant_id), K(cost_time_usec));
         }
       }

@@ -63,7 +63,7 @@ PartTransDispatcher::PartTransDispatcher(const char *tls_id_str,
     checkpoint_(OB_INVALID_VERSION),
     created_trans_count_(0),
     last_created_trans_count_(0),
-    last_stat_time_(get_timestamp()),
+    last_stat_time_(get_timestamp_cached()),
     dispatch_lock_(common::ObLatchIds::OB_CDC_COMMON_LOCK)
 {}
 
@@ -636,7 +636,7 @@ int PartTransDispatcher::get_dispatch_progress(int64_t &dispatch_progress,
 
 double PartTransDispatcher::get_tps()
 {
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_created_trans_count = ATOMIC_LOAD(&created_trans_count_);
   int64_t local_last_created_trans_count = ATOMIC_LOAD(&last_created_trans_count_);
   int64_t local_last_stat_time = last_stat_time_;

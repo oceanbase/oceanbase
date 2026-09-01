@@ -33,11 +33,20 @@
         small_alloc_count++; \
       } \
 \
-      EXPECT_EQ(small_alloc_count, sa.get_small_alloc_count()); \
-      EXPECT_EQ(large_alloc_count, sa.get_large_alloc_count()); \
+      CHECK_ALLOC_COUNT(); \
 \
       ((char *)ptr)[alloc_size - 1] = 'a'; \
     } while (0)
+
+#ifdef ENABLE_CDC_PERF_DEBUG_STAT
+#define CHECK_ALLOC_COUNT() \
+    do { \
+      EXPECT_EQ(small_alloc_count, sa.get_small_alloc_count()); \
+      EXPECT_EQ(large_alloc_count, sa.get_large_alloc_count()); \
+    } while (0)
+#else
+#define CHECK_ALLOC_COUNT() do {} while (0)
+#endif
 
 #define MAX_SMALL_ALLOC_SIZE(align) (MAX_SMALL_ALLOC_SIZE_WITHOUT_ALIGN - align + 1)
 
@@ -357,6 +366,33 @@ TEST_F(TestSmallArena, alloc_align)
   large_alloc_count = 0;
 }
 
+TEST_F(TestSmallArena, alloc_from_local_page)
+{
+  void *ptr = NULL;
+  void *local_page = NULL;
+  void *reverted_page = NULL;
+  ObSmallArena sa;
+
+  sa.set_allocator(PAGE_SIZE, large_allocator_);
+  local_page = large_allocator_.alloc(PAGE_SIZE);
+  ASSERT_TRUE(NULL != local_page);
+  sa.set_prealloc_page(local_page);
+
+  ptr = sa.alloc(8);
+  ASSERT_TRUE(NULL != ptr);
+  EXPECT_GE(reinterpret_cast<int64_t>(ptr), reinterpret_cast<int64_t>(local_page));
+  EXPECT_LT(reinterpret_cast<int64_t>(ptr), reinterpret_cast<int64_t>(local_page) + PAGE_SIZE);
+#ifdef ENABLE_CDC_PERF_DEBUG_STAT
+  EXPECT_EQ(1, sa.get_small_alloc_count());
+  EXPECT_EQ(0, sa.get_large_alloc_count());
+#endif
+
+  sa.revert_prealloc_page(reverted_page);
+  EXPECT_EQ(local_page, reverted_page);
+  large_allocator_.free(local_page);
+  local_page = NULL;
+}
+
 TEST_F(TestSmallArena, init_err)
 {
   void *ptr = NULL;
@@ -375,8 +411,11 @@ TEST_F(TestSmallArena, invalid_args)
   ObSmallArena sa;
   sa.set_allocator(PAGE_SIZE, large_allocator_);
   ptr = sa.alloc(-1); EXPECT_TRUE(NULL == ptr);
+  ptr = sa.alloc_aligned(1, 0); EXPECT_TRUE(NULL == ptr);
+  ptr = sa.alloc_aligned(1, INT64_MIN); EXPECT_TRUE(NULL == ptr);
   ptr = sa.alloc_aligned(1,3); EXPECT_TRUE(NULL == ptr);
   ptr = sa.alloc_aligned(1, 1024); EXPECT_TRUE(NULL == ptr);
+  ptr = sa.alloc(INT64_MAX); EXPECT_TRUE(NULL == ptr);
   sa.reset();
 }
 

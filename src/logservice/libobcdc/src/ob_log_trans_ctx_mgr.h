@@ -90,6 +90,41 @@ public:
 
 class ObLogTransCtxMgr : public IObLogTransCtxMgr
 {
+  typedef TransCtx LogTransCtxVal;
+  typedef common::LinkHashNode<TenantTransID> LogTransCtxNode;
+
+  // ObLinkHashMap's default AllocHandle stringifies the template parameter as
+  // "Value"/"Node". Keep the same object-pool allocation path, but instantiate
+  // it with CDC-specific aliases so memory dumps identify TransCtx objects.
+  class TransCtxAllocHandle
+  {
+  public:
+    typedef LogTransCtxNode Node;
+
+    static LogTransCtxVal *alloc_value()
+    {
+      return op_reclaim_alloc(LogTransCtxVal);
+    }
+
+    static void free_value(LogTransCtxVal *value)
+    {
+      op_reclaim_free(value);
+      value = NULL;
+    }
+
+    static Node *alloc_node(LogTransCtxVal *value)
+    {
+      UNUSED(value);
+      return op_reclaim_alloc(LogTransCtxNode);
+    }
+
+    static void free_node(Node *node)
+    {
+      op_reclaim_free(node);
+      node = NULL;
+    }
+  };
+
   struct Scanner
   {
     Scanner() : buffer_(NULL), buffer_size_(0), pos_(0), valid_trans_count_(0)
@@ -111,7 +146,7 @@ class ObLogTransCtxMgr : public IObLogTransCtxMgr
 public:
   static const int64_t BLOCK_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE; // 64KB - 128
   static const int64_t PRINT_STATE_INTERVAL = 10 * 1000 * 1000;
-  typedef ObLinkHashMap<TenantTransID, TransCtx> TransCtxMap;
+  typedef ObLinkHashMap<TenantTransID, TransCtx, TransCtxAllocHandle> TransCtxMap;
 
 public:
   ObLogTransCtxMgr();

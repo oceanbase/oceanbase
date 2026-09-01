@@ -524,7 +524,8 @@ int ObLogTransRedoDispatcher::alloc_task_for_redo_(PartTransTask &part_task,
   if (OB_UNLIKELY(OB_ISNULL(TCTX.log_entry_task_pool_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log_entry_task_pool is null!", KR(ret));
-  } else if (OB_FAIL(TCTX.log_entry_task_pool_->alloc(redo_node.is_direct_load_inc_log(), log_entry_task, part_task))) {
+  } else if (OB_FAIL(TCTX.log_entry_task_pool_->alloc(redo_node.is_direct_load_inc_log(),
+      redo_node.get_data_len(), log_entry_task, part_task))) {
     LOG_ERROR("log_entry_task_pool_ alloc fail", KR(ret), KPC(log_entry_task), K(part_task));
   } else if (OB_ISNULL(log_entry_task)) {
     ret = OB_ERR_UNEXPECTED;

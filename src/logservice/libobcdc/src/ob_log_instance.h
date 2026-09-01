@@ -242,6 +242,7 @@ private:
   void run1() override;
   int daemon_handle_storage_op_thd_();
   void reload_config_();
+  void print_process_memory_usage_();
   void print_tenant_memory_usage_();
   void global_flow_control_();
   void dump_pending_trans_info_();

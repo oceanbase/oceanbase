@@ -66,13 +66,14 @@ public:
 
   virtual void mark_stop_flag() override { ATOMIC_SET(&is_stopped_, true); }
   virtual int close() override;
-  virtual void get_mem_usage(const std::vector<uint64_t> ids,
-      const std::vector<void *> cf_handles);
+  virtual void get_mem_usage(const std::vector<uint64_t> &ids,
+      const std::vector<void *> &cf_handles,
+      const char *storage_type) override;
   virtual int get_mem_usage(void * cf_handle, int64_t &estimate_live_data_size, int64_t &estimate_num_keys);
+  virtual void print_stat_info() const override;
   OB_INLINE bool is_stopped() const { return ATOMIC_LOAD(&is_stopped_); }
 
 private:
-  void print_db_stats_info_() const;
   int init_dir_(const char *dir_path);
   int init_database_(const std::string &path);
 

@@ -53,7 +53,7 @@ static int do_read_batch_misslog(
   int64_t pos = 0;
   const int64_t log_cnt = resp.get_log_num();
   const ObLogLSNArray &org_misslog_arr = missing_info.get_miss_redo_lsn_arr();
-  int64_t start_ts = get_timestamp();
+  int64_t start_ts = get_timestamp_cached();
 
   if (OB_UNLIKELY(log_cnt <= 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -99,7 +99,7 @@ static int do_read_batch_misslog(
     }
   }
 
-  int64_t read_batch_missing_cost = get_timestamp() - start_ts;
+  int64_t read_batch_missing_cost = get_timestamp_cached() - start_ts;
   const int64_t handle_miss_progress = missing_info.get_last_misslog_progress();
   ObCStringHelper helper;
   _LOG_INFO("[MISS_LOG][READ_MISSLOG][PART_TRANS_ID=%s][COST=%ld][PROGRESS_CNT=%ld/%ld][PROGRESS_SCN=%ld(%s)]",
@@ -409,7 +409,7 @@ public:
   {
     int ret = OB_SUCCESS;
     static const int64_t STAT_INTERVAL_US = 10 * _SEC_;
-    int64_t last_stat_ts = get_timestamp();
+    int64_t last_stat_ts = get_timestamp_cached();
     const int64_t start_ts = last_stat_ts;
 
     int64_t last_fetched = 0;
@@ -417,7 +417,7 @@ public:
 
     while (ATOMIC_LOAD(&done_count_) < n_workers_ && !(*stop_flag_)) {
       done_cond_.timedwait(100000);
-      const int64_t now = get_timestamp();
+      const int64_t now = get_timestamp_cached();
       if (now - last_stat_ts >= STAT_INTERVAL_US) {
         const int64_t interval_us = now - last_stat_ts;
         last_stat_ts = now;
@@ -621,7 +621,7 @@ void MissLogTask::reset()
 int MissLogTask::try_change_server(const int64_t timeout, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  const int64_t end_time = get_timestamp() + timeout;
+  const int64_t end_time = get_timestamp_cached() + timeout;
 
   if (OB_UNLIKELY(disable_server_change_)) {
     need_change_server_ = false;
@@ -645,7 +645,7 @@ int MissLogTask::try_change_server(const int64_t timeout, volatile bool &stop_fl
       }
 
       if (OB_FAIL(ret)) {
-        is_timeout = get_timestamp() >= end_time;
+        is_timeout = get_timestamp_cached() >= end_time;
         if (is_timeout) {
           LOG_ERROR("[MISS_LOG][NEXT_SERVER]RETRY_GET_NEXT_SERVER TIMEOUT", KR(ret), K(timeout), KPC(this));
           ret = OB_TIMEOUT;
@@ -719,7 +719,7 @@ int ObCDCMissLogHandler::handle_miss_log_task_(MissLogTask &misslog_task, volati
 {
   int ret = OB_SUCCESS;
   ObTraceIdGuard guard(*common::ObCurTraceId::get_trace_id());
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
   misslog_task.missing_info_.set_resolving_miss_log();
   FetchLogSRpc *fetch_log_srpc = nullptr;
   // Allocate a second FetchLogSRpc for pipelined redo log fetching:
@@ -756,7 +756,7 @@ int ObCDCMissLogHandler::handle_miss_log_task_(MissLogTask &misslog_task, volati
   if (stop_flag) {
     ret = OB_IN_STOP_STATE;
   } else {
-    const int64_t cost_time = get_timestamp() - start_ts;
+    const int64_t cost_time = get_timestamp_cached() - start_ts;
     LOG_INFO("[MISS_LOG][HANDLE_DONE]", KR(ret),
         K(cost_time), "cost_time", TVAL_TO_STR(cost_time),
         K(misslog_task));
@@ -784,7 +784,7 @@ int ObCDCMissLogHandler::handle_miss_record_or_state_log_(
     int64_t miss_record_cnt = 1;
     ObArrayImpl<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> batched_misslog_lsn_arr;
     palf::LSN misslog_lsn;
-    const int64_t start_ts = get_timestamp();
+    const int64_t start_ts = get_timestamp_cached();
     LOG_INFO("[MISS_LOG][FETCH_RECORD_OR_STATE][BEGIN]", KR(ret), "part_trans_id", misslog_task.get_part_trans_id());
 
     while (OB_SUCC(ret) && ! stop_flag && misslog_task.missing_info_.has_miss_record_or_state_log()) {
@@ -857,7 +857,7 @@ int ObCDCMissLogHandler::handle_miss_record_or_state_log_(
           "part_trans_id", misslog_task.missing_info_.get_part_trans_id(),
           K(miss_record_cnt),
           "miss_redo_cnt", misslog_task.missing_info_.get_miss_redo_lsn_arr().count(),
-          "cost", get_timestamp() - start_ts);
+          "cost", get_timestamp_cached() - start_ts);
     }
   }
 
@@ -900,7 +900,7 @@ int ObCDCMissLogHandler::handle_miss_redo_log_(
   } else {
     const int64_t total_misslog_cnt = misslog_task.missing_info_.get_total_misslog_cnt();
     int64_t fetched_missing_log_cnt = 0;
-    const int64_t start_ts = get_timestamp();
+    const int64_t start_ts = get_timestamp_cached();
     const int64_t parallelism = TCONF.miss_log_discrete_fetch_parallelism;
     const ClientFetchingMode fetching_mode = misslog_task.ls_fetch_ctx_.get_fetching_mode();
 
@@ -934,7 +934,7 @@ int ObCDCMissLogHandler::handle_miss_redo_log_(
         "part_trans_id", misslog_task.missing_info_.get_part_trans_id(),
         K(total_misslog_cnt), K(fetched_missing_log_cnt),
         K(parallelism),
-        "cost", get_timestamp() - start_ts);
+        "cost", get_timestamp_cached() - start_ts);
   }
 
   return ret;
@@ -1193,7 +1193,7 @@ int ObCDCMissLogHandler::fetch_miss_log_with_retry_(
   ObLogTraceIdGuard trace_guard;
   int64_t fetch_log_timeout = g_rpc_timeout;
 
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
   const int64_t end_ts = start_ts + RETRY_TIMEOUT;
   int64_t cur_ts = start_ts;
   int64_t try_cnt = 0;
@@ -1298,7 +1298,7 @@ int ObCDCMissLogHandler::fetch_miss_log_with_retry_(
       }
     }
 
-    cur_ts = get_timestamp();
+    cur_ts = get_timestamp_cached();
   } // end while
 
   if (stop_flag) {
@@ -1428,7 +1428,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
   logservice::ObLogExternalStorageHandler *log_ext_handler = NULL;
   ObRpcResultCode rcode;
   SCN cur_scn;
-  const int64_t start_fetch_ts = get_timestamp();
+  const int64_t start_fetch_ts = get_timestamp_cached();
   const int64_t time_upper_limit = start_fetch_ts + timeout;
   bool stop_fetch = false;
   bool is_timeout = false;
@@ -1449,7 +1449,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
     while (OB_SUCC(ret) && !stop_fetch) {
       bool retry_on_err = false;
       while (OB_SUCC(ret) && fetched_cnt < arr_cnt && !is_timeout) {
-        const int64_t start_fetch_entry_ts = get_timestamp();
+        const int64_t start_fetch_entry_ts = get_timestamp_cached();
         const ObCdcLSFetchMissLogReq::MissLogParam &param = miss_log_array.at(fetched_cnt);
         const LSN &missing_lsn = param.miss_lsn_;
         const char *buf;
@@ -1460,7 +1460,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
         logservice::ObRemoteILogEntryIterator entry_iter(get_source_func, update_source_func);
         resp->set_next_miss_lsn(missing_lsn);
 
-        if (get_timestamp() > time_upper_limit) {
+        if (get_timestamp_cached() > time_upper_limit) {
           is_timeout = true;
         } else if (OB_FAIL(entry_iter.init(tenant_id, ls_id, cur_scn, missing_lsn,
             LSN(palf::LOG_MAX_LSN_VAL), buffer_pool, log_ext_handler, archive::ARCHIVE_FILE_DATA_BUF_SIZE, enable_logservice))) {
@@ -1476,7 +1476,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
           } else {
             const int64_t entry_size = log_entry.get_serialize_size(lsn);
             int64_t pos = 0;
-            resp->inc_log_fetch_time(get_timestamp() - start_fetch_entry_ts);
+            resp->inc_log_fetch_time(get_timestamp_cached() - start_fetch_entry_ts);
 
             if (! resp->has_enough_buffer(entry_size)) {
               ret = OB_BUF_NOT_ENOUGH;
@@ -1513,7 +1513,7 @@ int ObCDCMissLogHandler::fetch_miss_log_direct_(
     } // while
     resp->set_l2s_net_time(0);
     resp->set_svr_queue_time(0);
-    resp->set_process_time(get_timestamp() - start_fetch_ts);
+    resp->set_process_time(get_timestamp_cached() - start_fetch_ts);
   }
   // regard resp not null as sending rpc successfully
   if (OB_NOT_NULL(resp)) {

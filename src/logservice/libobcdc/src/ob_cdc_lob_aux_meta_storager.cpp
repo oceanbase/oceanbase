@@ -614,7 +614,7 @@ int ObCDCLobAuxMetaStorager::get_clean_task(const uint64_t tenant_id, ObCDCLobAu
 
 void ObCDCLobAuxMetaStorager::print_stat_info()
 {
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_last_stat_time = stat_info_.last_stat_time_;
   int64_t delta_time = current_timestamp - local_last_stat_time;
   // Update last statistic value

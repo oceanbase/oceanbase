@@ -136,7 +136,7 @@ void ObLogPartMgr::reset()
 int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t start_ts = ObClockGenerator::getClock();
   IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
   ObLogSchemaGuard schema_guard;
   ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
@@ -216,7 +216,7 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
       }
     }
 
-    int64_t execute_ts = ObTimeUtility::current_time() - start_ts;
+    int64_t execute_ts = ObClockGenerator::getClock() - start_ts;
     ISTAT("[ADD_ALL_USER_TABLETS_AND_TABLES_INFO]", KR(ret), K_(tenant_id),
         K_(cur_schema_version), K_(tablet_to_table_info), K_(cur_schema_version),
         "TableSchemaCount", table_schemas.count(), "AddTableCount", table_id_cache_.count(),
@@ -231,7 +231,7 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
+  int64_t start_ts = ObClockGenerator::getClock();
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K_(tenant_id));
@@ -263,7 +263,7 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(
       }
     }
 
-    int64_t execute_ts = ObTimeUtility::current_time() - start_ts;
+    int64_t execute_ts = ObClockGenerator::getClock() - start_ts;
     ISTAT("[ADD_ALL_USER_TABLES_AND_TABLES_INFO]", KR(ret), K_(tenant_id), K_(cur_schema_version),
         K_(tablet_to_table_info), "TableSchemaCount", table_metas.count(),
         "AddTableCount", table_id_cache_.count(), K(execute_ts));
@@ -1461,7 +1461,7 @@ int ObLogPartMgr::check_cur_schema_version_when_handle_future_table_(const int64
   // Parsing  row data, e.g. table_version=100, the current PartMgr is processing to version 90,
   // so you need to wait for the schema version to advance to a version greater than or equal to 100
   while (OB_SUCC(ret) && schema_version > ATOMIC_LOAD(&cur_schema_version_)) {
-    int64_t left_time = end_time - get_timestamp();
+    int64_t left_time = end_time - get_timestamp_cached();
 
     if (left_time <= 0) {
       ret = OB_TIMEOUT;
@@ -1526,7 +1526,7 @@ int ObLogPartMgr::handle_future_table(const uint64_t table_id,
     LOG_ERROR("PartMgr has not been initialized");
     ret = OB_NOT_INIT;
   } else {
-    int64_t start_time = get_timestamp();
+    int64_t start_time = get_timestamp_cached();
     int64_t end_time = start_time + timeout;
     int64_t cur_schema_version = ATOMIC_LOAD(&cur_schema_version_);
 
@@ -1550,7 +1550,7 @@ int ObLogPartMgr::handle_future_table(const uint64_t table_id,
     cur_schema_version = ATOMIC_LOAD(&cur_schema_version_);
     _ISTAT("[HANDLE_FUTURE_TABLE] [END] RET=%d TENANT=%lu TABLE=%ld "
         "TABLE_VERSION=%ld IS_EXIST=%d CUR_SCHEMA_VERSION=%ld DELTA=%ld INTERVAL=%ld",
-        ret, tenant_id_, table_id, table_version, is_exist, cur_schema_version, table_version - cur_schema_version, get_timestamp() - start_time);
+        ret, tenant_id_, table_id, table_version, is_exist, cur_schema_version, table_version - cur_schema_version, get_timestamp_cached() - start_time);
   }
 
   return ret;

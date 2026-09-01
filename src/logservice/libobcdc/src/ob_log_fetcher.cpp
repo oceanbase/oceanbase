@@ -380,7 +380,7 @@ void ObLogFetcher::stop()
 void ObLogFetcher::pause()
 {
   if (OB_LIKELY(is_inited_)) {
-    int64_t pause_time = get_timestamp();
+    int64_t pause_time = get_timestamp_cached();
     int64_t last_pause_time = ATOMIC_LOAD(&pause_time_);
     int64_t last_resume_time = ATOMIC_LOAD(&resume_time_);
 
@@ -395,7 +395,7 @@ void ObLogFetcher::pause()
 void ObLogFetcher::resume()
 {
   if (OB_LIKELY(is_inited_)) {
-    int64_t resume_time = get_timestamp();
+    int64_t resume_time = get_timestamp_cached();
     int64_t pause_time = ATOMIC_LOAD(&pause_time_);
     int64_t pause_interval = resume_time - pause_time;
 
@@ -533,10 +533,10 @@ int ObLogFetcher::wait_for_all_ls_to_be_removed(const int64_t timeout)
     ret = OB_NOT_INIT;
     LOG_ERROR("Fetcher not inited", KR(ret));
   } else {
-    int64_t start_time = get_timestamp();
+    int64_t start_time = get_timestamp_cached();
 
     while (OB_SUCC(ret) && ls_fetch_mgr_.get_total_count() > 0) {
-      int64_t end_time = get_timestamp();
+      int64_t end_time = get_timestamp_cached();
       if (end_time - start_time >= timeout) {
         ret = OB_TIMEOUT;
         break;

@@ -870,7 +870,7 @@ int ObLogSequencer::wait_until_ready_queue_not_busy_(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
   bool ready_queue_busy = true;
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
   const int64_t base_sleep_us_if_busy = 100;
 
   while (ready_queue_busy && !stop_flag) {

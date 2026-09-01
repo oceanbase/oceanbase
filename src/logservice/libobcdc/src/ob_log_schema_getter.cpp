@@ -37,12 +37,12 @@
     do { \
       if (OB_SUCC(ret)) { \
         static const int64_t SLEEP_TIME_ON_FAIL = 100L * 1000L; \
-        int64_t start_time = get_timestamp(); \
+        int64_t start_time = get_timestamp_cached(); \
         int64_t end_time = start_time + timeout; \
         int old_err = OB_SUCCESS; \
         while (OB_FAIL((var).func(args))) { \
           old_err = ret; \
-          int64_t now = get_timestamp(); \
+          int64_t now = get_timestamp_cached(); \
           if (end_time <= now) { \
             LOG_ERROR(#func " timeout", KR(ret), K(timeout)); \
             ret = OB_TIMEOUT; \
@@ -70,13 +70,13 @@
           ret = OB_INVALID_ARGUMENT; \
           LOG_ERROR(#func " fail: RETRY_ON_FAIL_WITH_TENANT_ID not support invalid tenant_id", KR(ret), K(tenant_id), K(timeout)); \
         } else { \
-          int64_t start_time = get_timestamp(); \
+          int64_t start_time = get_timestamp_cached(); \
           int64_t end_time = start_time + timeout; \
           int old_err = OB_SUCCESS; \
           LOG_DEBUG(#func " trying with tenant id", K(tenant_id)); \
           bool test_mode_force_check_tenant_status = (1 == TCONF.test_mode_on) && (1 == TCONF.test_mode_force_check_tenant_status); \
           while (OB_FAIL((var).func(args)) || test_mode_force_check_tenant_status) { \
-            int64_t now = get_timestamp(); \
+            int64_t now = get_timestamp_cached(); \
             if (end_time <= now) { \
               LOG_ERROR(#func " timeout", KR(ret), K(timeout)); \
               ret = OB_TIMEOUT; \
@@ -727,7 +727,7 @@ int ObLogSchemaGetter::refresh_to_expected_version_(
     int64_t &latest_version)
 {
   int ret = OB_SUCCESS;
-  int64_t start_time = get_timestamp();
+  int64_t start_time = get_timestamp_cached();
   latest_version = OB_INVALID_VERSION;
 
   // Requires valid tenant ID and version
@@ -764,7 +764,7 @@ int ObLogSchemaGetter::refresh_to_expected_version_(
 
       need_refresh_schema = (OB_SUCCESS == ret) && ((OB_INVALID_VERSION == latest_version) || (specify_version_mode && latest_version < expected_version));
     }
-    int64_t cost_time = get_timestamp() - start_time;
+    int64_t cost_time = get_timestamp_cached() - start_time;
     LOG_TRACE("[SCHEMA_GETTER] refresh schema to expected version", KR(ret), K(tenant_id),
         K(latest_version), K(expected_version), "delta", latest_version - expected_version,
         "latest_version", TS_TO_STR(latest_version),

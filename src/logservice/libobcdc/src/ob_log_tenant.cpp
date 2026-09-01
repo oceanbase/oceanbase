@@ -315,7 +315,7 @@ int ObLogTenant::alloc_global_trans_seq_and_schema_version_for_ddl(
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  int64_t end_time = get_timestamp() + timeout;
+  int64_t end_time = get_timestamp_cached() + timeout;
 
   while (OB_SUCC(ret)) {
     types::uint128_t old_v;
@@ -346,7 +346,7 @@ int ObLogTenant::alloc_global_trans_seq_and_schema_version_for_ddl(
 
     PAUSE();
 
-    if (end_time <= get_timestamp()) {
+    if (end_time <= get_timestamp_cached()) {
       ret = OB_TIMEOUT;
       break;
     }

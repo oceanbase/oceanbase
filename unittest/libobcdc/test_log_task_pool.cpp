@@ -27,6 +27,8 @@ namespace unittest
 class MockTransTask : public TransTaskBase<MockTransTask>
 {
 public:
+  MockTransTask() : bar_(0), prealloc_page_(NULL) {}
+
   void foo() { bar_ += 1; }
 
   void set_allocator(int64_t page_size, common::ObIAllocator &large_allocator)
@@ -35,14 +37,16 @@ public:
     UNUSED(large_allocator);
   }
 
-  void set_prealloc_page(void *page)
+  void set_prealloc_page(void *page, const int64_t page_size)
   {
-    UNUSED(page);
+    prealloc_page_ = page;
+    UNUSED(page_size);
   }
 
-  void revert_prealloc_page(void *page)
+  void revert_prealloc_page(void *&page)
   {
-    UNUSED(page);
+    page = prealloc_page_;
+    prealloc_page_ = NULL;
   }
 
   void set_task_info(const logservice::TenantLSID &tls_id,
@@ -54,6 +58,7 @@ public:
 
 private:
   int64_t bar_;
+  void *prealloc_page_;
 };
 
 TEST(ObLogTransTaskPool, Init)
@@ -70,6 +75,40 @@ TEST(ObLogTransTaskPool, Init)
 
   int ret = pool.init(&fifo, part_trans_task_prealloc_count, true, prealloc_page_count);
   EXPECT_EQ(OB_SUCCESS, ret);
+}
+
+TEST(ObLogTransTaskPool, InitWithoutPreallocPage)
+{
+  ObConcurrentFIFOAllocator fifo;
+  int64_t G = 1024 * 1024 * 1024;
+  fifo.init(1 * G, 1 * G, OB_MALLOC_BIG_BLOCK_SIZE);
+
+  ObLogTransTaskPool<MockTransTask> pool;
+  int ret = pool.init(&fifo, 1024, true, 0);
+  EXPECT_EQ(OB_SUCCESS, ret);
+
+  const char *tls_info = "tenant_ls_id";
+  logservice::TenantLSID tls_id;
+  MockTransTask *task = pool.get(tls_info, tls_id);
+  EXPECT_TRUE(NULL != task);
+  if (NULL != task) {
+    task->revert();
+  }
+
+  pool.destroy();
+  fifo.destroy();
+}
+
+TEST(ObLogTransTaskPool, InitSizeOverflow)
+{
+  ObConcurrentFIFOAllocator fifo;
+  ObLogTransTaskPool<MockTransTask> pool;
+  const int64_t overflow_task_count =
+      INT64_MAX / static_cast<int64_t>(sizeof(MockTransTask)) + 1;
+  const int64_t overflow_page_count = INT64_MAX / 256 + 1;
+
+  EXPECT_EQ(OB_SIZE_OVERFLOW, pool.init(&fifo, overflow_task_count, true, 0));
+  EXPECT_EQ(OB_SIZE_OVERFLOW, pool.init(&fifo, 1, true, overflow_page_count));
 }
 
 TEST(ObLogTransTaskPool, Function1)

@@ -799,7 +799,7 @@ bool LSFetchCtx::need_update_svr_list()
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
-  int64_t cur_time = get_timestamp();
+  int64_t cur_time = get_timestamp_cached();
   int64_t avail_svr_count = 0;
   logservice::ObLogRouteService *log_route_service = nullptr;
 
@@ -1110,7 +1110,7 @@ int LSFetchCtx::check_fetch_timeout(const common::ObAddr &svr,
     bool &is_fetch_timeout)                       // Is the log fetch timeout
 {
   int ret = OB_SUCCESS;
-  int64_t cur_time = get_timestamp();
+  int64_t cur_time = get_timestamp_cached();
   int64_t svr_start_fetch_tstamp = OB_INVALID_TIMESTAMP;
   // Partition timeout, after which time progress is not updated, it is considered to be a log fetch timeout
   const int64_t ls_fetch_progress_update_timeout = TCONF.ls_fetch_progress_update_timeout_sec * _SEC_;
@@ -1345,7 +1345,7 @@ void LSFetchCtx::LSProgress::reset(const palf::LSN start_lsn, const int64_t star
   next_lsn_ = start_lsn;
   // Set start-up timestamp to progress
   log_progress_ = start_tstamp_ns;
-  log_touch_tstamp_ = get_timestamp();
+  log_touch_tstamp_ = get_timestamp_cached();
 }
 
 // If the progress is greater than the upper limit, the touch timestamp of the corresponding progress is updated
@@ -1358,7 +1358,7 @@ void LSFetchCtx::LSProgress::update_touch_tstamp_if_progress_beyond_upper_limit(
   if (OB_INVALID_TIMESTAMP != log_progress_
       && OB_INVALID_TIMESTAMP != upper_limit
       && log_progress_ >= upper_limit) {
-    log_touch_tstamp_ = get_timestamp();
+    log_touch_tstamp_ = get_timestamp_cached();
   }
 }
 
@@ -1394,7 +1394,7 @@ int LSFetchCtx::LSProgress::update_log_progress(const palf::LSN &new_next_lsn,
     // 2. At startup, if there is a log rollback and the progress is equal to the startup timestamp and cannot be rolled back,
     // so the fetched log progress is less than the start progress and the update of the log progress does not update the progress,
     // but the LS does fetched the log, in which case the "update timestamp of progress" needs to be updated
-    log_touch_tstamp_ = get_timestamp();
+    log_touch_tstamp_ = get_timestamp_cached();
   }
 
   return ret;
@@ -1430,7 +1430,7 @@ void LSFetchCtx::FetchModule::reset_to_fetch_stream(const common::ObAddr &svr, F
   set_module(FETCH_MODULE_FETCH_STREAM);
   svr_ = svr;
   fetch_stream_ = &fs;
-  start_fetch_tstamp_ = get_timestamp();
+  start_fetch_tstamp_ = get_timestamp_cached();
 }
 
 void LSFetchCtx::FetchModule::reset_to_dead_pool()

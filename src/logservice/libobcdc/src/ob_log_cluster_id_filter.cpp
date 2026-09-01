@@ -120,7 +120,7 @@ void ObLogClusterIDFilter::destroy()
 
 void ObLogClusterIDFilter::stat_ignored_tps()
 {
-  int64_t cur_time = get_timestamp();
+  int64_t cur_time = get_timestamp_cached();
   int64_t cur_count = ATOMIC_LOAD(&cluster_id_ignored_part_trans_count_);
   int64_t last_count = ATOMIC_LOAD(&last_cluster_id_ignored_part_trans_count_);
   int64_t delta_time = (cur_time - last_stat_time_) / 1000000;

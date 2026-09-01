@@ -75,9 +75,11 @@ public:
   virtual int drop_column_family(void *cf_handle) = 0;
   virtual int destory_column_family(void *cf_handle) = 0;
 
-  virtual void get_mem_usage(const std::vector<uint64_t> ids,
-      const std::vector<void *> cf_handles) = 0;
+  virtual void get_mem_usage(const std::vector<uint64_t> &ids,
+      const std::vector<void *> &cf_handles,
+      const char *storage_type) = 0;
   virtual int get_mem_usage(void * cf_handle, int64_t &estimate_live_data_size, int64_t &estimate_num_keys) = 0;
+  virtual void print_stat_info() const = 0;
 
 };
 

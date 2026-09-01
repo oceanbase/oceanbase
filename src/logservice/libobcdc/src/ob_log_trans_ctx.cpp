@@ -101,9 +101,10 @@ TransCtx::TransCtx() :
     is_trans_redo_dispatched_(false),
     trans_br_sort_status_(TRANS_BR_SORT_NOT_STARTED),
     br_out_queue_(),
-    allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
     lock_(ObLatchIds::OBCDC_TRANS_CTX_LOCK)
-{}
+{
+  trans_id_str_buf_[0] = '\0';
+}
 
 TransCtx::~TransCtx()
 {
@@ -118,6 +119,7 @@ void TransCtx::reset()
   state_ = TRANS_CTX_STATE_INVALID;
   tenant_id_ = OB_INVALID_TENANT_ID;
   trans_id_.reset();
+  trans_id_str_buf_[0] = '\0';
   trans_id_str_.reset();
   major_version_str_.reset();
   trx_sort_elem_.reset();
@@ -135,8 +137,6 @@ void TransCtx::reset()
   has_ddl_participant_ = false;
   is_trans_redo_dispatched_ = false;
   trans_br_sort_status_ = TRANS_BR_SORT_NOT_STARTED;
-
-  allocator_.reset();
 }
 
 int TransCtx::set_trans_id(const transaction::ObTransID &trans_id)
@@ -433,28 +433,17 @@ int TransCtx::prepare_(
 int TransCtx::init_trans_id_str_()
 {
   int ret = OB_SUCCESS;
-  static const int TRANS_ID_STR_BUF_LEN = 40; // uint64_t(tenant_id, 20) + "_" + int64_t(tx_id, 10)
-  char trans_id_buf[TRANS_ID_STR_BUF_LEN];
   int64_t pos = 0;
 
-  if (OB_FAIL(common::databuff_printf(trans_id_buf, TRANS_ID_STR_BUF_LEN, pos, "%lu_%ld", tenant_id_, trans_id_.get_id()))) {
+  if (OB_FAIL(common::databuff_printf(trans_id_str_buf_, TRANS_ID_STR_BUF_LEN, pos,
+      "%lu_%ld", tenant_id_, trans_id_.get_id()))) {
     LOG_ERROR("databuff_printf trans_id_str failed", KR(ret), K_(tenant_id), K_(trans_id), K(TRANS_ID_STR_BUF_LEN), K(pos));
   } else if (OB_UNLIKELY(pos <= 0 || pos >= TRANS_ID_STR_BUF_LEN)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("local trans_id_buf is not valid", KR(ret), K(TRANS_ID_STR_BUF_LEN), K(pos));
+    LOG_ERROR("trans_id_str_buf_ is not valid", KR(ret), K(TRANS_ID_STR_BUF_LEN), K(pos));
   } else {
-    int64_t buf_len = pos + 1;
-    char *buf = static_cast<char*>(allocator_.alloc(buf_len));
-
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("allocator_ alloc for trans id str fail", K(buf), K(buf_len));
-    } else {
-      MEMCPY(buf, trans_id_buf, pos);
-      buf[pos] = '\0';
-
-      trans_id_str_.assign(buf, static_cast<int32_t>(pos));
-    }
+    trans_id_str_buf_[pos] = '\0';
+    trans_id_str_.assign(trans_id_str_buf_, static_cast<int32_t>(pos));
   }
 
   return ret;
@@ -642,7 +631,7 @@ int TransCtx::sequence(const int64_t seq, const int64_t schema_version)
 int TransCtx::wait_data_ready(const int64_t timeout, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  int64_t end_time = get_timestamp() + timeout;
+  int64_t end_time = get_timestamp_cached() + timeout;
   ObSpinLockGuard guard(lock_);
 
   if (OB_UNLIKELY(TRANS_CTX_STATE_SEQUENCED != state_)) {
@@ -653,7 +642,7 @@ int TransCtx::wait_data_ready(const int64_t timeout, volatile bool &stop_flag)
     while (OB_SUCC(ret) && NULL != part) {
       RETRY_FUNC(stop_flag, (*part), wait_data_ready, DATA_OP_TIMEOUT);
 
-      int64_t left_time = end_time - get_timestamp();
+      int64_t left_time = end_time - get_timestamp_cached();
       if (left_time <= 0) {
         //_TCTX_ISTAT()
         OBLOG_LOG(INFO, "wait_data_ready timeout", KPC(this), KPC(part));
@@ -811,13 +800,13 @@ int TransCtx::init_participant_array_(const int64_t part_count)
   } else {
     int64_t parts_alloc_size = part_count * sizeof(participants_[0]);
 
-    participants_ = static_cast<TransPartInfo *>(allocator_.alloc(parts_alloc_size));
+    participants_ = static_cast<TransPartInfo *>(
+        common::ob_malloc(parts_alloc_size, ObModIds::OB_LOG_TRANS_CTX));
 
     if (OB_ISNULL(participants_)) {
       LOG_ERROR("allocate memory for participant array fail", K(part_count), K(parts_alloc_size));
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
-      // Number of valid participants is 0
       participant_count_ = 0;
     }
   }
@@ -827,12 +816,12 @@ int TransCtx::init_participant_array_(const int64_t part_count)
 
 void TransCtx::destroy_participant_array_()
 {
-  if (NULL != participants_ && participant_count_ > 0) {
+  if (NULL != participants_) {
     for (int64_t index = 0; index < participant_count_; index++) {
       participants_[index].~TransPartInfo();
     }
 
-    allocator_.free(participants_);
+    common::ob_free(participants_);
     participants_ = NULL;
     participant_count_ = 0;
   }

@@ -273,7 +273,7 @@ int ObLogFixedTimer::next_queue_task_(QTask *&task)
       LOG_ERROR("invalid task popped from queue", K(task));
       ret = OB_ERR_UNEXPECTED;
     } else {
-      int64_t cur_time = get_timestamp();
+      int64_t cur_time = get_timestamp_cached();
       int64_t delay = task->out_timestamp_ - cur_time;
 
       // Assuming the delay is not too long, otherwise the thread would stuck here
@@ -304,7 +304,7 @@ void ObLogFixedTimer::destroy_all_tasks_()
 ObLogFixedTimer::QTask::QTask(ObLogTimerTask &task) : task_(task)
 {
   int64_t wait_time = ATOMIC_LOAD(&ObLogFixedTimer::g_wait_time);
-  out_timestamp_ = get_timestamp() + wait_time;
+  out_timestamp_ = get_timestamp_cached() + wait_time;
 }
 
 }

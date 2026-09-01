@@ -66,7 +66,7 @@ private:
   static const int64_t TASK_POOL_ALLOCATOR_PAGE_SIZE = common::OB_MALLOC_MIDDLE_BLOCK_SIZE;
   static const int64_t TASK_POOL_ALLOCATOR_HOLD_LIMIT = TASK_POOL_ALLOCATOR_PAGE_SIZE;
   static const int64_t PART_TRANS_TASK_PREALLOC_COUNT = 1000;
-  static const int64_t PART_TRANS_TASK_PREALLOC_PAGE_COUNT = 1000;
+  static const int64_t PART_TRANS_TASK_PREALLOC_PAGE_COUNT = 0;
   static const int64_t LOG_ENTRY_TASK_COUNT= 100;
   static const int64_t FETCHER_WAIT_LS_TIMEOUT = 2 * 1000L * 1000L;
   typedef ObLogTransTaskPool<PartTransTask> PartTransTaskPool;

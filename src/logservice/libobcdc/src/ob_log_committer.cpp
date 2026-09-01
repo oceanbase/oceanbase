@@ -47,11 +47,18 @@ namespace libobcdc
 
 /////////////////////////////////////// ObLogCommitter::CheckpointTask ///////////////////////////////////////
 
-ObLogCommitter::CheckpointTask::CheckpointTask(PartTransTask &task)
+ObLogCommitter::CheckpointTask::CheckpointTask() :
+    tenant_ls_id_(),
+    task_type_(PartTransTask::TASK_TYPE_DML_TRANS),
+    timestamp_(0)
 {
-  tenant_ls_id_ = task.get_tls_id();
-  task_type_ = task.get_type();
-  timestamp_ = task.get_trans_commit_version();
+}
+
+ObLogCommitter::CheckpointTask::CheckpointTask(PartTransTask &task) :
+    tenant_ls_id_(task.get_tls_id()),
+    task_type_(task.get_type()),
+    timestamp_(task.get_trans_commit_version())
+{
 }
 
 ObLogCommitter::CheckpointTask::~CheckpointTask()
@@ -83,6 +90,7 @@ ObLogCommitter::ObLogCommitter() :
     checkpoint_queue_(),
     checkpoint_queue_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     checkpoint_queue_allocator_(),
+    normal_checkpoint_task_(),
     last_output_checkpoint_(OB_INVALID_VERSION),
     global_heartbeat_seq_(0),
     global_heartbeat_info_queue_(),
@@ -366,26 +374,27 @@ int ObLogCommitter::alloc_checkpoint_task_(PartTransTask &task, CheckpointTask *
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
-  int64_t size = 0;
   checkpoint_task = NULL;
 
-  size = sizeof(CheckpointTask);
-
-  if (OB_ISNULL(ptr = checkpoint_queue_allocator_.alloc(size))) {
-    LOG_ERROR("alloc memory for CheckpointTask fail", K(size));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
+  if (! task.is_global_heartbeat() && ! task.is_offline_ls_task()) {
+    checkpoint_task = &normal_checkpoint_task_;
   } else {
-    checkpoint_task = new (ptr) CheckpointTask(task);
+    const int64_t size = sizeof(CheckpointTask);
+    if (OB_ISNULL(ptr = checkpoint_queue_allocator_.alloc(size))) {
+      LOG_ERROR("alloc memory for CheckpointTask fail", K(size));
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      checkpoint_task = new (ptr) CheckpointTask(task);
+    }
   }
   return ret;
 }
 
 void ObLogCommitter::free_checkpoint_task_(CheckpointTask *checkpoint_task)
 {
-  if (NULL != checkpoint_task) {
+  if (NULL != checkpoint_task && &normal_checkpoint_task_ != checkpoint_task) {
     checkpoint_task->~CheckpointTask();
     checkpoint_queue_allocator_.free(checkpoint_task);
-    checkpoint_task = NULL;
   }
 }
 
@@ -1741,7 +1750,7 @@ void ObLogCommitter::print_stat_info()
 
 void CommitterStatInfo::calc_and_print_stat()
 {
-  int64_t current_timestamp = get_timestamp_coarse();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_total_processed_trans_count = ATOMIC_LOAD(&total_processed_trans_count_);
   int64_t local_empty_trans_count = ATOMIC_LOAD(&empty_trans_count_);
   int64_t local_last_total_processed_trans_count = last_total_processed_trans_count_;

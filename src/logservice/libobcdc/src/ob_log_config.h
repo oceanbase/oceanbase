@@ -157,8 +157,8 @@ public:
   DEF_INT(ready_to_seq_task_upper_bound, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "ready to sequencer task count upper bound");
   DEF_INT(part_trans_task_dynamic_alloc, OB_CLUSTER_PARAMETER, "1", "[0,1]", "part trans task dynamic alloc");
-  DEF_INT(part_trans_task_prealloc_page_count, OB_CLUSTER_PARAMETER, "20000", "[1,]",
-      "part trans task prealloc page count");
+  DEF_INT(part_trans_task_prealloc_page_count, OB_CLUSTER_PARAMETER, "-1", "[-1,]",
+      "part trans task prealloc page count, -1 means same as part trans task pre-alloc count");
   // Max accumulated redo log size limit per PartTransTask before persisting to IO; 0 disables.
   T_DEF_INT_INFT(part_trans_task_redo_size_in_memory_threshold, OB_CLUSTER_PARAMETER, 0, 0,
       "max accumulated redo log size limit per PartTransTask before persisting to IO; 0 disables");

@@ -19,6 +19,7 @@ cd ${TOP_DIR}
 ./build.sh                  \
     rpm                     \
     -DBUILD_CDC_ONLY=ON     \
+    -DENABLE_CDC_COMPILE_OPTIMIZATIONS=ON \
     -DOB_RELEASEID=$RELEASE \
     -DBUILD_NUMBER=$RELEASE \
     ${OB_DISABLE_LSE_OPTION}\
@@ -27,4 +28,3 @@ cd ${TOP_DIR}
 
 cd ${TOP_DIR}/build_rpm
 mv *cdc*.rpm $CURDIR || exit 2
-

@@ -36,6 +36,7 @@
 #include "share/schema/ob_schema_service.h"   // ObSchemaService
 #include "share/inner_table/ob_inner_table_schema.h"   // OB_ALL_SEQUENCE_VALUE_TID
 #include "lib/time/ob_time_utility.h"                  // ObTimeUtility (current_time / current_time_coarse)
+#include "common/ob_clock_generator.h"                 // ObClockGenerator::getClock()
 #include "ob_cdc_define.h"
 
 namespace oceanbase
@@ -149,6 +150,23 @@ inline int64_t get_timestamp() { return ::oceanbase::common::ObTimeUtility::curr
 /// Do not mix with get_timestamp() when computing deltas; use one source for both ends of the interval.
 inline int64_t get_timestamp_coarse() { return ::oceanbase::common::ObTimeUtility::current_time_coarse(); }
 
+/// Cached wall-clock timestamp (microseconds). Refreshed by a background thread via
+/// ObClockGenerator at ~1ms granularity and read with a single ATOMIC_LOAD (~1-5ns),
+/// avoiding the ~30-50ns vDSO cost of get_timestamp() on every call.
+///
+/// Same time base as get_timestamp() — both are wall-clock microseconds since Unix epoch;
+/// this is NOT CLOCK_MONOTONIC and remains subject to NTP/clock adjustments. The only
+/// difference from get_timestamp() is the caching layer.
+///
+/// Prefer for: elapsed-time, timeouts, coarse perf stats, queue-wait timing, or any
+/// high-frequency timestamp where ~1ms precision is sufficient.
+///
+/// Do NOT use when:
+///  - microsecond/nanosecond precision is required (e.g. fine-grained perf stats)
+///  - the value is formatted with TS_TO_STR for human-readable wall-clock display
+///    (use get_timestamp() to avoid coupling to the caching implementation)
+inline int64_t get_timestamp_cached() { return ::oceanbase::common::ObClockGenerator::getClock(); }
+
 class HumanDataSizeConverter
 {
   static const int64_t BufSize = 128;
@@ -230,8 +248,8 @@ public:
   StopWatch() : start_(0), elapsed_(0) { }
   virtual ~StopWatch() { }
 public:
-  void start() { start_ = get_timestamp(); }
-  void pause() { elapsed_ += (get_timestamp() - start_); }
+  void start() { start_ = get_timestamp_cached(); }
+  void pause() { elapsed_ += (get_timestamp_cached() - start_); }
   void reset() { start_ = 0; elapsed_ = 0; }
   double elapsed_sec() const { return static_cast<double>(
                                       elapsed_msec()) / 1000.0; }

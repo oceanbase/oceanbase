@@ -23,6 +23,68 @@ target_link_libraries(obcdc_base
   obcdc_msg rocksdb
   ${OB_RELRO_FLAG} -Wl,-T,${CMAKE_SOURCE_DIR}/rpm/ld.lds)
 
+# LTO / sample PGO for libobcdc (see libobcdc/profile/)
+set(CDC_PROFILE_DIR ${CMAKE_CURRENT_LIST_DIR}/../profile)
+message(STATUS "libobcdc: ENABLE_CDC_COMPILE_OPTIMIZATIONS=${ENABLE_CDC_COMPILE_OPTIMIZATIONS}")
+set(CDC_COMPILE_OPTS "")
+set(CDC_LINK_OPTS "")
+
+if(ENABLE_CDC_THIN_LTO)
+  list(APPEND CDC_COMPILE_OPTS "-flto=thin")
+  list(APPEND CDC_LINK_OPTS "-flto=thin")
+  if(LTO_JOBS)
+    list(APPEND CDC_LINK_OPTS "-Wl,--thinlto-jobs=${LTO_JOBS}")
+  endif()
+  if(USE_LTO_CACHE AND LTO_CACHE_DIR AND LTO_CACHE_POLICY)
+    list(APPEND CDC_LINK_OPTS
+      "-Wl,--thinlto-cache-dir=${LTO_CACHE_DIR}"
+      "-Wl,--thinlto-cache-policy=${LTO_CACHE_POLICY}")
+  endif()
+  message(STATUS "libobcdc: ENABLE_CDC_THIN_LTO=ON")
+endif()
+
+if(ENABLE_CDC_SAMPLE_PGO)
+  if(${ARCHITECTURE} STREQUAL "x86_64")
+    set(CDC_SAMPLE_PROFILE "${CDC_PROFILE_DIR}/cdc-x86_64.prof")
+  elseif(${ARCHITECTURE} STREQUAL "aarch64")
+    set(CDC_SAMPLE_PROFILE "${CDC_PROFILE_DIR}/cdc-aarch64.prof")
+  else()
+    message(FATAL_ERROR "ENABLE_CDC_SAMPLE_PGO: unsupported ARCHITECTURE=${ARCHITECTURE}")
+  endif()
+  if(NOT EXISTS "${CDC_SAMPLE_PROFILE}")
+    message(WARNING "libobcdc: CDC sample profile not found: ${CDC_SAMPLE_PROFILE}")
+  endif()
+  list(APPEND CDC_COMPILE_OPTS "-finline-functions" "-fprofile-sample-use=${CDC_SAMPLE_PROFILE}")
+  list(APPEND CDC_LINK_OPTS "-fprofile-sample-use=${CDC_SAMPLE_PROFILE}")
+  message(STATUS "libobcdc: ENABLE_CDC_SAMPLE_PGO=ON, profile=${CDC_SAMPLE_PROFILE}")
+endif()
+
+if(ENABLE_CDC_HOTFUNC)
+  if(${ARCHITECTURE} STREQUAL "x86_64")
+    set(CDC_HOTFUNC_PATH "${CDC_PROFILE_DIR}/cdc-hotfuncs-x86_64.txt")
+  elseif(${ARCHITECTURE} STREQUAL "aarch64")
+    set(CDC_HOTFUNC_PATH "${CDC_PROFILE_DIR}/cdc-hotfuncs-aarch64.txt")
+  else()
+    message(FATAL_ERROR "ENABLE_CDC_HOTFUNC: unsupported ARCHITECTURE=${ARCHITECTURE}")
+  endif()
+  if(NOT EXISTS "${CDC_HOTFUNC_PATH}")
+    message(WARNING "libobcdc: CDC hotfunc file not found: ${CDC_HOTFUNC_PATH}")
+  endif()
+  list(APPEND CDC_LINK_OPTS
+    "-Wl,--no-warn-symbol-ordering"
+    "-Wl,--symbol-ordering-file,${CDC_HOTFUNC_PATH}")
+  message(STATUS "libobcdc: ENABLE_CDC_HOTFUNC=ON, file=${CDC_HOTFUNC_PATH}")
+endif()
+
+function(apply_cdc_lto_pgo_options target)
+  if(CDC_COMPILE_OPTS)
+    target_compile_options(${target} PRIVATE ${CDC_COMPILE_OPTS})
+  endif()
+  if(CDC_LINK_OPTS)
+    target_link_options(${target} PRIVATE ${CDC_LINK_OPTS})
+  endif()
+endfunction()
+
 if( ${ARCHITECTURE} STREQUAL "x86_64" )
   add_definitions(-DARC_X86)
 endif()
@@ -159,6 +221,7 @@ add_dependencies(obcdc_objects ob_cdc_deps)
 
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
 target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
+apply_cdc_lto_pgo_options(obcdc_objects)
 if (OB_STRICT_COMPILE_FLAGS)
   target_compile_options(obcdc_objects PRIVATE -Wno-c++20-extensions)
 else()
@@ -197,6 +260,7 @@ else()
     )
   endif()
   add_dependencies(obcdc obcdc_objects)
+  apply_cdc_lto_pgo_options(obcdc)
   if (BUILD_CDC_ONLY)
     # Compress DWARF sections in-place after linking so eu-strip can process the binary
     # without hitting size limits. Full debug info is preserved; the debuginfo RPM
@@ -216,6 +280,7 @@ ob_add_new_object_target(obcdc_objects_miner obcdc_object_list)
 add_dependencies(obcdc_objects_miner ob_cdc_deps)
 
 target_link_libraries(obcdc_objects_miner PUBLIC obcdc_base)
+apply_cdc_lto_pgo_options(obcdc_objects_miner)
 add_library(obcdc_static
     STATIC
     ${CMAKE_BINARY_DIR}/src/observer/ob_version.cpp)
@@ -229,4 +294,5 @@ target_link_libraries(obcdc_static
   oceanbase_static
   -Wl,--end-group
   PRIVATE easy ${STATIC_LIBGCC_FLAGS} ${STATIC_LIBSTDCXX_FLAGS})
+apply_cdc_lto_pgo_options(obcdc_static)
 set_target_properties(obcdc_static PROPERTIES OUTPUT_NAME "obcdc")

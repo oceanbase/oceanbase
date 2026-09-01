@@ -1483,7 +1483,7 @@ int ObLogSysTableHelper::do_query_(MySQLQueryBase &query)
                   K(retry_svr_cnt), "server_count", svr_provider_->get_server_count());
             }
           } else {
-            last_change_server_tstamp = ObTimeUtility::current_time();
+            last_change_server_tstamp = ObClockGenerator::getClock();
           }
         }
 
@@ -1540,7 +1540,7 @@ bool ObLogSysTableHelper::need_change_server_(
   bool bool_ret = false;
   static const int64_t PRINT_CONN_SERVER_INTERVAL = 10 * _SEC_;
   const int64_t sql_server_change_interval = TCONF.sql_server_change_interval_sec * _SEC_;
-  int64_t cur_time = ObTimeUtility::current_time();
+  int64_t cur_time = ObClockGenerator::getClock();
 
   if (REACH_TIME_INTERVAL(PRINT_CONN_SERVER_INTERVAL)) {
     LOG_INFO("[STAT] [SYSTABLE_HELPER] [QUERY_SQL_SERVER]", K(tid), "svr", conn.get_server(),

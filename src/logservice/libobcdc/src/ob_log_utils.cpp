@@ -1398,8 +1398,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   bool done = false;
-  int64_t end_time = ObTimeUtility::current_time() + timeout;
-
+  int64_t end_time = ObClockGenerator::getClock() + timeout;
   while (OB_SUCC(ret) && ! done) {
     if (OB_FAIL(share::ObCompatModeGetter::instance().get_tenant_mode(tenant_id, compat_mode))) {
       LOG_WARN("ObCompatModeGetter get_tenant_mode fail", KR(ret), K(tenant_id), "compat_mode", print_compat_mode(compat_mode));
@@ -1416,7 +1415,7 @@ int get_tenant_compat_mode(const uint64_t tenant_id,
       ob_usleep(100);
     }
 
-    int64_t left_time = end_time - ObTimeUtility::current_time();
+    int64_t left_time = end_time - ObClockGenerator::getClock();
 
     if (left_time <= 0) {
       ret = OB_TIMEOUT;
@@ -1467,7 +1466,7 @@ ObLogTimeMonitor::ObLogTimeMonitor(const char *log_msg_prefix, bool enable)
   enable_ = enable;
   if (enable_) {
     log_msg_prefix_ = log_msg_prefix;
-    start_time_usec_ = get_timestamp();
+    start_time_usec_ = get_timestamp_cached();
   } else {
     log_msg_prefix_ = NULL;
     start_time_usec_ = 0;
@@ -1478,7 +1477,7 @@ ObLogTimeMonitor::ObLogTimeMonitor(const char *log_msg_prefix, bool enable)
 ObLogTimeMonitor::~ObLogTimeMonitor()
 {
   if (enable_) {
-    int64_t cost_time = get_timestamp() - start_time_usec_;
+    int64_t cost_time = get_timestamp_cached() - start_time_usec_;
     _LOG_INFO("[TIME_MONITOR] %s: cost:%ld; start:%ld, start_ts:%s", log_msg_prefix_, cost_time, start_time_usec_, TS_TO_STR(start_time_usec_));
     enable_ = false;
     log_msg_prefix_ = NULL;
@@ -1491,7 +1490,7 @@ int64_t ObLogTimeMonitor::mark_and_get_cost(const char *log_msg_suffix, bool nee
 {
   int64_t cost = 0;
   if (enable_) {
-    int64_t cur_ts = get_timestamp();
+    int64_t cur_ts = get_timestamp_cached();
     cost = cur_ts - last_mark_time_usec_;
     if (need_print) {
       _LOG_INFO("[TIME_MONITOR] %s-%s: cost %ld", log_msg_prefix_, log_msg_suffix, cost);

@@ -32,7 +32,6 @@
 #include "rocksdb/table.h"
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/cache.h"
-#include "rocksdb/utilities/memory_util.h"
 
 #define RETRY_FUNC_ON_IO_ERROR_WITH_USLEEP_MS(stop_flag, sleep_ms, var, func, args...) \
   do {\
@@ -503,7 +502,7 @@ int RocksDbStoreService::batch_delete(void *cf_handle, const common::ObArray<ObL
 int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key)
 {
   int ret = OB_SUCCESS;
-  int64_t start_ts = get_timestamp();
+  int64_t start_ts = get_timestamp_cached();
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
 
   if (OB_ISNULL(column_family_handle)) {
@@ -523,7 +522,7 @@ int RocksDbStoreService::del_range(void *cf_handle, const std::string &begin_key
       ret = OB_ERR_UNEXPECTED;
     } else {
       // NOTICE invoke this interface lob data clean task interval
-      double time_cost = (get_timestamp() - start_ts)/1000.0;
+      double time_cost = (get_timestamp_cached() - start_ts)/1000.0;
       _LOG_INFO("DEL_RANGE time_cost=%.3lfms start_key=%s end_key=%s", time_cost, begin_key.c_str(), end_key.c_str());
     }
   }
@@ -538,7 +537,7 @@ int RocksDbStoreService::compact_range(
     const bool op_entire_cf)
 {
   int ret = OB_SUCCESS;
-  int64_t start_ts = get_timestamp();
+  int64_t start_ts = get_timestamp_cached();
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
   rocksdb::CompactRangeOptions compact_option;
   compact_option.change_level = true;
@@ -562,7 +561,7 @@ int RocksDbStoreService::compact_range(
     if (!s.ok()) {
       _LOG_WARN("COMPACT_RANGE [%s - %s] failed, reason: [%s]", begin_key.c_str(), end_key.c_str(), s.ToString().c_str());
     } else {
-      int64_t time_cost = get_timestamp() - start_ts;
+      int64_t time_cost = get_timestamp_cached() - start_ts;
       _LOG_INFO("COMPACT_RANGE [%s - %s] time_cost=%s", begin_key.c_str(), end_key.c_str(), TVAL_TO_STR(time_cost));
     }
   }
@@ -572,7 +571,7 @@ int RocksDbStoreService::compact_range(
 int RocksDbStoreService::flush(void *cf_handle)
 {
   int ret = OB_SUCCESS;
-  int64_t start_ts = get_timestamp();
+  int64_t start_ts = get_timestamp_cached();
   rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handle);
   rocksdb::FlushOptions flush_option; // default wait=true, allow_wait_stall=false
 
@@ -587,7 +586,7 @@ int RocksDbStoreService::flush(void *cf_handle)
     if (! s.ok()) {
       _LOG_WARN("ROCKSDB FLUSH failed, reason: [%s]", s.ToString().c_str());
     } else {
-      int64_t time_cost = get_timestamp() - start_ts;
+      int64_t time_cost = get_timestamp_cached() - start_ts;
       _LOG_INFO("ROCKSDB FLUSH SUCC, time_cost=%s", TVAL_TO_STR(time_cost));
     }
   }
@@ -755,68 +754,48 @@ int RocksDbStoreService::destory_column_family(void *cf_handle)
   return ret;
 }
 
-void RocksDbStoreService::get_mem_usage(const std::vector<uint64_t> ids,
-    const std::vector<void *> cf_handles)
+void RocksDbStoreService::get_mem_usage(const std::vector<uint64_t> &ids,
+    const std::vector<void *> &cf_handles,
+    const char *storage_type)
 {
   int ret = OB_SUCCESS;
-  int64_t total_memtable_usage = 0;
-  int64_t total_block_cache_usage = 0;
-  int64_t total_table_readers_usage = 0;
-  int64_t total_block_cache_pinned_usage = 0;
+  if (OB_ISNULL(storage_type) || ids.size() != cf_handles.size()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for RocksDB CF memory statistics", KR(ret),
+        KP(storage_type), "tenant_count", ids.size(), "cf_count", cf_handles.size());
+  } else if (OB_ISNULL(m_db_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("RocksDB is not initialized when collecting CF memory statistics", KR(ret), KCSTRING(storage_type));
+  }
 
-  for (int64_t idx = 0; OB_SUCC(ret) && !is_stopped() && idx < cf_handles.size(); ++idx) {
+  for (int64_t idx = 0; OB_SUCC(ret) && !is_stopped()
+      && idx < static_cast<int64_t>(cf_handles.size()); ++idx) {
     rocksdb::ColumnFamilyHandle *column_family_handle = static_cast<rocksdb::ColumnFamilyHandle *>(cf_handles[idx]);
 
     if (OB_ISNULL(column_family_handle)) {
-      LOG_ERROR("column_family_handle is NULL");
       ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("column_family_handle is NULL when collecting RocksDB CF memory statistics",
+          KR(ret), KCSTRING(storage_type), "tenant_id", ids[idx], K(idx));
     } else {
-      std::string memtable_usage;
-      std::string block_cache_usage;
-      std::string table_readers_usage;
-      std::string block_cache_pinned_usage;
-      int64_t int64_memtable_usage = 0;
-      int64_t int64_block_cache_usage = 0;
-      int64_t int64_table_readers_usage = 0;
-      int64_t int64_block_cache_pinned_usage = 0;
+      uint64_t memtable_usage = 0;
+      uint64_t table_readers_usage = 0;
+      const bool got_memtable = m_db_->GetIntProperty(
+          column_family_handle, rocksdb::DB::Properties::kCurSizeAllMemTables, &memtable_usage);
+      const bool got_table_readers = m_db_->GetIntProperty(
+          column_family_handle, rocksdb::DB::Properties::kEstimateTableReadersMem, &table_readers_usage);
 
-      m_db_->GetProperty(column_family_handle, "rocksdb.cur-size-all-mem-tables", &memtable_usage);
-      m_db_->GetProperty(column_family_handle, "rocksdb.block-cache-usage", &block_cache_usage);
-      m_db_->GetProperty(column_family_handle, "rocksdb.estimate-table-readers-mem", &table_readers_usage);
-      m_db_->GetProperty(column_family_handle, "rocksdb.block-cache-pinned-usage", &block_cache_pinned_usage);
-
-      c_str_to_int(memtable_usage.c_str(), int64_memtable_usage);
-      c_str_to_int(block_cache_usage.c_str(), int64_block_cache_usage);
-      c_str_to_int(table_readers_usage.c_str(), int64_table_readers_usage);
-      c_str_to_int(block_cache_pinned_usage.c_str(), int64_block_cache_pinned_usage);
-
-      total_memtable_usage += int64_memtable_usage;
-      total_block_cache_usage += int64_block_cache_usage;
-      total_table_readers_usage += int64_table_readers_usage;
-      total_block_cache_pinned_usage += int64_block_cache_pinned_usage;
-
-      LOG_INFO("[ROCKSDB] [MEM]", "tenant_id", ids[idx],
-          "memtable", memtable_usage.c_str(),
-          "block_cache", block_cache_usage.c_str(),
-          "table_readers", table_readers_usage.c_str(),
-          "block_cache_pinned", block_cache_pinned_usage.c_str());
+      if (!got_memtable || !got_table_readers) {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to collect RocksDB CF memory properties",
+            KCSTRING(storage_type), "tenant_id", ids[idx], K(got_memtable), K(got_table_readers));
+      } else {
+        LOG_INFO("[ROCKSDB] [CF_MEM]",
+            "tenant_id", ids[idx],
+            KCSTRING(storage_type),
+            "memtable", SIZE_TO_STR(memtable_usage),
+            "table_reader", SIZE_TO_STR(table_readers_usage));
+      }
     }
   } // for
-
-  LOG_INFO("[ROCKSDB] [TOTAL_MEM]",
-      "memtable", SIZE_TO_STR(total_memtable_usage),
-      "block_cache", SIZE_TO_STR(total_block_cache_usage),
-      "table_readers", SIZE_TO_STR(total_table_readers_usage),
-      "block_cache_pinned", SIZE_TO_STR(total_block_cache_pinned_usage));
-
-  if (m_options_.write_buffer_manager && m_options_.write_buffer_manager->enabled()) {
-    LOG_INFO("[ROCKSDB] [WRITE_BUFFER_MGR]",
-        "memory_usage", SIZE_TO_STR(m_options_.write_buffer_manager->memory_usage()),
-        "mutable_memtable_usage", SIZE_TO_STR(m_options_.write_buffer_manager->mutable_memtable_memory_usage()),
-        "buffer_size", SIZE_TO_STR(m_options_.write_buffer_manager->buffer_size()));
-  }
-
-  print_db_stats_info_();
 }
 
 int RocksDbStoreService::get_mem_usage(void * cf_handle, int64_t &estimate_live_data_size, int64_t &estimate_num_keys)
@@ -840,45 +819,84 @@ int RocksDbStoreService::get_mem_usage(void * cf_handle, int64_t &estimate_live_
   return ret;
 }
 
-void RocksDbStoreService::print_db_stats_info_() const
+void RocksDbStoreService::print_stat_info() const
 {
-  int ret = OB_SUCCESS;
-  // 使用 MemoryUtil 获取 RocksDB 整体(所有 column_family) 内存占用
-  std::map<rocksdb::MemoryUtil::UsageType, uint64_t> usage_by_type;
-  std::vector<rocksdb::DB*> dbs = {m_db_};
-  std::unordered_set<const rocksdb::Cache*> caches;  // 传空, MemoryUtil 会自动从 DB 获取 block cache
+  if (OB_ISNULL(m_db_)) {
+    LOG_WARN_RET(OB_NOT_INIT, "RocksDB is not initialized when collecting global statistics");
+  } else {
+    uint64_t memtable_total = 0;
+    uint64_t memtable_unflushed = 0;
+    uint64_t table_readers_total = 0;
+    uint64_t block_cache_total = 0;
+    uint64_t block_cache_pinned = 0;
+    const bool got_memtable_total = m_db_->GetAggregatedIntProperty(
+        rocksdb::DB::Properties::kSizeAllMemTables, &memtable_total);
+    const bool got_memtable_unflushed = m_db_->GetAggregatedIntProperty(
+        rocksdb::DB::Properties::kCurSizeAllMemTables, &memtable_unflushed);
+    const bool got_table_readers = m_db_->GetAggregatedIntProperty(
+        rocksdb::DB::Properties::kEstimateTableReadersMem, &table_readers_total);
+    const bool got_block_cache = m_db_->GetAggregatedIntProperty(
+        rocksdb::DB::Properties::kBlockCacheUsage, &block_cache_total);
+    const bool got_block_cache_pinned = m_db_->GetAggregatedIntProperty(
+        rocksdb::DB::Properties::kBlockCachePinnedUsage, &block_cache_pinned);
 
-  rocksdb::Status s = rocksdb::MemoryUtil::GetApproximateMemoryUsageByType(dbs, caches, &usage_by_type);
-  if (!s.ok()) {
-    LOG_WARN("[ROCKSDB] [OVERALL_MEM] GetApproximateMemoryUsageByType failed", "error", s.ToString().c_str());
-    return;
-  }
+    if (!got_memtable_total || !got_memtable_unflushed || !got_table_readers
+        || !got_block_cache || !got_block_cache_pinned) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to collect RocksDB global memory properties",
+          K(got_memtable_total), K(got_memtable_unflushed), K(got_table_readers),
+          K(got_block_cache), K(got_block_cache_pinned));
+    } else {
+      const uint64_t tracked_memory = memtable_total + table_readers_total + block_cache_total;
+      uint64_t write_buffer_manager_usage = 0;
+      uint64_t write_buffer_manager_limit = 0;
+      if (m_options_.write_buffer_manager && m_options_.write_buffer_manager->enabled()) {
+        write_buffer_manager_usage = m_options_.write_buffer_manager->memory_usage();
+        write_buffer_manager_limit = m_options_.write_buffer_manager->buffer_size();
+      }
 
-  // 从 map 中提取各项内存使用
-  int64_t memtable_total = static_cast<int64_t>(usage_by_type[rocksdb::MemoryUtil::kMemTableTotal]);
-  int64_t memtable_unflushed = static_cast<int64_t>(usage_by_type[rocksdb::MemoryUtil::kMemTableUnFlushed]);
-  int64_t table_readers_total = static_cast<int64_t>(usage_by_type[rocksdb::MemoryUtil::kTableReadersTotal]);
-  int64_t cache_total = static_cast<int64_t>(usage_by_type[rocksdb::MemoryUtil::kCacheTotal]);
+      // WBM usage overlaps memtable_total, and pinned cache is part of block_cache_total.
+      LOG_INFO("[ROCKSDB] [MEM_SUMMARY]",
+          "tracked_memory", SIZE_TO_STR(tracked_memory),
+          "memtable_total", SIZE_TO_STR(memtable_total),
+          "memtable_unflushed", SIZE_TO_STR(memtable_unflushed),
+          "table_reader", SIZE_TO_STR(table_readers_total),
+          "block_cache", SIZE_TO_STR(block_cache_total),
+          "block_cache_pinned", SIZE_TO_STR(block_cache_pinned),
+          "write_buffer_manager_usage", SIZE_TO_STR(write_buffer_manager_usage),
+          "write_buffer_manager_limit", SIZE_TO_STR(write_buffer_manager_limit));
+    }
 
-  // 计算总内存: memtable + table_readers + cache
-  int64_t total_memory_usage = memtable_total + table_readers_total + cache_total;
+    if (OB_NOT_NULL(m_options_.statistics)) {
+      const uint64_t user_write =
+        m_options_.statistics->getTickerCount(rocksdb::Tickers::BYTES_WRITTEN);
+      const uint64_t flush_write =
+        m_options_.statistics->getTickerCount(rocksdb::Tickers::FLUSH_WRITE_BYTES);
+      const uint64_t compaction_write =
+        m_options_.statistics->getTickerCount(rocksdb::Tickers::COMPACT_WRITE_BYTES);
+      const uint64_t stall_micros_total =
+        m_options_.statistics->getTickerCount(rocksdb::Tickers::STALL_MICROS);
+      uint64_t pending_compaction_bytes = 0;
+      uint64_t is_write_stopped = 0;
+      const bool got_pending_compaction = m_db_->GetAggregatedIntProperty(
+          rocksdb::DB::Properties::kEstimatePendingCompactionBytes, &pending_compaction_bytes);
+      // kIsWriteStopped reports DB-wide write-controller state. Aggregating it
+      // over CFs would sum the same global boolean once per CF.
+      const bool got_write_stopped = m_db_->GetIntProperty(
+          rocksdb::DB::Properties::kIsWriteStopped, &is_write_stopped);
 
-  // 整体内存占用(所有 CF) - 使用 MemoryUtil 获取的精确值
-  LOG_INFO("[ROCKSDB] [OVERALL_MEM] [ALL_CF]",
-      "total_memory_usage", SIZE_TO_STR(total_memory_usage),
-      "memtable_total", SIZE_TO_STR(memtable_total),
-      "memtable_unflushed", SIZE_TO_STR(memtable_unflushed),
-      "table_readers_total", SIZE_TO_STR(table_readers_total),
-      "block_cache_total", SIZE_TO_STR(cache_total));
-
-  // 内存分布(各组件占总内存比例)
-  if (total_memory_usage > 0) {
-    LOG_INFO("[ROCKSDB] [OVERALL_MEM] [MEM_DISTRIBUTION]",
-        "total", SIZE_TO_STR(total_memory_usage),
-        "memtable_pct", (100 * memtable_total / total_memory_usage),
-        "memtable_unflushed_pct", (100 * memtable_unflushed / total_memory_usage),
-        "table_readers_pct", (100 * table_readers_total / total_memory_usage),
-        "block_cache_pct", (100 * cache_total / total_memory_usage));
+      if (!got_pending_compaction || !got_write_stopped) {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to collect RocksDB global IO properties",
+            K(got_pending_compaction), K(got_write_stopped));
+      } else {
+        LOG_INFO("[ROCKSDB] [IO_SUMMARY]",
+            "user_write_total", SIZE_TO_STR(user_write),
+            "flush_write_total", SIZE_TO_STR(flush_write),
+            "compaction_write_total", SIZE_TO_STR(compaction_write),
+            K(stall_micros_total),
+            "pending_compaction_bytes", SIZE_TO_STR(pending_compaction_bytes),
+            K(is_write_stopped));
+      }
+    }
   }
 }
 

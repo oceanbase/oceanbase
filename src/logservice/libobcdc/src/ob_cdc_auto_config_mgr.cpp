@@ -134,7 +134,7 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   const int64_t redo_dispatch_exceed_ratio = factor_ <= 12 ? 1 : (1 << (factor_ - 13));
   const int64_t direct_load_inc_thread_num = factor_ <= 12 ? 1 : (factor_ - 12);
   const int64_t parser_flow_control_queue_backlog_threshold = 1 << factor_;
-  const int64_t max_chunk_cache_size =  factor_ <= 12 ? (1 << (factor_ - 11)) * 512 * _M_ : 4096 * _M_;
+  const int64_t max_chunk_cache_size =  factor_ <= 13 ? (1 << (factor_ - 11)) * 512 * _M_ : 4096 * _M_;
   const int64_t task_pool_allocator_total_limit = memory_limit_;
 
   REFRESH_NUM_FIELD_WITH_CONFIG(redo_dispatcher_memory_limit, redo_dispatcher_limit, config.redo_dispatcher_memory_limit.get());

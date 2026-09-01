@@ -747,14 +747,14 @@ void FetchLogARpc::stop()
         "flying_request_count", get_flying_request_count());
     print_flying_request_list();
 
-    int64_t start_time = get_timestamp();
+    int64_t start_time = get_timestamp_cached();
     while (get_flying_request_count() > 0) {
       wait_count++;
       if (0 == (wait_count % WARN_COUNT_ON_STOP)) {
         LOG_WARN_RET(OB_ERR_UNEXPECTED, "wait for flying async fetch log rpc done",
             "fetch_stream", &host_, K_(svr),
             "flying_request_count", get_flying_request_count(),
-            "wait_time", get_timestamp() - start_time);
+            "wait_time", get_timestamp_cached() - start_time);
         print_flying_request_list();
       }
 
@@ -763,7 +763,7 @@ void FetchLogARpc::stop()
 
     LOG_INFO("all flying async fetch log rpc is done",
         "fetch_stream", &host_, K_(svr),
-        "wait_time", get_timestamp() - start_time,
+        "wait_time", get_timestamp_cached() - start_time,
         "flying_request_count", get_flying_request_count());
   }
 }
@@ -863,7 +863,7 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
     const obrpc::ObCdcLSFetchLogResp *resp)
 {
   int ret = OB_SUCCESS;
-  int64_t start_proc_time = get_timestamp();
+  int64_t start_proc_time = get_timestamp_cached();
 
   // Locked mutually exclusive access
   ObSpinLockGuard lock_guard(lock_);
@@ -1056,7 +1056,7 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
 {
   const bool print_rpc_handle_info = ATOMIC_LOAD(&g_print_rpc_handle_info);
   int64_t req_upper_limit = rpc_req.get_upper_limit();
-  int64_t rpc_time = get_timestamp() - rpc_req.get_rpc_start_time();
+  int64_t rpc_time = get_timestamp_cached() - rpc_req.get_rpc_start_time();
   void *fetch_stream = &host_;
 
   if (print_rpc_handle_info) {
@@ -1126,7 +1126,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     } else {
       LOG_ERROR("send async stream fetch log rpc fail", KR(ret), K(svr_), K(rpc_req), K(launch_by_cb));
 
-      int64_t start_proc_time = get_timestamp();
+      int64_t start_proc_time = get_timestamp_cached();
 
       // First reset the ret return value
       int err_code = ret;
@@ -1460,7 +1460,7 @@ int FetchLogARpc::RpcRequest::prepare(
     trace_id_.init(get_self_addr());
 
     // Update request time
-    rpc_start_time_ = get_timestamp();
+    rpc_start_time_ = get_timestamp_cached();
 
     // reset stop flag
     force_stop_flag_ = false;
@@ -1574,7 +1574,7 @@ int FetchLogARpcResult::set(const obrpc::ObRpcResultCode &rcode,
   // After setting all the result items, only then start setting the statistics items,
   // because the results need a memory copy and this time must be considered
   if (OB_SUCCESS == ret) {
-    int64_t rpc_end_time = get_timestamp();
+    int64_t rpc_end_time = get_timestamp_cached();
 
     rpc_time_ = rpc_end_time - rpc_start_time;
     rpc_callback_time_ = rpc_end_time - rpc_callback_start_time;

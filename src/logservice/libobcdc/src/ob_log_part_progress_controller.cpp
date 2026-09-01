@@ -228,7 +228,7 @@ int PartProgressController::get_min_progress(int64_t &progress)
   } else {
     progress = INVALID_PROGRESS;
     const int64_t cnt = ATOMIC_LOAD(&progress_cnt_);
-    int64_t execution_time = get_timestamp();
+    int64_t execution_time = get_timestamp_cached();
     int64_t min_progress_id = 0;
 
     for (int64_t idx = 0; OB_SUCCESS == ret && (idx < cnt); ++idx) {
@@ -242,7 +242,7 @@ int PartProgressController::get_min_progress(int64_t &progress)
     }
 
     LOG_DEBUG("[FETCHER] [GET_MIN_PROGRESS] ", K(progress), K_(progress_cnt), K(min_progress_id));
-    execution_time = get_timestamp() - execution_time ;
+    execution_time = get_timestamp_cached() - execution_time ;
     // Update execution time, print execution time periodically
     update_execution_time_(execution_time);
   }

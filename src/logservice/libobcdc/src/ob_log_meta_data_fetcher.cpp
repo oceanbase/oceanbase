@@ -192,7 +192,7 @@ int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
     } else {
       bool is_exceeded = false;
       const int64_t end_tstamp_ns = start_parameters.get_end_tstamp_ns();
-      int64_t start_time = get_timestamp();
+      int64_t start_time = get_timestamp_cached();
       int64_t cur_progress;
 
       while (OB_SUCC(ret) && ! is_exceeded) {
@@ -205,7 +205,7 @@ int ObLogMetaDataFetcher::add_ls_and_fetch_until_the_progress_is_reached(
                 K(tenant_id), K(cur_progress), K(end_tstamp_ns));
             trans_task_pool_.print_stat_info();
           }
-          int64_t end_time = get_timestamp();
+          int64_t end_time = get_timestamp_cached();
 
           if (end_time - start_time > timeout) {
             ret = OB_TIMEOUT;

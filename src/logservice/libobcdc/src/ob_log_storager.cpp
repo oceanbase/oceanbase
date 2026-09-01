@@ -70,7 +70,7 @@ int ObLogStorager::init(const int64_t thread_num,
   } else {
     round_value_ = 0;
     rps_stat_.reset();
-    last_stat_time_ = get_timestamp();
+    last_stat_time_ = get_timestamp_cached();
     store_service_ = &store_service;
     block_count_ = 0;
     log_task_count_ = 0;
@@ -569,7 +569,7 @@ void ObLogStorager::print_task_count_()
 
 void ObLogStorager::print_stat_info()
 {
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_last_stat_time = last_stat_time_;
   int64_t delta_time = current_timestamp - local_last_stat_time;
   // Update last statistic

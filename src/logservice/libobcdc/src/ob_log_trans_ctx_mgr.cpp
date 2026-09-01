@@ -133,7 +133,7 @@ int ObLogTransCtxMgr::init(const bool need_sort_participant)
     last_created_trans_count_ = 0;
     sequenced_trans_count_ = 0;
     last_sequenced_trans_count_ = 0;
-    last_stat_time_ = get_timestamp();
+    last_stat_time_ = get_timestamp_cached();
   }
 
   return ret;
@@ -272,7 +272,7 @@ int ObLogTransCtxMgr::update_stat_info(const int trans_state)
 
 void ObLogTransCtxMgr::print_stat_info()
 {
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_created_trans_count = ATOMIC_LOAD(&created_trans_count_);
   int64_t local_last_created_trans_count = ATOMIC_LOAD(&last_created_trans_count_);
   int64_t local_sequenced_trans_count = ATOMIC_LOAD(&sequenced_trans_count_);

@@ -18,6 +18,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/time/ob_time_utility.h"     // ObTimeUtility
+#include "common/ob_clock_generator.h"    // ObClockGenerator::getClock()
 #include "share/ob_errno.h"               // KR
 
 namespace oceanbase
@@ -104,7 +105,7 @@ int ObConcurrentSeqQueue::wait_on_item_(SeqItem &item,
   // We set it relatively short to avoid the cost of "false sleep" caused by int32_t overflow
   static const int64_t WAIT_TIME_ON_OP = 10L * 1000L;
 
-  int64_t wait_time_us = end_time - ObTimeUtility::current_time();
+  int64_t wait_time_us = end_time - ObClockGenerator::getClock();
   wait_time_us = std::min(wait_time_us, WAIT_TIME_ON_OP);
   if (wait_time_us <= 0) {
     ret = OB_TIMEOUT;
@@ -164,7 +165,7 @@ int ObConcurrentSeqQueue::push(void *data, const int64_t seq, const int64_t time
   } else {
     bool ready_to_push = false;
     SeqItem &item = seq_item_(seq);
-    int64_t end_time = ObTimeUtility::current_time() + timeout_us;
+    int64_t end_time = ObClockGenerator::getClock() + timeout_us;
 
     while (! ready_to_push && OB_SUCCESS == ret) {
       // First save the current seq value
@@ -211,7 +212,7 @@ int ObConcurrentSeqQueue::pop(void *&data, const int64_t asked_seq, const int64_
   } else {
     bool ready_to_pop = false;
     SeqItem &item = seq_item_(asked_seq);
-    int64_t end_time = ObTimeUtility::current_time() + timeout_us;
+    int64_t end_time = ObClockGenerator::getClock() + timeout_us;
     // The value becomes seq + 1, indicating that the data is ready
     int64_t ready_seq = asked_seq + 1;
 

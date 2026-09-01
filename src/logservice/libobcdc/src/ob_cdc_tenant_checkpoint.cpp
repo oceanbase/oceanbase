@@ -178,7 +178,7 @@ int TenantCheckpoint::check_snapshot_readable_(const int64_t snapshot_scn_val, b
 int TenantCheckpoint::wait_until_readable(const int64_t snapshot_scn_val, const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
   const int64_t end_ts = start_ts + timeout_us;
   bool is_readable = false;
 
@@ -192,7 +192,7 @@ int TenantCheckpoint::wait_until_readable(const int64_t snapshot_scn_val, const 
     }
 
     if (OB_SUCC(ret) && OB_UNLIKELY(!is_readable)) {
-      if (get_timestamp() >= end_ts) {
+      if (get_timestamp_cached() >= end_ts) {
         ret = OB_TIMEOUT;
       } else {
         ob_usleep(100 * _MSEC_);
@@ -218,7 +218,7 @@ int TenantCheckpoint::wait_until_readable(const int64_t snapshot_scn_val, const 
 int TenantCheckpoint::wait_until_clog_served(const int64_t snapshot_scn_val, bool &is_clog_served, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
   const int64_t end_ts = start_ts + timeout;
   is_clog_served = false;
   bool need_retry = true;
@@ -233,7 +233,7 @@ int TenantCheckpoint::wait_until_clog_served(const int64_t snapshot_scn_val, boo
     }
 
     if (OB_SUCC(ret) && OB_UNLIKELY(! is_clog_served)) {
-      if (get_timestamp() >= end_ts) {
+      if (get_timestamp_cached() >= end_ts) {
         ret = OB_TIMEOUT;
       } else if (OB_UNLIKELY(need_retry)) {
         // refresh tenant checkpoint

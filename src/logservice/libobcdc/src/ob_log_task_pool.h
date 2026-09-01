@@ -70,6 +70,7 @@ class ObLogTransTaskPool
   static const int64_t LARGE_ALLOCATOR_PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE;     // 2M - 17KB
   static const int64_t LARGE_ALLOCATOR_TOTAL_LIMIT = (1LL << 37);   // 127G
   static const int64_t LARGE_ALLOCATOR_HOLD_LIMIT = (1LL << 26);    // 64M
+  static const int64_t TRANS_TASK_LOCAL_PAGE_SIZE = 256;
 
 public:
   ObLogTransTaskPool() :
@@ -81,6 +82,7 @@ public:
     prealloc_pool_tasks_(NULL),
     alloc_(NULL),
     prealloc_page_cnt_(0),
+    prealloc_page_size_(0),
     prealloc_pages_(NULL),
     prealloc_page_pool_(),
     task_large_allocator_(),
@@ -90,8 +92,12 @@ public:
   { }
   virtual ~ObLogTransTaskPool() { }
 
-  int64_t get_alloc_count() const { return dynamic_alloc_task_cnt_ + used_prealloc_task_cnt_; }
-  int64_t get_total_count() const { return total_cnt_; }
+  // The pool counters change concurrently; monitoring only needs a best-effort snapshot.
+  int64_t get_alloc_count() const
+  {
+    return ATOMIC_LOAD(&dynamic_alloc_task_cnt_) + ATOMIC_LOAD(&used_prealloc_task_cnt_);
+  }
+  int64_t get_total_count() const { return ATOMIC_LOAD(&total_cnt_); }
 
 public:
   // Init pool.
@@ -103,8 +109,10 @@ public:
       const int64_t large_allocator_total_limit = LARGE_ALLOCATOR_TOTAL_LIMIT)
   {
     int ret = common::OB_SUCCESS;
-    const int64_t start_ts = get_timestamp();
+    const int64_t start_ts = get_timestamp_cached();
     const int64_t trans_task_page_size = OB_MALLOC_NORMAL_BLOCK_SIZE;
+    const int64_t trans_task_local_page_size = TRANS_TASK_LOCAL_PAGE_SIZE;
+    const int64_t task_object_size = static_cast<int64_t>(sizeof(TaskType));
 
     if (OB_UNLIKELY(inited_)) {
       ret = common::OB_INIT_TWICE;
@@ -112,29 +120,36 @@ public:
     } else if (OB_ISNULL(alloc_ = task_alloc)
         || OB_UNLIKELY((prealloc_task_cnt_ = prealloc_pool_size) < 1)
         || OB_UNLIKELY((task_page_size_ = trans_task_page_size) <= 0)
-        || OB_UNLIKELY((prealloc_page_cnt_ = prealloc_page_count) <= 0)) {
+        || OB_UNLIKELY((prealloc_page_cnt_ = prealloc_page_count) < 0)
+        || OB_UNLIKELY((prealloc_page_size_ = trans_task_local_page_size) <= 0)) {
       ret = common::OB_INVALID_ARGUMENT;
       OBLOG_LOG(WARN, "invalid argument", KR(ret), K(task_alloc), K(prealloc_pool_size),
-          K(trans_task_page_size), K(prealloc_page_count));
+          K(trans_task_page_size), K(prealloc_page_count), K(trans_task_local_page_size));
+    } else if (OB_UNLIKELY(IS_MULTI_OVERFLOW64(task_object_size, prealloc_pool_size))
+        || OB_UNLIKELY(IS_MULTI_OVERFLOW64(trans_task_local_page_size, prealloc_page_count))) {
+      ret = common::OB_SIZE_OVERFLOW;
+      OBLOG_LOG(ERROR, "prealloc memory size overflow", KR(ret), K(task_object_size),
+          K(prealloc_pool_size), K(trans_task_local_page_size), K(prealloc_page_count));
     } else if (OB_FAIL(task_large_allocator_.init(large_allocator_total_limit,
         LARGE_ALLOCATOR_HOLD_LIMIT,
         LARGE_ALLOCATOR_PAGE_SIZE))) {
       OBLOG_LOG(ERROR, "init large allocator fail", KR(ret));
-    } else if (OB_FAIL(prealloc_page_pool_.init(prealloc_page_count))) {
+    } else if (prealloc_page_count > 0 && OB_FAIL(prealloc_page_pool_.init(prealloc_page_count))) {
       OBLOG_LOG(ERROR, "init prealloc page pool fail", KR(ret), K(prealloc_page_count));
     } else if (OB_FAIL(prepare_prealloc_tasks_(prealloc_pool_size, trans_task_page_size))) {
       OBLOG_LOG(ERROR, "err prepare prealloc tasks", KR(ret), K(prealloc_pool_size),
           K(trans_task_page_size));
-    } else if (OB_FAIL(prepare_prealloc_pages_(prealloc_page_count, trans_task_page_size))) {
+    } else if (prealloc_page_count > 0
+        && OB_FAIL(prepare_prealloc_pages_(prealloc_page_count, trans_task_local_page_size))) {
       OBLOG_LOG(ERROR, "prepare prealloc pages fail", KR(ret), K(prealloc_page_count),
-          K(trans_task_page_size));
+          K(trans_task_local_page_size));
     } else {
       task_large_allocator_.set_label(common::ObModIds::OB_LOG_PART_TRANS_TASK_LARGE);
       allow_dynamic_alloc_ = allow_dynamic_alloc;
-      const int64_t cost_ts_usec = get_timestamp() - start_ts;
+      const int64_t cost_ts_usec = get_timestamp_cached() - start_ts;
       inited_ = true;
       OBLOG_LOG(INFO, "task_pool init success", K(prealloc_page_count), K(prealloc_pool_size),
-          K(trans_task_page_size), K(cost_ts_usec));
+          K(trans_task_page_size), K(trans_task_local_page_size), K(cost_ts_usec));
     }
     return ret;
   }
@@ -147,29 +162,35 @@ public:
     } else if (OB_FAIL(clean_prealloc_tasks_())) {
       OBLOG_LOG(ERROR, "err clean prealloc tasks", KR(ret));
     } else {
-      if (0 < total_cnt_) {
-        OBLOG_LOG(WARN, "user didn't return all tasks", KR(ret), K(total_cnt_),
+      const bool has_unreverted_task = 0 < total_cnt_;
+      if (has_unreverted_task) {
+        OBLOG_LOG(ERROR, "user didn't return all tasks, skip destroying backing memory", KR(ret), K(total_cnt_),
             K(dynamic_alloc_task_cnt_), K(used_prealloc_task_cnt_), K(prealloc_task_cnt_));
+        inited_ = false;
+        allow_dynamic_alloc_ = false;
+        alloc_ = NULL;
+      } else {
+        task_large_allocator_.destroy();
+
+        // Clear pre-allocated pages
+        clean_prealloc_pages_();
+
+        inited_ = false;
+        prealloc_task_cnt_ = 0;
+        task_page_size_ = 0;
+        allow_dynamic_alloc_ = false;
+        prealloc_pool_tasks_ = NULL;
+        prealloc_page_cnt_ = 0;
+        prealloc_page_size_ = 0;
+        prealloc_pages_ = NULL;
+        total_cnt_ = 0;
+        dynamic_alloc_task_cnt_ = 0;
+        used_prealloc_task_cnt_ = 0;
+
+        prealloc_page_pool_.destroy();
       }
 
-      task_large_allocator_.destroy();
-
-      // Clear pre-allocated pages
-      clean_prealloc_pages_();
-
-      inited_ = false;
-      prealloc_task_cnt_ = 0;
-      task_page_size_ = 0;
-      allow_dynamic_alloc_ = false;
-      prealloc_pool_tasks_ = NULL;
       alloc_ = NULL;
-      prealloc_page_cnt_ = 0;
-      prealloc_pages_ = NULL;
-      total_cnt_ = 0;
-      dynamic_alloc_task_cnt_ = 0;
-      used_prealloc_task_cnt_ = 0;
-
-      prealloc_page_pool_.destroy();
     }
   }
 
@@ -215,7 +236,10 @@ public:
     }
 
     if (OB_SUCC(ret) && OB_NOT_NULL(ret_task)) {
-      ret_task->set_prealloc_page(get_prealloc_page_());
+      void *prealloc_page = get_prealloc_page_();
+      if (NULL != prealloc_page) {
+        ret_task->set_prealloc_page(prealloc_page, prealloc_page_size_);
+      }
       ret_task->set_task_info(tls_id, info);
     }
 
@@ -308,8 +332,12 @@ private:
     } else if (OB_UNLIKELY(NULL != prealloc_pool_tasks_)) {
       OBLOG_LOG(WARN, "prealloc task has been allocated", KP(prealloc_pool_tasks_));
       ret = common::OB_INIT_TWICE;
+    } else if (OB_UNLIKELY(IS_MULTI_OVERFLOW64(static_cast<int64_t>(sizeof(TaskType)), cnt))) {
+      ret = common::OB_SIZE_OVERFLOW;
+      OBLOG_LOG(ERROR, "prealloc task memory size overflow", KR(ret), K(cnt),
+          "task_object_size", sizeof(TaskType));
     } else {
-      int64_t size = static_cast<int64_t>(sizeof(TaskType) * cnt);
+      int64_t size = static_cast<int64_t>(sizeof(TaskType)) * cnt;
       void *buf = common::ob_malloc(size, common::ObModIds::OB_LOG_PART_TRANS_TASK_POOL);
       if (OB_ISNULL(prealloc_pool_tasks_ = static_cast<TaskType*>(buf))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
@@ -379,6 +407,9 @@ private:
     } else if (OB_UNLIKELY(NULL != prealloc_pages_)) {
       OBLOG_LOG(ERROR, "prealloc pages has been allocated", K(prealloc_pages_));
       ret = common::OB_INIT_TWICE;
+    } else if (OB_UNLIKELY(IS_MULTI_OVERFLOW64(page_size, cnt))) {
+      ret = common::OB_SIZE_OVERFLOW;
+      OBLOG_LOG(ERROR, "prealloc page memory size overflow", KR(ret), K(cnt), K(page_size));
     } else {
       int64_t size = page_size * cnt;
       prealloc_pages_ = common::ob_malloc(size,
@@ -429,7 +460,9 @@ private:
     int ret = common::OB_SUCCESS;
     void *page = NULL;
 
-    if (OB_FAIL(prealloc_page_pool_.pop(page))) {
+    if (prealloc_page_cnt_ <= 0) {
+      // No pre-bound local page. SmallArena allocates dynamic small pages on demand.
+    } else if (OB_FAIL(prealloc_page_pool_.pop(page))) {
       if (common::OB_ENTRY_NOT_EXIST == ret) {
         // No page available
         // Normal
@@ -445,7 +478,9 @@ private:
   {
     int ret = common::OB_SUCCESS;
     if (OB_NOT_NULL(page)) {
-      if (OB_FAIL(prealloc_page_pool_.push(page))) {
+      if (OB_UNLIKELY(!prealloc_page_pool_.is_inited())) {
+        OBLOG_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "prealloc page pool is not inited", K(page));
+      } else if (OB_FAIL(prealloc_page_pool_.push(page))) {
         OBLOG_LOG(ERROR, "push prealloc page into pool fail", KR(ret), K(page));
       }
     }
@@ -462,6 +497,7 @@ private:
 
   // Pool of pre-allocated page objects
   int64_t prealloc_page_cnt_;
+  int64_t prealloc_page_size_;
   void *prealloc_pages_;
   PagePool prealloc_page_pool_;
 

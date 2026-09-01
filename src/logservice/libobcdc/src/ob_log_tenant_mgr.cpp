@@ -1383,7 +1383,7 @@ int ObLogTenantMgr::get_tenant_ids_(
     common::ObIArray<uint64_t> &tenant_id_list)
 {
   int ret = OB_SUCCESS;
-  const int64_t end_ts = get_timestamp() + timeout;
+  const int64_t end_ts = get_timestamp_cached() + timeout;
 
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
@@ -1402,11 +1402,11 @@ int ObLogTenantMgr::get_tenant_ids_(
     // Get the schema guard for the SYS tenant
     // Since get_available_tenant_ids() cannot use lazy mode
     else if (OB_FAIL(schema_getter->get_fallback_schema_guard(OB_SYS_TENANT_ID, sys_schema_version,
-            end_ts - get_timestamp(), sys_schema_guard))) {
+            end_ts - get_timestamp_cached(), sys_schema_guard))) {
       LOG_ERROR("get_fallback_schema_guard of SYS tenant fail", KR(ret), K(sys_schema_version), K(timeout));
     }
     // get available tenant id list
-    else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_id_list, end_ts - get_timestamp()))) {
+    else if (OB_FAIL(sys_schema_guard.get_available_tenant_ids(tenant_id_list, end_ts - get_timestamp_cached()))) {
       LOG_ERROR("get_available_tenant_ids fail", KR(ret), K(tenant_id_list), K(timeout));
     } else if (OB_FAIL(filter_by_current_tenant_status_(tenant_id_list))) {
       LOG_ERROR("filter_by_current_tenant_status_ fail", KR(ret), K(tenant_id_list), K(timeout));
@@ -1452,7 +1452,7 @@ int ObLogTenantMgr::get_tenant_ids_(
         }
 
         if (OB_NEED_RETRY == ret) {
-          const int64_t cur_ts = get_timestamp();
+          const int64_t cur_ts = get_timestamp_cached();
 
           if (OB_UNLIKELY(cur_ts >= end_ts)) {
             LOG_WARN("get tenant_id_list timeout", KR(ret), K(cur_ts), K(end_ts), K(timeout));
@@ -1539,8 +1539,9 @@ void ObLogTenantMgr::print_stat_info()
   IObStoreService *store_service = TCTX.store_service_;
 
   if (NULL != store_service) {
-    store_service->get_mem_usage(printer.tenant_ids_, printer.cf_handles_);
-    store_service->get_mem_usage(printer.tenant_ids_, printer.lob_storage_cf_handles_);
+    store_service->get_mem_usage(printer.tenant_ids_, printer.cf_handles_, "REDO");
+    store_service->get_mem_usage(printer.tenant_ids_, printer.lob_storage_cf_handles_, "LOB");
+    store_service->print_stat_info();
   }
 }
 

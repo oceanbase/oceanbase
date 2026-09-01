@@ -229,7 +229,7 @@ void FetchStream::process_timer_task()
 {
   int ret = OB_SUCCESS;
   static int64_t max_dispatch_time = 0;
-  int64_t start_time = get_timestamp();
+  int64_t start_time = get_timestamp_cached();
   int64_t end_time = 0;
 
   LOG_DEBUG("[STAT] [WAKE_UP_STREAM_TASK]", "task", this, "task", *this);
@@ -242,7 +242,7 @@ void FetchStream::process_timer_task()
       LOG_ERROR("dispatch stream task fail", KR(ret), K(this));
     }
   } else {
-    ATOMIC_STORE(&end_time, get_timestamp());
+    ATOMIC_STORE(&end_time, get_timestamp_cached());
     max_dispatch_time = std::max(max_dispatch_time, ATOMIC_LOAD(&end_time) - start_time);
 
     if (REACH_TIME_INTERVAL(STAT_INTERVAL)) {
@@ -287,7 +287,7 @@ void FetchStream::do_stat(int64_t &traffic)
   ObByteLockGuard lock_guard(stat_lock_);
 
   int ret = OB_SUCCESS;
-  int64_t cur_time = get_timestamp();
+  int64_t cur_time = get_timestamp_cached();
   int64_t delta_time = cur_time - last_stat_time_;
   double delta_second = static_cast<double>(delta_time) / static_cast<double>(_SEC_);
 
@@ -414,7 +414,7 @@ int FetchStream::dispatch_fetch_task_(LSFetchCtx &task,
         LOG_ERROR("get_cur_svr_start_fetch_tstamp fail", KR(ret), "tls_id", task.get_tls_id(),
             K_(svr), K(svr_start_fetch_tstamp));
       } else {
-        int64_t svr_service_time = get_timestamp() - svr_start_fetch_tstamp;
+        int64_t svr_service_time = get_timestamp_cached() - svr_start_fetch_tstamp;
         int64_t cur_survival_time = ATOMIC_LOAD(&g_blacklist_survival_time);
         int64_t survival_time = cur_survival_time;
         // Server add into blacklist
@@ -632,7 +632,7 @@ int FetchStream::process_result_(
     bool &is_stream_valid)
 {
   int ret = OB_SUCCESS;
-  int64_t start_handle_time = get_timestamp();
+  int64_t start_handle_time = get_timestamp_cached();
   int64_t handle_rpc_time = 0;
   int64_t read_log_time = 0;
   int64_t decode_log_entry_time = 0;
@@ -685,7 +685,7 @@ int FetchStream::process_result_(
   }
 
   if (OB_SUCCESS == ret) {
-    handle_rpc_time = get_timestamp() - start_handle_time;
+    handle_rpc_time = get_timestamp_cached() - start_handle_time;
 
     // Update statistical information
     update_fetch_stat_info_(result, handle_rpc_time, read_log_time,
@@ -949,7 +949,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
     const logservice::TenantLSID &tls_id = ls_fetch_ctx_->get_tls_id();
     int64_t fetched_group_entry_cnt = 0;
     int64_t fetched_group_entry_size = 0;
-    int64_t start_handle_timestamp = get_timestamp();
+    int64_t start_handle_timestamp = get_timestamp_cached();
     int64_t start_fetch_remote_timestamp = OB_INVALID_TIMESTAMP;
     int64_t fetch_remote_time = 0;
 
@@ -960,7 +960,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
       const char *buf = NULL;
       int64_t buf_size = 0;
 
-      start_fetch_remote_timestamp = get_timestamp();
+      start_fetch_remote_timestamp = get_timestamp_cached();
       if (! ls_fetch_ctx_->is_remote_iter_inited() && OB_FAIL(ls_fetch_ctx_->init_remote_iter())) {
         LOG_ERROR("init remote iter when handle fetch archive task failed", KR(ret), KPC(ls_fetch_ctx_));
       } else if (OB_FAIL(ls_fetch_ctx_->get_next_remote_group_entry(log_group_entry,
@@ -982,7 +982,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
         need_fetch_log = false;
         ls_fetch_ctx_->reset_remote_iter();
         ret = OB_SUCCESS;
-      } else if (FALSE_IT(fetch_remote_time += get_timestamp() - start_fetch_remote_timestamp)) {
+      } else if (FALSE_IT(fetch_remote_time += get_timestamp_cached() - start_fetch_remote_timestamp)) {
       } else if (OB_FAIL(ls_fetch_ctx_->append_log(buf, buf_size))) {
         LOG_ERROR("append log failed", KR(ret), K(buf), K(buf_size));
       } else if (OB_FAIL(read_group_entry_(log_group_entry, lsn, stop_flag, kick_out_info, tsi))) {
@@ -1015,7 +1015,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
         // update fetch state every 100 group entries
         if ((++fetched_group_entry_cnt % UPDATE_FETCH_STATE_INTERVAL) == 0) {
           int64_t flush_time = 0;
-          const int64_t read_log_time = get_timestamp() - start_handle_timestamp;
+          const int64_t read_log_time = get_timestamp_cached() - start_handle_timestamp;
 
           if (OB_FAIL(update_fetch_task_state_(kick_out_info, stop_flag, flush_time))) {
             LOG_ERROR("update fetch task state failed", KR(ret), K(kick_out_info), K(tls_id));
@@ -1030,7 +1030,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
           fetched_group_entry_cnt = 0;
           fetched_group_entry_size = 0;
           tsi.reset();
-          start_handle_timestamp = get_timestamp();
+          start_handle_timestamp = get_timestamp_cached();
         }
       }
     }
@@ -1038,7 +1038,7 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
     // when exit from loop, there could still be some fetch tasks to be synchronized
     if (OB_SUCC(ret)) {
       int64_t flush_time = 0;
-      const int64_t read_log_time = get_timestamp() - start_handle_timestamp;
+      const int64_t read_log_time = get_timestamp_cached() - start_handle_timestamp;
       if (OB_FAIL(update_fetch_task_state_(kick_out_info, stop_flag, flush_time))) {
         LOG_ERROR("update fetch task state failed at loop end", KR(ret), K(kick_out_info));
       } else {
@@ -1212,7 +1212,7 @@ bool FetchStream::check_need_switch_server_()
 {
   bool bool_ret = false;
   const int64_t check_switch_server_interval = ATOMIC_LOAD(&g_check_switch_server_interval);
-  const int64_t cur_time = get_timestamp();
+  const int64_t cur_time = get_timestamp_cached();
 
   if ((check_switch_server_interval <= 0)
       || (cur_time - last_switch_server_tstamp_) >= check_switch_server_interval) {
@@ -1389,7 +1389,7 @@ int FetchStream::read_log_(
   const int64_t len = resp.get_pos();
   const int64_t log_cnt = resp.get_log_num();
   int64_t pos = 0;
-  int64_t start_read_time = get_timestamp();
+  int64_t start_read_time = get_timestamp_cached();
 
   read_log_time = 0;
   decode_log_entry_time = 0;
@@ -1410,7 +1410,7 @@ int FetchStream::read_log_(
   } else {
     // Iterate through all log entries
     for (int64_t idx = 0; OB_SUCC(ret) && (idx < log_cnt); ++idx) {
-      int64_t begin_time = get_timestamp();
+      int64_t begin_time = get_timestamp_cached();
       palf::LSN group_start_lsn;
       bool enable_logservice = ls_fetch_ctx_->get_logservice_model();
       ipalf::IGroupEntry group_entry(enable_logservice);
@@ -1425,7 +1425,7 @@ int FetchStream::read_log_(
         } else { /* group_entry iter end */ }
       } else {
         // GroupLogEntry deserialize time
-        decode_log_entry_time += (get_timestamp() - begin_time);
+        decode_log_entry_time += (get_timestamp_cached() - begin_time);
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn,
             stop_flag, kick_out_info, tsi))) {
           if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {
@@ -1446,7 +1446,7 @@ int FetchStream::read_log_(
   }
 
   if (OB_SUCCESS == ret) {
-    read_log_time = get_timestamp() - start_read_time;
+    read_log_time = get_timestamp_cached() - start_read_time;
   }
 
   return ret;
@@ -1589,13 +1589,13 @@ int FetchStream::update_fetch_task_state_(KickOutInfo &kick_out_info,
       // 1. synchronize the data generated by the read log to downstream
       // 2. Synchronize progress to downstream using heartbeat task
       if (OB_SUCCESS == ret) {
-        int64_t begin_flush_time = get_timestamp();
+        int64_t begin_flush_time = get_timestamp_cached();
         if (OB_FAIL(task->sync(stop_flag))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("sync data to parser fail", KR(ret), KPC(task));
           }
         } else {
-          flush_time += get_timestamp() - begin_flush_time;
+          flush_time += get_timestamp_cached() - begin_flush_time;
         }
       }
       // end

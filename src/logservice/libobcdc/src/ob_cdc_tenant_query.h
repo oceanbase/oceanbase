@@ -97,7 +97,7 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
     int retry_cnt = 0;
     const int64_t retry_fail_sleep_time = 100 * _MSEC_;
     const int64_t retry_warn_interval = 5 * _SEC_;
-    const int64_t start_time = get_timestamp();
+    const int64_t start_time = get_timestamp_cached();
     const int64_t end_time = start_time + retry_timeout;
 
     while (! query_done) {
@@ -119,7 +119,7 @@ int ObCDCTenantQuery<T>::query(const uint64_t tenant_id, ObCDCQueryResult<T> &qu
       }
 
       if (! query_done) {
-        int64_t cur_time = get_timestamp();
+        int64_t cur_time = get_timestamp_cached();
 
         if (cur_time < end_time) {
           retry_cnt ++;

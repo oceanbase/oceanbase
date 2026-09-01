@@ -79,7 +79,7 @@ int ObLogPartTransParser::init(
   } else {
     cluster_id_ = cluster_id;
     inited_ = true;
-    last_stat_time_ = get_timestamp();
+    last_stat_time_ = get_timestamp_cached();
     LOG_INFO("init PartTransParser succ", K(cluster_id));
   }
   return ret;
@@ -87,7 +87,7 @@ int ObLogPartTransParser::init(
 
 void ObLogPartTransParser::print_stat_info()
 {
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_last_stat_time = last_stat_time_;
   int64_t delta_time = current_timestamp - local_last_stat_time;
   double delta_second = static_cast<double>(delta_time) / static_cast<double>(_SEC_);
@@ -1137,7 +1137,7 @@ int ObLogPartTransParser::parse_ext_info_log_mutator_row_(
     LOG_TRACE("rollback row by RollbackToSavepoint",
         "tls_id", part_trans_task.get_tls_id(),
         "trans_id", part_trans_task.get_trans_id(),
-        "row_seq_no", row->seq_no_);
+        "row_seq_no", row->get_seq_no());
   } else if (part_trans_task.is_ddl_trans()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("part tans task is ddl not expected", KR(ret), K(part_trans_task));

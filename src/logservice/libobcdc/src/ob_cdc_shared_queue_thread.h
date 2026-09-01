@@ -284,7 +284,7 @@ int ObCdcSharedQueueThread<T>::push(T *task, const int64_t timeout)
   } else if (OB_UNLIKELY(is_stopped())) {
     ret = OB_IN_STOP_STATE;
   } else {
-    const int64_t start_time = common::ObTimeUtility::current_time();
+    const int64_t start_time = common::ObClockGenerator::getClock();
     const int64_t end_time = (INT64_MAX == timeout)
         ? INT64_MAX
         : start_time + timeout;
@@ -303,7 +303,7 @@ int ObCdcSharedQueueThread<T>::push(T *task, const int64_t timeout)
           break;
         }
 
-        const int64_t now = common::ObTimeUtility::current_time();
+        const int64_t now = common::ObClockGenerator::getClock();
         if (now >= end_time) {
           ret = OB_TIMEOUT;
           break;

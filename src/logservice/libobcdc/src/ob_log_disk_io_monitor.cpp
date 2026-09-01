@@ -296,7 +296,7 @@ int ObLogDiskIOMonitor::parse_proc_io_(const char *buf, const int64_t buf_len)
 
 int64_t ObLogDiskIOMonitor::get_timestamp() const
 {
-  return ::oceanbase::libobcdc::get_timestamp();
+  return ::oceanbase::libobcdc::get_timestamp_cached();
 }
 
 // NOTE: This function must only be called from a single thread (the storager stat timer thread).
@@ -304,7 +304,7 @@ int64_t ObLogDiskIOMonitor::get_timestamp() const
 void ObLogDiskIOMonitor::print_stat()
 {
   int ret = OB_SUCCESS;
-  int64_t current_time = get_timestamp();
+  int64_t current_time = get_timestamp_cached();
   int64_t delta_time = current_time - last_print_time_;
 
   if (delta_time >= PRINT_DISK_IO_STAT_INTERVAL || last_print_time_ == 0) {

@@ -22,6 +22,7 @@
 #include "lib/oblog/ob_log_module.h"        // LIB_LOG
 #include "lib/container/ob_bit_set.h"       // ObFixedBitSet
 #include "common/ob_queue_thread.h"         // ObCond
+#include "common/ob_clock_generator.h"     // ObClockGenerator::getClock()
 
 namespace oceanbase
 {
@@ -358,7 +359,7 @@ int ObMsQueueThread<MAX_THREAD_NUM, ModuleClass>::push_(Task *task,
   } else {
     int64_t target_index = static_cast<int64_t>(hash % thread_num_);
     ThreadConf &tc = tc_[target_index];
-    int64_t end_time = ObTimeUtility::current_time() + timeout;
+    int64_t end_time = ObClockGenerator::getClock() + timeout;
 
     while (true) {
       ret = queue_.push(task, seq, hash);
@@ -367,7 +368,7 @@ int ObMsQueueThread<MAX_THREAD_NUM, ModuleClass>::push_(Task *task,
         break;
       }
 
-      int64_t left_time = end_time - ObTimeUtility::current_time();
+      int64_t left_time = end_time - ObClockGenerator::getClock();
 
       if (left_time <= 0) {
         ret = OB_TIMEOUT;

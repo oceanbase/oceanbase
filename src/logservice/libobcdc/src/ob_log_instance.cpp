@@ -26,6 +26,8 @@
 #include "observer/omt/ob_tenant_timezone_mgr.h"  // OTTZ_MGR
 #include "common/ob_clock_generator.h"
 #include "lib/alloc/ob_malloc_sample_struct.h"
+#include "lib/allocator/ob_tc_malloc.h"      // get_virtual_memory_used
+#include "lib/resource/achunk_mgr.h"         // CHUNK_MGR
 
 #include "ob_log_common.h"
 #include "ob_log_config.h"                // ObLogConfig
@@ -600,6 +602,7 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
   int ret = OB_SUCCESS;
   ObLogTraceIdGuard trace_guard;
   int64_t current_timestamp_usec = get_timestamp() * NS_CONVERSION;
+  int64_t part_trans_task_prealloc_page_count = 0;
 
   if (start_tstamp_ns <= 0) {
     start_tstamp_ns =  current_timestamp_usec;
@@ -644,17 +647,22 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
         TASK_POOL_ALLOCATOR_HOLD_LIMIT,
         TASK_POOL_ALLOCATOR_PAGE_SIZE))) {
       LOG_ERROR("init fifo allocator fail", KR(ret));
+    } else if (FALSE_IT(trans_task_pool_alloc_.set_label("LogPartTraTasDy"))) {
     } else if (OB_FAIL(log_entry_task_base_allocator_.init(
-        common::OB_MALLOC_NORMAL_BLOCK_SIZE,  // 64KB block size
+        common::OB_MALLOC_MIDDLE_BLOCK_SIZE,  // 64KB block size
         "LogEntryTaskBas"))) {  // INT64_MAX total limit (effectively unlimited)
       LOG_ERROR("init log_entry_task_base_allocator fail", KR(ret));
+    } else if (FALSE_IT(part_trans_task_prealloc_page_count =
+        TCONF.part_trans_task_prealloc_page_count.get() < 0
+        ? CDC_CFG_MGR.get_part_trans_task_prealloc_count()
+        : TCONF.part_trans_task_prealloc_page_count.get())) {
     } else if (OB_FAIL(trans_task_pool_.init(
         &trans_task_pool_alloc_,
         CDC_CFG_MGR.get_part_trans_task_prealloc_count(),
         1 == TCONF.part_trans_task_dynamic_alloc,
-        TCONF.part_trans_task_prealloc_page_count,
+        part_trans_task_prealloc_page_count,
         CDC_CFG_MGR.get_task_pool_allocator_total_limit()))) {
-      LOG_ERROR("init task pool fail", KR(ret));
+      LOG_ERROR("init task pool fail", KR(ret), K(part_trans_task_prealloc_page_count));
     } else if (OB_FAIL(hbase_util_.init())) {
       LOG_ERROR("init hbase_util_ fail", KR(ret));
     } else if (OB_FAIL(br_queue_.init(CDC_CFG_MGR.get_br_queue_length()))) {
@@ -2395,6 +2403,7 @@ void ObLogInstance::timer_routine()
             print_working_mode(working_mode_),
             print_refresh_mode(refresh_mode_),
             print_fetching_mode(fetching_mode_));
+        print_process_memory_usage_();
         print_tenant_memory_usage_();
         dump_malloc_sample_();
         if (is_online_refresh_mode(refresh_mode_)) {
@@ -2418,23 +2427,6 @@ void ObLogInstance::timer_routine()
       if (REACH_TIME_INTERVAL(ObLogSchemaGetter::RECYCLE_MEMORY_INTERVAL)) {
         if (is_online_refresh_mode(refresh_mode_)) {
           schema_getter_->try_recycle_memory();
-        }
-      }
-
-      // Periodic purge log_entry_task_base_allocator to release unused blocks
-      if (REACH_TIME_INTERVAL(10 * _SEC_)) {  // Purge every 10 seconds
-        log_entry_task_base_allocator_.purge();
-        int64_t hold = log_entry_task_base_allocator_.allocated();
-        int64_t limit = log_entry_task_base_allocator_.limit();
-        int64_t used = log_entry_task_base_allocator_.used();
-        int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
-
-        if (hold > memory_limit * 0.8) {  // Warn if hold > 80% of memory_limit
-          _LOG_WARN("log_entry_task_base_allocator memory usage high",
-              "hold", SIZE_TO_STR(hold),
-              "used", SIZE_TO_STR(used),
-              "limit", SIZE_TO_STR(limit),
-              "memory_limit", SIZE_TO_STR(memory_limit));
         }
       }
 
@@ -2695,6 +2687,35 @@ void ObLogInstance::reload_config_()
   _LOG_INFO("====================reload config end====================");
 }
 
+void ObLogInstance::print_process_memory_usage_()
+{
+  // virtual_memory_bytes: total process virtual address space from /proc/self/statm.
+  // resident_size_bytes: process pages currently resident in physical memory from the same statm sample.
+  int64_t resident_size_bytes = 0;
+  const int64_t virtual_memory_bytes = get_virtual_memory_used(&resident_size_bytes);
+  // chunk_hold_bytes: AChunk memory charged to the OB allocator limit; equals chunk_used + chunk_cache.
+  const int64_t chunk_hold_bytes = CHUNK_MGR.get_hold();
+  // chunk_total_hold_bytes: mmap space retained by AChunkMgr, including alignment and washed virtual space.
+  const int64_t chunk_total_hold_bytes = CHUNK_MGR.get_total_hold();
+  // chunk_used_bytes: charged AChunk memory currently used by allocators, excluding the reusable chunk cache.
+  const int64_t chunk_used_bytes = CHUNK_MGR.get_used();
+  // chunk_cache_bytes: charged AChunk memory kept in the freelist for reuse; it is part of chunk_hold.
+  const int64_t chunk_cache_bytes = CHUNK_MGR.get_freelist_hold();
+
+  if (virtual_memory_bytes <= 0 || resident_size_bytes <= 0) {
+    LOG_WARN_RET(OB_IO_ERROR, "failed to sample process VIRT/RSS from /proc/self/statm",
+        K(virtual_memory_bytes), K(resident_size_bytes));
+  }
+
+  LOG_INFO("[MEMORY] [PROCESS_SUMMARY]",
+      "virtual_memory", SIZE_TO_STR(virtual_memory_bytes),
+      "resident_size", SIZE_TO_STR(resident_size_bytes),
+      "chunk_hold", SIZE_TO_STR(chunk_hold_bytes),
+      "chunk_total_hold", SIZE_TO_STR(chunk_total_hold_bytes),
+      "chunk_used", SIZE_TO_STR(chunk_used_bytes),
+      "chunk_cache", SIZE_TO_STR(chunk_cache_bytes));
+}
+
 void ObLogInstance::print_tenant_memory_usage_()
 {
   int ret = OB_SUCCESS;
@@ -2731,7 +2752,7 @@ void ObLogInstance::dump_malloc_sample_()
   static int64_t last_print_ts = 0;
   lib::ObMallocSampleMap malloc_sample_map;
   ObCDCMallocSampleInfo sample_info;
-  const int64_t cur_time = get_timestamp();
+  const int64_t cur_time = get_timestamp_cached();
   const int64_t print_interval = TCONF.print_mod_memory_usage_interval.get();
 
   if (OB_LIKELY(last_print_ts + print_interval > cur_time)) {
@@ -3346,7 +3367,7 @@ int ObLogInstance::init_ob_trace_id_(const char *ob_trace_id_ptr)
 int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster_info, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
   const int64_t end_ts = start_ts + timeout;
   cluster_info.reset();
   bool done = false;
@@ -3363,7 +3384,7 @@ int ObLogInstance::query_cluster_info_(ObLogSysTableHelper::ClusterInfo &cluster
       }
 
       if (OB_NEED_RETRY == ret) {
-        if (end_ts < get_timestamp()) {
+        if (end_ts < get_timestamp_cached()) {
           ret = OB_TIMEOUT;
           LOG_ERROR("query_cluster_info timeout", KR(ret), "timeout", TVAL_TO_STR(timeout));
         } else {

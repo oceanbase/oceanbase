@@ -18,7 +18,7 @@
 #include "share/ob_define.h"                      // OB_*
 #include "lib/allocator/ob_allocator.h"           // ObIAllocator
 #include "lib/container/ob_se_array.h"            // ObSEArray
-#include "lib/allocator/page_arena.h"             // ObArenaAllocator
+#include "lib/allocator/ob_malloc.h"              // ob_malloc, ob_free
 #include "lib/lock/ob_spin_lock.h"                // ObSpinLock
 #include "lib/queue/ob_link_queue.h"              // ObSpLinkQueue
 #include "storage/tx/ob_trans_define.h"  // ObTransID
@@ -118,7 +118,8 @@ public:
   enum { DATA_OP_TIMEOUT = 10 * 1000 * 1000 };
 
 public:
-  static const int64_t PAGE_SIZE = common::OB_MALLOC_NORMAL_BLOCK_SIZE;
+  // uint64_t(tenant_id, 20) + "_" + int64_t(tx_id, 10)
+  static constexpr int64_t TRANS_ID_STR_BUF_LEN = 40;
   static const int64_t DEFAULT_DEP_SET_SIZE = 64;
   static const int64_t PRINT_LOG_INTERVAL = 10 * _SEC_;
 
@@ -407,6 +408,7 @@ private:
   int8_t                    state_;
   uint64_t                  tenant_id_;
   transaction::ObTransID    trans_id_;
+  char                      trans_id_str_buf_[TRANS_ID_STR_BUF_LEN];
   common::ObString          trans_id_str_;
   common::ObString          major_version_str_;
   TransCtxSortElement       trx_sort_elem_;
@@ -431,8 +433,6 @@ private:
   int8_t                    trans_br_sort_status_ CACHE_ALIGNED;
   common::ObSpLinkQueue     br_out_queue_;
 
-  // allocator
-  common::ObArenaAllocator  allocator_;
   mutable common::ObSpinLock lock_;
 
 private:

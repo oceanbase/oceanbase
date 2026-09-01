@@ -234,7 +234,10 @@ class ObLogCommitter : public IObLogCommitter
   // No memory limit for checkpoint queue
   static const int64_t CHECKPOINT_QUEUE_ALLOCATOR_TOTAL_LIMIT = INT64_MAX;
   static const int64_t CHECKPOINT_QUEUE_ALLOCATOR_HOLD_LIMIT = 32 * _M_;
-  static const int64_t CHECKPOINT_QUEUE_ALLOCATOR_PAGE_SIZE = 2 * _M_;
+  // Only GLOBAL_HEARTBEAT and OFFLINE_LS carry an allocated payload. Keep the
+  // allocator page proportional to these sparse objects instead of reserving
+  // one 2 MiB page in every active allocation way.
+  static const int64_t CHECKPOINT_QUEUE_ALLOCATOR_PAGE_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE;
   static const int64_t COMMITTER_TRANS_COUNT_UPPER_LIMIT = 1000;
   static int64_t g_output_heartbeat_interval;
   static const int64_t PRINT_GLOBAL_HEARTBEAT_CHECKPOINT_INTERVAL = 10L * _SEC_;
@@ -333,6 +336,7 @@ private:
     }
     bool is_offline_ls_task() const { return PartTransTask::TASK_TYPE_OFFLINE_LS == task_type_; }
 
+    CheckpointTask();
     explicit CheckpointTask(PartTransTask &task);
     ~CheckpointTask();
 
@@ -414,6 +418,10 @@ private:
   CheckpointQueue           checkpoint_queue_;
   common::ObCond            checkpoint_queue_cond_;
   CheckpointQueueAllocator  checkpoint_queue_allocator_;
+  // Ordinary checkpoint entries are readiness markers. The heartbeat thread
+  // never reads their payload, so they share this immutable, owner-lifetime
+  // sentinel instead of allocating one CheckpointTask per partition task.
+  CheckpointTask            normal_checkpoint_task_;
 
   int64_t                   last_output_checkpoint_;
   int64_t                   global_heartbeat_seq_;

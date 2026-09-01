@@ -600,10 +600,13 @@ public:
 class FetchLogARpcResultPool : public IFetchLogARpcResultPool
 {
   typedef common::ObSmallObjPool<FetchLogARpcResult> ResultPool;
-  // 16M
-  //static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = 1L << 24;
-  // 32M
-  static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = 1L << 25;
+  static const int64_t DEFAULT_RESULT_POOL_BLOCK_SIZE = 18L << 20;
+  // One block must hold the pool item, allocator metadata, pointer table entry and 16-byte alignment padding.
+  static_assert(sizeof(ResultPool::ObjItem)
+      + sizeof(common::ObBlockSlicer)
+      + sizeof(common::ObBlockSlicer::Item)
+      + sizeof(void *) + 15 <= DEFAULT_RESULT_POOL_BLOCK_SIZE,
+      "FetchLogARpcResult pool block cannot hold one object");
 
 public:
   FetchLogARpcResultPool() : inited_(false), pool_() {}

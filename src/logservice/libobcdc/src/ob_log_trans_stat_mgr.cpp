@@ -371,7 +371,7 @@ void ObLogTransStatMgr::print_stat_info()
 {
   int ret = OB_SUCCESS;
 
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_last_stat_time = last_stat_time_;
   int64_t delta_time = current_timestamp - local_last_stat_time;
 

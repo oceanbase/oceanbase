@@ -18,6 +18,7 @@ ob_define(ENABLE_LATCH_DIAGNOSE OFF)
 ob_define(ENABLE_MEMORY_DIAGNOSIS OFF)
 ob_define(ENABLE_OBJ_LEAK_CHECK OFF)
 ob_define(ENABLE_FATAL_ERROR_HANG ON)
+
 ob_define(DETECT_RECURSION OFF)
 ob_define(ENABLE_SMART_VAR_CHECK OFF)
 ob_define(ENABLE_COMPILE_DLL_MODE OFF)
@@ -74,6 +75,43 @@ if(WITH_COVERAGE)
   add_compile_options(${CMAKE_COVERAGE_COMPILE_OPTIONS})
   set(DEBUG_PREFIX "")
   set(FILE_PREFIX "")
+endif()
+
+# CDC 编译优化总开关:仅在 CDC 构建(BUILD_CDC_ONLY=ON)中生效,与 observer 的
+# AUTO_FDO / HOTFUNC 优化完全独立。复用全局 ThinLTO / sample-FDO 机制,让优化覆盖
+# libobcdc.so 的全部代码(含 oceanbase_static),profile 使用 libobcdc/profile/ 下
+# CDC 场景采集的数据。Debug / ASAN / Coverage 构建不启用。
+# 默认关闭，仅由 CDC RPM 构建或手动通过
+# -DENABLE_CDC_COMPILE_OPTIMIZATIONS=ON 开启。
+ob_define(ENABLE_CDC_COMPILE_OPTIMIZATIONS OFF)
+if(NOT BUILD_CDC_ONLY
+    OR CMAKE_BUILD_TYPE STREQUAL "Debug"
+    OR OB_USE_ASAN
+    OR WITH_COVERAGE)
+  # 非 CDC 构建一律关闭,下游 libobcdc/CMakeLists.txt 的兜底逻辑同样以此为准
+  set(ENABLE_CDC_COMPILE_OPTIMIZATIONS OFF)
+endif()
+if(ENABLE_CDC_COMPILE_OPTIMIZATIONS)
+  if(NOT DEFINED ENABLE_THIN_LTO)
+    set(ENABLE_THIN_LTO ON)
+  endif()
+  # CDC 构建与 observer 优化完全拆开:不使用 observer 的 AUTO_FDO profile 和
+  # hotfunc 文件(CDC 的 hotfunc 由 libobcdc 目标级链接选项单独控制)
+  set(ENABLE_AUTO_FDO OFF)
+  set(ENABLE_HOTFUNC OFF)
+  set(CDC_GLOBAL_SAMPLE_PROFILE "")
+  if(${ARCHITECTURE} STREQUAL "x86_64")
+    set(CDC_GLOBAL_SAMPLE_PROFILE "${CMAKE_SOURCE_DIR}/src/logservice/libobcdc/profile/cdc-x86_64.prof")
+  elseif(${ARCHITECTURE} STREQUAL "aarch64")
+    set(CDC_GLOBAL_SAMPLE_PROFILE "${CMAKE_SOURCE_DIR}/src/logservice/libobcdc/profile/cdc-aarch64.prof")
+  endif()
+  if(CDC_GLOBAL_SAMPLE_PROFILE AND EXISTS "${CDC_GLOBAL_SAMPLE_PROFILE}")
+    set(AUTO_FDO_OPT "-finline-functions -fprofile-sample-use=${CDC_GLOBAL_SAMPLE_PROFILE}")
+    message(STATUS "cdc global sample pgo: ${CDC_GLOBAL_SAMPLE_PROFILE}")
+  else()
+    message(WARNING "cdc sample profile not found, skip global sample PGO: ${CDC_GLOBAL_SAMPLE_PROFILE}")
+  endif()
+  message(STATUS "cdc compile optimizations enabled (BUILD_CDC_ONLY, ThinLTO + CDC sample PGO)")
 endif()
 
 ob_define(AUTO_FDO_OPT "")

@@ -555,7 +555,7 @@ int ObCDCPartTransResolver::handle_redo_(
   transaction::ObTxRedoLogTempRef tmp_ref;
   transaction::ObTxRedoLog redo_log(tmp_ref);
   PartTransTask *task = NULL;
-  const int64_t start_ts = get_timestamp();
+  const int64_t start_ts = get_timestamp_cached();
 
   if (OB_FAIL(tx_log_block.deserialize_log_body(redo_log))) {
     LOG_ERROR("deserialize_redo_log_body failed", KR(ret), K_(tls_id), K(tx_id), K(lsn));
@@ -588,7 +588,7 @@ int ObCDCPartTransResolver::handle_redo_(
           K(handling_miss_log), K(task), K(redo_log));
     }
   } else {
-    LOG_DEBUG("handle_trans_redo", K_(tls_id), K(tx_id), K(lsn), K(submit_ts), "cost", get_timestamp() - start_ts,
+    LOG_DEBUG("handle_trans_redo", K_(tls_id), K(tx_id), K(lsn), K(submit_ts), "cost", get_timestamp_cached() - start_ts,
         K(redo_log), K(handling_miss_log), KPC(task));
   }
 

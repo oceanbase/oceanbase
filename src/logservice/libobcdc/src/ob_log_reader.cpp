@@ -69,7 +69,7 @@ int ObLogReader::init(const int64_t thread_num,
     working_mode_ = working_mode;
     round_value_ = 0;
     rps_stat_.reset();
-    last_stat_time_ = get_timestamp();
+    last_stat_time_ = get_timestamp_cached();
     log_entry_task_count_ = 0;
     store_service_ = &store_service;
     err_handler_ = &err_handler;
@@ -162,7 +162,7 @@ int ObLogReader::push(ObLogEntryTask &task, const int64_t timeout)
 
 void ObLogReader::print_stat_info()
 {
-  int64_t current_timestamp = get_timestamp();
+  int64_t current_timestamp = get_timestamp_cached();
   int64_t local_last_stat_time = last_stat_time_;
   int64_t delta_time = current_timestamp - local_last_stat_time;
   // Update last statistic value

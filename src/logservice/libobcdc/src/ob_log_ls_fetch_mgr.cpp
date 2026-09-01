@@ -426,7 +426,7 @@ void ObLogLSFetchMgr::print_k_slowest_ls()
         LOG_ERROR("find the k slowest ls fail", KR(ret), K(slowest_part_num),
             K(dispatch_slow_array));
       } else {
-        int64_t cur_time = get_timestamp();
+        int64_t cur_time = get_timestamp_cached();
         int64_t array_cnt = fetch_slow_array.count();
 
         // ************************ Print the K LSs with the slowest fetch log progress

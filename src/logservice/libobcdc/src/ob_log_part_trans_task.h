@@ -41,7 +41,6 @@
 #include "ob_log_callback.h"                        // ObILogCallback
 #include "ob_cdc_lob_ctx.h"                         // ObLobDataOutRowCtxList
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
-// Removed: #include "lib/allocator/ob_lf_fifo_allocator.h" - no longer needed, ObLogEntryTask uses independent ObArenaAllocator
 #include "ob_log_safe_arena.h"
 #include "ob_log_tic_update_info.h"                 // TICUpdateInfo
 
@@ -418,7 +417,7 @@ private:
 //////////////////////////////////////// MacroBlockMutatorRow ///////////////////////////////////////////////
 
 //////////////////////////////////////// MemtableMutatorRow ///////////////////////////////////////////////
-class MemtableMutatorRow : public memtable::ObMemtableMutatorRow, public MutatorRow
+class MemtableMutatorRow : public MutatorRow
 {
 public:
   explicit MemtableMutatorRow(common::ObIAllocator &allocator);
@@ -465,15 +464,54 @@ public:
   uint64_t get_table_id() const { return table_id_; }
   blocksstable::ObDmlRowFlag get_dml_flag() const { return dml_flag_; }
   const transaction::ObTxSEQ &get_seq_no() const { return seq_no_; }
-  int64_t get_update_split_trace_id() const override
-  {
-    return memtable::ObMemtableMutatorRow::get_update_split_trace_id();
-  }
+  int64_t get_update_split_trace_id() const override { return update_split_trace_id_; }
 
 public:
   TO_STRING_KV(
     "MutatorRow", static_cast<const MutatorRow &>(*this),
-    "MemtableMutatorRow", static_cast<const memtable::ObMemtableMutatorRow &>(*this));
+    K_(row_size), K_(table_id), K_(rowkey), K_(table_version), K_(dml_flag),
+    K_(update_seq), K_(new_row), K_(old_row), K_(acc_checksum), K_(version),
+    K_(flag), K_(seq_no), K_(column_cnt), K_(update_split_trace_id));
+
+private:
+  struct EncryptedRowHolder;
+  int deserialize_row_header_(
+      const char *buf,
+      const int64_t data_len,
+      const int64_t pos,
+      uint32_t &encoded_row_size,
+      uint64_t &encrypt_index,
+      int64_t &payload_pos);
+  int deserialize_compact_(
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos,
+      const uint32_t encoded_row_size,
+      const uint64_t encrypt_index,
+      const int64_t payload_pos);
+  int deserialize_encrypted_fallback_(const char *buf, const int64_t data_len, int64_t &pos);
+  int deserialize_rowkey_(const char *buf, const int64_t data_len, int64_t &pos);
+
+private:
+  common::ObStoreRowkey rowkey_;
+  uint32_t row_size_;
+  uint64_t table_id_;
+  int64_t table_version_;
+  blocksstable::ObDmlFlag dml_flag_;
+  uint32_t update_seq_;
+  memtable::ObRowData new_row_;
+  memtable::ObRowData old_row_;
+  uint32_t acc_checksum_;
+  int64_t version_;
+  int32_t flag_;
+  transaction::ObTxSEQ seq_no_;
+  int64_t column_cnt_;
+  int64_t update_split_trace_id_;
+  // 普通 Row 不再持有存储层固定的 ObObj[128]。加密 Row 按需创建 holder，
+  // 同时持有存储层 Row 和解密缓冲区，避免浅引用在反序列化返回后悬垂。
+  // holder 与 Compact Row 一样由现有 task arena 管理，不引入独立内存池。
+  EncryptedRowHolder *encrypted_row_holder_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(MemtableMutatorRow);
 };
@@ -767,7 +805,9 @@ typedef LightyList<IStmtTask> StmtList;
 class ObLogEntryTask : public ObLogResourceRecycleTask
 {
 public:
-  ObLogEntryTask(PartTransTask &host, const bool is_direct_load_inc_log = false);
+  ObLogEntryTask(PartTransTask &host,
+      const bool is_direct_load_inc_log = false,
+      const int64_t redo_data_len = 0);
   virtual ~ObLogEntryTask();
   void reset();
   bool is_valid() const;
@@ -1178,7 +1218,7 @@ public:
   void set_allocator(const int64_t page_size,
       common::ObIAllocator &large_allocator);
 
-  void set_prealloc_page(void *page);
+  void set_prealloc_page(void *page, const int64_t page_size);
   void revert_prealloc_page(void *&page);
 
   const ObString &get_trace_id() const { return trace_id_; }
@@ -1412,7 +1452,6 @@ private:
   // trace_id/trace_info/part_trans_info_str_/participant_
   // MutatorRow(DDL)/DdlStmtTask
   ObSmallArena            allocator_;
-  // Note: log_entry_task_base_allocator_ removed - ObLogEntryTask now uses independent ObArenaAllocator
   ServedState             serve_state_;
   // trans basic info
   uint64_t                cluster_id_;            // cluster ID

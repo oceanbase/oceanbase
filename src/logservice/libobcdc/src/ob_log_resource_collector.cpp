@@ -1254,7 +1254,7 @@ int ObLogResourceCollector::del_store_service_data_(const ObLogStoreKey &store_k
     ret = OB_IN_STOP_STATE;
   } else {
     const uint64_t tenant_id = store_key.get_tenant_id();
-    const int64_t current_time_us = get_timestamp();
+    const int64_t current_time_us = get_timestamp_cached();
     const int64_t local_batch_delete_size = ATOMIC_LOAD(&batch_delete_size_);
     const int64_t local_flush_interval_ms = ATOMIC_LOAD(&flush_interval_ms_);
     bool should_flush = false;
@@ -1615,14 +1615,14 @@ int ObLogResourceCollector::handle_store_delete_task_(StoreDeleteTask *task)
           K(task->tenant_id_), "key_count", task->keys_.count());
     } else {
       // Execute batch delete with timing
-      int64_t start_time_us = get_timestamp();
+      int64_t start_time_us = get_timestamp_cached();
       if (OB_FAIL(store_service_->batch_delete(column_family_handle, task->keys_))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("store_service_ batch_delete fail", KR(ret), KPC(task), "key_count", task->keys_.count());
         }
       } else {
         // Update statistics
-        int64_t elapsed_time_us = get_timestamp() - start_time_us;
+        int64_t elapsed_time_us = get_timestamp_cached() - start_time_us;
         ATOMIC_AAF(&total_delete_operations_, 1);
         ATOMIC_AAF(&total_delete_time_us_, elapsed_time_us);
         LOG_TRACE("store_service_ batch_delete succ", KPC(task), "key_count", task->keys_.count(),
@@ -1672,7 +1672,7 @@ int ObLogResourceCollector::submit_batch_delete_keys_(const uint64_t tenant_id,
 int ObLogResourceCollector::flush_batch_delete_by_time_()
 {
   int ret = OB_SUCCESS;
-  const int64_t current_time_us = get_timestamp();
+  const int64_t current_time_us = get_timestamp_cached();
   const int64_t local_flush_interval_ms = ATOMIC_LOAD(&flush_interval_ms_);
 
   static const int64_t MAX_FLUSH_TENANTS = 128;

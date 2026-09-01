@@ -83,7 +83,7 @@ int ObLogSysLsTaskHandler::TaskQueue::next_ready_to_handle(
     common::ObCond &cond)
 {
   int ret = OB_SUCCESS;
-  int64_t cur_time = get_timestamp();
+  int64_t cur_time = get_timestamp_cached();
   int64_t end_time = cur_time + timeout;
 
   while (NULL == queue_.top() && OB_SUCCESS == ret) {
@@ -93,7 +93,7 @@ int ObLogSysLsTaskHandler::TaskQueue::next_ready_to_handle(
       ret = OB_TIMEOUT;
     } else {
       cond.timedwait(wait_time);
-      cur_time = get_timestamp();
+      cur_time = get_timestamp_cached();
     }
   }
 

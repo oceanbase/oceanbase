@@ -63,6 +63,22 @@ namespace oceanbase
 namespace libobcdc
 {
 
+namespace
+{
+const int64_t LOG_ENTRY_TASK_SMALL_REDO_THRESHOLD = 4 * 1024;
+const int64_t LOG_ENTRY_TASK_SMALL_ARENA_PAGE_SIZE = 4 * 1024;
+
+int64_t get_log_entry_task_arena_page_size_(
+    const bool is_direct_load_inc_log, const int64_t redo_data_len)
+{
+  return is_direct_load_inc_log
+      ? OB_MALLOC_BIG_BLOCK_SIZE
+      : (redo_data_len <= LOG_ENTRY_TASK_SMALL_REDO_THRESHOLD
+          ? LOG_ENTRY_TASK_SMALL_ARENA_PAGE_SIZE
+          : OB_MALLOC_NORMAL_BLOCK_SIZE);
+}
+} // namespace
+
 void IStmtTask::reset()
 {
   hash_value_ = OB_INVALID_ID;
@@ -1045,10 +1061,33 @@ int MacroBlockMutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info
 
 //////////////////////////////////////// MemtableMutatorRow ///////////////////////////////////////////////
 
+struct MemtableMutatorRow::EncryptedRowHolder
+{
+  EncryptedRowHolder() : row_(), decrypt_buf_() {}
+  ~EncryptedRowHolder() {}
+
+  ObMemtableMutatorRow row_;
+  ObEncryptRowBuf decrypt_buf_;
+};
+
 MemtableMutatorRow::MemtableMutatorRow(
     common::ObIAllocator &allocator) :
-    ObMemtableMutatorRow(),
-    MutatorRow(allocator)
+    MutatorRow(allocator),
+    rowkey_(),
+    row_size_(0),
+    table_id_(OB_INVALID_ID),
+    table_version_(0),
+    dml_flag_(ObDmlFlag::DF_NOT_EXIST),
+    update_seq_(0),
+    new_row_(),
+    old_row_(),
+    acc_checksum_(0),
+    version_(0),
+    flag_(0),
+    seq_no_(),
+    column_cnt_(0),
+    update_split_trace_id_(0),
+    encrypted_row_holder_(NULL)
 {}
 
 MemtableMutatorRow::~MemtableMutatorRow()
@@ -1058,20 +1097,33 @@ MemtableMutatorRow::~MemtableMutatorRow()
 
 void MemtableMutatorRow::reset()
 {
-  ObMemtableMutatorRow::reset();
+  if (OB_NOT_NULL(encrypted_row_holder_)) {
+    encrypted_row_holder_->~EncryptedRowHolder();
+    encrypted_row_holder_ = NULL;
+  }
   MutatorRow::reset();
+  rowkey_.reset();
+  row_size_ = 0;
+  table_id_ = OB_INVALID_ID;
+  table_version_ = 0;
+  dml_flag_ = ObDmlFlag::DF_NOT_EXIST;
+  update_seq_ = 0;
+  new_row_.reset();
+  old_row_.reset();
+  acc_checksum_ = 0;
+  version_ = 0;
+  flag_ = 0;
+  seq_no_.reset();
+  column_cnt_ = 0;
+  update_split_trace_id_ = 0;
 }
 
 int MemtableMutatorRow::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  transaction::ObCLogEncryptInfo empty_clog_encrypt_info;
-  empty_clog_encrypt_info.init();
-
-  const bool need_extract_encrypt_meta = false;
-  share::ObEncryptMeta unused_encrypt_meta;
-  share::ObCLogEncryptStatMap unused_encrypt_stat_map;
-  ObEncryptRowBuf row_buf;
+  uint32_t encoded_row_size = 0;
+  uint64_t encrypt_index = 0;
+  int64_t payload_pos = pos;
 
   if (OB_UNLIKELY(deserialized_)) {
     LOG_ERROR("deserialize twice");
@@ -1079,12 +1131,244 @@ int MemtableMutatorRow::deserialize(const char *buf, const int64_t data_len, int
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos > data_len)) {
     LOG_ERROR("invalid argument", K(buf), K(pos), K(data_len));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(ObMemtableMutatorRow::deserialize(buf, data_len, pos,
-                     row_buf, empty_clog_encrypt_info, need_extract_encrypt_meta,
-                     unused_encrypt_meta, unused_encrypt_stat_map))) {
-    LOG_ERROR("deserialize mutator fail", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(deserialize_row_header_(
+      buf, data_len, pos, encoded_row_size, encrypt_index, payload_pos))) {
+    LOG_WARN("deserialize row header failed", KR(ret), K(data_len), K(pos));
   } else {
-    deserialized_ = true;
+#ifdef OB_BUILD_TDE_SECURITY
+    // OB_BUILD_TDE_SECURITY 默认开启，普通未加密 Row 也会经过此分支。
+    // header 已在上面解析完成，Compact 热路径不能再次解码相同字段。
+    if (encrypt_index > 0) {
+      // 加密 Row 保留存储层解密路径。该路径是冷路径，允许存储层再次解析
+      // header，以避免复制和分叉存储层的 TDE 协议实现。
+      ret = deserialize_encrypted_fallback_(buf, data_len, pos);
+    } else {
+      ret = deserialize_compact_(
+          buf, data_len, pos, encoded_row_size, encrypt_index, payload_pos);
+    }
+#else
+    ret = deserialize_compact_(
+        buf, data_len, pos, encoded_row_size, encrypt_index, payload_pos);
+#endif
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("deserialize mutator fail", KR(ret), KP(buf), K(data_len), K(pos));
+    } else {
+      deserialized_ = true;
+    }
+  }
+
+  return ret;
+}
+
+int MemtableMutatorRow::deserialize_row_header_(
+    const char *buf,
+    const int64_t data_len,
+    const int64_t pos,
+    uint32_t &encoded_row_size,
+    uint64_t &encrypt_index,
+    int64_t &payload_pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  encoded_row_size = 0;
+  encrypt_index = 0;
+  payload_pos = pos;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(decode_i32(buf, data_len, new_pos,
+      reinterpret_cast<int32_t *>(&encoded_row_size)))) {
+    LOG_WARN("deserialize row size failed", KR(ret), K(data_len), K(new_pos));
+  } else if (OB_UNLIKELY(encoded_row_size > static_cast<uint64_t>(data_len - pos))) {
+    // 与存储层 ObMemtableMutatorRow 保持一致：frame 超出输入返回
+    // OB_ERR_UNEXPECTED，且失败时不推进调用方 pos。
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("row size overflow", KR(ret), K(data_len), K(pos), K(new_pos),
+        K(encoded_row_size));
+  } else if (OB_FAIL(decode_vi64(buf, data_len, new_pos,
+      reinterpret_cast<int64_t *>(&encrypt_index)))) {
+    LOG_WARN("deserialize encryption index failed", KR(ret), K(data_len), K(new_pos));
+  } else {
+    payload_pos = new_pos;
+  }
+
+  return ret;
+}
+
+int MemtableMutatorRow::deserialize_rowkey_(
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_pos = pos;
+  int64_t obj_count = 0;
+  ObObj *obj_array = NULL;
+
+  if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(decode_vi64(buf, data_len, new_pos, &obj_count))) {
+    LOG_WARN("decode rowkey object count failed", KR(ret), K(data_len), K(pos));
+  } else if (OB_UNLIKELY(obj_count < 0)) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("invalid rowkey object count", KR(ret), K(obj_count), K(data_len), K(pos));
+  } else if (OB_UNLIKELY(obj_count > common::OB_MAX_ROWKEY_COLUMN_NUMBER)) {
+    // 旧实现使用固定 ObObj[128]，超过上限时由 ObRowkey::deserialize
+    // 返回 OB_BUF_NOT_ENOUGH。Compact Row 必须保持相同错误码。
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("rowkey object count exceeds protocol limit",
+        KR(ret), K(obj_count), K(data_len), K(pos));
+  } else if (0 == obj_count) {
+    rowkey_.reset();
+    pos = new_pos;
+  } else if (OB_ISNULL(obj_array = static_cast<ObObj *>(
+      allocator_.alloc(sizeof(ObObj) * obj_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate compact rowkey failed", KR(ret), K(obj_count));
+  } else {
+    for (int64_t idx = 0; idx < obj_count; ++idx) {
+      new(obj_array + idx) ObObj();
+    }
+    if (OB_FAIL(rowkey_.assign(obj_array, obj_count))) {
+      LOG_ERROR("assign compact rowkey buffer failed", KR(ret), K(obj_count));
+    } else {
+      // rowkey 数量已用于按需分配，不能再调用 ObStoreRowkey::deserialize
+      // 重复解码数量；直接从数量字段之后逐个解析 ObObj。
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < obj_count; ++idx) {
+        if (OB_FAIL(obj_array[idx].deserialize(buf, data_len, new_pos))) {
+          LOG_WARN("deserialize compact rowkey object failed",
+              KR(ret), K(idx), K(obj_count), K(data_len), K(new_pos));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        pos = new_pos;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int MemtableMutatorRow::deserialize_compact_(
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos,
+    const uint32_t encoded_row_size,
+    const uint64_t encrypt_index,
+    const int64_t payload_pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t inner_pos = 0;
+  const char *row_buf = NULL;
+  int64_t row_buf_len = 0;
+
+  if (OB_ISNULL(buf)
+      || OB_UNLIKELY(pos < 0)
+      || OB_UNLIKELY(pos > data_len)
+      || OB_UNLIKELY(payload_pos < pos)
+      || OB_UNLIKELY(payload_pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid compact row argument",
+        KR(ret), KP(buf), K(data_len), K(pos), K(payload_pos));
+  } else {
+    table_id_ = encrypt_index;
+    row_buf = buf + payload_pos;
+    row_buf_len = encoded_row_size - (payload_pos - pos);
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(deserialize_rowkey_(row_buf, row_buf_len, inner_pos))) {
+      LOG_WARN("deserialize compact rowkey failed", KR(ret), K(row_buf_len), K(inner_pos));
+    } else if (OB_FAIL(decode_vi64(row_buf, row_buf_len, inner_pos, &table_version_))
+        || OB_FAIL(decode_i8(row_buf, row_buf_len, inner_pos,
+            reinterpret_cast<int8_t *>(&dml_flag_)))
+        || OB_FAIL(decode_vi32(row_buf, row_buf_len, inner_pos,
+            reinterpret_cast<int32_t *>(&update_seq_)))
+        || OB_FAIL(new_row_.deserialize(row_buf, row_buf_len, inner_pos))
+        || OB_FAIL(old_row_.deserialize(row_buf, row_buf_len, inner_pos))) {
+      LOG_WARN("deserialize compact row failed", KR(ret), K(table_id_),
+          K(row_buf_len), K(inner_pos));
+    } else {
+      seq_no_.reset();
+      update_split_trace_id_ = 0;
+    }
+  }
+
+  if (OB_SUCC(ret) && inner_pos < row_buf_len) {
+    if (OB_FAIL(decode_vi32(row_buf, row_buf_len, inner_pos,
+        reinterpret_cast<int32_t *>(&acc_checksum_)))
+        || OB_FAIL(decode_vi64(row_buf, row_buf_len, inner_pos, &version_))) {
+      LOG_WARN("deserialize compact row checksum/version failed", KR(ret),
+          K(table_id_), K(row_buf_len), K(inner_pos));
+    }
+  }
+  if (OB_SUCC(ret) && inner_pos < row_buf_len
+      && OB_FAIL(decode_vi32(row_buf, row_buf_len, inner_pos, &flag_))) {
+    LOG_WARN("deserialize compact row flag failed", KR(ret),
+        K(table_id_), K(row_buf_len), K(inner_pos));
+  }
+  if (OB_SUCC(ret) && inner_pos < row_buf_len
+      && OB_FAIL(seq_no_.deserialize(row_buf, row_buf_len, inner_pos))) {
+    LOG_WARN("deserialize compact row sequence failed", KR(ret),
+        K(table_id_), K(row_buf_len), K(inner_pos));
+  }
+  if (OB_SUCC(ret) && inner_pos < row_buf_len
+      && OB_FAIL(decode_vi64(row_buf, row_buf_len, inner_pos, &column_cnt_))) {
+    LOG_WARN("deserialize compact row column count failed", KR(ret),
+        K(table_id_), K(row_buf_len), K(inner_pos));
+  }
+  if (OB_SUCC(ret) && inner_pos < row_buf_len
+      && OB_FAIL(decode_vi64(row_buf, row_buf_len, inner_pos,
+          &update_split_trace_id_))) {
+    LOG_WARN("deserialize compact row update trace failed", KR(ret),
+        K(table_id_), K(row_buf_len), K(inner_pos));
+  }
+
+  if (OB_SUCC(ret)) {
+    row_size_ = encoded_row_size;
+    pos += encoded_row_size;
+  }
+  return ret;
+}
+
+int MemtableMutatorRow::deserialize_encrypted_fallback_(
+    const char *buf,
+    const int64_t data_len,
+    int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  void *holder_buf = allocator_.alloc(sizeof(EncryptedRowHolder));
+
+  if (OB_ISNULL(holder_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate encrypted row holder failed", KR(ret));
+  } else {
+    encrypted_row_holder_ = new(holder_buf) EncryptedRowHolder();
+    transaction::ObCLogEncryptInfo empty_clog_encrypt_info;
+    const bool need_extract_encrypt_meta = false;
+    share::ObEncryptMeta unused_encrypt_meta;
+    share::ObCLogEncryptStatMap unused_encrypt_stat_map;
+
+    // CDC 现有接口没有传入事务级加密元数据，继续保持原路径使用空
+    // ObCLogEncryptInfo 的行为；holder 仍需持有解密缓冲区，确保将来接入
+    // 有效元数据后，rowkey 和 new/old row 的浅引用不会在函数返回后悬垂。
+    if (OB_FAIL(empty_clog_encrypt_info.init())) {
+      LOG_ERROR("init empty clog encrypt info failed", KR(ret));
+    } else if (OB_FAIL(encrypted_row_holder_->row_.deserialize(buf, data_len, pos,
+        encrypted_row_holder_->decrypt_buf_, empty_clog_encrypt_info, need_extract_encrypt_meta,
+        unused_encrypt_meta, unused_encrypt_stat_map))) {
+      LOG_ERROR("storage mutator row deserialize failed", KR(ret),
+          KP(buf), K(data_len), K(pos));
+    } else if (OB_FAIL(encrypted_row_holder_->row_.copy(table_id_, rowkey_, table_version_,
+        new_row_, old_row_, dml_flag_, update_seq_, acc_checksum_,
+        version_, flag_, seq_no_, column_cnt_,
+        update_split_trace_id_))) {
+      LOG_ERROR("copy storage mutator row failed", KR(ret));
+    } else {
+      row_size_ = encrypted_row_holder_->row_.row_size_;
+    }
   }
 
   return ret;
@@ -1131,6 +1415,8 @@ int MemtableMutatorRow::deserialize_second(
   int ret = OB_SUCCESS;
   table_version = 0;
   int64_t new_pos = pos;
+  ObObj obj_array[common::OB_MAX_ROWKEY_COLUMN_NUMBER];
+  ObStoreRowkey rowkey;
 
   if (OB_UNLIKELY(deserialized_)) {
     LOG_ERROR("deserialize twice");
@@ -1138,12 +1424,13 @@ int MemtableMutatorRow::deserialize_second(
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0) || OB_UNLIKELY(pos > buf_len)) {
     LOG_ERROR("invalid argument", K(buf), K(pos), K(buf_len));
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(rowkey_.deserialize(buf, buf_len, new_pos))) {
-    LOG_ERROR("deserialize rowkey fail", KR(ret), K(new_pos), K(rowkey_));
-  } else if (OB_FAIL(decode_vi64(buf, buf_len, new_pos, &table_version_))) {
-    LOG_ERROR("deserialize table_version fail", KR(ret), K(new_pos), K(table_version_));
+  } else if (OB_FAIL(rowkey.assign(obj_array, common::OB_MAX_ROWKEY_COLUMN_NUMBER))) {
+    LOG_ERROR("assign temporary rowkey failed", KR(ret));
+  } else if (OB_FAIL(rowkey.deserialize(buf, buf_len, new_pos))) {
+    LOG_ERROR("deserialize rowkey fail", KR(ret), K(new_pos), K(rowkey));
+  } else if (OB_FAIL(decode_vi64(buf, buf_len, new_pos, &table_version))) {
+    LOG_ERROR("deserialize table_version fail", KR(ret), K(new_pos), K(table_version));
   } else {
-    table_version = table_version_;
     // The pos indicates the position that has been resolved
     pos = new_pos;
   }
@@ -1192,8 +1479,7 @@ int MemtableMutatorRow::parse_cols(
   // parse value of new column
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(new_row_.data_) || OB_UNLIKELY(new_row_.size_ <= 0)) {
-      LOG_WARN("new row data is empty", K(new_row_),
-          "mutator_row", (const ObMemtableMutatorRow &)(*this));
+      LOG_WARN("new row data is empty", K(new_row_), KPC(this));
       new_cols_.reset();
     } else if (OB_FAIL(row_reader.read_row(new_row_.data_, new_row_.size_, nullptr, datum_row))) {
       LOG_WARN("read datum row fail", KR(ret), K(datum_row));
@@ -1297,8 +1583,7 @@ int MemtableMutatorRow::parse_cols(const ObCDCLobAuxTableSchemaInfo &inner_table
   // parse value of new column
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(new_row_.data_) || OB_UNLIKELY(new_row_.size_ <= 0)) {
-      LOG_WARN("new row data is empty", K(new_row_),
-          "mutator_row", (const ObMemtableMutatorRow &)(*this));
+      LOG_WARN("new row data is empty", K(new_row_), KPC(this));
       new_cols_.reset();
     } else if (OB_FAIL(row_reader.read_row(new_row_.data_, new_row_.size_, nullptr, datum_row))) {
       LOG_WARN("read datum row fail", KR(ret), K(datum_row));
@@ -1366,8 +1651,7 @@ int MemtableMutatorRow::parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_l
     ret = OB_STATE_NOT_MATCH;
     LOG_ERROR("row has not been deserialized", KR(ret));
   } else if (OB_ISNULL(new_row_.data_) || OB_UNLIKELY(new_row_.size_ <= 0)) {
-    LOG_WARN("new row data is empty", K(new_row_),
-        "mutator_row", (const ObMemtableMutatorRow &)(*this));
+    LOG_WARN("new row data is empty", K(new_row_), KPC(this));
     new_cols_.reset();
   } else if (OB_UNLIKELY(new_cols_.num_ > 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2237,7 +2521,9 @@ void DdlStmtTask::reset()
 
 ////////////////////////////////////////////////////////////////////////////////////
 
-ObLogEntryTask::ObLogEntryTask(PartTransTask &host, const bool is_direct_load_inc_log) :
+ObLogEntryTask::ObLogEntryTask(PartTransTask &host,
+    const bool is_direct_load_inc_log,
+    const int64_t redo_data_len) :
     ObLogResourceRecycleTask(ObLogResourceRecycleTask::LOG_ENTRY_TASK),
     host_(&host),
     participant_(NULL),
@@ -2249,10 +2535,10 @@ ObLogEntryTask::ObLogEntryTask(PartTransTask &host, const bool is_direct_load_in
     formatted_stmt_num_(0),
     row_ref_cnt_(0),
     arena_allocator_(
-      TCTX.get_log_entry_task_base_allocator(),  // Use base allocator to reduce fragmentation
+      TCTX.get_log_entry_task_base_allocator(),
       "LogEntryTask",
       host.get_tenant_id(),
-      is_direct_load_inc_log ? OB_MALLOC_BIG_BLOCK_SIZE : OB_MALLOC_NORMAL_BLOCK_SIZE)  // 64KB page size for normal case
+      get_log_entry_task_arena_page_size_(is_direct_load_inc_log, redo_data_len))
 {
 }
 
@@ -2685,9 +2971,9 @@ void PartTransTask::set_allocator(const int64_t page_size, ObIAllocator &large_a
   allocator_.set_allocator(page_size, large_allocator);
 }
 
-void PartTransTask::set_prealloc_page(void *page)
+void PartTransTask::set_prealloc_page(void *page, const int64_t page_size)
 {
-  allocator_.set_prealloc_page(page);
+  allocator_.set_prealloc_page(page, page_size);
 }
 
 void PartTransTask::revert_prealloc_page(void *&page)
@@ -2818,8 +3104,7 @@ void PartTransTask::set_redo_store_policy_()
 
 int PartTransTask::init_log_entry_task_allocator()
 {
-  // ObLogEntryTask now uses independent ObArenaAllocator, no need to init base allocator
-  // This function is kept for compatibility but does nothing
+  // LogEntryTask arenas use the shared allocator owned by ObLogInstance.
   return OB_SUCCESS;
 }
 
@@ -4273,7 +4558,7 @@ void PartTransTask::set_formatted()
 int PartTransTask::wait_formatted(const int64_t timeout, ObCond &cond)
 {
   int ret = OB_SUCCESS;
-  int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time() + timeout;
+  int64_t end_time = ObClockGenerator::getClock() + timeout;
 
   if (ATOMIC_LOAD(&is_data_ready_)) {
     // The format is already done, nothing needs to be done
@@ -4283,7 +4568,7 @@ int PartTransTask::wait_formatted(const int64_t timeout, ObCond &cond)
 
     // Re-check the variable values
     while (OB_SUCCESS == ret && ! ATOMIC_LOAD(&is_data_ready_)) {
-      int64_t left_time = end_time - ::oceanbase::common::ObTimeUtility::current_time();
+      int64_t left_time = end_time - ObClockGenerator::getClock();
 
       if (left_time <= 0) {
         ret = OB_TIMEOUT;
@@ -4316,11 +4601,11 @@ void PartTransTask::set_data_ready()
 int PartTransTask::wait_data_ready(const int64_t timeout)
 {
   int ret = OB_SUCCESS;
-  int64_t end_time = ::oceanbase::common::ObTimeUtility::current_time() + timeout;
+  int64_t end_time = ObClockGenerator::getClock() + timeout;
 
   // Re-check the variable values
   while (OB_SUCCESS == ret && ! ATOMIC_LOAD(&is_data_ready_)) {
-    int64_t left_time = end_time - ::oceanbase::common::ObTimeUtility::current_time();
+    int64_t left_time = end_time - ObClockGenerator::getClock();
 
     if (left_time <= 0) {
       ret = OB_TIMEOUT;

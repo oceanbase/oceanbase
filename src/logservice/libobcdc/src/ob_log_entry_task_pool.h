@@ -30,6 +30,7 @@ public:
 public:
   virtual int alloc(
       const bool is_direct_load_inc_log,
+      const int64_t redo_data_len,
       ObLogEntryTask *&task,
       PartTransTask &host) = 0;
   virtual void free(ObLogEntryTask *task) = 0;
@@ -51,6 +52,7 @@ public:
 public:
   int alloc(
       const bool is_direct_load_inc_log,
+      const int64_t redo_data_len,
       ObLogEntryTask *&log_entry_task,
       PartTransTask &host) override;
   void free(ObLogEntryTask *log_entry_task) override;

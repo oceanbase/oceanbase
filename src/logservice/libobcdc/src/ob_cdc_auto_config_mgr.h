@@ -59,7 +59,7 @@ private:
 // | redo_dispatcher_memory_limit                  | 32M   | 64M   | 128M  | 256M  | 512M  | 2G    |
 // | extra_redo_dispatch_memory_size               | 1K    | 8M    | 32M   | 96M   | 256M  | 1.5G  |
 // | redo_dispatch_exceed_ratio                    | 1     | 1     | 1     | 2     | 4     | 16    |
-// | max_chunk_cache_size                          | 512M  | 1G    | 4G    | 4G    | 4G    | 4G    |
+// | max_chunk_cache_size                          | 512M  | 1G    | 2G    | 4G    | 4G    | 4G    |
 // | direct_load_inc_thread_num                    | 1     | 1     | 1     | 2     | 3     | 5     |
 // | parser_flow_control_queue_backlog_threshold    | 2048  | 4096  | 8192  | 16384 | 32768 | 131072|
   int64_t factor_;
