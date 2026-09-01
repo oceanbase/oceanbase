@@ -64,7 +64,7 @@ obdevtools-llvm-17.0.6-72025060300.el8.aarch64.rpm
 [tools-deps]
 devdeps-oblogmsg-1.1-192026052510.el8.aarch64.rpm
 obstack-2.0.4-172024070513.el8.aarch64.rpm
-obshell-4.5.0.0-12026050816.el8.aarch64.rpm target=community
+obshell-4.5.1.0-12026082815.el8.aarch64.rpm target=community
 
 [test-utils]
 ob-deploy-3.6.0-3.el8.aarch64.rpm target=community
