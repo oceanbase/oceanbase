@@ -816,6 +816,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   RefreshMode refresh_mode = parse_refresh_mode(refresh_mode_str);
   const char *fetching_mode_str = TCONF.fetching_log_mode.str();
   ClientFetchingMode fetching_mode = get_fetching_mode(fetching_mode_str);
+  logservice::ObLogExternalAddrConfig external_addr_config;
   const char *archive_dest_str = TCONF.archive_dest.str();
   ObBackupPathString archive_dest(archive_dest_str);
   const bool enable_ssl_client_authentication = (1 == TCONF.ssl_client_authentication);
@@ -1106,15 +1107,37 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
+  if (OB_SUCC(ret) && is_integrated_fetching_mode(fetching_mode)) {
+    if (is_tenant_sync_mode()) {
+      ObCDCEndpointProvider *provider = static_cast<ObCDCEndpointProvider *>(rs_server_provider_);
+      if (OB_ISNULL(provider)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tenant endpoint provider is null", KR(ret));
+      } else if (OB_FAIL(provider->get_external_addr_config(external_addr_config))) {
+        LOG_ERROR("get tenant endpoint external address config failed", KR(ret));
+      }
+    } else {
+      ObLogSQLServerProvider *provider = static_cast<ObLogSQLServerProvider *>(rs_server_provider_);
+      if (OB_ISNULL(provider)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("sql server provider is null", KR(ret));
+      } else if (OB_FAIL(provider->get_external_addr_config(external_addr_config))) {
+        LOG_ERROR("get rootserver external address config failed", KR(ret));
+      }
+    }
+  }
+
   INIT(fetcher_, ObLogFetcher, false/*is_load_data_dict_baseline_data*/, enable_direct_load_inc, fetching_mode,
       archive_dest, &dispatcher_, sys_ls_handler_, &trans_task_pool_, log_entry_task_pool_,
-      &mysql_proxy_.get_ob_mysql_proxy(), err_handler, cluster_info.cluster_id_, TCONF, start_seq);
+      &mysql_proxy_.get_ob_mysql_proxy(), err_handler, cluster_info.cluster_id_, TCONF, start_seq,
+      external_addr_config);
 
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
               sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler, *part_trans_parser_,
-              cluster_info.cluster_id_, TCONF, start_seq, enable_direct_load_inc))) {
+              cluster_info.cluster_id_, TCONF, start_seq, enable_direct_load_inc,
+              external_addr_config))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }
     }
@@ -1243,7 +1266,20 @@ int ObLogInstance::init_sql_provider_()
     }
     // init tenant sql provider
     if (! is_tenant_sync_mode()) {
-      INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider, *systable_helper_);
+      logservice::ObLogExternalAddrConfig external_addr_config;
+      common::ObAddr external_sql_addr;
+      ObLogSQLServerProvider *rs_server_provider =
+          static_cast<ObLogSQLServerProvider *>(rs_server_provider_);
+      if (OB_ISNULL(rs_server_provider)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("sql server provider is null while initializing tenant SQL provider", KR(ret));
+      } else if (OB_FAIL(rs_server_provider->get_external_addr_config(external_addr_config))) {
+        LOG_ERROR("get external address config for tenant SQL provider failed", KR(ret));
+      } else if (external_addr_config.is_unique()) {
+        external_sql_addr = external_addr_config.external_addr_;
+      }
+      INIT(tenant_server_provider_, ObCDCTenantSQLServerProvider,
+          *systable_helper_, external_sql_addr);
 
       // init ObLogTenantSQLProxy
       if (OB_SUCC(ret)) {

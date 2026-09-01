@@ -78,7 +78,8 @@ int ObLogMetaDataService::init(
     const int64_t cluster_id,
     const ObLogConfig &cfg,
     const int64_t start_seq,
-    const bool enable_direct_load_inc)
+    const bool enable_direct_load_inc,
+    const logservice::ObLogExternalAddrConfig &external_addr_config)
 {
   int ret = OB_SUCCESS;
 
@@ -95,7 +96,7 @@ int ObLogMetaDataService::init(
   } else if (OB_FAIL(fetcher_dispatcher_.init(&incremental_replayer_, start_seq))) {
     LOG_ERROR("ObLogMetaDataFetcherDispatcher init fail", KR(ret));
   } else if (OB_FAIL(fetcher_.init(fetching_mode, archive_dest, &fetcher_dispatcher_, sys_ls_handler,
-      proxy, err_handler, cluster_id, cfg, start_seq, enable_direct_load_inc))) {
+      proxy, err_handler, cluster_id, cfg, start_seq, enable_direct_load_inc, external_addr_config))) {
     LOG_ERROR("ObLogMetaDataFetcher init fail", KR(ret),
         K(fetching_mode), "fetching_log_mode", print_fetching_mode(fetching_mode), K(archive_dest));
   } else if (OB_FAIL(fetcher_.start())) {

@@ -76,6 +76,23 @@ void ObCDCEndpointProvider::configure(const ObLogConfig &cfg)
   svr_blacklist_.refresh(sql_server_blacklist);
 }
 
+int ObCDCEndpointProvider::get_external_addr_config(
+    logservice::ObLogExternalAddrConfig &external_addr_config) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tenant endpoint provider is not initialized", KR(ret));
+  } else {
+    external_addr_config.reset();
+    external_addr_config.source_ =
+        logservice::ObLogExternalAddrSource::CDC_TENANT_ENDPOINT;
+    // Tenant credentials cannot reliably query cluster-wide server topology.
+    // Keep the source for diagnostics, but do not provide an address candidate.
+  }
+  return ret;
+}
+
 int ObCDCEndpointProvider::refresh_server_list(ObIArray<ObAddr> &server_list)
 {
   int ret = OB_SUCCESS;

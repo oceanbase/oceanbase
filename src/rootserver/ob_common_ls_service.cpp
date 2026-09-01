@@ -388,6 +388,9 @@ void ObRestoreSourceAttrUpdater::reset()
 int ObRestoreSourceAttrUpdater::update_restore_source_attr_periodically()
 {
   int ret = OB_SUCCESS;
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  LOG_INFO("update restore source attr periodically is not needed in standalone mode", K(user_tenant_id_));
+#else
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -490,6 +493,7 @@ int ObRestoreSourceAttrUpdater::update_restore_source_attr_periodically()
     }
   }
   LOG_INFO("finish update ip list", KR(ret), K(user_tenant_id_), "target", get_change_target());
+#endif
   return ret;
 }
 

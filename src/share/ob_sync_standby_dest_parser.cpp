@@ -225,11 +225,20 @@ int ObSyncStandbyDestParser::parse_from(const common::ObString &value, const uin
    const ObCompatibilityMode &compat_mode)
 {
   int ret = OB_SUCCESS;
+  ObRestoreSourceServiceAttr &service_attr = sync_standby_dest_struct_.restore_source_service_attr_;
   if (OB_FAIL(ObServiceConfigParser::parse_from(value))) {
     LOG_WARN("failed to parse from", KR(ret), K(value));
-  } else if (FALSE_IT(sync_standby_dest_struct_.restore_source_service_attr_.user_.mode_ = compat_mode)) {
+  } else if (FALSE_IT(service_attr.user_.mode_ = compat_mode)) {
   } else if (OB_FAIL(check_sync_standby_dest_connectivity_(user_tenant_id))) {
     LOG_WARN("failed to check sync standby dest connectivity", KR(ret), K(user_tenant_id));
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy_ is null", KR(ret));
+  } else if (!service_attr.addr_.empty()
+      && OB_FAIL(service_attr.check_peer_form_for_set_command(*GCTX.srv_rpc_proxy_, "SYNC_STANDBY_DEST"))) {
+    LOG_WARN("check_peer_form_for_set_command failed", KR(ret));
+#endif
   }
   return ret;
 }

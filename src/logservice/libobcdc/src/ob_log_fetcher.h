@@ -148,7 +148,8 @@ public:
       IObLogErrHandler *err_handler,
       const int64_t cluster_id,
       const ObLogConfig &cfg,
-      const int64_t start_seq);
+      const int64_t start_seq,
+      const logservice::ObLogExternalAddrConfig &external_addr_config);
 
   void destroy();
 
@@ -160,7 +161,6 @@ public:
   virtual bool is_paused();
   virtual void mark_stop_flag();
   virtual void configure(const ObLogConfig &cfg);
-
   virtual int add_ls(
       const logservice::TenantLSID &tls_id,
       const logfetcher::ObLogFetcherStartParameters &start_parameters);

@@ -620,6 +620,17 @@ int ObRestoreSourceServiceAttr::set_sql_addr_and_svr_port_list(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("svr addr list is invalid", KR(ret), K(addr_list), K(svr_port_list));
   } else {
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+    if (1 != addr_.count()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("addr_ is invalid", KR(ret), K(addr_));
+    } else {
+      ObRestoreSourceServiceAddr &service_addr = addr_.at(0);
+      if (OB_FAIL(service_addr.set_svr_port(svr_port_list.at(0)))) {
+        LOG_WARN("fail to set svr port", KR(ret), K(svr_port_list.at(0)));
+      }
+    }
+#else
     addr_.reset();
     for (int64_t idx = 0; OB_SUCC(ret) && idx < addr_list.count(); ++idx) {
       ObRestoreSourceServiceAddr service_addr;
@@ -631,9 +642,41 @@ int ObRestoreSourceServiceAttr::set_sql_addr_and_svr_port_list(
         LOG_WARN("fail to push addr", KR(ret), K(service_addr));
       }
     }
+#endif
   }
   return ret;
 }
+
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+// check the deploy mode of the cluster when SET LOG_RESTORE_SOURCE / SYNC_STANDBY_DEST
+int ObRestoreSourceServiceAttr::check_peer_form_for_set_command(
+  obrpc::ObSrvRpcProxy &rpc_proxy,
+  const char *command_name)
+{
+  int ret = OB_SUCCESS;
+  bool peer_is_standalone = false;
+  ret = ObLogRestoreProxyUtil::query_peer_is_standalone_by_rpc(*this, &rpc_proxy, peer_is_standalone);
+  if (OB_NOT_SUPPORTED == ret) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("peer is old version does not support ip translation, SET not allowed", KR(ret), K(command_name));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+        "target cluster version is too low, operation is");
+  } else if (OB_SUCCESS != ret) {
+    LOG_WARN("query_standalone_info RPC failed", KR(ret), K(command_name));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+        "cannot connect to target cluster, operation is");
+    ret = OB_OP_NOT_ALLOW;
+  } else if (!peer_is_standalone) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("peer is distributed build, form mismatch", KR(ret), K(command_name));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+        "target cluster is distributed, operation is");
+  } else {
+    LOG_INFO("peer is standalone, SET allowed", K(command_name));
+  }
+  return ret;
+}
+#endif
 
 int ObRestoreSourceServiceAttr::set_sql_addr_list(const common::ObIArray<common::ObAddr> &addr_list)
 {

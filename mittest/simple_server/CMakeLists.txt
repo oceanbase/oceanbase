@@ -71,6 +71,7 @@ ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
 ob_offline_observer(test_tx_data test_tx_data.cpp)
 
+ob_unittest_observer(test_standalone_public_address test_standalone_public_address.cpp)
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_ls_recover test_ls_recover.cpp)
 ob_unittest_observer(test_ob_simple_cluster test_ob_simple_cluster.cpp)

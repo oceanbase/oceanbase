@@ -373,6 +373,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_GET_INSPECTION_STATUS, ObGetInspectionStatusP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_ASYNC_GET_INSPECTION_STATUS, ObAsyncGetInspectionStatusP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_LS_TASK, ObRpcBackupLSValidateP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_LS_TASK_RES, ObRpcBackupValidateLSResP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_QUERY_DEPLOY_MODE_INFO, ObQueryDeployModeInfoP);
 
 } // end of namespace observer
 } // end of namespace oceanbase

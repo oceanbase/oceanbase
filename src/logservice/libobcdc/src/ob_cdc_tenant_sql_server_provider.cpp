@@ -32,10 +32,13 @@ ObCDCTenantSQLServerProvider::ObCDCTenantSQLServerProvider()
     server_list_(ObModIds::OB_LOG_SERVER_PROVIDER ,OB_MALLOC_NORMAL_BLOCK_SIZE),
     tenant_server_map_(),
     server_blacklist_(),
+    external_sql_addr_(),
+    is_standalone_sql_topology_(false),
     refresh_server_lock_(common::ObLatchIds::OB_CDC_TENANT_REFRESH_SERVER_LOCK)
 {}
 
-int ObCDCTenantSQLServerProvider::init(IObLogSysTableHelper &systable_helper)
+int ObCDCTenantSQLServerProvider::init(IObLogSysTableHelper &systable_helper,
+    const common::ObAddr &external_sql_addr)
 {
   int ret = OB_SUCCESS;
   const char *sql_server_blacklist = TCONF.sql_server_blacklist.str();
@@ -50,6 +53,7 @@ int ObCDCTenantSQLServerProvider::init(IObLogSysTableHelper &systable_helper)
     LOG_ERROR("tenant_server_map_ init failed", KR(ret));
   } else {
     systable_helper_ = &systable_helper;
+    external_sql_addr_ = external_sql_addr;
     is_inited_ = true;
   }
 
@@ -65,6 +69,8 @@ void ObCDCTenantSQLServerProvider::destroy()
     server_list_.destroy();
     tenant_server_map_.reset();
     server_blacklist_.destroy();
+    external_sql_addr_.reset();
+    is_standalone_sql_topology_ = false;
   }
 }
 
@@ -239,16 +245,38 @@ int ObCDCTenantSQLServerProvider::query_all_server_()
     LOG_ERROR("systable_helper_ should not be null", KR(ret));
   } else {
     server_list_.reset();
+    is_standalone_sql_topology_ = false;
 
     if (OB_FAIL(systable_helper_->query_sql_server_list(server_blacklist_, server_list_))) {
       LOG_ERROR("query_server_list failed", KR(ret));
     } else if (OB_UNLIKELY(0 == server_list_.count())) {
       ret = OB_NEED_RETRY;
       LOG_WARN("server_list query from cluster is empty", KR(ret));
+    } else {
+      is_standalone_sql_topology_ = 1 == server_list_.count()
+          && server_list_.at(0).is_loopback();
+      map_standalone_sql_server_(server_list_);
     }
   }
 
   return ret;
+}
+
+void ObCDCTenantSQLServerProvider::map_standalone_sql_server_(
+    ServerList &sql_server_list)
+{
+  if (is_standalone_sql_topology_
+      && 1 == sql_server_list.count()
+      && sql_server_list.at(0).is_loopback()
+      && external_sql_addr_.is_valid()) {
+    common::ObAddr &sql_server = sql_server_list.at(0);
+    const common::ObAddr inner_sql_server = sql_server;
+    const int32_t sql_port = sql_server.get_port();
+    sql_server = external_sql_addr_;
+    sql_server.set_port(sql_port);
+    LOG_INFO("standalone loopback SQL server mapped to external address",
+        K_(external_sql_addr), K(inner_sql_server), K(sql_server));
+  }
 }
 
 int ObCDCTenantSQLServerProvider::query_tenant_server_()
@@ -302,6 +330,7 @@ int ObCDCTenantSQLServerProvider::query_tenant_server_()
             LOG_WARN("tenant_server_list is empty but tenant is not dropped", K(tenant_id), K(tenant_server_list));
           }
         } else {
+          map_standalone_sql_server_(tenant_server_list->get_server_list());
           LOG_INFO("find tenant servers", K(tenant_id), K(tenant_server_list));
         }
 

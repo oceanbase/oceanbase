@@ -330,3 +330,4 @@
   RPC_S(PR5 kill_mview_refresh, OB_KILL_MVIEW_REFRESH, (obrpc::ObKillMViewRefreshArg), obrpc::ObKillMViewRefreshResult);
   RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
   RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
+  RPC_S(PR5 query_standalone_info, OB_QUERY_DEPLOY_MODE_INFO, (obrpc::ObQueryDeployModeInfoArg), obrpc::ObQueryDeployModeInfoResult);

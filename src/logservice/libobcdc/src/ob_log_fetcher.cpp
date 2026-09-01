@@ -96,7 +96,8 @@ int ObLogFetcher::init(
     IObLogErrHandler *err_handler,
     const int64_t cluster_id,
     const ObLogConfig &cfg,
-    const int64_t start_seq)
+    const int64_t start_seq,
+    const logservice::ObLogExternalAddrConfig &external_addr_config)
 {
   int ret = OB_SUCCESS;
   int64_t max_cached_ls_fetch_ctx_count = cfg.active_ls_count;
@@ -140,7 +141,8 @@ int ObLogFetcher::init(
         cfg.blacklist_history_clear_interval_min,
         is_tenant_mode,
         TCTX.tenant_id_,
-        OB_SERVER_TENANT_ID))) {
+        OB_SERVER_TENANT_ID,
+        external_addr_config))) {
       LOG_ERROR("ObLogRouterService init failer", KR(ret), K(prefer_region), K(cluster_id));
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
     } else if (is_integrated_fetching_mode(fetching_mode) && OB_SUCC(log_route_service_.get_logservice_model_info(logservice_model_info)) && OB_FAIL(TCTX.init_max_syslog_file_count_with_libpalf(logservice_model_info))) {

@@ -81,7 +81,6 @@ public:
 
   // Return the number of available servers
   int64_t count() const { return svr_items_.count(); }
-
   // Sorting the server list by priority
   void sort_by_priority();
 
@@ -263,4 +262,3 @@ private:
 } // namespace oceanbase
 
 #endif
-

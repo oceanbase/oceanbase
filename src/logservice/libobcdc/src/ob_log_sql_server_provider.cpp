@@ -101,6 +101,40 @@ void ObLogSQLServerProvider::configure(const ObLogConfig &cfg)
   svr_blacklist_.refresh(sql_server_blacklist);
 }
 
+int ObLogSQLServerProvider::get_external_addr_config(
+    logservice::ObLogExternalAddrConfig &external_addr_config) const
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<common::ObAddr> addr_list;
+  external_addr_config.reset();
+  common::SpinRLockGuard guard(refresh_lock_);
+
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql server provider is not initialized", KR(ret));
+  } else if (!is_using_rs_list_) {
+    // cluster URL is not an explicit external address.
+  } else {
+    share::ObRootAddr root_addr;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < server_list_.count(); ++idx) {
+      if (OB_FAIL(server_list_.at(idx, root_addr))) {
+        LOG_WARN("get root address failed", KR(ret), K(idx));
+      } else {
+        common::ObAddr sql_addr = root_addr.get_server();
+        sql_addr.set_port(static_cast<int32_t>(root_addr.get_sql_port()));
+        if (OB_FAIL(addr_list.push_back(sql_addr))) {
+          LOG_WARN("collect root address failed", KR(ret), K(idx), K(sql_addr));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(external_addr_config.assign(
+        logservice::ObLogExternalAddrSource::CDC_RS_LIST, addr_list))) {
+      LOG_WARN("build rootserver external address config failed", KR(ret), K(addr_list));
+    }
+  }
+  return ret;
+}
+
 int ObLogSQLServerProvider::prepare_refresh()
 {
   return OB_SUCCESS;

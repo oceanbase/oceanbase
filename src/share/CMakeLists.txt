@@ -86,6 +86,7 @@ ob_set_subtarget(ob_share ALONE
   ob_common_rpc_proxy.cpp
   ob_ddl_args.cpp
   ob_mview_args.cpp
+  ob_query_standalone_info_rpc_struct.cpp
   ob_lonely_table_clean_rpc_struct.cpp
   ob_create_hidden_tablev2_rpc_struct.cpp
   ob_external_resource_rpc_struct.cpp

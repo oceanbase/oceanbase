@@ -486,6 +486,18 @@ void ObAddr::set_port(int32_t port)
   port_ = port;
 }
 
+// check if the address is a loopback address
+bool ObAddr::is_loopback() const
+{
+  bool bret = false;
+  if (IPV4 == version_) {
+    bret = ((ip_.v4_ & IN_CLASSA_NET) == (static_cast<uint32_t>(IN_LOOPBACKNET) << IN_CLASSA_NSHIFT));
+  } else if (IPV6 == version_) {
+    bret = IN6_IS_ADDR_LOOPBACK(reinterpret_cast<const struct in6_addr *>(ip_.v6_));
+  }
+  return bret;
+}
+
 OB_DEF_SERIALIZE(ObAddr)
 {
   int ret = OB_SUCCESS;

@@ -199,6 +199,10 @@ public:
   // @param[out] leader_addr, leader address of the log stream
   int get_primary_ls_leader_addr_by_rpc(const ObRestoreSourceServiceAttr &service_attr,
       obrpc::ObSrvRpcProxy *rpc_proxy, const ObLSID &ls_id, common::ObAddr &leader_addr);
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  static int query_peer_is_standalone_by_rpc(const ObRestoreSourceServiceAttr &service_attr,
+      obrpc::ObSrvRpcProxy *rpc_proxy, bool &peer_is_standalone);
+#endif
   // check if the source cluster has the same cluster id as current cluster, but they are actually
   // two different clusters, if so, out param `res` will be true, otherwise false
   int check_different_cluster_with_same_cluster_id(const int64_t source_cluster_id, bool &res);

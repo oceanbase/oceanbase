@@ -5248,5 +5248,20 @@ GET_INSPECTION_STATUS_PROCESS_IMPL(ObGetInspectionStatusP);
 GET_INSPECTION_STATUS_PROCESS_IMPL(ObAsyncGetInspectionStatusP);
 #undef GET_INSPECTION_STATUS_PROCESS_IMPL
 
+// OB_QUERY_DEPLOY_MODE_INFO handler：return the deploy mode of the cluster
+int ObQueryDeployModeInfoP::process()
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObDeployMode status = obrpc::ObDeployMode::INVALID_STATUS;
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  status = obrpc::ObDeployMode::CENTRALIZED;
+#else
+  status = obrpc::ObDeployMode::DISTRIBUTED;
+#endif
+  result_.set_status(status);
+  LOG_INFO("OB_QUERY_DEPLOY_MODE_INFO handler", KR(ret), K(status));
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

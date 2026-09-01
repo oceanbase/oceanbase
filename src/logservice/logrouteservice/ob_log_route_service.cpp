@@ -12,8 +12,12 @@
 
 #define USING_LOG_PREFIX OBLOG
 #include "ob_log_route_service.h"
-#include "lib/thread/thread_mgr.h"  // MTL
 #include "share/ob_thread_mgr.h"    // TG*
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+#include "lib/thread/thread_mgr.h"  // MTL
+#include "logservice/ob_log_service.h"
+#include "share/restore/ob_log_restore_source.h"
+#endif
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -51,7 +55,9 @@ ObLogRouteService::ObLogRouteService() :
     blacklist_history_overdue_time_min_(0),
     blacklist_history_clear_interval_min_(0),
     ls_svr_list_last_update_time_(OB_INVALID_TIMESTAMP),
-    logservice_model_info_()
+    logservice_model_info_(),
+    external_addr_config_(),
+    standalone_mapping_logged_(false)
 {
 }
 
@@ -82,7 +88,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     const int64_t blacklist_history_clear_interval_min,
     const bool is_tenant_mode,
     const uint64_t source_tenant_id,
-    const uint64_t self_tenant_id)
+    const uint64_t self_tenant_id,
+    const ObLogExternalAddrConfig &external_addr_config)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -95,7 +102,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     LOG_WARN("ObLogRouteService has been inited twice", KR(ret), K(cluster_id), K(is_across_cluster));
   } else if (OB_ISNULL(proxy) || OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(proxy), K(cluster_id));
+    LOG_WARN("invalid argument", KR(ret), K(proxy), K(cluster_id), K(external_addr_config));
   } else if (OB_FAIL(ls_route_key_set_.create(DEFAULT_LS_ROUTE_KEY_SET_SIZE))) {
     LOG_ERROR("ls_route_key_set_ init failed", KR(ret));
   } else if (OB_FAIL(ls_router_map_.init("LSRouterMap"))) {
@@ -142,6 +149,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     cluster_id_ = cluster_id;
     source_tenant_id_ = source_tenant_id;
     self_tenant_id_ = self_tenant_id;
+    external_addr_config_ = external_addr_config;
     log_router_allocator_.set_nway(NWAY);
     asyn_task_allocator_.set_nway(NWAY);
     timer_id_ = lib::TGDefIDs::LogRouterTimer;
@@ -252,6 +260,8 @@ void ObLogRouteService::destroy()
   blacklist_history_clear_interval_min_ = 0;
   ls_svr_list_last_update_time_ = OB_INVALID_TIMESTAMP;
   logservice_model_info_.reset(false);
+  external_addr_config_.reset();
+  ATOMIC_SET(&standalone_mapping_logged_, false);
 
   is_tenant_mode_ = false;
   is_inited_ = false;
@@ -851,6 +861,114 @@ int ObLogRouteService::get_logservice_model_info(
   return ret;
 }
 
+int ObLogRouteService::get_effective_external_addr_config_(
+    ObLogExternalAddrConfig &external_addr_config) const
+{
+  int ret = OB_SUCCESS;
+  external_addr_config = external_addr_config_;
+
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  if (!external_addr_config.is_provided()) {
+    ObLogService *log_service = MTL(ObLogService*);
+    ObLogRestoreService *restore_service =
+        OB_ISNULL(log_service) ? nullptr : log_service->get_log_restore_service();
+    if (OB_NOT_NULL(restore_service)) {
+      const share::ObLogRestoreSourceItem &item = restore_service->get_restore_source();
+      share::ObRestoreSourceServiceAttr service_attr;
+      if (!item.is_valid() || share::ObLogRestoreSourceType::SERVICE != item.type_) {
+        // The current restore source does not need address translation.
+      } else if (OB_FAIL(service_attr.parse_service_attr_from_item(item))) {
+        LOG_WARN("parse restore source service attr failed", KR(ret), K(item));
+      } else if (OB_UNLIKELY(1 != service_attr.addr_.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("restore source address count should be one in standalone",
+            KR(ret), K(service_attr));
+      } else {
+        common::ObAddr external_addr;
+        common::ObArray<common::ObAddr> external_addr_list;
+        if (OB_FAIL(service_attr.addr_.at(0).get_sql_addr(external_addr))) {
+          LOG_WARN("get external address from restore source failed", KR(ret), K(service_attr));
+        } else if (OB_UNLIKELY(!external_addr.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("restore source sql address is invalid", KR(ret), K(service_attr));
+        } else if (OB_FAIL(external_addr_list.push_back(external_addr))) {
+          LOG_WARN("save restore source external address failed", KR(ret), K(external_addr));
+        } else if (OB_FAIL(external_addr_config.assign(
+            ObLogExternalAddrSource::RESTORE_SOURCE, external_addr_list))) {
+          LOG_WARN("build restore source external address config failed",
+              KR(ret), K(external_addr_list));
+        }
+      }
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObLogRouteService::resolve_route_server_addr_(common::ObAddr &route_addr) const
+{
+  int ret = OB_SUCCESS;
+  ObLogExternalAddrConfig external_addr_config;
+  const common::ObAddr inner_route_addr = route_addr;
+  if (!route_addr.is_loopback()) {
+    // Non-loopback routes remain in the observer-provided address domain.
+  } else if (OB_FAIL(get_effective_external_addr_config_(external_addr_config))) {
+    LOG_WARN("get effective external address config failed", KR(ret), K(route_addr));
+  } else if (ObLogExternalAddrSource::RESTORE_SOURCE == external_addr_config.source_) {
+    // LOG_RESTORE_SOURCE is accepted only after query_peer_is_standalone_by_rpc()
+    // confirms that the source uses a standalone build. Keep tenant-mode restore
+    // isolated from cluster-wide __all_server and use the configured external IP.
+    if (OB_UNLIKELY(!is_tenant_mode_)) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("restore source route mapping requires tenant mode",
+          KR(ret), K(external_addr_config), K(route_addr));
+    } else if (OB_UNLIKELY(!external_addr_config.is_unique())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unique restore source external address is required for loopback route mapping",
+          KR(ret), K(external_addr_config), K(route_addr));
+    } else {
+      // The external address owns only the IP domain. The observer-reported RPC
+      // port remains authoritative and may differ from the configured SQL port.
+      const int32_t inner_rpc_port = route_addr.get_port();
+      route_addr = external_addr_config.external_addr_;
+      route_addr.set_port(inner_rpc_port);
+    }
+  } else if (ObLogExternalAddrSource::CDC_TENANT_ENDPOINT
+      == external_addr_config.source_) {
+    // Tenant endpoint mode has neither cluster-wide topology nor the standalone
+    // deployment proof required to translate an observer-reported loopback IP.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("loopback route resolution is not supported in CDC tenant endpoint mode",
+        KR(ret), K(external_addr_config), K(route_addr));
+  } else if (ObLogExternalAddrSource::CDC_RS_LIST
+      == external_addr_config.source_) {
+    // CDC RS-list mode has cluster-wide topology and must prove that the source
+    // has exactly one loopback observer before translating its route address.
+    ObLogClusterTopology topology;
+    if (OB_FAIL(all_svr_cache_.get_cluster_topology(topology))) {
+      LOG_WARN("get cluster topology failed", KR(ret), K(route_addr));
+    } else if (OB_FAIL(topology.resolve_cluster_route_addr(
+        external_addr_config, route_addr))) {
+      LOG_WARN("resolve loopback route address failed",
+          KR(ret), K(external_addr_config), K(topology), K(route_addr));
+    }
+  } else {
+    // The restore source may not have been loaded yet during tenant startup.
+    // Retry instead of guessing an external address domain for a loopback route.
+    ret = OB_NEED_RETRY;
+    LOG_WARN("external address source is not ready for loopback route resolution",
+        KR(ret), K(external_addr_config), K(route_addr));
+  }
+
+  if (OB_SUCC(ret)
+      && inner_route_addr != route_addr
+      && ATOMIC_BCAS(&standalone_mapping_logged_, false, true)) {
+    LOG_INFO("standalone loopback route resolved to external address",
+        K(external_addr_config), K(inner_route_addr), K(route_addr));
+  }
+  return ret;
+}
+
 int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
     LSSvrList &svr_list)
 {
@@ -917,16 +1035,21 @@ int ObLogRouteService::query_ls_log_info_and_update_(const ObLSRouterKey &router
   } else {
     svr_list.reset();
     const ObLSLogInfo::LogStatRecordArray &log_stat_records = ls_log_info.get_log_stat_array();
-    ARRAY_FOREACH_NORET(log_stat_records, idx) {
-      int tmp_ret = OB_SUCCESS;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < log_stat_records.count(); ++idx) {
       const LogStatRecord &rec = log_stat_records.at(idx);
       const ObAddr& svr = rec.server_;
+      ObAddr route_svr = svr;
       FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
+      // Server status, zone and priority caches use the observer's internal
+      // address. Mapping happens only after that lookup and before LSSvrList.
       if (! all_svr_cache_.is_svr_avail(svr, fetch_priority)) {
         // ignore
-      } else if (OB_TMP_FAIL(svr_list.add_server_or_update(rec.server_, rec.begin_lsn_, rec.end_lsn_,
+      } else if (OB_FAIL(resolve_route_server_addr_(route_svr))) {
+        LOG_WARN("resolve log route server address failed", KR(ret), K(router_key), K(rec));
+      } else if (OB_FAIL(svr_list.add_server_or_update(route_svr, rec.begin_lsn_, rec.end_lsn_,
           fetch_priority, ObRole::LEADER == rec.role_))) {
-        LOG_WARN_RET(tmp_ret, "failed to add_server_or_update after get_ls_log_info", K(router_key), K(rec));
+        LOG_WARN("failed to add_server_or_update after get_ls_log_info",
+            KR(ret), K(router_key), K(rec), K(route_svr));
       }
     }
   }
@@ -947,13 +1070,16 @@ int ObLogRouteService::query_units_info_and_update_(const ObLSRouterKey &router_
     LOG_WARN("failed to get_all_units_info", KR(ret), K(router_key));
   } else {
     const ObUnitsRecordInfo::ObUnitsRecordArray &units_record_array = units_record_info.get_units_record_array();
-    ARRAY_FOREACH_NORET(units_record_array, idx) {
-      int tmp_ret = OB_SUCCESS;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < units_record_array.count(); ++idx) {
       const ObUnitsRecord &record = units_record_array.at(idx);
+      ObAddr route_svr = record.server_;
       const FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
-      if (OB_TMP_FAIL(svr_list.add_server_or_update(record.server_, palf::LSN(palf::PALF_INITIAL_LSN_VAL),
+      if (OB_FAIL(resolve_route_server_addr_(route_svr))) {
+        LOG_WARN("resolve fallback route server address failed", KR(ret), K(record), K(router_key));
+      } else if (OB_FAIL(svr_list.add_server_or_update(route_svr, palf::LSN(palf::PALF_INITIAL_LSN_VAL),
           palf::LSN(palf::LOG_MAX_LSN_VAL), fetch_priority, false))) {
-        LOG_WARN_RET(tmp_ret, "failed to add_server_or_update after get_all_units_info", K(record), K(router_key));
+        LOG_WARN("failed to add_server_or_update after get_all_units_info",
+            KR(ret), K(record), K(router_key), K(route_svr));
       }
     }
   }
@@ -1316,4 +1442,3 @@ void ObLogRouteService::ObLSRouteTimerTask::runTimerTask()
 
 } // namespace logservice
 } // namespace oceanbase
-

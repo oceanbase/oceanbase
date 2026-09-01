@@ -71,7 +71,8 @@ int ObLogMetaDataFetcher::init(
     const int64_t cluster_id,
     const ObLogConfig &cfg,
     const int64_t start_seq,
-    const bool enable_direct_load_inc)
+    const bool enable_direct_load_inc,
+    const logservice::ObLogExternalAddrConfig &external_addr_config)
 {
   int ret = OB_SUCCESS;
 
@@ -96,7 +97,7 @@ int ObLogMetaDataFetcher::init(
     INIT(log_fetcher_, ObLogFetcher, true/*is_loading_data_dict_baseline_data*/,
         enable_direct_load_inc, fetching_mode, archive_dest, fetcher_dispatcher,
         sys_ls_handler, &trans_task_pool_, &log_entry_task_pool_, proxy, err_handler,
-        cluster_id, cfg, start_seq);
+        cluster_id, cfg, start_seq, external_addr_config);
 
     is_inited_ = true;
     LOG_INFO("ObLogMetaDataFetcher init success",

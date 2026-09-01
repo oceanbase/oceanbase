@@ -23,6 +23,7 @@
 #include "ob_log_systable_queryer.h"        // ObLogSysTableQueryer
 #include "ob_log_route_struct.h"            // ObLSRouterKey, ObLSRouterValue
 #include "ob_log_all_svr_cache.h"           // ObLogAllSvrCache
+#include "ob_log_external_addr_config.h"    // ObLogExternalAddrConfig
 
 namespace oceanbase
 {
@@ -89,7 +90,8 @@ public:
       const int64_t blacklist_history_clear_interval_min = 20,
       const bool is_tenant_mode = false,
       const uint64_t tenant_id = OB_INVALID_TENANT_ID,
-      const uint64_t self_tenant_id = OB_SERVER_TENANT_ID);
+      const uint64_t self_tenant_id = OB_SERVER_TENANT_ID,
+      const ObLogExternalAddrConfig &external_addr_config = ObLogExternalAddrConfig());
   int start();
   void stop();
   void wait();
@@ -286,6 +288,9 @@ private:
   int get_ls_svr_list_(const ObLSRouterKey &router_key,
       LSSvrList &svr_list);
 
+  int get_effective_external_addr_config_(
+      ObLogExternalAddrConfig &external_addr_config) const;
+  int resolve_route_server_addr_(common::ObAddr &route_addr) const;
   int query_ls_log_info_and_update_(const ObLSRouterKey &router_key,
       LSSvrList &svr_list);
 
@@ -405,7 +410,10 @@ private:
   int64_t blacklist_history_clear_interval_min_;
   int64_t ls_svr_list_last_update_time_;
   ObLogserviceModelInfo logservice_model_info_;
-
+  ObLogExternalAddrConfig external_addr_config_;
+  // Multiple route workers may discover the same standalone mapping
+  // concurrently. Log only the first successful mapping in one LRS lifetime.
+  mutable volatile bool standalone_mapping_logged_;
   DISALLOW_COPY_AND_ASSIGN(ObLogRouteService);
 };
 
@@ -413,4 +421,3 @@ private:
 } // namespace oceanbase
 
 #endif
-

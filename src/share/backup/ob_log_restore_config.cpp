@@ -195,6 +195,11 @@ int ObLogRestoreSourceServiceConfigParser::check_before_update_inner_config(obrp
     LOG_WARN("invalid parser", KR(ret), KPC(this));
   } else if (OB_FAIL(check_before_update_inner_config(false /* for_verify */, compat_mode))) {
     LOG_WARN("fail to check before update inner config");
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  } else if (!service_attr_.addr_.empty()
+      && OB_FAIL(service_attr_.check_peer_form_for_set_command(rpc_proxy, "LOG_RESTORE_SOURCE"))) {
+    LOG_WARN("check_peer_form_for_set_command failed", KR(ret));
+#endif
   }
   return ret;
 }
@@ -283,6 +288,30 @@ int ObLogRestoreSourceServiceConfigParser::
         primary_tenant_id = service_attr_.user_.tenant_id_;
         primary_cluster_id = service_attr_.user_.cluster_id_;
       }
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(1 != addr_list.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("addr list length should be one in standalone", KR(ret), K(addr_list));
+        } else if (addr_list.at(0).is_loopback()) {
+          if (OB_UNLIKELY(1 != service_attr_.addr_.count())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("service addr list length should be one in standalone", KR(ret), K(service_attr_));
+          } else {
+            common::ObAddr public_sql_addr;
+            common::ObAddr &addr = addr_list.at(0);
+            if (OB_FAIL(service_attr_.addr_.at(0).get_sql_addr(public_sql_addr))) {
+              LOG_WARN("failed to get public sql addr from service attr", KR(ret), K(service_attr_));
+            } else {
+              const int32_t port = addr.get_port();
+              addr = public_sql_addr;
+              addr.set_port(port);
+              LOG_INFO("translate loopback ip in get_primary_server_addr", K(public_sql_addr), K(port));
+            }
+          }
+        }
+      }
+#endif
       LOG_INFO("get primary server info", K(primary_tenant_id), K(primary_cluster_id), K(addr_list));
     }
   }

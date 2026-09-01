@@ -16,6 +16,7 @@
 #define OCEANBASE_LIBOBCDC_TENANT_ENDPOINT_PROVIDER_H__
 
 #include "lib/lock/ob_spin_rwlock.h"                    // SpinRWLock
+#include "logservice/logrouteservice/ob_log_external_addr_config.h"
 #include "lib/mysqlclient/ob_mysql_server_provider.h"   // ObMySQLServerProvider
 #include "ob_cdc_server_endpoint_access_info.h"
 #include "ob_log_svr_blacklist.h"                       // ObLogSvrBlacklist
@@ -38,6 +39,8 @@ public:
   int refresh_server_list(ObIArray<ObAddr> &svr_list);
   const ObLogSvrBlacklist &get_svr_black_list() const { return svr_blacklist_; }
   void configure(const ObLogConfig &cfg);
+  int get_external_addr_config(
+      logservice::ObLogExternalAddrConfig &external_addr_config) const;
 public:
   // override ObMySQLServerProvider
   virtual int64_t get_server_count() const override;

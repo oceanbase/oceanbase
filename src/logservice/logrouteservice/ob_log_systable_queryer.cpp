@@ -184,7 +184,6 @@ int ObLogSysTableQueryer::get_all_units_info(
   return ret;
 }
 
-
 ////////////////////////////////////// QueryAllServerInfo /////////////////////////////////
 int ObLogSysTableQueryer::get_all_server_info(
     const uint64_t tenant_id,

@@ -1048,6 +1048,16 @@ int ObLogRestoreProxyUtil::get_primary_ls_leader_addr_by_rpc(const ObRestoreSour
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("service attr has no svr port", KR(ret), K(service_attr));
   } else {
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+    if (OB_UNLIKELY(1 != service_attr.addr_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("service addr list length should be one in standalone", KR(ret), K(service_attr));
+    } else if (OB_FAIL(service_attr.addr_.at(0).get_svr_addr(leader_addr))) {
+      LOG_WARN("get_svr_addr failed", KR(ret), K(service_attr));
+    } else {
+      LOG_INFO("get primary ls leader addr from service_attr in standalone", K(leader_addr), K(ls_id));
+    }
+#else
     const int64_t primary_cluster_id = service_attr.user_.cluster_id_;
     const uint64_t primary_tenant_id = service_attr.user_.tenant_id_;
     obrpc::ObGetLSLocationArg req;
@@ -1093,6 +1103,7 @@ int ObLogRestoreProxyUtil::get_primary_ls_leader_addr_by_rpc(const ObRestoreSour
       ret = (last_ret == OB_SUCCESS) ? OB_ENTRY_NOT_EXIST : last_ret;
       LOG_WARN("get primary ls location failed", KR(ret), K(req), K(service_attr));
     }
+#endif
   }
 
   return ret;
@@ -1325,6 +1336,42 @@ int64_t ObLogRestoreProxyUtil::cal_timeout_() {
     K(abs_timeout_ts), K(curr_ts), K(abs_timeout), K(final_timeout), K(DEFAULT_MAX_TIMEOUT));
   return final_timeout;
 }
+
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+int ObLogRestoreProxyUtil::query_peer_is_standalone_by_rpc(
+    const ObRestoreSourceServiceAttr &service_attr,
+    obrpc::ObSrvRpcProxy *rpc_proxy,
+    bool &peer_is_standalone)
+{
+  int ret = OB_SUCCESS;
+  peer_is_standalone = false;
+  if (OB_ISNULL(rpc_proxy) || OB_UNLIKELY(!service_attr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(rpc_proxy), K(service_attr));
+  } else if (1 != service_attr.addr_.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("service addr list length should be one in standalone", KR(ret), K(service_attr));
+  } else {
+    obrpc::ObQueryDeployModeInfoArg args;
+    obrpc::ObQueryDeployModeInfoResult result;
+    common::ObAddr server_addr;
+    if (OB_FAIL(service_attr.addr_.at(0).get_svr_addr(server_addr))) {
+      LOG_WARN("get_svr_addr failed", KR(ret), K(service_attr));
+    } else if (OB_FAIL(rpc_proxy->to(server_addr)
+                                .dst_cluster_id(service_attr.user_.cluster_id_)
+                                .by(service_attr.user_.tenant_id_)
+                                .timeout(GCONF.rpc_timeout)
+                                .query_standalone_info(args, result))) {
+      LOG_INFO("query_standalone_info rpc failed", KR(ret), K(server_addr), "rpc_timeout", GCONF.rpc_timeout.get_value());
+    } else {
+      peer_is_standalone = result.is_standalone();
+      LOG_INFO("query peer standalone info success",
+          K(server_addr), "status", result.get_status(), K(peer_is_standalone));
+    }
+  }
+  return ret;
+}
+#endif
 
 } // namespace share
 } // namespace oceanbase

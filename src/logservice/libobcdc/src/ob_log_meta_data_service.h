@@ -58,11 +58,11 @@ public:
       const int64_t cluster_id,
       const ObLogConfig &cfg,
       const int64_t start_seq,
-      const bool enable_direct_load_inc);
+      const bool enable_direct_load_inc,
+      const logservice::ObLogExternalAddrConfig &external_addr_config);
   void mark_stop_flag();
   void stop();
   void destroy();
-
   static ObLogMetaDataService &get_instance();
   ObLogMetaDataBaselineLoader &get_baseline_loader() { return baseline_loader_; }
 

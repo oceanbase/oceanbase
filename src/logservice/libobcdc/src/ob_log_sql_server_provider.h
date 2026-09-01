@@ -24,6 +24,7 @@
 #include "lib/lock/ob_small_spin_lock.h"                // ObByteLock
 #include "ob_log_svr_blacklist.h"                       // ObLogSvrBlacklist
 #include "ob_log_config.h"                              // TCONF, ObLogConfig
+#include "logservice/logrouteservice/ob_log_external_addr_config.h"
 
 namespace oceanbase
 {
@@ -65,6 +66,8 @@ public:
   int init(const char *config_url, const char *rs_list);
   void destroy();
   void configure(const ObLogConfig &cfg);
+  int get_external_addr_config(
+      logservice::ObLogExternalAddrConfig &external_addr_config) const;
 
 private:
   // str_len of rs_list should be greater than 1(default valud is ';') and less than MAX_CONFIG_LENGTH

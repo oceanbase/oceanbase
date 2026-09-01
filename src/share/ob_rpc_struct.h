@@ -110,6 +110,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/ai_service/ob_ai_service_struct.h"
 #include "share/ob_sync_standby_status_operator.h"
+#include "share/ob_query_standalone_info_rpc_struct.h"
 
 namespace oceanbase
 {

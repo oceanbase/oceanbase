@@ -37,7 +37,9 @@ ObLogAllSvrCache::ObLogAllSvrCache() :
     zone_last_update_tstamp_(OB_INVALID_TIMESTAMP),
     svr_map_(),
     zone_map_(),
-    units_map_()
+    units_map_(),
+    topology_lock_(common::ObLatchIds::OB_LOG_ALL_SVR_CACHE_LOCK),
+    cluster_topology_()
 {
 }
 
@@ -112,6 +114,49 @@ bool ObLogAllSvrCache::is_svr_avail(
   }
 
   return bool_ret;
+}
+
+int ObLogClusterTopology::resolve_cluster_route_addr(
+    const ObLogExternalAddrConfig &external_addr_config,
+    common::ObAddr &route_addr) const
+{
+  int ret = OB_SUCCESS;
+  if (!route_addr.is_loopback()) {
+    // Normal deployments keep the address returned by the observer.
+  } else if (ObLogExternalAddrSource::CDC_RS_LIST
+      != external_addr_config.source_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cluster route resolution requires a CDC RS-list external address",
+        KR(ret), K(external_addr_config), K(route_addr));
+  } else if (!is_ready_ || 0 == active_server_count_) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("cluster topology is not ready for loopback route mapping",
+        KR(ret), KPC(this), K(route_addr));
+  } else if (1 != active_server_count_ || !only_server_.is_loopback()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("loopback route does not match standalone cluster topology",
+        KR(ret), KPC(this), K(route_addr));
+  } else if (!external_addr_config.is_unique()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unique external address is required for loopback route mapping",
+        KR(ret), K(external_addr_config), K(route_addr));
+  } else {
+    // Only the IP belongs to the external address domain. The observer-reported
+    // RPC port remains authoritative.
+    const int32_t inner_port = route_addr.get_port();
+    route_addr = external_addr_config.external_addr_;
+    route_addr.set_port(inner_port);
+  }
+  return ret;
+}
+
+int ObLogAllSvrCache::get_cluster_topology(
+    ObLogClusterTopology &topology) const
+{
+  int ret = OB_SUCCESS;
+  common::SpinRLockGuard guard(topology_lock_);
+  topology = cluster_topology_;
+  return ret;
 }
 
 int ObLogAllSvrCache::update_assign_region(const common::ObRegion &prefer_region)
@@ -259,6 +304,10 @@ int ObLogAllSvrCache::init(
     cur_zone_version_ = 0;
     zone_need_update_ = false;
     zone_last_update_tstamp_ = OB_INVALID_TIMESTAMP;
+    {
+      common::SpinWLockGuard guard(topology_lock_);
+      cluster_topology_.reset();
+    }
 
     LOG_INFO("ObLogAllSvrCache init succ", K(prefer_region), K(is_tenant_mode), K(zp));
   }
@@ -278,6 +327,10 @@ void ObLogAllSvrCache::destroy()
   cur_zone_version_ = 0;
   zone_need_update_ = false;
   zone_last_update_tstamp_ = OB_INVALID_TIMESTAMP;
+  {
+    common::SpinWLockGuard guard(topology_lock_);
+    cluster_topology_.reset();
+  }
   if (! is_tenant_mode_) {
     (void)svr_map_.destroy();
     (void)zone_map_.destroy();
@@ -333,6 +386,8 @@ void ObLogAllSvrCache::query_and_update()
     const int64_t all_svr_cache_update_interval = ATOMIC_LOAD(&all_server_cache_update_interval_);
 
     if (REACH_TIME_INTERVAL_THREAD_LOCAL(all_svr_cache_update_interval)) {
+      // Tenant-mode users only query tenant-scoped routing metadata. Cluster-wide
+      // topology refresh is reserved for non-tenant mode to preserve isolation.
       if (OB_FAIL(update_unit_info_cache_())) {
         if (OB_IN_STOP_STATE == ret) {
           LOG_WARN("skip updating unit cache because route service is stopping", KR(ret),
@@ -527,10 +582,40 @@ int ObLogAllSvrCache::update_server_cache_()
     }
 
     ATOMIC_INC(&cur_version_);
+    // Publish only after the server cache update succeeds, so route workers
+    // observe topology derived from the same successful __all_server refresh.
+    if (OB_SUCC(ret)) {
+      publish_cluster_topology_(all_server_info);
+    }
     _LOG_INFO("[STAT] [ALL_SERVER_LIST] COUNT=%ld VERSION=%lu", all_server_record_array.count(), cur_version_);
   }
 
   return ret;
+}
+
+void ObLogAllSvrCache::publish_cluster_topology_(
+    ObAllServerInfo &all_server_info)
+{
+  ObLogClusterTopology topology;
+  ObAllServerInfo::AllServerRecordArray &records =
+      all_server_info.get_all_server_array();
+  for (int64_t idx = 0; idx < records.count(); ++idx) {
+    const AllServerRecord &record = records.at(idx);
+    if (ObServerStatus::OB_SERVER_ACTIVE == record.status_
+        || ObServerStatus::OB_SERVER_DELETING == record.status_) {
+      ++topology.active_server_count_;
+      if (1 == topology.active_server_count_) {
+        topology.only_server_ = record.server_;
+      } else {
+        topology.only_server_.reset();
+      }
+    }
+  }
+  topology.is_ready_ = true;
+
+  // Build the snapshot without the lock, then publish all fields together.
+  common::SpinWLockGuard guard(topology_lock_);
+  cluster_topology_ = topology;
 }
 
 int ObLogAllSvrCache::update_unit_info_cache_()

@@ -79,7 +79,8 @@ public:
   // release refresh_server_lock_
   virtual int end_refresh() override;
 public:
-  int init(IObLogSysTableHelper &systable_helper);
+  int init(IObLogSysTableHelper &systable_helper,
+      const common::ObAddr &external_sql_addr);
   void destroy();
   // black_list
   void configure(const ObLogConfig &config);
@@ -89,6 +90,7 @@ private:
   int query_all_tenant_();
   int query_all_server_();
   int query_tenant_server_();
+  void map_standalone_sql_server_(ServerList &sql_server_list);
 private:
   bool                  is_inited_;
   IObLogSysTableHelper  *systable_helper_;
@@ -96,6 +98,8 @@ private:
   ServerList            server_list_;
   TenantServerMap       tenant_server_map_;
   ObLogSvrBlacklist     server_blacklist_; // sql server blacklist(ip:rpc_port)
+  common::ObAddr        external_sql_addr_;
+  bool                  is_standalone_sql_topology_;
 
   mutable common::SpinRWLock  refresh_server_lock_;
 

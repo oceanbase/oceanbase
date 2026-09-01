@@ -145,6 +145,7 @@ public:
   void set_port(int32_t port);
   void set_max();
   bool is_valid() const;
+  bool is_loopback() const;
   int compare(const ObAddr &rv) const;
 private:
   // depercate:

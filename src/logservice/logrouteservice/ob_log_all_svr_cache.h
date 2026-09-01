@@ -14,13 +14,38 @@
 #define OCEANBASE_LOG_ALL_SVR_CACHE_H_
 
 #include "lib/hash/ob_linear_hash_map.h"    // ObLinearHashMap
+#include "lib/lock/ob_spin_rwlock.h"
 #include "ob_server_priority.h"             // FetchPriority, REGION_PRIORITY_*, ObCdcLogFetchPriority
+#include "ob_log_external_addr_config.h"
 #include "ob_log_systable_queryer.h"        // ObLogSysTableQueryer
 
 namespace oceanbase
 {
 namespace logservice
 {
+// A compact snapshot derived from one successful __all_server query.
+// It is cluster-wide and must not be inferred from an LS replica list or tenant units.
+struct ObLogClusterTopology
+{
+  int64_t active_server_count_;
+  common::ObAddr only_server_;
+  bool is_ready_;
+
+  ObLogClusterTopology() { reset(); }
+  void reset()
+  {
+    active_server_count_ = 0;
+    only_server_.reset();
+    is_ready_ = false;
+  }
+
+  int resolve_cluster_route_addr(
+      const ObLogExternalAddrConfig &external_addr_config,
+      common::ObAddr &route_addr) const;
+
+  TO_STRING_KV(K_(active_server_count), K_(only_server), K_(is_ready));
+};
+
 ///////////////////// ObLogAllSvrCache //////////////////////
 class ObLogAllSvrCache
 {
@@ -52,6 +77,9 @@ public:
   bool is_svr_avail(
       const common::ObAddr &svr,
       FetchPriority &fetch_priority);
+
+  // Copy out a consistent topology snapshot. No cache-owned pointer escapes the lock.
+  int get_cluster_topology(ObLogClusterTopology &topology) const;
 
   int update_assign_region(const common::ObRegion &prefer_region);
   int get_assign_region(common::ObRegion &prefer_region);
@@ -92,6 +120,7 @@ private:
   bool need_update_zone_();
   int update_zone_cache_();
   int update_server_cache_();
+  void publish_cluster_topology_(ObAllServerInfo &all_server_info);
   int purge_stale_records_();
   int purge_stale_zone_records_();
   int update_unit_info_cache_();
@@ -253,6 +282,8 @@ private:
   UnitsMap              units_map_;
 
   ObCdcLogFetchPriority fetch_priority_;
+  mutable common::SpinRWLock topology_lock_;
+  ObLogClusterTopology  cluster_topology_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogAllSvrCache);

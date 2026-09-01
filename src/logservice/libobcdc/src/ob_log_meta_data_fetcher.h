@@ -18,6 +18,7 @@
 #include "ob_log_entry_task_pool.h"  // ObLogEntryTaskPool
 #include "ob_log_meta_data_fetcher_dispatcher.h"  // ObLogMetaDataFetcherDispatcher
 #include "logservice/logfetcher/ob_log_fetcher_start_parameters.h"
+#include "logservice/logrouteservice/ob_log_external_addr_config.h"
 
 namespace oceanbase
 {
@@ -44,12 +45,12 @@ public:
       const int64_t cluster_id,
       const ObLogConfig &cfg,
       const int64_t start_seq,
-      const bool enable_direct_load_inc);
+      const bool enable_direct_load_inc,
+      const logservice::ObLogExternalAddrConfig &external_addr_config);
   int start();
   void mark_stop_flag();
   void stop();
   void destroy();
-
 public:
   int add_ls_and_fetch_until_the_progress_is_reached(
       const uint64_t tenant_id,

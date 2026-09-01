@@ -19,6 +19,10 @@
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObSrvRpcProxy;
+}
 namespace share
 {
 class ObLogRestoreProxyUtil;
@@ -136,6 +140,9 @@ struct ObRestoreSourceServiceAttr final : public ObServiceAttrBase
   int check_target_tenant_valid(const uint64_t self_tenant_id, const bool for_verify,
       ObLogRestoreProxyUtil &proxy);
   int check_tenant_not_changed(ObLogRestoreProxyUtil &proxy, uint64_t &tenant_id, int64_t &cluster_id);
+#ifdef OB_ENABLE_STANDALONE_LAUNCH
+  int check_peer_form_for_set_command(obrpc::ObSrvRpcProxy &rpc_proxy, const char *command_name);
+#endif
   bool operator ==(const ObRestoreSourceServiceAttr &other) const;
   int assign(const ObRestoreSourceServiceAttr &attr);
   TO_STRING_KV(K_(addr), K_(user));
