@@ -261,8 +261,8 @@ int ObCGGroupByScanner::do_group_by_aggregate(const uint64_t count, const bool i
   for (int64_t i = 0; OB_SUCC(ret) && i < datum_infos_.count(); ++i) {
     common::ObDatum *col_datums = is_group_by_col ? group_by_cell_->get_group_by_col_datums() : datum_infos_.at(i).datum_ptr_;
     ObGroupByAggIdxArray &agg_idxs = group_by_agg_idxs_.at(i);
-    for (int64_t i = 0; OB_SUCC(ret) && i < agg_idxs.count(); ++i) {
-      const int32_t agg_idx = agg_idxs.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < agg_idxs.count(); ++j) {
+      const int32_t agg_idx = agg_idxs.at(j);
       if (OB_FAIL(group_by_cell_->eval_batch(col_datums, count, agg_idx, is_group_by_col, false, ref_offset))) {
         LOG_WARN("Failed to eval batch", K(ret));
       }

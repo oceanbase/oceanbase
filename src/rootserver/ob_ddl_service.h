@@ -2732,13 +2732,21 @@ private:
     common::hash::ObHashSet<ObColumnNameHashWrapper> &update_column_name_set,
     bool &need_redistribute_column_id,
     bool &is_contain_part_key);
-  int drop_downgraded_dependent_prefix_columns_offline(
+  int adjust_dependent_prefix_columns_offline(
     const ObTableSchema &origin_table_schema,
     const ObColumnSchemaV2 &orig_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
     ObSchemaGetterGuard &schema_guard,
     const uint64_t data_version,
     ObTableSchema &new_table_schema);
+  bool can_keep_prefix_semantic(
+    const share::schema::ObColumnSchemaV2 &new_col,
+    const share::schema::ObColumnSchemaV2 &prefix_gen_col);
+  bool sync_prefix_column_schema(
+    const share::schema::ObColumnSchemaV2 &new_col,
+    const share::schema::ObColumnSchemaV2 &orig_prefix_col,
+    share::schema::ObColumnSchemaV2 &new_prefix_col,
+    const bool use_final_not_null_schema);
 
   int check_new_columns_for_index(ObIArray<ObTableSchema> &idx_schemas,
                                   const ObTableSchema &origin_table_schema,
@@ -2776,8 +2784,6 @@ private:
   int update_tables_tablegroup_for_database_(
       ObMySQLTransaction &trans,
       const share::schema::ObDatabaseSchema &new_database_schema);
-  bool can_keep_prefix_semantic(const share::schema::ObColumnSchemaV2 &new_col,
-                                const share::schema::ObColumnSchemaV2 &prefix_gen_col);
   int alter_table_update_dependencies(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &new_table_schema,

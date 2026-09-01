@@ -10582,7 +10582,7 @@ int ObDDLService::alter_dependent_prefix_index_column(
   if (OB_ISNULL(orig_column_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig column not found", K(ret), K(column_id));
-  } else if (orig_column_schema->has_generated_column_deps() && orig_column_schema->is_nullable() != new_column_schema.is_nullable()) {
+  } else if (orig_column_schema->has_generated_column_deps()) {
     ObArray<const ObColumnSchemaV2 *> prefix_columns;
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
         OB_SUCC(ret) && iter != table_schema.column_end(); iter++) {
@@ -10604,23 +10604,9 @@ int ObDDLService::alter_dependent_prefix_index_column(
         LOG_WARN("invalid column", K(ret), K(i), K(prefix_columns), K(table_schema));
       } else if (OB_FAIL(new_prefix_column.assign(*prefix_column))) {
         LOG_WARN("failed to assign", K(ret), KPC(prefix_column));
-      } else if (new_column_schema.is_nullable()) {
-        new_prefix_column.set_nullable(true);
-        new_prefix_column.drop_not_null_cst();
-      } else {
-        // base column changed to NOT NULL, sync nullable and NOT NULL constraint
-        // flags to the prefix gen column. is_nullable_ keeps SHOW INDEX /
-        // information_schema.STATISTICS consistent; constraint flags keep the
-        // prefix column's column_flags symmetric with the base column (mainly
-        // matters in oracle mode where add_not_null_cst is used).
-        new_prefix_column.set_nullable(false);
-        if (new_column_schema.has_not_null_constraint()) {
-          new_prefix_column.add_not_null_cst(new_column_schema.is_not_null_rely_column(),
-                                             new_column_schema.is_not_null_enable_column(),
-                                             new_column_schema.is_not_null_validate_column());
-        }
-      }
-      if (OB_FAIL(ret)) {
+      } else if (!sync_prefix_column_schema(
+          new_column_schema, *prefix_column, new_prefix_column,
+          false /* use_final_not_null_schema */)) {
       } else if (OB_FAIL(ddl_operator.update_single_column(trans, table_schema, table_schema, new_prefix_column, false/*need_del_stats*/))) {
         LOG_WARN("schema service update aux column failed", K(ret), K(table_schema), K(new_prefix_column));
       } else if (OB_FAIL(alter_table_update_index_and_view_column(table_schema,
@@ -11418,7 +11404,75 @@ bool ObDDLService::can_keep_prefix_semantic(const share::schema::ObColumnSchemaV
       && new_col.get_data_length() >= prefix_gen_col.get_data_length();
 }
 
-int ObDDLService::drop_downgraded_dependent_prefix_columns_offline(
+bool ObDDLService::sync_prefix_column_schema(const share::schema::ObColumnSchemaV2 &new_col,
+                                             const share::schema::ObColumnSchemaV2 &orig_prefix_col,
+                                             share::schema::ObColumnSchemaV2 &new_prefix_col,
+                                             const bool use_final_not_null_schema)
+{
+  // Keep the prefix column's identity, generated expression and dependency,
+  // and only synchronize attributes inherited from the modified base column.
+  // This follows generate_prefix_column(): a prefix of a TEXT column is stored
+  // as VARCHAR and its length is always the original prefix length.
+  static const int64_t NOT_NULL_COLUMN_FLAG_MASK =
+      COLUMN_NOT_NULL_CONSTRAINT_FLAG
+      | NOT_NULL_ENABLE_FLAG
+      | NOT_NULL_VALIDATE_FLAG
+      | NOT_NULL_RELY_FLAG;
+  // Flags rewritten by this sync helper. NOT NULL flags may be inherited from
+  // the base column; STRING_LOB_COLUMN_FLAG is only cleared on the prefix.
+  static const int64_t PREFIX_SYNC_MANAGED_FLAG_MASK =
+      NOT_NULL_COLUMN_FLAG_MASK | STRING_LOB_COLUMN_FLAG;
+  common::ObObjMeta expected_prefix_meta = new_col.get_meta_type();
+  common::ObAccuracy expected_prefix_accuracy = new_col.get_accuracy();
+  if (ob_is_text_tc(new_col.get_data_type())) {
+    expected_prefix_meta.set_type(common::ObVarcharType);
+    expected_prefix_accuracy.set_scale(0);
+  }
+  expected_prefix_accuracy.set_length(orig_prefix_col.get_data_length());
+  // Offline NULL -> NOT NULL is represented temporarily as nullable=true plus
+  // an ENABLE NOT NULL constraint while existing rows are validated. The
+  // hidden table is published only after validation, and the base column is
+  // then normalized to nullable=false with the temporary constraint flags
+  // removed. Its prefix column must be built in that final form as well,
+  // because the later constraint task only normalizes the base column.
+  const bool pending_not_null = use_final_not_null_schema
+      && new_col.is_nullable()
+      && new_col.is_not_null_enable_column();
+  const bool expected_nullable = pending_not_null ? false : new_col.is_nullable();
+  // A prefix column is always a bounded VARCHAR value, even when its source
+  // is the special STRING LOB type. Only NOT NULL flags are inherited;
+  // STRING_LOB_COLUMN_FLAG is included in the managed mask so that a
+  // stale flag left by an older schema is actively removed.
+  int64_t inherited_column_flags = new_col.get_column_flags() & NOT_NULL_COLUMN_FLAG_MASK;
+  if (pending_not_null) {
+    inherited_column_flags &= ~NOT_NULL_COLUMN_FLAG_MASK;
+  }
+  const int64_t expected_column_flags =
+      (new_prefix_col.get_column_flags() & ~PREFIX_SYNC_MANAGED_FLAG_MASK)
+      | inherited_column_flags;
+  const bool need_sync =
+      new_prefix_col.get_meta_type() != expected_prefix_meta
+      || new_prefix_col.get_charset_type() != new_col.get_charset_type()
+      || new_prefix_col.is_binary_collation() != new_col.is_binary_collation()
+      || new_prefix_col.get_accuracy() != expected_prefix_accuracy
+      || new_prefix_col.is_nullable() != expected_nullable
+      || new_prefix_col.is_zero_fill() != new_col.is_zero_fill()
+      || new_prefix_col.get_column_flags() != expected_column_flags
+      || 0 != new_prefix_col.get_skip_index_attr().get_packed_value();
+  if (need_sync) {
+    new_prefix_col.set_meta_type(expected_prefix_meta);
+    new_prefix_col.set_charset_type(new_col.get_charset_type());
+    new_prefix_col.set_binary_collation(new_col.is_binary_collation());
+    new_prefix_col.set_accuracy(expected_prefix_accuracy);
+    new_prefix_col.set_nullable(expected_nullable);
+    new_prefix_col.set_zero_fill(new_col.is_zero_fill());
+    new_prefix_col.set_column_flags(expected_column_flags);
+    new_prefix_col.set_skip_index_attr(0);
+  }
+  return need_sync;
+}
+
+int ObDDLService::adjust_dependent_prefix_columns_offline(
     const ObTableSchema &origin_table_schema,
     const ObColumnSchemaV2 &orig_column_schema,
     const ObColumnSchemaV2 &new_column_schema,
@@ -11456,8 +11510,19 @@ int ObDDLService::drop_downgraded_dependent_prefix_columns_offline(
       } else if (!dep_prefix_col->is_prefix_column()
                  || !dep_prefix_col->has_cascaded_column_id(orig_column_schema.get_column_id())) {
         // not a dependent prefix generated column
-      } else if (!can_keep_prefix_semantic(new_column_schema, *dep_prefix_col)
-          && OB_FAIL(drop_column_update_new_table(dep_prefix_col->get_column_name_str(), new_table_schema))) {
+      } else if (can_keep_prefix_semantic(new_column_schema, *dep_prefix_col)) {
+        ObColumnSchemaV2 *new_prefix_col =
+            new_table_schema.get_column_schema(dep_prefix_col->get_column_name_str());
+        if (OB_ISNULL(new_prefix_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dependent prefix column not found in new table schema",
+              K(ret), KPC(dep_prefix_col), K(new_column_schema));
+        } else {
+          sync_prefix_column_schema(new_column_schema, *dep_prefix_col, *new_prefix_col,
+                                    true /* use_final_not_null_schema */);
+        }
+      } else if (OB_FAIL(drop_column_update_new_table(
+                     dep_prefix_col->get_column_name_str(), new_table_schema))) {
         LOG_WARN("failed to drop downgraded dependent prefix generated column",
             K(ret), KPC(dep_prefix_col), K(new_column_schema));
       }
@@ -11661,10 +11726,10 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                        is_contain_part_key))) {
                 LOG_WARN("prepare new column schema failed", K(ret));
                 // prefix index is not supported in oracle mode
-              } else if (!is_oracle_mode && OB_FAIL(drop_downgraded_dependent_prefix_columns_offline(
+              } else if (!is_oracle_mode && OB_FAIL(adjust_dependent_prefix_columns_offline(
                              origin_table_schema, *orig_column_schema, new_column_schema,
                              schema_guard, alter_table_arg.data_version_, new_table_schema))) {
-                LOG_WARN("failed to drop downgraded dependent prefix generated column",
+                LOG_WARN("failed to adjust dependent prefix generated column",
                     K(ret), KPC(orig_column_schema), K(new_column_schema));
               } else if (OB_FAIL(new_table_schema.alter_column(
                            new_column_schema, ObTableSchema::CHECK_MODE_OFFLINE, false))) {
@@ -39586,10 +39651,10 @@ int ObDDLService::pre_rename_mysql_columns_offline(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("original column not found in origin table schema",
             K(ret), K(orig_column_names.at(i)), K(origin_table_schema));
-      } else if (OB_FAIL(drop_downgraded_dependent_prefix_columns_offline(
+      } else if (OB_FAIL(adjust_dependent_prefix_columns_offline(
                      origin_table_schema, *orig_column_schema, new_column_schemas.at(i),
                      schema_guard, alter_table_arg.data_version_, new_table_schema))) {
-        LOG_WARN("failed to drop downgraded dependent prefix generated column in rename-first path",
+        LOG_WARN("failed to adjust dependent prefix generated column in rename-first path",
             K(ret), KPC(orig_column_schema), K(new_column_schemas.at(i)));
       }
     }
