@@ -7635,8 +7635,29 @@ int ObPartitionUtils::get_range_tablet_and_part_id_(
   } else if (OB_ISNULL(partition = partition_array[point_pos])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("partition is null", KR(ret), K(point_pos));
-  } else if (OB_FAIL(indexes.push_back(PartitionIndex(point_pos, OB_INVALID_INDEX)))) {
-    LOG_WARN("fail to push back point partition index", KR(ret), K(point_pos));
+  // low_bound_val_ is populated only for materialized interval partitions. Such a
+  // partition covers [low_bound, high_bound) and may be preceded by an unmaterialized
+  // interval gap, so locating a point by high_bound alone is insufficient.
+  } else if (0 >= partition->low_bound_val_.get_obj_cnt()) {
+    if (OB_FAIL(indexes.push_back(PartitionIndex(point_pos, OB_INVALID_INDEX)))) {
+      LOG_WARN("fail to push back point partition index", KR(ret), K(point_pos));
+    }
+  } else {
+    ObNewRow low_bound_row;
+    low_bound_row.cells_ = const_cast<ObObj*>(partition->low_bound_val_.get_obj_ptr());
+    low_bound_row.count_ = partition->low_bound_val_.get_obj_cnt();
+    low_bound_row.projector_ = partition->projector_;
+    low_bound_row.projector_size_ = partition->projector_size_;
+    int cmp = 0;
+    if (OB_FAIL(ObRowUtil::compare_row(row, low_bound_row, cmp))) {
+      LOG_WARN("fail to compare point with interval partition low bound",
+               KR(ret), K(row), K(low_bound_row), KPC(partition));
+    // cmp == 0 is valid because the low bound is inclusive; locate_point_pos_ uses
+    // the first partition whose high bound is greater than the point.
+    } else if (cmp >= 0 &&
+               OB_FAIL(indexes.push_back(PartitionIndex(point_pos, OB_INVALID_INDEX)))) {
+      LOG_WARN("fail to push back point partition index", KR(ret), K(point_pos));
+    }
   }
   return ret;
 }
