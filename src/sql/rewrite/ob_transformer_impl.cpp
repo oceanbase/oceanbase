@@ -576,7 +576,7 @@ int ObTransformerImpl::update_enable_types(TRANSFORM_TYPE type,
     if (PREDICATE_MOVE_AROUND == type) {
       // Non-convergence guard:
       // Predicate deduction (a.k.a. predicate move around) may oscillate with
-      // constant propagation and expression simplification. To avoid rewrite
+      // constant propagation, expression simplification and view merge. To avoid rewrite
       // ping-pong within one iteration sequence, we only allow it to happen a
       // limited number of times (PREDICATE_MOVE_AROUND_RESET_CNT). After that,
       // we temporarily disable it until it is reset by other rewrite rules.
@@ -584,7 +584,7 @@ int ObTransformerImpl::update_enable_types(TRANSFORM_TYPE type,
       if (cnt <= 0) {
         enable_types &= ~(1L << type);
       }
-    } else if (CONST_PROPAGATE == type || SIMPLIFY_EXPR == type) {
+    } else if (CONST_PROPAGATE == type || SIMPLIFY_EXPR == type || VIEW_MERGE == type) {
       // These rules are considered part of the "oscillation group" with predicate
       // deduction. If only these rules happen, we do NOT reset predicate deduction.
       /*do nothing*/
