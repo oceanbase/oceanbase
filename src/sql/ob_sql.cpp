@@ -44,8 +44,6 @@
 #include "sql/ob_sql_ccl_rule_manager.h"
 #include "share/diagnosis/ob_runtime_profile.h"
 #include "sql/ob_sql_utils.h"
-#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
-#include "share/ob_cluster_version.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
@@ -897,6 +895,14 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             if (OB_SUCC(ret)) {
               if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
                 LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
+              } else if (T_OBJ_XML != udt_meta.udt_id_
+                         && NULL == context->secondary_namespace_ // pl resolve
+                         && NULL == context->session_info_->get_pl_context()) {
+                if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
+                                                          udt_meta.udt_id_,
+                                                          composite_field_name))) {
+                  LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
+                }
               }
             }
           } else {
@@ -2611,44 +2617,6 @@ int ObSql::check_read_only_privilege(ParseResult &parse_result,
   return ret;
 }
 
-int ObSql::convert_ps_pl_extend_params_to_sql_udt(ParamStore &params,
-                                                  const stmt::StmtType stmt_type,
-                                                  ObExecContext &exec_ctx,
-                                                  ObSQLSessionInfo &session,
-                                                  ObIAllocator &allocator,
-                                                  ObSchemaGetterGuard &schema_guard)
-{
-  int ret = OB_SUCCESS;
-  if (ObStmt::is_dml_stmt(stmt_type)
-      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
-      && session.get_local_enable_pl_composite_as_sql_udt()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
-      ObObjParam &param = params.at(i);
-      const uint64_t udt_id = param.get_udt_id();
-      if (param.is_pl_extend()
-          && pl::ObPLDataType::is_schema_udt(&schema_guard, udt_id)
-          && !is_inner_pl_udt_id(udt_id)) {
-        ObString serialized;
-        ObSqlUDTMeta unused_udt_meta;
-        OZ (ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(
-            allocator, &exec_ctx, serialized, param, unused_udt_meta));
-        if (OB_SUCC(ret)) {
-          OZ (pl::ObUserDefinedType::destruct_obj(param, &session));
-          OX (param.reset());
-          OX (param.set_sql_udt(serialized.ptr(), serialized.length(), ObInvalidSqlType)); //subschema_id will be set in build_subschema_ctx_by_param_store
-          if (OB_SUCC(ret) && serialized.length() > 0) {
-            OX (param.set_has_lob_header());
-          }
-          OX (param.set_udt_id(udt_id));
-          OX (param.set_need_to_check_extend_type(false));
-          OX (param.set_param_meta(param.get_meta()));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                              const stmt::StmtType stmt_type,
                              const ParamStore &params,
@@ -2697,9 +2665,6 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                 K(ps_info->get_ps_sql()),
                 K(origin_params_count), K(ret));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "execute");
-    } else if (OB_FAIL(convert_ps_pl_extend_params_to_sql_udt(
-        const_cast<ParamStore &>(params), stmt_type, ectx, session, allocator, *schema_guard))) {
-      LOG_WARN("failed to convert pl extend params to sql udt", K(ret));
     } else if (OB_FAIL(construct_ps_params_store(*ps_info, params, context, *pctx, session,
                                                  allocator, ps_params, ps_ab_params))) {
       LOG_WARN("failed to construct ps params store", K(ret));

@@ -209,15 +209,16 @@ int ObPlAggUdfFunction::build_in_params_store(ObObjParam &pl_obj,
                                               int64_t param_num,
                                               ObIArray<ObUDFParamDesc> &params_desc,
                                               ObIArray<ObExprResType> &params_type,
-                                              pl::ObPLParamArray &udf_params)
+                                              pl::ObPLParamArray &udf_params,
+                                              ObIArray<ObObj> &deep_in_objs)
 {
   int ret = OB_SUCCESS;
   void *param_store_buf = NULL;
-  if (OB_ISNULL(allocator_) ||
+  if (OB_ISNULL(allocator_) || OB_ISNULL(exec_ctx_) ||
       (OB_ISNULL(obj_params) && param_num > 0) ||
       (OB_NOT_NULL(obj_params) && param_num < 1)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(allocator_), K(obj_params), K(param_num), K(ret));
+    LOG_WARN("get unexpected null", K(allocator_), K(exec_ctx_), K(obj_params), K(param_num), K(ret));
   } else if (param_num > 0 && OB_FAIL(check_types(obj_params, param_num, params_type))) {
     LOG_WARN("failed to check types", K(ret));
   } else if (OB_ISNULL(param_store_buf = allocator_->alloc(sizeof(ParamStore)))) {
@@ -245,7 +246,8 @@ int ObPlAggUdfFunction::build_in_params_store(ObObjParam &pl_obj,
       LOG_WARN("failed to push back param", K(ret));
     } else if (obj_params != NULL &&
                OB_FAIL(ObExprUDF::process_in_params(input_params, param_num, params_desc,
-                                                    params_type, udf_params, *allocator_))) {
+                                                    params_type, udf_params, *exec_ctx_,
+                                                    *allocator_, deep_in_objs))) {
       LOG_WARN("failed to process in params", K(ret));
     } else {
       LOG_TRACE("succeed to build in params store", K(pl_obj), K(obj_params), K(params_desc),
@@ -276,31 +278,39 @@ int ObPlAggUdfFunction::process_init_pl_agg_udf(ObObjParam &pl_obj)
     pl_type.set_type_from(pl::PL_TYPE_UDT);
     if (OB_FAIL(ns.init_complex_obj(*allocator_, *allocator_, pl_type, pl_obj, false))) {
       LOG_WARN("failed to init complex obj", K(ret));
-    } else if (OB_FAIL(build_in_params_store(pl_obj, true, NULL, 0, params_desc,
-                                             params_type, udf_params))) {
-      LOG_WARN("failed to build in params store", K(ret));
     } else {
-      //for pl agg udf, type member ODCIAggregateInitialize() must only have one param, and the
-      //param is self. So, we can stable type(ObExtendType) and position(0, true) ==> IN OUT
-      //see url:https://docs.oracle.com/cd/B28359_01/appdev.111/b28425/ext_agg_ref.htm#CACBJHHI
-      ObExprResType param_type;
-      param_type.set_ext();
-      param_type.set_udt_id(type_id_);
-      if (OB_FAIL(params_type.push_back(param_type))) {
-        LOG_WARN("failed to push back type", K(ret));
-      } else if (OB_FAIL(params_desc.push_back(
-          ObUDFParamDesc(ObUDFParamDesc::OutType::LOCAL_OUT, 0)))) {
-        LOG_WARN("failed to push back param desc", K(ret));
-      } else if (OB_FAIL(get_package_routine_info(routine_name, routine_info, params_type))) {
-        LOG_WARN("failed to get package routine info", K(ret));
-      } else if (OB_FAIL(call_pl_engine_exectue_udf(udf_params, routine_info, tmp_result))) {
-        LOG_WARN("failed to call pl engine exectue udf", K(ret));
-      } else if (OB_UNLIKELY(udf_params.count() < 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(udf_params.count()));
+      ObSEArray<ObObj, 1> deep_in_objs;
+      if (OB_FAIL(build_in_params_store(pl_obj, true, NULL, 0, params_desc,
+                                        params_type, udf_params, deep_in_objs))) {
+        LOG_WARN("failed to build in params store", K(ret));
       } else {
-        udf_params.at(0).copy_value_or_obj(pl_obj, true);
-        LOG_TRACE("succeed to process init pl agg udf", K(pl_obj));
+        //for pl agg udf, type member ODCIAggregateInitialize() must only have one param, and the
+        //param is self. So, we can stable type(ObExtendType) and position(0, true) ==> IN OUT
+        //see url:https://docs.oracle.com/cd/B28359_01/appdev.111/b28425/ext_agg_ref.htm#CACBJHHI
+        ObExprResType param_type;
+        param_type.set_ext();
+        param_type.set_udt_id(type_id_);
+        if (OB_FAIL(params_type.push_back(param_type))) {
+          LOG_WARN("failed to push back type", K(ret));
+        } else if (OB_FAIL(params_desc.push_back(
+            ObUDFParamDesc(ObUDFParamDesc::OutType::LOCAL_OUT, 0)))) {
+          LOG_WARN("failed to push back param desc", K(ret));
+        } else if (OB_FAIL(get_package_routine_info(routine_name, routine_info, params_type))) {
+          LOG_WARN("failed to get package routine info", K(ret));
+        } else if (OB_FAIL(call_pl_engine_exectue_udf(udf_params, routine_info, tmp_result))) {
+          LOG_WARN("failed to call pl engine exectue udf", K(ret));
+        } else if (OB_UNLIKELY(udf_params.count() < 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(udf_params.count()));
+        } else {
+          udf_params.at(0).copy_value_or_obj(pl_obj, true);
+          LOG_TRACE("succeed to process init pl agg udf", K(pl_obj));
+        }
+      }
+      int tmp_ret = destruct_deep_in_objs(deep_in_objs);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to destruct deep in objs", K(ret), K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
   }
@@ -356,8 +366,9 @@ int ObPlAggUdfFunction::process_calc_pl_agg_udf(ObObjParam &pl_obj,
         } else {/*do nothing*/}
       }
       if (OB_SUCC(ret)) {
+        ObSEArray<ObObj, 4> deep_in_objs;
         if (OB_FAIL(build_in_params_store(pl_obj, true, obj_params, param_num, params_desc,
-                                          params_type, udf_params))) {
+                                          params_type, udf_params, deep_in_objs))) {
           LOG_WARN("failed to build in params store", K(ret));
         } else if (OB_FAIL(get_package_routine_info(routine_name, routine_info, all_params_type))) {
           LOG_WARN("failed to get package routine info", K(ret));
@@ -369,6 +380,11 @@ int ObPlAggUdfFunction::process_calc_pl_agg_udf(ObObjParam &pl_obj,
         } else {
           udf_params.at(0).copy_value_or_obj(pl_obj, true);
           LOG_TRACE("Succeed to process calc pl agg udf", K(pl_obj), K(tmp_result));
+        }
+        int tmp_ret = destruct_deep_in_objs(deep_in_objs);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to destruct deep in objs", K(ret), K(tmp_ret));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
       }
     }
@@ -422,28 +438,36 @@ int ObPlAggUdfFunction::process_merge_pl_agg_udf(ObObjParam &pl_obj,
     LOG_WARN("failed to push back type", K(ret));
   } else if (OB_FAIL(params_desc.push_back(ObUDFParamDesc()))) {
     LOG_WARN("failed to push back param desc", K(ret));
-  } else if (OB_FAIL(build_in_params_store(pl_obj, true, &pl_obj2, 1, params_desc,
-                                            params_type, udf_params))) {
-    LOG_WARN("failed to build in params store", K(ret));
-  } else if (OB_FAIL(all_params_type.push_back(param_type))) {
-    LOG_WARN("failed to push back type", K(ret));
-  } else if (OB_FAIL(all_params_desc.push_back(
-      ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, 0)))) {
-    LOG_WARN("failed to push back param desc", K(ret));
-  } else if (OB_FAIL(all_params_type.push_back(param_type))) {
-    LOG_WARN("failed to push back type", K(ret));
-  } else if (OB_FAIL(all_params_desc.push_back(ObUDFParamDesc()))) {
-    LOG_WARN("failed to push back param desc", K(ret));
-  } else if (OB_FAIL(get_package_routine_info(routine_name, routine_info, all_params_type))) {
-    LOG_WARN("failed to get package routine info", K(ret));
-  } else if (OB_FAIL(call_pl_engine_exectue_udf(udf_params, routine_info, tmp_result))) {
-    LOG_WARN("failed to call pl engine exectue udf", K(ret));
-  } else if (OB_UNLIKELY(udf_params.count() < 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(udf_params.count()));
   } else {
-    udf_params.at(0).copy_value_or_obj(pl_obj, true);
-    LOG_TRACE("Succeed to process merge pl agg udf", K(pl_obj), K(tmp_result));
+    ObSEArray<ObObj, 1> deep_in_objs;
+    if (OB_FAIL(build_in_params_store(pl_obj, true, &pl_obj2, 1, params_desc,
+                                      params_type, udf_params, deep_in_objs))) {
+      LOG_WARN("failed to build in params store", K(ret));
+    } else if (OB_FAIL(all_params_type.push_back(param_type))) {
+      LOG_WARN("failed to push back type", K(ret));
+    } else if (OB_FAIL(all_params_desc.push_back(
+        ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, 0)))) {
+      LOG_WARN("failed to push back param desc", K(ret));
+    } else if (OB_FAIL(all_params_type.push_back(param_type))) {
+      LOG_WARN("failed to push back type", K(ret));
+    } else if (OB_FAIL(all_params_desc.push_back(ObUDFParamDesc()))) {
+      LOG_WARN("failed to push back param desc", K(ret));
+    } else if (OB_FAIL(get_package_routine_info(routine_name, routine_info, all_params_type))) {
+      LOG_WARN("failed to get package routine info", K(ret));
+    } else if (OB_FAIL(call_pl_engine_exectue_udf(udf_params, routine_info, tmp_result))) {
+      LOG_WARN("failed to call pl engine exectue udf", K(ret));
+    } else if (OB_UNLIKELY(udf_params.count() < 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(udf_params.count()));
+    } else {
+      udf_params.at(0).copy_value_or_obj(pl_obj, true);
+      LOG_TRACE("Succeed to process merge pl agg udf", K(pl_obj), K(tmp_result));
+    }
+    int tmp_ret = destruct_deep_in_objs(deep_in_objs);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to destruct deep in objs", K(ret), K(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
 
   return ret;
@@ -488,10 +512,12 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
   } else if (OB_FAIL(params_desc.push_back(
       ObUDFParamDesc(ObUDFParamDesc::LOCAL_OUT, 0)))) {
     LOG_WARN("failed to push back param desc", K(ret));
-  } else if (OB_FAIL(build_in_params_store(pl_obj, false, &result, 1, params_desc,
-                                            params_type, udf_params))) {
-    LOG_WARN("failed to build in params store", K(ret));
   } else {
+    ObSEArray<ObObj, 1> deep_in_objs;
+    if (OB_FAIL(build_in_params_store(pl_obj, false, &result, 1, params_desc,
+                                      params_type, udf_params, deep_in_objs))) {
+      LOG_WARN("failed to build in params store", K(ret));
+    } else {
     ObExprResType param_type;
     ObExprResType flags_type;
     param_type.set_ext();
@@ -569,8 +595,26 @@ int ObPlAggUdfFunction::process_get_pl_agg_udf_result(ObObjParam &pl_obj,
       udf_params.at(1).copy_value_or_obj(result, true);
       LOG_TRACE("succeed to process get pl agg udf result", K(result));
     }
+    }
+    int tmp_ret = destruct_deep_in_objs(deep_in_objs);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to destruct deep in objs", K(ret), K(tmp_ret));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    }
   }
 
+  return ret;
+}
+
+int ObPlAggUdfFunction::destruct_deep_in_objs(ObIArray<ObObj> &deep_in_objs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < deep_in_objs.count(); ++i) {
+    ret = pl::ObUserDefinedType::destruct_obj(deep_in_objs.at(i), session_info_);
+    if (OB_SUCCESS != ret) {
+      LOG_WARN("failed to destruct deep in objs", K(ret), K(i));
+    }
+  }
   return ret;
 }
 

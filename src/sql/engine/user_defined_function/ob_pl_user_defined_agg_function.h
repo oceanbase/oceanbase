@@ -55,7 +55,8 @@ class ObPlAggUdfFunction
                             int64_t param_num,
                             ObIArray<ObUDFParamDesc> &params_desc,
                             ObIArray<ObExprResType> &params_type,
-                            pl::ObPLParamArray &udf_params);
+                            pl::ObPLParamArray &udf_params,
+                            ObIArray<ObObj> &deep_in_objs);
 
   int process_init_pl_agg_udf(ObObjParam &pl_obj);
 
@@ -96,6 +97,7 @@ class ObPlAggUdfFunction
                K_(result_type));
 
   private:
+  int destruct_deep_in_objs(common::ObIArray<ObObj> &deep_in_objs);
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
   ObIAllocator *allocator_;

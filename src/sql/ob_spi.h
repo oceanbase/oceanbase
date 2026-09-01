@@ -1129,6 +1129,8 @@ public:
   static int fill_ps_cursor(ObSQLSessionInfo &session,
                             pl::ObPsCursorInfo &ps_cursor,
                             int64_t pre_store_size = 0);
+  static int fill_exec_ctx_subschema_from_cursor(ObExecContext &exec_ctx,
+                                                ObSPICursor &cursor);
   static int close_ps_cursor_result_set(ObSQLSessionInfo &session,
                                         int64_t cursor_id);
 

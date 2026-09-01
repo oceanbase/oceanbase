@@ -569,13 +569,15 @@ int ObExprUDFUtils::process_in_params(ObExprUDFCtx &udf_ctx, ObIArray<ObObj> &de
                             udf_ctx.get_allocator(),
                             deep_in_objs));
     } else {
+      CK (OB_NOT_NULL(udf_ctx.get_exec_ctx()));
       OZ (process_in_params(udf_ctx.get_obj_stack(),
                             udf_ctx.get_arg_count(),
                             udf_ctx.get_info()->params_desc_,
                             udf_ctx.get_info()->params_type_,
                             udf_ctx.get_param_store(),
+                            *udf_ctx.get_exec_ctx(),
                             udf_ctx.get_allocator(),
-                            &deep_in_objs));
+                            deep_in_objs));
     }
     if (udf_ctx.get_info()->is_udt_cons_) {
       pl::ObPLUDTNS ns(*(udf_ctx.get_exec_ctx()->get_sql_ctx()->schema_guard_));
@@ -751,8 +753,9 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
                                       const ObIArray<ObUDFParamDesc> &params_desc,
                                       const ObIArray<ObExprResType> &params_type,
                                       pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
                                       ObIAllocator &allocator,
-                                      ObIArray<ObObj> *deep_in_objs)
+                                      ObIArray<ObObj> &deep_in_objs)
 {
   int ret = OB_SUCCESS;
   CK (param_num == params_desc.count());
@@ -763,14 +766,26 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
       // default value, mock a max obj to tell pl engine here need replace to default value.
       param.set_is_pl_mock_default_param(true);
     } else if (!params_desc.at(i).is_out()) { // in parameter
-      if (ObExtendType == params_type.at(i).get_type()) {
+      if (objs_stack.at(i).is_common_user_defined_sql_type()) {
+        ObObj pl_obj;
+        ObSqlUDTMeta udt_meta;
+        uint16_t subschema_id = objs_stack.at(i).get_meta().get_subschema_id();
+        if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+          LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+        } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+                       &exec_ctx, pl_obj, objs_stack.at(i), udt_meta, &allocator))) {
+          LOG_WARN("failed to convert sql udt to pl extend for UDF param", K(ret), K(i));
+        } else {
+          param.set_extend(pl_obj.get_ext(), pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());
+          param.set_param_meta();
+          OZ (deep_in_objs.push_back(pl_obj));
+        }
+      } else if (ObExtendType == params_type.at(i).get_type()) {
         bool need_copy = false;
         OZ (need_deep_copy_in_parameter(objs_stack, param_num, params_desc, params_type, objs_stack.at(i), need_copy));
         if (need_copy) {
           OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, objs_stack.at(i), param, true));
-          if (OB_NOT_NULL(deep_in_objs)) {
-            OZ (deep_in_objs->push_back(param));
-          }
+          OZ (deep_in_objs.push_back(param));
         } else {
           if (!objs_stack.at(i).is_null()) {
             param.set_extend(objs_stack.at(i).get_ext(), objs_stack.at(i).get_meta().get_extend_type(), objs_stack.at(i).get_val_len());
@@ -799,9 +814,7 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
         if (params_type.at(i).get_type() == ObExtendType) {
           if (params_desc.at(i).is_obj_access_pure_out()) {
             OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, value, param));
-            if (OB_NOT_NULL(deep_in_objs)) {
-              OZ (deep_in_objs->push_back(param));
-            }
+            OZ (deep_in_objs.push_back(param));
           } else {
             param.set_extend(value.get_ext(), value.get_meta().get_extend_type(), value.get_val_len());
             param.set_param_meta();
@@ -819,7 +832,9 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
         }
       }
     }
-    if (OB_SUCC(ret) && params_type.at(i).get_type() == ObExtendType) {
+    if (OB_SUCC(ret)
+        && (params_type.at(i).get_type() == ObExtendType
+            || params_type.at(i).is_user_defined_sql_type())) {
       param.set_udt_id(params_type.at(i).get_udt_id());
     }
     OZ (iparams.push_back(param));

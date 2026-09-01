@@ -34,6 +34,8 @@
 #include "sql/monitor/ob_exec_stat_collector.h"
 #include "lib/trace/ob_trace.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "share/ob_cluster_version.h"
 
 void __attribute__((weak)) request_finish_callback();
 namespace oceanbase
@@ -2675,6 +2677,30 @@ int ObMPStmtExecute::parse_complex_param_value(ObIAllocator &allocator,
   OZ (pl_type->deserialize(*(ctx_.schema_guard_), allocator, session, charset, cs_type, ncs_type,
         tz_info, data, reinterpret_cast<char *>(param.get_ext()), param_size, param_pos));
   OX (param.set_need_to_check_extend_type(true));
+  if (OB_SUCC(ret) && !is_arraybinding_
+      && ObStmt::is_dml_stmt(stmt_type_)
+      && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+      && session->get_local_enable_pl_composite_as_sql_udt()
+      && pl_type->is_udt_type()
+      && !is_inner_pl_udt_id(pl_type->get_user_type_id())) {
+    ObString serialized;
+    ObSqlUDTMeta unused_udt_meta;
+    ObExecContext *unused_exec_ctx = NULL;
+    uint64_t udt_id = pl_type->get_user_type_id();
+    OZ (ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(
+        allocator, unused_exec_ctx, serialized, param, unused_udt_meta));
+    if (OB_SUCC(ret)) {
+      OZ (pl::ObUserDefinedType::destruct_obj(param, session));
+      OX (param.reset());
+      OX (param.set_sql_udt(serialized.ptr(), serialized.length(), ObInvalidSqlType)); //subschema_id will be set in build_subschema_ctx_by_param_store
+      if (OB_SUCC(ret) && serialized.length() > 0) {
+        OX (param.set_has_lob_header());
+      }
+      OX (param.set_udt_id(udt_id));
+      OX (param.set_need_to_check_extend_type(false));
+      OX (param.set_param_meta(param.get_meta()));
+    }
+  }
   return ret;
 }
 

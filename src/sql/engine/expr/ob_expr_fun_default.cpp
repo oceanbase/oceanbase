@@ -54,9 +54,11 @@ int ObExprFunDefault::calc_result_typeN(ObExprResType &type,
     type.set_collation_type(types[0].get_collation_type());
     type.set_collation_level(CS_LEVEL_IMPLICIT);
     type.set_accuracy(types[0].get_accuracy());
-    if (ob_is_enumset_tc(type.get_type())) {
+    if (ob_is_enumset_tc(type.get_type()) || ob_is_user_defined_sql_type(type.get_type())) {
       type.set_subschema_id(types[0].get_subschema_id());
-      type.mark_enum_set_with_subschema(types[0].get_enum_set_subschema_state());
+      if (ob_is_enumset_tc(type.get_type())) {
+        type.mark_enum_set_with_subschema(types[0].get_enum_set_subschema_state());
+      }
     }
   } else if (param_num != ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO
       && param_num != ObExprColumnConv::PARAMS_COUNT_WITHOUT_COLUMN_INFO) {
@@ -67,13 +69,19 @@ int ObExprFunDefault::calc_result_typeN(ObExprResType &type,
     type.set_collation_type(types[1].get_collation_type());
     type.set_collation_level(CS_LEVEL_IMPLICIT);
     type.set_accuracy(types[2].get_accuracy());
-    if (ob_is_enumset_tc(type.get_type())) {
+    if (ob_is_enumset_tc(type.get_type()) || ob_is_user_defined_sql_type(type.get_type())) {
       type.set_subschema_id(types[0].get_subschema_id());
-      type.mark_enum_set_with_subschema(types[0].get_enum_set_subschema_state());
+      if (ob_is_enumset_tc(type.get_type())) {
+        type.mark_enum_set_with_subschema(types[0].get_enum_set_subschema_state());
+      }
     }
     types[ObExprColumnConv::VALUE_EXPR].set_calc_type(type.get_type());
     types[ObExprColumnConv::VALUE_EXPR].set_calc_collation_type(type.get_collation_type());
     types[ObExprColumnConv::VALUE_EXPR].set_calc_collation_level(type.get_collation_level());
+    if (ob_is_user_defined_sql_type(type.get_type())) {
+      types[ObExprColumnConv::VALUE_EXPR].set_calc_subschema_id(type.get_subschema_id());
+      types[ObExprColumnConv::VALUE_EXPR].set_calc_accuracy(type.get_accuracy());
+    }
   }
   return ret;
 }

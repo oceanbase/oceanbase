@@ -1661,6 +1661,8 @@ int ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(common::ObIAllocator &res_allo
                                                         ObSqlUDTMeta &udt_meta)
 {
   int ret = OB_SUCCESS;
+  UNUSED(exec_ctx);
+  UNUSED(udt_meta);
 #ifndef OB_BUILD_ORACLE_PL
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not support", K(ret));

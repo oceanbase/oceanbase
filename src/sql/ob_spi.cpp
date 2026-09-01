@@ -10856,6 +10856,22 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::fill_exec_ctx_subschema_from_cursor(ObExecContext &exec_ctx,
+                                                     ObSPICursor &cursor)
+{
+  int ret = OB_SUCCESS;
+  if (!cursor.subschema_ctx_.is_inited() || cursor.subschema_ctx_.get_subschema_count() == 0) {
+    // no sql udt in result, nothing to copy
+  } else if (OB_ISNULL(exec_ctx.get_physical_plan_ctx())
+             && OB_FAIL(exec_ctx.create_physical_plan_ctx())) {
+    LOG_WARN("failed to create physical plan ctx for cursor subschema", K(ret));
+  } else if (OB_FAIL(exec_ctx.get_physical_plan_ctx()->get_subschema_ctx().assgin(
+                 cursor.subschema_ctx_))) {
+    LOG_WARN("failed to assign cursor subschema ctx to exec ctx", K(ret));
+  }
+  return ret;
+}
+
 int ObSPIService::fill_ps_cursor(ObSQLSessionInfo &session,
                                  ObPsCursorInfo &ps_cursor,
                                  int64_t pre_store_size) {

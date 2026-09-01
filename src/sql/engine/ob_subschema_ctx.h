@@ -195,6 +195,7 @@ public:
 
   int get_new_subschema_id(uint16_t &subschema_id);
   int get_subschema_id_from_fields(uint64_t udt_id, uint16_t &subschema_id);
+  void reserve_subschema_ids_from_fields();
 
   int set_subschema(uint16_t subschema_id, ObSubSchemaValue &value);
   int get_subschema(uint16_t subschema_id, ObSubSchemaValue &value) const;

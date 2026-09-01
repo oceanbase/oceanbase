@@ -659,6 +659,11 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
         // execute 如果返回数据，需要更新一下cursor的指针位置
         OX (cursor->set_current_position(0));
       }
+      if (OB_SUCC(ret) && OB_NOT_NULL(cursor->get_spi_cursor())
+          && OB_FAIL(ObSPIService::fill_exec_ctx_subschema_from_cursor(
+                 result.get_exec_context(), *cursor->get_spi_cursor()))) {
+        LOG_WARN("failed to fill cursor subschema to exec ctx", K(ret));
+      }
       while (OB_SUCC(ret) && row_num < iteration_count_
               && OB_SUCC(sql::ObSPIService::ps_cursor_fetch(*cursor, session))) {
         common::ObNewRow &row = cursor->get_current_row();

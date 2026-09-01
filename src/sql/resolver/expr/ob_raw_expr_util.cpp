@@ -10751,7 +10751,7 @@ int ObRawExprUtils::adjust_type_expr_with_subschema(const ObObjType type,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
-  } else if (!ob_is_enumset_tc(type) && !ob_is_collection_sql_type(type)) {
+  } else if (!ob_is_enumset_tc(type) && !ob_is_collection_sql_type(type) && !ob_is_user_defined_sql_type(type)) {
     // do nothing
   } else if (OB_UNLIKELY(T_INT32 != expr->get_expr_type())) {
     ret = OB_ERR_UNEXPECTED;

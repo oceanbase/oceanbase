@@ -400,6 +400,22 @@ int ObSubSchemaCtx::get_subschema_id_from_fields(uint64_t udt_id, uint16_t &subs
   }
   return ret;
 }
+
+void ObSubSchemaCtx::reserve_subschema_ids_from_fields()
+{
+  if (OB_NOT_NULL(fields_)) {
+    for (uint32_t i = 0; i < fields_->count(); i++) {
+      if (fields_->at(i).type_.is_user_defined_sql_type()
+          || fields_->at(i).type_.is_collection_sql_type()) {
+        const uint16_t field_subschema_id = fields_->at(i).type_.get_udt_subschema_id();
+        if (field_subschema_id != ObInvalidSqlType
+            && used_subschema_id_ <= field_subschema_id) {
+          used_subschema_id_ = field_subschema_id + 1;
+        }
+      }
+    }
+  }
+}
 int ObSubSchemaCtx::ensure_array_capacity(const uint16_t count)
 {
   int ret = common::OB_SUCCESS;

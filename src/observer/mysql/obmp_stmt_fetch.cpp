@@ -381,6 +381,9 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
               if (OB_ISNULL(cursor.get_spi_cursor())) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("cursor result set is null.", K(ret), K(cursor.get_id()));
+              } else if (OB_FAIL(ObSPIService::fill_exec_ctx_subschema_from_cursor(
+                             tmp_exec_ctx, *cursor.get_spi_cursor()))) {
+                LOG_WARN("failed to fill cursor subschema to exec ctx", K(ret), K(cursor.get_id()));
               } else {
                 ObSPICursor *spi_cursor = cursor.get_spi_cursor();
                 // ps cursor position is be record in current_position

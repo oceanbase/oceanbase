@@ -2638,7 +2638,7 @@ int ObRawExprDeduceType::deduce_type_visit_for_special_func(int64_t param_index,
         LOG_WARN("get int32 value failed", K(*const_expr));
       } else {
         dest_type.set_type(static_cast<ObObjType>(type_value));
-        if (ob_is_enumset_tc(dest_type.get_type()) || dest_type.is_collection_sql_type()) {
+        if (ob_is_enumset_tc(dest_type.get_type()) || dest_type.is_collection_sql_type() || dest_type.is_user_defined_sql_type()) {
           // set in ObRawExprUtils::adjust_type_expr_with_subschema
           dest_type.set_subschema_id(const_expr->get_result_type().get_precision());
           if (ob_is_enumset_tc(dest_type.get_type())) {

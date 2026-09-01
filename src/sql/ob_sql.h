@@ -323,13 +323,6 @@ private:
                         ObSqlCtx &context,
                         ObResultSet &result,
                         bool is_inner_sql);
-  int convert_ps_pl_extend_params_to_sql_udt(
-      ParamStore &params,
-      stmt::StmtType stmt_type,
-      ObExecContext &exec_ctx,
-      ObSQLSessionInfo &session,
-      ObIAllocator &allocator,
-      share::schema::ObSchemaGetterGuard &schema_guard);
 
   int init_execute_params_for_ab(ObIAllocator &allocator,
                                  const ParamStore &params_store,

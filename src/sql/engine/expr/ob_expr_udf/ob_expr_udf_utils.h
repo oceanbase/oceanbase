@@ -97,8 +97,9 @@ public:
                                       const ObIArray<ObUDFParamDesc> &params_desc,
                                       const ObIArray<ObExprResType> &params_type,
                                       pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
                                       ObIAllocator &allocator,
-                                      ObIArray<ObObj> *deep_in_objs = nullptr);
+                                      ObIArray<ObObj> &deep_in_objs);
   static
   int process_out_params(ObExprUDFCtx &udf_ctx, ObEvalCtx &eval_ctx);
   static

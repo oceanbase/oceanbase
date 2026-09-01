@@ -1454,6 +1454,8 @@ int ObPhysicalPlanCtx::build_subschema_by_fields(const ColumnsFieldIArray *field
     LOG_WARN("subschema ctx init failed", K(ret));
   } else {
     subschema_ctx_.set_fields(fields);
+    // reserve subschema ids from fields, avoid nested type get_new_subschema_id and top level field id collision
+    subschema_ctx_.reserve_subschema_ids_from_fields();
 
     for (uint32_t i = 0; OB_SUCC(ret) && i < fields->count(); i++) {
       if (fields->at(i).type_.is_user_defined_sql_type()
