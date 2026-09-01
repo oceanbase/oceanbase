@@ -943,12 +943,10 @@ int ObBackupTabletStat::prepare_tablet_sstables(const uint64_t tenant_id, const 
       LOG_WARN("table is not sstable", K(ret), KPC(sstable_ptr));
     } else {
       const ObITable::TableKey &table_key = sstable_ptr->get_key();
-      if (OB_SUCC(ret)) {
-        if (GCTX.is_shared_storage_mode() && sstable_ptr->is_ddl_dump_sstable()) {
-          ObBackupOtherBlocksMgr &other_block_mgr = stat->other_block_mgr_;
-          if (OB_FAIL(other_block_mgr.init(tenant_id, tablet_id, table_key, *sstable_ptr))) {
-            LOG_WARN("failed to init backup other blocks mgr", K(ret), K(tenant_id), K(tablet_id), K(table_key), KPC(sstable_ptr));
-          }
+      if (GCTX.is_shared_storage_mode() && sstable_ptr->is_ddl_dump_sstable()) {
+        ObBackupOtherBlocksMgr &other_block_mgr = stat->other_block_mgr_;
+        if (OB_FAIL(other_block_mgr.init(tenant_id, tablet_id, table_key, *sstable_ptr))) {
+          LOG_WARN("failed to init backup other blocks mgr", K(ret), K(tenant_id), K(tablet_id), K(table_key), KPC(sstable_ptr));
         }
       }
     }
@@ -1859,6 +1857,7 @@ int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src)
   tablet_id_ = src.tablet_id_;
   nested_offset_ = src.nested_offset_;
   nested_size_ = src.nested_size_;
+  timestamp_ = src.timestamp_;
   need_copy_ = src.need_copy_;
   macro_index_ = src.macro_index_;
   absolute_row_offset_ = src.absolute_row_offset_;
@@ -1877,6 +1876,7 @@ int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src, char *buf, 
   tablet_id_ = src.tablet_id_;
   nested_offset_ = src.nested_offset_;
   nested_size_ = src.nested_size_;
+  timestamp_ = src.timestamp_;
   need_copy_ = src.need_copy_;
   macro_index_ = src.macro_index_;
   absolute_row_offset_ = src.absolute_row_offset_;
@@ -1908,6 +1908,7 @@ void ObBackupProviderItem::reset()
   tablet_id_.reset();
   nested_offset_ = 0;
   nested_size_ = 0;
+  timestamp_ = 0;
   need_copy_ = true;
   macro_index_.reset();
   absolute_row_offset_ = 0;
@@ -2898,7 +2899,7 @@ int ObBackupTabletProvider::fetch_ddl_macro_id_in_ss_mode_(const common::ObTable
 {
   int ret = OB_SUCCESS;
   ObBackupOtherBlockIdIterator other_block_iter;
-  if (!GCTX.is_shared_storage_mode() && !table_key.is_ddl_dump_sstable()) {
+  if (!GCTX.is_shared_storage_mode() || !table_key.is_ddl_dump_sstable()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table key is not ddl dump sstable", K(ret), K(table_key));
   } else if (OB_FAIL(other_block_iter.init(tablet_id, sstable))) {

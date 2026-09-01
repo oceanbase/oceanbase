@@ -151,10 +151,12 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
     common::ObMemberList &member_list)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   member_list.reset();
   learner_list.reset();
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
+  common::ObAddr new_leader;
   ObStorageHASrcInfo src_info;
   src_info.src_addr_ = leader_addr;
   src_info.cluster_id_ = GCONF.cluster_id;
@@ -169,12 +171,12 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
   } else if (need_learner_list) {
     if (OB_FAIL(storage_rpc_->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_and_learner_info))) {
       LOG_WARN("failed to fetch ls member list and learner list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-      //overwrite ret
       member_and_learner_info.reset();
-      if (OB_FAIL(ls->get_log_handler()->get_election_leader(src_info.src_addr_))) {
-        LOG_WARN("failed to get election leader", K(ret), K(tenant_id), K(ls_id));
+      if (OB_TMP_FAIL(ls->get_log_handler()->get_election_leader(new_leader))) {
+        LOG_WARN("failed to get election leader, keep original rpc error", K(ret), K(tmp_ret), K(tenant_id), K(ls_id));
       } else {
-        leader_addr = src_info.src_addr_;
+        src_info.src_addr_ = new_leader;
+        leader_addr = new_leader;
         if (OB_FAIL(storage_rpc_->fetch_ls_member_and_learner_list(tenant_id, ls_id, src_info, member_and_learner_info))) {
           LOG_WARN("failed to post ls member list and learner list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
         }
@@ -188,12 +190,12 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
   } else {
     if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
       LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
-      //overwrite ret
       member_info.reset();
-      if (OB_FAIL(ls->get_log_handler()->get_election_leader(src_info.src_addr_))) {
-        LOG_WARN("failed to get election leader", K(ret), K(tenant_id), K(ls_id));
+      if (OB_TMP_FAIL(ls->get_log_handler()->get_election_leader(new_leader))) {
+        LOG_WARN("failed to get election leader, keep original rpc error", K(ret), K(tmp_ret), K(tenant_id), K(ls_id));
       } else {
-        leader_addr = src_info.src_addr_;
+        src_info.src_addr_ = new_leader;
+        leader_addr = new_leader;
         if (OB_FAIL(storage_rpc_->post_ls_member_list_request(tenant_id, src_info, ls_id, member_info))) {
           LOG_WARN("failed to post ls member list request", K(ret), K(tenant_id), K(src_info), K(ls_id));
         }

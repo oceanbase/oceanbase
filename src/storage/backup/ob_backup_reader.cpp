@@ -117,7 +117,7 @@ int ObTabletLogicMacroIdReader::init(const common::ObTabletID &tablet_id, const 
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));
   } else if (!tablet_id.is_valid() || !tablet_handle.is_valid() || !table_key.is_valid() || !sstable.is_valid() ||
-             batch_size < 0) {
+             batch_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(tablet_id), K(table_key), K(batch_size));
   } else if (FALSE_IT(datum_range_.set_whole_range())) {
@@ -152,7 +152,7 @@ int ObTabletLogicMacroIdReader::get_next_batch(common::ObIArray<ObBackupMacroBlo
     ObDataMacroBlockMeta data_macro_block_meta;
     while (OB_SUCC(ret)) {
       data_macro_block_meta.reset();
-      if (id_array.count() >= MACRO_BLOCK_BATCH_SIZE) {
+      if (id_array.count() >= batch_size_) {
         break;
       } else if (OB_FAIL(meta_iter_.get_next(data_macro_block_meta))) {
         if (OB_ITER_END == ret) {
@@ -421,7 +421,7 @@ int ObMultiMacroBlockBackupReader::init(const uint64_t tenant_id,
         LOG_WARN("failed to alloc macro block reader", K(ret), K(reader_type));
       } else if (OB_FAIL(readers_.push_back(reader))) {
         LOG_WARN("failed to push back reader", K(ret));
-        reader->~ObIMacroBlockBackupReader();
+        ObLSBackupFactory::free(reader);
       }
     }
     if (OB_SUCC(ret)) {
@@ -460,6 +460,7 @@ void ObMultiMacroBlockBackupReader::reset()
       ObLSBackupFactory::free(readers_.at(i));
     }
   }
+  readers_.reset();
   is_inited_ = false;
   LOG_INFO("free multi macro block backup reader");
 }
@@ -604,8 +605,8 @@ int ObTabletMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffer
   char *buf = NULL;
   int64_t pos = 0;
   if (IS_NOT_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("cannot init twice", K(ret));
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet meta backup reader do not init", K(ret));
   } else if (OB_ISNULL(tablet_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is null", K(ret));

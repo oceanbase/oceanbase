@@ -2993,7 +2993,6 @@ int ObMacroBlockWriter::agg_micro_block(const ObMicroIndexData &micro_index_data
 int ObMacroBlockWriter::init_pre_warmer(const share::ObPreWarmerParam &pre_warm_param)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObPreWarmerType tmp_type =  pre_warm_param.type_;
   if (OB_ISNULL(data_store_desc_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3014,7 +3013,7 @@ int ObMacroBlockWriter::init_pre_warmer(const share::ObPreWarmerParam &pre_warm_
     if (GCTX.is_shared_storage_mode()) {
       // no need to pre warm for shared storage mode
     } else if (OB_FAIL(create_pre_warmer(MEM_PRE_WARM, pre_warm_param))) {
-      LOG_WARN("fail to create pre warmer", KR(tmp_ret), K(pre_warm_param));
+      LOG_WARN("fail to create pre warmer", KR(ret), K(pre_warm_param));
     }
   } else if (MEM_AND_FILE_PRE_WARM == tmp_type) {
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -3074,7 +3073,7 @@ int ObMacroBlockWriter::create_pre_warmer(
         ret = OB_ALLOCATE_MEMORY_FAILED; // use ret, must pre warm disk micro cache
         LOG_WARN("fail to new major pre warmer", KR(ret));
       }
-    } else if (ObPreWarmerType::MEM_AND_FILE_PRE_WARM == pre_warmer_type) {
+    } else {
       if (OB_ISNULL(pre_warmer_ = OB_NEWx(ObMajorPreWarmer<ObDataBlockCachePreWarmer>, &allocator_,
                                           param->pre_warm_writer_.data_writer_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED; // use ret, must pre warm disk micro cache

@@ -127,7 +127,7 @@ int ObBackupOtherBlocksMgr::init(const uint64_t tenant_id, const common::ObTable
   } else if (OB_INVALID_ID == tenant_id || !tablet_id.is_valid() || !table_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(tablet_id), K(table_key));
-  } else if (!GCTX.is_shared_storage_mode() && !table_key.is_ddl_dump_sstable()) {
+  } else if (!GCTX.is_shared_storage_mode() || !table_key.is_ddl_dump_sstable()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only ddl dump in ss mode allowed here", K(ret), K(table_key));
   } else if (OB_FAIL(get_total_other_block_count_(tablet_id, sstable, total_other_block_count))) {
@@ -157,17 +157,17 @@ int ObBackupOtherBlocksMgr::wait(ObLSBackupCtx *ls_backup_ctx)
         LOG_WARN("ls backup ctx should not be null", K(ret));
       } else if (OB_SUCCESS != ls_backup_ctx->get_result_code()) {
         ret = OB_CANCELED;
-        LOG_INFO("ls backup ctx already failed", K(ret), K(ret));
+        LOG_INFO("ls backup ctx already failed", K(ret));
         break;
       } else if (total_other_block_count_ < cur_list_count) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cur list count should not be greater than total block count",
             K(ret), K_(total_other_block_count), K(cur_list_count));
       } else if (total_other_block_count_ > cur_list_count) {
-        sleep(WAIT_SLEEP_TIME);
+        ob_usleep(WAIT_SLEEP_TIME);
         continue;
       } else {
-        LOG_INFO("other block all has been backed up", K_(tablet_id), K_(tablet_id), K_(table_key), K_(total_other_block_count));
+        LOG_INFO("other block all has been backed up", K_(tablet_id), K_(table_key), K_(total_other_block_count));
         break;
       }
     }

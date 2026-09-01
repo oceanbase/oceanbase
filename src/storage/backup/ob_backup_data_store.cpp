@@ -1203,7 +1203,7 @@ int ObBackupDataStore::read_root_key_info(const uint64_t tenant_id)
     LOG_WARN("fail to get path", K(ret));
   } else if (OB_FAIL(ObMasterKeyUtil::restore_root_key(tenant_id, path.get_obstr(),
                                               backup_set_dest_.get_storage_info(), empty_str))) {
-    LOG_WARN("fail to backup root key", K(ret));
+    LOG_WARN("fail to restore root key", K(ret));
   }
 #endif
   return ret;

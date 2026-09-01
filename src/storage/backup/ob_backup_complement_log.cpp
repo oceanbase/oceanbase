@@ -1073,10 +1073,13 @@ int ObBackupLSLogTask::update_ls_task_stat_(const share::ObBackupStats &old_back
     new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_;
     new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_;
     new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
     new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_;
     new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_;
-    new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
-    new_backup_stat.finish_macro_block_count_ = new_backup_stat.finish_macro_block_count_;
+    new_backup_stat.extra_bytes_ = old_backup_stat.extra_bytes_;
+    new_backup_stat.finish_file_count_ = old_backup_stat.finish_file_count_;
+    new_backup_stat.log_file_count_ = old_backup_stat.log_file_count_;
+    new_backup_stat.finish_log_file_count_ = old_backup_stat.finish_log_file_count_;
     new_backup_stat.log_file_count_ += compl_log_file_count;
   }
   return ret;
@@ -1574,8 +1577,8 @@ int ObBackupLSLogTask::copy_ls_file_info_(
     } else {
       const int64_t file_size = desc.get_serialize_size() + sizeof(ObBackupCommonHeader);
       ObBackupPath ls_file_info_path;
-      if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, src_dest_id, round_id, piece_id, ls_id, ls_file_info_path))) {
-        LOG_WARN("failed to get ls file info path", K(ret), K(dest), K(src_dest_id), K(round_id), K(piece_id), K(ls_id));
+      if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, dest_dest_id, round_id, piece_id, ls_id, ls_file_info_path))) {
+        LOG_WARN("failed to get ls file info path", K(ret), K(dest), K(dest_dest_id), K(round_id), K(piece_id), K(ls_id));
       } else if (OB_FAIL(file_list_info.push_file_info(ls_file_info_path, file_size))) {
         LOG_WARN("failed to push file info", K(ret), K(ls_file_info_path), K(file_size));
       } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(dest.get_storage_info(),

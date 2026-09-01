@@ -4570,12 +4570,7 @@ int ObTenantDagScheduler::add_dag(
       LOG_WARN("failed to inner add dag", K(ret), KPC(dag));
     }
   } else {
-    ObThreadCondGuard guard(scheduler_sync_);
-    if (OB_SUCC(guard.get_ret())) {
-      if(OB_FAIL(scheduler_sync_.signal())) {
-        COMMON_LOG(WARN, "Failed to signal", K(ret), KPC(dag));
-      }
-    }
+    notify();
   }
   return ret;
 }
@@ -5070,9 +5065,12 @@ int64_t ObReclaimUtil::compute_expected_reclaim_worker_cnt(
 
 void ObTenantDagScheduler::notify()
 {
+  int tmp_ret = OB_SUCCESS;
   ObThreadCondGuard cond_guard(scheduler_sync_);
-  if (OB_SUCCESS == cond_guard.get_ret()) {
-    scheduler_sync_.signal();
+  if (OB_TMP_FAIL(cond_guard.get_ret())) {
+    COMMON_LOG_RET(WARN, tmp_ret, "failed to lock scheduler condition");
+  } else if (OB_TMP_FAIL(scheduler_sync_.signal())) {
+    COMMON_LOG_RET(WARN, tmp_ret, "failed to signal scheduler condition");
   }
 }
 

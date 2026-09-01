@@ -575,7 +575,7 @@ int ObCOPrefetcher::update_end_rowid_for_column_store(
   } else {
     block_scan_border_row_id_ = start_row_id + end_offset - 1;
   }
-  LOG_DEBUG("update_start_and_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
+  LOG_DEBUG("update_end_rowid_for_column_store", K(ret), K(is_reverse_scan),
             K(start_row_id), K(start_offset), K(end_offset));
 
   return ret;

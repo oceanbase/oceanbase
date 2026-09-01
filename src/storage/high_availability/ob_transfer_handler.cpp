@@ -4112,7 +4112,7 @@ int ObTransferHandler::wait_parallel_tablet_info_dag_finish_(
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(fake_dag.init(task_info.dest_ls_id_, &ctx_, &timeout_ctx))) {
+  } else if (OB_FAIL(fake_dag.init(task_info.src_ls_id_, &ctx_, &timeout_ctx))) {
     LOG_WARN("failed to create fake dag", K(ret), K(task_info));
   } else {
     while (true) {

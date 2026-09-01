@@ -1474,7 +1474,7 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
     } else if (OB_FAIL(scheduler->add_dag(data_tablets_migration_dag))) {
       LOG_WARN("failed to add data tablets migration dag", K(ret), K(*data_tablets_migration_dag));
       if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(sys_tablets_migration_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(ret), KPC(start_migration_dag));
+        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_migration_dag));
       } else {
         sys_tablets_migration_dag = nullptr;
       }
@@ -1495,13 +1495,13 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
         STORAGE_LOG(ERROR, "fake EN_MIGRATION_GENERATE_SYS_TABLETS_DAG_FAILED", K(ret));
 
         if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(data_tablets_migration_dag))) {
-          LOG_WARN("failed to cancel ha dag", K(ret), KPC(sys_tablets_migration_dag));
+          LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(sys_tablets_migration_dag));
         } else {
           data_tablets_migration_dag = nullptr;
         }
 
         if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(sys_tablets_migration_dag))) {
-          LOG_WARN("failed to cancel ha dag", K(ret), KPC(start_migration_dag));
+          LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(start_migration_dag));
         } else {
           sys_tablets_migration_dag = nullptr;
         }

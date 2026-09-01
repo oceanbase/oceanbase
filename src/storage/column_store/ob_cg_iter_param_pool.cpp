@@ -163,6 +163,16 @@ int ObCGIterParamPool::fill_cg_iter_param(
       alloc_.free(out_cols_project);
       out_cols_project = nullptr;
     }
+    if (nullptr != param_output_exprs) {
+      param_output_exprs->~ObFixedArray();
+      alloc_.free(param_output_exprs);
+      param_output_exprs = nullptr;
+    }
+    if (nullptr != param_agg_exprs) {
+      param_agg_exprs->~ObFixedArray();
+      alloc_.free(param_agg_exprs);
+      param_agg_exprs = nullptr;
+    }
   } else if (OB_FAIL(generate_for_column_store(row_param, param_output_exprs, param_agg_exprs, out_cols_project, cg_idx, cg_param))) {
     LOG_WARN("Fail to generate cg iter param", K(ret));
   }
@@ -219,6 +229,18 @@ int ObCGIterParamPool::fill_virtual_cg_iter_param(
     cg_param.vectorized_enabled_ = row_param.vectorized_enabled_;
     cg_param.plan_enable_rich_format_ = row_param.plan_enable_rich_format_;
   }
+  if (OB_FAIL(ret)) {
+    if (nullptr != param_output_exprs) {
+      param_output_exprs->~ObFixedArray();
+      alloc_.free(param_output_exprs);
+      param_output_exprs = nullptr;
+    }
+    if (nullptr != param_agg_exprs) {
+      param_agg_exprs->~ObFixedArray();
+      alloc_.free(param_agg_exprs);
+      param_agg_exprs = nullptr;
+    }
+  }
   return ret;
 }
 
@@ -272,7 +294,7 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.output_sel_mask_ = nullptr;
       cg_param.is_multi_version_minor_merge_ = row_param.is_multi_version_minor_merge_;
       cg_param.need_scn_ = row_param.need_scn_;
-      cg_param.is_same_schema_column_ = row_param.need_scn_;
+      cg_param.is_same_schema_column_ = row_param.is_same_schema_column_;
       cg_param.vectorized_enabled_ = row_param.vectorized_enabled_;
       cg_param.has_virtual_columns_ = row_param.has_virtual_columns_;
       cg_param.has_lob_column_out_ = col_descs.at(cg_pos).col_type_.is_lob_storage();
@@ -311,6 +333,10 @@ void ObCGIterParamPool::free_iter_param(ObTableIterParam *iter_param)
     if (OB_NOT_NULL(iter_param->output_exprs_)) {
       const_cast<sql::ObExprPtrIArray*>(iter_param->output_exprs_)->reset();
       alloc_.free((void*)iter_param->output_exprs_);
+    }
+    if (OB_NOT_NULL(iter_param->aggregate_exprs_)) {
+      const_cast<sql::ObExprPtrIArray*>(iter_param->aggregate_exprs_)->reset();
+      alloc_.free((void*)iter_param->aggregate_exprs_);
     }
     if (OB_NOT_NULL(iter_param->out_cols_project_)) {
       const_cast<ObIArray<int32_t> *>(iter_param->out_cols_project_)->reset();

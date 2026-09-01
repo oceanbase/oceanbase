@@ -70,6 +70,7 @@ public:
   ObSortColumnIdArray()
     : is_inited_(false),
       build_map_flag_(false),
+      get_func_(nullptr),
       array_()
   {}
   ~ObSortColumnIdArray() { reset(); }

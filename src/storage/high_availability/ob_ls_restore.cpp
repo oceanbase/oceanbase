@@ -326,6 +326,12 @@ int ObLSRestoreDagNet::start_running_for_ls_restore_()
     initial_ls_restore_dag = nullptr;
   }
 
+  if (OB_FAIL(ret) && OB_NOT_NULL(ctx_)) {
+    const bool need_retry = false;
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, need_retry))) {
+      LOG_ERROR("failed to set restore ctx result", K(ret), K(tmp_ret), KPC(ctx_));
+    }
+  }
   return ret;
 }
 
@@ -2198,6 +2204,8 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablet_(
       LOG_WARN("failed to set restore status", K(ret), K(restore_status));
     } else if (OB_FAIL(param.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), K(data_status));
+    } else if (OB_FAIL(param.ha_status_.set_expected_status(ObTabletExpectedStatus::NORMAL))) {
+      LOG_WARN("failed to set expected status", K(ret));
     } else if (OB_FAIL(ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
         param.allocator_,
         param.storage_schema_,

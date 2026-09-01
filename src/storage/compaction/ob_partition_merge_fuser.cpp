@@ -257,7 +257,6 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
   } else if (OB_FAIL(generated_cols_.init(column_cnt_))) {
     LOG_WARN("Fail to init generated_cols", K(ret), K_(column_cnt));
   } else {
-    const ObColumnSchemaV2 *column_schema = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; ++i) {
       if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == multi_version_column_ids.at(i).col_id_ ||
           OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == multi_version_column_ids.at(i).col_id_) {

@@ -742,7 +742,6 @@ int ObLSBackupCleanTask::delete_sys_data_(const ObBackupPath &path)
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
-    ObIODirentEntry tmp_entry;
     ObBackupPath sys_path;
     for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
       ObIODirentEntry tmp_entry = d_entrys.at(i);
@@ -776,7 +775,6 @@ int ObLSBackupCleanTask::delete_major_data_(const ObBackupPath &path)
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
-    ObIODirentEntry tmp_entry;
     ObBackupPath major_path;
     for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
       ObIODirentEntry tmp_entry = d_entrys.at(i);
@@ -810,7 +808,6 @@ int ObLSBackupCleanTask::delete_minor_data_(const ObBackupPath &path)
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
-    ObIODirentEntry tmp_entry;
     ObBackupPath minor_path;
     for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
       ObIODirentEntry tmp_entry = d_entrys.at(i);
@@ -844,7 +841,6 @@ int ObLSBackupCleanTask::delete_fused_meta_data_(const ObBackupPath &path)
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
-    ObIODirentEntry tmp_entry;
     ObBackupPath fused_meta_path;
     for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
       ObIODirentEntry tmp_entry = d_entrys.at(i);
@@ -878,7 +874,6 @@ int ObLSBackupCleanTask::delete_user_data_(const ObBackupPath &path)
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
-    ObIODirentEntry tmp_entry;
     ObBackupPath user_data_path;
     for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
       ObIODirentEntry tmp_entry = d_entrys.at(i);
@@ -912,7 +907,6 @@ int ObLSBackupCleanTask::delete_meta_info_(const ObBackupPath &path)
   } else if (OB_FAIL(util.list_directories(path.get_obstr(), backup_dest_.get_storage_info(), prefix_op))) {
     LOG_WARN("failed to list files", K(ret));
   } else {
-    ObIODirentEntry tmp_entry;
     ObBackupPath meta_path;
     for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
       ObIODirentEntry tmp_entry = d_entrys.at(i);

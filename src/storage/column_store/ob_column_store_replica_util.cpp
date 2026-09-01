@@ -423,7 +423,8 @@ int ObCSReplicaUtil::get_column_array_from_full_storage_schema(
   if (OB_UNLIKELY(column_cnt <= 0 || column_cnt > full_storage_schema.column_array_.count()
                || expected_stored_column_cnt <= 0 || expected_stored_column_cnt != stored_column_cnt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected column cnt", K(ret), K(column_cnt), K(stored_column_cnt), K(expected_stored_column_cnt), K(stored_column_cnt), K(full_storage_schema));
+    LOG_WARN("unexpected column cnt", K(ret), K(column_cnt), K(stored_column_cnt), K(expected_stored_column_cnt),
+        K(full_storage_schema.column_array_.count()), K(full_storage_schema));
   } else if (OB_FAIL(column_array.init(column_cnt))) {
     LOG_WARN("failed to init column array", K(ret), K(column_cnt));
   } else {

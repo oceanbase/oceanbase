@@ -67,22 +67,17 @@ struct ObBatchExecInfo
 {
   ObBatchExecInfo()
     : success_cnt_(0),
-      failure_cnt_(0),
-      errno_(0)
+      failure_cnt_(0)
   {}
   void add(const ObBatchExecInfo &input_info)
   {
     success_cnt_ += input_info.success_cnt_;
     failure_cnt_ += input_info.failure_cnt_;
-    if (0 == errno_ && 0 != input_info.errno_) {
-      errno_ = input_info.errno_;
-    }
   }
-  TO_STRING_KV(K_(success_cnt), K_(failure_cnt), K_(errno));
+  TO_STRING_KV(K_(success_cnt), K_(failure_cnt));
 
   int64_t success_cnt_;
   int64_t failure_cnt_;
-  int errno_;
 };
 
 struct ObBatchExecCollector

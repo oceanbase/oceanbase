@@ -99,6 +99,7 @@ public:
       new_filter = new (buf) T();
       if (OB_FAIL(new_filter->init(args...))) {
         STORAGE_LOG(WARN, "failed to init filter", K(ret));
+        new_filter->~T();
         allocator.free(new_filter);
         new_filter = nullptr;
       } else {

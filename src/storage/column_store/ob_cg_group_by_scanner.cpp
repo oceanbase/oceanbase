@@ -288,7 +288,7 @@ int ObCGGroupByScanner::locate_micro_index(const ObCSRange &range)
     query_index_range_.end_row_id_ = MIN(range.end_row_id_, sstable_row_cnt_ - 1);
     current_ = is_reverse_scan_ ? query_index_range_.end_row_id_ : query_index_range_.start_row_id_;
 
-    if (OB_FAIL(ret) || end_of_scan()) {
+    if (end_of_scan()) {
     } else if (OB_FAIL(index_prefetcher_.locate(query_index_range_, nullptr))) {
       LOG_WARN("Fail to locate range", K(ret), K_(query_index_range), K_(current));
     } else if (OB_FAIL(index_prefetcher_.prefetch())) {

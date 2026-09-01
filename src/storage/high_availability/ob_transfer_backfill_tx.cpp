@@ -873,8 +873,8 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
       ret = OB_EAGAIN;
     }
   } else {
-    FLOG_INFO("[TRANSFER_BACKFILL]succeed to schedule transfer backfill tx dag", K(*backfill_tx_dag));
     backfill_tx_dag = nullptr;
+    FLOG_INFO("[TRANSFER_BACKFILL]succeed to schedule transfer backfill tx dag");
   }
 
   if (OB_NOT_NULL(backfill_tx_dag) && OB_NOT_NULL(scheduler)) {

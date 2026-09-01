@@ -311,7 +311,7 @@ int ObTabletTableStore::cut_minor_sstables_for_ss_(
       } else if (sstables.at(i)->get_end_scn() <= cut_scn) {
         inc_pos = i + 1;
         FLOG_INFO("recycle minor by shared-min-scn", KPC(sstables.at(i)), K(i), K(cut_scn));
-      } else if (sstables.at(i)->get_end_scn() > cut_scn) {
+      } else {
         // cross with cut_scn, modify start_scn to cut_scn
         ObSSTable *sstable = static_cast<ObSSTable*>(sstables.at(i));
         ObSSTable *copied_sstable = NULL;
@@ -371,16 +371,19 @@ int ObTabletTableStore::process_minor_sstables_upper_trans_for_ss_(
     if (OB_FAIL(init_minor_sstable_array_with_check(new_sstables, allocator, sstables, inc_pos))) {
       LOG_WARN("failed to init minor_tables", K(ret));
     } else {
-      int j = 0;
-      for (int64_t i = 0; i < new_sstables.count(); i++) {
+      int update_idx = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < new_sstables.count(); i++) {
         ObSSTable *sstable = new_sstables.at(i);
         if (sstable->get_upper_trans_version() == INT64_MAX) {
-          for (;  j < new_upper_trans.count(); j++) {
-            if (new_upper_trans.at(j).scn_ == sstable->get_end_scn()) {
-              if (new_upper_trans.at(j).upper_trans_version_ != INT64_MAX) {
-                sstable->set_upper_trans_version(allocator, new_upper_trans.at(j).upper_trans_version_);
+          for (; OB_SUCC(ret) && update_idx < new_upper_trans.count(); update_idx++) {
+            if (new_upper_trans.at(update_idx).scn_ == sstable->get_end_scn()) {
+              if (new_upper_trans.at(update_idx).upper_trans_version_ != INT64_MAX) {
+                if (OB_FAIL(sstable->set_upper_trans_version(
+                    allocator, new_upper_trans.at(update_idx).upper_trans_version_))) {
+                  LOG_WARN("failed to set upper trans version", K(ret), KPC(sstable));
+                }
               }
-            } else if (new_upper_trans.at(j).scn_ > sstable->get_end_scn()) {
+            } else if (new_upper_trans.at(update_idx).scn_ > sstable->get_end_scn()) {
               break;
             }
           }

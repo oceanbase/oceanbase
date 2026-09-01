@@ -25,7 +25,7 @@ namespace backup
 {
 
 ObBackupTabletFuseDagNet::ObBackupTabletFuseDagNet()
-  : ObIDagNet(ObDagNetType::DAG_NET_TYPE_BACKUP),
+  : ObBackupDagNet(ObBackupDagNetSubType::LOG_STREAM_BACKUP_TABLET_FUSE_DAG_NET),
     is_inited_(false),
     ctx_(NULL),
     compat_mode_(lib::Worker::CompatMode::INVALID)
@@ -106,11 +106,23 @@ int ObBackupTabletFuseDagNet::start_running()
 
 bool ObBackupTabletFuseDagNet::operator == (const ObIDagNet &other) const
 {
-  bool is_same = true;
+  bool is_same = false;
   if (this == &other) {
     is_same = true;
-  } else {
+  } else if (get_type() != other.get_type()) {
     is_same = false;
+  } else {
+    const ObBackupDagNet &backup_dag_net = static_cast<const ObBackupDagNet &>(other);
+    if (get_sub_type() != backup_dag_net.get_sub_type()) {
+      is_same = false;
+    } else {
+      const ObBackupTabletFuseDagNet &other_dag_net = static_cast<const ObBackupTabletFuseDagNet &>(other);
+      if (OB_ISNULL(ctx_) || OB_ISNULL(other_dag_net.ctx_)) {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fuse ctx should not be NULL", KP_(ctx));
+      } else {
+        is_same = ctx_->param_ == other_dag_net.ctx_->param_;
+      }
+    }
   }
   return is_same;
 }
@@ -121,7 +133,16 @@ uint64_t ObBackupTabletFuseDagNet::hash() const
   if (OB_ISNULL(ctx_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "fuse ctx is NULL", KPC(ctx_));
   } else {
-    hash_value = common::murmurhash(&ctx_->param_, sizeof(ctx_->param_), hash_value);
+    const int64_t type = ObBackupDagNetSubType::LOG_STREAM_BACKUP_TABLET_FUSE_DAG_NET;
+    hash_value = common::murmurhash(&type, sizeof(type), hash_value);
+    // param_ contains pointer members, so hash its stable scalar identity fields only.
+    hash_value = common::murmurhash(&ctx_->param_.tenant_id_, sizeof(ctx_->param_.tenant_id_), hash_value);
+    hash_value = common::murmurhash(&ctx_->param_.ls_id_, sizeof(ctx_->param_.ls_id_), hash_value);
+    hash_value = common::murmurhash(&ctx_->param_.backup_set_desc_.backup_set_id_,
+        sizeof(ctx_->param_.backup_set_desc_.backup_set_id_), hash_value);
+    hash_value = common::murmurhash(&ctx_->param_.dest_id_, sizeof(ctx_->param_.dest_id_), hash_value);
+    hash_value = common::murmurhash(&ctx_->param_.turn_id_, sizeof(ctx_->param_.turn_id_), hash_value);
+    hash_value = common::murmurhash(&ctx_->param_.retry_id_, sizeof(ctx_->param_.retry_id_), hash_value);
   }
   return hash_value;
 }

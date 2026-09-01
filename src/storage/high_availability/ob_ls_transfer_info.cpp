@@ -147,7 +147,11 @@ OB_DEF_DESERIALIZE(ObTransferTabletIDArray)
   int64_t count = 0;
 
   OB_UNIS_DECODE(count);
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(count < 0 || count > MAX_TABLET_COUNT)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid transfer tablet count", K(ret), K(count));
+  } else {
     count_ = count;
   }
   OB_UNIS_DECODE_ARRAY(id_array_, count_);

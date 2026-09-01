@@ -788,9 +788,9 @@ int ObLSBackupDataDagNet::get_batch_size_(int64_t &batch_size)
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (!tenant_config.is_valid()) {
     data_file_size = DEFAULT_BACKUP_DATA_FILE_SIZE;
-    data_backup_concurrency = tenant_config->ha_low_thread_score;
-   } else {
+  } else {
     data_file_size = tenant_config->backup_data_file_size;
+    data_backup_concurrency = tenant_config->ha_low_thread_score;
   }
   if (0 == data_backup_concurrency) {
     data_backup_concurrency = 2;
@@ -1555,7 +1555,8 @@ ObLSBackupDataDag::ObLSBackupDataDag(const share::ObDagType::ObDagTypeEnum type)
       task_mgr_(NULL),
       index_kv_cache_(NULL),
       report_ctx_(),
-      index_rebuild_dag_(NULL)
+      index_rebuild_dag_(NULL),
+      compat_mode_(lib::Worker::CompatMode::INVALID)
 {}
 
 ObLSBackupDataDag::~ObLSBackupDataDag()
@@ -4963,6 +4964,9 @@ int ObLSBackupPrepareTask::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("prepare task do not init", K(ret));
+  } else if (OB_ISNULL(scheduler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null MTL scheduler", K(ret));
   } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
     ret = ls_backup_ctx_->get_result_code();
     LOG_WARN("backup already failed, do nothing", K(ret));
@@ -5567,6 +5571,7 @@ int ObBackupIndexRebuildTask::check_all_tablet_released_()
   } else {
     bool all_released = ls_backup_ctx_->tablet_holder_.is_empty();
     if (!all_released) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tablet handle not released", K(ret));
       if (OB_SUCCESS != (tmp_ret = ls_backup_ctx_->tablet_stat_.print_tablet_stat())) {
         LOG_WARN("failed to print tablet stat", K(ret), K(tmp_ret));
@@ -5598,11 +5603,7 @@ bool ObBackupIndexRebuildTask::need_build_index_(const bool is_build_macro_index
 {
   bool bret = true;
   if (0 == param_.ls_id_.id() && is_build_macro_index) {
-    if (is_build_macro_index) {
-      bret = param_.backup_data_type_.is_user_backup();
-    } else {
-      bret = !param_.backup_data_type_.is_sys_backup();
-    }
+    bret = param_.backup_data_type_.is_user_backup();
   }
   return bret;
 }

@@ -63,11 +63,11 @@ int ObBackupLinkedBlockReader::init(const share::ObBackupDest &backup_set_dest,
       K(tablet_id), K(table_key));
   } else if (OB_FAIL(backup_set_dest_.deep_copy(backup_set_dest))) {
     LOG_WARN("failed to deep copy", K(ret), K(backup_set_dest));
+  } else if (FALSE_IT(allocator_.set_attr(mem_attr))) {
   } else if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(BLOCK_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    allocator_.set_attr(mem_attr);
     mod_ = mod;
     buf_len_ = BLOCK_SIZE;
     total_block_cnt_ = total_block_cnt;

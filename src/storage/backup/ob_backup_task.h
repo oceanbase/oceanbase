@@ -56,7 +56,7 @@ struct ObLSBackupDagNetInitParam : public share::ObIDagInitParam {
   int convert_to(ObLSBackupDagInitParam &init_param);
   bool operator==(const ObLSBackupDagNetInitParam &other) const;
   VIRTUAL_TO_STRING_KV(K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(ls_id), K_(turn_id),
-    K_(retry_id), K_(dest_id), K_(backup_data_type));
+    K_(retry_id), K_(backup_data_type));
   ObBackupJobDesc job_desc_;
   share::ObBackupDest backup_dest_;
   uint64_t tenant_id_;
@@ -98,6 +98,7 @@ enum ObBackupDagNetSubType : int64_t {
   LOG_STREAM_BACKUP_DAG_DAG_NET = 1,
   LOG_STREAM_BACKUP_BUILD_INDEX_DAG_NET = 2,
   LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET = 3,
+  LOG_STREAM_BACKUP_TABLET_FUSE_DAG_NET = 4,
 };
 
 // Selects which ERRSIM injection points schedule_prepare_finish_chain uses.

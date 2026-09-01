@@ -198,6 +198,10 @@ int ObIBackupMultiLevelIndexBuilder::init(const int64_t start_offset, const ObCo
   } else if (start_offset <= 0 || !node.is_inited() || !write_ctx.is_opened()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("node or file writer is not valid", K(ret), K(start_offset), K(node), "opened", write_ctx.is_opened());
+  } else if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1 != node.get_node_level()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid leaf node level", K(ret), "expected_level", OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1,
+        "actual_level", node.get_node_level());
   } else {
     cur_block_offset_ = start_offset;
     cur_block_length_ = 0;
@@ -309,8 +313,6 @@ int ObIBackupMultiLevelIndexBuilder::check_need_build_next_level_(ObBackupIndexB
   if (OB_ISNULL(node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid args", K(ret), K(node));
-  } else if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL + 1 == node->get_node_level()) {
-    need_build = true;
   } else {
     const int64_t write_count = node->get_write_count();
     if (write_count <= 1) {

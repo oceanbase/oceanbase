@@ -218,6 +218,10 @@ void ObLSBackupFactory::free(ObIMacroBlockIndexIterator *&iterator)
       OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
     } else if (BACKUP_MACRO_RANGE_INDEX_ITERATOR == iterator->get_type()) {
       OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+    } else if (BACKUP_UNOREDRED_MACRO_BLOCK_INDEX_ITERATOR == iterator->get_type()) {
+      OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
+    } else if (BACKUP_ORDERED_MACRO_BLOCK_INDEX_ITERATOR == iterator->get_type()) {
+      OB_DELETE(ObIMacroBlockIndexIterator, ObModIds::BACKUP, iterator);
     } else {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unknown iterator type", "type", iterator->get_type());
     }

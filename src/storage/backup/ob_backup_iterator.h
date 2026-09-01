@@ -252,11 +252,11 @@ public:
   virtual int get_cur_index(ObBackupMacroBlockIndex &index) override;
   virtual ObBackupIndexIteratorType get_type() const override
   {
-    return BACKUP_MACRO_BLOCK_INDEX_ITERATOR;
+    return BACKUP_UNOREDRED_MACRO_BLOCK_INDEX_ITERATOR;
   }
   TO_STRING_KV(K_(task_id), K_(backup_dest), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(backup_data_type),
       K_(turn_id), K_(retry_id), K_(cur_file_id), K_(file_id_list), K_(cur_idx), K(cur_index_list_.count()), K_(cur_index_list),
-     "type", "backup macro block index iterator");
+     "type", "backup unordered macro block index iterator");
 
 private:
   int inner_get_next_macro_block_index_(ObBackupMacroBlockIndex &macro_index);
@@ -292,7 +292,7 @@ public:
   virtual int get_cur_index(ObBackupMacroBlockIndex &index) override;
   virtual ObBackupIndexIteratorType get_type() const override
   {
-    return BACKUP_MACRO_BLOCK_INDEX_ITERATOR;
+    return BACKUP_ORDERED_MACRO_BLOCK_INDEX_ITERATOR;
   }
 public:
   int get_macro_block_index_backup_path_(share::ObBackupPath &backup_path) const;

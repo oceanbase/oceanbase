@@ -708,7 +708,7 @@ int ObInitialRebuildTabletTask::generate_rebuild_tablet_dags_()
     }
   } else if (OB_FAIL(scheduler->add_dag(start_rebuild_tablet_dag))) {
     LOG_WARN("failed to add dag", K(ret), K(*start_rebuild_tablet_dag));
-    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_rebuild_tablet_dag, start_rebuild_tablet_dag))) {
+    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_rebuild_tablet_dag, true/*force_cancel*/))) {
       LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_rebuild_tablet_dag));
     } else {
       finish_rebuild_tablet_dag = nullptr;

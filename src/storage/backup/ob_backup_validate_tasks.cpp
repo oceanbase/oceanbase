@@ -752,7 +752,6 @@ int ObBackupValidatePrepareTask::prepare_basic_validate_()
     ObBackupDest set_dest;
     ObBackupPath ls_dir_path;
     const share::ObLSID ls_id = param_.ls_id_;
-    ObArchiveStore store;
     if (OB_FAIL(ObBackupUtils::get_raw_path(param_.validate_path_.ptr(), raw_path, OB_MAX_BACKUP_PATH_LENGTH))) {
       LOG_WARN("failed to get root path", KR(ret), K_(param));
     } else if (OB_FAIL(set_dest.set(raw_path, &storage_info_))) {
@@ -1335,6 +1334,9 @@ int ObBackupValidateBackupSetPhysicalTask::get_backup_tx_data_table_filled_tx_sc
   }
   if (OB_FAIL(meta_index_store_->get_backup_meta_index_store(sys_backup_data_type, meta_index_store))) {
     LOG_WARN("failed to get meta index store", KR(ret), K(sys_backup_data_type), K(backup_set_info_), K(backup_dest_));
+  } else if (OB_ISNULL(meta_index_store)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("meta index store is null", KR(ret), K(sys_backup_data_type));
   } else if (OB_FAIL(backup::ObBackupUtils::get_backup_tx_data_table_filled_tx_scn(*meta_index_store,
                         is_backup_set_support_quick_restore, backup_dest_, param_.dest_id_, filled_tx_scn))) {
     LOG_WARN("failed to get backup tx data table filled tx scn", KR(ret), K_(param), K_(backup_dest),
@@ -2141,7 +2143,7 @@ int ObBackupValidateMacroBlockFinishTask::init(
     const common::ObTabletID &tablet_id = sstable_meta.tablet_id_;
     const ObITable::TableKey &table_key = sstable_meta.sstable_meta_.table_key_;
     ObBackupValidateTaskContext *ctx = base_dag.get_task_context();
-    if (OB_ISNULL(ctx) || !report_ctx.is_valid() || !param.is_valid() || !backup_dest.is_valid() || OB_ISNULL(ctx)) {
+    if (OB_ISNULL(ctx) || !report_ctx.is_valid() || !param.is_valid() || !backup_dest.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("report ctx or param or backup dest is invalid", KR(ret), K(report_ctx), K(param), K(backup_dest), KP(ctx));
     } else if (OB_FAIL(param_.assign(param))) {
