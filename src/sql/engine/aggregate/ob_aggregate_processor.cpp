@@ -26,10 +26,11 @@
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "pl/ob_pl.h"
-#include "pl/external_routine/ob_java_udaf.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "pl/ob_pl_type.h"
 #include "share/ob_cluster_version.h"
+#include "pl/external_routine/ob_java_udf_proxy.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -7656,12 +7657,18 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
     LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
   } else if (ObExternalRoutineType::INTERNAL_ROUTINE != aggr_info.external_routine_type_) {  // external UDAF
     if (is_java_external_routine(aggr_info.external_routine_type_)) {
-      pl::ObJavaUDAFExecutor executor(aggr_info, eval_ctx_, *extra);
-
-      if (OB_FAIL(executor.init())) {
-        LOG_WARN("failed to init java udaf executor", K(ret), K(aggr_info));
-      } else if (OB_FAIL(executor.execute(result))) {
-        LOG_WARN("failed to execute java UDAF", K(ret));
+      pl::ObJavaUDFProxy *java_proxy = nullptr;
+      if (OB_FAIL(pl::ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), java_proxy))) {
+        LOG_WARN("get java udf proxy failed", K(ret));
+      } else if (OB_ISNULL(java_proxy)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("java_proxy is NULL", K(ret), K(MTL_ID()));
+      } else {
+        pl::ObJavaUDFProxy::ProxyGuard proxy_guard(java_proxy);
+        if (OB_FAIL(java_proxy->execute_mysql_udaf(
+                aggr_info, eval_ctx_, static_cast<void*>(extra), result))) {
+          LOG_WARN("failed to execute java UDAF", K(ret));
+        }
       }
     } else {
       ret = OB_NOT_SUPPORTED;

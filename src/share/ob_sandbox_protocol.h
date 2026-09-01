@@ -66,13 +66,14 @@ struct SandboxMsgCreate {
   int32_t stdin_fd_;
   int32_t stdout_fd_;
   bool enable_net_;  // whether to enable network, default is true
+  common::ObSArray<int32_t> preserve_fds_;  // extra fds to preserve in child (for socketpair channels)
 
-  SandboxMsgCreate() : root_path_(), mount_infos_(), binary_path_(), arg_str_(), stdin_fd_(-1), stdout_fd_(-1), enable_net_(false) {}
+  SandboxMsgCreate() : root_path_(), mount_infos_(), binary_path_(), arg_str_(), stdin_fd_(-1), stdout_fd_(-1), enable_net_(false), preserve_fds_() {}
 
-  TO_STRING_KV(K_(root_path), K_(mount_infos), K_(binary_path), K_(arg_str), K_(stdin_fd), K_(stdout_fd), K_(enable_net));
+  TO_STRING_KV(K_(root_path), K_(mount_infos), K_(binary_path), K_(arg_str), K_(stdin_fd), K_(stdout_fd), K_(enable_net), K_(preserve_fds));
   OB_UNIS_VERSION(1);
 };
-OB_SERIALIZE_MEMBER(SandboxMsgCreate, root_path_, mount_infos_, binary_path_, arg_str_, stdin_fd_, stdout_fd_, enable_net_);
+OB_SERIALIZE_MEMBER(SandboxMsgCreate, root_path_, mount_infos_, binary_path_, arg_str_, stdin_fd_, stdout_fd_, enable_net_, preserve_fds_);
 
 struct SandboxMsgDestroy {
   int32_t pid_;
@@ -126,7 +127,7 @@ public:
     return ret;
   }
 
-  static const int64_t MAX_SANDBOX_MSG_BUF_SIZE = 4096;
+  static const int64_t MAX_SANDBOX_MSG_BUF_SIZE = 8192;
 
   template <typename T>
   static int send_request(int fd, SandboxMsgType type, const T& msg) {

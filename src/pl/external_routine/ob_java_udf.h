@@ -51,10 +51,12 @@ public:
   inline void set_need_infer_result_size(bool need_infer_result_size) { need_infer_result_size_ = need_infer_result_size; }
   inline bool need_infer_result_size() const { return need_infer_result_size_; }
 
-private:
+  // Public: also reused by ObJavaUDFProxy (sandbox path) to lazily create the
+  // shared cache. Returns the per-stmt (URL) / per-session (RES) cache.
   static int get_url_jar_cache(ObExecContext &exec_ctx, ObExternalResourceCache<ObExternalURLJar> *&cache);
   static int get_schema_jar_cache(ObExecContext &exec_ctx, ObExternalResourceCache<ObExternalSchemaJar> *&cache);
 
+private:
   static int get_class_loader(ObExecContext &exec_ctx,
                               int64_t udf_id,
                               ObExternalRoutineType type,
@@ -145,6 +147,7 @@ public:
 class ObOraJavaSessionState
 {
   friend class ObOraJavaRoutineExecutor;
+  friend class ObJavaUDFProxy;
 
 public:
   ObOraJavaSessionState(ObSQLSessionInfo &session)

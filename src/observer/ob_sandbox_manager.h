@@ -14,8 +14,10 @@
 #define OCEANBASE_OBSERVER_OB_SANDBOX_MANAGER_H_
 
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_array_serialization.h"
 #include "lib/string/ob_string.h"
 #include "lib/allocator/page_arena.h"
+#include "lib/atomic/ob_atomic.h"
 #include "lib/lock/ob_spin_rwlock.h"
 #include "lib/task/ob_timer.h"
 #include "lib/net/ob_addr.h"
@@ -60,6 +62,7 @@ public:
   int set_execute_arg(const char *arg_str);
   int set_root_path(const char *root_path);
   int mount_path(const char *src, const char *dest, unsigned long mountflags = MOUNT_RDONLY);
+  int add_preserve_fd(int fd) { return preserve_fds_.push_back(fd); }
   void set_pid_limit(int64_t limit) { pid_limit_ = limit; }
   void set_timeout(int64_t timeout_us) { running_timeout_ = timeout_us; }
 
@@ -80,7 +83,10 @@ public:
 
   // Getters
   pid_t get_pid() const { return pid_; }
-  SandboxState get_state() const { return state_; }
+  SandboxState get_state() const
+  {
+    return static_cast<SandboxState>(ATOMIC_LOAD(&state_));
+  }
   int64_t get_memory_usage() const { return memory_usage_; }
   int64_t get_cpu_time() const { return cpu_time_; }
   double get_cpu_usage() const { return cpu_usage_; }
@@ -99,7 +105,10 @@ private:
   // Called by ObSandboxManager
   void set_pid(pid_t pid) { pid_ = pid; }
   void set_pipes(int stdin_fd, int stdout_fd) { pipe_fd_stdin_ = stdin_fd; pipe_fd_stdout_ = stdout_fd; }
-  void set_state(SandboxState state) { state_ = state; }
+  void set_state(SandboxState state)
+  {
+    ATOMIC_STORE(&state_, static_cast<int64_t>(state));
+  }
   int set_string_(const char *src, common::ObString &dst);
   int set_string_(const common::ObString &src, common::ObString &dst);
   void reset_string_storage_();
@@ -114,7 +123,7 @@ private:
   pid_t pid_;
   uint64_t tenant_id_;
   common::ObAddr addr_; // Reserved, the addr used to communicate with the sandbox process
-  SandboxState state_;
+  int64_t state_;
   int pipe_fd_stdin_;
   int pipe_fd_stdout_;
 
@@ -136,6 +145,7 @@ private:
   };
   int deep_copy_mount_infos_(const common::ObIArray<MountInfo> &src_mount_infos);
   common::ObArray<MountInfo> mount_infos_;
+  common::ObSArray<int> preserve_fds_;  // extra fds to preserve in sandbox child (for socketpair channels)
   int64_t pid_limit_;
   bool memory_limited_;
   lib::MemoryContext placeholder_mem_ctx_;
@@ -143,7 +153,7 @@ private:
   common::ObArenaAllocator string_allocator_;
 public:
   TO_STRING_KV(K_(execute_path), K_(execute_arg), K_(root_path), K_(running_timeout),
-               K_(pid), "state", static_cast<int32_t>(state_),
+               K_(pid), "state", static_cast<int32_t>(get_state()),
                K_(pipe_fd_stdin), K_(pipe_fd_stdout),
                K_(start_time), K_(cpu_time), K_(cpu_usage), "process_state", process_state_, K_(memory_usage),
                K_(pid_limit), K_(mount_infos));
@@ -207,6 +217,8 @@ public:
   int create_sandbox_process(ObSandboxProcess& process, int child_stdin, int child_stdout);
 
   int destroy_sandbox_process(ObSandboxProcess &process);
+
+  int check_process_status(pid_t pid) { return sandbox_client_.check_process_status(pid); }
 
   // Background check task
   void run1();

@@ -289,7 +289,8 @@ static int pre_execve_hook(void *payload) {
   return err;
 }
 
-static int setup_minijail(struct minijail *j, const SandboxMsgCreate& msg) {
+static int setup_minijail(struct minijail *j, const SandboxMsgCreate& msg,
+                          const std::vector<int>& preserve_fds) {
   int ret = OB_SUCCESS;
   if (j) {
     minijail_namespace_user(j);
@@ -313,9 +314,10 @@ static int setup_minijail(struct minijail *j, const SandboxMsgCreate& msg) {
         const char* src_path = mount_info.src_.ptr();
         const char* dest_path = (mount_info.dest_.length() > 0) ? mount_info.dest_.ptr() : src_path;
         const int writeable = (mount_info.flags_ & MS_RDONLY) ? 0 : 1;
-        if ((ret = minijail_bind(j, src_path, dest_path, writeable)) != 0) {
+        int bind_ret = minijail_bind(j, src_path, dest_path, writeable);
+        if (bind_ret != 0) {
           ret = OB_ERR_SYS;
-          LOG_WARN("Failed to bind mount path", K(ret), K(i), K(src_path), K(dest_path), K(writeable), K(err));
+          LOG_WARN("Failed to bind mount path", K(ret), K(i), K(src_path), K(dest_path), K(writeable), K(bind_ret));
         } else {
           LOG_TRACE("Bind mount path", K(i), K(src_path), K(dest_path), K(writeable));
         }
@@ -364,6 +366,9 @@ static int setup_minijail(struct minijail *j, const SandboxMsgCreate& msg) {
     minijail_preserve_fd(j, STDIN_FILENO, STDIN_FILENO);
     minijail_preserve_fd(j, STDOUT_FILENO, STDOUT_FILENO);
     minijail_preserve_fd(j, STDERR_FILENO, STDERR_FILENO);
+    for (size_t i = 0; i < preserve_fds.size(); ++i) {
+      minijail_preserve_fd(j, preserve_fds[i], preserve_fds[i]);
+    }
     minijail_namespace_user_disable_setgroups(j);
 
     char uid_map[32];
@@ -434,6 +439,7 @@ static void close_fds_except(int keep_a = -1, int keep_b = -1) {
 // ob_sandbox.
 static int run_degraded_process(const SandboxMsgCreate& msg, const char *path,
                                 char *const argv[], int stdin_fd, int stdout_fd,
+                                const std::vector<int>& preserve_fds,
                                 pid_t& child_pid) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_degraded_mount_infos(msg))) {
@@ -458,7 +464,27 @@ static int run_degraded_process(const SandboxMsgCreate& msg, const char *path,
       if (stdout_fd > 0 && stdout_fd != STDOUT_FILENO) {
         dup2(stdout_fd, STDOUT_FILENO);
       }
-      close_fds_except();
+      // Close all fds except stdio and preserve_fds
+      {
+        DIR *d = opendir("/proc/self/fd");
+        if (d != nullptr) {
+          int dir_fd = dirfd(d);
+          struct dirent *ent = nullptr;
+          while ((ent = readdir(d)) != nullptr) {
+            if (ent->d_name[0] != '.') {
+              int fd = atoi(ent->d_name);
+              if (fd > STDERR_FILENO && fd != dir_fd) {
+                bool keep = false;
+                for (size_t fi = 0; fi < preserve_fds.size(); ++fi) {
+                  if (fd == preserve_fds[fi]) { keep = true; break; }
+                }
+                if (!keep) close(fd);
+              }
+            }
+          }
+          closedir(d);
+        }
+      }
       execve(path, argv, environ);
       _exit(127);
     } else {
@@ -468,7 +494,8 @@ static int run_degraded_process(const SandboxMsgCreate& msg, const char *path,
   return ret;
 }
 
-static int recv_process_fds(const SandboxMsgCreate& msg, int& stdin_fd, int& stdout_fd) {
+static int recv_process_fds(const SandboxMsgCreate& msg, int& stdin_fd, int& stdout_fd,
+                            std::vector<int>& preserve_fds) {
   int ret = OB_SUCCESS;
   int msg_stdin = msg.stdin_fd_;
   int msg_stdout = msg.stdout_fd_;
@@ -496,11 +523,39 @@ static int recv_process_fds(const SandboxMsgCreate& msg, int& stdin_fd, int& std
       }
     }
   }
+
+  // Receive preserve_fds in batches
+  if (OB_SUCC(ret) && msg.preserve_fds_.count() > 0) {
+    static const int MAX_RECV_BATCH = 253;
+    int64_t total = msg.preserve_fds_.count();
+    int64_t received_total = 0;
+    while (OB_SUCC(ret) && received_total < total) {
+      int64_t expect_batch = std::min(total - received_total, (int64_t)MAX_RECV_BATCH);
+      int batch_fds[MAX_RECV_BATCH];
+      int cnt = recv_fds(pass_fd, batch_fds, MAX_RECV_BATCH);
+      if (cnt < 0) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("recv preserve_fds batch failed", K(ret), K(errno),
+                 K(received_total), K(total));
+      } else if (0 == cnt) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("recv preserve_fds batch returned no fds", K(ret),
+                 K(received_total), K(total));
+      } else {
+        for (int i = 0; i < cnt; ++i) {
+          preserve_fds.push_back(batch_fds[i]);
+        }
+        received_total += cnt;
+      }
+    }
+  }
   return ret;
 }
 
 static int run_minijail_process(const SandboxMsgCreate& msg,
-                                int stdin_fd, int stdout_fd, pid_t& child_pid) {
+                                int stdin_fd, int stdout_fd,
+                                const std::vector<int>& preserve_fds,
+                                pid_t& child_pid) {
   int ret = OB_SUCCESS;
 
   // Construct path and argv from msg
@@ -517,9 +572,23 @@ static int run_minijail_process(const SandboxMsgCreate& msg,
   }
   argv.push_back(nullptr);
 
+  // Build OB_JAVA_CHANNEL_FDS env var value for child process
+  std::string channel_fds_val;
+  if (!preserve_fds.empty()) {
+    for (size_t i = 0; i < preserve_fds.size(); ++i) {
+      if (i > 0) channel_fds_val += ",";
+      channel_fds_val += std::to_string(preserve_fds[i]);
+    }
+  }
+
+  // Set OB_JAVA_CHANNEL_FDS env var before fork (inherited by both minijail and degraded child)
+  if (!channel_fds_val.empty()) {
+    setenv("OB_JAVA_CHANNEL_FDS", channel_fds_val.c_str(), 1);
+  }
+
   if (!g_support_userns) {
     if (OB_FAIL(run_degraded_process(msg, path.c_str(), argv.data(),
-                                     stdin_fd, stdout_fd, child_pid))) {
+                                     stdin_fd, stdout_fd, preserve_fds, child_pid))) {
       LOG_WARN("run_degraded_process failed", K(ret));
     }
   } else {
@@ -527,7 +596,7 @@ static int run_minijail_process(const SandboxMsgCreate& msg,
     if (nullptr == j) {
       ret = OB_ERR_SYS;
       LOG_ERROR("minijail_new failed", K(ret));
-    } else if (OB_FAIL(setup_minijail(j, msg))) {
+    } else if (OB_FAIL(setup_minijail(j, msg, preserve_fds))) {
       minijail_destroy(j);
       LOG_ERROR("setup_minijail failed", K(ret));
     } else {
@@ -590,12 +659,14 @@ void handle_create(int fd, uint32_t len) {
     } else {
       int32_t stdin_fd = -1;
       int32_t stdout_fd = -1;
+      std::vector<int> preserve_fds;
 
-      if (OB_FAIL(recv_process_fds(msg, stdin_fd, stdout_fd))) {
+      if (OB_FAIL(recv_process_fds(msg, stdin_fd, stdout_fd, preserve_fds))) {
          LOG_WARN("recv_process_fds failed", K(ret));
          ObSandboxProtocolHelper::send_response(fd, SandboxResponse());
       } else {
-        LOG_TRACE("handle_create", K(msg), K(stdin_fd), K(stdout_fd));
+        LOG_TRACE("handle_create", K(msg), K(stdin_fd), K(stdout_fd),
+                  "preserve_fds_count", preserve_fds.size());
 
         // On first encounter with this binary path, copy its runtime shared
         // library dependencies (discovered via ld.so --list) into the sandbox
@@ -612,7 +683,7 @@ void handle_create(int fd, uint32_t len) {
         }
 
         pid_t child_pid = -1;
-        if (OB_FAIL(run_minijail_process(msg, stdin_fd, stdout_fd, child_pid))) {
+        if (OB_FAIL(run_minijail_process(msg, stdin_fd, stdout_fd, preserve_fds, child_pid))) {
            LOG_WARN("run_minijail_process failed", K(ret));
            ObSandboxProtocolHelper::send_response(fd, SandboxResponse());
         } else {
@@ -635,6 +706,9 @@ void handle_create(int fd, uint32_t len) {
         }
         if (stdout_fd > 0) {
           close(stdout_fd);
+        }
+        for (size_t i = 0; i < preserve_fds.size(); ++i) {
+          close(preserve_fds[i]);
         }
       }
     }
@@ -709,13 +783,17 @@ void handle_check(int fd, uint32_t len) {
       std::map<pid_t, ProcessInfo>::iterator it = processes.find(target_pid);
       if (it != processes.end()) {
         ProcessInfo &info = it->second;
+        bool was_running = info.running;
         reap_process(target_pid, info);
         resp.ret_code_ = 0;
         resp.status_ = info.status;
         resp.is_running_ = info.running ? 1 : 0;
+        LOG_TRACE("[SANDBOX_DIAG] handle_check", K(target_pid),
+                  K(was_running), "now_running", info.running, K(info.status));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
-        LOG_WARN("handle_check unknown pid", K(ret), K(target_pid));
+        LOG_WARN("[SANDBOX_DIAG] handle_check unknown pid", K(ret), K(target_pid),
+                 "known_pids_count", (int)processes.size());
         resp.ret_code_ = ret;
       }
       ObSandboxProtocolHelper::send_response(fd, resp);

@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/external_routine/ob_java_utils.h"
+#include "pl/external_routine/ob_java_udf.h"
 
 #include "lib/charset/ob_charset.h"
 #include "lib/number/ob_number_v2.h"
@@ -96,6 +97,79 @@ int ObJavaUtils::load_routine_jar(const ObString &jar, jobject &class_loader)
     delete_local_ref(loader, env);
   }
 
+  return ret;
+}
+
+int ObJavaUtils::build_udf_args_to_buffer(
+    const sql::ObSQLSessionInfo &session,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    int64_t batch_size,
+    const ObIArray<ObObjMeta> &arg_types,
+    const ObIArray<ObIArray<ObObj> *> &args,
+    ObIAllocator &alloc,
+    char *&buffer,
+    int64_t &buffer_size)
+{
+  int ret = OB_SUCCESS;
+  buffer = nullptr;
+  buffer_size = 0;
+  ObArenaAllocator tmp_alloc;
+  ObSEArray<ObJavaUDFPermission, 8> permissions;
+  ObPl__JavaUdf__BatchedArgs batched_args;
+  ob_pl__java_udf__batched_args__init(&batched_args);
+  batched_args.batch_size = batch_size;
+
+  if (OB_FAIL(ObJavaUDFPermission::collect_enabled_permissions(session, schema_guard, permissions))) {
+    LOG_WARN("collect permissions failed", K(ret));
+  } else if (OB_FAIL(ObJavaUDFPermission::permissions_to_protobuf(
+                 permissions, tmp_alloc, batched_args.n_permissions, batched_args.permissions))) {
+    LOG_WARN("permissions_to_protobuf failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && args.count() > 0) {
+    using Arg = std::remove_pointer_t<decltype(batched_args.args)>;
+    Arg *arg_buffer = static_cast<Arg*>(tmp_alloc.alloc(args.count() * sizeof(Arg)));
+    if (OB_ISNULL(arg_buffer)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      batched_args.args = arg_buffer;
+      batched_args.n_args = args.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); ++i) {
+        ObToJavaTypeMapperBase *to_java_functor = nullptr;
+        if (OB_FAIL(ObToJavaTypeMapperBase::create_for_sandbox(
+                arg_types.at(i), batch_size, tmp_alloc, to_java_functor))) {
+          LOG_WARN("create_for_sandbox (ToJava) failed", K(ret), K(arg_types.at(i)));
+        } else if (OB_ISNULL(to_java_functor)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL to_java_functor", K(ret));
+        } else {
+          const ObIArray<ObObj> &col = *args.at(i);
+          for (int64_t j = 0; OB_SUCC(ret) && j < batch_size; ++j) {
+            if (OB_FAIL((*to_java_functor)(col.at(j), j))) {
+              LOG_WARN("to_java functor failed", K(ret), K(i), K(j));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            arg_buffer[i] = to_java_functor->get_arg_values();
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    int64_t size = ob_pl__java_udf__batched_args__get_packed_size(&batched_args);
+    uint8_t *buf = static_cast<uint8_t*>(alloc.alloc(size));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_UNLIKELY(0 > ob_pl__java_udf__batched_args__pack(&batched_args, buf))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("protobuf pack failed", K(ret), K(size));
+    } else {
+      buffer = reinterpret_cast<char*>(buf);
+      buffer_size = size;
+    }
+  }
   return ret;
 }
 
@@ -362,7 +436,7 @@ int ObToJavaByteTypeMapper::operator()(const common::ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaByteTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -382,7 +456,7 @@ int ObToJavaShortTypeMapper::operator()(const common::ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaShortTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -402,7 +476,7 @@ int ObToJavaIntegerTypeMapper::operator()(const ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaIntegerTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -422,7 +496,7 @@ int ObToJavaLongTypeMapper::operator()(const ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaLongTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -442,7 +516,7 @@ int ObToJavaFloatTypeMapper::operator()(const ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaFloatTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -462,7 +536,7 @@ int ObToJavaDoubleTypeMapper::operator()(const ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaDoubleTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -482,7 +556,7 @@ int ObToJavaBigDecimalTypeMapper::operator()(const ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaBigDecimalTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -514,7 +588,7 @@ int ObToJavaStringTypeMapper::operator()(const ObObj &obj, int64_t idx)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaStringTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -578,7 +652,7 @@ int ObToJavaByteBufferTypeMapper::operator()(const ObObj &obj, int64_t idx)
 
   ObString buffer;
 
-  if (OB_ISNULL(type_class_) || 0 >= batch_size_) {
+  if (0 >= batch_size_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObToJavaByteBufferTypeMapper is not inited", K(ret), K(lbt()), KPC(this));
   } else if (idx >= batch_size_) {
@@ -993,6 +1067,185 @@ int ObFromJavaTypeMapperBase::convert(ObObj &src, ObObj &dest)
     LOG_WARN("failed to ObSPIService::spi_convert", K(ret), K(src), K(dest));
   }
 
+  return ret;
+}
+
+int ObFromJavaTypeMapperBase::create_for_sandbox(ObIAllocator &alloc,
+                                                  int64_t batch_size,
+                                                  const sql::ObExprResType &res_type,
+                                                  sql::ObSQLSessionInfo &session,
+                                                  ObFromJavaTypeMapperBase *&functor)
+{
+  int ret = OB_SUCCESS;
+  functor = nullptr;
+
+  // Same type dispatch as get_java_type_to_ob_map, but uses the non-JNI
+  // constructor (no JNIEnv, no init()/Java class lookup). operator() is pure
+  // C++ and identical to the JNI path, so the sandbox reuses the exact same
+  // deserialization + spi_convert logic.
+#define ALLOC_SANDBOX_MAPPER(MAPPER)                                                  \
+  do {                                                                                \
+    MAPPER *mapper = static_cast<MAPPER *>(alloc.alloc(sizeof(MAPPER)));              \
+    if (OB_ISNULL(mapper)) {                                                          \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                \
+      LOG_WARN("failed to alloc memory for " #MAPPER, K(ret));                        \
+    } else {                                                                          \
+      mapper = new (mapper) MAPPER(alloc, batch_size, res_type, session);             \
+      functor = mapper;                                                               \
+    }                                                                                 \
+  } while (0)
+
+  switch (res_type.get_type()) {
+  case ObNullType:
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null of ob type", K(ret));
+    break;
+  case ObTinyIntType:
+  case ObUTinyIntType:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaByteTypeMapper);
+    break;
+  case ObSmallIntType:
+  case ObUSmallIntType:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaShortTypeMapper);
+    break;
+  case ObMediumIntType:
+  case ObUMediumIntType:
+  case ObInt32Type:
+  case ObUInt32Type:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaIntegerTypeMapper);
+    break;
+  case ObBitType:
+  case ObIntType:
+  case ObUInt64Type:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaLongTypeMapper);
+    break;
+  case ObFloatType:
+  case ObUFloatType:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaFloatTypeMapper);
+    break;
+  case ObDoubleType:
+  case ObUDoubleType:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaDoubleTypeMapper);
+    break;
+  case ObNumberType:
+  case ObUNumberType:
+  case ObNumberFloatType:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaBigDecimalTypeMapper);
+    break;
+  case ObVarcharType:
+  case ObCharType:
+  case ObHexStringType:
+  case ObNVarchar2Type:
+  case ObNCharType:
+  case ObTinyTextType:
+  case ObTextType:
+  case ObMediumTextType:
+  case ObLongTextType:
+  case ObLobType:
+    if (CHARSET_BINARY != res_type.get_charset_type()) {
+      ALLOC_SANDBOX_MAPPER(ObFromJavaStringTypeMapper);
+    } else {
+      ALLOC_SANDBOX_MAPPER(ObFromJavaByteBufferTypeMapper);
+    }
+    break;
+  case ObRawType:
+    ALLOC_SANDBOX_MAPPER(ObFromJavaByteBufferTypeMapper);
+    break;
+  default:
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("type in Java UDF is not supported yet", K(ret), K(res_type));
+    break;
+  }
+
+#undef ALLOC_SANDBOX_MAPPER
+  return ret;
+}
+
+// ---- ObToJavaTypeMapperBase::create_for_sandbox ----
+
+int ObToJavaTypeMapperBase::create_for_sandbox(const common::ObObjMeta &obj_meta,
+                                                int64_t batch_size,
+                                                common::ObIAllocator &alloc,
+                                                ObToJavaTypeMapperBase *&functor)
+{
+  int ret = OB_SUCCESS;
+  functor = nullptr;
+
+#define ALLOC_TO_JAVA_SANDBOX(MAPPER)                                                  \
+  do {                                                                                \
+    MAPPER *mapper = static_cast<MAPPER *>(alloc.alloc(sizeof(MAPPER)));              \
+    if (OB_ISNULL(mapper)) {                                                          \
+      ret = OB_ALLOCATE_MEMORY_FAILED;                                                \
+      LOG_WARN("failed to alloc memory for " #MAPPER, K(ret));                        \
+    } else {                                                                          \
+      mapper = new (mapper) MAPPER(alloc, batch_size);                                \
+      if (OB_FAIL(mapper->init())) {                                                  \
+        LOG_WARN("failed to init " #MAPPER, K(ret));                                  \
+      } else {                                                                        \
+        functor = mapper;                                                             \
+      }                                                                               \
+    }                                                                                 \
+  } while (0)
+
+  switch (obj_meta.get_type()) {
+  case ObTinyIntType:
+  case ObUTinyIntType:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaByteTypeMapper);
+    break;
+  case ObSmallIntType:
+  case ObUSmallIntType:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaShortTypeMapper);
+    break;
+  case ObMediumIntType:
+  case ObUMediumIntType:
+  case ObInt32Type:
+  case ObUInt32Type:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaIntegerTypeMapper);
+    break;
+  case ObBitType:
+  case ObIntType:
+  case ObUInt64Type:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaLongTypeMapper);
+    break;
+  case ObFloatType:
+  case ObUFloatType:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaFloatTypeMapper);
+    break;
+  case ObDoubleType:
+  case ObUDoubleType:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaDoubleTypeMapper);
+    break;
+  case ObNumberType:
+  case ObUNumberType:
+  case ObNumberFloatType:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaBigDecimalTypeMapper);
+    break;
+  case ObVarcharType:
+  case ObCharType:
+  case ObHexStringType:
+  case ObNVarchar2Type:
+  case ObNCharType:
+  case ObTinyTextType:
+  case ObTextType:
+  case ObMediumTextType:
+  case ObLongTextType:
+  case ObLobType:
+    if (CHARSET_BINARY != obj_meta.get_charset_type()) {
+      ALLOC_TO_JAVA_SANDBOX(ObToJavaStringTypeMapper);
+    } else {
+      ALLOC_TO_JAVA_SANDBOX(ObToJavaByteBufferTypeMapper);
+    }
+    break;
+  case ObRawType:
+    ALLOC_TO_JAVA_SANDBOX(ObToJavaByteBufferTypeMapper);
+    break;
+  default:
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported type for java udf sandbox", K(ret), K(obj_meta));
+    break;
+  }
+
+#undef ALLOC_TO_JAVA_SANDBOX
   return ret;
 }
 

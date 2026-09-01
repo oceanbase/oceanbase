@@ -33,6 +33,7 @@
 #include "sql/audit/ob_audit_log_utils.h"
 #endif
 #include "pl/external_routine/ob_external_resource.h"
+#include "pl/external_routine/ob_java_udf_proxy.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "pl/external_routine/ob_java_udf.h"
 
@@ -199,6 +200,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       trans_gtt_v2_sequence_(0),
       min_data_version_of_init_sess_(0),
       ora_java_session_state_(nullptr),
+      ora_java_sandbox_generation_id_(0),
       pl_top_context_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
@@ -340,6 +342,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
     pl_top_context_ = nullptr;
+    ora_java_sandbox_generation_id_ = 0;
     pl_can_retry_ = true;
     plsql_exec_time_ = 0;
     plsql_compile_time_ = 0;
@@ -847,16 +850,26 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
 #endif
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
-    reset(skip_sys_var);
-    is_inited_ = false;
-    sql_req_level_ = 0;
 
+    // Clean up sandbox state BEFORE reset(), because reset() zeroes sessid_
+    // which makes get_server_sid() return 0 and destroy_session() skip the
+    // eviction message — causing classloader leaks in the sandbox JVM.
     if (OB_NOT_NULL(external_resource_schema_cache_)) {
       using Cache = pl::ObExternalResourceCache<pl::ObExternalSchemaJar>;
       Cache *cache = static_cast<Cache *>(external_resource_schema_cache_);
+      if (cache->is_sandbox()) {
+        pl::ObJavaUDFProxy *proxy = nullptr;
+        int tmp_ret = pl::ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), proxy);
+        if (OB_SUCCESS != tmp_ret || OB_ISNULL(proxy)) {
+          LOG_WARN("get java udf proxy failed in destroy, sandbox session may leak",
+                   K(tmp_ret), K(MTL_ID()), "session_id", get_server_sid());
+        } else {
+          pl::ObJavaUDFProxy::ProxyGuard proxy_guard(proxy);
+          proxy->destroy_session(get_server_sid());
+        }
+      }
       cache->~Cache();
       get_session_allocator().free(cache);
-      cache = nullptr;
       external_resource_schema_cache_ = nullptr;
     }
 
@@ -865,6 +878,11 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
       get_session_allocator().free(ora_java_session_state_);
       ora_java_session_state_ = nullptr;
     }
+    ora_java_sandbox_generation_id_ = 0;
+
+    reset(skip_sys_var);
+    is_inited_ = false;
+    sql_req_level_ = 0;
   }
 }
 

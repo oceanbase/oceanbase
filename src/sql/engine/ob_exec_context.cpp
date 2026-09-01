@@ -22,6 +22,7 @@
 #include "sql/spm/ob_spm_controller.h"
 #endif
 #include "pl/external_routine/ob_external_resource.h"
+#include "pl/external_routine/ob_java_udf_proxy.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_profiler.h"
 #endif // OB_BUILD_ORACLE_PL
@@ -241,10 +242,25 @@ ObExecContext::~ObExecContext()
   auto_dop_map_.destroy();
 
   if (OB_NOT_NULL(external_url_resource_cache_)) {
+    // The pointer holds ObExternalResourceCache<ObExternalURLJar> in both modes.
+    // Dispatch on the cache's is_sandbox() stamp (recorded at creation) — NOT live
+    // GCONF — so a mid-session GCONF flip cannot cause type confusion here.
     using Cache = pl::ObExternalResourceCache<pl::ObExternalURLJar>;
     Cache *cache = static_cast<Cache *>(external_url_resource_cache_);
+    if (cache->is_sandbox() && cache->get_sandbox_ctx_id() != 0) {
+      pl::ObJavaUDFProxy *proxy = nullptr;
+      int tmp_ret = pl::ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), proxy);
+      if (OB_SUCCESS != tmp_ret || OB_ISNULL(proxy)) {
+        int ret = (OB_SUCCESS != tmp_ret) ? tmp_ret : OB_ERR_UNEXPECTED;
+        LOG_WARN("get java udf proxy failed in destructor, sandbox ctx may leak",
+                 K(ret), K(MTL_ID()), K(cache->get_sandbox_ctx_id()));
+      } else {
+        pl::ObJavaUDFProxy::ProxyGuard proxy_guard(proxy);
+        proxy->evict_statement(cache->get_sandbox_ctx_id(),
+                               cache->get_sandbox_generation_id());
+      }
+    }
     cache->~Cache();
-    cache = nullptr;
     external_url_resource_cache_ = nullptr;
   }
   if (OB_NOT_NULL(py_udf_ctx_)) {

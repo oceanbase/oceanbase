@@ -32,7 +32,7 @@ namespace oceanbase
 namespace observer
 {
 
-static const int MAX_SEND_FDS_COUNT = 2;
+static const int MAX_SEND_FDS_COUNT = 253;
 
 static int set_fd_cloexec(int fd)
 {
@@ -273,6 +273,13 @@ int ObSandboxClient::create_sandbox_process_(const ObSandboxProcess& process,
           SERVER_LOG(WARN, "push mount_infos_ failed", K(ret), K(i));
         }
       }
+      // Copy preserve_fds_ from process
+      msg.preserve_fds_.reset();
+      for (int64_t i = 0; i < process.preserve_fds_.count() && OB_SUCC(ret); ++i) {
+        if (OB_FAIL(msg.preserve_fds_.push_back(process.preserve_fds_.at(i)))) {
+          SERVER_LOG(WARN, "push preserve_fds_ failed", K(ret), K(i));
+        }
+      }
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(ObSandboxProtocolHelper::send_request(server_fd_, SANDBOX_MSG_CREATE, msg))) {
@@ -302,6 +309,31 @@ int ObSandboxClient::create_sandbox_process_(const ObSandboxProcess& process,
             if (server_pid_ > 0) {
               waitpid(server_pid_, nullptr, 0);
               server_pid_ = -1;
+            }
+          }
+        }
+
+        // Send preserve_fds_ in batches (for Java sandbox socketpair channels)
+        if (OB_SUCC(ret) && fd_send_ret == 0 && msg.preserve_fds_.count() > 0) {
+          int64_t total = msg.preserve_fds_.count();
+          int64_t sent = 0;
+          while (fd_send_ret == 0 && sent < total) {
+            int64_t batch = std::min(total - sent, (int64_t)MAX_SEND_FDS_COUNT);
+            if (send_fds(fd_pass_sock_, &msg.preserve_fds_.at(sent), static_cast<int>(batch)) < 0) {
+              ret = common::OB_ERR_UNEXPECTED;
+              SERVER_LOG(ERROR, "send preserve_fds batch failed",
+                  K(errno), K(server_pid_), K(sent), K(total));
+              fd_send_ret = -1;
+              close(server_fd_);
+              server_fd_ = -1;
+              close(fd_pass_sock_);
+              fd_pass_sock_ = -1;
+              if (server_pid_ > 0) {
+                waitpid(server_pid_, nullptr, 0);
+                server_pid_ = -1;
+              }
+            } else {
+              sent += batch;
             }
           }
         }
@@ -338,11 +370,12 @@ int ObSandboxClient::try_recycle_sandbox_process()
     if (result == 0) {
       // process is still running
     } else if (result == server_pid_) {
-      ret = common::OB_ERR_UNEXPECTED;
+      const int exit_ret = common::OB_ERR_UNEXPECTED;
       char exit_desc[128] = {0};
       bool is_coredump = false;
       format_sandbox_exit_status(status, exit_desc, sizeof(exit_desc), is_coredump);
-      SERVER_LOG(ERROR, "ob_sandbox process exited", KR(ret), K(server_pid_), K(exit_desc), K(is_coredump));
+      SERVER_LOG(ERROR, "ob_sandbox process exited",
+                 KR(exit_ret), K(server_pid_), K(exit_desc), K(is_coredump));
       if (server_fd_ != -1) {
         close(server_fd_);
         server_fd_ = -1;
@@ -352,6 +385,9 @@ int ObSandboxClient::try_recycle_sandbox_process()
         fd_pass_sock_ = -1;
       }
       server_pid_ = -1;
+      // The abnormal exit is an event to diagnose, but reaping the process and
+      // clearing its communication fds completed successfully. The create path
+      // can now rebuild ob_sandbox and retry the original request.
     } else {
       ret = OB_ERR_SYS;
       SERVER_LOG(WARN, "wait ob_sandbox failed", K(server_pid_), K(status), K(result), K(errno));

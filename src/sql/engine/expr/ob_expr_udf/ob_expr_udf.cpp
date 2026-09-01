@@ -16,9 +16,10 @@
 #include "observer/ob_server.h"
 #include "pl/ob_pl_stmt.h"
 #include "ob_udf_result_cache.h"
-#include "pl/external_routine/ob_java_udf.h"
+#include "pl/external_routine/ob_java_udf_proxy.h"
 #include "pl/external_routine/ob_py_udf.h"
 #include "pl/ob_pl_type.h"
+#include "share/config/ob_server_config.h"
 
 namespace oceanbase
 {
@@ -606,15 +607,21 @@ int ObExprUDF::eval_external_udf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
           LOG_WARN("failed to execute udf", K(ret));
         }
       } else {
-        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
-
-        if (OB_FAIL(executor.init(udf_info.udf_id_,
-                                  udf_info.external_routine_type_,
-                                  udf_info.external_routine_url_,
-                                  udf_info.external_routine_resource_))) {
-          LOG_WARN("failed to init java udf executor", K(ret));
-        } else if (OB_FAIL(executor.execute(1, "evaluate", arg_types, args, udf_info.result_type_, alloc, res_array))) {
-          LOG_WARN("failed to execute udf", K(ret));
+        pl::ObJavaUDFProxy *java_proxy = nullptr;
+        if (OB_FAIL(pl::ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), java_proxy))) {
+          LOG_WARN("get java udf proxy failed", K(ret));
+        } else if (OB_ISNULL(java_proxy)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("java_proxy is NULL", K(ret), K(MTL_ID()));
+        } else {
+          pl::ObJavaUDFProxy::ProxyGuard proxy_guard(java_proxy);
+          if (OB_FAIL(java_proxy->execute_mysql(
+                  ctx.exec_ctx_, udf_info.udf_id_, udf_info.external_routine_type_,
+                  udf_info.external_routine_url_, udf_info.external_routine_resource_,
+                  udf_info.external_routine_entry_, 1, "evaluate",
+                  arg_types, args, udf_info.result_type_, alloc, res_array))) {
+            LOG_WARN("failed to execute java udf", K(ret));
+          }
         }
       }
 
@@ -740,14 +747,21 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
           LOG_WARN("failed to execute python udf", K(ret), K(batch_size));
         }
       } else {
-        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
-        if (OB_FAIL(executor.init(udf_info.udf_id_,
-                                  udf_info.external_routine_type_,
-                                  udf_info.external_routine_url_,
-                                  udf_info.external_routine_resource_))) {
-          LOG_WARN("failed to init java udf executor", K(ret));
-        } else if (OB_FAIL(executor.execute(batch_size, "evaluate", arg_types, args, udf_info.result_type_, alloc, res_array))) {
-          LOG_WARN("failed to execute udf", K(ret), K(batch_size), K(res_array));
+        pl::ObJavaUDFProxy *java_proxy = nullptr;
+        if (OB_FAIL(pl::ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), java_proxy))) {
+          LOG_WARN("get java udf proxy failed", K(ret));
+        } else if (OB_ISNULL(java_proxy)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("java_proxy is NULL", K(ret), K(MTL_ID()));
+        } else {
+          pl::ObJavaUDFProxy::ProxyGuard proxy_guard(java_proxy);
+          if (OB_FAIL(java_proxy->execute_mysql(
+                  ctx.exec_ctx_, udf_info.udf_id_, udf_info.external_routine_type_,
+                  udf_info.external_routine_url_, udf_info.external_routine_resource_,
+                  udf_info.external_routine_entry_, batch_size, "evaluate",
+                  arg_types, args, udf_info.result_type_, alloc, res_array))) {
+            LOG_WARN("failed to execute java udf", K(ret), K(batch_size));
+          }
         }
       }
 
@@ -966,18 +980,24 @@ int ObExprUDF::eval_mysql_udtf(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
       if (OB_SUCC(ret)) {
         ObSEArray<ObObj, 8> res_array;
 
-        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
-
-        executor.set_need_infer_result_size(true);
-
-        if (OB_FAIL(executor.init(udf_info.udf_id_,
-                                  udf_info.external_routine_type_,
-                                  udf_info.external_routine_url_,
-                                  udf_info.external_routine_resource_))) {
-          LOG_WARN("failed to init java udf executor", K(ret));
-        } else if (OB_FAIL(executor.execute(1, "process", arg_types, args, udf_info.result_type_, alloc, res_array))) {
-          LOG_WARN("failed to execute udf", K(ret));
+        pl::ObJavaUDFProxy *java_proxy = nullptr;
+        if (OB_FAIL(pl::ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), java_proxy))) {
+          LOG_WARN("get java udf proxy failed", K(ret));
+        } else if (OB_ISNULL(java_proxy)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("java_proxy is NULL", K(ret), K(MTL_ID()));
         } else {
+          pl::ObJavaUDFProxy::ProxyGuard proxy_guard(java_proxy);
+          if (OB_FAIL(java_proxy->execute_mysql(
+                  ctx.exec_ctx_, udf_info.udf_id_, udf_info.external_routine_type_,
+                  udf_info.external_routine_url_, udf_info.external_routine_resource_,
+                  udf_info.external_routine_entry_, 1, "process",
+                  arg_types, args, udf_info.result_type_, alloc, res_array, true))) {
+            LOG_WARN("failed to execute java udtf", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret)) {
           for (int64_t i = 0; OB_SUCC(ret) && i < res_array.count(); ++i) {
             ObObj buf;
 

@@ -37,7 +37,7 @@ namespace observer {
 
 ObSandboxProcess::ObSandboxProcess()
   : execute_path_(), execute_arg_(), root_path_(), running_timeout_(0), pid_(-1), tenant_id_(OB_SERVER_TENANT_ID),
-    addr_(), state_(SandboxState::STATE_UNKNOWN),
+    addr_(), state_(static_cast<int64_t>(SandboxState::STATE_UNKNOWN)),
     pipe_fd_stdin_(-1), pipe_fd_stdout_(-1),
     start_time_(0), cpu_time_(0), last_cpu_time_(0), last_check_time_(0), cpu_usage_(0), process_state_('\0'),
     memory_usage_(0), process_name_(),
@@ -54,7 +54,7 @@ ObSandboxProcess::ObSandboxProcess()
 
 ObSandboxProcess::ObSandboxProcess(const char *path, const char *arg_str)
   : execute_path_(), execute_arg_(), root_path_(), running_timeout_(0), pid_(-1), tenant_id_(OB_SERVER_TENANT_ID),
-    addr_(), state_(SandboxState::STATE_UNKNOWN),
+    addr_(), state_(static_cast<int64_t>(SandboxState::STATE_UNKNOWN)),
     pipe_fd_stdin_(-1), pipe_fd_stdout_(-1),
     start_time_(0), cpu_time_(0), last_cpu_time_(0), last_check_time_(0), cpu_usage_(0), process_state_('\0'),
     memory_usage_(0), process_name_(),
@@ -75,7 +75,7 @@ ObSandboxProcess::ObSandboxProcess(const char *path, const char *arg_str)
 
 ObSandboxProcess::ObSandboxProcess(const ObSandboxProcess &other)
   : execute_path_(), execute_arg_(), root_path_(), running_timeout_(0), pid_(-1), tenant_id_(OB_SERVER_TENANT_ID),
-    addr_(), state_(SandboxState::STATE_UNKNOWN),
+    addr_(), state_(static_cast<int64_t>(SandboxState::STATE_UNKNOWN)),
     pipe_fd_stdin_(-1), pipe_fd_stdout_(-1),
     start_time_(0), cpu_time_(0), last_cpu_time_(0), last_check_time_(0), cpu_usage_(0), process_state_('\0'),
     memory_usage_(0), process_name_(),
@@ -89,7 +89,7 @@ ObSandboxProcess::ObSandboxProcess(const ObSandboxProcess &other)
   pid_ = other.pid_;
   tenant_id_ = other.tenant_id_;
   addr_ = other.addr_;
-  state_ = other.state_;
+  set_state(other.get_state());
   pipe_fd_stdin_ = other.pipe_fd_stdin_;
   pipe_fd_stdout_ = other.pipe_fd_stdout_;
   start_time_ = other.start_time_;
@@ -122,7 +122,7 @@ ObSandboxProcess &ObSandboxProcess::operator=(const ObSandboxProcess &other)
     pid_ = other.pid_;
     tenant_id_ = other.tenant_id_;
     addr_ = other.addr_;
-    state_ = other.state_;
+    set_state(other.get_state());
     pipe_fd_stdin_ = other.pipe_fd_stdin_;
     pipe_fd_stdout_ = other.pipe_fd_stdout_;
     start_time_ = other.start_time_;
@@ -169,7 +169,7 @@ int ObSandboxProcess::set_root_path(const char *root_path)
 int ObSandboxProcess::start(bool redirect_stdin_stdout /* = true */)
 {
   int ret = common::OB_SUCCESS;
-  if (state_ == SandboxState::STATE_RUNNING) {
+  if (get_state() == SandboxState::STATE_RUNNING) {
     ret = common::OB_ENTRY_EXIST;
     LOG_WARN("sandbox process already running", K(pid_));
   } else if (!execute_path_.prefix_match("/")) {
@@ -226,7 +226,7 @@ int ObSandboxProcess::destroy()
     // Call manager to destroy
     ObSandboxManager::get_instance().destroy_sandbox_process(*this);
     pid_ = -1;
-    state_ = SandboxState::STATE_EXITED;
+    set_state(SandboxState::STATE_EXITED);
   }
   if (pipe_fd_stdin_ >= 0) {
     close(pipe_fd_stdin_);
@@ -611,6 +611,12 @@ int ObSandboxManager::create_sandbox_process(ObSandboxProcess& process, int chil
       // ob_sandbox exited abnormally, ignore return value
       IGNORE_RETURN sandbox_client_.destroy_sandbox_process(pid);
       process.set_pid(-1);
+    } else {
+      // Some callers (for example Java UDF sandbox) use the manager directly
+      // because they pass a pool of preserved fds instead of ObSandboxProcess::start().
+      // Record the same lifecycle state here so the monitor also covers them.
+      process.set_state(SandboxState::STATE_RUNNING);
+      process.start_time_ = common::ObTimeUtility::current_time();
     }
   }
 
@@ -765,12 +771,14 @@ void ObSandboxManager::run1()
     if (p && p->get_pid() > 0 && p->get_state() == SandboxState::STATE_RUNNING) {
       // Check status
       int ret = sandbox_client_.check_process_status(p->get_pid());
-      if (ret != common::OB_SUCCESS) {
-        // Process exited
+      if (common::OB_ENTRY_NOT_EXIST == ret || common::OB_SEARCH_NOT_FOUND == ret) {
+        // The daemon either confirmed that the process exited or no longer
+        // owns this pid. In both cases this sandbox generation is unusable.
         p->set_state(SandboxState::STATE_EXITED);
-        LOG_INFO("sandbox process exited", "pid", p->get_pid());
+        LOG_INFO("sandbox process exited or is no longer managed",
+                 K(ret), "pid", p->get_pid());
         // NOTICE: We don't remove it here automatically, let the owner decide when to destroy/cleanup
-      } else {
+      } else if (common::OB_SUCCESS == ret) {
         p->update_resource_usage();
         p->sync_memory_placeholder_();
 
@@ -800,6 +808,12 @@ void ObSandboxManager::run1()
         if (dump_process_info) {
           LOG_INFO("dump ob_sandbox process info", K(i), KPC(p));
         }
+      } else {
+        // A transient failure on the daemon control channel is not evidence
+        // that the sandbox process died. Keep the last known state and retry
+        // on the next monitor tick to avoid retiring a healthy process.
+        LOG_WARN("check sandbox process status failed, keep current state",
+                 K(ret), "pid", p->get_pid());
       }
     }
   }

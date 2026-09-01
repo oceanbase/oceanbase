@@ -104,10 +104,10 @@ public:
       data_ = nullptr;
     }
   }
-private:
   explicit ObExternalURLJar(ObIAllocator &alloc) : ObExternalResourceBase(alloc)
   {  }
 
+private:
   static size_t curl_write_callback(const void *ptr, size_t size, size_t nmemb, void *buffer);
 };
 
@@ -130,7 +130,6 @@ public:
     }
   }
 
-private:
   ObExternalSchemaJar(ObIAllocator &alloc, uint64_t resource_id, int64_t schema_version)
     : ObExternalResourceBase(alloc),
       resource_id_(resource_id),
@@ -177,6 +176,35 @@ public:
   using Resource = typename Node::Resource;
 
   int init() { return map_.create(MAX_RES_COUNT, ObMemAttr(MTL_ID(), "PlExtRes")); };
+
+  // Sandbox path does not go through get_resource/fetch_impl (no in-process JNI).
+  // It builds the jar bytes itself, asks the sandbox JVM to load them, and only
+  // uses the cache as a (udf_id -> node) dedup table with data_ = nullptr.
+  // These thin wrappers expose the private map_ + allocator for that path.
+  bool is_sandbox() const { return is_sandbox_; }
+  void set_sandbox(bool v) { is_sandbox_ = v; }
+  int64_t get_sandbox_ctx_id() const { return sandbox_ctx_id_; }
+  void set_sandbox_ctx_id(int64_t id) { sandbox_ctx_id_ = id; }
+  int64_t get_sandbox_generation_id() const { return sandbox_generation_id_; }
+  void set_sandbox_generation_id(int64_t generation_id) { sandbox_generation_id_ = generation_id; }
+  ObIAllocator &get_alloc() { return alloc_; }
+  bool contains(int64_t udf_id) { Node *n = nullptr; return OB_SUCCESS == map_.get_refactored(udf_id, n); }
+  int get(int64_t udf_id, Node *&node) { return map_.get_refactored(udf_id, node); }
+  int insert(int64_t udf_id, Node *node) { return map_.set_refactored(udf_id, node); }
+  int erase(int64_t udf_id) { return map_.erase_refactored(udf_id); }
+  void clear_entries()
+  {
+    for (typename common::hash::ObHashMap<uint64_t, Node *>::iterator it = map_.begin();
+         it != map_.end();
+         ++it) {
+      if (OB_NOT_NULL(it->second)) {
+        it->second->~Node();
+        alloc_.free(it->second);
+        it->second = nullptr;
+      }
+    }
+    map_.reuse();
+  }
 
   template<typename ...ExtraInfo>
   int get_resource(int64_t udf_id, const ResourceKey &res_key, Resource &data, ExtraInfo&& ...extra_info)
@@ -240,17 +268,7 @@ public:
 
   ~ObExternalResourceCache()
   {
-    for (typename common::hash::ObHashMap<uint64_t, Node *>::iterator it = map_.begin();
-         it != map_.end();
-         ++it) {
-      if (OB_NOT_NULL(it->second)) {
-        it->second->~Node();
-        alloc_.free(it->second);
-        it->second = nullptr;
-      }
-    }
-
-    map_.reuse();
+    clear_entries();
   }
 
 private:
@@ -263,6 +281,9 @@ private:
 private:
   static constexpr int64_t MAX_RES_COUNT = 1024;
 
+  bool is_sandbox_ = false;
+  int64_t sandbox_ctx_id_ = 0;
+  int64_t sandbox_generation_id_ = 0;
   ObArenaAllocator alloc_;
   common::hash::ObHashMap<uint64_t, Node*> map_;
 };

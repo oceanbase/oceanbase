@@ -161,6 +161,7 @@
 #include "observer/report/ob_tenant_offline_tablet_cleanup_service.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "share/ob_inspection_service.h" // ObInspectionService
+#include "pl/external_routine/ob_java_udf_proxy.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -2199,6 +2200,9 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       const int64_t log_disk_size = config.config_.log_disk_size();
       if (!is_virtual_tenant_id(tenant_id)) {
         GCTX.log_block_mgr_->remove_tenant(log_disk_size);
+      }
+      if (!is_meta_tenant(tenant_id)) {
+        pl::ObJavaUDFProxy::drop_tenant_proxy(tenant_id);
       }
       removed_tenant->destroy();
       ob_delete(removed_tenant);

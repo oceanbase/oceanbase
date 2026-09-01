@@ -117,6 +117,9 @@ ob_set_subtarget(ob_pl external_routine
   external_routine/ob_py_udf.cpp
   external_routine/ob_py_udf_arrow.cpp
   external_routine/ob_java_udaf.cpp
+  external_routine/ob_java_sandbox_frame.cpp
+  external_routine/ob_java_sandbox_channel.cpp
+  external_routine/ob_java_udf_proxy.cpp
 )
 
 ob_server_add_target(ob_pl)

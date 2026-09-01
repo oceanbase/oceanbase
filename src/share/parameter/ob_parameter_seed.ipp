@@ -3411,3 +3411,7 @@ DEF_BOOL(_enable_trigger_dml_snapshot_opt, OB_TENANT_PARAMETER, "False",
          " UPDATE/DELETE try local LS read snapshot instead of remote GTS,"
          " reducing RPC count on data-local execution.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(ob_enable_java_udf_sandbox, OB_CLUSTER_PARAMETER, "False",
+          "Enable or disable sandbox mode for java udf execution.",
+          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

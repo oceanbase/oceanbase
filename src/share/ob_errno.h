@@ -1957,6 +1957,7 @@ constexpr int OB_ERR_JAVA_SESSION_STATE_CHANGED = -9839;
 constexpr int OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT = -9840;
 constexpr int OB_ERR_PL_DOM_HANDLE_INVALID = -9841;
 constexpr int OB_ERR_PL_PARSER_HANDLE_INVALID = -9842;
+constexpr int OB_ERR_JAVA_SESSION_STATE_CLEARED = -9847;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -4439,6 +4440,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot change object with type or table dependents"
 #define OB_ERR_PL_DOM_HANDLE_INVALID__USER_ERROR_MSG "PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__USER_ERROR_MSG "invalid PL/SQL XML parser handle"
+#define OB_ERR_JAVA_SESSION_STATE_CLEARED__USER_ERROR_MSG "Java session state cleared"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -9335,6 +9337,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PL_DOM_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-31181: PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__ORA_USER_ERROR_MSG "ORA-64500: invalid PL/SQL XML parser handle"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-64500: invalid PL/SQL XML parser handle"
+#define OB_ERR_JAVA_SESSION_STATE_CLEARED__ORA_USER_ERROR_MSG "ORA-29550: Java session state cleared"
+#define OB_ERR_JAVA_SESSION_STATE_CLEARED__OBE_USER_ERROR_MSG "OBE-29550: Java session state cleared"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9688,7 +9692,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2533];
+extern int g_all_ob_errnos[2534];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

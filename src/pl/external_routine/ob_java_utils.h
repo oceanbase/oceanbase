@@ -27,8 +27,12 @@ namespace common
 
 class ObDatum;
 class ObObj;
+class ObObjMeta;
 
 }
+
+namespace share { namespace schema { class ObSchemaGetterGuard; } }
+namespace sql { class ObSQLSessionInfo; }
 
 namespace pl
 {
@@ -364,6 +368,16 @@ public:
                                   JNIEnv &env,
                                   jobject &buffer_handle);
 
+  static int build_udf_args_to_buffer(
+      const sql::ObSQLSessionInfo &session,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      int64_t batch_size,
+      const common::ObIArray<common::ObObjMeta> &arg_types,
+      const common::ObIArray<common::ObIArray<common::ObObj> *> &args,
+      common::ObIAllocator &alloc,
+      char *&buffer,
+      int64_t &buffer_size);
+
 private:
   static int parse_binary_response(const char *buffer,
                                    int64_t buffer_size,
@@ -375,8 +389,16 @@ private:
 class ObToJavaTypeMapperBase
 {
 public:
+  // JNI constructor (existing path: needs Java class lookup via init())
   ObToJavaTypeMapperBase(JNIEnv &env, ObIAllocator &alloc, int64_t batch_size)
-    : env_(env),
+    : env_(&env),
+      alloc_(alloc),
+      batch_size_(batch_size)
+  {  }
+
+  // Non-JNI constructor (sandbox path: no JNIEnv, skip class lookup)
+  ObToJavaTypeMapperBase(ObIAllocator &alloc, int64_t batch_size)
+    : env_(nullptr),
       alloc_(alloc),
       batch_size_(batch_size)
   {  }
@@ -390,6 +412,14 @@ public:
 
   inline ObPl__JavaUdf__Values *get_arg_values() { return &arg_; }
 
+  // Factory for sandbox path: creates the right mapper based on obj_meta,
+  // WITHOUT JNIEnv (no Java class lookup). operator() is pure C++
+  // (ObObj → protobuf Values), identical to JNI path.
+  static int create_for_sandbox(const common::ObObjMeta &obj_meta,
+                                int64_t batch_size,
+                                common::ObIAllocator &alloc,
+                                ObToJavaTypeMapperBase *&functor);
+
   TO_STRING_KV(K(OB_ISNULL(type_class_)), K_(batch_size));
 
 protected:
@@ -397,12 +427,15 @@ protected:
   {
     int ret = OB_SUCCESS;
 
-    jclass object_clazz = nullptr;
-
-    if (OB_FAIL(ObJavaUtils::get_cached_class(env_, clazz_name, object_clazz))) {
-      PL_LOG(WARN, "failed to get_cached_class", K(ret), K(clazz_name));
-    } else {
-      type_class_ = object_clazz;
+    // Java class lookup: skip for sandbox (env_ == nullptr), only needed by
+    // get_java_type_class() which the JNI path passes to Java.
+    if (OB_NOT_NULL(env_)) {
+      jclass object_clazz = nullptr;
+      if (OB_FAIL(ObJavaUtils::get_cached_class(*env_, clazz_name, object_clazz))) {
+        PL_LOG(WARN, "failed to get_cached_class", K(ret), K(clazz_name));
+      } else {
+        type_class_ = object_clazz;
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -434,7 +467,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObToJavaTypeMapperBase);
 
 protected:
-  JNIEnv &env_;
+  JNIEnv *env_;
   jclass type_class_ = nullptr;
   ObIAllocator &alloc_;
   int64_t batch_size_ = OB_INVALID_SIZE;
@@ -446,6 +479,11 @@ class ObToJavaByteTypeMapper final : public ObToJavaTypeMapperBase
 public:
   ObToJavaByteTypeMapper(JNIEnv &env, ObIAllocator &alloc, int64_t batch_size)
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObToJavaByteTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
   {  }
 
   int init()
@@ -489,6 +527,11 @@ public:
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObToJavaShortTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
+  {  }
+
   int init()
   {
     int ret = OB_SUCCESS;
@@ -528,6 +571,11 @@ class ObToJavaIntegerTypeMapper final : public ObToJavaTypeMapperBase
 public:
   ObToJavaIntegerTypeMapper(JNIEnv &env, ObIAllocator &alloc, int64_t batch_size)
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObToJavaIntegerTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
   {  }
 
   int init()
@@ -571,6 +619,11 @@ public:
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObToJavaLongTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
+  {  }
+
   int init()
   {
     int ret = OB_SUCCESS;
@@ -610,6 +663,11 @@ class ObToJavaFloatTypeMapper final : public ObToJavaTypeMapperBase
 public:
   ObToJavaFloatTypeMapper(JNIEnv &env, ObIAllocator &alloc, int64_t batch_size)
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObToJavaFloatTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
   {  }
 
   int init()
@@ -653,6 +711,11 @@ public:
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObToJavaDoubleTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
+  {  }
+
   int init()
   {
     int ret = OB_SUCCESS;
@@ -692,6 +755,11 @@ class ObToJavaBigDecimalTypeMapper final : public ObToJavaTypeMapperBase
 public:
   ObToJavaBigDecimalTypeMapper(JNIEnv &env, ObIAllocator &alloc, int64_t batch_size)
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObToJavaBigDecimalTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
   {  }
 
   int init()
@@ -740,6 +808,11 @@ public:
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObToJavaStringTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
+  {  }
+
   int init()
   {
     int ret = OB_SUCCESS;
@@ -786,6 +859,11 @@ public:
     : ObToJavaTypeMapperBase(env, alloc, batch_size)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObToJavaByteBufferTypeMapper(ObIAllocator &alloc, int64_t batch_size)
+    : ObToJavaTypeMapperBase(alloc, batch_size)
+  {  }
+
   int init()
   {
     int ret = OB_SUCCESS;
@@ -828,12 +906,26 @@ private:
 class ObFromJavaTypeMapperBase
 {
 public:
+  // JNI constructor (existing path: Oracle JNI needs Java class lookup via init())
   ObFromJavaTypeMapperBase(JNIEnv &env,
                            ObIAllocator &alloc,
                            int64_t batch_size,
                            const sql::ObExprResType &res_type,
                            sql::ObSQLSessionInfo &session)
-    : env_(env),
+    : env_(&env),
+      alloc_(alloc),
+      type_class_(nullptr),
+      batch_size_(batch_size),
+      res_type_(res_type),
+      session_(session)
+  {  }
+
+  // Non-JNI constructor (sandbox path: no JNIEnv, skip init())
+  ObFromJavaTypeMapperBase(ObIAllocator &alloc,
+                           int64_t batch_size,
+                           const sql::ObExprResType &res_type,
+                           sql::ObSQLSessionInfo &session)
+    : env_(nullptr),
       alloc_(alloc),
       type_class_(nullptr),
       batch_size_(batch_size),
@@ -851,21 +943,34 @@ public:
   inline void set_batch_size(int64_t batch_size) { batch_size_ = batch_size; }
   inline int64_t get_batch_size() const { return batch_size_; }
 
+  // Factory for sandbox path: creates the right mapper based on res_type,
+  // WITHOUT JNIEnv (no Java class lookup). The returned mapper's operator()
+  // is pure C++ (protobuf Values → ObObj + spi_convert), identical to JNI path.
+  static int create_for_sandbox(ObIAllocator &alloc,
+                                int64_t batch_size,
+                                const sql::ObExprResType &res_type,
+                                sql::ObSQLSessionInfo &session,
+                                ObFromJavaTypeMapperBase *&functor);
+
   TO_STRING_KV(K(OB_ISNULL(type_class_)));
 
 protected:
   int init(const char* clazz_name)
   {
     int ret = OB_SUCCESS;
-
+    if (OB_ISNULL(env_)) {
+      // Non-JNI (sandbox) path: skip Java class lookup. operator() doesn't
+      // need type_class_; it's only used by get_java_type_class() which the
+      // JNI Oracle path passes to Java. The sandbox sends the type name as a
+      // string instead.
+      return ret;
+    }
     jclass object_clazz = nullptr;
-
-    if (OB_FAIL(ObJavaUtils::get_cached_class(env_,clazz_name, object_clazz))) {
+    if (OB_FAIL(ObJavaUtils::get_cached_class(*env_, clazz_name, object_clazz))) {
       PL_LOG(WARN, "failed to get_cached_class", K(ret), K(clazz_name));
     } else {
       type_class_ = object_clazz;
     }
-
     return ret;
   }
 
@@ -876,7 +981,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObFromJavaTypeMapperBase);
 
 protected:
-  JNIEnv &env_;
+  JNIEnv *env_;  // nullptr for sandbox path; non-null for JNI path
   ObIAllocator &alloc_;
   jclass type_class_ = nullptr;
   int64_t batch_size_;
@@ -893,6 +998,14 @@ public:
                            const sql::ObExprResType &res_type,
                            sql::ObSQLSessionInfo &session)
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaByteTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
   {  }
 
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/Byte"); }
@@ -915,6 +1028,14 @@ public:
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaShortTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
+  {  }
+
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/Short"); }
 
   int operator()(const ObPl__JavaUdf__Values &values,
@@ -933,6 +1054,14 @@ public:
                               const sql::ObExprResType &res_type,
                               sql::ObSQLSessionInfo &session)
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaIntegerTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
   {  }
 
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/Integer"); }
@@ -955,6 +1084,14 @@ public:
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaLongTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
+  {  }
+
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/Long"); }
 
   int operator()(const ObPl__JavaUdf__Values &values,
@@ -973,6 +1110,14 @@ public:
                             const sql::ObExprResType &res_type,
                             sql::ObSQLSessionInfo &session)
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaFloatTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
   {  }
 
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/Float"); }
@@ -995,6 +1140,14 @@ public:
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaDoubleTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
+  {  }
+
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/Double"); }
 
   int operator()(const ObPl__JavaUdf__Values &values,
@@ -1012,6 +1165,14 @@ public:
                                  const sql::ObExprResType &res_type,
                                  sql::ObSQLSessionInfo &session)
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaBigDecimalTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
   {  }
 
   int init() { return ObFromJavaTypeMapperBase::init("java/math/BigDecimal"); }
@@ -1034,6 +1195,14 @@ public:
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
   {  }
 
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaStringTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
+  {  }
+
   int init() { return ObFromJavaTypeMapperBase::init("java/lang/String"); }
 
   int operator()(const ObPl__JavaUdf__Values &values,
@@ -1052,6 +1221,14 @@ public:
                                  const sql::ObExprResType &res_type,
                                  sql::ObSQLSessionInfo &session)
     : ObFromJavaTypeMapperBase(env, alloc, batch_size, res_type, session)
+  {  }
+
+  // Non-JNI constructor (sandbox path)
+  ObFromJavaByteBufferTypeMapper(ObIAllocator &alloc,
+         int64_t batch_size,
+         const sql::ObExprResType &res_type,
+         sql::ObSQLSessionInfo &session)
+    : ObFromJavaTypeMapperBase(alloc, batch_size, res_type, session)
   {  }
 
   int init() { return ObFromJavaTypeMapperBase::init("java/nio/ByteBuffer"); }

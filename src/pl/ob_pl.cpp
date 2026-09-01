@@ -37,10 +37,10 @@
 #include "pl/ob_pl_exception_handling.h"
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/ob_server.h"
-#include "pl/external_routine/ob_java_udf.h"
 #include "observer/mysql/obmp_utils.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "share/object/ob_obj_cast.h"
+#include "pl/external_routine/ob_java_udf_proxy.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "close_modules/oracle_pl/pl/opaque/ob_pl_xmldom.h"
 #endif
@@ -5773,12 +5773,17 @@ int ObPL::external_execute(ObPLExecCtx *ctx)
   if (OB_SUCC(ret)) {
     switch (func->get_external_routine_type()) {
       case ObExternalRoutineType::EXTERNAL_ORACLE_JAVA_ROUTINE: {
-        ObOraJavaRoutineExecutor executor(*ctx, *func);
-
-        if (OB_FAIL(executor.init())) {
-          LOG_WARN("failed to init ObOraJavaRoutineExecutor", K(ret));
-        } else if (OB_FAIL(executor.execute())) {
-          LOG_WARN("failed to execute Oracle Java routine", K(ret));
+        ObJavaUDFProxy *java_proxy = nullptr;
+        if (OB_FAIL(ObJavaUDFProxy::get_tenant_proxy(MTL_ID(), java_proxy))) {
+          LOG_WARN("get java udf proxy failed", K(ret));
+        } else if (OB_ISNULL(java_proxy)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("java_proxy is NULL", K(ret), K(MTL_ID()));
+        } else {
+          ObJavaUDFProxy::ProxyGuard proxy_guard(java_proxy);
+          if (OB_FAIL(java_proxy->execute_oracle(*ctx, *func))) {
+            LOG_WARN("failed to execute Oracle Java routine", K(ret));
+          }
         }
       } break;
       default: {

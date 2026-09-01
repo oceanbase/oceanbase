@@ -2215,6 +2215,9 @@ public:
   void set_retry_wait_event_begin_time();
   pl::ObOraJavaSessionState *get_ora_java_session_state() { return ora_java_session_state_; }
   void set_ora_java_session_state(pl::ObOraJavaSessionState *ora_java_session_state) { ora_java_session_state_ = ora_java_session_state; }
+  int64_t get_ora_java_sandbox_generation_id() const { return ora_java_sandbox_generation_id_; }
+  void set_ora_java_sandbox_generation_id(int64_t generation_id) { ora_java_sandbox_generation_id_ = generation_id; }
+  void reset_ora_java_sandbox_generation_id() { ora_java_sandbox_generation_id_ = 0; }
   int set_mlog_expected_rows(uint64_t mlog_table_id, int64_t expected_rows);
   int get_mlog_expected_rows(uint64_t mlog_table_id, int64_t &expected_rows) const;
   void reset_mlog_expected_rows();
@@ -2273,6 +2276,7 @@ private:
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;
   pl::ObOraJavaSessionState* ora_java_session_state_ = nullptr;
+  int64_t ora_java_sandbox_generation_id_ = 0;
   pl::ObPLTopContext *pl_top_context_ = nullptr;
 
   public:
