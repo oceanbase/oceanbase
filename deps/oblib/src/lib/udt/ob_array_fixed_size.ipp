@@ -391,7 +391,14 @@ int ObArrayFixedSize<T>::insert_from(const ObIArrayType &src, uint32_t begin, ui
     const uint32_t src_null_offset = begin * sizeof(uint8_t);
     int64_t curr_pos = this->data_container_->raw_data_.size();
     int64_t capacity = curr_pos + len;
-    if (OB_FAIL(this->data_container_->raw_data_.prepare_allocate(capacity))) {
+    if (capacity > this->data_container_->raw_data_.get_capacity()) {
+      int64_t doubled_cap = MAX(capacity, 2 * (this->data_container_->raw_data_.get_capacity()));
+      if (OB_FAIL(this->data_container_->raw_data_.reserve(doubled_cap))) {
+        OB_LOG(WARN, "reserve raw data failed", K(ret), K(doubled_cap));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(this->data_container_->raw_data_.prepare_allocate(capacity))) {
       OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
     } else {
       char *cur_data = reinterpret_cast<char *>(this->data_container_->raw_data_.get_data() + curr_pos);
@@ -399,7 +406,14 @@ int ObArrayFixedSize<T>::insert_from(const ObIArrayType &src, uint32_t begin, ui
       // insert nullbitmaps
       curr_pos = this->data_container_->null_bitmaps_.size();
       capacity = curr_pos + len;
-      if (OB_FAIL(this->data_container_->null_bitmaps_.prepare_allocate(capacity))) {
+      if (capacity > this->data_container_->null_bitmaps_.get_capacity()) {
+        int64_t doubled_null_cap = MAX(capacity, 2 * (this->data_container_->null_bitmaps_.get_capacity()));
+        if (OB_FAIL(this->data_container_->null_bitmaps_.reserve(doubled_null_cap))) {
+          OB_LOG(WARN, "reserve null bitmaps failed", K(ret), K(doubled_null_cap));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(this->data_container_->null_bitmaps_.prepare_allocate(capacity))) {
         OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
       } else {
         uint8_t *cur_null_bitmap = this->data_container_->null_bitmaps_.get_data() + curr_pos;

@@ -9419,6 +9419,19 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
     } else if (OB_FAIL(pullup_aggr->assign(*origin_expr))) {
       LOG_WARN("assign expr failed", K(ret));
     }
+  } else if (T_FUN_RETENTION == aggr_type) {
+    if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_RETENTION, pullup_aggr))) {
+      LOG_WARN("create retention pullup expr failed", K(ret));
+    } else if (OB_FAIL(pullup_aggr->assign(*origin_expr))) {
+      LOG_WARN("assign retention expr failed", K(ret));
+    } else {
+      pullup_aggr->get_real_param_exprs_for_update().reset();
+      if (OB_FAIL(pullup_aggr->add_real_param_expr(pushdown_expr))) {
+        LOG_WARN("add partial result param failed", K(ret));
+      } else if (OB_FAIL(pullup_aggr->formalize(session_info, false, false))) {
+        LOG_WARN("formalize retention pullup expr failed", K(ret));
+      }
+    }
   } else if (T_FUN_TOP_FRE_HIST == aggr_type) {
     if (OB_UNLIKELY(4 != origin_expr->get_real_param_count())) {
       ret = OB_ERR_UNEXPECTED;

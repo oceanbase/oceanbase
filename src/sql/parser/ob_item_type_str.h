@@ -85,6 +85,9 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_WINDOW_FUNNEL:
       ret = "WINDOW_FUNNEL";
       break;
+    case T_FUN_RETENTION:
+      ret = "RETENTION";
+      break;
     default:
       break;
   }

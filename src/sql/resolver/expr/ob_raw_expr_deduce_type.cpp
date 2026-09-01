@@ -1746,6 +1746,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         expr.set_result_type(result_type);
         break;
       }
+      case T_FUN_RETENTION: {
+        if (OB_FAIL(set_retention_result_type(expr, result_type))) {
+          LOG_WARN("set retention result type failed", K(ret));
+        }
+        break;
+      }
       case T_FUN_SYS_BIT_AND:
       case T_FUN_SYS_BIT_OR:
       case T_FUN_SYS_BIT_XOR: {
@@ -3870,6 +3876,59 @@ int ObRawExprDeduceType::set_array_agg_result_type(ObAggFunRawExpr &expr,
         }
       }
       if (OB_SUCC(ret)) {
+        result_type.set_collection(subschema_id);
+        expr.set_result_type(result_type);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExprDeduceType::set_retention_result_type(ObAggFunRawExpr &expr,
+                                                    ObExprResType &result_type)
+{
+  int ret = OB_SUCCESS;
+  const int64_t param_count = expr.get_real_param_count();
+  bool has_collection_param = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
+    ObRawExpr *p = expr.get_param_expr(i);
+    if (OB_ISNULL(p)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("retention param expr is null", K(ret), K(i));
+    } else {
+      const ObObjType param_type = p->get_data_type();
+      const ObObjTypeClass tc = ob_obj_type_class(param_type);
+      // In the group-by pushdown stage-2 (pullup) plan, param[0] is the partial
+      // ARRAY<TINYINT> result produced by stage-1, so a collection-typed param is
+      // expected and must be accepted here.
+      if (ob_is_collection_sql_type(param_type)) {
+        has_collection_param = true;
+      } else if (tc != ObIntTC && tc != ObUIntTC && tc != ObBitTC) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("retention param must be integer/bool type",
+                 K(ret), K(i), K(param_type));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && has_collection_param && 1 != param_count) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("retention with array param must have exactly one param",
+             K(ret), K(param_count));
+  }
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(my_session_);
+    ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
+    if (OB_ISNULL(session) || OB_ISNULL(exec_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session or exec_ctx is null", K(ret));
+    } else {
+      ObDataType elem_type;
+      elem_type.meta_.set_tinyint();
+      uint16_t subschema_id;
+      if (OB_FAIL(exec_ctx->get_subschema_id_by_collection_elem_type(
+              ObNestedType::OB_ARRAY_TYPE, elem_type, subschema_id))) {
+        LOG_WARN("failed to get subschema id", K(ret));
+      } else {
         result_type.set_collection(subschema_id);
         expr.set_result_type(result_type);
       }

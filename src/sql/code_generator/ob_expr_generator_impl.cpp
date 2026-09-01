@@ -1681,7 +1681,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
                         || T_FUN_ORA_XMLAGG == expr.get_expr_type()
                         || T_FUN_ARG_MIN == expr.get_expr_type()
                         || T_FUN_ARG_MAX == expr.get_expr_type()) ? 2 :
-                        (T_FUN_WINDOW_FUNNEL == expr.get_expr_type()) ? expr.get_param_count() : 1;
+                        (T_FUN_WINDOW_FUNNEL == expr.get_expr_type() ||
+                         T_FUN_RETENTION == expr.get_expr_type()) ? expr.get_param_count() : 1;
     aggr_expr->set_real_param_col_count(col_count);
     aggr_expr->set_all_param_col_count(col_count);
     const ObIArray<ObRawExpr*> &real_param_exprs = expr.get_real_param_exprs();
@@ -1751,7 +1752,8 @@ int ObExprGeneratorImpl::visit(ObAggFunRawExpr &expr)
         || (T_FUN_ORA_JSON_OBJECTAGG == expr.get_expr_type() && expr.get_real_param_count() > 1)
         || (T_FUN_ARG_MAX == expr.get_expr_type() && expr.get_real_param_count() == 2)
         || (T_FUN_ARG_MIN == expr.get_expr_type() && expr.get_real_param_count() == 2)
-        || (T_FUN_WINDOW_FUNNEL == expr.get_expr_type() && expr.get_real_param_count() >= 3)) {
+        || (T_FUN_WINDOW_FUNNEL == expr.get_expr_type() && expr.get_real_param_count() >= 3)
+        || (T_FUN_RETENTION == expr.get_expr_type() && expr.get_real_param_count() >= 1)) {
       ObExprOperator *op = NULL;
       if (OB_FAIL(factory_.alloc(T_OP_AGG_PARAM_LIST, op))) {
         LOG_WARN("fail to alloc expr_op", K(ret));

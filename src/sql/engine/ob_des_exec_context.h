@@ -26,6 +26,8 @@ public:
   ObDesExecContext(common::ObIAllocator &allocator, ObSQLSessionMgr *session_mgr);
   virtual ~ObDesExecContext();
   int create_my_session(uint64_t tenant_id);
+  int attach_my_session_unregistered(ObSQLSessionInfo *session);
+  int detach_my_session_unregistered(ObSQLSessionInfo *session);
   virtual int deserialize(const char* buf, const int64_t data_len, int64_t& pos);
   void cleanup_session();
   void show_session();

@@ -3412,6 +3412,10 @@ DEF_BOOL(_enable_trigger_dml_snapshot_opt, OB_TENANT_PARAMETER, "False",
          " reducing RPC count on data-local execution.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(_das_deserialize_lib_cache_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
+        "specifies the percentage of tenant lib cache memory that das deserialize cache may use. The value 0 disables das deserialize cache.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(ob_enable_java_udf_sandbox, OB_CLUSTER_PARAMETER, "False",
           "Enable or disable sandbox mode for java udf execution.",
           ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

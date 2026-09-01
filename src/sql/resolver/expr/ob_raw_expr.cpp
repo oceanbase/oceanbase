@@ -4374,6 +4374,13 @@ int ObAggFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     if (OB_FAIL(BUF_PRINTF("%s(", get_name_dblink(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
+  } else if (T_FUN_RETENTION == get_expr_type()
+             && get_real_param_count() == 1
+             && ob_is_collection_sql_type(
+                 get_real_param_exprs().at(0)->get_data_type())) {
+    if (OB_FAIL(BUF_PRINTF("T_FUN_RETENTION_MERGE("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
   } else {
     if (OB_FAIL(BUF_PRINTF("%s(", get_type_name(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));

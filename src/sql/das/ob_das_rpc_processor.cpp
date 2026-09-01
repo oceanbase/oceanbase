@@ -75,6 +75,7 @@ private:
   int process_task(ObDASTaskArg &task_arg, ObDASTaskResp &task_resp);
   void cleanup();
 private:
+  observer::ObReqTimeGuard rt_guard_;
   ObDASTaskFactory das_factory_;
   ObDesExecContext exec_ctx_;
   ObExprFrameInfo frame_info_;
@@ -308,7 +309,9 @@ void ObDASLookupBatchExecutor::cleanup()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
+  das_remote_info_.release_cached_ctdef_obj();
   das_factory_.cleanup();
+  das_remote_info_.cleanup_deser_cache_session();
   if (das_remote_info_.trans_desc_ != nullptr) {
     MTL(transaction::ObTransService*)->release_tx(*das_remote_info_.trans_desc_);
     das_remote_info_.trans_desc_ = nullptr;
@@ -645,7 +648,9 @@ void ObDASBaseAccessP<pcode>::cleanup()
 {
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
   GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
+  das_remote_info_.release_cached_ctdef_obj();
   das_factory_.cleanup();
+  das_remote_info_.cleanup_deser_cache_session();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;
   if (das_remote_info_.trans_desc_ != nullptr) {
     MTL(transaction::ObTransService*)->release_tx(*das_remote_info_.trans_desc_);

@@ -713,6 +713,11 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
   case T_FUN_WINDOW_FUNNEL: {
     return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_1;
   }
+  case T_FUN_RETENTION: {
+    uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+    return (cluster_version >= CLUSTER_VERSION_4_4_2_3 && cluster_version < CLUSTER_VERSION_4_5_0_0)
+            || (cluster_version >= CLUSTER_VERSION_5_0_2_0);
+  }
   default:
     return false;
   }

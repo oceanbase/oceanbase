@@ -76,7 +76,14 @@ int ObArrayBinary::insert_from(const ObIArrayType &src, uint32_t begin, uint32_t
     uint32_t src_len = src.get_offsets()[begin + len - 1] - src_offset;
     int64_t curr_pos = data_container_->raw_data_.size();
     int64_t capacity = curr_pos + src_len;
-    if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
+    if (capacity > data_container_->raw_data_.get_capacity()) {
+      int64_t doubled_cap = MAX(capacity, 2 * (data_container_->raw_data_.get_capacity()));
+      if (OB_FAIL(data_container_->raw_data_.reserve(doubled_cap))) {
+        OB_LOG(WARN, "reserve raw data failed", K(ret), K(doubled_cap));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(data_container_->raw_data_.prepare_allocate(capacity))) {
       OB_LOG(WARN, "allocate memory failed", K(ret), K(capacity));
     } else {
       char *cur_data = data_container_->raw_data_.get_data() + curr_pos;

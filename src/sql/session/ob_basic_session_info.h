@@ -1635,6 +1635,17 @@ public:
   void set_curr_trans_last_stmt_end_time(int64_t t) { curr_trans_last_stmt_end_time_ = t; }
   int64_t get_curr_trans_last_stmt_end_time() const { return curr_trans_last_stmt_end_time_; }
 
+  // for DAS deserialize cache
+  int das_serialize_split(char *buf, int64_t buf_len, int64_t &pos) const;
+  int das_serialize_split_size(int64_t &inv_len, int64_t &var_len) const;
+  int das_build_template_invariant_section(const char *buf, const int64_t data_len, int64_t &pos) { return das_deserialize_invariant_(buf, data_len, pos); }
+  int das_apply_invariant_section(const ObBasicSessionInfo &templ) { return das_apply_invariant_from(templ); }
+  int das_decode_volatile_section(const char *buf, const int64_t data_len, int64_t &pos) { return das_deserialize_volatile_(buf, data_len, pos); }
+  void das_detach_borrowed_sys_vars();
+  bool is_das_borrowed_sys_vars() const { return is_das_borrowed_sys_vars_; }
+  int das_deser_cache_begin_pool_request();
+  int das_deser_cache_end_pool_request(bool &can_return_to_pool);
+
   // for SESSION_SYNC_SYS_VAR serialize and deserialize.
   int serialize_sync_sys_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, char *buf, const int64_t &buf_len, int64_t &pos);
   int deserialize_sync_sys_vars(int64_t &deserialize_sys_var_count, const char *buf, const int64_t &data_len, int64_t &pos, bool is_error_sync = false);
@@ -1749,7 +1760,16 @@ public:
   // 或 QUERY_SENSITIVE 标记)。这些系统变量在 inner connection 复用 PX Worker 的 session 时，拿到的变量值是 base_value
   // 而不是 default value。
   int init_default_value_changed_serialized_variables(const bool is_sys_tenant);
+
 protected:
+  // for DAS deserialize cache
+  virtual int das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const;
+  virtual int das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const;
+  virtual int das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos);
+  virtual int das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos);
+  virtual int das_apply_invariant_from(const ObBasicSessionInfo &templ);
+  int das_borrow_sys_vars_from(const ObBasicSessionInfo &templ);
+
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
                                const bool is_update_sys_var = false);
@@ -2051,6 +2071,41 @@ public:
       }
     }
     ~SysVarsCacheData() {}
+
+    void assign(const SysVarsCacheData &other)
+    {
+      if (this != &other) {
+        *this = other;
+        for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
+          if (other.nls_formats_[i].empty()) {
+            nls_formats_[i].reset();
+          } else {
+            nls_formats_[i].assign_ptr(nls_formats_buf_[i], other.nls_formats_[i].length());
+          }
+        }
+        if (other.iso_nls_currency_.empty()) {
+          iso_nls_currency_.reset();
+        } else {
+          iso_nls_currency_.assign_ptr(iso_nls_currency_buf_, other.iso_nls_currency_.length());
+        }
+        if (other.log_row_value_option_.empty()) {
+          log_row_value_option_.reset();
+        } else {
+          log_row_value_option_.assign_ptr(log_row_value_option_buf_,
+                                           other.log_row_value_option_.length());
+        }
+        if (other.ob_trace_info_.empty()) {
+          ob_trace_info_.reset();
+        } else {
+          ob_trace_info_.assign_ptr(trace_info_buf_, other.ob_trace_info_.length());
+        }
+        if (other.ob_plsql_ccflags_.empty()) {
+          ob_plsql_ccflags_.reset();
+        } else {
+          ob_plsql_ccflags_.assign_ptr(plsql_ccflags_, other.ob_plsql_ccflags_.length());
+        }
+      }
+    }
 
     void reset()
     {
@@ -2526,6 +2581,15 @@ private:
       return inc_flags_ == 0 && ext_inc_flags_ == 0;
     }
 
+    void assign(const SysVarsCache &other)
+    {
+      if (this != &other) {
+        inc_data_.assign(other.inc_data_);
+        inc_flags_ = other.inc_flags_;
+        ext_inc_flags_ = other.ext_inc_flags_;
+      }
+    }
+
   private:
 
     inline void set_bit(int bit_pos) {
@@ -2799,6 +2863,7 @@ private:
   common::ObWrapperAllocator bucket_allocator_wrapper_;
   ObSessionValMap user_var_val_map_; // user variables
   share::ObBasicSysVar *sys_vars_[share::ObSysVarFactory::ALL_SYS_VARS_COUNT]; // system variables
+  bool is_das_borrowed_sys_vars_;
   common::ObSEArray<int64_t, 32> influence_plan_var_indexs_;
   common::ObString sys_var_in_pc_str_;
   // configurations that will influence execution plan

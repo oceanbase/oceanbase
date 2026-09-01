@@ -1045,7 +1045,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_RB_AND_CARDINALITY_AGG:
       case T_FUN_ARG_MAX:
       case T_FUN_ARG_MIN:
-      case T_FUN_WINDOW_FUNNEL: {
+      case T_FUN_WINDOW_FUNNEL:
+      case T_FUN_RETENTION: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -6106,6 +6107,32 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           }
         }
       }
+    } else if (T_FUN_RETENTION == node->type_) {
+      const ParseNode *expr_list_node = node->children_[0];
+      if (OB_ISNULL(expr_list_node) || T_EXPR_LIST != expr_list_node->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid retention arguments", K(ret));
+      } else if (expr_list_node->num_child_ < 1 || expr_list_node->num_child_ > 32) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("retention requires 1 to 32 arguments", K(ret), K(expr_list_node->num_child_));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr_list_node->num_child_; ++i) {
+        ObRawExpr *condition_expr = nullptr;
+        ObRawExpr *new_condition_expr = nullptr;
+        if (OB_ISNULL(expr_list_node->children_[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("retention param is null", K(ret), K(i));
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(expr_list_node->children_[i], condition_expr)))) {
+          LOG_WARN("fail to resolve retention param", K(ret), K(i));
+        } else if (OB_FAIL(ObRawExprUtils::try_create_bool_expr(condition_expr, new_condition_expr, ctx_.expr_factory_))) {
+          LOG_WARN("fail to create bool expr", K(ret));
+        } else if (OB_ISNULL(new_condition_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("new condition expr is null", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(new_condition_expr))) {
+          LOG_WARN("fail to add param expr", K(ret));
+        }
+      }
     } else if (T_FUN_COUNT != node->type_
         || (T_FUN_COUNT == node->type_ && 2 == node->num_child_ && T_ALL == node->children_[0]->type_)
         || T_FUN_GROUPING == node->type_) {
@@ -9049,7 +9076,8 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_JSON_OBJECTAGG == func_type
         || T_FUN_ARG_MIN == func_type
         || T_FUN_ARG_MAX == func_type
-        || T_FUN_WINDOW_FUNNEL == func_type) {
+        || T_FUN_WINDOW_FUNNEL == func_type
+        || T_FUN_RETENTION == func_type) {
       ctx_.is_win_agg_ = true;
       if (T_FUN_PL_AGG_UDF == func_type) {
         ParseNode *agg_udf_node = NULL;

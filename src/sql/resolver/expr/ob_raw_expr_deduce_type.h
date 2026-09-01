@@ -132,6 +132,7 @@ private:
 
   int set_agg_xmlagg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
   int set_array_agg_result_type(ObAggFunRawExpr &expr, ObExprResType& result_type);
+  int set_retention_result_type(ObAggFunRawExpr &expr, ObExprResType &result_type);
 
   // helper functions for add_implicit_cast
   int add_implicit_cast_for_op_row(ObRawExpr *&child_ptr,

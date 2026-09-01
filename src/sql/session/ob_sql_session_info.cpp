@@ -2273,6 +2273,288 @@ int ObSQLSessionInfo::calc_remote_extra_sess_state_serialize_size_(int64_t &len)
   return ret;
 }
 
+#define DAS_INV(...)                            \
+  do {                                          \
+    if (invariant_phase) {                      \
+      LST_DO_CODE(OB_UNIS_ENCODE, __VA_ARGS__); \
+    }                                           \
+  } while (0)
+
+#define DAS_VAR(...)                            \
+  do {                                          \
+    if (!invariant_phase) {                     \
+      LST_DO_CODE(OB_UNIS_ENCODE, __VA_ARGS__); \
+    }                                           \
+  } while (0)
+
+int ObSQLSessionInfo::das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBasicSessionInfo::das_serialize_phase_(buf, buf_len, pos, invariant_phase))) {
+    LOG_WARN("base das serialize phase failed", K(ret), K(invariant_phase));
+  } else {
+    DAS_VAR(thread_data_.cur_query_start_time_);            // [VOLATILE] per-query
+    DAS_INV(user_priv_set_,
+            db_priv_set_);
+    DAS_VAR(trans_type_);                                   // [VOLATILE] tx
+    DAS_INV(global_sessid_,
+            inner_flag_,
+            is_max_availability_mode_,
+            session_type_,
+            has_temp_table_flag_,
+            enable_early_lock_release_,
+            enable_role_array_,
+            in_definer_named_proc_,
+            priv_user_id_,
+            xa_end_timeout_seconds_,
+            prelock_,
+            proxy_version_,
+            min_proxy_version_ps_);
+    DAS_VAR(thread_data_.is_in_retry_);                     // [VOLATILE] retry status
+    DAS_INV(ddl_info_,
+            gtt_session_scope_unique_id_,
+            gtt_trans_scope_unique_id_,
+            gtt_session_scope_ids_,
+            gtt_trans_scope_ids_);
+    DAS_VAR(affected_rows_);                                // [VOLATILE] per-query
+    DAS_INV(unit_gc_min_sup_proxy_version_,
+            gtt_tablet_info_map_,
+            trans_gtt_v2_sequence_,
+            min_data_version_of_init_sess_);
+    if (OB_FAIL(ret)) {
+    } else if (!invariant_phase
+               && OB_FAIL(const_cast<ObSQLSessionInfo *>(this)->
+                              serialize_remote_extra_sess_state_(buf, buf_len, pos))) {
+      LOG_WARN("serialize das volatile remote extra session state failed", K(ret));
+    }
+  }
+  return ret;
+}
+#undef DAS_INV
+#undef DAS_VAR
+
+#define DAS_INV(...)                             \
+  do {                                           \
+    if (invariant_phase) {                       \
+      LST_DO_CODE(OB_UNIS_ADD_LEN, __VA_ARGS__); \
+    }                                            \
+  } while (0)
+
+#define DAS_VAR(...)                             \
+  do {                                           \
+    if (!invariant_phase) {                      \
+      LST_DO_CODE(OB_UNIS_ADD_LEN, __VA_ARGS__); \
+    }                                            \
+  } while (0)
+
+int ObSQLSessionInfo::das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBasicSessionInfo::das_serialize_phase_size_(len, invariant_phase))) {
+    LOG_WARN("base das serialize phase size failed", K(ret), K(invariant_phase));
+  } else {
+    DAS_VAR(thread_data_.cur_query_start_time_);
+    DAS_INV(user_priv_set_,
+            db_priv_set_);
+    DAS_VAR(trans_type_);
+    DAS_INV(global_sessid_,
+            inner_flag_,
+            is_max_availability_mode_,
+            session_type_,
+            has_temp_table_flag_,
+            enable_early_lock_release_,
+            enable_role_array_,
+            in_definer_named_proc_,
+            priv_user_id_,
+            xa_end_timeout_seconds_,
+            prelock_,
+            proxy_version_,
+            min_proxy_version_ps_);
+    DAS_VAR(thread_data_.is_in_retry_);
+    DAS_INV(ddl_info_,
+            gtt_session_scope_unique_id_,
+            gtt_trans_scope_unique_id_,
+            gtt_session_scope_ids_,
+            gtt_trans_scope_ids_);
+    DAS_VAR(affected_rows_);
+    DAS_INV(unit_gc_min_sup_proxy_version_,
+            gtt_tablet_info_map_,
+            trans_gtt_v2_sequence_,
+            min_data_version_of_init_sess_);
+    if (OB_FAIL(ret)) {
+    } else if (!invariant_phase) {
+      int64_t extra_len = 0;
+      if (OB_FAIL(const_cast<ObSQLSessionInfo *>(this)->
+                      calc_remote_extra_sess_state_serialize_size_(extra_len))) {
+        LOG_WARN("get das volatile remote extra session state serialize size failed", K(ret));
+      } else {
+        len += extra_len;
+      }
+    }
+  }
+  return ret;
+}
+#undef DAS_INV
+#undef DAS_VAR
+
+int ObSQLSessionInfo::das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBasicSessionInfo::das_deserialize_invariant_(buf, data_len, pos))) {
+    LOG_WARN("base das deserialize invariant failed", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE,
+        user_priv_set_,
+        db_priv_set_,
+        global_sessid_,
+        inner_flag_,
+        is_max_availability_mode_,
+        session_type_,
+        has_temp_table_flag_,
+        enable_early_lock_release_,
+        enable_role_array_,
+        in_definer_named_proc_,
+        priv_user_id_,
+        xa_end_timeout_seconds_,
+        prelock_,
+        proxy_version_,
+        min_proxy_version_ps_,
+        ddl_info_,
+        gtt_session_scope_unique_id_,
+        gtt_trans_scope_unique_id_,
+        gtt_session_scope_ids_,
+        gtt_trans_scope_ids_,
+        unit_gc_min_sup_proxy_version_,
+        gtt_tablet_info_map_,
+        trans_gtt_v2_sequence_,
+        min_data_version_of_init_sess_);
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBasicSessionInfo::das_deserialize_volatile_(buf, data_len, pos))) {
+    LOG_WARN("base das deserialize volatile failed", K(ret));
+  } else {
+    LST_DO_CODE(OB_UNIS_DECODE,
+        thread_data_.cur_query_start_time_,
+        trans_type_,
+        thread_data_.is_in_retry_,
+        affected_rows_);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(deserialize_remote_extra_sess_state_(buf, data_len, pos))) {
+      LOG_WARN("deserialize das volatile remote extra session state failed", K(ret));
+    } else {
+      (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_apply_invariant_from(const ObBasicSessionInfo &templ)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBasicSessionInfo::das_apply_invariant_from(templ))) {
+    LOG_WARN("base das apply invariant failed", K(ret));
+  } else {
+    // templ is always an ObSQLSessionInfo (the cache template is built as one).
+    const ObSQLSessionInfo &s = static_cast<const ObSQLSessionInfo &>(templ);
+    user_priv_set_ = s.user_priv_set_;
+    db_priv_set_ = s.db_priv_set_;
+    global_sessid_ = s.global_sessid_;
+    inner_flag_ = s.inner_flag_;
+    is_max_availability_mode_ = s.is_max_availability_mode_;
+    session_type_ = s.session_type_;
+    has_temp_table_flag_ = s.has_temp_table_flag_;
+    enable_early_lock_release_ = s.enable_early_lock_release_;
+    in_definer_named_proc_ = s.in_definer_named_proc_;
+    priv_user_id_ = s.priv_user_id_;
+    xa_end_timeout_seconds_ = s.xa_end_timeout_seconds_;
+    prelock_ = s.prelock_;
+    proxy_version_ = s.proxy_version_;
+    min_proxy_version_ps_ = s.min_proxy_version_ps_;
+    ddl_info_ = s.ddl_info_;
+    gtt_session_scope_unique_id_ = s.gtt_session_scope_unique_id_;
+    gtt_trans_scope_unique_id_ = s.gtt_trans_scope_unique_id_;
+    unit_gc_min_sup_proxy_version_ = s.unit_gc_min_sup_proxy_version_;
+    trans_gtt_v2_sequence_ = s.trans_gtt_v2_sequence_;
+    min_data_version_of_init_sess_ = s.min_data_version_of_init_sess_;
+    if (OB_FAIL(enable_role_array_.assign(s.enable_role_array_))) {
+      LOG_WARN("fail to assign enable_role_array", K(ret));
+    } else if (OB_FAIL(gtt_session_scope_ids_.assign(s.gtt_session_scope_ids_))) {
+      LOG_WARN("fail to assign gtt_session_scope_ids", K(ret));
+    } else if (OB_FAIL(gtt_trans_scope_ids_.assign(s.gtt_trans_scope_ids_))) {
+      LOG_WARN("fail to assign gtt_trans_scope_ids", K(ret));
+    } else {
+      const int64_t ser_size = s.gtt_tablet_info_map_.get_serialize_size();
+      ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_SESSION);
+      char *tmp_buf = static_cast<char *>(tmp_alloc.alloc(ser_size));
+      int64_t ser_pos = 0;
+      int64_t des_pos = 0;
+      if (OB_ISNULL(tmp_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc gtt map round-trip buffer failed", K(ret), K(ser_size));
+      } else if (OB_FAIL(s.gtt_tablet_info_map_.serialize(tmp_buf, ser_size, ser_pos))) {
+        LOG_WARN("serialize template gtt_tablet_info_map failed", K(ret));
+      } else if (OB_FAIL(gtt_tablet_info_map_.deserialize(tmp_buf, ser_pos, des_pos))) {
+        LOG_WARN("deserialize gtt_tablet_info_map failed", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    das_detach_borrowed_sys_vars();
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_deser_cache_begin_pool_request()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBasicSessionInfo::das_deser_cache_begin_pool_request())) {
+    LOG_WARN("begin das deser cache pool request failed", K(ret));
+  } else {
+    warnings_buf_.reset();
+    show_warnings_buf_.reset();
+    audit_record_wrapper_.reset();
+    trans_type_ = transaction::ObTxClass::USER;
+    affected_rows_ = -1;
+    has_query_executed_ = false;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_deser_cache_end_pool_request(bool &can_return_to_pool)
+{
+  int ret = OB_SUCCESS;
+  const bool sql_poolable = !has_temp_table_flag_
+                            && gtt_session_scope_ids_.empty()
+                            && gtt_trans_scope_ids_.empty()
+                            && gtt_tablet_info_map_.is_empty()
+                            && 0 == package_state_map_.size()
+                            && 0 == contexts_map_.size()
+                            && 0 == sequence_currval_map_.size()
+                            && 0 == dblink_sequence_id_map_.size()
+                            && 0 == sock_fd_map_.size();
+  if (OB_FAIL(ObBasicSessionInfo::das_deser_cache_end_pool_request(can_return_to_pool))) {
+    LOG_WARN("end das deser cache pool request failed", K(ret));
+  }
+  can_return_to_pool = can_return_to_pool && sql_poolable && OB_SUCC(ret);
+  warnings_buf_.reset();
+  show_warnings_buf_.reset();
+  end_trans_cb_.reset();
+  audit_record_wrapper_.reset();
+  trans_type_ = transaction::ObTxClass::USER;
+  affected_rows_ = -1;
+  has_query_executed_ = false;
+  curr_trans_start_time_ = 0;
+  curr_trans_last_stmt_time_ = 0;
+  txn_free_route_ctx_.reset();
+  txn_free_route_ctx_.set_sessid(get_server_sid());
+  return ret;
+}
+
 int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;

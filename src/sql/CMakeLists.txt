@@ -54,6 +54,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_context.cpp
   das/ob_das_define.cpp
   das/ob_das_delete_op.cpp
+  das/ob_das_deserialize_cache.cpp
   das/ob_das_dml_ctx_define.cpp
   das/ob_das_extra_data.cpp
   das/ob_das_factory.cpp

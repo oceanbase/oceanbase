@@ -14,9 +14,17 @@
 #include "ob_das_task.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/utility.h"
+#include "lib/rc/context.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/das/ob_das_rpc_processor.h"
+#include "sql/das/ob_das_deserialize_cache.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/expr/ob_expr_frame_info.h"
+#include "sql/plan_cache/ob_plan_cache.h"
+#include "sql/plan_cache/ob_cache_object_factory.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -42,6 +50,70 @@ namespace sql
 {
 ERRSIM_POINT_DEF(ERRSIM_LOOKUP_BATCH_FILL_BUFFER);
 
+bool ObDASRemoteInfo::ObDasCacheMemStat::can_add_das_cache_obj(ObPlanCache &lib_cache,
+                                                              const ObDasDeserializeCacheObj &obj,
+                                                              const ObDasDeserializeCacheKey &key)
+{
+  bool can_add = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    percentage_ = static_cast<int64_t>(tenant_config->_das_deserialize_lib_cache_percentage);
+  }
+  if (percentage_ > 0) {
+    mem_limit_ = lib_cache.get_mem_limit() / 100 * percentage_;
+    lib::ObLabel label = LC_NS_TYPE_LABELS[ObLibCacheNameSpace::NS_DAS_DESER];
+    // Label memory is a periodically refreshed snapshot. Add the new entry's
+    // estimated size conservatively because it is usually absent from the snapshot.
+    label_hold_ = lib_cache.get_label_hold(label);
+    entry_size_ = obj.get_mem_size()
+        + key.key_.length()
+        + sizeof(ObDasDeserializeCacheNode)
+        + sizeof(ObDasDeserializeCacheKey);
+    can_add = label_hold_ >= 0
+        && label_hold_ < mem_limit_
+        && entry_size_ <= mem_limit_ - label_hold_;
+  }
+  return can_add;
+}
+
+int ObDASRemoteInfo::reserve_len_prefix(char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(buf);
+  if (OB_UNLIKELY(pos + serialization::OB_SERIALIZE_SIZE_NEED_BYTES > buf_len)) {
+    ret = OB_SIZE_OVERFLOW;
+  } else {
+    pos += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  }
+  return ret;
+}
+
+int ObDASRemoteInfo::fill_len_prefix(char *buf, const int64_t len_pos, const int64_t blob_len)
+{
+  int64_t tmp_pos = 0;
+  return serialization::encode_fixed_bytes_i64(buf + len_pos,
+                                               serialization::OB_SERIALIZE_SIZE_NEED_BYTES,
+                                               tmp_pos,
+                                               blob_len);
+}
+
+int ObDASRemoteInfo::serialize_session_blob(ObSQLSessionInfo &session,
+                                            bool use_split_session,
+                                            char *buf,
+                                            int64_t buf_len,
+                                            int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (use_split_session) {
+    if (OB_FAIL(session.das_serialize_split(buf, buf_len, pos))) {
+      LOG_WARN("das_serialize_split failed", K(ret));
+    }
+  } else {
+    OB_UNIS_ENCODE(session);
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObDASRemoteInfo)
 {
   int ret = OB_SUCCESS;
@@ -55,17 +127,35 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   }
   if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
     OB_UNIS_ENCODE(session->get_effective_tenant_id());
-    OB_UNIS_ENCODE(*session);
+    // Deser-cache format: length prefix of the session blob for cache-key locating.
+    const int64_t sess_len_pos = pos;
+    if (OB_SUCC(ret) && use_deser_cache_format_ &&
+        OB_FAIL(reserve_len_prefix(buf, buf_len, pos))) {
+      LOG_WARN("reserve session blob length prefix failed", K(ret), K(pos), K(buf_len));
+    }
+    const int64_t blob_begin = pos;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(serialize_session_blob(*session, use_deser_cache_format_, buf, buf_len, pos))) {
+      LOG_WARN("serialize session blob failed", K(ret));
+    }
+    if (OB_SUCC(ret) && use_deser_cache_format_ &&
+        OB_FAIL(fill_len_prefix(buf, sess_len_pos, pos - blob_begin))) {
+      LOG_WARN("fill session blob length prefix failed", K(ret), K(sess_len_pos), K(pos));
+    }
   }
-  if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::serialize_expr_frame_info<true>(
-        buf, buf_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
-  }
-  OB_UNIS_ENCODE(ctdefs_.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
-    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
-    OB_UNIS_ENCODE(ctdef->op_type_);
-    OB_UNIS_ENCODE(*ctdef);
+  if (use_deser_cache_format_) {
+    OZ(serialize_cacheable_ctdef_expr(buf, buf_len, pos));
+  } else {
+    if (OB_SUCC(ret) && has_expr_) {
+      OZ(ObPxTreeSerializer::serialize_expr_frame_info<true>(
+          buf, buf_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
+    }
+    OB_UNIS_ENCODE(ctdefs_.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+      const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+      OB_UNIS_ENCODE(ctdef->op_type_);
+      OB_UNIS_ENCODE(*ctdef);
+    }
   }
   OB_UNIS_ENCODE(rtdefs_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < rtdefs_.count(); ++i) {
@@ -88,12 +178,14 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   OB_UNIS_ENCODE(plan_id_);
   OB_UNIS_ENCODE(plan_hash_);
   //Serializing the reference relationship between ctdefs and rtdefs.
-  for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
-    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
-    OB_UNIS_ENCODE(ctdef->children_cnt_);
-    for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
-      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
-      OB_UNIS_ENCODE(child_ctdef);
+  if (!use_deser_cache_format_) {
+    for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+      const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+      OB_UNIS_ENCODE(ctdef->children_cnt_);
+      for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+        const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+        OB_UNIS_ENCODE(child_ctdef);
+      }
     }
   }
   for (int i = 0; OB_SUCC(ret) && i < rtdefs_.count(); ++i) {
@@ -144,10 +236,48 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   }
   if (OB_SUCC(ret) && (need_calc_expr_ || need_calc_udf_)) {
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    int64_t sess_blob_len = 0;
     ObDesExecContext *des_exec_ctx = static_cast<ObDesExecContext*>(exec_ctx_);
     OB_UNIS_DECODE(tenant_id);
-    OZ(des_exec_ctx->create_my_session(tenant_id));
-    OB_UNIS_DECODE(*des_exec_ctx->get_my_session());
+    if (use_deser_cache_format_) {
+      OB_UNIS_DECODE(sess_blob_len);
+      if (OB_SUCC(ret) && OB_UNLIKELY(sess_blob_len < 0 || pos + sess_blob_len > data_len)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid session blob length prefix", K(ret), K(sess_blob_len), K(pos), K(data_len));
+      }
+    }
+    const int64_t sess_blob_begin = pos;
+    if (!use_deser_cache_format_) {
+      OZ(des_exec_ctx->create_my_session(tenant_id));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (use_deser_cache_format_) {
+      OZ(deser_session_with_cache(*this,
+                                  *des_exec_ctx,
+                                  tenant_id,
+                                  buf,
+                                  data_len,
+                                  pos,
+                                  sess_blob_begin,
+                                  sess_blob_len));
+    } else {
+      OB_UNIS_DECODE(*des_exec_ctx->get_my_session());
+    }
+    if (OB_SUCC(ret) && use_deser_cache_format_ &&
+        OB_UNLIKELY(pos - sess_blob_begin != sess_blob_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session blob length prefix mismatch",
+               K(ret),
+               K(sess_blob_len),
+               K(sess_blob_begin),
+               K(pos));
+    }
+    LOG_TRACE("[DAS_DESER_CACHE] SESSION DESERIALIZE",
+              K(ret),
+              K(need_calc_expr_),
+              K(need_calc_udf_),
+              K(use_deser_cache_format_),
+              "session_len", pos - sess_blob_begin);
     if (OB_SUCC(ret)) {
       //notice: can't unlink exec context and session info here
       typedef ObSQLSessionInfo::ExecCtxSessionRegister MyExecCtxSessionRegister;
@@ -173,26 +303,31 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
     }
   }
   OZ(exec_ctx_->create_physical_plan_ctx());
-  if (OB_SUCC(ret) && has_expr_) {
-    OZ(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
-        buf, data_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
-    OZ(exec_ctx_->init_expr_op(frame_info_->rt_exprs_.count()));
-    if (OB_SUCC(ret)) {
-      eval_ctx = OB_NEWx(ObEvalCtx, (&exec_ctx_->get_allocator()), (*exec_ctx_));
-      if (OB_ISNULL(eval_ctx)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate eval ctx failed", K(ret));
+  if (use_deser_cache_format_) {
+    OZ(deserialize_cacheable_ctdef_expr(buf, data_len, pos, eval_ctx));
+    ctdef_cnt = ctdefs_.count();
+  } else {
+    if (OB_SUCC(ret) && has_expr_) {
+      OZ(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
+          buf, data_len, pos, *exec_ctx_, const_cast<ObExprFrameInfo &>(*frame_info_)));
+      OZ(exec_ctx_->init_expr_op(frame_info_->rt_exprs_.count()));
+      if (OB_SUCC(ret)) {
+        eval_ctx = OB_NEWx(ObEvalCtx, (&exec_ctx_->get_allocator()), (*exec_ctx_));
+        if (OB_ISNULL(eval_ctx)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate eval ctx failed", K(ret));
+        }
       }
     }
-  }
-  OB_UNIS_DECODE(ctdef_cnt);
-  for (int64_t i = 0; OB_SUCC(ret) && i < ctdef_cnt; ++i) {
-    ObDASBaseCtDef *ctdef = nullptr;
-    ObDASOpType op_type = DAS_OP_INVALID;
-    OB_UNIS_DECODE(op_type);
-    OZ(das_factory->create_das_ctdef(op_type, ctdef));
-    OB_UNIS_DECODE(*ctdef);
-    OZ(ctdefs_.push_back(ctdef));
+    OB_UNIS_DECODE(ctdef_cnt);
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctdef_cnt; ++i) {
+      ObDASBaseCtDef *ctdef = nullptr;
+      ObDASOpType op_type = DAS_OP_INVALID;
+      OB_UNIS_DECODE(op_type);
+      OZ(das_factory->create_das_ctdef(op_type, ctdef));
+      OB_UNIS_DECODE(*ctdef);
+      OZ(ctdefs_.push_back(ctdef));
+    }
   }
   OB_UNIS_DECODE(rtdef_cnt);
   for (int64_t i = 0; OB_SUCC(ret) && i < rtdef_cnt; ++i) {
@@ -217,21 +352,23 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   OB_UNIS_DECODE(session_id_);
   OB_UNIS_DECODE(plan_id_);
   OB_UNIS_DECODE(plan_hash_);
-  //rebuilding the reference relationship between ctdefs and rtdefs after deserialization.
-  for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
-    ObDASBaseCtDef *ctdef = const_cast<ObDASBaseCtDef*>(ctdefs_.at(i));
-    OB_UNIS_DECODE(ctdef->children_cnt_);
-    if (OB_SUCC(ret) && ctdef->children_cnt_ > 0) {
-      if (OB_ISNULL(ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &exec_ctx_->get_allocator(), ctdef->children_cnt_))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("allocate ctdef children_ failed", K(ret), K(ctdef->children_cnt_));
+
+  if (!use_deser_cache_format_) {
+    for (int i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+      ObDASBaseCtDef *ctdef = const_cast<ObDASBaseCtDef*>(ctdefs_.at(i));
+      OB_UNIS_DECODE(ctdef->children_cnt_);
+      if (OB_SUCC(ret) && ctdef->children_cnt_ > 0) {
+        if (OB_ISNULL(ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &exec_ctx_->get_allocator(), ctdef->children_cnt_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate ctdef children_ failed", K(ret), K(ctdef->children_cnt_));
+        }
       }
-    }
-    for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
-      const ObDASBaseCtDef *child_ctdef = nullptr;
-      OB_UNIS_DECODE(child_ctdef);
-      if (OB_SUCC(ret)) {
-        ctdef->children_[j] = const_cast<ObDASBaseCtDef*>(child_ctdef);
+      for (int j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+        const ObDASBaseCtDef *child_ctdef = nullptr;
+        OB_UNIS_DECODE(child_ctdef);
+        if (OB_SUCC(ret)) {
+          ctdef->children_[j] = const_cast<ObDASBaseCtDef*>(child_ctdef);
+        }
       }
     }
   }
@@ -272,17 +409,30 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   OB_UNIS_ADD_LEN(snapshot_);
   if (need_calc_expr_ || need_calc_udf_) {
     OB_UNIS_ADD_LEN(session->get_effective_tenant_id());
-    OB_UNIS_ADD_LEN(*session);
+    if (use_deser_cache_format_) {
+      len += serialization::OB_SERIALIZE_SIZE_NEED_BYTES; // session blob length prefix
+      int64_t inv_len = 0;
+      int64_t var_len = 0;
+      if (OB_SUCCESS == session->das_serialize_split_size(inv_len, var_len)) {
+        len += inv_len + var_len;
+      }
+    } else {
+      OB_UNIS_ADD_LEN(*session);
+    }
   }
-  if (has_expr_) {
-    len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
-             const_cast<ObExprFrameInfo&>(*frame_info_));
-  }
-  OB_UNIS_ADD_LEN(ctdefs_.count());
-  for (int64_t i = 0; i < ctdefs_.count(); ++i) {
-    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
-    OB_UNIS_ADD_LEN(ctdef->op_type_);
-    OB_UNIS_ADD_LEN(*ctdef);
+  if (use_deser_cache_format_) {
+    len += get_cacheable_ctdef_expr_serialize_size();
+  } else {
+    if (has_expr_) {
+      len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
+               const_cast<ObExprFrameInfo&>(*frame_info_));
+    }
+    OB_UNIS_ADD_LEN(ctdefs_.count());
+    for (int64_t i = 0; i < ctdefs_.count(); ++i) {
+      const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+      OB_UNIS_ADD_LEN(ctdef->op_type_);
+      OB_UNIS_ADD_LEN(*ctdef);
+    }
   }
   OB_UNIS_ADD_LEN(rtdefs_.count());
   for (int64_t i = 0; i < rtdefs_.count(); ++i) {
@@ -298,12 +448,14 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   OB_UNIS_ADD_LEN(plan_id_);
   OB_UNIS_ADD_LEN(plan_hash_);
   //Serializing the reference relationship between ctdefs and rtdefs.
-  for (int i = 0; i < ctdefs_.count(); ++i) {
-    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
-    OB_UNIS_ADD_LEN(ctdef->children_cnt_);
-    for (int j = 0; j < ctdef->children_cnt_; ++j) {
-      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
-      OB_UNIS_ADD_LEN(child_ctdef);
+  if (!use_deser_cache_format_) {
+    for (int i = 0; i < ctdefs_.count(); ++i) {
+      const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+      OB_UNIS_ADD_LEN(ctdef->children_cnt_);
+      for (int j = 0; j < ctdef->children_cnt_; ++j) {
+        const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+        OB_UNIS_ADD_LEN(child_ctdef);
+      }
     }
   }
   for (int i = 0; i < rtdefs_.count(); ++i) {
@@ -324,6 +476,665 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   }
   OB_UNIS_ADD_LEN(detectable_id_);
   OB_UNIS_ADD_LEN(stmt_type_);
+  return len;
+}
+
+int ObDASRemoteInfo::serialize_cacheable_ctdef_expr(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_SUCC(ret) && has_expr_) {
+    int64_t need_ctx_cnt = frame_info_->need_ctx_cnt_;
+    OB_UNIS_ENCODE(need_ctx_cnt);
+    ObExprExtraSerializeInfo expr_info;
+    ObPhysicalPlanCtx *plan_ctx = exec_ctx_->get_physical_plan_ctx();
+    expr_info.current_time_ = &plan_ctx->get_cur_time();
+    expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
+    expr_info.mview_ids_ = &plan_ctx->get_mview_ids();
+    expr_info.last_refresh_scns_ = &plan_ctx->get_last_refresh_scns();
+    OZ(expr_info.serialize(buf, buf_len, pos));
+  }
+
+  const int64_t ctdef_expr_len_pos = pos;
+  if (OB_SUCC(ret) &&
+      OB_FAIL(reserve_len_prefix(buf, buf_len, pos))) {
+    LOG_WARN("reserve ctdef expr length prefix failed", K(ret), K(pos), K(buf_len));
+  }
+  const int64_t ctdef_expr_begin = pos;
+
+  if (OB_SUCC(ret) && has_expr_) {
+    const ObIArray<ObExpr> &exprs = frame_info_->rt_exprs_;
+    const int32_t expr_cnt = frame_info_->is_mark_serialize()
+        ? frame_info_->ser_expr_marks_.count()
+        : exprs.count();
+    ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
+    OZ(serialization::encode_i32(buf, buf_len, pos, expr_cnt));
+    if (OB_SUCC(ret) && !frame_info_->is_mark_serialize()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr_cnt; ++i) {
+        OZ(exprs.at(i).serialize(buf, buf_len, pos));
+      }
+    } else if (OB_SUCC(ret)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr_cnt; ++i) {
+        if (frame_info_->ser_expr_marks_.at(i)) {
+          OZ(exprs.at(i).serialize(buf, buf_len, pos));
+        } else {
+          OZ(ObEmptyExpr::instance().serialize(buf, buf_len, pos));
+        }
+      }
+    }
+  }
+
+  OB_UNIS_ENCODE(ctdefs_.count());
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ENCODE(ctdef->op_type_);
+    OB_UNIS_ENCODE(*ctdef);
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ENCODE(ctdef->children_cnt_);
+    for (int64_t j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+      OB_UNIS_ENCODE(child_ctdef);
+    }
+  }
+
+  if (OB_SUCC(ret) &&
+      OB_FAIL(fill_len_prefix(buf, ctdef_expr_len_pos, pos - ctdef_expr_begin))) {
+    LOG_WARN("fill ctdef expr length prefix failed", K(ret), K(ctdef_expr_len_pos), K(pos));
+  }
+
+  if (OB_SUCC(ret) && has_expr_) {
+    int64_t frame_count = 0;
+    char **frames = nullptr;
+    if (exec_ctx_->get_ori_frame_cnt() != 0 && exec_ctx_->get_ori_frames() != nullptr) {
+      frame_count = exec_ctx_->get_ori_frame_cnt();
+      frames = exec_ctx_->get_ori_frames();
+    } else {
+      frame_count = exec_ctx_->get_frame_cnt();
+      frames = exec_ctx_->get_frames();
+    }
+    OB_UNIS_ENCODE(frame_count);
+    OZ(ObPxTreeSerializer::serialize_frame_info<true>(buf, buf_len, pos,
+        frame_info_->const_frame_, frames, frame_count));
+    OZ(ObPxTreeSerializer::serialize_frame_info<true>(buf, buf_len, pos,
+        frame_info_->param_frame_, frames, frame_count));
+    OZ(ObPxTreeSerializer::serialize_frame_info<true>(buf, buf_len, pos,
+        frame_info_->dynamic_frame_, frames, frame_count));
+    OZ(ObPxTreeSerializer::serialize_frame_info<true>(buf, buf_len, pos,
+        frame_info_->datum_frame_, frames, frame_count, true));
+  }
+  return ret;
+}
+
+int ObDASRemoteInfo::deserialize_cacheable_ctdef_expr(const char *buf,
+                                                      int64_t data_len,
+                                                      int64_t &pos,
+                                                      ObEvalCtx *&eval_ctx)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_SUCC(ret) && has_expr_) {
+    int64_t need_ctx_cnt = 0;
+    OB_UNIS_DECODE(need_ctx_cnt);
+    const_cast<ObExprFrameInfo &>(*frame_info_).need_ctx_cnt_ = need_ctx_cnt;
+    ObExprExtraSerializeInfo expr_info;
+    ObPhysicalPlanCtx *plan_ctx = exec_ctx_->get_physical_plan_ctx();
+    expr_info.current_time_ = &plan_ctx->get_cur_time();
+    expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
+    expr_info.mview_ids_ = &plan_ctx->get_mview_ids();
+    expr_info.last_refresh_scns_ = &plan_ctx->get_last_refresh_scns();
+    OZ(expr_info.deserialize(buf, data_len, pos));
+  }
+
+  int64_t ctdef_expr_len = 0;
+  int64_t ctdef_expr_begin = 0;
+  OB_UNIS_DECODE(ctdef_expr_len);
+  if (OB_SUCC(ret)) {
+    ctdef_expr_begin = pos;
+    if (OB_UNLIKELY(ctdef_expr_len < 0 || pos + ctdef_expr_len > data_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid ctdef expr length prefix", K(ret), K(ctdef_expr_len), K(pos), K(data_len));
+    }
+  }
+
+  ObIArray<ObExpr> *active_exprs = &const_cast<ObArray<ObExpr> &>(frame_info_->rt_exprs_);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(deser_ctdef_expr_with_cache(*this,
+                                                 buf,
+                                                 data_len,
+                                                 pos,
+                                                 ctdef_expr_begin,
+                                                 ctdef_expr_len,
+                                                 active_exprs))) {
+    LOG_WARN("deserialize cacheable ctdef expr failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(pos - ctdef_expr_begin != ctdef_expr_len)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctdef expr length prefix mismatch",
+             K(ret), K(ctdef_expr_len), K(ctdef_expr_begin), K(pos));
+  }
+
+  if (OB_SUCC(ret) && has_expr_) {
+    int64_t frame_cnt = 0;
+    char **frames = nullptr;
+    ObPhysicalPlanCtx *plan_ctx = exec_ctx_->get_physical_plan_ctx();
+    const ObIArray<char *> *param_frame_ptrs = &plan_ctx->get_param_frame_ptrs();
+    OB_UNIS_DECODE(frame_cnt);
+    ObIArray<char *> *const_char_ptrs =
+        &(const_cast<ObExprFrameInfo &>(*frame_info_)).const_frame_ptrs_;
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(frames = static_cast<char **>(
+                exec_ctx_->get_allocator().alloc(sizeof(char *) * frame_cnt)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate frames", K(ret));
+    } else if (FALSE_IT(MEMSET(frames, 0, sizeof(char *) * frame_cnt))) {
+    } else if (OB_FAIL(ObPxTreeSerializer::deserialize_frame_info<true>(
+                buf, data_len, pos, exec_ctx_->get_allocator(),
+                frame_info_->const_frame_, const_char_ptrs, frames, frame_cnt))) {
+      LOG_WARN("failed to deserialize const frame", K(ret));
+    } else if (OB_FAIL(ObPxTreeSerializer::deserialize_frame_info<true>(
+                buf, data_len, pos, exec_ctx_->get_allocator(),
+                frame_info_->param_frame_,
+                const_cast<ObIArray<char *> *>(param_frame_ptrs), frames, frame_cnt))) {
+      LOG_WARN("failed to deserialize param frame", K(ret));
+    } else if (OB_FAIL(ObPxTreeSerializer::deserialize_frame_info<true>(
+                buf, data_len, pos, exec_ctx_->get_allocator(),
+                frame_info_->dynamic_frame_, nullptr, frames, frame_cnt))) {
+      LOG_WARN("failed to deserialize dynamic frame", K(ret));
+    } else if (OB_FAIL(ObPxTreeSerializer::deserialize_frame_info<true>(
+                buf, data_len, pos, exec_ctx_->get_allocator(),
+                frame_info_->datum_frame_, nullptr, frames, frame_cnt, true))) {
+      LOG_WARN("failed to deserialize datum frame", K(ret));
+    } else {
+      exec_ctx_->set_frames(frames);
+      exec_ctx_->set_frame_cnt(frame_cnt);
+      OZ(exec_ctx_->init_expr_op(active_exprs->count()));
+      if (OB_SUCC(ret)) {
+        eval_ctx = OB_NEWx(ObEvalCtx, (&exec_ctx_->get_allocator()), (*exec_ctx_));
+        if (OB_ISNULL(eval_ctx)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate eval ctx failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        const ObIArray<ObExpr> &exprs = *active_exprs;
+        for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+          const ObExpr &expr = exprs.at(i);
+          if (expr.is_const_expr()
+              && UINT32_MAX != expr.vector_header_off_
+              && T_OP_ROW != expr.type_) {
+            OZ(expr.init_vector(*eval_ctx, VEC_UNIFORM_CONST, 1));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASRemoteInfo::decode_cacheable_ctdef_expr(const char *buf,
+                                                 int64_t data_len,
+                                                 int64_t &pos,
+                                                 ObIAllocator &ctdef_alloc,
+                                                 ObIArray<ObExpr> &exprs)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_SUCC(ret) && has_expr_) {
+    ObExpr::get_serialize_array() = &exprs;
+    int32_t expr_cnt = 0;
+    OZ(serialization::decode_i32(buf, data_len, pos, &expr_cnt));
+    OZ(exprs.prepare_allocate(expr_cnt));
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr_cnt; ++i) {
+      OZ(exprs.at(i).deserialize(buf, data_len, pos));
+    }
+  }
+
+  int64_t ctdef_cnt = 0;
+  OB_UNIS_DECODE(ctdef_cnt);
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctdef_cnt; ++i) {
+    ObDASBaseCtDef *ctdef = nullptr;
+    ObDASOpType op_type = DAS_OP_INVALID;
+    OB_UNIS_DECODE(op_type);
+    if (OB_FAIL(ret)) {
+    } else {
+      OZ(ObDASTaskFactory::create_das_ctdef(op_type, ctdef_alloc, ctdef));
+    }
+    OB_UNIS_DECODE(*ctdef);
+    OZ(ctdefs_.push_back(ctdef));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctdefs_.count(); ++i) {
+    ObDASBaseCtDef *ctdef = const_cast<ObDASBaseCtDef*>(ctdefs_.at(i));
+    OB_UNIS_DECODE(ctdef->children_cnt_);
+    if (OB_SUCC(ret) && ctdef->children_cnt_ > 0) {
+      if (OB_ISNULL(ctdef->children_ = OB_NEW_ARRAY(ObDASBaseCtDef*, &ctdef_alloc, ctdef->children_cnt_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate ctdef children_ failed", K(ret), K(ctdef->children_cnt_));
+      }
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = nullptr;
+      OB_UNIS_DECODE(child_ctdef);
+      if (OB_SUCC(ret)) {
+        ctdef->children_[j] = const_cast<ObDASBaseCtDef*>(child_ctdef);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDASRemoteInfo::deser_ctdef_expr_with_cache(ObDASRemoteInfo &remote_info,
+                                                 const char *buf,
+                                                 int64_t data_len,
+                                                 int64_t &pos,
+                                                 int64_t ctdef_expr_begin,
+                                                 int64_t ctdef_expr_len,
+                                                 ObIArray<ObExpr> *&active_exprs)
+{
+  int ret = OB_SUCCESS;
+
+  ObPlanCache *lib_cache = MTL(ObPlanCache*);
+  if (OB_ISNULL(lib_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null plan cache in DAS v2 ctdef/expr deserialize", K(ret), K(MTL_ID()));
+  } else {
+    ObDasDeserializeCacheKey key;
+    key.type_ = ObDasDeserializeCacheKey::CacheType::CTDEF_EXPR;
+    key.key_.assign_ptr(buf + ctdef_expr_begin, static_cast<int32_t>(ctdef_expr_len));
+    const uint64_t key_hash = key.hash();
+    ObILibCacheCtx ctx;
+    ObCacheObjGuard guard(DAS_DESER_HANDLE);
+    int get_ret = lib_cache->get_cache_obj(ctx, &key, guard);
+    if (OB_SUCCESS == get_ret) {
+      ObDasDeserializeCacheObj *obj = static_cast<ObDasDeserializeCacheObj*>(guard.get_cache_obj());
+      ObDasCtdefExprCacheVal *val = OB_NOT_NULL(obj) ? obj->get_ctdef_expr_value() : nullptr;
+      if (OB_ISNULL(val)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cached ctdef expr value invalid", K(ret), K(key_hash), KP(val));
+      } else {
+        active_exprs = &val->rt_exprs_;
+        ObExpr::get_serialize_array() = active_exprs;
+        for (int64_t i = 0; OB_SUCC(ret) && i < val->ctdefs_.count(); ++i) {
+          OZ(remote_info.ctdefs_.push_back(val->ctdefs_.at(i)));
+        }
+        if (OB_SUCC(ret)) {
+          pos = ctdef_expr_begin + ctdef_expr_len; // skip the entire cached ctdef/expr blob
+
+          remote_info.release_cached_ctdef_obj();
+          remote_info.ctdef_cache_obj_guard_.swap(guard);
+        }
+        LOG_TRACE("[DAS_DESER_CACHE] HIT",
+                  K(key_hash),
+                  K(ctdef_expr_len),
+                  "ctdef_cnt", val->ctdefs_.count());
+      }
+    } else if (OB_SQL_PC_NOT_EXIST != get_ret) {
+      ret = get_ret;
+      LOG_WARN("get das deserialize cache obj failed", K(ret), K(key_hash));
+    } else {
+      // ---- MISS: decode into a fresh cache obj's memory context and insert ----
+      if (OB_FAIL(lib_cache->alloc_cache_obj(guard, ObLibCacheNameSpace::NS_DAS_DESER, MTL_ID()))) {
+        LOG_WARN("alloc das deserialize cache obj failed", K(ret), K(key_hash));
+      } else if (OB_ISNULL(guard.get_cache_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alloc-ed das deserialize cache obj is null", K(ret), K(key_hash));
+      } else {
+        ObDasDeserializeCacheObj *obj = static_cast<ObDasDeserializeCacheObj*>(guard.get_cache_obj());
+        ObDasCtdefExprCacheVal *val = nullptr;
+        if (OB_FAIL(obj->alloc_ctdef_expr_value(val))) {
+          LOG_WARN("alloc ctdef expr cache value failed", K(ret), K(key_hash));
+        } else {
+          active_exprs = &val->rt_exprs_;
+          WITH_CONTEXT(obj->get_mem_context()) {
+            OZ(remote_info.decode_cacheable_ctdef_expr(buf,
+                                                       data_len,
+                                                       pos,
+                                                       obj->get_allocator(),
+                                                       *active_exprs));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < remote_info.ctdefs_.count(); ++i) {
+            OZ(val->ctdefs_.push_back(remote_info.ctdefs_.at(i)));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObDasCacheMemStat mem_stat;
+          if (!mem_stat.can_add_das_cache_obj(*lib_cache, *obj, key)) {
+            if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+              LOG_TRACE("[DAS_DESER_CACHE] SKIP_INSERT_MEM_LIMIT",
+                        "type", static_cast<int>(key.type_),
+                        K(key_hash),
+                        "percentage", mem_stat.percentage_,
+                       "label_hold", mem_stat.label_hold_,
+                       "entry_size", mem_stat.entry_size_,
+                       "mem_limit", mem_stat.mem_limit_);
+            }
+          } else {
+            int add_ret = lib_cache->add_cache_obj(ctx, &key, obj);
+            if (OB_SUCCESS == add_ret) {
+              LOG_TRACE("[DAS_DESER_CACHE] MISS_INSERT",
+                        K(key_hash),
+                        K(ctdef_expr_len),
+                        "ctdef_cnt",
+                        val->ctdefs_.count());
+            } else if (OB_SQL_PC_PLAN_DUPLICATE == add_ret) {
+              LOG_TRACE("[DAS_DESER_CACHE] MISS insert race, use local obj", K(key_hash));
+            } else {
+              ret = add_ret;
+              LOG_WARN("add das deserialize cache obj failed", K(ret), K(key_hash));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            remote_info.release_cached_ctdef_obj();
+            remote_info.ctdef_cache_obj_guard_.swap(guard);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObDASRemoteInfo::release_cached_ctdef_obj()
+{
+  ObCacheObjGuard release_guard(DAS_DESER_HANDLE);
+  ctdef_cache_obj_guard_.swap(release_guard);
+}
+
+ObDASRemoteInfo::~ObDASRemoteInfo()
+{
+  cleanup_deser_cache_session();
+}
+
+void ObDASRemoteInfo::cleanup_deser_cache_session()
+{
+  if (OB_NOT_NULL(session_cache_obj_guard_.get_cache_obj())) {
+    ObSQLSessionInfo *session = OB_NOT_NULL(exec_ctx_) ? exec_ctx_->get_my_session() : nullptr;
+    if (OB_NOT_NULL(session)) {
+      bool can_return_to_pool = false;
+      int tmp_ret = session->das_deser_cache_end_pool_request(can_return_to_pool);
+      can_return_to_pool = can_return_session_to_pool_
+                           && OB_SUCCESS == tmp_ret
+                           && can_return_to_pool;
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "end das deser cache pool request failed");
+      }
+      ObDesExecContext *des_exec_ctx = static_cast<ObDesExecContext*>(exec_ctx_);
+      if (OB_SUCCESS != (tmp_ret = des_exec_ctx->detach_my_session_unregistered(session))) {
+        can_return_to_pool = false;
+        LOG_WARN_RET(tmp_ret, "detach das deser cache session failed");
+      }
+      if (OB_ISNULL(cached_session_pool_)) {
+        LOG_WARN_RET(OB_ERR_UNEXPECTED, "das deser cache session pool is null");
+        session->das_detach_borrowed_sys_vars();
+        session->~ObSQLSessionInfo();
+      } else {
+        cached_session_pool_->release(session, can_return_to_pool);
+      }
+    }
+    cached_session_pool_ = nullptr;
+    ObCacheObjGuard release_guard(DAS_DESER_HANDLE);
+    session_cache_obj_guard_.swap(release_guard);
+    can_return_session_to_pool_ = true;
+  }
+}
+
+int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
+                                              ObDesExecContext &des_exec_ctx,
+                                              uint64_t tenant_id,
+                                              const char *buf, int64_t data_len, int64_t &pos,
+                                              int64_t sess_blob_begin, int64_t sess_blob_len)
+{
+  int ret = OB_SUCCESS;
+
+  remote_info.cleanup_deser_cache_session();
+  ObSQLSessionInfo *my_session = nullptr;
+  int64_t inv_len = 0;
+
+  if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &inv_len))) {
+    LOG_WARN("decode inv section len failed", K(ret), K(pos), K(data_len));
+  } else if (OB_UNLIKELY(inv_len < 0
+                         || pos + inv_len > data_len
+                         || pos + inv_len > sess_blob_begin + sess_blob_len)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid inv section len",
+             K(ret), K(inv_len), K(pos), K(data_len), K(sess_blob_begin), K(sess_blob_len));
+  }
+  const int64_t inv_begin = pos;
+  ObPlanCache *lib_cache = MTL(ObPlanCache *);
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(lib_cache)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null plan cache in DAS v2 session deserialize", K(ret), K(MTL_ID()));
+  } else {
+    ObDasDeserializeCacheKey key;
+    key.type_ = ObDasDeserializeCacheKey::CacheType::SESSION;
+    key.key_.assign_ptr(buf + inv_begin, static_cast<int32_t>(inv_len));
+    const uint64_t key_hash = key.hash();
+    ObILibCacheCtx ctx;
+    ObCacheObjGuard guard(DAS_DESER_HANDLE);
+    ObDasDeserializeCacheObj *obj = nullptr;
+    ObSQLSessionInfo *templ = nullptr;
+    ObDasSessionCacheVal *cache_val = nullptr;
+    bool reused_session = false;
+    int get_ret = lib_cache->get_cache_obj(ctx, &key, guard);
+    if (OB_SUCCESS == get_ret) {
+      // ---- HIT: reuse the shared read-only template ----
+      obj = static_cast<ObDasDeserializeCacheObj*>(guard.get_cache_obj());
+      cache_val = OB_NOT_NULL(obj) ? obj->get_session_value() : nullptr;
+      if (OB_ISNULL(cache_val) || OB_ISNULL(cache_val->templ_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cached session value invalid", K(ret), K(key_hash), KP(cache_val));
+      } else {
+        templ = cache_val->templ_;
+        LOG_TRACE("[DAS_DESER_CACHE] SESSION HIT", K(key_hash), K(inv_len));
+      }
+    } else if (OB_SQL_PC_NOT_EXIST != get_ret) {
+      ret = get_ret;
+      LOG_WARN("get das session cache obj failed", K(ret), K(key_hash));
+    } else {
+      // ---- MISS: build a detached template, fill its invariant and insert ----
+      if (OB_FAIL(lib_cache->alloc_cache_obj(guard, ObLibCacheNameSpace::NS_DAS_DESER, MTL_ID()))) {
+        LOG_WARN("alloc das session cache obj failed", K(ret), K(key_hash));
+      } else if (OB_ISNULL(obj = static_cast<ObDasDeserializeCacheObj*>(guard.get_cache_obj()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alloc-ed das session cache obj is null", K(ret), K(key_hash));
+      } else {
+        if (OB_FAIL(obj->alloc_session_value(cache_val))) {
+          LOG_WARN("alloc session cache value failed", K(ret), K(key_hash));
+        } else if (OB_FAIL(obj->build_session_template(tenant_id, templ))) {
+          LOG_WARN("build session template failed", K(ret), K(key_hash));
+        } else if (OB_ISNULL(templ)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("built session template is null", K(ret), K(key_hash));
+        } else {
+          int64_t tpos = 0;
+          if (OB_FAIL(templ->das_build_template_invariant_section(buf + inv_begin, inv_len, tpos))) {
+            LOG_WARN("build template invariant failed", K(ret), K(key_hash));
+          } else if (OB_UNLIKELY(tpos != inv_len)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("template invariant length mismatch", K(ret), K(tpos), K(inv_len));
+          } else {
+            cache_val->inv_len_ = inv_len;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObDasCacheMemStat mem_stat;
+          if (!mem_stat.can_add_das_cache_obj(*lib_cache, *obj, key)) {
+            if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+              LOG_TRACE("[DAS_DESER_CACHE] SKIP_INSERT_MEM_LIMIT",
+                        "type", static_cast<int>(key.type_),
+                        K(key_hash),
+                        "percentage", mem_stat.percentage_,
+                       "label_hold", mem_stat.label_hold_,
+                       "entry_size", mem_stat.entry_size_,
+                       "mem_limit", mem_stat.mem_limit_);
+            }
+          } else {
+            int add_ret = lib_cache->add_cache_obj(ctx, &key, obj);
+            if (OB_SUCCESS == add_ret) {
+              LOG_TRACE("[DAS_DESER_CACHE] SESSION MISS_INSERT", K(key_hash), K(inv_len));
+            } else if (OB_SQL_PC_PLAN_DUPLICATE == add_ret) {
+              LOG_TRACE("[DAS_DESER_CACHE] SESSION MISS insert race, use local obj", K(key_hash));
+            } else {
+              ret = add_ret;
+              LOG_WARN("add das session cache obj failed", K(ret), K(key_hash));
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(obj) || OB_ISNULL(cache_val) || OB_ISNULL(templ)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session cache value is null",
+                 K(ret), K(key_hash), KP(obj), KP(cache_val), KP(templ));
+      } else if (OB_FAIL(cache_val->pool_.acquire(tenant_id, my_session, reused_session))) {
+        LOG_WARN("acquire das deser cache session failed", K(ret), K(key_hash));
+      } else if (OB_ISNULL(my_session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("acquired das deser cache session is null", K(ret), K(key_hash));
+      } else if (OB_FAIL(my_session->das_deser_cache_begin_pool_request())) {
+        LOG_WARN("begin das deser cache pool request failed", K(ret), K(key_hash));
+        cache_val->pool_.release(my_session, false);
+        my_session = nullptr;
+      } else if (OB_FAIL(des_exec_ctx.attach_my_session_unregistered(my_session))) {
+        LOG_WARN("attach das deser cache session failed", K(ret), K(key_hash));
+        cache_val->pool_.release(my_session, false);
+        my_session = nullptr;
+      } else {
+        remote_info.cached_session_pool_ = &cache_val->pool_;
+        remote_info.session_cache_obj_guard_.swap(guard);
+        remote_info.can_return_session_to_pool_ = true;
+        LOG_TRACE("[DAS_DESER_CACHE] SESSION_POOL ACQUIRE",
+                  K(key_hash), K(reused_session), "idle_count", cache_val->pool_.idle_count());
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(my_session)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("working das session is null", K(ret), K(key_hash));
+        } else if (!reused_session
+                   && OB_FAIL(my_session->das_apply_invariant_section(*templ))) {
+          LOG_WARN("apply invariant from template failed", K(ret), K(key_hash));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        pos = inv_begin + inv_len; // skip the invariant section bytes
+        int64_t var_len = 0;
+        if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &var_len))) {
+          LOG_WARN("decode var section len failed", K(ret), K(pos), K(data_len));
+        } else if (OB_UNLIKELY(var_len < 0 || pos + var_len > data_len)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("invalid var section len", K(ret), K(var_len), K(pos), K(data_len));
+        } else {
+          int64_t vpos = 0;
+          if (OB_FAIL(my_session->das_decode_volatile_section(buf + pos, var_len, vpos))) {
+            LOG_WARN("deserialize volatile section failed", K(ret), K(key_hash));
+          } else if (OB_UNLIKELY(vpos != var_len)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("volatile session length mismatch", K(ret), K(vpos), K(var_len), K(key_hash));
+          } else {
+            pos += var_len;
+          }
+        }
+      }
+    }
+
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(remote_info.session_cache_obj_guard_.get_cache_obj())) {
+      remote_info.can_return_session_to_pool_ = false;
+      remote_info.cleanup_deser_cache_session();
+    }
+  }
+
+  return ret;
+}
+
+int64_t ObDASRemoteInfo::get_cacheable_ctdef_expr_serialize_size() const
+{
+  int64_t len = 0;
+  len += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+
+  if (has_expr_) {
+    int64_t need_ctx_cnt = frame_info_->need_ctx_cnt_;
+    OB_UNIS_ADD_LEN(need_ctx_cnt);
+    ObExprExtraSerializeInfo expr_info;
+    ObPhysicalPlanCtx *plan_ctx = exec_ctx_->get_physical_plan_ctx();
+    expr_info.current_time_ = &plan_ctx->get_cur_time();
+    expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
+    expr_info.mview_ids_ = &plan_ctx->get_mview_ids();
+    expr_info.last_refresh_scns_ = &plan_ctx->get_last_refresh_scns();
+    len += expr_info.get_serialize_size();
+  }
+
+  if (has_expr_) {
+    const ObIArray<ObExpr> &exprs = frame_info_->rt_exprs_;
+    int32_t expr_cnt = frame_info_->is_mark_serialize()
+        ? frame_info_->ser_expr_marks_.count()
+        : exprs.count();
+    ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
+    len += serialization::encoded_length_i32(expr_cnt);
+    if (!frame_info_->is_mark_serialize()) {
+      for (int64_t i = 0; i < expr_cnt; ++i) {
+        len += exprs.at(i).get_serialize_size();
+      }
+    } else {
+      for (int64_t i = 0; i < expr_cnt; ++i) {
+        if (frame_info_->ser_expr_marks_.at(i)) {
+          len += exprs.at(i).get_serialize_size();
+        } else {
+          len += ObEmptyExpr::instance().get_serialize_size();
+        }
+      }
+    }
+  }
+
+  OB_UNIS_ADD_LEN(ctdefs_.count());
+  for (int64_t i = 0; i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ADD_LEN(ctdef->op_type_);
+    OB_UNIS_ADD_LEN(*ctdef);
+  }
+
+  for (int64_t i = 0; i < ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = ctdefs_.at(i);
+    OB_UNIS_ADD_LEN(ctdef->children_cnt_);
+    for (int64_t j = 0; j < ctdef->children_cnt_; ++j) {
+      const ObDASBaseCtDef *child_ctdef = ctdef->children_[j];
+      OB_UNIS_ADD_LEN(child_ctdef);
+    }
+  }
+
+  if (has_expr_) {
+    int64_t frame_count = 0;
+    char **frames = nullptr;
+    if (exec_ctx_->get_ori_frame_cnt() != 0 && exec_ctx_->get_ori_frames() != nullptr) {
+      frame_count = exec_ctx_->get_ori_frame_cnt();
+      frames = exec_ctx_->get_ori_frames();
+    } else {
+      frame_count = exec_ctx_->get_frame_cnt();
+      frames = exec_ctx_->get_frames();
+    }
+    OB_UNIS_ADD_LEN(frame_count);
+    len += ObPxTreeSerializer::get_serialize_frame_info_size<true>(
+               frame_info_->const_frame_, frames, frame_count);
+    len += ObPxTreeSerializer::get_serialize_frame_info_size<true>(
+               frame_info_->param_frame_, frames, frame_count);
+    len += ObPxTreeSerializer::get_serialize_frame_info_size<true>(
+               frame_info_->dynamic_frame_, frames, frame_count);
+    len += ObPxTreeSerializer::get_serialize_frame_info_size<true>(
+               frame_info_->datum_frame_, frames, frame_count, true);
+  }
+
   return len;
 }
 

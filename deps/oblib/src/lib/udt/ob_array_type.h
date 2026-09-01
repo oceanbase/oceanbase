@@ -29,7 +29,7 @@
 namespace oceanbase {
 namespace common {
 
-static constexpr int64_t MAX_ARRAY_SIZE = (1 << 20) * 16; // 16M
+static constexpr int64_t MAX_ARRAY_SIZE = OB_MAX_LONGTEXT_LENGTH; // align to LOB upper bound
 static constexpr int64_t MAX_ARRAY_ELEMENT_SIZE = 2000000;
 enum ArrayAttr {
   ATTR_LENGTH = 0,

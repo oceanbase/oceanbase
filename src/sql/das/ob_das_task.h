@@ -25,6 +25,7 @@
 #include "sql/engine/basic/ob_temp_row_store.h"
 #include "lib/list/ob_obj_store.h"
 #include "rpc/obrpc/ob_rpc_processor.h"
+#include "sql/plan_cache/ob_cache_object_factory.h"
 namespace oceanbase
 {
 namespace common
@@ -43,6 +44,12 @@ class ObDasAggregatedTask;
 struct ObDASTCBInterruptInfo;
 class ObDASLookupBatchTask;
 class ObDASLookupBatchResult;
+class ObSQLSessionInfo;
+class ObDesExecContext;
+class ObPlanCache;
+struct ObDasDeserializeCacheKey;
+class ObDasDeserializeCacheObj;
+class ObDasDeserCacheSessionPool;
 
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
@@ -93,6 +100,26 @@ public:
 struct ObDASRemoteInfo
 {
   OB_UNIS_VERSION(1);
+private:
+  struct ObDasCacheMemStat
+  {
+    ObDasCacheMemStat()
+      : percentage_(0),
+        label_hold_(0),
+        entry_size_(0),
+        mem_limit_(0)
+    {}
+
+    bool can_add_das_cache_obj(ObPlanCache &lib_cache,
+                               const ObDasDeserializeCacheObj &obj,
+                               const ObDasDeserializeCacheKey &key);
+
+    int64_t percentage_;
+    int64_t label_hold_;
+    int64_t entry_size_;
+    int64_t mem_limit_;
+  };
+
 public:
   ObDASRemoteInfo()
     : exec_ctx_(nullptr),
@@ -108,16 +135,52 @@ public:
       plan_hash_(0),
       detectable_id_(),
       tsc_monitor_info_(nullptr),
-      stmt_type_(0)
+      stmt_type_(0),
+      ctdef_cache_obj_guard_(DAS_DESER_HANDLE),
+      session_cache_obj_guard_(DAS_DESER_HANDLE)
   {
     sql_id_[0] = '\0';
   }
+  ~ObDASRemoteInfo();
   OB_INLINE static ObDASRemoteInfo *&get_remote_info()
   {
     RLOCAL_INLINE(ObDASRemoteInfo*, g_remote_info);
     return g_remote_info;
   }
   TO_STRING_EMPTY();
+  int serialize_cacheable_ctdef_expr(char *buf, int64_t buf_len, int64_t &pos) const;
+  int deserialize_cacheable_ctdef_expr(const char *buf, int64_t data_len, int64_t &pos, ObEvalCtx *&eval_ctx);
+  int64_t get_cacheable_ctdef_expr_serialize_size() const;
+  int decode_cacheable_ctdef_expr(const char *buf,
+                                  int64_t data_len,
+                                  int64_t &pos,
+                                  ObIAllocator &ctdef_alloc,
+                                  ObIArray<ObExpr> &exprs);
+  void release_cached_ctdef_obj();
+  void cleanup_deser_cache_session();
+  static int reserve_len_prefix(char *buf, const int64_t buf_len, int64_t &pos);
+  static int fill_len_prefix(char *buf, const int64_t len_pos, const int64_t blob_len);
+  static int serialize_session_blob(ObSQLSessionInfo &session,
+                                    bool use_split_session,
+                                    char *buf,
+                                    int64_t buf_len,
+                                    int64_t &pos);
+  static int deser_ctdef_expr_with_cache(ObDASRemoteInfo &remote_info,
+                                         const char *buf,
+                                         int64_t data_len,
+                                         int64_t &pos,
+                                         int64_t ctdef_expr_begin,
+                                         int64_t ctdef_expr_len,
+                                         ObIArray<ObExpr> *&active_exprs);
+  static int deser_session_with_cache(ObDASRemoteInfo &remote_info,
+                                      ObDesExecContext &des_exec_ctx,
+                                      uint64_t tenant_id,
+                                      const char *buf,
+                                      int64_t data_len,
+                                      int64_t &pos,
+                                      int64_t sess_blob_begin,
+                                      int64_t sess_blob_len);
+
   ObExecContext *exec_ctx_;
   const ObExprFrameInfo *frame_info_;
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
@@ -136,7 +199,7 @@ public:
       uint64_t need_tx_                         : 1;
       uint64_t need_subschema_ctx_              : 1;
       uint64_t has_attach_ctdef_                : 1;  // placeholder from master, unused
-      uint64_t should_use_deser_cache_format    : 1;
+      uint64_t use_deser_cache_format_          : 1;  // FARM COMPAT WHITELIST
       uint64_t reserved_                        : 57;
     };
   };
@@ -149,6 +212,10 @@ public:
   ObTSCMonitorInfo *tsc_monitor_info_;
   uint64_t stmt_type_;
   ObDasExecuteLocalInfo *das_execute_local_info_;
+  ObCacheObjGuard ctdef_cache_obj_guard_;
+  ObCacheObjGuard session_cache_obj_guard_;
+  ObDasDeserCacheSessionPool *cached_session_pool_ = nullptr;
+  bool can_return_session_to_pool_ = true;
 };
 
 class ObIDASTaskOp

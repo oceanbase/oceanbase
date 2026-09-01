@@ -8082,6 +8082,8 @@ int ObStaticEngineCG::fill_aggr_infos(ObLogGroupBy &op,
                                op.get_hash_rollup_info(),
                                op.get_grouping_set_info()))) {
       LOG_WARN("failed to fill_aggr_info", K(ret));
+    } else if (T_FUN_RETENTION == aggr_exprs.at(i)->get_expr_type()) {
+      aggr_info.retention_is_final_ = !op.is_push_down();
     }
   }//end of for
 

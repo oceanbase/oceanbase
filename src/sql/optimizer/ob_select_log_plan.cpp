@@ -563,7 +563,8 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
   // Check if there is window_funnel aggregate function
   for (int64_t i = 0; !force_use_hash_rollup && i < aggr_items.count(); ++i) {
     if (OB_NOT_NULL(aggr_items.at(i)) &&
-        T_FUN_WINDOW_FUNNEL == aggr_items.at(i)->get_expr_type()) {
+        (T_FUN_WINDOW_FUNNEL == aggr_items.at(i)->get_expr_type()
+         || T_FUN_RETENTION == aggr_items.at(i)->get_expr_type())) {
       force_use_hash_rollup = true;
     }
   }
@@ -627,10 +628,10 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
     LOG_TRACE("succeed to allocate rollup group by plan", K(groupby_plans.count()));
     OPT_TRACE("succeed to allocate rollup group by plan");
   } else if (force_use_hash_rollup) {
-    // window_funnel must use hash rollup plan
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("window_funnel must use hash rollup plan", K(ret), K(force_use_hash_rollup),
-             K(enable_hash_rollup));
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("aggregate must use hash rollup but it is not enabled", K(ret),
+             K(force_use_hash_rollup), K(enable_hash_rollup));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "vec 1.0 aggregate in group by rollup without hash rollup");
   } else {
     SMART_VAR(GroupingOpHelper, groupby_helper) {
       if (OB_FAIL(init_groupby_helper(group_by_exprs,

@@ -127,6 +127,46 @@ int ObDesExecContext::create_my_session(uint64_t tenant_id)
   return ret;
 }
 
+int ObDesExecContext::attach_my_session_unregistered(ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cannot attach null unregistered session", K(ret));
+  } else if (OB_NOT_NULL(my_session_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("my_session is not null", K(ret), KP_(my_session), KP(session));
+  } else {
+    free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
+    my_session_ = session;
+    my_session_->set_thread_id(GETTID());
+    ObSQLSessionInfo::ExecCtxSessionRegister ctx_register(*my_session_, this);
+    sql_ctx_.session_info_ = my_session_;
+  }
+  return ret;
+}
+
+int ObDesExecContext::detach_my_session_unregistered(ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session) || session != my_session_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected unregistered session to detach",
+             K(ret), KP(session), KP_(my_session));
+  } else {
+    if (ObSQLSessionInfo::INVALID_SESSID != free_session_ctx_.sessid_) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED,
+                   "unexpected registered state for das deser cache session",
+                   K(free_session_ctx_.sessid_));
+      free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
+    }
+    session->set_cur_exec_ctx(nullptr);
+    sql_ctx_.session_info_ = nullptr;
+    my_session_ = nullptr;
+  }
+  return ret;
+}
+
 DEFINE_DESERIALIZE(ObDesExecContext)
 {
   int ret = OB_SUCCESS;

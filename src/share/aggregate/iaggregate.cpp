@@ -73,6 +73,8 @@ extern int init_arg_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col
                                        ObIAllocator &allocator, IAggregate *&agg);
 extern int init_window_funnel_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                         ObIAllocator &allocator, IAggregate *&agg);
+extern int init_retention_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
+                                    ObIAllocator &allocator, IAggregate *&agg);
 extern int init_wm_concat_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
                                     ObIAllocator &allocator, IAggregate *&agg);
 extern int init_string_prefix_max_aggregate(RuntimeContext &agg_ctx, const int64_t agg_col_id,
@@ -127,6 +129,7 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_ARG_MIN, arg_min, i);
         INIT_AGGREGATE_CASE(T_FUN_ARG_MAX, arg_max, i);
         INIT_AGGREGATE_CASE(T_FUN_WINDOW_FUNNEL, window_funnel, i);
+        INIT_AGGREGATE_CASE(T_FUN_RETENTION, retention, i);
         INIT_AGGREGATE_CASE(T_FUN_GROUP_ID, grouping, i);
         INIT_AGGREGATE_CASE(T_FUN_WM_CONCAT, wm_concat, i);
         INIT_AGGREGATE_CASE(T_FUN_KEEP_WM_CONCAT, wm_concat, i);
@@ -310,6 +313,9 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
       // we use int64_t as row counts recording type, and cast int64_t to ObNumberType in
       // `collect_group_result`
       ret_size += sizeof(int64_t);
+    } else if (aggr_info.get_expr_type() == T_FUN_RETENTION) {
+      // {int32 bitmap; int8 N}; see RetentionAggregate::CELL_SIZE
+      ret_size += sizeof(int32_t) + sizeof(int8_t);
     } else if (is_var_len_agg_cell(res_tc)) {
       ret_size += string_reserved_size;
     } else {
@@ -367,7 +373,8 @@ int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator
     VecValueTypeClass vec_tc =
       get_vec_value_tc(info.expr_->datum_meta_.type_, info.expr_->datum_meta_.scale_,
                        info.expr_->datum_meta_.precision_);
-    if (info.is_implicit_first_aggr() || helper::is_var_len_agg_cell(vec_tc)) {
+    if ((info.is_implicit_first_aggr() || helper::is_var_len_agg_cell(vec_tc))
+        && info.get_expr_type() != T_FUN_RETENTION) {
       agg_row_meta_.use_var_len_->set(i);
     }
     if (helper::has_extra_info(info)) {

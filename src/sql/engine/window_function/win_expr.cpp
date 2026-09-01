@@ -2735,7 +2735,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         if ((ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_GROUP_CONCAT
                 && (ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_distinct_
                 || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).has_order_by_))
-              || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_WINDOW_FUNNEL) {
+              || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_WINDOW_FUNNEL
+              || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_RETENTION) {
           need_whole_frame = true;
         }
 

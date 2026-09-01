@@ -1967,6 +1967,16 @@ public:
   int close_all_ps_stmt();
   void destory_mem_context();
   void set_cur_exec_ctx(ObExecContext *cur_exec_ctx) { cur_exec_ctx_ = cur_exec_ctx; }
+  int das_deser_cache_begin_pool_request();
+  int das_deser_cache_end_pool_request(bool &can_return_to_pool);
+protected:
+  // for DAS deserialize cache
+  int das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const override;
+  int das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const override;
+  int das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos) override;
+  int das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos) override;
+  int das_apply_invariant_from(const ObBasicSessionInfo &templ) override;
+
 private:
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
   inline int init_mem_context(uint64_t tenant_id);

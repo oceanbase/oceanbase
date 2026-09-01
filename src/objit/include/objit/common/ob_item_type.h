@@ -1064,6 +1064,7 @@ typedef enum ObItemType
   T_FUN_SYS_VOID = 2096,
   T_FUN_COLLECT_FILE_LIST = 2097,
   T_FUN_WINDOW_FUNNEL = 2100,
+  T_FUN_RETENTION = 2108,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -3149,7 +3150,8 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \
                          ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
-                         (op) == T_FUN_WINDOW_FUNNEL)
+                         (op) == T_FUN_WINDOW_FUNNEL || \
+                         (op) == T_FUN_RETENTION)
 #define MAYBE_ROW_OP(op) ((op) >= T_OP_EQ && (op) <= T_OP_NE)
 #define IS_PSEUDO_COLUMN_TYPE(op) \
   ((op) == T_LEVEL || (op) == T_CONNECT_BY_ISLEAF || (op) == T_CONNECT_BY_ISCYCLE || (op) == T_ORA_ROWSCN)

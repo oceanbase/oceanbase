@@ -323,6 +323,7 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
   with_unique_keys_ = rhs.with_unique_keys_;
   max_disuse_param_expr_ = rhs.max_disuse_param_expr_;
   hash_rollup_info_ = nullptr;
+  retention_is_final_ = rhs.retention_is_final_;
   if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
     LOG_WARN("fail to assign param exprs", K(ret));
   } else if (OB_FAIL(distinct_collations_.assign(rhs.distinct_collations_))) {
@@ -1499,7 +1500,8 @@ int ObAggregateProcessor::init()
       LOG_WARN("expr node is null", K(aggr_info), K(i), K(ret));
     } else if (T_FUN_ARG_MIN == aggr_info.get_expr_type() ||
                T_FUN_ARG_MAX == aggr_info.get_expr_type() ||
-               T_FUN_WINDOW_FUNNEL == aggr_info.get_expr_type()) {
+               T_FUN_WINDOW_FUNNEL == aggr_info.get_expr_type() ||
+               T_FUN_RETENTION == aggr_info.get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("this agg func not supported vec1.0", K(aggr_info.get_expr_type()));
     } else {
@@ -3434,6 +3436,18 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rollup contain sum_opnsize still not supported", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain sum_opnsize");
+      break;
+    }
+    case T_FUN_RETENTION: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("rollup contain retention still not supported", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain retention");
+      break;
+    }
+    case T_FUN_WINDOW_FUNNEL: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("aggregate not supported in datum rollup path", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "rollup contain window_funnel");
       break;
     }
     default:

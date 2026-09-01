@@ -67,7 +67,8 @@ const char* ObCacheRefHandleMgr::handle_name(const CacheRefHandleID handle_id)
     "sql_stat_handle",
     "virtual_table_sql_stat_handle",
     "kv_schema_info_handle",
-    "udf_result_cache"
+    "udf_result_cache",
+    "das_deser_handle",
   };
   static_assert(sizeof(handle_names)/sizeof(const char*) == MAX_HANDLE, "invalid handle name array");
   if (handle_id < MAX_HANDLE) {

@@ -277,6 +277,19 @@ void fill_session_info(ObSQLSessionInfo &sess)
   sess.unit_gc_min_sup_proxy_version_ = 1001;
 }
 
+void init_remote_extra_maps(ObSQLSessionInfo &sess)
+{
+  ASSERT_EQ(OB_SUCCESS,
+            sess.sequence_currval_map_.create(hash::cal_next_prime(32),
+                                              ObMemAttr(500, "SequenceMap")));
+  ASSERT_EQ(OB_SUCCESS,
+            sess.dblink_sequence_id_map_.create(hash::cal_next_prime(32),
+                                                ObMemAttr(500, "SequenceIdMap")));
+  ASSERT_EQ(OB_SUCCESS,
+            sess.contexts_map_.create(hash::cal_next_prime(32),
+                                      ObMemAttr(500, "ContextsMap")));
+}
+
 void verify_basic_fields_equal(const ObSQLSessionInfo42x &sess1, const ObSQLSessionInfo &sess2)
 {
   LOG_INFO("verify_basic_fields_equal", K(sess1.thread_data_.cur_query_start_time_), K(sess2.thread_data_.cur_query_start_time_));
@@ -341,6 +354,253 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_master_to_42x)
 
   // 验证基本字段
   verify_basic_fields_equal(sess_42x, sess_master);
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_split_round_trip)
+{
+  common::ObArenaAllocator sess_src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &sess_src_allocator));
+  init_set(sess_src);
+  init_remote_extra_maps(sess_src);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(sess_src);
+  sess_src.thread_data_.cur_query_start_time_ = 1234567890;
+  sess_src.set_cur_sql_id(const_cast<char *>("0123456789abcdef0123456789abcdef"));
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_module_name(ObString::make_string("das_module")));
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_action_name(ObString::make_string("das_action")));
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_client_info(ObString::make_string("das_client_info")));
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_client_id(ObString::make_string("das_client_identifier")));
+  ASSERT_EQ(OB_SUCCESS,
+            sess_src.set_context_values(ObString::make_string("DAS_CTX"),
+                                        ObString::make_string("DAS_ATTR"),
+                                        ObString::make_string("DAS_VALUE")));
+  const uint64_t seq_id = 10001;
+  const share::ObSequenceValue seq_value(20260722);
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_sequence_value(500, seq_id, seq_value));
+  FLTControlInfo control_info;
+  control_info.level_ = 1;
+  control_info.sample_pct_ = 0.5;
+  control_info.rp_ = FLTControlInfo::RP_ALL;
+  control_info.print_sample_pct_ = 0.25;
+  control_info.slow_query_thres_ = 1000;
+  control_info.show_trace_enable_ = true;
+  sess_src.set_flt_control_info(control_info);
+  sess_src.set_coninfo_set_by_sess(true);
+
+  // ---- reference path: legacy serialize -> legacy deserialize ----
+  char *legacy_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(legacy_buf != nullptr);
+  int64_t legacy_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.serialize(legacy_buf, BUF_SIZE, legacy_pos));
+  common::ObArenaAllocator sess_ref_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_ref(500);
+  ASSERT_EQ(OB_SUCCESS, sess_ref.test_init(0, 0, 0, &sess_ref_allocator));
+  init_set(sess_ref);
+  init_remote_extra_maps(sess_ref);
+  sess_ref.cached_tenant_config_info_.session_ = nullptr;
+  int64_t legacy_des_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.deserialize(legacy_buf, legacy_pos, legacy_des_pos));
+
+  // ---- new path: split serialize -> production split reconstruction ----
+  // this mirrors deser_session_with_cache: parse the [len_inv][inv][len_var][var] windows, build a
+  // read-only template from the invariant bytes, apply it into the working session, then decode the
+  // volatile suffix. (There is deliberately no single "deserialize the whole split blob" entry point:
+  // the invariant is always reconstructed from a cached template, never re-decoded inline.)
+  char *split_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(split_buf != nullptr);
+  int64_t split_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_buf, BUF_SIZE, split_pos));
+  int64_t inv_len = 0;
+  int64_t var_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split_size(inv_len, var_len));
+  ASSERT_EQ(split_pos, inv_len + var_len);  // split body size matches the size twin
+
+  // locate the invariant / volatile section windows inside the split blob
+  const int64_t nb = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  int64_t tmp = 0;
+  int64_t wire_inv_len = 0;
+  serialization::decode_vi64(split_buf, nb, tmp, &wire_inv_len);
+  const int64_t inv_begin = nb;
+  const int64_t var_len_pos = inv_begin + wire_inv_len;
+  tmp = 0;
+  int64_t wire_var_len = 0;
+  serialization::decode_vi64(split_buf + var_len_pos, nb, tmp, &wire_var_len);
+  const int64_t var_begin = var_len_pos + nb;
+
+  // build the read-only template from the invariant section, then reconstruct the working session
+  ObSQLSessionInfo sess_templ(500);
+  init_set(sess_templ);
+  sess_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t tpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_templ.das_build_template_invariant_section(split_buf + inv_begin, wire_inv_len, tpos));
+  ASSERT_EQ(tpos, wire_inv_len);
+
+  common::ObArenaAllocator sess_dst_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_dst(500);
+  ASSERT_EQ(OB_SUCCESS, sess_dst.test_init(0, 0, 0, &sess_dst_allocator));
+  init_remote_extra_maps(sess_dst);
+  sess_dst.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sess_dst.das_apply_invariant_section(sess_templ));
+  ASSERT_TRUE(sess_dst.is_das_borrowed_sys_vars());
+  ASSERT_EQ(sess_templ.sys_var_base_version_, sess_dst.sys_var_base_version_);
+  ASSERT_FALSE(ObBasicSessionInfo::CACHED_SYS_VAR_VERSION == sess_dst.sys_var_base_version_);
+  for (int64_t i = 0; i < share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++i) {
+    ASSERT_EQ(sess_templ.sys_vars_[i], sess_dst.sys_vars_[i]);
+  }
+  int64_t vpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_dst.das_decode_volatile_section(split_buf + var_begin, wire_var_len, vpos));
+  ASSERT_EQ(vpos, wire_var_len);
+  ASSERT_EQ(var_begin + wire_var_len, split_pos);  // consumed the whole split blob
+  ASSERT_EQ(sess_src.get_module_name(), sess_dst.get_module_name());
+  ASSERT_EQ(sess_src.get_action_name(), sess_dst.get_action_name());
+  ASSERT_EQ(sess_src.get_client_info(), sess_dst.get_client_info());
+  ASSERT_EQ(sess_src.get_client_identifier(), sess_dst.get_client_identifier());
+  ObString context_value;
+  bool context_exists = false;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_dst.get_context_values(ObString::make_string("DAS_CTX"),
+                                        ObString::make_string("DAS_ATTR"),
+                                        context_value,
+                                        context_exists));
+  ASSERT_TRUE(context_exists);
+  ASSERT_EQ(ObString::make_string("DAS_VALUE"), context_value);
+  share::ObSequenceValue decoded_seq_value;
+  ASSERT_EQ(OB_SUCCESS, sess_dst.get_sequence_value(500, seq_id, decoded_seq_value));
+  ASSERT_EQ(0, seq_value.val().compare(decoded_seq_value.val()));
+  ASSERT_TRUE(sess_src.get_control_info() == sess_dst.get_control_info());
+  ASSERT_EQ(sess_src.is_coninfo_set_by_sess(), sess_dst.is_coninfo_set_by_sess());
+
+  // ---- compare: legacy-serialize both deserialized sessions, bytes must match ----
+  char *reser_ref = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *reser_dst = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(reser_ref != nullptr && reser_dst != nullptr);
+  int64_t reser_ref_len = 0;
+  int64_t reser_dst_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.serialize(reser_ref, BUF_SIZE, reser_ref_len));
+  ASSERT_EQ(OB_SUCCESS, sess_dst.serialize(reser_dst, BUF_SIZE, reser_dst_len));
+
+  LOG_INFO("[DAS_SPLIT_RT] lengths", K(legacy_pos), K(split_pos), K(inv_len), K(var_len),
+           K(reser_ref_len), K(reser_dst_len));
+  ASSERT_EQ(reser_ref_len, reser_dst_len);
+  ASSERT_EQ(0, MEMCMP(reser_ref, reser_dst, reser_ref_len));
+
+  sess_dst.das_detach_borrowed_sys_vars();
+  ASSERT_FALSE(sess_dst.is_das_borrowed_sys_vars());
+  for (int64_t i = 0; i < share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++i) {
+    ASSERT_EQ(nullptr, sess_dst.sys_vars_[i]);
+  }
+
+  ob_free(legacy_buf);
+  ob_free(split_buf);
+  ob_free(reser_ref);
+  ob_free(reser_dst);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  sess_ref.cached_tenant_config_info_.session_ = nullptr;
+  sess_dst.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
+{
+  common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &allocator));
+  init_set(sess_src);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(sess_src);
+  sess_src.thread_data_.cur_query_start_time_ = 1234567890;
+  sess_src.set_cur_sql_id(const_cast<char *>("0123456789abcdef0123456789abcdef"));
+  // exercise a user variable (invariant) so apply's user-var loop is covered
+  {
+    ObSessionVariable uv;
+    uv.meta_.set_int();
+    uv.value_.set_int(42);
+    ASSERT_EQ(OB_SUCCESS, sess_src.replace_user_variable(ObString::make_string("my_uvar"), uv));
+  }
+
+  // ---- reference path: legacy serialize -> legacy deserialize ----
+  char *legacy_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(legacy_buf != nullptr);
+  int64_t legacy_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.serialize(legacy_buf, BUF_SIZE, legacy_pos));
+  ObSQLSessionInfo sess_ref(500);
+  init_set(sess_ref);
+  sess_ref.cached_tenant_config_info_.session_ = nullptr;
+  int64_t legacy_des_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.deserialize(legacy_buf, legacy_pos, legacy_des_pos));
+
+  // ---- split serialize, then parse the [len_inv][inv][len_var][var] section windows ----
+  char *split_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(split_buf != nullptr);
+  int64_t split_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_buf, BUF_SIZE, split_pos));
+  const int64_t nb = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  int64_t tmp = 0;
+  int64_t inv_len = 0;
+  int64_t var_len = 0;
+  serialization::decode_vi64(split_buf, nb, tmp, &inv_len);
+  const int64_t inv_begin = nb;
+  const int64_t var_len_pos = inv_begin + inv_len;
+  tmp = 0;
+  serialization::decode_vi64(split_buf + var_len_pos, nb, tmp, &var_len);
+  const int64_t var_begin = var_len_pos + nb;
+
+  // ---- build the read-only template (invariant section only) ----
+  ObSQLSessionInfo sess_templ(500);
+  init_set(sess_templ);
+  sess_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t tpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_templ.das_build_template_invariant_section(split_buf + inv_begin, inv_len, tpos));
+  ASSERT_EQ(tpos, inv_len);
+
+  // ---- apply into a working session + decode the volatile suffix ----
+  common::ObArenaAllocator sess_app_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_app(500);
+  ASSERT_EQ(OB_SUCCESS, sess_app.test_init(0, 0, 0, &sess_app_allocator));
+  sess_app.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sess_app.das_apply_invariant_section(sess_templ));
+  ASSERT_TRUE(sess_app.is_das_borrowed_sys_vars());
+  ASSERT_EQ(sess_templ.sys_var_base_version_, sess_app.sys_var_base_version_);
+  ASSERT_FALSE(ObBasicSessionInfo::CACHED_SYS_VAR_VERSION == sess_app.sys_var_base_version_);
+  for (int64_t i = 0; i < share::ObSysVarFactory::ALL_SYS_VARS_COUNT; ++i) {
+    ASSERT_EQ(sess_templ.sys_vars_[i], sess_app.sys_vars_[i]);
+  }
+  int64_t vpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_app.das_decode_volatile_section(split_buf + var_begin, var_len, vpos));
+  ASSERT_EQ(vpos, var_len);
+
+  // ---- compare: legacy-serialize ref and applied, bytes must match ----
+  char *reser_ref = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *reser_app = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(reser_ref != nullptr && reser_app != nullptr);
+  int64_t reser_ref_len = 0;
+  int64_t reser_app_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.serialize(reser_ref, BUF_SIZE, reser_ref_len));
+  ASSERT_EQ(OB_SUCCESS, sess_app.serialize(reser_app, BUF_SIZE, reser_app_len));
+
+  LOG_INFO("[DAS_APPLY] lengths", K(inv_len), K(var_len), K(reser_ref_len), K(reser_app_len));
+  ASSERT_EQ(reser_ref_len, reser_app_len);
+  ASSERT_EQ(0, MEMCMP(reser_ref, reser_app, reser_ref_len));
+
+  ObObj new_autocommit;
+  new_autocommit.set_int(0);
+  ASSERT_EQ(OB_ERR_UNEXPECTED,
+            sess_app.update_sys_variable(share::SYS_VAR_AUTOCOMMIT, new_autocommit));
+  sess_app.das_detach_borrowed_sys_vars();
+  ASSERT_FALSE(sess_app.is_das_borrowed_sys_vars());
+
+  ob_free(legacy_buf);
+  ob_free(split_buf);
+  ob_free(reser_ref);
+  ob_free(reser_app);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  sess_ref.cached_tenant_config_info_.session_ = nullptr;
+  sess_templ.cached_tenant_config_info_.session_ = nullptr;
+  sess_app.cached_tenant_config_info_.session_ = nullptr;
 }
 
 } // namespace sql

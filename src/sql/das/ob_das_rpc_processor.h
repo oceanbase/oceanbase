@@ -20,6 +20,7 @@
 #include "sql/das/ob_das_define.h"
 #include "sql/das/ob_das_factory.h"
 #include "sql/engine/ob_des_exec_context.h"
+#include "observer/ob_req_time_service.h"
 
 namespace oceanbase
 {
@@ -58,6 +59,7 @@ public:
     return g_das_fatory;
   }
 protected:
+  observer::ObReqTimeGuard rt_guard_;
   ObDASTaskFactory das_factory_;
   ObDesExecContext exec_ctx_;
   ObExprFrameInfo frame_info_;

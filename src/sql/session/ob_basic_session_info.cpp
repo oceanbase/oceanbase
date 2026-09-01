@@ -94,6 +94,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       current_buf_index_(0),
       bucket_allocator_wrapper_(&block_allocator_),
       user_var_val_map_(SMALL_BLOCK_SIZE, ObWrapperAllocator(&block_allocator_), orig_tenant_id_),
+      is_das_borrowed_sys_vars_(false),
       influence_plan_var_indexs_(),
       is_first_gen_(true),
       is_first_gen_config_(true),
@@ -360,6 +361,7 @@ int ObBasicSessionInfo::reset_sys_vars()
 
   // 清理 sys_var 信息
   memset(sys_vars_, 0, sizeof(sys_vars_));
+  is_das_borrowed_sys_vars_ = false;
   influence_plan_var_indexs_.reset();
   sys_vars_cache_.reset();
   sys_var_inc_info_.reset();
@@ -406,6 +408,11 @@ int ObBasicSessionInfo::reset_sys_vars()
 
 void ObBasicSessionInfo::reset(bool skip_sys_var)
 {
+  if (OB_UNLIKELY(skip_sys_var && is_das_borrowed_sys_vars_)) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED,
+                 "cannot keep borrowed das sys vars when resetting session");
+    skip_sys_var = false;
+  }
   set_valid(false);
 
   if (OB_NOT_NULL(tx_desc_)) {
@@ -454,6 +461,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   user_var_val_map_.reuse();
   if (!skip_sys_var) {
     memset(sys_vars_, 0, sizeof(sys_vars_));
+    is_das_borrowed_sys_vars_ = false;
     influence_plan_var_indexs_.reset();
     influence_pl_cache_var_indexs_.reset();
   } else {
@@ -1462,16 +1470,22 @@ int ObBasicSessionInfo::create_sys_var(ObSysVarClassType sys_var_id,
                                        int64_t store_idx, ObBasicSysVar *&sys_var)
 {
   int ret = OB_SUCCESS;
-  OV (0 <= store_idx && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT,
-      OB_ERR_UNEXPECTED, sys_var_id, store_idx);
-  if (OB_NOT_NULL(sys_vars_[store_idx])) {
-    OV (sys_vars_[store_idx]->get_type() == sys_var_id,
-        OB_ERR_UNEXPECTED, sys_var_id, store_idx, sys_vars_[store_idx]->get_type());
-    OX (sys_var = sys_vars_[store_idx]);
+  if (OB_UNLIKELY(is_das_borrowed_sys_vars_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot create sys var in das session borrowing cached sys vars", K(ret), K(sys_var_id));
   } else {
-    OZ (sys_var_fac_.create_sys_var(sys_var_id, sys_var, store_idx), sys_var_id);
-    OV (OB_NOT_NULL(sys_var), OB_ERR_UNEXPECTED, sys_var_id, store_idx);
-    OX (sys_vars_[store_idx] = sys_var);
+    OV (0 <= store_idx && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT,
+        OB_ERR_UNEXPECTED, sys_var_id, store_idx);
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(sys_vars_[store_idx])) {
+      OV (sys_vars_[store_idx]->get_type() == sys_var_id,
+          OB_ERR_UNEXPECTED, sys_var_id, store_idx, sys_vars_[store_idx]->get_type());
+      OX (sys_var = sys_vars_[store_idx]);
+    } else {
+      OZ (sys_var_fac_.create_sys_var(sys_var_id, sys_var, store_idx), sys_var_id);
+      OV (OB_NOT_NULL(sys_var), OB_ERR_UNEXPECTED, sys_var_id, store_idx);
+      OX (sys_vars_[store_idx] = sys_var);
+    }
   }
   return ret;
 }
@@ -2035,7 +2049,10 @@ int ObBasicSessionInfo::update_sys_variable(const ObSysVarClassType sys_var_id, 
   ObBasicSysVar *sys_var = NULL;
   int64_t sys_var_idx = 0;
   // 首先track变量的修改, 这样如果变量修改失败, 也不会造成客户端与服务端不一致的情况
-  if (SYS_VAR_INVALID == sys_var_id) {
+  if (OB_UNLIKELY(is_das_borrowed_sys_vars_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot update borrowed das sys var", K(ret), K(sys_var_id));
+  } else if (SYS_VAR_INVALID == sys_var_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sys_var_id", K(sys_var_id), K(ret));
   } else if (OB_FAIL(inner_get_sys_var(sys_var_id, sys_var_idx, sys_var))) {
@@ -2200,7 +2217,10 @@ int ObBasicSessionInfo::deep_copy_sys_variable(ObBasicSysVar &sys_var,
 {
   int ret = OB_SUCCESS;
   ObObj dest_val;
-  if (OB_UNLIKELY(sys_var_id == SYS_VAR_OB_STATEMENT_TRACE_ID)) {
+  if (OB_UNLIKELY(is_das_borrowed_sys_vars_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot deep copy borrowed das sys var", K(ret), K(sys_var_id));
+  } else if (OB_UNLIKELY(sys_var_id == SYS_VAR_OB_STATEMENT_TRACE_ID)) {
     if (OB_FAIL(deep_copy_trace_id_var(src_val, &dest_val))) {
       LOG_WARN("fail to deep copy trace id", K(ret));
     } else {
@@ -2302,7 +2322,10 @@ int ObBasicSessionInfo::update_session_sys_variable(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   ObBasicSysVar *sys_var = NULL;
-  if (var.empty()) {
+  if (OB_UNLIKELY(is_das_borrowed_sys_vars_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot update borrowed das sys var", K(ret), K(var));
+  } else if (var.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid variable name", K(ret), K(var));
   } else if (OB_FAIL(inner_get_sys_var(var, sys_var))) {
@@ -5425,6 +5448,194 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   return ret;
 }
 
+#define DAS_INV(...)                            \
+  do {                                          \
+    if (invariant_phase) {                      \
+      LST_DO_CODE(OB_UNIS_ENCODE, __VA_ARGS__); \
+    }                                           \
+  } while (0)
+
+#define DAS_VAR(...)                            \
+  do {                                          \
+    if (!invariant_phase) {                     \
+      LST_DO_CODE(OB_UNIS_ENCODE, __VA_ARGS__); \
+    }                                           \
+  } while (0)
+
+int ObBasicSessionInfo::das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const
+{
+  int ret = OB_SUCCESS;
+  ObTimeZoneInfo tmp_tz_info;//为了兼容老版本，创建临时time zone info 占位
+  int64_t compatibility_mode_index = 0;
+  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+    LOG_WARN("convert compatibility mode to index failed", K(ret));
+  }
+  // [VOLATILE] tx desc changes per query
+  bool has_tx_desc = tx_desc_ != NULL;
+  if (!invariant_phase) {
+    OB_UNIS_ENCODE(has_tx_desc);
+    if (has_tx_desc) {
+      OB_UNIS_ENCODE(*tx_desc_);
+    }
+  }
+
+  DAS_INV(consistency_level_,
+          compatibility_mode_index,
+          tmp_tz_info,
+          tenant_id_ | (rpc_tenant_id_ << 32),
+          effective_tenant_id_,
+          is_changed_to_temp_tenant_,
+          user_id_,
+          is_master_session() ? get_sid() : master_sessid_,
+          capability_.capability_,
+          thread_data_.database_name_);
+
+  if (invariant_phase) {
+    ObSEArray<ObSysVarClassType, 64> sys_var_ids;
+    ObSEArray<ObString, 32> user_var_names;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(calc_need_serialize_vars(sys_var_ids, user_var_names))) {
+      LOG_WARN("fail to calc need serialize vars", K(ret));
+    } else {
+      ObSEArray<std::pair<ObString, ObSessionVariable>, 32> actual_ser_user_vars;
+      ObSessionVariable user_var_val;
+      for (int64_t i = 0; OB_SUCC(ret) && i < user_var_names.count(); ++i) {
+        user_var_val.reset();
+        const ObString &user_var_name = user_var_names.at(i);
+        ret = user_var_val_map_.get_refactored(user_var_name, user_var_val);
+        if (OB_SUCCESS != ret && OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("fail to get user var", K(i), K(user_var_name), K(ret));
+        } else {
+          if (OB_SUCCESS == ret
+              && OB_FAIL(actual_ser_user_vars.push_back(std::make_pair(user_var_name, user_var_val)))) {
+            LOG_WARN("fail to push back user var", K(user_var_name), K(ret));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(serialization::encode(buf, buf_len, pos, actual_ser_user_vars.count()))) {
+          LOG_WARN("fail to serialize user var count", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < actual_ser_user_vars.count(); ++i) {
+            const ObString &user_var_name = actual_ser_user_vars.at(i).first;
+            const ObSessionVariable &user_var_val = actual_ser_user_vars.at(i).second;
+            if (OB_FAIL(serialization::encode(buf, buf_len, pos, user_var_name))) {
+              LOG_WARN("fail to serialize user var name", K(user_var_name), K(ret));
+            } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, user_var_val.meta_))) {
+              LOG_WARN("fail to serialize user var meta", K(ret));
+            } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, user_var_val.value_))) {
+              LOG_WARN("fail to serialize user var value", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (invariant_phase) {
+    ObSEArray<ObSysVarClassType, 64> sys_var_ids;
+    ObSEArray<ObString, 32> user_var_names;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(calc_need_serialize_vars(sys_var_ids, user_var_names))) {
+      LOG_WARN("fail to calc need serialize vars", K(ret));
+    } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_ids.count()))) {
+      LOG_WARN("fail to serialize sys var count", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_ids.count(); ++i) {
+        int64_t sys_var_idx = -1;
+        if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_ids.at(i), sys_var_idx))) {
+          LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_ids.at(i)), K(ret));
+        } else if (sys_var_idx < 0 || get_sys_var_count() <= sys_var_idx) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("sys var idx is invalid", K(sys_var_idx), K(get_sys_var_count()), K(ret));
+        } else if (OB_ISNULL(sys_vars_[sys_var_idx])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("sys var is NULL", K(ret), K(sys_var_idx));
+        } else {
+          int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
+          if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_id))) {
+            LOG_ERROR("fail to serialize sys var id", K(sys_var_id), K(ret));
+          } else if (OB_FAIL(sys_vars_[sys_var_idx]->serialize(buf, buf_len, pos))) {
+            LOG_ERROR("fail to serialize sys var", K(sys_var_idx), K(ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !invariant_phase) {
+    bool tx_read_only = get_tx_read_only();
+    if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, tx_read_only))) {
+      LOG_WARN("fail to encode tx_read_only", K(ret));
+    }
+  }
+
+  bool unused_literal_query = false;
+  int64_t unused_inner_safe_weak_read_snapshot = 0;
+  int64_t unused_weak_read_snapshot_source = 0;
+  int64_t unused_safe_weak_read_snapshot = 0;
+  bool need_serial_exec = false;
+  uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
+  DAS_VAR(sys_vars_cache_.inc_data_);
+  DAS_INV(unused_safe_weak_read_snapshot,
+          unused_inner_safe_weak_read_snapshot,
+          unused_literal_query,
+          tz_info_wrap_);
+  DAS_VAR(app_trace_id_);
+  DAS_INV(proxy_capability_.capability_,
+          client_mode_,
+          proxy_sessid_);
+  DAS_VAR(nested_count_);
+  DAS_INV(thread_data_.user_name_);
+  DAS_VAR(next_tx_isolation_,
+          reserved_read_snapshot_version_);
+  DAS_INV(check_sys_variable_,
+          unused_weak_read_snapshot_source,
+          database_id_,
+          thread_data_.user_at_host_name_,
+          thread_data_.user_at_client_ip_);
+  DAS_VAR(current_execution_id_,
+          labels_,
+          total_stmt_tables_,
+          cur_stmt_tables_);
+  DAS_INV(is_foreign_key_cascade,
+          sys_var_in_pc_str_,
+          config_in_pc_str_,
+          is_foreign_key_check_exist,
+          need_serial_exec);
+  DAS_VAR(sql_scope_flags,
+          stmt_type_);
+  DAS_INV(thread_data_.client_addr_,
+          thread_data_.user_client_addr_);
+  DAS_VAR(process_query_time_,
+          flt_vars_.last_flt_trace_id_,
+          flt_vars_.row_traceformat_,
+          flt_vars_.last_flt_span_id_);
+  DAS_INV(exec_min_cluster_version_,
+          is_client_sessid_support_,
+          use_rich_vector_format_);
+  DAS_VAR(ObString(sql_id_));
+  DAS_INV(proxy_user_id_,
+          thread_data_.proxy_user_name_,
+          thread_data_.proxy_host_name_,
+          enable_role_ids_wrapper_.get_enable_role_ids(),
+          sys_var_config_hash_val_,
+          enable_mysql_compatible_dates_,
+          is_diagnosis_enabled_,
+          diagnosis_limit_num_,
+          client_sessid_,
+          diagnosis_info_,
+          client_create_time_,
+          sys_var_in_pl_cache_str_,
+          global_rich_vector_configured_);
+  return ret;
+}
+#undef DAS_INV
+#undef DAS_VAR
+
 int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -5757,6 +5968,587 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
   return ret;
 }
 
+int ObBasicSessionInfo::das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObTimeZoneInfo tmp_tz_info;
+  int64_t compatibility_mode_index = 0;
+  is_deserialized_ = true;
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              consistency_level_,
+              compatibility_mode_index,
+              tmp_tz_info,
+              tenant_id_,
+              effective_tenant_id_,
+              is_changed_to_temp_tenant_,
+              user_id_,
+              master_sessid_,
+              capability_.capability_,
+              thread_data_.database_name_);
+  rpc_tenant_id_ = (tenant_id_ >> 32);
+  tenant_id_ = (tenant_id_ << 32 >> 32);
+
+  int64_t deserialize_user_var_count = 0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, deserialize_user_var_count))) {
+    LOG_WARN("fail to deserialize user var count", K(data_len), K(pos), K(ret));
+  } else {
+    ObSessionVariable user_var_val;
+    for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_user_var_count; ++i) {
+      ObString user_var_name;
+      user_var_val.reset();
+      if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_name))) {
+        LOG_WARN("fail to deserialize user var name", K(i), K(ret));
+      } else if (OB_FAIL(sess_level_name_pool_.write_string(user_var_name, &user_var_name))) {
+        LOG_WARN("fail to write user_var_name", K(user_var_name), K(ret));
+      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.meta_))) {
+        LOG_WARN("fail to deserialize user var meta", K(i), K(ret));
+      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.value_))) {
+        LOG_WARN("fail to deserialize user var value", K(i), K(ret));
+      } else if (OB_FAIL(user_var_val_map_.set_refactored(user_var_name, user_var_val))) {
+        LOG_WARN("Insert user var into map failed", K(user_var_name), K(ret));
+      }
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match(pl::package_key_prefix_v1))) {
+        if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
+                      this, user_var_name, user_var_val))) {
+          LOG_WARN("fail to notify package variable deserialize", K(user_var_name), K(ret));
+        }
+      }
+#endif
+    }
+  }
+  sys_var_inc_info_.reset();
+  if (CACHED_SYS_VAR_VERSION != sys_var_base_version_) {
+    OZ (load_all_sys_vars_default());
+  }
+
+  if (OB_SUCC(ret)) {
+    ObTZMapWrap tz_map_wrap;
+    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id_, tz_map_wrap))) {
+      LOG_WARN("get tenant timezone map failed", K(ret));
+    } else {
+      tz_info_wrap_.set_tz_info_map(tz_map_wrap.get_tz_map());
+    }
+  }
+
+  int64_t deserialize_sys_var_count = 0;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(serialization::decode(buf, data_len, pos, deserialize_sys_var_count))) {
+      LOG_WARN("fail to deserialize sys var count", K(data_len), K(pos), K(ret));
+    } else {
+      const bool check_timezone_valid = false;
+      for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_sys_var_count; ++i) {
+        ObBasicSysVar *sys_var = NULL;
+        ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
+        int16_t tmp_sys_var_id = -1;
+        int64_t store_idx = -1;
+        if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
+          LOG_WARN("fail to deserialize sys var id", K(ret));
+        } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
+        } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+          if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
+            ret = OB_SUCCESS;
+            int64_t sys_var_version = 0;
+            int64_t sys_var_len = 0;
+            OB_UNIS_DECODE(sys_var_version);
+            OB_UNIS_DECODE(sys_var_len);
+            if (OB_SUCC(ret)) {
+              pos += sys_var_len;
+              LOG_WARN("invalid sys var id, maybe version different, skip", K(sys_var_id));
+            }
+          } else {
+            LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
+          }
+        } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+          LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
+        } else if (OB_FAIL(create_sys_var(sys_var_id, store_idx, sys_var))) {
+          LOG_WARN("fail to create sys var", K(sys_var_id), K(ret));
+        } else if (OB_ISNULL(sys_var)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create sys var is NULL", K(ret));
+        } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
+          LOG_WARN("fail to deserialize sys var", K(sys_var_id), K(ret));
+        } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+          LOG_WARN("fail to update system variable", K(sys_var_id), K(ret));
+        } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
+                                                    check_timezone_valid, false))) {
+          LOG_WARN("process system variable error", K(ret), K(*sys_var));
+        }
+      }
+    }
+  }
+  if (CACHED_SYS_VAR_VERSION == sys_var_base_version_) {
+    OZ (process_session_variable_fast());
+  }
+
+  int64_t unused_inner_safe_weak_read_snapshot = 0;
+  int64_t unused_weak_read_snapshot_source = 0;
+  int64_t unused_safe_weak_read_snapshot = 0;
+  bool unused_literal_query = false;
+  bool need_serial_exec = false;
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
+  sys_var_in_pc_str_.reset();
+  config_in_pc_str_.reset();
+  exec_env_inited_ = false;
+  sys_var_in_pl_cache_str_.reset();
+  const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
+  LST_DO_CODE(OB_UNIS_DECODE,
+              unused_safe_weak_read_snapshot,
+              unused_inner_safe_weak_read_snapshot,
+              unused_literal_query,
+              tz_info_wrap_,
+              proxy_capability_.capability_,
+              client_mode_,
+              proxy_sessid_,
+              thread_data_.user_name_,
+              check_sys_variable_,
+              unused_weak_read_snapshot_source,
+              database_id_,
+              thread_data_.user_at_host_name_,
+              thread_data_.user_at_client_ip_,
+              is_foreign_key_cascade,
+              sys_var_in_pc_str_,
+              config_in_pc_str_,
+              is_foreign_key_check_exist,
+              need_serial_exec,
+              thread_data_.client_addr_,
+              thread_data_.user_client_addr_,
+              exec_min_cluster_version_,
+              is_client_sessid_support_,
+              use_rich_vector_format_);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.user_name_, &thread_data_.user_name_))) {
+      LOG_WARN("fail to write username", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.user_at_host_name_,
+                                              &thread_data_.user_at_host_name_))) {
+      LOG_WARN("fail to write user_at_host_name", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.user_at_client_ip_,
+                                              &thread_data_.user_at_client_ip_))) {
+      LOG_WARN("fail to write user_at_client_ip", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pc_str_, &sys_var_in_pc_str_))) {
+      LOG_WARN("fail to write sys_var_in_pc_str", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(config_in_pc_str_, &config_in_pc_str_))) {
+      LOG_WARN("fail to write config_in_pc_str_", K(ret));
+    }
+  }
+  is_deserialized_ = true;
+  tz_info_wrap_.set_tz_info_map(tz_info_map);
+  if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION) {
+    ObArenaAllocator calc_buf(ObModIds::OB_SQL_SESSION);
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_sys_var_count(); ++i) {
+      if ((ObSysVariables::get_flags(i) & ObSysVarFlag::NEED_SERIALIZE) && OB_ISNULL(sys_vars_[i])) {
+        if (OB_FAIL(load_default_sys_variable(calc_buf, i))) {
+          LOG_WARN("fail to load default sys variable", K(ret), K(i));
+        }
+      }
+    }
+  }
+  release_to_pool_ = OB_SUCC(ret);
+  force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              proxy_user_id_,
+              thread_data_.proxy_user_name_,
+              thread_data_.proxy_host_name_,
+              enable_role_ids_wrapper_.get_enable_role_ids());
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_user_name_,
+                                        &thread_data_.proxy_user_name_))) {
+      LOG_WARN("fail to write proxy_user_name", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_host_name_,
+                                              &thread_data_.proxy_host_name_))) {
+      LOG_WARN("fail to write proxy_host_name", K(ret));
+    }
+  }
+  LST_DO_CODE(OB_UNIS_DECODE,
+              sys_var_config_hash_val_,
+              enable_mysql_compatible_dates_,
+              is_diagnosis_enabled_,
+              diagnosis_limit_num_,
+              client_sessid_,
+              diagnosis_info_,
+              client_create_time_);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_info_.log_file_, &diagnosis_info_.log_file_))) {
+      LOG_WARN("fail to write diagnosis log_file", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_info_.bad_file_, &diagnosis_info_.bad_file_))) {
+      LOG_WARN("fail to write diagnosis bad_file", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(gen_exec_env())) {
+      LOG_WARN("fail to regenerate exec_env", K(ret));
+    }
+  }
+  OB_UNIS_DECODE(sys_var_in_pl_cache_str_);
+  OB_UNIS_DECODE(global_rich_vector_configured_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pl_cache_str_, &sys_var_in_pl_cache_str_))) {
+      LOG_WARN("fail to write sys_var_in_pl_cache_str", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+
+  bool has_tx_desc = 0;
+  if (OB_FAIL(serialization::decode(buf, data_len, pos, has_tx_desc))) {
+    LOG_WARN("fail to deserialize has_tx_desc", K(ret));
+  } else if (has_tx_desc) {
+    transaction::ObTransService* txs = MTL(transaction::ObTransService*);
+    if (OB_FAIL(txs->acquire_tx(buf, data_len, pos, tx_desc_))) {
+      LOG_WARN("acquire tx by deserialize fail", K(ret));
+    }
+  } else {
+    tx_desc_ = nullptr;
+  }
+
+  if (OB_SUCC(ret)) {
+    bool tx_read_only = false;
+    if (OB_FAIL(serialization::decode_bool(buf, data_len, pos, &tx_read_only))) {
+      LOG_WARN("fail to decode tx_read_only", K(ret));
+    } else {
+      next_tx_read_only_ = tx_read_only;
+    }
+  }
+
+  uint64_t sql_scope_flags = 0;
+  flt_vars_.last_flt_trace_id_.reset();
+  flt_vars_.last_flt_span_id_.reset();
+  LST_DO_CODE(OB_UNIS_DECODE,
+              sys_vars_cache_.inc_data_,
+              app_trace_id_,
+              nested_count_,
+              next_tx_isolation_,
+              reserved_read_snapshot_version_,
+              current_execution_id_,
+              labels_,
+              total_stmt_tables_,
+              cur_stmt_tables_,
+              sql_scope_flags,
+              stmt_type_,
+              process_query_time_,
+              flt_vars_.last_flt_trace_id_,
+              flt_vars_.row_traceformat_,
+              flt_vars_.last_flt_span_id_);
+
+  ObString sql_id;
+  OB_UNIS_DECODE(sql_id);
+  if (OB_SUCC(ret)) {
+    set_cur_sql_id(sql_id.ptr());
+  }
+
+  if (OB_SUCC(ret)) {
+    sql_scope_flags_.set_flags(sql_scope_flags);
+    set_last_flt_trace_id(flt_vars_.last_flt_trace_id_);
+    set_last_flt_span_id(flt_vars_.last_flt_span_id_);
+    if (OB_FAIL(sess_level_name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
+      LOG_WARN("fail to write app_trace_id", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObBasicSessionInfo::das_borrow_sys_vars_from(const ObBasicSessionInfo &templ)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_das_borrowed_sys_vars_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("das sys vars already borrowed", K(ret));
+  } else if (OB_FAIL(influence_plan_var_indexs_.assign(templ.influence_plan_var_indexs_))) {
+    LOG_WARN("fail to assign influence plan sys var indexes", K(ret));
+  } else if (OB_FAIL(influence_pl_cache_var_indexs_.assign(templ.influence_pl_cache_var_indexs_))) {
+    LOG_WARN("fail to assign influence pl cache sys var indexes", K(ret));
+  } else {
+    MEMCPY(sys_vars_, templ.sys_vars_, sizeof(sys_vars_));
+    sys_vars_cache_.assign(templ.sys_vars_cache_);
+    sys_var_base_version_ = templ.sys_var_base_version_;
+    is_das_borrowed_sys_vars_ = true;
+  }
+  return ret;
+}
+
+void ObBasicSessionInfo::das_detach_borrowed_sys_vars()
+{
+  if (is_das_borrowed_sys_vars_) {
+    MEMSET(sys_vars_, 0, sizeof(sys_vars_));
+    is_das_borrowed_sys_vars_ = false;
+    sys_var_base_version_ = OB_INVALID_VERSION;
+    sys_var_inc_info_.reset();
+    sys_vars_cache_.reset();
+    influence_plan_var_indexs_.reset();
+    influence_pl_cache_var_indexs_.reset();
+  }
+}
+
+int ObBasicSessionInfo::das_deser_cache_begin_pool_request()
+{
+  int ret = OB_SUCCESS;
+  set_thread_id(GETTID());
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.is_in_retry_ = SESS_NOT_IN_RETRY;
+    thread_data_.is_mark_killed_ = false;
+    thread_data_.retry_active_time_ = 0;
+    thread_data_.is_request_end_ = false;
+  }
+  reset_session_changed_info();
+  return ret;
+}
+
+int ObBasicSessionInfo::das_deser_cache_end_pool_request(bool &can_return_to_pool)
+{
+  int ret = OB_SUCCESS;
+  can_return_to_pool = is_das_borrowed_sys_vars_
+                       && 0 == user_var_val_map_.size()
+                       && !is_session_info_changed()
+                       && app_trace_id_.empty()
+                       && !associated_xa_;
+
+  if (OB_NOT_NULL(tx_desc_)) {
+    MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+    if (OB_SUCC(guard.switch_to(tx_desc_->get_tenant_id(), false))) {
+      MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    } else {
+      LOG_WARN("tenant env not exist, force release das deser cache session tx",
+               KP(tx_desc_), K(tx_desc_->get_tx_id()));
+      transaction::ObTransService::force_release_tx_when_session_destroy(*tx_desc_);
+    }
+    tx_desc_ = nullptr;
+  }
+
+  set_session_sleep();
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    if (OB_NOT_NULL(thread_data_.cur_query_)) {
+      thread_data_.cur_query_[0] = '\0';
+    }
+    if (OB_NOT_NULL(thread_data_.top_query_)) {
+      thread_data_.top_query_[0] = '\0';
+    }
+    thread_data_.cur_query_len_ = 0;
+    thread_data_.top_query_len_ = 0;
+    thread_data_.cur_statement_id_ = 0;
+    thread_data_.cur_query_start_time_ = 0;
+    thread_data_.pl_internal_time_split_point_ = 0;
+    thread_data_.pl_cur_query_start_time_bak_ = 0;
+    thread_data_.is_in_retry_ = SESS_NOT_IN_RETRY;
+    thread_data_.is_mark_killed_ = false;
+    thread_data_.retry_active_time_ = 0;
+    thread_data_.is_request_end_ = true;
+  }
+
+  xid_.reset();
+  associated_xa_ = false;
+  trans_flags_.reset();
+  sql_scope_flags_.reset();
+  next_tx_read_only_ = -1;
+  next_tx_isolation_ = transaction::ObTxIsolationLevel::INVALID;
+  reserved_read_snapshot_version_.reset();
+  nested_count_ = -1;
+  current_execution_id_ = -1;
+  labels_.reuse();
+  total_stmt_tables_.reset();
+  cur_stmt_tables_.reset();
+  stmt_type_ = stmt::T_NONE;
+  process_query_time_ = 0;
+  flt_vars_.reset();
+  CHAR_CARRAY_INIT(sql_id_);
+  app_trace_id_.reset();
+  retry_info_.reset();
+  last_query_trace_id_.reset();
+  reset_session_changed_info();
+  return ret;
+}
+
+int ObBasicSessionInfo::das_apply_invariant_from(const ObBasicSessionInfo &templ)
+{
+  int ret = OB_SUCCESS;
+  is_deserialized_ = true;
+
+  consistency_level_ = templ.consistency_level_;
+  tenant_id_ = templ.tenant_id_;
+  rpc_tenant_id_ = templ.rpc_tenant_id_;
+  effective_tenant_id_ = templ.effective_tenant_id_;
+  is_changed_to_temp_tenant_ = templ.is_changed_to_temp_tenant_;
+  user_id_ = templ.user_id_;
+  master_sessid_ = templ.master_sessid_;
+  capability_.capability_ = templ.capability_.capability_;
+  MEMCPY(thread_data_.database_name_,
+         templ.thread_data_.database_name_,
+         sizeof(thread_data_.database_name_));
+
+  if (OB_SUCC(ret)) {
+    const ObSessionValMap::VarNameValMap &src_map = templ.user_var_val_map_.get_val_map();
+    for (ObSessionValMap::VarNameValMap::const_iterator it = src_map.begin();
+         OB_SUCC(ret) && it != src_map.end(); ++it) {
+      ObString user_var_name = it->first;
+      const ObSessionVariable &user_var_val = it->second;
+      if (OB_FAIL(sess_level_name_pool_.write_string(user_var_name, &user_var_name))) {
+        LOG_WARN("fail to write user_var_name", K(user_var_name), K(ret));
+      } else if (OB_FAIL(user_var_val_map_.set_refactored(user_var_name, user_var_val))) {
+        LOG_WARN("Insert user var into map failed", K(user_var_name), K(ret));
+      }
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match(pl::package_key_prefix_v1))) {
+        if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
+                      this, user_var_name, user_var_val))) {
+          LOG_WARN("fail to notify package variable deserialize", K(user_var_name), K(ret));
+        }
+      }
+#endif
+    }
+  }
+  sys_var_inc_info_.reset();
+  if (OB_SUCC(ret)) {
+    OZ (das_borrow_sys_vars_from(templ));
+  }
+
+  if (OB_SUCC(ret)) {
+    ObTZMapWrap tz_map_wrap;
+    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id_, tz_map_wrap))) {
+      LOG_WARN("get tenant timezone map failed", K(ret));
+    } else {
+      tz_info_wrap_.set_tz_info_map(tz_map_wrap.get_tz_map());
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const bool check_timezone_valid = false;
+    const SysVarIds &ids = templ.sys_var_inc_info_.get_all_sys_var_ids();
+    for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
+      const ObSysVarClassType sys_var_id = ids.at(i);
+      int64_t store_idx = -1;
+      if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
+        LOG_WARN("fail to calc sys var store idx", K(sys_var_id), K(ret));
+      } else if (OB_UNLIKELY(store_idx < 0 || store_idx >= templ.get_sys_var_count())
+                 || OB_ISNULL(templ.sys_vars_[store_idx])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("template sys var is null", K(ret), K(sys_var_id), K(store_idx));
+      } else if (OB_FAIL(sys_var_inc_info_.add_sys_var_id(sys_var_id))) {
+        LOG_WARN("fail to add sys var id", K(sys_var_id), K(ret));
+      } else if (OB_FAIL(process_session_variable(sys_var_id,
+                                                  templ.sys_vars_[store_idx]->get_value(),
+                                                  check_timezone_valid, false))) {
+        LOG_WARN("process system variable error", K(ret), K(sys_var_id));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_das_borrowed_sys_vars_) {
+    OZ (process_session_variable_fast());
+  }
+
+  sys_var_in_pc_str_.reset();
+  config_in_pc_str_.reset();
+  exec_env_inited_ = false;
+  sys_var_in_pl_cache_str_.reset();
+  if (OB_SUCC(ret)) {
+    const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
+    if (OB_FAIL(tz_info_wrap_.deep_copy(templ.tz_info_wrap_))) {
+      LOG_WARN("fail to deep copy tz_info_wrap", K(ret));
+    } else {
+      proxy_capability_.capability_ = templ.proxy_capability_.capability_;
+      client_mode_ = templ.client_mode_;
+      proxy_sessid_ = templ.proxy_sessid_;
+      check_sys_variable_ = templ.check_sys_variable_;
+      database_id_ = templ.database_id_;
+      thread_data_.client_addr_ = templ.thread_data_.client_addr_;
+      thread_data_.user_client_addr_ = templ.thread_data_.user_client_addr_;
+      exec_min_cluster_version_ = templ.exec_min_cluster_version_;
+      is_client_sessid_support_ = templ.is_client_sessid_support_;
+      use_rich_vector_format_ = templ.use_rich_vector_format_;
+      // invariant string deep-copies into THIS pool (sourced from templ)
+      if (OB_FAIL(sess_level_name_pool_.write_string(templ.thread_data_.user_name_,
+                                          &thread_data_.user_name_))) {
+        LOG_WARN("fail to write username", K(ret));
+      } else if (OB_FAIL(sess_level_name_pool_.write_string(templ.thread_data_.user_at_host_name_,
+                                          &thread_data_.user_at_host_name_))) {
+        LOG_WARN("fail to write user_at_host_name", K(ret));
+      } else if (OB_FAIL(sess_level_name_pool_.write_string(templ.thread_data_.user_at_client_ip_,
+                                          &thread_data_.user_at_client_ip_))) {
+        LOG_WARN("fail to write user_at_client_ip", K(ret));
+      } else if (OB_FAIL(sess_level_name_pool_.write_string(templ.sys_var_in_pc_str_,
+                                          &sys_var_in_pc_str_))) {
+        LOG_WARN("fail to write sys_var_in_pc_str", K(ret));
+      } else if (OB_FAIL(sess_level_name_pool_.write_string(templ.config_in_pc_str_,
+                                          &config_in_pc_str_))) {
+        LOG_WARN("fail to write config_in_pc_str_", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      tz_info_wrap_.set_tz_info_map(tz_info_map);
+    }
+  }
+  is_deserialized_ = true;
+  if (OB_SUCC(ret) && GET_MIN_CLUSTER_VERSION() < CLUSTER_CURRENT_VERSION) {
+    ObArenaAllocator calc_buf(ObModIds::OB_SQL_SESSION);
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_sys_var_count(); ++i) {
+      if ((ObSysVariables::get_flags(i) & ObSysVarFlag::NEED_SERIALIZE) && OB_ISNULL(sys_vars_[i])) {
+        if (OB_FAIL(load_default_sys_variable(calc_buf, i))) {
+          LOG_WARN("fail to load default sys variable", K(ret), K(i));
+        }
+      }
+    }
+  }
+  release_to_pool_ = OB_SUCC(ret);
+  force_rich_vector_format_ = ForceRichFormatStatus::Disable;
+
+  if (OB_SUCC(ret)) {
+    proxy_user_id_ = templ.proxy_user_id_;
+    if (OB_FAIL(sess_level_name_pool_.write_string(templ.thread_data_.proxy_user_name_,
+                                        &thread_data_.proxy_user_name_))) {
+      LOG_WARN("fail to write proxy_user_name", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(templ.thread_data_.proxy_host_name_,
+                                        &thread_data_.proxy_host_name_))) {
+      LOG_WARN("fail to write proxy_host_name", K(ret));
+    } else if (OB_FAIL(get_enable_role_ids().assign(templ.get_enable_role_ids()))) {
+      LOG_WARN("fail to assign enable_role_ids", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    sys_var_config_hash_val_ = templ.sys_var_config_hash_val_;
+    enable_mysql_compatible_dates_ = templ.enable_mysql_compatible_dates_;
+    is_diagnosis_enabled_ = templ.is_diagnosis_enabled_;
+    diagnosis_limit_num_ = templ.diagnosis_limit_num_;
+    client_sessid_ = templ.client_sessid_;
+    client_create_time_ = templ.client_create_time_;
+    diagnosis_info_.is_enabled_ = templ.diagnosis_info_.is_enabled_;
+    diagnosis_info_.limit_num_ = templ.diagnosis_info_.limit_num_;
+    if (OB_FAIL(sess_level_name_pool_.write_string(templ.diagnosis_info_.log_file_,
+                                        &diagnosis_info_.log_file_))) {
+      LOG_WARN("fail to write diagnosis log_file", K(ret));
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(templ.diagnosis_info_.bad_file_,
+                                        &diagnosis_info_.bad_file_))) {
+      LOG_WARN("fail to write diagnosis bad_file", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(gen_exec_env())) {
+      LOG_WARN("fail to regenerate exec_env", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    global_rich_vector_configured_ = templ.global_rich_vector_configured_;
+    if (OB_FAIL(sess_level_name_pool_.write_string(templ.sys_var_in_pl_cache_str_,
+                                        &sys_var_in_pl_cache_str_))) {
+      LOG_WARN("fail to write sys_var_in_pl_cache_str", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    das_detach_borrowed_sys_vars();
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarIncInfo)
 {
   int ret = OB_SUCCESS;
@@ -5843,6 +6635,10 @@ int ObBasicSessionInfo::load_all_sys_vars_default()
 int ObBasicSessionInfo::clean_all_sys_vars()
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_das_borrowed_sys_vars_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot clean borrowed das sys vars", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < get_sys_var_count(); ++i) {
     if (OB_NOT_NULL(sys_vars_[i])) {
       OX (sys_vars_[i]->clean_value());
@@ -6053,6 +6849,216 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(sys_var_in_pl_cache_str_);
   OB_UNIS_ADD_LEN(global_rich_vector_configured_);
   return len;
+}
+
+#define DAS_INV(...)                             \
+  do {                                           \
+    if (invariant_phase) {                       \
+      LST_DO_CODE(OB_UNIS_ADD_LEN, __VA_ARGS__); \
+    }                                            \
+  } while (0)
+
+#define DAS_VAR(...)                             \
+  do {                                           \
+    if (!invariant_phase) {                      \
+      LST_DO_CODE(OB_UNIS_ADD_LEN, __VA_ARGS__); \
+    }                                            \
+  } while (0)
+
+int ObBasicSessionInfo::das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const
+{
+  int ret = OB_SUCCESS;
+  ObTimeZoneInfo tmp_tz_info;
+  int64_t compatibility_mode_index = 0;
+  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+    LOG_WARN("convert compatibility mode to index failed", K(ret));
+  }
+  char has_tx_desc = tx_desc_ != NULL ? 1 : 0;
+  if (!invariant_phase) {
+    OB_UNIS_ADD_LEN(has_tx_desc);
+    if (has_tx_desc) {
+      OB_UNIS_ADD_LEN(*tx_desc_);
+    }
+  }
+  DAS_INV(consistency_level_,
+          compatibility_mode_index,
+          tmp_tz_info,
+          tenant_id_ | (rpc_tenant_id_ << 32),
+          effective_tenant_id_,
+          is_changed_to_temp_tenant_,
+          user_id_,
+          is_master_session() ? get_sid() : master_sessid_,
+          capability_.capability_,
+          thread_data_.database_name_);
+  if (invariant_phase) {
+    ObSEArray<ObSysVarClassType, 128> sys_var_ids;
+    ObSEArray<ObString, 32> user_var_names;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(calc_need_serialize_vars(sys_var_ids, user_var_names))) {
+      LOG_WARN("fail to calc need serialize vars", K(ret));
+    } else {
+      int64_t actual_ser_user_var_count = 0;
+      ObSessionVariable user_var_val;
+      for (int64_t i = 0; OB_SUCC(ret) && i < user_var_names.count(); ++i) {
+        user_var_val.reset();
+        const ObString &user_var_name = user_var_names.at(i);
+        ret = user_var_val_map_.get_refactored(user_var_name, user_var_val);
+        if (OB_SUCCESS != ret && OB_HASH_NOT_EXIST != ret) {
+          LOG_WARN("fail to get user var", K(i), K(user_var_name), K(ret));
+        } else {
+          if (OB_SUCCESS == ret) {
+            actual_ser_user_var_count++;
+            len += serialization::encoded_length(user_var_name);
+            len += serialization::encoded_length(user_var_val.meta_);
+            len += serialization::encoded_length(user_var_val.value_);
+          }
+          ret = OB_SUCCESS;
+        }
+      }
+      len += serialization::encoded_length(actual_ser_user_var_count);
+    }
+    if (OB_SUCC(ret)) {
+      len += serialization::encoded_length(sys_var_ids.count());
+      for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_ids.count(); ++i) {
+        int64_t sys_var_idx = -1;
+        if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_ids.at(i), sys_var_idx))) {
+          LOG_WARN("fail to calc sys var store idx", K(i), K(ret));
+        } else if (sys_var_idx < 0 || get_sys_var_count() <= sys_var_idx) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("sys var idx is invalid", K(sys_var_idx), K(ret));
+        } else if (OB_ISNULL(sys_vars_[sys_var_idx])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("sys var is NULL", K(ret), K(sys_var_idx));
+        } else {
+          int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
+          len += serialization::encoded_length(sys_var_id);
+          len += sys_vars_[sys_var_idx]->get_serialize_size();
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !invariant_phase) {
+    bool tx_read_only = get_tx_read_only();
+    len += serialization::encoded_length_bool(tx_read_only);
+  }
+  bool unused_literal_query = false;
+  int64_t unused_inner_safe_weak_read_snapshot = 0;
+  int64_t unused_weak_read_snapshot_source = 0;
+  int64_t unused_safe_weak_read_snapshot = 0;
+  bool need_serial_exec = false;
+  uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
+  DAS_VAR(sys_vars_cache_.inc_data_);
+  DAS_INV(unused_safe_weak_read_snapshot,
+          unused_inner_safe_weak_read_snapshot,
+          unused_literal_query,
+          tz_info_wrap_);
+  DAS_VAR(app_trace_id_);
+  DAS_INV(proxy_capability_.capability_,
+          client_mode_,
+          proxy_sessid_);
+  DAS_VAR(nested_count_);
+  DAS_INV(thread_data_.user_name_);
+  DAS_VAR(next_tx_isolation_,
+          reserved_read_snapshot_version_);
+  DAS_INV(check_sys_variable_,
+          unused_weak_read_snapshot_source,
+          database_id_,
+          thread_data_.user_at_host_name_,
+          thread_data_.user_at_client_ip_);
+  DAS_VAR(current_execution_id_,
+          labels_,
+          total_stmt_tables_,
+          cur_stmt_tables_);
+  DAS_INV(is_foreign_key_cascade,
+          sys_var_in_pc_str_,
+          config_in_pc_str_,
+          is_foreign_key_check_exist,
+          need_serial_exec);
+  DAS_VAR(sql_scope_flags,
+          stmt_type_);
+  DAS_INV(thread_data_.client_addr_,
+          thread_data_.user_client_addr_);
+  DAS_VAR(process_query_time_,
+          flt_vars_.last_flt_trace_id_,
+          flt_vars_.row_traceformat_,
+          flt_vars_.last_flt_span_id_);
+  DAS_INV(exec_min_cluster_version_,
+          is_client_sessid_support_,
+          use_rich_vector_format_);
+  DAS_VAR(ObString(sql_id_));
+  const common::ObSEArray<uint64_t, 4> enable_role_ids = enable_role_ids_wrapper_.get_enable_role_ids();
+  DAS_INV(proxy_user_id_,
+          thread_data_.proxy_user_name_,
+          thread_data_.proxy_host_name_,
+          enable_role_ids,
+          sys_var_config_hash_val_,
+          enable_mysql_compatible_dates_,
+          is_diagnosis_enabled_,
+          diagnosis_limit_num_,
+          client_sessid_,
+          diagnosis_info_,
+          client_create_time_,
+          sys_var_in_pl_cache_str_,
+          global_rich_vector_configured_);
+  return ret;
+}
+#undef DAS_INV
+#undef DAS_VAR
+
+int ObBasicSessionInfo::das_serialize_split(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t size_nbytes = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+
+  if (OB_UNLIKELY(pos + size_nbytes > buf_len)) {
+    ret = OB_SIZE_OVERFLOW;
+  } else {
+    const int64_t inv_len_pos = pos;
+    pos += size_nbytes;
+    const int64_t inv_begin = pos;
+    if (OB_FAIL(das_serialize_phase_(buf, buf_len, pos, true /*invariant*/))) {
+      LOG_WARN("serialize invariant phase failed", K(ret));
+    } else {
+      int64_t tmp_pos = 0;
+      ret = serialization::encode_fixed_bytes_i64(buf + inv_len_pos, size_nbytes, tmp_pos, pos - inv_begin);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(pos + size_nbytes > buf_len)) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      const int64_t var_len_pos = pos;
+      pos += size_nbytes;
+      const int64_t var_begin = pos;
+      if (OB_FAIL(das_serialize_phase_(buf, buf_len, pos, false /*volatile*/))) {
+        LOG_WARN("serialize volatile phase failed", K(ret));
+      } else {
+        int64_t tmp_pos = 0;
+        ret = serialization::encode_fixed_bytes_i64(buf + var_len_pos, size_nbytes, tmp_pos, pos - var_begin);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::das_serialize_split_size(int64_t &inv_len, int64_t &var_len) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t size_nbytes = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  inv_len = 0;
+  var_len = 0;
+  if (OB_FAIL(das_serialize_phase_size_(inv_len, true /*invariant*/))) {
+    LOG_WARN("size invariant phase failed", K(ret));
+  } else if (OB_FAIL(das_serialize_phase_size_(var_len, false /*volatile*/))) {
+    LOG_WARN("size volatile phase failed", K(ret));
+  } else {
+    inv_len += size_nbytes;  // length prefix
+    var_len += size_nbytes;
+  }
+  return ret;
 }
 
 ////////////////////////////////////////////////////////////////
