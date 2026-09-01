@@ -2975,6 +2975,7 @@ typedef enum ObItemType
   T_VERIFY_NOWAIT = 4989,
   T_EXTERNAL_FILE_GLOB_PATTERN = 4990,
   T_EXPORT_CSV_HEADER = 4991,
+  T_BYTE_ORDER_MARK = 4995,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

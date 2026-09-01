@@ -148,7 +148,8 @@ struct ObCSVGeneralFormat {
     parallel_parse_on_single_file_(true),
     parallel_parse_file_size_threshold_(DEFAULT_CSV_LARGE_FILE_SIZE_THRESHOLD),
     max_row_length_(DEFAULT_MAX_CSV_ROW_LENGTH),
-    export_header_(false)
+    export_header_(false),
+    enable_check_bom_(false)
   {}
   static constexpr const char *OPTION_NAMES[] = {
     "LINE_DELIMITER",
@@ -170,7 +171,8 @@ struct ObCSVGeneralFormat {
     "PARALLEL_PARSE_ON_SINGLE_FILE",
     "PARALLEL_PARSE_FILE_SIZE_THRESHOLD",
     "MAX_ROW_LENGTH",
-    "EXPORT_HEADER"
+    "EXPORT_HEADER",
+    "BYTEORDERMARK"
   };
 
   // ObCSVOptionsEnum should keep the same order as OPTION_NAMES
@@ -195,6 +197,7 @@ struct ObCSVGeneralFormat {
     PARALLEL_PARSE_FILE_SIZE_THRESHOLD,
     MAX_ROW_LENGTH,
     EXPORT_HEADER,
+    BYTEORDERMARK,
     // put new options here, before MAX_OPTIONS
     // ....
     MAX_OPTIONS
@@ -245,6 +248,7 @@ struct ObCSVGeneralFormat {
   static constexpr int64_t DEFAULT_CSV_LARGE_FILE_SIZE_THRESHOLD = 256 * 1024 * 1024; // 256MB
   static constexpr int64_t DEFAULT_MAX_CSV_ROW_LENGTH = 2 * 1024 * 1024; // 2MB
   bool export_header_;
+  bool enable_check_bom_;
 
   int init_format(const ObDataInFileStruct &format,
                   int64_t file_column_nums,
@@ -255,7 +259,7 @@ struct ObCSVGeneralFormat {
   TO_STRING_KV(K(cs_type_), K(file_column_nums_), K(line_start_str_), K(field_enclosed_char_),
                K(is_optional_), K(field_escaped_char_), K(field_term_str_), K(line_term_str_),
                K(compression_algorithm_), K(file_extension_), K(binary_format_), K(skip_blank_lines_), K(ignore_extra_fields_),
-               K(parallel_parse_on_single_file_), K(parallel_parse_file_size_threshold_), K(max_row_length_));
+               K(parallel_parse_on_single_file_), K(parallel_parse_file_size_threshold_), K(max_row_length_), K(enable_check_bom_));
   OB_UNIS_VERSION(1);
 };
 

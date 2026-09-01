@@ -208,6 +208,9 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       } else if (OB_FAIL(csv.parallel_parse_on_single_file_ &&
                          databuff_printf(buf, buf_len, pos, "\n  MAX_ROW_LENGTH = %ld,", csv.max_row_length_))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print MAX_ROW_LENGTH", K(ret));
+      } else if (OB_FAIL(csv.enable_check_bom_ &&
+                         databuff_printf(buf, buf_len, pos, "\n  BYTEORDERMARK = CHECK,"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print BYTEORDERMARK", K(ret));
       }
     } else if (OB_SUCC(ret) && ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
       const ObODPSGeneralFormat &odps = format.odps_format_;

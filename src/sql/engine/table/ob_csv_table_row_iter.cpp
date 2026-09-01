@@ -25,6 +25,15 @@ using namespace common;
 using namespace share;
 namespace sql {
 
+bool ObCSVTableRowIterator::has_utf8_bom(const char *buf, const int64_t len)
+{
+  return OB_NOT_NULL(buf)
+         && len >= UTF8_BOM_LEN
+         && static_cast<unsigned char>(buf[0]) == 0xEF
+         && static_cast<unsigned char>(buf[1]) == 0xBB
+         && static_cast<unsigned char>(buf[2]) == 0xBF;
+}
+
 ObCSVTableRowIterator::~ObCSVTableRowIterator()
 {
   release_buf();
@@ -108,6 +117,7 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     arena_alloc_.set_attr(lib::ObMemAttr(scan_param->tenant_id_, "CSVRowIter"));
     OZ (ObExternalTableRowIterator::init(scan_param));
     OZ (parser_.init(scan_param->external_file_format_.csv_format_));
+    enable_check_bom_ = scan_param->external_file_format_.csv_format_.enable_check_bom_;
     OZ (get_storage_type_from_path_for_external_table(
             scan_param->external_file_location_, storage_type_));
 
@@ -378,10 +388,15 @@ int ObCSVTableRowIterator::open_next_file()
       OZ (prefetch_mgr_.open(*file_url_info, cache_options, state_.bounded_start_pos_, state_.bounded_end_pos_));
     } else {
       OZ(file_reader_.open(url_.ptr()));
+      state_.is_scan_full_file_ = true;
       if (OB_SUCC(ret) && state_.bounded_end_pos_ != INT64_MAX) {
         file_reader_.advance(state_.bounded_start_pos_);
         state_.is_scan_full_file_ = false;
       }
+    }
+    if (OB_SUCC(ret)) {
+      state_.need_check_bom_ = enable_check_bom_
+                               && (state_.is_scan_full_file_ || state_.chunk_idx_ == 0);
     }
   }
   LOG_DEBUG("open external file", K(ret), K(url_), K(location));
@@ -444,7 +459,13 @@ int ObCSVTableRowIterator::load_next_buf()
           state_.data_end_ = next_load_pos + tmp_read_size;
           state_.already_read_size_ += tmp_read_size;
         }
-        state_.has_escape_ = (nullptr != memchr(state_.buf_,
+        if (state_.need_check_bom_ && state_.data_end_ > state_.pos_) {
+          if (has_utf8_bom(state_.pos_, state_.data_end_ - state_.pos_)) {
+            state_.pos_ += UTF8_BOM_LEN;
+          }
+          state_.need_check_bom_ = false;  // open_next_file时重置
+        }
+        state_.has_escape_ = (nullptr != memchr(state_.pos_,
                                                 parser_.get_format().field_escaped_char_,
                                                 state_.data_end_ - state_.pos_));
       }

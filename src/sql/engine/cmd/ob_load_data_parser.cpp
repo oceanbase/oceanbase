@@ -667,6 +667,12 @@ int ObCSVGeneralFormat::to_json_kv_string(char *buf, const int64_t buf_len, int6
                       OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::EXPORT_HEADER)],
                       STR_BOOL(export_header_)));
   }
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3) {
+    OZ(J_COMMA());
+    OZ(databuff_printf(buf, buf_len, pos, R"("%s":%s)",
+                      OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::BYTEORDERMARK)],
+                      STR_BOOL(enable_check_bom_)));
+  }
   return ret;
 }
 
@@ -837,6 +843,15 @@ int ObCSVGeneralFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
       export_header_ = true;
     } else {
       export_header_ = false;
+    }
+    node = node->get_next();
+  }
+  enable_check_bom_ = false;
+  if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[static_cast<int32_t>(ObCSVOptionsEnum::BYTEORDERMARK)])) {
+    if (json::JT_TRUE == node->value_->get_type()) {
+      enable_check_bom_ = true;
+    } else {
+      enable_check_bom_ = false;
     }
     node = node->get_next();
   }
