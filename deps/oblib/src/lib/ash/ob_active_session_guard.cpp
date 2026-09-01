@@ -327,6 +327,7 @@ void ObActiveSessionStat::begin_row_lock_wait_event()
 void ObActiveSessionStat::end_row_lock_wait_event()
 {
   if (retry_wait_event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
+    ATOMIC_STORE_RLX(&lock_wait_detail_seq_, 0);
     end_retry_wait_event();
     block_sessid_ = 0;
   } else {

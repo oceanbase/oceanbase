@@ -742,7 +742,7 @@ public:
   const common::ObString get_database_name() const;
   inline int get_database_id(uint64_t &db_id) const { db_id = database_id_; return common::OB_SUCCESS; }
   inline uint64_t get_database_id() const { return database_id_; }
-  inline void set_database_id(uint64_t db_id) { database_id_ = db_id; }
+  void set_database_id(uint64_t db_id);
   inline const ObQueryRetryInfo &get_retry_info() const { return retry_info_; }
   inline ObQueryRetryInfo &get_retry_info_for_update() { return retry_info_; }
   inline const common::ObCurTraceId::TraceId &get_last_query_trace_id() const

@@ -435,6 +435,8 @@ int ObDiagnosticInfoContainer::acquire_diagnostic_info(int64_t tenant_id, int64_
       // notice: if using cache, we shouldn't change its session id. because it is linkhashmap's
       // key.
       di_info->set_group_id(group_id);
+      di_info->get_ash_stat().lock_wait_detail_seq_ = 0;
+      di_info->get_ash_stat().database_id_ = OB_INVALID_ID;
       if (OB_FAIL(summarys_.get_di_slot(tenant_id, group_id, di_info->get_session_id(), slot))) {
         LOG_WARN("failed to acquire summary slot for cache di", K(ret), K(tenant_id), K(group_id),
             K(di_info->get_session_id()), K(di_info));

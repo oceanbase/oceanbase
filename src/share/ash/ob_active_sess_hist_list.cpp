@@ -17,7 +17,12 @@
 #include "share/config/ob_server_config.h"
 #include "lib/guard/ob_shared_guard.h"          // ObShareGuard
 #include "lib/ob_running_mode.h"
+#include "lib/time/ob_time_utility.h"
 #include "share/ash/ob_ash_refresh_task.h"
+#include "share/rc/ob_tenant_base.h"
+#include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_trans_define_v4.h"
+#include "storage/tx/ob_lock_diag_stmt_ring.h"
 
 constexpr int64_t SET_COMPRESS_FLAG_THRESHOLD = 3;
 constexpr int64_t RESET_COMPRESS_FLAG_THRESHOLD = 3;
@@ -80,6 +85,14 @@ int ObActiveSessHistList::init()
     } else {
       ash_buffer_ = tmp;
       LOG_INFO("ash buffer init OK", K_(ash_buffer));
+      int64_t buffer_size = GCONF._ob_lock_diagnose_detail_buffer_num;
+      if (buffer_size == 0) {
+        buffer_size = lib::is_mini_mode() ? 4096 : 8192;
+      }
+      if (OB_FAIL(lock_wait_detail_buffer_.init(buffer_size))) {
+        LOG_WARN("lock wait detail buffer init failed, lock diagnose degraded", KR(ret));
+        ret = OB_SUCCESS;
+      }
     }
     mutex_.unlock();
   }
@@ -205,3 +218,192 @@ void ObActiveSessHistList::check_if_can_reset_compress_flag()
     }
   }
 }
+
+namespace oceanbase
+{
+namespace share
+{
+
+static ObLockDiagSampleStat G_LOCK_DIAG_SAMPLE_STAT;
+
+ObLockDiagSampleStat &get_lock_diag_sample_stat()
+{
+  return G_LOCK_DIAG_SAMPLE_STAT;
+}
+
+ObLockWaitDetailBuffer::ObLockWaitDetailBuffer()
+  : is_inited_(false), buffer_size_(0), entries_(nullptr), next_alloc_seq_(0)
+{
+}
+
+ObLockWaitDetailBuffer::~ObLockWaitDetailBuffer()
+{
+  destroy();
+}
+
+int ObLockWaitDetailBuffer::init(const int64_t buffer_size)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+  } else if (buffer_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    buffer_size_ = buffer_size;
+    const int64_t alloc_bytes = sizeof(ObLockWaitDetail) * buffer_size_;
+    entries_ = static_cast<ObLockWaitDetail *>(ob_malloc(alloc_bytes, "LkWaitDetBuf"));
+    if (OB_ISNULL(entries_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      MEMSET(entries_, 0, alloc_bytes);
+      next_alloc_seq_ = 0;
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+void ObLockWaitDetailBuffer::destroy()
+{
+  if (OB_NOT_NULL(entries_)) {
+    ob_free(entries_);
+    entries_ = nullptr;
+  }
+  is_inited_ = false;
+  buffer_size_ = 0;
+  next_alloc_seq_ = 0;
+}
+
+uint64_t ObLockWaitDetailBuffer::alloc_detail_seq()
+{
+  return ATOMIC_AAF(&next_alloc_seq_, 1);
+}
+
+ObLockWaitDetail *ObLockWaitDetailBuffer::get_entry(const uint64_t seq)
+{
+  return OB_NOT_NULL(entries_) && buffer_size_ > 0
+         ? &entries_[seq % buffer_size_] : nullptr;
+}
+
+const ObLockWaitDetail *ObLockWaitDetailBuffer::get_entry(const uint64_t seq) const
+{
+  return OB_NOT_NULL(entries_) && buffer_size_ > 0
+         ? &entries_[seq % buffer_size_] : nullptr;
+}
+
+bool ObLockWaitDetailBuffer::read_detail(const uint64_t target_seq,
+                                         ObLockWaitDetail &out,
+                                         bool &holder_valid) const
+{
+  bool rowkey_hit = false;
+  holder_valid = false;
+  for (int64_t retry = 0; retry < 2; ++retry) {
+    const ObLockWaitDetail *det = get_entry(target_seq);
+    if (OB_ISNULL(det)) {
+      break;
+    }
+    const uint64_t alloc_seq = ATOMIC_LOAD(&det->alloc_seq_);
+    if (alloc_seq != target_seq || alloc_seq == 0) {
+      continue;
+    }
+    const uint64_t holder_seq_before = ATOMIC_LOAD_ACQ(&det->holder_filled_seq_);
+    MEMCPY(&out, det, sizeof(ObLockWaitDetail));
+    MEM_BARRIER();
+    const uint64_t alloc_seq_after = ATOMIC_LOAD_RLX(&det->alloc_seq_);
+    const uint64_t holder_seq_after = ATOMIC_LOAD_RLX(&det->holder_filled_seq_);
+    if (alloc_seq == alloc_seq_after && alloc_seq == target_seq) {
+      rowkey_hit = true;
+      holder_valid = (holder_seq_before == target_seq
+                      && holder_seq_after == target_seq
+                      && out.holder_filled_seq_ == target_seq);
+      break;
+    }
+  }
+  return rowkey_hit;
+}
+
+bool ObLockWaitDetailBuffer::is_holder_filled(const uint64_t det_seq,
+                                              const int64_t holder_seq) const
+{
+  const ObLockWaitDetail *det = get_entry(det_seq);
+  return OB_ISNULL(det)
+         ? false
+         : (ATOMIC_LOAD_ACQ(&det->alloc_seq_) == det_seq
+            && ATOMIC_LOAD_ACQ(&det->holder_filled_seq_) == det_seq
+            && det->last_filled_holder_seq_ == holder_seq);
+}
+
+int ObLockWaitDetailBuffer::lookup_and_fill_detail(const transaction::ObTransID &holder_tx_id,
+                                                   const int64_t holder_seq,
+                                                   const uint64_t det_seq)
+{
+  int ret = OB_SUCCESS;
+  ObLockWaitDetail *det = get_entry(det_seq);
+  ObLockDiagSampleStat &stat = get_lock_diag_sample_stat();
+  if (OB_ISNULL(det)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (ATOMIC_LOAD(&det->alloc_seq_) != det_seq) {
+    ++stat.detail_mismatch_;
+    ret = OB_ENTRY_NOT_EXIST;
+  } else {
+    transaction::ObTxDesc *holder_desc = nullptr;
+    transaction::ObTransService *txs = MTL(transaction::ObTransService *);
+    const int64_t lookup_begin = ObTimeUtility::current_time();
+    ++stat.tx_desc_mgr_lookup_attempt_;
+    if (OB_ISNULL(txs)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(txs->get_tx_desc_mgr().get(holder_tx_id, holder_desc))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ++stat.tx_desc_mgr_lookup_notfound_;
+        LOG_TRACE("[LOCK_DIAG] holder tx desc not found",
+                 K(ret), K(holder_tx_id), K(holder_seq), K(det_seq));
+        ret = OB_SUCCESS;
+      } else {
+        ++stat.tx_desc_mgr_lookup_fail_;
+        LOG_WARN("[LOCK_DIAG] failed to lookup holder tx desc",
+                 K(ret), K(holder_tx_id), K(holder_seq), K(det_seq));
+      }
+    } else {
+      ++stat.tx_desc_mgr_lookup_ok_;
+      if (ATOMIC_LOAD(&det->alloc_seq_) != det_seq) {
+        ++stat.detail_mismatch_;
+        ret = OB_ENTRY_NOT_EXIST;
+      } else {
+        transaction::ObLockDiagStmtSlot stmt_info;
+        transaction::ObLockDiagQuerySqlSlot query_sql_info;
+        bool has_query_sql = false;
+        transaction::ObTxStmtRing &stmt_ring = holder_desc->get_stmt_ring();
+        if (OB_FAIL(stmt_ring.lookup_stmt_info(holder_seq, stmt_info, query_sql_info, has_query_sql))) {
+          if (OB_EAGAIN == ret) {
+            ++stat.ring_retry_;
+          }
+        } else if (ATOMIC_LOAD(&det->alloc_seq_) != det_seq) {
+          ++stat.detail_mismatch_;
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          ATOMIC_STORE_REL(&det->holder_filled_seq_, 0);
+          MEMCPY(det->holder_sql_id_, stmt_info.sql_id_, common::OB_MAX_SQL_ID_LENGTH);
+          det->holder_sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
+          det->holder_query_sql_[0] = '\0';
+          if (has_query_sql) {
+            strncpy(det->holder_query_sql_, query_sql_info.query_sql_, LOCK_DIAG_HOLDER_QUERY_SQL_LEN);
+            det->holder_query_sql_[LOCK_DIAG_HOLDER_QUERY_SQL_LEN] = '\0';
+          }
+          if (ATOMIC_LOAD(&det->alloc_seq_) != det_seq) {
+            ++stat.detail_mismatch_;
+            ret = OB_ENTRY_NOT_EXIST;
+          } else {
+            det->last_filled_holder_seq_ = holder_seq;
+            ATOMIC_STORE_REL(&det->holder_filled_seq_, det_seq);
+          }
+        }
+      }
+      txs->get_tx_desc_mgr().revert(*holder_desc);
+    }
+    stat.tx_desc_mgr_lookup_cost_us_ += ObTimeUtility::current_time() - lookup_begin;
+  }
+  return ret;
+}
+
+} // namespace share
+} // namespace oceanbase

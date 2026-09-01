@@ -349,7 +349,7 @@ int ObWrCollector::collect_ash()
             "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
             "sample_id, session_id, tenant_id, "
             "time_to_usec(sample_time) as sample_time, "
-            "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
+            "user_id, database_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
             "time_waited, "
             "p1, p2, p3, sql_plan_line_id, plan_hash, thread_id, stmt_type, tx_id, group_id, time_model, "
             "module, action, "
@@ -359,7 +359,8 @@ int ObWrCollector::collect_ash()
             "plsql_object_id, "
             "plsql_subprogram_id, plsql_subprogram_name, tablet_id, blocking_session_id, proxy_sid, "
             "delta_read_io_requests, delta_read_io_bytes, delta_write_io_requests, "
-            "delta_write_io_bytes, weight, is_wr_weight_sample from "
+            "delta_write_io_bytes, weight, is_wr_weight_sample, rowkey, holder_sql_id, "
+            "holder_query_sql from "
             "__all_virtual_ash where (tenant_id=%ld  or tenant_id= %ld -1) and "
             "(is_wr_sample=true or is_wr_weight_sample=true) and "
             "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
@@ -402,6 +403,8 @@ int ObWrCollector::collect_ash()
                 collected_ash_min_sample_time = ash.sample_time_;
               }
               EXTRACT_INT_FIELD_MYSQL(*result, "user_id", ash.user_id_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "database_id", ash.database_id_,
+                  int64_t, skip_null_error, skip_column_error, static_cast<int64_t>(OB_INVALID_ID));
               EXTRACT_BOOL_FIELD_MYSQL(*result, "session_type", ash.session_type_);
               EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
                   *result, "sql_id", ash.sql_id_, sizeof(ash.sql_id_), tmp_real_str_len);
@@ -467,6 +470,12 @@ int ObWrCollector::collect_ash()
                   int64_t, skip_null_error, skip_column_error, default_value);
               EXTRACT_BOOL_FIELD_MYSQL(*result, "is_wr_weight_sample", ash.is_wr_weight_sample_);
               EXTRACT_INT_FIELD_MYSQL(*result, "tenant_id", ash.tenant_id_, int64_t);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "rowkey", ash.rowkey_, sizeof(ash.rowkey_), tmp_real_str_len);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "holder_sql_id", ash.holder_sql_id_, sizeof(ash.holder_sql_id_), tmp_real_str_len);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "holder_query_sql", ash.holder_query_sql_, sizeof(ash.holder_query_sql_), tmp_real_str_len);
 
 
               char plan_hash_char[64] = "";
@@ -611,6 +620,33 @@ int ObWrCollector::collect_ash()
                 FILL_NULLABLE_COLUMN(delta_write_io_bytes)
                 } else if (OB_FAIL(dml_splicer.add_column("weight", ash.weight_))) {
                   LOG_WARN("failed to add column weight", KR(ret), K(ash));
+                } else if (ash.rowkey_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "rowkey"))) {
+                  LOG_WARN("failed to add null column rowkey", KR(ret), K(ash));
+                } else if (ash.rowkey_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column(
+                              "rowkey", ObHexEscapeSqlStr(ObString::make_string(ash.rowkey_))))) {
+                  LOG_WARN("failed to add column rowkey", KR(ret), K(ash));
+                } else if (ash.holder_sql_id_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "holder_sql_id"))) {
+                  LOG_WARN("failed to add null column holder_sql_id", KR(ret), K(ash));
+                } else if (ash.holder_sql_id_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column("holder_sql_id", ash.holder_sql_id_))) {
+                  LOG_WARN("failed to add column holder_sql_id", KR(ret), K(ash));
+                } else if (ash.holder_query_sql_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "holder_query_sql"))) {
+                  LOG_WARN("failed to add null column holder_query_sql", KR(ret), K(ash));
+                } else if (ash.holder_query_sql_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column(
+                              "holder_query_sql",
+                              ObHexEscapeSqlStr(ObString::make_string(ash.holder_query_sql_))))) {
+                  LOG_WARN("failed to add column holder_query_sql", KR(ret), K(ash));
+                } else if (OB_INVALID_ID == ash.database_id_ &&
+                          OB_FAIL(dml_splicer.add_column(true, "database_id"))) {
+                  LOG_WARN("failed to add column database_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID != ash.database_id_ &&
+                          OB_FAIL(dml_splicer.add_column("database_id", ash.database_id_))) {
+                  LOG_WARN("failed to add column database_id", KR(ret), K(ash));
                 } else if (OB_FAIL(dml_splicer.finish_row())) {
                   LOG_WARN("failed to finish row", KR(ret));
                 }

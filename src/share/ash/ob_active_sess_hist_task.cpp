@@ -23,10 +23,14 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "observer/ob_server.h"
+#include "storage/tx/ob_trans_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+
+namespace share = oceanbase::share;
+namespace transaction = oceanbase::transaction;
 
 // a sample would be taken place up to 20ms after ash iteration begins.
 // if sample time is above this threshold, mean ash execution too slow
@@ -35,6 +39,55 @@ constexpr int64_t ash_iteration_time = 40000;   // 40ms
 #define GET_OTHER_TSI_ADDR(var_name, addr) \
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
 decltype(*addr) var_name = *(decltype(addr))(thread_base + var_name##_offset);
+
+namespace
+{
+void do_fill_lock_wait_detail(ObLockDiagSampleStat &lock_diag_stat,
+                              ObLockWaitDetailBuffer &detail_buf,
+                              const uint64_t det_seq,
+                              const int64_t holder_seq,
+                              const int64_t holder_tx_id_val)
+{
+  if (detail_buf.is_inited()) {
+    if (detail_buf.is_holder_filled(det_seq, holder_seq)) {
+      ++lock_diag_stat.fill_skip_;
+    } else {
+      const transaction::ObTransID holder_tx_id(holder_tx_id_val);
+      if (OB_SUCCESS == detail_buf.lookup_and_fill_detail(holder_tx_id, holder_seq, det_seq)) {
+        ++lock_diag_stat.fill_ok_;
+      } else {
+        ++lock_diag_stat.fill_fail_;
+      }
+    }
+  }
+}
+
+void try_fill_row_lock_wait_detail(ObDiagnosticInfo *di, ObActiveSessionStat &ash_stat)
+{
+  ObLockDiagSampleStat &lock_diag_stat = get_lock_diag_sample_stat();
+  ++lock_diag_stat.row_lock_wait_count_;
+  const uint64_t det_seq = ATOMIC_LOAD(&ash_stat.lock_wait_detail_seq_);
+  if (det_seq > 0) {
+    const int64_t holder_seq = ash_stat.retry_wait_event_p2_;
+    ObLockWaitDetailBuffer &detail_buf =
+        ObActiveSessHistList::get_instance().get_lock_wait_detail_buffer();
+    const uint64_t di_tenant_id = static_cast<uint64_t>(di->get_tenant_id());
+    if (MTL_ID() == di_tenant_id) {
+      do_fill_lock_wait_detail(lock_diag_stat, detail_buf, det_seq,
+                               holder_seq, ash_stat.retry_wait_event_p1_);
+    } else {
+      int ret = OB_SUCCESS;
+      MTL_SWITCH(di_tenant_id) {
+        do_fill_lock_wait_detail(lock_diag_stat, detail_buf, det_seq,
+                                 holder_seq, ash_stat.retry_wait_event_p1_);
+      } else {
+        LOG_WARN("failed to switch tenant for lock wait detail fill, skip fill",
+                 K(ret), K(di_tenant_id));
+      }
+    }
+  }
+}
+}
 
 ObActiveSessHistTask &ObActiveSessHistTask::get_instance()
 {
@@ -134,6 +187,22 @@ void ObActiveSessHistTask::runTimerTask()
     ash_list.reset_compress_num();
   }
   ash_list.unlock();
+  {
+    ObLockDiagSampleStat &lock_diag_stat = get_lock_diag_sample_stat();
+    if (lock_diag_stat.row_lock_wait_count_ > 0) {
+      LOG_INFO("[LOCK_DIAG]",
+               "row_lock_wait", lock_diag_stat.row_lock_wait_count_,
+               "mgr_lookup", lock_diag_stat.tx_desc_mgr_lookup_attempt_,
+               "mgr_notfound", lock_diag_stat.tx_desc_mgr_lookup_notfound_,
+               "mgr_cost_us", lock_diag_stat.tx_desc_mgr_lookup_cost_us_,
+               "ring_retry", lock_diag_stat.ring_retry_,
+               "fill_ok", lock_diag_stat.fill_ok_,
+               "fill_skip", lock_diag_stat.fill_skip_,
+               "fill_fail", lock_diag_stat.fill_fail_,
+               "detail_mismatch", lock_diag_stat.detail_mismatch_);
+      lock_diag_stat.reset();
+    }
+  }
   int64_t duration = ObTimeUtility::current_time() - current_time;
   int64_t next_schedule_time = REFRESH_INTERVAL - duration;
   if (next_schedule_time < 0) {
@@ -167,11 +236,15 @@ bool ObActiveSessHistTask::process_running_di(const SessionID &session_id, ObDia
                     ObWaitEventIds::NETWORK_QUEUE_WAIT == di->get_ash_stat().event_no_)) {
       MTL(ObDiagnosticInfoContainer *)->calculate_wait_in_request_queue(di);
     } else {
-      di->get_ash_stat().sample_time_ = sample_time_;
+      ObActiveSessionStat &ash_stat = di->get_ash_stat();
+      if (ash_stat.is_in_row_lock_wait()) {
+        try_fill_row_lock_wait_detail(di, ash_stat);
+      }
+      ash_stat.sample_time_ = sample_time_;
       ObActiveSessionStat::calc_db_time(di, sample_time_, tsc_sample_time_);
-      ObActiveSessionStat::calc_retry_wait_event(di->get_ash_stat(), sample_time_);
+      ObActiveSessionStat::calc_retry_wait_event(ash_stat, sample_time_);
       ObActiveSessionStat::cal_delta_io_data(di);
-      ash_list.add(di->get_ash_stat());
+      ash_list.add(ash_stat);
     }
   } else {
     // inactive session

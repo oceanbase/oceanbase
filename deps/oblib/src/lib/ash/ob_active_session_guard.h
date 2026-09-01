@@ -72,6 +72,7 @@ public:
       : id_(0),
         tenant_id_(0),
         user_id_(0),
+        database_id_(OB_INVALID_ID),
         session_id_(0),
         plan_id_(0),
         sample_time_(0),
@@ -104,7 +105,8 @@ public:
         delta_read_(0),
         delta_write_(0),
         weight_(1),
-        is_wr_weight_sample_(false)
+        is_wr_weight_sample_(false),
+        lock_wait_detail_seq_(0)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -129,6 +131,7 @@ public:
   uint64_t id_;
   uint64_t tenant_id_;
   uint64_t user_id_;
+  uint64_t database_id_;
   uint64_t session_id_;
   uint64_t plan_id_;
   int64_t sample_time_; // sample time
@@ -198,6 +201,7 @@ public:
   ObIOData delta_write_;
   int64_t weight_;
   bool is_wr_weight_sample_;
+  uint64_t lock_wait_detail_seq_;
   char program_[ASH_PROGRAM_STR_LEN];
   char module_[ASH_MODULE_STR_LEN];
   char action_[ASH_ACTION_STR_LEN];
@@ -205,7 +209,7 @@ public:
 #if !defined(NDEBUG)
   char bt_[ASH_BACKTRACE_STR_LEN];
 #endif
-  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(session_id), "event id", OB_WAIT_EVENTS[event_no_].event_id_,
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(database_id), K_(session_id), "event id", OB_WAIT_EVENTS[event_no_].event_id_,
       "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time), K_(time_model), K_(trace_id),
       K_(plan_line_id), K_(sql_id), K_(top_level_sql_id), K_(plsql_entry_subprogram_name),
       K_(plsql_subprogram_name), K_(session_type), K_(is_wr_sample), K_(delta_time),

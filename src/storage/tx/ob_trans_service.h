@@ -220,6 +220,8 @@ public:
   virtual void handle(void *task) override;
 public:
   ObReadOnlyTxChecker &get_read_tx_checker() { return read_only_checker_; }
+  ObTxDescMgr &get_tx_desc_mgr() { return tx_desc_mgr_; }
+  const ObTxDescMgr &get_tx_desc_mgr() const { return tx_desc_mgr_; }
   int64_t get_unique_seq()
   { return ATOMIC_AAF(&tx_debug_seq_, 1); }
   int check_trans_partition_leader_unsafe(const share::ObLSID &ls_id, bool &is_leader);

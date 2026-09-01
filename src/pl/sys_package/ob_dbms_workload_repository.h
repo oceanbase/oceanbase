@@ -257,6 +257,8 @@ public:
   static int print_ash_summary_info(const AshReportParams &ash_report_params, ObStringBuffer &buff, bool &no_data);
   static int print_ash_top_active_tenants(const AshReportParams &ash_report_params,
       const int64_t num_samples, ObStringBuffer &buff);
+  static int print_ash_top_active_databases(const AshReportParams &ash_report_params,
+      const int64_t num_samples, ObStringBuffer &buff);
   static int print_ash_top_node_load(const AshReportParams &ash_report_params,
       const int64_t num_samples, ObStringBuffer &buff);
   static int print_ash_foreground_db_time(const AshReportParams &ash_report_params,

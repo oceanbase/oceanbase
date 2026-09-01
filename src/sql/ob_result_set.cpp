@@ -21,6 +21,7 @@
 #include "storage/tx/ob_xa_ctx.h"
 #include "src/rootserver/mview/ob_mview_maintenance_service.h"
 #include "src/sql/ob_sql_ccl_rule_manager.h"
+#include "storage/tx/ob_lock_diag_stmt_ring.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -610,6 +611,32 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
     LOG_WARN("mview_maintenance_service is null", K(ret), KP(mview_maintenance_service));
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
+  } else {
+    ObTxDesc *tx_desc = my_session_.get_tx_desc();
+    const bool is_select_for_update = get_is_select_for_update()
+        || (OB_NOT_NULL(physical_plan_) && physical_plan_->has_for_update());
+    if (oceanbase::lib::is_diagnose_info_enabled()
+        && OB_NOT_NULL(tx_desc)
+        && need_push_lock_diag_stmt(get_stmt_type(), is_select_for_update)) {
+      ObExecContext &exec_ctx = get_exec_context();
+      const int64_t seq_start = exec_ctx.get_das_ctx().get_savepoint().get_seq();
+      const ObString cur_sql_id = my_session_.get_cur_sql_id();
+      ObString stmt_sql = get_stmt_sql();
+      if (stmt_sql.empty()) {
+        ObSqlCtx *sql_ctx = exec_ctx.get_sql_ctx();
+        if (OB_NOT_NULL(sql_ctx)) {
+          stmt_sql = sql_ctx->cur_sql_;
+        }
+      }
+      const int64_t qs_len = truncate_lock_diag_query_sql_len(stmt_sql.ptr(), stmt_sql.length());
+      tx_desc->get_stmt_ring().push(seq_start,
+                                    cur_sql_id.ptr(),
+                                    stmt_sql.ptr(),
+                                    qs_len,
+                                    MTL_ID());
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (!physical_plan_->get_mview_ids().empty() && OB_PHY_PLAN_REMOTE != physical_plan_->get_plan_type()
              && OB_FAIL((mview_maintenance_service->get_mview_refresh_info(physical_plan_->get_mview_ids(),
                                                                            ctx.get_sql_proxy(),

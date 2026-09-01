@@ -209,6 +209,7 @@ int ObDiagnosticInfo::init(
     ash_stat_.client_sid_ = INVALID_SESSID;
     ash_stat_.last_touch_ts_ = rdtsc();
     ash_stat_.last_inactive_ts_ = ash_stat_.last_touch_ts_;
+    ash_stat_.lock_wait_detail_seq_ = 0;
     pool_ = &pool;
     events_.init(pool_);
     is_inited_ = true;

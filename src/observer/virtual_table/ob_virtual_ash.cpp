@@ -29,7 +29,9 @@ ObVirtualASH::ObVirtualASH() :
     addr_(),
     ipstr_(),
     port_(0),
-    is_first_get_(true)
+    lock_detail_(),
+    is_first_get_(true),
+    need_lock_detail_(false)
 {
   server_ip_[0] = '\0';
   trace_id_[0] = '\0';
@@ -45,12 +47,22 @@ void ObVirtualASH::reset()
   ObVirtualTableScannerIterator::reset();
   port_ = 0;
   ipstr_.reset();
+  MEMSET(&lock_detail_, 0, sizeof(lock_detail_));
   is_first_get_ = true;
+  need_lock_detail_ = false;
 }
 
 int ObVirtualASH::inner_open()
 {
   int ret = OB_SUCCESS;
+  need_lock_detail_ = false;
+  for (int64_t i = 0; i < output_column_ids_.count(); ++i) {
+    const uint64_t column_id = output_column_ids_.at(i);
+    if (column_id == ROWKEY || column_id == HOLDER_SQL_ID || column_id == HOLDER_QUERY_SQL) {
+      need_lock_detail_ = true;
+      break;
+    }
+  }
   if (OB_FAIL(set_ip(addr_))) {
     SERVER_LOG(WARN, "failed to set server ip addr", K(ret));
   }
@@ -106,6 +118,18 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
   if (OB_ISNULL(cells)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
+  }
+  bool lock_detail_hit = false;
+  bool lock_detail_holder_valid = false;
+  if (need_lock_detail_
+      && node.lock_wait_detail_seq_ > 0
+      && node.event_no_ == ObWaitEventIds::ROW_LOCK_WAIT) {
+    const share::ObLockWaitDetailBuffer &detail_buf =
+        share::ObActiveSessHistList::get_instance().get_lock_wait_detail_buffer();
+    if (detail_buf.is_inited()) {
+      lock_detail_hit = detail_buf.read_detail(
+          node.lock_wait_detail_seq_, lock_detail_, lock_detail_holder_valid);
+    }
   }
   for (int64_t cell_idx = 0;
        OB_SUCC(ret) && cell_idx < output_column_ids_.count();
@@ -475,6 +499,41 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
       }
       case IS_WR_WEIGHT_SAMPLE: {
         cells[cell_idx].set_bool(node.is_wr_weight_sample_);
+        break;
+      }
+      case ROWKEY: {
+        if (lock_detail_hit && lock_detail_.rowkey_len_ > 0) {
+          cells[cell_idx].set_varchar(lock_detail_.rowkey_, lock_detail_.rowkey_len_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case HOLDER_SQL_ID: {
+        if (lock_detail_hit && lock_detail_holder_valid && lock_detail_.holder_sql_id_[0] != '\0') {
+          cells[cell_idx].set_varchar(lock_detail_.holder_sql_id_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case HOLDER_QUERY_SQL: {
+        if (lock_detail_hit && lock_detail_holder_valid && lock_detail_.holder_query_sql_[0] != '\0') {
+          cells[cell_idx].set_varchar(lock_detail_.holder_query_sql_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case DATABASE_ID: {
+        if (node.database_id_ != OB_INVALID_ID) {
+          cells[cell_idx].set_int(static_cast<int64_t>(node.database_id_));
+        } else {
+          cells[cell_idx].set_null();
+        }
         break;
       }
       default: {

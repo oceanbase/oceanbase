@@ -23,6 +23,7 @@
 #include "storage/ddl/ob_ddl_inc_clog_callback.h"
 #include "storage/tx/ob_tx_log_operator.h"
 #include "lib/container/ob_array_wrap.h"
+#include "lib/ob_lib_config.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_service.h"
 #include "close_modules/shared_storage/storage/incremental/sslog/notify/ob_sslog_notify_adapter.h"
@@ -8961,6 +8962,20 @@ int ObPartTransCtx::start_access(const ObTxDesc &tx_desc,
     } else { // OLD version < 4.2.4
       ret = OB_ERR_UNEXPECTED;
     }
+  }
+  if (OB_SUCC(ret) && alloc && oceanbase::lib::is_diagnose_info_enabled()) {
+    TRANS_LOG(TRACE, "[LOCK_DIAG] start access alloc data seq",
+              "tx_id", tx_desc.get_tx_id(),
+              "op_sn", tx_desc.op_sn_,
+              "seq_base", tx_desc.get_seq_base(),
+              K(branch),
+              K(data_scn),
+              "data_seq", data_scn.get_seq(),
+              "data_seq_raw", data_scn.cast_to_int(),
+              K(pending_write),
+              K(callback_list_idx),
+              K(write_flag),
+              KPC(this));
   }
 
   last_request_ts_ = ObClockGenerator::getClock();

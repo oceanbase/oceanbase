@@ -105,6 +105,10 @@ protected:
     DELTA_WRITE_IO_BYTES,
     WEIGHT,
     IS_WR_WEIGHT_SAMPLE,
+    ROWKEY,
+    HOLDER_SQL_ID,
+    HOLDER_QUERY_SQL,
+    DATABASE_ID,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   // ash main table scan output rows in reverse order.
@@ -117,7 +121,9 @@ protected:
   int32_t port_;
   char server_ip_[common::MAX_IP_ADDR_LENGTH + 2];
   char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+  share::ObLockWaitDetail lock_detail_;
   bool is_first_get_;
+  bool need_lock_detail_;
 };
 
 class ObVirtualASHI1 : public ObVirtualASH

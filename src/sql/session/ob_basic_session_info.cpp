@@ -1013,6 +1013,15 @@ int ObBasicSessionInfo::set_default_database(const ObString &database_name,
   return ret;
 }
 
+void ObBasicSessionInfo::set_database_id(uint64_t db_id)
+{
+  database_id_ = db_id;
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().database_id_ = db_id;
+  }
+}
+
 int ObBasicSessionInfo::update_database_variables(ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
@@ -2498,6 +2507,7 @@ void ObBasicSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
     ash_stat.tenant_id_ = tenant_id_;
   }
   ash_stat.user_id_ = get_user_id();
+  ash_stat.database_id_ = get_database_id();
   ash_stat.trace_id_ = get_current_trace_id();
   ash_stat.tid_ = GETTID();
   ash_stat.group_id_ = THIS_WORKER.get_group_id();

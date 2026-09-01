@@ -31,6 +31,7 @@
 #include "common/ob_simple_iterator.h"
 #include "share/ob_common_id.h"
 #include "storage/memtable/ob_row_conflict_info.h"
+#include "storage/tx/ob_lock_diag_stmt_ring.h"
 
 namespace oceanbase
 {
@@ -723,6 +724,7 @@ private:
   // when end_stmt() with other err-code(including OB_SUCCESS): continuous_lock_conflict_cnt_ resetted to 0
   // when end_stmt() with -6005 and continuous_lock_conflict_cnt_ greater than a threshold value: start detect deadlock.
   int64_t continuous_lock_conflict_cnt_;
+  ObTxStmtRing stmt_ring_ CACHE_ALIGNED;
   ObTransTraceLog tlog_;
 #ifdef ENABLE_DEBUG_LOG
   struct DLink {
@@ -1002,6 +1004,8 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_all_parts_without_valid_write() const;
   int64_t get_commit_start_time() const { return commit_ts_; }
   int64_t get_trans_commit_time() const { return finish_ts_ - commit_ts_; }
+  ObTxStmtRing &get_stmt_ring() { return stmt_ring_; }
+  const ObTxStmtRing &get_stmt_ring() const { return stmt_ring_; }
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
@@ -1075,8 +1079,7 @@ public:
         if (v->__alloced_in_current_tenant__) {
           MTL_DELETE(ObTxDesc, "TxDesc", v);
         } else {
-          ob_free(v);
-          v = NULL;
+          OB_DELETE(ObTxDesc, "TxDesc", v);
         }
       }
     }
@@ -1086,8 +1089,7 @@ public:
       } else if (v->__alloced_in_current_tenant__) {
         MTL_DELETE(ObTxDesc, "TxDesc", v);
       } else {
-        ob_free(v);
-        v = NULL;
+        OB_DELETE(ObTxDesc, "TxDesc", v);
       }
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }

@@ -15,9 +15,14 @@
 
 #include "lib/lock/ob_tc_rwlock.h"
 #include "lib/ash/ob_active_session_guard.h"
+#include "lib/utility/ob_macro_utils.h"
 
 namespace oceanbase
 {
+namespace transaction
+{
+class ObTransID;
+}
 namespace common
 {
   struct ObActiveSessionStatItem;
@@ -27,6 +32,93 @@ namespace common
 namespace share
 {
 typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
+
+inline constexpr int64_t LOCK_DIAG_ROWKEY_MAX_LEN = 320;
+inline constexpr int64_t LOCK_DIAG_HOLDER_QUERY_SQL_LEN = 200;
+
+struct ObLockWaitDetail
+{
+  // Rowkey region seqlock: monotonic slot id; visible when == target_seq (0 while waiter is writing).
+  uint64_t alloc_seq_;
+  int32_t rowkey_len_;
+  char rowkey_[LOCK_DIAG_ROWKEY_MAX_LEN];
+  // Holder region version (decoupled from alloc_seq_): visible when == alloc_seq_; 0 if unfilled or writing.
+  uint64_t holder_filled_seq_;
+  // Holder stmt seq of last successful fill; INT64_MAX sentinel forces first ASH lookup (is_holder_filled prune key).
+  int64_t last_filled_holder_seq_;
+  char holder_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  char holder_query_sql_[LOCK_DIAG_HOLDER_QUERY_SQL_LEN + 1];
+};
+
+class ObLockWaitDetailBuffer
+{
+public:
+  ObLockWaitDetailBuffer();
+  ~ObLockWaitDetailBuffer();
+  int init(const int64_t buffer_size);
+  void destroy();
+  bool is_inited() const { return is_inited_; }
+  int64_t buffer_size() const { return buffer_size_; }
+  uint64_t alloc_detail_seq();
+  ObLockWaitDetail *get_entry(const uint64_t seq);
+  const ObLockWaitDetail *get_entry(const uint64_t seq) const;
+  bool read_detail(const uint64_t target_seq,
+                   ObLockWaitDetail &out,
+                   bool &holder_valid) const;
+  bool is_holder_filled(const uint64_t det_seq, const int64_t holder_seq) const;
+  int lookup_and_fill_detail(const transaction::ObTransID &holder_tx_id,
+                             const int64_t holder_seq,
+                             const uint64_t det_seq);
+private:
+  bool is_inited_;
+  int64_t buffer_size_;
+  ObLockWaitDetail *entries_;
+  uint64_t next_alloc_seq_;
+};
+
+struct ObLockDiagSampleStat
+{
+  int64_t row_lock_wait_count_;
+  int64_t tx_desc_mgr_lookup_attempt_;
+  int64_t tx_desc_mgr_lookup_ok_;
+  int64_t tx_desc_mgr_lookup_notfound_;
+  int64_t tx_desc_mgr_lookup_fail_;
+  int64_t tx_desc_mgr_lookup_cost_us_;
+  int64_t ring_retry_;
+  int64_t fill_ok_;
+  int64_t fill_skip_;
+  int64_t fill_fail_;
+  int64_t detail_mismatch_;
+  ObLockDiagSampleStat()
+    : row_lock_wait_count_(0),
+      tx_desc_mgr_lookup_attempt_(0),
+      tx_desc_mgr_lookup_ok_(0),
+      tx_desc_mgr_lookup_notfound_(0),
+      tx_desc_mgr_lookup_fail_(0),
+      tx_desc_mgr_lookup_cost_us_(0),
+      ring_retry_(0),
+      fill_ok_(0),
+      fill_skip_(0),
+      fill_fail_(0),
+      detail_mismatch_(0)
+  {}
+  void reset()
+  {
+    row_lock_wait_count_ = 0;
+    tx_desc_mgr_lookup_attempt_ = 0;
+    tx_desc_mgr_lookup_ok_ = 0;
+    tx_desc_mgr_lookup_notfound_ = 0;
+    tx_desc_mgr_lookup_fail_ = 0;
+    tx_desc_mgr_lookup_cost_us_ = 0;
+    ring_retry_ = 0;
+    fill_ok_ = 0;
+    fill_skip_ = 0;
+    fill_fail_ = 0;
+    detail_mismatch_ = 0;
+  }
+};
+
+ObLockDiagSampleStat &get_lock_diag_sample_stat();
 
 class ObActiveSessHistList
 {
@@ -342,9 +434,12 @@ public:
   bool need_compress() const {return is_compress_;}
   void inc_compress_num() {last_compress_num_++;}
   void reset_compress_num() {last_compress_num_=0;}
+  ObLockWaitDetailBuffer &get_lock_wait_detail_buffer() { return lock_wait_detail_buffer_; }
+  const ObLockWaitDetailBuffer &get_lock_wait_detail_buffer() const { return lock_wait_detail_buffer_; }
 private:
   int allocate_ash_buffer(int64_t ash_size, common::ObSharedGuard<common::ObAshBuffer> &ash_buffer);
   int64_t ash_size_;
+  ObLockWaitDetailBuffer lock_wait_detail_buffer_;
   lib::ObMutex mutex_;
   common::ObSharedGuard<common::ObAshBuffer> ash_buffer_;
   int64_t prev_write_nums_[PREV_WRITE_NUM_ARRAY_SIZE];

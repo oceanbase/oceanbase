@@ -825,12 +825,12 @@ void ObLockWaitMgr::on_lock_conflict(ObSArray<ObRowConflictInfo> &cflict_infos,
                 session_id,
                 node_type,
                 cflict_info.conflict_happened_addr_);
-      set_ash_rowlock_diag_info(cflict_info);
       GET_DIAGNOSTIC_INFO->get_ash_stat().begin_retry_wait_event(
                 ObWaitEventIds::ROW_LOCK_WAIT,
                 cflict_info.conflict_tx_id_,
                 cflict_info.conflict_tx_hold_seq_.get_seq(),
                 calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq()));
+      set_ash_rowlock_diag_info(cflict_info);
       TRANS_LOG_RET(INFO, OB_SUCCESS, "handle lock conflict end",
           K(ret), K(cflict_infos), KPC(node), K(is_lock_wait_timeout), K(curr_ts));
     }
@@ -1918,47 +1918,6 @@ bool ObLockWaitMgr::is_killed_session_(KilledSessionArray *sessions,
 int64_t ObLockWaitMgr::calc_holder_tx_lock_timestamp(const int64_t holder_tx_start_time, const int64_t holder_data_seq_num)
 {
   return holder_tx_start_time + ObTxSEQ::cast_from_int(holder_data_seq_num).get_seq();
-}
-
-void ObLockWaitMgr::begin_row_lock_wait_event(const Node * const node)
-{
-  rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
-  if (OB_NOT_NULL(req)) {
-      ObDiagnosticInfo *di = req->get_type() == rpc::ObRequest::OB_MYSQL
-        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
-        : req->get_diagnostic_info();
-      if (OB_NOT_NULL(di)) {
-        ObActiveSessionStat &ash_stat = di->get_ash_stat();
-        ash_stat.begin_row_lock_wait_event();
-        ash_stat.block_sessid_ = node->holder_sessid_;
-      }
-    }
-}
-
-void ObLockWaitMgr::end_row_lock_wait_event(const Node * const node)
-{
-  if (oceanbase::lib::is_diagnose_info_enabled()) {
-    rpc::ObRequest* req = CONTAINER_OF((const rpc::ObLockWaitNode *)node, rpc::ObRequest, lock_wait_node_);
-    if (OB_NOT_NULL(req)) {
-      ObDiagnosticInfo *di = req->get_type() == rpc::ObRequest::OB_MYSQL
-        ? reinterpret_cast<observer::ObSMConnection *>(SQL_REQ_OP.get_sql_session(req))->get_diagnostic_info()
-        : req->get_diagnostic_info();
-      if (OB_NOT_NULL(di)) {
-        ObActiveSessionStat &ash_stat = di->get_ash_stat();
-        ash_stat.end_row_lock_wait_event();
-        ash_stat.block_sessid_ = 0;
-      }
-    }
-  }
-}
-
-void ObLockWaitMgr::set_ash_rowlock_diag_info(const ObRowConflictInfo &cflict_info)
-{
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_tx_id_, cflict_info.conflict_tx_id_);
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_data_seq_num_, cflict_info.conflict_tx_hold_seq_.get_seq());
-  int64_t holder_lock_timestamp = calc_holder_tx_lock_timestamp(cflict_info.holder_tx_start_time_, cflict_info.conflict_tx_hold_seq_.get_seq());
-  ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(holder_lock_timestamp_, holder_lock_timestamp);
-  GET_DIAGNOSTIC_INFO->get_ash_stat().block_sessid_ = cflict_info.holder_sess_id_;
 }
 
 }; // end namespace lockwaitmgr

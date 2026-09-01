@@ -2314,6 +2314,14 @@ DEF_BOOL(_ob_ash_disk_write_enable, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_diagnostic_info_cache, OB_CLUSTER_PARAMETER, "True",
          "enable diagnostic info cache",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ob_lock_diagnose_detail_buffer_num, OB_CLUSTER_PARAMETER, "0", "[0,262144]",
+        "server-level lock wait detail ring buffer capacity in number of entries (not bytes) for ASH "
+        "row-lock conflict diagnostics; each entry stores rowkey, holder_sql_id and holder_query_sql "
+        "0 means auto (4096 in mini mode, 8192 otherwise)",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(_ob_enable_lock_diagnose_collect_query_sql, OB_CLUSTER_PARAMETER, "False",
+         "collect holder query sql for lock conflict diagnostics (transaction-level snapshot)",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ob_sqlstat_enable, OB_TENANT_PARAMETER, "True", "enable/disable sql stat",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 

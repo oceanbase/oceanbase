@@ -516,6 +516,7 @@ int ObTxDesc::switch_to_idle()
   modified_tables_.reset();
   state_ = State::IDLE;
   op_sn_ = 0;
+  stmt_ring_.reset();
   return OB_SUCCESS;
 }
 
@@ -629,6 +630,7 @@ void ObTxDesc::reset()
   tlog_.reset();
   xa_ctx_ = NULL;
   continuous_lock_conflict_cnt_ = 0;
+  stmt_ring_.reset();
   modified_tables_.reset();
 }
 

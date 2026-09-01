@@ -15,6 +15,7 @@
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
 #include "sql/plan_cache/ob_i_lib_cache_object.h"
 #include "share/wr/ob_wr_rpc_proxy.h"
+#include "share/ash/ob_active_sess_hist_list.h"
 
 namespace oceanbase
 {
@@ -114,22 +115,27 @@ public:
     weight_ = 0.0;
     is_wr_weight_sample_ = false;
     tenant_id_ = 0;
+    rowkey_[0] = '\0';
+    holder_sql_id_[0] = '\0';
+    holder_query_sql_[0] = '\0';
+    database_id_ = OB_INVALID_ID;
   };
 
-  TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sample_id), K_(session_id), K_(sample_time), K_(user_id), K_(session_type),
+  TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sample_id), K_(session_id), K_(sample_time), K_(user_id), K_(database_id), K_(session_type),
       K_(sql_id), K_(trace_id), K_(event_no), K_(event_id), K_(time_waited), K_(p1), K_(p2), K_(p3),
       K_(sql_plan_line_id), K_(group_id), K_(time_model), K_(module), K_(action), K_(client_id), K_(plan_id),
       K_(top_level_sql_id), K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id), K_(plsql_entry_subprogram_name),
       K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name), K_(plan_hash), K_(thread_id),
       K_(stmt_type), K_(tablet_id), K_(blocking_session_id), K_(proxy_sid), K_(delta_read_io_requests),
       K_(delta_read_io_bytes), K_(delta_write_io_requests), K_(delta_write_io_bytes),
-      K_(weight), K_(is_wr_weight_sample), K_(tenant_id));
+      K_(weight), K_(is_wr_weight_sample), K_(tenant_id), K_(rowkey), K_(holder_sql_id), K_(holder_query_sql));
   char svr_ip_[OB_IP_STR_BUFF];
   int64_t svr_port_;
   int64_t sample_id_;
   int64_t session_id_;
   int64_t sample_time_;
   int64_t user_id_;
+  int64_t database_id_;
   bool session_type_;
   char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];  // + 1 for '/0'
   char trace_id_[OB_MAX_TRACE_ID_BUFFER_SIZE + 1];
@@ -172,6 +178,9 @@ public:
   double weight_;
   bool is_wr_weight_sample_;
   int64_t tenant_id_;
+  char rowkey_[LOCK_DIAG_ROWKEY_MAX_LEN + 1];
+  char holder_sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
+  char holder_query_sql_[LOCK_DIAG_HOLDER_QUERY_SQL_LEN + 1];
 };
 
 

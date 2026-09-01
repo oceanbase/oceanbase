@@ -853,6 +853,7 @@ ob_set_subtarget(ob_storage compaction_filter
 
 ob_set_subtarget(ob_storage lock_wait_mgr
   lock_wait_mgr/ob_lock_wait_mgr.cpp
+  lock_wait_mgr/ob_lock_wait_mgr_ash.cpp
   lock_wait_mgr/ob_lock_wait_mgr_msg.cpp
   lock_wait_mgr/ob_lock_wait_mgr_rpc.cpp
 )

@@ -443,7 +443,7 @@ private:
   bool is_killed_session_(KilledSessionArray *sessions,
                               const uint32_t sess_id);
   void fetch_killed_sessions_(KilledSessionArray *&sessions);
-  inline int64_t calc_holder_tx_lock_timestamp(const int64_t holder_tx_start_time, const int64_t holder_data_seq_num);
+  int64_t calc_holder_tx_lock_timestamp(const int64_t holder_tx_start_time, const int64_t holder_data_seq_num);
   virtual void begin_row_lock_wait_event(const Node * const node);
   virtual void end_row_lock_wait_event(const Node * const node);
   void set_ash_rowlock_diag_info(const ObRowConflictInfo &cflict_info);
