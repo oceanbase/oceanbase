@@ -2710,6 +2710,19 @@ int ObMultiTenant::get_tenant_cpu_time(const uint64_t tenant_id, int64_t &cpu_ti
   return ret;
 }
 
+int ObMultiTenant::get_tenant_group_cpu_time(const uint64_t tenant_id, uint64_t group_id, int64_t &cpu_time)
+{
+  int ret = OB_SUCCESS;
+  cpu_time = 0;
+  if (is_resource_manager_group(group_id)
+      && OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
+    ret = GCTX.cgroup_ctrl_->get_cpu_time(tenant_id, cpu_time, group_id);
+  } else {
+    // OBCG and other unsupported group ids: report 0 without error.
+    cpu_time = 0;
+  }
+  return ret;
+}
 
 int ObMultiTenant::get_tenant_cpu(
     const uint64_t tenant_id, double &min_cpu, double &max_cpu) const
