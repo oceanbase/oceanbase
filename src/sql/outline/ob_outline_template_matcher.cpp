@@ -965,7 +965,11 @@ int ObOutlineTemplateMatcher::try_match_template_outline(
           parse_result, session, allocator, false/*need_format*/, template_signature);
       LOG_DEBUG("[OUTLINE] generated template signature", K(ast_ret), K(template_signature));
       if (OB_SUCCESS == ast_ret) {
-        pc_ctx.sql_ctx_.outline_match_template_signature_ = template_signature;
+        if (OB_FAIL(ob_write_string(pc_ctx.allocator_, template_signature,
+                                    pc_ctx.sql_ctx_.outline_match_template_signature_))) {
+          LOG_WARN("fail to deep-copy template signature", K(ret));
+          pc_ctx.sql_ctx_.outline_match_template_signature_.reset();
+        }
       } else {
         LOG_WARN("failed to generate template signature from parse tree",
                  K(ast_ret), "original_sql_sig", signature_sql);
