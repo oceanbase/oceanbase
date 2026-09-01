@@ -409,6 +409,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     txn_free_route_ctx_.reset();
     client_non_standard_ = false;
   }
+  last_stmt_resource_usage_.reset();
   gtt_session_scope_unique_id_ = 0;
   gtt_trans_scope_unique_id_ = 0;
   gtt_tablet_info_map_.reset();

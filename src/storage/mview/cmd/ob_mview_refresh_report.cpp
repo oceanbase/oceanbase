@@ -94,18 +94,18 @@ int resolve_method_display(const MViewReportRunData &run_data,
       }
     }
     if (OB_SUCC(ret) && first) {
-      if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "AUTO"))) {
+      if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "DEFAULT"))) {
         LOG_WARN("method_buf overflow", KR(ret));
       }
     }
   } else if (mv_array.count() > 0) {
     if (OB_FAIL(databuff_printf(method_buf,
                                 METHOD_DISPLAY_BUF_LEN,
-                                "AUTO (executed %s)",
+                                "DEFAULT (executed %s)",
                                 mv_array.at(0).type_name()))) {
       LOG_WARN("method_buf overflow", KR(ret));
     }
-  } else if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "AUTO"))) {
+  } else if (OB_FAIL(databuff_printf(method_buf, METHOD_DISPLAY_BUF_LEN, "DEFAULT"))) {
     LOG_WARN("method_buf overflow", KR(ret));
   }
   if (OB_SUCC(ret)) {
@@ -322,7 +322,6 @@ static int build_mv_groups(MViewReportContext &ctx, MViewRefreshReport &report)
   int64_t total_retries = 0;
   int64_t total_retry_overhead = 0;
   int64_t num_failures = 0;
-  int64_t total_sched_overhead = 0;
   int64_t slowest_grp = 0;
   for (int64_t group_idx = 0; OB_SUCC(ret) && group_idx < mv_groups.count(); ++group_idx) {
     const int64_t last = mv_groups.at(group_idx).attempt_range_.last_;
@@ -332,26 +331,84 @@ static int build_mv_groups(MViewReportContext &ctx, MViewRefreshReport &report)
       slowest_grp = group_idx;
     }
     total_retries += last - first;
-    if (last != first) {
-      const int64_t overhead_end = mv_array.at(last).is_failed() ? last : (last - 1);
-      for (int64_t i = first; i <= overhead_end; ++i) {
-        total_retry_overhead += mv_array.at(i).elapsed_time_;
-      }
+    // Retry overhead = non-final attempts only, independent of final success/failure.
+    for (int64_t i = first; i < last; ++i) {
+      total_retry_overhead += mv_array.at(i).elapsed_time_;
     }
     if (mv_array.at(last).is_failed()) {
       ++num_failures;
-    }
-    const MViewReportMVData &mv = mv_array.at(last);
-    const int64_t delay = mv.sched_delay_us();
-    if (delay >= 0) {
-      total_sched_overhead += delay;
     }
   }
   summary.total_retries_ = total_retries;
   summary.total_retry_overhead_us_ = total_retry_overhead;
   summary.num_failures_ = num_failures;
-  summary.total_sched_overhead_us_ = total_sched_overhead;
   summary.slowest_grp_ = slowest_grp;
+  // total_sched_overhead is filled later in build(): run_elapsed minus merged
+  // MV-running wall time (see compute_mv_attempt_wall_time).
+  return ret;
+}
+
+// Sum of wall-clock time when at least one MV attempt was running.
+// Each attempt is a [start, end] interval; overlapping intervals (parallel MVs)
+// are merged so concurrent work is counted once. Callers use
+//   run_elapsed - this_value
+// as sched overhead (gaps with no MV running). Failed retry attempts are part
+// of these intervals and are NOT sched overhead; they are reported separately
+// as Retry Overhead.
+struct MvAttemptInterval {
+  int64_t start_;
+  int64_t end_;
+  TO_STRING_KV(K_(start), K_(end));
+};
+
+static int compute_mv_attempt_wall_time(const ObIArray<MViewReportMVData> &mv_array, int64_t &wall_time_us)
+{
+  int ret = OB_SUCCESS;
+  wall_time_us = 0;
+  ObSEArray<MvAttemptInterval, 8> intervals;
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_array.count(); ++i) {
+    const MViewReportMVData &mv = mv_array.at(i);
+    if (mv.start_time_ > 0) {
+      int64_t end_time = mv.end_time_;
+      if (end_time <= mv.start_time_) {
+        const int64_t elapsed = mv.elapsed_time_ > 0 ? mv.elapsed_time_ : 0;
+        end_time = mv.start_time_ + elapsed;
+      }
+      if (end_time > mv.start_time_) {
+        MvAttemptInterval interval;
+        interval.start_ = mv.start_time_;
+        interval.end_ = end_time;
+        if (OB_FAIL(intervals.push_back(interval))) {
+          LOG_WARN("fail to push attempt interval", KR(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && intervals.count() > 0) {
+    for (int64_t i = 1; i < intervals.count(); ++i) {
+      const MvAttemptInterval key = intervals.at(i);
+      int64_t j = i - 1;
+      for (; j >= 0 && intervals.at(j).start_ > key.start_; --j) {
+        intervals.at(j + 1) = intervals.at(j);
+      }
+      intervals.at(j + 1) = key;
+    }
+    int64_t cur_start = intervals.at(0).start_;
+    int64_t cur_end = intervals.at(0).end_;
+    for (int64_t i = 1; i < intervals.count(); ++i) {
+      const MvAttemptInterval &iv = intervals.at(i);
+      if (iv.start_ <= cur_end) {
+        if (iv.end_ > cur_end) {
+          cur_end = iv.end_;
+        }
+      } else {
+        wall_time_us += cur_end - cur_start;
+        cur_start = iv.start_;
+        cur_end = iv.end_;
+      }
+    }
+    wall_time_us += cur_end - cur_start;
+  }
   return ret;
 }
 
@@ -469,12 +526,23 @@ int MViewRefreshReport::build(MViewReportContext &ctx)
     } else if (OB_FAIL(index_mv_group_ranges(data, mv_groups_))) {
       LOG_WARN("fail to index mv group ranges", KR(ret));
     } else {
+      int64_t attempt_wall_us = 0;
       aggregate_mv_resources(mv_groups_, resources_);
-
       summary_.elapsed_us_ = run_data.elapsed_us();
-      summary_.status_str_ = run_data.summary_status();
-      if (OB_FAIL(resolve_method_display(run_data, *ctx.allocator_, mv_array, summary_.method_display_))) {
-        LOG_WARN("fail to resolve method display", KR(ret));
+      // Sched overhead: time in the run when no MV was running (queueing,
+      // scheduling gaps, init/teardown). = run_elapsed - merged attempt time
+      // (see compute_mv_attempt_wall_time). Retries count as running time, not
+      // sched overhead; they appear separately as Retry Overhead.
+      if (OB_FAIL(compute_mv_attempt_wall_time(mv_array, attempt_wall_us))) {
+        LOG_WARN("fail to compute attempt wall time", KR(ret));
+      } else {
+        summary_.total_sched_overhead_us_ = summary_.elapsed_us_ > attempt_wall_us
+                                            ? summary_.elapsed_us_ - attempt_wall_us
+                                            : 0;
+        summary_.status_str_ = run_data.summary_status();
+        if (OB_FAIL(resolve_method_display(run_data, *ctx.allocator_, mv_array, summary_.method_display_))) {
+          LOG_WARN("fail to resolve method display", KR(ret));
+        }
       }
     }
   }

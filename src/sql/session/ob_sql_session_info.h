@@ -201,6 +201,38 @@ struct ObSessionStat final
   uint64_t total_alive_time_us_;
 };
 
+// Snapshot of the just-finished statement's resource usage, captured from the
+// audit record right before reset_audit_record() clears it. Unlike audit_record_,
+// this survives until the next statement overwrites it, so callers (e.g. mview
+// refresh) can read it after the executing SQL has returned.
+struct ObLastStmtResourceUsage final
+{
+  ObLastStmtResourceUsage()
+    : cpu_time_(0), io_wait_time_(0), disk_reads_(0), memory_used_(0)
+  {}
+  void reset()
+  {
+    cpu_time_ = 0;
+    io_wait_time_ = 0;
+    disk_reads_ = 0;
+    memory_used_ = 0;
+  }
+  void assign(const ObLastStmtResourceUsage &other)
+  {
+    cpu_time_ = other.cpu_time_;
+    io_wait_time_ = other.io_wait_time_;
+    disk_reads_ = other.disk_reads_;
+    memory_used_ = other.memory_used_;
+  }
+
+  TO_STRING_KV(K_(cpu_time), K_(io_wait_time), K_(disk_reads), K_(memory_used));
+
+  int64_t cpu_time_;
+  int64_t io_wait_time_;
+  int64_t disk_reads_;
+  int64_t memory_used_;
+};
+
 //该结构的并发控制跟Session上的其他变量一样
 class ObTenantCachedSchemaGuardInfo
 {
@@ -1436,6 +1468,10 @@ public:
   void reset_audit_record(bool need_retry = false)
   {
     ObAuditRecordData &audit_record = audit_record_wrapper_.get_audit_record();
+    last_stmt_resource_usage_.cpu_time_ = audit_record.exec_timestamp_.executor_t_;
+    last_stmt_resource_usage_.io_wait_time_ = audit_record.exec_record_.user_io_time_;
+    last_stmt_resource_usage_.disk_reads_ = audit_record.exec_record_.io_read_count_;
+    last_stmt_resource_usage_.memory_used_ = audit_record.request_memory_used_;
     if (!need_retry) {
       audit_record.reset();
     } else {
@@ -1449,6 +1485,7 @@ public:
   }
   ObAuditRecordData &get_raw_audit_record() { return audit_record_wrapper_.get_audit_record(); }
   const ObAuditRecordData &get_raw_audit_record() const { return audit_record_wrapper_.get_audit_record(); }
+  const ObLastStmtResourceUsage &get_last_stmt_resource_usage() const { return last_stmt_resource_usage_; }
   //在最最终需要push record到audit buffer中时使用该方法，
   //该方法会将一些session中能够拿到的并且重试过程中不会变化的
   //字段初始化
@@ -2357,6 +2394,7 @@ private:
   // it cannot use a new-version temporary table during an upgrade.
   uint64_t min_data_version_of_init_sess_;
   common::hash::ObHashMap<uint64_t, int64_t> mlog_expected_rows_map_;
+  ObLastStmtResourceUsage last_stmt_resource_usage_;
 
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;

@@ -955,6 +955,10 @@ static const char *const JK_SPECIAL_PREDICATES = "special_predicates";
 static const char *const JK_PARTITION_START = "partition_start";
 static const char *const JK_PARTITION_STOP = "partition_stop";
 static const char *const JK_IS_LAST_CHILD = "is_last_child";
+static const char *const JK_CPU_TIME = "cpu_time";
+static const char *const JK_IO_WAIT_TIME = "io_wait_time";
+static const char *const JK_DISK_READS = "disk_reads";
+static const char *const JK_MEMORY_USED = "memory_used";
 
 static int add_int_member(common::ObIAllocator &alloc,
                           ObJsonObject *obj,
@@ -1133,6 +1137,10 @@ static int add_string_member(common::ObIAllocator &alloc,
 
 int build_mview_plan_hash_json(common::ObIAllocator &allocator,
                                uint64_t plan_hash,
+                               int64_t cpu_time,
+                               int64_t io_wait_time,
+                               int64_t disk_reads,
+                               int64_t memory_used,
                                ObSqlString &result_json)
 {
   int ret = OB_SUCCESS;
@@ -1143,6 +1151,14 @@ int build_mview_plan_hash_json(common::ObIAllocator &allocator,
     LOG_WARN("fail to alloc hash-only plan json containers", KR(ret), KP(root), KP(ops));
   } else if (OB_FAIL(add_uint_member(allocator, root, JK_PLAN_HASH, plan_hash))) {
     LOG_WARN("fail to add plan_hash", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_CPU_TIME, cpu_time))) {
+    LOG_WARN("fail to add cpu_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_IO_WAIT_TIME, io_wait_time))) {
+    LOG_WARN("fail to add io_wait_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_DISK_READS, disk_reads))) {
+    LOG_WARN("fail to add disk_reads", KR(ret));
+  } else if (OB_FAIL(add_int_member(allocator, root, JK_MEMORY_USED, memory_used))) {
+    LOG_WARN("fail to add memory_used", KR(ret));
   } else if (OB_FAIL(root->add(ObString::make_string(JK_OPERATORS), ops))) {
     LOG_WARN("fail to add operators", KR(ret));
   } else {
@@ -1161,6 +1177,10 @@ namespace
 
 static int format_merged_plan_json(common::ObIAllocator &alloc,
                                    uint64_t plan_hash,
+                                   int64_t cpu_time,
+                                   int64_t io_wait_time,
+                                   int64_t disk_reads,
+                                   int64_t memory_used,
                                    const ObIArray<ObSqlPlanItem *> &plan_infos,
                                    const ObIArray<MViewPlanMonitorTime> &monitor_times,
                                    const ObIArray<MViewPlanOtherStat> &other_stats,
@@ -1175,6 +1195,14 @@ static int format_merged_plan_json(common::ObIAllocator &alloc,
     LOG_WARN("fail to alloc json containers", KR(ret), KP(root), KP(ops));
   } else if (OB_FAIL(add_uint_member(alloc, root, JK_PLAN_HASH, plan_hash))) {
     LOG_WARN("fail to add plan_hash", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_CPU_TIME, cpu_time))) {
+    LOG_WARN("fail to add cpu_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_IO_WAIT_TIME, io_wait_time))) {
+    LOG_WARN("fail to add io_wait_time", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_DISK_READS, disk_reads))) {
+    LOG_WARN("fail to add disk_reads", KR(ret));
+  } else if (OB_FAIL(add_int_member(alloc, root, JK_MEMORY_USED, memory_used))) {
+    LOG_WARN("fail to add memory_used", KR(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (plan_infos.count() != monitor_times.count()
@@ -1652,49 +1680,6 @@ static int format_predicate_information(const ObIArray<ObSqlPlanItem *> &plan_in
   return ret;
 }
 
-// Aggregate per-operator data into step-level resource metrics. See header.
-static int aggregate_resources_from_arrays(const ObIArray<ObSqlPlanItem *> &plan_infos,
-                                           const ObIArray<MViewPlanMonitorTime> &monitor_times,
-                                           const ObIArray<MViewPlanOtherStat> &other_stats,
-                                           int64_t &cpu_time,
-                                           int64_t &io_wait_time,
-                                           int64_t &disk_reads,
-                                           int64_t &memory_used)
-{
-  int ret = OB_SUCCESS;
-  cpu_time = 0;
-  io_wait_time = 0;
-  disk_reads = 0;
-  memory_used = 0;
-  if (plan_infos.count() != monitor_times.count()
-      || plan_infos.count() != other_stats.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plan_infos/monitor_times/other_stats count mismatch",
-             KR(ret), K(plan_infos.count()), K(monitor_times.count()), K(other_stats.count()));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < plan_infos.count(); ++i) {
-    const ObSqlPlanItem *item = plan_infos.at(i);
-    if (OB_ISNULL(item)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null plan item", KR(ret), K(i));
-    } else {
-      const MViewPlanMonitorTime &mtime = monitor_times.at(i);
-      const MViewPlanOtherStat &ostat = other_stats.at(i);
-      cpu_time += mtime.sum_db_time_;
-      io_wait_time += item->io_cost_;
-      if (mtime.max_wa_mem_ > memory_used) {
-        memory_used = mtime.max_wa_mem_;
-      }
-      for (int64_t s = 0; s < OTHERSTAT_SLOT_COUNT; ++s) {
-        if (sql::ObSqlMonitorStatIds::IO_READ_BYTES == ostat.ids_[s]) {
-          disk_reads += ostat.values_[s];
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 }  // anonymous namespace
 
 int get_mview_stmt_execution_plan(ObExecContext &ctx,
@@ -1705,6 +1690,10 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
                                   int64_t svr_port,
                                   uint64_t plan_id,
                                   uint64_t plan_hash,
+                                  int64_t cpu_time,
+                                  int64_t io_wait_time,
+                                  int64_t disk_reads,
+                                  int64_t memory_used,
                                   ObSqlString &result_json)
 {
   int ret = OB_SUCCESS;
@@ -1750,7 +1739,18 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
                                     " CAST(SUM(OUTPUT_ROWS) AS SIGNED) REAL_CARD, "
                                     " CAST(MAX(GREATEST((DB_TIME - USER_IO_WAIT_TIME), 0)) AS SIGNED) CPU_COST, "
                                     " CAST(MAX(USER_IO_WAIT_TIME) AS SIGNED) IO_COST, "
-                                    " CAST((UNIX_TIMESTAMP(MAX(LAST_CHANGE_TIME)) - UNIX_TIMESTAMP(MIN(FIRST_CHANGE_TIME))) * 1000000 AS SIGNED) REAL_COST, "
+                                    " CAST(GREATEST("
+                                    "(UNIX_TIMESTAMP("
+                                    "CASE WHEN SUM(OUTPUT_ROWS) > 0 AND MAX(LAST_CHANGE_TIME) IS NOT NULL "
+                                    "THEN MAX(LAST_CHANGE_TIME) "
+                                    "WHEN MAX(LAST_REFRESH_TIME) IS NOT NULL "
+                                    "THEN MAX(LAST_REFRESH_TIME) "
+                                    "ELSE NULL END) "
+                                    "- UNIX_TIMESTAMP((SELECT MIN(FIRST_REFRESH_TIME) "
+                                    "FROM OCEANBASE.__ALL_VIRTUAL_SQL_PLAN_MONITOR "
+                                    "WHERE TENANT_ID = %lu AND TRACE_ID = '%.*s' AND SQL_ID = '%.*s' "
+                                    "AND PLAN_LINE_ID = 0)) "
+                                    ") * 1000000, 0) AS SIGNED) REAL_COST, "
                                     " CAST(UNIX_TIMESTAMP(MIN(FIRST_REFRESH_TIME))*1000000 AS SIGNED) OPEN_TIME, "
                                     " CAST(UNIX_TIMESTAMP(MAX(LAST_REFRESH_TIME))*1000000 AS SIGNED) CLOSE_TIME, "
                                     " CAST(COUNT(*) AS SIGNED) DOP, "
@@ -1787,6 +1787,9 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
                                     "WHERE A.TENANT_ID = %lu AND A.SVR_IP = '%.*s' AND A.SVR_PORT = %ld "
                                     "AND A.PLAN_ID = %lu AND A.PLAN_HASH = %lu "
                                     "ORDER BY A.ID",
+                                    tenant_id,
+                                    trace_id.length(), trace_id.ptr(),
+                                    sql_id.length(), sql_id.ptr(),
                                     tenant_id,
                                     trace_id.length(), trace_id.ptr(),
                                     sql_id.length(), sql_id.ptr(),
@@ -1842,6 +1845,10 @@ int get_mview_stmt_execution_plan(ObExecContext &ctx,
         LOG_WARN("fail to compute plan tree child flags", KR(ret));
       } else if (OB_FAIL(format_merged_plan_json(allocator,
                                                  plan_hash,
+                                                 cpu_time,
+                                                 io_wait_time,
+                                                 disk_reads,
+                                                 memory_used,
                                                  plan_infos,
                                                  monitor_times,
                                                  other_stats,
@@ -1901,31 +1908,37 @@ int render_mview_plan_text(common::ObIAllocator &allocator,
   return ret;
 }
 
-int aggregate_mview_plan_resources(common::ObIAllocator &allocator,
-                                   const ObString &plan_json,
-                                   int64_t &cpu_time,
-                                   int64_t &io_wait_time,
-                                   int64_t &disk_reads,
-                                   int64_t &memory_used)
+int parse_mview_plan_resources(common::ObIAllocator &allocator,
+                               const ObString &plan_json,
+                               int64_t &cpu_time,
+                               int64_t &io_wait_time,
+                               int64_t &disk_reads,
+                               int64_t &memory_used)
 {
   int ret = OB_SUCCESS;
   cpu_time = 0;
   io_wait_time = 0;
   disk_reads = 0;
   memory_used = 0;
-  uint64_t plan_hash = 0;
-  ObSEArray<ObSqlPlanItem *, 16> plan_infos;
-  ObSEArray<MViewPlanMonitorTime, 2> monitor_times;
-  ObSEArray<MViewPlanOtherStat, 1> other_stats;
-  if (OB_FAIL(parse_merged_plan_json(allocator, plan_json, plan_hash,
-                                     plan_infos, monitor_times, other_stats,
-                                     NULL,
-                                     false /*need_predicates*/))) {
-    LOG_WARN("fail to parse plan json for aggregation", KR(ret));
-  } else if (OB_FAIL(aggregate_resources_from_arrays(plan_infos, monitor_times, other_stats,
-                                                    cpu_time, io_wait_time, disk_reads,
-                                                    memory_used))) {
-    LOG_WARN("fail to aggregate resources", KR(ret));
+  ObJsonNode *root_node = NULL;
+  if (plan_json.empty()) {
+    // Empty plan is valid — leave outputs at 0.
+  } else if (OB_FAIL(ObJsonParser::get_tree(&allocator, plan_json, root_node))) {
+    LOG_WARN("fail to parse plan json", KR(ret), K(plan_json));
+  } else if (OB_ISNULL(root_node) || ObJsonNodeType::J_OBJECT != root_node->json_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("plan json root is not object", KR(ret));
+  } else {
+    ObJsonObject *root_obj = static_cast<ObJsonObject *>(root_node);
+    if (OB_FAIL(read_json_int_member(root_obj, JK_CPU_TIME, cpu_time))) {
+      LOG_WARN("fail to read cpu_time", KR(ret));
+    } else if (OB_FAIL(read_json_int_member(root_obj, JK_IO_WAIT_TIME, io_wait_time))) {
+      LOG_WARN("fail to read io_wait_time", KR(ret));
+    } else if (OB_FAIL(read_json_int_member(root_obj, JK_DISK_READS, disk_reads))) {
+      LOG_WARN("fail to read disk_reads", KR(ret));
+    } else if (OB_FAIL(read_json_int_member(root_obj, JK_MEMORY_USED, memory_used))) {
+      LOG_WARN("fail to read memory_used", KR(ret));
+    }
   }
   return ret;
 }

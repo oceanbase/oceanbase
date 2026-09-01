@@ -235,7 +235,7 @@ int ObDBMSMViewMysql::refresh(ObPLExecCtx &pl_ctx, ParamStore &params, ObObj &re
 
 /*
 FUNCTION refresh_report(
-    IN     refresh_id          INT            DEFAULT NULL,
+    IN     refresh_id          BIGINT         DEFAULT NULL,
     IN     mv_name             VARCHAR(65535) DEFAULT NULL,
     IN     tenant_id           INT            DEFAULT NULL,
     IN     format              VARCHAR(65535) DEFAULT 'TEXT')

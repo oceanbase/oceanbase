@@ -104,8 +104,14 @@ struct ObMViewStmtPlanCaptureInfo
   uint64_t plan_id_;
   uint64_t plan_hash_;
   ObMViewPlanCaptureMode capture_mode_;
+  // Resource usage of this statement, read from the session's audit record right after execution.
+  int64_t cpu_time_;
+  int64_t io_wait_time_;
+  int64_t disk_reads_;
+  int64_t memory_used_;
   ObMViewStmtPlanCaptureInfo()
-    : svr_port_(0), plan_id_(0), plan_hash_(0), capture_mode_(ObMViewPlanCaptureMode::NONE)
+    : svr_port_(0), plan_id_(0), plan_hash_(0), capture_mode_(ObMViewPlanCaptureMode::NONE),
+      cpu_time_(0), io_wait_time_(0), disk_reads_(0), memory_used_(0)
   {
     sql_id_buf_[0] = '\0';
     trace_id_buf_[0] = '\0';
@@ -118,7 +124,8 @@ struct ObMViewStmtPlanCaptureInfo
   common::ObString svr_ip() const { return common::ObString(svr_ip_buf_); }
   TO_STRING_KV("sql_id", sql_id_buf_, "trace_id", trace_id_buf_,
                "svr_ip", svr_ip_buf_, K_(svr_port), K_(plan_id),
-               K_(plan_hash), K_(capture_mode));
+               K_(plan_hash), K_(capture_mode), K_(cpu_time), K_(io_wait_time),
+               K_(disk_reads), K_(memory_used));
 };
 
 class ObMViewRefreshStatsUtils

@@ -877,6 +877,11 @@ int ObMViewRefresher::prepare_plan_capture_info(sql::ObSQLSessionInfo *exec_sess
     capture_info.svr_port_ = GCTX.self_addr().get_port();
     // Always capture plan_hash; full-plan mode additionally needs sql_id/trace_id/plan_id.
     capture_info.plan_hash_ = exec_session_info->get_current_plan_hash();
+    const ObLastStmtResourceUsage &resource_usage = exec_session_info->get_last_stmt_resource_usage();
+    capture_info.cpu_time_ = resource_usage.cpu_time_;
+    capture_info.io_wait_time_ = resource_usage.io_wait_time_;
+    capture_info.disk_reads_ = resource_usage.disk_reads_;
+    capture_info.memory_used_ = resource_usage.memory_used_;
     if (capture_info.is_full_plan()) {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(sql::ObSQLUtils::gen_sql_id_from_sql_string(*exec_session_info,

@@ -173,6 +173,110 @@ static int prepare_report_names(ObExecContext &ctx,
   return ret;
 }
 
+static int find_final_mv_data(ObIArray<MViewReportMVData> &mv_array, int64_t mview_id,
+                              MViewReportMVData *&mv_data)
+{
+  int ret = OB_SUCCESS;
+  mv_data = NULL;
+  for (int64_t i = mv_array.count() - 1; OB_ISNULL(mv_data) && i >= 0; --i) {
+    if (mv_array.at(i).mview_id_ == mview_id) {
+      mv_data = &mv_array.at(i);
+    }
+  }
+  if (OB_ISNULL(mv_data)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mv data not found in array", KR(ret), K(mview_id));
+  }
+  return ret;
+}
+
+static int fetch_prev_refresh_info(ObExecContext &ctx,
+                                   uint64_t conn_tenant_id,
+                                   uint64_t target_tenant_id,
+                                   int64_t refresh_id,
+                                   int64_t mview_id,
+                                   const char *stats_table,
+                                   const char *run_stats_table,
+                                   bool same_tenant,
+                                   ObIArray<MViewReportMVData> &mv_array)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString prev_sql;
+  const char *hint = same_tenant ? "/*+ INDEX(s idx_mview_refresh_stats_mview_end_time) */ " : "";
+  // Inner tables store data with extract tenant_id (0), while virtual tables
+  // expose the real tenant_id.  Use 0 for direct inner-table queries, otherwise
+  // use the caller-supplied target_tenant_id.
+  const uint64_t query_tenant_id = same_tenant ? 0 : target_tenant_id;
+  uint64_t prev_refresh_scn = 0;
+  uint64_t data_target_scn = 0;
+  MViewReportMVData *mv_data = NULL;
+  if (OB_FAIL(prev_sql.assign_fmt(
+          "SELECT %s"
+          "s.refresh_scn, r.data_target_scn "
+          "FROM %s s "
+          "LEFT JOIN %s r "
+          "  ON r.tenant_id = s.tenant_id AND r.refresh_id = s.refresh_id "
+          "WHERE s.tenant_id = %lu AND s.mview_id = %ld "
+          "  AND s.result = 0 AND s.refresh_scn IS NOT NULL "
+          "  AND s.end_time < ("
+          "    SELECT MIN(c.start_time) FROM %s c "
+          "    WHERE c.tenant_id = %lu AND c.refresh_id = %ld AND c.mview_id = %ld"
+          "  ) "
+          "ORDER BY s.end_time DESC, s.refresh_id DESC, s.retry_id DESC LIMIT 1",
+          hint,
+          stats_table,
+          run_stats_table,
+          query_tenant_id,
+          mview_id,
+          stats_table,
+          query_tenant_id,
+          refresh_id,
+          mview_id))) {
+    LOG_WARN("fail to build prev scn sql", KR(ret), K(mview_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, prev_res)
+    {
+      sqlclient::ObMySQLResult *prev_result = NULL;
+      if (OB_FAIL(ctx.get_sql_proxy()->read(prev_res, conn_tenant_id, prev_sql.ptr()))) {
+        LOG_WARN("fail to execute prev scn query", KR(ret), K(mview_id));
+      } else if (OB_ISNULL(prev_result = prev_res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null prev scn result", KR(ret));
+      } else if (OB_FAIL(prev_result->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to get prev scn result", KR(ret), K(mview_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*prev_result,
+                                                    "refresh_scn",
+                                                    prev_refresh_scn,
+                                                    uint64_t,
+                                                    false /*skip_null_error*/,
+                                                    false /*skip_column_error*/,
+                                                    0);
+        EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*prev_result,
+                                                    "data_target_scn",
+                                                    data_target_scn,
+                                                    uint64_t,
+                                                    true /*skip_null_error*/,
+                                                    false /*skip_column_error*/,
+                                                    0);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(find_final_mv_data(mv_array, mview_id, mv_data))) {
+      LOG_WARN("fail to find final mv data", KR(ret), K(mview_id));
+    } else {
+      mv_data->mv_refresh_start_scn_ = prev_refresh_scn;
+      mv_data->base_table_start_scn_ = data_target_scn;
+    }
+  }
+  return ret;
+}
+
 static int fetch_run_data(ObExecContext &ctx,
                           uint64_t conn_tenant_id,
                           uint64_t target_tenant_id,
@@ -550,14 +654,14 @@ static int fetch_stmt_data(ObExecContext &ctx,
           }
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*sql_result, "result", stmt_data.result_, int64_t, true, true, 0);
           if (OB_SUCC(ret) && !stmt_data.execution_plan_.empty()) {
-            int tmp_ret = aggregate_mview_plan_resources(allocator,
-                                                         stmt_data.execution_plan_,
-                                                         stmt_data.cpu_time_,
-                                                         stmt_data.io_wait_time_,
-                                                         stmt_data.disk_reads_,
-                                                         stmt_data.memory_used_);
+            int tmp_ret = parse_mview_plan_resources(allocator,
+                                                     stmt_data.execution_plan_,
+                                                     stmt_data.cpu_time_,
+                                                     stmt_data.io_wait_time_,
+                                                     stmt_data.disk_reads_,
+                                                     stmt_data.memory_used_);
             if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-              LOG_WARN("fail to aggregate plan resources, skip plan", K(tmp_ret), K(stmt_data.step_));
+              LOG_WARN("fail to parse plan resources, skip plan", K(tmp_ret), K(stmt_data.step_));
             }
           }
           if (OB_SUCC(ret) && OB_FAIL(stmt_array.push_back(stmt_data))) {
@@ -601,100 +705,29 @@ int ObMViewRefreshReportFetcher::fetch_all(ObExecContext &ctx,
     LOG_WARN("fail to fetch mv data", KR(ret), K(refresh_id));
   }
   if (OB_FAIL(ret)) {
-  } else {
-    ObSqlString base_scn_sql;
-    if (OB_FAIL(base_scn_sql.assign_fmt("SELECT MAX(data_target_scn) AS base_scn FROM %s "
-                                        "WHERE tenant_id = %lu AND refresh_id < %ld AND data_target_scn IS NOT NULL",
-                                        OB_ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_TNAME,
-                                        target_tenant_id,
-                                        refresh_id))) {
-      LOG_WARN("fail to build base_scn sql", KR(ret));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, base_res)
-      {
-        sqlclient::ObMySQLResult *base_result = NULL;
-        if (OB_FAIL(ctx.get_sql_proxy()->read(base_res, conn_tenant_id, base_scn_sql.ptr()))) {
-          LOG_WARN("fail to execute base_scn query", KR(ret));
-        } else if (OB_ISNULL(base_result = base_res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("null base_scn result", KR(ret));
-        } else if (OB_FAIL(base_result->next())) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("fail to get base_scn result", KR(ret));
-          } else {
-            ret = OB_SUCCESS;
-          }
-        } else {
-          uint64_t base_scn = 0;
-          EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*base_result, "base_scn", base_scn, uint64_t, true, true, 0);
-          for (int64_t i = 0; i < data.mv_array_.count(); ++i) {
-            data.mv_array_.at(i).base_table_start_scn_ = base_scn;
-          }
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
   } else if (0 < data.mv_array_.count() && OB_FAIL(collect_distinct_mv_ids(data.mv_array_, data.mv_ids_))) {
     LOG_WARN("fail to collect distinct mv ids", KR(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (0 < data.mv_ids_.count()) {
+    const bool same_tenant = (conn_tenant_id == target_tenant_id);
+    const char *stats_table = same_tenant ? OB_ALL_MVIEW_REFRESH_STATS_TNAME
+                                          : OB_ALL_VIRTUAL_MVIEW_REFRESH_STATS_TNAME;
+    const char *run_stats_table = same_tenant ? OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME
+                                              : OB_ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_TNAME;
     ObSqlString in_ids;
     for (int64_t i = 0; OB_SUCC(ret) && i < data.mv_ids_.count(); ++i) {
       if (OB_FAIL(in_ids.append_fmt(0 == i ? "%ld" : ",%ld", data.mv_ids_.at(i)))) {
         LOG_WARN("fail to append mv_id", KR(ret));
       }
     }
-    if (OB_FAIL(ret)) {
-    } else {
-      ObSqlString hist_scn_sql;
-      if (OB_FAIL(hist_scn_sql.assign_fmt("SELECT mview_id, MAX(refresh_scn) AS hist_scn "
-                                          "FROM %s "
-                                          "WHERE tenant_id = %lu AND result = 0 "
-                                          "  AND refresh_id < %ld "
-                                          "  AND mview_id IN (%s) "
-                                          "GROUP BY mview_id",
-                                          OB_ALL_VIRTUAL_MVIEW_REFRESH_STATS_TNAME,
-                                          target_tenant_id,
-                                          refresh_id,
-                                          in_ids.ptr()))) {
-        LOG_WARN("fail to build hist_scn sql", KR(ret));
-      } else {
-        SMART_VAR(ObMySQLProxy::MySQLResult, hist_res)
-        {
-          sqlclient::ObMySQLResult *hist_result = NULL;
-          if (OB_FAIL(ctx.get_sql_proxy()->read(hist_res, conn_tenant_id, hist_scn_sql.ptr()))) {
-            LOG_WARN("fail to execute hist_scn query", KR(ret));
-          } else if (OB_ISNULL(hist_result = hist_res.get_result())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("null hist_scn result", KR(ret));
-          } else {
-            while (OB_SUCC(ret) && OB_SUCC(hist_result->next())) {
-              int64_t result_mv_id = 0;
-              uint64_t hist_scn = 0;
-              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*hist_result,
-                                                         "mview_id",
-                                                         result_mv_id,
-                                                         int64_t,
-                                                         true,
-                                                         true,
-                                                         0);
-              EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*hist_result, "hist_scn", hist_scn, uint64_t, true, true, 0);
-              if (OB_SUCC(ret)) {
-                for (int64_t i = 0; i < data.mv_array_.count(); ++i) {
-                  if (data.mv_array_.at(i).mview_id_ == result_mv_id
-                      && hist_scn > data.mv_array_.at(i).mv_refresh_start_scn_) {
-                    data.mv_array_.at(i).mv_refresh_start_scn_ = hist_scn;
-                  }
-                }
-              }
-            }
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-            }
-          }
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < data.mv_ids_.count(); ++i) {
+      int tmp_ret = fetch_prev_refresh_info(ctx, conn_tenant_id, target_tenant_id,
+                                            refresh_id, data.mv_ids_.at(i),
+                                            stats_table, run_stats_table, same_tenant,
+                                            data.mv_array_);
+      if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+        LOG_WARN("fail to fetch prev refresh info, skip mv", KR(tmp_ret), K(data.mv_ids_.at(i)));
       }
     }
     ObSqlString dep_sql;

@@ -399,6 +399,10 @@ int ObMViewRefreshStatsUtils::write_stmt_after_step(sql::ObExecContext &ctx,
                                                      capture_info.svr_port_,
                                                      capture_info.plan_id_,
                                                      capture_info.plan_hash_,
+                                                     capture_info.cpu_time_,
+                                                     capture_info.io_wait_time_,
+                                                     capture_info.disk_reads_,
+                                                     capture_info.memory_used_,
                                                      plan_json))) {
         LOG_WARN("fail to get stmt execution plan, ignore", KR(tmp_ret));
       }
@@ -406,6 +410,10 @@ int ObMViewRefreshStatsUtils::write_stmt_after_step(sql::ObExecContext &ctx,
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(build_mview_plan_hash_json(ctx.get_allocator(),
                                                  capture_info.plan_hash_,
+                                                 capture_info.cpu_time_,
+                                                 capture_info.io_wait_time_,
+                                                 capture_info.disk_reads_,
+                                                 capture_info.memory_used_,
                                                  plan_json))) {
         LOG_WARN("fail to build hash-only plan json, ignore", KR(tmp_ret));
       }
