@@ -1167,7 +1167,7 @@ int ObTableScanOp::prepare_das_task()
   }
   return ret;
 }
-int ObTableScanOp::prepare_all_das_tasks()
+int ObTableScanOp::prepare_all_das_tasks(const bool gi_above_is_false_range)
 {
   // get grop size of batch rescan
   int ret = OB_SUCCESS;
@@ -1182,7 +1182,9 @@ int ObTableScanOp::prepare_all_das_tasks()
   if (OB_SUCC(ret)) {
     // if use gi schedule and index merge, need to prepare scan range at the time of the first scan
     // or if the tasks are not all local tasks
-    if (MY_SPEC.gi_above_ && (!MY_INPUT.key_ranges_.empty() || !MY_INPUT.scan_tasks_.empty())
+    if (MY_SPEC.gi_above_
+        && ((gi_above_is_false_range && MY_CTDEF.enable_new_false_range_)
+            || !MY_INPUT.key_ranges_.empty() || !MY_INPUT.scan_tasks_.empty())
         && !MY_CTDEF.use_index_merge_) {
       if (OB_FAIL(prepare_das_task())) {
         LOG_WARN("prepare das task failed", K(ret));
@@ -2063,6 +2065,7 @@ int ObTableScanOp::inner_close()
 int ObTableScanOp::do_init_before_get_row()
 {
   int ret = OB_SUCCESS;
+  bool gi_above_is_false_range = false;
   if (need_init_before_get_row_) {
     LOG_DEBUG("do init before get row", K(MY_SPEC.id_), K(MY_SPEC.use_dist_das_), K(MY_SPEC.gi_above_));
     if (OB_UNLIKELY(iter_end_)) {
@@ -2070,16 +2073,15 @@ int ObTableScanOp::do_init_before_get_row()
     } else {
       if (MY_SPEC.gi_above_) {
         ObGranuleTaskInfo info;
-        bool is_false_range = false;
         if (OB_FAIL(get_access_tablet_loc(info))) {
           LOG_WARN("fail to get access partition failed", K(ret));
-        } else if (OB_FAIL(reassign_task_ranges(info, is_false_range))) {
+        } else if (OB_FAIL(reassign_task_ranges(info, gi_above_is_false_range))) {
           LOG_WARN("assign task ranges failed", K(ret));
         }
       }
       if (OB_FAIL(ret) || OB_UNLIKELY(iter_end_)) {
         // do nothing
-      } else if (OB_FAIL(prepare_all_das_tasks())) {
+      } else if (OB_FAIL(prepare_all_das_tasks(gi_above_is_false_range))) {
         LOG_WARN("prepare das task failed", K(ret));
       } else if (OB_FAIL(do_table_scan())) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
@@ -3279,10 +3281,32 @@ int ObTableScanOp::reassign_task_ranges(ObGranuleTaskInfo &info, bool &is_false_
       MY_INPUT.mbr_filters_.reuse();
     } else if (!MY_INPUT.get_need_extract_query_range()) {
       is_false_range = info.ranges_.empty();
-      if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
-          OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
+      if (MY_CTDEF.enable_new_false_range_) {
+        const bool has_ss_range = !info.ss_ranges_.empty();
+        MY_INPUT.key_ranges_.reuse();
+        MY_INPUT.ss_key_ranges_.reuse();
+        if (OB_UNLIKELY(has_ss_range && info.ranges_.count() != info.ss_ranges_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected key range and skip scan range count", KR(ret), K(info));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < info.ranges_.count(); ++i) {
+          if (!info.ranges_.at(i).empty()) {
+            if (OB_FAIL(MY_INPUT.key_ranges_.push_back(info.ranges_.at(i)))) {
+              LOG_WARN("failed to push back key range", KR(ret), K(i), K(info));
+            } else if (has_ss_range &&
+                       OB_FAIL(MY_INPUT.ss_key_ranges_.push_back(info.ss_ranges_.at(i)))) {
+              LOG_WARN("failed to push back skip scan range", KR(ret), K(i), K(info));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          is_false_range = MY_INPUT.key_ranges_.empty();
+        }
+      } else if (OB_FAIL(MY_INPUT.key_ranges_.assign(info.ranges_)) ||
+                 OB_FAIL(MY_INPUT.ss_key_ranges_.assign(info.ss_ranges_))) {
         LOG_WARN("assign the range info failed", K(ret), K(info));
-      } else if (MY_SPEC.is_vt_mapping_) {
+      }
+      if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
         if (OB_FAIL(vt_result_converter_->convert_key_ranges(MY_INPUT.key_ranges_))) {
           LOG_WARN("convert key ranges failed", K(ret));
         }
