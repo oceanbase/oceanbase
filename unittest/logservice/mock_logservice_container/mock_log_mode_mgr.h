@@ -34,7 +34,8 @@ public:
            LogStateMgr *state_mgr,
            LogEngine *log_engine,
            LogConfigMgr *config_mgr,
-           LogSlidingWindow *sw)
+           LogSlidingWindow *sw,
+           const LogQuorumPolicy *quorum_policy)
   {
     int ret = OB_SUCCESS;
     UNUSED(palf_id);
@@ -44,6 +45,7 @@ public:
     UNUSED(log_engine);
     UNUSED(config_mgr);
     UNUSED(sw);
+    UNUSED(quorum_policy);
     return ret;
   }
   void destroy() {}
