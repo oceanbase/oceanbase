@@ -1817,6 +1817,9 @@ DEF_BOOL(_enable_spf_batch_rescan, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_das_keep_order, OB_TENANT_PARAMETER, "True",
          "enable das keep order optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_das_scan_iter_reuse, OB_TENANT_PARAMETER, "False",
+         "enable DAS scan iterator reuse across tablets on local and remote execution paths",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_update_split_with_unique_id, OB_TENANT_PARAMETER, "False",
          "enable writing unique trace id in clog when update is split into delete and insert, "
          "so that CDC can reassemble them back to update semantics",

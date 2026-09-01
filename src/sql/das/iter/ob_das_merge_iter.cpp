@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 namespace oceanbase
 {
 using namespace common;
@@ -340,11 +341,17 @@ int ObDASMergeIter::do_table_scan()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr das ref", K(das_ref_), K(ret));
   } else {
-    enable_iter_reuse_ = (SEQUENTIAL_MERGE == merge_type_
-                          && nullptr == group_id_expr_);
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    const bool reuse_config_enabled = tenant_config.is_valid()
+                                      && tenant_config->_enable_das_scan_iter_reuse;
+    enable_iter_reuse_ = reuse_config_enabled
+                         && SEQUENTIAL_MERGE == merge_type_
+                         && nullptr == group_id_expr_;
     close_reuse_after_retry_ = false;
     if (enable_iter_reuse_) {
       ObDASScanOp *first_local = nullptr;
+      const transaction::ObTxReadSnapshot *first_local_snapshot = nullptr;
+      bool same_local_snapshot = true;
       const common::ObAddr &self_addr = GCTX.self_addr();
       DASTaskIter task_iter = das_ref_->begin_task_iter();
       for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
@@ -357,12 +364,24 @@ int ObDASMergeIter::do_table_scan()
         } else if (self_addr == das_task_ptr->get_tablet_loc()->server_) {
           if (first_local == nullptr) {
             first_local = DAS_SCAN_OP(das_task_ptr);
+            first_local_snapshot = first_local->get_snapshot();
+            same_local_snapshot = OB_NOT_NULL(first_local_snapshot);
+          } else if (das_task_ptr->get_snapshot() != first_local_snapshot) {
+            same_local_snapshot = false;
+            LOG_TRACE("[DAS ITER] local snapshot mismatch, disable reuse",
+                      KP(first_local_snapshot), KP(das_task_ptr->get_snapshot()));
           }
         }
       }
 
       bool has_part_retry = false;
       if (OB_FAIL(ret)) {
+      } else if (!same_local_snapshot) {
+        enable_iter_reuse_ = false;
+        reusable_scan_op_ = nullptr;
+        if (OB_FAIL(das_ref_->execute_all_task())) {
+          LOG_WARN("failed to execute das tasks after snapshot mismatch", K(ret));
+        }
       } else if (OB_FAIL(das_ref_->execute_remote_aggregated_tasks(&has_part_retry))) {
         LOG_WARN("failed to dispatch remote aggregated tasks", K(ret));
       } else if (has_part_retry) {
@@ -375,6 +394,26 @@ int ObDASMergeIter::do_table_scan()
         reusable_scan_op_ = first_local;
         if (OB_FAIL(reusable_scan_op_->start_das_task())) {
           LOG_WARN("failed to start aliased reusable das task", K(ret));
+          common::ObSEArray<ObIDASTaskOp *, 1> failed_tasks;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(reusable_scan_op_->state_advance())) {
+            LOG_WARN("failed to advance reusable das task state", K(ret), K(tmp_ret));
+          } else if (OB_TMP_FAIL(failed_tasks.push_back(reusable_scan_op_))) {
+            LOG_WARN("failed to collect reusable das task for retry", K(ret), K(tmp_ret));
+          } else if (OB_TMP_FAIL(das_ref_->retry_all_fail_tasks(failed_tasks,
+                                                                 &has_part_retry))) {
+            LOG_WARN("failed to retry reusable das task", K(ret), K(tmp_ret));
+          }
+          if (OB_SUCCESS != tmp_ret) {
+            ret = tmp_ret;
+          } else if (has_part_retry) {
+            ret = OB_SUCCESS;
+            enable_iter_reuse_ = false;
+            reusable_scan_op_ = nullptr;
+            if (OB_FAIL(das_ref_->execute_all_task())) {
+              LOG_WARN("failed to execute remaining tasks after partition retry", K(ret));
+            }
+          }
         }
       }
     } else {

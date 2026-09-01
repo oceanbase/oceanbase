@@ -23,6 +23,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/rpc/ob_batch_rpc.h"
 #include "rpc/obrpc/ob_poc_rpc_proxy.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -385,6 +386,7 @@ bool precheck_remote_iter_reuse(
 {
   bool bret = task_ops.count() >= 2;
   const ObDASBaseCtDef *first_ctdef = NULL;
+  const transaction::ObTxReadSnapshot *first_snapshot = NULL;
   for (int64_t i = 0; bret && i < task_ops.count(); ++i) {
     ObIDASTaskOp *op = task_ops.at(i);
     if (OB_ISNULL(op) || op->get_type() != DAS_OP_TABLE_SCAN) {
@@ -397,8 +399,14 @@ bool precheck_remote_iter_reuse(
         bret = false;
       } else if (0 == i) {
         first_ctdef = ctdef;
+        first_snapshot = op->get_snapshot();
+        bret = OB_NOT_NULL(first_snapshot);
       } else if (ctdef != first_ctdef) {
         bret = false;  // All tasks must share scan_ctdef_ to guarantee the same iter tree.
+      } else if (op->get_snapshot() != first_snapshot) {
+        bret = false;  // A storage iter cannot be reused across different snapshots.
+        LOG_TRACE("[DAS REMOTE REUSE] snapshot mismatch, disable reuse",
+                  K(i), KP(first_snapshot), KP(op->get_snapshot()));
       }
     }
   }
@@ -519,7 +527,10 @@ int ObDASBaseAccessP<pcode>::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
   } else {
-    bool reuse_enable = precheck_remote_iter_reuse(task_ops);
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    bool reuse_enable = tenant_config.is_valid()
+                        && tenant_config->_enable_das_scan_iter_reuse
+                        && precheck_remote_iter_reuse(task_ops);
     ObDASScanOp *reusable_scan_op = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       if (OB_ISNULL(task_op = task_ops.at(i))) {
@@ -593,18 +604,13 @@ int ObDASBaseAccessP<pcode>::process()
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("reusable scan op is null in reuse window", K(ret), K(i));
           } else if (OB_FAIL(reusable->switch_for_remote_reuse(*cur_scan))) {
-            LOG_WARN("switch for remote reuse failed, terminating reuse window",
-                     K(ret), K(i), KP(reusable));
+            LOG_WARN("switch for remote reuse failed", K(ret), K(i), KP(reusable));
             int end_ret = reusable->end_das_task();
             if (OB_SUCCESS != end_ret) {
-              LOG_WARN("end reusable das task during fallback also failed", K(end_ret));
+              LOG_WARN("end reusable das task after switch failure also failed", K(end_ret));
             }
             reusable_scan_op = nullptr;
             reuse_enable = false;
-            ret = OB_SUCCESS;
-            if (OB_FAIL(task_op->start_das_task())) {
-              LOG_WARN("fallback start das task failed", K(ret));
-            }
           }
         }
 
