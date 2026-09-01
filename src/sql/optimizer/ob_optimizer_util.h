@@ -1176,6 +1176,7 @@ public:
                                             const bool is_distinct,
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObIArray<ObSelectStmt*> &right_stmts,
+                                            ObIArray<ObExprResType> &left_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL,
                                             const bool need_merge_type = true);
@@ -1185,6 +1186,7 @@ public:
                                             const bool is_distinct,
                                             ObIArray<ObSelectStmt*> &left_stmts,
                                             ObSelectStmt *right_stmt,
+                                            ObIArray<ObExprResType> &left_types,
                                             const bool is_mysql_recursive_union = false,
                                             ObIArray<ObString> *rcte_col_name = NULL,
                                             const bool need_merge_type = true);

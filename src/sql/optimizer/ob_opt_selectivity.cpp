@@ -1113,9 +1113,19 @@ int OptTableMetas::get_set_stmt_output_ndv(const ObSelectStmt &stmt,
 const OptTableMeta* OptTableMetas::get_table_meta_by_table_id(const uint64_t table_id) const
 {
   const OptTableMeta *table_meta = NULL;
-  for (int64_t i = 0; NULL == table_meta && i < table_metas_.count(); ++i) {
-    if (NULL != table_metas_.at(i) && table_id == table_metas_.at(i)->get_table_id()) {
-      table_meta = table_metas_.at(i);
+  // Normally, `table_meta`s should have monotonically increasing `table_id`s (started from 0)
+  // and being pushed back in order into `table_metas_`,
+  // so `table_metas_[table_id]` should be the one being looking for.
+  // If no so, fallback to linear search.
+  if (table_id < static_cast<uint64_t>(table_metas_.count())
+      && NULL != table_metas_.at(table_id)
+      && table_id == table_metas_.at(table_id)->get_table_id()) {
+    table_meta = table_metas_.at(table_id);
+  } else {
+    for (int64_t i = 0; NULL == table_meta && i < table_metas_.count(); ++i) {
+      if (NULL != table_metas_.at(i) && table_id == table_metas_.at(i)->get_table_id()) {
+        table_meta = table_metas_.at(i);
+      }
     }
   }
   return table_meta;
@@ -1123,13 +1133,8 @@ const OptTableMeta* OptTableMetas::get_table_meta_by_table_id(const uint64_t tab
 
 OptTableMeta* OptTableMetas::get_table_meta_by_table_id(const uint64_t table_id)
 {
-  OptTableMeta *table_meta = NULL;
-  for (int64_t i = 0; NULL == table_meta && i < table_metas_.count(); ++i) {
-    if (NULL != table_metas_.at(i) && table_id == table_metas_.at(i)->get_table_id()) {
-      table_meta = table_metas_.at(i);
-    }
-  }
-  return table_meta;
+  return const_cast<OptTableMeta *>(
+    static_cast<const OptTableMetas *>(this)->get_table_meta_by_table_id(table_id));
 }
 
 const OptColumnMeta* OptTableMetas::get_column_meta_by_table_id(const uint64_t table_id,

@@ -6246,7 +6246,8 @@ int ObSelectLogPlan::generate_child_plan_for_set(const ObDMLStmt *sub_stmt,
     LOG_ERROR("Failed to create logical plan", K(sub_plan), K(ret));
   } else if (FALSE_IT(sub_plan->set_is_parent_set_distinct(is_set_distinct)) ||
              FALSE_IT(sub_plan->set_nonrecursive_plan_for_fake_cte(nonrecursive_plan))||
-             FALSE_IT(sub_plan->set_need_accurate_cardinality(need_accurate_cardinality))) {
+             FALSE_IT(sub_plan->set_need_accurate_cardinality(need_accurate_cardinality)) ||
+             FALSE_IT(sub_plan->set_is_parent_set_stmt(true))) {
     // do nothing
   } else if (OB_FAIL(sub_plan->init_rescan_info_for_subquery_paths(*this, false, false))) {
     LOG_WARN("failed to init rescan info", K(ret));

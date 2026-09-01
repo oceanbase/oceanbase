@@ -348,8 +348,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_set_stmt(ObDMLStmt *s
   if (OB_ISNULL(sel_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
-  } else if (OB_FAIL(SMART_CALL(pullup_predicates_from_set(sel_stmt,
-                                                    pullup_preds)))) {
+  } else if (OB_FAIL(SMART_CALL(pullup_predicates_from_set(sel_stmt, sel_ids, pullup_preds)))) {
     LOG_WARN("failed to pull up predicates from set stmt", K(ret));
   } else if (OB_FAIL(generate_set_pullup_predicates(*sel_stmt,
                                                     sel_ids,
@@ -412,6 +411,9 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
       if (!stmt_preds_pulled_up_.at(stmt_idx)) {
         if (OB_FAIL(pullup_predicates_from_set_stmt(stmt, sel_ids, output_pullup_preds))) {
           LOG_WARN("process set stmt failed", K(ret));
+        } else if (skip_pullup_preds_from_set_children(static_cast<ObSelectStmt *>(stmt), sel_ids)) {
+          // preds are not pulled up from set child, do not mark stmt_preds_pulled_up_ as true
+          OPT_TRACE("skip pullup preds from set children")
         } else {
           stmt_preds_pulled_up_.at(stmt_idx) = true;
         }
@@ -796,7 +798,8 @@ int ObTransformPredicateMoveAround::generate_set_pullup_predicates(ObSelectStmt 
 }
 
 int ObTransformPredicateMoveAround::pullup_predicates_from_set(ObSelectStmt *stmt,
-                                                              ObIArray<ObRawExpr *> &pullup_preds)
+                                                               ObIArray<int64_t> &sel_ids,
+                                                               ObIArray<ObRawExpr *> &pullup_preds)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -838,6 +841,8 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_set(ObSelectStmt *stm
       } else if (OB_FAIL(SMART_CALL(pullup_predicates(child_query.at(i), all_sels,
                                                       right_output_preds)))) {
         LOG_WARN("pullup preds from set failed", K(ret));
+      } else if (skip_pullup_preds_from_set_children(stmt, sel_ids)) {
+        // do nothing
       } else if (OB_FAIL(rename_set_op_predicates(*child_query.at(i), *stmt,
                                                   right_output_preds, true))) {
         LOG_WARN("rename predicates failed", K(ret));

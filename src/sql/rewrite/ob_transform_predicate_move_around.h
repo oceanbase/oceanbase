@@ -91,12 +91,25 @@ private:
    * @brief pullup_predicates_from_set
    * set stmt的左右子查询中谓词上拉
    * @param stmt
+   * @param sel_ids select items needed by parent filters
    * @param pullup_preds 上拉的谓词
-   * @param parent_stmt set stmt的上层stmt，用于改写上拉谓词
    */
   int pullup_predicates_from_set(ObSelectStmt *stmt,
-                                ObIArray<ObRawExpr *> &pullup_preds);
-  
+                                 ObIArray<int64_t> &sel_ids,
+                                 ObIArray<ObRawExpr *> &pullup_preds);
+
+  // The preds pulled up from children stmts of a non-recursive set stmt will be consumed in two ways:
+  // 1. by `pushdown_into_set_stmt`: but the UNION stmt will NOT push down preds that are pulled up from its children
+  // 2. as output preds: but the output preds are filtered by `sel_ids` which is select items needed by parent filters
+  // So if the stmt is a non-recursive UNION stmt and the sel_ids is empty,
+  // it's safe to skip pulling up preds from its children stmts
+  OB_INLINE bool skip_pullup_preds_from_set_children(ObSelectStmt *stmt, ObIArray<int64_t> &sel_ids)
+  {
+    return ObSelectStmt::UNION == stmt->get_set_op()
+           && !stmt->is_recursive_union()
+           && sel_ids.empty();
+  }
+
   /**
    * @brief check_pullup_predicates
    * 根据set op类型选择需要输出的谓词

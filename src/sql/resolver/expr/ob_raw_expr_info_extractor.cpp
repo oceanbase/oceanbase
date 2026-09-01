@@ -207,11 +207,17 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr &expr)
   int ret = OB_SUCCESS;
   bool cnt_const_expr = false;
   bool is_const_expr = true;
-  for (int64_t i = 0; i < expr.get_param_count(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
     ObRawExpr *param_expr = expr.get_param_expr(i);
-    CONST_ACTION(param_expr);
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret), K(i));
+    } else {
+      CONST_ACTION(param_expr);
+    }
   }
-  if (is_const_expr) {
+  if (OB_FAIL(ret)) {
+  } else if (is_const_expr) {
     bool is_const_inherit = true;
     if (OB_FAIL(expr.is_const_inherit_expr(is_const_inherit))) {
       LOG_WARN("failed to check expr is const in");
@@ -219,7 +225,8 @@ int ObRawExprInfoExtractor::add_const(ObRawExpr &expr)
       is_const_expr = is_const_inherit;
     }
   }
-  if (is_const_expr) {
+  if (OB_FAIL(ret)) {
+  } else if (is_const_expr) {
     if (OB_FAIL(expr.add_flag(IS_CONST_EXPR))) {
       LOG_WARN("failed to add flag IS_CONST_EXPR", K(ret));
     }

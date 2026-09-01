@@ -1596,6 +1596,9 @@ public:
   inline void set_is_subplan_scan(bool is_subplan_scan) { is_subplan_scan_ = is_subplan_scan; }
   inline bool get_is_rescan_subplan() const { return is_rescan_subplan_; }
   inline bool get_disable_child_batch_rescan() const { return disable_child_batch_rescan_; }
+  inline bool get_is_parent_set_stmt() const { return is_parent_set_stmt_; }
+  inline void set_is_parent_set_stmt(bool is_parent_set_stmt)
+  { is_parent_set_stmt_ = is_parent_set_stmt; }
   inline bool get_is_parent_set_distinct() const { return is_parent_set_distinct_; }
   inline void set_is_parent_set_distinct(bool is_parent_set_distinct)
   { is_parent_set_distinct_ = is_parent_set_distinct; }
@@ -2349,6 +2352,7 @@ private:
   bool is_parent_set_distinct_;
   bool is_rescan_subplan_;    // generate subquery subplan for subplan filter or inner subquery path
   bool disable_child_batch_rescan_;  // before version 4_2_5, semi/anti join and subplan filter child op can not use batch rescan
+  bool is_parent_set_stmt_;
   ObSqlTempTableInfo *temp_table_info_; // current plan is a temp table
   // 从where condition中抽出的常量表达式
   ObSqlArray<ObRawExpr*> const_exprs_;
