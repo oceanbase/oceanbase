@@ -1974,15 +1974,17 @@ int ObMultiVersionMicroBlockRowScanner::check_trans_version(
     } else {
       // Case3: Data is committed, so we use the version on the data to decide
       //        whether uncommitted txns are readable
-      if (context_->query_flag_.iter_uncommitted_row()) {
-        version_fit = true;
-      } else if (trans_version <= version_range_.base_version_) {
+      if (trans_version <= version_range_.base_version_) {
         // filter multi version row whose trans version is smaller than base_version
         version_fit = false;
         final_result = true;
       } else if (trans_version > snapshot_version) {
         // filter multi version row whose trans version is larger than snapshot_version
-        version_fit = false;
+        if (context_->query_flag_.iter_uncommitted_row()) {
+          version_fit = true; // iter_uncommitted_row bypasses the snapshot boundary
+        } else {
+          version_fit = false;
+        }
         if (OB_NOT_NULL(context_->get_mds_collector())) {
           context_->get_mds_collector()->exist_new_committed_node_ = true;
           LOG_TRACE("exist new committed node", KR(ret), K(trans_version), K(snapshot_version), KPC(context_->get_mds_collector()));

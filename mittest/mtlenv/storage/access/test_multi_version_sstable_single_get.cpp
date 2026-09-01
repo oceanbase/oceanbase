@@ -37,6 +37,10 @@ public:
   static void SetUpTestCase();
   static void TearDownTestCase();
   void prepare_query_param(const ObVersionRange &version_range, const bool is_reverse_scan = false);
+  void get_and_check_row(ObSSTable *sstable,
+                         const int64_t rowkey_value,
+                         const bool expected_found,
+                         const int64_t expected_value);
 private:
   ObStoreCtx store_ctx_;
 };
@@ -92,12 +96,14 @@ void TestMultiVersionSSTableSingleGet::prepare_query_param(
   iter_param_.is_same_schema_column_ = true;
   iter_param_.has_virtual_columns_ = false;
   iter_param_.vectorized_enabled_ = false;
+  share::SCN snapshot_scn;
+  ASSERT_EQ(OB_SUCCESS, snapshot_scn.convert_for_tx(version_range.snapshot_version_));
   ASSERT_EQ(OB_SUCCESS,
             store_ctx_.init_for_read(ls_id,
                                      iter_param_.tablet_id_,
                                      INT64_MAX, // query_expire_ts
                                      -1, // lock_timeout_us
-                                     share::SCN::max_scn()));
+                                     snapshot_scn));
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false, /*is daily merge scan*/
                          false, /*is read multiple macro block*/
@@ -114,6 +120,38 @@ void TestMultiVersionSSTableSingleGet::prepare_query_param(
                           allocator_,
                           version_range));
   context_.limit_param_ = nullptr;
+}
+
+void TestMultiVersionSSTableSingleGet::get_and_check_row(
+    ObSSTable *sstable,
+    const int64_t rowkey_value,
+    const bool expected_found,
+    const int64_t expected_value)
+{
+  ObDatumRow query_row;
+  ASSERT_EQ(OB_SUCCESS, query_row.init(allocator_, 1));
+  query_row.storage_datums_[0].set_int(rowkey_value);
+  ObDatumRowkey rowkey;
+  ASSERT_EQ(OB_SUCCESS, rowkey.assign(query_row.storage_datums_, 1));
+
+  ObStoreRowIterator *row_iter = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sstable->get(iter_param_, context_, rowkey, row_iter));
+  ASSERT_NE(nullptr, row_iter);
+
+  const ObDatumRow *row = nullptr;
+  const int ret = row_iter->get_next_row(row);
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_ITER_END == ret);
+  const bool found = OB_SUCCESS == ret && nullptr != row && !row->row_flag_.is_not_exist();
+  EXPECT_EQ(expected_found, found)
+      << "rowkey=" << rowkey_value
+      << ", iter_uncommitted_row=" << context_.query_flag_.iter_uncommitted_row();
+  if (found) {
+    ASSERT_GT(row->count_, 3);
+    EXPECT_EQ(expected_value, row->storage_datums_[3].get_int());
+  }
+
+  row_iter->~ObStoreRowIterator();
+  context_.stmt_allocator_->free(row_iter);
 }
 
 TEST_F(TestMultiVersionSSTableSingleGet, exist)
@@ -299,6 +337,83 @@ TEST_F(TestMultiVersionSSTableSingleGet, exist)
   GET_AND_CHECK_EXIST_FROM_SSTABLE(is_exist, is_found);
   ASSERT_EQ(false, is_exist);
   ASSERT_EQ(false, is_found);
+}
+
+TEST_F(TestMultiVersionSSTableSingleGet, iter_uncommitted_honors_base_and_bypasses_snapshot)
+{
+  ObTableHandleV2 handle;
+  const int64_t schema_rowkey_cnt = 1;
+  const char *micro_data[1];
+  const char *flat_micro_data =
+      "bigint   bigint  bigint  bigint  flag   multi_version_row_flag  trans_id\n"
+      "1        -5      0       50      EXIST  CL                      trans_id_0\n"
+      "2        -12     0       120     EXIST  CL                      trans_id_0\n"
+      "3        MIN     -1      999     EXIST  ULF                     trans_id_1\n"
+      "4        -30     0       300     EXIST  CL                      trans_id_0\n";
+  micro_data[0] = flat_micro_data;
+  const int64_t uncommitted_tx_id = 1;
+
+  const int64_t table_snapshot_version = 40;
+  ObScnRange scn_range;
+  scn_range.start_scn_.convert_for_gts(1);
+  scn_range.end_scn_.convert_for_gts(table_snapshot_version);
+  prepare_table_schema(micro_data, schema_rowkey_cnt, scn_range, table_snapshot_version);
+  reset_writer(table_snapshot_version);
+
+  // The row on key 3 sets the table-level uncommitted marker.  That marker routes
+  // point-get to the multi-version getter, which must enforce the same boundaries
+  // both before and after the transaction state is resolved.
+  prepare_one_macro(micro_data, 1);
+  prepare_data_end(handle, ObITable::MINOR_SSTABLE);
+
+  ObLSHandle ls_handle;
+  ASSERT_EQ(OB_SUCCESS,
+            MTL(ObLSService*)->get_ls(ObLSID(ls_id_), ls_handle, ObLSGetMod::STORAGE_MOD));
+  ObTxTableGuard tx_table_guard;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tx_table_guard(tx_table_guard));
+  ObTxTable *tx_table = tx_table_guard.get_tx_table();
+  ASSERT_NE(nullptr, tx_table);
+  ObTxDataGuard tx_data_guard;
+  ASSERT_EQ(OB_SUCCESS, tx_table->alloc_tx_data(tx_data_guard, false /* enable_throttle */));
+  ObTxData *tx_data = tx_data_guard.tx_data();
+  ASSERT_NE(nullptr, tx_data);
+  tx_data->tx_id_ = transaction::ObTransID(uncommitted_tx_id);
+  tx_data->commit_version_.convert_for_tx(30);
+  tx_data->start_scn_.convert_for_tx(1);
+  tx_data->end_scn_ = tx_data->commit_version_;
+  tx_data->state_ = ObTxData::COMMIT;
+  ASSERT_EQ(OB_SUCCESS, tx_table->insert(tx_data));
+
+  ObSSTable *sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, handle.get_sstable(sstable));
+  ASSERT_NE(nullptr, sstable);
+  // prepare_data_end omits res.contain_uncommitted_row_; set it for multi-version get path.
+  sstable->meta_cache_.contain_uncommitted_row_ = true;
+  ASSERT_TRUE(sstable->contain_uncommitted_row());
+
+  ObVersionRange version_range;
+  version_range.base_version_ = 10;
+  version_range.multi_version_start_ = 0;
+  version_range.snapshot_version_ = 20;
+  prepare_query_param(version_range);
+
+  // The ordinary query path applies the base-version boundary correctly.
+  get_and_check_row(sstable, 1, false, 50);
+  get_and_check_row(sstable, 2, true, 120);
+  // The physical row is uncommitted, but its transaction committed above snapshot.
+  get_and_check_row(sstable, 3, false, 999);
+  get_and_check_row(sstable, 4, false, 300);
+
+  context_.query_flag_.set_iter_uncommitted_row();
+  // Version 5 is already covered by the base table and must not be returned.
+  get_and_check_row(sstable, 1, false, 50);
+  // A committed version above base remains visible with iter_uncommitted_row.
+  get_and_check_row(sstable, 2, true, 120);
+  // The result must not depend on whether the committed transaction was cleaned out.
+  get_and_check_row(sstable, 3, true, 999);
+  // iter_uncommitted_row intentionally allows committed versions above snapshot.
+  get_and_check_row(sstable, 4, true, 300);
+  handle.reset();
 }
 
 } // end namespace oceanbase
