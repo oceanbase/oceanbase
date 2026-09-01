@@ -77,6 +77,7 @@ struct SelectItemTraverseCtx
   const int64_t buf_len_;
   int64_t &expr_pos_;
   SelectItemParamInfo &param_info_;
+  bool is_grammar_concat_ = false;
 
   SelectItemTraverseCtx(const common::ObIArray<ObPCParam *> &raw_params,
                         const ParseNode *tree,
@@ -2621,6 +2622,10 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
     // start to construct paramed field name template...
     if (lib::is_oracle_mode()) { // oracle要使用原始的字符串，以正确处理偏移
       org_field_name.assign_ptr(tree->raw_text_, (int32_t)tree->text_len_);
+    } else if (T_FUN_SYS == tree->children_[0]->type_
+               && 1 == tree->children_[0]->reserved_
+               && NULL != tree->raw_text_) {
+      org_field_name.assign_ptr(tree->raw_text_, (int32_t)tree->text_len_);
     } else {
       org_field_name.assign_ptr(tree->str_value_, (int32_t)tree->str_len_);
     }
@@ -2632,6 +2637,8 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
                               buf_len,
                               expr_pos,
                               param_info);
+    ctx.is_grammar_concat_ = (T_FUN_SYS == tree->children_[0]->type_
+                              && 1 == tree->children_[0]->reserved_);
     // 模拟函数递归操作，遍历子树
     // 栈上每一个元素为 {cur_node, next_child_idx}
     // 出栈操作：
@@ -2703,6 +2710,9 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
       if (T_QUESTIONMARK == tree->children_[0]->type_
           && 1 == tree->children_[0]->is_column_varchar_) {
         param_info.esc_str_flag_ = true;
+      } else if (T_FUN_SYS == tree->children_[0]->type_
+                 && 1 == tree->children_[0]->reserved_) {
+        param_info.esc_str_flag_ = true;
       }
     }
   }
@@ -2748,7 +2758,18 @@ int ObSqlParameterization::resolve_paramed_const(SelectItemTraverseCtx &ctx)
 {
   int ret = OB_SUCCESS;
   int64_t idx = ctx.tree_->raw_param_idx_;
-  if (idx >= ctx.raw_params_.count()) {
+  if (ctx.is_grammar_concat_ && ctx.param_info_.questions_pos_.count() >= 1) {
+    if (idx < 0 || idx >= ctx.raw_params_.count()) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid argument", K(ret), K(idx), K(ctx.raw_params_.count()));
+    } else if (OB_ISNULL(ctx.raw_params_.at(idx)) || OB_ISNULL(ctx.raw_params_.at(idx)->node_)) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid argument", K(ret), K(idx));
+    } else {
+      ctx.expr_pos_ = ctx.raw_params_.at(idx)->node_->raw_sql_offset_
+                    + ctx.raw_params_.at(idx)->node_->text_len_;
+    }
+  } else if (idx < 0 || idx >= ctx.raw_params_.count()) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret), K(idx), K(ctx.raw_params_.count()));
   } else if (OB_ISNULL(ctx.raw_params_.at(idx)) || OB_ISNULL(ctx.raw_params_.at(idx)->node_)) {
