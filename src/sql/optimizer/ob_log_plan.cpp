@@ -6145,6 +6145,22 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObIArray<CandidatePlan> &candi_plan
   return ret;
 }
 
+static int check_groupby_exprs_valid(const ObIArray<ObRawExpr *> &group_by_exprs, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < group_by_exprs.count(); ++i) {
+    const ObRawExpr *expr = group_by_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null group by expr", K(ret), K(i));
+    } else {
+      is_valid = expr->is_deterministic() && !expr->has_flag(CNT_VOLATILE_CONST);
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::get_grouping_style_exchange_info(const ObIArray<ObRawExpr*> &partition_exprs,
                                                 const EqualSets &equal_sets,
                                                 ObExchangeInfo &exch_info)
@@ -6202,6 +6218,7 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   bool has_rollup_opt_param = false;
   bool enable_hash_rollup = false;
   bool force_hash_rollup = false;
+  bool is_groupby_exprs_valid = true;
   ObObj hash_rollup_policy;
   ObQueryCtx *query_ctx = nullptr;
   bool rowsets_enabled = true;
@@ -6237,6 +6254,12 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
                                                                 groupby_helper.force_hash_local_,
                                                                 groupby_helper.force_pushdown_group_by_))) {
       LOG_WARN("failed to get aggregation info from hint", K(ret));
+    } else if (!rollup_exprs.empty() || groupby_helper.grouping_set_info_ != NULL) {
+      OPT_TRACE("group by has rollup or grouping sets, can not push");
+    } else if (OB_FAIL(check_groupby_exprs_valid(group_exprs, is_groupby_exprs_valid))) {
+      LOG_WARN("failed to check group by exprs valid", K(ret));
+    } else if (!is_groupby_exprs_valid) {
+      OPT_TRACE("group by has volatile or non-deterministic expr, can not push");
     } else if (OB_FAIL(check_storage_groupby_pushdown(aggr_items, group_exprs,
                                                       groupby_helper.pushdown_groupby_columns_,
                                                       groupby_helper.can_storage_pushdown_))) {
@@ -10501,7 +10524,13 @@ int ObLogPlan::partial_distinct_pushdown(ObLogicalOperator *&top,
         ObLogGroupBy * groupby_op = static_cast<ObLogGroupBy*>(top);
         ObLogicalOperator* child = top->get_child(0);
         bool is_duplicate_insensitive = false;
-        if (OB_FAIL(ret)) {
+        bool is_groupby_exprs_valid = true;
+        if (OB_FAIL(check_groupby_exprs_valid(groupby_op->get_group_by_exprs(), is_groupby_exprs_valid))) {
+          LOG_WARN("failed to check group by exprs valid", K(ret));
+        } else if (!is_groupby_exprs_valid) {
+          // Volatile and non-deterministic group by expressions cannot be split safely.
+        } else if (groupby_op->has_rollup() || groupby_op->get_grouping_set_info() != NULL) {
+          // Grouping sets do not support partial distinct pushdown.
         // only handle hash group by
         // only init pushdown from a single group by
         } else if (HASH_AGGREGATE != groupby_op->get_algo() || !groupby_op->is_single()) {
@@ -12918,6 +12947,7 @@ int ObLogPlan::is_eligible_for_groupby_pushdown(ObLogicalOperator *&top, bool &i
   ObLogGroupBy *group_by = NULL;
   is_eligible = false;
   bool can_pushdown = true;
+  bool is_groupby_exprs_valid = true;
   ObSEArray<ObAggFunRawExpr *, 4> aggr_items;
   if (OB_ISNULL(top) || OB_ISNULL(top->get_plan()) || OB_ISNULL(top->get_plan()->get_stmt()) ||
       OB_UNLIKELY(LOG_GROUP_BY != top->get_type()) ||
@@ -12942,11 +12972,16 @@ int ObLogPlan::is_eligible_for_groupby_pushdown(ObLogicalOperator *&top, bool &i
       LOG_WARN("failed to check stmt is only full group by", K(ret));
     } else if (!is_only_full_group_by) {
       is_eligible = false;
-    } else if (OB_FALSE_IT(can_pushdown = !group_by->has_rollup())) {
-    } else if (can_pushdown && OB_FAIL(top->get_plan()->check_basic_groupby_pushdown(aggr_items,
-                                                                     false,
-                                                                     top->get_child(0)->get_output_equal_sets(),
-                                                                     can_pushdown))) {
+    } else if (OB_FALSE_IT(can_pushdown = !(group_by->has_rollup() || group_by->get_grouping_set_info() != NULL))) {
+    } else if (OB_FAIL(check_groupby_exprs_valid(group_by->get_group_by_exprs(), is_groupby_exprs_valid))) {
+      LOG_WARN("failed to check group by exprs valid", K(ret));
+    } else if (!is_groupby_exprs_valid) {
+      can_pushdown = false;
+    } else if (can_pushdown
+               && OB_FAIL(top->get_plan()->check_basic_groupby_pushdown(aggr_items,
+                                                                        false,
+                                                                        top->get_child(0)->get_output_equal_sets(),
+                                                                        can_pushdown))) {
       LOG_WARN("failed check basic groupby pushdown", K(ret), KP(top));
     } else {
       is_eligible = can_pushdown;
