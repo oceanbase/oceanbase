@@ -20,6 +20,7 @@
 #ifndef OCEANBASE_LIBOBCDC_UPDATE_SPLIT_MERGE_STORAGER_H_
 #define OCEANBASE_LIBOBCDC_UPDATE_SPLIT_MERGE_STORAGER_H_
 
+#include "share/ob_ls_id.h"         // ObLSID
 #include "storage/tx/ob_tx_log.h"    // ObTransID
 
 namespace oceanbase
@@ -35,6 +36,7 @@ struct UpdateSplitMergeKey
     tenant_id_(common::OB_INVALID_TENANT_ID),
     commit_version_(0),
     trans_id_(),
+    ls_id_(),
     trace_id_raw_(0)
   {}
 
@@ -42,16 +44,20 @@ struct UpdateSplitMergeKey
       const uint64_t tenant_id,
       const int64_t commit_version,
       const transaction::ObTransID &trans_id,
+      const share::ObLSID &ls_id,
       const int64_t trace_id_raw) :
     tenant_id_(tenant_id),
     commit_version_(commit_version),
     trans_id_(trans_id),
+    ls_id_(ls_id),
     trace_id_raw_(trace_id_raw)
   {}
 
   bool is_valid() const
   {
-    return common::OB_INVALID_TENANT_ID != tenant_id_ && trace_id_raw_ > 0;
+    return common::OB_INVALID_TENANT_ID != tenant_id_
+      && ls_id_.is_valid()
+      && trace_id_raw_ > 0;
   }
 
   uint64_t hash() const
@@ -59,8 +65,10 @@ struct UpdateSplitMergeKey
     uint64_t hash_val = 0;
     hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
     hash_val = common::murmurhash(&commit_version_, sizeof(commit_version_), hash_val);
-    uint64_t trans_id_hash = trans_id_.hash();
+    const uint64_t trans_id_hash = trans_id_.hash();
     hash_val = common::murmurhash(&trans_id_hash, sizeof(trans_id_hash), hash_val);
+    const uint64_t ls_id_hash = ls_id_.hash();
+    hash_val = common::murmurhash(&ls_id_hash, sizeof(ls_id_hash), hash_val);
     hash_val = common::murmurhash(&trace_id_raw_, sizeof(trace_id_raw_), hash_val);
     return hash_val;
   }
@@ -76,16 +84,18 @@ struct UpdateSplitMergeKey
     return tenant_id_ == other.tenant_id_
       && commit_version_ == other.commit_version_
       && trans_id_ == other.trans_id_
+      && ls_id_ == other.ls_id_
       && trace_id_raw_ == other.trace_id_raw_;
   }
 
   int get_key(std::string &key) const;
 
-  TO_STRING_KV(K_(tenant_id), K_(commit_version), K_(trans_id), K_(trace_id_raw));
+  TO_STRING_KV(K_(tenant_id), K_(commit_version), K_(trans_id), K_(ls_id), K_(trace_id_raw));
 
   uint64_t tenant_id_;
   int64_t commit_version_;
   transaction::ObTransID trans_id_;
+  share::ObLSID ls_id_;
   int64_t trace_id_raw_;
 };
 

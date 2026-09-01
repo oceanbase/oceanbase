@@ -18,6 +18,7 @@
 #define OCEANBASE_LIBOBCDC_UPDATE_SPLIT_MERGE_CACHE_H_
 
 #include "lib/hash/ob_hashmap.h"
+#include "logservice/common_util/ob_log_ls_define.h"
 #include "ob_log_trans_ctx.h"
 #include "ob_log_binlog_record.h"
 #include "ob_log_trans_stat_mgr.h"
@@ -29,6 +30,44 @@ namespace libobcdc
 {
 
 class IObLogResourceCollector;
+
+// The merge map is transaction-scoped. TenantLSID separates independent redo
+// streams inside the transaction when the raw trace ID is reused.
+struct UpdateSplitMergeCacheKey
+{
+  UpdateSplitMergeCacheKey() : tls_id_(), trace_id_(0) {}
+  UpdateSplitMergeCacheKey(
+      const logservice::TenantLSID &tls_id,
+      const int64_t trace_id) :
+    tls_id_(tls_id),
+    trace_id_(trace_id)
+  {}
+
+  bool is_valid() const { return tls_id_.is_valid() && trace_id_ > 0; }
+
+  uint64_t hash() const
+  {
+    uint64_t hash_val = tls_id_.hash();
+    hash_val = common::murmurhash(&trace_id_, sizeof(trace_id_), hash_val);
+    return hash_val;
+  }
+
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+
+  bool operator==(const UpdateSplitMergeCacheKey &other) const
+  {
+    return tls_id_ == other.tls_id_ && trace_id_ == other.trace_id_;
+  }
+
+  TO_STRING_KV(K_(tls_id), K_(trace_id));
+
+  logservice::TenantLSID tls_id_;
+  int64_t trace_id_;
+};
 
 struct MergeCacheEntry
 {
@@ -44,7 +83,7 @@ struct MergeCacheEntry
   TO_STRING_KV(K_(state), KP_(delete_stmt), K_(offload_key));
 };
 
-typedef common::hash::ObHashMap<int64_t, MergeCacheEntry> UpdateSplitMergeMap;
+typedef common::hash::ObHashMap<UpdateSplitMergeCacheKey, MergeCacheEntry> UpdateSplitMergeMap;
 
 class ObCDCUpdateSplitMergeCache
 {

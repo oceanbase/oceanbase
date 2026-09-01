@@ -34,10 +34,12 @@ int UpdateSplitMergeKey::get_key(std::string &key) const
     LOG_ERROR("update_split_merge store key is not valid", KR(ret), KPC(this));
   } else {
     // Tenant is isolated at cf granularity (merge_cf_handle is per-tenant),
-    // so we do not encode tenant_id into the key string. Matches lob_aux convention.
+    // so the persisted key only needs commit version, transaction, LS and trace.
     key.append(std::to_string(commit_version_));
     key.append("_");
     key.append(std::to_string(trans_id_.get_id()));
+    key.append("_");
+    key.append(std::to_string(ls_id_.id()));
     key.append("_");
     key.append(std::to_string(trace_id_raw_));
   }

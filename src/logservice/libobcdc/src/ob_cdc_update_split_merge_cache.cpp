@@ -30,7 +30,7 @@ namespace
 {
 
 static const int64_t MAX_UNMATCHED_DELETE_LOG_COUNT = 5;
-static const int64_t UNMATCHED_TRACE_ID_BUF_LEN = 256;
+static const int64_t UNMATCHED_KEY_BUF_LEN = 256;
 
 int build_delete_old_cols_payload_(
     ObLogBR &del_br,
@@ -94,7 +94,7 @@ int deserialize_merge_old_cols_payload_(
   return ret;
 }
 
-void build_unmatched_trace_id_summary_(
+void build_unmatched_key_summary_(
     UpdateSplitMergeMap &merge_map,
     char *buf,
     const int64_t buf_len)
@@ -111,9 +111,11 @@ void build_unmatched_trace_id_summary_(
     for (UpdateSplitMergeMap::iterator iter = merge_map.begin();
         iter != merge_map.end() && logged_count < MAX_UNMATCHED_DELETE_LOG_COUNT;
         ++iter, ++logged_count) {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s%ld",
+      const UpdateSplitMergeCacheKey &cache_key = iter->first;
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s(%ld,%ld)",
               (0 == logged_count ? "" : ","),
-              iter->first))) {
+              cache_key.tls_id_.get_ls_id().id(),
+              cache_key.trace_id_))) {
         break;
       }
     }
@@ -142,7 +144,7 @@ void log_unmatched_delete_details_(
   for (UpdateSplitMergeMap::iterator iter = merge_map.begin();
       iter != merge_map.end() && logged_count < MAX_UNMATCHED_DELETE_LOG_COUNT;
       ++iter, ++logged_count) {
-    const int64_t trace_id = iter->first;
+    const UpdateSplitMergeCacheKey &cache_key = iter->first;
     const MergeCacheEntry &entry = iter->second;
     DmlStmtTask *delete_stmt = entry.delete_stmt_;
 
@@ -150,7 +152,7 @@ void log_unmatched_delete_details_(
       PartTransTask &part_trans = delete_stmt->get_host();
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "[MERGE] unmatched DELETE detail",
           K(trans_id),
-          K(trace_id),
+          K(cache_key),
           "state", entry.state_,
           "commit_version", part_trans.get_trans_commit_version(),
           "table_id", delete_stmt->get_table_id(),
@@ -159,7 +161,7 @@ void log_unmatched_delete_details_(
     } else {
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "[MERGE] unmatched DELETE detail",
           K(trans_id),
-          K(trace_id),
+          K(cache_key),
           "state", entry.state_,
           KP(delete_stmt));
     }
@@ -223,8 +225,13 @@ int ObCDCUpdateSplitMergeCache::put(const int64_t trace_id, DmlStmtTask *del_stm
 {
   int ret = OB_SUCCESS;
   MergeCacheEntry entry;
+  PartTransTask &host = del_stmt->get_host();
+  const UpdateSplitMergeCacheKey cache_key(host.get_tls_id(), trace_id);
 
-  if (should_offload_to_storager_(trace_id)) {
+  if (OB_UNLIKELY(!cache_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid merge cache key", KR(ret), K(cache_key), KPC(del_stmt));
+  } else if (should_offload_to_storager_(trace_id)) {
     ObLogBR *del_br = del_stmt->get_binlog_record();
     const char *data = nullptr;
     int64_t data_len = 0;
@@ -239,11 +246,11 @@ int ObCDCUpdateSplitMergeCache::put(const int64_t trace_id, DmlStmtTask *del_stm
     } else if (OB_FAIL(serialize_merge_old_cols_payload_(payload, allocator, data, data_len))) {
       LOG_ERROR("serialize merge old cols payload failed", KR(ret), K(trace_id), KPC(del_stmt));
     } else {
-      PartTransTask &host = del_stmt->get_host();
       UpdateSplitMergeKey key(
           host.get_tenant_id(),
           host.get_trans_commit_version(),
           host.get_trans_id(),
+          host.get_ls_id(),
           trace_id);
       if (OB_FAIL(storager_->put(key, data, static_cast<int64_t>(data_len)))) {
         LOG_ERROR("storager put failed", KR(ret), K(key));
@@ -263,19 +270,18 @@ int ObCDCUpdateSplitMergeCache::put(const int64_t trace_id, DmlStmtTask *del_stm
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(merge_map_.set_refactored(trace_id, entry))) {
+    if (OB_FAIL(merge_map_.set_refactored(cache_key, entry))) {
       if (OB_HASH_EXIST == ret) {
-        PartTransTask &part_trans = del_stmt->get_host();
-        LOG_ERROR("[MERGE] duplicate DELETE trace_id inserted into merge_map",
+        LOG_ERROR("[MERGE] duplicate DELETE merge key inserted into merge_map",
             KR(ret),
-            K(trace_id),
+            K(cache_key),
             K_(trans_id),
-            "commit_version", part_trans.get_trans_commit_version(),
+            "commit_version", host.get_trans_commit_version(),
             "table_id", del_stmt->get_table_id(),
             "seq_no", del_stmt->get_row_seq_no(),
             KP(del_stmt));
       } else {
-        LOG_ERROR("merge_map set failed", KR(ret), K(trace_id));
+        LOG_ERROR("merge_map set failed", KR(ret), K(cache_key));
       }
     }
   }
@@ -291,35 +297,39 @@ int ObCDCUpdateSplitMergeCache::get_and_merge(
   int ret = OB_SUCCESS;
   output_br = nullptr;
   MergeCacheEntry entry;
+  PartTransTask &part_trans = ins_stmt->get_host();
+  const UpdateSplitMergeCacheKey cache_key(part_trans.get_tls_id(), trace_id);
 
-  if (OB_FAIL(merge_map_.get_refactored(trace_id, entry))) {
+  if (OB_UNLIKELY(!cache_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid merge cache key", KR(ret), K(cache_key), KPC(ins_stmt));
+  } else if (OB_FAIL(merge_map_.get_refactored(cache_key, entry))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      PartTransTask &part_trans = ins_stmt->get_host();
       ret = OB_SUCCESS;
       output_br = ins_stmt->get_binlog_record();
       LOG_WARN("[MERGE] INSERT with trace_id has no matching DELETE, output as-is",
-          K(trace_id),
+          K(cache_key),
           "trans_id", part_trans.get_trans_id(),
           "commit_version", part_trans.get_trans_commit_version(),
           "table_id", ins_stmt->get_table_id(),
           "seq_no", ins_stmt->get_row_seq_no(),
           KP(ins_stmt));
     } else {
-      LOG_ERROR("merge_map get failed", KR(ret), K(trace_id));
+      LOG_ERROR("merge_map get failed", KR(ret), K(cache_key));
     }
   } else if (MergeCacheEntry::IN_STMT == entry.state_) {
     if (OB_FAIL(merge_in_stmt_(entry, ins_stmt, output_br))) {
-      LOG_ERROR("merge_in_stmt_ failed", KR(ret), K(trace_id));
-    } else if (OB_FAIL(merge_map_.erase_refactored(trace_id))) {
-      LOG_ERROR("merge_map erase failed", KR(ret), K(trace_id));
+      LOG_ERROR("merge_in_stmt_ failed", KR(ret), K(cache_key));
+    } else if (OB_FAIL(merge_map_.erase_refactored(cache_key))) {
+      LOG_ERROR("merge_map erase failed", KR(ret), K(cache_key));
     } else {
       stat_->dec_kept_in_stmt();
     }
   } else {
     if (OB_FAIL(merge_offloaded_(entry, trace_id, ins_stmt, output_br))) {
-      LOG_ERROR("merge_offloaded_ failed", KR(ret), K(trace_id));
-    } else if (OB_FAIL(merge_map_.erase_refactored(trace_id))) {
-      LOG_ERROR("merge_map erase failed", KR(ret), K(trace_id));
+      LOG_ERROR("merge_offloaded_ failed", KR(ret), K(cache_key));
+    } else if (OB_FAIL(merge_map_.erase_refactored(cache_key))) {
+      LOG_ERROR("merge_map erase failed", KR(ret), K(cache_key));
     } else {
       stat_->dec_storager_disk_current();
     }
@@ -426,11 +436,11 @@ int ObCDCUpdateSplitMergeCache::handle_unmatched()
 {
   int ret = OB_SUCCESS;
   const int64_t remaining = merge_map_.size();
-  char unmatched_trace_ids[UNMATCHED_TRACE_ID_BUF_LEN] = "";
+  char unmatched_keys[UNMATCHED_KEY_BUF_LEN] = "";
 
   if (remaining > 0) {
     stat_->inc_contract_violation(remaining);
-    build_unmatched_trace_id_summary_(merge_map_, unmatched_trace_ids, sizeof(unmatched_trace_ids));
+    build_unmatched_key_summary_(merge_map_, unmatched_keys, sizeof(unmatched_keys));
     log_unmatched_delete_details_(merge_map_, trans_id_);
 
     // Reclaim T1/T2 current gauges for the leftover entries, and for any
@@ -448,7 +458,7 @@ int ObCDCUpdateSplitMergeCache::handle_unmatched()
         const int del_ret = storager_->del(iter->second.offload_key_);
         if (OB_SUCCESS != del_ret) {
           LOG_WARN_RET(del_ret, "[MERGE] storager del for unmatched OFFLOADED failed, ignoring",
-              "trace_id", iter->first, "key", iter->second.offload_key_);
+              "cache_key", iter->first, "store_key", iter->second.offload_key_);
         }
       }
     }
@@ -464,14 +474,14 @@ int ObCDCUpdateSplitMergeCache::handle_unmatched()
       LOG_ERROR("[MERGE] contract violation: unmatched DELETE stmts remain in merge_map, "
           "set update_split_merge_abort_on_data_loss=0 to continue with data loss",
           KR(ret), K(remaining), K_(trans_id), K(t1_leftover), K(t2_leftover),
-          K(unmatched_trace_ids),
+          K(unmatched_keys),
           "logged_unmatched_count",
           MIN(remaining, MAX_UNMATCHED_DELETE_LOG_COUNT));
     } else {
       stat_->inc_data_loss(remaining);
       LOG_WARN("[MERGE] contract violation: discarding unmatched DELETE stmts (data loss mode)",
           K(remaining), K_(trans_id), K(t1_leftover), K(t2_leftover),
-          K(unmatched_trace_ids),
+          K(unmatched_keys),
           "logged_unmatched_count",
           MIN(remaining, MAX_UNMATCHED_DELETE_LOG_COUNT));
     }
