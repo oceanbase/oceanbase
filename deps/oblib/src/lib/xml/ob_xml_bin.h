@@ -605,7 +605,9 @@ public:
   }
 
   int get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString& value, ObIMulModeBase* extend);
-  int node_ns_value(ObString& prefix, ObString& ns_value);
+  // found reports whether a namespace declaration matched (including xmlns=""),
+  // so callers can distinguish an empty declared URI from a missing declaration
+  int node_ns_value(ObString& prefix, ObString& ns_value, bool& found);
 
   ObMulModeMemCtx* get_mem_ctx() { return ctx_; }
 

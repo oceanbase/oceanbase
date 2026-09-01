@@ -138,6 +138,21 @@ bool ObPathParserUtil::is_position(ObPathNode* node)
   return ret_bool;
 }
 
+bool ObPathParserUtil::filter_has_func(ObPathNode* node, ObFuncType func_type)
+{
+  bool ret_bool = false;
+  if (OB_NOT_NULL(node)) {
+    if (node->node_type_.is_func() && node->node_type_.get_func_type() == func_type) {
+      ret_bool = true;
+    } else {
+      for (int64_t i = 0; !ret_bool && i < node->size(); ++i) {
+        ret_bool = filter_has_func(static_cast<ObPathNode*>(node->member(i)), func_type);
+      }
+    }
+  }
+  return ret_bool;
+}
+
 bool ObPathParserUtil::check_is_legal_tagname(const char* name, int length)
 {
   bool ret_bool = true;
@@ -692,6 +707,12 @@ int ObPathParser::trans_to_filter_op(ObPathRootNode*& origin_root, int filter_nu
       origin_root->is_abs_path_ = false;
     }
     op->init_left(origin_root);
+    // The filter-op stands for the whole (sub)path rooted at origin_root, so it
+    // inherits the root's relative-ness. Without this a relative subpath with a
+    // bare [n] filter (e.g. b[2]/@id inside a predicate) reports
+    // contain_relative_path_ = false and callers wrongly take the context-free
+    // fast path in eval_node, evaluating the predicate without a candidate.
+    op->contain_relative_path_ = origin_root->contain_relative_path_;
   }
   for (int i = 0; OB_SUCC(ret) && i < origin_root->size() && filter_num > 0;) {
     ObPathNode* tmp = static_cast<ObPathNode*>(origin_root->member(i));
@@ -709,10 +730,26 @@ int ObPathParser::trans_to_filter_op(ObPathRootNode*& origin_root, int filter_nu
         filter_idx  = i;
         for (int j = 0; OB_SUCC(ret) && j < location->size();) {
           ObPathNode* tmp_filter = static_cast<ObPathNode*>(location->member(j));
-          if (OB_FAIL(op->append_filter(tmp_filter))) {
-            LOG_WARN("fail to append filter", K(ret));
-          } else if (OB_FAIL(location->remove(j))) {
-            LOG_WARN("fail to remove filter", K(ret));
+          if (OB_ISNULL(tmp_filter)) {
+            ret = OB_BAD_NULL_ERROR;
+            LOG_WARN("filter node is null", K(ret));
+          } else {
+            // positional predicate detection: [n] (bare number), position() or last() in subtree
+            bool is_num_idx = tmp_filter->node_type_.is_arg()
+                              && tmp_filter->node_type_.get_arg_type() == ObArgType::PN_DOUBLE;
+            bool has_position = ObPathParserUtil::filter_has_func(tmp_filter, ObFuncType::PN_POSITION);
+            bool has_last = ObPathParserUtil::filter_has_func(tmp_filter, ObFuncType::PN_LAST);
+            if (is_num_idx || has_position || has_last) {
+              op->is_positional_ = true;
+            }
+            if (has_last) {
+              op->need_size_ = true;
+            }
+            if (OB_FAIL(op->append_filter(tmp_filter))) {
+              LOG_WARN("fail to append filter", K(ret));
+            } else if (OB_FAIL(location->remove(j))) {
+              LOG_WARN("fail to remove filter", K(ret));
+            }
           }
         }
         location->has_filter_ = false;
@@ -733,6 +770,8 @@ int ObPathParser::trans_to_filter_op(ObPathRootNode*& origin_root, int filter_nu
           // if not the last location, need a new root for right arg
           right = new (right) ObPathRootNode(ctx_, parser_type_);
           right->is_abs_path_ = false;
+          // the right continuation is always relative to the filtered node
+          right->contain_relative_path_ = true;
         }
       } else if (filter_idx >= 0) { // location after filter
         if (i != filter_idx + 1 || OB_ISNULL(right)) {

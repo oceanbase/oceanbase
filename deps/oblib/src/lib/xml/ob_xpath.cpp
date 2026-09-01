@@ -988,6 +988,7 @@ int ObPathNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
 int ObPathRootNode::init_adapt(ObPathCtx &ctx, ObIMulModeBase*& ans)
 {
   INIT_SUCC(ret);
+  last_step_context_id_ = 0;
   ans = (is_abs_path_ = is_abs_subpath()) ? ctx.doc_root_ : ctx.cur_doc_;
   if (adapt_.size() == 0) { // alloc and init for the first time
     for (int i = 0; i < size() && OB_SUCC(ret); ++i) {
@@ -1063,6 +1064,8 @@ int ObPathRootNode::next_adapt(ObPathCtx &ctx, ObIMulModeBase*& ans)
     ret = OB_ITER_END;
   } else {
     ObIMulModeBase* tmp_ans = nullptr;
+    const bool switch_last_step_context =
+        iter_pos_ == static_cast<int64_t>(adapt_.size()) - 1;
     ObSeekIterator* top = adapt_[iter_pos_];
     if (OB_ISNULL(top)) {
       ret = OB_BAD_NULL_ERROR;
@@ -1075,6 +1078,9 @@ int ObPathRootNode::next_adapt(ObPathCtx &ctx, ObIMulModeBase*& ans)
       if (OB_SUCC(next_adapt(ctx, new_root)) && OB_NOT_NULL(new_root)) {
         top->reset(new_root);
         ++iter_pos_;
+        if (switch_last_step_context) {
+          ++last_step_context_id_;
+        }
         if (OB_SUCC(next_adapt(ctx, tmp_ans)) && OB_NOT_NULL(tmp_ans)) {
           ans = tmp_ans;
         } else {
@@ -1209,11 +1215,21 @@ int ObPathFuncNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
     case ObFuncType::PN_NS_URI:
     case ObFuncType::PN_NORMALIZE_SPACE:
     case ObFuncType::PN_SUBSTRING_FUNC:
-    case ObFuncType::PN_POSITION:
-    case ObFuncType::PN_LAST:
     case ObFuncType::PN_ROUND: {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("axis not supported yet", K(ret));
+      break;
+    }
+    case ObFuncType::PN_POSITION: {
+      if (OB_FAIL(eval_position_or_last(ctx, false, res)) && ret != OB_ITER_END) {
+        LOG_WARN("fail to eval position", K(ret));
+      }
+      break;
+    }
+    case ObFuncType::PN_LAST: {
+      if (OB_FAIL(eval_position_or_last(ctx, true, res)) && ret != OB_ITER_END) {
+        LOG_WARN("fail to eval last", K(ret));
+      }
       break;
     }
     default: {
@@ -1466,6 +1482,32 @@ int ObPathFuncNode::eval_true_or_false(ObPathCtx &ctx, bool is_true, ObSeekResul
     res.is_scalar_ = true;
     res.result_.scalar_ = ans_;
     is_seeked_ = true;
+  }
+  return ret;
+}
+
+int ObPathFuncNode::eval_position_or_last(ObPathCtx &ctx, bool is_last, ObSeekResult& res)
+{
+  INIT_SUCC(ret);
+  if (is_seeked_) {
+    // streaming iterator protocol: second pull ends the iteration
+    is_seeked_ = false;
+    ret = OB_ITER_END;
+  } else {
+    is_seeked_ = true;
+    int val = is_last ? ctx.cur_doc_size_ : ctx.cur_doc_position_;
+    if (val < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("position/size not set in context", K(ret), K(is_last), K(val));
+    } else {
+      ObPathArgNode* ans = nullptr;
+      if (OB_FAIL(ObPathUtil::alloc_num_arg(ctx.ctx_, ans, node_type_.get_path_type(), val))) {
+        LOG_WARN("fail to alloc num arg", K(ret));
+      } else {
+        res.is_scalar_ = true;
+        res.result_.scalar_ = ans;
+      }
+    }
   }
   return ret;
 }
@@ -2803,30 +2845,117 @@ int ObPathUtil::filter_single_node(ObPathCtx &ctx, ObPathNode* filter_node, ObSe
   return ret;
 }
 
+namespace {
+// Saves the candidate-node context before a nested predicate is evaluated and
+// restores it on scope exit. An inner filter-op rewrites cur_doc_ /
+// cur_doc_position_ / cur_doc_size_ for its own relative seeking; without this
+// guard the pollution leaks into outer predicate stages and the right path
+// that follows the predicate.
+class ObPathCtxRestoreGuard
+{
+public:
+  explicit ObPathCtxRestoreGuard(ObPathCtx &ctx)
+      : ctx_(ctx), saved_doc_(ctx.cur_doc_),
+        saved_position_(ctx.cur_doc_position_), saved_size_(ctx.cur_doc_size_) {}
+  ~ObPathCtxRestoreGuard()
+  {
+    ctx_.cur_doc_ = saved_doc_;
+    ctx_.cur_doc_position_ = saved_position_;
+    ctx_.cur_doc_size_ = saved_size_;
+  }
+private:
+  ObPathCtx &ctx_;
+  ObIMulModeBase *saved_doc_;
+  const int saved_position_;
+  const int saved_size_;
+};
+} // anonymous namespace
+
+int ObPathFilterOpNode::get_filter_ans_at(
+    int64_t filter_idx, ObFilterOpAns& ans, ObPathCtx& filter_ctx)
+{
+  INIT_SUCC(ret);
+  ans = NOT_FILTERED;
+  ObSeekResult filter;
+  bool filter_ans = false;
+  ObPathNode* filter_node = static_cast<ObPathNode*>(member(filter_idx));
+  if (OB_ISNULL(filter_node)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("should not be null", K(ret));
+  } else if (filter_node->node_type_.is_arg()) {
+    if (ObArgType::PN_DOUBLE == filter_node->node_type_.get_arg_type()) {
+      // [n] : positional predicate, equivalent to [position() = n]
+      const double pred_d = static_cast<ObPathArgNode*>(filter_node)->arg_.double_;
+      ans = static_cast<double>(filter_ctx.cur_doc_position_) == pred_d
+          ? FILTERED_TRUE : FILTERED_FALSE;
+    } else {
+      ret = OB_NOT_IMPLEMENT;
+      LOG_WARN("single arg not support", K(ret));
+    }
+  } else {
+    filter_node->is_seeked_ = false;
+    int eval_ret = OB_SUCCESS;
+    {
+      // guard scope covers only the recursive evaluation, so the caller's
+      // context is restored before positional/boolean result interpretation.
+      ObPathCtxRestoreGuard ctx_guard(filter_ctx);
+      eval_ret = filter_node->eval_node(filter_ctx, filter);
+    }
+    if (OB_FAIL(eval_ret)) {
+      LOG_WARN("fail to eval filter node", K(ret), K(filter_idx));
+    } else {
+      const bool is_num_scalar = filter.is_scalar_ && OB_NOT_NULL(filter.result_.scalar_)
+          && ObArgType::PN_DOUBLE == filter.result_.scalar_->node_type_.get_arg_type();
+      if (is_positional_ && is_num_scalar) {
+        // bare numeric predicate, e.g. [last()] / [position()] : equivalent to [position() = expr]
+        const double pred_d = filter.result_.scalar_->arg_.double_;
+        ans = static_cast<double>(filter_ctx.cur_doc_position_) == pred_d
+            ? FILTERED_TRUE : FILTERED_FALSE;
+      } else if (OB_FAIL(ObPathUtil::seek_res_to_boolean(filter, filter_ans))) {
+        LOG_WARN("seek res to boolean failed", K(ret));
+      } else {
+        ans = filter_ans ? FILTERED_TRUE : FILTERED_FALSE;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPathFilterOpNode::reset_stage_positions()
+{
+  int ret = OB_SUCCESS;
+  if (stage_positions_.size() != size()) {
+    stage_positions_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < size(); ++i) {
+      if (OB_FAIL(stage_positions_.push_back(0))) {
+        LOG_WARN("fail to init predicate stage position", K(ret), K(i));
+      }
+    }
+  } else {
+    for (int64_t i = 0; i < stage_positions_.size(); ++i) {
+      stage_positions_[i] = 0;
+    }
+  }
+  return ret;
+}
+
 int ObPathFilterOpNode::get_filter_ans(ObFilterOpAns& ans, ObPathCtx& filter_ctx)
 {
   INIT_SUCC(ret);
   bool end_loop = false;
-  ObSeekResult filter;
-
-  for (int i = 0; i < size() && OB_SUCC(ret) && !end_loop; ++i) {
-    bool filter_ans = false;
-    ObPathNode* filter_node = static_cast<ObPathNode*>(member(i));
-    if (OB_ISNULL(filter_node)) {
-      ret = OB_BAD_NULL_ERROR;
-      LOG_WARN("should not be null", K(ret));
-    } else if (filter_node->node_type_.is_arg()) {
-      ret = OB_NOT_IMPLEMENT;
-      LOG_WARN("single arg not support");
-    } else if (OB_FALSE_IT(filter_node->is_seeked_ = false)) {
-    } else if (OB_FAIL(filter_node->eval_node(filter_ctx, filter))) {
-    } else if (OB_FAIL(ObPathUtil::seek_res_to_boolean(filter, filter_ans))) {
-      LOG_WARN("seek res to boolean failed", K(ret));
-    } else if (!filter_ans) {
-      end_loop = true;
+  ans = NOT_FILTERED;
+  for (int64_t i = 0; OB_SUCC(ret) && !end_loop && i < size(); ++i) {
+    if (is_positional_) {
+      filter_ctx.cur_doc_position_ = ++stage_positions_[i];
+    }
+    ObFilterOpAns stage_ans = NOT_FILTERED;
+    if (OB_FAIL(get_filter_ans_at(i, stage_ans, filter_ctx))) {
+      LOG_WARN("fail to eval predicate stage", K(ret), K(i));
+    } else if (stage_ans == FILTERED_FALSE) {
       ans = FILTERED_FALSE;
+      end_loop = true;
     } else if (i == size() - 1) {
-      ans= FILTERED_TRUE;
+      ans = FILTERED_TRUE;
     }
   }
   return ret;
@@ -2886,10 +3015,211 @@ int ObPathFilterOpNode::init_right_without_filter(ObPathCtx &ctx, ObSeekResult& 
   return ret;
 }
 
+bool ObPathFilterOpNode::has_complex_seektype(ObPathNode* node)
+{
+  bool ret_bool = false;
+  if (OB_NOT_NULL(node)) {
+    if (node->node_type_.is_location()
+        && static_cast<ObPathLocationNode*>(node)->is_complex_seektype()) {
+      ret_bool = true;
+    } else {
+      for (int64_t i = 0; !ret_bool && i < node->size(); ++i) {
+        ret_bool = has_complex_seektype(static_cast<ObPathNode*>(node->member(i)));
+      }
+    }
+  }
+  return ret_bool;
+}
+
+int ObPathFilterOpNode::filter_buffer_by_stages(ObPathCtx& ctx)
+{
+  INIT_SUCC(ret);
+  ObSeekVector filtered_buf;
+  ObPositionGroupVector filtered_group_starts;
+  for (int64_t group_idx = 0; OB_SUCC(ret) && group_idx + 1 < group_starts_.size(); ++group_idx) {
+    ObSeekVector stage_nodes;
+    const int64_t group_start = group_starts_[group_idx];
+    const int64_t group_end = group_starts_[group_idx + 1];
+    if (OB_FAIL(filtered_group_starts.push_back(filtered_buf.size()))) {
+      LOG_WARN("fail to append filtered position group", K(ret), K(group_idx));
+    }
+    for (int64_t i = group_start; OB_SUCC(ret) && i < group_end; ++i) {
+      if (OB_FAIL(stage_nodes.push_back(buf_[i]))) {
+        LOG_WARN("fail to initialize predicate stage", K(ret), K(group_idx), K(i));
+      }
+    }
+    for (int64_t filter_idx = 0; OB_SUCC(ret) && filter_idx < size(); ++filter_idx) {
+      ObSeekVector next_stage_nodes;
+      const int stage_size = static_cast<int>(stage_nodes.size());
+      for (int64_t node_idx = 0; OB_SUCC(ret) && node_idx < stage_nodes.size(); ++node_idx) {
+        ctx.cur_doc_ = stage_nodes[node_idx].result_.base_;
+        ctx.cur_doc_position_ = static_cast<int>(node_idx + 1);
+        ctx.cur_doc_size_ = stage_size;
+        ObFilterOpAns stage_ans = NOT_FILTERED;
+        if (OB_FAIL(get_filter_ans_at(filter_idx, stage_ans, ctx))) {
+          LOG_WARN("fail to eval buffered predicate stage", K(ret),
+                   K(group_idx), K(filter_idx), K(node_idx));
+        } else if (stage_ans == FILTERED_TRUE) {
+          if (OB_FAIL(next_stage_nodes.push_back(stage_nodes[node_idx]))) {
+            LOG_WARN("fail to append predicate stage result", K(ret),
+                     K(group_idx), K(filter_idx), K(node_idx));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        stage_nodes.reset();
+        for (int64_t i = 0; OB_SUCC(ret) && i < next_stage_nodes.size(); ++i) {
+          if (OB_FAIL(stage_nodes.push_back(next_stage_nodes[i]))) {
+            LOG_WARN("fail to move predicate stage result", K(ret), K(filter_idx), K(i));
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < stage_nodes.size(); ++i) {
+      if (OB_FAIL(filtered_buf.push_back(stage_nodes[i]))) {
+        LOG_WARN("fail to append filtered node", K(ret), K(group_idx), K(i));
+      }
+    }
+  }
+  if (OB_SUCC(ret)
+      && OB_FAIL(filtered_group_starts.push_back(filtered_buf.size()))) {
+    LOG_WARN("fail to append filtered position group sentinel", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    buf_.reset();
+    group_starts_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < filtered_buf.size(); ++i) {
+      if (OB_FAIL(buf_.push_back(filtered_buf[i]))) {
+        LOG_WARN("fail to store filtered buffer", K(ret), K(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < filtered_group_starts.size(); ++i) {
+      if (OB_FAIL(group_starts_.push_back(filtered_group_starts[i]))) {
+        LOG_WARN("fail to store filtered position group", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPathFilterOpNode::init_right_with_filter_buffered(ObPathCtx &ctx, ObSeekResult& res)
+{
+  INIT_SUCC(ret);
+  // last() needs the node-set size, which we obtain by buffering left_ in one pass.
+  // Tree nodes are stable and binary wrappers are copied before buffering. Complex
+  // relative/descendant paths with positional predicates are already rejected by
+  // the caller (need_size_ implies is_positional_), so left_ is always simple here.
+  // Build the buffer once: drain left_ in a single pass into buf_, then size_ is known.
+  // This avoids re-iterating left_ (its iterator does not reliably restart mid-call),
+  // which is required for last()/position()=last() to know the context size up front.
+  if (OB_SUCC(ret) && emit_idx_ < 0) {
+    buf_.reset();
+    group_starts_.reset();
+    int64_t previous_context_id = -1;
+    // NOTE: OB_SUCC/OB_FAIL assign their argument to `ret`; only use them on `ret`.
+    // For the left-iteration code we must inspect a separate `cret` with explicit compares.
+    int cret = OB_SUCCESS;
+    while (OB_SUCCESS == ret && OB_SUCCESS == cret) {
+      ObSeekResult left_res;
+      cret = get_valid_res(ctx, left_res, true);
+      if (OB_SUCCESS == cret) {
+        if (left_res.is_scalar_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("should not be scalar", K(ret));
+        } else {
+          // Binary seek iterators reuse their current-node wrapper. Copy it before
+          // buffering so earlier results are not overwritten by the next seek.
+          ObIMulModeBase* buffered_node = left_res.result_.base_;
+          const int64_t context_id =
+              static_cast<ObPathRootNode*>(left_)->get_last_step_context_id();
+          if (OB_SUCCESS != (ret = ctx.alloc_new_bin(buffered_node))) {
+            LOG_WARN("fail to copy binary node for position buffer", K(ret));
+          } else if (context_id != previous_context_id
+              && OB_SUCCESS != (ret = group_starts_.push_back(buf_.size()))) {
+            LOG_WARN("fail to append position group", K(ret));
+          } else {
+            left_res.result_.base_ = buffered_node;
+            if (OB_SUCCESS != (ret = buf_.push_back(left_res))) {
+              LOG_WARN("fail to buffer left node", K(ret));
+            } else {
+              previous_context_id = context_id;
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCCESS == ret && cret == OB_ITER_END) {
+      if (OB_SUCCESS != (ret = group_starts_.push_back(buf_.size()))) {
+        LOG_WARN("fail to append position group sentinel", K(ret));
+      } else if (OB_SUCCESS != (ret = filter_buffer_by_stages(ctx))) {
+        LOG_WARN("fail to filter buffered nodes by predicate stages", K(ret));
+      } else {
+        size_ = buf_.size();
+        emit_idx_ = 0;
+        group_idx_ = 0;
+      }
+    } else if (OB_SUCCESS == ret) {
+      ret = cret;
+    }
+  }
+  bool got_valid = false;
+  while (OB_SUCC(ret) && !got_valid) {
+    if (emit_idx_ >= size_) {
+      ret = OB_ITER_END;
+    } else {
+      while (emit_idx_ >= group_starts_[group_idx_ + 1]) {
+        ++group_idx_;
+      }
+      const int64_t group_start = group_starts_[group_idx_];
+      const int64_t group_end = group_starts_[group_idx_ + 1];
+      ctx.cur_doc_position_ = emit_idx_ - group_start + 1;
+      ctx.cur_doc_size_ = group_end - group_start;
+    }
+    if (OB_SUCC(ret)) {
+      ctx.cur_doc_ = buf_[emit_idx_].result_.base_;
+      if (OB_NOT_NULL(right_) && right_active_) {
+        // continue streaming right_ for the current buffered node
+        if (OB_FAIL(get_valid_res(ctx, res, false))) {
+          if (ret == OB_ITER_END) {
+            ret = OB_SUCCESS;
+            right_active_ = false;
+            ++emit_idx_;
+          } else {
+            LOG_WARN("fail to get right", K(ret));
+          }
+        } else {
+          got_valid = true;
+        }
+      } else {
+        if (OB_ISNULL(right_)) {
+          res = buf_[emit_idx_];
+          ++emit_idx_;
+          got_valid = true;
+        } else {
+          right_->is_seeked_ = false;
+          right_active_ = true;  // loop again to start the right_ stream
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPathFilterOpNode::init_right_with_filter(ObPathCtx &ctx, ObSeekResult& res)
 {
   INIT_SUCC(ret);
   bool get_valid_right = false;
+  if (is_positional_ && has_complex_seektype(left_)) {
+    // Positional predicates ([n], position(), last()) over a descendant/ellipsis
+    // node-set would count positions across the whole descendant set instead of
+    // each parent context, which diverges from Oracle; reject the combination.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("positional predicate with descendant/ellipsis path is not supported", K(ret));
+  } else if (need_size_) {
+    // last() present: serve position/last() from a one-pass buffer of the node-set
+    ret = init_right_with_filter_buffered(ctx, res);
+    return ret;
+  }
   while (OB_SUCC(ret) && !get_valid_right) {
     ObSeekResult left_res;
     if (OB_FAIL(get_valid_res(ctx, left_res, true))) {
@@ -2898,8 +3228,20 @@ int ObPathFilterOpNode::init_right_with_filter(ObPathCtx &ctx, ObSeekResult& res
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("shoudl not be scalar");
     } else {
+      if (is_positional_) {
+        const int64_t context_id =
+            static_cast<ObPathRootNode*>(left_)->get_last_step_context_id();
+        if (context_id != current_context_id_) {
+          current_context_id_ = context_id;
+          if (OB_FAIL(reset_stage_positions())) {
+            LOG_WARN("fail to reset predicate stage positions", K(ret), K(context_id));
+            return ret;
+          }
+        }
+        ctx.cur_doc_size_ = -1; // last() predicates use the buffered path
+      }
       ctx.cur_doc_ = left_res.result_.base_;
-      ObFilterOpAns ans;
+      ObFilterOpAns ans = NOT_FILTERED;
       if (OB_FAIL(get_filter_ans(ans, ctx))) {
         LOG_WARN("fail to get filter ans");
       } else if (ans == FILTERED_TRUE) {
@@ -2940,7 +3282,7 @@ int ObPathFilterOpNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
   if (OB_ISNULL(left_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("left can't be null", K(ret));
-  } else if (!contain_relative_path_ && !need_cache_) {  // could get filter ans directly
+  } else if (!contain_relative_path_ && !need_cache_ && !is_positional_) {  // could get filter ans directly
     if (ans_ == ObFilterOpAns::NOT_FILTERED) {
       ObFilterOpAns ans;
       if (OB_FAIL(get_filter_ans(ans, ctx))) {
@@ -2971,7 +3313,8 @@ int ObPathFilterOpNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("there should have ans");
     }
-  } else if (!is_seeked_ || OB_ISNULL(right_)) {
+  } else if (!is_seeked_ || OB_ISNULL(right_) || need_size_) {
+    // need_size_ (last()) keeps all state in the buffered driver, so always re-enter it
     ret = init_right_with_filter(ctx, res);
   } else if (OB_FAIL(get_valid_res(ctx, res, false))) { // get_right_next
     if (ret != OB_ITER_END) {
@@ -2991,6 +3334,18 @@ int ObPathFilterOpNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
     left_->is_seeked_ = false;
     if (OB_NOT_NULL(right_)) {
       right_->is_seeked_ = false;
+    }
+    if (is_positional_) {
+      stage_positions_.reset(); // reset predicate-stage positions for next full iteration
+      size_ = -1;               // recompute context size next time
+      current_context_id_ = -1;
+    }
+    if (need_size_) {
+      buf_.reset();        // drop buffered node-set
+      group_starts_.reset(); // drop step-local group boundaries
+      group_idx_ = 0;
+      emit_idx_ = -1;      // rebuild buffer on next full iteration
+      right_active_ = false;
     }
     if (contain_relative_path_ || need_cache_) {
       ans_ = NOT_FILTERED; // reset ans

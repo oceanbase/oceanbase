@@ -4653,9 +4653,11 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     const ObUserDefinedType* user_type = NULL;
     if (!obj.is_pl_extend()) {
       ret = OB_NOT_SUPPORTED;
+      LOG_WARN("generic paramter has a non composite input value", K(ret), K(obj));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic paramter has a non composite input value");
     } else if (OB_ISNULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext()))) {
       ret = OB_NOT_SUPPORTED;
+      LOG_WARN("generic parameter has null value pointer", K(ret), K(obj.get_udt_id()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic parameter has null value pointer");
     }
     if (OB_FAIL(ret)) {

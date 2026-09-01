@@ -2353,10 +2353,10 @@ int ObXmlBin::get_attribute(ObIArray<ObIMulModeBase*>& res, ObMulModeNodeType fi
   return ret;
 }
 
-int ObXmlBin::node_ns_value(ObString& prefix, ObString& ns_value)
+int ObXmlBin::node_ns_value(ObString& prefix, ObString& ns_value, bool& found)
 {
   INIT_SUCC(ret);
-  bool found = false;
+  found = false;
 
   int64_t attribute_num = attribute_size();
   for (int attr_pos = 0; OB_SUCC(ret) && attr_pos < attribute_num; ++attr_pos) {
@@ -2396,30 +2396,28 @@ int ObXmlBin::get_ns_value(ObStack<ObIMulModeBase*>& stk, ObString& ns_value, Ob
   if (type() == M_ATTRIBUTE && prefix.empty()) {
   } else if (prefix.compare(ObXmlConstants::XML_STRING) == 0) {
     ns_value = ObXmlConstants::XML_NAMESPACE_SPECIFICATION_URI;
-  } else if (OB_FAIL(node_ns_value(prefix, ns_value))) {
+  } else if (OB_FAIL(node_ns_value(prefix, ns_value, found))) {
     LOG_WARN("failed get node ns value.", K(ret));
-  } else if (!ns_value.empty()) {
+  } else if (found) {
+    // declaration found on the current node (xmlns="" included): it shadows ancestors
   } else if (size > 0) {
     for (int64_t pos = size - 1; !found && OB_SUCC(ret) && pos >= 0; --pos) {
       ObXmlBin* current = static_cast<ObXmlBin*>(stk.at(pos));
 
-      if (OB_FAIL(current->node_ns_value(prefix, ns_value))) {
+      if (OB_FAIL(current->node_ns_value(prefix, ns_value, found))) {
         LOG_WARN("failed get node ns value.", K(ret));
-      } else if (!ns_value.empty()) {
-        found = true;
-        break;
       }
     }
 
     // if didn't find ns definition after traversing ancestor nodes, check exrend area
-    if (ns_value.empty() && size > 0) {
+    if (!found && size > 0) {
       // get root node
       ObXmlBin* extend_bin;
       if (OB_ISNULL(extend)) { // without extend, its normal
       } else if (OB_ISNULL(extend_bin = static_cast<ObXmlBin*>(extend))) {
         ret = OB_BAD_NULL_ERROR;
         LOG_WARN("should not be null", K(ret));
-      } else if (OB_FAIL(extend_bin->node_ns_value(prefix, ns_value))) {
+      } else if (OB_FAIL(extend_bin->node_ns_value(prefix, ns_value, found))) {
         LOG_WARN("failed get node ns value.", K(ret));
       }
     }

@@ -11,6 +11,7 @@ CREATE OR REPLACE PACKAGE dbms_xmlparser AUTHID CURRENT_USER AS
   SUBTYPE Parser IS SYS.Parser;
   FUNCTION newParser RETURN Parser;
   PROCEDURE parseClob(p IN Parser, doc IN CLOB);
+  PROCEDURE parseBuffer(p IN Parser, doc IN VARCHAR2);
   FUNCTION getDocument(p IN Parser) RETURN DBMS_XMLDOM.DOMDocument;
   PROCEDURE freeParser(p IN Parser);
 END dbms_xmlparser;

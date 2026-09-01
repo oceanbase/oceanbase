@@ -19,10 +19,38 @@ CREATE OR REPLACE TYPE DOMNodeList FORCE OID '300038' AS OPAQUE
 );
 //
 
+CREATE OR REPLACE TYPE DOMAttr FORCE OID '300039' AS OPAQUE
+(
+  CONSTRUCTOR FUNCTION DOMAttr RETURN SELF AS RESULT
+);
+//
+
+CREATE OR REPLACE TYPE DOMCharacterData FORCE OID '300040' AS OPAQUE
+(
+  CONSTRUCTOR FUNCTION DOMCharacterData RETURN SELF AS RESULT
+);
+//
+
+CREATE OR REPLACE TYPE DOMElement FORCE OID '300041' AS OPAQUE
+(
+  CONSTRUCTOR FUNCTION DOMElement RETURN SELF AS RESULT
+);
+//
+
+CREATE OR REPLACE TYPE DOMText FORCE OID '300042' AS OPAQUE
+(
+  CONSTRUCTOR FUNCTION DOMText RETURN SELF AS RESULT
+);
+//
+
 CREATE OR REPLACE PACKAGE dbms_xmldom AUTHID CURRENT_USER AS
-  SUBTYPE DOMDocument IS SYS.DOMDocument;
-  SUBTYPE DOMNode     IS SYS.DOMNode;
-  SUBTYPE DOMNodeList IS SYS.DOMNodeList;
+  SUBTYPE DOMDocument      IS SYS.DOMDocument;
+  SUBTYPE DOMNode          IS SYS.DOMNode;
+  SUBTYPE DOMNodeList      IS SYS.DOMNodeList;
+  SUBTYPE DOMAttr          IS SYS.DOMAttr;
+  SUBTYPE DOMElement       IS SYS.DOMElement;
+  SUBTYPE DOMText          IS SYS.DOMText;
+  SUBTYPE DOMCharacterData IS SYS.DOMCharacterData;
 
   ELEMENT_NODE       CONSTANT PLS_INTEGER := 1;
   ATTRIBUTE_NODE     CONSTANT PLS_INTEGER := 2;
@@ -38,5 +66,48 @@ CREATE OR REPLACE PACKAGE dbms_xmldom AUTHID CURRENT_USER AS
   FUNCTION getLength(nl IN DOMNodeList) RETURN NUMBER;
   FUNCTION getNodeValue(n IN DOMNode) RETURN VARCHAR2;
   FUNCTION item(nl IN DOMNodeList, idx IN NUMBER) RETURN DOMNode;
+
+  -- Node manipulation
+  FUNCTION appendChild(n IN DOMNode, newChild IN DOMNode) RETURN DOMNode;
+  FUNCTION createElement(doc IN DOMDocument, tagName IN VARCHAR2) RETURN DOMElement;
+  FUNCTION createElement(doc IN DOMDocument, tagName IN VARCHAR2, ns IN VARCHAR2) RETURN DOMElement;
+  FUNCTION createTextNode(doc IN DOMDocument, data IN VARCHAR2) RETURN DOMText;
+  FUNCTION makeCharacterData(n IN DOMNode) RETURN DOMCharacterData;
+  FUNCTION makeNode(doc IN DOMDocument) RETURN DOMNode;
+  FUNCTION makeNode(n IN DOMNode) RETURN DOMNode;
+  FUNCTION makeNode(attr IN DOMAttr) RETURN DOMNode;
+  FUNCTION makeNode(cd IN DOMCharacterData) RETURN DOMNode;
+  FUNCTION makeNode(elem IN DOMElement) RETURN DOMNode;
+  FUNCTION makeNode(t IN DOMText) RETURN DOMNode;
+  FUNCTION removeChild(n IN DOMNode, oldChild IN DOMNode) RETURN DOMNode;
+  PROCEDURE setAttribute(elem IN DOMElement, name IN VARCHAR2, newvalue IN VARCHAR2);
+  PROCEDURE setAttribute(elem IN DOMElement, name IN VARCHAR2, newvalue IN VARCHAR2, ns IN VARCHAR2);
+
+  -- Node query / inspection
+  FUNCTION getData(cd IN DOMCharacterData) RETURN VARCHAR2;
+  FUNCTION getDocumentElement(doc IN DOMDocument) RETURN DOMElement;
+  FUNCTION getLocalName(attr IN DOMAttr) RETURN VARCHAR2;
+  FUNCTION getLocalName(elem IN DOMElement) RETURN VARCHAR2;
+  FUNCTION getNodeName(n IN DOMNode) RETURN VARCHAR2;
+  FUNCTION getNodeType(n IN DOMNode) RETURN NUMBER;
+  FUNCTION getXmlType(doc IN DOMDocument) RETURN XMLTYPE;
+
+  -- Handle emptiness check
+  FUNCTION isNull(n IN DOMNode) RETURN BOOLEAN;
+  FUNCTION isNull(d IN DOMDocument) RETURN BOOLEAN;
+  FUNCTION isNull(nl IN DOMNodeList) RETURN BOOLEAN;
+  FUNCTION isNull(attr IN DOMAttr) RETURN BOOLEAN;
+  FUNCTION isNull(cd IN DOMCharacterData) RETURN BOOLEAN;
+  FUNCTION isNull(elem IN DOMElement) RETURN BOOLEAN;
+  FUNCTION isNull(t IN DOMText) RETURN BOOLEAN;
+
+  -- Document operations
+  FUNCTION newDOMDocument RETURN DOMDocument;
+  PROCEDURE setCharset(doc IN DOMDocument, charset IN VARCHAR2);
+  PROCEDURE setVersion(doc IN DOMDocument, version IN VARCHAR2);
+  PROCEDURE writeToBuffer(doc IN DOMDocument, buffer IN OUT VARCHAR2);
+  PROCEDURE writeToBuffer(n IN DOMNode, buffer IN OUT VARCHAR2);
+  PROCEDURE writeToClob(doc IN DOMDocument, cl IN OUT CLOB);
+  PROCEDURE writeToClob(n IN DOMNode, cl IN OUT CLOB);
 END dbms_xmldom;
 //

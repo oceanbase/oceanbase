@@ -19189,7 +19189,8 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
         }
       }
     }
-    if (OB_SUCC(ret) && routine_info->has_generic_type() && resolve_routine_def) {
+    if (OB_SUCC(ret) && routine_info->has_generic_type() && resolve_routine_def
+        && !unit_ast.is_object()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("NOTICE: Routine use Generic Type not Implement with Interface not supported",
                 K(ret), K(resolve_routine_def), K(routine_info->has_generic_type()));

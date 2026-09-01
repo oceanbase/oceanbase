@@ -9086,12 +9086,7 @@ intptr_t ObBasicSessionInfo::get_xml_pl_mngr()
       LOG_WARN("failed to allocate handle", K(ret));
     } else {
       handle = new (handle) pl::ObPlXmlTypeManager(orig_tenant_id_);
-      if (OB_FAIL(handle->init())) {
-        allocator.free(handle);
-        LOG_WARN("failed to init xml pl type manager", K(ret));
-      } else {
-        xml_pl_mngr_ = reinterpret_cast<intptr_t>(handle);
-      }
+      xml_pl_mngr_ = reinterpret_cast<intptr_t>(handle);
     }
   }
 #else

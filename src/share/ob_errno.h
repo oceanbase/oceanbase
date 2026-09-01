@@ -1519,6 +1519,8 @@ constexpr int OB_ERR_COMPARE_VARRAY_LOB_ATTR = -7432;
 constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
 constexpr int OB_ERR_CONVERSION_OF_UNIT = -7434;
 constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
+constexpr int OB_ERR_XML_WRONG_DOCUMENT = -7436;
+constexpr int OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE = -7437;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
 constexpr int OB_ERR_VSAG_MEM_LIMIT_EXCEEDED = -7603;
 constexpr int OB_ERR_VSAG_RETURN_ERROR = -7604;
@@ -1957,7 +1959,10 @@ constexpr int OB_ERR_JAVA_SESSION_STATE_CHANGED = -9839;
 constexpr int OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT = -9840;
 constexpr int OB_ERR_PL_DOM_HANDLE_INVALID = -9841;
 constexpr int OB_ERR_PL_PARSER_HANDLE_INVALID = -9842;
+constexpr int OB_ERR_XML_NOT_MATCH_TYPE_DEF = -9846;
 constexpr int OB_ERR_JAVA_SESSION_STATE_CLEARED = -9847;
+constexpr int OB_ERR_XML_CANNOT_CONVERT_TO_TYPE = -9848;
+constexpr int OB_ERR_PL_XML_STRING_ARG_INVALID = -9849;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -3935,6 +3940,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %s%.*s"
 #define OB_ERR_CONVERSION_OF_UNIT__USER_ERROR_MSG "conversion error between the specified unit and standard unit"
 #define OB_ERR_PARAM_OUT_OF_RANGE__USER_ERROR_MSG "value is out of range"
+#define OB_ERR_XML_WRONG_DOCUMENT__USER_ERROR_MSG "A node is used in a different document than the one that created it"
+#define OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE__USER_ERROR_MSG "attribute or element value is larger than specified in type"
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
@@ -4440,7 +4447,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot change object with type or table dependents"
 #define OB_ERR_PL_DOM_HANDLE_INVALID__USER_ERROR_MSG "PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__USER_ERROR_MSG "invalid PL/SQL XML parser handle"
+#define OB_ERR_XML_NOT_MATCH_TYPE_DEF__USER_ERROR_MSG "XML element or attribute does not match any in type"
 #define OB_ERR_JAVA_SESSION_STATE_CLEARED__USER_ERROR_MSG "Java session state cleared"
+#define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__USER_ERROR_MSG "Cannot convert the given XMLType to the required type"
+#define OB_ERR_PL_XML_STRING_ARG_INVALID__USER_ERROR_MSG "NULL or invalid string argument specified"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -8327,6 +8337,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CONVERSION_OF_UNIT__OBE_USER_ERROR_MSG "OBE-13291: conversion error between the specified unit and standard unit"
 #define OB_ERR_PARAM_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-13011: value is out of range"
 #define OB_ERR_PARAM_OUT_OF_RANGE__OBE_USER_ERROR_MSG "OBE-13011: value is out of range"
+#define OB_ERR_XML_WRONG_DOCUMENT__ORA_USER_ERROR_MSG "ORA-31013: A node is used in a different document than the one that created it"
+#define OB_ERR_XML_WRONG_DOCUMENT__OBE_USER_ERROR_MSG "OBE-31013: A node is used in a different document than the one that created it"
+#define OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE__ORA_USER_ERROR_MSG "ORA-22814: attribute or element value is larger than specified in type"
+#define OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE__OBE_USER_ERROR_MSG "OBE-22814: attribute or element value is larger than specified in type"
 #define OB_ERR_INVALID_VECTOR_DIM__ORA_USER_ERROR_MSG "ORA-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_INVALID_VECTOR_DIM__OBE_USER_ERROR_MSG "OBE-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
@@ -9337,8 +9351,14 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_PL_DOM_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-31181: PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__ORA_USER_ERROR_MSG "ORA-64500: invalid PL/SQL XML parser handle"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-64500: invalid PL/SQL XML parser handle"
+#define OB_ERR_XML_NOT_MATCH_TYPE_DEF__ORA_USER_ERROR_MSG "ORA-19031: XML element or attribute %.*s does not match any in type %.*s"
+#define OB_ERR_XML_NOT_MATCH_TYPE_DEF__OBE_USER_ERROR_MSG "OBE-19031: XML element or attribute %.*s does not match any in type %.*s"
 #define OB_ERR_JAVA_SESSION_STATE_CLEARED__ORA_USER_ERROR_MSG "ORA-29550: Java session state cleared"
 #define OB_ERR_JAVA_SESSION_STATE_CLEARED__OBE_USER_ERROR_MSG "OBE-29550: Java session state cleared"
+#define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__ORA_USER_ERROR_MSG "ORA-19029: Cannot convert the given XMLType to the required type"
+#define OB_ERR_XML_CANNOT_CONVERT_TO_TYPE__OBE_USER_ERROR_MSG "OBE-19029: Cannot convert the given XMLType to the required type"
+#define OB_ERR_PL_XML_STRING_ARG_INVALID__ORA_USER_ERROR_MSG "ORA-64505: NULL or invalid string argument specified"
+#define OB_ERR_PL_XML_STRING_ARG_INVALID__OBE_USER_ERROR_MSG "OBE-64505: NULL or invalid string argument specified"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
@@ -9692,7 +9712,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2534];
+extern int g_all_ob_errnos[2539];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

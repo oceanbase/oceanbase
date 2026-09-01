@@ -49,11 +49,6 @@ protected:
   // produced in these tests; destroy() in TearDown releases everything.
   ObPlXmlTypeManager mgr_{OB_SERVER_TENANT_ID};
 
-  void SetUp() override
-  {
-    ASSERT_EQ(OB_SUCCESS, mgr_.init());
-  }
-
   void TearDown() override
   {
     mgr_.destroy();
@@ -98,16 +93,6 @@ protected:
 // ---------------------------------------------------------------------------
 TEST_F(TestDbmsXmlDom, test_xml_parser_create_and_fields)
 {
-  ObPLXmlParser parser;
-
-  // Freshly constructed: no wrapper, but reports alive (parser handle itself)
-  EXPECT_EQ(ObPLOpaqueType::PL_XMLPARSER_TYPE, parser.get_type());
-  EXPECT_TRUE(parser.is_xmlparser_type());
-  EXPECT_EQ((ObPLWrapperXmlDoc*)NULL, parser.get_pl_doc());
-  EXPECT_EQ((ObXmlDocument*)NULL, parser.get_xml_doc());
-  EXPECT_TRUE(parser.is_alive());
-
-  // Build a session-managed wrapper and attach it
   ObPLWrapperXmlDoc *w = nullptr;
   ASSERT_EQ(OB_SUCCESS, create_wrapper("<r/>", w));
   ASSERT_NE((ObPLWrapperXmlDoc*)NULL, w);
@@ -115,20 +100,41 @@ TEST_F(TestDbmsXmlDom, test_xml_parser_create_and_fields)
   ASSERT_NE((ObXmlDocument*)NULL, doc);
   EXPECT_EQ(0, w->ref_count());
 
-  parser.set_pl_doc(w);
+  {
+    ObPLXmlParser parser;
 
-  EXPECT_EQ(w,    parser.get_pl_doc());
-  EXPECT_EQ(doc,  parser.get_xml_doc());
-  EXPECT_EQ(1,    w->ref_count());
-  EXPECT_TRUE(w->is_alive());
+    // Freshly constructed without a shared state the handle is not usable:
+    // NEWPARSER always binds a manager-owned state before exposing it.
+    EXPECT_EQ(ObPLOpaqueType::PL_XMLPARSER_TYPE, parser.get_type());
+    EXPECT_TRUE(parser.is_xmlparser_type());
+    EXPECT_EQ((ObPLWrapperXmlDoc*)NULL, parser.get_pl_doc());
+    EXPECT_EQ((ObXmlDocument*)NULL, parser.get_xml_doc());
+    EXPECT_FALSE(parser.is_alive());
 
-  // Self-assign must be a no-op (refcount unchanged)
-  parser.set_pl_doc(w);
-  EXPECT_EQ(1, w->ref_count());
+    ObPLXmlParserState *state = nullptr;
+    ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(state));
+    ASSERT_NE((ObPLXmlParserState*)NULL, state);
+    EXPECT_EQ(0, state->ref_count());
+    EXPECT_EQ(1u, mgr_.parser_states_.size());
 
-  // Detach -> ref drops back to 0
-  parser.set_pl_doc(nullptr);
-  EXPECT_EQ((ObPLWrapperXmlDoc*)NULL, parser.get_pl_doc());
+    parser.set_parser_state(state);
+    EXPECT_TRUE(parser.is_alive());
+    EXPECT_EQ(1, state->ref_count());
+
+    // Binding the same state and document again must be a no-op.
+    parser.set_parser_state(state);
+    EXPECT_EQ(1, state->ref_count());
+    parser.set_pl_doc(w);
+    parser.set_pl_doc(w);
+
+    EXPECT_EQ(w,    parser.get_pl_doc());
+    EXPECT_EQ(doc,  parser.get_xml_doc());
+    EXPECT_EQ(1,    w->ref_count());
+    EXPECT_TRUE(w->is_alive());
+  }
+
+  // The Parser destructor releases both the state and its document ref.
+  EXPECT_EQ(0u, mgr_.parser_states_.size());
   EXPECT_EQ(0, w->ref_count());
 }
 
@@ -143,7 +149,11 @@ TEST_F(TestDbmsXmlDom, test_xml_parser_deep_copy)
   ObXmlDocument *doc = w->get_document();
 
   ObPLXmlParser src;
+  ObPLXmlParserState *state = nullptr;
+  ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(state));
+  src.set_parser_state(state);
   src.set_pl_doc(w);
+  EXPECT_EQ(1, state->ref_count());
   EXPECT_EQ(1, w->ref_count());
 
   // Allocate a raw buffer of the correct size for the copy.
@@ -160,17 +170,146 @@ TEST_F(TestDbmsXmlDom, test_xml_parser_deep_copy)
   EXPECT_EQ(ObPLOpaqueType::PL_XMLPARSER_TYPE, copy->get_type());
   EXPECT_EQ(w,   copy->get_pl_doc());
   EXPECT_EQ(doc, copy->get_xml_doc());
-  // src + copy both hold a reference
-  EXPECT_EQ(2, w->ref_count());
-
-  // Manually destruct the copy (it lives on a raw arena buffer) so its
-  // destructor releases the second ref before TearDown.
-  copy->~ObPLXmlParser();
+  // The doc wrapper ref is held once by the shared state, not per alias.
   EXPECT_EQ(1, w->ref_count());
+  EXPECT_EQ(2, state->ref_count());
+
+  // Handle semantics: parser state is shared, so detaching via one alias is
+  // visible through the other (Oracle Parser assignment semantics).
+  src.set_pl_doc(nullptr);
+  EXPECT_EQ((ObPLWrapperXmlDoc*)NULL, copy->get_pl_doc());
+  EXPECT_EQ(0, w->ref_count());
+  copy->set_pl_doc(w);
+  EXPECT_EQ(w, src.get_pl_doc());
+  EXPECT_EQ(1, w->ref_count());
+
+  // Shared free: freeParser through one alias invalidates every alias.
+  src.free();
+  EXPECT_FALSE(copy->is_alive());
+  EXPECT_FALSE(src.is_alive());
+  EXPECT_FALSE(state->is_alive());
+  EXPECT_EQ(1, state->ref_count());
+  // Logical state free also released the shared doc reference.
+  EXPECT_EQ(0, w->ref_count());
+
+  // Manually destruct the copy (it lives on a raw arena buffer).
+  copy->~ObPLXmlParser();
+  EXPECT_EQ(0u, mgr_.parser_states_.size());
 }
 
 // ---------------------------------------------------------------------------
-// UT3: ObPLXmlDomDocument creation and deep_copy
+// UT3: Repeated Parser creation and release
+// ---------------------------------------------------------------------------
+TEST_F(TestDbmsXmlDom, test_xml_parser_state_repeated_create_and_free)
+{
+  for (int64_t i = 0; i < 100; ++i) {
+    ObPLXmlParserState *state = nullptr;
+    ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(state));
+    ASSERT_NE((ObPLXmlParserState*)NULL, state);
+    EXPECT_EQ(0, state->ref_count());
+    {
+      ObPLXmlParser parser;
+      parser.set_parser_state(state);
+      EXPECT_EQ(1, state->ref_count());
+      parser.free();
+      EXPECT_FALSE(parser.is_alive());
+    }
+    EXPECT_EQ(0u, mgr_.parser_states_.size());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UT4: Copying a dead alias cannot bind a newly allocated Parser state
+// ---------------------------------------------------------------------------
+TEST_F(TestDbmsXmlDom, test_xml_parser_dead_alias_copy)
+{
+  ObPLXmlParser p1;
+  ObPLXmlParser p2;
+  ObPLXmlParser p3;
+  ObPLXmlParser p4;
+  ObPLXmlParserState *dead_state = nullptr;
+  ObPLXmlParserState *live_state = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(dead_state));
+  p1.set_parser_state(dead_state);
+  ASSERT_EQ(OB_SUCCESS, p1.deep_copy(&p2));
+  EXPECT_EQ(2, dead_state->ref_count());
+
+  p1.free();
+  EXPECT_FALSE(p1.is_alive());
+  EXPECT_FALSE(p2.is_alive());
+  EXPECT_FALSE(dead_state->is_alive());
+  EXPECT_EQ(1, dead_state->ref_count());
+
+  ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(live_state));
+  p3.set_parser_state(live_state);
+  EXPECT_TRUE(p3.is_alive());
+  EXPECT_EQ(2u, mgr_.parser_states_.size());
+
+  ASSERT_EQ(OB_SUCCESS, p2.deep_copy(&p4));
+  EXPECT_FALSE(p4.is_alive());
+  EXPECT_EQ(2, dead_state->ref_count());
+  EXPECT_EQ(1, live_state->ref_count());
+
+  p4.free();
+  EXPECT_TRUE(p3.is_alive());
+  EXPECT_EQ(1, dead_state->ref_count());
+  p2.free();
+  EXPECT_EQ(1u, mgr_.parser_states_.size());
+
+  p3.free();
+  EXPECT_EQ(0u, mgr_.parser_states_.size());
+}
+
+// ---------------------------------------------------------------------------
+// UT5: Overwriting a Parser releases its old state reference
+// ---------------------------------------------------------------------------
+TEST_F(TestDbmsXmlDom, test_xml_parser_overwrite)
+{
+  ObPLXmlParser src;
+  ObPLXmlParser dst;
+  ObPLXmlParserState *src_state = nullptr;
+  ObPLXmlParserState *dst_state = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(src_state));
+  ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(dst_state));
+  src.set_parser_state(src_state);
+  dst.set_parser_state(dst_state);
+  EXPECT_EQ(2u, mgr_.parser_states_.size());
+
+  ASSERT_EQ(OB_SUCCESS, src.deep_copy(&dst));
+  EXPECT_EQ(1u, mgr_.parser_states_.size());
+  EXPECT_EQ(2, src_state->ref_count());
+  EXPECT_TRUE(dst.is_alive());
+
+  dst.free();
+  EXPECT_FALSE(src.is_alive());
+  EXPECT_EQ(1, src_state->ref_count());
+  src.free();
+  EXPECT_EQ(0u, mgr_.parser_states_.size());
+}
+
+// ---------------------------------------------------------------------------
+// UT6: Parser self-copy is a no-op
+// ---------------------------------------------------------------------------
+TEST_F(TestDbmsXmlDom, test_xml_parser_self_copy)
+{
+  ObPLXmlParser parser;
+  ObPLXmlParserState *state = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS, mgr_.create_parser(state));
+  parser.set_parser_state(state);
+  ASSERT_EQ(OB_SUCCESS, parser.deep_copy(&parser));
+  EXPECT_TRUE(parser.is_alive());
+  EXPECT_EQ(1, state->ref_count());
+  EXPECT_EQ(1u, mgr_.parser_states_.size());
+
+  parser.free();
+  EXPECT_EQ(0u, mgr_.parser_states_.size());
+}
+
+// ---------------------------------------------------------------------------
+// UT7: ObPLXmlDomDocument creation and deep_copy
 // ---------------------------------------------------------------------------
 TEST_F(TestDbmsXmlDom, test_dom_document_create_and_deep_copy)
 {

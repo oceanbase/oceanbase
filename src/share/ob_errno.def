@@ -2152,6 +2152,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot 
 DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %s%.*s", 31003, "Parent %.*s already contains child entry %s%.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_CONVERSION_OF_UNIT, -7434, -1, "42000", "conversion error between the specified unit and standard unit", 13291, "conversion error between the specified unit and standard unit");
 DEFINE_ORACLE_ERROR(OB_ERR_PARAM_OUT_OF_RANGE, -7435, -1, "42000", "value is out of range", 13011, "value is out of range");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_WRONG_DOCUMENT, -7436, -1, "42000", "A node is used in a different document than the one that created it", 31013, "A node is used in a different document than the one that created it");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_VALUE_TOO_LARGE_FOR_TYPE, -7437, -1, "HY000", "attribute or element value is larger than specified in type", 22814, "attribute or element value is larger than specified in type");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2767,7 +2769,10 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_JAVA_SESSION_STATE_CHANGED, -9839, -1, "HY000", "
 DEFINE_ORACLE_ERROR(OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT, -9840, -1, "HY000", "cannot change object with type or table dependents", 22933, "cannot change object with type or table dependents");
 DEFINE_ORACLE_ERROR(OB_ERR_PL_DOM_HANDLE_INVALID, -9841, -1, "HY000", "PL/SQL DOM handle accesses node that is no longer available", 31181, "PL/SQL DOM handle accesses node that is no longer available");
 DEFINE_ORACLE_ERROR(OB_ERR_PL_PARSER_HANDLE_INVALID, -9842, -1, "HY000", "invalid PL/SQL XML parser handle", 64500, "invalid PL/SQL XML parser handle");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_MATCH_TYPE_DEF, -9846, -1, "HY000", "XML element or attribute does not match any in type", 19031, "XML element or attribute %.*s does not match any in type %.*s");
 DEFINE_ORACLE_ERROR(OB_ERR_JAVA_SESSION_STATE_CLEARED, -9847, -1, "HY000", "Java session state cleared", 29550, "Java session state cleared");
+DEFINE_ORACLE_ERROR(OB_ERR_XML_CANNOT_CONVERT_TO_TYPE, -9848, -1, "HY000", "Cannot convert the given XMLType to the required type", 19029, "Cannot convert the given XMLType to the required type");
+DEFINE_ORACLE_ERROR(OB_ERR_PL_XML_STRING_ARG_INVALID, -9849, -1, "HY000", "NULL or invalid string argument specified", 64505, "NULL or invalid string argument specified");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

@@ -404,6 +404,7 @@ using ObFilterCharPointers = ObVector<ObXpathFilterChar, ObFilterCharVectorArena
 
 typedef PageArena<ObSeekResult, ModulePageAllocator> SeekVectorModuleArena;
 typedef common::ObVector<ObSeekResult, SeekVectorModuleArena> ObSeekVector;
+typedef common::ObVector<int64_t, ModulePageAllocator> ObPositionGroupVector;
 typedef PageArena<ObIMulModeBase*, ModulePageAllocator> ModeBaseModuleArena;
 typedef common::ObSortedVector<ObIMulModeBase*, ModeBaseModuleArena> ObIBaseSortedVector;
 typedef PageArena<ObSeekIterator*, ModulePageAllocator> SeekIterModuleArena;
@@ -560,7 +561,7 @@ public:
   friend class ObPathNode;
   ObPathCtx (common::ObIAllocator *alloc) : alloc_(alloc), ancestor_record_(alloc), is_inited_(0) {}
   ObPathCtx(ObMulModeMemCtx* ctx) :
-    ctx_(ctx), alloc_(ctx->allocator_), doc_root_(nullptr), cur_doc_(nullptr), cur_doc_position_(-1),
+    ctx_(ctx), alloc_(ctx->allocator_), doc_root_(nullptr), cur_doc_(nullptr), cur_doc_position_(-1), cur_doc_size_(-1),
     ancestor_record_(ctx->allocator_), is_inited_(0), is_auto_wrap_(0),
     check_duplicate_(1), need_boolean_(0), need_record_(0), reserved_(0) {}
   ~ObPathCtx() {bin_pool_.reset();}
@@ -587,6 +588,7 @@ public:
   ObIMulModeBase* extend_;
   ObPathPool bin_pool_;
   int cur_doc_position_;
+  int cur_doc_size_;
   ObStack<ObIMulModeBase*> ancestor_record_;
   int defined_ns_;
   union {
@@ -630,7 +632,7 @@ public:
     ObPathNode(ctx, parser_type, ObPathNodeClass::PN_ROOT),
     arena_(PATH_DEFAULT_PAGE_SIZE, ctx->page_allocator_),
     adapt_(&arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-    need_trans_(0), iter_pos_(-1), is_abs_path_(true) {}
+    need_trans_(0), iter_pos_(-1), last_step_context_id_(0), is_abs_path_(true) {}
   virtual ~ObPathRootNode() {}
   int reuse(ObPathCtx &ctx, ObIMulModeBase*& ans);
   int next_adapt(ObPathCtx &ctx, ObIMulModeBase*& ans);
@@ -638,10 +640,12 @@ public:
   virtual int node_to_string(ObStringBuffer& str);
   virtual int eval_node(ObPathCtx &ctx, ObSeekResult& res);
   bool is_abs_subpath();
+  int64_t get_last_step_context_id() const { return last_step_context_id_; }
   SeekIterModuleArena arena_;
   ObSeekIterVector adapt_;
   int need_trans_;
   int iter_pos_;
+  int64_t last_step_context_id_;
   bool is_abs_path_;
 };
 
@@ -729,7 +733,9 @@ class ObPathFilterOpNode : public ObPathNode
 public:
   ObPathFilterOpNode(ObMulModeMemCtx* ctx, const ObParserType& parser_type) :
     ObPathNode(ctx, parser_type, ObPathNodeClass::PN_LOCATION_FILTER),
-    ans_(NOT_FILTERED), left_(nullptr), right_(nullptr) {}
+    ans_(NOT_FILTERED), left_(nullptr), right_(nullptr),
+    stage_positions_(&ctx->page_allocator_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+    group_starts_(&ctx->page_allocator_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
   virtual ~ObPathFilterOpNode() {}
   virtual int node_to_string(ObStringBuffer& str);
   virtual int eval_node(ObPathCtx &ctx, ObSeekResult& res);
@@ -738,12 +744,30 @@ public:
   void init_right(ObPathNode* right) {right_ = right;}
   int filter_op_arg_to_str(bool is_left, ObStringBuffer& str);
   int get_filter_ans(ObFilterOpAns& ans, ObPathCtx& filter_ctx);
+  int get_filter_ans_at(int64_t filter_idx, ObFilterOpAns& ans, ObPathCtx& filter_ctx);
+  int reset_stage_positions();
+  int filter_buffer_by_stages(ObPathCtx& ctx);
   int get_valid_res(ObPathCtx &ctx, ObSeekResult& res, bool is_left);
   int init_right_without_filter(ObPathCtx &ctx, ObSeekResult& res);
   int init_right_with_filter(ObPathCtx &ctx, ObSeekResult& res);
+  // last() needs the full node-set size; buffer left nodes in one pass and serve from buffer
+  int init_right_with_filter_buffered(ObPathCtx &ctx, ObSeekResult& res);
+  // true if the subtree contains a descendant/ellipsis location (complex seek);
+  // positional predicates over such node-sets are rejected as not supported
+  static bool has_complex_seektype(ObPathNode* node);
   ObFilterOpAns ans_;
   ObPathNode* left_;
   ObPathNode* right_;
+  bool is_positional_ = false;  // predicate is positional: [n] / position() / last()
+  bool need_size_ = false;      // predicate references last(), needs context size
+  int size_ = -1;               // context size (node-set count), -1 = not computed
+  int64_t current_context_id_ = -1; // input context of the filtered location step
+  ObPositionGroupVector stage_positions_; // proximity position for each predicate stage
+  ObSeekVector buf_;            // materialized left node-set (only used when need_size_)
+  ObPositionGroupVector group_starts_; // starts of step-local groups plus an end sentinel
+  int64_t group_idx_ = 0;       // current group in group_starts_
+  int emit_idx_ = -1;           // emit cursor into buf_; -1 = buffer not yet built
+  bool right_active_ = false;   // right_ is mid-stream for the current buffered node
 };
 
 class ObPathFuncNode : public ObPathNode

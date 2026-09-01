@@ -175,6 +175,8 @@ public:
   static bool is_boolean_ans(ObFilterType type);
   static bool is_boolean_subpath_arg(ObPathNode* node);
   static bool is_position(ObPathNode* node);
+  // true if the filter subtree contains a function node of func_type (e.g. position()/last())
+  static bool filter_has_func(ObPathNode* node, ObFuncType func_type);
 };
 
 }
