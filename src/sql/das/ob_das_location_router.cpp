@@ -16,6 +16,7 @@
 #include "storage/tx/wrs/ob_black_list.h"
 #include "storage/tx/ob_trans_service.h"
 #include "sql/engine/ob_exec_context.h"
+#include "share/ob_debug_sync.h"
 
 namespace oceanbase
 {
@@ -926,6 +927,9 @@ int ObDASTabletMapper::get_tablet_id_for_temp_table(
           LOG_WARN("fail to add related tablet info", KR(ret), K(tablet_info), K(related_table_id), K(related_tablet_info));
         }
       }
+    }
+    if (OB_SUCC(ret)) {
+      DEBUG_SYNC(AFTER_GET_GTT_DML_TABLET_ID);
     }
   }
   return ret;

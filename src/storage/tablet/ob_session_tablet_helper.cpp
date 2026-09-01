@@ -786,31 +786,22 @@ int ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
   } else if (OB_FAIL(collect_oracle_temp_table_v2_related_ids(*table_schema, related_table_ids))) {
     LOG_WARN("fail to collect related table ids for gtt v2 truncate", KR(ret), K(tenant_id), K(table_id));
   } else if (table_schema->is_oracle_trx_tmp_table_v2()) {
-    if (OB_FAIL(dispatch_batch_drop_gtt_v2_session_tablet_on_creator(
-                  tenant_data_version,
-                  tenant_id,
-                  false/*exclude_active_session_trx_tablet*/,
-                  related_table_ids))) {
-      LOG_WARN("fail to dispatch batch drop gtt v2 trx session tablets", K(ret), K(tenant_id), K(table_id),
-        K(related_table_ids));
-    }
+    sequence = OB_GTT_V2_TRX_TABLET_INACTIVE_SEQUENCE;
   } else if (table_schema->is_oracle_sess_tmp_table_v2()) {
     sequence = session_info.get_session_gtt_v2_sequence();
-    if (OB_FAIL(dispatch_drop_gtt_v2_session_tablet_on_creator(
-          tenant_data_version,
-          tenant_id,
-          related_table_ids,
-          sequence,
-          session_id))) {
-      LOG_WARN("fail to dispatch drop gtt v2 session tablet", KR(ret), K(tenant_id), K(table_id), K(sequence),
-          K(session_id), K(related_table_ids));
-    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not oracle tmp table v2", K(ret), K(tenant_id), K(table_id), KPC(table_schema));
   }
-
-  if (OB_SUCC(ret)) {
+  if (FAILEDx(dispatch_drop_gtt_v2_session_tablet_on_creator(
+        tenant_data_version,
+        tenant_id,
+        related_table_ids,
+        sequence,
+        session_id))) {
+    LOG_WARN("fail to dispatch drop gtt v2 session tablet", KR(ret), K(tenant_id), K(table_id), K(sequence),
+        K(session_id), K(related_table_ids));
+  } else {
     LOG_INFO("succeed to drop gtt v2 session tablet via dispatch", K(tenant_id), K(table_id), K(sequence),
         K(session_id), K(related_table_ids));
   }
