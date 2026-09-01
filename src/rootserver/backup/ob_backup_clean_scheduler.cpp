@@ -1923,8 +1923,8 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
       ObBackupPathString backup_archive_path;
       // Lock the backup archive dest row to materialize the mutex with backup archive jobs(see
       // ObBackupArchiveScheduler::insert_job_, which takes the same row lock).
-      if (OB_FAIL(archive_helper.init(tenant_id_))) {
-        LOG_WARN("failed to init archive helper", K(ret), K_(tenant_id));
+      if (OB_FAIL(archive_helper.init(job_attr_->tenant_id_))) {
+        LOG_WARN("failed to init archive helper", K(ret), "tenant_id", job_attr_->tenant_id_);
       } else if (OB_FAIL(archive_helper.get_backup_archive_dest(trans, true /*need_lock*/, backup_archive_path))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           // Backup archive dest is not configured, no alive backup archive job can exist and all
@@ -1956,8 +1956,8 @@ int ObUserTenantBackupDeleteMgr::persist_backup_clean_task_()
       // Lock the backup archive dest row to materialize the mutex with plus archivelog backup
       // jobs(see ObBackupDataScheduler::start_tenant_backup_data_, which takes the same row lock)
       // and with backup archive dest modification.
-      if (OB_FAIL(archive_helper.init(tenant_id_))) {
-        LOG_WARN("failed to init archive helper", K(ret), K_(tenant_id));
+      if (OB_FAIL(archive_helper.init(job_attr_->tenant_id_))) {
+        LOG_WARN("failed to init archive helper", K(ret), "tenant_id", job_attr_->tenant_id_);
       } else if (OB_FAIL(archive_helper.get_backup_archive_dest(trans, true /*need_lock*/, backup_archive_path))) {
         if (OB_ENTRY_NOT_EXIST == ret) { // backup archive dest has been cleared, no need to do delete input clean job
           ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
