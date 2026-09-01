@@ -18,6 +18,7 @@
 #include "common/object/ob_object.h"
 #include "lib/container/ob_vector.h"
 #include "lib/container/ob_2d_array.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
 #include "lib/geo/ob_s2adapter.h"
 #include "share/partition_table/ob_partition_location.h"
@@ -117,6 +118,56 @@ struct ObHiddenColumnItem
   ObRawExpr* expr_;
   int64_t hidden_idx_;
   TO_STRING_KV(K_(hidden_idx));
+};
+
+struct ObPartitionRangeBuffer
+{
+public:
+  ObPartitionRangeBuffer();
+  bool has_enough_range_buffer(const int64_t key_count) const;
+  int ensure_range_buffer(const int64_t range_count);
+  void reset();
+  OB_INLINE ObObj *get_start_row_key_ptr()
+  {
+    return row_key_buffer_.get_data();
+  }
+  OB_INLINE const ObObj *get_start_row_key_ptr() const
+  {
+    return row_key_buffer_.get_data();
+  }
+  OB_INLINE ObObj *get_end_row_key_ptr()
+  {
+    return row_key_buffer_.get_data() + get_range_key_count();
+  }
+  OB_INLINE const ObObj *get_end_row_key_ptr() const
+  {
+    return row_key_buffer_.get_data() + get_range_key_count();
+  }
+  OB_INLINE ObObj &at_start_row_key(const int64_t idx)
+  {
+    return get_start_row_key_ptr()[idx];
+  }
+  OB_INLINE const ObObj &at_start_row_key(const int64_t idx) const
+  {
+    return get_start_row_key_ptr()[idx];
+  }
+  OB_INLINE ObObj &at_end_row_key(const int64_t idx)
+  {
+    return get_end_row_key_ptr()[idx];
+  }
+  OB_INLINE const ObObj &at_end_row_key(const int64_t idx) const
+  {
+    return get_end_row_key_ptr()[idx];
+  }
+  OB_INLINE int64_t get_range_key_count() const
+  {
+    return row_key_buffer_.count() / 2;
+  }
+
+  common::ObSEArray<ObObj, 8> row_key_buffer_;
+  ObObj function_obj_;
+  TO_STRING_KV(K_(row_key_buffer),
+               K_(function_obj));
 };
 
 class ObSqlArrayExpandGuard
@@ -516,16 +567,13 @@ public:
 																 ObExprCtx &expr_ctx,
 																 common::ObNewRange &partition_range);
 
-  static int get_partition_range(ObObj *start_row_key,
-                                 ObObj *end_row_key,
-                                 ObObj *function_obj,
+  static int get_partition_range(ObPartitionRangeBuffer &range_buffer,
                                  const share::schema::ObPartitionFuncType part_type,
                                  const ObExpr *part_expr,
                                  int64_t range_key_count,
                                  uint64_t table_id,
                                  ObEvalCtx &eval_ctx,
-                                 common::ObNewRange &partition_range,
-                                 ObArenaAllocator &allocator);
+                                 common::ObNewRange &partition_range);
 
   static int revise_hash_part_object(common::ObObj &obj,
                                      const ObNewRow &row,
@@ -898,16 +946,13 @@ private:
                                     const share::schema::ObPartitionFuncType part_type,
                                     const ObExpr *part_expr,
                                     ObEvalCtx &eval_ctx);
-  static int get_range_for_scalar(ObObj *start_row_key,
-                                  ObObj *end_row_key,
-                                  ObObj *function_obj,
+  static int get_range_for_scalar(ObPartitionRangeBuffer &range_buffer,
                                   const share::schema::ObPartitionFuncType part_type,
                                   const ObExpr *part_expr,
                                   int64_t range_key_count,
                                   uint64_t table_id,
                                   ObEvalCtx &eval_ctx,
-                                  common::ObNewRange &part_range,
-                                  ObArenaAllocator &allocator);
+                                  common::ObNewRange &part_range);
   struct SessionInfoCtx
   {
     common::ObCollationType collation_type_;

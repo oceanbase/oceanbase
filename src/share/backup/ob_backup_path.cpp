@@ -1742,6 +1742,31 @@ int ObBackupPathUtil::get_major_compaction_mview_dep_tablet_list_path(const shar
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/tablet_pairing_info.obbak
+int ObBackupPathUtil::get_tablet_pairing_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_set_dest, path))) {
+    LOG_WARN("failed to get backup set info path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join(OB_STR_TABLET_PAIRING_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join tablet pairing info", K(ret));
+  }
+  return ret;
+}
+
+// file:///obbackup/backup_set_1_full/logstream_x/tablet_pairing_info.obbak
+int ObBackupPathUtil::get_ls_tablet_pairing_info_path(const share::ObBackupDest &backup_set_dest,
+    const share::ObLSID &ls_id, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_backup_dir_path(backup_set_dest, ls_id, path))) {
+    LOG_WARN("failed to get ls backup dir path", K(ret), K(backup_set_dest), K(ls_id));
+  } else if (OB_FAIL(path.join(OB_STR_TABLET_PAIRING_INFO, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join tablet pairing info", K(ret));
+  }
+  return ret;
+}
+
 int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)
 {

@@ -29,6 +29,7 @@
 #include "sql/das/ob_das_vec_define.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/das/iter/ob_das_iter.h"
 #include "sql/das/iter/ob_das_merge_iter.h"
 #include "sql/das/iter/ob_das_group_fold_iter.h"
@@ -533,6 +534,24 @@ struct ObRandScanProcessor
   ObTableScanOp *tsc_op_;
 };
 
+struct ObPartitionRangeMemCtx
+{
+  ObPartitionRangeMemCtx() : part_(), subpart_() {}
+  void reset()
+  {
+    part_.reset();
+    subpart_.reset();
+  }
+
+  int ensure_range_obj_mem(const int64_t part_range_count,
+                           const int64_t subpart_range_count);
+  TO_STRING_KV(K_(part), K_(subpart));
+
+public:
+  ObPartitionRangeBuffer part_;
+  ObPartitionRangeBuffer subpart_;
+};
+
 class ObTableScanOp : public ObOperator
 {
   friend class ObDASScanOp;
@@ -611,12 +630,12 @@ protected:
   int can_prune_by_tablet_id(const common::ObTabletID &tablet_id,
                                 const common::ObNewRange &scan_range,
                                 bool &can_prune);
-  int construct_partition_range(ObArenaAllocator &allocator,
-                                const share::schema::ObPartitionFuncType part_type,
+  int construct_partition_range(const share::schema::ObPartitionFuncType part_type,
                                 const common::ObIArray<int64_t> &part_range_pos,
                                 const ObNewRange &scan_range,
                                 const ObExpr *part_expr,
                                 const ExprFixedArray &part_dep_cols,
+                                ObPartitionRangeBuffer &prune_buffer,
                                 bool &can_prune,
                                 ObNewRange &part_range);
 
@@ -807,6 +826,8 @@ protected:
   //但是用query级别的allocator来说，不合适，会导致这个allocator的内存膨胀厉害，中间结果得不到释放
   //用行级allocator生命周期太短，满足不了需求
   common::ObArenaAllocator *table_rescan_allocator_;
+  // Reuse partition prune scratch buffers to avoid per-range ObObj allocations.
+  ObPartitionRangeMemCtx partition_range_mem_ctx_;
   // this is used for found rows, reset in rescan.
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;

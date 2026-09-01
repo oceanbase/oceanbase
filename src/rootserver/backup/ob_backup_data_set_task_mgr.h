@@ -30,6 +30,10 @@ namespace storage
 {
 class ObTabletMeta;
 }
+namespace backup
+{
+class ObBackupTabletPairingHelper;
+}
 namespace rootserver
 {
 
@@ -78,6 +82,7 @@ private:
   int get_extern_tablet_info_(const share::ObLSID &ls_id,
       ObIArray<ObTabletID> &user_tablet_ids, share::SCN &backup_scn);
   int merge_ls_meta_infos_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
+  int aggregate_tablet_pairing_files_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
   int do_backup_root_key_();
   int backup_data_();
   int backup_fuse_tablet_meta_();
@@ -101,13 +106,18 @@ private:
   int get_next_turn_id_(int64_t &next_turn_id);
   int get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
                                ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls);
+  int validate_and_complete_tablet_pairing_(
+      const backup::ObBackupTabletPairingHelper &pairing_helper,
+      common::hash::ObHashSet<share::ObBackupSkipTabletAttr> &skipped_tablets);
   int get_tablets_of_deleted_ls_(
       const ObIArray<ObBackupLSTaskAttr> &ls_tasks, common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets);
-  int do_get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
+  int do_get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
       const common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets,
+      backup::ObBackupTabletPairingHelper &pairing_helper,
       ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls);
   int decide_tablet_final_ls_(const share::ObBackupSkipTabletAttr &skip_tablet,
                               common::hash::ObHashMap<share::ObLSID, common::ObArray<ObTabletReorganizeInfo>> &tablet_reorganize_ls_map,
+                              backup::ObBackupTabletPairingHelper &pairing_helper,
                               common::ObArray<common::ObTabletID> &descendent_list,
                               share::ObLSID &final_ls_id);
   int deduplicate_array_(const common::ObIArray<common::ObTabletID> &tablet_ids,

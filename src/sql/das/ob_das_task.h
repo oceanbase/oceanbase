@@ -304,6 +304,7 @@ public:
   void set_plan_line_id(int64_t plan_line_id) { plan_line_id_ = plan_line_id; }
   int64_t get_plan_line_id() const { return plan_line_id_; }
   void set_attach_ctdef(const ObDASBaseCtDef *attach_ctdef) { attach_ctdef_ = attach_ctdef; }
+  const ObDASBaseCtDef *get_attach_ctdef() const { return attach_ctdef_; }
   void set_attach_rtdef(ObDASBaseRtDef *attach_rtdef) { attach_rtdef_ = attach_rtdef; }
   ObDASBaseRtDef *get_attach_rtdef() { return attach_rtdef_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id),
@@ -342,6 +343,7 @@ public:
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
   bool can_part_retry() const { return can_part_retry_; }
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
+  bool is_in_part_retry() const { return in_part_retry_; }
   void set_task_status(ObDasTaskStatus status);
   ObDasTaskStatus get_task_status() const { return task_status_; };
   const ObDasAggregatedTask *get_agg_task() const { return agg_task_; };

@@ -7516,17 +7516,26 @@ int ObPartitionUtils::get_range_tablet_and_part_id_(
     common::ObIArray<PartitionIndex> &indexes)
 {
   int ret = OB_SUCCESS;
+  if (range.is_single_rowkey()) {
+    ObNewRow row(const_cast<ObObj*>(range.start_key_.get_obj_ptr()),
+                 range.start_key_.get_obj_cnt());
+    if (OB_FAIL(get_range_tablet_and_part_id_(
+        row, partition_array, partition_num, indexes))) {
+      LOG_WARN("fail to get point range tablet and part_id", KR(ret), K(row), K(range));
+    }
+  } else {
+    ObPartition start_tmp;
+    start_tmp.high_bound_val_ = range.start_key_;
 
-  ObPartition start_tmp;
-  start_tmp.high_bound_val_ = range.start_key_;
+    ObPartition end_tmp;
+    end_tmp.high_bound_val_ = range.end_key_;
 
-  ObPartition end_tmp;
-  end_tmp.high_bound_val_ = range.end_key_;
-
-  return get_range_tablet_and_part_id_(start_tmp, end_tmp,
-                                       range.border_flag_,
-                                       partition_array, partition_num,
-                                       indexes);
+    ret = get_range_tablet_and_part_id_(start_tmp, end_tmp,
+                                        range.border_flag_,
+                                        partition_array, partition_num,
+                                        indexes);
+  }
+  return ret;
 }
 
 int ObPartitionUtils::get_list_tablet_and_part_id_(
@@ -7617,26 +7626,17 @@ int ObPartitionUtils::get_range_tablet_and_part_id_(
     common::ObIArray<PartitionIndex> &indexes)
 {
   int ret = OB_SUCCESS;
-  ObPartition start_tmp;
-  start_tmp.high_bound_val_.assign(row.cells_, row.count_);
-  start_tmp.projector_ = row.projector_;
-  start_tmp.projector_size_ = row.projector_size_;
-
-  ObPartition end_tmp;
-  end_tmp.high_bound_val_.assign(row.cells_, row.count_);
-  end_tmp.projector_ = row.projector_;
-  end_tmp.projector_size_ = row.projector_size_;
-
-  ObBorderFlag border_flag;
-  border_flag.set_inclusive_start();
-  border_flag.set_inclusive_end();
-
-  if (OB_FAIL(get_range_tablet_and_part_id_(start_tmp, end_tmp,
-                                            border_flag,
-                                            partition_array, partition_num,
-                                            indexes))) {
-    LOG_WARN("fail to get range tablet and part_id",
-             KR(ret), K(start_tmp), K(end_tmp), K(border_flag));
+  indexes.reset();
+  int64_t point_pos = OB_INVALID_INDEX;
+  const ObPartition *partition = NULL;
+  if (OB_FAIL(locate_point_pos_(partition_array, partition_num, row, point_pos))) {
+    LOG_WARN("fail to locate point partition", KR(ret), K(row), K(partition_num));
+  } else if (OB_INVALID_INDEX == point_pos) {
+  } else if (OB_ISNULL(partition = partition_array[point_pos])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition is null", KR(ret), K(point_pos));
+  } else if (OB_FAIL(indexes.push_back(PartitionIndex(point_pos, OB_INVALID_INDEX)))) {
+    LOG_WARN("fail to push back point partition index", KR(ret), K(point_pos));
   }
   return ret;
 }
@@ -7808,19 +7808,29 @@ int ObPartitionUtils::get_range_tablet_and_subpart_id_(
     common::ObIArray<PartitionIndex> &indexes)
 {
   int ret = OB_SUCCESS;
+  if (range.is_single_rowkey()) {
+    ObNewRow row(const_cast<ObObj*>(range.start_key_.get_obj_ptr()),
+                 range.start_key_.get_obj_cnt());
+    if (OB_FAIL(get_range_tablet_and_subpart_id_(
+        part_id, row, subpartition_array, subpartition_num, indexes))) {
+      LOG_WARN("fail to get point range tablet and subpart_id",
+               KR(ret), K(part_id), K(row), K(range));
+    }
+  } else {
+    ObSubPartition start_tmp;
+    start_tmp.part_id_ = part_id;
+    start_tmp.high_bound_val_ = range.start_key_;
 
-  ObSubPartition start_tmp;
-  start_tmp.part_id_ = part_id;
-  start_tmp.high_bound_val_ = range.start_key_;
+    ObSubPartition end_tmp;
+    end_tmp.part_id_ = part_id;
+    end_tmp.high_bound_val_ = range.end_key_;
 
-  ObSubPartition end_tmp;
-  end_tmp.part_id_ = part_id;
-  end_tmp.high_bound_val_ = range.end_key_;
-
-  return get_range_tablet_and_subpart_id_(start_tmp, end_tmp,
-                                          range.border_flag_, part_id,
-                                          subpartition_array, subpartition_num,
-                                          indexes);
+    ret = get_range_tablet_and_subpart_id_(start_tmp, end_tmp,
+                                           range.border_flag_, part_id,
+                                           subpartition_array, subpartition_num,
+                                           indexes);
+  }
+  return ret;
 }
 
 int ObPartitionUtils::get_list_tablet_and_subpart_id_(
@@ -7916,28 +7926,24 @@ int ObPartitionUtils::get_range_tablet_and_subpart_id_(
     common::ObIArray<PartitionIndex> &indexes)
 {
   int ret = OB_SUCCESS;
-  ObSubPartition start_tmp;
-  start_tmp.part_id_ = part_id;
-  start_tmp.high_bound_val_.assign(row.cells_, row.count_);
-  start_tmp.projector_ = row.projector_;
-  start_tmp.projector_size_ = row.projector_size_;
-
-  ObSubPartition end_tmp;
-  end_tmp.part_id_ = part_id;
-  end_tmp.high_bound_val_.assign(row.cells_, row.count_);
-  end_tmp.projector_ = row.projector_;
-  end_tmp.projector_size_ = row.projector_size_;
-
-  ObBorderFlag border_flag;
-  border_flag.set_inclusive_start();
-  border_flag.set_inclusive_end();
-
-  if (OB_FAIL(get_range_tablet_and_subpart_id_(start_tmp, end_tmp,
-                                               border_flag, part_id,
-                                               subpartition_array, subpartition_num,
-                                               indexes))) {
-    LOG_WARN("fail to get range tablet and subpart_id",
-             KR(ret), K(start_tmp), K(end_tmp), K(border_flag));
+  indexes.reset();
+  int64_t point_pos = OB_INVALID_INDEX;
+  const ObSubPartition *subpartition = NULL;
+  if (OB_FAIL(locate_point_pos_(subpartition_array, subpartition_num, row, point_pos))) {
+    LOG_WARN("fail to locate point subpartition",
+             KR(ret), K(part_id), K(row), K(subpartition_num));
+  } else if (OB_INVALID_INDEX == point_pos) {
+  } else if (OB_ISNULL(subpartition = subpartition_array[point_pos])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("subpartition is null", KR(ret), K(point_pos));
+  } else if (OB_UNLIKELY(static_cast<ObPartID>(subpartition->get_part_id()) != part_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_id not match", KR(ret), KPC(subpartition), K(part_id), K(point_pos));
+  } else if (OB_UNLIKELY(!subpartition->get_tablet_id().is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet_id is invalid", KR(ret), KPC(subpartition), K(point_pos));
+  } else if (OB_FAIL(indexes.push_back(PartitionIndex(OB_INVALID_INDEX, point_pos)))) {
+    LOG_WARN("fail to push back point subpartition index", KR(ret), K(point_pos));
   }
   return ret;
 }

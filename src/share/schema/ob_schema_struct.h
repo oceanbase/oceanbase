@@ -3971,6 +3971,46 @@ private:
                       const common::ObBorderFlag &border_flag,
                       const T &end_part,
                       int64_t &end_pos);
+
+  template <typename T>
+  class HighBoundWithRowCompare
+  {
+  public:
+    explicit HighBoundWithRowCompare(int &ret) : ret_(ret) {}
+    bool operator()(const common::ObNewRow &row, const T *partition)
+    {
+      int &ret = ret_;
+      int cmp = 0;
+      bool bool_ret = false;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(partition)) {
+        ret = common::OB_ERR_UNEXPECTED;
+        SHARE_SCHEMA_LOG(WARN, "partition is null", K(ret));
+      } else {
+        common::ObNewRow lrow;
+        lrow.cells_ = const_cast<common::ObObj*>(partition->high_bound_val_.get_obj_ptr());
+        lrow.count_ = partition->high_bound_val_.get_obj_cnt();
+        lrow.projector_ = partition->projector_;
+        lrow.projector_size_ = partition->projector_size_;
+        if (OB_FAIL(common::ObRowUtil::compare_row(lrow, row, cmp))) {
+          SHARE_SCHEMA_LOG(WARN, "failed to compare partition high bound with row",
+                           KR(ret), K(lrow), K(row), KPC(partition));
+        } else {
+          bool_ret = cmp > 0;
+        }
+      }
+      return bool_ret;
+    }
+    int get_ret() const { return ret_; }
+  private:
+    int &ret_;
+  };
+
+  template <typename T>
+  static int locate_point_pos_(const T *const *partition_array,
+                               const int64_t partition_num,
+                               const common::ObNewRow &row,
+                               int64_t &point_pos);
   /* ----------------------------------------------------------------- */
 
 
@@ -4078,6 +4118,36 @@ int ObPartitionUtils::get_end_(
                        KPC(partition_array[end_pos]));
     } else if (cmp < 0) {
       end_pos--;
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+int ObPartitionUtils::locate_point_pos_(
+    const T *const *partition_array,
+    const int64_t partition_num,
+    const common::ObNewRow &row,
+    int64_t &point_pos)
+{
+  int ret = common::OB_SUCCESS;
+  point_pos = OB_INVALID_INDEX;
+  if (OB_UNLIKELY(OB_ISNULL(partition_array) || partition_num <= 0 || !row.is_valid())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    SHARE_SCHEMA_LOG(WARN, "invalid arguments for locating point partition",
+                     K(ret), KP(partition_array), K(partition_num), K(row));
+  } else {
+    HighBoundWithRowCompare<T> compare(ret);
+    const T *const *result = std::upper_bound(
+        partition_array,
+        partition_array + partition_num,
+        row,
+        compare);
+    if (OB_FAIL(ret = compare.get_ret())) {
+      SHARE_SCHEMA_LOG(WARN, "failed to compare partition high bound with row",
+        KR(ret), K(row), K(partition_num), KP(partition_array));
+    } else if (result - partition_array < partition_num) {
+      point_pos = result - partition_array;
     }
   }
   return ret;

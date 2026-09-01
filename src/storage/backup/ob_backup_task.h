@@ -44,6 +44,7 @@ class SCN;
 }
 namespace backup {
 
+class ObBackupTabletPairingHelper;
 class ObLSBackupDagInitParam;
 
 struct ObLSBackupDagNetInitParam : public share::ObIDagInitParam {
@@ -473,6 +474,8 @@ public:
 private:
   int advance_checkpoint_by_flush_(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &start_scn);
   int backup_ls_meta_and_tablet_metas_(const uint64_t tenant_id, const share::ObLSID &ls_id);
+  int persist_tablet_pairing_(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const backup::ObBackupTabletPairingHelper &pairing_helper);
   int backup_ls_meta_package_(const ObBackupLSMetaInfo &ls_meta_info);
   int report_backup_stat_(const int64_t tablet_count, const int64_t macro_block_count);
   int calc_backup_stat_(const ObBackupSetTaskAttr &set_task_attr,

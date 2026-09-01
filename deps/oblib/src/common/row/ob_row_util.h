@@ -26,7 +26,35 @@ class ObRowUtil
 public:
   static int convert(const common::ObString &compact_row, ObNewRow &row);
   static int convert(const char *compact_row, int64_t buf_len, ObNewRow &row);
-  static int compare_row(const ObNewRow &lrow, const ObNewRow &rrow, int &cmp);
+  OB_INLINE static int compare_row(const ObNewRow &lrow, const ObNewRow &rrow, int &cmp)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(lrow.is_invalid()) || OB_UNLIKELY(rrow.is_invalid())) {
+      ret = OB_ERR_UNEXPECTED;
+      COMMON_LOG(WARN, "lrow or rrow is invalid", K(lrow.is_invalid()), K(rrow.is_invalid()));
+    } else {
+      int64_t cmp_cnt = lrow.get_count() >= rrow.get_count() ? lrow.get_count() : rrow.get_count();
+      int64_t min_cnt = lrow.get_count() < rrow.get_count() ? lrow.get_count() : rrow.get_count();
+      for (int64_t i = 0; 0 == cmp && i < cmp_cnt; ++i) {
+        if (i < min_cnt) {
+          //Oracle compatible range partition, the null value is only allowed to be inserted when the range partition defines maxvalue, so the null value is regarded as max
+          if (lib::is_oracle_mode() && lrow.get_cell(i).is_null() && !rrow.get_cell(i).is_max_value()) {
+            cmp = 1;
+          } else if (lib::is_oracle_mode() && rrow.get_cell(i).is_null() && !lrow.get_cell(i).is_max_value()) {
+            cmp = -1;
+          } else {
+            cmp = lrow.get_cell(i).compare(rrow.get_cell(i));
+          }
+        } else if (i < lrow.get_count()) {
+          cmp = lrow.get_cell(i).is_min_value() ? 0 : 1;
+        } else {
+          //i < rrow.get_count() && i >= lrow.get_count()
+          cmp = rrow.get_cell(i).is_min_value() ? 0 : -1;
+        }
+      }
+    }
+    return ret;
+  }
 };
 
 } // end namespace common

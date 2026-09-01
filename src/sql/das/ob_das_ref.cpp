@@ -360,7 +360,8 @@ bool ObDASRef::check_agg_task_can_retry(ObDasAggregatedTask *agg_task)
   return bret;
 }
 
-int ObDASRef::retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_tasks)
+int ObDASRef::retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_tasks,
+                                   bool *part_retry_happened)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < failed_tasks.count(); i++) {
@@ -370,22 +371,32 @@ int ObDASRef::retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_task
       LOG_WARN("can't do task level retry", K(ret), KPC(failed_task));
     } else if (OB_FAIL(MTL(ObDataAccessService *)->retry_das_task(*this, *failed_tasks.at(i)))) {
       LOG_WARN("Failed to retry das task", K(ret));
+    } else if (OB_NOT_NULL(part_retry_happened) && failed_task->is_in_part_retry()) {
+      *part_retry_happened = true;
     }
   }
   return ret;
 }
 
-int ObDASRef::execute_all_task(DasAggregatedTaskList &agg_task_list)
+int ObDASRef::execute_remote_aggregated_tasks(bool *part_retry_happened)
+{
+  return execute_all_task(aggregated_tasks_, /*skip_local=*/true, part_retry_happened);
+}
+
+int ObDASRef::execute_all_task(DasAggregatedTaskList &agg_task_list,
+                               bool skip_local,
+                               bool *part_retry_happened)
 {
   int ret = OB_SUCCESS;
   const bool async = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_1_0_0;
-  uint32_t finished_cnt = 0;
-  while (finished_cnt < agg_task_list.get_size() && OB_SUCC(ret)) {
-    finished_cnt = 0;
+  const common::ObAddr &ctrl_addr = MTL(ObDataAccessService *)->get_ctrl_addr();
+  bool all_remote_finished = false;
+  while (!all_remote_finished && OB_SUCC(ret)) {
     // execute tasks follows aggregated task state machine.
     DLIST_FOREACH_X(curr, agg_task_list.get_obj_list(), OB_SUCC(ret)) {
       ObDasAggregatedTask* agg_task = curr->get_obj();
-      if (agg_task->has_unstart_tasks() && !agg_task->has_parallel_submiitted()) {
+      if (skip_local && agg_task->server_ == ctrl_addr) {
+      } else if (agg_task->has_unstart_tasks() && !agg_task->has_parallel_submiitted()) {
         if (get_parallel_type() == DAS_SERIALIZATION) {
           if (OB_FAIL(MTL(ObDataAccessService *)->execute_das_task(*this, *agg_task, async))) {
             LOG_WARN("failed to execute aggregated das task", K(ret), KPC(agg_task), K(async));
@@ -412,15 +423,17 @@ int ObDASRef::execute_all_task(DasAggregatedTaskList &agg_task_list)
       ret = OB_SUCCESS;
     }
 
-    // check das task status.
+    // check das task status; loop again if any non-skipped agg still has work.
+    all_remote_finished = true;
     DLIST_FOREACH_X(curr, agg_task_list.get_obj_list(), OB_SUCC(ret)) {
       ObDasAggregatedTask* aggregated_task = curr->get_obj();
-      if (aggregated_task->has_parallel_submiitted() && aggregated_task->get_save_ret() != OB_SUCCESS) {
+      if (skip_local && aggregated_task->server_ == ctrl_addr) {
+      } else if (aggregated_task->has_parallel_submiitted() && aggregated_task->get_save_ret() != OB_SUCCESS) {
         // all parallel_submit task can't retry
         ret = aggregated_task->get_save_ret();
         LOG_WARN("can't retry for this error_ret", K(ret), KPC(aggregated_task));
       } else if (aggregated_task->has_not_execute_task()) {
-        // 还有任务没执行完毕
+        all_remote_finished = false;
         if (aggregated_task->has_failed_tasks()) {
           // retry all failed tasks.
           common::ObSEArray<ObIDASTaskOp *, 2> failed_tasks;
@@ -430,13 +443,10 @@ int ObDASRef::execute_all_task(DasAggregatedTaskList &agg_task_list)
           } else if (failed_tasks.count() == 0) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to get failed tasks");
-          } else if (OB_FAIL(retry_all_fail_tasks(failed_tasks))) {
+          } else if (OB_FAIL(retry_all_fail_tasks(failed_tasks, part_retry_happened))) {
             LOG_WARN("fail to retry das tasks", K(ret), K(failed_tasks));
           }
         }
-      } else {
-        ++finished_cnt;
-        LOG_DEBUG("check finish agg_task print agg_list", K(finished_cnt), K(agg_task_list.get_size()), KPC(aggregated_task));
       }
     }
   }

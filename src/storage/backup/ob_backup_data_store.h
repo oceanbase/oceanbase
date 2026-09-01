@@ -374,6 +374,41 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMajorCompactionMViewDepTabletListDesc);
 };
 
+struct ObBackupTabletPairingItem final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupTabletPairingItem()
+    : tablet_id_(),
+      paired_tablet_id_() {}
+  ObBackupTabletPairingItem(const common::ObTabletID &tablet_id, const common::ObTabletID &paired_tablet_id)
+    : tablet_id_(tablet_id),
+      paired_tablet_id_(paired_tablet_id) {}
+  bool is_valid() const { return tablet_id_.is_valid() && paired_tablet_id_.is_valid(); }
+  TO_STRING_KV(K_(tablet_id), K_(paired_tablet_id));
+  common::ObTabletID tablet_id_;
+  common::ObTabletID paired_tablet_id_;
+};
+
+struct ObBackupTabletPairingInfoDesc final : public ObExternBackupDataDesc
+{
+public:
+  static const uint8_t FILE_VERSION = 1;
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupTabletPairingInfoDesc()
+    : ObExternBackupDataDesc(share::ObBackupFileType::BACKUP_TABLET_PAIRING_INFO, FILE_VERSION),
+      pairing_list_() {}
+  ~ObBackupTabletPairingInfoDesc() {}
+  bool is_valid() const override;
+  INHERIT_TO_STRING_KV("ObExternBackupDataDesc", ObExternBackupDataDesc, K_(pairing_list));
+public:
+  ObSArray<ObBackupTabletPairingItem> pairing_list_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupTabletPairingInfoDesc);
+};
+
+
 class ObBackupSetFilter : public ObBaseDirEntryOperator
 {
 public:
@@ -474,6 +509,11 @@ public:
   // mview dep tablet list
   int write_major_compaction_mview_dep_tablet_list(const ObBackupMajorCompactionMViewDepTabletListDesc &desc);
   int read_major_compaction_mview_dep_tablet_list(ObBackupMajorCompactionMViewDepTabletListDesc &desc);
+  // tablet pairing info
+  int write_tablet_pairing_info(const ObBackupTabletPairingInfoDesc &desc);
+  int read_tablet_pairing_info(ObBackupTabletPairingInfoDesc &desc);
+  int write_ls_tablet_pairing_info(const share::ObLSID &ls_id, const ObBackupTabletPairingInfoDesc &desc);
+  int read_ls_tablet_pairing_info(const share::ObLSID &ls_id, ObBackupTabletPairingInfoDesc &desc);
   // write file list when path contains only one file
   int write_backup_meta_file_list(const share::ObBackupLSTaskAttr &ls_attr);
   int write_backup_data_file_list(const share::ObBackupLSTaskAttr &ls_attr);

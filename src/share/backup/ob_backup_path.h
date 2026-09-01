@@ -311,7 +311,13 @@ struct ObBackupPathUtil
   // file:///obbackup/backup_set_1_full/infos/major_compaction_mview_dep_tablet_list
   static int get_major_compaction_mview_dep_tablet_list_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);
 
-  static int construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest, 
+  // file:///obbackup/backup_set_1_full/infos/tablet_pairing_info.obbak (tenant-level)
+  static int get_tablet_pairing_info_path(const share::ObBackupDest &backup_set_dest, share::ObBackupPath &path);
+  // file:///obbackup/backup_set_1_full/logstream_x/tablet_pairing_info.obbak (LS-level)
+  static int get_ls_tablet_pairing_info_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, share::ObBackupPath &path);
+
+  static int construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
   static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);

@@ -26,6 +26,8 @@
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "lib/wait_event/ob_wait_event.h"
+#include "share/backup/ob_backup_helper.h"
+#include "storage/backup/ob_backup_tablet_pairing_helper.h"
 #include "share/ls/ob_ls_operator.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 #include "share/backup/ob_backup_path.h"
@@ -1170,6 +1172,7 @@ int ObBackupTabletStat::free_tablet_stat(const common::ObTabletID &tablet_id)
   } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
     LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
   } else {
+    report_event_(tablet_id, *ctx);
     free_stat_(tablet_id, ctx);
     if (OB_FAIL(stat_map_.erase_refactored(tablet_id))) {
       LOG_WARN("failed to erase", K(ret), K(tablet_id));
@@ -1203,6 +1206,7 @@ int ObBackupTabletStat::try_free_tablet_stat(const common::ObTabletID &tablet_id
   } else if (!ctx->can_release()) {
     // cannot release yet, do nothing
   } else {
+    report_event_(tablet_id, *ctx);
     free_stat_(tablet_id, ctx);
     if (OB_FAIL(stat_map_.erase_refactored(tablet_id))) {
       LOG_WARN("failed to erase", K(ret), K(tablet_id));
@@ -1433,6 +1437,13 @@ void ObBackupTabletStat::report_event_(const common::ObTabletID &tablet_id, cons
     backup_event = "backup_sys_tablet";
   } else if (backup_data_type_.is_user_backup()) {
     backup_event = "backup_user_tablet";
+  }
+  if (OB_NOT_NULL(backup_event)) {
+    SERVER_EVENT_ADD("backup_data", backup_event,
+        "ls_id", ls_id_.id(),
+        "tablet_id", tablet_id.id(),
+        "finish_major_block_cnt", tablet_ctx.finish_major_macro_block_count_,
+        "finish_minor_block_cnt", tablet_ctx.finish_minor_macro_block_count_);
   }
 }
 
@@ -2147,7 +2158,8 @@ ObBackupTabletProvider::ObBackupTabletProvider()
       meta_index_store_(),
       prev_item_(),
       has_prev_item_(false),
-      item_queue_()
+      item_queue_(),
+      pairing_helper_()
 {}
 
 ObBackupTabletProvider::~ObBackupTabletProvider()
@@ -2172,6 +2184,8 @@ int ObBackupTabletProvider::init(const ObLSBackupParam &param, const share::ObBa
     LOG_WARN("failed to assign param", K(ret), K(param));
   } else if (OB_FAIL(item_queue_.init(tenant_id))) {
     LOG_WARN("failed to init queue", K(ret));
+  } else if (!backup_data_type.is_sys_backup() && OB_FAIL(init_pairing_helper_())) {
+    LOG_WARN("failed to init pairing helper", K(ret));
   } else {
     backup_data_type_ = backup_data_type;
     batch_size_ = batch_size;
@@ -2191,6 +2205,7 @@ void ObBackupTabletProvider::reset()
   ObMutexGuard guard(mutex_);
   is_inited_ = false;
   ls_backup_ctx_ = NULL;
+  pairing_helper_.reset();
   free_queue_item_();
 }
 
@@ -2335,7 +2350,20 @@ int ObBackupTabletProvider::prepare_batch_tablet_(const uint64_t tenant_id, cons
       }
     } else if (OB_FAIL(prepare_tablet_(tenant_id, ls_id, tablet_id, backup_data_type_, count))) {
       LOG_WARN("failed to prepare tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-    } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, ls_backup_ctx_->rebuild_seq_))) {
+    }
+#ifdef ERRSIM
+    if (OB_SUCC(ret) && backup_data_type_.is_user_backup()) {
+      const int64_t ERRSIM_TABLET_ID = GCONF.errsim_backup_tablet_id;
+      if (0 != ERRSIM_TABLET_ID && tablet_id.id() == ERRSIM_TABLET_ID) {
+        SERVER_EVENT_SYNC_ADD("backup_data", "after_backup_prepare_tablet",
+                              "ls_id", ls_id.id(),
+                              "turn_id", param_.turn_id_,
+                              "tablet_id", tablet_id.id());
+        DEBUG_SYNC(AFTER_BACKUP_PREPARE_TABLET);
+      }
+    }
+#endif
+    if (FAILEDx(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, ls_backup_ctx_->rebuild_seq_))) {
       LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id));
     } else {
       total_count += count;
@@ -2685,7 +2713,8 @@ int ObBackupTabletProvider::check_need_report_tablet_skipped_(const share::ObLSI
 
 int ObBackupTabletProvider::report_tablet_skipped_(const common::ObTabletID &tablet_id,
     const share::ObBackupSkippedType &skipped_type,
-    const share::ObBackupDataType &backup_data_type)
+    const share::ObBackupDataType &backup_data_type,
+    const bool cascade_pairing)
 {
   int ret = OB_SUCCESS;
   ObBackupSkippedTablet skipped_tablet;
@@ -2702,9 +2731,60 @@ int ObBackupTabletProvider::report_tablet_skipped_(const common::ObTabletID &tab
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else if (OB_FAIL(ObLSBackupOperator::report_tablet_skipped(param_.tenant_id_, skipped_tablet, *sql_proxy_))) {
-    LOG_WARN("failed to report tablet skipped", K(ret), K_(param), K(tablet_id));
+    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+      // The tablet may have been proactively skipped as a paired tablet earlier; treat as idempotent.
+      ret = OB_SUCCESS;
+      LOG_INFO("tablet already reported as skipped, ignore duplicate", K(tablet_id));
+    } else {
+      LOG_WARN("failed to report tablet skipped", K(ret), K_(param), K(tablet_id));
+    }
   } else {
     LOG_INFO("report tablet skipping", K(tablet_id));
+  }
+  // Pairing-aware split handling: probe pairing and proactively skip the paired tablet.
+  // Symmetric design: whichever of the pair arrives first proactively skips the other;
+  // the later one is absorbed by the idempotent OB_ERR_PRIMARY_KEY_DUPLICATE path above.
+  // cascade_pairing=false on the recursive call prevents A->B->A infinite recursion.
+  if (OB_SUCC(ret) && cascade_pairing
+      && ObBackupSkippedType::REORGANIZED == skipped_type.get_type()
+      && pairing_helper_.is_inited()) {
+    ObTabletID paired_tablet_id;
+    if (OB_FAIL(pairing_helper_.get_paired_tablet_id(tablet_id, paired_tablet_id))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get paired tablet id", K(ret), K(tablet_id));
+      }
+    } else if (paired_tablet_id.is_valid()) {
+      if (OB_FAIL(report_tablet_skipped_(paired_tablet_id, skipped_type, backup_data_type,
+                                         false /*cascade_pairing*/))) {
+        LOG_WARN("failed to report paired tablet skipped", K(ret), K(paired_tablet_id));
+      } else {
+        SERVER_EVENT_SYNC_ADD("backup_data", "paired_tablet_proactive_skip",
+                              "tablet_id", tablet_id.id(),
+                              "paired_tablet_id", paired_tablet_id.id());
+        LOG_INFO("[DATA_BACKUP]skip paired tablet due to split",
+                 K(tablet_id), K(paired_tablet_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::init_pairing_helper_()
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDest backup_set_dest;
+  if (OB_FAIL(share::ObBackupPathUtil::construct_backup_set_dest(
+          param_.backup_dest_, param_.backup_set_desc_, backup_set_dest))) {
+    LOG_WARN("failed to construct backup set dest", K(ret), K_(param));
+  } else if (OB_FAIL(pairing_helper_.init(param_.tenant_id_))) {
+    LOG_WARN("failed to init pairing helper", K(ret));
+  } else if (OB_FAIL(pairing_helper_.load_from_ls_file(backup_set_dest, param_.ls_id_))) {
+    LOG_WARN("failed to load pairing from ls file", K(ret), K_(param));
+  } else {
+    LOG_INFO("loaded pairing helper from ls file", K_(param),
+             "pairing_count", pairing_helper_.get_pairing_count());
   }
   return ret;
 }

@@ -305,6 +305,12 @@ void ObSSTableMultiVersionRowMultiScanner::reuse()
   multi_version_ranges_.reset();
 }
 
+void ObSSTableMultiVersionRowMultiScanner::reclaim()
+{
+  multi_version_ranges_.reset();
+  ObSSTableRowMultiScanner::reclaim();
+}
+
 int ObSSTableMultiVersionRowMultiScanner::inner_open(
     const ObTableIterParam &iter_param,
     ObTableAccessContext &access_ctx,
@@ -318,6 +324,7 @@ int ObSSTableMultiVersionRowMultiScanner::inner_open(
   } else {
     const ObIArray<ObDatumRange> *base_ranges = static_cast<const ObIArray<ObDatumRange> *>(query_range);
     int64_t out_cols_cnt = iter_param.get_out_col_cnt();
+    multi_version_ranges_.reset();
     if (OB_UNLIKELY(0 == out_cols_cnt)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected empty out_cols", K(ret), K(iter_param));

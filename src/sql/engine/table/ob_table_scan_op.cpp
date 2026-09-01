@@ -876,11 +876,24 @@ int ObTableScanSpec::explain_index_selection_info(
   return ret;
 }
 
+int ObPartitionRangeMemCtx::ensure_range_obj_mem(const int64_t part_range_count,
+                                                 const int64_t subpart_range_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(part_.ensure_range_buffer(part_range_count))) {
+    LOG_WARN("failed to reserve partition prune buffer", K(ret), K(part_range_count));
+  } else if (OB_FAIL(subpart_.ensure_range_buffer(subpart_range_count))) {
+    LOG_WARN("failed to reserve subpartition prune buffer", K(ret), K(subpart_range_count));
+  }
+  return ret;
+}
+
 ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(exec_ctx, spec, input),
     tsc_rtdef_(exec_ctx.get_allocator()),
     need_final_limit_(false),
-    table_rescan_allocator_(NULL),
+    table_rescan_allocator_(nullptr),
+    partition_range_mem_ctx_(),
     input_row_cnt_(0),
     output_row_cnt_(0),
     iter_end_(false),
@@ -2089,6 +2102,7 @@ int ObTableScanOp::do_init_before_get_row()
 
 void ObTableScanOp::destroy()
 {
+  partition_range_mem_ctx_.reset();
   tsc_rtdef_.~ObTableScanRtDef();
   ObOperator::destroy();
   if (OB_NOT_NULL(vt_result_converter_)) {
@@ -2249,6 +2263,9 @@ int ObTableScanOp::inner_rescan_for_tsc()
     reset_iter_tree_for_rescan();
     LOG_TRACE("[group rescan] need perform real rescan", K(group_rescan_cnt_), K(ctx_.get_das_ctx().get_group_rescan_cnt()),
               K(group_id_), K(ctx_.get_das_ctx().get_skip_scan_group_id()), K(spec_.id_));
+    // is_all_local_task() here means all task ops have been started locally.
+    // local_iter_rescan() reuses every task op in-place, but DAS merge scan-op
+    // reuse does not start every local task op, must go close_and_reopen().
     if (is_virtual_table(MY_SPEC.ref_table_id_)
         || (OB_NOT_NULL(scan_iter_) && !scan_iter_->is_all_local_task())
         || (MY_SPEC.use_dist_das_ && nullptr != MY_CTDEF.das_dppr_tbl_)) {
@@ -3103,7 +3120,6 @@ int ObTableScanOp::can_prune_by_tablet_id(const ObTabletID &tablet_id,
                                           bool &can_prune)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
   ObNewRange partition_range;
   ObNewRange subpartition_range;
   ObDASTabletMapper tablet_mapper;
@@ -3114,16 +3130,20 @@ int ObTableScanOp::can_prune_by_tablet_id(const ObTabletID &tablet_id,
   } else if (scan_range.is_physical_rowid_range_) {
     //scan range with physical rowid range does not support pruning range by tablet_id
     can_prune = false;
+  } else if (OB_FAIL(partition_range_mem_ctx_.ensure_range_obj_mem(
+                         MY_SPEC.part_range_pos_.count(),
+                         MY_SPEC.subpart_range_pos_.count()))) {
+    LOG_WARN("failed to reserve partition range obj mem", K(ret));
   } else if (OB_FAIL(DAS_CTX(ctx_).get_das_tablet_mapper(MY_CTDEF.scan_ctdef_.ref_table_id_, tablet_mapper))) {
     LOG_WARN("get das tablet mapper failed", K(ret), K(MY_CTDEF.scan_ctdef_.ref_table_id_));
   } else if (OB_FAIL(construct_partition_range(
-              allocator, MY_SPEC.part_type_, MY_SPEC.part_range_pos_,
-              scan_range, MY_SPEC.part_expr_, MY_SPEC.part_dep_cols_,
+              MY_SPEC.part_type_, MY_SPEC.part_range_pos_,
+              scan_range, MY_SPEC.part_expr_, MY_SPEC.part_dep_cols_, partition_range_mem_ctx_.part_,
               can_prune, partition_range))) {
     LOG_WARN("failed to construct partition range", K(ret));
   } else if (can_prune && OB_FAIL(construct_partition_range(
-              allocator, MY_SPEC.subpart_type_, MY_SPEC.subpart_range_pos_,
-              scan_range, MY_SPEC.subpart_expr_, MY_SPEC.subpart_dep_cols_,
+              MY_SPEC.subpart_type_, MY_SPEC.subpart_range_pos_,
+              scan_range, MY_SPEC.subpart_expr_, MY_SPEC.subpart_dep_cols_, partition_range_mem_ctx_.subpart_,
               can_prune, subpartition_range))) {
     LOG_WARN("failed to construct subpartition range", K(ret));
   } else if (can_prune) {
@@ -3163,12 +3183,12 @@ int ObTableScanOp::can_prune_by_tablet_id(const ObTabletID &tablet_id,
   return ret;
 }
 
-int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
-                                             const ObPartitionFuncType part_type,
+int ObTableScanOp::construct_partition_range(const ObPartitionFuncType part_type,
                                              const ObIArray<int64_t> &part_range_pos,
                                              const ObNewRange &scan_range,
                                              const ObExpr *part_expr,
                                              const ExprFixedArray &part_dep_cols,
+                                             ObPartitionRangeBuffer &prune_buffer,
                                              bool &can_prune,
                                              ObNewRange &part_range)
 {
@@ -3195,18 +3215,9 @@ int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
         K(scan_range.end_key_.get_obj_cnt()), K(ret));
   } else if (part_range_pos.count() > 0) {
     int64_t range_key_count = part_range_pos.count();
-    ObObj *start_row_key = NULL;
-    ObObj *end_row_key = NULL;
-    ObObj *function_obj = NULL;
-    if (OB_ISNULL(start_row_key = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * range_key_count)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for start_obj failed", K(ret));
-    } else if (OB_ISNULL(end_row_key = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * range_key_count)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for end_obj failed", K(ret));
-    } else if (OB_ISNULL(function_obj = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj))))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for function obj failed", K(ret));
+    if (OB_UNLIKELY(!prune_buffer.has_enough_range_buffer(range_key_count))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition range buffer is invalid", K(ret), K(range_key_count), K(prune_buffer));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && can_prune && i < range_key_count; i++) {
         int64_t pos = part_range_pos.at(i);
@@ -3221,36 +3232,33 @@ int ObTableScanOp::construct_partition_range(ObArenaAllocator &allocator,
         } else if (scan_range.start_key_.get_obj_ptr()[pos] != scan_range.end_key_.get_obj_ptr()[pos]) {
           can_prune = false;
         } else {
-          start_row_key[i] = scan_range.start_key_.get_obj_ptr()[pos];
-          end_row_key[i] = scan_range.end_key_.get_obj_ptr()[pos];
+          prune_buffer.at_start_row_key(i) = scan_range.start_key_.get_obj_ptr()[pos];
+          prune_buffer.at_end_row_key(i) = scan_range.end_key_.get_obj_ptr()[pos];
           sql::ObExpr *expr = part_dep_cols.at(i);
           sql::ObDatum &datum = expr->locate_datum_for_write(eval_ctx_);
           if (get_spec().use_rich_format_) {
             expr->init_vector_for_write(eval_ctx_, VEC_UNIFORM, 1);
           }
-          if (OB_FAIL(datum.from_obj(start_row_key[i], expr->obj_datum_map_))) {
+          if (OB_FAIL(datum.from_obj(prune_buffer.at_start_row_key(i), expr->obj_datum_map_))) {
             LOG_WARN("convert obj to datum failed", K(ret));
-          } else if (is_lob_storage(start_row_key[i].get_type()) &&
-                     OB_FAIL(ob_adjust_lob_datum(start_row_key[i], expr->obj_meta_, expr->obj_datum_map_,
+          } else if (is_lob_storage(prune_buffer.at_start_row_key(i).get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(prune_buffer.at_start_row_key(i), expr->obj_meta_, expr->obj_datum_map_,
                                                  get_exec_ctx().get_allocator(), datum))) {
             LOG_WARN("adjust lob datum failed", K(ret), K(i),
-                     K(start_row_key[i].get_meta()), K(expr->obj_meta_));
+                     K(prune_buffer.at_start_row_key(i).get_meta()), K(expr->obj_meta_));
           }else {
             expr->set_evaluated_projected(eval_ctx_);
           }
         }
       }
       if (OB_SUCC(ret) && can_prune) {
-        if (OB_FAIL(ObSQLUtils::get_partition_range(start_row_key,
-                                                    end_row_key,
-                                                    function_obj,
+        if (OB_FAIL(ObSQLUtils::get_partition_range(prune_buffer,
                                                     part_type,
                                                     part_expr,
                                                     range_key_count,
                                                     scan_range.table_id_,
                                                     eval_ctx_,
-                                                    part_range,
-                                                    allocator))) {
+                                                    part_range))) {
           LOG_WARN("get partition real range failed", K(ret));
         }
         LOG_DEBUG("part range info", K(part_range), K(can_prune), K(ret));

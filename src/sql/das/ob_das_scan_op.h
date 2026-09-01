@@ -445,6 +445,9 @@ public:
   int init_scan_param();
   int rescan();
   int reuse_iter();
+  // Remote RPC handler iter reuse: swizzle this op's storage-layer iter to
+  // `target`'s tablet/ls/key_ranges without recreating ObTableScanIterator.
+  int switch_for_remote_reuse(ObDASScanOp &target);
   void reset_access_datums_ptr(int64_t capacity = 0);
   void reset_access_datums_ptr(const ObDASBaseCtDef *ctdef, ObEvalCtx &eval_ctx, int64_t capacity);
   bool is_contain_trans_info() {return NULL != scan_ctdef_->trans_info_expr_; }

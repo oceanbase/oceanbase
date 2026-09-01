@@ -23,6 +23,8 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/backup/ob_backup_meta_cache.h"
+#include "storage/backup/ob_backup_tablet_pairing_helper.h"
+#include "storage/tablet/ob_tablet_binding_mds_user_data.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
 
@@ -4624,6 +4626,7 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   int64_t backup_tablet_count = 0;
   int64_t backup_macro_block_count = 0;
   int64_t calc_macro_block_count_time = 0;
+  ObBackupTabletPairingHelper pairing_helper;
 
   // save max tablet checkpoint scn of all the tablets belong to the same ls.
   SCN max_tablet_checkpoint_scn;
@@ -4643,7 +4646,7 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
   };
 
   // persist tablet meta
-  auto backup_tablet_meta_f = [&writer, &backup_tablet_count, &max_tablet_checkpoint_scn, &backup_macro_block_count, &calc_macro_block_count_time]
+  auto backup_tablet_meta_f = [&writer, &backup_tablet_count, &max_tablet_checkpoint_scn, &backup_macro_block_count, &calc_macro_block_count_time, &pairing_helper]
       (const obrpc::ObCopyTabletInfo &tablet_info, const ObTabletHandle &tablet_handle)->int {
     int ret = OB_SUCCESS;
     blocksstable::ObSelfBufferWriter buffer_writer("LSBackupMetaTask");
@@ -4677,6 +4680,27 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
       }
     }
 
+    // Collect tablet pairing info: only from primary tablet's lob_meta_tablet_id_.
+    // Do not infer pairing from data_tablet_id to avoid local index false positives.
+    if (OB_SUCC(ret)) {
+      const common::ObTabletID &tablet_id = tablet_info.param_.tablet_id_;
+      ObTabletBindingMdsUserData ddl_data;
+      if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(
+              share::SCN::max_scn(), ddl_data))) {
+        if (OB_EMPTY_RESULT == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get ddl data for pairing collection", K(ret), K(tablet_id));
+        }
+      } else if (ddl_data.lob_meta_tablet_id_.is_valid()) {
+        if (OB_FAIL(pairing_helper.add_pairing(tablet_id, ddl_data.lob_meta_tablet_id_))) {
+          LOG_WARN("failed to add pairing A->A'", K(ret), K(tablet_id), K(ddl_data.lob_meta_tablet_id_));
+        } else if (OB_FAIL(pairing_helper.add_pairing(ddl_data.lob_meta_tablet_id_, tablet_id))) {
+          LOG_WARN("failed to add pairing A'->A", K(ret), K(ddl_data.lob_meta_tablet_id_), K(tablet_id));
+        }
+      }
+    }
+
     ++backup_tablet_count;
     return ret;
   };
@@ -4697,6 +4721,8 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     LOG_WARN("failed to construct backup set dest", K(ret), K(param_));
   } else if (OB_FAIL(writer.init(backup_set_dest, param_.ls_id_, param_.turn_id_, param_.retry_id_, param_.dest_id_, false/*is_final_fuse*/, *ls_backup_ctx_->bandwidth_throttle_))) {
     LOG_WARN("failed to init tablet info writer", K(ret));
+  } else if (OB_FAIL(pairing_helper.init(tenant_id))) {
+    LOG_WARN("failed to init pairing helper", K(ret));
   } else {
     const int64_t WAIT_GC_LOCK_TIMEOUT = 30 * 60 * 1000 * 1000;
     const int64_t CHECK_GC_LOCK_INTERVAL = 1000000; // 1s
@@ -4737,7 +4763,9 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     } while (OB_TABLET_GC_LOCK_CONFLICT == ret);
 
 
-    if (FAILEDx(backup_ls_meta_package_(ls_meta_info))) {
+    if (FAILEDx(persist_tablet_pairing_(backup_set_dest, ls_id, pairing_helper))) {
+      LOG_WARN("failed to persist tablet pairing info", K(ret), K(ls_id));
+    } else if (OB_FAIL(backup_ls_meta_package_(ls_meta_info))) {
       LOG_WARN("failed to backup ls meta package", K(ret), K(ls_meta_info));
     } else if (OB_FAIL(ObBackupLSTaskOperator::update_max_tablet_checkpoint_scn(
                        *report_ctx_.sql_proxy_,
@@ -4761,6 +4789,23 @@ int ObLSBackupMetaTask::backup_ls_meta_and_tablet_metas_(const uint64_t tenant_i
     }
   }
 
+  return ret;
+}
+
+int ObLSBackupMetaTask::persist_tablet_pairing_(
+    const ObBackupDest &backup_set_dest,
+    const ObLSID &ls_id,
+    const ObBackupTabletPairingHelper &pairing_helper)
+{
+  int ret = OB_SUCCESS;
+  if (!pairing_helper.is_empty()) {
+    if (OB_FAIL(pairing_helper.write_to_ls_file(backup_set_dest, ls_id))) {
+      LOG_WARN("failed to write tablet pairing to ls file", K(ret), K(ls_id));
+    } else {
+      LOG_INFO("succeed persist tablet pairing info", K(ls_id),
+               "pairing_count", pairing_helper.get_pairing_count());
+    }
+  }
   return ret;
 }
 
@@ -4907,8 +4952,14 @@ int ObLSBackupPrepareTask::process()
   ObIDagNet *dag_net = NULL;
   ObLSBackupIndexRebuildDag *rebuild_dag = NULL;
   const ObBackupIndexLevel index_level = BACKUP_INDEX_LEVEL_LOG_STREAM;
-  SERVER_EVENT_SYNC_ADD("backup_data", "before_backup_prepare_task");
+  SERVER_EVENT_SYNC_ADD("backup_data", "before_backup_prepare_task",
+                        "ls_id", param_.ls_id_.id(),
+                        "turn_id", param_.turn_id_,
+                        "data_type", backup_data_type_.type_);
   DEBUG_SYNC(BEFORE_BACKUP_PREPARE_TASK);
+  if (backup_data_type_.is_user_backup() && !param_.ls_id_.is_sys_ls()) {
+    DEBUG_SYNC(BEFORE_MAJOR_BACKUP_PREPARE_TASK);
+  }
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("prepare task do not init", K(ret));

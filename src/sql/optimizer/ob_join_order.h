@@ -654,12 +654,13 @@ class Path
         index_prefix_(-1),
         can_batch_rescan_(false),
         can_das_dynamic_part_pruning_(-1),
-        is_ordered_by_pk_(false)
+        is_ordered_by_pk_(false),
+        need_prune_for_dop_(false)
     {
     }
     virtual ~AccessPath() {
     }
-    int assign(const AccessPath &other, common::ObIAllocator *allocator);
+    int assign(const AccessPath &other, common::ObIAllocator *allocator = nullptr);
     uint64_t get_table_id() const { return table_id_; }
     void set_table_id(uint64_t table_id) { table_id_ = table_id; }
     uint64_t get_ref_table_id() const { return ref_table_id_; }
@@ -786,7 +787,8 @@ class Path
                  K_(is_valid_inner_path),
                  K_(can_batch_rescan),
                  K_(can_das_dynamic_part_pruning),
-                 K_(is_ordered_by_pk));
+                 K_(is_ordered_by_pk),
+                 K_(need_prune_for_dop));
   public:
     //member variables
     uint64_t table_id_;
@@ -816,6 +818,9 @@ class Path
     bool can_batch_rescan_;
     int64_t can_das_dynamic_part_pruning_;
     bool is_ordered_by_pk_; // indicate whether result from index table scan is ordered by primary key
+    // True when this path is part of a (das, basic) pair that must be pruned
+    // in prune_paths_due_to_parallel after auto-dop is resolved.
+    bool need_prune_for_dop_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
@@ -1892,7 +1897,18 @@ struct MergeKeyInfoHelper
                                AccessPath *&ap,
                                bool use_das,
                                bool use_column_store,
-                               OptSkipScanState use_skip_scan);
+                               OptSkipScanState use_skip_scan,
+                               bool defer_column_store_init = false);
+
+    int expand_access_paths_after_estimate(const ObIndexInfoCache &index_info_cache,
+                                           PathHelper &helper,
+                                           common::ObIArray<AccessPath *> &access_paths);
+
+    int create_access_path_variant_from_template(AccessPath &tmpl,
+                                                 bool use_das,
+                                                 bool use_column_store,
+                                                 bool &template_reused,
+                                                 AccessPath *&variant_ap);
 
     int create_index_merge_access_paths(const uint64_t table_id,
                                         const uint64_t ref_table_id,
@@ -2014,12 +2030,12 @@ struct MergeKeyInfoHelper
                                                     const OptTableMetas& table_opt_meta,
                                                     ObSqlBitSet<> &used_column_ids);
 
-    int will_use_das(const uint64_t table_id,
-                     const uint64_t index_id,
+    int will_use_das(const AccessPath &path,
                      const ObIndexInfoCache &index_info_cache,
                      PathHelper &helper,
                      bool &create_das_path,
-                     bool &create_basic_path);
+                     bool &create_basic_path,
+                     bool &need_prune_for_dop);
 
     int will_index_merge_use_das(const uint64_t table_id,
                                  const PathHelper &helper,
@@ -2029,13 +2045,15 @@ struct MergeKeyInfoHelper
     int check_exec_force_use_das(const uint64_t table_id,
                                  bool &create_das_path,
                                  bool &create_basic_path);
-    int check_opt_rule_use_das(const uint64_t table_id,
-                               const uint64_t index_id,
+    int check_opt_rule_use_das(const AccessPath &path,
                                const ObIndexInfoCache &index_info_cache,
                                const ObIArray<ObRawExpr*> &filters,
                                const bool is_rescan,
                                bool &create_das_path,
-                               bool &create_basic_path);
+                               bool &create_basic_path,
+                               bool &need_prune_for_dop);
+    int check_rowcount_use_das(const AccessPath &path,
+                               bool &create_das_path);
     int check_use_das_by_false_startup_filter(const IndexInfoEntry &index_info_entry,
                                               const ObIArray<ObRawExpr*> &filters,
                                               bool &use_das);

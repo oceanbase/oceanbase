@@ -263,9 +263,13 @@ public:
 
   int parallel_submit_agg_task(ObDasAggregatedTask *agg_task);
   int execute_all_task();
-  int execute_all_task(DasAggregatedTaskList &agg_task_list);
+  int execute_all_task(DasAggregatedTaskList &agg_task_list,
+                       bool skip_local = false,
+                       bool *part_retry_happened = nullptr);
+  int execute_remote_aggregated_tasks(bool *part_retry_happened = nullptr);
   bool check_agg_task_can_retry(ObDasAggregatedTask *agg_task);
-  int retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_tasks);
+  int retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_tasks,
+                           bool *part_retry_happened = nullptr);
   int close_all_task();
   bool is_all_local_task() const;
   bool is_do_gts_opt() { return do_gts_opt_; }

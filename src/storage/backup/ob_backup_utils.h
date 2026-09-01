@@ -36,6 +36,7 @@
 #include "lib/queue/ob_lighty_queue.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "storage/backup/ob_backup_index_block_builder_mgr.h"
+#include "storage/backup/ob_backup_tablet_pairing_helper.h"
 
 namespace oceanbase {
 namespace storage
@@ -428,12 +429,17 @@ private:
   int inner_get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       ObBackupTabletHandleRef *&tablet_ref);
   int get_consistent_scn_(share::SCN &consistent_scn) const;
+  // For REORGANIZED skipped_type with pairing_helper_ initialized, also proactively reports
+  // the paired tablet as skipped (probed via get_paired_tablet_id). cascade_pairing=false on
+  // recursion prevents A->B->A loops; callers should leave it at the default.
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type,
-                             const share::ObBackupDataType &backup_data_type);
+                             const share::ObBackupDataType &backup_data_type,
+                             const bool cascade_pairing = true);
   int check_need_report_tablet_skipped_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       const share::ObBackupSkippedType &skipped_type, bool &need_report_skip);
   int get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id, share::ObBackupSkippedType &skipped_type, share::ObLSID &split_ls_id);
+  int init_pairing_helper_();
   int hold_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const ObTabletTableStore &table_store, const share::ObBackupDataType &backup_data_type,
@@ -488,6 +494,7 @@ private:
   ObBackupProviderItem prev_item_;
   bool has_prev_item_;
   ObBackupTmpFileQueue item_queue_;
+  ObBackupTabletPairingHelper pairing_helper_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletProvider);
 };
 

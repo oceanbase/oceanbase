@@ -60,6 +60,40 @@ ObString get_display_mysql_version_cfg()
   return GCONF._display_mysql_version.get_value_string();;
 }
 
+ObPartitionRangeBuffer::ObPartitionRangeBuffer()
+  : row_key_buffer_(),
+    function_obj_()
+{
+  const ObMemAttr mem_attr(MTL_ID(), "PartRangeBuf");
+  row_key_buffer_.set_attr(mem_attr);
+  function_obj_.reset();
+}
+
+bool ObPartitionRangeBuffer::has_enough_range_buffer(const int64_t key_count) const
+{
+  return key_count <= get_range_key_count();
+}
+
+int ObPartitionRangeBuffer::ensure_range_buffer(const int64_t range_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(range_count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid partition range key count", K(ret), K(range_count), KPC(this));
+  } else if (has_enough_range_buffer(range_count)) {
+    // do nothing
+  } else if (OB_FAIL(row_key_buffer_.prepare_allocate(range_count * 2))) {
+    LOG_WARN("allocate partition range buffer failed", K(ret), K(range_count), KPC(this));
+  }
+  return ret;
+}
+
+void ObPartitionRangeBuffer::reset()
+{
+  row_key_buffer_.reset();
+  function_obj_.reset();
+}
+
 ObSqlArrayExpandGuard::ObSqlArrayExpandGuard(ParamStore &params, ObIAllocator &allocator)
   : array_obj_list_(allocator),
     ret_(OB_SUCCESS)
@@ -3224,16 +3258,13 @@ bool ObSQLUtils::part_expr_has_virtual_column(const ObExpr *part_expr)
   return has_virtual_column;
 }
 
-int ObSQLUtils::get_partition_range(ObObj *start_row_key,
-                                    ObObj *end_row_key,
-                                    ObObj *function_obj,
+int ObSQLUtils::get_partition_range(ObPartitionRangeBuffer &range_buffer,
                                     const share::schema::ObPartitionFuncType part_type,
                                     const ObExpr *part_expr,
                                     int64_t range_key_count,
                                     uint64_t table_id,
                                     ObEvalCtx &eval_ctx,
-                                    common::ObNewRange &part_range,
-                                    ObArenaAllocator &allocator)
+                                    common::ObNewRange &part_range)
 {
   int ret = OB_SUCCESS;
   bool has_virtual_column = part_expr_has_virtual_column(part_expr);
@@ -3243,8 +3274,8 @@ int ObSQLUtils::get_partition_range(ObObj *start_row_key,
     if ((part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_RANGE_COLUMNS ||
         part_type == share::schema::ObPartitionFuncType::PARTITION_FUNC_TYPE_LIST_COLUMNS)) {
       if (OB_FAIL(get_range_for_vector(
-                                    start_row_key,
-                                    end_row_key,
+                                    range_buffer.get_start_row_key_ptr(),
+                                    range_buffer.get_end_row_key_ptr(),
                                     range_key_count,
                                     table_id,
                                     part_range))) {
@@ -3254,32 +3285,26 @@ int ObSQLUtils::get_partition_range(ObObj *start_row_key,
     } else {
       // part expr only have one column.
       if (OB_FAIL(get_range_for_scalar(
-                                    start_row_key,
-                                    end_row_key,
-                                    function_obj,
+                                    range_buffer,
                                     part_type,
                                     part_expr,
                                     range_key_count,
                                     table_id,
                                     eval_ctx,
-                                    part_range,
-                                    allocator))) {
+                                    part_range))) {
         LOG_WARN("get partition range in part expr for scalar failed", K(ret));
       }
     }
   // conclude virtual generated column & part expr not NULL
   } else {
     if (OB_FAIL(get_range_for_scalar(
-                                    start_row_key,
-                                    end_row_key,
-                                    function_obj,
+                                    range_buffer,
                                     part_type,
                                     part_expr,
                                     range_key_count,
                                     table_id,
                                     eval_ctx,
-                                    part_range,
-                                    allocator))) {
+                                    part_range))) {
       LOG_WARN("get partition range in part expr for scalar failed", K(ret));
     }
   }
@@ -3287,81 +3312,56 @@ int ObSQLUtils::get_partition_range(ObObj *start_row_key,
   return ret;
 }
 
-int ObSQLUtils::get_range_for_scalar(ObObj *start_row_key,
-                                    ObObj *end_row_key,
-                                    ObObj *function_obj,
+int ObSQLUtils::get_range_for_scalar(ObPartitionRangeBuffer &range_buffer,
                                     const share::schema::ObPartitionFuncType part_type,
                                     const ObExpr *part_expr,
                                     int64_t range_key_count,
                                     uint64_t table_id,
                                     ObEvalCtx &eval_ctx,
-                                    common::ObNewRange &part_range,
-                                    ObArenaAllocator &allocator)
+                                    common::ObNewRange &part_range)
 {
   int ret = OB_SUCCESS;
-  ObObj *tmp_start_row_key = NULL;
-  ObObj *tmp_end_row_key = NULL;
-  int64_t count = 0;
+  const int64_t count = (part_expr->type_ == T_OP_ROW) ? range_key_count : 1;
+  if (OB_UNLIKELY(!range_buffer.has_enough_range_buffer(count))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition range buffer is not enough", K(ret), K(count), K(range_buffer));
   // only range column & list column
   // hash column mode type is T_FUN_SYS_PART_HASH
-  if (part_expr->type_ == T_OP_ROW) {
-    count = range_key_count;
-    if (OB_ISNULL(tmp_start_row_key = static_cast<ObObj*>(allocator.alloc(
-      sizeof(ObObj) * range_key_count)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for start_obj failed", K(ret));
-    } else if (OB_ISNULL(tmp_end_row_key = static_cast<ObObj*>(allocator.alloc(
-      sizeof(ObObj) * range_key_count)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for start_obj failed", K(ret));
-    } else {
-      for (int64_t i = 0; i < part_expr->arg_cnt_ && OB_SUCC(ret); i++) {
-        if (part_expr->args_[i]->type_ == T_REF_COLUMN) {
-          tmp_start_row_key[i] = start_row_key[i];
-          tmp_end_row_key[i] = end_row_key[i];
+  } else if (part_expr->type_ == T_OP_ROW) {
+    for (int64_t i = 0; i < part_expr->arg_cnt_ && OB_SUCC(ret); i++) {
+      if (part_expr->args_[i]->type_ == T_REF_COLUMN) {
+        // reuse the original rowkey buffers directly for column refs
+      } else {
+        ObExpr *part_expr_arg = nullptr;
+        part_expr_arg = part_expr->args_[i];
+      // virtual generated column scene
+        if (OB_FAIL(get_partition_range_common(
+                                  &range_buffer.function_obj_,
+                                  part_type,
+                                  part_expr_arg,
+                                  eval_ctx))) {
+          LOG_WARN("get partition range common failed", K(ret));
         } else {
-          ObExpr *part_expr_arg = NULL;
-          part_expr_arg = part_expr->args_[i];
-        // virtual generated column scene
-          if (OB_FAIL(get_partition_range_common(
-                                    function_obj,
-                                    part_type,
-                                    part_expr_arg,
-                                    eval_ctx))) {
-            LOG_WARN("get partition range common failed", K(ret));
-          } else {
-            tmp_start_row_key[i] = *function_obj;
-            tmp_end_row_key[i] = *function_obj;
-          }
+          range_buffer.at_start_row_key(i) = range_buffer.function_obj_;
+          range_buffer.at_end_row_key(i) = range_buffer.function_obj_;
         }
       }
     }
   // one column or hash columns oracle mode.
-  } else {
-    count = 1;
-    if (OB_ISNULL(tmp_start_row_key = static_cast<ObObj*>(allocator.alloc(
-      sizeof(ObObj) * 1)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for start_obj failed", K(ret));
-    } else if (OB_ISNULL(tmp_end_row_key = static_cast<ObObj*>(allocator.alloc(
-      sizeof(ObObj) * 1)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory for start_obj failed", K(ret));
-    } else if (OB_FAIL(get_partition_range_common(
-                                    function_obj,
+  } else if (OB_FAIL(get_partition_range_common(
+                                    &range_buffer.function_obj_,
                                     part_type,
                                     part_expr,
                                     eval_ctx))) {
-      LOG_WARN("get partition range common failed", K(ret));
-    } else {
-      tmp_start_row_key[0] = *function_obj;
-      tmp_end_row_key[0] = *function_obj;
-    }
+    LOG_WARN("get partition range common failed", K(ret));
+  } else {
+    range_buffer.at_start_row_key(0) = range_buffer.function_obj_;
+    range_buffer.at_end_row_key(0) = range_buffer.function_obj_;
   }
   if (OB_SUCC(ret)) {
     part_range.table_id_ = table_id;
-    part_range.start_key_.assign(tmp_start_row_key, count);
-    part_range.end_key_.assign(tmp_end_row_key, count);
+    part_range.start_key_.assign(range_buffer.get_start_row_key_ptr(), count);
+    part_range.end_key_.assign(range_buffer.get_end_row_key_ptr(), count);
     part_range.border_flag_.set_inclusive_start();
     part_range.border_flag_.set_inclusive_end();
   }

@@ -28,6 +28,7 @@ public:
 public:
   int open(const common::ObIArray<blocksstable::ObDatumRange> &ranges);
   virtual void reset();
+  virtual void reclaim() override;
 protected:
   virtual int calc_scan_range() override;
   int inner_calc_scan_range(const ObIArray<blocksstable::ObDatumRange> *&ranges,

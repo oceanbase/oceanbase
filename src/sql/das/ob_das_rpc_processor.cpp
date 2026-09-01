@@ -15,6 +15,7 @@
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/utility/utility.h"
 #include "sql/ob_sql.h"
+#include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/engine/px/ob_px_interruption.h"
@@ -379,6 +380,36 @@ int ObDASLookupBatchExecutor::execute(const char *buf,
   return ret;
 }
 
+bool precheck_remote_iter_reuse(
+    const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops)
+{
+  bool bret = task_ops.count() >= 2;
+  const ObDASBaseCtDef *first_ctdef = NULL;
+  for (int64_t i = 0; bret && i < task_ops.count(); ++i) {
+    ObIDASTaskOp *op = task_ops.at(i);
+    if (OB_ISNULL(op) || op->get_type() != DAS_OP_TABLE_SCAN) {
+      bret = false;  // BATCH_SCAN and DML ops cannot reuse the scan iter.
+    } else if (OB_NOT_NULL(op->get_attach_ctdef())) {
+      bret = false;  // Lookup and index merge iter trees are not covered by this optimization.
+    } else {
+      const ObDASBaseCtDef *ctdef = op->get_ctdef();
+      if (OB_ISNULL(ctdef) || ctdef->op_type_ != DAS_OP_TABLE_SCAN) {
+        bret = false;
+      } else if (0 == i) {
+        first_ctdef = ctdef;
+      } else if (ctdef != first_ctdef) {
+        bret = false;  // All tasks must share scan_ctdef_ to guarantee the same iter tree.
+      }
+    }
+  }
+  if (bret) {
+    const ObDASScanCtDef *scan_ctdef = static_cast<const ObDASScanCtDef *>(first_ctdef);
+    bret = nullptr == scan_ctdef->group_id_expr_
+        && !scan_ctdef->has_local_dynamic_filter_;
+  }
+  return bret;
+}
+
 template<obrpc::ObRpcPacketCode pcode>
 int ObDASBaseAccessP<pcode>::init()
 {
@@ -488,6 +519,8 @@ int ObDASBaseAccessP<pcode>::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
   } else {
+    bool reuse_enable = precheck_remote_iter_reuse(task_ops);
+    ObDASScanOp *reusable_scan_op = nullptr;
     for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       if (OB_ISNULL(task_op = task_ops.at(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -542,12 +575,49 @@ int ObDASBaseAccessP<pcode>::process()
         } else if (OB_FAIL(op_result->init(*task_op, CURRENT_CONTEXT->get_arena_allocator()))) {
           LOG_WARN("failed to init op result", K(ret));
         } else if (FALSE_IT(op_result->set_task_id(task_op->get_task_id()))) {
-        } else if (OB_FAIL(task_op->start_das_task())) {
-          LOG_WARN("start das task failed", K(ret));
-        } else if (OB_FAIL(task_op->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
-          LOG_WARN("fill task result to controller failed", K(ret));
-        } else if (OB_UNLIKELY(has_more) && OB_FAIL(task_op->fill_extra_result(interrupt_info))) {
-          LOG_WARN("fill extra result to controller failed", KR(ret));
+        } else if (!reuse_enable || i==0) {
+          // Non-reuse, or first task of a reuse window: open a fresh iter.
+          if (OB_FAIL(task_op->start_das_task())) {
+            LOG_WARN("start das task failed", K(ret));
+          } else if (reuse_enable) {
+            reusable_scan_op = static_cast<ObDASScanOp *>(task_op);
+            LOG_TRACE("[DAS REMOTE REUSE] window opened",
+                      "first_task_id", task_op->get_task_id(),
+                      "tablet", task_op->get_tablet_id(), KP(reusable_scan_op));
+          }
+        } else {
+          // In Reuse Window: switch the cached iter to this task instead of start_das_task.
+          ObDASScanOp *reusable = reusable_scan_op;
+          ObDASScanOp *cur_scan = static_cast<ObDASScanOp *>(task_op);
+          if (OB_ISNULL(reusable)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("reusable scan op is null in reuse window", K(ret), K(i));
+          } else if (OB_FAIL(reusable->switch_for_remote_reuse(*cur_scan))) {
+            LOG_WARN("switch for remote reuse failed, terminating reuse window",
+                     K(ret), K(i), KP(reusable));
+            int end_ret = reusable->end_das_task();
+            if (OB_SUCCESS != end_ret) {
+              LOG_WARN("end reusable das task during fallback also failed", K(end_ret));
+            }
+            reusable_scan_op = nullptr;
+            reuse_enable = false;
+            ret = OB_SUCCESS;
+            if (OB_FAIL(task_op->start_das_task())) {
+              LOG_WARN("fallback start das task failed", K(ret));
+            }
+          }
+        }
+
+        // Single fill path: when the reusable iter is alive, fill from it
+        // Otherwise fill from task_op as in the original task.
+        ObIDASTaskOp *fill_target = (reuse_enable && reusable_scan_op != nullptr)
+                                      ? static_cast<ObIDASTaskOp *>(reusable_scan_op)
+                                      : task_op;
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(fill_target->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
+          LOG_WARN("fill task result to controller failed", K(ret), K(reuse_enable));
+        } else if (OB_UNLIKELY(has_more) && OB_FAIL(fill_target->fill_extra_result(interrupt_info))) {
+          LOG_WARN("fill extra result to controller failed", KR(ret), K(reuse_enable));
         } else {
           task_resp.set_has_more(has_more);
           ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
@@ -561,10 +631,31 @@ int ObDASBaseAccessP<pcode>::process()
           // accessing failed das task result is undefined behavior.
           op_result->reuse();
         }
-        //因为end_task还有可能失败，需要通过RPC将end_task的返回值带回到scheduler上
-        int tmp_ret = task_op->end_das_task();
-        if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("end das task failed", K(ret), K(tmp_ret), K(task));
+
+        // end_das_task placement: non-reuse closes per task as before. Reuse
+        // keeps the iter open until the last task or until has_more / error /
+        // memory_limit forces an early close — once. must_close covers every
+        // break edge below so the tail safety net is purely defensive.
+        int tmp_ret = OB_SUCCESS;
+        if (!reuse_enable || reusable_scan_op == nullptr) {
+          tmp_ret = task_op->end_das_task();
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("end das task failed", K(ret), K(tmp_ret), K(task));
+          }
+        } else {
+          const bool must_close = OB_FAIL(ret) || has_more || i == task_ops.count() - 1 || memory_limit < 0;
+          if (must_close) {
+            tmp_ret = reusable_scan_op->end_das_task();
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("end reusable das task failed", K(ret), K(tmp_ret), K(task));
+            }
+            LOG_TRACE("[DAS REMOTE REUSE] window closed",
+                      "last_i", i, K(has_more), "errcode", ret, KP(reusable_scan_op));
+            reusable_scan_op = nullptr;
+            if (has_more || OB_FAIL(ret) || tmp_ret != OB_SUCCESS || memory_limit < 0) {
+              reuse_enable = false;
+            }
+          }
         }
         ret = COVER_SUCC(tmp_ret);
         if (OB_NOT_NULL(task_op->get_trans_desc())) {
@@ -608,6 +699,17 @@ int ObDASBaseAccessP<pcode>::process()
         }
         LOG_DEBUG("process das base access task", K(ret), KPC(task_op), KPC(op_result), K(has_more));
       }
+    }
+
+    if (OB_NOT_NULL(reusable_scan_op)) {
+      // Loop exited without going through must_close — happens when task_op is null
+      // mid-window, or when ret is mutated after must_close (trans/schema fixups).
+      int tmp_ret = reusable_scan_op->end_das_task();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("end reusable das task at loop tail failed", K(ret), K(tmp_ret));
+      }
+      ret = COVER_SUCC(tmp_ret);
+      reusable_scan_op = nullptr;
     }
 
     if (OB_LIKELY(has_set_interrupt)) {

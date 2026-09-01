@@ -112,6 +112,7 @@ public:
   virtual ~ObSSTableMultiVersionRowMultiScanner() {}
   virtual void reset() override;
   virtual void reuse() override;
+  virtual void reclaim() override;
 protected:
   virtual int inner_open(
       const ObTableIterParam &iter_param,

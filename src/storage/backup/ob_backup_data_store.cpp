@@ -376,6 +376,109 @@ bool ObBackupMajorCompactionMViewDepTabletListDesc::is_valid() const
   return bret;
 }
 
+OB_SERIALIZE_MEMBER(ObBackupTabletPairingItem, tablet_id_, paired_tablet_id_);
+
+OB_SERIALIZE_MEMBER(ObBackupTabletPairingInfoDesc, pairing_list_);
+
+bool ObBackupTabletPairingInfoDesc::is_valid() const
+{
+  bool bret = true;
+  for (int64_t i = 0; bret && i < pairing_list_.count(); ++i) {
+    if (!pairing_list_.at(i).is_valid()) {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
+int ObBackupDataStore::write_tablet_pairing_info(const ObBackupTabletPairingInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tablet_pairing_info_path(backup_set_dest_, path))) {
+    LOG_WARN("failed to get tablet pairing info path", K(ret), K(backup_set_dest_));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("failed to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("failed to write tablet pairing info", K(ret), K(desc));
+  } else {
+    LOG_INFO("write tablet pairing info", "pairing_count", desc.pairing_list_.count());
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_tablet_pairing_info(ObBackupTabletPairingInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_tablet_pairing_info_path(backup_set_dest_, path))) {
+    LOG_WARN("failed to get tablet pairing info path", K(ret), K(backup_set_dest_));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("failed to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("failed to read tablet pairing info", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read tablet pairing info", "pairing_count", desc.pairing_list_.count());
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_ls_tablet_pairing_info(
+    const share::ObLSID &ls_id, const ObBackupTabletPairingInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ls_tablet_pairing_info_path(backup_set_dest_, ls_id, path))) {
+    LOG_WARN("failed to get ls tablet pairing info path", K(ret), K(backup_set_dest_), K(ls_id));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("failed to assign full path", K(ret));
+  } else if (OB_FAIL(write_single_file(full_path, desc))) {
+    LOG_WARN("failed to write ls tablet pairing info", K(ret), K(ls_id), K(desc));
+  } else {
+    LOG_INFO("write ls tablet pairing info", K(ls_id), "pairing_count", desc.pairing_list_.count());
+  }
+  return ret;
+}
+
+int ObBackupDataStore::read_ls_tablet_pairing_info(
+    const share::ObLSID &ls_id, ObBackupTabletPairingInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  ObBackupPathString full_path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(ObBackupPathUtil::get_ls_tablet_pairing_info_path(backup_set_dest_, ls_id, path))) {
+    LOG_WARN("failed to get ls tablet pairing info path", K(ret), K(backup_set_dest_), K(ls_id));
+  } else if (OB_FAIL(full_path.assign(path.get_obstr()))) {
+    LOG_WARN("failed to assign full path", K(ret));
+  } else if (OB_FAIL(read_single_file(full_path, desc))) {
+    LOG_WARN("failed to read ls tablet pairing info", K(ret), K(ls_id), K(full_path));
+  } else {
+    LOG_INFO("read ls tablet pairing info", K(ls_id), "pairing_count", desc.pairing_list_.count());
+  }
+  return ret;
+}
+
 int ObBackupSetFilter::get_backup_set_array(ObIArray<share::ObBackupSetDesc> &backup_set_array) const
 {
   int ret = OB_SUCCESS;

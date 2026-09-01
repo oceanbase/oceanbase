@@ -45,6 +45,15 @@ void ObMultipleMultiScanMerge::reset()
   di_base_cow_ranges_.reset();
 }
 
+void ObMultipleMultiScanMerge::reclaim()
+{
+  ranges_ = NULL;
+  cow_ranges_.reset();
+  di_base_ranges_ = NULL;
+  di_base_cow_ranges_.reset();
+  ObMultipleScanMerge::reclaim();
+}
+
 int ObMultipleMultiScanMerge::open(const ObIArray<ObDatumRange> &ranges)
 {
   int ret = OB_SUCCESS;

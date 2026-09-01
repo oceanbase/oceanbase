@@ -143,6 +143,10 @@ public:
       get_next_rows_(nullptr),
       first_get_row_(true),
       seq_task_idx_(OB_INVALID_INDEX),
+      enable_iter_reuse_(false),
+      is_cur_task_local_(false),
+      reusable_scan_op_(nullptr),
+      close_reuse_after_retry_(false),
       group_id_idx_(OB_INVALID_INDEX),
       need_prepare_sort_merge_info_(false),
       merge_state_arr_(),
@@ -234,6 +238,14 @@ private:
   bool first_get_row_;
   /********* SEQUENTIAL MERGE BEGIN *********/
   int64_t seq_task_idx_;
+  bool enable_iter_reuse_;
+  bool is_cur_task_local_;
+  ObDASScanOp *reusable_scan_op_;
+  int switch_reusable_scan_op(ObDASScanOp *new_scan_op);
+  // A partition retry happened while rescanning the holder. Keep consuming
+  // the current retry result, then retire the holder at logical task end.
+  bool close_reuse_after_retry_;
+  int disable_reuse_if_part_retry_happened();
   /********* SEQUENTIAL MERGE END *********/
 
   /********* SORT MERGE BEGIN *********/

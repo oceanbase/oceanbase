@@ -171,8 +171,12 @@ TEST_F(ObGlobalIteratorPoolTest, get)
   type = T_MULTI_SCAN;
   CachedIteratorNode *ms_cached_node = nullptr;
   ret = iter_pool.get(type, ms_cached_node);
-  ASSERT_EQ(ret, OB_INVALID_ARGUMENT);
-  ASSERT_TRUE(nullptr == ms_cached_node);
+  ASSERT_EQ(ret, OB_SUCCESS);
+  ASSERT_TRUE(nullptr != ms_cached_node);
+  ASSERT_TRUE(ms_cached_node->is_occupied_);
+  ASSERT_TRUE(nullptr == ms_cached_node->iter_);
+  ASSERT_TRUE(nullptr != ms_cached_node->stmt_iter_pool_);
+  iter_pool.release(ms_cached_node);
 }
 
 TEST_F(ObGlobalIteratorPoolTest, release)

@@ -939,6 +939,40 @@ int ObDASScanOp::reuse_iter()
   return ret;
 }
 
+int ObDASScanOp::switch_for_remote_reuse(ObDASScanOp &target)
+{
+  int ret = OB_SUCCESS;
+  // Remote-side counterpart of switch_reusable_scan_op.
+  // task_id_ must be synced before any fill_extra_result (save_task_result keys by task_id_).
+  set_tablet_id(target.get_tablet_id());
+  set_ls_id(target.get_ls_id());
+  set_task_id(target.get_task_id());
+  remain_row_cnt_ = 0;
+  if (OB_FAIL(get_related_tablet_ids().assign(target.get_related_tablet_ids()))) {
+    LOG_WARN("failed to copy related tablet ids for remote reuse", K(ret));
+  } else if (OB_FAIL(reuse_iter())) {
+    LOG_WARN("failed to reuse iter for remote reuse", K(ret),
+             "src_tablet", target.get_tablet_id(),
+             "dst_tablet", get_tablet_id());
+  } else if (OB_FAIL(scan_param_.key_ranges_.assign(target.get_scan_param().key_ranges_))) {
+    LOG_WARN("failed to assign key_ranges for remote reuse", K(ret));
+  } else if (OB_FAIL(scan_param_.ss_key_ranges_.assign(target.get_scan_param().ss_key_ranges_))) {
+    LOG_WARN("failed to assign ss_key_ranges for remote reuse", K(ret));
+  } else if (OB_FAIL(scan_param_.mbr_filters_.assign(target.get_scan_param().mbr_filters_))) {
+    LOG_WARN("failed to assign mbr_filters for remote reuse", K(ret));
+  } else if (OB_FAIL(rescan())) {
+    LOG_WARN("failed to rescan for remote reuse", K(ret),
+             "tablet", get_tablet_id(), "ls", get_ls_id());
+  } else {
+    OB_ASSERT(task_id_ == target.get_task_id());
+    LOG_TRACE("[DAS REMOTE REUSE] switched iter to next tablet",
+              "tablet_id", get_tablet_id(),
+              "ls_id", get_ls_id(),
+              "task_id", get_task_id());
+  }
+  return ret;
+}
+
 const ExprFixedArray &ObDASScanOp::get_result_outputs() const
 {
   const ExprFixedArray *result_output = nullptr;

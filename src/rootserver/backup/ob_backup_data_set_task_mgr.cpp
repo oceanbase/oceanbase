@@ -24,6 +24,7 @@
 #include "share/ob_tablet_replica_checksum_operator.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
+#include "storage/backup/ob_backup_tablet_pairing_helper.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_data_table_operator.h"
@@ -640,6 +641,8 @@ int ObBackupSetTaskMgr::backup_meta_finish_()
     LOG_WARN("[DATA_BACKUP]failed to merge tablet to ls info", K(ret), K(ls_task));
   } else if (OB_FAIL(backup_major_compaction_mview_dep_tablet_list_(consistent_scn))) {
     LOG_WARN("failed to backup mview dep tablet list", K(ret));
+  } else if (OB_FAIL(aggregate_tablet_pairing_files_(ls_task))) {
+    LOG_WARN("failed to aggregate tablet pairing files", K(ret));
   } else if (OB_FAIL(generate_backup_meta_info_file_list_())) {
     LOG_WARN("failed to generate meta info file list", K(ret));
   } else if (OB_FALSE_IT(DEBUG_SYNC(BEFORE_BACKUP_DATA))) {
@@ -807,6 +810,37 @@ int ObBackupSetTaskMgr::merge_ls_meta_infos_(
   }
   return ret;
 }
+
+int ObBackupSetTaskMgr::aggregate_tablet_pairing_files_(
+    const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks)
+{
+  int ret = OB_SUCCESS;
+  backup::ObBackupTabletPairingHelper tenant_pairing_helper;
+  const share::ObBackupDest &backup_set_dest = store_.get_backup_set_dest();
+  if (OB_FAIL(tenant_pairing_helper.init(set_task_attr_.tenant_id_))) {
+    LOG_WARN("failed to init tenant pairing helper", K(ret));
+  } else {
+    // Load pairing info from each LS-level file and merge into the tenant-level helper.
+    ARRAY_FOREACH_X(ls_tasks, i, cnt, OB_SUCC(ret)) {
+      const share::ObBackupLSTaskAttr &ls_task_attr = ls_tasks.at(i);
+      if (OB_FAIL(tenant_pairing_helper.load_from_ls_file(backup_set_dest, ls_task_attr.ls_id_))) {
+        LOG_WARN("failed to load ls pairing file", K(ret), K(ls_task_attr.ls_id_));
+      }
+    }
+    // Write the aggregated tenant-level pairing file.
+    if (OB_SUCC(ret) && !tenant_pairing_helper.is_empty()) {
+      if (OB_FAIL(tenant_pairing_helper.write_to_tenant_file(backup_set_dest))) {
+        LOG_WARN("failed to write tenant pairing file", K(ret));
+      } else {
+        LOG_INFO("[DATA_BACKUP]succeed aggregate tablet pairing files",
+                 "pairing_count", tenant_pairing_helper.get_pairing_count(),
+                 "ls_count", ls_tasks.count());
+      }
+    }
+  }
+  return ret;
+}
+
 
 int ObBackupSetTaskMgr::merge_tablet_to_ls_info_(const share::SCN &consistent_scn,
     const ObIArray<ObBackupLSTaskAttr> &ls_tasks, common::ObIArray<share::ObLSID> &ls_ids)
@@ -1664,8 +1698,66 @@ int ObBackupSetTaskMgr::get_change_turn_tablets_(
     LOG_WARN("[DATA_BACKUP]failed to get skip tablet", K(ret), "teannt_id", set_task_attr_.tenant_id_, "task_id", set_task_attr_.task_id_);
   } else if (skipped_tablets.empty()) {
     LOG_INFO("[DATA_BACKUP]no change turn tablets found", K(ret));
-  } else if (OB_FAIL(do_get_change_turn_tablets_(ls_tasks, skipped_tablets, tablet_to_ls))) {
-    LOG_WARN("[DATA_BACKUP]failed to do get change turn tables", K(ret), K(set_task_attr_));
+  } else {
+    backup::ObBackupTabletPairingHelper pairing_helper;
+    const share::ObBackupDest &backup_set_dest = store_.get_backup_set_dest();
+    if (OB_FAIL(pairing_helper.init(set_task_attr_.tenant_id_))) {
+      LOG_WARN("failed to init pairing helper", K(ret));
+    } else if (OB_FAIL(pairing_helper.load_from_tenant_file(backup_set_dest))) {
+      LOG_WARN("failed to load tenant pairing file", K(ret));
+    } else if (OB_FAIL(validate_and_complete_tablet_pairing_(pairing_helper, skipped_tablets))) {
+      LOG_WARN("[DATA_BACKUP]failed to validate tablet pairing", K(ret));
+    } else if (OB_FAIL(do_get_change_turn_tablets_(ls_tasks, skipped_tablets, pairing_helper, tablet_to_ls))) {
+      LOG_WARN("[DATA_BACKUP]failed to do get change turn tables", K(ret), K(set_task_attr_));
+    }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::validate_and_complete_tablet_pairing_(
+    const backup::ObBackupTabletPairingHelper &pairing_helper,
+    common::hash::ObHashSet<ObBackupSkipTabletAttr> &skipped_tablets)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupSkipTabletAttr> additional_skipped;
+  if (pairing_helper.is_empty()) {
+    // no pairing info, skip validation
+  } else {
+    for (auto iter = skipped_tablets.begin(); OB_SUCC(ret) && iter != skipped_tablets.end(); ++iter) {
+      const ObBackupSkipTabletAttr &skip_tablet = iter->first;
+      ObTabletID paired_tablet_id;
+      if (OB_FAIL(pairing_helper.get_paired_tablet_id(skip_tablet.tablet_id_, paired_tablet_id))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          continue;
+        }
+        LOG_WARN("failed to get paired tablet", K(ret), K(skip_tablet));
+      } else if (!paired_tablet_id.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get_paired_tablet_id succeeded but returned invalid tablet id", K(ret), K(skip_tablet));
+      } else {
+        ObBackupSkipTabletAttr paired_skip;
+        paired_skip.tablet_id_ = paired_tablet_id;
+        if (OB_HASH_NOT_EXIST == skipped_tablets.exist_refactored(paired_skip)) {
+          paired_skip.skipped_type_ = skip_tablet.skipped_type_;
+          if (OB_FAIL(additional_skipped.push_back(paired_skip))) {
+            LOG_WARN("failed to push back", K(ret));
+          } else {
+            LOG_INFO("[DATA_BACKUP]supplement paired tablet to skipped",
+                     K(skip_tablet), K(paired_skip));
+          }
+        }
+      }
+    }
+    ARRAY_FOREACH_X(additional_skipped, idx, cnt, OB_SUCC(ret)) {
+      if (OB_FAIL(skipped_tablets.set_refactored(additional_skipped.at(idx)))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to add paired tablet to skipped", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1705,6 +1797,7 @@ int ObBackupSetTaskMgr::get_tablets_of_deleted_ls_(
 int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
     const ObIArray<ObBackupLSTaskAttr> &ls_tasks,
     const common::hash::ObHashSet<ObBackupSkipTabletAttr> &skipped_tablets,
+    backup::ObBackupTabletPairingHelper &pairing_helper,
     ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls)
 {
   int ret = OB_SUCCESS;
@@ -1738,7 +1831,7 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
     for (auto iter = skipped_tablets.begin(); OB_SUCC(ret) && iter != skipped_tablets.end(); ++iter) {
       const ObBackupSkipTabletAttr &skip_tablet = iter->first;
       descendent_list.reset();
-      if (OB_FAIL(decide_tablet_final_ls_(skip_tablet, tablet_reorganize_ls_map, descendent_list, final_ls_id))) {
+      if (OB_FAIL(decide_tablet_final_ls_(skip_tablet, tablet_reorganize_ls_map, pairing_helper, descendent_list, final_ls_id))) {
         LOG_WARN("failed to decide tablet final ls", K(ret), K(skip_tablet), K(descendent_list));
       } else if (!final_ls_id.is_valid()) {
         // do nothing
@@ -1799,6 +1892,7 @@ int ObBackupSetTaskMgr::do_get_change_turn_tablets_(
 
 int ObBackupSetTaskMgr::decide_tablet_final_ls_(const share::ObBackupSkipTabletAttr &skip_tablet,
                                                 common::hash::ObHashMap<share::ObLSID, common::ObArray<ObTabletReorganizeInfo>> &tablet_reorganize_ls_map,
+                                                backup::ObBackupTabletPairingHelper &pairing_helper,
                                                 common::ObArray<common::ObTabletID> &descendent_list,
                                                 share::ObLSID &final_ls_id)
 {
@@ -1849,6 +1943,38 @@ int ObBackupSetTaskMgr::decide_tablet_final_ls_(const share::ObBackupSkipTabletA
         LOG_WARN("failed to get lead children from history", K(ret));
       } else {
         final_ls_id = split_ls_id;
+        // Derive paired descendants: if A has paired A', get A' descendants and append.
+        // Use a local variable to avoid polluting ret when the tablet has no pairing.
+        if (!pairing_helper.is_empty()) {
+          ObTabletID paired_tablet_id;
+          int pair_ret = pairing_helper.get_paired_tablet_id(skip_tablet.tablet_id_, paired_tablet_id);
+          if (OB_SUCCESS == pair_ret && !paired_tablet_id.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get_paired_tablet_id succeeded but returned invalid tablet id",
+                     K(ret), K(skip_tablet), K(paired_tablet_id));
+          } else if (OB_SUCCESS == pair_ret && paired_tablet_id.is_valid()) {
+            ObArray<ObTabletID> paired_descendent_list;
+            // Count-only check: leaf descendents are post-split, so they don't appear in the
+            // pairing snapshot. Cascading split guarantees the primary and its auxiliary split
+            // symmetrically — equal leaf counts imply the split structure is consistent.
+            if (OB_FAIL(ObBackupTabletReorganizeHelper::get_leaf_children_from_history(
+                    job_attr_->tenant_id_, *tablet_reorganize_array, paired_tablet_id, paired_descendent_list))) {
+              LOG_WARN("failed to get paired descendents", K(ret), K(paired_tablet_id));
+            } else if (OB_FAIL(backup::ObBackupTabletPairingHelper::verify_descendent_count_match(
+                    descendent_list, paired_descendent_list))) {
+              LOG_WARN("descendent count mismatch between paired tablets", K(ret),
+                       K(skip_tablet), K(paired_tablet_id), K(descendent_list), K(paired_descendent_list));
+            } else if (OB_FAIL(append(descendent_list, paired_descendent_list))) {
+              LOG_WARN("failed to append paired descendents", K(ret));
+            } else {
+              LOG_INFO("[DATA_BACKUP]appended paired descendents",
+                       K(skip_tablet), K(paired_tablet_id), K(paired_descendent_list));
+            }
+          } else if (OB_ENTRY_NOT_EXIST != pair_ret && OB_SUCCESS != pair_ret) {
+            ret = pair_ret;
+            LOG_WARN("failed to get paired tablet id", K(ret), K(skip_tablet));
+          }
+        }
       }
     }
   } else if (OB_FAIL(descendent_list.push_back(skip_tablet.tablet_id_))) {

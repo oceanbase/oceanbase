@@ -25,6 +25,7 @@ namespace oceanbase
 {
 namespace share
 {
+ERRSIM_POINT_DEF(EN_AUTO_SPLIT_TABLET_BY_ALL_SSTABLES, "Trigger tablet splitting by counting all sstables size");
 
 uint64_t ObSplitTask::hash() const
 {
@@ -1005,7 +1006,11 @@ int ObServerAutoSplitScheduler::check_and_fetch_tablet_split_info(const storage:
     can_split = tablet->get_major_table_count() > 0 && tablet->get_data_tablet_id() == tablet->get_tablet_id()
         && common::ObRole::LEADER == role && !num_sstables_exceed_limit && MTL_ID() != OB_SYS_TENANT_ID;
     // TODO gaishun.gs resident_info
-    used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
+    if (OB_UNLIKELY(EN_AUTO_SPLIT_TABLET_BY_ALL_SSTABLES)) {
+      used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_);
+    } else {
+      used_disk_space = std::max(static_cast<int64_t>(2), tablet->get_last_major_total_macro_block_count() * OB_DEFAULT_MACRO_BLOCK_SIZE);
+    }
     can_split &= (used_disk_space > real_auto_split_size);
     if (OB_SUCC(ret) && can_split) {
       ObTabletCreateDeleteMdsUserData user_data;

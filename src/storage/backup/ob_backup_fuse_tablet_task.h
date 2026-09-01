@@ -15,6 +15,7 @@
 
 #include "storage/backup/ob_backup_fuse_tablet_ctx.h"
 #include "storage/backup/ob_backup_tablet_meta_fuser.h"
+#include "storage/backup/ob_backup_tablet_pairing_helper.h"
 
 namespace oceanbase
 {
@@ -114,6 +115,7 @@ private:
   int write_new_tablet_info_(
       const ObMigrationTabletParam &output);
   int record_server_event_();
+  int init_pairing_helper_();
 
 private:
   bool is_inited_;
@@ -121,6 +123,7 @@ private:
   ObBackupTabletFuseCtx *fuse_ctx_;
   ObBackupTabletGroupFuseCtx *group_ctx_;
   ObBackupFuseTabletType fuse_type_;
+  ObBackupTabletPairingHelper pairing_helper_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletFuseTask);
 };
 

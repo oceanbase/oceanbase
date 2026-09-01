@@ -341,7 +341,7 @@ int ObJoinOrder::compute_sharding_info_for_base_paths(ObIArray<AccessPath *> &ac
 }
 
 // prune paths added because of auto dop:
-//  global index and is not inner path / subquery with pushdown filter
+//  global index/multi get/auto split table and is not inner path / subquery with pushdown filter
 //    1. not use das but parallel = 1
 //    2. use das and exits same index path with parallel > 1
 int ObJoinOrder::prune_paths_due_to_parallel(ObIArray<AccessPath *> &access_paths)
@@ -364,7 +364,7 @@ int ObJoinOrder::prune_paths_due_to_parallel(ObIArray<AccessPath *> &access_path
       if (OB_ISNULL(path = access_paths.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(path), K(ret));
-      } else if (!path->is_global_index_) {
+      } else if (!path->need_prune_for_dop_) {
         /* do nothing */
       } else {
         AccessPath *target_path = NULL;
@@ -1443,24 +1443,25 @@ int ObJoinOrder::check_index_subset(const OrderingInfo *first_ordering_info,
   return ret;
 }
 
-int ObJoinOrder::will_use_das(const uint64_t table_id,
-                             const uint64_t index_id,
+int ObJoinOrder::will_use_das(const AccessPath &path,
                              const ObIndexInfoCache &index_info_cache,
                              PathHelper &helper,
                              bool &create_das_path,
-                             bool &create_basic_path)
+                             bool &create_basic_path,
+                             bool &need_prune_for_dop)
 {
   int ret = OB_SUCCESS;
   create_das_path = false;
   create_basic_path = false;
+  need_prune_for_dop = false;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(get_plan()));
-  } else if (OB_FAIL(check_exec_force_use_das(table_id, create_das_path, create_basic_path))) {
+  } else if (OB_FAIL(check_exec_force_use_das(path.table_id_, create_das_path, create_basic_path))) {
     LOG_WARN("failed to check exec force use das", K(ret));
   } else if (create_das_path || create_basic_path) {
     LOG_TRACE("will use das by execution", K(create_das_path), K(create_basic_path));
-  } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(table_id, create_das_path, create_basic_path))) {
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(path.table_id_, create_das_path, create_basic_path))) {
     LOG_WARN("failed to check hint use das", K(ret));
   } else if (create_das_path || create_basic_path) {
     LOG_TRACE("will use das by hint", K(create_das_path), K(create_basic_path));
@@ -1468,16 +1469,51 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     create_das_path = false;
     create_basic_path = true;
     LOG_TRACE("disable das scan by tenant config", K(create_das_path), K(create_basic_path));
-  } else if (OB_FAIL(check_opt_rule_use_das(table_id,
-                                            index_id,
+  } else if (OB_FAIL(check_opt_rule_use_das(path,
                                             index_info_cache,
                                             helper.filters_,
                                             (get_plan()->get_is_rescan_subplan() || helper.is_inner_path_),
                                             create_das_path,
-                                            create_basic_path))) {
+                                            create_basic_path,
+                                            need_prune_for_dop))) {
     LOG_WARN("failed to check opt rule use das", K(ret));
   } else {
-    LOG_TRACE("will use das by opt rule", K(create_das_path), K(create_basic_path));
+    LOG_TRACE("will use das by opt rule",
+              K(create_das_path), K(create_basic_path), K(need_prune_for_dop));
+  }
+  return ret;
+}
+
+int ObJoinOrder::check_rowcount_use_das(const AccessPath &estimated_template,
+                                        bool &create_das_path)
+{
+  int ret = OB_SUCCESS;
+  create_das_path = false;
+  const ObDMLStmt *stmt = nullptr;
+  static constexpr double DAS_ROWCOUNT_THRESHOLD = 1000000.0;
+  if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan", K(ret));
+  } else if (!estimated_template.is_single() && stmt->is_select_stmt()) {
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (select_stmt->has_distinct() ||
+        (select_stmt->has_group_by() && !select_stmt->is_scala_group_by()) ||
+        !select_stmt->is_single_table_stmt()) {
+     /* do nothing */
+    } else if (estimated_template.get_logical_query_range_row_count() <= DAS_ROWCOUNT_THRESHOLD) {
+      ObSqlSchemaGuard *schema_guard = nullptr;
+      const ObTableSchema *table_schema = nullptr;
+      if (estimated_template.is_get_) {
+        create_das_path = true;
+      } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null schema guard", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(estimated_template.ref_table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(estimated_template.ref_table_id_));
+      } else if (OB_NOT_NULL(table_schema) && table_schema->is_auto_partitioned_table()) {
+        create_das_path = true;
+      }
+    }
   }
   return ret;
 }
@@ -1593,18 +1629,20 @@ int ObJoinOrder::check_exec_force_use_das(const uint64_t table_id,
   return ret;
 }
 
-int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
-                                        const uint64_t index_id,
+int ObJoinOrder::check_opt_rule_use_das(const AccessPath &path,
                                         const ObIndexInfoCache &index_info_cache,
                                         const ObIArray<ObRawExpr*> &filters,
                                         const bool is_rescan,
                                         bool &create_das_path,
-                                        bool &create_basic_path)
+                                        bool &create_basic_path,
+                                        bool &need_prune_for_dop)
 {
   int ret = OB_SUCCESS;
   create_das_path = false;
   create_basic_path = false;
+  need_prune_for_dop = false;
   IndexInfoEntry *index_info_entry = NULL;
+  int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
   if (is_rescan) {
     if (!is_expanded_realtime_major_refresh_mview()) {
       create_das_path = true;
@@ -1615,8 +1653,8 @@ int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
       create_das_path = table_meta_info_.is_broadcast_table_;
       create_basic_path = !table_meta_info_.is_broadcast_table_;
     }
-  } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id, index_info_entry))) {
-    LOG_WARN("failed to get index info entry", K(table_id), K(index_id), K(ret));
+  } else if (OB_FAIL(index_info_cache.get_index_info_entry(path.table_id_, path.index_id_, index_info_entry))) {
+    LOG_WARN("failed to get index info entry", K(path.table_id_), K(path.index_id_), K(ret));
   } else if (OB_ISNULL(index_info_entry)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(index_info_entry));
@@ -1624,18 +1662,28 @@ int ObJoinOrder::check_opt_rule_use_das(const uint64_t table_id,
     LOG_WARN("failed to check use das by false startup filter", K(ret));
   } else if (create_das_path) {
     /* do nothing */
+  } else if (OB_FAIL(get_explicit_dop_for_path(path.index_id_, explicit_dop))) {
+    LOG_WARN("failed to get explicit dop", K(ret));
+  } else if (explicit_dop > 1) {
+    // Explicit parallel hint or table dop > 1 forces basic path
+    create_basic_path = true;
+  } else if (OB_FAIL(check_rowcount_use_das(path, create_das_path))) {
+    LOG_WARN("failed to check rowcount use das", K(ret));
+  } else if (create_das_path) {
+    // Rowcount rule chose DAS. For auto-dop (UNSET_PARALLEL) we cannot tell
+    // yet whether the basic alternative would win after auto-dop resolution,
+    // so generate both and let prune_paths_due_to_parallel pick later.
+    if (ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
+      create_basic_path = true;
+      need_prune_for_dop = true;
+    }
   } else if (index_info_entry->is_index_global() && index_info_entry->is_index_back()) {
-    int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
-    if (OB_FAIL(get_explicit_dop_for_path(index_id, explicit_dop))) {
-      LOG_WARN("failed to get explicit dop", K(ret));
-    } else if (ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
-      // for global index use auto dop, create das path and basic path, after get auto dop result, prune unnecessary path
-      create_das_path = true;
+    create_das_path = true;
+    if (ObGlobalHint::UNSET_PARALLEL == explicit_dop) {
+      // for global index use auto dop, create das path and basic path,
+      // after get auto dop result, prune unnecessary path
       create_basic_path = true;
-    } else if (ObGlobalHint::DEFAULT_PARALLEL == explicit_dop) {
-      create_das_path = true;
-    } else {
-      create_basic_path = true;
+      need_prune_for_dop = true;
     }
   } else {
     create_basic_path = true;
@@ -1933,7 +1981,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
                                         AccessPath *&access_path,
                                         bool use_das,
                                         bool use_column_store,
-                                        OptSkipScanState use_skip_scan)
+                                        OptSkipScanState use_skip_scan,
+                                        bool defer_column_store_init)
 {
   int ret = OB_SUCCESS;
   IndexInfoEntry *index_info_entry = NULL;
@@ -2093,7 +2142,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
         LOG_WARN("failed to assign expr constraints", K(ret));
       } else if (OB_FAIL(append(ap->expr_constraints_, helper.expr_constraints_))) {
         LOG_WARN("append expr constraints failed", K(ret));
-      } else if (OB_FAIL(init_column_store_est_info(table_id, ref_id, ap->est_cost_info_))) {
+      } else if (!defer_column_store_init &&
+                 OB_FAIL(init_column_store_est_info(table_id, ref_id, ap->est_cost_info_))) {
         LOG_WARN("failed to init column store est cost info", K(ret));
       } else if (OB_FAIL(ap->compute_access_path_batch_rescan())) {
         LOG_WARN("failed to compute access path batch rescan", K(ret));
@@ -2103,6 +2153,133 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     }
     LOG_TRACE("OPT:succeed to create one access path",
                 K(table_id), K(ref_id), K(index_id), K(helper.is_inner_path_));
+  }
+  return ret;
+}
+
+int ObJoinOrder::create_access_path_variant_from_template(AccessPath &tmpl,
+                                                          bool use_das,
+                                                          bool use_column_store,
+                                                          bool &template_reused,
+                                                          AccessPath *&variant_ap)
+{
+  int ret = OB_SUCCESS;
+  variant_ap = NULL;
+  if (!template_reused) {
+    tmpl.use_das_ = use_das;
+    tmpl.contain_das_op_ = use_das;
+    tmpl.est_cost_info_.is_das_scan_ = use_das;
+    tmpl.use_column_store_ = use_column_store;
+    tmpl.est_cost_info_.use_column_store_ = use_column_store;
+    variant_ap = &tmpl;
+    template_reused = true;
+  } else {
+    AccessPath *ap = NULL;
+    if (OB_ISNULL(allocator_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null allocator", K(ret));
+    } else if (OB_ISNULL(ap = reinterpret_cast<AccessPath *>(
+                                         allocator_->alloc(sizeof(AccessPath))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("failed to allocate AccessPath", K(ret));
+    } else {
+      ap = new(ap) AccessPath(tmpl.table_id_,
+                              tmpl.ref_table_id_,
+                              tmpl.index_id_,
+                              tmpl.parent_,
+                              tmpl.order_direction_,
+                              *allocator_);
+      if (OB_FAIL(ap->assign(tmpl))) {
+        LOG_WARN("failed to assign access path", K(ret));
+      } else {
+        ap->use_das_ = use_das;
+        ap->contain_das_op_ = use_das;
+        ap->est_cost_info_.is_das_scan_ = use_das;
+        ap->use_column_store_ = use_column_store;
+        ap->est_cost_info_.use_column_store_ = use_column_store;
+        variant_ap = ap;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::expand_access_paths_after_estimate(const ObIndexInfoCache &index_info_cache,
+                                                    PathHelper &helper,
+                                                    ObIArray<AccessPath *> &access_paths)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<AccessPath *, 8> expanded_paths;
+  for (int64_t i = 0; OB_SUCC(ret) && i < access_paths.count(); ++i) {
+    AccessPath *tmpl = access_paths.at(i);
+    if (OB_ISNULL(tmpl)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null template access path", K(ret), K(i));
+    } else if (tmpl->is_index_merge_path()) {
+      // index merge paths are out of scope; carry over as-is.
+      if (OB_FAIL(expanded_paths.push_back(tmpl))) {
+        LOG_WARN("failed to push back index merge path", K(ret));
+      }
+    } else {
+      bool is_create_das_path = false;
+      bool is_create_basic_path = false;
+      bool need_prune_for_dop = false;
+      bool use_column_store = false;
+      bool use_row_store = false;
+      if (OB_FAIL(will_use_das(*tmpl,
+                               index_info_cache,
+                               helper,
+                               is_create_das_path,
+                               is_create_basic_path,
+                               need_prune_for_dop))) {
+        LOG_WARN("failed to check will use das", K(ret));
+      } else if (OB_FAIL(get_plan()->will_use_column_store(tmpl->table_id_,
+                                                           tmpl->index_id_,
+                                                           tmpl->ref_table_id_,
+                                                           use_column_store,
+                                                           use_row_store))) {
+        LOG_WARN("failed to check will use column store", K(ret));
+      } else {
+        // Try to reuse the template in-place for one variant to avoid one
+        // allocation. The template carries use_das_=false / use_column_store_=false,
+        // so the basic+row_store variant is the natural in-place candidate.
+        bool template_reused = false;
+        struct VariantSpec { bool use_das; bool use_col; bool should_create; };
+        VariantSpec specs[4] = {
+            { true,  false, is_create_das_path   && use_row_store    },
+            { true,  true,  is_create_das_path   && use_column_store },
+            { false, false, is_create_basic_path && use_row_store    },
+            { false, true,  is_create_basic_path && use_column_store },
+        };
+        for (int64_t v = 0; OB_SUCC(ret) && v < 4; ++v) {
+          AccessPath *ap = NULL;
+          if (!specs[v].should_create) {
+            // skip
+          } else if (OB_FAIL(create_access_path_variant_from_template(*tmpl,
+                                                                      specs[v].use_das,
+                                                                      specs[v].use_col,
+                                                                      template_reused,
+                                                                      ap))) {
+            LOG_WARN("failed to create access path variant from template", K(ret));
+          } else if (FALSE_IT(ap->need_prune_for_dop_ = need_prune_for_dop)) {
+          } else if (OB_FAIL(init_column_store_est_info(ap->table_id_,
+                                                        ap->ref_table_id_,
+                                                        ap->est_cost_info_))) {
+            LOG_WARN("failed to init column store est info for access path", K(ret));
+          } else if (OB_FAIL(expanded_paths.push_back(ap))) {
+            LOG_WARN("failed to push back access path", K(ret));
+          } else {
+            OPT_TRACE("created access path for index", K(tmpl->index_id_),
+                specs[v].use_das ? "use das" : "use basic",
+                specs[v].use_col ? "and use column store" : "and use row store");
+            LOG_TRACE("created access path for index", K(tmpl->index_id_), K(specs[v].use_das), K(specs[v].use_col));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(access_paths.assign(expanded_paths))) {
+    LOG_WARN("failed to assign expanded paths", K(ret));
   }
   return ret;
 }
@@ -2196,6 +2373,8 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                        index_back_will_use_row_store))) {
     LOG_WARN("failed to check will use column store", K(ret));
   } else if (est_cost_info.use_column_store_ || !index_back_will_use_row_store) {
+    est_cost_info.index_scan_column_group_infos_.reuse();
+    est_cost_info.index_back_column_group_infos_.reuse();
     FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
     lib::ob_sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
     ObSqlBitSet<> used_column_ids;
@@ -3427,97 +3606,35 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
     LOG_WARN("failed to pruning_index", K(table_id), K(ref_table_id), K(ret));
   } else {
     helper.table_opt_info_->optimization_method_ = OptimizationMethod::COST_BASED;
+    // Build one template AccessPath per valid index. will_use_das /
+    // will_use_column_store are intentionally NOT called here -- they run in
+    // expand_access_paths_after_estimate() so estimated row counts can feed
+    // the DAS decision.
     for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
-      bool is_create_basic_path = false;
-      bool is_create_das_path = false;
-      bool use_column_store = false;
-      bool use_row_store = false;
-      AccessPath *das_row_store_access_path = NULL;
-      AccessPath *basic_row_store_access_path = NULL; // the path does not use DAS, maybe optimal sometime.
-      AccessPath *das_column_store_access_path = NULL;
-      AccessPath *basic_column_store_access_path = NULL;
+      AccessPath *template_ap = NULL;
       OptSkipScanState use_skip_scan = OptSkipScanState::SS_UNSET;
-      if (OB_FAIL(will_use_das(table_id,
-                               valid_index_ids.at(i),
-                               index_info_cache,
-                               helper,
-                               is_create_das_path,
-                               is_create_basic_path))) {
-        LOG_WARN("failed to check will use das", K(ret));
-      } else if (OB_FAIL(will_use_skip_scan(table_id,
-                                            ref_table_id,
-                                            valid_index_ids.at(i),
-                                            index_info_cache,
-                                            helper,
-                                            session_info,
-                                            use_skip_scan))) {
+      if (OB_FAIL(will_use_skip_scan(table_id,
+                                     ref_table_id,
+                                     valid_index_ids.at(i),
+                                     index_info_cache,
+                                     helper,
+                                     session_info,
+                                     use_skip_scan))) {
         LOG_WARN("failed to check will use skip scan", K(ret));
-      } else if (OB_FAIL(get_plan()->will_use_column_store(table_id,
-                                                          valid_index_ids.at(i),
-                                                          ref_table_id,
-                                                          use_column_store,
-                                                          use_row_store))) {
-        LOG_WARN("failed to check will use column store", K(ret));
-      } else if (is_create_das_path &&
-                 use_row_store &&
-                 OB_FAIL(create_one_access_path(table_id,
+      } else if (OB_FAIL(create_one_access_path(table_id,
                                                 ref_table_id,
                                                 valid_index_ids.at(i),
                                                 index_info_cache,
                                                 helper,
-                                                das_row_store_access_path,
-                                                true,
-                                                false,
-                                                use_skip_scan))) {
-        LOG_WARN("failed to make index path", "index_table_id", valid_index_ids.at(i), K(ret));
-      } else if (OB_NOT_NULL(das_row_store_access_path) &&
-                 OB_FAIL(access_paths.push_back(das_row_store_access_path))) {
-        LOG_WARN("failed to push back access path", K(ret));
-      } else if (is_create_das_path &&
-                 use_column_store &&
-                 OB_FAIL(create_one_access_path(table_id,
-                                                ref_table_id,
-                                                valid_index_ids.at(i),
-                                                index_info_cache,
-                                                helper,
-                                                das_column_store_access_path,
-                                                true,
-                                                true,
-                                                use_skip_scan))) {
-        LOG_WARN("failed to make index path", "index_table_id", valid_index_ids.at(i), K(ret));
-      } else if (OB_NOT_NULL(das_column_store_access_path) &&
-                 OB_FAIL(access_paths.push_back(das_column_store_access_path))) {
-        LOG_WARN("failed to push back access path", K(ret));
-      } else if (is_create_basic_path &&
-                 use_row_store &&
-                 OB_FAIL(create_one_access_path(table_id,
-                                                ref_table_id,
-                                                valid_index_ids.at(i),
-                                                index_info_cache,
-                                                helper,
-                                                basic_row_store_access_path,
-                                                false,
-                                                false,
-                                                use_skip_scan))) {
-        LOG_WARN("failed to make index path", "index_table_id", valid_index_ids.at(i), K(ret));
-      } else if(OB_NOT_NULL(basic_row_store_access_path) &&
-                OB_FAIL(access_paths.push_back(basic_row_store_access_path))) {
-        LOG_WARN("failed to push back access path", K(ret));
-      } else if (is_create_basic_path &&
-                 use_column_store &&
-                 OB_FAIL(create_one_access_path(table_id,
-                                                ref_table_id,
-                                                valid_index_ids.at(i),
-                                                index_info_cache,
-                                                helper,
-                                                basic_column_store_access_path,
-                                                false,
-                                                true,
-                                                use_skip_scan))) {
-        LOG_WARN("failed to make index path", "index_table_id", valid_index_ids.at(i), K(ret));
-      } else if(OB_NOT_NULL(basic_column_store_access_path) &&
-                OB_FAIL(access_paths.push_back(basic_column_store_access_path))) {
-        LOG_WARN("failed to push back access path", K(ret));
+                                                template_ap,
+                                                /*use_das*/ false,
+                                                /*use_column_store*/ false,
+                                                use_skip_scan,
+                                                /*defer_column_store_init*/ true))) {
+        LOG_WARN("failed to make template access path",
+                 "index_table_id", valid_index_ids.at(i), K(ret));
+      } else if (OB_FAIL(access_paths.push_back(template_ap))) {
+        LOG_WARN("failed to push back template access path", K(ret));
       }
     }
   }
@@ -8322,11 +8439,9 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   can_batch_rescan_ = other.can_batch_rescan_;
   can_das_dynamic_part_pruning_ = other.can_das_dynamic_part_pruning_;
   is_ordered_by_pk_ = other.is_ordered_by_pk_;
+  need_prune_for_dop_ = other.need_prune_for_dop_;
 
-  if (OB_ISNULL(allocator)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("NULL pointer error", K(allocator), K(ret));
-  } else if (OB_UNLIKELY(is_index_merge_path() != other.is_index_merge_path())) {
+  if (OB_UNLIKELY(is_index_merge_path() != other.is_index_merge_path())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("assign index merge path to non-index merge path is not allowed", K(ret), K(other));
   } else if (OB_FAIL(Path::assign(other, allocator))) {
@@ -8341,6 +8456,9 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
     LOG_WARN("Failed to assign domain_idx_info", K(ret));
   } else if (OB_FAIL(vec_idx_info_.assign(other.vec_idx_info_))) {
     LOG_WARN("Failed to assign vec_idx_info", K(ret));
+  } else if (nullptr == allocator) {
+    pre_range_graph_ = other.pre_range_graph_;
+    pre_query_range_ = other.pre_query_range_;
   } else if (other.pre_range_graph_ != NULL) {
     ObPreRangeGraph *range_graph = static_cast<ObPreRangeGraph*>(allocator->alloc(sizeof(ObPreRangeGraph)));
     if (OB_ISNULL(range_graph)) {
@@ -11593,6 +11711,10 @@ int ObJoinOrder::generate_base_table_paths(PathHelper &helper)
                                                   helper.table_opt_info_,
                                                   access_paths))) {
     LOG_WARN("failed to pruning unstable access path", K(ret));
+  } else if (OB_FAIL(expand_access_paths_after_estimate(index_info_cache,
+                                                        helper,
+                                                        access_paths))) {
+    LOG_WARN("failed to expand access paths after estimate", K(ret));
   } else if (OB_FAIL(compute_parallel_and_server_info_for_base_paths(access_paths))) {
     LOG_WARN("failed to compute", K(ret));
   } else if (OB_FAIL(compute_sharding_info_for_base_paths(access_paths))) {

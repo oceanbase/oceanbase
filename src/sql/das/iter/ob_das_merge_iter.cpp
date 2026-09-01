@@ -150,6 +150,9 @@ int ObDASMergeIter::set_merge_status(MergeType merge_type)
     get_next_row_ = &ObDASMergeIter::get_next_seq_row;
     get_next_rows_ = &ObDASMergeIter::get_next_seq_rows;
     seq_task_idx_ = 0;
+    if (enable_iter_reuse_ && !das_tasks_arr_.empty()) {
+      is_cur_task_local_ = (das_tasks_arr_.at(0)->get_tablet_loc()->server_ == GCTX.self_addr());
+    }
     DASTaskIter task_iter = das_ref_->begin_task_iter();
     // if this is index scan task in global index back, we cannot update_pseudo_columns
     // need_update_partition_id_ will be false
@@ -254,26 +257,144 @@ int ObDASMergeIter::rescan_das_task(ObDASScanOp *scan_op)
   return ret;
 }
 
+int ObDASMergeIter::disable_reuse_if_part_retry_happened()
+{
+  int ret = OB_SUCCESS;
+  if (close_reuse_after_retry_) {
+    ObDASScanOp *old_holder = reusable_scan_op_;
+    if (OB_ISNULL(das_ref_) || OB_ISNULL(old_holder)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr", K(ret), K_(das_ref), K(old_holder));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i <= seq_task_idx_; ++i) {
+      ObIDASTaskOp *task_op = das_tasks_arr_.at(i);
+      if (OB_ISNULL(task_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null task", K(ret), K(i), KP(task_op));
+      } else if (ObDasTaskStatus::UNSTART == task_op->get_task_status()) {
+        task_op->set_task_status(ObDasTaskStatus::FINISHED);
+        if (OB_FAIL(task_op->state_advance())) {
+          LOG_WARN("failed to advance reused logical task", K(ret), K(i), KPC(task_op));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (old_holder->is_local_task()
+               && OB_FAIL(MTL(ObDataAccessService*)->end_das_task(*das_ref_, *old_holder))) {
+      LOG_WARN("failed to end retired reusable holder", K(ret), KPC(old_holder));
+    } else if (OB_FAIL(das_ref_->execute_all_task())) {
+      LOG_WARN("failed to execute remaining das tasks after disabling reuse", K(ret));
+    }
+    enable_iter_reuse_ = false;
+    is_cur_task_local_ = false;
+    close_reuse_after_retry_ = false;
+    reusable_scan_op_ = nullptr;
+  }
+  return ret;
+}
+
+int ObDASMergeIter::switch_reusable_scan_op(ObDASScanOp *new_scan_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(reusable_scan_op_) || OB_ISNULL(new_scan_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr", K_(reusable_scan_op), K(new_scan_op), K(ret));
+  } else if (new_scan_op == reusable_scan_op_) {
+    // first_local is already opened via start_das_task() in do_table_scan().
+    // Self-assignment here will clear key_ranges_ (via reuse_iter()) and then
+    // assign the just-cleared self back, resulting in an empty scan range and
+    // a silently-dropped tablet result.
+  } else {
+    reusable_scan_op_->set_tablet_id(new_scan_op->get_tablet_loc()->tablet_id_);
+    reusable_scan_op_->set_ls_id(new_scan_op->get_tablet_loc()->ls_id_);
+    reusable_scan_op_->set_tablet_loc(new_scan_op->get_tablet_loc());
+    if (OB_FAIL(reusable_scan_op_->get_related_tablet_ids().assign(
+                    new_scan_op->get_related_tablet_ids()))) {
+      LOG_WARN("failed to copy related tablet ids", K(ret));
+    } else if (OB_FAIL(reusable_scan_op_->reuse_iter())) {
+      LOG_WARN("failed to reuse iter", K(ret));
+    } else if (OB_FAIL(reusable_scan_op_->get_scan_param().key_ranges_.assign(
+                   new_scan_op->get_scan_param().key_ranges_))) {
+      LOG_WARN("failed to copy key ranges", K(ret));
+    } else if (OB_FAIL(reusable_scan_op_->get_scan_param().ss_key_ranges_.assign(
+                   new_scan_op->get_scan_param().ss_key_ranges_))) {
+      LOG_WARN("failed to copy ss key ranges", K(ret));
+    } else if (OB_FAIL(reusable_scan_op_->get_scan_param().mbr_filters_.assign(
+                   new_scan_op->get_scan_param().mbr_filters_))) {
+      LOG_WARN("failed to copy mbr filters", K(ret));
+    } else if (OB_FAIL(rescan_das_task(reusable_scan_op_))) {
+      LOG_WARN("failed to rescan das task", K(ret));
+    } else if (reusable_scan_op_->is_in_part_retry()) {
+      close_reuse_after_retry_ = true;
+      LOG_TRACE("partition retry happened on reusable holder, disable after current",
+                KPC(reusable_scan_op_), KPC(new_scan_op));
+    }
+  }
+  return ret;
+}
+
 int ObDASMergeIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(das_ref_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr das ref", K(das_ref_), K(ret));
-  } else if (OB_FAIL(das_ref_->execute_all_task())) {
-    LOG_WARN("failed to execute all das task", K(ret));
   } else {
-    DASTaskIter task_iter = das_ref_->begin_task_iter();
-    for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
-      ObIDASTaskOp *das_task_ptr = task_iter.get_item();
-      if (OB_ISNULL(das_task_ptr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected das task nullptr", K(ret));
-      } else if (OB_FAIL(das_tasks_arr_.push_back(das_task_ptr))) {
-        LOG_WARN("failed to push back das task ptr", K(ret));
+    enable_iter_reuse_ = (SEQUENTIAL_MERGE == merge_type_
+                          && nullptr == group_id_expr_);
+    close_reuse_after_retry_ = false;
+    if (enable_iter_reuse_) {
+      ObDASScanOp *first_local = nullptr;
+      const common::ObAddr &self_addr = GCTX.self_addr();
+      DASTaskIter task_iter = das_ref_->begin_task_iter();
+      for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
+        ObIDASTaskOp *das_task_ptr = task_iter.get_item();
+        if (OB_ISNULL(das_task_ptr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected das task nullptr", K(ret));
+        } else if (OB_FAIL(das_tasks_arr_.push_back(das_task_ptr))) {
+          LOG_WARN("failed to push back das task ptr", K(ret));
+        } else if (self_addr == das_task_ptr->get_tablet_loc()->server_) {
+          if (first_local == nullptr) {
+            first_local = DAS_SCAN_OP(das_task_ptr);
+          }
+        }
       }
-    } // for end
-    LOG_DEBUG("[DAS ITER] merge iter do table scan", K(ref_table_id_), K(das_tasks_arr_.count()));
+
+      bool has_part_retry = false;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(das_ref_->execute_remote_aggregated_tasks(&has_part_retry))) {
+        LOG_WARN("failed to dispatch remote aggregated tasks", K(ret));
+      } else if (has_part_retry) {
+        enable_iter_reuse_ = false;
+        reusable_scan_op_ = nullptr;
+        if (OB_FAIL(das_ref_->execute_all_task())) {
+          LOG_WARN("failed to execute remaining tasks after partition retry", K(ret));
+        }
+      } else if (first_local != nullptr) {
+        reusable_scan_op_ = first_local;
+        if (OB_FAIL(reusable_scan_op_->start_das_task())) {
+          LOG_WARN("failed to start aliased reusable das task", K(ret));
+        }
+      }
+    } else {
+      if (OB_SUCC(ret) && OB_FAIL(das_ref_->execute_all_task())) {
+        LOG_WARN("failed to execute all das task", K(ret));
+      } else {
+        DASTaskIter task_iter = das_ref_->begin_task_iter();
+        for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
+          ObIDASTaskOp *das_task_ptr = task_iter.get_item();
+          if (OB_ISNULL(das_task_ptr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected das task nullptr", K(ret));
+          } else if (OB_FAIL(das_tasks_arr_.push_back(das_task_ptr))) {
+            LOG_WARN("failed to push back das task ptr", K(ret));
+          }
+        }
+      }
+    }
+    LOG_TRACE("[DAS ITER] merge iter do table scan", K(ref_table_id_),
+              K(das_tasks_arr_.count()), K_(enable_iter_reuse));
   }
   return ret;
 }
@@ -350,6 +471,10 @@ int ObDASMergeIter::inner_reuse()
 {
   int ret = OB_SUCCESS;
   seq_task_idx_ = OB_INVALID_INDEX;
+  enable_iter_reuse_ = false;
+  is_cur_task_local_ = false;
+  close_reuse_after_retry_ = false;
+  reusable_scan_op_ = nullptr;
   for (int64_t i = 0; i < merge_store_rows_arr_.count(); i++) {
     merge_store_rows_arr_.at(i).reset();
   }
@@ -380,6 +505,10 @@ int ObDASMergeIter::inner_release()
     iter_alloc_->~ObArenaAllocator();
     iter_alloc_ = nullptr;
   }
+  enable_iter_reuse_ = false;
+  is_cur_task_local_ = false;
+  close_reuse_after_retry_ = false;
+  reusable_scan_op_ = nullptr;
   if (OB_NOT_NULL(das_ref_)) {
     if (OB_FAIL(das_ref_->close_all_task())) {
       LOG_WARN("das ref failed to close das task", K(ret));
@@ -540,7 +669,9 @@ int ObDASMergeIter::get_cur_diagnosis_info(ObDiagnosisManager *diagnosis_manager
   } else if (seq_task_idx_ >= das_tasks_arr_.count()) {
     // do nothing
   } else if (seq_task_idx_ >= 0) {
-    ObDASScanOp *scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+    ObDASScanOp *scan_op = (enable_iter_reuse_ && is_cur_task_local_)
+        ? reusable_scan_op_
+        : DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
     if (OB_ISNULL(scan_op)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("scan op is null", K(ret));
@@ -857,6 +988,9 @@ int ObDASMergeIter::get_next_seq_row()
     while (OB_SUCC(ret) && !got_row) {
       clear_evaluated_flag();
       ObDASScanOp *scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+      if (enable_iter_reuse_ && is_cur_task_local_) {
+        scan_op = reusable_scan_op_;
+      }
       if (OB_ISNULL(scan_op)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected das task op type", K(ret));
@@ -866,7 +1000,6 @@ int ObDASMergeIter::get_next_seq_row()
         }
         ret = scan_op->get_output_result_iter()->get_next_row();
         scan_op->get_scan_param().need_update_tablet_param_ = false;
-
         if (OB_SUCC(ret)) {
           got_row = true;
           if (has_pseudo_part_id_columnref()) {
@@ -875,18 +1008,34 @@ int ObDASMergeIter::get_next_seq_row()
             }
           }
         } else if (OB_ITER_END == ret) {
-          ++seq_task_idx_;
-          if (seq_task_idx_ == das_tasks_arr_.count()) {
-            // keep the ret = OB_ITER_END
+          if (OB_FAIL(disable_reuse_if_part_retry_happened())) {
+            LOG_WARN("failed to disable reuse after partition retry", K(ret));
           } else {
-            ret = OB_SUCCESS;
-            scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
-            scan_op->get_scan_param().need_update_tablet_param_ = true;
-            if (OB_FAIL(update_pseudo_columns(scan_op))) {
-              LOG_WARN("failed to update_pseudo_columns", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
-            } else if (need_update_partition_id_) {
-              if (OB_FAIL(update_output_tablet_id(scan_op))) {
-                LOG_WARN("failed to update output tablet id", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
+            ++seq_task_idx_;
+            if (seq_task_idx_ == das_tasks_arr_.count()) {
+              ret = OB_ITER_END;
+            } else {
+              ret = OB_SUCCESS;
+              scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+              is_cur_task_local_ = (scan_op->get_tablet_loc()->server_ == GCTX.self_addr());
+              if (enable_iter_reuse_ && is_cur_task_local_) {
+                if (OB_FAIL(switch_reusable_scan_op(scan_op))) {
+                  LOG_WARN("failed to switch reusable scan op", K(ret));
+                } else {
+                  scan_op = reusable_scan_op_;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                scan_op->get_scan_param().need_update_tablet_param_ = true;
+                if (OB_FAIL(update_pseudo_columns(scan_op))) {
+                  LOG_WARN("failed to update_pseudo_columns", K(ret),
+                      K(scan_op->get_tablet_loc()->tablet_id_));
+                } else if (need_update_partition_id_) {
+                  if (OB_FAIL(update_output_tablet_id(scan_op))) {
+                    LOG_WARN("failed to update output tablet id", K(ret),
+                        K(scan_op->get_tablet_loc()->tablet_id_));
+                  }
+                }
               }
             }
           }
@@ -912,6 +1061,9 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
     while (OB_SUCC(ret) && !got_rows) {
       clear_evaluated_flag();
       ObDASScanOp *scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+      if (enable_iter_reuse_ && is_cur_task_local_) {
+        scan_op = reusable_scan_op_;
+      }
       if (OB_ISNULL(scan_op)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected das task op type", K(ret));
@@ -936,25 +1088,38 @@ int ObDASMergeIter::get_next_seq_rows(int64_t &count, int64_t capacity)
           if (!scan_op->is_local_task()) {
             update_wild_datum_ptr(count);
           }
-          // only for global index back and use pseudo_partition_id_expr_ in filter
           if (OB_FAIL(update_pseudo_columns(scan_op))) {
             LOG_WARN("update output tablet id failed", K(ret), K(scan_op->get_tablet_loc()->tablet_id_));
           }
         } else if (OB_ITER_END == ret) {
-          ++seq_task_idx_;
-          if (seq_task_idx_ == das_tasks_arr_.count()) {
-            // keep the ret = OB_ITER_END
+          if (OB_FAIL(disable_reuse_if_part_retry_happened())) {
+            LOG_WARN("failed to disable reuse after partition retry", K(ret));
           } else {
-            ret = OB_SUCCESS;
-            scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
-            scan_op->get_scan_param().need_update_tablet_param_ = true;
-            if (OB_FAIL(update_pseudo_columns(scan_op))) {
-              LOG_WARN("failed to update_pseudo_columns", K(ret),
-                K(scan_op->get_tablet_loc()->tablet_id_));
-            } else if (need_update_partition_id_) {
-              if (OB_FAIL(update_output_tablet_id(scan_op))) {
-                LOG_WARN("failed to update output tablet id", K(ret),
-                  K(scan_op->get_tablet_loc()->tablet_id_));
+            ++seq_task_idx_;
+            if (seq_task_idx_ == das_tasks_arr_.count()) {
+              ret = OB_ITER_END;
+            } else {
+              ret = OB_SUCCESS;
+              scan_op = DAS_SCAN_OP(das_tasks_arr_.at(seq_task_idx_));
+              is_cur_task_local_ = (scan_op->get_tablet_loc()->server_ == GCTX.self_addr());
+              if (enable_iter_reuse_ && is_cur_task_local_) {
+                if (OB_FAIL(switch_reusable_scan_op(scan_op))) {
+                  LOG_WARN("failed to switch reusable scan op", K(ret));
+                } else {
+                  scan_op = reusable_scan_op_;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                scan_op->get_scan_param().need_update_tablet_param_ = true;
+                if (OB_FAIL(update_pseudo_columns(scan_op))) {
+                  LOG_WARN("failed to update_pseudo_columns", K(ret),
+                    K(scan_op->get_tablet_loc()->tablet_id_));
+                } else if (need_update_partition_id_) {
+                  if (OB_FAIL(update_output_tablet_id(scan_op))) {
+                    LOG_WARN("failed to update output tablet id", K(ret),
+                      K(scan_op->get_tablet_loc()->tablet_id_));
+                  }
+                }
               }
             }
           }
