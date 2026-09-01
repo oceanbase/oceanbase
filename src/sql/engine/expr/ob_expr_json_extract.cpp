@@ -213,9 +213,6 @@ int ObExprJsonExtract::eval_json_extract_general_path(const ObExpr &expr,
   if (OB_UNLIKELY(OB_FAIL(ret))) {
     if (ret == OB_ERR_INVALID_TYPE_FOR_JSON) {
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_JSON, 1, "json_extract");
-    } else if (ret != OB_ERR_INVALID_JSON_TEXT_IN_PARAM) {
-      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-      LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
     }
     LOG_WARN("fail to handle json param 0 in json extract", K(ret));
   } else if (is_null_result) {

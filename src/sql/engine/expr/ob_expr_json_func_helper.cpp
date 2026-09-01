@@ -199,9 +199,9 @@ int ObJsonExprHelper::get_json_wrapper(ObExpr *expr, ObDatum *datum,
     if (OB_FAIL(common::get_json_wrapper(j_str, j_in_type, allocator, wrapper,
                                          parse_flag, get_json_max_depth_config(ctx),
                                          enable_json_bin_view))) {
-      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-      LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
-      LOG_WARN("get_json_wrapper failed", K(ret), K(j_in_type));
+      const int origin_ret = ret;
+      ret = ObJsonUtil::remap_invalid_json_doc_error(ret, lib::is_oracle_mode());
+      LOG_WARN("get_json_wrapper failed", K(origin_ret), K(ret), K(j_in_type));
     }
   }
   return ret;
@@ -382,13 +382,9 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
                                                   expect_type, j_base, parse_flag, ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
-        LOG_WARN("fail to get json base", K(ret), K(j_in_type));
-        if (is_oracle) {
-          ret = OB_ERR_JSON_SYNTAX_ERROR;
-        } else {
-          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
-        }
+        const int origin_ret = ret;
+        ret = ObJsonUtil::remap_invalid_json_doc_error(ret, is_oracle);
+        LOG_WARN("fail to get json base", K(origin_ret), K(ret), K(j_in_type));
       }
     }
   }
@@ -439,13 +435,9 @@ int ObJsonExprHelper::get_json_doc_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
                                                    parse_flag,
                                                    ObJsonExprHelper::get_json_max_depth_config(ctx),
                                                    enable_json_bin_view))) {
-        LOG_WARN("fail to get json wrapper", K(ret), K(j_in_type));
-        if (is_oracle) {
-          ret = OB_ERR_JSON_SYNTAX_ERROR;
-        } else {
-          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
-        }
+        const int origin_ret = ret;
+        ret = ObJsonUtil::remap_invalid_json_doc_error(ret, is_oracle);
+        LOG_WARN("fail to get json wrapper", K(origin_ret), K(ret), K(j_in_type));
       }
     }
   }

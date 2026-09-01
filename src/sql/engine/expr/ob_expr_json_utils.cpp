@@ -2159,14 +2159,12 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
                                                   expect_type, j_base, parse_flag,
                                                   cached_json_max_depth))) {
-        LOG_WARN("fail to get json base", K(ret), K(j_in_type));
+        const int origin_ret = ret;
+        LOG_WARN("fail to get json base", K(origin_ret), K(j_in_type));
         if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
           is_cover_by_error = false;
-        } else if (is_oracle) {
-          ret = OB_ERR_JSON_SYNTAX_ERROR;
         } else {
-          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
+          ret = ObJsonUtil::remap_invalid_json_doc_error(ret, is_oracle);
         }
       } else if (j_base->is_bin()) {
         // only use json doc to search
@@ -3451,6 +3449,24 @@ int OB_JSON_QUERY_ITEM_METHOD_NULL_OPTION[ObMaxItemMethod][ObMaxJsonType] =
     0, // oyearmonth
   },
 };
+
+int ObJsonUtil::remap_invalid_json_doc_error(int ret, bool is_oracle)
+{
+  int mapped_ret = ret;
+  if (ret == OB_ERR_INVALID_JSON_TEXT_IN_PARAM
+      || ret == OB_ERR_INVALID_JSON_TEXT
+      || ret == OB_ERR_UNEXPECTED
+      || ret == OB_INVALID_ARGUMENT
+      || ret == OB_ERR_NULL_VALUE) {
+    if (is_oracle) {
+      mapped_ret = OB_ERR_JSON_SYNTAX_ERROR;
+    } else {
+      mapped_ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
+    }
+  }
+  return mapped_ret;
+}
 
 int ObJsonUtil::get_query_item_method_null_option(ObJsonPath* j_path,
                                                ObIJsonBase* j_base)

@@ -124,6 +124,7 @@ public:
 class ObJsonUtil final
 {
 public:
+  static int remap_invalid_json_doc_error(int ret, bool is_oracle);
   static int get_query_item_method_null_option(ObJsonPath* j_path,
                                             ObIJsonBase* j_base);
   static int cast_to_res(common::ObIAllocator *allocator,
