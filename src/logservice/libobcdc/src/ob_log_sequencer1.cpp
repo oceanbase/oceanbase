@@ -1329,8 +1329,7 @@ int ObLogSequencer::recycle_resources_after_trans_ready_(TransCtx &trans_ctx, Ob
 
     // Iterate over each statement of each partitioned transaction of a distributed transaction
     while (NULL != participant && ! stop_flag) {
-      // TODO is_ddl_trans: LS_TABLE的事务如何处理？
-      if (participant->is_dml_trans() || participant->is_ddl_trans()) {
+      if (participant->is_dml_trans() || participant->is_ddl_trans() || participant->is_ls_op_trans()) {
         const logservice::TenantLSID &tls_id = participant->get_tls_id();
         // Decrement the count of ongoing transactions on the partition
         if (OB_FAIL(tenant.get_ls_mgr().dec_ls_trans_count(tls_id))) {
