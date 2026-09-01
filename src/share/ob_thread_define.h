@@ -25,7 +25,7 @@ TG_DEF(Blacklist, Blacklist, THREAD_POOL, 1)
 // TG_DEF(PartSerLargeCb, PartSerLargeCb, QUEUE_THREAD, ThreadCountPair(storage::ObCallbackQueueThread::QUEUE_THREAD_NUM, storage::ObCallbackQueueThread::MINI_MODE_QUEUE_THREAD_NUM),
 //       (!lib::is_mini_mode() ? OB_MAX_PARTITION_NUM_PER_SERVER : OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER) * 2)
 // TG_DEF(ReplayEngine, ReplayEngine, QUEUE_THREAD, ThreadCountPair(sysconf(_SC_NPROCESSORS_ONLN), 2),
-//        !lib::is_mini_mode() ? (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER : (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
+//        !lib::is_mini_mode() ? (common::MAX_REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_PARTITION_NUM_PER_SERVER : (common::MAX_REPLAY_TASK_QUEUE_SIZE + 1) * OB_MINI_MODE_MAX_PARTITION_NUM_PER_SERVER)
 // TG_DEF(TransMigrate, TransMigrate, QUEUE_THREAD, ThreadCountPair(GET_THREAD_NUM_BY_NPROCESSORS(24), 1), 10000)
 TG_DEF(StandbyTimestampService, StandbyTimestampService, THREAD_POOL, 1)
 TG_DEF(TSnapSvc, TSnapSvc, THREAD_POOL, 1)
@@ -108,7 +108,7 @@ TG_DEF(LogSharedQueueTh, LogSharedQueueThread, QUEUE_THREAD,
        ThreadCountPair(palf::LogSharedQueueTh::THREAD_NUM,
        palf::LogSharedQueueTh::MINI_MODE_THREAD_NUM),
        palf::LogSharedQueueTh::MAX_LOG_HANDLE_TASK_NUM)
-TG_DEF(ReplayService, ReplaySrv, QUEUE_THREAD, 1, (common::REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
+TG_DEF(ReplayService, ReplaySrv, QUEUE_THREAD, 1, (common::MAX_REPLAY_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(TransportService, TransportSrv, QUEUE_THREAD, 1, (common::TRANSPORT_TASK_QUEUE_SIZE + 1) * OB_MAX_LS_NUM_PER_TENANT_PER_SERVER_CAN_BE_SET)
 TG_DEF(StandbyTransportWorker, StandbyTpWorker, THREAD_POOL, 1)
 TG_DEF(StandbyAckTimer, StandbyAckTimer, TIMER)

@@ -34,15 +34,11 @@ ERRSIM_POINT_DEF(EN_REPLAY_FATAL_ERROR);
   } while(0)
 
 
-int ObTabletReplayExecutor::replay_check_restore_status(storage::ObTabletHandle &tablet_handle, const bool update_tx_data)
+int ObTabletReplayExecutor::replay_check_restore_status(storage::ObTablet &tablet, const bool update_tx_data)
 {
   int ret = OB_SUCCESS;
-  ObTablet *tablet = tablet_handle.get_obj();
   ObTabletRestoreStatus::STATUS restore_status = ObTabletRestoreStatus::STATUS::RESTORE_STATUS_MAX;
-  if (OB_ISNULL(tablet)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "tablet is null", K(ret));
-  } else if (OB_FAIL(tablet->get_restore_status(restore_status))) {
+  if (OB_FAIL(tablet.get_restore_status(restore_status))) {
     CLOG_LOG(WARN, "failed to get tablet restore status", K(ret));
   } else if (ObTabletRestoreStatus::is_undefined(restore_status)) {
     // UNDEFINED tablet need replay.
@@ -195,8 +191,16 @@ int ObTabletReplayExecutor::replay_get_tablet_(
 
 int ObTabletReplayExecutor::replay_check_restore_status_(storage::ObTabletHandle &tablet_handle)
 {
-  const bool update_user_data = is_replay_update_tablet_status_();
-  return ObTabletReplayExecutor::replay_check_restore_status(tablet_handle, update_user_data);
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = tablet_handle.get_obj();
+  if (OB_ISNULL(tablet)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "tablet is null", K(ret));
+  } else {
+    const bool update_user_data = is_replay_update_tablet_status_();
+    ret = ObTabletReplayExecutor::replay_check_restore_status(*tablet, update_user_data);
+  }
+  return ret;
 }
 
 int ObTabletReplayExecutor::check_can_skip_replay_to_mds_(

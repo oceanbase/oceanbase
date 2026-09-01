@@ -301,7 +301,7 @@ void ObMvccRow::ObMvccRowIndex::reset()
 
 bool ObMvccRow::ObMvccRowIndex::is_valid_queue_index(const int64_t queue_index)
 {
-  return (queue_index >= 0 && queue_index < REPLAY_TASK_QUEUE_SIZE);
+  return (queue_index >= 0 && queue_index < MAX_REPLAY_TASK_QUEUE_SIZE);
 }
 
 ObMvccTransNode *ObMvccRow::ObMvccRowIndex::get_index_node(const int64_t index) const
@@ -454,7 +454,7 @@ int ObMvccRow::unlink_trans_node(const ObMvccTransNode &node)
     }
     if (NULL != index_) {
       //修改凡是执行该node的index node位置
-      for (int64_t i = 0; i < common::REPLAY_TASK_QUEUE_SIZE; ++i) {
+      for (int64_t i = 0; i < common::MAX_REPLAY_TASK_QUEUE_SIZE; ++i) {
         if (&node == index_->get_index_node(i)) {
           index_->set_index_node(i, ATOMIC_LOAD(&(node.prev_)));
           if (NULL == node.prev_ && TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {

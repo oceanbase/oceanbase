@@ -85,6 +85,48 @@ struct LSReplayStat
                K(min_unreplayed_scn_));
 };
 
+struct LSReplayQueueStat
+{
+  int64_t ls_id_;
+  int64_t queue_idx_;
+  palf::LSN min_unreplayed_lsn_;
+  share::SCN min_unreplayed_scn_;
+  int64_t replay_hint_;
+  ObLogBaseType log_type_;
+  int64_t first_handle_ts_;
+  int64_t last_handle_ts_;
+  int64_t retry_cost_;
+  int64_t task_count_;
+  int64_t pre_barrier_count_;
+  int err_ret_code_;
+  bool has_fatal_error_;
+  bool is_idle_;
+
+  LSReplayQueueStat() { reset(); }
+  void reset()
+  {
+    ls_id_ = -1;
+    queue_idx_ = -1;
+    min_unreplayed_lsn_.reset();
+    min_unreplayed_scn_.reset();
+    replay_hint_ = 0;
+    log_type_ = ObLogBaseType::INVALID_LOG_BASE_TYPE;
+    first_handle_ts_ = 0;
+    last_handle_ts_ = 0;
+    retry_cost_ = 0;
+    task_count_ = 0;
+    pre_barrier_count_ = 0;
+    err_ret_code_ = common::OB_SUCCESS;
+    has_fatal_error_ = false;
+    is_idle_ = true;
+  }
+
+  TO_STRING_KV(K(ls_id_), K(queue_idx_), K(min_unreplayed_lsn_), K(min_unreplayed_scn_),
+               K(replay_hint_), K(log_type_), K(first_handle_ts_), K(last_handle_ts_),
+               K(retry_cost_), K(task_count_), K(pre_barrier_count_),
+               K(err_ret_code_), K(has_fatal_error_), K(is_idle_));
+};
+
 struct ReplayDiagnoseInfo
 {
   ReplayDiagnoseInfo() { reset(); }
@@ -147,7 +189,10 @@ public:
       replay_hint_(std::abs(header.get_replay_hint())),
       init_task_ts_(OB_INVALID_TIMESTAMP),
       first_handle_ts_(OB_INVALID_TIMESTAMP),
+      last_handle_ts_(OB_INVALID_TIMESTAMP),
       print_error_ts_(OB_INVALID_TIMESTAMP),
+      replay_cost_(OB_INVALID_TIMESTAMP),
+      retry_cost_(OB_INVALID_TIMESTAMP),
       read_log_buf_(NULL),
       decompression_buf_(decompression_buf),
       has_decompressed_(false),
@@ -158,7 +203,7 @@ public:
   {
     reset();
   }
-  int init(void *log_buf);
+  int init(void *log_buf, const int64_t queue_size);
   void reset();
   bool is_valid();
   void *get_replay_payload() const;
@@ -175,6 +220,7 @@ public:
   int64_t replay_hint_;
   int64_t init_task_ts_;
   int64_t first_handle_ts_;
+  int64_t last_handle_ts_; //每次开始执行时更新,用于计算纯执行时间
   int64_t print_error_ts_;
   int64_t replay_cost_; //此任务回放成功时的当次处理时间
   int64_t retry_cost_; //此任务重试的总耗时时间
@@ -360,6 +406,8 @@ public:
     type_ = ObReplayServiceTaskType::REPLAY_LOG_TASK;
     idx_ = -1;
     need_batch_push_ = false;
+    task_count_ = 0;
+    pre_barrier_count_ = 0;
   }
   ~ObReplayServiceReplayTask() { destroy(); }
   // use base_scn init min_unreplayed_scn
@@ -380,13 +428,18 @@ public:
                                   int64_t &replay_hint,
                                   ObLogBaseType &log_type,
                                   int64_t &first_handle_ts,
+                                  int64_t &last_handle_ts,
                                   int64_t &replay_cost,
                                   int64_t &retry_cost,
-                                  bool &is_queue_empty) const;
+                                  bool &is_queue_empty,
+                                  int64_t &task_count,
+                                  int64_t &pre_barrier_count) const;
   bool need_batch_push();
   void set_batch_push_finish();
+  int64_t get_task_count() const { return ATOMIC_LOAD(&task_count_); }
+  int64_t get_pre_barrier_count() const { return ATOMIC_LOAD(&pre_barrier_count_); }
   INHERIT_TO_STRING_KV("ObReplayServiceReplayTask", ObReplayServiceTask,
-                       K(idx_));
+                       K(idx_), K(task_count_), K(pre_barrier_count_));
 private:
   Link *pop_()
   {
@@ -396,6 +449,8 @@ private:
   common::ObSpScLinkQueue queue_; //place ObLogReplayTask
   int64_t idx_; //热点行优化
   bool need_batch_push_; //batch push判断标志, 只有拉日志线程可以修改此值
+  int64_t task_count_;
+  int64_t pre_barrier_count_;
 };
 
 class ObReplayFsCb : public palf::PalfFSCb
@@ -532,15 +587,29 @@ public:
                                   int64_t &replay_hint,
                                   ObLogBaseType &log_type,
                                   int64_t &first_handle_ts,
+                                  int64_t &last_handle_ts,
                                   int64_t &replay_cost,
-                                  int64_t &retry_cost) const;
+                                  int64_t &retry_cost,
+                                  bool &is_queue_empty) const;
   int get_replay_process(int64_t &submitted_log_size,
                          int64_t &unsubmitted_log_size,
                          int64_t &replayed_log_size,
                          int64_t &unreplayed_log_size);
+  // 计算并刷新回放速度。每次调用会用当前值更新内部 last_ls_* 基线，
+  // 因此下一轮速度是基于本次快照算出的，非纯查询接口。
+  // 速度单位 MB/s，浮点保留 3 位小数，调用方负责格式化后打印。
+  void update_replay_speed(const int64_t submitted_log_size,
+                           const int64_t unsubmitted_log_size,
+                           const int64_t replayed_log_size,
+                           int64_t &interval_us,
+                           double &unsub_speed,
+                           double &submit_speed,
+                           double &replay_speed);
   //提交日志检查barrier状态
   int check_submit_barrier();
   //回放日志检查barrier状态
+  int check_reload_queue_size_before_submit();
+  int mark_need_reload_queue_size(const int64_t new_queue_size);
   int check_replay_barrier(ObLogReplayTask *replay_task,
                            ObLogReplayBuffer *&replay_log_buf,
                            bool &need_replay,
@@ -550,7 +619,10 @@ public:
   void set_post_barrier_submitted(const palf::LSN &lsn);
   int set_post_barrier_finished(const palf::LSN &lsn);
   int trigger_fetch_log();
+  int64_t get_replay_queue_size() const
+  { return ATOMIC_LOAD(&effective_queue_size_); }
   int stat(LSReplayStat &stat) const;
+  int get_queue_stat(const int64_t idx, LSReplayQueueStat &stat) const;
   int diagnose(ReplayDiagnoseInfo &diagnose_info);
   inline void inc_ref()
   {
@@ -560,10 +632,7 @@ public:
   {
     return ATOMIC_SAF(&ref_cnt_, 1);
   }
-  inline int64_t calc_replay_queue_idx(const int64_t replay_hint)
-  {
-    return replay_hint & (REPLAY_TASK_QUEUE_SIZE - 1);
-  }
+  int64_t calc_replay_queue_idx(const int64_t replay_hint);
   // 用于记录日志流级别的错误, 此类错误不可恢复
   void set_err_info(const palf::LSN &lsn,
                     const share::SCN &scn,
@@ -593,6 +662,8 @@ public:
                K(err_info_),
                K(ref_cnt_),
                K(post_barrier_lsn_),
+               K(need_reload_queue_size_),
+               K(ATOMIC_LOAD(&effective_queue_size_)),
                K(pending_task_count_),
                K(submit_log_task_));
 private:
@@ -627,6 +698,8 @@ private:
   int64_t ref_cnt_;
   // used for barrier demand
   palf::LSN post_barrier_lsn_;
+  bool need_reload_queue_size_;
+  int64_t effective_queue_size_;
   // record error info, reported when handle submit or replay type task
   LSErrInfo err_info_;
   int64_t pending_task_count_;
@@ -640,7 +713,7 @@ private:
 
   ObLogReplayService *rp_sv_;
   // be sure to clear these queues when the partition is offline to prevent old replay task is replayed in situation of migrating out and then migrating in
-  ObReplayServiceReplayTask task_queues_[common::REPLAY_TASK_QUEUE_SIZE];
+  ObReplayServiceReplayTask task_queues_[common::MAX_REPLAY_TASK_QUEUE_SIZE];
   ObReplayServiceSubmitTask submit_log_task_;
 
   ipalf::IPalfEnv *palf_env_;
@@ -649,6 +722,10 @@ private:
   mutable int64_t get_log_info_debug_time_;
   mutable int64_t try_wrlock_debug_time_;
   mutable int64_t check_enable_debug_time_;
+  int64_t last_ls_submitted_log_size_;
+  int64_t last_ls_unsubmitted_log_size_;
+  int64_t last_ls_replayed_log_size_;
+  int64_t last_ls_stat_ts_;
   DISALLOW_COPY_AND_ASSIGN(ObReplayStatus);
 };
 

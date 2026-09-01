@@ -63,7 +63,7 @@ public:
   // @return OB_EAGAIN, need retry.
   // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
   // @return other error codes, failed to replay.
-  static int replay_check_restore_status(storage::ObTabletHandle &tablet_handle, const bool update_tx_data);
+  static int replay_check_restore_status(storage::ObTablet &tablet, const bool update_tx_data);
 
 
 protected:

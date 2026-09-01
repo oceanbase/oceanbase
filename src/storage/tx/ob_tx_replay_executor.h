@@ -17,6 +17,7 @@
 #include "storage/ob_i_table.h"
 
 #include "lib/worker.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/ob_storage_table_guard.h"
 
 namespace oceanbase
@@ -31,6 +32,7 @@ class ObMemtableCtx;
 class ObMemtable;
 class ObMemtableMutatorIterator;
 class ObEncryptRowBuf;
+struct ObMutatorRowHeader;
 };
 namespace storage
 {
@@ -77,6 +79,38 @@ public:
                K(table_lock_row_count_));
 
 private:
+  class ObReplayHandleCache
+  {
+  public:
+    ObReplayHandleCache();
+    ~ObReplayHandleCache();
+
+    ObReplayHandleCache(const ObReplayHandleCache&) = delete;
+    ObReplayHandleCache &operator=(const ObReplayHandleCache&) = delete;
+
+    int prepare_tablet_for_replay(
+        const common::ObTabletID &tablet_id,
+        ObTxReplayExecutor &replay_executor,
+        storage::ObStoreCtx *&store_ctx,
+        storage::ObTablet *&tablet);
+    int prepare_memtable_for_replay(
+        storage::ObTablet *tablet,
+        const share::SCN &replay_scn,
+        storage::ObIMemtable *&mem_ptr);
+    void reset();
+
+  private:
+    storage::ObStorageTableGuard *get_storage_guard_();
+    void construct_storage_guard_(storage::ObTablet *tablet, const share::SCN &replay_scn);
+    void deconstruct_storage_guard_();
+
+  private:
+    storage::ObTabletHandle tablet_handle_;
+    storage::ObStoreCtx store_ctx_;
+    bool is_storage_guard_constructed_;
+    union { storage::ObStorageTableGuard storage_guard_; };
+  };
+
   ObTxReplayExecutor(storage::ObLS *ls,
                      const share::ObLSID &ls_id,
                      const uint64_t tenant_id,
@@ -100,10 +134,15 @@ private:
         tx_part_log_no_(0),
         mvcc_row_count_(0),
         table_lock_row_count_(0),
+        guard_cache_(),
         base_header_(base_header)
   {}
 
-  ~ObTxReplayExecutor() { ob_free(mmi_ptr_); }
+  ~ObTxReplayExecutor()
+  {
+    guard_cache_.reset();
+    ob_free(mmi_ptr_);
+  }
 
 private:
   int do_replay_(const char *buf,
@@ -133,8 +172,6 @@ private:
   int replay_redo_in_memtable_(ObTxRedoLog &redo, const bool serial_final, ObTxSEQ &max_seq_no);
   virtual int replay_one_row_in_memtable_(memtable::ObMutatorRowHeader& row_head,
                                           memtable::ObMemtableMutatorIterator *mmi_ptr);
-  int prepare_memtable_replay_(storage::ObStorageTableGuard &w_guard,
-                          storage::ObIMemtable *&mem_ptr);
   int replay_row_(storage::ObStoreCtx &store_ctx,
                   storage::ObTablet *tablet,
                   memtable::ObMemtableMutatorIterator *mmi_ptr);
@@ -171,6 +208,7 @@ private:
   // memtable::ObMemtable * mem_store_;
   int64_t mvcc_row_count_;
   int64_t table_lock_row_count_;
+  ObReplayHandleCache guard_cache_;
   const logservice::ObLogBaseHeader &base_header_;
 };
 }

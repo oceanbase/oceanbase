@@ -17,6 +17,7 @@
 #endif
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -30,6 +31,8 @@ namespace logservice
 ReplayProcessStat::ReplayProcessStat()
   : last_replayed_log_size_(-1),
     last_submitted_log_size_(-1),
+    last_unsubmitted_log_size_(-1),
+    last_stat_ts_(-1),
     rp_sv_(NULL),
     tg_id_(-1),
     is_inited_(false)
@@ -39,6 +42,8 @@ ReplayProcessStat::~ReplayProcessStat()
 {
   last_replayed_log_size_ = -1;
   last_submitted_log_size_ = -1;
+  last_unsubmitted_log_size_ = -1;
+  last_stat_ts_ = -1;
   rp_sv_ = NULL;
   tg_id_ = -1;
   is_inited_ = false;
@@ -113,13 +118,17 @@ void ReplayProcessStat::destroy()
 void ReplayProcessStat::runTimerTask()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   int64_t submitted_log_size = 0;
   int64_t unsubmitted_log_size = 0;
   int64_t replayed_log_size = 0;
   int64_t unreplayed_log_size = 0;
   int64_t estimate_time = 0;
+  const int64_t cur_ts = common::ObTimeUtility::current_time();
   if (NULL == rp_sv_) {
     CLOG_LOG(ERROR, "rp_sv_ is NULL, unexpected error");
+  } else if (OB_TMP_FAIL(rp_sv_->mark_need_reload_queue_size(rp_sv_->calc_replay_queue_size()))) {
+    CLOG_LOG(WARN, "mark need reload queue size failed", K(tmp_ret));
   } else if (OB_FAIL(rp_sv_->stat_all_ls_replay_process(submitted_log_size, unsubmitted_log_size,
                                                         replayed_log_size, unreplayed_log_size))) {
     CLOG_LOG(WARN, "stat_all_ls_replay_process failed", K(ret));
@@ -129,10 +138,15 @@ void ReplayProcessStat::runTimerTask()
   } else if (-1 == last_replayed_log_size_) {
     last_replayed_log_size_ = replayed_log_size;
     last_submitted_log_size_ = submitted_log_size;
+    last_unsubmitted_log_size_ = unsubmitted_log_size;
+    last_stat_ts_ = cur_ts;
     CLOG_LOG(TRACE, "initial last_replayed_log_size_", K(ret), K(last_replayed_log_size_));
   } else {
     constexpr int64_t MB = 1024 * 1024;
-    int64_t round_cost_time = SCAN_TIMER_INTERVAL / 1000 / 1000; //second
+    constexpr int64_t MIN_SPEED_INTERVAL_US = 1000;
+    const int64_t interval_us = cur_ts - last_stat_ts_;
+    const int64_t interval_s = interval_us / 1000 / 1000;
+    int64_t round_cost_time = (interval_s > 0) ? interval_s : 1;
     int64_t last_submitted_log_size_MB = last_submitted_log_size_/MB;
     int64_t last_replayed_log_size_MB = last_replayed_log_size_/MB;
     int64_t submitted_log_size_MB = submitted_log_size/MB;
@@ -141,8 +155,27 @@ void ReplayProcessStat::runTimerTask()
     int64_t unreplayed_log_size_MB = unreplayed_log_size/MB;
     int64_t round_replayed_log_size_MB = replayed_log_size_MB - last_replayed_log_size_MB;
     int64_t pending_replay_log_size_MB = rp_sv_->get_pending_task_size()/MB;
+    // 速度按 MB/s 保留 3 位小数。整数除法在 delta<MB 时截断为 0，
+    // 小流量场景会被误判为无进展，改用浮点避免截断。
+    // size 单调递增；若出现回退（如 unsubmitted 随提交下降），速度无意义，clamp 到 0。
+    const double divisor = interval_us >= MIN_SPEED_INTERVAL_US ? (double)interval_us / (1000.0 * 1000.0) : 1.0;
+    const int64_t unsub_delta = std::max((int64_t)0, unsubmitted_log_size - last_unsubmitted_log_size_);
+    const int64_t submit_delta = std::max((int64_t)0, submitted_log_size - last_submitted_log_size_);
+    const int64_t replay_delta = std::max((int64_t)0, replayed_log_size - last_replayed_log_size_);
+    double unsub_speed_MB_s = (double)unsub_delta / (double)MB / divisor;
+    double submit_speed_MB_s = (double)submit_delta / (double)MB / divisor;
+    double replay_speed_MB_s = (double)replay_delta / (double)MB / divisor;
+    // OB_LOG 对 double 走 %.18le 难读，格式化成 3 位小数字符串后打印。
+    char unsub_speed_buf[32];
+    char submit_speed_buf[32];
+    char replay_speed_buf[32];
+    snprintf(unsub_speed_buf, sizeof(unsub_speed_buf), "%.3f", unsub_speed_MB_s);
+    snprintf(submit_speed_buf, sizeof(submit_speed_buf), "%.3f", submit_speed_MB_s);
+    snprintf(replay_speed_buf, sizeof(replay_speed_buf), "%.3f", replay_speed_MB_s);
     last_submitted_log_size_ = submitted_log_size;
     last_replayed_log_size_ = replayed_log_size;
+    last_unsubmitted_log_size_ = unsubmitted_log_size;
+    last_stat_ts_ = cur_ts;
     if (0 == unreplayed_log_size) {
       estimate_time = 0;
     } else if (0 != round_replayed_log_size_MB) {
@@ -160,6 +193,10 @@ void ReplayProcessStat::runTimerTask()
                "last_submitted_log_size(MB)", last_submitted_log_size_MB,
                "last_replayed_log_size(MB)", last_replayed_log_size_MB,
                "round_cost_time(second)", round_cost_time,
+               "interval_us", interval_us,
+               "unsub_speed(MB/s)", unsub_speed_buf,
+               "submit_speed(MB/s)", submit_speed_buf,
+               "replay_speed(MB/s)", replay_speed_buf,
                "pending_replay_log_size(MB)", pending_replay_log_size_MB);
     } else {
       CLOG_LOG(INFO, "dump tenant replay process", "tenant_id", MTL_ID(),
@@ -171,6 +208,10 @@ void ReplayProcessStat::runTimerTask()
                "last_submitted_log_size(MB)", last_submitted_log_size_MB,
                "last_replayed_log_size(MB)", last_replayed_log_size_MB,
                "round_cost_time(second)", round_cost_time,
+               "interval_us", interval_us,
+               "unsub_speed(MB/s)", unsub_speed_buf,
+               "submit_speed(MB/s)", submit_speed_buf,
+               "replay_speed(MB/s)", replay_speed_buf,
                "pending_replay_log_size(MB)", pending_replay_log_size_MB);
     }
   }
@@ -189,7 +230,8 @@ ObLogReplayService::ObLogReplayService()
     replay_status_map_(),
     pending_replay_log_size_(0),
     wait_cost_stat_("[REPLAY STAT REPLAY TASK IN QUEUE TIME]", PALF_STAT_PRINT_INTERVAL_US),
-    replay_cost_stat_("[REPLAY STAT REPLAY TASK EXECUTE COST TIME]", PALF_STAT_PRINT_INTERVAL_US)
+    retry_cost_stat_("[REPLAY STAT REPLAY TASK RETRY TIME]", PALF_STAT_PRINT_INTERVAL_US),
+    execute_cost_stat_("[REPLAY STAT REPLAY TASK EXECUTE TIME]", PALF_STAT_PRINT_INTERVAL_US)
 {}
 
 ObLogReplayService::~ObLogReplayService()
@@ -233,6 +275,61 @@ int ObLogReplayService::init(ipalf::IPalfEnv *palf_env,
 
   if (OB_SUCC(ret)) {
     CLOG_LOG(INFO, "replay service init success", K(tg_id_));
+  }
+  return ret;
+}
+
+int64_t ObLogReplayService::calc_replay_queue_size() const
+{
+  const int64_t thread_num = TG_GET_THREAD_CNT(tg_id_);
+  return calc_replay_queue_size(thread_num);
+}
+
+int64_t ObLogReplayService::calc_replay_queue_size(const int64_t thread_num)
+{
+  // Linear mapping through (thread_num, queue_size): (16, 32) and (128, 128).
+  const int64_t queue_size = (6 * thread_num + 128) / 7;
+  return std::max(MIN_REPLAY_TASK_QUEUE_SIZE, std::min(queue_size, MAX_REPLAY_TASK_QUEUE_SIZE));
+}
+
+int ObLogReplayService::mark_need_reload_queue_size(const int64_t new_queue_size)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = MTL(ObLSService *);
+  ObArray<ObLSID> ls_ids;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "replay service not init", K(ret));
+  } else if (new_queue_size < MIN_REPLAY_TASK_QUEUE_SIZE || new_queue_size > MAX_REPLAY_TASK_QUEUE_SIZE) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid replay queue size", K(ret), K(new_queue_size));
+  } else if (OB_ISNULL(ls_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ls service is NULL", K(ret));
+  } else if (OB_FAIL(ls_service->get_ls_ids(ls_ids))) {
+    CLOG_LOG(WARN, "get ls ids failed", K(ret), K(new_queue_size));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_ids.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      ObReplayStatusGuard guard;
+      ObReplayStatus *replay_status = NULL;
+      if (OB_FAIL(get_replay_status_(ls_ids.at(i), guard))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          CLOG_LOG(INFO, "ls_id is not exist", K(ret), K(new_queue_size), K(i), K(ls_ids.at(i)));
+        } else {
+          CLOG_LOG(WARN, "get replay status failed when mark reload queue size",
+                   K(ret), K(i), K(ls_ids.at(i)), K(new_queue_size));
+        }
+      } else if (OB_ISNULL(replay_status = guard.get_replay_status())) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(WARN, "replay status is null in guard", K(ret));
+      } else if (OB_TMP_FAIL(replay_status->mark_need_reload_queue_size(new_queue_size))) {
+        CLOG_LOG(WARN, "mark replay queue size reload failed",
+                 K(tmp_ret), K(ls_ids.at(i)), K(new_queue_size));
+      }
+    }
+    CLOG_LOG(INFO, "check replay queue size finish", K(ret), K(new_queue_size), K(ls_ids));
   }
   return ret;
 }
@@ -664,9 +761,11 @@ int ObLogReplayService::get_min_unreplayed_scn(const share::ObLSID &id, SCN &scn
   LSN unused_lsn;
   int64_t unused_replay_hint = 0;
   int64_t unused_first_handle_ts = 0;
+  int64_t unused_last_handle_ts = 0;
   ObLogBaseType unused_log_type = ObLogBaseType::INVALID_LOG_BASE_TYPE;
   int64_t unused_replay_cost = 0;
   int64_t unused_retry_cost = 0;
+  bool unused_empty = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "replay service not init", K(ret));
@@ -676,7 +775,7 @@ int ObLogReplayService::get_min_unreplayed_scn(const share::ObLSID &id, SCN &scn
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "replay status is not exist", K(ret), K(id));
   } else if (OB_FAIL(replay_status->get_min_unreplayed_log_info(unused_lsn, scn, unused_replay_hint, unused_log_type,
-                                          unused_first_handle_ts, unused_replay_cost, unused_retry_cost))) {
+          unused_first_handle_ts, unused_last_handle_ts, unused_replay_cost, unused_retry_cost, unused_empty))) {
     if (OB_STATE_NOT_MATCH != ret) {
       CLOG_LOG(WARN, "get_min_unreplayed_log_info failed", K(ret), K(id));
     } else if (REACH_TIME_INTERVAL(1000 * 1000)) {
@@ -992,7 +1091,10 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
   get_replay_queue_index() = replay_queue_idx;
   ObLogReplayBuffer *replay_log_buff = NULL;
   bool need_replay = false;
-  replay_task->first_handle_ts_ = ObTimeUtility::fast_current_time();
+  if (OB_INVALID_TIMESTAMP == replay_task->first_handle_ts_) {
+    replay_task->first_handle_ts_ = ObTimeUtility::fast_current_time();
+  }
+  replay_task->last_handle_ts_ = ObTimeUtility::fast_current_time();
   if (OB_ISNULL(replay_status) || OB_ISNULL(replay_task)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "invalid argument", KPC(replay_task), KPC(replay_status), KR(ret));
@@ -1031,6 +1133,7 @@ int ObLogReplayService::do_replay_task_(ObLogReplayTask *replay_task,
   } else if (OB_FAIL(ls_adapter_->replay(replay_task))) {
     CLOG_LOG(WARN, "ls do replay failed", K(ret), KPC(replay_task));
   }
+  replay_task->retry_cost_ = replay_task->last_handle_ts_ - replay_task->first_handle_ts_;
   if (OB_SUCC(ret) && need_replay) {
     if (replay_task->is_post_barrier_) {
       if (OB_FAIL(replay_status->set_post_barrier_finished(replay_task->lsn_))) {
@@ -1127,7 +1230,7 @@ int ObLogReplayService::fetch_pre_barrier_log_(ObReplayStatus &replay_status,
       char *real_log_buf = share_log_buf + sizeof(ObLogReplayBuffer);
       replay_log_buffer->log_buf_ = real_log_buf;
       MEMCPY(real_log_buf, log_buf, log_size);
-      if (OB_FAIL(replay_task->init(replay_log_buffer))) {
+      if (OB_FAIL(replay_task->init(replay_log_buffer, replay_status.get_replay_queue_size()))) {
         free_replay_log_buf_(replay_log_buffer);
         CLOG_LOG(ERROR, "init replay task failed", K(ret), K(id), K(id), K(cur_lsn), K(cur_log_submit_scn),
                  K(log_size), KP(replay_log_buffer), K(header), K(header_pos));
@@ -1212,7 +1315,7 @@ int ObLogReplayService::fetch_and_submit_single_log_(ObReplayStatus &replay_stat
       decompression_buf = NULL;//decompression_buf will be free by replay_task
       char *task_log_buf = task_buf + sizeof(ObLogReplayTask);
       MEMCPY(task_log_buf, log_buf, log_size);
-      if (OB_FAIL(replay_task->init(task_log_buf))) {
+      if (OB_FAIL(replay_task->init(task_log_buf, replay_status.get_replay_queue_size()))) {
         // print log details inside
         CLOG_LOG(ERROR, "init replay task failed", K(ret), K(id));
       }
@@ -1281,6 +1384,15 @@ int ObLogReplayService::handle_submit_task_(ObReplayServiceSubmitTask *submit_ta
     int64_t count = 0;
     LSN last_batch_to_submit_lsn;
     bool iterate_end_by_replayable_point = false;
+    if (!replay_status->is_enabled_without_lock() || !replay_status->need_submit_log()) {
+      need_submit_log = false;
+    }
+    // 队列数变更时，等待所有pending任务排空后再reload，期间暂停提交
+    else if (OB_FAIL(replay_status->check_reload_queue_size_before_submit())) {
+      if (OB_EAGAIN != ret) {
+        CLOG_LOG(WARN, "failed to check_reload_queue_size_before_submit", KPC(replay_status), K(ret));
+      }
+    }
     while (OB_SUCC(ret) && need_submit_log && (!is_timeslice_run_out)) {
       int64_t log_size = 0;
       LSN to_submit_lsn;
@@ -1393,7 +1505,8 @@ int ObLogReplayService::handle_replay_task_(ObReplayServiceReplayTask *task_queu
           ObDIActionGuard ag(log_type_str);
           if (OB_FAIL(do_replay_task_(replay_task, replay_status, task_queue->idx()))) {
             (void)process_replay_ret_code_(ret, *replay_status, *task_queue, *replay_task);
-          } else if (OB_FAIL(statistics_replay_cost_(replay_task->init_task_ts_, replay_task->first_handle_ts_))) {
+          } else if (OB_FAIL(statistics_replay_cost_(replay_task->init_task_ts_, replay_task->first_handle_ts_,
+                                                     replay_task->last_handle_ts_))) {
             ret = OB_ERR_UNEXPECTED;
             CLOG_LOG(ERROR, "do statistics replay cost failed", KPC(replay_task), K(ret));
           } else if (OB_ISNULL(link_to_destroy = task_queue->pop())) {
@@ -1557,14 +1670,17 @@ int ObLogReplayService::transform_replay_task_(ObLogReplayTask *replay_task,
 #endif
 
 int ObLogReplayService::statistics_replay_cost_(const int64_t init_task_time,
-                                                const int64_t first_handle_time)
+                                                const int64_t first_handle_time,
+                                                const int64_t last_handle_time)
 {
   int ret = OB_SUCCESS;
   int64_t handle_finish_time = ObTimeUtility::fast_current_time();
   int64_t wait_cost_time = first_handle_time - init_task_time;
-  int64_t replay_cost_time = handle_finish_time - first_handle_time;
+  int64_t retry_cost_time = last_handle_time - first_handle_time;
+  int64_t execute_cost_time = handle_finish_time - last_handle_time;
   wait_cost_stat_.stat(wait_cost_time);
-  replay_cost_stat_.stat(replay_cost_time);
+  retry_cost_stat_.stat(retry_cost_time);
+  execute_cost_stat_.stat(execute_cost_time);
   return ret;
 }
 
@@ -1685,8 +1801,25 @@ bool ObLogReplayService::StatReplayProcessFunctor::operator()(const palf::LSKey 
     unsubmitted_log_size_ += unsubmitted_log_size;
     replayed_log_size_ += replayed_log_size;
     unreplayed_log_size_ += unreplayed_log_size;
+    int64_t interval_us = 0;
+    double unsub_speed = 0.0;
+    double submit_speed = 0.0;
+    double replay_speed = 0.0;
+    replay_status->update_replay_speed(submitted_log_size, unsubmitted_log_size, replayed_log_size,
+                                       interval_us, unsub_speed, submit_speed, replay_speed);
+    // OB_LOG 对 double 走 %.18le 难读，格式化成 3 位小数字符串后打印。
+    char unsub_speed_buf[32];
+    char submit_speed_buf[32];
+    char replay_speed_buf[32];
+    snprintf(unsub_speed_buf, sizeof(unsub_speed_buf), "%.3f", unsub_speed);
+    snprintf(submit_speed_buf, sizeof(submit_speed_buf), "%.3f", submit_speed);
+    snprintf(replay_speed_buf, sizeof(replay_speed_buf), "%.3f", replay_speed);
     CLOG_LOG(INFO, "get_replay_process success", K(id), K(submitted_log_size), K(unsubmitted_log_size),
-             K(replayed_log_size), K(unreplayed_log_size));
+             K(replayed_log_size), K(unreplayed_log_size),
+             "interval_us", interval_us,
+             "unsub_speed(MB/s)", unsub_speed_buf,
+             "submit_speed(MB/s)", submit_speed_buf,
+             "replay_speed(MB/s)", replay_speed_buf);
   }
   ret_code_ = ret;
   return true;

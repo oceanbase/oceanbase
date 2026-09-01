@@ -290,7 +290,7 @@ struct ObMvccRow
     void set_index_node(const int64_t index, ObMvccTransNode *node);
   public:
     bool is_empty_;
-    ObMvccTransNode *replay_locations_[common::REPLAY_TASK_QUEUE_SIZE];
+    ObMvccTransNode *replay_locations_[common::MAX_REPLAY_TASK_QUEUE_SIZE];
   };
   static const uint8_t F_INIT = 0x0;
   static const uint8_t F_HASH_INDEX = 0x1;

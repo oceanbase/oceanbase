@@ -18098,6 +18098,40 @@ def_table_schema(**gen_iterate_virtual_table_def(
   in_tenant_space = True))
 
 def_table_schema(
+  owner = 'zk250686',
+  table_name = '__all_virtual_replay_queue_stat',
+  table_id = '12619',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('queue_idx', 'int'),
+    ('min_unreplayed_lsn', 'uint'),
+    ('min_unreplayed_scn', 'uint'),
+    ('replay_hint', 'int'),
+    ('log_type', 'varchar:32'),
+    ('first_handle_ts', 'int'),
+    ('last_handle_ts', 'int'),
+    ('retry_cost', 'int'),
+    ('task_count', 'int'),
+    ('pre_barrier_count', 'int'),
+    ('err_ret_code', 'int'),
+    ('has_fatal_error', 'bool'),
+    ('is_idle', 'bool'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+
+def_table_schema(
   owner = 'laibingzheng.lbz',
   table_name = '__all_virtual_tenant_memstore_diagnose_info',
   table_id = '12624',

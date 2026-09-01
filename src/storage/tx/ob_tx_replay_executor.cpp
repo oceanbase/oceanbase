@@ -16,6 +16,7 @@
 #include "storage/tx/ob_tx_log_operator.h"
 #include "storage/tx/ob_tx_replay_executor.h"
 #include "storage/tablelock/ob_lock_memtable.h"
+#include "storage/tablet/ob_tablet.h"
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
 
 namespace oceanbase
@@ -24,6 +25,122 @@ using namespace share;
 using namespace memtable;
 namespace transaction
 {
+
+ObTxReplayExecutor::ObReplayHandleCache::ObReplayHandleCache()
+  : tablet_handle_(),
+    store_ctx_(),
+    is_storage_guard_constructed_(false)
+{
+}
+
+ObTxReplayExecutor::ObReplayHandleCache::~ObReplayHandleCache()
+{
+  reset();
+}
+
+storage::ObStorageTableGuard *ObTxReplayExecutor::ObReplayHandleCache::get_storage_guard_()
+{
+  return &storage_guard_;
+}
+
+void ObTxReplayExecutor::ObReplayHandleCache::construct_storage_guard_(
+    storage::ObTablet *tablet,
+    const share::SCN &replay_scn)
+{
+  if (!is_storage_guard_constructed_) {
+    storage::ObStorageTableGuard *guard = get_storage_guard_();
+    new (guard) storage::ObStorageTableGuard(tablet, store_ctx_, true, true, replay_scn);
+    is_storage_guard_constructed_ = true;
+    TRANS_LOG(DEBUG, "storage table guard construct", KPC(guard));
+  }
+}
+
+void ObTxReplayExecutor::ObReplayHandleCache::deconstruct_storage_guard_()
+{
+  storage::ObStorageTableGuard *guard = get_storage_guard_();
+  if (is_storage_guard_constructed_) {
+    TRANS_LOG(DEBUG, "storage table guard will be deconstructed", KPC(guard));
+    guard->~ObStorageTableGuard();
+    is_storage_guard_constructed_ = false;
+  }
+}
+
+int ObTxReplayExecutor::ObReplayHandleCache::prepare_tablet_for_replay(
+    const common::ObTabletID &tablet_id,
+    ObTxReplayExecutor &replay_executor,
+    storage::ObStoreCtx *&store_ctx,
+    storage::ObTablet *&tablet)
+{
+  int ret = OB_SUCCESS;
+  store_ctx_.reset();
+  if (!tablet_handle_.is_valid()
+      || OB_ISNULL(tablet_handle_.get_obj())
+      || tablet_handle_.get_obj()->get_tablet_id() != tablet_id) {
+    deconstruct_storage_guard_();
+    tablet_handle_.reset();
+    if (OB_FAIL(replay_executor.ls_->replay_get_tablet(
+            tablet_id, replay_executor.log_ts_ns_, false/*is_update_mds_table*/, tablet_handle_))) {
+      TRANS_LOG(WARN, "failed to replay_get_tablet", KR(ret), K(tablet_id));
+      tablet_handle_.reset();
+    }
+  } else {
+    TRANS_LOG(DEBUG, "tablet handle reuse", K(tablet_id));
+  }
+
+  if (OB_SUCC(ret)) {
+    store_ctx_.ls_id_ = replay_executor.ctx_->get_ls_id();
+    (void)store_ctx_.mvcc_acc_ctx_.init_replay(
+      *replay_executor.ctx_,
+      *replay_executor.mt_ctx_,
+      replay_executor.ctx_->get_trans_id()
+    );
+    store_ctx_.tablet_id_ = tablet_id;
+    store_ctx_.ls_ = replay_executor.ls_;
+    store_ctx = &store_ctx_;
+    tablet = tablet_handle_.get_obj();
+  }
+
+  return ret;
+}
+
+int ObTxReplayExecutor::ObReplayHandleCache::prepare_memtable_for_replay(
+    storage::ObTablet *tablet,
+    const share::SCN &replay_scn,
+    storage::ObIMemtable *&mem_ptr)
+{
+  int ret = OB_SUCCESS;
+  storage::ObStorageTableGuard *guard = get_storage_guard_();
+  bool skip_refresh_memtable = false;
+  if (!is_storage_guard_constructed_) {
+    construct_storage_guard_(tablet, replay_scn);
+  } else if (guard->get_tablet() != tablet) {
+    deconstruct_storage_guard_();
+    construct_storage_guard_(tablet, replay_scn);
+  } else {
+    TRANS_LOG(DEBUG, "storage table guard reuse", KPC(guard));
+    skip_refresh_memtable = true;
+  }
+
+  if (skip_refresh_memtable) {
+  } else if (OB_FAIL(guard->refresh_and_protect_memtable_for_replay())) {
+    TRANS_LOG(WARN, "[Replay Tx] refresh and protect memtable error", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(guard->get_memtable_for_replay(mem_ptr))) {
+    if (OB_NO_NEED_UPDATE != ret) {
+      TRANS_LOG(WARN, "[Replay Tx] get active_memtable error", K(ret), KP(mem_ptr));
+    }
+  }
+  return ret;
+}
+
+void ObTxReplayExecutor::ObReplayHandleCache::reset()
+{
+  deconstruct_storage_guard_();
+  tablet_handle_.reset();
+  store_ctx_.reset();
+}
 
 int ObTxReplayExecutor::execute(storage::ObLS *ls,
                                 ObLSTxService *ls_tx_srv,
@@ -666,6 +783,7 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo, const bool s
   }
 
   ret = (OB_ITER_END == ret) ? OB_SUCCESS : ret;
+  guard_cache_.reset();
   // free ObRowKey's objs's memory
   CLICK();
   THIS_WORKER.get_sql_arena_allocator().reset();
@@ -686,11 +804,11 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
 {
   int ret = OB_SUCCESS;
   lib::Worker::CompatMode mode;
-  ObTabletHandle tablet_handle;
-  const bool is_update_mds_table = false;
+  storage::ObStoreCtx *store_ctx = nullptr;
+  storage::ObTablet *tablet = nullptr;
   ObASHTabletIdSetterGuard ash_tablet_id_guard(row_head.tablet_id_.id());
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(tablet_id_, row_head.tablet_id_.id());
-  if (OB_FAIL(ls_->replay_get_tablet(row_head.tablet_id_, log_ts_ns_, is_update_mds_table, tablet_handle))) {
+  if (OB_FAIL(guard_cache_.prepare_tablet_for_replay(row_head.tablet_id_, *this, store_ctx, tablet))) {
     if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
       ctx_->force_no_need_replay_checksum(!is_tx_log_replay_queue(), log_ts_ns_);
       ret = OB_SUCCESS;
@@ -701,7 +819,11 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
       TX_REPLAY_LOG(INFO, "get tablet failed, retry this log entry", K(row_head.tablet_id_));
       ret = OB_EAGAIN;
     }
-  } else if (OB_FAIL(logservice::ObTabletReplayExecutor::replay_check_restore_status(tablet_handle, false/*update_tx_data*/))) {
+  } else if (OB_UNLIKELY(OB_ISNULL(tablet) || OB_ISNULL(store_ctx) || !store_ctx->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "[Replay Tx] tablet or store ctx is invalid", K(ret),
+              KP(tablet), KP(store_ctx), K(row_head.tablet_id_));
+  } else if (OB_FAIL(logservice::ObTabletReplayExecutor::replay_check_restore_status(*tablet, false/*update_tx_data*/))) {
     if (OB_NO_NEED_UPDATE == ret) {
       ctx_->check_no_need_replay_checksum(log_ts_ns_, replay_queue_);
       ret = OB_SUCCESS;
@@ -718,21 +840,10 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   } else if (OB_FAIL(get_compat_mode_(row_head.tablet_id_, mode))) {
     TX_REPLAY_LOG(WARN, "get compat mode error", K(mode));
   } else {
-    ObTablet *tablet = tablet_handle.get_obj();
-    storage::ObStoreCtx storeCtx;
-    storeCtx.ls_id_ = ctx_->get_ls_id();
-    (void)storeCtx.mvcc_acc_ctx_.init_replay(
-      *ctx_,
-      *mt_ctx_,
-      ctx_->get_trans_id()
-    );
-    storeCtx.tablet_id_ = row_head.tablet_id_;
-    storeCtx.ls_ = ls_;
-
     lib::CompatModeGuard compat_guard(mode);
     switch (row_head.mutator_type_) {
     case MutatorType::MUTATOR_ROW: {
-      if (OB_FAIL(replay_row_(storeCtx, tablet, mmi_ptr_)) && OB_ITER_END != ret) {
+      if (OB_FAIL(replay_row_(*store_ctx, tablet, mmi_ptr_)) && OB_ITER_END != ret) {
         if (OB_NO_NEED_UPDATE != ret && OB_MINOR_FREEZE_NOT_ALLOW != ret) {
           TRANS_LOG(WARN, "[Replay Tx] replay row failed.", K(ret), K(mt_ctx_),
                     K(row_head.tablet_id_));
@@ -749,7 +860,7 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
       break;
     }
     case MutatorType::MUTATOR_TABLE_LOCK: {
-      if (OB_FAIL(replay_lock_(storeCtx, tablet, mmi_ptr_)) && OB_ITER_END != ret) {
+      if (OB_FAIL(replay_lock_(*store_ctx, tablet, mmi_ptr_)) && OB_ITER_END != ret) {
         TRANS_LOG(WARN, "[Replay Tx] replay lock failed.", K(ret), K(mt_ctx_),
                   K(row_head.tablet_id_));
       } else {
@@ -770,22 +881,6 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
   return ret;
 }
 
-int ObTxReplayExecutor::prepare_memtable_replay_(ObStorageTableGuard &w_guard,
-                                                 storage::ObIMemtable *&mem_ptr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(w_guard.refresh_and_protect_memtable_for_replay())) {
-    TRANS_LOG(WARN, "[Replay Tx] refresh and protect memtable error", K(ret));
-  } else if (OB_FAIL(w_guard.get_memtable_for_replay(mem_ptr))) {
-    // OB_NO_NEED_UPDATE => don't need to replay
-    if (OB_NO_NEED_UPDATE != ret) {
-      TRANS_LOG(WARN, "[Replay Tx] get active_memtable error", K(ret), KP(mem_ptr));
-    }
-  }
-
-  return ret;
-}
-
 int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
                                     ObTablet *tablet,
                                     memtable::ObMemtableMutatorIterator *mmi_ptr)
@@ -796,12 +891,11 @@ int ObTxReplayExecutor::replay_row_(storage::ObStoreCtx &store_ctx,
   common::ObTimeGuard timeguard("replay_row_in_memtable", 10_ms);
   storage::ObIMemtable *mem_ptr = nullptr;
   ObMemtable *data_mem_ptr = nullptr;
-  ObStorageTableGuard w_guard(tablet, store_ctx, true, true, log_ts_ns_);
   if (OB_ISNULL(mmi_ptr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "[Replay Tx] invaild arguments", K(ret), KP(mmi_ptr));
   } else if (FALSE_IT(timeguard.click("start"))) {
-  } else if (OB_FAIL(prepare_memtable_replay_(w_guard, mem_ptr))) {
+  } else if (OB_FAIL(guard_cache_.prepare_memtable_for_replay(tablet, log_ts_ns_, mem_ptr))) {
     if (OB_NO_NEED_UPDATE == ret) {
       TRANS_LOG(DEBUG, "[Replay Tx] Not need replay row for tablet",
                 K(ret), K(ls_id), K(tablet_id), K(log_ts_ns_),

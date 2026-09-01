@@ -6785,7 +6785,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
   } else {
     const int64_t CHECK_SCHEMA_VERSION_CHANGE_LOG_US = 1000;
     const int64_t CHECK_SCHEMA_VERSION_CHANGE_LOG_TIMEOUT = 1000L * 1000L * 30L; // 30s
-    const enum ObReplayBarrierType replay_barrier_type = ObReplayBarrierType::STRICT_BARRIER;
+    const enum ObReplayBarrierType replay_barrier_type = ObReplayBarrierType::NO_NEED_BARRIER;
     ObLogBaseHeader base_header(ObLogBaseType::DDL_LOG_BASE_TYPE, replay_barrier_type);
     ObDDLClogHeader ddl_header(ObDDLClogType::DDL_TABLET_SCHEMA_VERSION_CHANGE_LOG);
     const int64_t buffer_size = base_header.get_serialize_size() + ddl_header.get_serialize_size()

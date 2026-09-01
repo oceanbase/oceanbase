@@ -62,6 +62,7 @@ public:
   int get_memtable_for_replay(ObIMemtable *&memtable);
 
   TO_STRING_KV(KP(tablet_),
+               K(store_ctx_),
                K(need_control_mem_),
                K(for_replay_),
                K(replay_scn_),
@@ -69,6 +70,8 @@ public:
                K(retry_count_),
                K(last_ts_),
                K(init_ts_));
+
+  ObTablet *get_tablet() const { return tablet_; }
 
 private:
   void reset();

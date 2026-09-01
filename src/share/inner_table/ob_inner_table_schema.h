@@ -1302,6 +1302,7 @@ public:
   static int all_virtual_log_transport_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_dep_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_refresh_pending_task_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_replay_queue_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_memstore_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -4746,6 +4747,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_log_transport_stat_schema,
   ObInnerTableSchema::all_virtual_mview_dep_schema,
   ObInnerTableSchema::all_virtual_mview_refresh_pending_task_schema,
+  ObInnerTableSchema::all_virtual_replay_queue_stat_schema,
   ObInnerTableSchema::all_virtual_tenant_memstore_diagnose_info_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
@@ -7168,6 +7170,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,
   OB_ALL_VIRTUAL_MVIEW_DEP_TID,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TID,
+  OB_ALL_VIRTUAL_REPLAY_QUEUE_STAT_TID,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
@@ -10489,6 +10492,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TNAME,
   OB_ALL_VIRTUAL_MVIEW_DEP_TNAME,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TNAME,
+  OB_ALL_VIRTUAL_REPLAY_QUEUE_STAT_TNAME,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
@@ -12928,6 +12932,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID,
   OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,
+  OB_ALL_VIRTUAL_REPLAY_QUEUE_STAT_TID,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
