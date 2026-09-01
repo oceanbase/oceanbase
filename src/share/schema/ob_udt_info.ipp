@@ -46,8 +46,8 @@ int ObUDTTypeInfo::check_dependency_valid(SCHEMA_PROVIDER &schema_provider) cons
       SHARE_SCHEMA_LOG(WARN, "failed to get_udt_info", K(ret), K(*this), K(elem_id), KPC(elem_info));                  \
     } else if (OB_ISNULL(elem_info)) {                                                                                 \
       /* dependency is dropped, the object must be invalid, do nothing */                                              \
-    } else if ((type_info)->is_coll_type() && !elem_info->is_collection() ||                                           \
-               (type_info)->is_obj_type() && !elem_info->is_obj_type()) {                                              \
+    } else if (((type_info)->is_coll_type() && !elem_info->is_collection()) ||                                           \
+               ((type_info)->is_obj_type() && !elem_info->is_obj_type())) {                                              \
         ret = OB_ERR_OBJECT_INVALID;                                                                                   \
         SHARE_SCHEMA_LOG(WARN, "original element type is replaced by another type",                                    \
                  K(ret), K(*this), K(elem_id), KPC(type_info), K((type_info)->get_typecode()), KPC(elem_info));        \
