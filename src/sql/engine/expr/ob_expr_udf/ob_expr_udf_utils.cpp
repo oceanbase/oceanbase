@@ -676,12 +676,17 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
         OX (cast_out.set_subschema_id(result_meta.get_subschema_id()));
         OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, tmp_result, cast_out));
         if (OB_SUCC(ret)) {
-          eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(
-              guard.get_cur_obj_count());
-          tmp_result.set_null();
+          eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(guard.get_cur_obj_count());
           OX (result = cast_out);
         }
       }
+      int tmp_ret = OB_SUCCESS;
+      if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+            tmp_result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+        LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+      tmp_result.set_null();
     } else if (is_complex_result) {
       int tmp_ret = OB_SUCCESS;
       ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
@@ -689,7 +694,6 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
       OZ (pl::ObUserDefinedType::deep_copy_obj(pl_complex_type_mgr->alloc_, tmp_result, result, true));
       if (OB_SUCC(ret)) {
         eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(guard.get_cur_obj_count());
-        tmp_result.set_null();
         OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
         if (OB_FAIL(ret)) {
           if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
@@ -698,12 +702,32 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
           }
         }
       }
+      if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+            tmp_result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+        LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+      tmp_result.set_null();
     } else {
       // Basic result & RefCursor, shadow copy result.
       result = tmp_result;
     }
   } else { // Call IN PL, shadow copy result.
     result = tmp_result;
+    if (is_complex_result) {
+      ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
+      OZ (eval_ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
+      OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
+      if (OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+              result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+          LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
+        }
+        result.set_null();
+      }
+      tmp_result.set_null();
+    }
   }
   return ret;
 }

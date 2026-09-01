@@ -118,7 +118,7 @@ private:
   bool need_free_udt_;
   ObEvalCtx &ctx_;
   ObExprUDFCtx &udf_ctx_;
-  int ret_;
+  int &ret_;
   int64_t start_time_;
   ObObj &tmp_result_;
 };

@@ -537,9 +537,16 @@ ObExprUDFEnvGuard::~ObExprUDFEnvGuard()
       }
     }
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret)
+      && udf_ctx_.get_info()->is_called_in_sql_) {
     ctx_.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(get_cur_obj_count());
-    tmp_result_.set_null();
+  }
+  // Release return value when pl eval failed,
+  // if pl eval success, return value will released by process_return_value call.
+  int tmp_ret = OB_SUCCESS;
+  if (OB_FAIL(ret) && (tmp_ret =
+        pl::ObUserDefinedType::destruct_obj(tmp_result_, ctx_.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+    LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
   }
   if (need_end_stmt_) {
     udf_ctx_.get_session_info()->set_end_stmt();

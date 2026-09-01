@@ -2101,7 +2101,6 @@ int ObPL::execute(ObExecContext &ctx,
     OZ (pl.init(params, is_anonymous));
     OZ (pl.execute(is_first_execute));
     pl.try_clear_complex_obj();
-    OZ (pl.register_complex_result_if_need());
     pl.final(ret);
     if (OB_SUCC(ret)) {
       // process out arguments
@@ -2223,9 +2222,18 @@ int ObPL::execute(ObExecContext &ctx,
       }
     }
     // process function return value
-    if (OB_SUCC(ret) && local_result.is_valid_type()) {
-      CK (OB_NOT_NULL(result));
-      OX (*result = local_result);
+    if (local_result.is_valid_type()) {
+      if (OB_SUCC(ret)) {
+        CK (OB_NOT_NULL(result));
+        OX (*result = local_result);
+      }
+      if (OB_FAIL(ret)
+          && local_result.is_pl_extend()) {
+        int tmp_ret = ObUserDefinedType::destruct_obj(local_result, ctx.get_my_session());
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to destruct local result object", K(ret), K(tmp_ret));
+        }
+      }
     }
 
     if(OB_SUCC(ret) && !is_oracle_mode
@@ -4479,6 +4487,7 @@ int ObPLExecState::final(int ret)
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("failed to destruct pl object", K(tmp_ret));
     }
+    result_.set_null();
   }
 
 #ifdef OB_BUILD_ORACLE_PL
@@ -5965,22 +5974,6 @@ int ObPLExecState::check_pl_priv(
     }
   }
     // check func self priv
-  return ret;
-}
-
-int ObPLExecState::register_complex_result_if_need()
-{
-  int ret = OB_SUCCESS;
-  if (func_.is_function()
-      && func_.get_ret_type().is_composite_type()
-      && result_.is_pl_extend()
-      && result_.get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-    CK (OB_NOT_NULL(ctx_.exec_ctx_));
-    if (OB_SUCC(ret)) {
-      ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
-      OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result_)); //if failed, result_ will be released in pl::final()
-    }
-  }
   return ret;
 }
 
