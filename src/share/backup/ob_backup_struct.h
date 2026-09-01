@@ -81,6 +81,7 @@ const int64_t OB_MIN_LAG_TARGET = 1 * 1000LL * 1000LL;// 1s
 const int64_t OB_MAX_LAG_TARGET = 60 * 60 * 1000LL * 1000LL; // 1h
 const int64_t OB_MIN_LOG_ARCHIVE_PIECE_SWITH_INTERVAL = 60 * 1000LL * 1000LL;// 1min
 const int64_t OB_DEFAULT_PIECE_SWITCH_INTERVAL = 24 * 3600 * 1000LL * 1000LL;// 1d, unit:us
+const int64_t OB_BACKUP_ARCHIVE_DEST_NO_OFFSET = 10000; // used for backup archive dest
 const int64_t OB_DEFAULT_LAG_TARGET = 120 * 1000LL * 1000LL;// 2min, unit:us
 const int64_t OB_BACKUP_MAX_RETRY_TIMES = 64;
 const int64_t OB_BACKUP_VALIDATE_MAX_RETRY_TIMES = 64;
@@ -220,6 +221,7 @@ const char *const OB_STR_FILE_LIST="file_list";
 const char *const OB_STR_LOG_ARCHIVE_STATUS = "log_archive_status";
 const char *const OB_STR_DATA_BACKUP_DEST = "data_backup_dest";
 const char *const OB_STR_LOG_ARCHIVE_DEST = "log_archive_dest";
+const char *const OB_STR_BACKUP_ARCHIVE_PREFIX = "backup_archive_";
 const char *const OB_STR_BACKUP_CLEAN_POLICY_NAME_DEFAULT = "default";
 const char *const OB_STR_BACKUP_CLEAN_POLICY_NAME_LOG_ONLY = "log_only";
 const char *const OB_STR_BACKUP_BACKUP_DEST = "backup_backup_dest";
@@ -242,6 +244,8 @@ const char *const OB_STR_MIN_FIRST_TIME = "min_first_time";
 const char *const OB_STR_MAX_NEXT_TIME = "max_next_time";
 const char *const OB_STR_STATUS = "status";
 const char *const OB_STR_FILE_STATUS = "file_status";
+const char *const OB_STR_BACKUP_FILE_STATUS = "backup_file_status";
+const char *const OB_STR_TASK_STATUS = "task_status";
 const char *const OB_STR_BACKUP_ENCRYPTION_MODE = "encryption_mode";
 const char *const OB_STR_BACKUP_PASSWD = "passwd";
 const char *const OB_STR_COPY_ID = "copy_id";
@@ -605,7 +609,8 @@ struct ObBackupFileStatus final
   static OB_INLINE bool is_valid(const STATUS &status) { return status >= 0 && status < BACKUP_FILE_MAX; }
   static int check_can_change_status(
       const ObBackupFileStatus::STATUS &src_file_status,
-      const ObBackupFileStatus::STATUS &dest_file_status);
+      const ObBackupFileStatus::STATUS &dest_file_status,
+      const bool for_archive_backup = false);
   static bool can_show_in_preview(const ObBackupFileStatus::STATUS &status);
 };
 
@@ -618,6 +623,8 @@ public:
     EMPTY = 0,
     FULL_BACKUP = 1,
     INCREMENTAL_BACKUP = 2,
+    BACKUP_ARCHIVE = 3,
+    BACKUP_ARCHIVE_DELETE_INPUT = 4,
     MAX,
   };
 
@@ -629,8 +636,12 @@ public:
   const char* get_backup_type_str() const;
   int set_backup_type(const char *buf);
   static OB_INLINE bool is_full_backup(const BackupType &type) { return FULL_BACKUP == type; }
+  static OB_INLINE bool is_backup_archive(const BackupType &type) { return BACKUP_ARCHIVE == type || BACKUP_ARCHIVE_DELETE_INPUT == type; }
+  static OB_INLINE bool is_backup_archive_delete_input(const BackupType &type) { return BACKUP_ARCHIVE_DELETE_INPUT == type; }
   bool is_full_backup() const { return ObBackupType::is_full_backup(type_); }
   bool is_inc_backup() const { return type_ == BackupType::INCREMENTAL_BACKUP; }
+  bool is_backup_archive() const { return ObBackupType::is_backup_archive(type_); }
+  bool is_backup_archive_delete_input() const { return type_ == BackupType::BACKUP_ARCHIVE_DELETE_INPUT; }
   TO_STRING_KV(K_(type));
   BackupType type_;
 };
@@ -1191,7 +1202,10 @@ public:
   static int get_tenant_sys_time_zone_wrap(const uint64_t tenant_id,
                                            ObFixedLengthString<common::OB_MAX_TIMESTAMP_TZ_LENGTH> &time_zone,
                                            ObTimeZoneInfoWrap &time_zone_info_wrap);
-  static int get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id);
+  static int get_backup_dest_id(
+      const uint64_t tenant_id,
+      const ObBackupPathString &backup_dest_str,
+      int64_t &dest_id);
   static int get_tenant_backup_servers(
       const char *backup_dest_str,
       const uint64_t tenant_id,
@@ -1546,18 +1560,23 @@ public:
     BACKUP_DATA,
     BACKUP_CLEAN,
     BACKUP_VALIDATE,
+    BACKUP_ARCHIVE,
     MAX_FAILED_TYPE
   };
   ObHAResultInfo(const FailedType &type, const ObLSID &ls_id, const ObAddr &addr, const ObTaskId &trace_id,
       const int result);
   ObHAResultInfo(const FailedType &type, const ObAddr &addr, const ObTaskId &trace_id, const int result);
+  ObHAResultInfo(const FailedType &type, const int64_t round_id, const int64_t piece_id, const ObAddr &addr,
+      const ObTaskId &trace_id, const int result);
   const char *get_failed_type_str() const;
   int get_comment_str(Comment &comment) const;
   int assign(const ObHAResultInfo &that);
   bool is_valid() const;
-  TO_STRING_KV(K_(type), K_(ls_id), K_(trace_id), K_(addr), K_(result));
+  TO_STRING_KV(K_(type), K_(ls_id), K_(round_id), K_(piece_id), K_(trace_id), K_(addr), K_(result));
   FailedType type_;
   ObLSID ls_id_;
+  int64_t round_id_;
+  int64_t piece_id_;
   ObTaskId trace_id_;
   ObAddr addr_;
   int result_;
@@ -2103,13 +2122,14 @@ struct ObBackupDestType final
     DEST_TYPE_RESTORE_DATA = 3,
     DEST_TYPE_RESTORE_LOG = 4,
     DEST_TYPE_BACKUP_VALIDATE = 5,
+    DEST_TYPE_BACKUP_ARCHIVE_LOG = 6,
     DEST_TYPE_MAX
   };
   static const char *get_str(const TYPE &type);
   static TYPE get_type(const char *type_str);
   static OB_INLINE bool is_valid(const TYPE &type) { return type >= 0 && type < TYPE::DEST_TYPE_MAX; }
 
-  static OB_INLINE bool is_clean_valid(const TYPE &type) { return DEST_TYPE_BACKUP_DATA == type || DEST_TYPE_ARCHIVE_LOG == type; }
+  static OB_INLINE bool is_clean_valid(const TYPE &type) { return DEST_TYPE_BACKUP_DATA == type || DEST_TYPE_ARCHIVE_LOG == type || DEST_TYPE_BACKUP_ARCHIVE_LOG == type; }
 };
 
 struct ObBackupTurnRetryInfo

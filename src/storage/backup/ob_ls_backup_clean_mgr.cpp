@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "ob_ls_backup_clean_mgr.h"
 #include "share/backup/ob_backup_data_table_operator.h"
+#include "share/backup/ob_backup_clean_operator.h"
 #include "share/backup/ob_archive_persist_helper.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_clean_util.h"
@@ -408,7 +409,7 @@ ObLSBackupCleanTask::ObLSBackupCleanTask()
     round_id_(0),
     dest_id_(0),
     ls_id_(),
-    task_type_(ObBackupCleanTaskType::TYPE::MAX) 
+    task_type_(ObBackupCleanTaskType::TYPE::MAX)
 {
 }
 
@@ -438,8 +439,10 @@ int ObLSBackupCleanTask::init(const ObLSBackupCleanDagNetInitParam &param, commo
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, param.tenant_id_, backup_set_desc_.backup_path_, backup_dest_))) {
       LOG_WARN("failed to set backup dest", K(ret), K_(backup_set_desc)); 
     }
-  } else if (ObBackupCleanTaskType::BACKUP_PIECE == param.task_type_) {
+  } else if (ObBackupCleanTaskType::BACKUP_PIECE == param.task_type_
+          || ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == param.task_type_) {
     ObArchivePersistHelper archive_table_op;
+    ObBackupCleanTaskAttr task_attr;
     if (OB_FAIL(archive_table_op.init(param.tenant_id_))) {
       LOG_WARN("failed to init archive piece attr", K(ret));
     } else if (OB_FAIL(archive_table_op.get_piece(*sql_proxy_, param.dest_id_, param.round_id_,
@@ -449,6 +452,12 @@ int ObLSBackupCleanTask::init(const ObLSBackupCleanDagNetInitParam &param, commo
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("backup piece info is invalid", K(ret), K_(backup_piece_info));
     } else if (FALSE_IT(backup_piece_id_ = param.id_)) {
+    } else if (ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == param.task_type_) {
+      if (OB_FAIL(ObBackupCleanTaskOperator::get_backup_clean_task(*sql_proxy_, param.task_id_, param.tenant_id_, false/* need_lock */, task_attr))) {
+        LOG_WARN("failed to get backup clean task", K(ret), K(param));
+      } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, param.tenant_id_, task_attr.backup_path_, backup_dest_))) {
+        LOG_WARN("failed to set backup archive dest", K(ret), K(task_attr));
+      }
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, param.tenant_id_, backup_piece_info_.path_, backup_dest_))) {
       LOG_WARN("failed to set backup dest", K(ret), K_(backup_piece_info));
     }
@@ -553,12 +562,15 @@ int ObLSBackupCleanTask::check_can_do_task_(bool &can)
     } else if (ObBackupFileStatus::BACKUP_FILE_DELETING != backup_set_desc_.file_status_) {
       can = false;
     }
-  } else if (ObBackupCleanTaskType::BACKUP_PIECE == task_type_) {
+  } else if (ObBackupCleanTaskType::BACKUP_PIECE == task_type_
+          || ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_) {
     if (!backup_piece_info_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("backup piece info is invalid", K(ret), K(backup_piece_info_));
-    } else if (ObBackupFileStatus::BACKUP_FILE_DELETING != backup_piece_info_.file_status_) {
-      can = false;
+    } else if (ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_) {
+      can = ObBackupFileStatus::BACKUP_FILE_DELETING == backup_piece_info_.backup_file_status_;
+    } else if (ObBackupCleanTaskType::BACKUP_PIECE == task_type_) {
+      can = ObBackupFileStatus::BACKUP_FILE_DELETING == backup_piece_info_.file_status_;
     }
   }
 
@@ -578,7 +590,8 @@ int ObLSBackupCleanTask::do_ls_task()
     } else if (OB_FAIL(delete_backup_set_ls_files_(path))) {
       LOG_WARN("failed to delete backup set ls", K(ret));
     }
-  } else if (ObBackupCleanTaskType::BACKUP_PIECE == task_type_) {
+  } else if (ObBackupCleanTaskType::BACKUP_PIECE == task_type_
+          || ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_) {
     if (OB_FAIL(get_piece_ls_path(path))) {
       LOG_WARN("failed to get piece ls path", K(ret));
     } else if (OB_FAIL(delete_backup_piece_ls_files_(path))) {

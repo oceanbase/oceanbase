@@ -2736,6 +2736,34 @@ int ObBackupDatabaseExecutor::execute(ObExecContext &ctx, ObBackupDatabaseStmt &
   return ret;
 }
 
+int ObBackupArchiveLogAllExecutor::execute(ObExecContext &ctx, ObBackupArchiveLogAllStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx);
+  ObCommonRpcProxy *common_proxy = NULL;
+  common::ObCurTraceId::mark_user_request();
+  obrpc::ObBackupArchiveLogAllArg arg;
+  if (OB_ISNULL(task_exec_ctx)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed");
+  } else if (OB_ISNULL(common_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_FAIL(arg.archive_tenant_ids_.assign(stmt.get_archive_tenant_ids()))) {
+    LOG_WARN("failed to assign archive tenant ids", K(ret), K(stmt));
+  } else if (OB_FAIL(arg.description_.assign(stmt.get_description()))) {
+    LOG_WARN("failed to assign backup description", K(ret), K(stmt));
+  } else {
+    arg.tenant_id_ = stmt.get_tenant_id();
+    arg.delete_input_ = stmt.is_delete_input();
+    LOG_INFO("ObBackupArchiveLogAllExecutor::execute", K(stmt), K(arg), K(ctx));
+    if (OB_FAIL(common_proxy->backup_archive_log_all(arg))) {
+      LOG_WARN("backup_archive_log_all rpc failed", K(ret), K(arg), "dst", common_proxy->get_server());
+    }
+  }
+  return ret;
+}
+
 int ObBackupManageExecutor::execute(ObExecContext &ctx, ObBackupManageStmt &stmt)
 {
   int ret = OB_SUCCESS;

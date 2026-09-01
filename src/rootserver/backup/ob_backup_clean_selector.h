@@ -240,9 +240,12 @@ public:
   int get_delete_backup_piece_infos(ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
   // auto delete obsolete OR manually launch a delete obsolete
   int get_delete_obsolete_infos(ObIArray<share::ObBackupSetFileDesc> &set_list,
-                         ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+                                ObIArray<share::ObTenantArchivePieceAttr> &piece_list,
+                                ObIArray<share::ObTenantArchivePieceAttr> &archive_piece_list);
   // clear all file in one dest
   int get_delete_backup_all_infos(ObIArray<share::ObBackupSetFileDesc> &set_list, ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  // clear frozen pieces that have been backed up to backup_archive_dest on log_archive_dest
+  int get_backed_up_archive_pieces_to_delete(ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
 
 private:
   // ----------------------------Set deletion related methods----------------------------
@@ -319,6 +322,11 @@ private:
                                             ObIArray<share::ObBackupSetFileDesc> &set_list);
   int get_delete_obsolete_backup_piece_infos_(const share::ObBackupSetFileDesc &clog_data_clean_point,
                                               ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int get_delete_obsolete_backup_archive_piece_infos_(
+      const share::SCN &clog_data_clean_point,
+      const ObIArray<share::ObTenantArchivePieceAttr> &deletable_source_pieces,
+      const bool is_log_only,
+      ObIArray<share::ObTenantArchivePieceAttr> &archive_piece_list);
 
   int get_min_depended_piece_idx_(const ObIArray<share::ObTenantArchivePieceAttr> &candidate_piece_infos, int64_t &min_depended_pieces_idx);
   int get_min_depended_piece_idx_ls_(const ObIArray<share::ObTenantArchivePieceAttr> &candidate_piece_infos,
@@ -326,8 +334,10 @@ private:
                                     const int64_t file_id,
                                     int64_t &min_depended_pieces_idx);
   int check_piece_dependency_(ObIArray<share::ObTenantArchivePieceAttr> &candidate_piece_infos);
-  int get_delete_obsolete_backup_piece_infos_log_only_(int64_t expired_time,
-                                            ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int get_delete_obsolete_backup_piece_infos_log_only_(
+      int64_t expired_time,
+      ObIArray<share::ObTenantArchivePieceAttr> &piece_list,
+      share::SCN &clog_data_clean_point);
 
   int get_all_dest_backup_piece_infos_(const share::SCN &clog_data_clean_point,
                                       ObIArray<share::ObTenantArchivePieceAttr> &backup_piece_infos,

@@ -200,9 +200,11 @@ int ObRemoteLocationAdaptor::add_location_source_(const share::ObLogRestoreSourc
 {
   int ret = OB_SUCCESS;
   share::ObBackupDest dest;
-  if (OB_FAIL(ObLogRestoreSourceMgr::get_backup_dest(item, dest))) {
+  share::ObBackupDest backup_dest;
+  // value column maybe "<dest>" or "<dest>,<backup_dest>"
+  if (OB_FAIL(ObLogRestoreSourceMgr::get_backup_dest(item, dest, backup_dest))) {
     LOG_WARN("get backup dest failed", K(ret), K(item));
-  } else if (OB_FAIL(restore_handler.add_source(dest, item.until_scn_))) {
+  } else if (OB_FAIL(restore_handler.add_source(dest, backup_dest, item.until_scn_))) {
     LOG_WARN("add ObBackupDest source failed", K(ret), K(dest), K(item));
   }
   return ret;

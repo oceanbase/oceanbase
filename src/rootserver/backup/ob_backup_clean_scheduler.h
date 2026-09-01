@@ -66,6 +66,7 @@ private:
   int start_sys_backup_clean_(const share::ObBackupCleanJobAttr &job_attr);
   int start_tenant_backup_clean_(const share::ObBackupCleanJobAttr &job_attr);
   int fill_template_job_(const obrpc::ObBackupCleanArg &in_arg, share::ObBackupCleanJobAttr &job_attr);
+  int check_archive_delete_job_duplicate_(const obrpc::ObBackupCleanArg &in_arg, bool &is_duplicate);
   int get_need_cancel_jobs_(
       const uint64_t tenant_id,
       const common::ObIArray<uint64_t> &backup_tenant_ids,
@@ -159,19 +160,25 @@ private:
   int persist_backup_clean_task_();
   int get_need_cleaned_backup_infos_(
       ObArray<share::ObBackupSetFileDesc> &set_list,
-      ObArray<share::ObTenantArchivePieceAttr> &piece_list);
+      ObArray<share::ObTenantArchivePieceAttr> &piece_list,
+      ObArray<share::ObTenantArchivePieceAttr> &archive_piece_list);
   int get_delete_backup_set_infos_(ObIArray<share::ObBackupSetFileDesc> &set_list);
   int get_delete_backup_piece_infos_(ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int get_backed_up_archive_pieces_to_delete_(ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
   int get_delete_obsolete_backup_infos_(
       ObArray<share::ObBackupSetFileDesc> &set_list,
-      ObArray<share::ObTenantArchivePieceAttr> &piece_list);
+      ObArray<share::ObTenantArchivePieceAttr> &piece_list,
+      ObArray<share::ObTenantArchivePieceAttr> &archive_piece_list);
   int check_can_delete_set_();
   int check_can_delete_piece_();
   int insert_backup_task_attr_(common::ObISQLClient &sql_proxy, bool &is_exist);
   int get_next_task_id_(int64_t &task_id);
   int delete_rounds_placeholders_(const ObArray<share::ObBackupCleanTaskAttr> &task_attrs);
   int get_round_range_to_delete_(const ObArray<share::ObBackupCleanTaskAttr> &task_attrs,
-      ObIArray<int64_t> &round_ids, common::hash::ObHashMap<int64_t, share::ObBackupPathString> &piece_round_to_backup_path);
+      ObIArray<share::ObBackupCleanTaskAttr> &piece_round_tasks,
+      ObIArray<share::ObBackupCleanTaskAttr> &archive_round_tasks);
+  int delete_round_placeholders_(const int64_t round_id,
+      const share::ObBackupPathString &backup_path, const int64_t dest_id);
   int do_backup_clean_task_();
   int do_cleanup_();
   int cancel_();
@@ -186,7 +193,10 @@ private:
   int get_backup_dest_(share::ObBackupCleanJobAttr &job_attr);
   int set_current_backup_dest_();
   int check_can_backup_clean_();
-  int get_backup_piece_task_(const share::ObTenantArchivePieceAttr &backup_piece_info, share::ObBackupCleanTaskAttr &task_attr);
+  int get_backup_piece_task_(
+      const share::ObTenantArchivePieceAttr &backup_piece_info,
+      const share::ObBackupCleanTaskType::TYPE task_type,
+      share::ObBackupCleanTaskAttr &task_attr);
   int get_backup_clean_task_(const share::ObBackupSetFileDesc &backup_set_info, share::ObBackupCleanTaskAttr &task_attr);
   int update_task_to_canceling_(ObArray<share::ObBackupCleanTaskAttr> &task_attrs);
   int do_backup_clean_tasks_(const ObArray<share::ObBackupCleanTaskAttr> &task_attrs);
@@ -194,7 +204,10 @@ private:
       ObIArray<share::ObBackupSetFileDesc> &set_list,
       ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
   int persist_backup_clean_tasks_(common::ObISQLClient &trans, const ObArray<share::ObBackupSetFileDesc> &set_list);
-  int persist_backup_piece_task_(common::ObISQLClient &trans, const ObArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int persist_backup_piece_task_(
+      common::ObISQLClient &trans,
+      const ObArray<share::ObTenantArchivePieceAttr> &piece_list,
+      const share::ObBackupCleanTaskType::TYPE task_type);
   int handle_backup_clean_task(
       const ObArray<share::ObBackupCleanTaskAttr> &task_attrs,
       share::ObBackupCleanStatus &next_status,

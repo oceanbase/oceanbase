@@ -440,6 +440,8 @@
 # 587: __all_java_policy  # BASE_TABLE_NAME
 # 591: __all_audit_log_encryption_password
 # 604: __all_mview_refresh_pending_task
+# 605: __all_backup_archive_piece_task
+# 606: __all_backup_archive_piece_task_history
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1403,6 +1405,10 @@
 # 12617: __all_virtual_mview_refresh_pending_task
 # 12617: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
 # 12619: __all_virtual_replay_queue_stat
+# 12622: __all_virtual_backup_archive_piece_task
+# 12622: __all_backup_archive_piece_task  # BASE_TABLE_NAME
+# 12623: __all_virtual_backup_archive_piece_task_history
+# 12623: __all_backup_archive_piece_task_history  # BASE_TABLE_NAME
 # 12624: __all_virtual_tenant_memstore_diagnose_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME

@@ -924,6 +924,10 @@ int ObBackupJobOperator::cancel_jobs(common::ObISQLClient &proxy, const uint64_t
   int64_t affected_rows = -1;
   ObDMLSqlSplicer dml;
   ObBackupStatus status(ObBackupStatus::Status::CANCELING);
+  ObBackupType backup_archive_type;
+  backup_archive_type.type_ = ObBackupType::BackupType::BACKUP_ARCHIVE;
+  ObBackupType backup_archive_delete_input_type;
+  backup_archive_delete_input_type.type_ = ObBackupType::BackupType::BACKUP_ARCHIVE_DELETE_INPUT;
   if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid status", K(ret), K(tenant_id));
@@ -934,6 +938,9 @@ int ObBackupJobOperator::cancel_jobs(common::ObISQLClient &proxy, const uint64_t
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_JOB_TNAME, sql))) {
     LOG_WARN("[DATA_BACKUP]failed to splice_update_sql", K(ret));
   } else if (OB_FAIL(sql.append_fmt(" and (%s='INIT' or %s='DOING')", OB_STR_STATUS, OB_STR_STATUS))) {
+    LOG_WARN("[DATA_BACKUP]failed to append sql", K(ret), K(sql));
+  } else if (OB_FAIL(sql.append_fmt(" and %s not in ('%s','%s')", OB_STR_BACKUP_TYPE,
+      backup_archive_type.get_backup_type_str(), backup_archive_delete_input_type.get_backup_type_str()))) { // backup db should ignore backup archive job
     LOG_WARN("[DATA_BACKUP]failed to append sql", K(ret), K(sql));
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));

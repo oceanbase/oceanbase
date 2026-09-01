@@ -609,6 +609,7 @@ static const NonReservedKeyword MYSQL_NON_RESERVED_KEYWORDS[] =
   {"innodb", INNODB},
   {"inplace", INPLACE},
   {"inplace", INPLACE},
+  {"input", INPUT},
   {"insert_method", INSERT_METHOD},
   {"install", INSTALL},
   {"instance", INSTANCE},

@@ -103,7 +103,9 @@ int ObBackupDataScheduler::get_need_reload_task(
       const ObBackupJobAttr &job = jobs.at(i);
       ObBackupSetTaskAttr set_task_attr;
       bool is_valid = true;
-      if (OB_SYS_TENANT_ID == job.tenant_id_
+      if (job.backup_type_.is_backup_archive()) {
+        // do nothing, backup data should ignore the backup archive job
+      } else if (OB_SYS_TENANT_ID == job.tenant_id_
           || ObBackupStatus::Status::DOING != job.status_.status_) {
       } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(
           *sql_proxy_, job.job_id_, job.tenant_id_, false/*for update*/, set_task_attr))) {
@@ -324,6 +326,13 @@ int ObBackupDataScheduler::start_backup_data(const obrpc::ObBackupDatabaseArg &i
   } else if (!in_arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(in_arg));
+  } else if (OB_SYS_TENANT_ID == in_arg.tenant_id_ && !in_arg.backup_dest_.is_empty()
+             && in_arg.backup_tenant_ids_.count() != 1) {
+    // specifying backup dest with sys tenant is only allowed for exactly one tenant:
+    // multiple tenants would share the same root path and overwrite each other's backup sets
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("[DATA_BACKUP]sys tenant backup to specified dest requires exactly one tenant", K(ret), K(in_arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sys tenant backup to specified dest requires exactly one tenant");
   } else if (OB_FAIL(fill_template_job_(in_arg, template_job_attr))) {
     LOG_WARN("[DATA_BACKUP]failed to fill backup base arg", K(ret), K(in_arg));
   } else if (OB_SYS_TENANT_ID == in_arg.tenant_id_) {
@@ -358,11 +367,33 @@ int ObBackupDataScheduler::fill_template_job_(const obrpc::ObBackupDatabaseArg &
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid argument", K(ret), K(in_arg));
   } else if (!in_arg.backup_dest_.is_empty()) {
-    ObBackupDest dest;
-    if (OB_FAIL(dest.set(in_arg.backup_dest_.ptr()))) {
-      LOG_WARN("[DATA_BACKUP]failed to set dest", K(ret));
-    } else if (OB_FAIL(dest.get_backup_path_str(job_attr.backup_path_.ptr(), job_attr.backup_path_.capacity()))) {
-      LOG_WARN("[DATA_BACKUP]failed to get backup path str", K(ret));
+    if (OB_INVALID_TENANT_ID == in_arg.initiator_tenant_id_
+        || in_arg.tenant_id_ == in_arg.initiator_tenant_id_) {
+      // Self-initiated backup: parse the full dest (with credentials) and write format file.
+      ObBackupDest dest;
+      if (OB_FAIL(dest.set(in_arg.backup_dest_.ptr()))) {
+        LOG_WARN("[DATA_BACKUP]failed to set dest", K(ret));
+      } else if (OB_FAIL(dest.get_backup_path_str(job_attr.backup_path_.ptr(), job_attr.backup_path_.capacity()))) {
+        LOG_WARN("[DATA_BACKUP]failed to get backup path str", K(ret));
+      } else {
+        const uint64_t target_tenant = OB_SYS_TENANT_ID == in_arg.tenant_id_
+            ? in_arg.backup_tenant_ids_.at(0) : in_arg.tenant_id_;
+        ObBackupDestMgr dest_mgr;
+        if (OB_FAIL(dest_mgr.init(target_tenant, ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA,
+                                  in_arg.backup_dest_, *sql_proxy_))) {
+          LOG_WARN("[DATA_BACKUP]failed to init dest mgr for one-time dest", K(ret));
+        } else if (OB_FAIL(dest_mgr.write_format_file())) {
+          LOG_WARN("[DATA_BACKUP]failed to write format file for one-time dest", K(ret));
+        }
+      }
+    } else {
+      // Forwarded from another tenant (e.g. sys -> user): the path has already been extracted
+      // and the format file + storage_info have already been written by the initiator.
+      // The path string lacks credentials, so dest.set() would fail on validate_arguments().
+      // Assign it directly as backup_path_.
+      if (OB_FAIL(job_attr.backup_path_.assign(in_arg.backup_dest_.ptr()))) {
+        LOG_WARN("[DATA_BACKUP]failed to assign backup path", K(ret));
+      }
     }
   }
   if (OB_FAIL(ret)) {
@@ -503,7 +534,7 @@ int ObBackupDataScheduler::start_sys_backup_data_(const ObBackupJobAttr &job_att
   } else if (OB_FAIL(get_all_tenants_(job_attr.backup_path_.is_empty(), new_job_attr.executor_tenant_id_))) {
     LOG_WARN("[DATA_BACKUP]failed to get all tenants", K(ret));
   }
-  
+
   if (OB_SUCC(ret)) {
     ObMySQLTransaction trans;
     if (OB_FAIL(trans.start(sql_proxy_, OB_SYS_TENANT_ID))) {
@@ -546,7 +577,8 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
     LOG_WARN("[DATA_BACKUP]invalid tmplate job", K(ret), K(job_attr));
   } else if (OB_FAIL(new_job_attr.assign(job_attr))) {
     LOG_WARN("[DATA_BACKUP]failed to assign job_attr", K(ret), K(job_attr));
-  } else if (OB_FAIL(get_backup_path(*sql_proxy_, new_job_attr.tenant_id_, backup_path))) {
+  } else if (new_job_attr.backup_path_.is_empty()
+      && OB_FAIL(get_backup_path(*sql_proxy_, new_job_attr.tenant_id_, backup_path))) {
     LOG_WARN("[DATA_BACKUP]failed to get backup dest", K(ret), K(new_job_attr));
   } else if (new_job_attr.backup_path_.is_empty() && OB_FAIL(new_job_attr.backup_path_.assign(backup_path))) {
     LOG_WARN("[DATA_BACKUP]failed to assign backup path", K(ret), K(backup_path));
@@ -957,7 +989,9 @@ int ObBackupDataScheduler::process()
   for (int64_t i = 0; OB_SUCC(ret) && i < backup_jobs.count(); ++i) {
     ObBackupJobAttr &job_attr = backup_jobs.at(i);
     job_mgr->reset();
-    if (!job_attr.is_valid()) {
+    if (job_attr.backup_type_.is_backup_archive()) {
+      continue; // backup data should ignore backup archive job
+    } else if (!job_attr.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[DATA_BACKUP]backup job is not valid", K(ret), K(job_attr));
     } else if (OB_FAIL(job_mgr->init(tenant_id_, job_attr, *sql_proxy_, *rpc_proxy_, *task_scheduler_, *schema_service_,

@@ -163,7 +163,9 @@ public:
   int delete_backup_ls_task(const obrpc::ObLSBackupCleanArg &arg);
   int validate_backup_ls_task(const obrpc::ObBackupValidateLSArg &arg);
   int notify_archive(const obrpc::ObNotifyArchiveArg &arg);
+  int notify_backup_archive(const obrpc::ObNotifyBackupArchiveArg &arg);
   int report_backup_over(const obrpc::ObBackupTaskRes &res);
+  int report_backup_archive_over(const obrpc::ObBackupTaskRes &res);
   int report_backup_clean_over(const obrpc::ObBackupTaskRes &res);
   int report_backup_validate_over(const obrpc::ObBackupTaskRes &res);
 

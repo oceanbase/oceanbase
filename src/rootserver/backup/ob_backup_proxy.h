@@ -22,6 +22,7 @@ struct ObBackupCleanArg;
 struct ObDeletePolicyArg;
 struct ObBackupCleanArg;
 struct ObArchiveLogArg;
+struct ObBackupArchiveLogAllArg;
 struct ObBackupManageArg;
 struct ObArchiveLogArg;
 struct ObBackupValidateArg;
@@ -39,6 +40,7 @@ public:
   static int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);
   static int handle_backup_delete_obsolete(const obrpc::ObBackupCleanArg &arg);
   static int handle_archive_log(const obrpc::ObArchiveLogArg &arg);
+  static int handle_backup_archive_log_all(const obrpc::ObBackupArchiveLogAllArg &arg);
   static int handle_backup_validate(const obrpc::ObBackupValidateArg &arg);
   static int handle_backup_validate_cancel(const obrpc::ObBackupManageArg &arg);
 };

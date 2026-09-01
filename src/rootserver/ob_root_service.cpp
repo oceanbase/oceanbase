@@ -10284,6 +10284,19 @@ int ObRootService::handle_backup_database(const obrpc::ObBackupDatabaseArg &in_a
   return ret;
 }
 
+int ObRootService::handle_backup_archive_log_all(const obrpc::ObBackupArchiveLogAllArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_archive_log_all(arg))) {
+    LOG_WARN("failed to handle backup archive log all", K(ret), K(arg));
+  }
+  FLOG_INFO("handle_backup_archive_log_all", K(ret), K(arg));
+  return ret;
+}
+
 int ObRootService::handle_backup_validate(const obrpc::ObBackupValidateArg &in_arg)
 {
   int ret = OB_SUCCESS;

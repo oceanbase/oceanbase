@@ -80,7 +80,8 @@ int ObBackupCleanTaskMgr::init(
     } else if(!backup_piece_info_.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(task_attr_));
-    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(sql_proxy, job_attr.tenant_id_, backup_piece_info_.path_, backup_dest_))) {
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(sql_proxy, job_attr.tenant_id_,
+        task_attr_.is_delete_backup_archive_piece_task() ? task_attr_.backup_path_ : backup_piece_info_.path_, backup_dest_))) {
       LOG_WARN("failed to get backup dest", K(ret), K(backup_piece_info_));
     }
   }
@@ -155,17 +156,25 @@ int ObBackupCleanTaskMgr::mark_backup_piece_files_deleting_()
   int ret = OB_SUCCESS;
   ObArchivePersistHelper archive_table_op;
   ObBackupFileStatus::STATUS file_status = ObBackupFileStatus::STATUS::BACKUP_FILE_DELETING;
+  const bool is_backup_archive_piece = task_attr_.is_delete_backup_archive_piece_task();
+  const ObBackupFileStatus::STATUS old_status = is_backup_archive_piece ? backup_piece_info_.backup_file_status_
+                                                                        : backup_piece_info_.file_status_;
   if (!backup_piece_info_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup piece info is valid", K(ret));
-  } else if (backup_piece_info_.file_status_ == file_status) {
+  } else if (old_status == file_status) {
     // do nothing
   } else if (OB_FAIL(archive_table_op.init(task_attr_.tenant_id_))) {
     LOG_WARN("failed to init archive piece attr", K(ret));
-  } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(backup_piece_info_.file_status_, file_status))) {
+  } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(old_status, file_status, is_backup_archive_piece))) {
     LOG_WARN("failed to check can change status", K(ret));
   } else if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("failed to check leader", K(ret));
+  } else if (is_backup_archive_piece) {
+    if (OB_FAIL(archive_table_op.mark_piece_backup_file_status(*sql_proxy_, backup_piece_info_.key_.dest_id_,
+        backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, old_status, file_status))) {
+      LOG_WARN("failed to update backup archive piece file status", K(ret), K(old_status), K(file_status));
+    }
   } else if (OB_FAIL(archive_table_op.mark_new_piece_file_status(*sql_proxy_, backup_piece_info_.key_.dest_id_,
     backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, file_status))) {
     LOG_WARN("failed to update backup piece file status", K(ret));
@@ -178,16 +187,24 @@ int ObBackupCleanTaskMgr::mark_backup_piece_files_deleted_()
   int ret = OB_SUCCESS;
   ObArchivePersistHelper archive_table_op;
   ObBackupFileStatus::STATUS file_status = ObBackupFileStatus::STATUS::BACKUP_FILE_DELETED;
+  const bool is_backup_archive_piece = task_attr_.is_delete_backup_archive_piece_task();
+  const ObBackupFileStatus::STATUS old_status = is_backup_archive_piece ? backup_piece_info_.backup_file_status_
+                                                                        : backup_piece_info_.file_status_;
   if (!backup_piece_info_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup piece info is valid", K(ret));
   } else if (OB_FAIL(archive_table_op.init(task_attr_.tenant_id_))) {
     LOG_WARN("failed to init archive piece attr", K(ret)); 
-  } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(backup_piece_info_.file_status_, file_status))) {
+  } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(old_status, file_status, is_backup_archive_piece))) {
     LOG_WARN("failed to check can change status", K(ret));
-  } else if (FALSE_IT(backup_piece_info_.file_status_ = file_status)) {
   } else if (OB_FAIL(backup_service_->check_leader())) {
     LOG_WARN("failed to check leader", K(ret));
+  } else if (is_backup_archive_piece) {
+    if (OB_FAIL(archive_table_op.mark_piece_backup_file_status(*sql_proxy_, backup_piece_info_.key_.dest_id_,
+        backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, old_status, file_status))) {
+      LOG_WARN("failed to update backup archive piece file status", K(ret), K(old_status), K(file_status));
+    }
+  } else if (FALSE_IT(backup_piece_info_.file_status_ = file_status)) {
   } else if (OB_FAIL(archive_table_op.mark_new_piece_file_status(*sql_proxy_, backup_piece_info_.key_.dest_id_,
     backup_piece_info_.key_.round_id_, backup_piece_info_.key_.piece_id_, file_status))) {
     LOG_WARN("failed to update backup piece file status", K(ret));
@@ -512,7 +529,7 @@ int ObBackupCleanTaskMgr::get_piece_ls_ids_(ObIArray<ObLSID> &ls_ids)
     LOG_WARN("failed to init store", K(ret), K_(task_attr));
   } else if (OB_FAIL(store.read_piece_info(backup_piece_info_.key_.dest_id_, backup_piece_info_.key_.round_id_,
       backup_piece_info_.key_.piece_id_, desc))) {
-    if (OB_OBJECT_NOT_EXIST == ret) {
+    if (OB_OBJECT_NOT_EXIST == ret || OB_BACKUP_FILE_NOT_EXIST == ret) {
       if (OB_FAIL(get_piece_ls_ids_from_traverse_(ls_ids))) {
         LOG_WARN("failed to get piece ls ids from traverse", K(ret));
       }

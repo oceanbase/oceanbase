@@ -104,15 +104,18 @@ public:
 public:
   void get(share::ObBackupDest *&dest, ObLogArchivePieceContext *&piece_context, share::SCN &end_scn);
   int set(const share::ObBackupDest &dest, const share::SCN &end_scn);
+  int set(const share::ObBackupDest &primary_dest, const share::ObBackupDest &backup_dest, const share::SCN &end_scn);
   int deep_copy_to(ObRemoteLogParent &other) override;
   bool is_valid() const override;
   int update_locate_info(ObRemoteLogParent &source) override;
 
-  TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(root_path), K_(piece_context),
+  TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(root_path),
+      K_(backup_archive_dest), K_(piece_context),
       K_(upper_limit_scn), K_(to_end), K_(end_fetch_scn), K_(end_lsn));
 
 private:
   share::ObBackupDest root_path_;   // uri & storage_info
+  share::ObBackupDest backup_archive_dest_;
   ObLogArchivePieceContext piece_context_;
 
 private:

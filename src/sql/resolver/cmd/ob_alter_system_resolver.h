@@ -195,6 +195,7 @@ DEF_SIMPLE_CMD_RESOLVER(ObRefreshTempTableResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAlterDiskgroupAddDiskResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAlterDiskgroupDropDiskResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObArchiveLogResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObBackupArchiveLogAllResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObBackupArchiveLogResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObBackupSetEncryptionResolver);

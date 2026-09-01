@@ -2397,3 +2397,455 @@ int ObArchiveStore::ObSpecificPieceFilter::func(const dirent *entry)
   }
   return ret;
 }
+
+/* ----------------------------- ObDualArchiveStore ----------------------------- */
+
+ObDualArchiveStore::ObDualArchiveStore()
+  : is_inited_(false),
+    primary_dest_(),
+    backup_dest_(),
+    primary_store_(),
+    backup_store_()
+{}
+
+void ObDualArchiveStore::reset()
+{
+  is_inited_ = false;
+  primary_store_.reset();
+  backup_store_.reset();
+  primary_dest_.reset();
+  backup_dest_.reset();
+}
+
+int ObDualArchiveStore::init(
+    const share::ObBackupDest &primary_dest,
+    const share::ObBackupDest &backup_dest)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(!primary_dest.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(primary_dest));
+  } else if (OB_FAIL(primary_dest_.deep_copy(primary_dest))) {
+    LOG_WARN("primary dest deep copy failed", K(ret), K(primary_dest));
+  } else if (OB_FAIL(primary_store_.init(primary_dest_))) {
+    LOG_WARN("primary store init failed", K(ret), K(primary_dest_));
+  } else if (backup_dest.is_valid() && OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
+    LOG_WARN("backup dest deep copy failed", K(ret), K(backup_dest));
+  } else if (backup_dest.is_valid() && OB_FAIL(backup_store_.init(backup_dest_))) {
+    LOG_WARN("backup store init failed", K(ret), K(backup_dest_));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::get_round_id(const int64_t dest_id, const SCN &scn, int64_t &round_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(primary_store_.get_round_id(dest_id, scn, round_id))) {
+  } else if (backup_dest_.is_valid() && (OB_ENTRY_NOT_EXIST == ret || OB_OBJECT_NOT_EXIST == ret)) {
+    if (OB_FAIL(backup_store_.get_round_id(dest_id, scn, round_id))) {
+      LOG_WARN("failed to get round id from backup store", K(ret), K(dest_id), K(scn));
+    }
+  } else {
+    LOG_WARN("failed to get round id from primary store", K(ret), K(dest_id), K(scn));
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::is_round_start_file_exist(const int64_t dest_id, const int64_t round_id, bool &exist) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(primary_store_.is_round_start_file_exist(dest_id, round_id, exist))) {
+    LOG_WARN("failed to check round start file exist from primary store", K(ret), K(dest_id), K(round_id));
+  } else if (exist || !backup_dest_.is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(backup_store_.is_round_start_file_exist(dest_id, round_id, exist))) {
+    LOG_WARN("failed to check round start file exist from backup store", K(ret), K(dest_id), K(round_id));
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::read_round_start(const int64_t dest_id, const int64_t round_id, ObRoundStartDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(primary_store_.read_round_start(dest_id, round_id, desc))) {
+  } else if (backup_dest_.is_valid() && (OB_ENTRY_NOT_EXIST == ret || OB_OBJECT_NOT_EXIST == ret)) {
+    if (OB_FAIL(backup_store_.read_round_start(dest_id, round_id, desc))) {
+      LOG_WARN("failed to read round start from backup store", K(ret), K(dest_id), K(round_id));
+    }
+  } else {
+    LOG_WARN("failed to read round start from primary store", K(ret), K(dest_id), K(round_id));
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::is_round_end_file_exist(const int64_t dest_id, const int64_t round_id, bool &exist) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(primary_store_.is_round_end_file_exist(dest_id, round_id, exist))) {
+    LOG_WARN("failed to check round end file exist from primary store", K(ret), K(dest_id), K(round_id));
+  } else if (exist || !backup_dest_.is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(backup_store_.is_round_end_file_exist(dest_id, round_id, exist))) {
+    LOG_WARN("failed to check round end file exist from backup store", K(ret), K(dest_id), K(round_id));
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::read_round_end(const int64_t dest_id, const int64_t round_id, ObRoundEndDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(primary_store_.read_round_end(dest_id, round_id, desc))) {
+  } else if (backup_dest_.is_valid() && (OB_ENTRY_NOT_EXIST == ret || OB_OBJECT_NOT_EXIST == ret)) {
+    if (OB_FAIL(backup_store_.read_round_end(dest_id, round_id, desc))) {
+      LOG_WARN("failed to read round end from backup store", K(ret), K(dest_id), K(round_id));
+    }
+  } else {
+    LOG_WARN("failed to read round end from primary store", K(ret), K(dest_id), K(round_id));
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::is_single_piece_file_exist(const int64_t dest_id, const int64_t round_id,
+    const int64_t piece_id, bool &exist, bool &on_backup) const
+{
+  int ret = OB_SUCCESS;
+  on_backup = false;
+
+  if (OB_FAIL(primary_store_.is_single_piece_file_exist(dest_id, round_id, piece_id, exist))) {
+    LOG_WARN("failed to check single piece file exist from primary store", K(ret), K(dest_id), K(round_id), K(piece_id));
+  } else if (exist || !backup_dest_.is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(backup_store_.is_single_piece_file_exist(dest_id, round_id, piece_id, exist))) {
+    LOG_WARN("failed to check single piece file exist from backup store", K(ret), K(dest_id), K(round_id), K(piece_id));
+  } else if (exist) {
+    on_backup = true;
+  }
+  return ret;
+}
+
+#define OB_DUAL_ARCHIVE_FETCH_RANGE(CALLER, FUNC, MIN_VAL, MAX_VAL, EXIST_FLAG, ...)   \
+  do {                                                                                 \
+    if (FAILEDx((CALLER).FUNC(__VA_ARGS__, (MIN_VAL), (MAX_VAL)))) {                   \
+      if (OB_ENTRY_NOT_EXIST == ret) {                                                 \
+        ret = OB_SUCCESS;                                                              \
+      }                                                                                \
+    } else if (OB_UNLIKELY((MIN_VAL) <= 0 || (MAX_VAL) < (MIN_VAL))) {                 \
+      ret = OB_ERR_UNEXPECTED;                                                         \
+    } else {                                                                           \
+      (EXIST_FLAG) = true;                                                             \
+    }                                                                                  \
+  } while (false)
+
+#define OB_DUAL_ARCHIVE_MERGE_RANGE(OUT_MIN, OUT_MAX)       \
+do {                                                        \
+  if (OB_FAIL(ret)) {                                       \
+    /* do nothing */                                        \
+  } else if (!primary_exist && !backup_exist) {             \
+    ret = OB_ENTRY_NOT_EXIST;                               \
+    LOG_WARN("not exist in both dest", K(ret), K(dest_id)); \
+  } else if (primary_exist && backup_exist) {               \
+    (OUT_MIN) = std::min(primary_min, backup_min);          \
+    (OUT_MAX) = std::max(primary_max, backup_max);          \
+  } else {                                                  \
+    (OUT_MIN) = primary_exist ? primary_min : backup_min;   \
+    (OUT_MAX) = primary_exist ? primary_max : backup_max;   \
+  }                                                         \
+} while (false)
+
+int ObDualArchiveStore::get_round_range(const int64_t dest_id, int64_t &min_round_id, int64_t &max_round_id)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t primary_min = 0;
+  int64_t primary_max = 0;
+  bool primary_exist = false;
+  OB_DUAL_ARCHIVE_FETCH_RANGE(primary_store_, get_round_range, primary_min, primary_max, primary_exist, dest_id);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get round range from primary store", K(ret), K(dest_id), K(primary_min), K(primary_max));
+  }
+
+  int64_t backup_min = 0;
+  int64_t backup_max = 0;
+  bool backup_exist = false;
+  if (OB_SUCC(ret) && backup_dest_.is_valid()) {
+    OB_DUAL_ARCHIVE_FETCH_RANGE(backup_store_, get_round_range, backup_min, backup_max, backup_exist, dest_id);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get round range from backup store", K(ret), K(dest_id), K(backup_min), K(backup_max));
+    }
+  }
+
+  OB_DUAL_ARCHIVE_MERGE_RANGE(min_round_id, max_round_id);
+  return ret;
+}
+
+int ObDualArchiveStore::get_piece_range(const int64_t dest_id, const int64_t round_id,
+    int64_t &min_piece_id, int64_t &max_piece_id)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t primary_min = 0;
+  int64_t primary_max = 0;
+  bool primary_exist = false;
+  OB_DUAL_ARCHIVE_FETCH_RANGE(primary_store_, get_piece_range, primary_min, primary_max, primary_exist, dest_id, round_id);
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get piece range from primary store", K(ret), K(dest_id), K(round_id), K(primary_min), K(primary_max));
+  }
+
+  int64_t backup_min = 0;
+  int64_t backup_max = 0;
+  bool backup_exist = false;
+  if (OB_SUCC(ret) && backup_dest_.is_valid()) {
+    OB_DUAL_ARCHIVE_FETCH_RANGE(backup_store_, get_piece_range, backup_min, backup_max, backup_exist, dest_id, round_id);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to get piece range from backup store", K(ret), K(dest_id), K(round_id), K(backup_min), K(backup_max));
+    }
+  }
+
+  OB_DUAL_ARCHIVE_MERGE_RANGE(min_piece_id, max_piece_id);
+  return ret;
+}
+
+int ObDualArchiveStore::get_piece_read_dest(const int64_t dest_id, const int64_t round_id,
+    const int64_t piece_id, const share::ObBackupDest *&dest) const
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+  bool on_backup = false;
+
+  if (OB_FAIL(is_single_piece_file_exist(dest_id, round_id, piece_id, exist, on_backup))) {
+    LOG_WARN("check single piece file exist failed", K(ret), K(dest_id), K(round_id), K(piece_id));
+  } else if (exist && on_backup) {
+    dest = &backup_dest_;
+  } else {
+    dest = &primary_dest_; // if single_piece_info file is not exist, the piece is active, must be on primary
+  }
+  return ret;
+}
+
+bool ObDualArchiveStore::contains_piece_key_(const ObIArray<ObPieceKey> &keys, const ObPieceKey &key)
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < keys.count(); ++i) {
+    if (keys.at(i) == key) {
+      found = true;
+    }
+  }
+  return found;
+}
+
+int ObDualArchiveStore::check_pieces_continuity_in_range(const SCN &start_scn, const SCN &end_scn)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObPieceKey> primary_keys;
+  ObArray<ObPieceKey> backup_keys;
+  ObArray<ObTenantArchivePieceAttr> all_pieces;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDualArchiveStore not init", K(ret));
+  } else if (OB_UNLIKELY(!start_scn.is_valid() || !end_scn.is_valid() || start_scn >= end_scn)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(start_scn), K(end_scn));
+  } else if (OB_FAIL(primary_store_.get_all_piece_keys(primary_keys))) {
+    LOG_WARN("failed to get all piece keys from primary store", K(ret), K(primary_dest_));
+  } else if (backup_dest_.is_valid() && OB_FAIL(backup_store_.get_all_piece_keys(backup_keys))) {
+    LOG_WARN("failed to get all piece keys from backup store", K(ret), K(backup_dest_));
+  } else if (OB_UNLIKELY(primary_keys.empty() && backup_keys.empty())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no piece is found in both archive dest", K(ret), K(start_scn), K(end_scn));
+  } else if (OB_FAIL(build_merged_piece_chain_(primary_keys, backup_keys, all_pieces))) {
+    LOG_WARN("failed to build merged piece chain", K(ret), K(primary_dest_), K(backup_dest_));
+  } else if (all_pieces.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("all pieces are empty in both archive dest", K(ret), K(start_scn), K(end_scn), K(primary_keys), K(backup_keys));
+  } else if (OB_FAIL(check_curr_pieces_continuous_(all_pieces, start_scn, end_scn, primary_keys, backup_keys))) {
+    LOG_WARN("log pieces are not continuous for restore", K(ret), K(start_scn), K(end_scn));
+  } else {
+    LOG_INFO("success to check piece continuity", K(start_scn), K(end_scn), K(primary_dest_), K(backup_dest_));
+  }
+
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "No enough log for restore");
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::get_newest_nonempty_piece_chain_(
+    ObArchiveStore &store,
+    const int64_t dest_id,
+    const ObIArray<ObPieceKey> &keys,
+    ObIArray<ObTenantArchivePieceAttr> &chain)
+{
+  int ret = OB_SUCCESS;
+  ObExternPieceWholeInfo whole_info;
+  chain.reset();
+  for (int64_t i = keys.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+    const ObPieceKey &key = keys.at(i);
+    bool is_empty_piece = true;
+    if (OB_UNLIKELY(key.dest_id_ != dest_id)) {
+      // piece of a different dest_id, just skip
+    } else if (OB_FAIL(store.get_whole_piece_info(key.dest_id_, key.round_id_, key.piece_id_, is_empty_piece, whole_info))) {
+      LOG_WARN("failed to get whole piece info", K(ret), K(key));
+    } else if (!is_empty_piece) {
+      for (int64_t j = 0; OB_SUCC(ret) && j <= whole_info.his_frozen_pieces_.count(); ++j) {
+        const ObTenantArchivePieceAttr &piece = whole_info.his_frozen_pieces_.count() == j
+                                              ? whole_info.current_piece_
+                                              : whole_info.his_frozen_pieces_.at(j);
+        if (piece.key_.dest_id_ == dest_id && OB_FAIL(chain.push_back(piece))) {
+          LOG_WARN("failed to push back piece", K(ret), K(piece));
+        }
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::build_merged_piece_chain_(
+    const ObIArray<ObPieceKey> &primary_keys,
+    const ObIArray<ObPieceKey> &backup_keys,
+    ObIArray<ObTenantArchivePieceAttr> &all_pieces)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObTenantArchivePieceAttr> primary_chain;
+  ObArray<ObTenantArchivePieceAttr> backup_chain;
+  all_pieces.reset();
+  ObBackupFormatDesc primary_format_desc;
+  int64_t dest_id = 0;
+
+  if (OB_FAIL(primary_store_.read_format_file(primary_format_desc))) {
+    LOG_WARN("failed to read format file from primary store", K(ret), K(primary_dest_));
+  } else if (OB_UNLIKELY(!primary_format_desc.is_valid())) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("get invalid format desc from log archive dest", K(ret), K(primary_format_desc), K(primary_dest_));
+  } else if (OB_FALSE_IT(dest_id = primary_format_desc.dest_id_)) {
+  } else if (OB_FAIL(get_newest_nonempty_piece_chain_(primary_store_, dest_id, primary_keys, primary_chain))) {
+    LOG_WARN("failed to get newest non-empty piece chain from primary", K(ret), K(dest_id), K(primary_dest_));
+  } else if (OB_FAIL(get_newest_nonempty_piece_chain_(backup_store_, dest_id, backup_keys, backup_chain))) {
+    LOG_WARN("failed to get newest non-empty piece chain from backup", K(ret), K(dest_id), K(backup_dest_));
+  }
+
+  int64_t primary_idx = 0;
+  int64_t backup_idx = 0;
+  // Merge two ascending chains by piece_id, keep primary's copy if the same piece_id exists on both dests.
+  while (OB_SUCC(ret) && (primary_idx < primary_chain.count() || backup_idx < backup_chain.count())) {
+    const ObTenantArchivePieceAttr *cur_piece = nullptr;
+    if (primary_idx >= primary_chain.count()) {
+      cur_piece = &backup_chain.at(backup_idx++);
+    } else if (backup_idx >= backup_chain.count()) {
+      cur_piece = &primary_chain.at(primary_idx++);
+    } else {
+      const ObTenantArchivePieceAttr &primary_piece = primary_chain.at(primary_idx);
+      const ObTenantArchivePieceAttr &backup_piece = backup_chain.at(backup_idx);
+      if (primary_piece.key_.piece_id_ == backup_piece.key_.piece_id_) {
+        cur_piece = &primary_piece;
+        ++primary_idx;
+        ++backup_idx;
+      } else if (primary_piece.key_.piece_id_ < backup_piece.key_.piece_id_) {
+        cur_piece = &primary_piece;
+        ++primary_idx;
+      } else {
+        cur_piece = &backup_piece;
+        ++backup_idx;
+      }
+    }
+    if (OB_FAIL(all_pieces.push_back(*cur_piece))) {
+      LOG_WARN("failed to push back piece", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDualArchiveStore::check_curr_pieces_continuous_(
+    const ObIArray<ObTenantArchivePieceAttr> &frozen_pieces,
+    const SCN &start_scn,
+    const SCN &end_scn,
+    const ObIArray<ObPieceKey> &primary_keys,
+    const ObIArray<ObPieceKey> &backup_keys)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> selected_idx;
+  int64_t last_piece_idx = -1;
+  int64_t i = 0;
+  const int64_t pieces_cnt = frozen_pieces.count();
+  while (OB_SUCC(ret) && i < pieces_cnt) {
+    const ObTenantArchivePieceAttr &cur = frozen_pieces.at(i);
+    if (cur.file_status_ != ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE || cur.end_scn_ <= start_scn) {
+      ++i;
+      continue;
+    } else if (cur.start_scn_ >= end_scn) {
+      // this piece may be required for restore, consider the following case.
+      // Piece#N : <start_scn, checkpoint_scn, end_scn>
+      // Piece#1 : <2022-06-01 06:00:00, 2022-06-02 05:00:00, 2022-06-02 06:00:00>
+      // Piece#2 : <2022-06-02 06:00:00, 2022-06-03 05:00:00, 2022-06-03 06:00:00>
+      // Piece#3 : <2022-06-03 06:00:00, 2022-06-03 10:00:00, 2022-06-04 06:00:00>
+      // If 'end_scn' is indicated to ' 2022-06-03 05:30:00', Piece#3 is required.
+      if (!selected_idx.empty()) {
+        const ObTenantArchivePieceAttr &prev = frozen_pieces.at(last_piece_idx);
+        // If pieces are not enough, and current piece is continous with previous one.
+        if (prev.end_scn_ == cur.start_scn_ && prev.checkpoint_scn_ < end_scn) {
+          if (OB_FAIL(selected_idx.push_back(i))) {
+            LOG_WARN("fail to push back idx", K(ret), K(i));
+          } else {
+            last_piece_idx = i;
+          }
+        }
+      }
+      break;
+    } else if (selected_idx.empty()) {
+      if (cur.start_scn_ <= start_scn) {
+        if (OB_FAIL(selected_idx.push_back(i))) {
+          LOG_WARN("fail to push back idx", K(ret), K(i));
+        } else {
+          last_piece_idx = i;
+          ++i;
+        }
+      } else {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("first piece start_scn is bigger than start_scn", K(ret), K(cur), K(start_scn), K(end_scn));
+      }
+    } else {
+      const ObTenantArchivePieceAttr &prev = frozen_pieces.at(last_piece_idx);
+      if (prev.end_scn_ != cur.start_scn_) {
+        // The <start_scn, checkpoint_scn, end_scn> of pieces are as following:
+        // Piece#1 : <2022-06-01 00:00:00, 2022-06-01 06:00:00, 2022-06-02 00:00:00>
+        // Piece#2 : <2022-06-01 08:00:00, 2022-06-02 07:59:00, 2022-06-02 08:00:00>
+        // Piece#3 : <2022-06-02 08:00:00, 2022-06-03 06:00:00, 2022-06-03 08:00:00>
+        // And the input [start_scn, end_scn] pair is [2022-06-01 12:00:00, 2022-06-03 04:00:00].
+
+        //  Previously, Piece#1 is required, and pushed into 'selected_idx'. However, when i = 1,
+        //  we find that Piece#2 is not continous with Piece#1, and Piece#1 is not required actually.
+        //  Then Piece#1 is abandoned, and recompute the required pieces.
+        selected_idx.reset();
+        last_piece_idx = -1;
+        // Do not do ++i, recompute if current piece can be used to restore.
+        LOG_INFO("pieces are not continous", K(prev), K(cur), K(start_scn), K(end_scn));
+      } else if (OB_FAIL(selected_idx.push_back(i))) {
+        LOG_WARN("fail to push back idx", K(ret), K(i));
+      } else {
+        last_piece_idx = i;
+        ++i;
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (-1 == last_piece_idx || frozen_pieces.at(last_piece_idx).checkpoint_scn_ < end_scn) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no enough log for restore", K(ret), K(last_piece_idx), K(end_scn), K(frozen_pieces));
+  }
+
+  // every selected piece must exist on at least one dest.
+  for (int64_t k = 0; OB_SUCC(ret) && k < selected_idx.count(); ++k) {
+    const ObTenantArchivePieceAttr &piece = frozen_pieces.at(selected_idx.at(k));
+    ObPieceKey pk(piece.key_.dest_id_, piece.key_.round_id_, piece.key_.piece_id_);
+    if (!contains_piece_key_(primary_keys, pk) && !contains_piece_key_(backup_keys, pk)) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("piece data lost on both archive dest", K(ret), K(piece));
+    }
+  }
+  return ret;
+}

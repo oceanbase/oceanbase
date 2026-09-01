@@ -231,6 +231,185 @@ int ObRestoreUtil::fill_backup_info_(
   return ret;
 }
 
+int ObRestoreUtil::check_dual_archive_dest_(
+    const ObIArray<ObString> &multi_path_array,
+    bool &is_dual_archive_dest,
+    ObIArray<share::ObBackupPathString> &log_path_list)
+{
+  int ret = OB_SUCCESS;
+  log_path_list.reset();
+  is_dual_archive_dest = false;
+  ObSEArray<ObBackupPathString, 1> archive_path_array;
+  ObSEArray<ObBackupPathString, 1> backup_archive_path_array;
+
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < multi_path_array.count(); idx++) {
+    const ObString &uri = multi_path_array.at(idx);
+    ObBackupDataStore store;
+    ObBackupDest dest;
+    ObBackupFormatDesc format_desc;
+    char encrypt_dest_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+    ObBackupPathString encrypt_dest;
+
+    if (uri.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FAIL(dest.set(uri))) {
+      LOG_WARN("fail to set backup dest", K(ret), K(uri));
+    } else if (OB_FAIL(store.init(dest))) {
+      LOG_WARN("fail to init backup store", K(ret), K(dest));
+    } else if (OB_FAIL(store.read_format_file(format_desc))) {
+      if (OB_OBJECT_NOT_EXIST == ret || OB_BACKUP_FILE_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        LOG_INFO("no format file, not an archive dest root", K(uri));
+      } else {
+        LOG_WARN("fail to read format file", K(ret), K(dest));
+      }
+    } else if (ObBackupDestType::DEST_TYPE_ARCHIVE_LOG != format_desc.dest_type_
+            && ObBackupDestType::DEST_TYPE_BACKUP_ARCHIVE_LOG != format_desc.dest_type_) {
+      // not an archive dest root, skip
+    } else if (OB_FAIL(dest.get_backup_dest_str(encrypt_dest_str, sizeof(encrypt_dest_str)))) {
+      LOG_WARN("fail to get encrypt backup dest str", K(ret), K(dest));
+    } else if (OB_FAIL(encrypt_dest.assign(encrypt_dest_str))) {
+      LOG_WARN("fail to assign encrypt backup dest str", K(ret), K(encrypt_dest_str));
+    } else if (ObBackupDestType::DEST_TYPE_ARCHIVE_LOG == format_desc.dest_type_
+            && OB_FAIL(archive_path_array.push_back(encrypt_dest))) {
+      LOG_WARN("fail to assign primary path", K(ret), K(encrypt_dest));
+    } else if (ObBackupDestType::DEST_TYPE_BACKUP_ARCHIVE_LOG == format_desc.dest_type_
+            && OB_FAIL(backup_archive_path_array.push_back(encrypt_dest))) {
+      LOG_WARN("fail to assign backup path", K(ret), K(encrypt_dest));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (archive_path_array.count() == 1 && backup_archive_path_array.count() == 1) {
+    is_dual_archive_dest = true;
+    if (OB_FAIL(log_path_list.push_back(archive_path_array.at(0)))) {
+      LOG_WARN("fail to push back primary path", K(ret), K(archive_path_array));
+    } else if (OB_FAIL(log_path_list.push_back(backup_archive_path_array.at(0)))) {
+      LOG_WARN("fail to push back backup path", K(ret), K(backup_archive_path_array));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::get_dual_dest_restore_scn_(
+    const obrpc::ObPhysicalRestoreTenantArg &arg,
+    const ObIArray<ObString> &multi_path_array,
+    const ObIArray<share::ObBackupPathString> &log_path_list,
+    share::SCN &restore_scn)
+{
+  int ret = OB_SUCCESS;
+  // log_path_list[0]: log archive dest, log_path_list[1]: backup archive dest
+  ObBackupDest primary_dest;
+  ObArchiveStore store;
+  ObBackupFormatDesc format_desc;
+
+  if (multi_path_array.empty() || log_path_list.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(multi_path_array.count()), K(log_path_list.count()));
+  } else if (arg.with_restore_scn_) {
+    restore_scn = arg.restore_scn_;
+  } else if (!arg.restore_timestamp_.empty()) {
+    common::ObTimeZoneInfoWrap time_zone_wrap;
+    if (OB_FAIL(get_multi_path_backup_sys_time_zone_(multi_path_array, time_zone_wrap))) {
+      LOG_WARN("fail to get backup sys time zone", K(ret));
+    } else if (!time_zone_wrap.is_valid() && OB_FAIL(get_backup_sys_time_zone_(multi_path_array, time_zone_wrap))) {
+      LOG_WARN("fail to get backup sys time zone from data root", K(ret));
+    } else if (OB_UNLIKELY(!time_zone_wrap.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected invalid time zone wrap", K(ret), K(time_zone_wrap));
+    } else if (OB_FAIL(convert_restore_timestamp_to_scn_(arg.restore_timestamp_, time_zone_wrap, restore_scn))) {
+      LOG_WARN("fail to convert restore timestamp to scn", K(ret), "timestamp", arg.restore_timestamp_);
+    } else {
+      LOG_INFO("dual dest restore scn converted from timestamp", K(restore_scn));
+    }
+  } else if (OB_FAIL(primary_dest.set(log_path_list.at(0).str()))) {
+    LOG_WARN("fail to set primary dest", K(ret), K(log_path_list.at(0)));
+  } else if (OB_FAIL(store.init(primary_dest))) {
+    LOG_WARN("fail to init archive store", K(ret), K(primary_dest));
+  } else if (OB_FAIL(store.read_format_file(format_desc))) {
+    LOG_WARN("fail to read format file from primary dest", K(ret), K(primary_dest));
+  } else {
+    const int64_t dest_id = format_desc.dest_id_;
+    int64_t round_id = 0;
+    int64_t piece_id = 0;
+    if (OB_FAIL(store.get_max_checkpoint_scn(dest_id, round_id, piece_id, restore_scn))) {
+      LOG_WARN("fail to get max checkpoint scn from primary archive dest", K(ret), K(dest_id));
+    } else {
+      LOG_INFO("dual dest restore scn derived from primary archive dest", K(restore_scn), K(dest_id), K(round_id), K(piece_id));
+    }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::check_dual_dest_log_continuity_(
+    const ObIArray<share::ObBackupPathString> &log_path_list,
+    const share::SCN &restore_start_scn,
+    const share::SCN &restore_scn)
+{
+  int ret = OB_SUCCESS;
+  // log_path_list[0]: log archive dest, log_path_list[1]: backup archive dest.
+  ObBackupDest primary_dest;
+  ObBackupDest backup_dest;
+  ObDualArchiveStore dual_store;
+  if (OB_UNLIKELY(log_path_list.count() < 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid log path list for dual dest", K(ret), K(log_path_list.count()));
+  } else if (OB_FAIL(primary_dest.set(log_path_list.at(0).str()))) {
+    LOG_WARN("fail to set primary dest", K(ret), K(log_path_list.at(0)));
+  } else if (OB_FAIL(backup_dest.set(log_path_list.at(1).str()))) {
+    LOG_WARN("fail to set backup dest", K(ret), K(log_path_list.at(1)));
+  } else if (OB_FAIL(dual_store.init(primary_dest, backup_dest))) {
+    LOG_WARN("fail to init dual archive store", K(ret), K(primary_dest), K(backup_dest));
+  } else if (OB_FAIL(dual_store.check_pieces_continuity_in_range(restore_start_scn, restore_scn))) {
+    LOG_WARN("dual dest log is not enough for restore", K(ret), K(restore_start_scn), K(restore_scn));
+  }
+  return ret;
+}
+
+int ObRestoreUtil::fill_dual_dest_backup_path_(
+    const obrpc::ObPhysicalRestoreTenantArg &arg,
+    const ObIArray<ObString> &path_array,
+    const ObIArray<share::ObBackupPathString> &archive_list,
+    share::ObPhysicalRestoreJob &job,
+    ObIArray<share::ObBackupSetBriefInfo> &backup_sets,
+    const bool is_multi_path)
+{
+  int ret = OB_SUCCESS;
+  // Restore whose pieces may be on BACKUP_ARCHIVE_DEST and LOG_ARCHIVE_DEST.
+  SCN restore_start_scn = SCN::min_scn();
+  SCN restore_scn;
+  ObArray<share::ObBackupPiecePath> empty_piece_path_list; // placeholder, pieces are located at runtime
+  ObTimeZoneInfoWrap time_zone_wrap; // only used by the multi path branch, discarded afterwards
+  backup_sets.reset();
+
+  if (OB_UNLIKELY(path_array.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(path_array.count()), K(archive_list.count()));
+  } else if (OB_FAIL(get_dual_dest_restore_scn_(arg, path_array, archive_list, restore_scn))) {
+    LOG_WARN("fail to get dual dest restore scn", K(ret), K(arg));
+  } else if (OB_FALSE_IT(job.set_restore_scn(restore_scn))) {
+  } else if (is_multi_path && OB_FAIL(get_restore_backup_set_array_from_multi_path_(path_array, arg.passwd_array_,
+                                          job.get_restore_scn(), restore_start_scn, backup_sets, time_zone_wrap))) {
+    LOG_WARN("fail to get restore backup set array from multi path", K(ret), K(restore_scn));
+  } else if (!is_multi_path && OB_FAIL(get_restore_backup_set_array_(true/*check_passwd*/, path_array, arg.passwd_array_,
+                                          job.get_restore_scn(), restore_start_scn, backup_sets))) {
+    LOG_WARN("fail to get restore backup set array", K(ret), K(restore_scn));
+  } else if (OB_UNLIKELY(backup_sets.empty() || archive_list.empty())) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no backup set path or archive dest can be used to restore", K(ret), K(backup_sets), K(archive_list), K(restore_start_scn), K(restore_scn));
+    LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "no backup set path or archive dest can be used to restore");
+  } else if (restore_scn < restore_start_scn) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("restore scn is smaller than restore start scn", K(ret), K(restore_scn), K(restore_start_scn));
+  } else if (restore_scn > restore_start_scn && OB_FAIL(check_dual_dest_log_continuity_(archive_list, restore_start_scn, restore_scn))) {
+    LOG_WARN("fail to check dual dest log continuity", K(ret), K(restore_start_scn), K(restore_scn));
+  } else if (OB_FAIL(job.get_multi_restore_path_list().set(backup_sets, empty_piece_path_list, archive_list))) {
+    LOG_WARN("failed to set multi restore path list", KR(ret), K(backup_sets), K(archive_list));
+  }
+  return ret;
+}
+
 //TODO(mingqiao): consider sql timeout
 int ObRestoreUtil::fill_multi_backup_path(
     const obrpc::ObPhysicalRestoreTenantArg &arg,
@@ -246,6 +425,7 @@ int ObRestoreUtil::fill_multi_backup_path(
   ObArray<share::ObSinglePieceDesc> backup_piece_array;
   int64_t last_backup_set_idx = -1;
   bool restore_using_compl_log = false;
+  bool is_dual_archive_dest = false;
   share::SCN restore_scn;
   if (arg.multi_uri_.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -256,6 +436,12 @@ int ObRestoreUtil::fill_multi_backup_path(
     LOG_WARN("failed to convert uri", K(ret), K(arg));
   } else if (OB_FAIL(job.set_backup_dest(backup_dest_list))) {
     LOG_WARN("failed to copy backup dest", K(ret), K(arg));
+  } else if (OB_FAIL(check_dual_archive_dest_(multi_path_array, is_dual_archive_dest, log_path_list))) {
+    LOG_WARN("failed to check archive dest root", K(ret), K(arg));
+  } else if (is_dual_archive_dest) {
+    if (OB_FAIL(fill_dual_dest_backup_path_(arg, multi_path_array, log_path_list, job, backup_set_list, true/*is_multi_path*/))) {
+      LOG_WARN("fail to fill dual dest backup path", K(ret), K(arg));
+    }
   } else if (OB_FAIL(get_restore_scn_from_multi_path_(arg ,multi_path_array, restore_using_compl_log, restore_scn, backup_piece_array))) {
     LOG_WARN("fail to get restore scn from multi path", K(ret), K(arg));
   } else if (OB_FALSE_IT(job.set_restore_scn(restore_scn))) {
@@ -335,6 +521,7 @@ int ObRestoreUtil::fill_compat_backup_path(
   ObString tenant_dest_list;
   int64_t last_backup_set_idx = -1;
   bool restore_using_compl_log = false;
+  bool is_dual_archive_dest = false;
   share::SCN restore_scn;
   if (!arg.multi_uri_.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -345,6 +532,12 @@ int ObRestoreUtil::fill_compat_backup_path(
     LOG_WARN("failed to convert uri", K(ret), K(arg));
   } else if (OB_FAIL(job.set_backup_dest(tenant_dest_list))) {
     LOG_WARN("failed to copy backup dest", K(ret), K(arg));
+  } else if (OB_FAIL(check_dual_archive_dest_(tenant_path_array, is_dual_archive_dest, log_path_list))) {
+    LOG_WARN("failed to check archive dest root", K(ret), K(arg));
+  } else if (is_dual_archive_dest) {
+    if (OB_FAIL(fill_dual_dest_backup_path_(arg, tenant_path_array, log_path_list, job, backup_set_list))) {
+      LOG_WARN("fail to fill dual dest backup path", K(ret), K(arg));
+    }
   } else if (OB_FAIL(check_restore_using_complement_log(tenant_path_array, restore_using_compl_log))) {
     LOG_WARN("failed to check only contain backup set", K(ret));
   } else if (OB_FAIL(fill_restore_scn(
@@ -357,6 +550,9 @@ int ObRestoreUtil::fill_compat_backup_path(
     LOG_WARN("fail to get restore source", K(ret), K(arg));
   } else if (OB_FAIL(do_fill_backup_path_(backup_set_list, backup_piece_list, log_path_list, job))) {
     LOG_WARN("fail to do fill backup path", K(backup_set_list), K(backup_piece_list), K(log_path_list));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FALSE_IT(last_backup_set_idx = backup_set_list.count() - 1)) {
   } else if (last_backup_set_idx < 0) {
     ret = OB_ERR_UNEXPECTED;

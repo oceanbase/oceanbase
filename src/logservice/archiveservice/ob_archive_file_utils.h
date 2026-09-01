@@ -77,7 +77,7 @@ public:
       const share::SCN &scn,
       int64_t &file_id);
 
-  static int locate_file_by_scn_in_piece(share::ObBackupDest &dest,
+  static int locate_file_by_scn_in_piece(const share::ObBackupDest &dest,
       const int64_t dest_id,
       const int64_t round,
       const int64_t piece_id,

@@ -107,6 +107,7 @@ void ObLogArchivePieceContext::InnerPieceContext::reset()
   file_id_ = 0;
   file_offset_ = 0;
   max_lsn_.reset();
+  on_backup_archive_dest_ = false;
 }
 
 bool ObLogArchivePieceContext::InnerPieceContext::is_valid() const
@@ -150,6 +151,7 @@ ObLogArchivePieceContext::InnerPieceContext &ObLogArchivePieceContext::InnerPiec
   file_id_ = other.file_id_;
   file_offset_ = other.file_offset_;
   max_lsn_ = other.max_lsn_;
+  on_backup_archive_dest_ = other.on_backup_archive_dest_;
   return *this;
 }
 
@@ -162,7 +164,8 @@ ObLogArchivePieceContext::ObLogArchivePieceContext() :
   max_round_id_(0),
   round_context_(),
   inner_piece_context_(),
-  archive_dest_()
+  archive_dest_(),
+  backup_archive_dest_()
 {}
 
 ObLogArchivePieceContext::~ObLogArchivePieceContext()
@@ -175,6 +178,7 @@ void ObLogArchivePieceContext::reset()
   is_inited_ = false;
   id_.reset();
   archive_dest_.reset();
+  backup_archive_dest_.reset();
   reset_locate_info();
 }
 
@@ -193,6 +197,41 @@ int ObLogArchivePieceContext::init(const share::ObLSID &id,
   } else {
     id_ = id;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObLogArchivePieceContext::init(
+    const share::ObLSID &id,
+    const share::ObBackupDest &archive_dest,
+    const share::ObBackupDest &backup_archive_dest)
+{
+  // before piece context init with new log_restore_source, the context should be reset first
+  reset();
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!id.is_valid() || !archive_dest.is_valid() || !backup_archive_dest.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(id), K(archive_dest), K(backup_archive_dest));
+  } else if (OB_FAIL(archive_dest_.deep_copy(archive_dest))) {
+    CLOG_LOG(WARN, "primary dest deep copy failed", K(ret), K(id), K(archive_dest));
+  } else if (OB_FAIL(backup_archive_dest_.deep_copy(backup_archive_dest))) {
+    CLOG_LOG(WARN, "backup dest deep copy failed", K(ret), K(id), K(backup_archive_dest));
+  } else {
+    id_ = id;
+    is_inited_ = true;
+    CLOG_LOG(INFO, "init dual dest piece context succ", K(id), K(archive_dest), K(backup_archive_dest));
+  }
+  return ret;
+}
+
+int ObLogArchivePieceContext::get_cur_piece_dest(const share::ObBackupDest *&dest) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "piece context not inited", K(ret));
+  } else {
+    dest = &cur_piece_dest_();
   }
   return ret;
 }
@@ -281,6 +320,9 @@ int ObLogArchivePieceContext::deep_copy_to(ObLogArchivePieceContext &other)
   int ret = OB_SUCCESS;
   if (OB_FAIL(other.archive_dest_.deep_copy(archive_dest_))) {
     CLOG_LOG(WARN, "deep copy failed", K(ret));
+  } else if (FALSE_IT(other.backup_archive_dest_.reset())) {
+  } else if (backup_archive_dest_.is_valid() && OB_FAIL(other.backup_archive_dest_.deep_copy(backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup dest deep copy failed", K(ret));
   } else {
     other.is_inited_ = is_inited_;
     other.locate_round_ = locate_round_;
@@ -393,15 +435,15 @@ int ObLogArchivePieceContext::get_round_(const SCN &start_scn)
 {
   int ret = OB_SUCCESS;
   int64_t round_id = 0;
-  share::ObArchiveStore archive_store;
+  share::ObDualArchiveStore archive_store;
   if (OB_UNLIKELY(dest_id_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "invalid dest id", K(ret), K(dest_id_));
   } else if (OB_UNLIKELY(locate_round_)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "already locate round", K(ret), KPC(this));
-  } else if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  } else if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest), K_(backup_archive_dest));
   } else if (OB_FAIL(archive_store.get_round_id(dest_id_, start_scn, round_id))) {
     CLOG_LOG(WARN, "archive store get round failed", K(ret), K(dest_id_), K(start_scn));
   } else if (OB_UNLIKELY(round_id <= 0)) {
@@ -421,7 +463,7 @@ int ObLogArchivePieceContext::get_round_range_()
   int ret = OB_SUCCESS;
   int64_t min_round_id = 0;
   int64_t max_round_id = 0;
-  share::ObArchiveStore archive_store;
+  share::ObDualArchiveStore archive_store;
   if (OB_FAIL(load_archive_meta_())) {
     if (OB_OBJECT_NOT_EXIST == ret) {
       ret = OB_INVALID_BACKUP_DEST;
@@ -429,8 +471,8 @@ int ObLogArchivePieceContext::get_round_range_()
     } else {
       CLOG_LOG(WARN, "load archive meta failed", K(id_), K(archive_dest_));
     }
-  } else if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  } else if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest), K_(backup_archive_dest));
   } else if (OB_FAIL(archive_store.get_round_range(dest_id_, min_round_id, max_round_id))) {
     CLOG_LOG(WARN, "archive store get round failed", K(ret), K(dest_id_));
   } else if (OB_UNLIKELY(min_round_id <= 0 || max_round_id < min_round_id)) {
@@ -471,14 +513,14 @@ int ObLogArchivePieceContext::load_archive_meta_()
 int ObLogArchivePieceContext::load_round_(const int64_t round_id, RoundContext &round_context, bool &exist)
 {
   int ret = OB_SUCCESS;
-  share::ObArchiveStore archive_store;
+  share::ObDualArchiveStore archive_store;
   bool start_exist = false;
   bool end_exist = false;
   share::ObRoundStartDesc start_desc;
   share::ObRoundEndDesc end_desc;
   exist = true;
-  if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest), K_(backup_archive_dest));
   } else if (OB_FAIL(archive_store.is_round_start_file_exist(dest_id_, round_id, start_exist))) {
     CLOG_LOG(WARN, "check round start file exist failed", K(ret), K(round_id), KPC(this));
   } else if (! start_exist) {
@@ -763,10 +805,9 @@ int ObLogArchivePieceContext::load_round_info_()
 int ObLogArchivePieceContext::get_round_piece_range_(const int64_t round_id, int64_t &min_piece_id, int64_t &max_piece_id)
 {
   int ret = OB_SUCCESS;
-  share::ObArchiveStore archive_store;
-  share::ObPieceInfoDesc desc;
-  if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  share::ObDualArchiveStore archive_store;
+  if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest), K_(backup_archive_dest));
   } else if (OB_FAIL(archive_store.get_piece_range(dest_id_, round_id, min_piece_id, max_piece_id))) {
     CLOG_LOG(WARN, "get piece range failed", K(ret), K(dest_id_), K(round_id));
   }
@@ -823,9 +864,9 @@ int ObLogArchivePieceContext::backward_round_()
 int ObLogArchivePieceContext::check_round_exist_(const int64_t round_id, bool &exist)
 {
   int ret = OB_SUCCESS;
-  share::ObArchiveStore archive_store;
-  if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  share::ObDualArchiveStore archive_store;
+  if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest), K_(backup_archive_dest));
   } else if (OB_FAIL(archive_store.is_round_start_file_exist(dest_id_, round_id, exist))) {
     CLOG_LOG(WARN, "check round start file exist failed", K(ret), K(dest_id_), K(round_id));
   }
@@ -988,8 +1029,9 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
 {
   int ret = OB_SUCCESS;
   const int64_t round_id = round_context_.round_id_;
-  share::ObArchiveStore archive_store;
+  share::ObDualArchiveStore archive_store;
   bool piece_meta_exist = true;
+  bool on_backup = false;
   bool is_ls_in_piece = false;
   bool is_ls_gc = false;
   palf::LSN min_lsn;
@@ -1000,11 +1042,16 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
   } else if (piece_id > round_context_.max_piece_id_) {
     ret = OB_ITER_END;
     CLOG_LOG(WARN, "piece id out of round range upper bound", K(ret), K(piece_id), KPC(this));
-  } else if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
-  } else if (OB_FAIL(archive_store.is_single_piece_file_exist(dest_id_, round_id, piece_id, piece_meta_exist))) {
+  } else if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest), K_(backup_archive_dest));
+  } else if (OB_FAIL(archive_store.is_single_piece_file_exist(dest_id_, round_id, piece_id, piece_meta_exist, on_backup))) {
     // 不同日志流归档进度不同, 可能存在多个piece未FROZEN情况, 消费piece需要确认是否FROZEN
     CLOG_LOG(WARN, "check single piece file exist failed", K(ret), K(piece_id), KPC(this));
+  } else {
+    inner_piece_context_.on_backup_archive_dest_ = (piece_meta_exist && on_backup);
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (! piece_meta_exist) {
     // single piece file not exist, active piece
   } else if (OB_FAIL(get_ls_inner_piece_info_(id_, dest_id_, round_id, piece_id, min_lsn, max_lsn, is_ls_in_piece, is_ls_gc))) {
@@ -1061,8 +1108,9 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id,
   share::ObSingleLSInfoDesc desc;
   exist = false;
   gc = false;
-  if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  const share::ObBackupDest &dest = cur_piece_dest_();
+  if (OB_FAIL(archive_store.init(dest))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K(dest));
   } else if (OB_FAIL(archive_store.read_single_ls_info(dest_id, round_id, piece_id, id, desc))
       && OB_OBJECT_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single piece file failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(id));
@@ -1091,8 +1139,8 @@ int ObLogArchivePieceContext::get_piece_file_range_()
   int64_t max_file_id = 0;
   if (! inner_piece_context_.is_active()) {
     // piece context is frozen or empty or low bound, file range is certain
-  } else if (OB_FAIL(archive_store.init(archive_dest_))) {
-    CLOG_LOG(WARN, "backup store init failed", K(ret), K_(archive_dest));
+  } else if (OB_FAIL(archive_store.init(cur_piece_dest_()))) {
+    CLOG_LOG(WARN, "backup store init failed", K(ret), K(inner_piece_context_), K_(archive_dest), K_(backup_archive_dest));
   } else if (OB_FAIL(archive_store.get_file_range_in_piece(dest_id_, inner_piece_context_.round_id_,
           inner_piece_context_.piece_id_, id_, min_file_id, max_file_id))
       && OB_ENTRY_NOT_EXIST != ret) {
@@ -1578,7 +1626,7 @@ int ObLogArchivePieceContext::seek_in_piece_(const SCN &scn, palf::LSN &lsn)
 {
   int ret = OB_SUCCESS;
   int64_t file_id = 0;
-  if (OB_FAIL(archive::ObArchiveFileUtils::locate_file_by_scn_in_piece(archive_dest_,
+  if (OB_FAIL(archive::ObArchiveFileUtils::locate_file_by_scn_in_piece(cur_piece_dest_(),
           dest_id_, inner_piece_context_.round_id_, inner_piece_context_.piece_id_,
           id_, inner_piece_context_.min_file_id_,
           inner_piece_context_.max_file_id_, scn, file_id))) {
@@ -1668,11 +1716,12 @@ int ObLogArchivePieceContext::read_part_file_(const int64_t round_id,
   share::ObBackupPath path;
   int64_t pos = 0;
   archive::ObArchiveFileHeader header;
-  if (OB_FAIL(share::ObArchivePathUtil::get_ls_archive_file_path(archive_dest_, dest_id_,
+  const share::ObBackupDest &piece_dest = cur_piece_dest_();
+  if (OB_FAIL(share::ObArchivePathUtil::get_ls_archive_file_path(piece_dest, dest_id_,
           round_id, piece_id, id_, file_id, path))) {
     CLOG_LOG(WARN, "get ls archive file path failed", K(ret), KPC(this));
   } else if (OB_FAIL(archive::ObArchiveFileUtils::range_read(path.get_ptr(),
-          archive_dest_.get_storage_info(),
+          piece_dest.get_storage_info(),
           common::ObStorageIdMod(dest_id_, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
           buf, buf_size, file_offset, read_size))) {
     CLOG_LOG(WARN, "range read failed", K(ret), K(path));
@@ -1741,13 +1790,23 @@ int ObLogArchivePieceContext::get_ls_meta_in_piece_(
   int64_t file_id = 0;
   share::ObBackupPath prefix;
   ObArray<int64_t> array;
+  share::ObDualArchiveStore archive_store;
+  const share::ObBackupDest *meta_dest = nullptr;
+  if (OB_FAIL(archive_store.init(archive_dest_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "fallback store init failed", K(ret), KPC(this));
+  }
   for (; OB_SUCC(ret) && ! done && piece_id >= round_context_.min_piece_id_; piece_id--) {
     array.reset();
-    if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_prefix(archive_dest_, dest_id_,
+    if (OB_FAIL(archive_store.get_piece_read_dest(dest_id_, round_context_.round_id_, piece_id, meta_dest))) {
+      CLOG_LOG(WARN, "get piece read dest failed", K(ret), K(piece_id), K(archive_store), KPC(this));
+    } else if (OB_ISNULL(meta_dest)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(WARN, "meta dest is unexpected null", K(ret), K(piece_id), K(archive_store), KPC(this));
+    } else if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_prefix(*meta_dest, dest_id_,
             round_context_.round_id_, piece_id, id_, meta_type, prefix))) {
       CLOG_LOG(WARN, "ger ls meta record prefix failed", K(ret), KPC(this));
     } else if (archive::ObArchiveFileUtils::list_files(prefix.get_obstr(),
-          archive_dest_.get_storage_info(), array)) {
+          meta_dest->get_storage_info(), array)) {
       if (OB_ENTRY_NOT_EXIST == ret) {
         CLOG_LOG(INFO, "no file exist, need backward", K(ret), K(prefix));
         ret = OB_SUCCESS;
@@ -1770,11 +1829,11 @@ int ObLogArchivePieceContext::get_ls_meta_in_piece_(
 
   if (done && OB_SUCC(ret)) {
     share::ObBackupPath path;
-    if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_path(archive_dest_, dest_id_,
+    if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_path(*meta_dest, dest_id_,
             round_context_.round_id_, piece_id, id_, meta_type, file_id, path))) {
       CLOG_LOG(WARN, "ger ls meta record prefix failed", K(ret), KPC(this));
     } else if (OB_FAIL(archive::ObArchiveFileUtils::read_file(path.get_obstr(),
-            archive_dest_.get_storage_info(),
+            meta_dest->get_storage_info(),
             common::ObStorageIdMod(dest_id_, ObStorageUsedMod::STORAGE_USED_ARCHIVE),
             buf, buf_size, read_size))) {
       CLOG_LOG(WARN, "read_file failed", K(ret), K(path), KPC(this));

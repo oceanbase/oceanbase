@@ -36,6 +36,8 @@
   RPC_S(PR5 report_backup_over, OB_BACKUP_LS_DATA_RES, (ObBackupTaskRes));
   RPC_S(PR5 report_backup_clean_over, OB_DELETE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
   RPC_S(PR5 notify_archive, OB_NOTIFY_ARCHIVE, (ObNotifyArchiveArg));
+  RPC_S(PR5 notify_backup_archive, OB_NOTIFY_BACKUP_ARCHIVE, (ObNotifyBackupArchiveArg));
+  RPC_S(PR5 report_backup_archive_over, OB_BACKUP_ARCHIVE_RESULT_REPORT, (ObBackupTaskRes));
 
   // ls disaster recovery rpc
   RPC_S(PR5 disaster_recovery_task_reply, OB_DISASTER_RECOVERY_TASK_REPLY, (ObDRTaskReplyResult));

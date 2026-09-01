@@ -726,7 +726,13 @@ int ObBackupDestMgr::updata_backup_file_status_()
   int ret = OB_SUCCESS;
   int64_t old_dest_id = 0;
   if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy_, tenant_id_, backup_dest_, old_dest_id))) {
-    LOG_WARN("fail to get old dest id", K(ret), K_(backup_dest));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup dest does not exist before, skip updating old backup file status",
+               K_(tenant_id), K_(backup_dest));
+    } else {
+      LOG_WARN("fail to get old dest id", K(ret), K_(backup_dest));
+    }
   } else if (0 == old_dest_id) {
     // do nothing
   } else if (ObBackupDestType::TYPE::DEST_TYPE_BACKUP_DATA == dest_type_) {
@@ -744,7 +750,8 @@ int ObBackupDestMgr::updata_backup_file_status_()
         }
       }
     }
-  } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == dest_type_) {
+  } else if (ObBackupDestType::TYPE::DEST_TYPE_ARCHIVE_LOG == dest_type_
+          || ObBackupDestType::TYPE::DEST_TYPE_BACKUP_ARCHIVE_LOG == dest_type_) {
     ObArchivePersistHelper archive_table_op;
     ObSArray<ObTenantArchivePieceAttr> backup_piece_infos;
     if (OB_FAIL(archive_table_op.init(tenant_id_))) {

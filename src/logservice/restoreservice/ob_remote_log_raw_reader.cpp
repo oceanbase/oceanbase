@@ -160,7 +160,8 @@ int ObRemoteLogRawReader::read_once_(char *buffer, const int64_t buffer_size, in
   int64_t file_offset = -1;
   share::ObBackupPath path;
   share::SCN unused_scn;
-  share::ObBackupDest *dest = NULL;
+  const share::ObBackupDest *dest = NULL;
+  share::ObBackupDest *unused_dest = NULL;
   ObLogArchivePieceContext *piece_context = NULL;
   common::ObObjectStorageInfo storage_info_base;
   char storage_info_cstr[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {'\0'};
@@ -171,16 +172,21 @@ int ObRemoteLogRawReader::read_once_(char *buffer, const int64_t buffer_size, in
   if (OB_ISNULL(source)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "source is NULL", K(source));
-  } else if (FALSE_IT(source->get(dest, piece_context, unused_scn))) {
-  } else if (OB_ISNULL(dest) || OB_ISNULL(piece_context)) {
+  } else if (FALSE_IT(source->get(unused_dest, piece_context, unused_scn))) {
+  } else if (OB_ISNULL(unused_dest) || OB_ISNULL(piece_context)) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "dest or piece_context is NULL", KPC(source), K(dest), K(piece_context));
+    CLOG_LOG(ERROR, "unused_dest or piece_context is NULL", KPC(source), K(unused_dest), K(piece_context));
   } else if (OB_FAIL(piece_context->get_raw_read_piece(pre_scn_, cur_lsn_, dest_id,
           round_id, piece_id, file_id, file_offset))) {
     CLOG_LOG(WARN, "get piece failed", KPC(this), KPC(piece_context));
   } else if (OB_UNLIKELY(!piece_context->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "piece_context not valid", KPC(this), KPC(piece_context));
+  } else if (OB_FAIL(piece_context->get_cur_piece_dest(dest))) {
+    CLOG_LOG(WARN, "get cur piece dest failed", K(ret), KPC(piece_context));
+  } else if (OB_ISNULL(dest)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "dest is NULL", K(ret), KPC(piece_context));
   } else if (OB_FAIL(share::ObArchivePathUtil::get_ls_archive_file_path(
           *dest, dest_id, round_id, piece_id, id_, file_id, path))) {
     CLOG_LOG(WARN, "get ls archive file path failed", KPC(dest),

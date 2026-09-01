@@ -402,11 +402,15 @@ int LocationDataGenerator::fetch_log_from_location_(char *&buf, int64_t &buf_siz
   int64_t read_size = 0;
   palf::LSN max_lsn_in_file (palf::LOG_INVALID_LSN_VAL);
   share::ObBackupPath piece_path;
+  const share::ObBackupDest *piece_dest = nullptr;
   if (OB_FAIL(get_precise_file_and_offset_(dest_id, round_id, piece_id,
-          file_id, file_offset, max_lsn_in_file, piece_path))) {
+          file_id, file_offset, max_lsn_in_file, piece_path, piece_dest))) {
     LOG_WARN("get precise file and offset failed", K(ret));
+  } else if (OB_ISNULL(piece_dest)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("piece_dest is NULL", K(ret), KPC(piece_context_));
   } else if (FALSE_IT(cal_read_size_(dest_id, round_id, piece_id, file_id, file_offset, read_size))) {
-  } else if (OB_FAIL(read_file_(piece_path.get_ptr(), dest_->get_storage_info(), id_,
+  } else if (OB_FAIL(read_file_(piece_path.get_ptr(), piece_dest->get_storage_info(), id_,
           file_id, file_offset, buf_, read_size, data_len_))) {
     if (OB_ITER_END == ret) {
       LOG_TRACE("read end of file", K(ret));
@@ -447,10 +451,12 @@ int LocationDataGenerator::get_precise_file_and_offset_(int64_t &dest_id,
     int64_t &file_id,
     int64_t &file_offset,
     palf::LSN &lsn,
-    share::ObBackupPath &piece_path)
+    share::ObBackupPath &piece_path,
+    const share::ObBackupDest *&piece_dest)
 {
   int ret = OB_SUCCESS;
   int64_t read_size = 0;
+  piece_dest = nullptr;
   if (FALSE_IT(file_id = cal_lsn_to_file_id_(next_fetch_lsn_))) {
   } else if (OB_FAIL(piece_context_->get_piece(pre_scn_, next_fetch_lsn_,
           dest_id, round_id, piece_id, file_id, file_offset, lsn, to_end_))) {
@@ -459,7 +465,12 @@ int LocationDataGenerator::get_precise_file_and_offset_(int64_t &dest_id,
     } else {
       LOG_WARN("get cur piece failed", K(ret), KPC(piece_context_), K(next_fetch_lsn_));
     }
-  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(*dest_,
+  } else if (OB_FAIL(piece_context_->get_cur_piece_dest(piece_dest))) {
+    LOG_WARN("get cur piece dest failed", K(ret), KPC(piece_context_));
+  } else if (OB_ISNULL(piece_dest)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("piece_dest is unexpected null", K(ret), KPC(piece_context_));
+  } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(*piece_dest,
           dest_id, round_id, piece_id, piece_path))) {
     LOG_WARN("get piece dir path failed", K(ret));
   } else if (lsn.is_valid() && lsn > next_fetch_lsn_) {

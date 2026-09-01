@@ -8636,6 +8636,21 @@ int ObArchiveLogArg::assign(const ObArchiveLogArg &other)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObBackupArchiveLogAllArg, tenant_id_, archive_tenant_ids_, description_, delete_input_);
+int ObBackupArchiveLogAllArg::assign(const ObBackupArchiveLogAllArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(archive_tenant_ids_.assign(other.archive_tenant_ids_))) {
+    LOG_WARN("fail to assign archive_tenant_ids", K(ret));
+  } else if (OB_FAIL(description_.assign(other.description_))) {
+    LOG_WARN("failed to assign description", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    delete_input_ = other.delete_input_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObLSBackupCleanArg, trace_id_, job_id_, tenant_id_, incarnation_, task_id_, ls_id_, task_type_, id_, dest_id_, round_id_);
 
 bool ObLSBackupCleanArg::is_valid() const
@@ -8717,17 +8732,17 @@ int ObBackupDataArg::assign(const ObBackupDataArg &arg)
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObBackupTaskRes, task_id_, job_id_, tenant_id_, ls_id_, src_server_, result_, trace_id_, dag_id_);
+OB_SERIALIZE_MEMBER(ObBackupTaskRes, task_id_, job_id_, tenant_id_, ls_id_, src_server_, result_, trace_id_, dag_id_, round_id_, piece_id_);
 
 bool ObBackupTaskRes::is_valid() const
 {
-  return task_id_ > 0
-      && job_id_ > 0
+  return job_id_ > 0
       && tenant_id_ > 0
       && src_server_.is_valid()
-      && ls_id_.is_valid()
       && !trace_id_.is_invalid()
-      && !dag_id_.is_invalid();
+      && !dag_id_.is_invalid()
+      && ((task_id_ > 0 && ls_id_.is_valid())  // data/clean/validate task
+          || (round_id_ > 0 && piece_id_ > 0)); // backup archive task
 }
 
 int ObBackupTaskRes::assign(const ObBackupTaskRes &res)
@@ -8745,6 +8760,42 @@ int ObBackupTaskRes::assign(const ObBackupTaskRes &res)
     result_ = res.result_;
     trace_id_ = res.trace_id_;
     dag_id_ = res.dag_id_;
+    round_id_ = res.round_id_;
+    piece_id_ = res.piece_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObNotifyBackupArchiveArg, trace_id_, job_id_, tenant_id_, archive_dest_id_, round_id_, piece_id_, dst_server_, backup_path_);
+
+bool ObNotifyBackupArchiveArg::is_valid() const
+{
+  return !trace_id_.is_invalid()
+      && job_id_ > 0
+      && tenant_id_ > 0
+      && archive_dest_id_ > 0
+      && round_id_ > 0
+      && piece_id_ > 0
+      && dst_server_.is_valid()
+      && !backup_path_.is_empty();
+}
+
+int ObNotifyBackupArchiveArg::assign(const ObNotifyBackupArchiveArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(backup_path_.assign(arg.backup_path_.ptr()))) {
+    LOG_WARN("failed to assign backup path", K(ret), K(arg));
+  } else {
+    trace_id_ = arg.trace_id_;
+    job_id_ = arg.job_id_;
+    tenant_id_ = arg.tenant_id_;
+    archive_dest_id_ = arg.archive_dest_id_;
+    round_id_ = arg.round_id_;
+    piece_id_ = arg.piece_id_;
+    dst_server_ = arg.dst_server_;
   }
   return ret;
 }
@@ -9152,6 +9203,9 @@ bool ObBackupCleanArg::is_valid() const
     switch (type_) {
     case ObNewBackupCleanType::DELETE_BACKUP_ALL:
         valid = (!dest_path_.is_empty() && share::ObBackupDestType::is_clean_valid(dest_type_));
+        break;
+    case ObNewBackupCleanType::DELETE_BACKED_UP_ARCHIVE_PIECE:
+        valid = (dest_id_ > 0);
         break;
     case ObNewBackupCleanType::CANCEL_DELETE:
         valid = (1 == batch_values_.count() && 0 == batch_values_.at(0));

@@ -25,7 +25,10 @@
 
 namespace oceanbase
 {
-
+namespace share
+{
+struct ObBackupArchivePieceTaskAttr;
+}
 namespace rootserver
 {
 class ObBackupTaskScheduler;
@@ -128,6 +131,8 @@ public:
         job_id_(-1),
         task_id_(-1),
         ls_id_(-1),
+        round_id_(-1),
+        piece_id_(-1),
         type_(BackupJobType::BACKUP_JOB_MAX),
         hash_value_(0)
   {
@@ -145,9 +150,15 @@ public:
   int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; };
   int init(const uint64_t tenant_id,
            const uint64_t job_id,
-           const uint64_t task_id_,
+           const uint64_t task_id,
            const uint64_t ls_id,
            const BackupJobType type);
+  // dedicated for backup archive task, use round_id/piece_id instead of task_id/ls_id
+  int init_archive(const uint64_t tenant_id,
+                   const uint64_t job_id,
+                   const uint64_t round_id,
+                   const uint64_t piece_id,
+                   const BackupJobType type);
   int init(const ObBackupScheduleTaskKey &that);
   BackupJobType get_key_type() const { return type_; }
 
@@ -155,6 +166,8 @@ public:
                K_(job_id),
                K_(task_id),
                K_(ls_id),
+               K_(round_id),
+               K_(piece_id),
                K_(type));
 private:
   uint64_t inner_hash() const;
@@ -163,6 +176,8 @@ private:
   uint64_t job_id_;
   uint64_t task_id_;
   uint64_t ls_id_;
+  uint64_t round_id_; // only used for backup archive task
+  uint64_t piece_id_; // only used for backup archive task
   BackupJobType type_;
   uint64_t hash_value_;
 };
@@ -237,11 +252,14 @@ public:
   const int64_t &get_schedule_time() const { return schedule_time_; }
   const uint64_t &get_task_id() const { return task_key_.task_id_; }
   const uint64_t &get_ls_id() const { return task_key_.ls_id_; }
+  uint64_t get_round_id() const { return task_key_.round_id_; } // only used for backup archive
+  uint64_t get_piece_id() const { return task_key_.piece_id_; } // only used for backup archive
   const BackupJobType &get_type() const { return task_key_.type_; }
   const share::ObBackupTaskStatus &get_status() const { return status_; }
   void set_last_check_alive_time(int64_t now) { last_check_alive_time_ = now; }
   const int64_t &get_last_check_alive_time() const { return last_check_alive_time_; }
   const int64_t &get_dest_id() const { return dest_id_; }
+  virtual int64_t get_io_dest_id() const { return dest_id_; }
 
 public:
   /* disallow copy constructor and operator= */
@@ -409,13 +427,17 @@ public:
   virtual bool can_execute_on_any_server() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
   virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+  // BACKUP ARCHIVE PIECE task should get I/O dest id from backup_archive_dest_id_ instead of dest_id_.
+  virtual int64_t get_io_dest_id() const override {
+    return share::OB_INVALID_DEST_ID == backup_archive_dest_id_ ? get_dest_id() : backup_archive_dest_id_;
+  }
 private:
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) final override;
   int set_optional_servers_();
 public:
   int build(const share::ObBackupCleanTaskAttr &task_attr, const share::ObBackupCleanLSTaskAttr &ls_attr);
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(job_id), K_(incarnation_id), K_(id), K_(round_id),
-               K_(task_type), K_(ls_id), K_(backup_path));
+               K_(task_type), K_(ls_id), K_(backup_path), K_(backup_archive_dest_id));
 private:
   int64_t job_id_;
   uint64_t incarnation_id_;
@@ -424,6 +446,7 @@ private:
   share::ObBackupCleanTaskType::TYPE task_type_;
   share::ObLSID ls_id_;
   share::ObBackupPathString backup_path_;
+  int64_t backup_archive_dest_id_; // only valid for BACKUP ARCHIVE PIECE task
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTask); 
 };
@@ -458,6 +481,29 @@ private:
   share::ObBackupPathString validate_path_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupValidateLSTask);
+};
+
+class ObBackupArchivePieceTask : public ObBackupScheduleTask
+{
+public:
+  ObBackupArchivePieceTask() : backup_path_() {}
+  virtual ~ObBackupArchivePieceTask() {}
+public:
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override { return sizeof(ObBackupArchivePieceTask); }
+  virtual bool can_execute_on_any_server() const override { return false; }
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+  virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+private:
+  virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) final override;
+  int set_optional_servers_();
+public:
+  int build(const share::ObBackupArchivePieceTaskAttr &task_attr, const share::ObBackupPathString &backup_path);
+  INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(backup_path));
+private:
+  share::ObBackupPathString backup_path_; // backup archive dest
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupArchivePieceTask);
 };
 
 }  // namespace rootserver

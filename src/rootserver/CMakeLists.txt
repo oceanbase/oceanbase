@@ -21,6 +21,7 @@ ob_set_subtarget(ob_rootserver backup
   backup/ob_backup_server_disk_space_filter.cpp
   backup/ob_tenant_archive_scheduler.cpp
   backup/ob_backup_data_scheduler.cpp
+  backup/ob_backup_archive_scheduler.cpp
   backup/ob_backup_data_set_task_mgr.cpp
   backup/ob_backup_proxy.cpp
   backup/ob_backup_data_ls_task_mgr.cpp

@@ -309,7 +309,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
-        INCREMENT INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL ILOGCACHE INDEXED INPLACE INSTANT INCONSISTENT INDIVIDUAL
+        INCREMENT INVISIBLE MERGE ISNULL INTERSECT INCREMENTAL ILOGCACHE INDEXED INPLACE INSTANT INCONSISTENT INDIVIDUAL INPUT
 
         JOB JSON JSON_ARRAYAGG JSON_OBJECTAGG JSON_QUERY JSON_VALUE JSON_TABLE
 
@@ -543,7 +543,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action alter_tablespace_options opt_force_purge
 %type <node> opt_tablespace_option opt_tablespace_options opt_tablespace_engine opt_alter_tablespace_option opt_alter_tablespace_options
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
-%type <node> opt_backup_dest backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
+%type <node> opt_backup_dest backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description opt_delete_input policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_encrypt_key
 %type <node> opt_recover_tenant recover_table_list recover_table_relation_name restore_remap_list remap_relation_name table_relation_name opt_recover_remap_item_list restore_remap_item_list restore_remap_item remap_item remap_table_val opt_tenant
 %type <node> opt_restore_with_config_list restore_with_config_list restore_with_config restore_with_item ls_attr_list
 %type <node> new_or_old new_or_old_column_ref diagnostics_info_ref
@@ -21758,6 +21758,12 @@ alter_with_opt_hint SYSTEM NOARCHIVELOG opt_backup_tenant_list opt_description
   malloc_non_terminal_node($$, result->malloc_pool_, T_ARCHIVE_LOG, 3, enable, $4, $5);
 }
 |
+alter_with_opt_hint SYSTEM BACKUP ARCHIVELOG ALL opt_delete_input opt_backup_tenant_list opt_description
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BACKUP_ARCHIVELOG_ALL, 3, $7, $8, $6);
+}
+|
 alter_with_opt_hint SYSTEM BACKUP DATABASE opt_backup_to opt_description
 {
   (void)($1);
@@ -25303,6 +25309,19 @@ opt_description:
 }
 ;
 
+opt_delete_input:
+/*EMPTY*/
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 0;
+}
+| DELETE INPUT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+;
+
 opt_restore_until:
 /*EMPTY*/
 { $$ = NULL; }
@@ -27556,6 +27575,7 @@ ACCESS_INFO
 |       INCREMENT
 |       INCREMENTAL
 |       INPLACE
+|       INPUT
 |       INSTANT
 |       IO
 |       IOPS_WEIGHT

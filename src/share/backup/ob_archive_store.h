@@ -659,6 +659,61 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObArchiveStore);
 };
 
+
+// read log archive dest first, if not exist, fallback to read the backup archive dest
+class ObDualArchiveStore
+{
+public:
+  ObDualArchiveStore();
+  ~ObDualArchiveStore() {}
+
+  int init(const share::ObBackupDest &primary_dest, const share::ObBackupDest &backup_dest = share::ObBackupDest());
+  void reset();
+  const share::ObBackupDest &get_primary_dest() const { return primary_dest_; }
+  const share::ObBackupDest &get_backup_dest() const { return backup_dest_; }
+
+  int get_round_id(const int64_t dest_id, const SCN &scn, int64_t &round_id);
+  int is_round_start_file_exist(const int64_t dest_id, const int64_t round_id, bool &exist) const;
+  int read_round_start(const int64_t dest_id, const int64_t round_id, ObRoundStartDesc &desc) const;
+  int is_round_end_file_exist(const int64_t dest_id, const int64_t round_id, bool &exist) const;
+  int read_round_end(const int64_t dest_id, const int64_t round_id, ObRoundEndDesc &desc) const;
+  int is_single_piece_file_exist(const int64_t dest_id, const int64_t round_id, const int64_t piece_id,
+      bool &exist, bool &on_backup) const;
+  int get_round_range(const int64_t dest_id, int64_t &min_round_id, int64_t &max_round_id);
+  int get_piece_range(const int64_t dest_id, const int64_t round_id, int64_t &min_piece_id, int64_t &max_piece_id);
+  int get_piece_read_dest(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const share::ObBackupDest *&dest) const;
+
+  int check_pieces_continuity_in_range(const SCN &start_scn, const SCN &end_scn);
+
+  TO_STRING_KV(K_(is_inited), K_(primary_dest), K_(backup_dest));
+
+private:
+  static bool contains_piece_key_(const ObIArray<ObPieceKey> &keys, const ObPieceKey &key);
+  static int get_newest_nonempty_piece_chain_(
+    ObArchiveStore &store,
+    const int64_t dest_id,
+    const ObIArray<ObPieceKey> &keys,
+    ObIArray<ObTenantArchivePieceAttr> &chain);
+  int build_merged_piece_chain_(
+    const ObIArray<ObPieceKey> &primary_keys,
+    const ObIArray<ObPieceKey> &backup_keys,
+    ObIArray<ObTenantArchivePieceAttr> &all_pieces);
+  static int check_curr_pieces_continuous_(
+    const ObIArray<ObTenantArchivePieceAttr> &frozen_pieces,
+    const SCN &start_scn,
+    const SCN &end_scn,
+    const ObIArray<ObPieceKey> &primary_keys,
+    const ObIArray<ObPieceKey> &backup_keys);
+
+  bool is_inited_;
+  share::ObBackupDest primary_dest_; // log archive dest
+  share::ObBackupDest backup_dest_;  // backup archive dest
+  ObArchiveStore primary_store_;
+  ObArchiveStore backup_store_;
+
+  DISALLOW_COPY_AND_ASSIGN(ObDualArchiveStore);
+};
+
 class ObArchiveStoreUtil final
 {
 public:

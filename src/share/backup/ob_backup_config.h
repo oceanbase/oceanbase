@@ -31,6 +31,11 @@ namespace share
 class ObBackupDest;
 class ObBackupHelper;
 class ObBackupFormatDesc;
+
+
+#define ENABLE_BACKUP_ARCHIVE_VERSION DATA_VERSION_4_4_2_3
+
+
 class ObBackupConfigType final
 {
 public:
@@ -57,6 +62,7 @@ public:
     LOG_ARCHIVE_DEST_8 = 17,
     LOG_ARCHIVE_DEST_STATE_8 = 18,
     LOG_RESTORE_SOURCE = 19,
+    BACKUP_ARCHIVE_DEST = 20,
     MAX_CONFIG_NAME
   };
   static const char *const type_str[Type::MAX_CONFIG_NAME];
@@ -200,6 +206,7 @@ protected:
   int do_parse_compression_(const common::ObString &name, const common::ObString &value);
   int do_parse_log_archive_mode_(const common::ObString &name, const common::ObString &value);
   int update_archive_dest_config_(common::ObISQLClient &trans);
+  int check_path_not_same_with_backup_archive_dest_(common::ObISQLClient &trans, const bool need_lock);
 protected:
   int64_t dest_no_;
   ObLogArchiveDestAtrr archive_dest_;
@@ -219,6 +226,20 @@ public:
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogArchiveDestStateConfigParser);
+};
+
+class ObBackupArchiveDestConfigParser final : public ObLogArchiveDestConfigParser
+{
+public:
+  ObBackupArchiveDestConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id, const int64_t dest_no)
+    : ObLogArchiveDestConfigParser(type, tenant_id, dest_no) {}
+  virtual ~ObBackupArchiveDestConfigParser() {}
+  virtual int update_inner_config_table(common::ObISQLClient &trans) override;
+  virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
+private:
+  int update_backup_archive_dest_config_(common::ObISQLClient &trans);
+  int check_path_not_same_with_log_archive_dest_(common::ObISQLClient &trans);
+  DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveDestConfigParser);
 };
 
 //class for update backup dest or archive dest.

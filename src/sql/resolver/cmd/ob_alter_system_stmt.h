@@ -909,6 +909,51 @@ private:
   common::ObArray<uint64_t> archive_tenant_ids_;
 };
 
+class ObBackupArchiveLogAllStmt : public ObSystemCmdStmt
+{
+public:
+  ObBackupArchiveLogAllStmt()
+    : ObSystemCmdStmt(stmt::T_BACKUP_ARCHIVELOG_ALL),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      archive_tenant_ids_(),
+      description_(),
+      delete_input_(false)
+  {
+  }
+  virtual ~ObBackupArchiveLogAllStmt() {}
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  const common::ObSArray<uint64_t> &get_archive_tenant_ids() const { return archive_tenant_ids_; }
+  const share::ObBackupDescription &get_description() const { return description_; }
+  bool is_delete_input() const { return delete_input_; }
+  int set_param(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &archive_tenant_ids,
+      const share::ObBackupDescription &description,
+      const bool delete_input)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_INVALID_ID == tenant_id) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "invalid args", K(ret), K(tenant_id));
+    } else if (OB_FAIL(archive_tenant_ids_.assign(archive_tenant_ids))) {
+      COMMON_LOG(WARN, "failed to assign archive tenant ids", K(ret), K(archive_tenant_ids));
+    } else if (OB_FAIL(description_.assign(description))) {
+      COMMON_LOG(WARN, "failed to assign description", K(ret), K(description));
+    } else {
+      tenant_id_ = tenant_id;
+      delete_input_ = delete_input;
+    }
+    return ret;
+  }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(tenant_id), K_(archive_tenant_ids), K_(description), K_(delete_input));
+
+private:
+  uint64_t tenant_id_;
+  common::ObSArray<uint64_t> archive_tenant_ids_;
+  share::ObBackupDescription description_;
+  bool delete_input_;
+};
+
 class ObBackupValidateStmt : public ObSystemCmdStmt
 {
 public:

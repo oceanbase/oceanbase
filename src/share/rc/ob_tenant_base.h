@@ -217,6 +217,7 @@ namespace rootserver
   class ObBackupTaskScheduler;
   class ObBackupDataService;
   class ObBackupMgrService;
+  class ObBackupArchiveService;
   class ObArchiveSchedulerService;
   class ObArbitrationService;
   class ObDBMSSchedService;
@@ -422,6 +423,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObBackupTaskScheduler*,            \
       rootserver::ObBackupDataService*,              \
       rootserver::ObBackupMgrService*,             \
+      rootserver::ObBackupArchiveService*,           \
       rootserver::ObArchiveSchedulerService*,        \
       rootserver::ObDRService*,                      \
       rootserver::ObDRSSLOGService*,                 \

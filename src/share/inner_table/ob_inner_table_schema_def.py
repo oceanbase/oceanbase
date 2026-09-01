@@ -3719,6 +3719,7 @@ all_log_archive_piece_files_def = dict(
     ('cp_file_id', 'int', 'false', '0'),
     ('cp_file_offset', 'int', 'false', '0'),
     ('path', 'varchar:OB_MAX_BACKUP_DEST_LENGTH', 'false', ''),
+    ('backup_file_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', 'INCOMPLETE'),
   ],
 )
 def_table_schema(**all_log_archive_piece_files_def)
@@ -9069,6 +9070,62 @@ def_table_schema(
     ('next_retry_time', 'timestamp', 'true'),
   ],
 )
+
+def_table_schema(
+  owner = 'fengjingkun.fjk',
+  table_name = '__all_backup_archive_piece_task',
+  table_id = '605',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id', 'int'),
+    ('round_id', 'int'),
+    ('piece_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true', ''),
+    ('svr_port', 'int', 'true', '0'),
+    ('task_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
+    ('dest_id', 'int', 'false', '0'),
+    ('task_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', 'INIT'),
+    ('retry_count', 'int', 'false', '0'),
+    ('result', 'int', 'true', '0'),
+  ],
+)
+
+def_table_schema(
+  owner = 'fengjingkun.fjk',
+  table_name    = '__all_backup_archive_piece_task_history',
+  table_id      = '606',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('job_id', 'int'),
+    ('round_id', 'int'),
+    ('piece_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true', ''),
+    ('svr_port', 'int', 'true', '0'),
+    ('task_trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
+    ('dest_id', 'int', 'false', '0'),
+    ('task_status', 'varchar:OB_DEFAULT_STATUS_LENTH', 'false', 'INIT'),
+    ('retry_count', 'int', 'false', '0'),
+    ('result', 'int', 'true', '0'),
+  ],
+)
+
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18130,6 +18187,18 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12622',
+  table_name = '__all_virtual_backup_archive_piece_task',
+  keywords = all_def_keywords['__all_backup_archive_piece_task'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12623',
+  table_name = '__all_virtual_backup_archive_piece_task_history',
+  keywords = all_def_keywords['__all_backup_archive_piece_task_history'],
+  in_tenant_space = True))
+
 
 def_table_schema(
   owner = 'laibingzheng.lbz',
@@ -22697,7 +22766,8 @@ def_table_schema(
         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)
       END AS COMPRESSION_RATIO,
     FILE_STATUS,
-    PATH
+    PATH,
+    BACKUP_FILE_STATUS
     FROM OCEANBASE.__ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES
 """.replace("\n", " ")
 )
@@ -31949,7 +32019,8 @@ def_table_schema(
         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)
       END AS COMPRESSION_RATIO,
     FILE_STATUS,
-    PATH
+    PATH,
+    BACKUP_FILE_STATUS
     FROM OCEANBASE.__ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
@@ -65054,7 +65125,8 @@ def_table_schema(
         ROUND(OUTPUT_BYTES / INPUT_BYTES, 2)
       END AS COMPRESSION_RATIO,
     FILE_STATUS,
-    PATH
+    PATH,
+    BACKUP_FILE_STATUS
     FROM SYS.ALL_VIRTUAL_LOG_ARCHIVE_PIECE_FILES
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")

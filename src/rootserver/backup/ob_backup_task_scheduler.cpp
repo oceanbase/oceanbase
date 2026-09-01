@@ -745,7 +745,10 @@ int ObBackupTaskSchedulerQueue::choose_dst_(
   } else {
     ObBackupSrcInfo src_info;
     char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
-    const int64_t dest_id = task->get_dest_id();
+    // use the dest id of the storage the task actually performs I/O on, which may
+    // differ from get_dest_id() (e.g. backup archive piece clean task), so that
+    // servers are filtered by the locality of the storage actually accessed.
+    const int64_t dest_id = task->get_io_dest_id();
     const uint64_t tenant_id = task->get_tenant_id();
     ObArray<ObBackupServer> connectivity_servers;
     src_info.reset();

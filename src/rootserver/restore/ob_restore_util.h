@@ -132,6 +132,28 @@ static int fill_multi_path_restore_scn_without_compl_log_(
   static int check_multi_path_using_complement_log_(
              ObIArray<ObString> &multi_path_array,
              bool &use_complement_log);
+  // log_path_list = [LOG ARCHIVE DEST, BACKUP ARCHIVE DEST]
+  static int check_dual_archive_dest_(
+             const ObIArray<ObString> &multi_path_array,
+             bool &is_dual_archive_dest,
+             ObIArray<share::ObBackupPathString> &log_path_list);
+  static int get_dual_dest_restore_scn_(
+             const obrpc::ObPhysicalRestoreTenantArg &arg,
+             const ObIArray<ObString> &multi_path_array,
+             const ObIArray<share::ObBackupPathString> &log_path_list,
+             share::SCN &restore_scn);
+  // Precheck that the merged pieces of primary/backup archive dest cover [restore_start_scn, restore_scn].
+  static int check_dual_dest_log_continuity_(
+             const ObIArray<share::ObBackupPathString> &log_path_list,
+             const share::SCN &restore_start_scn,
+             const share::SCN &restore_scn);
+  static int fill_dual_dest_backup_path_(
+             const obrpc::ObPhysicalRestoreTenantArg &arg,
+             const ObIArray<ObString> &path_array,
+             const ObIArray<share::ObBackupPathString> &log_path_list,
+             share::ObPhysicalRestoreJob &job,
+             ObIArray<share::ObBackupSetBriefInfo> &backup_set_list,
+             const bool is_multi_path = false);
   static int notify_restore_service(const uint64_t tenant_id);
 private:
   static int fill_backup_info_(

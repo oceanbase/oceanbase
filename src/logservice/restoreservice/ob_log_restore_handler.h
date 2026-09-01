@@ -240,7 +240,8 @@ public:
   int get_max_restore_scn(share::SCN &scn) const;
   // @brief add log fetch source of phyiscal backups
   int add_source(logservice::DirArray &array, const share::SCN &end_scn);
-  int add_source(share::ObBackupDest &dest, const share::SCN &end_scn);
+  // if backup dest is not exist, it will be invalid
+  int add_source(share::ObBackupDest &dest, share::ObBackupDest &backup_dest, const share::SCN &end_scn);
   int add_source(const share::ObRestoreSourceServiceAttr &service_attr, const share::SCN &end_scn);
   // clean source if log_restore_source is empty
   int clean_source();

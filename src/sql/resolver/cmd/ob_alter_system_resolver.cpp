@@ -5528,6 +5528,120 @@ int ObArchiveLogResolver::resolve(const ParseNode &parse_tree)
   return ret;
 }
 
+int ObBackupArchiveLogAllResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(T_BACKUP_ARCHIVELOG_ALL != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("type is not T_BACKUP_ARCHIVELOG_ALL", "type", get_type_name(parse_tree.type_));
+  } else if (OB_UNLIKELY(NULL == parse_tree.children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children should not be null", K(ret));
+  } else if (OB_UNLIKELY(3 != parse_tree.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("children num not match", K(ret), "num_child", parse_tree.num_child_);
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info should not be null", K(ret));
+  } else {
+    const uint64_t tenant_id = session_info_->get_login_tenant_id();
+    ParseNode *tenant_node = parse_tree.children_[0];
+    ParseNode *description_node = parse_tree.children_[1];
+    ParseNode *delete_input_node = parse_tree.children_[2];
+    ObSArray<uint64_t> archive_tenant_ids;
+    ObBackupDescription description;
+    bool is_standby = false;
+    bool delete_input = false;
+    ObBackupArchiveLogAllStmt *stmt = create_stmt<ObBackupArchiveLogAllStmt>();
+    if (OB_ISNULL(stmt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("create ObBackupArchiveLogAllStmt failed");
+    } else if (NULL == tenant_node) {
+      // alter system without tenant param: user tenant archives itself; sys tenant must specify tenants
+      if (OB_SYS_TENANT_ID == tenant_id) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("sys tenant must specify tenant names for backup archivelog all", KR(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "'ALTER SYSTEM BACKUP ARCHIVELOG ALL' without specifying tenant on sys tenant is");
+      }
+    } else if (OB_SYS_TENANT_ID != tenant_id) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("user tenant cannot specify tenant names", KR(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "user tenant cannot specify tenant names");
+    } else if (T_TENANT_LIST != tenant_node->type_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("type is not T_TENANT_LIST", "type", get_type_name(tenant_node->type_));
+    } else {
+      bool affect_all = false;
+      bool affect_all_user = false;
+      bool affect_all_meta = false;
+      if (OB_UNLIKELY(nullptr == tenant_node->children_ || 0 == tenant_node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children of tenant should not be null", KR(ret), K(tenant_node->num_child_));
+      } else if (OB_FAIL(Util::resolve_tenant(*tenant_node, tenant_id, archive_tenant_ids,
+                                              affect_all, affect_all_user, affect_all_meta))) {
+        LOG_WARN("fail to resolve tenant", KR(ret), K(tenant_id));
+      } else if (affect_all_user || affect_all_meta) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("all_user/all_meta is not supported by ALTER SYSTEM BACKUP ARCHIVELOG ALL",
+            KR(ret), K(affect_all_user), K(affect_all_meta));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use all_user/all_meta in 'ALTER SYSTEM BACKUP ARCHIVELOG ALL' syntax is");
+      } else if (affect_all) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant all is not supported by ALTER SYSTEM BACKUP ARCHIVELOG ALL", KR(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "'ALTER SYSTEM BACKUP ARCHIVELOG ALL' with tenant all on sys tenant is");
+      } else if (archive_tenant_ids.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("no valid tenant name given", K(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "No valid tenant name given");
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(delete_input_node)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("delete input node should not be null", K(ret));
+    } else if (OB_UNLIKELY(T_INT != delete_input_node->type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("type is not T_INT", "type", get_type_name(delete_input_node->type_));
+    } else {
+      delete_input = (1 == delete_input_node->value_);
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (nullptr != description_node && OB_FAIL(description.assign(description_node->str_value_))) {
+      LOG_WARN("failed to assign backup description", K(ret));
+    } else if (archive_tenant_ids.empty()) {
+      // Empty list means: sys tenant => all tenants, user tenant => itself.
+      // Only the single login tenant needs the standby guard here.
+      if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+        LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+      } else if (is_standby) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("backup archivelog all is not supported on standby tenant", KR(ret), K(tenant_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup archivelog all on standby tenant is");
+      }
+    } else {
+      ARRAY_FOREACH_X(archive_tenant_ids, idx, cnt, OB_SUCC(ret)) {
+        const uint64_t target_tenant_id = archive_tenant_ids.at(idx);
+        if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(target_tenant_id, is_standby))) {
+          LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(target_tenant_id));
+        } else if (is_standby) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("backup archivelog all is not supported on standby tenant", KR(ret), K(target_tenant_id));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup archivelog all on standby tenant is");
+        }
+      }
+    }
+
+    if (FAILEDx(stmt->set_param(tenant_id, archive_tenant_ids, description, delete_input))) {
+      LOG_WARN("failed to set backup archive log all stmt param", K(ret), K(tenant_id), K(archive_tenant_ids));
+    } else {
+      stmt_ = stmt;
+    }
+  }
+  return ret;
+}
+
 int ObBackupDatabaseResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -5588,7 +5702,7 @@ int ObBackupDatabaseResolver::resolve(const ParseNode &parse_tree)
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!backup_dest.is_empty()) { // TODO(chognrong.th) support specify path in 4.1
+    } else if (!backup_dest.is_empty() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_3) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("backup do not support using specify path ", K(ret), K(backup_dest), K(backup_tenant_ids));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup do not support using specify path");

@@ -77,6 +77,7 @@ inline bool allow_ddl_thread_rpc_not_match(const obrpc::ObRpcPacketCode pcode)
          || obrpc::OB_SPLIT_RESOURCE_POOL == pcode
          || obrpc::OB_MERGE_RESOURCE_POOL == pcode
          || obrpc::OB_BACKUP_DATABASE == pcode
+         || obrpc::OB_BACKUP_ARCHIVE_LOG_ALL == pcode
          || obrpc::OB_GET_TENANT_SCHEMA_VERSIONS == pcode
          || obrpc::OB_BROADCAST_SCHEMA == pcode
          || obrpc::OB_PHYSICAL_RESTORE_TENANT == pcode
@@ -746,6 +747,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_PHYSICAL_RESTORE_TENANT, ObRpcPhysicalRestoreT
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_REBUILD_INDEX_IN_RESTORE, ObRpcRebuildIndexInRestoreP, rebuild_index_in_restore(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ARCHIVE_LOG, ObArchiveLogP, handle_archive_log(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_DATABASE, ObBackupDatabaseP, handle_backup_database(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_ARCHIVE_LOG_ALL, ObBackupArchiveLogAllP, handle_backup_archive_log_all(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_MANAGE, ObBackupManageP, handle_backup_manage(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_BACKUP_CLEAN, ObBackupCleanP, handle_backup_delete(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_DELETE_POLICY, ObDeletePolicyP, handle_delete_policy(arg_));

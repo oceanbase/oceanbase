@@ -40,7 +40,9 @@
 #include "logservice/archiveservice/ob_archive_service.h"
 #include "storage/backup/ob_backup_handler.h"
 #include "storage/backup/ob_ls_backup_clean_mgr.h"
+#include "storage/backup/ob_backup_archive_piece_copier.h" // ObBackupArchiveHandler
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/backup/ob_archive_persist_helper.h"
 #include "share/ob_ddl_sim_point.h" // for DDL_SIM
 #include "rootserver/backup/ob_backup_task_scheduler.h" // ObBackupTaskScheduler
 #include "rootserver/ob_service_name_command.h"
@@ -948,6 +950,24 @@ int ObService::notify_archive(const obrpc::ObNotifyArchiveArg &arg)
     }
   }
 
+  return ret;
+}
+
+int ObService::notify_backup_archive(const obrpc::ObNotifyBackupArchiveArg &arg)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("[BACKUP_ARCHIVE]receive notify backup archive request", K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[BACKUP_ARCHIVE]ObService not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[BACKUP_ARCHIVE]invalid notify backup archive arg", K(ret), K(arg));
+  } else if (OB_FAIL(backup::ObBackupArchiveHandler::schedule_piece_copy_dag(arg))) {
+    LOG_WARN("[BACKUP_ARCHIVE]failed to schedule piece copy dag", K(ret), K(arg));
+  } else {
+    LOG_INFO("[BACKUP_ARCHIVE]succeed to schedule piece copy dag", K(arg));
+  }
   return ret;
 }
 
@@ -3443,6 +3463,36 @@ int ObService::report_backup_over(const obrpc::ObBackupTaskRes &res)
         LOG_WARN("failed to build task from res rpc", K(ret), K(res));
       } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
         LOG_WARN("failed to remove task from scheduler", K(ret), K(res), K(task));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObService::report_backup_archive_over(const obrpc::ObBackupTaskRes &res)
+{
+  int ret = OB_SUCCESS;
+  ObBackupArchivePieceTask task;
+  ObBackupTaskScheduler *task_scheduler = nullptr;
+  FLOG_INFO("[BACKUP_ARCHIVE]receive backup archive over", K(res));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[BACKUP_ARCHIVE]not init", KR(ret));
+  } else {
+    ObHAResultInfo result_info(ObHAResultInfo::BACKUP_ARCHIVE,
+                               res.round_id_,
+                               res.piece_id_,
+                               res.src_server_,
+                               res.dag_id_,
+                               res.result_);
+    MTL_SWITCH(gen_meta_tenant_id(res.tenant_id_)) {
+      if (nullptr == (task_scheduler = MTL(ObBackupTaskScheduler *))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("[BACKUP_ARCHIVE]backup task scheduler can't be nullptr", K(ret));
+      } else if (OB_FAIL(task.build_from_res(res, BackupJobType::BACKUP_ARCHIVE_JOB))) {
+        LOG_WARN("[BACKUP_ARCHIVE]failed to build archive task from res rpc", K(ret), K(res));
+      } else if (OB_FAIL(task_scheduler->execute_over(task, result_info))) {
+        LOG_WARN("[BACKUP_ARCHIVE]failed to execute over archive task", K(ret), K(res), K(task));
       }
     }
   }

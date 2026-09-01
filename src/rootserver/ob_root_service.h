@@ -916,6 +916,7 @@ public:
       obrpc::ObGetRecycleSchemaVersionsResult &result);
   int handle_archive_log(const obrpc::ObArchiveLogArg &arg);
   int handle_backup_database(const obrpc::ObBackupDatabaseArg &arg);
+  int handle_backup_archive_log_all(const obrpc::ObBackupArchiveLogAllArg &arg);
   int handle_backup_manage(const obrpc::ObBackupManageArg &arg);
   int handle_backup_delete(const obrpc::ObBackupCleanArg &arg);
   int handle_delete_policy(const obrpc::ObDeletePolicyArg &arg);

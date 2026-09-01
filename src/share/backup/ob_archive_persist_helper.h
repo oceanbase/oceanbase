@@ -68,10 +68,16 @@ public:
   // lock LOG_ARCHIVE_DEST
   int lock_archive_dest(common::ObISQLClient &trans, const int64_t dest_no, bool &is_exist) const;
 
-  // Get archive path.
+  // lock BACKUP_ARCHIVE_DEST
+  int lock_backup_archive_dest(common::ObISQLClient &trans, bool &is_exist) const;
+
+  // Get log archive path.
   int get_archive_dest(
       common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no, 
       ObBackupPathString &path) const;
+  // Get backup archive path.
+  int get_backup_archive_dest(
+      common::ObISQLClient &proxy, const bool need_lock, ObBackupPathString &path) const;
 
   int get_dest_id(
       common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no, 
@@ -127,8 +133,8 @@ public:
   // his round operation
   int get_his_round(common::ObISQLClient &proxy, const int64_t dest_no,
       const int64_t round_id, ObTenantArchiveHisRoundAttr &his_round) const;
-  int is_all_piece_in_round_deleted(common::ObISQLClient &proxy,
-          const int64_t round_id, bool &is_piece_all_deleted) const;
+  int is_all_piece_in_round_deleted(common::ObISQLClient &proxy, const int64_t round_id,
+      const bool check_backup_file, bool &is_piece_all_deleted) const;
   int insert_his_round(common::ObISQLClient &proxy, const ObTenantArchiveHisRoundAttr &his_round) const;
 
 
@@ -146,11 +152,21 @@ public:
       common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
   int get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const SCN &end_scn,
       const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const;
+  int get_candidate_obsolete_backup_archive_pieces(common::ObISQLClient &proxy, const SCN &end_scn,
+      const int64_t src_dest_id, common::ObIArray<ObTenantArchivePieceAttr> &pieces) const;
   int insert_or_update_piece(common::ObISQLClient &proxy, const ObTenantArchivePieceAttr &piece) const;
   // Usually, we need do it in a transaction.
   int batch_update_pieces(common::ObISQLClient &proxy, const common::ObIArray<ObTenantArchivePieceAttr> &pieces_array) const;
   int mark_new_piece_file_status(common::ObISQLClient &proxy, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObBackupFileStatus::STATUS new_status) const;
+  int mark_piece_backup_file_status(common::ObISQLClient &proxy, const int64_t dest_id,
+      const int64_t round_id, const int64_t piece_id, const ObBackupFileStatus::STATUS old_status,
+      const ObBackupFileStatus::STATUS new_status) const;
+  int get_unbackuped_frozen_pieces(common::ObISQLClient &proxy, const int64_t dest_id,
+      common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
+  // get all frozen pieces that have been backed up to the backup_archive_dest
+  int get_backed_up_frozen_pieces(common::ObISQLClient &proxy, const int64_t dest_id,
+      common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
 
 
   // ls round progress operation
@@ -193,6 +209,28 @@ private:
   uint64_t tenant_id_; // sys or user tenant id
 
   DISALLOW_COPY_AND_ASSIGN(ObArchivePersistHelper);
+};
+
+
+class ObBackupArchivePieceTaskOperator
+{
+public:
+  static int insert_tasks(common::ObISQLClient &proxy, const common::ObIArray<ObBackupArchivePieceTaskAttr> &tasks);
+  static int get_task(common::ObISQLClient &proxy, const ObBackupArchivePieceTaskAttr::Key &key,
+      const bool need_lock, ObBackupArchivePieceTaskAttr &task);
+  static int get_tasks(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id, const bool need_lock,
+      common::ObIArray<ObBackupArchivePieceTaskAttr> &tasks);
+  static int update_task_status(common::ObISQLClient &proxy, const ObBackupArchivePieceTaskAttr::Key &key,
+      const ObBackupTaskStatus &src_status, const ObBackupTaskStatus &dst_status);
+  static int update_task_status(common::ObISQLClient &proxy, const ObBackupArchivePieceTaskAttr::Key &key,
+      const ObBackupTaskStatus &src_status, const ObBackupTaskStatus &dst_status,
+      const common::ObAddr &dst, const share::ObTaskId &trace_id);
+  static int report_result(common::ObISQLClient &proxy, const ObBackupArchivePieceTaskAttr::Key &key,
+      const ObBackupTaskStatus &src_status, const ObBackupTaskStatus &dst_status, const int64_t retry_cnt,
+      const int result);
+  static int move_tasks_to_his(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id);
+private:
+  static int do_parse_task_(sqlclient::ObMySQLResult &result, ObBackupArchivePieceTaskAttr &task);
 };
 
 }

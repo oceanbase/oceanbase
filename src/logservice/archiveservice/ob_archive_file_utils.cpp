@@ -301,7 +301,7 @@ int ObArchiveFileUtils::locate_file_by_scn(share::ObBackupDest &dest,
   return ret;
 }
 
-int ObArchiveFileUtils::locate_file_by_scn_in_piece(share::ObBackupDest &dest,
+int ObArchiveFileUtils::locate_file_by_scn_in_piece(const share::ObBackupDest &dest,
     const int64_t dest_id,
     const int64_t round,
     const int64_t piece_id,

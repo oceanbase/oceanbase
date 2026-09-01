@@ -17,6 +17,8 @@
 #include "ob_backup_data_scheduler.h"
 #include "ob_backup_clean_scheduler.h"
 #include "ob_backup_validate_scheduler.h"
+#include "ob_backup_archive_scheduler.h"
+
 namespace oceanbase 
 {
 namespace rootserver 
@@ -85,6 +87,28 @@ private:
 private:
   ObBackupDataScheduler backup_data_scheduler_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataService);
+};
+
+class ObBackupArchiveService final : public ObBackupService
+{
+public:
+  ObBackupArchiveService(): ObBackupService(), backup_archive_scheduler_() {}
+  virtual ~ObBackupArchiveService() {}
+  DEFINE_MTL_FUNC(ObBackupArchiveService);
+  int process(int64_t &last_schedule_ts) override;
+
+  ObIBackupJobScheduler *get_scheduler(const BackupJobType &type);
+  int get_need_reload_task(
+      common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks) override;
+
+  int handle_backup_archive_log_all(const obrpc::ObBackupArchiveLogAllArg &arg);
+private:
+  int sub_init(common::ObMySQLProxy &sql_proxy, obrpc::ObSrvRpcProxy &rpc_proxy,
+    share::schema::ObMultiVersionSchemaService &schema_service, share::ObLocationService &loacation_service,
+    ObBackupTaskScheduler &task_scheduler) override;
+private:
+  ObBackupArchiveScheduler backup_archive_scheduler_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupArchiveService);
 };
 
 class ObBackupMgrService final : public ObBackupService

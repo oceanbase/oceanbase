@@ -51,6 +51,7 @@ const char *const ObBackupConfigType::type_str[ObBackupConfigType::Type::MAX_CON
   "log_archive_dest_8",
   "log_archive_dest_state_8",
   "log_restore_source",
+  "backup_archive_dest",
 };
 
 int ObBackupConfigType::set_backup_config_type(const common::ObString& str) {
@@ -316,6 +317,18 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 6, LOG_ARCHIVE_DEST_STATE_6, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 7, LOG_ARCHIVE_DEST_STATE_7, tenant_id);
     GENERATE_LOG_ARCHIVE_PARSER(DestState, 8, LOG_ARCHIVE_DEST_STATE_8, tenant_id);
+    case ObBackupConfigType::Type::BACKUP_ARCHIVE_DEST: {
+      int64_t size = sizeof(ObBackupArchiveDestConfigParser);
+      void *tmp_ptr = nullptr;
+      if (OB_ISNULL(tmp_ptr = (allocator_.alloc(size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("parser generator alloc memory failed", K(ret));
+      } else {
+        config_parser_ = new(tmp_ptr) ObBackupArchiveDestConfigParser(
+            ObBackupConfigType::Type::BACKUP_ARCHIVE_DEST, tenant_id, OB_BACKUP_ARCHIVE_DEST_NO_OFFSET);
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_SYS;
       LOG_ERROR("invalid config type", K(ret), K(type));
@@ -379,8 +392,9 @@ int ObBackupConfigParserMgr::init(const common::ObSqlString &name, const common:
     LOG_WARN("fail to set backup config type", K(ret), K(name));
 #ifdef OB_BUILD_SHARED_STORAGE
   } else if (GCTX.is_shared_storage_mode()
-             && (ObBackupConfigType::Type::DATA_BACKUP_DEST == type.get_type()
-                 || ObBackupConfigType::Type::LOG_ARCHIVE_DEST == type.get_type())) {
+             && (ObBackupConfigType::Type::DATA_BACKUP_DEST == type.get_type() ||
+                 ObBackupConfigType::Type::LOG_ARCHIVE_DEST == type.get_type() ||
+                 ObBackupConfigType::Type::BACKUP_ARCHIVE_DEST == type.get_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("set log_archive_dest/data_backup_dest in Shared-Storage mode is not supported", K(name), K(tenant_id));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set log_archive_dest/data_backup_dest in Shared-Storage mode is ");
@@ -676,6 +690,8 @@ int ObLogArchiveDestConfigParser::update_archive_dest_config_(common::ObISQLClie
     LOG_WARN("fail to init backup help", K(ret), K(tenant_id_));
   } else if (OB_FAIL(helper.lock_archive_dest(trans, dest_no_, is_exist))) {
     LOG_WARN("fail to lock archive dest", K(ret), K_(dest_no));
+  } else if (!is_empty_ && OB_FAIL(check_path_not_same_with_backup_archive_dest_(trans, true /* need_lock */))) {
+    LOG_WARN("log archive path should be different from backup archive path", K(ret), K_(tenant_id), K_(backup_dest));
   } else if (OB_FAIL(ObTenantArchiveMgr::is_archive_running(trans, tenant_id_, dest_no_, is_running))) {
     LOG_WARN("failed to check archive running.", K(ret), K_(backup_dest));
   } else if (is_running) {
@@ -806,8 +822,42 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
                             "set backup dest: parameter enable_worm=true is required for bucket with worm.");
         }
         LOG_WARN("fail to update archive dest config", K(ret), K_(tenant_id));
+      } else if (OB_FAIL(check_path_not_same_with_backup_archive_dest_(trans, false /* need_lock */))) {
+        LOG_WARN("log archive path should be different from backup archive path", K(ret), K_(tenant_id), K_(backup_dest));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogArchiveDestConfigParser::check_path_not_same_with_backup_archive_dest_(common::ObISQLClient &trans, const bool need_lock)
+{
+  int ret = OB_SUCCESS;
+  ObArchivePersistHelper helper;
+  ObBackupPathString backup_archive_path;
+  ObBackupDest log_archive_dest;
+  ObBackupDest backup_archive_dest;
+  bool is_equal = false;
+  if (is_empty_) {
+  } else if (OB_FAIL(helper.init(tenant_id_))) {
+    LOG_WARN("fail to init archive persist helper", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(log_archive_dest.set(backup_dest_.ptr()))) {
+    LOG_WARN("fail to set log archive dest", K(ret), K_(backup_dest));
+  } else if (OB_FAIL(helper.get_backup_archive_dest(trans, need_lock, backup_archive_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get backup archive dest", K(ret), K_(tenant_id));
+    }
+  } else if (OB_FAIL(backup_archive_dest.set(backup_archive_path.ptr()))) {
+    LOG_WARN("fail to set backup archive dest", K(ret), K(backup_archive_path));
+  } else if (OB_FAIL(log_archive_dest.is_backup_path_equal(backup_archive_dest, is_equal))) {
+    LOG_WARN("fail to compare backup path", K(ret), K(log_archive_dest), K(backup_archive_dest));
+  } else if (is_equal) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("log archive dest should be different from backup archive dest",
+        K(ret), K(log_archive_dest), K(backup_archive_dest));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "log archive dest must differ from backup archive dest");
   }
   return ret;
 }
@@ -879,7 +929,7 @@ int ObLogArchiveDestConfigParser::do_parse_log_archive_dest_(const common::ObStr
 int ObLogArchiveDestConfigParser::do_parse_piece_switch_interval_(const common::ObString &name, const common::ObString &value)
 {
   int ret = OB_SUCCESS;
-  const int64_t MIN_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL = 24 * 3600 * 1000LL * 1000LL; //1d
+  const int64_t MIN_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL = 1 * 3600 * 1000LL * 1000LL; //1h
   const int64_t MAX_LOG_ARCHIVE_PIECE_SWITCH_INTERVAL = 7 * 24 * 3600 * 1000LL * 1000LL; //7d
   if (name.empty() || value.empty()) {
     ret = OB_INVALID_ARGUMENT;
@@ -969,6 +1019,172 @@ int ObLogArchiveDestStateConfigParser::check_before_update_inner_config(obrpc::O
 {
   int ret = OB_SUCCESS;
   // do nothing
+  return ret;
+}
+
+int ObBackupArchiveDestConfigParser::update_inner_config_table(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestMgr dest_mgr;
+  ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_BACKUP_ARCHIVE_LOG;
+  if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parser", K(ret), KPC(this));
+  } else if (is_empty_) {
+  } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
+    LOG_WARN("fail to init dest manager", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(dest_mgr.write_format_file())) {
+    LOG_WARN("fail to write format file", K(ret), K_(tenant_id));
+  }
+
+  if (FAILEDx(update_backup_archive_dest_config_(trans))) {
+    LOG_WARN("fail to update backup archive dest config", K(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObBackupArchiveDestConfigParser::update_backup_archive_dest_config_(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  share::ObArchivePersistHelper helper;
+  ObBackupDest dest;
+  int64_t dest_id = 0;
+  bool is_exist = false;
+  if (OB_FAIL(helper.init(tenant_id_))) {
+    LOG_WARN("fail to init archive persist helper", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(helper.lock_backup_archive_dest(trans, is_exist))) {
+    LOG_WARN("fail to lock backup archive dest", K(ret), K_(dest_no));
+  } else if (is_empty_) {
+    if (OB_FAIL(helper.del_dest(trans, dest_no_))) {
+      LOG_WARN("fail to del backup archive dest", K(ret), K_(dest_no));
+    }
+  } else {
+    if (OB_FAIL(dest.set(backup_dest_.ptr()))) {
+      LOG_WARN("fail to set backup archive dest", K(ret));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(trans, tenant_id_, dest, dest_id))) {
+      LOG_WARN("fail to get dest id", K(ret), K_(tenant_id));
+    } else if (OB_FALSE_IT(archive_dest_.dest_id_ = dest_id)) {
+    } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(archive_dest_.dest_))) {
+      LOG_WARN("fail to set default checksum type", K(ret), "backup_dest", archive_dest_.dest_);
+    } else if (OB_FAIL(archive_dest_.gen_config_items(config_items_))) {
+      LOG_WARN("fail to gen archive config items", K(ret));
+    }
+
+    ARRAY_FOREACH_X(config_items_, i, cnt, OB_SUCC(ret)) {
+      const BackupConfigItemPair &config_item = config_items_.at(i);
+      ObSqlString prefixed_key;
+      const bool need_skip = (0 == STRCASECMP(config_item.key_.ptr(), OB_STR_BINDING)
+                           || 0 == STRCASECMP(config_item.key_.ptr(), OB_STR_PIECE_SWITCH_INTERVAL));
+      if (need_skip) {
+        continue; // binding && piece_switch_interval are useless for backup archive
+      } else if (OB_FAIL(prefixed_key.assign_fmt("%s%s", OB_STR_BACKUP_ARCHIVE_PREFIX, config_item.key_.ptr()))) {
+        LOG_WARN("fail to add backup archive prefix", K(ret), K(config_item.key_));
+      } else if (OB_FAIL(helper.set_kv_item(trans, dest_no_, prefixed_key, config_item.value_))) {
+        LOG_WARN("fail to set backup archive dest config", K(ret), K(prefixed_key), K(config_item.value_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupArchiveDestConfigParser::check_before_update_inner_config(
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDestType::TYPE dest_type = ObBackupDestType::TYPE::DEST_TYPE_BACKUP_ARCHIVE_LOG;
+  ObBackupDestMgr dest_mgr;
+  ObBackupDest backup_dest;
+  bool is_cleaning = false;
+  uint64_t data_version = 0;
+  if (is_empty_) {
+  } else if (!type_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parser", K(ret), KPC(this));
+  } else if (backup_dest_.is_empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("cannot set backup archive dest without location", K(ret), K_(backup_dest));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup archive dest without location is");
+  } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(backup_dest_))) {
+    LOG_WARN("fail to check dest checksum type", K(ret));
+  } else if (OB_FAIL(backup_dest.set(backup_dest_))) {
+    LOG_WARN("fail to set backup dest", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get data version", K(ret), K_(tenant_id));
+  } else if (data_version < ENABLE_BACKUP_ARCHIVE_VERSION) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set backup archive dest during upgrade is not supported", K(ret), K_(tenant_id), K_(backup_dest));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup archive dest during upgrade is not supported");
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(trans, tenant_id_, backup_dest, is_cleaning))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("backup dest is not exist, it's a new backup archive dest and it is not cleaning",
+          K(ret), K_(tenant_id), K_(backup_dest));
+    } else {
+      LOG_WARN("fail to check backup archive dest exist", K(ret), K_(tenant_id), K_(backup_dest));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (is_empty_) {
+  } else if (is_cleaning) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("A backup cleaning is in progress, set it again is not allowed", K(ret), K_(tenant_id), K_(backup_dest));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "cleaning of this dest is in progress, set it again ");
+  } else {
+    const char *extension = backup_dest.get_storage_info()->get_extension();
+    char src_locality[OB_MAX_BACKUP_SRC_INFO_LENGTH] = { 0 };
+    ObBackupSrcType src_type = ObBackupSrcType::EMPTY;
+    if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(
+            ObString(extension), src_locality, sizeof(src_locality), src_type))) {
+      LOG_WARN("failed to get src info from extension", K(ret), K(extension));
+    } else if (ObBackupSrcType::EMPTY != src_type
+                && OB_FAIL(ObBackupDestIOPermissionMgr::check_backup_src_info_valid(src_locality, src_type))) {
+      LOG_WARN("please check backup src info valid", K(src_locality), K(src_type));
+    } else if (OB_FAIL(dest_mgr.init(tenant_id_, dest_type, backup_dest_, trans))) {
+      LOG_WARN("fail to init backup archive dest manager", K(ret), K_(tenant_id));
+    } else if (OB_FAIL(dest_mgr.check_dest_validity(rpc_proxy, false/*need_format_file*/, true/*need_check_permission*/))) {
+      if (OB_OBJECT_STORAGE_OBJECT_LOCKED_BY_WORM == ret) {
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+            "set backup dest: parameter enable_worm=true is required for bucket with worm.");
+      }
+      LOG_WARN("fail to check backup archive dest validity", K(ret), K_(tenant_id));
+    } else if (OB_FAIL(check_path_not_same_with_log_archive_dest_(trans))) {
+      LOG_WARN("backup archive path should be different from log archive path", K(ret), K_(tenant_id), K_(backup_dest));
+    }
+  }
+  return ret;
+}
+
+int ObBackupArchiveDestConfigParser::check_path_not_same_with_log_archive_dest_(common::ObISQLClient &trans)
+{
+  int ret = OB_SUCCESS;
+  ObArchivePersistHelper helper;
+  ObBackupPathString log_archive_path;
+  ObBackupDest log_archive_dest;
+  ObBackupDest backup_archive_dest;
+  bool is_equal = false;
+  if (is_empty_) {
+  } else if (OB_FAIL(helper.init(tenant_id_))) {
+    LOG_WARN("fail to init archive persist helper", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(helper.get_archive_dest(trans, true /* need_lock */, 0 /* primary dest */, log_archive_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get log archive dest", K(ret), K_(tenant_id));
+    }
+  } else if (OB_FAIL(log_archive_dest.set(log_archive_path.ptr()))) {
+    LOG_WARN("fail to set log archive dest", K(ret), K(log_archive_path));
+  } else if (OB_FAIL(backup_archive_dest.set(backup_dest_.ptr()))) {
+    LOG_WARN("fail to set backup archive dest", K(ret), K_(backup_dest));
+  } else if (OB_FAIL(log_archive_dest.is_backup_path_equal(backup_archive_dest, is_equal))) {
+    LOG_WARN("fail to compare backup path", K(ret), K(log_archive_dest), K(backup_archive_dest));
+  } else if (is_equal) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("backup archive dest should be different from log archive dest",
+        K(ret), K(log_archive_dest), K(backup_archive_dest));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "backup archive dest must differ from log archive dest");
+  }
   return ret;
 }
 

@@ -624,11 +624,12 @@ void ObTenantArchivePieceAttr::Key::reset()
 OB_SERIALIZE_MEMBER(ObTenantArchivePieceAttr, key_, incarnation_, dest_no_,
   file_count_, start_scn_, checkpoint_scn_,
   max_scn_, end_scn_, compatible_, input_bytes_, output_bytes_, status_,
-  file_status_, cp_file_id_, cp_file_offset_, path_);
+  file_status_, cp_file_id_, cp_file_offset_, path_, backup_file_status_);
 
 // Return if both primary key and value are valid.
 bool ObTenantArchivePieceAttr::is_valid() const
 {
+  // ignore the backup_file_status_ column, it is useless for log archive
   return key_.is_pkey_valid() && compatible_.is_valid()
          && OB_START_INCARNATION <= incarnation_
          && 0 <= dest_no_
@@ -657,6 +658,7 @@ int ObTenantArchivePieceAttr::parse_from(common::sqlclient::ObMySQLResult &resul
   uint64_t max_scn = 0;
   uint64_t end_scn = 0;
   char file_status_str[OB_DEFAULT_STATUS_LENTH] = "";
+  char backup_file_status_str[OB_DEFAULT_STATUS_LENTH] = "";
   char status_str[OB_DEFAULT_STATUS_LENTH] = "";
   ObString path;
 
@@ -681,12 +683,16 @@ int ObTenantArchivePieceAttr::parse_from(common::sqlclient::ObMySQLResult &resul
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_CP_FILE_ID, cp_file_id_, int64_t);
   EXTRACT_INT_FIELD_MYSQL(result, OB_STR_CP_FILE_OFFSET, cp_file_offset_, int64_t);
   EXTRACT_VARCHAR_FIELD_MYSQL(result, OB_STR_PATH, path);
+  EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(result, OB_STR_BACKUP_FILE_STATUS, backup_file_status_str, OB_DEFAULT_STATUS_LENTH, real_length);
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(file_status_ = ObBackupFileStatus::get_status(file_status_str))) {
-  } else if (!ObBackupFileStatus::is_valid(file_status_)) {
+  } else if (OB_UNLIKELY(!ObBackupFileStatus::is_valid(file_status_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid file status", K(ret), K(file_status_str));
+  } else if (FALSE_IT(backup_file_status_ = ObBackupFileStatus::get_status(backup_file_status_str))) {
+  } else if (FALSE_IT(backup_file_status_ = ObBackupFileStatus::is_valid(backup_file_status_)
+                    ? backup_file_status_ : ObBackupFileStatus::BACKUP_FILE_INCOMPLETE /*default value, fall back for compat*/)) {
   } else if (OB_FAIL(path_.assign(path))) {
     LOG_WARN("failed to assign path", K(ret), K(path));
   } else if (OB_FAIL(set_status(status_str))) {
@@ -742,6 +748,9 @@ int ObTenantArchivePieceAttr::fill_dml(ObDMLSqlSplicer &dml) const
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_column(OB_STR_PATH, path_.ptr()))) {
     LOG_WARN("failed to add column", K(ret));
+  } else {
+    // There is no need to fill backup_file_status, the curr func is called for log archive, should ignore the new column
+    // The backup_file_status column will be filled by backup log archive func.
   }
   return ret;
 }
@@ -764,6 +773,7 @@ int ObTenantArchivePieceAttr::assign(const ObTenantArchivePieceAttr &other)
 
   status_ = other.status_;
   file_status_ = other.file_status_;
+  backup_file_status_ = other.backup_file_status_;
 
   cp_file_id_ = other.cp_file_id_;
   cp_file_offset_ = other.cp_file_offset_;
@@ -788,7 +798,64 @@ void ObTenantArchivePieceAttr::reset()
   compatible_.version_ = ObArchiveCompatible::Compatible::NONE;
   status_.status_ = ObArchivePieceStatus::Status::MAX_STATUS;
   file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_MAX;
+  backup_file_status_ = ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE;
   path_.reset();
+}
+
+bool ObBackupArchivePieceTaskAttr::Key::is_pkey_valid() const
+{
+  return is_user_tenant(tenant_id_) && job_id_ > 0 && round_id_ > 0 && piece_id_ > 0;
+}
+
+void ObBackupArchivePieceTaskAttr::Key::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  job_id_ = 0;
+  round_id_ = 0;
+  piece_id_ = 0;
+}
+
+ObBackupArchivePieceTaskAttr::ObBackupArchivePieceTaskAttr()
+  : key_(),
+    archive_dest_id_(0),
+    task_status_(ObBackupTaskStatus::INIT),
+    svr_addr_(),
+    task_trace_id_(),
+    retry_cnt_(0),
+    result_(OB_SUCCESS)
+{
+}
+
+bool ObBackupArchivePieceTaskAttr::is_valid() const
+{
+  return key_.is_pkey_valid()
+      && archive_dest_id_ > 0
+      && task_status_.is_valid()
+      && retry_cnt_ >= 0;
+}
+
+int ObBackupArchivePieceTaskAttr::assign(const ObBackupArchivePieceTaskAttr &other)
+{
+  int ret = OB_SUCCESS;
+  key_ = other.key_;
+  archive_dest_id_ = other.archive_dest_id_;
+  task_status_ = other.task_status_;
+  svr_addr_ = other.svr_addr_;
+  task_trace_id_ = other.task_trace_id_;
+  retry_cnt_ = other.retry_cnt_;
+  result_ = other.result_;
+  return ret;
+}
+
+void ObBackupArchivePieceTaskAttr::reset()
+{
+  key_.reset();
+  archive_dest_id_ = 0;
+  task_status_.status_ = ObBackupTaskStatus::MAX_STATUS;
+  svr_addr_.reset();
+  task_trace_id_.reset();
+  retry_cnt_ = 0;
+  result_ = OB_SUCCESS;
 }
 
 /**

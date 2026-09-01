@@ -5704,11 +5704,14 @@ public:
     tenant_id_(0),
     ls_id_(),
     src_server_(),
-    result_(OB_SUCCESS) {}
+    result_(OB_SUCCESS),
+    round_id_(0),
+    piece_id_(0) {}
 public:
   bool is_valid() const;
   int assign(const ObBackupTaskRes &res);
-  TO_STRING_KV(K_(task_id), K_(job_id), K_(tenant_id), K_(src_server), K_(ls_id), K_(result), K_(trace_id), K_(dag_id));
+  TO_STRING_KV(K_(task_id), K_(job_id), K_(tenant_id), K_(src_server), K_(ls_id), K_(result),
+      K_(trace_id), K_(dag_id), K_(round_id), K_(piece_id));
 public:
   int64_t task_id_;
   int64_t job_id_;
@@ -5718,7 +5721,39 @@ public:
   int result_;
   share::ObTaskId trace_id_;
   share::ObTaskId dag_id_;
+  int64_t round_id_; // only used for backup archive task
+  int64_t piece_id_; // only used for backup archive task
 };
+
+struct ObNotifyBackupArchiveArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyBackupArchiveArg()
+    : trace_id_(),
+      job_id_(0),
+      tenant_id_(0),
+      archive_dest_id_(0),
+      round_id_(0),
+      piece_id_(0),
+      dst_server_(),
+      backup_path_()
+  {}
+public:
+  bool is_valid() const;
+  int assign(const ObNotifyBackupArchiveArg &arg);
+  TO_STRING_KV(K_(trace_id), K_(job_id), K_(tenant_id), K_(archive_dest_id), K_(round_id), K_(piece_id), K_(dst_server), K_(backup_path));
+public:
+  share::ObTaskId trace_id_;
+  int64_t job_id_;
+  uint64_t tenant_id_;
+  int64_t archive_dest_id_;
+  int64_t round_id_;
+  int64_t piece_id_;
+  common::ObAddr dst_server_;
+  share::ObBackupPathString backup_path_;
+};
+
 struct ObBackupDataArg
 {
   OB_UNIS_VERSION(1);
@@ -10773,6 +10808,22 @@ public:
   bool enable_;
   uint64_t tenant_id_;
   common::ObSArray<uint64_t> archive_tenant_ids_;
+};
+
+struct ObBackupArchiveLogAllArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupArchiveLogAllArg()
+    : tenant_id_(OB_INVALID_TENANT_ID), archive_tenant_ids_(), description_(), delete_input_(false)
+  {}
+  int assign(const ObBackupArchiveLogAllArg &other);
+  bool is_valid() const { return OB_INVALID_TENANT_ID != tenant_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(archive_tenant_ids), K_(description), K_(delete_input));
+  uint64_t tenant_id_;
+  common::ObSArray<uint64_t> archive_tenant_ids_;
+  share::ObBackupDescription description_;
+  bool delete_input_;
 };
 
 struct ObBackupValidateArg final

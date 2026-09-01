@@ -96,34 +96,49 @@ int ObLogRestoreSourceMgr::add_service_source(const SCN &recovery_until_scn,
 }
 
 int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
-    const ObString &archive_dest, const int64_t recover_delay_us)
+    const ObString &archive_dest, const int64_t recover_delay_us, const ObString &backup_archive_dest)
 {
   int ret = OB_SUCCESS;
   ObBackupDest dest;
   char dest_buf[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
+  ObSqlString location_value;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreSourceMgr not init", K(ret), K(is_inited_));
   } else if (OB_UNLIKELY(archive_dest.empty() || !recovery_until_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(archive_dest), K(recovery_until_scn));
-  } else if (OB_FAIL(dest.set(archive_dest.ptr()))) {
+  } else if (OB_FAIL(dest.set(archive_dest))) {
     // use backup dest to manage oss key
     LOG_WARN("set backup dest failed", K(ret), K(archive_dest));
   } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, sizeof(dest_buf)))) {
     // store primary cluster id and tenant id in log restore source
     LOG_WARN("get backup dest str with primary attr failed", K(ret), K(dest));
-  } else {
+  } else if (OB_FAIL(location_value.assign(dest_buf))) {
+    LOG_WARN("assign location value failed", K(ret), K(dest_buf));
+  } else if (backup_archive_dest.empty()) {
+    // do nothing
+  } else if (OB_FAIL(dest.set(backup_archive_dest))) {
+    LOG_WARN("set backup archive dest failed", K(ret), K(backup_archive_dest));
+  } else if (OB_FAIL(dest.get_backup_dest_str(dest_buf, sizeof(dest_buf)))) {
+    LOG_WARN("get backup archive dest str failed", K(ret), K(dest));
+  } else if (OB_FAIL(location_value.append(","))) {
+    LOG_WARN("append comma failed", K(ret));
+  } else if (OB_FAIL(location_value.append(dest_buf))) {
+    LOG_WARN("append backup archive dest failed", K(ret), K(dest_buf));
+  }
+
+  if (OB_SUCC(ret)) {
     ObLogRestoreSourceItem item(tenant_id_,
                                 OB_DEFAULT_LOG_RESTORE_SOURCE_ID,
                                 ObLogRestoreSourceType::LOCATION,
-                                ObString(dest_buf),
+                                ObString(location_value.ptr()),
                                 recovery_until_scn,
                                 recover_delay_us);
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest), K(recover_delay_us));
+      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest), K(backup_archive_dest), K(recover_delay_us));
     }
   }
   return ret;
@@ -210,14 +225,31 @@ int ObLogRestoreSourceMgr::get_source_for_update(ObLogRestoreSourceItem &item, c
   return ret;
 }
 
-int ObLogRestoreSourceMgr::get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest &dest)
+int ObLogRestoreSourceMgr::get_backup_dest(
+    const ObLogRestoreSourceItem &item,
+    ObBackupDest &archive_dest,
+    ObBackupDest &backup_archive_dest)
 {
   int ret = OB_SUCCESS;
+  archive_dest.reset();
+  backup_archive_dest.reset();
+
   if (OB_UNLIKELY(! item.is_valid() || ! is_location_log_source_type(item.type_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(item));
-  } else if OB_FAIL(dest.set(item.value_)) {
-    LOG_WARN("backup dest set failed", K(ret), K(item));
+  } else {
+    // value can be "<archive_dest>" or "<archive_dest>,<backup_archive_dest>"
+    ObString value = item.value_;
+    ObString archive_dest_str = value.split_on(',');
+    if (archive_dest_str.empty()) { // only has archive dest
+      if (OB_FAIL(archive_dest.set(item.value_))) {
+        LOG_WARN("archive dest set failed", K(ret), K(item));
+      }
+    } else if (OB_FAIL(archive_dest.set(archive_dest_str))) {
+      LOG_WARN("primary backup dest set failed", K(ret), K(archive_dest_str));
+    } else if (OB_FAIL(backup_archive_dest.set(value))) {
+      LOG_WARN("backup archive dest set failed", K(ret), K(value));
+    }
   }
   return ret;
 }

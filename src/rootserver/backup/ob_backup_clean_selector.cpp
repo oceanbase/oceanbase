@@ -577,6 +577,30 @@ int ObBackupDeleteSelector::get_delete_backup_piece_infos(
   return ret;
 }
 
+int ObBackupDeleteSelector::get_backed_up_archive_pieces_to_delete(
+    ObIArray<ObTenantArchivePieceAttr> &piece_list)
+{
+  int ret = OB_SUCCESS;
+  piece_list.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
+  } else if (OB_ISNULL(archive_helper_) || OB_ISNULL(sql_proxy_) || OB_ISNULL(job_attr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("archive_helper_ or sql_proxy_ or job_attr_ is null", K(ret));
+  } else if (OB_UNLIKELY(job_attr_->dest_id_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dest id", K(ret), "dest_id", job_attr_->dest_id_);
+  } else if (OB_FAIL(archive_helper_->get_backed_up_frozen_pieces(*sql_proxy_, job_attr_->dest_id_, piece_list))) {
+    LOG_WARN("failed to get backed up frozen pieces", K(ret), "dest_id", job_attr_->dest_id_);
+  } else if (OB_FAIL(check_piece_dependency_(piece_list))) {
+    LOG_WARN("failed to check piece dependency for delete input", K(ret));
+  } else {
+    LOG_INFO("success to get backed up frozen pieces", K(ret), K(piece_list));
+  }
+  return ret;
+}
+
 // Initial filtering of user-requested archivelog pieces and grouping by dest_id
 int ObBackupDeleteSelector::get_candidate_pieces_(
     BackupGroupedPiece &candidate_data,
@@ -1277,11 +1301,14 @@ int ObBackupDeleteSelector::get_all_pieces_or_sets_in_dest_(
   return ret;
 }
 
-int ObBackupDeleteSelector::get_delete_obsolete_infos(ObIArray<ObBackupSetFileDesc> &set_list,
-                         ObIArray<ObTenantArchivePieceAttr> &piece_list)
+int ObBackupDeleteSelector::get_delete_obsolete_infos(
+    ObIArray<ObBackupSetFileDesc> &set_list,
+    ObIArray<ObTenantArchivePieceAttr> &piece_list,
+    ObIArray<ObTenantArchivePieceAttr> &archive_piece_list)
 {
   int ret = OB_SUCCESS;
   ObBackupSetFileDesc clog_data_clean_point;
+  SCN archive_clean_point;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
@@ -1290,15 +1317,89 @@ int ObBackupDeleteSelector::get_delete_obsolete_infos(ObIArray<ObBackupSetFileDe
       LOG_WARN("failed to get delete obsolete backup set infos", K(ret));
     } else if (OB_FAIL(get_delete_obsolete_backup_piece_infos_(clog_data_clean_point, piece_list))) {
       LOG_WARN("failed to get delete obsolete backup piece infos", K(ret));
+    } else if (OB_FAIL(get_delete_obsolete_backup_archive_piece_infos_(clog_data_clean_point.start_replay_scn_, piece_list, false, archive_piece_list))) {
+      LOG_WARN("failed to get delete obsolete backup archive piece infos", K(ret));
     }
   } else if (ObBackupDestType::DEST_TYPE_ARCHIVE_LOG == job_attr_->backup_path_type_) {// auto delete policy: log_only
-    if (OB_FAIL(get_delete_obsolete_backup_piece_infos_log_only_(job_attr_->expired_time_, piece_list))) {
+    if (OB_FAIL(get_delete_obsolete_backup_piece_infos_log_only_(job_attr_->expired_time_, piece_list, archive_clean_point))) {
       LOG_WARN("failed to get delete obsolete backup piece infos", K(ret));
+    } else if (OB_FAIL(get_delete_obsolete_backup_archive_piece_infos_(archive_clean_point, piece_list, true, archive_piece_list))) {
+      LOG_WARN("failed to get delete obsolete backup archive piece infos", K(ret));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unsupported backup path type", K(ret), K(job_attr_->backup_path_type_));
   }
+  return ret;
+}
+
+int ObBackupDeleteSelector::get_delete_obsolete_backup_archive_piece_infos_(
+    const SCN &clog_data_clean_point,
+    const ObIArray<ObTenantArchivePieceAttr> &deletable_source_pieces,
+    const bool is_log_only,
+    ObIArray<ObTenantArchivePieceAttr> &archive_piece_list)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString backup_archive_path;
+  ObBackupDest backup_archive_dest;
+  ObArray<std::pair<int64_t, int64_t>> dest_array;
+  ObArray<ObTenantArchivePieceAttr> candidate_pieces;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
+  } else if (!clog_data_clean_point.is_valid()) {
+    LOG_INFO("[BACKUP_CLEAN]no valid archive clean point, skip", K(clog_data_clean_point));
+  } else if (OB_FAIL(archive_helper_->get_backup_archive_dest(*sql_proxy_, false /*need_lock*/, backup_archive_path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("[BACKUP_CLEAN]no backup archive dest, skip", KPC(job_attr_));
+    } else {
+      LOG_WARN("failed to get backup archive dest", K(ret), KPC(job_attr_));
+    }
+  } else if (backup_archive_path.is_empty()) {
+    LOG_INFO("[BACKUP_CLEAN]get empty backup archive path, skip", KPC(job_attr_));
+  } else if (OB_FAIL(backup_archive_dest.set_storage_path(backup_archive_path.str()))) {
+    LOG_WARN("failed to parse backup archive dest", K(ret), KPC(job_attr_));
+  } else if (OB_FAIL(backup_archive_dest.get_backup_path_str(backup_archive_path.ptr(), backup_archive_path.capacity()))) {
+    LOG_WARN("failed to get normalized backup archive path", K(ret), K(backup_archive_dest));
+  } else if (OB_FAIL(archive_helper_->get_valid_dest_pairs(*sql_proxy_, dest_array))) {
+    LOG_WARN("failed to get valid archive dest pairs", K(ret));
+  } else if (0 == dest_array.count()) {
+    LOG_INFO("[BACKUP_CLEAN]no valid archive dest, skip", KPC(job_attr_));
+  } else if (1 != dest_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected dest array count", K(ret), K(dest_array));
+  } else if (OB_FAIL(archive_helper_->get_candidate_obsolete_backup_archive_pieces(*sql_proxy_,
+                                                                                   clog_data_clean_point,
+                                                                                   dest_array.at(0).second,
+                                                                                   candidate_pieces))) {
+    LOG_WARN("failed to get candidate backup archive pieces", K(ret), K(clog_data_clean_point), K(dest_array));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < candidate_pieces.count(); ++i) {
+    ObTenantArchivePieceAttr &cur_piece = candidate_pieces.at(i);
+    bool can_delete = false;
+    if (!is_log_only) {
+      can_delete = true; // no need to check dependency, delete directly
+    } else if (ObBackupFileStatus::BACKUP_FILE_DELETING == cur_piece.file_status_
+            || ObBackupFileStatus::BACKUP_FILE_DELETED == cur_piece.file_status_) {
+      can_delete = true; // the piece has been deleted on log_archive_dest, delete directly
+    }
+
+    // if piece exists in deletable_source_pieces, it can be deleted safely
+    for (int64_t j = 0; !can_delete && j < deletable_source_pieces.count(); ++j) {
+      can_delete = cur_piece.key_ == deletable_source_pieces.at(j).key_;
+    }
+
+    if (!can_delete) {
+      LOG_INFO("cur backup archive piece cannot be deleted, skip", K(is_log_only), K(cur_piece));
+    } else if (OB_FAIL(cur_piece.set_path(backup_archive_path))) {
+      LOG_WARN("failed to set backup archive path", K(ret), K(backup_archive_path), K(cur_piece));
+    } else if (OB_FAIL(archive_piece_list.push_back(cur_piece))) {
+      LOG_WARN("failed to push back backup archive piece", K(ret), K(cur_piece));
+    }
+  }
+  LOG_INFO("[BACKUP_CLEAN]finish get delete obsolete backup archive piece infos", K(ret), K(is_log_only), K(archive_piece_list));
   return ret;
 }
 
@@ -1636,12 +1737,14 @@ int ObBackupDeleteSelector::check_piece_dependency_(
   return ret;
 }
 
-int ObBackupDeleteSelector::get_delete_obsolete_backup_piece_infos_log_only_(int64_t expired_time,
-                                            ObIArray<ObTenantArchivePieceAttr> &piece_list) {
+int ObBackupDeleteSelector::get_delete_obsolete_backup_piece_infos_log_only_(
+    int64_t expired_time,
+    ObIArray<ObTenantArchivePieceAttr> &piece_list,
+    SCN &clog_data_clean_point)
+{
   int ret = OB_SUCCESS;
   CompareBackupPieceInfo backup_piece_info_cmp;
   ObArray<ObTenantArchivePieceAttr> backup_piece_infos;
-  SCN clog_data_clean_point;
   // check current writing dest backup set dest is not valid
   ObBackupPathString backup_dest_str;
   ObBackupHelper backup_helper;

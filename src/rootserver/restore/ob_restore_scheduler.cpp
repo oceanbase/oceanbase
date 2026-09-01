@@ -1085,6 +1085,9 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
     } else if (1 == log_path_array.count()
       && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str()))) {
       LOG_WARN("failed to add log restore source", KR(ret), K(job_info), K(log_path_array));
+    } else if (2 == log_path_array.count()
+      && OB_FAIL(restore_source_mgr.add_location_source(job_info.get_restore_scn(), log_path_array.at(0).str(), 0, log_path_array.at(1).str()))) {
+      LOG_WARN("failed to add dual-dest log restore source", KR(ret), K(job_info), K(log_path_array));
     } else if (0 == log_path_array.count()) /*add restore source*/ {
       DirArray piece_dir_array;
       const common::ObSArray<share::ObBackupPiecePath> piece_array = job_info.get_multi_restore_path_list().get_backup_piece_path_list();

@@ -290,7 +290,8 @@ private:
       int64_t &file_id,
       int64_t &file_offset,
       palf::LSN &lsn,
-      share::ObBackupPath &piece_path);
+      share::ObBackupPath &piece_path,
+      const share::ObBackupDest *&piece_dest);
   void cal_read_size_(const int64_t dest_id,
       const int64_t round_id,
       const int64_t piece_id,

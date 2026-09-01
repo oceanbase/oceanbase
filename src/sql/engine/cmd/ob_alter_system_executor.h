@@ -136,6 +136,7 @@ DEF_SIMPLE_EXECUTOR(ObDeletePolicy);
 DEF_SIMPLE_EXECUTOR(ObBackupKey);
 DEF_SIMPLE_EXECUTOR(ObBackupClusterParam);
 DEF_SIMPLE_EXECUTOR(ObBackupBackupset);
+DEF_SIMPLE_EXECUTOR(ObBackupArchiveLogAll);
 DEF_SIMPLE_EXECUTOR(ObBackupArchiveLog);
 DEF_SIMPLE_EXECUTOR(ObBackupBackupPiece);
 DEF_SIMPLE_EXECUTOR(ObBackupSetEncryption);

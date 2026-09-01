@@ -353,7 +353,7 @@ int ObLogRestoreHandler::add_source(logservice::DirArray &array, const SCN &end_
   return ret;;
 }
 
-int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const SCN &end_scn)
+int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, share::ObBackupDest &backup_dest, const SCN &end_scn)
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
@@ -371,11 +371,18 @@ int ObLogRestoreHandler::add_source(share::ObBackupDest &dest, const SCN &end_sc
   } else {
     ObRemoteLocationParent *source = static_cast<ObRemoteLocationParent *>(parent_);
     const bool source_exist = source->is_valid();
-    if (OB_FAIL(source->set(dest, end_scn))) {
+    if (backup_dest.is_valid()) {
+      if (OB_FAIL(source->set(dest, backup_dest, end_scn))) {
+        CLOG_LOG(WARN, "ObRemoteLocationParent set failed", K(ret), K(end_scn), K(dest), K(backup_dest));
+        ObResSrcAlloctor::free(parent_);
+        parent_ = NULL;
+      }
+    } else if (OB_FAIL(source->set(dest, end_scn))) {
       CLOG_LOG(WARN, "ObRemoteLocationParent set failed", K(ret), K(end_scn), K(dest));
       ObResSrcAlloctor::free(parent_);
       parent_ = NULL;
-    } else if (! source_exist) {
+    }
+    if (OB_SUCC(ret) && !source_exist) {
       context_.set_issue_version();
     }
   }

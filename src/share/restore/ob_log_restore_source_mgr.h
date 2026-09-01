@@ -47,8 +47,9 @@ public:
   // 2. oss example
   // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
   // 3. cos example
+  // if exists backup_archive_dest, LOCATION will be "archive_dest,backup_archive_dest"
   int add_location_source(const SCN &recovery_until_scn, const ObString &archive_dest,
-                          const int64_t recover_delay_us = 0);
+                          const int64_t recover_delay_us = 0, const ObString &backup_archive_dest = ObString());
   // add source with raw pieces
   int add_rawpath_source(const SCN &recovery_until_scn, const DirArray &array);
 
@@ -63,7 +64,9 @@ public:
 
   int get_source_for_update(ObLogRestoreSourceItem &item, common::ObMySQLTransaction &trans);
 
-  static int get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest& dest);
+  // if backup_archive_dest is not exist, the return param will be invalid
+  static int get_backup_dest(const ObLogRestoreSourceItem &item, ObBackupDest &archive_dest,
+                             ObBackupDest &backup_archive_dest);
   static int64_t get_default_log_restore_source_id() { return OB_DEFAULT_LOG_RESTORE_SOURCE_ID; }
 private:
   static const int64_t OB_DEFAULT_LOG_RESTORE_SOURCE_ID;

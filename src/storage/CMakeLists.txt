@@ -340,6 +340,7 @@ ob_set_subtarget(ob_storage restore
 )
 
 ob_set_subtarget(ob_storage backup
+  backup/ob_backup_archive_piece_copier.cpp
   backup/ob_backup_block_file_reader_writer.cpp
   backup/ob_backup_ctx.cpp
   backup/ob_backup_data_store.cpp

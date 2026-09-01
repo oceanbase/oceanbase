@@ -1241,6 +1241,7 @@ int ObLS::register_sys_service()
     REGISTER_TO_LOGSERVICE(BACKUP_TASK_SCHEDULER_LOG_BASE_TYPE, MTL(ObBackupTaskScheduler *));
     REGISTER_TO_LOGSERVICE(BACKUP_DATA_SERVICE_LOG_BASE_TYPE, MTL(ObBackupDataService *));
     REGISTER_TO_LOGSERVICE(BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE, MTL(ObBackupMgrService *));
+    REGISTER_TO_LOGSERVICE(BACKUP_ARCHIVE_JOB_SERVICE_LOG_BASE_TYPE, MTL(ObBackupArchiveService *));
     REGISTER_TO_LOGSERVICE(BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, MTL(ObArchiveSchedulerService *));
     REGISTER_TO_LOGSERVICE(COMMON_LS_SERVICE_LOG_BASE_TYPE, MTL(ObCommonLSService *));
     REGISTER_TO_LOGSERVICE(DISASTER_RECOVERY_SERVICE_LOG_BASE_TYPE, MTL(ObDRService *));
@@ -1432,6 +1433,8 @@ void ObLS::unregister_sys_service_()
     UNREGISTER_FROM_LOGSERVICE(BACKUP_DATA_SERVICE_LOG_BASE_TYPE, backup_data_service);
     ObBackupMgrService* backup_clean_service = MTL(ObBackupMgrService*);
     UNREGISTER_FROM_LOGSERVICE(BACKUP_CLEAN_SERVICE_LOG_BASE_TYPE, backup_clean_service);
+    ObBackupArchiveService* backup_archive_job_service = MTL(ObBackupArchiveService*);
+    UNREGISTER_FROM_LOGSERVICE(BACKUP_ARCHIVE_JOB_SERVICE_LOG_BASE_TYPE, backup_archive_job_service);
     ObArchiveSchedulerService* backup_archive_service = MTL(ObArchiveSchedulerService*);
     UNREGISTER_FROM_LOGSERVICE(BACKUP_ARCHIVE_SERVICE_LOG_BASE_TYPE, backup_archive_service);
     ObCommonLSService *ls_service = MTL(ObCommonLSService*);

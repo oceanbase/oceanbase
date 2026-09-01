@@ -124,6 +124,22 @@ int ObBackupServiceProxy::handle_archive_log(const obrpc::ObArchiveLogArg &arg)
   return ret;
 }
 
+int ObBackupServiceProxy::handle_backup_archive_log_all(const obrpc::ObBackupArchiveLogAllArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObBackupArchiveService *backup_service = nullptr;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
+    LOG_WARN("failed to switch to sys tenant", K(ret));
+  } else if (OB_ISNULL(backup_service = MTL(ObBackupArchiveService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup service must not be nullptr", K(ret));
+  } else if (OB_FAIL(backup_service->handle_backup_archive_log_all(arg))) {
+    LOG_WARN("failed handle backup archive log all", K(ret));
+  }
+  return ret;
+}
+
 int ObBackupServiceProxy::handle_backup_validate(const obrpc::ObBackupValidateArg &arg)
 {
   int ret = OB_SUCCESS;

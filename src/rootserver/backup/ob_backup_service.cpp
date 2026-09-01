@@ -15,6 +15,8 @@
 #include "ob_backup_service.h"
 #include "src/rootserver/backup/ob_backup_base_service.h"
 #include "ob_backup_task_scheduler.h"
+#include "share/ob_share_util.h"
+#include "observer/omt/ob_multi_tenant.h"
 
 namespace oceanbase 
 {
@@ -225,6 +227,118 @@ int ObBackupDataService::handle_backup_database_cancel(const uint64_t tenant_id,
 }
 
 /*
+*----------------------------- ObBackupArchiveService -----------------------------
+*/
+
+int ObBackupArchiveService::sub_init(
+    common::ObMySQLProxy &sql_proxy,
+    obrpc::ObSrvRpcProxy &rpc_proxy,
+    schema::ObMultiVersionSchemaService &schema_service,
+    share::ObLocationService &loacation_service,
+    ObBackupTaskScheduler &task_scheduler)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = MTL_ID();
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup archive service already inited", K(ret));
+  } else if (OB_FAIL(backup_archive_scheduler_.init(
+      tenant_id, sql_proxy, rpc_proxy, schema_service, task_scheduler, *this))) {
+    LOG_WARN("fail to init backup archive scheduler", K(ret));
+  } else if (OB_FAIL(create("BackupArchiveSrv", *this, ObWaitEventIds::BACKUP_ARCHIVE_JOB_SERVICE_COND_WAIT))) {
+    LOG_WARN("failed to create backup archive service", K(ret));
+  } else {
+    LOG_INFO("ObBackupArchiveService init", K(tenant_id));
+  }
+  return ret;
+}
+
+int ObBackupArchiveService::process(int64_t &last_schedule_ts)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(last_schedule_ts);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(backup_archive_scheduler_.process())) {
+    LOG_WARN("failed to process backup archive", K(ret));
+  }
+  return ret;
+}
+
+ObIBackupJobScheduler *ObBackupArchiveService::get_scheduler(const BackupJobType &type)
+{
+  ObIBackupJobScheduler *ptr = nullptr;
+  if (BackupJobType::BACKUP_ARCHIVE_JOB == type) {
+    ptr = &backup_archive_scheduler_;
+  }
+  return ptr;
+}
+
+int ObBackupArchiveService::get_need_reload_task(
+    common::ObIAllocator &allocator,
+    common::ObIArray<ObBackupScheduleTask *> &tasks)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_FAIL(backup_archive_scheduler_.get_need_reload_task(allocator, tasks))) {
+    LOG_WARN("failed to get backup archive need reload task", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupArchiveService::handle_backup_archive_log_all(const obrpc::ObBackupArchiveLogAllArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> tenant_ids;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (!is_sys_tenant(arg.tenant_id_)) {
+    if (OB_FAIL(tenant_ids.push_back(arg.tenant_id_))) {
+      LOG_WARN("failed to push back tenant id", K(ret), K(arg));
+    }
+  } else if (OB_UNLIKELY(arg.archive_tenant_ids_.empty())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("sys tenant must specify tenant names for backup archivelog all", K(ret), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sys tenant cannot do backup archivelog all.");
+  } else if (OB_FAIL(tenant_ids.assign(arg.archive_tenant_ids_))) {
+    LOG_WARN("failed to assign tenant ids", K(ret), K(arg));
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); ++i) {
+    const uint64_t target_tenant_id = tenant_ids.at(i);
+    if (OB_FAIL(backup_archive_scheduler_.add_job(target_tenant_id, arg))) {
+      LOG_WARN("failed to add backup archive job", K(ret), K(target_tenant_id), K(arg));
+    } else {
+      FLOG_INFO("success to start backup archive log", K(arg), K(target_tenant_id));
+
+      // speed up the backup archive process, should ignore the ret code
+      // the archive job service runs on the meta tenant (see ObLS::register_sys_service),
+      // so wake up the meta tenant instance that actually drives the job
+      const uint64_t exec_tenant_id = gen_meta_tenant_id(target_tenant_id);
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+      ObBackupArchiveService *backup_service = nullptr;
+      if (OB_TMP_FAIL(guard.switch_to(exec_tenant_id))) {
+        LOG_WARN("failed to switch tenant for wakeup", K(tmp_ret), K(target_tenant_id), K(exec_tenant_id));
+      } else if (OB_ISNULL(backup_service = MTL(ObBackupArchiveService *))) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("backup service must not be nullptr", K(tmp_ret), K(target_tenant_id));
+      } else {
+        backup_service->wakeup();
+      }
+    }
+  }
+  return ret;
+}
+
+/*
 *----------------------------- ObBackupMgrService -----------------------------
 */
 
@@ -330,10 +444,11 @@ int ObBackupMgrService::handle_backup_delete(const obrpc::ObBackupCleanArg &arg)
       }
       break;
     };
-    case ObNewBackupCleanType::DELETE_BACKUP_SET: 
+    case ObNewBackupCleanType::DELETE_BACKUP_SET:
     case ObNewBackupCleanType::DELETE_BACKUP_PIECE:
     case ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP:
-    case ObNewBackupCleanType::DELETE_BACKUP_ALL: {
+    case ObNewBackupCleanType::DELETE_BACKUP_ALL:
+    case ObNewBackupCleanType::DELETE_BACKED_UP_ARCHIVE_PIECE: {
       if (OB_FAIL(handle_backup_delete_(arg))) {
         LOG_WARN("failed to handle delete backup obsolete data", K(ret), K(arg));
       }
@@ -429,7 +544,8 @@ int ObBackupMgrService::handle_backup_delete_(const obrpc::ObBackupCleanArg &arg
   } else if (ObNewBackupCleanType::DELETE_BACKUP_SET != arg.type_
              && ObNewBackupCleanType::DELETE_BACKUP_PIECE != arg.type_
              && ObNewBackupCleanType::DELETE_OBSOLETE_BACKUP != arg.type_
-             && ObNewBackupCleanType::DELETE_BACKUP_ALL != arg.type_) {
+             && ObNewBackupCleanType::DELETE_BACKUP_ALL != arg.type_
+             && ObNewBackupCleanType::DELETE_BACKED_UP_ARCHIVE_PIECE != arg.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup delete arg type is not supported", K(ret), K(arg));
   } else if (OB_FAIL(backup_clean_scheduler_.start_schedule_backup_clean(arg))) {

@@ -76,7 +76,8 @@ static const char *new_backup_clean_type_str[] = {
     "DELETE BACKUP ALL",
     "DELETE OBSOLETE BACKUP",
     "DELETE OBSOLETE BACKUP BACKUP",
-    "CANCEL DELETE"
+    "CANCEL DELETE",
+    "DELETE BACKED UP ARCHIVELOG PIECE"
 };
 
 const char *ObNewBackupCleanType::get_str(const TYPE &type)
@@ -110,6 +111,7 @@ static const char *backup_clean_task_type_str[] = {
     "BACKUP SET",
     "BACKUP PIECE",
     "BACKUP COMPLEMENT LOG",
+    "BACKUP ARCHIVE PIECE",
 };
 
 const char *ObBackupCleanTaskType::get_str(const TYPE &type)
@@ -260,6 +262,12 @@ bool ObBackupCleanJobAttr::is_valid() const
         }
         break;
     }
+    case ObNewBackupCleanType::DELETE_BACKED_UP_ARCHIVE_PIECE: {
+        if (dest_id_ <= 0) {
+          is_valid = false;
+        }
+        break;
+    }
     case ObNewBackupCleanType::DELETE_BACKUP_SET: {
         if (backup_set_ids_.count() <= 0) {
           is_valid = false;
@@ -335,6 +343,11 @@ int ObBackupCleanJobAttr::set_clean_parameter(const ObIArray<int64_t> &parameter
     }
   } else if (is_delete_backup_all()) {
     // do nothing
+  } else if (is_delete_backed_up_archive_piece()) {
+    // dest_id_ is persisted via the clean parameter column; so restore it on reload.
+    if (parameter_list.count() >= 1) {
+      dest_id_ = parameter_list.at(0);
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup clean info is invalid, can not set parameter", K(ret), K(*this), K(parameter_list));
@@ -391,7 +404,7 @@ int ObBackupCleanJobAttr::get_parameter_list_str(char *buffer, int64_t buffer_si
     if (OB_FAIL(ObBackupCleanUtil::format_int64_list(backup_piece_ids_, buffer, buffer_size, pos))) {
       LOG_WARN("failed to format backup piece ids", K(ret));
     }
-  } else if (is_delete_backup_all()) {
+  } else if (is_delete_backup_all() || is_delete_backed_up_archive_piece()) {
     if (OB_FAIL(databuff_printf(buffer, buffer_size, pos, "%ld", dest_id_))) {
       LOG_WARN("fail to print dest id", K(ret));
     }

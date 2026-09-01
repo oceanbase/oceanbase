@@ -2111,6 +2111,8 @@ const char *ObBackupType::get_backup_type_str() const
     "",
     "FULL",
     "INC",
+    "BACKUP_ARCHIVE",
+    "BACKUP_ARCHIVE_DELETE_INPUT",
   };
   STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_func_type_strs), "types count mismatch");
   if (type_ < 0 || type_ >= MAX) {
@@ -2133,6 +2135,8 @@ int ObBackupType::set_backup_type(
       "",
       "FULL",
       "INC",
+      "BACKUP_ARCHIVE",
+      "BACKUP_ARCHIVE_DELETE_INPUT",
     };
     BackupType tmp_type = MAX;
     STATIC_ASSERT(MAX == ARRAYSIZEOF(backup_func_type_strs), "types count mismatch");
@@ -2615,27 +2619,26 @@ int ObBackupUtils::check_is_tmp_file(const common::ObString &file_name, bool &is
   return ret;
 }
 
-int ObBackupUtils::get_backup_dest_id(const uint64_t tenant_id, int64_t &dest_id)
+int ObBackupUtils::get_backup_dest_id(
+    const uint64_t tenant_id,
+    const ObBackupPathString &backup_dest_str,
+    int64_t &dest_id)
 {
   int ret = OB_SUCCESS;
-  share::ObBackupHelper backup_helper;
-  ObBackupPathString backup_dest_str;
-  char extension[OB_MAX_BACKUP_EXTENSION_LENGTH] = {0};
-  char backup_path[OB_MAX_BACKUP_DEST_LENGTH] = {0};
-  ObBackupDest dest;
+  ObBackupDest backup_dest;
   uint64_t user_tenant_id = gen_user_tenant_id(tenant_id);
   ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   if (OB_ISNULL(sql_proxy)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy is NULL", K(ret), KP(sql_proxy));
-  } else if (OB_FAIL(backup_helper.init(user_tenant_id, *sql_proxy))) {
-    LOG_WARN("fail to init backup help", K(ret));
-  } else if (OB_FAIL(backup_helper.get_backup_dest(backup_dest_str))) {
-    LOG_WARN("fail to get backup dest", K(ret), K(user_tenant_id));
-  } else if (OB_FAIL(dest.set(backup_dest_str.ptr()))) {
-    LOG_WARN("fail to set backup dest", K(ret), K(user_tenant_id));
-  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, user_tenant_id, dest, dest_id))) {
-    LOG_WARN("failed to get backup dest id", K(ret), K(user_tenant_id), K(dest), K(user_tenant_id));
+  } else if (backup_dest_str.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backup dest is empty", K(ret), K(user_tenant_id), K(backup_dest_str));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(
+      *sql_proxy, user_tenant_id, backup_dest_str, backup_dest))) {
+    LOG_WARN("fail to get backup dest", K(ret), K(user_tenant_id), K(backup_dest_str));
+  } else {
+    dest_id = backup_dest.get_storage_info()->get_dest_id();
   }
   return ret;
 }
@@ -2987,7 +2990,8 @@ ObBackupFileStatus::STATUS ObBackupFileStatus::get_status(const char *status_str
 
 int ObBackupFileStatus::check_can_change_status(
     const ObBackupFileStatus::STATUS &src_file_status,
-    const ObBackupFileStatus::STATUS &dest_file_status)
+    const ObBackupFileStatus::STATUS &dest_file_status,
+    const bool for_archive_backup)
 {
   int ret = OB_SUCCESS;
   if (ObBackupFileStatus::BACKUP_FILE_MAX == src_file_status
@@ -3010,9 +3014,10 @@ int ObBackupFileStatus::check_can_change_status(
     case ObBackupFileStatus::BACKUP_FILE_INCOMPLETE : {
       if (ObBackupFileStatus::BACKUP_FILE_COPYING != dest_file_status
           && ObBackupFileStatus::BACKUP_FILE_INCOMPLETE != dest_file_status
-          && ObBackupFileStatus::BACKUP_FILE_DELETING != dest_file_status) {
+          && ObBackupFileStatus::BACKUP_FILE_DELETING != dest_file_status
+          && !(for_archive_backup && ObBackupFileStatus::BACKUP_FILE_AVAILABLE == dest_file_status)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("can not change backup file status", K(ret), K(src_file_status), K(dest_file_status));
+        LOG_WARN("can not change backup file status", K(ret), K(src_file_status), K(dest_file_status), K(for_archive_backup));
       }
       break;
     }
@@ -3657,6 +3662,8 @@ ObHAResultInfo::ObHAResultInfo(
 {
   type_ = type;
   ls_id_ = ls_id;
+  round_id_ = 0;
+  piece_id_ = 0;
   trace_id_ = trace_id;
   addr_ = addr;
   result_ = result;
@@ -3669,6 +3676,24 @@ ObHAResultInfo::ObHAResultInfo(
     const int result)
 {
   type_ = type;
+  round_id_ = 0;
+  piece_id_ = 0;
+  trace_id_ = trace_id;
+  addr_ = addr;
+  result_ = result;
+}
+
+ObHAResultInfo::ObHAResultInfo(
+    const FailedType &type,
+    const int64_t round_id,
+    const int64_t piece_id,
+    const ObAddr &addr,
+    const ObTaskId &trace_id,
+    const int result)
+{
+  type_ = type;
+  round_id_ = round_id;
+  piece_id_ = piece_id;
   trace_id_ = trace_id;
   addr_ = addr;
   result_ = result;
@@ -3683,7 +3708,8 @@ const char *ObHAResultInfo::get_failed_type_str() const
     "RESTORE_CLOG",
     "BACKUP_DATA",
     "BACKUP_CLEAN",
-    "BACKUP_VALIDATE"
+    "BACKUP_VALIDATE",
+    "BACKUP_ARCHIVE"
   };
   if (type_ < ROOT_SERVICE || type_ >= MAX_FAILED_TYPE) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid failed type", K(type_));
@@ -3748,6 +3774,18 @@ int ObHAResultInfo::get_comment_str(Comment &comment) const
         static_cast<int>(OB_MAX_TRACE_ID_BUFFER_SIZE), trace_id))) {
       LOG_WARN("failed to fill comment", K(ret));
     }
+  } else if (BACKUP_ARCHIVE == type_) {
+    if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
+        "(SERVER)round_id: %ld, piece_id: %ld, addr: %.*s, module: %s, result: %d(%s), trace_id: %.*s",
+        round_id_,
+        piece_id_,
+        static_cast<int>(OB_MAX_SERVER_ADDR_SIZE), addr_buf,
+        type,
+        result_,
+        err_code_str,
+        static_cast<int>(OB_MAX_TRACE_ID_BUFFER_SIZE), trace_id))) {
+      LOG_WARN("failed to fill comment", K(ret));
+    }
   } else if (OB_FAIL(databuff_printf(comment.ptr(), comment.capacity(),
       "(SERVER)ls_id: %lu, addr: %.*s, module: %s, result: %d(%s), trace_id: %.*s",
       ls_id_.id(),
@@ -3767,6 +3805,8 @@ int ObHAResultInfo::assign(const ObHAResultInfo &that)
   type_ = that.type_;
   trace_id_ = that.trace_id_;
   ls_id_ = that.ls_id_;
+  round_id_ = that.round_id_;
+  piece_id_ = that.piece_id_;
   addr_ = that.addr_;
   result_ = that.result_;
   return ret;
@@ -5564,6 +5604,7 @@ static const char *type_strs[] = {
     "restore_data",
     "restore_log",
     "backup_validate",
+    "backup_archive_log",
 };
 
 const char *ObBackupDestType::get_str(const TYPE &type)

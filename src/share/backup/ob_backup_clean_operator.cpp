@@ -176,11 +176,12 @@ int ObBackupCleanJobOperator::get_job(
   return ret;
 }
 int ObBackupCleanJobOperator::cnt_jobs(
-    common::ObISQLClient &proxy, 
-    const uint64_t tenant_id, 
-    const uint64_t initiator_tenant_id, 
-    const int64_t initiator_job_id, 
-    int64_t &cnt)
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const uint64_t initiator_tenant_id,
+    const int64_t initiator_job_id,
+    int64_t &cnt,
+    const bool only_unfinished)
 {
   int ret = OB_SUCCESS;
   cnt = 0;
@@ -197,6 +198,8 @@ int ObBackupCleanJobOperator::cnt_jobs(
       } else if (OB_FAIL(sql.append_fmt(" where %s=%lu and %s=%lu and %s=%ld", OB_STR_TENANT_ID, tenant_id,
           OB_STR_INITIATOR_TENANT_ID, initiator_tenant_id, OB_STR_INITIATOR_JOB_ID, initiator_job_id))) {
         LOG_WARN("failed to append fmt", K(ret));
+      } else if (only_unfinished && OB_FAIL(sql.append_fmt(" and %s in ('INIT', 'DOING', 'CANCELING')", OB_STR_STATUS))) {
+        LOG_WARN("failed to append status filter", K(ret));
       } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
         LOG_WARN("failed to exec sql", K(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {

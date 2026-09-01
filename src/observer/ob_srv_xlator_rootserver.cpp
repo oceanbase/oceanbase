@@ -260,6 +260,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcRebuildIndexInRestoreP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObArchiveLogP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObBackupDatabaseP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObBackupArchiveLogAllP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObBackupManageP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObBackupCleanP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObDeletePolicyP, *gctx_.root_service_);

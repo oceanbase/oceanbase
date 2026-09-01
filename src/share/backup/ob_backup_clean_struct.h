@@ -34,6 +34,7 @@ struct ObBackupCleanStatus
   ObBackupCleanStatus(): status_(MAX_STATUS) {}
   virtual ~ObBackupCleanStatus() = default;
   bool is_valid() const;
+  bool is_finish() const { return COMPLETED == status_ || FAILED == status_ || CANCELED == status_; }
   const char* get_str() const;
   int set_status(const char *str);
   TO_STRING_KV(K_(status));
@@ -51,6 +52,7 @@ struct ObNewBackupCleanType final
     DELETE_OBSOLETE_BACKUP = 4,
     DELETE_OBSOLETE_BACKUP_BACKUP = 5,
     CANCEL_DELETE = 6,
+    DELETE_BACKED_UP_ARCHIVE_PIECE = 7,
     MAX,
   };
   static const char *get_str(const TYPE &type);
@@ -73,6 +75,7 @@ struct ObBackupCleanTaskType final
     BACKUP_SET = 0,
     BACKUP_PIECE = 1,
     BACKUP_COMPLEMENT_LOG = 2,
+    BACKUP_ARCHIVE_PIECE = 3,
     MAX,
   };
   static const char *get_str(const TYPE &type);
@@ -113,6 +116,7 @@ public:
   bool is_delete_backup_set() const { return ObNewBackupCleanType::DELETE_BACKUP_SET == clean_type_; }
   bool is_delete_backup_piece() const { return ObNewBackupCleanType::DELETE_BACKUP_PIECE == clean_type_; }
   bool is_delete_backup_all() const { return ObNewBackupCleanType::DELETE_BACKUP_ALL == clean_type_; }
+  bool is_delete_backed_up_archive_piece() const { return ObNewBackupCleanType::DELETE_BACKED_UP_ARCHIVE_PIECE == clean_type_; }
   int set_clean_parameter(const ObString &str);
   int set_clean_parameter(const ObIArray<int64_t> &parameter_list);
   int check_backup_clean_job_match(const ObBackupCleanJobAttr &job_attr) const;
@@ -164,7 +168,9 @@ public:
   void reset(); 
   int assign(const ObBackupCleanTaskAttr &other);
   bool is_delete_backup_set_task() const { return ObBackupCleanTaskType::BACKUP_SET == task_type_; }
-  bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_; }
+  bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_
+                                                 || ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_; }
+  bool is_delete_backup_archive_piece_task() const { return ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_; }
   bool is_succeed_task() const { return result_ == OB_SUCCESS ? true : false; }
   int get_backup_clean_id(int64_t &id) const;
   int set_backup_clean_id(const int64_t id);
@@ -201,7 +207,9 @@ struct ObBackupCleanLSTaskAttr final
   bool is_delete_backup_complement_task() const {
     return ObBackupCleanTaskType::BACKUP_COMPLEMENT_LOG == task_type_;
   }
-  bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_; }
+  bool is_delete_backup_piece_task() const { return ObBackupCleanTaskType::BACKUP_PIECE == task_type_
+                                                 || ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_; }
+  bool is_delete_backup_archive_piece_task() const { return ObBackupCleanTaskType::BACKUP_ARCHIVE_PIECE == task_type_; }
   int assign(const ObBackupCleanLSTaskAttr &other);
   TO_STRING_KV(K_(task_id), K_(tenant_id), K_(ls_id), K_(job_id),  K_(backup_set_id),
       K_(backup_piece_id), K_(round_id), K_(task_type), K_(status), K_(start_ts), K_(end_ts),

@@ -1116,6 +1116,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObBackupArchiveLogStmt, ObBackupArchiveLogExecutor);
         break;
       }
+      case stmt::T_BACKUP_ARCHIVELOG_ALL: {
+        DEFINE_EXECUTE_CMD(ObBackupArchiveLogAllStmt, ObBackupArchiveLogAllExecutor);
+        break;
+      }
       case stmt::T_BACKUP_SET_ENCRYPTION: {
         DEFINE_EXECUTE_CMD(ObBackupSetEncryptionStmt, ObBackupSetEncryptionExecutor);
         break;

@@ -620,6 +620,7 @@ public:
 
   ObArchivePieceStatus status_;
   ObBackupFileStatus::STATUS file_status_;
+  ObBackupFileStatus::STATUS backup_file_status_;
 
   int64_t cp_file_id_;
   int64_t cp_file_offset_;
@@ -638,6 +639,7 @@ public:
     checkpoint_scn_ = share::SCN::min_scn();
     max_scn_ = share::SCN::min_scn();
     end_scn_ = share::SCN::min_scn();
+    backup_file_status_ = ObBackupFileStatus::BACKUP_FILE_INCOMPLETE;
   }
 
   // Return if primary key valid.
@@ -706,7 +708,47 @@ public:
 
   TO_STRING_KV(K_(key), K_(incarnation), K_(dest_no), K_(file_count),
     K_(start_scn), K_(checkpoint_scn), K_(max_scn), K_(end_scn), K_(compatible), K_(input_bytes),
-    K_(output_bytes), K_(status), K_(file_status), K_(cp_file_id), K_(cp_file_offset), K_(path));
+    K_(output_bytes), K_(status), K_(file_status), K_(backup_file_status), K_(cp_file_id), K_(cp_file_offset), K_(path));
+};
+
+
+struct ObBackupArchivePieceTaskAttr final
+{
+  struct Key final
+  {
+  public:
+    uint64_t tenant_id_;
+    int64_t job_id_;
+    int64_t round_id_;
+    int64_t piece_id_;
+
+    Key()
+      : tenant_id_(OB_INVALID_TENANT_ID), job_id_(0), round_id_(0), piece_id_(0)
+    {}
+    Key(const uint64_t tenant_id, const int64_t job_id, const int64_t round_id, const int64_t piece_id)
+      : tenant_id_(tenant_id), job_id_(job_id), round_id_(round_id), piece_id_(piece_id)
+    {}
+
+    void reset();
+    bool is_pkey_valid() const;
+    TO_STRING_KV(K_(tenant_id), K_(job_id), K_(round_id), K_(piece_id));
+  };
+
+public:
+  Key key_;
+  int64_t archive_dest_id_; // log archive dest
+  ObBackupTaskStatus task_status_;
+  common::ObAddr svr_addr_;
+  share::ObTaskId task_trace_id_;
+  int64_t retry_cnt_;
+  int result_;
+
+  ObBackupArchivePieceTaskAttr();
+  bool is_pkey_valid() const { return key_.is_pkey_valid(); }
+  bool is_valid() const;
+  int assign(const ObBackupArchivePieceTaskAttr &other);
+  void reset();
+  TO_STRING_KV(K_(key), K_(archive_dest_id), K_(task_status), K_(svr_addr), K_(task_trace_id), K_(retry_cnt), K_(result));
 };
 
 

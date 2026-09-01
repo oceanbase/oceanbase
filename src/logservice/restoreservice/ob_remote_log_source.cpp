@@ -140,12 +140,14 @@ bool ObRemoteSerivceParent::is_valid() const
 ObRemoteLocationParent::ObRemoteLocationParent(const share::ObLSID &ls_id) :
   ObRemoteLogParent(ObLogRestoreSourceType::LOCATION, ls_id),
   root_path_(),
+  backup_archive_dest_(),
   piece_context_()
 {}
 
 ObRemoteLocationParent::~ObRemoteLocationParent()
 {
   root_path_.reset();
+  backup_archive_dest_.reset();
   piece_context_.reset();
 }
 
@@ -177,6 +179,7 @@ int ObRemoteLocationParent::set(const share::ObBackupDest &dest, const SCN &end_
     }
   } else if (OB_FAIL(root_path_.deep_copy(dest))) {
     CLOG_LOG(WARN, "root path deep copy failed", K(ret), K(dest), KPC(this));
+  } else if (FALSE_IT(backup_archive_dest_.reset())) {
   } else if (OB_FAIL(piece_context_.init(ls_id_, root_path_))) {
     CLOG_LOG(WARN, "piece context init failed", K(ret), KPC(this));
   } else {
@@ -187,12 +190,49 @@ int ObRemoteLocationParent::set(const share::ObBackupDest &dest, const SCN &end_
   return ret;
 }
 
+int ObRemoteLocationParent::set(
+    const share::ObBackupDest &primary_dest,
+    const share::ObBackupDest &backup_dest,
+    const SCN &end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(! primary_dest.is_valid() || ! backup_dest.is_valid() || ! end_scn.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", K(ret), K(end_scn), K(primary_dest), K(backup_dest));
+  } else if (backup_archive_dest_.is_valid() && primary_dest == root_path_ && backup_dest == backup_archive_dest_) {
+    if (end_scn < upper_limit_scn_ && SCN::max_scn() != upper_limit_scn_) {
+      CLOG_LOG(WARN, "fetch log upper_limit_scn rollback", K(ret), K(end_scn), KPC(this));
+    } else if (end_scn == upper_limit_scn_) {
+      // skip
+    } else {
+      const SCN pre_upper_scn = upper_limit_scn_;
+      upper_limit_scn_ = end_scn;
+      to_end_ = end_fetch_scn_ >= upper_limit_scn_;
+      CLOG_LOG(INFO, "upper limit ts increase", K(primary_dest), K(pre_upper_scn), K(end_scn));
+    }
+  } else if (OB_FAIL(root_path_.deep_copy(primary_dest))) {
+    CLOG_LOG(WARN, "root path deep copy failed", K(ret), K(primary_dest), KPC(this));
+  } else if (OB_FAIL(backup_archive_dest_.deep_copy(backup_dest))) {
+    CLOG_LOG(WARN, "backup archive dest deep copy failed", K(ret), K(backup_dest), KPC(this));
+  } else if (OB_FAIL(piece_context_.init(ls_id_, root_path_, backup_archive_dest_))) {
+    CLOG_LOG(WARN, "piece context init failed", K(ret), KPC(this));
+  } else {
+    upper_limit_scn_ = end_scn;
+    to_end_ = end_fetch_scn_ >= upper_limit_scn_;
+    CLOG_LOG(INFO, "add dual-dest location source succ", K(ret), KPC(this));
+  }
+  return ret;
+}
+
 int ObRemoteLocationParent::deep_copy_to(ObRemoteLogParent &other)
 {
   int ret = OB_SUCCESS;
   ObRemoteLocationParent &dst = static_cast<ObRemoteLocationParent &>(other);
   if (OB_FAIL(dst.root_path_.deep_copy(root_path_))) {
     CLOG_LOG(WARN, "root path deep copy failed", K(ret), KPC(this));
+  } else if (FALSE_IT(dst.backup_archive_dest_.reset())) {
+  } else if (backup_archive_dest_.is_valid() && OB_FAIL(dst.backup_archive_dest_.deep_copy(backup_archive_dest_))) {
+    CLOG_LOG(WARN, "backup archive dest deep copy failed", K(ret), KPC(this));
   } else if (OB_FAIL(piece_context_.deep_copy_to(dst.piece_context_))) {
     CLOG_LOG(WARN, "piece context deep copy failed", K(ret), KPC(this));
   } else {

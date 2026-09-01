@@ -51,8 +51,9 @@ public:
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const uint64_t initiator_tenant_id,
-      const int64_t initiator_job_id, 
-      int64_t &cnt);
+      const int64_t initiator_job_id,
+      int64_t &cnt,
+      const bool only_unfinished = false);
   static int cnt_jobs_of_user_tenant(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,

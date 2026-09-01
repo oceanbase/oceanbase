@@ -561,6 +561,8 @@ case OB_ALL_VIRTUAL_ZONE_STORAGE_MYSQL_SYS_AGENT_TID:
 #ifdef ITERATE_PRIVATE_VIRTUAL_TABLE_LOCATION_SWITCH
 
 case OB_ALL_VIRTUAL_AI_MODEL_ENDPOINT_TID:
+case OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_TID:
+case OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID:
 case OB_ALL_VIRTUAL_BACKUP_DELETE_JOB_TID:
 case OB_ALL_VIRTUAL_BACKUP_DELETE_JOB_HISTORY_TID:
 case OB_ALL_VIRTUAL_BACKUP_DELETE_LS_TASK_TID:
@@ -676,6 +678,38 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
         SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
       } else if (OB_FAIL(iter->init(OB_ALL_AI_MODEL_ENDPOINT_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TID, meta_record_in_sys, index_schema, params))) {
+        SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
+        iter->~ObIteratePrivateVirtualTable();
+        allocator.free(iter);
+        iter = NULL;
+      } else {
+       vt_iter = iter;
+      }
+      break;
+    }
+
+    case OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID: {
+      ObIteratePrivateVirtualTable *iter = NULL;
+      const bool meta_record_in_sys = false;
+      if (OB_FAIL(NEW_VIRTUAL_TABLE(ObIteratePrivateVirtualTable, iter))) {
+        SERVER_LOG(WARN, "create iterate private virtual table iterator failed", KR(ret));
+      } else if (OB_FAIL(iter->init(OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID, meta_record_in_sys, index_schema, params))) {
         SERVER_LOG(WARN, "iterate private virtual table iter init failed", KR(ret));
         iter->~ObIteratePrivateVirtualTable();
         allocator.free(iter);
@@ -957,7 +991,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_BACKUP_SKIPPED_TABLET_HISTORY_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -989,9 +1025,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_BACKUP_STORAGE_INFO_HISTORY_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1279,7 +1313,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1311,9 +1347,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_IMPORT_TABLE_TASK_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1601,7 +1635,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_LS_RESTORE_HISTORY_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1633,9 +1669,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_LS_STATUS_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = true;
@@ -1923,7 +1957,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_FLASHBACK_LOG_SCN_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -1955,9 +1991,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_TENANT_PARAMETER_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -2245,7 +2279,9 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
+  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
+  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_SQLTEXT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -2277,9 +2313,7 @@ case OB_ALL_VIRTUAL_ZONE_MERGE_INFO_TID:
       }
       break;
     }
-  END_CREATE_VT_ITER_SWITCH_LAMBDA
 
-  BEGIN_CREATE_VT_ITER_SWITCH_LAMBDA
     case OB_ALL_VIRTUAL_WR_SYSSTAT_TID: {
       ObIteratePrivateVirtualTable *iter = NULL;
       const bool meta_record_in_sys = false;
@@ -5876,6 +5910,12 @@ case OB_ALL_AI_MODEL_ENDPOINT_IDX_ENDPOINT_NAME_TID:
 case OB_ALL_AI_MODEL_ENDPOINT_IDX_AI_MODEL_NAME_TID:
 case OB_ALL_AI_MODEL_ENDPOINT_AUX_LOB_META_TID:
 case OB_ALL_AI_MODEL_ENDPOINT_AUX_LOB_PIECE_TID:
+case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TID:
+case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_AUX_LOB_META_TID:
+case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_AUX_LOB_PIECE_TID:
+case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID:
+case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_AUX_LOB_META_TID:
+case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_AUX_LOB_PIECE_TID:
 case OB_ALL_BACKUP_DELETE_JOB_TID:
 case OB_ALL_BACKUP_DELETE_JOB_AUX_LOB_META_TID:
 case OB_ALL_BACKUP_DELETE_JOB_AUX_LOB_PIECE_TID:
@@ -8791,6 +8831,8 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_JAVA_POLICY_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_SCHEMA_VERSION); break;
     case OB_ALL_MVIEW_REFRESH_PENDING_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_MVIEW_REFRESH_PENDING_TASK_SCHEMA_VERSION); break;
+    case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_SCHEMA_VERSION); break;
+    case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_ALL_TABLE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_ALL_TABLE_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_TABLE_COLUMN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_TABLE_COLUMN_SCHEMA_VERSION); break;
     case OB_TENANT_VIRTUAL_TABLE_INDEX_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_TENANT_VIRTUAL_TABLE_INDEX_SCHEMA_VERSION); break;
@@ -9374,6 +9416,8 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_VIRTUAL_MVIEW_DEP_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_DEP_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_REPLAY_QUEUE_STAT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_REPLAY_QUEUE_STAT_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_SCHEMA_VERSION); break;
+    case OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_VIRTUAL_SQL_AUDIT_ORACLE_SCHEMA_VERSION); break;
     case OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_IDX_15009_ALL_VIRTUAL_SQL_AUDIT_I1_ORACLE_SCHEMA_VERSION); break;
@@ -11476,6 +11520,8 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_MVIEW_REFRESH_PENDING_TASK_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_MVIEW_REFRESH_PENDING_TASK_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_COLUMN_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_COLUMN_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_SCHEMA_VERSION); break;
@@ -11847,5 +11893,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_AUDIT_LOG_ENCRYPTION_PASSWORD_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_MVIEW_REFRESH_PENDING_TASK_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_MVIEW_REFRESH_PENDING_TASK_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
 
 #endif // INNER_TABLE_HARD_CODE_SCHEMA_MAPPING_SWITCH

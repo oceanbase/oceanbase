@@ -177,6 +177,25 @@ int ObArchivePersistHelper::lock_archive_dest(
 }
 
 
+int ObArchivePersistHelper::lock_backup_archive_dest(
+    common::ObISQLClient &trans,
+    bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupPathString path;
+  if (OB_FAIL(get_backup_archive_dest(trans, true /* need_lock */, path))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      is_exist = false;
+    } else {
+      LOG_WARN("failed to get backup archive dest", K(ret));
+    }
+  } else {
+    is_exist = true;
+  }
+  return ret;
+}
+
 int ObArchivePersistHelper::get_archive_dest(
     common::ObISQLClient &proxy, const bool need_lock, const int64_t dest_no,
     ObBackupPathString &path) const
@@ -192,6 +211,27 @@ int ObArchivePersistHelper::get_archive_dest(
     LOG_WARN("fail to get string value", K(ret));
   } else if (OB_FAIL(path.assign(value.ptr()))) {
     LOG_WARN("fail to assign string value", K(ret), K(value));
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_backup_archive_dest(
+    common::ObISQLClient &proxy,
+    const bool need_lock,
+    ObBackupPathString &path) const
+{
+  int ret = OB_SUCCESS;
+  common::ObSqlString value;
+  common::ObSqlString name;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (OB_FAIL(name.assign_fmt("%s%s", OB_STR_BACKUP_ARCHIVE_PREFIX, OB_STR_PATH))) {
+    LOG_WARN("fail to assign backup archive path key", K(ret));
+  } else if (OB_FAIL(get_string_value(proxy, OB_BACKUP_ARCHIVE_DEST_NO_OFFSET, need_lock, name.string(), value))) {
+    LOG_WARN("fail to get backup archive path value", K(ret));
+  } else if (OB_FAIL(path.assign(value.ptr()))) {
+    LOG_WARN("fail to assign backup archive path value", K(ret), K(value));
   }
   return ret;
 }
@@ -739,8 +779,12 @@ int ObArchivePersistHelper::insert_his_round(common::ObISQLClient &proxy, const 
   return ret;
 }
 
-int ObArchivePersistHelper::is_all_piece_in_round_deleted(common::ObISQLClient &proxy,
-          const int64_t round_id, bool &is_piece_all_deleted) const {
+int ObArchivePersistHelper::is_all_piece_in_round_deleted(
+    common::ObISQLClient &proxy,
+    const int64_t round_id,
+    const bool check_backup_file,
+    bool &is_piece_all_deleted) const
+{
   int ret = OB_SUCCESS;
   ObSqlString sql;
   is_piece_all_deleted = false;
@@ -749,7 +793,7 @@ int ObArchivePersistHelper::is_all_piece_in_round_deleted(common::ObISQLClient &
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
   } else if (OB_FAIL(sql.append_fmt("select count(1) as cnt from %s where %s=%lu and %s=%ld and %s!='%s'",
           OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_,
-          OB_STR_ROUND_ID, round_id, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
+          OB_STR_ROUND_ID, round_id, check_backup_file ? OB_STR_BACKUP_FILE_STATUS : OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     HEAP_VAR(ObMySQLProxy::ReadResult, res) {
@@ -970,6 +1014,42 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
   return ret;
 }
 
+int ObArchivePersistHelper::get_candidate_obsolete_backup_archive_pieces(
+    common::ObISQLClient &proxy,
+    const SCN &end_scn,
+    const int64_t src_dest_id,
+    common::ObIArray<ObTenantArchivePieceAttr> &pieces) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (!end_scn.is_valid() || src_dest_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(end_scn), K(src_dest_id));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s<=%lu and %s!='%s'",
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, src_dest_id,
+      OB_STR_END_SCN, end_scn.get_val_for_inner_table_field(), OB_STR_BACKUP_FILE_STATUS, OB_STR_DELETED))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(parse_piece_result_(*result, pieces))) {
+        LOG_WARN("failed to parse pieces", K(ret));
+      } else {
+        FLOG_INFO("success get candidate obsolete backup archive pieces", K(sql), K(pieces));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObArchivePersistHelper::insert_or_update_piece(common::ObISQLClient &proxy, const ObTenantArchivePieceAttr &piece) const
 {
   int ret = OB_SUCCESS;
@@ -1024,6 +1104,121 @@ int ObArchivePersistHelper::mark_new_piece_file_status(common::ObISQLClient &pro
   return ret;
 }
 
+int ObArchivePersistHelper::mark_piece_backup_file_status(
+    common::ObISQLClient &proxy,
+    const int64_t dest_id,
+    const int64_t round_id,
+    const int64_t piece_id,
+    const ObBackupFileStatus::STATUS old_status,
+    const ObBackupFileStatus::STATUS new_status) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString assignments;
+  ObSqlString predicates;
+  ObInnerTableOperator piece_table_operator;
+  ObTenantArchivePieceAttr::Key key = {tenant_id_, dest_id, round_id, piece_id};
+  int64_t affected_rows = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0 || round_id <= 0 || piece_id <= 0
+          || !ObBackupFileStatus::is_valid(old_status) || !ObBackupFileStatus::is_valid(new_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_id), K(round_id), K(piece_id), K(old_status), K(new_status));
+  } else if (old_status == new_status) {
+    // do nothing
+  } else if (OB_FAIL(ObBackupFileStatus::check_can_change_status(old_status, new_status, true/*for_archive_backup*/))) {
+    LOG_WARN("can not change piece backup file status", K(ret), K(old_status), K(new_status));
+  } else if (OB_FAIL(piece_table_operator.init(OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, *this))) {
+    LOG_WARN("failed to init piece files table", K(ret));
+  } else if (OB_FAIL(assignments.assign_fmt("%s='%s'", OB_STR_BACKUP_FILE_STATUS, ObBackupFileStatus::get_str(new_status)))) {
+    LOG_WARN("failed to build assignments", K(ret), K(new_status));
+  } else if (OB_FAIL(predicates.assign_fmt("%s='%s'", OB_STR_BACKUP_FILE_STATUS, ObBackupFileStatus::get_str(old_status)))) {
+    LOG_WARN("failed to build predicates", K(ret), K(old_status));
+  } else if (OB_FAIL(piece_table_operator.compare_and_swap(proxy, key, assignments.ptr(), predicates.ptr(), affected_rows))) {
+    LOG_WARN("failed to mark piece backup file status", K(ret), K(key), K(old_status), K(new_status));
+  } else if (affected_rows > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), K(key), K(old_status), K(new_status));
+  }
+  return ret;
+}
+
+int ObArchivePersistHelper::get_unbackuped_frozen_pieces(
+    common::ObISQLClient &proxy,
+    const int64_t dest_id,
+    common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_id));
+  } else {
+    ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      // filter "DELETE" AND "DELETED" pieces
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s='%s' and %s='%s' and %s='%s' "
+                                 "order by %s asc, %s asc",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, dest_id,
+          OB_STR_STATUS, frozen.to_status_str(), OB_STR_FILE_STATUS, ObBackupFileStatus::get_str(ObBackupFileStatus::BACKUP_FILE_AVAILABLE),
+          OB_STR_BACKUP_FILE_STATUS, ObBackupFileStatus::get_str(ObBackupFileStatus::BACKUP_FILE_INCOMPLETE),
+          OB_STR_ROUND_ID, OB_STR_PIECE_ID))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+        LOG_WARN("failed to parse result", K(ret), K(sql));
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObArchivePersistHelper::get_backed_up_frozen_pieces(
+    common::ObISQLClient &proxy,
+    const int64_t dest_id,
+    common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchivePersistHelper not init", K(ret));
+  } else if (dest_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_id));
+  } else {
+    ObArchivePieceStatus frozen = ObArchivePieceStatus::frozen();
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s='%s' and %s='%s' and %s='%s' "
+                                 "order by %s asc, %s asc",
+          OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_DEST_ID, dest_id,
+          OB_STR_STATUS, frozen.to_status_str(), OB_STR_FILE_STATUS, ObBackupFileStatus::get_str(ObBackupFileStatus::BACKUP_FILE_AVAILABLE),
+          OB_STR_BACKUP_FILE_STATUS, ObBackupFileStatus::get_str(ObBackupFileStatus::BACKUP_FILE_AVAILABLE),
+          OB_STR_ROUND_ID, OB_STR_PIECE_ID))) {
+        LOG_WARN("failed to append fmt", K(ret));
+      } else if (OB_FAIL(proxy.read(res, get_exec_tenant_id(), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(parse_piece_result_(*result, piece_list))) {
+        LOG_WARN("failed to parse result", K(ret), K(sql));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObArchivePersistHelper::get_latest_ls_archive_progress(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t round_id,
     const ObLSID &id, ObLSArchivePersistInfo &info, bool &record_exist) const
@@ -1596,6 +1791,332 @@ int ObArchivePersistHelper::check_piece_continuity_between_two_scn(
       is_continuous = false;
       LOG_INFO("fail to find 2 pieces in the same round", K(is_continuous), K(floor_piece), K(ceil_piece));
     }
+  }
+  return ret;
+}
+
+
+/*====================================== ObBackupArchivePieceTaskOperator ======================================*/
+int ObBackupArchivePieceTaskOperator::insert_tasks(
+    common::ObISQLClient &proxy,
+    const common::ObIArray<ObBackupArchivePieceTaskAttr> &tasks)
+{
+  int ret = OB_SUCCESS;
+  if (!tasks.empty()) {
+    ObDMLSqlSplicer dml;
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    const uint64_t tenant_id = tasks.at(0).key_.tenant_id_;
+    const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tasks.count(); ++i) {
+      const ObBackupArchivePieceTaskAttr &task = tasks.at(i);
+      char ip_buf[MAX_IP_ADDR_LENGTH] = "";
+      char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+
+      if (OB_UNLIKELY(!task.is_valid() || task.key_.tenant_id_ != tenant_id)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid backup archive piece task", K(ret), K(tenant_id), K(task));
+      } else if (task.svr_addr_.is_valid() && !task.svr_addr_.ip_to_string(ip_buf, sizeof(ip_buf))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("failed to stringify server ip", K(ret), K(task));
+      } else if (!task.task_trace_id_.is_invalid()) {
+        task.task_trace_id_.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, task.key_.tenant_id_))
+              || OB_FAIL(dml.add_pk_column(OB_STR_JOB_ID, task.key_.job_id_))
+              || OB_FAIL(dml.add_pk_column(OB_STR_ROUND_ID, task.key_.round_id_))
+              || OB_FAIL(dml.add_pk_column(OB_STR_PIECE_ID, task.key_.piece_id_))
+              || OB_FAIL(dml.add_column(OB_STR_DEST_ID, task.archive_dest_id_))
+              || OB_FAIL(dml.add_column(OB_STR_TASK_STATUS, task.task_status_.get_str()))
+              || OB_FAIL(dml.add_column(OB_STR_SEVER_IP, task.svr_addr_.is_valid() ? ip_buf : ""))
+              || OB_FAIL(dml.add_column(OB_STR_SERVER_PORT, task.svr_addr_.is_valid() ? task.svr_addr_.get_port() : 0))
+              || OB_FAIL(dml.add_column(OB_STR_TASK_TRACE_ID, trace_id_str))
+              || OB_FAIL(dml.add_column(OB_STR_RETRY_COUNT, task.retry_cnt_))
+              || OB_FAIL(dml.add_column(OB_STR_RESULT, task.result_))) {
+        LOG_WARN("failed to fill dml", K(ret), K(task));
+      } else if (OB_FAIL(dml.finish_row())) {
+        LOG_WARN("failed to finish row", K(ret), K(task));
+      }
+    }
+
+    if (FAILEDx(dml.splice_batch_insert_sql(OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, sql))) {
+      LOG_WARN("failed to splice batch insert sql", K(ret));
+    } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to batch insert backup archive piece tasks", K(ret), K(sql), K(exec_tenant_id));
+    } else if (OB_UNLIKELY(affected_rows != tasks.count())) { // rollback the backup archive job trans
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), "expected", tasks.count());
+    }
+  }
+  return ret;
+}
+
+#define PARSE_PIECE_TASK_ROWS(sql_str, task_array)                                               \
+do {                                                                                             \
+  HEAP_VAR(ObMySQLProxy::ReadResult, res) {                                                      \
+    ObMySQLResult *result = nullptr;                                                             \
+    if (FAILEDx(proxy.read(res, exec_tenant_id, (sql_str).ptr()))) {                             \
+      LOG_WARN("failed to execute sql", K(ret), K(sql_str), K(exec_tenant_id));                  \
+    } else if (OB_ISNULL(result = res.get_result())) {                                           \
+      ret = OB_ERR_UNEXPECTED;                                                                   \
+      LOG_WARN("result is null", K(ret), K(sql_str));                                            \
+    }                                                                                            \
+    while (OB_SUCC(ret)) {                                                                       \
+      ObBackupArchivePieceTaskAttr tmp_task;                                                     \
+      if (OB_FAIL(result->next())) {                                                             \
+        if (OB_ITER_END == ret) {                                                                \
+          ret = OB_SUCCESS;                                                                      \
+        } else {                                                                                 \
+          LOG_WARN("failed to get next row", K(ret));                                            \
+        }                                                                                        \
+        break;                                                                                   \
+      } else if (OB_FAIL(ObBackupArchivePieceTaskOperator::do_parse_task_(*result, tmp_task))) { \
+        LOG_WARN("failed to parse task", K(ret));                                                \
+      } else if (OB_FAIL((task_array).push_back(tmp_task))) {                                    \
+        LOG_WARN("failed to push task", K(ret), K(tmp_task));                                    \
+      }                                                                                          \
+    }                                                                                            \
+  }                                                                                              \
+} while (false)
+
+int ObBackupArchivePieceTaskOperator::get_task(
+    common::ObISQLClient &proxy,
+    const ObBackupArchivePieceTaskAttr::Key &key,
+    const bool need_lock,
+    ObBackupArchivePieceTaskAttr &task)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(key.tenant_id_);
+  ObSEArray<ObBackupArchivePieceTaskAttr, 1> tasks;
+
+  if (!key.is_pkey_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld and %s=%ld and %s=%ld",
+      OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, OB_STR_TENANT_ID, key.tenant_id_, OB_STR_JOB_ID, key.job_id_,
+      OB_STR_ROUND_ID, key.round_id_, OB_STR_PIECE_ID, key.piece_id_))) {
+    LOG_WARN("failed to build sql", K(ret), K(key));
+  } else if (need_lock && OB_FAIL(sql.append(" for update"))) {
+    LOG_WARN("failed to append lock sql", K(ret), K(sql));
+  } else {
+    PARSE_PIECE_TASK_ROWS(sql, tasks);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (tasks.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+  } else if (OB_UNLIKELY(tasks.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected piece task count", K(ret), K(key), K(tasks.count()));
+  } else {
+    task = tasks.at(0);
+  }
+  return ret;
+}
+
+int ObBackupArchivePieceTaskOperator::get_tasks(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const int64_t job_id,
+    const bool need_lock,
+    common::ObIArray<ObBackupArchivePieceTaskAttr> &tasks)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (!is_user_tenant(tenant_id) || job_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(job_id));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s=%ld order by %s, %s",
+      OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_JOB_ID, job_id,
+      OB_STR_ROUND_ID, OB_STR_PIECE_ID))) {
+    LOG_WARN("failed to build sql", K(ret));
+  } else if (need_lock && OB_FAIL(sql.append(" for update"))) {
+    LOG_WARN("failed to append lock sql", K(ret), K(sql));
+  } else {
+    PARSE_PIECE_TASK_ROWS(sql, tasks);
+  }
+  return ret;
+}
+
+int ObBackupArchivePieceTaskOperator::update_task_status(
+    common::ObISQLClient &proxy,
+    const ObBackupArchivePieceTaskAttr::Key &key,
+    const ObBackupTaskStatus &src_status,
+    const ObBackupTaskStatus &dst_status)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(key.tenant_id_);
+
+  if (!key.is_pkey_valid() || !src_status.is_valid() || !dst_status.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key), K(src_status), K(dst_status));
+  } else if (src_status.status_ == dst_status.status_) {
+    // nothing to update
+  } else if (OB_FAIL(sql.assign_fmt("update %s set %s='%s' where %s=%lu and %s=%ld and %s=%ld and %s=%ld and %s='%s'",
+             OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, OB_STR_TASK_STATUS, dst_status.get_str(),
+             OB_STR_TENANT_ID, key.tenant_id_, OB_STR_JOB_ID, key.job_id_, OB_STR_ROUND_ID, key.round_id_,
+             OB_STR_PIECE_ID, key.piece_id_, OB_STR_TASK_STATUS, src_status.get_str()))) {
+    LOG_WARN("failed to build sql", K(ret), K(key));
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to execute sql", K(ret), K(sql), K(exec_tenant_id));
+  } else if (affected_rows == 0) {
+    ret = OB_EAGAIN;
+    LOG_WARN("cas update failed due to status mismatch", K(ret), K(key), K(src_status), K(dst_status));
+  } else if (affected_rows != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), K(key), K(src_status), K(dst_status));
+  }
+  return ret;
+}
+
+int ObBackupArchivePieceTaskOperator::update_task_status(
+    common::ObISQLClient &proxy,
+    const ObBackupArchivePieceTaskAttr::Key &key,
+    const ObBackupTaskStatus &src_status,
+    const ObBackupTaskStatus &dst_status,
+    const common::ObAddr &dst,
+    const share::ObTaskId &trace_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  char ip_buf[MAX_IP_ADDR_LENGTH] = "";
+  char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(key.tenant_id_);
+
+  if (!key.is_pkey_valid() || !src_status.is_valid() || !dst_status.is_valid() || !dst.is_valid() || trace_id.is_invalid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key), K(src_status), K(dst_status), K(dst), K(trace_id));
+  } else {
+    dst.ip_to_string(ip_buf, sizeof(ip_buf));
+    trace_id.to_string(trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE);
+  }
+
+  if (FAILEDx(sql.assign_fmt("update %s set %s='%s', %s='%s', %s=%d, %s='%s' where %s=%lu and %s=%ld and %s=%ld and %s=%ld and %s='%s'",
+      OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, OB_STR_TASK_STATUS, dst_status.get_str(), OB_STR_SEVER_IP, ip_buf, OB_STR_SERVER_PORT, dst.get_port(), OB_STR_TASK_TRACE_ID, trace_id_str,
+      OB_STR_TENANT_ID, key.tenant_id_, OB_STR_JOB_ID, key.job_id_, OB_STR_ROUND_ID, key.round_id_, OB_STR_PIECE_ID, key.piece_id_, OB_STR_TASK_STATUS, src_status.get_str()))) {
+    LOG_WARN("failed to build sql", K(ret), K(key));
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to execute sql", K(ret), K(sql), K(exec_tenant_id));
+  } else if (affected_rows == 0) {
+    ret = OB_EAGAIN;
+    LOG_WARN("cas update failed due to status mismatch", K(ret), K(key), K(src_status), K(dst_status), K(dst));
+  } else if (affected_rows != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), K(key), K(src_status), K(dst_status), K(dst));
+  }
+  return ret;
+}
+
+int ObBackupArchivePieceTaskOperator::report_result(
+    common::ObISQLClient &proxy,
+    const ObBackupArchivePieceTaskAttr::Key &key,
+    const ObBackupTaskStatus &src_status,
+    const ObBackupTaskStatus &dst_status,
+    const int64_t retry_cnt,
+    const int result)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer dml;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(key.tenant_id_);
+  if (!key.is_pkey_valid() || !src_status.is_valid() || !dst_status.is_valid() || retry_cnt < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(key), K(src_status), K(dst_status), K(retry_cnt), K(result));
+  } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, key.tenant_id_))
+          || OB_FAIL(dml.add_pk_column(OB_STR_JOB_ID, key.job_id_))
+          || OB_FAIL(dml.add_pk_column(OB_STR_ROUND_ID, key.round_id_))
+          || OB_FAIL(dml.add_pk_column(OB_STR_PIECE_ID, key.piece_id_))
+          || OB_FAIL(dml.add_column(OB_STR_TASK_STATUS, dst_status.get_str()))
+          || OB_FAIL(dml.add_column(OB_STR_RETRY_COUNT, retry_cnt))
+          || OB_FAIL(dml.add_column(OB_STR_RESULT, result))) {
+    LOG_WARN("failed to add column", K(ret), K(key));
+  } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, sql))) {
+    LOG_WARN("failed to splice update sql", K(ret), K(key));
+  } else if (OB_FAIL(sql.append_fmt(" and %s='%s'", OB_STR_TASK_STATUS, src_status.get_str()))) {
+    LOG_WARN("failed to append cas guard", K(ret), K(key));
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to execute sql", K(ret), K(sql), K(exec_tenant_id));
+  } else if (affected_rows == 0) {
+    ret = OB_EAGAIN;
+    LOG_WARN("cas update failed due to status mismatch", K(ret), K(key), K(src_status), K(dst_status));
+  } else if (affected_rows != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), K(key), K(src_status), K(dst_status));
+  }
+  return ret;
+}
+
+int ObBackupArchivePieceTaskOperator::move_tasks_to_his(
+    common::ObISQLClient &proxy,
+    const uint64_t tenant_id,
+    const int64_t job_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = -1;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  if (!is_user_tenant(tenant_id) || job_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(job_id));
+  } else if (OB_FAIL(sql.assign_fmt("insert into %s select * from %s where %s=%lu and %s=%lu",
+      OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TNAME, OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME,
+      OB_STR_TENANT_ID, tenant_id, OB_STR_JOB_ID, job_id))) {
+    LOG_WARN("failed to init sql", K(ret));
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
+  } else if (OB_FALSE_IT(sql.reset())) {
+  } else if (OB_FAIL(sql.assign_fmt("delete from %s where %s=%lu and %s=%lu",
+      OB_ALL_BACKUP_ARCHIVE_PIECE_TASK_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_JOB_ID, job_id))) {
+    LOG_WARN("failed to init sql", K(ret));
+  } else if (OB_FAIL(proxy.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to exec sql", K(ret), K(sql), K(exec_tenant_id));
+  } else {
+    LOG_INFO("[BACKUP_ARCHIVE]succeed move backup archive piece tasks to history table", K(tenant_id), K(job_id));
+  }
+  return ret;
+}
+
+int ObBackupArchivePieceTaskOperator::do_parse_task_(
+    sqlclient::ObMySQLResult &result,
+    ObBackupArchivePieceTaskAttr &task)
+{
+  int ret = OB_SUCCESS;
+  int64_t real_length = 0;
+  char task_status[OB_DEFAULT_STATUS_LENTH] = "";
+  char svr_ip[OB_MAX_SERVER_ADDR_SIZE] = "";
+  char trace_id_str[OB_MAX_TRACE_ID_BUFFER_SIZE] = "";
+  int64_t svr_port = 0;
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_TENANT_ID, task.key_.tenant_id_, uint64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_JOB_ID, task.key_.job_id_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_ROUND_ID, task.key_.round_id_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_PIECE_ID, task.key_.piece_id_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_DEST_ID, task.archive_dest_id_, int64_t);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TASK_STATUS, task_status, OB_DEFAULT_STATUS_LENTH, real_length);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_SEVER_IP, svr_ip, OB_MAX_SERVER_ADDR_SIZE, real_length);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_SERVER_PORT, svr_port, int64_t);
+  EXTRACT_STRBUF_FIELD_MYSQL(result, OB_STR_TASK_TRACE_ID, trace_id_str, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
+  EXTRACT_INT_FIELD_MYSQL(result, OB_STR_RETRY_COUNT, task.retry_cnt_, int64_t);
+  EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, OB_STR_RESULT, task.result_, int, true /*skip_null_error*/, false /*skip_column_error*/, 0 /*default*/);
+  if (FAILEDx(task.task_status_.set_status(task_status))) {
+    LOG_WARN("failed to set task status", K(ret), K(task_status));
+  } else if (0 != STRLEN(svr_ip) || 0 != svr_port) {
+    if (false == task.svr_addr_.set_ip_addr(svr_ip, static_cast<int32_t>(svr_port))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to set server addr", K(ret), K(svr_ip), K(svr_port));
+    }
+  }
+
+  if (OB_FAIL(ret) || 0 == strcmp(trace_id_str, "")) {
+  } else if (OB_FAIL(task.task_trace_id_.set(trace_id_str))) {
+    LOG_WARN("failed to set trace id", K(ret), K(trace_id_str));
   }
   return ret;
 }

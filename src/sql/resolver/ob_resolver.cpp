@@ -1233,6 +1233,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(BackupArchiveLog);
         break;
       }
+      case T_BACKUP_ARCHIVELOG_ALL: {
+        REGISTER_STMT_RESOLVER(BackupArchiveLogAll);
+        break;
+      }
       case T_BACKUP_SET_ENCRYPTION: {
         REGISTER_STMT_RESOLVER(BackupSetEncryption);
         break;

@@ -50,6 +50,14 @@ public:
   int init(const share::ObLSID &id,
       const share::ObBackupDest &archive_dest);
 
+  // dual-dest archive path interface
+  int init(const share::ObLSID &id,
+      const share::ObBackupDest &archive_dest,
+      const share::ObBackupDest &backup_archive_dest);
+
+  // output the dest that holds the currently located piece, for readers to assemble path
+  int get_cur_piece_dest(const share::ObBackupDest *&dest) const;
+
   void reset();
 
   bool is_valid() const;
@@ -123,7 +131,8 @@ public:
       const bool fuzzy_match = true);
 
   TO_STRING_KV(K_(is_inited), K_(locate_round), K_(id), K_(dest_id), K_(round_context),
-      K_(min_round_id), K_(max_round_id), K_(archive_dest), K_(inner_piece_context));
+      K_(min_round_id), K_(max_round_id), K_(archive_dest), K_(inner_piece_context),
+      K_(backup_archive_dest));
 
 private:
   enum class RoundOp
@@ -211,6 +220,8 @@ private:
     int64_t file_offset_;     // 当前piece已读最大文件内偏移
     palf::LSN max_lsn_;       // 当前piece已读最大文件内偏移对应日志LSN
 
+    bool on_backup_archive_dest_;     // 当前piece实际落在backup archive dest上(仅dual-dest场景有效)
+
     InnerPieceContext() { reset(); }
 
     void reset();
@@ -224,7 +235,7 @@ private:
     InnerPieceContext  &operator=(const InnerPieceContext &other);
 
     TO_STRING_KV(K_(state), K_(piece_id), K_(round_id), K_(min_lsn_in_piece), K_(max_lsn_in_piece),
-        K_(min_file_id), K_(max_file_id), K_(file_id), K_(file_offset), K_(max_lsn));
+        K_(min_file_id), K_(max_file_id), K_(file_id), K_(file_offset), K_(max_lsn), K_(on_backup_archive_dest));
   };
 
 private:
@@ -354,6 +365,11 @@ private:
       const bool fuzzy_match,
       int64_t &file_id,
       common::ObIArray<int64_t> &array);
+  const share::ObBackupDest &cur_piece_dest_() const
+  {
+    return (backup_archive_dest_.is_valid() && inner_piece_context_.on_backup_archive_dest_)
+          ? backup_archive_dest_ : archive_dest_;
+  }
 
 private:
   bool is_inited_;
@@ -366,6 +382,7 @@ private:
   InnerPieceContext inner_piece_context_;
 
   share::ObBackupDest archive_dest_;
+  share::ObBackupDest backup_archive_dest_;
 };
 
 class ObLogRawPathPieceContext
