@@ -150,7 +150,6 @@ protected:
   int compare_two_column_group_schema_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const ObColumnGroupSchema &base_cg_schema, const ObColumnGroupSchema &inc_cg_schema, const bool is_oracle_mode, bool &is_equal);
   // verify if the check constraints of two tables meet the requirements
   int check_table_constraints_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
-  int check_table_progressive_merge_round_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema);
   int check_table_all_column_conditions_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
   int check_column_level_conditions_(const ObColumnSchemaV2 *base_table_col_schema, const ObColumnSchemaV2 *inc_table_col_schema, const bool is_aux_table_column, const bool is_oracle_mode);
   int check_column_conditions_in_common_(const ObColumnSchemaV2 *base_table_col_schema, const ObColumnSchemaV2 *inc_table_col_schema, const bool is_oracle_mode);
@@ -191,6 +190,7 @@ protected:
                                            ObDDLOperator &ddl_operator,
                                            ObDDLSQLTransaction &trans,
                                            ObSchemaGetterGuard &schema_guard);
+  void align_progressive_merge_round_(ObTableSchema &new_pt_schema, ObTableSchema &new_inc_schema);
   int update_exchange_table_non_schema_attributes_(const uint64_t tenant_id,
                                                    const ObTableSchema &old_table_schema,
                                                    const ObIArray<ObTabletID> &old_tablet_ids,

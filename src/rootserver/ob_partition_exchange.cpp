@@ -639,24 +639,7 @@ int ObPartitionExchange::check_data_table_partition_exchange_conditions_(const O
       LOG_WARN("fail to check table all column conditions", K(ret), K(base_table_schema), K(inc_table_schema));
     } else if (OB_FAIL(check_table_constraints_(base_table_schema, inc_table_schema, is_oracle_mode))) {
       LOG_WARN("fail to check table constraints", K(ret), K(base_table_schema), K(inc_table_schema), K(is_oracle_mode));
-    } else if (OB_FAIL(check_table_progressive_merge_round_(base_table_schema, inc_table_schema))) {
-      LOG_WARN("fail to check table progressive merge round", K(ret), K(base_table_schema), K(inc_table_schema));
     }
-  }
-  return ret;
-}
-
-int ObPartitionExchange::check_table_progressive_merge_round_(
-    const ObTableSchema &base_table_schema,
-    const ObTableSchema &inc_table_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(base_table_schema.get_progressive_merge_round() != inc_table_schema.get_progressive_merge_round())) {
-    ret = OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION;
-    LOG_WARN("progressive merge round of exchanging partition tables are not equal", K(ret),
-             "base_progressive_merge_round", base_table_schema.get_progressive_merge_round(),
-             "inc_progressive_merge_round", inc_table_schema.get_progressive_merge_round());
-    LOG_USER_ERROR(OB_ERR_PARTITION_EXCHANGE_DIFFERENT_OPTION, "PROGRESSIVE_MERGE_ROUND");
   }
   return ret;
 }
@@ -1850,6 +1833,7 @@ int ObPartitionExchange::exchange_partition_map_relationship_(
             LOG_WARN("fail to assign inc table schema", K(ret), K(inc_table_schema));
           } else if (!is_inc_table_partitioned && OB_FALSE_IT(new_inc_schema.set_tablet_id(base_tablet_ids.at(0)))) {
           } else if (OB_FALSE_IT(new_inc_schema.set_in_offline_ddl_white_list(true))) {
+          } else if (OB_FALSE_IT(align_progressive_merge_round_(new_pt_schema, new_inc_schema))) {
           } else if (OB_FAIL(update_exchange_table_non_schema_attributes_(tenant_id,
                                                                           inc_table_schema,
                                                                           inc_tablet_ids,
@@ -1902,6 +1886,26 @@ int ObPartitionExchange::exchange_partition_map_relationship_(
     } // end HEAP_VARS_4
   } // end if
   return ret;
+}
+
+// Exchange only swaps metadata, so each tablet keeps the progressive merge round in its sstable meta.
+// Major merge rejects meta_round > schema_round, so the side receiving a tablet with a larger round must be raised,
+// otherwise it can never finish a major merge again.
+// Raising both sides to the max keeps the exchange symmetric and monotonic.
+void ObPartitionExchange::align_progressive_merge_round_(
+    ObTableSchema &new_pt_schema,
+    ObTableSchema &new_inc_schema)
+{
+  const int64_t pt_round = new_pt_schema.get_progressive_merge_round();
+  const int64_t inc_round = new_inc_schema.get_progressive_merge_round();
+  if (pt_round != inc_round) {
+    const int64_t new_round = std::max(pt_round, inc_round);
+    new_pt_schema.set_progressive_merge_round(new_round);
+    new_inc_schema.set_progressive_merge_round(new_round);
+    LOG_INFO("align progressive merge round for partition exchange", K(new_round),
+        K(pt_round), K(inc_round), "pt_table_id", new_pt_schema.get_table_id(),
+        "inc_table_id", new_inc_schema.get_table_id());
+  }
 }
 
 // for partitioned table
@@ -2600,8 +2604,6 @@ int ObPartitionExchange::generate_local_storage_index_table_mapping_in_mysql_mod
           LOG_WARN("fail to check table all column conditions", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
         } else if (OB_FAIL(check_index_column_data_table_mapping_(base_data_table_schema, inc_data_table_schema, base_table_schema, *inc_table_schemas.at(i), false /*is_oracle_mode*/))) {
           LOG_WARN("fail to check index column data table mapping", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
-        } else if (OB_FAIL(check_table_progressive_merge_round_(base_table_schema, *inc_table_schemas.at(i)))) {
-          LOG_WARN("fail to check index progressive merge round", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
         } else {
           find_related_nt_schema = true;
           used_nt_schema_flag.at(i) = true;
@@ -2657,16 +2659,6 @@ int ObPartitionExchange::generate_local_storage_index_table_mapping_in_oracle_mo
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("index column data table mapping check failed, and ret_code not in in_find_same_aux_table_retry_white_list", K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
-        }
-      } else if (OB_FAIL(check_table_progressive_merge_round_(base_table_schema, *inc_table_schemas.at(i)))) {
-        // uncertain if other inc tables match the base table, so try matching other inc tables
-        if (in_find_same_aux_table_retry_white_list_(ret)) {
-          LOG_WARN("index progressive merge round check failed, and retry find the matched table", K(ret),
-              K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("index progressive merge round check failed, and ret_code not in in_find_same_aux_table_retry_white_list",
-              K(ret), K(base_table_schema.get_table_id()), K(inc_table_schemas.at(i)->get_table_id()));
         }
       } else {
         find_related_nt_schema = true;
