@@ -97,12 +97,6 @@ int ObDBMSSchedJobExecutor::init_session(
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT));
   OZ (session.update_sys_variable(share::SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
                                   ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT));
-  // bound pl block timeout by max_run_duration for the spm stats job, otherwise it may run
-  // beyond its declared duration and overlap with the next scheduled run.
-  if (OB_SUCC(ret) && ObDbmsStatsMaintenanceWindow::is_spm_stats_job(job_info.get_job_name())) {
-    OZ (session.update_sys_variable(share::SYS_VAR_OB_PL_BLOCK_TIMEOUT,
-                                    job_info.get_max_run_duration() * 1000000L));
-  }
   OZ (session.set_default_database(database_name));
   OZ (session.get_pc_mem_conf(pc_mem_conf));
   CK (OB_NOT_NULL(GCTX.sql_engine_));
@@ -129,16 +123,12 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.gen_gtt_trans_scope_unique_id());
   OX (session.set_client_sessid(session.get_sid()));
   if (OB_SUCC(ret)) {
-    if (job_info.is_mview_job()) {
-      // set larger timeout for mview scheduler jobs
-      const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
-      const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
-      ObObj query_timeout_obj;
-      ObObj trx_timeout_obj;
-      query_timeout_obj.set_int(QUERY_TIMEOUT_US);
-      trx_timeout_obj.set_int(TRX_TIMEOUT_US);
-      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
-      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    if (job_info.is_mview_job() ||
+        ObDbmsStatsMaintenanceWindow::is_spm_stats_job(job_info.get_job_name())) {
+      const int64_t TIMEOUT_US = job_info.get_max_run_duration() * 1000000L;
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, TIMEOUT_US));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, TIMEOUT_US));
+      OZ (session.update_sys_variable(SYS_VAR_OB_PL_BLOCK_TIMEOUT, TIMEOUT_US));
     } else if (job_info.is_olap_async_job()) {
       const int64_t QUERY_TIMEOUT_US = ((job_info.get_max_run_duration() - OLAP_ASYNC_JOB_DEVIATION_SECOND) * 1000000L);
       const int64_t TRX_TIMEOUT_US = ((job_info.get_max_run_duration() - OLAP_ASYNC_JOB_DEVIATION_SECOND) * 1000000L);
@@ -475,9 +465,6 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(uint64_t tenant_id, bool is_oracl
   OZ (table_operator_.get_dbms_sched_job_info(tenant_id, is_oracle_tenant, job_id, job_name, allocator, job_info));
 
   if (OB_SUCC(ret)) {
-    if (job_info.is_mview_job() && job_info.max_run_duration_ > 0) {
-      THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + job_info.max_run_duration_ * 1000000LL);
-    }
     if (job_info.is_killed()) { //Intercept user cancellation requests before the actual execution of the job
       OZ(table_operator_.update_for_kill(job_info));
     } else {
