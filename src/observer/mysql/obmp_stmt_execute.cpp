@@ -285,17 +285,19 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
     } else {
       OZ (param_assign_after_convert_int2number(params_->at(i), *(data + pos)));
     }
-    if (data[pos].is_numeric_type()) {
-      ObAccuracy default_acc =
-        ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][data[pos].get_type()];
-      if (params_->at(i).get_scale() == NUMBER_SCALE_UNKNOWN_YET) {
-        params_->at(i).set_scale(default_acc.get_scale());
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(data) && data[pos].is_numeric_type()) {
+        ObAccuracy default_acc =
+          ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][data[pos].get_type()];
+        if (params_->at(i).get_scale() == NUMBER_SCALE_UNKNOWN_YET) {
+          params_->at(i).set_scale(default_acc.get_scale());
+        }
+        if (params_->at(i).get_precision() == PRECISION_UNKNOWN_YET) {
+          params_->at(i).set_precision(default_acc.get_precision());
+        }
       }
-      if (params_->at(i).get_precision() == PRECISION_UNKNOWN_YET) {
-        params_->at(i).set_precision(default_acc.get_precision());
-      }
+      params_->at(i).set_param_meta();
     }
-    params_->at(i).set_param_meta();
   }
   return ret;
 }
