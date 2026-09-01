@@ -2119,6 +2119,25 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               }
             }
 
+            // [ALTER TABLE ADD [CONSTRAINT] UNIQUE] Database-level name conflict checks for Oracle mode.
+            // These verify name uniqueness across the entire database.
+            // Oracle shares a single namespace for index/UNIQUE and PK constraint names.
+            if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+              if (OB_ISNULL(schema_checker_)) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_RESV_LOG(WARN, "schema checker is null", KR(ret));
+              } else if (OB_FAIL(reject_oracle_name_conflict(
+                  table_schema_->get_tenant_id(), table_schema_->get_database_id(),
+                  create_index_arg->index_name_, schema_checker_->get_schema_guard(),
+                  CHECK_VS_INDEX | CHECK_VS_PK))) {
+                SQL_RESV_LOG(WARN, "oracle name conflict check failed for ADD UNIQUE",
+                             KR(ret), K(create_index_arg->index_name_));
+              }
+              // TODO: current check covers only PK/UK constraint; extend to all constraint types to align with Oracle.
+              //       UK constraint name conflicts are already covered by the vs-INDEX check
+              //       (UK is registered as an INDEX), so only PK name is checked here.
+            }
+
             if (OB_SUCC(ret)) {
               if (NULL != table_option_node) {
                 has_index_using_type_ = false;
@@ -3847,6 +3866,21 @@ int ObAlterTableResolver::resolve_rename_index(const ParseNode &node)
           rename_index_arg->origin_index_name_ = ori_index_name;
           rename_index_arg->new_index_name_= new_index_name;
         }
+        // [ALTER INDEX RENAME] Database-level name conflict checks for Oracle mode.
+        // These verify name uniqueness across the entire database.
+        // Oracle shares a single namespace for index/UNIQUE and PK constraint names.
+        if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+          if (OB_ISNULL(schema_checker_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "schema checker is null", KR(ret));
+          } else if (OB_FAIL(reject_oracle_name_conflict(
+              table_schema_->get_tenant_id(), table_schema_->get_database_id(),
+              new_index_name, schema_checker_->get_schema_guard(),
+              CHECK_VS_INDEX | CHECK_VS_PK))) {
+            SQL_RESV_LOG(WARN, "oracle name conflict check failed for RENAME INDEX",
+                         KR(ret), K(new_index_name));
+          }
+        }
       }
 
       //push index arg
@@ -4040,12 +4074,34 @@ int ObAlterTableResolver::resolve_add_primary(const ParseNode &node)
         create_index_arg->index_name_.assign_ptr(common::OB_PRIMARY_INDEX_NAME,
                                                  static_cast<int32_t>(strlen(common::OB_PRIMARY_INDEX_NAME)));
       }
-      create_index_arg->tenant_id_ = session_info_->get_effective_tenant_id();
-      if (OB_ISNULL(alter_table_stmt)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
-      } else if (OB_FAIL(alter_table_stmt->add_index_arg(create_index_arg))) {
-        SQL_RESV_LOG(WARN, "push back index arg failed", K(ret));
+      // [ALTER TABLE ADD [CONSTRAINT] PRIMARY KEY] Database-level name conflict checks for Oracle mode.
+      // These verify name uniqueness across the entire database.
+      // Oracle shares a single namespace for index/UNIQUE and PK constraint names.
+      // Note: in Oracle mode, index_name_ may be empty when user does not specify a constraint name;
+      //       skip database-level checks in that case since there is nothing to conflict with.
+      if (OB_SUCC(ret) && lib::is_oracle_mode() && !create_index_arg->index_name_.empty()) {
+        if (OB_ISNULL(schema_checker_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "schema checker is null", KR(ret));
+        } else if (OB_FAIL(reject_oracle_name_conflict(
+            table_schema_->get_tenant_id(), table_schema_->get_database_id(),
+            create_index_arg->index_name_, schema_checker_->get_schema_guard(),
+            CHECK_VS_INDEX | CHECK_VS_CONSTRAINT))) {
+          SQL_RESV_LOG(WARN, "oracle name conflict check failed for ADD PK",
+                       KR(ret), K(create_index_arg->index_name_));
+        }
+      }
+      // Guard: skip add_index_arg when prior checks (e.g. Oracle database-level name conflict)
+      // have already set ret to an error. OB_FAIL() unconditionally assigns ret via
+      // `ret = (statement)`, so a successful add_index_arg would overwrite the error code.
+      if (OB_SUCC(ret)) {
+        create_index_arg->tenant_id_ = session_info_->get_effective_tenant_id();
+        if (OB_ISNULL(alter_table_stmt)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "alter table stmt should not be null", KR(ret));
+        } else if (OB_FAIL(alter_table_stmt->add_index_arg(create_index_arg))) {
+          SQL_RESV_LOG(WARN, "push back index arg failed", KR(ret));
+        }
       }
     }
   }

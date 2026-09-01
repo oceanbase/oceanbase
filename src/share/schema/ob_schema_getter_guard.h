@@ -393,6 +393,12 @@ public:
                           const uint64_t database_id,
                           const common::ObString &constraint_name,
                           ObSimpleConstraintInfo &constraint_info) const;
+  // ObConstraintInfo is a separate class; this function targets ObSimpleConstraintInfo only.
+  // Passing ObConstraintInfo is explicitly deleted to prevent misuse.
+  int get_constraint_info(const uint64_t tenant_id,
+                          const uint64_t database_id,
+                          const common::ObString &constraint_name,
+                          ObConstraintInfo &constraint_info) const = delete;
   int get_tenant_name_case_mode(const uint64_t tenant_id, common::ObNameCaseMode &mode);
   int get_tenant_compat_mode(const uint64_t tenant_id, lib::Worker::CompatMode &compat_mode);
   int get_tenant_read_only(const uint64_t tenant_id, bool &read_only);

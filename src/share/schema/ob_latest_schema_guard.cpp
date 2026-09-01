@@ -323,6 +323,32 @@ int ObLatestSchemaGuard::get_constraint_id(
   return ret;
 }
 
+int ObLatestSchemaGuard::get_constraint_info(
+    common::ObIAllocator &allocator,
+    const uint64_t database_id,
+    const ObString &constraint_name,
+    ObConstraintInfo &constraint_info)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service_impl = NULL;
+  ObISQLClient *sql_client = NULL;
+  constraint_info.reset();
+  if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
+    LOG_WARN("fail to check and get service", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == database_id
+             || constraint_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("database_id/constraint_name is invalid",
+             KR(ret), K_(tenant_id), K(database_id), K(constraint_name));
+  } else if (OB_FAIL(schema_service_impl->get_constraint_info(
+             allocator, *sql_client, tenant_id_, database_id, constraint_name, constraint_info))) {
+    LOG_WARN("fail to get constraint info", KR(ret), K_(tenant_id), K(database_id), K(constraint_name));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == constraint_info.constraint_id_)) {
+    LOG_INFO("constraint not exist", KR(ret), K_(tenant_id), K(database_id), K(constraint_name));
+  }
+  return ret;
+}
+
 int ObLatestSchemaGuard::get_foreign_key_id(
     const uint64_t database_id,
     const ObString &foreign_key_name,

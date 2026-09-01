@@ -44,6 +44,10 @@ public:
   int get_constraint_id(const uint64_t database_id,
                         const ObString &constraint_name,
                         uint64_t &constraint_id);
+  int get_constraint_info(common::ObIAllocator &allocator,
+                          const uint64_t database_id,
+                          const common::ObString &constraint_name,
+                          ObConstraintInfo &constraint_info);
   int get_udt_info(const uint64_t udt_id,
                    const ObUDTTypeInfo *&udt_info);
   int get_mock_fk_parent_table_id(const uint64_t database_id,

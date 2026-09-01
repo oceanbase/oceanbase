@@ -8050,6 +8050,42 @@ public:
   uint64_t constraint_id_;
 };
 
+struct ObConstraintInfo : public ObSimpleConstraintInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObConstraintInfo()
+    : ObSimpleConstraintInfo(),
+      constraint_type_(CONSTRAINT_TYPE_INVALID)
+  {}
+  ObConstraintInfo(const uint64_t tenant_id, const uint64_t database_id, const uint64_t table_id,
+                   const common::ObString &constraint_name, const uint64_t constraint_id,
+                   const ObConstraintType constraint_type)
+    : ObSimpleConstraintInfo(tenant_id, database_id, table_id, constraint_name, constraint_id),
+      constraint_type_(constraint_type)
+  {}
+  bool operator==(const ObConstraintInfo &other) const
+  {
+    return (ObSimpleConstraintInfo::operator==(other)
+            && constraint_type_ == other.constraint_type_);
+  }
+  int64_t get_convert_size() const
+  {
+    int64_t convert_size = ObSimpleConstraintInfo::get_convert_size();
+    convert_size += sizeof(constraint_type_);
+    return convert_size;
+  }
+  void reset()
+  {
+    ObSimpleConstraintInfo::reset();
+    constraint_type_ = CONSTRAINT_TYPE_INVALID;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(constraint_name),
+               K_(constraint_id), K_(constraint_type));
+
+  ObConstraintType constraint_type_;
+};
+
 #define ASSIGN_PARTITION_ERROR(ERROR_STRING, USER_ERROR) { \
   if (OB_SUCC(ret)) {\
     if (OB_NOT_NULL(ERROR_STRING)) { \

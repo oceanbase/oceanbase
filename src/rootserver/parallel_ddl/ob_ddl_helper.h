@@ -196,6 +196,11 @@ protected:
       const common::ObString &constraint_name,
       const bool is_foreign_key,
       bool &exist);
+  // Reject INDEX name that conflicts with existing PK constraint names in Oracle mode.
+  // On conflict, set ret = OB_ERR_EXIST_OBJECT (ORA-00955) directly.
+  int reject_oracle_index_name_conflict_with_pk_(
+      const uint64_t database_id,
+      const common::ObString &index_name);
   int check_database_legitimacy_(const ObString &database_name, uint64_t &database_id);
 
   int check_parallel_ddl_conflict_(const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos);
