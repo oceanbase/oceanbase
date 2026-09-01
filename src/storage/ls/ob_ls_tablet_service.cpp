@@ -4727,6 +4727,8 @@ int ObLSTabletService::build_tablet_with_batch_tables(
   } else {
     ObTabletHandle old_tablet_handle;
     ObTabletHandle tmp_tablet_handle;
+    ObSSTableTruncateFilter sstable_filter;
+    ObSSTableTruncateFilter *sstable_filter_ptr = nullptr;
 
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
 
@@ -4740,8 +4742,18 @@ int ObLSTabletService::build_tablet_with_batch_tables(
     } else if (OB_ISNULL(pointer = old_tablet_handle.get_obj()->get_pointer_handle().get_tablet_pointer())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tablet pointer should not be NULL", K(ret), K(old_tablet_handle));
+    // Prepare the truncate filter before taking the MDS truncate write lock to
+    // avoid lock-order inversion with the tablet MDS cache lock.
+    } else if (param.is_transfer_replace_ &&
+               OB_FAIL(old_tablet_handle.get_obj()->get_tablet_sstable_truncate_filter(
+                   false/*is_mds_merge*/, sstable_filter))) {
+      LOG_WARN("failed to get tablet sstable truncate filter", K(ret), K(tablet_id));
     } else {
       uint64_t data_version = 0;
+      ObTablet *old_tablet = old_tablet_handle.get_obj();
+      if (param.is_transfer_replace_) {
+        sstable_filter_ptr = &sstable_filter;
+      }
       // The mds truncate lock is shared with the clog replay thread, which holds it in read
       // mode for the whole do_replay_ (including check_transfer_table_replaced_). A one-shot
       // try_wrlock here easily livelocks against the replay thread's ~11ms rdlock/rdunlock
@@ -4775,22 +4787,12 @@ int ObLSTabletService::build_tablet_with_batch_tables(
 
         time_guard.click("ReleaseMDS");
 
-        ObTablet *old_tablet = old_tablet_handle.get_obj();
         ObTablet *tmp_tablet = nullptr;
         const share::ObLSID &ls_id = ls_->get_ls_id();
         const ObTabletMapKey key(ls_id, tablet_id);
         int64_t tablet_meta_version = 0;
-        // prepare sstable truncate filter
-        ObSSTableTruncateFilter sstable_filter;
-        ObSSTableTruncateFilter *sstable_filter_ptr = nullptr;
         if (FAILEDx(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
           LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
-        } else if (!param.is_transfer_replace_) {
-          // do nothing if is not transfer replace
-        } else if (OB_FAIL(old_tablet->get_tablet_sstable_truncate_filter(false/*is_mds_merge*/, sstable_filter))) {
-          LOG_WARN("failed to get tablet sstable truncate filter", K(ret), K(key));
-        } else {
-          sstable_filter_ptr = &sstable_filter;
         }
         const ObTabletPersisterParam persist_param(data_version,
                                                    ls_id,
