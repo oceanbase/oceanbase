@@ -373,6 +373,10 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
   } else if (ObMVRefreshMode::NEVER == mview_info_.get_refresh_mode()) {
     ret = OB_ERR_MVIEW_NEVER_REFRESH;
     LOG_WARN("mview never refresh", KR(ret), K(mview_info_));
+  } else if (ObMVRefreshMode::MAJOR_COMPACTION == mview_info_.get_refresh_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("major compaction mview cannot be refreshed via DBMS_MVIEW", KR(ret), K(mview_info_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh major compaction materialized view via DBMS_MVIEW");
   } else if (OB_FAIL(get_and_check_refresh_scn(trans_,
                                                mview_refresh_scn_range_,
                                                base_table_scn_range_))) {
