@@ -310,6 +310,7 @@ int ObCopyTabletInfo::assign(const ObCopyTabletInfo &info)
     status_ = info.status_;
     data_size_ = info.data_size_;
     version_ = info.version_;
+    tablet_id_ = info.tablet_id_;
   }
   return ret;
 }
