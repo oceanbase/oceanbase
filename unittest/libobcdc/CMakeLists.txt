@@ -4,6 +4,7 @@ function(libobcdc_unittest case)
   else()
     add_executable(${ARGV})
   endif()
+  add_dependencies(${case} ob_cdc_deps)
   target_link_libraries(${case} PRIVATE obcdc gtest gmock)
   target_include_directories(${case}
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/deps/oblib/unittest)

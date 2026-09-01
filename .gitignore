@@ -449,6 +449,7 @@ ebpf_profile_agent/
 ############# deps #############
 deps/oblib/src/common/storage/ob_io_selector.h
 deps/3rd
+deps/cdc_3rd
 
 ############# test #############
 test/tmp

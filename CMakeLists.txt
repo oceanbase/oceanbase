@@ -138,6 +138,17 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+set(CDC_DEP_DIR "${CMAKE_SOURCE_DIR}/deps/cdc_3rd/usr/local/oceanbase/deps/devel")
+set(CDC_ROCKSDB_LIBRARY "${CDC_DEP_DIR}/lib64/librocksdb.a")
+file(MAKE_DIRECTORY "${CDC_DEP_DIR}/include")
+add_custom_target(ob_cdc_deps
+  COMMAND "${CMAKE_COMMAND}" -E env
+    "OB_BUILD_OPENSOURCE=${OB_BUILD_OPENSOURCE}"
+    bash "${CMAKE_SOURCE_DIR}/deps/init/dep_create.sh" --cdc-deps-only
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/deps/init"
+  COMMENT "Preparing CDC dependencies"
+  VERBATIM)
+
 set(STDC_SHARED_LIB "")
 set(STDC_SHARED_LIB_SYMLINK "${DEVTOOLS_DIR}/lib64/libstdc++.so")
 if(${ARCHITECTURE} STREQUAL "loongarch64")
@@ -262,5 +273,8 @@ endif()
 
 # build cdc service
 if(OB_BUILD_CLOSE_MODULES AND EXISTS ${CMAKE_SOURCE_DIR}/ob_cdc)
-  add_subdirectory(ob_cdc)
+  add_subdirectory(ob_cdc EXCLUDE_FROM_ALL)
+  if(CMAKE_BUILD_RPM AND BUILD_CDC_ONLY)
+    add_dependencies(rpm ob_cdc_server)
+  endif()
 endif()

@@ -1,0 +1,10 @@
+# OS_TAG package
+al8.aarch64 devdeps-rocksdb-10.9.1-72026030410.al8.aarch64.rpm
+al8.x86_64 devdeps-rocksdb-10.9.1-72026030410.al8.x86_64.rpm
+an8.loongarch64 devdeps-rocksdb-10.9.1-1.an8.loongarch64.rpm
+el7.aarch64 devdeps-rocksdb-10.9.1-72026030410.el7.aarch64.rpm
+el7.x86_64 devdeps-rocksdb-10.9.1-72026030410.el7.x86_64.rpm
+el8.aarch64 devdeps-rocksdb-10.9.1-72026030410.el8.aarch64.rpm
+el8.x86_64 devdeps-rocksdb-10.9.1-72026030410.el8.x86_64.rpm
+el9.aarch64 devdeps-rocksdb-10.9.1-72026030410.el8.aarch64.rpm
+el9.x86_64 devdeps-rocksdb-10.9.1-72026030410.el8.x86_64.rpm

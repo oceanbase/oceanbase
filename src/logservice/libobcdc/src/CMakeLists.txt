@@ -11,10 +11,13 @@ endif()
 
 add_library(rocksdb STATIC IMPORTED)
 set_target_properties(rocksdb PROPERTIES
-  IMPORTED_LOCATION ${DEP_DIR}/lib64/librocksdb.a)
+  IMPORTED_LOCATION ${CDC_ROCKSDB_LIBRARY})
 
 add_library(obcdc_base INTERFACE)
-target_include_directories(obcdc_base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(obcdc_base INTERFACE
+  ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(obcdc_base SYSTEM INTERFACE
+  ${CDC_DEP_DIR}/include)
 target_link_libraries(obcdc_base
   INTERFACE -Wl,--whole-archive mock_di -Wl,--no-whole-archive ob_base
   obcdc_msg rocksdb
@@ -152,6 +155,7 @@ ob_set_subtarget(obcdc_object_list common
 )
 
 ob_add_new_object_target(obcdc_objects obcdc_object_list)
+add_dependencies(obcdc_objects ob_cdc_deps)
 
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
 target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
@@ -209,6 +213,7 @@ set_target_properties(obcdc PROPERTIES
   VERSION ${CMAKE_PROJECT_VERSION})
 
 ob_add_new_object_target(obcdc_objects_miner obcdc_object_list)
+add_dependencies(obcdc_objects_miner ob_cdc_deps)
 
 target_link_libraries(obcdc_objects_miner PUBLIC obcdc_base)
 add_library(obcdc_static

@@ -172,3 +172,11 @@ include(CPack)
 add_custom_target(rpm
   COMMAND +make package
   )
+
+if (BUILD_CDC_ONLY)
+  if (NOT OB_SO_CACHE)
+    add_dependencies(rpm obcdc obcdc_tailf)
+  endif()
+else()
+  add_dependencies(rpm oblogminer)
+endif()

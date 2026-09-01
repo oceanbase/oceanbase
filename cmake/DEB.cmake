@@ -88,3 +88,7 @@ add_custom_target(deb
   ob_admin ob_error ob_sql_proxy_parser_static
   ${BITCODE_TO_ELF_LIST}
   )
+
+if (NOT BUILD_CDC_ONLY)
+  add_dependencies(deb oblogminer)
+endif()
