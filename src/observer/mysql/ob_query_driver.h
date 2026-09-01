@@ -54,7 +54,8 @@ public:
       session_(session),
       retry_ctrl_(retry_ctrl),
       sender_(sender),
-      is_prexecute_(is_prexecute)
+      is_prexecute_(is_prexecute),
+      need_send_meta_(true)
   {
   }
   virtual ~ObQueryDriver()
@@ -74,6 +75,7 @@ public:
   virtual int send_eof_packet(bool has_more_result);
   virtual int seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp);
   ObIMPPacketSender& get_packet_sender() { return sender_; }
+  void set_need_send_meta(bool v) { need_send_meta_ = v; }
   int response_query_header(const ColumnsFieldIArray &fields,
                                     bool has_more_result = false,
                                     bool need_set_ps_out = false,
@@ -140,6 +142,7 @@ protected:
   ObQueryRetryCtrl &retry_ctrl_;
   ObIMPPacketSender &sender_;
   bool is_prexecute_;
+  bool need_send_meta_;
   /* const */
   /* disallow copy & assign */
   DISALLOW_COPY_AND_ASSIGN(ObQueryDriver);

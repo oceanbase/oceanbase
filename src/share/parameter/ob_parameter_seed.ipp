@@ -517,6 +517,10 @@ DEF_BOOL(_enable_fast_json_path_lookup, OB_TENANT_PARAMETER, "True",
         "Controls whether to enable JSON fast lookup paths. Fast paths optimize performance by directly parsing binary data",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_json_bin_view, OB_TENANT_PARAMETER, "True",
+        "Controls whether to attempt the JSON bin view (ObJsonBinView) zero-copy path for binary JSON input",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "
@@ -3435,3 +3439,11 @@ DEF_INT(_das_deserialize_lib_cache_percentage, OB_TENANT_PARAMETER, "0", "[0,100
 DEF_BOOL(ob_enable_java_udf_sandbox, OB_CLUSTER_PARAMETER, "False",
           "Enable or disable sandbox mode for java udf execution.",
           ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(enable_ps_meta_response_optimize, OB_TENANT_PARAMETER, "False",
+        "is used to control whether the observer and client enable the meta response optimization "
+        "feature under the PS (Prepared Statement) protocol. When this feature is enabled, when the "
+        "observer interacts with an ob-jdbc that has meta cache capability, "
+        "it will return the result set's meta information only during the first execution of a PS statement."
+        "Default: False.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

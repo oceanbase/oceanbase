@@ -1339,6 +1339,43 @@ int ObPhysicalPlan::assign_worker_map(ObPlanStat::AddrMap &worker_map, const com
   return ret;
 }
 
+void ObPhysicalPlan::record_ps_params_value(ObPlanCacheCtx &pc_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (pc_ctx.fp_result_.parameterized_params_.count() > 0) {
+    ObArenaAllocator tmp_alloc("PsParamsPrint");
+    int64_t init_len = 256;
+    char *params_value = static_cast<char *>(tmp_alloc.alloc(init_len));
+    int64_t length = init_len;
+    int64_t pos = 0;
+    if (OB_ISNULL(params_value)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_PC_LOG(WARN, "fail to alloc params value buffer", K(ret));
+    }
+    const ObObjPrintParams print_params(TZ_INFO(pc_ctx.sql_ctx_.session_info_), CS_TYPE_UTF8MB4_GENERAL_CI);
+    for (int i = 0; OB_SUCC(ret) && i < pc_ctx.fp_result_.parameterized_params_.count(); ++i) {
+      const common::ObObjParam *param = pc_ctx.fp_result_.parameterized_params_.at(i);
+      if (OB_ISNULL(param)) {
+        ret = OB_INVALID_ARGUMENT;
+        SQL_PC_LOG(WARN, "param is null", K(ret));
+      } else if (param->is_ext()) {
+        OZ (databuff_printf(params_value, length, pos, tmp_alloc, "ext"));
+      } else if (OB_UNLIKELY(param->is_lob_storage())) {
+        OZ (param->print_varchar_literal(params_value, length, pos, tmp_alloc, print_params));
+      } else {
+        OZ (param->print_sql_literal(params_value, length, pos, tmp_alloc, print_params));
+      }
+      if (i != pc_ctx.fp_result_.parameterized_params_.count() - 1) {
+        OZ (databuff_printf(params_value, length, pos, tmp_alloc, ","));
+      }
+    }
+    if (OB_SUCC(ret) && params_value != NULL && pos > 0) {
+      ObString tmp_str(pos, params_value);
+      OZ (ob_write_string(get_allocator(), tmp_str, stat_.params_value_));
+    }
+  }
+}
+
 int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
 {
   int ret = OB_SUCCESS;
@@ -1364,6 +1401,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
         SQL_PC_LOG(WARN, "fail to set truncate string", K(ret));
       }
       stat_.ps_stmt_id_ = pc_ctx.sql_ctx_.statement_id_;
+      record_ps_params_value(pc_ctx);
     } else {
       ObTruncatedString trunc_stmt(pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_, sql_length);
       if (OB_FAIL(ob_write_string(get_allocator(),

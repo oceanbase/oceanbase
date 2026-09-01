@@ -22,6 +22,7 @@
 #include "lib/json_type/ob_json_tree.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
+#include "lib/json_type/ob_json_wrapper.h"
 #include "lib/json_type/ob_json_path.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
@@ -65,6 +66,7 @@ struct ObJsonCastParam {
     is_pretty_(false),
     is_only_check_(false),
     relaxed_time_convert_(false),
+    lob_done_(false),
     rt_expr_(nullptr)
   {}
   ~ObJsonCastParam() {}
@@ -78,6 +80,7 @@ struct ObJsonCastParam {
   bool is_pretty_;
   bool is_only_check_; // only check cast, not set result
   bool relaxed_time_convert_; // relaxed_time_convert_ for json_table and multivalue index.
+  bool lob_done_;  // cast_to_string set the lob result inline; caller must skip set_lob_datum
   const ObExpr *rt_expr_; // get nls format expr
 };
 
@@ -126,6 +129,15 @@ public:
   static int cast_to_res(common::ObIAllocator *allocator,
                          ObEvalCtx &ctx,
                          ObIJsonBase *j_base,
+                         common::ObAccuracy &accuracy,
+                         ObJsonCastParam &cast_param,
+                         ObDatum &res,
+                         uint8_t &is_type_mismatch);
+  // Overload for ObJsonWrapper: avoids get_raw_binary + ObJsonBin + reset_iter
+  // for common scalar types by using a stack-allocated ObJsonBinViewAdapter.
+  static int cast_to_res(common::ObIAllocator *allocator,
+                         ObEvalCtx &ctx,
+                         const common::ObJsonWrapper &wrapper,
                          common::ObAccuracy &accuracy,
                          ObJsonCastParam &cast_param,
                          ObDatum &res,

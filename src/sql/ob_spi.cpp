@@ -10812,14 +10812,18 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("physical plan is NULL", K(ret));
     } else {
-      rs->get_physical_plan()->has_for_update() ? ps_cursor.set_for_update() : (void)NULL;
+      const ObPhysicalPlan *phy_plan = rs->get_physical_plan();
+      phy_plan->has_for_update() ? ps_cursor.set_for_update() : (void)NULL;
       if (ps_cursor.is_for_update()
-          || rs->get_physical_plan()->contain_pl_udf_or_trigger()
-          || rs->get_physical_plan()->has_link_udf()) {
+          || phy_plan->contain_pl_udf_or_trigger()
+          || phy_plan->has_link_udf()) {
         if (ps_cursor.is_async()) {
           ps_cursor.set_is_async(false);
           ObPsCursorInfo::reduce_async_cursor_count();
         }
+      }
+      if (OB_FAIL(ps_cursor.snapshot_dep_table_versions(phy_plan->get_dependency_table()))) {
+        LOG_WARN("fail to snapshot dep table versions", K(ret));
       }
     }
     audit_guard.set_exec_start_timestamp();

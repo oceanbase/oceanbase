@@ -1324,12 +1324,6 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
         ret = OB_ALLOCATE_MEMORY_FAILED;
       } else if (OB_FAIL(construct_sql(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, len, pos))) {
         SQL_PC_LOG(WARN, "fail to construct_sql", K(ret));
-      } else if (!pc_ctx.is_batch_insert_opt_ &&
-                 !pc_ctx.exec_ctx_.has_dynamic_values_table() &&
-                 OB_FAIL(ObSqlParameterization::formalize_sql_text(allocator, pc_ctx.raw_sql_,
-                                                  pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_,
-                                                  sql_info, fp_ctx))) {
-        SQL_PC_LOG(WARN, "fail to formalize sql text", K(ret), K(pc_ctx.raw_sql_));
       } else if (is_prepare_mode(mode) && OB_FAIL(transform_neg_param(pc_ctx.fp_result_.raw_params_))) {
         SQL_PC_LOG(WARN, "fail to transform_neg_param", K(ret));
       } else {
@@ -1339,6 +1333,17 @@ int ObSqlParameterization::parameterize_syntax_tree(common::ObIAllocator &alloca
       }
     }
   }
+
+  if (OB_SUCC(ret)
+      && !pc_ctx.is_batch_insert_opt_
+      && !pc_ctx.exec_ctx_.has_dynamic_values_table()) {
+    if (OB_FAIL(ObSqlParameterization::formalize_sql_text(allocator, pc_ctx.raw_sql_,
+                                          pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_,
+                                          sql_info, fp_ctx))) {
+      SQL_PC_LOG(WARN, "fail to formalize sql text", K(ret), K(pc_ctx.raw_sql_), K(need_parameterized), K(is_from_pl), K(mode));
+    }
+  }
+
   return ret;
 }
 
@@ -2159,16 +2164,16 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
   } else if (T_QUESTIONMARK == node->type_) {
+    const int64_t raw_param_idx = sql_info.total_++;
     if (pl_sql_parameterize) {
       ParseNode *mutable_node = const_cast<ParseNode *>(node);
-      mutable_node->value_ = sql_info.total_;
-      mutable_node->raw_param_idx_ = sql_info.total_;
-      sql_info.total_++;
+      mutable_node->value_ = raw_param_idx;
+      mutable_node->raw_param_idx_ = raw_param_idx;
     }
     if (OB_FAIL(sql_info.ps_not_param_offsets_.push_back(node->value_))) {
       LOG_WARN("pushback offset failed", K(node->value_));
-    } else if (OB_FAIL(sql_info.not_param_index_.add_member(node->value_))) {
-      SQL_PC_LOG(WARN, "failed to add member", K(node->value_));
+    } else if (OB_FAIL(sql_info.not_param_index_.add_member(raw_param_idx))) {
+      SQL_PC_LOG(WARN, "failed to add member", K(raw_param_idx));
     }
   } else if (T_CAST_ARGUMENT == node->type_        //如果是cast类型，则需要添加N个cast节点对应的常数, 因为正常parse不识别为常量, 但fast parse时会识别为常量
              || T_COLLATION == node->type_
@@ -2210,10 +2215,11 @@ int ObSqlParameterization::add_not_param_flag(const ParseNode *node, SqlInfo &sq
     // Do NOT add them to sql_info.total_ to avoid mismatch with raw_params.count()
     // Just skip this node entirely - no action needed
   } else {
-    if (pl_sql_parameterize && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(sql_info.total_++))) {
+    const int64_t raw_param_idx = sql_info.total_++;
+    if (pl_sql_parameterize && OB_FAIL(sql_info.ps_not_param_offsets_.push_back(raw_param_idx))) {
       LOG_WARN("pushback offset failed", K(node->value_));
-    } else if (PL_EXECUTE_MODE != mode && OB_FAIL(sql_info.not_param_index_.add_member(sql_info.total_++))) {
-      SQL_PC_LOG(WARN, "failed to add member", K(sql_info.total_));
+    } else if (OB_FAIL(sql_info.not_param_index_.add_member(raw_param_idx))) {
+      SQL_PC_LOG(WARN, "failed to add member", K(raw_param_idx));
     } else if (OB_FAIL(add_varchar_charset(node, sql_info))) {
       SQL_PC_LOG(WARN, "fail to add varchar charset", K(ret));
     }
@@ -3023,6 +3029,8 @@ int ObSqlParameterization::formalize_sql_text(ObIAllocator &allocator, const ObS
     if (OB_NOT_SUPPORTED != ret) {
       SQL_PC_LOG(WARN, "fail to check and generate param info", K(ret));
     } else {
+      SQL_PC_LOG(WARN, "fail to formalize sql text", K(ret), K(sql_info.total_), K(fmt_raw_params.count()));
+      ret = OB_SUCCESS;
       // do nothing
     }
   } else if (OB_FAIL(construct_sql(fmt_sql, fmt_special_params, buf, format_len, pos))) {

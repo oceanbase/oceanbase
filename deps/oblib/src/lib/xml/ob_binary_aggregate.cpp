@@ -160,6 +160,44 @@ int ObBinAggSerializer::append_key_and_value(ObString key, ObStringBuffer &value
   return ret;
 }
 
+// Append raw binary value directly, bypassing ObJsonBin construction
+int ObBinAggSerializer::append_raw_json_value(ObString key, const char *value_data,
+                                              int64_t value_len, uint8_t json_type)
+{
+  INIT_SUCC(ret);
+  ObAggBinKeyInfo *key_info = nullptr;
+  int64_t value_record = value_.length();
+
+  ObIAllocator *arr_allocator = get_array_allocator();
+  if (OB_ISNULL(key_info = static_cast<ObAggBinKeyInfo*>
+                          (arr_allocator->alloc(sizeof(ObAggBinKeyInfo))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate key info struct failed", K(ret));
+  } else {
+    int key_count = key_info_.count();
+    key_info->key_len_ = key.length();
+    key_info->origin_index_ = 0;
+    key_info->unparsed_ = false;
+    key_info->type_ = json_type;
+    key_info->value_offset_ = value_record;
+    key_info->offset_ = key_count == 0 ?
+                        0 : key_info_.at(key_count-1)->offset_ + key_info_.at(key_count-1)->key_len_;
+
+    if (OB_FAIL(key_.append(key.ptr(), key.length()))) {
+      LOG_WARN("failed to append key", K(ret), K(key));
+    } else if (OB_FAIL(value_.append(value_data, value_len, 0))) {
+      LOG_WARN("failed to append value", K(ret), K(value_len));
+    } else {
+      key_info->value_len_ = value_len;
+      if (OB_FAIL(key_info_.push_back(key_info))) {
+        LOG_WARN("failed to push back key_info", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 // for xml
 int ObBinAggSerializer::append_key_and_value(ObXmlBin *xml_bin)
 {

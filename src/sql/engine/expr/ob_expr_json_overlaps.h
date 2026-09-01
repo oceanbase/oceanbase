@@ -15,7 +15,7 @@
 #define OCEANBASE_SQL_OB_EXPR_JSON_OVERLAPS_H_
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#include "lib/json_type/ob_json_tree.h"
+#include "lib/json_type/ob_json_wrapper.h"
 
 using namespace oceanbase::common;
 
@@ -23,6 +23,7 @@ namespace oceanbase
 {
 namespace sql
 {
+
 class ObExprJsonOverlaps : public ObFuncExprOperator
 {
 public:
@@ -38,10 +39,10 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-  static int json_overlaps_object(ObIJsonBase *json_a, ObIJsonBase *json_b, bool *result);
-  static int json_overlaps_array(ObIJsonBase *json_a, ObIJsonBase *json_b, bool *result);
-  static int json_overlaps(ObIJsonBase *json_a, ObIJsonBase *json_b, bool *result);
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonOverlaps);
+  static int json_overlaps(const ObJsonWrapper &wrapper_a, const ObJsonWrapper &wrapper_b, bool &result);
+  static int json_overlaps_array(const ObJsonWrapper &wrapper_a, const ObJsonWrapper &wrapper_b, bool &result);
+  static int json_overlaps_object(const ObJsonWrapper &wrapper_a, const ObJsonWrapper &wrapper_b, bool &result);
 };
 
 } // sql

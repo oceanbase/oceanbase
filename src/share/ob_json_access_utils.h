@@ -24,7 +24,7 @@ class ObIAllocator;
 }
 namespace share
 {
-class ObJsonWrapper
+class ObJsonAccessUtils
 {
 public:
   static int get_raw_binary(common::ObIJsonBase *j_base, common::ObString &result, common::ObIAllocator *allocator);

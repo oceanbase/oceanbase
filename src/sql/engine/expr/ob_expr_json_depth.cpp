@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_func_helper.h"
 #include "ob_expr_json_depth.h"
+#include "lib/json_type/ob_json_wrapper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -50,35 +51,30 @@ int ObExprJsonDepth::calc_result_type1(ObExprResType &type,
 
 int ObExprJsonDepth::eval_json_depth(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
-  // get json doc
-  INIT_SUCC(ret);
+  int ret = OB_SUCCESS;
   ObDatum *json_datum = NULL;
   ObExpr *json_arg = expr.args_[0];
   ObObjType val_type = json_arg->datum_meta_.type_;
-  ObIJsonBase *json_doc = NULL;
+  ObJsonWrapper wrapper;
   bool is_null_result = false;
 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, ret, ctx, "json_depth");
   if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
     LOG_WARN("eval json arg failed", K(ret));
   } else if (val_type == ObNullType || json_datum->is_null()) {
     is_null_result = true;
-  } else if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, temp_allocator, 0,
-                                                    json_doc, is_null_result, false))) {
-    LOG_WARN("get_json_doc failed", K(ret));
-  } else {
-    // do nothing
+  } else if (OB_FAIL(ObJsonExprHelper::get_json_wrapper(
+               json_arg, json_datum, temp_allocator, ctx, wrapper, false))) {
+    LOG_WARN("get json bin view wrapper failed", K(ret));
   }
 
-  // set result
   if (OB_FAIL(ret)) {
     LOG_WARN("json_depth failed", K(ret));
   } else if (is_null_result) {
     res.set_null();
   } else {
-    res.set_int32(json_doc->depth());
+    res.set_int32(static_cast<int32_t>(wrapper.depth()));
   }
 
   return ret;

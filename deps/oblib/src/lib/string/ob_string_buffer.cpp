@@ -17,11 +17,22 @@ namespace oceanbase {
 namespace common {
 
 ObStringBuffer::ObStringBuffer(common::ObIAllocator *allocator)
-    : allocator_(allocator), data_(NULL), len_(0), cap_(0)
+    : allocator_(allocator), data_(NULL), len_(0), cap_(0),
+      init_cap_(STRING_BUFFER_INIT_STRING_LEN)
+{}
+
+ObStringBuffer::ObStringBuffer(common::ObIAllocator *allocator, uint64_t init_cap)
+    : allocator_(allocator), data_(NULL), len_(0), cap_(0),
+      init_cap_(init_cap > 0 ? init_cap : STRING_BUFFER_INIT_STRING_LEN)
+{}
+
+ObStringBuffer::ObStringBuffer(char *buf, uint64_t cap, common::ObIAllocator *allocator)
+    : allocator_(allocator), data_(buf), len_(0), cap_(cap), init_cap_(cap)
 {}
 
 ObStringBuffer::ObStringBuffer()
-    : allocator_(NULL), data_(NULL), len_(0), cap_(0)
+    : allocator_(NULL), data_(NULL), len_(0), cap_(0),
+      init_cap_(STRING_BUFFER_INIT_STRING_LEN)
 {}
 
 ObStringBuffer::~ObStringBuffer()
@@ -104,7 +115,9 @@ int ObStringBuffer::reserve(const uint64_t len)
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("allocator is null.", K(ret));
   } else if (cap_ < need_size) {
-    uint64_t extend_to = (cap_ == 0) ? STRING_BUFFER_INIT_STRING_LEN : cap_;
+    // Start from max(init_cap_, need_size) so the first allocation is exactly the right size
+    // for callers that pass a tight init_cap hint (e.g. small scalars in JSON cast).
+    uint64_t extend_to = (cap_ == 0) ? (need_size > init_cap_ ? need_size : init_cap_) : cap_;
     // buffer extend by double
     for (uint64_t i = 0; i < sizeof(extend_to) * BIT_PER_BYTE && extend_to < need_size; ++i) {
       extend_to = extend_to << 1;

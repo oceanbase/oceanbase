@@ -839,7 +839,6 @@ int cast_to_string(common::ObIAllocator *allocator,
                    uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
-  UNUSED(ctx);
   ObString val;
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
@@ -848,13 +847,108 @@ int cast_to_string(common::ObIAllocator *allocator,
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("allocator is null", K(ret));
   } else {
-    ObJsonBuffer j_buf(allocator);
-    if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, 0, cast_param.is_pretty_))) {
-      is_type_mismatch = 1;
-      LOG_WARN("fail to_string as json", K(ret));
+    // Fast path: J_STRING without quoting — use raw data pointer, skip ObJsonBuffer + print().
+    // is_quote_=false is the norm for json_value/json_query returning VARCHAR/TEXT.
+    ObString temp_str_val;
+    const bool is_str_fast = (j_base->json_type() == ObJsonNodeType::J_STRING
+                               && !cast_param.is_quote_);
+
+    // Direct-lob path: when rt_expr_ is set and charset conversion is not needed, write the
+    // result directly into the get_str_res_mem buffer to eliminate:
+    //   (1) the intermediate j_buf arena allocation (non-fast path), and
+    //   (2) the set_lob_datum function call + memcpy overhead (all paths).
+    // Charset-conversion and binary-padding are mutually exclusive with direct-lob because both
+    // require CS_TYPE_BINARY==dst_coll_type_ which causes no_charset_conv to be false.
+    const bool no_charset_conv =
+        !((CS_TYPE_BINARY == cast_param.dst_coll_type_)
+          || (ObCharset::charset_type_by_coll(cast_param.in_coll_type_) !=
+              ObCharset::charset_type_by_coll(cast_param.dst_coll_type_)));
+    const bool can_direct_lob = (cast_param.rt_expr_ != nullptr
+                                  && cast_param.ascii_type_ == 0
+                                  && !cast_param.is_only_check_
+                                  && no_charset_conv);
+
+    // Stack storage for a single ObTextStringDatumResult used in the non-fast direct path.
+    // Placement-new'd only when can_direct_lob && !is_str_fast; always destroyed before return.
+    alignas(ObTextStringDatumResult) char pre_result_store[sizeof(ObTextStringDatumResult)];
+    ObTextStringDatumResult *pre_result = nullptr;
+    const char *direct_buf = nullptr;  // non-null when print() wrote into the lob buffer
+
+    if (is_str_fast) {
+      temp_str_val.assign_ptr(j_base->get_data(),
+                              static_cast<int32_t>(j_base->get_data_length()));
     } else {
+      // For scalar types, pre-size the buffer tightly to avoid the default 512-byte minimum.
+      // For J_DOUBLE/J_DECIMAL, print() issues its own reserve() internally which will take
+      // precedence via max(init_cap, need_size), so init_cap=24 is safe for all scalar types.
+      // Complex types (J_ARRAY/J_OBJECT) keep the 512-byte default.
+      uint64_t print_init_cap = ObJsonBuffer::STRING_BUFFER_INIT_STRING_LEN;
+      switch (j_base->json_type()) {
+        case ObJsonNodeType::J_INT:
+        case ObJsonNodeType::J_UINT:
+        case ObJsonNodeType::J_OINT:
+        case ObJsonNodeType::J_OLONG:
+        case ObJsonNodeType::J_BOOLEAN:
+        case ObJsonNodeType::J_NULL:
+          print_init_cap = 24;
+          break;
+        case ObJsonNodeType::J_DOUBLE:
+        case ObJsonNodeType::J_ODOUBLE:
+        case ObJsonNodeType::J_OFLOAT:
+        case ObJsonNodeType::J_DECIMAL:
+        case ObJsonNodeType::J_ODECIMAL:
+          print_init_cap = 64;
+          break;
+        case ObJsonNodeType::J_STRING:
+          // Only reaches here when is_quote_=true (json_query path).
+          print_init_cap = static_cast<uint64_t>(j_base->get_data_length()) + 10;
+          break;
+        default:
+          break;  // J_ARRAY/J_OBJECT etc keep 512
+      }
+
+      if (can_direct_lob) {
+        // Pre-allocate the lob result buffer large enough for print output.
+        // ObStringBuffer::reserve() checks (cap_ < content_len + 8), so we need
+        // print_init_cap + 8 bytes to guarantee no reallocation for content <= print_init_cap.
+        pre_result = new (pre_result_store) ObTextStringDatumResult(
+            cast_param.dst_type_, cast_param.rt_expr_, &ctx, &res);
+        char *raw_buf = nullptr;
+        int64_t raw_len = 0;
+        if (OB_FAIL(pre_result->init(static_cast<int64_t>(print_init_cap) + 8))) {
+          LOG_WARN("pre_result init failed", K(ret));
+        } else if (OB_FAIL(pre_result->get_reserved_buffer(raw_buf, raw_len))) {
+          LOG_WARN("get_reserved_buffer failed", K(ret));
+        } else {
+          // j_buf is backed by the lob result buffer: no intermediate arena allocation.
+          ObJsonBuffer j_buf(raw_buf, static_cast<uint64_t>(raw_len), allocator);
+          if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, 0, cast_param.is_pretty_))) {
+            is_type_mismatch = 1;
+            LOG_WARN("fail to_string as json", K(ret));
+          } else {
+            temp_str_val.assign_ptr(j_buf.ptr(), static_cast<int32_t>(j_buf.length()));
+            if (j_buf.ptr() == raw_buf) {
+              // Direct write: print output is already in the lob buffer.
+              direct_buf = raw_buf;
+            }
+            // If j_buf overflowed (ptr != raw_buf), direct_buf stays nullptr and
+            // temp_str_val points to the reallocated buffer in allocator.
+          }
+        }
+      } else {
+        ObJsonBuffer j_buf(allocator, print_init_cap);
+        if (CAST_FAIL(j_base->print(j_buf, cast_param.is_quote_, 0, cast_param.is_pretty_))) {
+          is_type_mismatch = 1;
+          LOG_WARN("fail to_string as json", K(ret));
+        } else {
+          // j_buf memory is arena-allocated and outlives j_buf's stack scope.
+          temp_str_val.assign_ptr(j_buf.ptr(), static_cast<int32_t>(j_buf.length()));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       ObObjType in_type = ObLongTextType;
-      ObString temp_str_val(j_buf.length(), j_buf.ptr());
       bool is_need_string_string_convert = ((CS_TYPE_BINARY == cast_param.dst_coll_type_)
                           || (ObCharset::charset_type_by_coll(cast_param.in_coll_type_) !=
                               ObCharset::charset_type_by_coll(cast_param.dst_coll_type_)))
@@ -909,24 +1003,29 @@ int cast_to_string(common::ObIAllocator *allocator,
         val.assign_ptr(temp_str_val.ptr(), temp_str_val.length());
       }
 
+      // Compute max_accuracy_len (O(1)) before any O(n) string scans.
       ObLengthSemantics senmactics = accuracy.get_length_semantics();
-      // do str length check
-      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(
-        senmactics == LS_BYTE ? CS_TYPE_BINARY : cast_param.dst_coll_type_, val.ptr(), val.length()));
       ObLength max_accuracy_len;
       if (lib::is_oracle_mode()) {
-        max_accuracy_len =  (cast_param.dst_type_ == ObLongTextType) ? OB_MAX_LONGTEXT_LENGTH : accuracy.get_length();
+        max_accuracy_len =
+          (cast_param.dst_type_ == ObLongTextType) ? OB_MAX_LONGTEXT_LENGTH : accuracy.get_length();
+        if (max_accuracy_len > 0) {
+          max_accuracy_len *= (senmactics == LS_BYTE ? 1 : 2);
+        }
       } else { // mysql mode
-        max_accuracy_len = (ob_obj_type_class(cast_param.dst_type_) == ObTextTC)
-                                ? ObAccuracy::DDL_DEFAULT_ACCURACY[cast_param.dst_type_].get_length()
-                                    : accuracy.get_length();
-      }
-      if (max_accuracy_len > 0 && lib::is_oracle_mode()) {
-        max_accuracy_len *= (senmactics == LS_BYTE ? 1 : 2);
+        max_accuracy_len = (ob_obj_type_class(cast_param.dst_type_) == ObTextTC) ?
+                             ObAccuracy::DDL_DEFAULT_ACCURACY[cast_param.dst_type_].get_length() :
+                             accuracy.get_length();
       }
 
+      // strlen_char + charpos are O(n) — only pay the cost when there is an actual length limit.
+      int32_t str_len_char = 0;
       uint32_t byte_len = 0;
-      byte_len = ObCharset::charpos(senmactics == LS_BYTE ? CS_TYPE_BINARY : cast_param.dst_coll_type_, val.ptr(), str_len_char, max_accuracy_len);
+      if (OB_SUCC(ret) && max_accuracy_len != DEFAULT_STR_LENGTH) {
+        ObCollationType len_coll = (senmactics == LS_BYTE) ? CS_TYPE_BINARY : cast_param.dst_coll_type_;
+        str_len_char = static_cast<int32_t>(ObCharset::strlen_char(len_coll, val.ptr(), val.length()));
+        byte_len = ObCharset::charpos(len_coll, val.ptr(), str_len_char, max_accuracy_len);
+      }
 
       if (OB_SUCC(ret)) {
         if (max_accuracy_len == DEFAULT_STR_LENGTH) { // default string len
@@ -985,9 +1084,49 @@ int cast_to_string(common::ObIAllocator *allocator,
         }
       }
       if (OB_SUCC(ret) && !cast_param.is_only_check_) {
-        ObJsonUtil::wrapper_set_string(cast_param.dst_type_, val, res);
-        res.set_string(val);
+        if (can_direct_lob && pre_result != nullptr
+            && direct_buf != nullptr && val.ptr() == direct_buf) {
+          // Non-fast direct path succeeded: print() already wrote into the lob buffer.
+          // Just advance the write position to the actual content length and finalize.
+          if (OB_FAIL(pre_result->lseek(static_cast<int64_t>(val.length()), 0))) {
+            LOG_WARN("lseek failed", K(ret));
+          } else {
+            pre_result->set_result();
+            cast_param.lob_done_ = true;
+          }
+        } else if (can_direct_lob) {
+          // is_str_fast path, or non-fast with overflow/alloc_failure: inline the lob setup
+          // to avoid the set_lob_datum function call + overhead.
+          ObTextStringDatumResult inline_result(
+              cast_param.dst_type_, cast_param.rt_expr_, &ctx, &res);
+          if (OB_FAIL(inline_result.init(static_cast<int64_t>(val.length())))) {
+            LOG_WARN("inline_result init failed", K(ret));
+          } else if (val.length() > 0) {
+            char *buf = nullptr;
+            int64_t buf_len = 0;
+            if (OB_FAIL(inline_result.get_reserved_buffer(buf, buf_len))) {
+              LOG_WARN("get_reserved_buffer failed", K(ret));
+            } else {
+              MEMCPY(buf, val.ptr(), val.length());
+              if (OB_FAIL(inline_result.lseek(static_cast<int64_t>(val.length()), 0))) {
+                LOG_WARN("lseek failed", K(ret));
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            inline_result.set_result();
+            cast_param.lob_done_ = true;
+          }
+        } else {
+          ObJsonUtil::wrapper_set_string(cast_param.dst_type_, val, res);
+          res.set_string(val);
+        }
       }
+    }
+
+    // Destroy placement-new'd pre_result (destructor is trivial but called for correctness).
+    if (pre_result != nullptr) {
+      pre_result->ObTextStringDatumResult::~ObTextStringDatumResult();
     }
   }
 
@@ -1607,6 +1746,59 @@ int ObJsonUtil::cast_to_res(common::ObIAllocator *allocator,
 
   LOG_DEBUG("finish cast_to_res.", K(ret), K(cast_param.dst_type_));
 
+  return ret;
+}
+
+int ObJsonUtil::cast_to_res(common::ObIAllocator *allocator,
+                            ObEvalCtx &ctx,
+                            const common::ObJsonWrapper &wrapper,
+                            ObAccuracy &accuracy,
+                            ObJsonCastParam &cast_param,
+                            ObDatum &res,
+                            uint8_t &is_type_mismatch)
+{
+  INIT_SUCC(ret);
+  if (!wrapper.is_bin()) {
+    ret = cast_to_res(allocator, ctx, wrapper.get_dom(),
+                      accuracy, cast_param, res, is_type_mismatch);
+  } else {
+    const common::ObJsonBinView &view = wrapper.get_bin_view();
+    ObJsonNodeType j_type = view.json_type();
+    // Fast path: scalar types already parsed in view — stack-allocated adapter, zero allocation.
+    // Fall back to to_json_base() for decimal, time-opaque, containers.
+    bool use_adapter = false;
+    switch (j_type) {
+      case ObJsonNodeType::J_NULL:
+      case ObJsonNodeType::J_BOOLEAN:
+      case ObJsonNodeType::J_INT:
+      case ObJsonNodeType::J_OINT:
+      case ObJsonNodeType::J_UINT:
+      case ObJsonNodeType::J_OLONG:
+      case ObJsonNodeType::J_DOUBLE:
+      case ObJsonNodeType::J_ODOUBLE:
+      case ObJsonNodeType::J_OFLOAT:
+      case ObJsonNodeType::J_STRING:
+        use_adapter = true;
+        break;
+      default:
+        break;
+    }
+    if (use_adapter) {
+      common::ObJsonBinViewAdapter adapter(view, allocator);
+      ret = cast_to_res(allocator, ctx, static_cast<ObIJsonBase *>(&adapter),
+                        accuracy, cast_param, res, is_type_mismatch);
+    } else {
+      ObIJsonBase *j_base = nullptr;
+      if (OB_ISNULL(allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("allocator is null", K(ret));
+      } else if (OB_FAIL(const_cast<common::ObJsonWrapper &>(wrapper).to_json_base(*allocator, j_base))) {
+        LOG_WARN("to_json_base fail", K(ret));
+      } else {
+        ret = cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res, is_type_mismatch);
+      }
+    }
+  }
   return ret;
 }
 

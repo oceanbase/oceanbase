@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_sql_utils.h"
 #include "sql/ob_sql.h"
+#include "sql/resolver/dml/ob_select_stmt.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
 #include "sql/printer/ob_select_stmt_printer.h"
 #include "sql/printer/ob_insert_all_stmt_printer.h"
@@ -7512,4 +7514,68 @@ int ObSQLUtils::is_opt_hdfs_external_hive_table(const ObTableSchema *table_schem
                         || !table_schema->is_user_specified_partition_for_external_table());
   }
   return ret;
+}
+
+static bool check_expr_meta_unstable(const ObRawExpr *expr, const ObDMLStmt *stmt)
+{
+  bool is_unstable = false;
+  if (OB_ISNULL(expr)) {
+    is_unstable = true;
+  }
+  ObItemType type = expr->get_expr_type();
+  if (T_QUESTIONMARK == type || T_OP_GET_USER_VAR == type) {
+    is_unstable = true;
+  }
+  if (T_REF_COLUMN == type && OB_NOT_NULL(stmt) && !is_unstable) {
+    const ObColumnRefRawExpr *col_ref = static_cast<const ObColumnRefRawExpr *>(expr);
+    const TableItem *table_item = stmt->get_table_item_by_id(col_ref->get_table_id());
+    if (OB_NOT_NULL(table_item) && OB_NOT_NULL(table_item->ref_query_) &&
+        (table_item->is_generated_table() || table_item->is_temp_table() ||
+         table_item->is_lateral_table())) {
+      int64_t col_idx = col_ref->get_column_id() - common::OB_APP_MIN_COLUMN_ID;
+      const ObIArray<SelectItem> &inner_items = table_item->ref_query_->get_select_items();
+      if (col_idx >= 0 && col_idx < inner_items.count()) {
+        if (SMART_CALL(check_expr_meta_unstable(inner_items.at(col_idx).expr_, table_item->ref_query_))) {
+          is_unstable = true;
+        }
+      }
+    }
+  }
+  if (!is_unstable && expr->is_query_ref_expr()) {
+    const ObQueryRefRawExpr *query_ref = static_cast<const ObQueryRefRawExpr *>(expr);
+    const ObSelectStmt *ref_stmt = query_ref->get_ref_stmt();
+    if (OB_NOT_NULL(ref_stmt) && !SMART_CALL(ObSQLUtils::detect_column_meta_stable(ref_stmt))) {
+      is_unstable = true;
+    }
+  }
+  for (int64_t i = 0; !is_unstable && i < expr->get_param_count(); i++) {
+    if (SMART_CALL(check_expr_meta_unstable(expr->get_param_expr(i), stmt))) {
+      is_unstable = true;
+    }
+  }
+  return is_unstable;
+}
+
+bool ObSQLUtils::detect_column_meta_stable(const ObDMLStmt *stmt)
+{
+  bool is_stable = true;
+  if (OB_ISNULL(stmt) || !stmt->is_select_stmt()) {
+    is_stable = false;
+  } else {
+    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (select_stmt->is_set_stmt()) {
+      const ObIArray<ObSelectStmt *> &set_queries = select_stmt->get_set_query();
+      for (int64_t i = 0; is_stable && i < set_queries.count(); i++) {
+        is_stable = SMART_CALL(detect_column_meta_stable(set_queries.at(i)));
+      }
+    } else {
+      const ObIArray<SelectItem> &select_items = select_stmt->get_select_items();
+      for (int64_t i = 0; is_stable && i < select_items.count(); i++) {
+        if (SMART_CALL(check_expr_meta_unstable(select_items.at(i).expr_, select_stmt))) {
+          is_stable = false;
+        }
+      }
+    }
+  }
+  return is_stable;
 }

@@ -90,7 +90,7 @@ MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int
   }
 }
 
-MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int64_t tenant_id, int &ret,
+MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int &ret,
                                      ObEvalCtx &ctx, const char *func_name)
     : arena_(arena),
       baseline_size_(0),
@@ -103,6 +103,7 @@ MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int
       ext_used_(0)
 {
   uint64_t alloc_tenant = arena.get_arena().get_tenant_id();
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
   if (alloc_tenant != tenant_id) {
     INIT_SUCC(ret);
@@ -451,6 +452,11 @@ int MultimodeAlloctor::eval_arg(const ObExpr *arg, ObEvalCtx &ctx, common::ObDat
   if (OB_ISNULL(arg)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("invalid null expr argument", K(ret), K(arg));
+  } else if (check_level_ == 0) {
+    // skip memory tracking in the common case (tracing disabled)
+    if (OB_FAIL(arg->eval(ctx, datum))) {
+      LOG_WARN("eval arg failed", K(ret));
+    }
   } else {
     int64_t last_used = used();
     if (OB_FAIL(arg->eval(ctx, datum))) {

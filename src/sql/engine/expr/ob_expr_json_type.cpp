@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_type.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "lib/json_type/ob_json_wrapper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -140,7 +141,9 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
       case ObLongTextType: {
         common::ObString j_str = data.get_string(); // json text or json binary
         ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(type);
-        ObIJsonBase *j_base = NULL;
+        ObJsonWrapper wrapper;
+        sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+        bool enable_json_bin_view = OB_NOT_NULL(session) ? session->is_enable_json_bin_view() : true;
         if (OB_FAIL(ObJsonExprHelper::ensure_collation(type, cs_type))) {
           LOG_WARN("fail to ensure collation", K(ret), K(type), K(cs_type));
         } else if (j_str.length() == 0) {
@@ -148,16 +151,16 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
         } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data, meta, has_lob_header, j_str))) {
           LOG_WARN("fail to get real data.", K(ret), K(j_str));
-        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
-                                                            j_in_type, j_base, 0,
-                                                            ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
-          LOG_WARN("fail to get json base", K(ret), K(type), K(j_str), K(j_in_type));
+        } else if (OB_FAIL(common::get_json_wrapper(j_str, j_in_type, *allocator, wrapper,
+                                                    0, ObJsonExprHelper::get_json_max_depth_config(ctx),
+                                                    enable_json_bin_view))) {
+          LOG_WARN("fail to get json wrapper", K(ret), K(type), K(j_str), K(j_in_type));
           if (ret == OB_ERR_INVALID_JSON_TEXT_IN_PARAM) {
             ret = OB_ERR_INVALID_JSON_TEXT;
             LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
           }
         } else {
-          ObJsonNodeType j_type = j_base->json_type();
+          ObJsonNodeType j_type = wrapper.json_type();
           if (j_type == ObJsonNodeType::J_MYSQL_DATE){
             j_type = ObJsonNodeType::J_DATE;
           } else if (j_type == ObJsonNodeType::J_MYSQL_DATETIME){
@@ -165,7 +168,7 @@ int ObExprJsonType::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta, 
           }
           type_idx = static_cast<uint32_t>(j_type);
           if (j_type == ObJsonNodeType::J_OPAQUE) {
-            type_idx = opaque_index(j_base->field_type());
+            type_idx = opaque_index(wrapper.field_type());
           }
         }
         break;

@@ -625,6 +625,8 @@ ObJsonPath::ObJsonPath(common::ObIAllocator *allocator)
   is_mysql_ =  lib::is_mysql_mode();
   is_sub_path_ = false;
   is_contained_wildcard_or_ellipsis_ = false;
+  is_simple_path_ = true;
+  can_match_many_ = false;
 }
 
 common::ObIAllocator* ObJsonPath::get_allocator()
@@ -643,6 +645,8 @@ ObJsonPath::ObJsonPath(const ObString& path, common::ObIAllocator *allocator)
   bad_index_ = -1;
   use_heap_expr_ = 1;
   is_contained_wildcard_or_ellipsis_ = false;
+  is_simple_path_ = true;
+  can_match_many_ = false;
   is_mysql_ = lib::is_mysql_mode();
   is_sub_path_ = false;
 
@@ -910,28 +914,18 @@ int ObJsonPath::append(ObJsonPathNode* json_node)
     K(ret), K(expression_), K(path_node_cnt()));
   } else if (OB_FAIL(path_nodes_.push_back(json_node))) {
     LOG_WARN("fail to push back", K(ret));
-  }
-  return ret;
-}
-
-bool ObJsonPath::can_match_many() const
-{
-  bool ret_bool = false;
-  for (uint32_t i = 0; i < path_nodes_.size() && ret_bool == false; ++i) {
-    switch(path_nodes_[i]->get_node_type()) {
-      case JPN_MEMBER_WILDCARD:
-      case JPN_ARRAY_CELL_WILDCARD:
-      case JPN_WILDCARD_ELLIPSIS:
-      case JPN_ARRAY_RANGE: {
-        ret_bool = true;
-        break;
-      }
-      default: {
-        ret_bool = false;
-      }
+  } else {
+    ObJsonPathNodeType nt = json_node->get_node_type();
+    if (is_simple_path_ && nt != JPN_MEMBER && nt != JPN_ARRAY_CELL) {
+      is_simple_path_ = false;
+    }
+    if (!can_match_many_
+        && (nt == JPN_MEMBER_WILDCARD || nt == JPN_ARRAY_CELL_WILDCARD
+            || nt == JPN_WILDCARD_ELLIPSIS || nt == JPN_ARRAY_RANGE)) {
+      can_match_many_ = true;
     }
   }
-  return ret_bool;
+  return ret;
 }
 
 inline bool ObJsonPath::is_contained_wildcard_or_ellipsis() const
@@ -963,44 +957,58 @@ int ObJsonPathCache::find_and_add_cache(
 {
   INIT_SUCC(ret);
 
-  ObJsonPath* json_path = nullptr;
-
-  if (is_const) {
-    if (arg_idx < size()) {  // for const path, only one path is cached
-      json_path = path_arr_ptr_[arg_idx]->at(0).path_;
-    }
+  // Fast path for const args: single array access, no pointer indirection.
+  if (is_const && arg_idx >= 0 && arg_idx < MAX_CONST_PATH_ARGS
+      && OB_NOT_NULL(const_path_[arg_idx])) {
+    res_path = const_path_[arg_idx];
   } else {
-    json_path = find_path(path_str, arg_idx);
-  }
-
-  if (OB_NOT_NULL(json_path)) {
-    res_path = json_path;
-  } else {
-    void* buf = nullptr;
     ObJsonPath* json_path = nullptr;
-    int path_cnt = get_cached_path_count(arg_idx);
-    if (path_cnt < MAX_PATH_CACHE_COUNT) {
-      if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObJsonPath)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc path.", K(ret));
-      } else {
-        json_path = new (buf) ObJsonPath(path_str, allocator_);
+
+    if (is_const) {
+      if (arg_idx < static_cast<int>(size())) {  // for const path, only one path is cached
+        json_path = path_arr_ptr_[arg_idx]->at(0).path_;
       }
     } else {
-      if (OB_ISNULL(buf = allocator.alloc(sizeof(ObJsonPath)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to alloc path.", K(ret));
-      } else {
-        json_path = new (buf) ObJsonPath(path_str, &allocator);
-      }
+      json_path = find_path(path_str, arg_idx);
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(json_path->parse_path())) {
-      LOG_WARN("wrong path expression, parse path failed or with wildcards", K(ret), K(path_str));
-    } else if (OB_FALSE_IT(res_path = json_path)) {
-    } else if (path_cnt < MAX_PATH_CACHE_COUNT) {
-      ret = set_path(json_path, path_str.length() == 0 ? OK_NULL : OK_NOT_NULL, arg_idx, arg_idx);
+    if (OB_NOT_NULL(json_path)) {
+      res_path = json_path;
+      if (is_const && arg_idx >= 0 && arg_idx < MAX_CONST_PATH_ARGS) {
+        const_path_[arg_idx] = json_path;  // populate flat cache for next call
+      }
+    } else {
+      void* buf = nullptr;
+      ObJsonPath* new_path = nullptr;
+      int path_cnt = get_cached_path_count(arg_idx);
+      if (path_cnt < MAX_PATH_CACHE_COUNT) {
+        if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObJsonPath)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc path.", K(ret));
+        } else {
+          new_path = new (buf) ObJsonPath(path_str, allocator_);
+        }
+      } else {
+        if (OB_ISNULL(buf = allocator.alloc(sizeof(ObJsonPath)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc path.", K(ret));
+        } else {
+          new_path = new (buf) ObJsonPath(path_str, &allocator);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(new_path->parse_path())) {
+        LOG_WARN("wrong path expression, parse path failed or with wildcards", K(ret), K(path_str));
+      } else {
+        res_path = new_path;
+        if (is_const && arg_idx >= 0 && arg_idx < MAX_CONST_PATH_ARGS) {
+          const_path_[arg_idx] = new_path;
+        }
+        if (path_cnt < MAX_PATH_CACHE_COUNT) {
+          ret = set_path(new_path, path_str.length() == 0 ? OK_NULL : OK_NOT_NULL, arg_idx, arg_idx);
+        }
+      }
     }
   }
   return ret;

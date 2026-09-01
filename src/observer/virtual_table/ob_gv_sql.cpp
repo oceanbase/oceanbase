@@ -1428,6 +1428,24 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       }
       break;
     }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PARAMS_VALUE: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        ObString params_str;
+        if (OB_FAIL(ob_write_string(*allocator_, plan->stat_.params_value_, params_str))) {
+          SERVER_LOG(WARN, "deep copy parameters string failed", K(ret));
+        } else {
+          cells[i].set_lob_value(ObLongTextType, params_str.ptr(),
+                                 static_cast<int32_t>(params_str.length()));
+          cells[i].set_collation_type(ObCharset::get_default_collation(
+                                        ObCharset::get_default_charset()));
+        }
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
     default: {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(WARN,

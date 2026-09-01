@@ -26,7 +26,7 @@ using namespace common;
 namespace share
 {
 
-int ObJsonWrapper::get_raw_binary(ObIJsonBase *j_base, ObString &result, ObIAllocator *allocator)
+int ObJsonAccessUtils::get_raw_binary(ObIJsonBase *j_base, ObString &result, ObIAllocator *allocator)
 {
   INIT_SUCC(ret);
   uint64_t tenant_data_version = 0;

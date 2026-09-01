@@ -90,10 +90,17 @@ private:
                           uint16_t warning_count,
                           int8_t has_result_set,
                           bool is_returning_into,
-                          bool has_ps_out);
+                          bool has_ps_out,
+                          bool enable_ps_meta_cache = false);
   int send_column_packet(sql::ObSQLSessionInfo &session,
                          const ColumnsFieldIArray *fields,
                          bool ps_out);
+  // PS Meta Cache 命中时发送一个占位列 + 对应的 EOF。
+  int send_dummy_column_packet(sql::ObSQLSessionInfo &session, bool ps_out);
+  // PS Meta Cache 命中时发送一个参数占位包；
+  // 注意此处不发 EOF，EOF 由调用侧（input + returning 段拼起来后）统一发送，
+  // 与原 send_param_field_packet 的语义保持一致。
+  int send_dummy_param_packet(sql::ObSQLSessionInfo &session);
   int send_param_field_packet(sql::ObSQLSessionInfo &session,
                               const ParamsFieldIArray *input_params);
   int send_param_packet(sql::ObSQLSessionInfo &session, ParamStore *params);
@@ -109,6 +116,7 @@ private:
                                   int64_t stmt_id,
                                   int8_t has_result,
                                   int64_t warning_count = 0,
+                                  const common::ObIArray<int64_t> *dep_table_versions = NULL,
                                   bool ps_out = false);
 
   // arraybinding

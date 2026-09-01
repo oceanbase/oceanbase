@@ -237,7 +237,7 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     if (ObJsonExprHelper::is_json_depth_exceed_limit(j_base->depth())) {
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_base->depth()));
-    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));
@@ -360,7 +360,7 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
       LOG_WARN("current json over depth", K(ret), K(j_base->depth()));
     } else if (dst_type == ObJsonType) {
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
         LOG_WARN("fail to pack json result", K(ret), K(raw_bin));

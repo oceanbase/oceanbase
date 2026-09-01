@@ -473,6 +473,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     parse_question_mark_count_ = other.parse_question_mark_count_;
     external_params_count_ = other.external_params_count_;
     is_select_for_update_ = other.is_select_for_update_;
+    is_column_meta_stable_ = other.is_column_meta_stable_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>
@@ -720,6 +721,22 @@ int ObPsSessionInfo::fill_param_types_with_null_type()
       LOG_WARN("push null type into param_types_ failed", K(ret));
     }
   }
+  return ret;
+}
+
+const char *PsCacheInfoCtx::PS_DUMMY_FIELD_NAME = "__$_OB_PS_DUMMY_COLUMN_$__";
+
+int PsCacheInfoCtx::build_ps_dummy_field(ObField &field)
+{
+  int ret = OB_SUCCESS;
+  field.dname_ = ObString::make_string(OB_SYS_DATABASE_NAME);
+  field.tname_ = ObString::make_string(OB_SYS_DATABASE_NAME);
+  field.org_tname_ = field.tname_;
+  field.cname_ = ObString::make_string(PS_DUMMY_FIELD_NAME);
+  field.org_cname_ = field.cname_;
+  field.charsetnr_ = CS_TYPE_BINARY;
+  field.length_ = 0;
+  field.type_.set_null();
   return ret;
 }
 

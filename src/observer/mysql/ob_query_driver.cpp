@@ -21,6 +21,8 @@
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "sql/plan_cache/ob_prepare_stmt_struct.h"
+#include "sql/engine/ob_physical_plan.h"
 
 namespace oceanbase
 {
@@ -68,6 +70,7 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
   int ret = OB_SUCCESS;
   bool ac = true;
   int tmp_ret = OB_E(EventTable::EN_DISABLE_HASH_BASE_DISTINCT) OB_SUCCESS;
+  LOG_TRACE("response query header", K(ps_cursor_execute), K(need_send_meta_), KP(result));
   // result == null means ps cursor in execute or fetch .
   if (NULL != result && (&fields != result->get_field_columns())) {
     ret = OB_ERR_UNEXPECTED;
@@ -80,7 +83,9 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
   } else if (!(NULL != result && result->get_is_com_filed_list())) {
     // 普通协议发送 cnt 值
     OMPKResheader rhp;
-    rhp.set_field_count(fields.count());
+    // 无需发送 PS Meta 时仍回 1 列，由 fake invisible field 占位，避免 field_count=0 与
+    // 其他协议路径混淆。
+    rhp.set_field_count(need_send_meta_ ? fields.count() : 1);
     if (OB_FAIL(sender_.response_packet(rhp, &session_))) {
       LOG_WARN("response packet fail", K(ret));
     }
@@ -89,7 +94,7 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
   }
 
   // 发送 field 信息
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && need_send_meta_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < fields.count(); ++i) {
       bool is_not_match = false;
       ObMySQLField field;
@@ -127,6 +132,21 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
             LOG_WARN("response packet fail", K(ret));
           }
         }
+      }
+    }
+  } else if (OB_SUCC(ret) && !need_send_meta_) {
+    // 无需发送 PS Meta 时仍回 1 列，由 dummy field 占位，避免 field_count=0 与
+    // 其他协议路径混淆。
+    ObField dummy_ob_field;
+    ObMySQLField dummy_mfield;
+    if (OB_FAIL(sql::PsCacheInfoCtx::build_ps_dummy_field(dummy_ob_field))) {
+      LOG_WARN("fail to build invisible fake field", K(ret));
+    } else if (OB_FAIL(ObMySQLResultSet::to_new_result_field(dummy_ob_field, dummy_mfield))) {
+      LOG_WARN("fail to convert fake field", K(ret));
+    } else {
+      OMPKField fp(dummy_mfield);
+      if (OB_FAIL(sender_.response_packet(fp, &session_))) {
+        LOG_WARN("response fake field packet fail", K(ret));
       }
     }
   }

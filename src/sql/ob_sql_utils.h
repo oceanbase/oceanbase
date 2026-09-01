@@ -882,6 +882,7 @@ public:
     ObIAllocator &allocator,
     const ObSQLSessionInfo &session,
     bool param_byorder);
+  static bool detect_column_meta_stable(const ObDMLStmt *stmt);
 
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);

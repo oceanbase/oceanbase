@@ -133,7 +133,7 @@ int ObExprXmlAttributes::eval_xml_attributes(const ObExpr &expr, ObEvalCtx &ctx,
     // set result(json bin)
     if (OB_SUCC(ret)) {
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &tmp_allocator))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &tmp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       } else {
         uint64_t length = raw_bin.length();

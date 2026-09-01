@@ -15,6 +15,7 @@
 #include "ob_expr_json_func_helper.h"
 #include "share/ob_json_access_utils.h"
 #include "ob_expr_json_utils.h"
+#include "lib/json_type/ob_json_compare.h"
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/ob_spi.h"
 #include "storage/lob/ob_lob_manager.h"
@@ -29,6 +30,45 @@ namespace oceanbase
 {
 namespace sql
 {
+
+int ObJsonExprHelper::pack_json_str_res_impl(
+    const ObExpr &expr,
+    ObEvalCtx &ctx,
+    ObDatum &res,
+    const char *ptr,
+    int64_t len,
+    common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (!expr.obj_meta_.has_lob_header() || (lib::is_mysql_mode() && OB_ISNULL(allocator))) {
+    const bool has_lob_header = expr.obj_meta_.has_lob_header();
+    const int64_t lob_header_size = has_lob_header ? static_cast<int64_t>(sizeof(common::ObLobCommon)) : 0;
+    const int64_t total = lob_header_size + len;
+    char *buf = expr.get_str_res_mem(ctx, total);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc str res mem failed", K(ret), K(total));
+    } else {
+      MEMCPY(buf + lob_header_size, ptr, len);
+      if (lob_header_size > 0) {
+        static const common::ObLobCommon LOB_HDR;
+        MEMCPY(buf, &LOB_HDR, sizeof(common::ObLobCommon));
+      }
+      res.set_string(buf, total);
+    }
+  } else {
+    ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+    if (OB_FAIL(text_result.init(len, allocator))) {
+      LOG_WARN("init lob result failed", K(ret));
+    } else if (OB_FAIL(text_result.append(ptr, len))) {
+      LOG_WARN("failed to append realdata", K(ret), KP(ptr), K(len), K(text_result));
+    } else {
+      text_result.set_result();
+    }
+  }
+  return ret;
+}
+
 static OB_INLINE int common_construct_otimestamp(const ObObjType type,
                                                  const ObDatum &in_datum,
                                                  ObOTimestampData &out_val)
@@ -103,9 +143,66 @@ int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
               && !ob_is_string_type(val_type)) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN("input type error", K(val_type));
+  } else if (!expr->obj_meta_.has_lob_header()) {
+    // Fast path: skip LOB processing when no LOB header present (e.g., in-row JSON binary)
+    str = json_datum->get_string();
   } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *json_datum,
                 expr->datum_meta_, expr->obj_meta_.has_lob_header(), str))) {
     LOG_WARN("fail to get real data.", K(ret), K(str));
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_or_str_data(ObExpr *expr, ObDatum *datum,
+                                           MultimodeAlloctor &allocator,
+                                           ObString &str, ObEvalCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (!expr->obj_meta_.has_lob_header()) {
+    str = datum->get_string();
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *datum,
+                expr->datum_meta_, true, str, &ctx.exec_ctx_))) {
+    LOG_WARN("fail to get real data.", K(ret), K(str));
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_wrapper(ObExpr *expr, ObDatum *datum,
+                                       MultimodeAlloctor &allocator,
+                                       ObEvalCtx &ctx,
+                                       common::ObJsonWrapper &wrapper,
+                                       bool need_set_baseline_size)
+{
+  int ret = OB_SUCCESS;
+  ObString j_str;
+  if (OB_ISNULL(expr) || OB_ISNULL(datum)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null json expr or datum", K(ret), K(expr), K(datum));
+  } else if (OB_FAIL(get_json_or_str_data(expr, datum, allocator, j_str, ctx))) {
+    LOG_WARN("fail to get real data.", K(ret), K(j_str));
+  } else if (lib::is_mysql_mode()
+             && OB_FAIL(ObJsonExprHelper::ensure_collation(expr->datum_meta_.type_,
+                                                           expr->datum_meta_.cs_type_))) {
+    LOG_WARN("fail to ensure collation", K(ret), K(expr->datum_meta_.cs_type_));
+  } else {
+    ObJsonInType j_in_type = get_json_internal_type(expr->datum_meta_.type_);
+    if (need_set_baseline_size) {
+      allocator.set_baseline_size(j_str.length());
+    }
+    uint32_t parse_flag = 0;
+    ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    bool json_float_full_precision =
+        OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+    ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag,
+                     ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
+    bool enable_json_bin_view = OB_NOT_NULL(session) ? session->is_enable_json_bin_view() : true;
+    if (OB_FAIL(common::get_json_wrapper(j_str, j_in_type, allocator, wrapper,
+                                         parse_flag, get_json_max_depth_config(ctx),
+                                         enable_json_bin_view))) {
+      ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+      LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
+      LOG_WARN("get_json_wrapper failed", K(ret), K(j_in_type));
+    }
   }
   return ret;
 }
@@ -292,6 +389,202 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
           ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_doc_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
+                                           MultimodeAlloctor &allocator,
+                                           uint16_t index, common::ObJsonWrapper &wrapper,
+                                           bool &is_null, bool relax,
+                                           bool preserve_dup)
+{
+  INIT_SUCC(ret);
+  ObDatum *json_datum = NULL;
+  ObExpr *json_arg = expr.args_[index];
+  ObObjType val_type = json_arg->datum_meta_.type_;
+  ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
+  bool is_oracle = lib::is_oracle_mode();
+
+  if (OB_UNLIKELY(OB_FAIL(allocator.eval_arg(json_arg, ctx, json_datum)))) {
+    LOG_WARN("eval json arg failed", K(ret));
+  } else if (val_type == ObNullType || json_datum->is_null()) {
+    is_null = true;
+  } else if (val_type != ObJsonType && !ob_is_string_type(val_type)) {
+    ret = OB_ERR_INVALID_TYPE_FOR_OP;
+    LOG_WARN("input type error", K(val_type));
+  } else if (lib::is_mysql_mode() && OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
+    LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
+  } else {
+    ObString j_str;
+    if (OB_FAIL(get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null))) {
+      LOG_WARN("fail to get real data.", K(ret), K(j_str));
+    } else if (is_null) {
+    } else if (OB_FALSE_IT(allocator.add_baseline_size(j_str.length()))) {
+    } else {
+      ObJsonInType j_in_type = ObJsonExprHelper::get_json_internal_type(val_type);
+      bool relax_json = (is_oracle && relax);
+      sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      bool json_float_full_precision =
+        OB_NOT_NULL(session) ? session->get_local_json_float_full_precision() : false;
+      uint32_t parse_flag = relax_json ? ObJsonParser::JSN_RELAXED_FLAG : 0;
+      ADD_FLAG_IF_NEED(preserve_dup, parse_flag, ObJsonParser::JSN_PRESERVE_DUP_FLAG);
+      ADD_FLAG_IF_NEED(json_float_full_precision, parse_flag, ObJsonParser::JSN_FLOAT_FULL_PRECISION_FLAG);
+      bool enable_json_bin_view = OB_NOT_NULL(session) ? session->is_enable_json_bin_view() : true;
+      if (is_oracle && j_str.length() == 0) {
+        is_null = true;
+      } else if (OB_FAIL(common::get_json_wrapper(j_str, j_in_type, allocator, wrapper,
+                                                   parse_flag,
+                                                   ObJsonExprHelper::get_json_max_depth_config(ctx),
+                                                   enable_json_bin_view))) {
+        LOG_WARN("fail to get json wrapper", K(ret), K(j_in_type));
+        if (is_oracle) {
+          ret = OB_ERR_JSON_SYNTAX_ERROR;
+        } else {
+          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
+          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_val_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
+                                           MultimodeAlloctor &allocator,
+                                           uint16_t index, common::ObJsonWrapper &wrapper,
+                                           bool &is_null)
+{
+  INIT_SUCC(ret);
+  ObExpr *json_arg = expr.args_[index];
+  ObObjType val_type = json_arg->datum_meta_.type_;
+  if (val_type == ObJsonType) {
+    if (OB_FAIL(get_json_doc_wrapper(expr, ctx, allocator, index, wrapper, is_null,
+                                     false, false))) {
+      LOG_WARN("get bin-view wrapper failed", K(ret));
+    }
+  } else {
+    ObDatum *json_datum = NULL;
+    ObIJsonBase *j_base = NULL;
+    if (OB_FAIL(allocator.eval_arg(json_arg, ctx, json_datum))) {
+      LOG_WARN("eval json arg failed", K(ret));
+    } else if (json_datum->is_null()) {
+      is_null = true;
+    } else if (OB_FAIL(allocator.add_baseline_size(json_datum, json_arg->obj_meta_.has_lob_header()))) {
+      LOG_WARN("failed to add baseline size", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::get_json_val(expr, ctx, &allocator, index, j_base))) {
+      LOG_WARN("get_json_val failed", K(ret));
+    } else {
+      wrapper = common::ObJsonWrapper(j_base);
+    }
+  }
+  return ret;
+}
+
+static int get_candidate_wrapper_by_semantics(const ObExpr &expr, ObEvalCtx &ctx,
+                                              MultimodeAlloctor &allocator,
+                                              uint16_t index, bool use_val_semantics,
+                                              common::ObJsonWrapper &wrapper,
+                                              bool &is_null)
+{
+  INIT_SUCC(ret);
+  if (use_val_semantics) {
+    if (OB_FAIL(ObJsonExprHelper::get_json_val_wrapper(expr, ctx, allocator, index,
+                                                       wrapper, is_null))) {
+      LOG_WARN("candidate get_json_val_wrapper failed", K(ret));
+    }
+  } else {
+    if (OB_FAIL(ObJsonExprHelper::get_json_doc_wrapper(expr, ctx, allocator, index,
+                                                       wrapper, is_null, false, false))) {
+      LOG_WARN("candidate get_json_doc_wrapper failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_candidate_wrapper_with_cache(const ObExpr &expr, ObEvalCtx &ctx,
+                                                            MultimodeAlloctor &allocator,
+                                                            uint16_t index,
+                                                            ObJsonParamCacheCtx *param_ctx,
+                                                            bool use_val_semantics,
+                                                            common::ObJsonWrapper &wrapper,
+                                                            bool &is_null)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(param_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param_ctx is null for a const candidate", K(ret), K(index));
+  } else if (param_ctx->cand_cache_inited_) {
+    is_null = param_ctx->cand_is_null_;
+    if (!is_null) {
+      wrapper = param_ctx->cand_wrapper_;
+    }
+  } else {
+    bool cur_is_null = false;
+    common::ObJsonWrapper tmp_wrapper;
+    common::ObString raw_bin;
+    common::ObIAllocator &persist_alloc = ctx.exec_ctx_.get_allocator();
+    sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    bool enable_json_bin_view = OB_NOT_NULL(session) ? session->is_enable_json_bin_view() : true;
+    if (OB_FAIL(get_candidate_wrapper_by_semantics(expr, ctx, allocator, index,
+                                                   use_val_semantics, tmp_wrapper,
+                                                   cur_is_null))) {
+      LOG_WARN("get_candidate_wrapper_by_semantics failed", K(ret));
+    } else if (FALSE_IT(param_ctx->cand_is_null_ = cur_is_null)) {
+    } else if (cur_is_null) {
+      is_null = true;
+    } else if (OB_FAIL(tmp_wrapper.get_raw_binary(persist_alloc, raw_bin))) {
+      LOG_WARN("deep copy candidate raw binary failed", K(ret));
+    } else if (OB_FAIL(common::get_json_wrapper(raw_bin,
+                                                ObJsonInType::JSON_BIN, persist_alloc,
+                                                param_ctx->cand_wrapper_,
+                                                0, 0, enable_json_bin_view))) {
+      LOG_WARN("rebuild cached candidate wrapper failed", K(ret));
+    } else {
+      wrapper = param_ctx->cand_wrapper_;
+      is_null = false;
+    }
+    if (OB_SUCC(ret)) {
+      param_ctx->cand_cache_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::get_json_candidate_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
+                                                 MultimodeAlloctor &allocator,
+                                                 uint16_t index,
+                                                 ObJsonParamCacheCtx *param_ctx,
+                                                 bool use_val_semantics,
+                                                 common::ObJsonWrapper &wrapper,
+                                                 bool &is_null)
+{
+  INIT_SUCC(ret);
+  if (OB_UNLIKELY(index >= expr.arg_cnt_) || OB_ISNULL(expr.args_[index])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid candidate index", K(ret), K(index), K(expr.arg_cnt_));
+  } else {
+    const bool is_const = expr.args_[index]->is_static_const_expr();
+    if (is_const) {
+      // constant candidate: parse once, reuse the cached wrapper across rows.
+      if (OB_ISNULL(param_ctx)) {
+        param_ctx = get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
+      }
+      if (OB_ISNULL(param_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("param_ctx is null", K(ret), K(index));
+      } else if (OB_FAIL(get_json_candidate_wrapper_with_cache(expr, ctx, allocator,
+                                                               index, param_ctx, use_val_semantics,
+                                                               wrapper, is_null))) {
+        LOG_WARN("get_json_candidate_wrapper_with_cache failed", K(ret));
+      }
+    } else {
+      // non-constant candidate: per-row parse, no caching overhead.
+      if (OB_FAIL(get_candidate_wrapper_by_semantics(expr, ctx, allocator, index,
+                                                     use_val_semantics, wrapper, is_null))) {
+        LOG_WARN("get_candidate_wrapper_by_semantics failed", K(ret));
       }
     }
   }
@@ -1412,7 +1705,7 @@ int ObJsonExprHelper::is_json_zero(const ObString& data, int& result)
     result = 1; 
   } else if (OB_FAIL(j_bin.reset_iter())) {
     LOG_WARN("failed: reset iter", K(ret));
-  } else if (OB_FAIL(ObJsonBaseUtil::compare_int_json(0, &j_bin, tmp_result))) {
+  } else if (OB_FAIL(ObJsonCompare::compare_int_json(0, &j_bin, tmp_result))) {
     LOG_WARN("failed: cmp json", K(ret));
   } else {
     result = (tmp_result == 0) ? 0 : 1;
@@ -1437,13 +1730,13 @@ int ObJsonExprHelper::is_json_true(const ObString& data, int& result)
              j_bin.json_type() == ObJsonNodeType::J_BOOLEAN)) {
     result = 1;
   } else if ((j_bin.json_type() == ObJsonNodeType::J_INT || j_bin.json_type() == ObJsonNodeType::J_UINT)
-             && OB_FAIL(ObJsonBaseUtil::compare_int_json(0, &j_bin, tmp_result))) {
+             && OB_FAIL(ObJsonCompare::compare_int_json(0, &j_bin, tmp_result))) {
     LOG_WARN("failed: cmp json", K(ret));
   } else if ((j_bin.json_type() == ObJsonNodeType::J_DECIMAL)
-             && OB_FAIL(ObJsonBaseUtil::compare_decimal_uint(j_bin.get_decimal_data(), 0, tmp_result))) {
+             && OB_FAIL(ObJsonCompare::compare_decimal_uint(j_bin.get_decimal_data(), 0, tmp_result))) {
     LOG_WARN("failed: cmp json", K(ret));
   } else if ((j_bin.json_type() == ObJsonNodeType::J_DOUBLE)
-             && OB_FAIL(ObJsonBaseUtil::compare_double_int(j_bin.get_double(), 0, tmp_result))) {
+             && OB_FAIL(ObJsonCompare::compare_double_int(j_bin.get_double(), 0, tmp_result))) {
     LOG_WARN("failed: cmp json", K(ret));
   } else {
     result = (tmp_result == 0) ? 0 : 1;
@@ -2856,7 +3149,7 @@ int ObJsonExprHelper::pack_json_res(
     }
   } else {
     ObString str;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(json_doc, str, &temp_allocator))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(json_doc, str, &temp_allocator))) {
       LOG_WARN("json_set result to binary failed", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str))) {
       LOG_WARN("fail to pack json result", K(ret));

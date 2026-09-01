@@ -22,7 +22,16 @@ namespace common {
 class ObStringBuffer
 {
 public:
+  static const int64_t STRING_BUFFER_INIT_STRING_LEN = 512;
+
   ObStringBuffer(common::ObIAllocator *allocator);
+  // init_cap: hint for the first allocation; avoids the default 512-byte minimum for small outputs.
+  ObStringBuffer(common::ObIAllocator *allocator, uint64_t init_cap);
+  // Pre-allocated backing buffer.  buf must have at least `cap` usable bytes.
+  // allocator is used ONLY when the buffer overflows and needs to grow.
+  // Callers using arena allocators: arena->free() is a no-op, so it is safe for reset()/extend()
+  // to call allocator->free(buf) when buf was not originally allocated by that allocator.
+  ObStringBuffer(char *buf, uint64_t cap, common::ObIAllocator *allocator);
   ObStringBuffer();
   ~ObStringBuffer();
   // before set new alloctor, should call reset() first
@@ -67,11 +76,11 @@ public:
     return pos;
   }
 private:
-  static const int64_t STRING_BUFFER_INIT_STRING_LEN = 512;
   common::ObIAllocator *allocator_;
   char *data_;
   uint64_t len_;
   uint64_t cap_;
+  uint64_t init_cap_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStringBuffer);
 };

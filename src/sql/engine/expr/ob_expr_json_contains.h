@@ -15,6 +15,8 @@
 #define OCEANBASE_SQL_OB_EXPR_JSON_CONTAINS_H_
 
 #include "lib/json_type/ob_json_tree.h"
+#include "lib/json_type/ob_json_bin_view.h"
+#include "lib/json_type/ob_json_wrapper.h"
 #include "sql/engine/expr/ob_expr_operator.h"
 
 using namespace oceanbase::common;
@@ -39,9 +41,9 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonContains);
-  static int json_contains(ObIJsonBase* json_target, ObIJsonBase* json_candidate, bool *result);
-  static int json_contains_object(ObIJsonBase* json_target, ObIJsonBase* json_candidate, bool *result);
-  static int json_contains_array(ObIJsonBase* json_target, ObIJsonBase* json_candidate, bool *result);
+  static int json_contains(const ObJsonWrapper &target, const ObJsonWrapper &candidate, bool &result);
+  static int json_contains_object(const ObJsonWrapper &target, const ObJsonWrapper &candidate, bool &result);
+  static int json_contains_array(const ObJsonWrapper &target, const ObJsonWrapper &candidate, bool &result);
 };
 
 } // sql

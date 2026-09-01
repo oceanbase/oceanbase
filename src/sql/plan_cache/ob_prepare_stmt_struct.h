@@ -203,6 +203,9 @@ public:
   inline bool get_is_prexecute() const { return is_prexecute_; }
   inline void set_is_prexecute(bool v) { is_prexecute_ = v; }
 
+  inline bool get_is_column_meta_stable() const { return is_column_meta_stable_; }
+  inline void set_is_column_meta_stable(bool v) { is_column_meta_stable_ = v; }
+
   inline void set_ps_stmt_checksum(uint64_t ps_checksum) { ps_stmt_checksum_ = ps_checksum; }
   inline uint64_t get_ps_stmt_checksum() const { return ps_stmt_checksum_; }
 
@@ -310,6 +313,7 @@ private:
   int64_t parse_question_mark_count_;
   int64_t external_params_count_;
   bool is_select_for_update_;
+  bool is_column_meta_stable_;
 };
 
 struct TypeInfo {
@@ -354,7 +358,7 @@ struct TypeInfo {
 typedef common::ObSEArray<obmysql::EMySQLFieldType, 48> ParamTypeArray;
 typedef common::ObSEArray<TypeInfo, 16> ParamTypeInfoArray;
 typedef common::ObSEArray<bool, 16> ParamCastArray;
-
+typedef common::ObSEArray<int64_t, 16> SchemaVersionArray;
 // 每个session中同一个statement的prepare只会记录一个stmt_id-->ps_session_info的映射
 // 当有多个应用线程使用同一个session， 分别对同一个语句进行prepare时, 此时会出现在重复prepare的情况, 这些应用线程拿到的ps_stmt_id都时一样的
 // 同时在每个线程多次execute后，会进行close，此时会出现对该session上同一个stmt_id进行多次close，为避免第一次close时session上stmt_id-->ps_session_info
@@ -367,18 +371,22 @@ typedef common::ObSEArray<bool, 16> ParamCastArray;
 class ObPsSessionInfo
 {
 public:
-  ObPsSessionInfo(const int64_t tenant_id, const int64_t num_of_params) :
+  ObPsSessionInfo(const int64_t tenant_id, const int64_t num_of_params, const bool is_result_meta_stable) :
     stmt_id_(common::OB_INVALID_STMT_ID),
     stmt_type_(stmt::T_NONE),
     num_of_params_(num_of_params),
     ps_stmt_checksum_(0),
     ref_cnt_(0),
     inner_stmt_id_(0),
-    num_of_returning_into_(common::OB_INVALID_STMT_ID) // num_of_returning_into_ init as -1
+    num_of_returning_into_(common::OB_INVALID_STMT_ID), // num_of_returning_into_ init as -1
+    is_result_meta_stable_(is_result_meta_stable),
+    result_meta_has_sent_(false),
+    param_meta_has_sent_(false)
   {
     param_types_.set_attr(ObMemAttr(tenant_id, "ParamTypes"));
     param_type_infos_.set_attr(ObMemAttr(tenant_id, "ParamTypesInfo"));
     param_types_.reserve(num_of_params_);
+    schema_version_.set_attr(ObMemAttr(tenant_id, "SchemaVersions"));
   }
   //{ param_types_.set_label(common::ObModIds::OB_PS_SESSION_INFO_ARRAY); }
   virtual ~ObPsSessionInfo() {}
@@ -412,6 +420,70 @@ public:
 
   inline void set_inner_stmt_id(ObPsStmtId id) { inner_stmt_id_ = id; }
   inline ObPsStmtId get_inner_stmt_id() { return inner_stmt_id_; }
+  inline bool is_result_meta_stable() const { return is_result_meta_stable_; }
+  bool need_send_result_meta(const DependenyTableStore &dep_tables) const {
+    bool ret = false;
+    if (is_result_meta_stable_ && result_meta_has_sent_ &&
+        dep_tables.count() == schema_version_.count()) {
+      for (int i = 0; i < schema_version_.count(); ++i) {
+        if (schema_version_.at(i) != dep_tables.at(i).version_) {
+          ret = true;
+          break;
+        }
+      }
+    } else {
+      ret = true;
+    }
+    return ret;
+  }
+
+  bool need_send_result_meta(const common::ObIArray<int64_t> &dep_table_versions) const {
+    bool ret = false;
+    if (is_result_meta_stable_ && result_meta_has_sent_ &&
+        dep_table_versions.count() == schema_version_.count()) {
+      for (int i = 0; i < schema_version_.count(); ++i) {
+        if (schema_version_.at(i) != dep_table_versions.at(i)) {
+          ret = true;
+          break;
+        }
+      }
+    } else {
+      ret = true;
+    }
+    return ret;
+  }
+
+  int mark_result_meta_sent(const DependenyTableStore &dep_tables)
+  {
+    int ret = common::OB_SUCCESS;
+    SchemaVersionArray versions;
+    for (int64_t i = 0; OB_SUCC(ret) && i < dep_tables.count(); i++) {
+      if (OB_FAIL(versions.push_back(dep_tables.at(i).version_))) {
+        SQL_PC_LOG(WARN, "fail to push back schema version", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(schema_version_.assign(versions))) {
+      SQL_PC_LOG(WARN, "fail to assign schema version", K(ret));
+    } else {
+      result_meta_has_sent_ = true;
+    }
+    return ret;
+  }
+
+  int mark_result_meta_sent(const common::ObIArray<int64_t> &dep_table_versions)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(schema_version_.assign(dep_table_versions))) {
+      SQL_PC_LOG(WARN, "fail to assign schema version", K(ret));
+    } else {
+      result_meta_has_sent_ = true;
+    }
+    return ret;
+  }
+
+  void mark_param_meta_sent() { param_meta_has_sent_ = true; }
+  bool need_send_param_meta() const { return !param_meta_has_sent_; }
 
   TO_STRING_KV(K_(stmt_id),
                K_(stmt_type),
@@ -419,7 +491,11 @@ public:
                K_(ref_cnt),
                K_(ps_stmt_checksum),
                K_(inner_stmt_id),
-               K_(num_of_returning_into));
+               K_(num_of_returning_into),
+               K_(is_result_meta_stable),
+               K_(result_meta_has_sent),
+               K_(param_meta_has_sent),
+               K_(schema_version));
 
 private:
   ObPsStmtId stmt_id_;
@@ -431,7 +507,10 @@ private:
   int64_t ref_cnt_;
   ObPsStmtId inner_stmt_id_;
   int32_t num_of_returning_into_;
-
+  const bool is_result_meta_stable_;
+  bool result_meta_has_sent_;
+  bool param_meta_has_sent_;
+  SchemaVersionArray schema_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPsSessionInfo);
 };
@@ -472,8 +551,12 @@ struct PsCacheInfoCtx
     raw_params_(NULL),
     fixed_param_idx_(NULL),
     stmt_type_(stmt::T_NONE),
-    ps_need_parameterization_(true) {}
+    ps_need_parameterization_(true),
+    is_column_meta_stable_(false) {}
 
+
+  static int build_ps_dummy_field(common::ObField &field);
+  static const char *PS_DUMMY_FIELD_NAME;
 
   TO_STRING_KV(K_(param_cnt),
                K_(num_of_returning_into),
@@ -483,7 +566,8 @@ struct PsCacheInfoCtx
                K_(raw_sql),
                K_(no_param_sql),
                K_(stmt_type),
-               K_(ps_need_parameterization));
+               K_(ps_need_parameterization),
+               K_(is_column_meta_stable));
 
   int64_t param_cnt_;
   int32_t num_of_returning_into_;
@@ -496,6 +580,7 @@ struct PsCacheInfoCtx
   common::ObIArray<int64_t> *fixed_param_idx_;
   stmt::StmtType stmt_type_;
   bool ps_need_parameterization_;
+  bool is_column_meta_stable_;
 };
 
 } //end of namespace sql

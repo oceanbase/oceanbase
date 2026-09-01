@@ -864,6 +864,8 @@ public:
                                  enable_pl_sql_parameterize_(false),
                                  enable_foreign_key_gts_opt_(false),
                                  enable_fk_skip_parent_pure_lock_(false),
+                                 enable_json_bin_view_(false),
+                                 enable_ps_meta_response_optimize_(false),
                                  session_(session)
     {
     }
@@ -935,6 +937,8 @@ public:
     bool enable_pl_sql_parameterize() const { return enable_pl_sql_parameterize_; }
     bool enable_foreign_key_gts_opt() const { return ATOMIC_LOAD(&enable_foreign_key_gts_opt_); }
     bool enable_fk_skip_parent_pure_lock() const { return ATOMIC_LOAD(&enable_fk_skip_parent_pure_lock_); }
+    bool enable_json_bin_view() const { return enable_json_bin_view_; }
+    bool enable_ps_meta_response_optimize() const { return enable_ps_meta_response_optimize_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -988,6 +992,8 @@ public:
     bool enable_pl_sql_parameterize_;
     bool enable_foreign_key_gts_opt_;
     bool enable_fk_skip_parent_pure_lock_;
+    bool enable_json_bin_view_;
+    bool enable_ps_meta_response_optimize_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1056,6 +1062,17 @@ public:
   ObPlanCache *get_plan_cache();
   ObPlanCache *get_plan_cache_directly() const { return plan_cache_; };
   ObPsCache *get_ps_cache();
+
+  bool need_to_send_result_meta(ObPsStmtId stmt_id,
+                               const DependenyTableStore &dep_tables);
+  bool need_to_send_result_meta(ObPsStmtId stmt_id,
+                               const common::ObIArray<int64_t> &dep_table_versions);
+  bool need_to_send_param_meta(ObPsStmtId stmt_id);
+  int mark_ps_result_meta_sent(ObPsStmtId stmt_id,
+                               const DependenyTableStore &dep_tables);
+  int mark_ps_result_meta_sent(ObPsStmtId stmt_id,
+                               const common::ObIArray<int64_t> &dep_table_versions);
+  void mark_ps_param_meta_sent(ObPsStmtId stmt_id);
   obmysql::ObMySQLRequestManager *get_request_manager();
   sql::ObFLTSpanMgr *get_flt_span_manager();
   void set_user_priv_set(const ObPrivSet priv_set) { user_priv_set_ = priv_set; }
@@ -1829,6 +1846,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_ps_parameterize();
   }
+  bool is_enable_ps_meta_response_optimize()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_ps_meta_response_optimize();
+  }
   bool is_enable_sql_ccl_rule()
   {
     cached_tenant_config_info_.refresh();
@@ -1870,6 +1892,12 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_update_split_with_unique_id();
+  }
+
+  bool is_enable_json_bin_view()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_json_bin_view();
   }
 
   int get_tmp_table_size(uint64_t &size);

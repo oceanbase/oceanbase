@@ -738,6 +738,7 @@ struct ObPlanStat
   ObPlanExecutingStat executing_stat_;
   uint64_t gen_plan_usec_;  // plan generation time cost
   ObCollationType collation_connection_;
+  ObString params_value_;
 
   ObPlanStat()
     : plan_id_(0),
@@ -817,7 +818,8 @@ struct ObPlanStat
       vec_index_exec_ctx_(),
       executing_stat_(),
       gen_plan_usec_(0),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      params_value_()
 {
   exact_mode_sql_id_[0] = '\0';
 }

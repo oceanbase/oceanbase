@@ -302,7 +302,7 @@ public:
   virtual ~ObJsonPath();
   common::ObIAllocator* get_allocator();
   void set_subpath_arg(bool is_lax);
-  int path_node_cnt() { return path_nodes_.size(); }  // path length
+  int path_node_cnt() const { return path_nodes_.size(); }  // path length
   ObJsonPathNodeType get_last_node_type();
   bool is_last_func();
   bool path_not_str();
@@ -311,8 +311,9 @@ public:
   int append(ObJsonPathNode* json_node);    // add to the tail of path_nodes_
   int to_string(ObJsonBuffer& str);          // transfer all pathnodes to string
   int parse_path();                         // do parse 
-  bool can_match_many() const;
+  OB_INLINE bool can_match_many() const { return can_match_many_; }
   bool is_contained_wildcard_or_ellipsis() const;
+  OB_INLINE bool is_simple_path() const { return is_simple_path_; }
   ObString& get_path_string();
   ObJsonPathBasicNode* path_node(int index);
   ObJsonPathBasicNode* last_path_node();
@@ -337,6 +338,8 @@ private:
   int use_heap_expr_;
 
   bool is_contained_wildcard_or_ellipsis_; // for json_length, wildcards were forbidden
+  bool is_simple_path_;  // true if path only contains JPN_MEMBER and JPN_ARRAY_CELL
+  bool can_match_many_;  // true if path contains wildcard/ellipsis/range nodes
   
   uint64_t index_;
   int64_t bad_index_;
@@ -417,6 +420,7 @@ public:
   };
 
   const static int64_t MAX_PATH_CACHE_COUNT = 10;
+  static const int MAX_CONST_PATH_ARGS = 8;
   typedef PageArena<ObJsonPathItem, ModulePageAllocator> JsonPathItemArena;
   typedef ObVector<ObJsonPathItem, JsonPathItemArena> ObJsonPathItemVector;
   typedef PageArena<ObJsonPathItemVector*, ModulePageAllocator> JsonPathVectorArena;
@@ -430,7 +434,10 @@ public:
         path_item_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
         path_vector_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
         path_arr_ptr_(&path_vector_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
-        fast_path_state_(FAST_PATH_UNCHECKED) {}
+        fast_path_state_(FAST_PATH_UNCHECKED)
+  {
+    MEMSET(const_path_, 0, sizeof(const_path_));
+  }
   ~ObJsonPathCache() {};
 
   size_t get_cached_path_count(size_t idx);
@@ -470,6 +477,7 @@ private:
   /* next two fields are only used in fast path */
   FastPathState fast_path_state_;
   ObSEArray<ObMultiPathEntry, 4> multi_path_keys_;
+  ObJsonPath* const_path_[MAX_CONST_PATH_ARGS];
 };
 
 using ObPathParseStat = ObJsonPathCache::ObPathParseStat;

@@ -41,6 +41,7 @@ union ObServerExtendFlag
     int32_t IS_RETURNING_INTO_STMT:1; // is returning into ?
     int32_t IS_ARRAY_BINDING:1; // is arraybinding ?
     int32_t IS_PS_OUT:1; // is ps out ?
+    int32_t ENABLE_PS_META_OPT:1; // enable ps meta cache ?
   };
 };
 

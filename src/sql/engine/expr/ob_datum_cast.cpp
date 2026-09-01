@@ -3971,7 +3971,7 @@ CAST_FUNC_NAME(int, json)
     }
 
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("fail to get int json binary", K(ret), K(in_type), K(in_val));
     } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4267,7 +4267,7 @@ CAST_FUNC_NAME(uint, json)
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObString raw_bin;
 
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("fail to get uint json binary", K(ret), K(in_type), K(in_val));
     } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4683,7 +4683,7 @@ static int common_string_json(const ObExpr &expr,
 
       if (OB_SUCC(ret) && !is_null_res) {
         ObString raw_bin;
-        if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+        if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
           LOG_WARN("fail to get string json binary", K(ret), K(in_type), K(raw_bin));
         } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
           LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -5446,7 +5446,7 @@ static int common_number_json(const number::ObNumber &nmb, const ObObjType in_ty
     ObString raw_bin;
     if (OB_FAIL(tmp_num.from(nmb, temp_allocator))) {
       LOG_WARN("copy number failed", K(ret));
-    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("fail to get number json binary", K(ret), K(in_type), K(nmb));
     } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -5753,7 +5753,7 @@ CAST_FUNC_NAME(float, json)
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObString raw_bin;
     
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("fail to get float json binary", K(ret), K(in_type), K(in_val));
     } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -6176,7 +6176,7 @@ CAST_FUNC_NAME(double, json)
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("fail to get double json binary", K(ret), K(in_type), K(in_val));
     } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -7014,7 +7014,7 @@ CAST_FUNC_NAME(datetime, json)
           common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
           ObString raw_bin;
 
-          if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+          if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
             LOG_WARN("fail to get datetime json binary", K(ret), K(in_type), K(in_val));
           } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
             LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -7135,7 +7135,7 @@ CAST_FUNC_NAME(mdatetime, json)
         common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
         ObString raw_bin;
 
-        if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+        if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
           LOG_WARN("fail to get datetime json binary", K(ret), K(in_type), K(in_val));
         } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
           LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -7660,7 +7660,7 @@ CAST_FUNC_NAME(date, json)
         common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
         ObString raw_bin;
 
-        if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+        if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
           LOG_WARN("fail to get date json binary", K(ret), K(in_type), K(in_val));
         } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
           LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -7757,7 +7757,7 @@ CAST_FUNC_NAME(mdate, json)
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       ObString raw_bin;
 
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
         LOG_WARN("fail to get date json binary", K(ret), K(in_type), K(in_val));
       } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -8080,7 +8080,7 @@ CAST_FUNC_NAME(year, json)
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       ObString raw_bin;
       
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
         LOG_WARN("fail to get year json binary", K(ret), K(in_type), K(in_val));
       } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -8439,7 +8439,7 @@ CAST_FUNC_NAME(bit, json)
       ObIJsonBase *j_base = &j_opaque;
       ObString raw_bin;
 
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
         LOG_WARN("fail to get int json binary", K(ret), K(in_val), KP(buf), K(BUF_LEN));
       } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -9328,7 +9328,7 @@ CAST_FUNC_NAME(time, json)
         common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
         ObString raw_bin;
 
-        if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
+        if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
           LOG_WARN("fail to get time json binary", K(ret), K(in_type), K(in_val));
         } else if (OB_FAIL(common_json_bin(expr, ctx, res_datum, raw_bin))) {
           LOG_WARN("fail to fill json bin lob locator", K(ret));

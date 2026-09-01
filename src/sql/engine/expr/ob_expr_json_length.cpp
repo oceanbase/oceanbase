@@ -63,9 +63,11 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
   INIT_SUCC(ret);
   bool is_null = false;
   uint32_t res_len = 0;
-  ObIJsonBase *j_base = NULL;
+  ObJsonWrapper wrapper;
   ObObjType type1 = meta1.type_;
   ObCollationType cs_type1 = meta1.cs_type_;
+  sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  bool enable_json_bin_view = OB_NOT_NULL(session) ? session->is_enable_json_bin_view() : true;
   // handle data1(json text)
   if (type1 == ObNullType || data1.is_null()) { // null should display "NULL"
     is_null = true;
@@ -83,23 +85,23 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data1, meta1, has_lob_header1, j_doc))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_doc));
     } else if (OB_FALSE_IT(allocator->add_baseline_size(j_doc.length()))) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_doc, j_in_type,
-                                                        j_in_type, j_base, 0,
-                                                        ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
-      LOG_WARN("fail to get json base", K(ret), K(type1), K(j_doc), K(j_in_type));
+    } else if (OB_FAIL(common::get_json_wrapper(j_doc, j_in_type, *allocator, wrapper,
+                                                0, ObJsonExprHelper::get_json_max_depth_config(ctx),
+                                                enable_json_bin_view))) {
+      LOG_WARN("fail to get json wrapper", K(ret), K(type1), K(j_doc));
     }
   }
 
   // handle data2(path text)
   if (OB_SUCC(ret) && OB_LIKELY(!is_null)) {
     if (OB_ISNULL(data2)) { // have no path
-      res_len = j_base->member_count();
+      res_len = wrapper.member_count();
     } else { // handle json path
       ObObjType type2 = meta2.type_;
       if (type2 == ObNullType) { // null should display "NULL"
         is_null = true;
       } else { // ObLongTextType
-        ObJsonSeekResult hit;
+        ObSEArray<ObJsonWrapper, 4> hits;
         ObString j_path_text = data2->get_string();
         ObJsonPath *j_path = NULL;
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, *data2, meta2, has_lob_header2, j_path_text))) {
@@ -107,14 +109,14 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
         } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(*allocator, path_cache, j_path, j_path_text, 1, true, is_const))) {
           LOG_USER_ERROR(OB_ERR_INVALID_JSON_PATH);
           LOG_WARN("fail to parse json path", K(ret), K(type2), K(j_path_text));
-        } else if (OB_FAIL(j_base->seek(*j_path, j_path->path_node_cnt(), true, false, hit))) {
+        } else if (OB_FAIL(wrapper.seek(*j_path, *allocator, hits, true, false))) {
           LOG_WARN("fail to seek json node", K(ret), K(j_path_text));
-        } else if (hit.size() == 0) { // not found node by path, display "NULL"
+        } else if (hits.count() == 0) { // not found node by path, display "NULL"
           is_null = true;
-        } else if (hit.size() > 1) {
-          res_len = hit.size();
+        } else if (hits.count() > 1) {
+          res_len = hits.count();
         } else {
-          res_len = hit[0]->member_count();
+          res_len = hits.at(0).member_count();
         }
       }
     }
@@ -132,18 +134,17 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
   return ret;
 }
 
-// for new sql engine 
+// for new sql engine
 int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
+  ObDatum *datum0 = NULL;
   ObDatum *datum1 = NULL;
   ObDatumMeta meta1;
   bool has_lob_header1 = false;
-  ObDatum *datum0 = NULL;
   ObExpr *arg0 = expr.args_[0];
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  MultimodeAlloctor tmp_allocator(tmp_alloc_g.get_allocator(), expr.type_, ret, ctx, "json_length");
   bool is_const = false;
   if (OB_FAIL(tmp_allocator.eval_arg(arg0, ctx, datum0))) { // json doc
     LOG_WARN("fail to eval json arg", K(ret), K(arg0->datum_meta_));
@@ -166,7 +167,7 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
     if (OB_FAIL(calc(ctx, *datum0, arg0->datum_meta_, arg0->obj_meta_.has_lob_header(),
                      datum1, meta1, has_lob_header1, &tmp_allocator, res, path_cache, is_const))) {
-      LOG_WARN("fail to calc json length result", K(ret), K(datum0), K(expr.arg_cnt_));
+      LOG_WARN("fail to calc json length result", K(ret), K(expr.arg_cnt_));
     }
   }
 

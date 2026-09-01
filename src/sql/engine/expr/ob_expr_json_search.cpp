@@ -502,7 +502,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
       res.set_null();
     } else {
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_res, raw_bin, &temp_allocator))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_res, raw_bin, &temp_allocator))) {
         LOG_WARN("json_keys get result binary failed", K(ret));
       } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
         LOG_WARN("fail to pack json result", K(ret));

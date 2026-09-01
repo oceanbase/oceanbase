@@ -947,7 +947,9 @@ int ObExprJsonQuery::set_result(ObJsonExprParam* json_param,
       }
     }
   }
-  if (OB_SUCC(ret) && OB_FAIL(ObJsonUtil::set_lob_datum(allocator, expr, ctx, json_param->dst_type_, json_param->ascii_type_, res))) {
+  if (OB_SUCC(ret) && !cast_param.lob_done_
+      && OB_FAIL(ObJsonUtil::set_lob_datum(allocator, expr, ctx, json_param->dst_type_,
+                                           json_param->ascii_type_, res))) {
     LOG_WARN("fail to set lob datum", K(ret));
   }
   return ret;

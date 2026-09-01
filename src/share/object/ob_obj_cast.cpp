@@ -1608,7 +1608,7 @@ static int int_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonInt j_int(in.get_int());
     ObIJsonBase *j_base = &j_int;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -2065,7 +2065,7 @@ static int uint_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonUint j_uint(in.get_uint64());
     ObIJsonBase *j_base = &j_uint;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get uint json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -2552,7 +2552,7 @@ static int float_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonDouble j_double(in.get_float());
     ObIJsonBase *j_base = &j_double;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get float json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -3098,7 +3098,7 @@ static int double_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonDouble j_double(in.get_double());
     ObIJsonBase *j_base = &j_double;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get double json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -3698,7 +3698,7 @@ static int number_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonDecimal j_dec(nmb, -1, in.get_scale());
     ObIJsonBase *j_base = &j_dec;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get decimal json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4482,7 +4482,7 @@ static int datetime_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_datetime(j_type, ob_time);
       ObIJsonBase *j_base = &j_datetime;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get datetime json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -4519,7 +4519,7 @@ static int mdatetime_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_datetime(ObJsonNodeType::J_MYSQL_DATETIME, ob_time);
       ObIJsonBase *j_base = &j_datetime;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get datetime json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -5160,7 +5160,7 @@ static int date_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_date(ObJsonNodeType::J_DATE, ob_time);
       ObIJsonBase *j_base = &j_date;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get date json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -5197,7 +5197,7 @@ static int mdate_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_date(ObJsonNodeType::J_MYSQL_DATE, ob_time);
       ObIJsonBase *j_base = &j_date;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get date json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -5606,7 +5606,7 @@ static int time_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonDatetime j_time(ObJsonNodeType::J_TIME, ob_time);
       ObIJsonBase *j_base = &j_time;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get time json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -5980,7 +5980,7 @@ static int year_json(const ObObjType expect_type, ObObjCastParams &params,
     ObJsonInt j_year(full_year);
     ObIJsonBase *j_base = &j_year;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
       LOG_WARN("fail to get year json binary", K(ret), K(in), K(expect_type), K(*j_base));
     } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -7316,7 +7316,7 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
 
     if (OB_SUCC(ret)) {
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get string json binary", K(ret), K(in), K(*j_base));
       } else if (OB_FAIL(set_json_bin_res(&params, &out, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -7976,7 +7976,7 @@ static int bit_json(const ObObjType expect_type, ObObjCastParams &params,
       ObJsonOpaque j_opaque(j_value, ObBitType);
       ObIJsonBase *j_base = &j_opaque;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, params.allocator_v2_))) {
         LOG_WARN("fail to get int json binary", K(ret), K(in), K(expect_type), K(*j_base));
       } else if (OB_FAIL(copy_string(params, expect_type, raw_bin.ptr(), raw_bin.length(), out))) {
         LOG_WARN("fail to copy string", K(ret), K(expect_type), K(raw_bin));
@@ -17363,7 +17363,7 @@ int ObObjCaster::bool_to_json(const ObObjType expect_type,
     ObJsonBoolean j_bool(bool_val);
     ObIJsonBase *j_base = &j_bool;
     ObString raw_bin;
-    if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, cast_ctx.allocator_v2_))) {
+    if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, cast_ctx.allocator_v2_))) {
       LOG_WARN("fail to get bool json binary", K(ret), K(in_obj), K(expect_type));
     } else if (OB_FAIL(set_json_bin_res(&cast_ctx, &buf_obj, raw_bin))) {
       LOG_WARN("fail to fill json bin lob locator", K(ret));
@@ -17405,7 +17405,7 @@ int ObObjCaster::enumset_to_json(const ObObjType expect_type,
     } else {
       j_base = &j_string;
       ObString raw_bin;
-      if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, cast_ctx.allocator_v2_))) {
+      if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, cast_ctx.allocator_v2_))) {
         LOG_WARN("fail to get string json binary", K(ret), K(in_obj));
       } else if (OB_FAIL(set_json_bin_res(&cast_ctx, &buf_obj, raw_bin))) {
         LOG_WARN("fail to fill json bin lob locator", K(ret));

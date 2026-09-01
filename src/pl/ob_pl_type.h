@@ -1337,7 +1337,8 @@ public:
     fetch_size_(512),
     store_ret_(OB_SUCCESS),
     client_close_(false),
-    ora_max_ret_rows_(INT64_MAX)
+    ora_max_ret_rows_(INT64_MAX),
+    execute_meta_sent_(false)
   {
     is_async_ = can_open_async_cursor();
   };
@@ -1369,6 +1370,20 @@ public:
   inline void set_is_async(bool is_async) { is_async_ = is_async; }
   inline void set_ora_max_ret_rows(int64_t max_ret_rows) { ora_max_ret_rows_ = max_ret_rows; }
   inline int64_t get_ora_max_ret_rows() { return ora_max_ret_rows_; }
+  inline bool is_execute_meta_sent() const { return execute_meta_sent_; }
+  inline void set_execute_meta_sent(bool v) { execute_meta_sent_ = v; }
+  inline const common::ObIArray<int64_t> &get_dep_table_versions() const { return dep_table_versions_; }
+  int snapshot_dep_table_versions(const common::ObIArray<share::schema::ObSchemaObjVersion> &dep_tables)
+  {
+    int ret = common::OB_SUCCESS;
+    dep_table_versions_.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < dep_tables.count(); i++) {
+      if (OB_FAIL(dep_table_versions_.push_back(dep_tables.at(i).version_))) {
+        PL_LOG(WARN, "fail to push back dep table version", K(ret));
+      }
+    }
+    return ret;
+  }
   int init_params(ParamStore &exec_params);
   int prepare_cursor_store(sql::ObSQLSessionInfo &session,
                            sql::ObResultSet &result_set);
@@ -1397,6 +1412,8 @@ private:
   common::ObString ps_sql_;
   ParamStore exec_params_; // the params of ps stmt
   int64_t ora_max_ret_rows_;
+  bool execute_meta_sent_;
+  common::ObSEArray<int64_t, 4> dep_table_versions_;
   static int32_t ASYNC_PS_CURSOR_COUNT; // the number of asynchronous cursors on the current server
 };
 

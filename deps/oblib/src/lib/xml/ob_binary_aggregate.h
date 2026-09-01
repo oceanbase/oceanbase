@@ -69,6 +69,9 @@ public:
   int serialize();
   int append_key_and_value(ObString key, ObStringBuffer &value, ObJsonBin *json_val);
   int append_key_and_value(ObXmlBin *xml_bin);
+  // Append raw binary value directly, bypassing ObJsonBin construction
+  int append_raw_json_value(ObString key, const char *value_data,
+                            int64_t value_len, uint8_t json_type);
   void set_header_type(uint8_t header_type) { header_type_ = header_type; }
   void set_xml_decl(ObString version, ObString encoding, uint16_t standalone);
   void set_sort_and_unique() {

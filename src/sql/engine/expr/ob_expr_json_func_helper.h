@@ -24,6 +24,7 @@
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/json_type/ob_json_parse.h"
+#include "lib/json_type/ob_json_wrapper.h"
 #include "lib/json_type/ob_json_schema.h"
 #include "lib/json_type/ob_json_diff.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
@@ -102,7 +103,11 @@ class ObJsonParamCacheCtx : public ObExprOperatorCtx
       path_cache_(allocator),
       is_first_exec_(true),
       is_json_path_const_(false),
-      json_param_()
+      json_param_(),
+      view_hits_(),
+      cand_cache_inited_(false),
+      cand_is_null_(false),
+      cand_wrapper_()
   {}
   virtual ~ObJsonParamCacheCtx() {}
   ObJsonPathCache *get_path_cache() { return &path_cache_; }
@@ -113,6 +118,12 @@ public:
   bool is_first_exec_;
   bool is_json_path_const_;
   ObJsonExprParam json_param_;
+  // reused across rows to avoid per-row ObSEArray construction/destruction in the fast path.
+  // Call view_hits_.reuse() before each seek to clear stale results from the previous row.
+  ObSEArray<common::ObJsonWrapper, 1> view_hits_;
+  bool cand_cache_inited_;
+  bool cand_is_null_;
+  common::ObJsonWrapper cand_wrapper_;
 };
 
 struct ObConv2JsonParam {
@@ -208,6 +219,92 @@ public:
   static int get_json_or_str_data(ObExpr *expr, ObEvalCtx &ctx,
                                   MultimodeAlloctor &allocator,
                                   ObString& str, bool& is_null);
+  // Fast overload: caller already holds the evaluated datum (skips re-eval, null check, type check).
+  static int get_json_or_str_data(ObExpr *expr, ObDatum *datum,
+                                  MultimodeAlloctor &allocator,
+                                  ObString &str, ObEvalCtx &ctx);
+  static int get_json_wrapper(ObExpr *expr, ObDatum *datum,
+                              MultimodeAlloctor &allocator,
+                              ObEvalCtx &ctx,
+                              common::ObJsonWrapper &wrapper,
+                              bool need_set_baseline_size);
+  /*
+  get json doc to JsonWrapper in static_typing_engine (doc semantics).
+  Same pipeline as get_json_wrapper above but takes an arg index and does
+  eval/null/type-check/error-mapping itself, mirroring get_json_doc so callers
+  need no boilerplate. The partial-update branch is intentionally omitted: it is
+  gated on OB_JSON_PARTIAL_UPDATE_ALLOW which is only set on write-side exprs
+  (JSON_SET/REPLACE/REMOVE), so read functions never take it.
+  Named get_json_doc_wrapper to mirror get_json_doc; the value-semantics
+  counterpart (scalar-capable) is get_json_val_wrapper below.
+  @param[in]  expr          the input arguments
+  @param[in]  ctx           the eval context
+  @param[in]  allocator     the Allocator in context
+  @param[in]  index         the input arguments index
+  @param[out] wrapper       the output JsonWrapper
+  @param[out] is_null       the flag for null situation
+  @param[in]  relax         allow relaxed json syntax (oracle only)
+  @param[in]  preserve_dup  preserve duplicate keys during parse
+  @return Returns OB_SUCCESS on success, error code otherwise.
+  */
+  static int get_json_doc_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
+                                  MultimodeAlloctor &allocator,
+                                  uint16_t index, common::ObJsonWrapper &wrapper,
+                                  bool &is_null, bool relax = false,
+                                  bool preserve_dup = false);
+  /*
+  get json value to JsonWrapper in static_typing_engine (value semantics).
+  Wraps get_json_val's full type coverage (json column / json string / raw /
+  collection / bare scalar int/bool/double/...) into an ObJsonWrapper, mirroring
+  get_json_val so callers need no boilerplate. Distinct from get_json_doc_wrapper
+  (doc semantics, json/string only, bin-view fast path): this one converts bare
+  SQL scalars to a tree DOM — needed by MEMBER OF whose candidate is a bare
+  scalar (e.g. 17 MEMBER OF ('[1,2,17]')). A JSON-binary arg still takes the
+  zero-copy ObJsonBinView path (delegating to get_json_doc_wrapper above);
+  everything else builds a tree DOM via get_json_val.
+  @param[in]  expr          the input arguments
+  @param[in]  ctx           the eval context
+  @param[in]  allocator     the Allocator in context
+  @param[in]  index         the input arguments index
+  @param[out] wrapper       the output JsonWrapper
+  @param[out] is_null       the flag for null situation
+  @return Returns OB_SUCCESS on success, error code otherwise.
+  */
+  static int get_json_val_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
+                                  MultimodeAlloctor &allocator,
+                                  uint16_t index, common::ObJsonWrapper &wrapper,
+                                  bool &is_null);
+  /*
+  get the "candidate" json wrapper, dispatching on whether the candidate arg is
+  a whole-execution constant. A constant candidate is parsed once and reused
+  across rows (get_json_candidate_wrapper_with_cache, requires a non-NULL
+  param_ctx); a non-constant candidate is parsed per row via
+  get_json_doc_wrapper (doc semantics) or get_json_val_wrapper (val semantics,
+  scalar-capable, for MEMBER OF). Whether the candidate is constant is derived
+  internally from expr.args_[index]->is_static_const_expr(); it is NOT inferred
+  from param_ctx, since in json_contains the param_ctx is also fetched when a
+  third path argument exists, so param_ctx != NULL does not imply a constant
+  candidate.
+  @param[in]  expr              the input arguments
+  @param[in]  ctx               the eval context
+  @param[in]  allocator         the per-row temp allocator
+  @param[in]  index             the candidate argument index
+  @param[in]  param_ctx         the runtime cache ctx (from get_param_cache_ctx);
+                                only used when the candidate is constant; may be
+                                NULL otherwise
+  @param[in]  use_val_semantics true -> get_json_val_wrapper (scalar-capable,
+                                for MEMBER OF); false -> get_json_doc_wrapper
+  @param[out] wrapper          the output candidate wrapper
+  @param[out] is_null           the flag for null situation
+  @return Returns OB_SUCCESS on success, error code otherwise.
+  */
+  static int get_json_candidate_wrapper(const ObExpr &expr, ObEvalCtx &ctx,
+                                        MultimodeAlloctor &allocator,
+                                        uint16_t index,
+                                        ObJsonParamCacheCtx *param_ctx,
+                                        bool use_val_semantics,
+                                        common::ObJsonWrapper &wrapper,
+                                        bool &is_null);
   /*
   get json doc to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -413,16 +510,7 @@ public:
                                T &str,
                                common::ObIAllocator *allocator = nullptr)
   {
-    int ret = OB_SUCCESS;
-    ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-    if (OB_FAIL(text_result.init(str.length(), allocator))) {
-      LOG_WARN("init lob result failed");
-    } else if (OB_FAIL(text_result.append(str.ptr(), str.length()))) {
-      LOG_WARN("failed to append realdata", K(ret), K(str), K(text_result));
-    } else {
-      text_result.set_result();
-    }
-    return ret;
+    return pack_json_str_res_impl(expr, ctx, res, str.ptr(), str.length(), allocator);
   }
 
   static int pack_json_res(
@@ -536,6 +624,44 @@ public:
   uint64_t tenant_id;
 
 private:
+  /*
+  get the "candidate" json wrapper with cross-row caching for a constant arg.
+  Used by json_contains (arg1) and json_member_of (arg0): when the argument is a
+  whole-execution constant, the parsed wrapper is identical on every row, so we
+  parse once, deep-copy its raw binary into the exec-ctx (persistent) allocator,
+  and reuse the cached wrapper afterwards — avoiding per-row re-parse. The caller
+  must only invoke this on a constant candidate with a non-NULL param_ctx; a
+  non-constant candidate is handled by the caller via get_json_doc_wrapper /
+  get_json_val_wrapper (this function never runs for it).
+  @param[in]  expr        the input arguments
+  @param[in]  ctx         the eval context
+  @param[in]  allocator   the per-row temp allocator (used only on the first row
+                          to parse tmp_wrapper before deep-copying into the
+                          persistent allocator; the cached wrapper does not
+                          reference it)
+  @param[in]  index       the candidate argument index
+  @param[in]  param_ctx   the runtime cache ctx (from get_param_cache_ctx);
+                          must be non-NULL — the caller ensures this is only
+                          fetched when the candidate is a static constant
+  @param[in]  use_val_semantics  true -> get_json_val_wrapper (scalar-capable,
+                          for MEMBER OF); false -> get_json_doc_wrapper (CONTAINS)
+  @param[out] wrapper     the output candidate wrapper
+  @param[out] is_null     the flag for null situation
+  @return Returns OB_SUCCESS on success, error code otherwise.
+  */
+  static int get_json_candidate_wrapper_with_cache(const ObExpr &expr, ObEvalCtx &ctx,
+                                                   MultimodeAlloctor &allocator,
+                                                   uint16_t index,
+                                                   ObJsonParamCacheCtx *param_ctx,
+                                                   bool use_val_semantics,
+                                                   common::ObJsonWrapper &wrapper,
+                                                   bool &is_null);
+  static int pack_json_str_res_impl(const ObExpr &expr,
+                                    ObEvalCtx &ctx,
+                                    ObDatum &res,
+                                    const char *ptr,
+                                    int64_t len,
+                                    common::ObIAllocator *allocator);
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
 };

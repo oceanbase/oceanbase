@@ -720,7 +720,8 @@ union ObClientAttributeCapabilityFlags
     uint64_t OB_CLIENT_CAP_OB_LOB_LOCATOR_V2:       1;
     uint64_t OB_CLIENT_CAP_NEW_RESULT_META_DATA:       1;
     uint64_t OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE:     1;
-    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       61;
+    uint64_t OB_CLIENT_SUPPORT_PS_META_CACHE:     1;
+    uint64_t OB_CLIENT_CAP_RESERVED_NOT_USE:       60;
   } cap_flags_;
 };
 

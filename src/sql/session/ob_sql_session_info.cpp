@@ -1440,6 +1440,82 @@ ObPsCache *ObSQLSessionInfo::get_ps_cache()
   return ps_cache_;
 }
 
+bool ObSQLSessionInfo::need_to_send_result_meta(ObPsStmtId stmt_id,
+                                                const DependenyTableStore &dep_tables)
+{
+  int ret = OB_SUCCESS;
+  bool need_send = true;
+  ObPsSessionInfo *ps_sess_info = nullptr;
+  if (OB_FAIL(get_ps_session_info(stmt_id, ps_sess_info))) {
+    LOG_WARN("failed to get ps session info", K(ret), K(stmt_id), K(dep_tables));
+  } else {
+    need_send = ps_sess_info->need_send_result_meta(dep_tables);
+  }
+  return need_send;
+}
+
+bool ObSQLSessionInfo::need_to_send_result_meta(ObPsStmtId stmt_id,
+                                                const common::ObIArray<int64_t> &dep_table_versions)
+{
+  int ret = OB_SUCCESS;
+  bool need_send = true;
+  ObPsSessionInfo *ps_sess_info = nullptr;
+  if (OB_FAIL(get_ps_session_info(stmt_id, ps_sess_info))) {
+    LOG_WARN("failed to get ps session info", K(ret), K(stmt_id));
+  } else {
+    need_send = ps_sess_info->need_send_result_meta(dep_table_versions);
+  }
+  return need_send;
+}
+
+bool ObSQLSessionInfo::need_to_send_param_meta(ObPsStmtId stmt_id)
+{
+  int ret = OB_SUCCESS;
+  bool need_send = true;
+  ObPsSessionInfo *ps_sess_info = nullptr;
+  if (OB_FAIL(get_ps_session_info(stmt_id, ps_sess_info))) {
+    LOG_WARN("failed to get ps session info", K(ret), K(stmt_id));
+  } else {
+    need_send = ps_sess_info->need_send_param_meta();
+  }
+  return need_send;
+}
+
+int ObSQLSessionInfo::mark_ps_result_meta_sent(ObPsStmtId stmt_id,
+                                               const DependenyTableStore &dep_tables)
+{
+  int ret = OB_SUCCESS;
+  ObPsSessionInfo *ps_sess_info = nullptr;
+  if (OB_FAIL(get_ps_session_info(stmt_id, ps_sess_info))) {
+    LOG_WARN("get ps session info failed", K(ret), K(stmt_id));
+  } else if (OB_FAIL(ps_sess_info->mark_result_meta_sent(dep_tables))) {
+    LOG_WARN("fail to mark result meta sent", K(ret), K(stmt_id));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::mark_ps_result_meta_sent(ObPsStmtId stmt_id,
+                                               const common::ObIArray<int64_t> &dep_table_versions)
+{
+  int ret = OB_SUCCESS;
+  ObPsSessionInfo *ps_sess_info = nullptr;
+  if (OB_FAIL(get_ps_session_info(stmt_id, ps_sess_info))) {
+    LOG_WARN("get ps session info failed", K(ret), K(stmt_id));
+  } else if (OB_FAIL(ps_sess_info->mark_result_meta_sent(dep_table_versions))) {
+    LOG_WARN("fail to mark result meta sent", K(ret), K(stmt_id));
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::mark_ps_param_meta_sent(ObPsStmtId stmt_id)
+{
+  int ret = OB_SUCCESS;
+  ObPsSessionInfo *ps_sess_info = nullptr;
+  if (OB_FAIL(get_ps_session_info(stmt_id, ps_sess_info))) {
+    LOG_WARN("get ps session info failed", K(ret), K(stmt_id));
+  } else if (OB_FALSE_IT(ps_sess_info->mark_param_meta_sent())) {
+  }
+}
 
 //whether the user has the super privilege
 bool ObSQLSessionInfo::has_user_super_privilege() const
@@ -1698,7 +1774,7 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt info is null", K(ret), K(stmt_info));
       } else {
-        session_info = new (buf) ObPsSessionInfo(orig_tenant_id_, stmt_info->get_num_of_param());
+        session_info = new (buf) ObPsSessionInfo(orig_tenant_id_, stmt_info->get_num_of_param(), stmt_info->get_is_column_meta_stable());
         session_info->set_stmt_id(client_stmt_id);
         session_info->set_stmt_type(stmt_info->get_stmt_type());
         session_info->set_ps_stmt_checksum(stmt_info->get_ps_stmt_checksum());
@@ -3984,6 +4060,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
       enable_seq_wrap_around_flush_cache_ = tenant_config->_enable_seq_wrap_around_flush_cache;
       enable_fast_json_path_lookup_ = tenant_config->_enable_fast_json_path_lookup;
+      enable_json_bin_view_ = tenant_config->_enable_json_bin_view;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
       // 8. _enable_enhanced_cursor_validation
@@ -4013,6 +4090,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
                    tenant_config->_multimodel_memory_trace_level > 2 ? 0 : tenant_config->_multimodel_memory_trace_level);
       ATOMIC_STORE(&record_ps_execute_params_, tenant_config->_record_ps_execute_params);
       ATOMIC_STORE(&enable_pl_sql_parameterize_, tenant_config->_enable_pl_sql_parameterize);
+      ATOMIC_STORE(&enable_ps_meta_response_optimize_, tenant_config->enable_ps_meta_response_optimize);
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);

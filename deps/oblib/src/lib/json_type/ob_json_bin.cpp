@@ -4235,147 +4235,45 @@ ObJBVerType ObJsonVerType::get_json_vertype(ObJsonNodeType in_type)
   return ret_type;
 }
 
-ObJsonNodeType ObJsonVerType::get_json_type(ObJBVerType type)
-{
-  ObJsonNodeType ret_type;
-
-  switch (type) {
-    case ObJBVerType::J_NULL_V0: {
-      ret_type = ObJsonNodeType::J_NULL;
-      break;
-    }
-    case ObJBVerType::J_DECIMAL_V0: {
-      ret_type = ObJsonNodeType::J_DECIMAL;
-      break;
-    }
-    case ObJBVerType::J_INT_V0: {
-      ret_type = ObJsonNodeType::J_INT;
-      break;
-    }
-    case ObJBVerType::J_UINT_V0: {
-      ret_type = ObJsonNodeType::J_UINT;
-      break;
-    }
-    case ObJBVerType::J_DOUBLE_V0: {
-      ret_type = ObJsonNodeType::J_DOUBLE;
-      break;
-    }
-    case ObJBVerType::J_STRING_V0: {
-      ret_type = ObJsonNodeType::J_STRING;
-      break;
-    }
-    case ObJBVerType::J_OBJECT_V0: {
-      ret_type = ObJsonNodeType::J_OBJECT;
-      break;
-    }
-    case ObJBVerType::J_ARRAY_V0: {
-      ret_type = ObJsonNodeType::J_ARRAY;
-      break;
-    }
-    case ObJBVerType::J_SEMI_HETE_COL_V0: {
-      ret_type = ObJsonNodeType::J_SEMI_HETE_COL;
-      break;
-    }
-    case ObJBVerType::J_BOOLEAN_V0: {
-      ret_type = ObJsonNodeType::J_BOOLEAN;
-      break;
-    }
-    case ObJBVerType::J_DATE_V0: {
-      ret_type = ObJsonNodeType::J_DATE;
-      break;
-    }
-    case ObJBVerType::J_MYSQL_DATE_V0: {
-      ret_type = ObJsonNodeType::J_MYSQL_DATE;
-      break;
-    }
-    case ObJBVerType::J_TIME_V0: {
-      ret_type = ObJsonNodeType::J_TIME;
-      break;
-    }
-    case ObJBVerType::J_DATETIME_V0: {
-      ret_type = ObJsonNodeType::J_DATETIME;
-      break;
-    }
-    case ObJBVerType::J_MYSQL_DATETIME_V0: {
-      ret_type = ObJsonNodeType::J_MYSQL_DATETIME;
-      break;
-    }
-    case ObJBVerType::J_TIMESTAMP_V0: {
-      ret_type = ObJsonNodeType::J_TIMESTAMP;
-      break;
-    }
-    case ObJBVerType::J_OPAQUE_V0: {
-      ret_type = ObJsonNodeType::J_OPAQUE;
-      break;
-    }
-    case ObJBVerType::J_OFLOAT_V0: {
-      ret_type = ObJsonNodeType::J_OFLOAT;
-      break;
-    }
-    case ObJBVerType::J_ODOUBLE_V0: {
-      ret_type = ObJsonNodeType::J_ODOUBLE;
-      break;
-    }
-    case ObJBVerType::J_ODECIMAL_V0: {
-      ret_type = ObJsonNodeType::J_ODECIMAL;
-      break;
-    }
-    case ObJBVerType::J_OINT_V0: {
-      ret_type = ObJsonNodeType::J_OINT;
-      break;
-    }
-    case ObJBVerType::J_OLONG_V0: {
-      ret_type = ObJsonNodeType::J_OLONG;
-      break;
-    }
-    case ObJBVerType::J_OBINARY_V0: {
-      ret_type = ObJsonNodeType::J_OBINARY;
-      break;
-    }
-    case ObJBVerType::J_OOID_V0: {
-      ret_type = ObJsonNodeType::J_OOID;
-      break;
-    }
-    case ObJBVerType::J_ORAWHEX_V0: {
-      ret_type = ObJsonNodeType::J_ORAWHEX;
-      break;
-    }
-    case ObJBVerType::J_ORAWID_V0: {
-      ret_type = ObJsonNodeType::J_ORAWID;
-      break;
-    }
-    case ObJBVerType::J_ORACLEDATE_V0: {
-      ret_type = ObJsonNodeType::J_ORACLEDATE;
-      break;
-    }
-    case ObJBVerType::J_ODATE_V0: {
-      ret_type = ObJsonNodeType::J_ODATE;
-      break;
-    }
-    case ObJBVerType::J_OTIMESTAMP_V0: {
-      ret_type = ObJsonNodeType::J_OTIMESTAMP;
-      break;
-    }
-    case ObJBVerType::J_OTIMESTAMPTZ_V0: {
-      ret_type = ObJsonNodeType::J_OTIMESTAMPTZ;
-      break;
-    }
-    case ObJBVerType::J_ODAYSECOND_V0: {
-      ret_type = ObJsonNodeType::J_ODAYSECOND;
-      break;
-    }
-    case ObJBVerType::J_OYEARMONTH_V0: {
-      ret_type = ObJsonNodeType::J_OYEARMONTH;
-      break;
-    }
-    default: {
-      ret_type = static_cast<ObJsonNodeType>(type);
-      break;
-    }
-  }
-
-  return ret_type;
-}
+const ObJsonNodeType ObJsonVerType::VER_TYPE_TO_JSON_TYPE[] = {
+  ObJsonNodeType::J_NULL,          // 0:  J_NULL_V0
+  ObJsonNodeType::J_DECIMAL,       // 1:  J_DECIMAL_V0
+  ObJsonNodeType::J_INT,           // 2:  J_INT_V0
+  ObJsonNodeType::J_UINT,          // 3:  J_UINT_V0
+  ObJsonNodeType::J_DOUBLE,        // 4:  J_DOUBLE_V0
+  ObJsonNodeType::J_STRING,        // 5:  J_STRING_V0
+  ObJsonNodeType::J_OBJECT,        // 6:  J_OBJECT_V0
+  ObJsonNodeType::J_ARRAY,         // 7:  J_ARRAY_V0
+  ObJsonNodeType::J_BOOLEAN,       // 8:  J_BOOLEAN_V0
+  ObJsonNodeType::J_DATE,          // 9:  J_DATE_V0
+  ObJsonNodeType::J_TIME,          // 10: J_TIME_V0
+  ObJsonNodeType::J_DATETIME,      // 11: J_DATETIME_V0
+  ObJsonNodeType::J_TIMESTAMP,     // 12: J_TIMESTAMP_V0
+  ObJsonNodeType::J_OPAQUE,        // 13: J_OPAQUE_V0
+  static_cast<ObJsonNodeType>(14), // 14: (gap, identity map)
+  ObJsonNodeType::J_OFLOAT,        // 15: J_OFLOAT_V0
+  ObJsonNodeType::J_ODOUBLE,       // 16: J_ODOUBLE_V0
+  ObJsonNodeType::J_ODECIMAL,      // 17: J_ODECIMAL_V0
+  ObJsonNodeType::J_OINT,          // 18: J_OINT_V0
+  ObJsonNodeType::J_OLONG,         // 19: J_OLONG_V0
+  ObJsonNodeType::J_OBINARY,       // 20: J_OBINARY_V0
+  ObJsonNodeType::J_OOID,          // 21: J_OOID_V0
+  ObJsonNodeType::J_ORAWHEX,       // 22: J_ORAWHEX_V0
+  ObJsonNodeType::J_ORAWID,        // 23: J_ORAWID_V0
+  ObJsonNodeType::J_ORACLEDATE,    // 24: J_ORACLEDATE_V0
+  ObJsonNodeType::J_ODATE,         // 25: J_ODATE_V0
+  ObJsonNodeType::J_OTIMESTAMP,    // 26: J_OTIMESTAMP_V0
+  ObJsonNodeType::J_OTIMESTAMPTZ,  // 27: J_OTIMESTAMPTZ_V0
+  ObJsonNodeType::J_ODAYSECOND,    // 28: J_ODAYSECOND_V0
+  ObJsonNodeType::J_OYEARMONTH,    // 29: J_OYEARMONTH_V0
+  static_cast<ObJsonNodeType>(30), // 30: J_DOC_HEADER_V0 (identity map)
+  static_cast<ObJsonNodeType>(31), // 31: J_FORWARD_V0 (identity map)
+  ObJsonNodeType::J_MYSQL_DATE,    // 32: J_MYSQL_DATE_V0
+  ObJsonNodeType::J_MYSQL_DATETIME,// 33: J_MYSQL_DATETIME_V0
+  ObJsonNodeType::J_SEMI_HETE_COL, // 34: J_SEMI_HETE_COL_V0
+};
+const uint8_t ObJsonVerType::VER_TYPE_TABLE_SIZE =
+    sizeof(VER_TYPE_TO_JSON_TYPE) / sizeof(VER_TYPE_TO_JSON_TYPE[0]);
 
 bool ObJsonVerType::is_array(ObJBVerType type)
 {
@@ -4711,16 +4609,6 @@ int ObJsonVar::set_var(ObILobCursor *cursor, int64_t offset, uint64_t var, uint8
   return ret;
 }
 
-uint64_t ObJsonVar::get_var_size(uint8_t type)
-{
-  uint64_t var_size = static_cast<uint64_t>(JBLS_MAX);
-  if (OB_LIKELY(type < JBLS_MAX)) {
-    var_size = static_cast<uint64_t>(OB_JSON_VAR_BYTE_WIDTH[type]);
-  } else {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid var type.", K(OB_NOT_SUPPORTED), K(type));
-  }
-  return var_size;
-}
 
 uint8_t ObJsonVar::get_var_type(uint64_t var)
 {

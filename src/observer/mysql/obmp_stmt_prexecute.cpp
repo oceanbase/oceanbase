@@ -638,9 +638,19 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(session.get_autocommit(ac))) {
         LOG_WARN("fail to get autocommit", K(ret));
-      } else if (OB_FAIL(response_param_query_header(
-                     session, fields, params_, stmt_id_, has_result, 0))) {
-        LOG_WARN("send header packet faild.", K(ret));
+      } else {
+        const common::ObIArray<int64_t> *dep_table_versions = nullptr;
+        if (cursor->get_dep_table_versions().count() > 0) {
+          dep_table_versions = &cursor->get_dep_table_versions();
+        }
+        if (OB_FAIL(response_param_query_header(
+                       session, fields, params_, stmt_id_, has_result, 0, dep_table_versions))) {
+          LOG_WARN("send header packet faild.", K(ret));
+        } else {
+          cursor->set_execute_meta_sent(true);
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                      session.get_effective_tenant_id(), schema_guard))) {
         LOG_WARN("get tenant schema guard failed ", K(ret), K(session.get_effective_tenant_id()));
@@ -891,20 +901,46 @@ int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
 {
   // TODO: 增加com类型的处理
   int ret = OB_SUCCESS;
+  bool need_send_meta = true;  // 默认发送列 Meta
+  bool need_send_param_meta = true; // 默认发送参数 Meta
+
+  bool should_mark_column_meta_sent = false;
+  bool meta_cache_param_pending = false;
+  const uint64_t stmt_id = result.get_statement_id();
   if (!prepare_packet_sent_) {
     const ColumnsFieldIArray *fields = result.get_field_columns();
     const ParamsFieldIArray *param_fields = result.get_param_fields();
     const ParamsFieldIArray *returning_params_field = result.get_returning_param_fields();
-    uint64_t params_cnt = OB_NOT_NULL(param_fields) ? param_fields->count() : 0;
+    const uint64_t input_params_cnt =
+        OB_NOT_NULL(param_fields) ? param_fields->count() : 0;
     int64_t fields_count = OB_NOT_NULL(fields) ? fields->count() : 0;
     uint64_t returning_params_cnt = 0;
     bool has_arraybinding_result = false;
     int8_t has_result = 0;
     bool ps_out = false;
+    bool enable_ps_meta_response_opt = session.is_enable_ps_meta_response_optimize()
+                                        && session.is_client_support_ps_meta_cache();
+    LOG_DEBUG("ps meta response optimization", K(enable_ps_meta_response_opt));
+    if (enable_ps_meta_response_opt && common::OB_INVALID_STMT_ID != stmt_id
+        && OB_NOT_NULL(result.get_physical_plan())) {
+      const DependenyTableStore &dep_tables = result.get_physical_plan()->get_dependency_table();
+      if (stmt::T_SELECT == stmt_type_ && fields_count > 0) {
+        need_send_meta = session.need_to_send_result_meta(stmt_id, dep_tables);
+        should_mark_column_meta_sent = need_send_meta;
+      }
+      if (input_params_cnt > 0 && OB_NOT_NULL(param_fields)
+          && stmt::T_SELECT == stmt_type_
+          && !is_arraybinding_) {
+        need_send_param_meta = session.need_to_send_param_meta(stmt_id);
+        meta_cache_param_pending = need_send_param_meta;
+      }
+    }
 
     LOG_DEBUG("before response_query_header",KPC(fields), KPC(param_fields), KPC(returning_params_field));
 
     // check has arraybinding result
+    // 仅在 arraybinding 带 returning 的语句类型下，returning 段才参与下发并计入 params_cnt。
+    uint64_t real_params_cnt = input_params_cnt;
     if (OB_NOT_NULL(returning_params_field) && is_arraybinding_has_result_type(stmt_type_)) {
       /*
        * 1. arraybinding 带结果集的语句类型 包含了 DML 语句 + 匿名块 + CALL
@@ -912,7 +948,7 @@ int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
        * 2. param 的个数包含了 returning 的个数
        */
       returning_params_cnt = returning_params_field->count();
-      params_cnt = params_cnt + returning_params_cnt;
+      real_params_cnt = real_params_cnt + returning_params_cnt;
       has_arraybinding_result = returning_params_cnt > 0 ? true : false;
     }
 
@@ -936,32 +972,68 @@ int ObMPStmtPrexecute::response_query_header(ObSQLSessionInfo &session,
       ps_out = true;
     }
 
+    // 无需发送 result meta 时仍以 1 列 / 1 个参数占位回包，由 fake invisible field 占位。
+    // OB Client / OBProxy 通过 prepare 包里的 enable_ps_meta_opt flag + field 上的
+    // 识别这类占位包，并改用本地缓存重建真实 meta。
+    const uint16_t response_column_num =
+        need_send_meta ? static_cast<uint16_t>(fields_count)
+                       : static_cast<uint16_t>(1);
+
+    // 无需发送 param meta 时，如果参数数量 > 0 仍以 1 列 / 1 个参数占位回包，由 fake invisible field 占位；
+    // 否则不需要发送对应meta。
+    const uint16_t response_param_num =
+        need_send_param_meta
+            ? static_cast<uint16_t>(real_params_cnt)
+            : (real_params_cnt > 0 ? static_cast<uint16_t>(1) : static_cast<uint16_t>(0));
     // send packet
     if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(send_prepare_packet(stmt_id_,
-                                           fields_count,
-                                           params_cnt,
+                                           response_column_num,
+                                           response_param_num,
                                            result.get_warning_count(),
                                            has_result,
                                            has_arraybinding_result,
-                                           ps_out && is_arraybinding_))) { // 只有 arraybinding + PL + 有结果集返回， prepare 中的 ps_out 才设置为 true
+                                           ps_out && is_arraybinding_, // 只有 arraybinding + PL + 有结果集返回， prepare 中的 ps_out 才设置为 true
+                                           enable_ps_meta_response_opt))) {
       LOG_WARN("packet send prepare infomation fail", K(ret), K(stmt_id_));
-    } else if (params_cnt > 0 && OB_FAIL(send_param_field_packet(session, param_fields))) {
+    } else if (need_send_param_meta && input_params_cnt > 0
+               && OB_FAIL(send_param_field_packet(session, param_fields))) {
       LOG_WARN("response param packet fail", K(ret));
-    } else if (returning_params_cnt > 0 && is_arraybinding_has_result_type(stmt_type_)
-      && OB_FAIL(send_param_field_packet(session, returning_params_field))) {
+    } else if (need_send_param_meta && returning_params_cnt > 0
+               && is_arraybinding_has_result_type(stmt_type_)
+               && OB_FAIL(send_param_field_packet(session, returning_params_field))) {
       LOG_WARN("response param packet fail", K(ret));
-    } else if (params_cnt > 0 && OB_FAIL(send_eof_packet(session, 0, false, true, false))) {
+    } else if (!need_send_param_meta && real_params_cnt > 0
+               && OB_FAIL(send_dummy_param_packet(session))) {
+      LOG_WARN("response fake param packet fail", K(ret));
+    } else if (real_params_cnt > 0
+               && OB_FAIL(send_eof_packet(session, 0, false, true, false))) {
       LOG_WARN("send eof field failed", K(ret));
-    } else if (fields_count > 0 && OB_FAIL(send_column_packet(session, fields, ps_out))) {
+    } else if (need_send_meta && fields_count > 0 && OB_FAIL(send_column_packet(session, fields, ps_out))) {
       LOG_WARN("response column packet fail", K(ret));
+    } else if (!need_send_meta && fields_count > 0
+               && OB_FAIL(send_dummy_column_packet(session, ps_out))) {
+      LOG_WARN("response fake column packet fail", K(ret));
     } else if (need_flush_buffer && OB_FAIL(flush_buffer(false))) {
       LOG_WARN("flush buffer fail before send async ok packet.", K(ret), K(stmt_id_));
     } else {
       prepare_packet_sent_ = true;
     }
   }
+
+  if (OB_SUCC(ret) && meta_cache_param_pending) {
+    session.mark_ps_param_meta_sent(stmt_id);
+  }
+  if (OB_SUCC(ret) && should_mark_column_meta_sent
+      && OB_NOT_NULL(result.get_physical_plan())) {
+    int tmp_mark_ret = session.mark_ps_result_meta_sent(
+        stmt_id, result.get_physical_plan()->get_dependency_table());
+    if (OB_SUCCESS != tmp_mark_ret) {
+      LOG_WARN("fail to mark result meta sent", K(tmp_mark_ret), K(stmt_id));
+    }
+  }
+
   return ret;
 }
 
@@ -971,10 +1043,11 @@ int ObMPStmtPrexecute::response_param_query_header(ObSQLSessionInfo &session,
                                                   int64_t stmt_id,
                                                   int8_t has_result,
                                                   int64_t warning_count,
+                                                  const common::ObIArray<int64_t> *dep_table_versions,
                                                   bool ps_out)
 {
-  // TODO: 增加com类型的处理
   int ret = OB_SUCCESS;
+
   if (!prepare_packet_sent_) {
     uint64_t params_cnt = 0;
     int64_t fields_count = 0;
@@ -984,30 +1057,73 @@ int ObMPStmtPrexecute::response_param_query_header(ObSQLSessionInfo &session,
     if (OB_NOT_NULL(fields)) {
       fields_count = fields->count();
     }
+
+    // PS Meta 回包优化
+    bool need_send_column_meta = true;
+    bool need_send_param_meta = true;
+    bool enable_ps_meta_opt = session.is_enable_ps_meta_response_optimize()
+                              && session.is_client_support_ps_meta_cache();
+    LOG_DEBUG("ps meta response optimization", K(enable_ps_meta_opt), K(stmt_id), K(params_cnt));
+    if (enable_ps_meta_opt && common::OB_INVALID_STMT_ID != stmt_id) {
+      if (stmt::T_SELECT == stmt_type_ && fields_count > 0 && OB_NOT_NULL(dep_table_versions)) {
+        need_send_column_meta = session.need_to_send_result_meta(stmt_id, *dep_table_versions);
+      }
+      if (params_cnt > 0 && stmt::T_SELECT == stmt_type_ && !is_arraybinding_) {
+        need_send_param_meta = session.need_to_send_param_meta(stmt_id);
+      }
+    }
+
+    // 无需发送 PS Meta Cache 时仍以 1 列 / 1 个参数占位回包。
+    const uint16_t response_column_num =
+        need_send_column_meta ? static_cast<uint16_t>(fields_count)
+                             : (fields_count > 0 ? static_cast<uint16_t>(1) : static_cast<uint16_t>(0));
+    const uint16_t response_param_num =
+        need_send_param_meta
+            ? static_cast<uint16_t>(params_cnt)
+            : (params_cnt > 0 ? static_cast<uint16_t>(1) : static_cast<uint16_t>(0));
     if (OB_FAIL(send_prepare_packet(stmt_id,
-                                    fields_count,
-                                    params_cnt,
+                                    response_column_num,
+                                    response_param_num,
                                     warning_count,
                                     has_result,
                                     false,
-                                    false))) {
+                                    false,
+                                    enable_ps_meta_opt))) {
       LOG_WARN("packet send prepare infomation fail", K(ret), K(stmt_id));
-    }
-    if (OB_SUCC(ret) && params_cnt > 0) {
-      if (OB_FAIL(send_param_packet(session, params))) {
-        LOG_WARN("response param packet fail", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && fields_count > 0) {
+    } else if (need_send_param_meta && params_cnt > 0
+               && OB_FAIL(send_param_packet(session, params))) {
+      LOG_WARN("response param packet fail", K(ret));
+    } else if (!need_send_param_meta && params_cnt > 0
+               && OB_FAIL(send_dummy_param_packet(session))) {
+      LOG_WARN("response fake param packet fail", K(ret));
+    } else if (!need_send_param_meta && params_cnt > 0
+               && OB_FAIL(send_eof_packet(session, 0, false, false, false))) {
+      LOG_WARN("send eof field failed", K(ret));
+    } else if (fields_count > 0) {
       if (stmt::T_ANONYMOUS_BLOCK == stmt_type_
               || (OB_OCI_EXACT_FETCH == exec_mode_ && stmt::T_SELECT == stmt_type_)) {
         // do nothing
-      } else if (OB_FAIL(send_column_packet(session, fields, ps_out))) {
-        LOG_WARN("response column packet fail", K(ret));
+      } else if (need_send_column_meta) {
+        if (OB_FAIL(send_column_packet(session, fields, ps_out))) {
+          LOG_WARN("response column packet fail", K(ret));
+        }
+      } else {
+        if (OB_FAIL(send_dummy_column_packet(session, ps_out))) {
+          LOG_WARN("response fake column packet fail", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {
       prepare_packet_sent_ = true;
+      if (enable_ps_meta_opt && need_send_param_meta) {
+        session.mark_ps_param_meta_sent(stmt_id);
+      }
+      if (enable_ps_meta_opt && need_send_column_meta && OB_NOT_NULL(dep_table_versions)) {
+        int tmp_mark_ret = session.mark_ps_result_meta_sent(stmt_id, *dep_table_versions);
+        if (OB_SUCCESS != tmp_mark_ret) {
+          LOG_WARN("fail to mark result meta sent", K(tmp_mark_ret), K(stmt_id));
+        }
+      }
     }
   }
   return ret;
@@ -1331,7 +1447,8 @@ int ObMPStmtPrexecute::response_header_for_arraybinding(ObSQLSessionInfo &sessio
                                                     warning_count,
                                                     true,
                                                     returning_param_num > 0,
-                                                    ps_out))) {
+                                                    ps_out,
+                                                    false))) {
       LOG_WARN("fail to send_prepare_packet", K(stmt_id_));
     }
 
@@ -1389,7 +1506,8 @@ int ObMPStmtPrexecute::send_prepare_packet(uint32_t statement_id,
                                            uint16_t warning_count,
                                            int8_t has_result_set,
                                            bool is_returning_into,
-                                           bool is_ps_out)
+                                           bool is_ps_out,
+                                           bool is_enable_ps_meta_opt)
 {
   int ret = OB_SUCCESS;
   obmysql::OMPKPrexecute prexecute_packet;
@@ -1402,6 +1520,7 @@ int ObMPStmtPrexecute::send_prepare_packet(uint32_t statement_id,
   extend_flag.IS_RETURNING_INTO_STMT = is_returning_into ? 1 : 0;
   extend_flag.IS_ARRAY_BINDING = is_arraybinding_ ? 1 : 0;
   extend_flag.IS_PS_OUT = is_ps_out ? 1 : 0;
+  extend_flag.ENABLE_PS_META_OPT = is_enable_ps_meta_opt ? 1 : 0;
   prexecute_packet.set_extend_flag(extend_flag);
 
   if (OB_SUCC(ret) && OB_FAIL(response_packet(prexecute_packet, NULL))) {
@@ -1464,6 +1583,49 @@ int ObMPStmtPrexecute::send_param_packet(ObSQLSessionInfo &session,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(send_eof_packet(session, 0, false, false, false))) {
       LOG_WARN("send eof field failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMPStmtPrexecute::send_dummy_column_packet(ObSQLSessionInfo &session, bool ps_out)
+{
+  int ret = OB_SUCCESS;
+  ObField dummy_ob_field;
+  ObMySQLField dummy_mfield;
+  if (OB_FAIL(sql::PsCacheInfoCtx::build_ps_dummy_field(dummy_ob_field))) {
+    LOG_WARN("fail to build invisible fake field", K(ret));
+  } else if (OB_FAIL(ObMySQLResultSet::to_new_result_field(dummy_ob_field, dummy_mfield))) {
+    LOG_WARN("fail to convert fake field", K(ret));
+  } else {
+    OMPKField fp(dummy_mfield);
+    if (OB_FAIL(response_packet(fp, &session))) {
+      LOG_WARN("response fake field packet fail", K(ret));
+    } else if (OB_FAIL(send_eof_packet(session, 0, false, is_ps_cursor(), false, ps_out))) {
+      LOG_WARN("fake column send eof fail", K(ret));
+    } else {
+      LOG_DEBUG("send invisible fake column packet for ps meta cache hit");
+    }
+  }
+  return ret;
+}
+
+int ObMPStmtPrexecute::send_dummy_param_packet(ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObField dummy_ob_field;
+  ObMySQLField dummy_mfield;
+  if (OB_FAIL(sql::PsCacheInfoCtx::build_ps_dummy_field(dummy_ob_field))) {
+    LOG_WARN("fail to build invisible fake field", K(ret));
+  } else if (OB_FAIL(ObMySQLResultSet::to_new_result_field(dummy_ob_field, dummy_mfield))) {
+    LOG_WARN("fail to convert fake field", K(ret));
+  } else {
+    ObMySQLResultSet::replace_lob_type(session, dummy_ob_field, dummy_mfield);
+    OMPKField fp(dummy_mfield);
+    if (OB_FAIL(response_packet(fp, &session))) {
+      LOG_WARN("response fake param packet fail", K(ret));
+    } else {
+      LOG_DEBUG("send invisible fake param packet for ps param meta cache hit");
     }
   }
   return ret;

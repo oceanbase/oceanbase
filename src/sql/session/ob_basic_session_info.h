@@ -1484,6 +1484,11 @@ public:
     return client_attribute_capability_.cap_flags_.OB_CLIENT_SUPPORT_JDBC_BINARY_DOUBLE;
   }
 
+  inline bool is_client_support_ps_meta_cache() const
+  {
+    return client_attribute_capability_.cap_flags_.OB_CLIENT_SUPPORT_PS_META_CACHE;
+  }
+
   void set_proxy_cap_flags(const obmysql::ObProxyCapabilityFlags &proxy_capability)
   {
     proxy_capability_ = proxy_capability;

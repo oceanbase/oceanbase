@@ -196,6 +196,9 @@ ob_set_subtarget(oblib_lib common_mixed
   json_type/ob_json_parse.cpp
   json_type/ob_json_schema.cpp
   json_type/ob_json_diff.cpp
+  json_type/ob_json_bin_view.cpp
+  json_type/ob_json_wrapper.cpp
+  json_type/ob_json_compare.cpp
   lds/ob_lds_define.cpp
   net/ob_addr.cpp
   net/ob_net_util.cpp

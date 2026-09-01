@@ -154,7 +154,13 @@ static const int OB_JSON_BIN_VALUE_TYPE_LEN = sizeof(uint8_t);
 
 class ObJsonVerType {
 public:
-  static ObJsonNodeType get_json_type(ObJBVerType type);
+  static OB_INLINE ObJsonNodeType get_json_type(ObJBVerType type)
+  {
+    uint8_t idx = static_cast<uint8_t>(type);
+    return OB_LIKELY(idx < VER_TYPE_TABLE_SIZE)
+        ? VER_TYPE_TO_JSON_TYPE[idx]
+        : static_cast<ObJsonNodeType>(type);
+  }
   static bool is_opaque_or_string(ObJsonNodeType type);
   static ObJBVerType get_json_vertype(ObJsonNodeType type);
   static bool is_array(ObJBVerType type);
@@ -165,6 +171,9 @@ public:
   static bool is_opaque_or_string(ObJBVerType type);
   static bool is_signed_online_integer(uint8_t type);
 private:
+  // ObJBVerType spans 0-34. Most map 1:1 to ObJsonNodeType except indices 32-33.
+  static const ObJsonNodeType VER_TYPE_TO_JSON_TYPE[];
+  static const uint8_t VER_TYPE_TABLE_SIZE;
   DISALLOW_COPY_AND_ASSIGN(ObJsonVerType);
 };
 
@@ -654,6 +663,13 @@ public:
   static OB_INLINE ObJBVerType get_ointervalDS_vertype() { return J_ODAYSECOND_V0; }
   static OB_INLINE ObJBVerType get_ointervalYM_vertype() { return J_OYEARMONTH_V0; }
   static OB_INLINE bool is_doc_header(uint8_t type) { return is_doc_header_v0(type); }
+  static OB_INLINE bool need_type_prefix(const uint8_t value_type)
+  {
+    return value_type == ObJBVerType::J_ARRAY_V0 ||
+        value_type == ObJBVerType::J_OBJECT_V0 ||
+        value_type == ObJBVerType::J_SEMI_HETE_COL_V0 ||
+        ObJsonVerType::is_opaque_or_string(static_cast<ObJBVerType>(value_type));
+  }
 private:
   static OB_INLINE bool is_forward_v0(uint8_t type) { return J_FORWARD_V0 == type; }
   static OB_INLINE bool is_doc_header_v0(uint8_t type) { return J_DOC_HEADER_V0 == type; }
@@ -1027,13 +1043,6 @@ private:
   OB_INLINE uint64_t get_extend_seg_offset() const { return nullptr == ctx_ ? 0 : ctx_->extend_seg_offset_; }
   OB_INLINE void set_extend_seg_offset(uint64_t offset) { if (nullptr != ctx_) ctx_->extend_seg_offset_  = offset; }
   OB_INLINE uint64_t get_extend_value_offset(uint64_t offset) const { return get_extend_seg_offset() + offset; }
-  static OB_INLINE bool need_type_prefix(const uint8_t value_type)
-  {
-    return value_type == ObJBVerType::J_ARRAY_V0 ||
-        value_type == ObJBVerType::J_OBJECT_V0 ||
-        value_type == ObJBVerType::J_SEMI_HETE_COL_V0 ||
-        ObJsonVerType::is_opaque_or_string(static_cast<ObJBVerType>(value_type));
-  }
 
   int get_extend_value_type(uint64_t offset, uint8_t &value_type) const;
 
@@ -1122,7 +1131,11 @@ public:
   static int reserve_var(uint8_t type, ObJsonBuffer &result);
   static int set_var(uint64_t var, uint8_t type, char *pos); // fill var at pos
   static int set_var(ObILobCursor *cursor, int64_t offset, uint64_t var, uint8_t type);
-  static uint64_t get_var_size(uint8_t type);
+  // JBLS_UINT8=0->1, JBLS_UINT16=1->2, JBLS_UINT32=2->4, JBLS_UINT64=3->8
+  static OB_INLINE uint64_t get_var_size(uint8_t type)
+  {
+    return OB_UNLIKELY(type > JBLS_UINT64) ? JBLS_MAX : (1ULL << type);
+  }
   static uint8_t get_var_type(uint64_t var);
   static int read_var(const char *data, uint8_t type, int64_t *var);
   static uint64_t var_int2uint(int64_t var);

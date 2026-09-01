@@ -324,7 +324,7 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
         ObString outline_format_signature_str;
         if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
           outline_signature_str = pc_ctx.raw_sql_;
-          outline_format_signature_.reset();
+          outline_format_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
         } else {
           outline_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
           outline_format_signature_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;

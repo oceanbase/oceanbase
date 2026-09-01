@@ -358,7 +358,7 @@ int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx, const common::ObNew
             ObJsonBoolean j_bool(tmp->get_bool());
             ObIJsonBase *j_base = &j_bool;
             ObString raw_bin; //
-            if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, expr_ctx.calc_buf_))) {
+            if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, expr_ctx.calc_buf_))) {
               LOG_WARN("get result binary failed", K(ret), K(*j_base));
             } else {
               // bool type convert to json bool, need to know outside has lob header or not
@@ -395,7 +395,7 @@ int ObInfixExpression::calc_row(common::ObExprCtx &expr_ctx, const common::ObNew
           ObJsonBoolean j_bool(stack->get_bool());
           ObIJsonBase *j_base = &j_bool;
           ObString raw_bin;
-          if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, expr_ctx.calc_buf_))) {
+          if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(j_base, raw_bin, expr_ctx.calc_buf_))) {
             LOG_WARN("get result binary failed", K(ret), K(*j_base));
           } else {
             // bool type convert to json bool, need to know outside has lob header or not

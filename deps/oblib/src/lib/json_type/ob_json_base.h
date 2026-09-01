@@ -227,7 +227,7 @@ public:
   }
   OB_INLINE bool is_tree() const { return get_internal_type() == ObJsonInType::JSON_TREE; }
   OB_INLINE bool is_bin() const { return get_internal_type() == ObJsonInType::JSON_BIN; }
-  OB_INLINE ObIAllocator *get_allocator() { return allocator_; }
+  OB_INLINE ObIAllocator *get_allocator() const { return allocator_; }
   OB_INLINE void set_allocator(ObIAllocator *allocator) { allocator_ = allocator; }
   virtual int reset() { return OB_SUCCESS; }
 public:
@@ -503,56 +503,6 @@ private:
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int print_opaque(ObJsonBuffer &j_buf, uint64_t depth, bool is_quoted) const;
 
-  // Compare two ObIJsonBase which are ObJsonArray.
-  //
-  // @param [in] other  Another ObIJsonBase which is ObJsonArray.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_array(const ObIJsonBase &other, int &res) const;
-
-  // Compare two ObIJsonBase which are ObJsonObject.
-  //
-  // @param [in] other  Another ObIJsonBase which is ObJsonObject.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_object(const ObIJsonBase &other, int &res) const;
-
-  // Compare two ObIJsonBase and this json base is ObJsonInt.
-  //
-  // @param [in] other  Another ObIJsonBase which is other ObJsonNodeType.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_int(const ObIJsonBase &other, int &res) const;
-
-  // Compare two ObIJsonBase and this json base is ObJsonUint.
-  //
-  // @param [in] other  Another ObIJsonBase which is other ObJsonNodeType.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_uint(const ObIJsonBase &other, int &res) const;
-
-  // Compare two ObIJsonBase and this json base is ObJsonDouble.
-  //
-  // @param [in] other  Another ObIJsonBase which is other ObJsonNodeType.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_double(const ObIJsonBase &other, int &res) const;
-
-  // Compare two ObIJsonBase and this json base is J_DECIMAL.
-  //
-  // @param [in] other  Another ObIJsonBase which is other ObJsonNodeType.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_decimal(const ObIJsonBase &other, int &res) const;
-
-  // Compare two ObIJsonBase which are J_DATETIME/J_DATE/J_TIME/J_TIMESTAMP.
-  //
-  // @param [in] other Another ObIJsonBase which is other ObJsonNodeType.
-  // @param [out] res Less than other returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  int compare_datetime(ObDTMode dt_mode_a, const ObIJsonBase &other, int &res) const;
-
-  int path_compare_string(const ObString &str_l, const ObString &str_r, int &res) const;
   // Check whether the search is complete.
   //
   // @param [in] res             The result.
@@ -1197,71 +1147,6 @@ public:
   // @param [in] length       The length of source string.
   // @return Returns OB_SUCCESS on success, error code otherwise.
   static int append_string(ObJsonBuffer &j_buf, bool is_quoted, const char *data, uint64_t length);
-
-  // Compare two numbers.
-  //
-  // @param [in] a The first value to be compared.
-  // @param [in] b The decond value to be compared.
-  // @return Less than returns -1, greater than 1, equal returns 0.
-  template <class T>
-  static inline int compare_numbers(T a, T b) {
-    return a < b ? -1 : (a == b ? 0 : 1);
-  }
-
-  // Compare int64 with uint64_t.
-  //
-  // @param [in] a The first value with int64 to be compared.
-  // @param [in] b The decond value with uint64_t to be compared.
-  // @return Less than returns -1, greater than 1, equal returns 0.
-  static int compare_int_uint(int64_t a, uint64_t b);
-
-  // Compare json decimal with uint64_t.
-  //
-  // @param [in]  a       The first value with ObNumber to be compared.
-  // @param [in]  b       The decond value with uint64_t to be compared.
-  // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_decimal_uint(const number::ObNumber &a, uint64_t b, int &res);
-
-  // Compare int with json.
-  //
-  // @param [in]  a       The first value with double to be compared.
-  // @param [in]  other   The decond value with json type to be compared.
-  // @param [out] result  Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_int_json(int a, ObIJsonBase* other, int& result);
-
-  // Compare json decimal with int64_t.
-  //
-  // @param [in]  a       The first value with ObNumber to be compared.
-  // @param [in]  b       The decond value with int64_t to be compared.
-  // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_decimal_int(const number::ObNumber &a, int64_t b, int &res);
-
-  // Compare json decimal with double.
-  //
-  // @param [in]  a       The first value with ObNumber to be compared.
-  // @param [in]  b       The decond value with double to be compared.
-  // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_decimal_double(const number::ObNumber &a, double b, int &res);
-
-  // Compare double with int.
-  //
-  // @param [in]  a       The first value with double to be compared.
-  // @param [in]  b       The decond value with int64_t to be compared.
-  // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_double_int(double a, int64_t b, int &res);
-
-  // Compare double with uint.
-  //
-  // @param [in]  a       The first value with double to be compared.
-  // @param [in]  b       The decond value with uint64_t to be compared.
-  // @param [out] res     Less than returns -1, greater than 1, equal returns 0.
-  // @return Returns OB_SUCCESS on success, error code otherwise.
-  static int compare_double_uint(double a, uint64_t b, int &res);
 
   // Change double to number
   //

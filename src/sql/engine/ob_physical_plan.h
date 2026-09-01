@@ -563,6 +563,7 @@ public:
   }
   inline bool is_disable_auto_memory_mgr() const { return disable_auto_memory_mgr_; }
   inline void disable_auto_memory_mgr() { disable_auto_memory_mgr_ = true; }
+  void record_ps_params_value(ObPlanCacheCtx &pc_ctx);
 
   int set_logical_plan(ObLogicalPlanRawData &logical_plan);
   inline ObLogicalPlanRawData& get_logical_plan() { return logical_plan_; }

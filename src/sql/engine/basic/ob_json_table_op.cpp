@@ -2914,7 +2914,8 @@ int JsonTableFunc::cast_to_result(ObRegCol& col_node, JtScanCtx* ctx, bool enabl
     }
   }
 
-  if (OB_SUCC(ret) && is_pack_result && is_lob_storage(dst_type) && (col_node.res_flag_ == ResultType::NOT_DATUM) && !res.is_null()) {
+  if (OB_SUCC(ret) && is_pack_result && is_lob_storage(dst_type) && !cast_param.lob_done_
+      && (col_node.res_flag_ == ResultType::NOT_DATUM) && !res.is_null()) {
     ObString val = res.get_string();
     if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(*expr, *ctx->eval_ctx_, res, val, &ctx->row_alloc_))) {
       LOG_WARN("fail to pack res result.", K(ret));

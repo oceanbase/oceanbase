@@ -288,7 +288,8 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
 }
 
 int ObMPStmtFetch::response_query_header(ObSQLSessionInfo &session, 
-                                         const ColumnsFieldArray *fields)
+                                         const ColumnsFieldArray *fields,
+                                         bool need_send_meta)
 {
   // TODO: 增加com类型的处理
   int ret = OB_SUCCESS;
@@ -304,10 +305,14 @@ int ObMPStmtFetch::response_query_header(ObSQLSessionInfo &session,
                            OB_INVALID_COUNT);
   if (NULL == fields) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(drv.response_query_header(*fields,
+  } else {
+    drv.set_need_send_meta(need_send_meta);
+    if (OB_FAIL(drv.response_query_header(*fields,
                                                has_ok_packet(),
+                                               false,
                                                false))) {
-    LOG_WARN("fail to get autocommit", K(ret));
+      LOG_WARN("fail to get autocommit", K(ret));
+    }
   }
   return ret;
 }
@@ -357,9 +362,15 @@ int ObMPStmtFetch::response_result(pl::ObPLCursorInfo &cursor,
             fields = &(cursor.get_spi_cursor()->fields_);
           }
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-            // oracle 模式每次都需要返回head packet
-            // mysql模式 兼容 mysql 协议，不返回 headpacket
-            OZ (response_query_header(session, fields));
+            bool meta_has_sent = false;
+            bool enable_meta_response_opt = session.is_enable_ps_meta_response_optimize()
+                                            && session.is_client_support_ps_meta_cache();
+            if (enable_meta_response_opt && cursor.is_ps_cursor()) {
+              const pl::ObPsCursorInfo &ps_cursor =
+                  static_cast<const pl::ObPsCursorInfo &>(cursor);
+              meta_has_sent = ps_cursor.is_execute_meta_sent();
+            }
+            OZ (response_query_header(session, fields, !meta_has_sent));
           }
           if (OB_SUCC(ret)) {
               tmp_exec_ctx.set_my_session(&session);

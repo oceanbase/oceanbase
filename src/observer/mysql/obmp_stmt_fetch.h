@@ -89,7 +89,7 @@ private:
                       sql::ObSQLSessionInfo &session,
                       int64_t fetch_limit,
                       int64_t &row_num);
-  int response_query_header(sql::ObSQLSessionInfo &session, const ColumnsFieldArray *fields);
+  int response_query_header(sql::ObSQLSessionInfo &session, const ColumnsFieldArray *fields, bool need_send_meta);
   virtual int before_process();
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time) const;
   //重载response，在response中不去调用flush_buffer(true)；flush_buffer(true)在需要回包时显示调用

@@ -132,10 +132,45 @@ private:
                                 ObDatum &res, int &ret,
                                 ObJsonExprParam* json_param,
                                 uint8_t &is_type_mismatch);
-  static int doc_do_seek(ObJsonSeekResult &hits, bool &is_null_result, ObJsonExprParam* json_param,
-                         ObIJsonBase *j_base, const ObExpr &expr, ObEvalCtx &ctx, bool &is_cover_by_error,
+  static int doc_do_seek(ObIArray<ObJsonWrapper> &hits,
+                         bool &is_null_result,
+                         ObJsonExprParam* json_param,
+                         const ObJsonWrapper &doc_wrapper,
+                         const ObExpr &expr,
+                         ObEvalCtx &ctx,
+                         common::ObIAllocator &allocator,
+                         bool &is_cover_by_error,
                          ObDatum *&return_val,
                          uint8_t &is_type_mismatch);
+  static int set_result_impl(const ObExpr &expr,
+                             ObJsonExprParam* json_param,
+                             ObEvalCtx &ctx,
+                             bool &is_null_result,
+                             bool &is_cover_by_error,
+                             uint8_t &is_type_mismatch,
+                             ObDatum &res,
+                             ObDatum *return_val,
+                             ObIAllocator *allocator,
+                             const common::ObJsonWrapper &hit_wrapper);
+  static int normalize_single_result(ObJsonExprParam *json_param,
+                                     ObIJsonBase *j_base,
+                                     bool &is_null_result);
+  static int eval_json_value_fast_path(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       MultimodeAlloctor &temp_allocator,
+                                       ObDatum &res,
+                                       ObJsonParamCacheCtx* param_ctx,
+                                       bool is_cover_by_error);
+  static int ensure_param_ctx_initialized(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          ObJsonParamCacheCtx* param_ctx,
+                                          bool &is_cover_by_error);
+  static int eval_json_value_general_path(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          MultimodeAlloctor &temp_allocator,
+                                          ObDatum &res,
+                                          ObJsonParamCacheCtx* param_ctx,
+                                          bool is_cover_by_error);
 
   // new sql engine
   static inline void set_val(ObDatum &res, ObDatum *val)
@@ -195,6 +230,7 @@ public:
                               int8_t empty_type,
                               ObDatum *empty_datum,
                               bool &is_null_result);
+  template <typename Hits>
   static int set_result(const ObExpr &expr,
                         ObJsonExprParam* json_param,
                         ObEvalCtx &ctx,
@@ -204,30 +240,24 @@ public:
                         ObDatum &res,
                         ObDatum *return_val,
                         ObIAllocator *allocator,
-                        ObIJsonBase *j_base);
-
-private:
-  static int normalize_single_result(ObJsonExprParam *json_param,
-                                     ObIJsonBase *j_base,
-                                     bool &is_null_result);
-  static int eval_json_value_fast_path(const ObExpr &expr,
-                                       ObEvalCtx &ctx,
-                                       MultimodeAlloctor &temp_allocator,
-                                       ObDatum &res,
-                                       ObJsonParamCacheCtx* param_ctx,
-                                       bool is_cover_by_error);
-
-  static int ensure_param_ctx_initialized(const ObExpr &expr,
-                                          ObEvalCtx &ctx,
-                                          ObJsonParamCacheCtx* param_ctx,
-                                          bool &is_cover_by_error);
-
-  static int eval_json_value_general_path(const ObExpr &expr,
-                                          ObEvalCtx &ctx,
-                                          MultimodeAlloctor &temp_allocator,
-                                          ObDatum &res,
-                                          ObJsonParamCacheCtx* param_ctx,
-                                          bool is_cover_by_error);
+                        Hits &hits)
+  {
+    INIT_SUCC(ret);
+    common::ObJsonWrapper hit_wrapper;
+    if (!is_null_result && return_val == NULL) {
+      if (OB_UNLIKELY(hits.count() != 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_LOG(WARN, "unexpected json value hit count", K(ret), K(hits.count()));
+      } else {
+        hit_wrapper = common::ObJsonWrapper(hits[0]);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = set_result_impl(expr, json_param, ctx, is_null_result, is_cover_by_error,
+                            is_type_mismatch, res, return_val, allocator, hit_wrapper);
+    }
+    return ret;
+  }
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonValue);

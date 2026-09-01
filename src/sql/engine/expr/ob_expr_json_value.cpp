@@ -13,6 +13,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_value.h"
+#include "lib/json_type/ob_json_wrapper.h"
 
 // from sql_parser_base.h
 #define DEFAULT_STR_LENGTH -1
@@ -325,8 +326,9 @@ int ObExprJsonValue::eval_json_value_fast_path(const ObExpr &expr,
         } else {
           ObDatum *return_val = NULL;
           uint8_t is_type_mismatch = 0;
-          ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error,
-                          is_type_mismatch, res, return_val, &temp_allocator, j_base_found);
+          ret = set_result_impl(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error,
+                               is_type_mismatch, res, return_val, &temp_allocator,
+                               common::ObJsonWrapper(j_base_found));
         }
       }
     }
@@ -345,48 +347,113 @@ int ObExprJsonValue::eval_json_value_general_path(const ObExpr &expr,
   bool is_null_result = false;
   uint8_t is_type_mismatch = 0;
   ObDatum *return_val = NULL;
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  ObJsonBin st_json(&temp_allocator);
-  ObIJsonBase *j_base = &st_json;
-  ObJsonSeekResult hits;
-  ObJsonBin res_json(&temp_allocator);
-  hits.res_point_ = &res_json;
-  if (OB_FAIL(ObJsonUtil::get_json_doc(expr.args_[JSN_VAL_DOC], ctx,
-                    temp_allocator, j_base, is_null_result,
-                    is_cover_by_error))) { // parse json doc
-    LOG_WARN("fail to parse json doc", K(ret));
-  } else if (OB_ISNULL(param_ctx->json_param_.json_path_)
-             && OB_FAIL(ObJsonUtil::get_json_path(expr.args_[JSN_VAL_PATH],
-                            ctx, is_null_result, param_ctx, temp_allocator,
-                            is_cover_by_error))) { // parse json path
-    LOG_WARN("fail to get json path", K(ret));
-  }
-  // parse empty error default value
-  if ((OB_SUCC(ret) && !is_null_result) || is_cover_by_error) {
-    int temp_ret = get_default_empty_error_value(expr, &param_ctx->json_param_, ctx);
-    if (temp_ret != OB_SUCCESS) {
-      is_cover_by_error = false;
-      ret = temp_ret;
-    }
-  }
-  if (OB_SUCC(ret) && !is_null_result && OB_FAIL(doc_do_seek(hits,
-                                  is_null_result, &param_ctx->json_param_, j_base,
-                                  expr, ctx, is_cover_by_error,
-                                  return_val, is_type_mismatch))) { // do seek
-    LOG_WARN("doc do seek fail", K(ret));
-  }
+  bool fast_path_done = false;
 
-  // fill output and deal error case
-  if (OB_FAIL(ret)) {
-    if (is_cover_by_error && !try_set_error_val(expr, ctx, res, ret, &param_ctx->json_param_, is_type_mismatch)) {
-      LOG_WARN("set error val fail", K(ret));
+  // ---- Fast path: ObJsonBinView (MySQL mode, binary JSON input) ----
+  if (OB_SUCC(ret) && !is_null_result && lib::is_mysql_mode()) {
+    // Parse path first if not cached (needed for both fast and old paths)
+    if (OB_ISNULL(param_ctx->json_param_.json_path_)
+        && OB_FAIL(ObJsonUtil::get_json_path(expr.args_[JSN_VAL_PATH], ctx, is_null_result,
+                                             param_ctx, temp_allocator, is_cover_by_error))) {
+      LOG_WARN("fail to get json path", K(ret));
     }
-    LOG_WARN("json_values failed", K(ret));
-  } else {
-    ObIJsonBase *result_j_base = hits.size() > 0 ? hits[0] : NULL;
-    ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error, is_type_mismatch,
-                    res, return_val, &temp_allocator, result_j_base);
+    ObJsonPath *j_path = param_ctx->json_param_.json_path_;
+
+    if (OB_SUCC(ret) && !is_null_result && OB_NOT_NULL(j_path) && !j_path->is_last_func()) {
+      ObExpr *doc_expr = expr.args_[JSN_VAL_DOC];
+      if (doc_expr->datum_meta_.type_ == ObJsonType) {
+        ObDatum *doc_datum = nullptr;
+        ObJsonWrapper doc_wrapper;
+
+        if (OB_FAIL(temp_allocator.eval_arg(doc_expr, ctx, doc_datum))) {
+          is_cover_by_error = false;
+        } else if (doc_datum->is_null()) {
+          is_null_result = true;
+        } else if (OB_FAIL(ObJsonExprHelper::get_json_wrapper(
+                     doc_expr, doc_datum, temp_allocator, ctx, doc_wrapper, true))) {
+          if (ret == OB_ERR_INVALID_JSON_TEXT_IN_PARAM) {
+            is_cover_by_error = true;
+          } else {
+            LOG_WARN("get json bin view wrapper failed", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret) && !is_null_result) {
+          int temp_ret = get_default_empty_error_value(expr, &param_ctx->json_param_, ctx);
+          if (temp_ret != OB_SUCCESS) {
+            is_cover_by_error = false;
+            ret = temp_ret;
+          }
+
+          ObSEArray<ObJsonWrapper, 1> &view_hits = param_ctx->view_hits_;
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(doc_do_seek(view_hits, is_null_result, &param_ctx->json_param_,
+                                     doc_wrapper, expr, ctx, temp_allocator,
+                                     is_cover_by_error, return_val, is_type_mismatch))) {
+            LOG_WARN("json view seek failed", K(ret));
+          }
+
+          if (OB_FAIL(ret)) {
+            if (is_cover_by_error
+                && !try_set_error_val(expr, ctx, res, ret, &param_ctx->json_param_, is_type_mismatch)) {
+              LOG_WARN("set error val fail", K(ret));
+            }
+            LOG_WARN("json_values fast path failed", K(ret));
+          } else if (OB_FAIL(set_result(expr, &param_ctx->json_param_, ctx, is_null_result,
+                                        is_cover_by_error, is_type_mismatch, res, return_val,
+                                        &temp_allocator, view_hits))) {
+            LOG_WARN("set view result fail", K(ret));
+          }
+
+          fast_path_done = true;
+        }
+      }
+    }
+  }
+  // ---- End fast path ----
+  if (!fast_path_done) {
+    ObJsonBin st_json(&temp_allocator);
+    ObIJsonBase *j_base = &st_json;
+    ObSEArray<ObJsonWrapper, 1> hits;
+
+    if (OB_SUCC(ret) && !is_null_result) {
+      if (OB_FAIL(ObJsonUtil::get_json_doc(expr.args_[JSN_VAL_DOC], ctx,
+                        temp_allocator, j_base, is_null_result,
+                        is_cover_by_error))) {
+        LOG_WARN("fail to parse json doc", K(ret));
+      } else if (OB_ISNULL(param_ctx->json_param_.json_path_)
+                 && OB_FAIL(ObJsonUtil::get_json_path(expr.args_[JSN_VAL_PATH],
+                                ctx, is_null_result, param_ctx, temp_allocator,
+                                is_cover_by_error))) {
+        LOG_WARN("fail to get json path", K(ret));
+      }
+    }
+    // parse empty error default value
+    if ((OB_SUCC(ret) && !is_null_result) || is_cover_by_error) {
+      int temp_ret = get_default_empty_error_value(expr, &param_ctx->json_param_, ctx);
+      if (temp_ret != OB_SUCCESS) {
+        is_cover_by_error = false;
+        ret = temp_ret;
+      }
+    }
+    ObJsonWrapper doc_wrapper(j_base);
+    if (OB_SUCC(ret) && !is_null_result && OB_FAIL(doc_do_seek(hits,
+                                    is_null_result, &param_ctx->json_param_, doc_wrapper,
+                                    expr, ctx, temp_allocator, is_cover_by_error,
+                                    return_val, is_type_mismatch))) {
+      LOG_WARN("doc do seek fail", K(ret));
+    }
+
+    // fill output and deal error case
+    if (OB_FAIL(ret)) {
+      if (is_cover_by_error && !try_set_error_val(expr, ctx, res, ret, &param_ctx->json_param_, is_type_mismatch)) {
+        LOG_WARN("set error val fail", K(ret));
+      }
+      LOG_WARN("json_values failed", K(ret));
+    } else {
+      ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error, is_type_mismatch,
+                      res, return_val, &temp_allocator, hits);
+    }
   }
   return ret;
 }
@@ -397,8 +464,7 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 
   // Initialize allocator and param context
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, ctx);
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, ret, ctx);
 
   // Check if fast path is enabled
   ObExpr *json_arg = expr.args_[JSN_VAL_DOC];
@@ -471,13 +537,10 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
   uint8_t is_type_mismatch = 0;
   ObDatum *return_val = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, ret, ctx, "json_value");
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
-  ObJsonSeekResult hits;
-  ObJsonBin res_json(&temp_allocator);
-  hits.res_point_ = &res_json;
+  ObSEArray<ObJsonWrapper, 1> hits;
   ObJsonParamCacheCtx ctx_cache(&temp_allocator);
   ObJsonParamCacheCtx* param_ctx = NULL;
   param_ctx = ObJsonExprHelper::get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
@@ -509,8 +572,8 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
     LOG_WARN("fail to get json doc", K(ret));
   } else if (!is_null_result
               && OB_FAIL(doc_do_seek(hits, is_null_result, &param_ctx->json_param_,
-                              j_base, expr, ctx, is_cover_by_error,
-                              return_val, is_type_mismatch))) { //  do seek
+                              ObJsonWrapper(j_base), expr, ctx, temp_allocator,
+                              is_cover_by_error, return_val, is_type_mismatch))) {
     if (ret == OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR) {
       is_cover_by_error = false;
     }
@@ -524,9 +587,8 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
     }
     LOG_WARN("json_values failed", K(ret));
   } else {
-    ObIJsonBase *result_j_base = hits.size() > 0 ? hits[0] : NULL;
     ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error, is_type_mismatch,
-                    res, return_val, &temp_allocator, result_j_base);
+                    res, return_val, &temp_allocator, hits);
   }
   if (OB_SUCC(ret)) {
     param_ctx->is_first_exec_ = false;
@@ -646,35 +708,36 @@ int ObExprJsonQueryParamInfo::init_jsn_val_expr_param(ObIAllocator &alloc, ObExp
   return ret;
 }
 
-int ObExprJsonValue::set_result(const ObExpr &expr,
-                                ObJsonExprParam* json_param,
-                                ObEvalCtx &ctx,
-                                bool &is_null_result,
-                                bool &is_cover_by_error,
-                                uint8_t &is_type_mismatch,
-                                ObDatum &res,
-                                ObDatum *return_val,
-                                ObIAllocator *allocator,
-                                ObIJsonBase *j_base)
+int ObExprJsonValue::set_result_impl(const ObExpr &expr,
+                                     ObJsonExprParam* json_param,
+                                     ObEvalCtx &ctx,
+                                     bool &is_null_result,
+                                     bool &is_cover_by_error,
+                                     uint8_t &is_type_mismatch,
+                                     ObDatum &res,
+                                     ObDatum *return_val,
+                                     ObIAllocator *allocator,
+                                     const common::ObJsonWrapper &hit_wrapper)
 {
   INIT_SUCC(ret);
+  UNUSED(is_cover_by_error);
   if (is_null_result) {
     res.set_null();
+  } else if (return_val != NULL) {
+    res.set_datum(*return_val);
   } else {
-    if (return_val != NULL) {
-      res.set_datum(*return_val);
-    } else {
-      ObCollationType in_coll_type = expr.args_[0]->datum_meta_.cs_type_;
-      ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
-      ObJsonCastParam cast_param(json_param->dst_type_, in_coll_type, dst_coll_type, json_param->ascii_type_);
-      cast_param.rt_expr_ = &expr;
-      ret = ObJsonUtil::cast_to_res(allocator, ctx, j_base,
-          json_param->accuracy_, cast_param, res, is_type_mismatch);
-      if (OB_FAIL(ret)) {
-        try_set_error_val(expr, ctx, res, ret, json_param, is_type_mismatch);
-      } else if (OB_FAIL(ObJsonUtil::set_lob_datum(allocator, expr, ctx, json_param->dst_type_, json_param->ascii_type_,res))) {
-        LOG_WARN("fail to set lob datum from string val", K(ret));
-      }
+    ObCollationType in_coll_type = expr.args_[0]->datum_meta_.cs_type_;
+    ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
+    ObJsonCastParam cast_param(json_param->dst_type_, in_coll_type, dst_coll_type, json_param->ascii_type_);
+    cast_param.rt_expr_ = &expr;
+    ret = ObJsonUtil::cast_to_res(allocator, ctx, hit_wrapper,
+        json_param->accuracy_, cast_param, res, is_type_mismatch);
+    if (OB_FAIL(ret)) {
+      try_set_error_val(expr, ctx, res, ret, json_param, is_type_mismatch);
+    } else if (!cast_param.lob_done_
+               && OB_FAIL(ObJsonUtil::set_lob_datum(allocator, expr, ctx,
+                              json_param->dst_type_, json_param->ascii_type_, res))) {
+      LOG_WARN("fail to set lob datum from string val", K(ret));
     }
   }
   return ret;
@@ -879,52 +942,54 @@ int ObExprJsonValue::check_default_val_accuracy(const ObAccuracy &accuracy,
   return ret;
 }
 
-int ObExprJsonValue::doc_do_seek(ObJsonSeekResult &hits, bool &is_null_result, ObJsonExprParam* json_param,
-                                ObIJsonBase *j_base, const ObExpr &expr, ObEvalCtx &ctx, bool &is_cover_by_error,
-                                ObDatum *&return_val,
-                                uint8_t &is_type_mismatch)
+int ObExprJsonValue::doc_do_seek(ObIArray<ObJsonWrapper> &hits, bool &is_null_result,
+                                 ObJsonExprParam *json_param,
+                                 const ObJsonWrapper &doc_wrapper,
+                                 const ObExpr &expr, ObEvalCtx &ctx,
+                                 common::ObIAllocator &allocator,
+                                 bool &is_cover_by_error, ObDatum *&return_val,
+                                 uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
-  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
-  common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  if (OB_SUCC(ret) && !is_null_result) {
-    if (OB_FAIL(j_base->seek(*json_param->json_path_, json_param->json_path_->path_node_cnt(), true, false, hits))) {
-      if (ret == OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR) {
-        is_cover_by_error = false;
-      } else if (ret == OB_ERR_DOUBLE_TRUNCATED) {
-        is_type_mismatch = true;
-        ret = OB_INVALID_NUMERIC;
-      }
-      LOG_WARN("json seek failed", K(ret));
-    } else if (lib::is_oracle_mode() && hits.size() == 1) {
-      ObIJsonBase* data = hits[0];
-      if (OB_FAIL(deal_item_method_in_seek(data, is_null_result, json_param->json_path_,
-                        &temp_allocator, is_type_mismatch))) {
-        LOG_WARN("fail to deal item method and special case", K(ret));
-      } else {
-        hits.set_node(0, data);
-      }
-    } else if (hits.size() == 0) {
-      // get empty clause
-      if (lib::is_oracle_mode() && OB_FAIL(get_default_empty_error_value(expr, json_param, ctx))) {
-        if (ret == OB_ERR_VALUE_LARGER_THAN_ALLOWED) {
-          is_cover_by_error = false;
-        }
-        LOG_WARN("fail to get empty clause", K(ret));
-      } else if (OB_FAIL(get_empty_option(return_val, is_cover_by_error,
-                                    json_param->empty_type_,
-                                    json_param->empty_val_,
-                                    is_null_result))) {
-        LOG_WARN("fail to get empty option", K(ret));
-      }
-    } else if (hits.size() > 1) {
-      // return val decide by error option
-      ret = OB_ERR_MULTIPLE_JSON_VALUES;
-      LOG_USER_ERROR(OB_ERR_MULTIPLE_JSON_VALUES, "json_value");
-      LOG_WARN("json value seek result more than one.", K(hits.size()));
-    } else if (OB_FAIL(normalize_single_result(json_param, hits[0], is_null_result))) {
-      LOG_WARN("fail to normalize json value result", K(ret));
+  hits.reuse();
+  if (is_null_result) {
+    // skip
+  } else if (OB_FAIL(doc_wrapper.seek(*json_param->json_path_, allocator, hits, true, false))) {
+    if (ret == OB_ERR_JSON_PATH_EXPRESSION_SYNTAX_ERROR) {
+      is_cover_by_error = false;
+    } else if (ret == OB_ERR_DOUBLE_TRUNCATED) {
+      is_type_mismatch = true;
+      ret = OB_INVALID_NUMERIC;
     }
+    LOG_WARN("json seek failed", K(ret));
+  } else if (lib::is_oracle_mode() && !doc_wrapper.is_bin() && hits.count() == 1) {
+    ObIJsonBase *data = hits.at(0).get_dom();
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+    if (OB_FAIL(deal_item_method_in_seek(data, is_null_result, json_param->json_path_,
+                                         &tmp_alloc_g.get_allocator(), is_type_mismatch))) {
+      LOG_WARN("fail to deal item method and special case", K(ret));
+    } else {
+      hits.at(0) = ObJsonWrapper(data);
+    }
+  } else if (hits.count() == 0) {
+    if (lib::is_oracle_mode()
+        && OB_FAIL(get_default_empty_error_value(expr, json_param, ctx))) {
+      if (ret == OB_ERR_VALUE_LARGER_THAN_ALLOWED) {
+        is_cover_by_error = false;
+      }
+      LOG_WARN("fail to get empty clause", K(ret));
+    } else if (OB_FAIL(get_empty_option(return_val, is_cover_by_error,
+                                        json_param->empty_type_,
+                                        json_param->empty_val_,
+                                        is_null_result))) {
+      LOG_WARN("fail to get empty option", K(ret));
+    }
+  } else if (hits.count() > 1) {
+    ret = OB_ERR_MULTIPLE_JSON_VALUES;
+    LOG_USER_ERROR(OB_ERR_MULTIPLE_JSON_VALUES, "json_value");
+    LOG_WARN("json value seek result more than one.", K(hits.count()));
+  } else if (hits.at(0).json_type() == ObJsonNodeType::J_NULL) {
+    is_null_result = true;
   }
   return ret;
 }

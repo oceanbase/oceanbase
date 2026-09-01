@@ -89,7 +89,7 @@ int ObExprJsonKeys::get_keys_from_wrapper(ObIJsonBase *json_doc,
   }
   
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(&res_array, str, allocator))) {
+  } else if (OB_FAIL(share::ObJsonAccessUtils::get_raw_binary(&res_array, str, allocator))) {
     LOG_WARN("json_keys get result binary failed", K(ret));
   }
   return ret;

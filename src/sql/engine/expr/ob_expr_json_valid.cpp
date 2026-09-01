@@ -89,11 +89,12 @@ int ObExprJsonValid::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
       }
     } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
     } else if (type == ObJsonType) { // json bin
-      ObIJsonBase *j_bin = NULL;
-      if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
-                                                   ObJsonInType::JSON_BIN, j_bin, 0,
-                                                   ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
-        LOG_WARN("fail to get json base", K(ret), K(type), K(j_str));
+      ObJsonWrapper wrapper;
+      sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      bool enable_json_bin_view = OB_NOT_NULL(session) ? session->is_enable_json_bin_view() : true;
+      if (OB_FAIL(common::get_json_wrapper(j_str, ObJsonInType::JSON_BIN, *allocator, wrapper,
+                                           0, 0, enable_json_bin_view))) {
+        LOG_WARN("fail to validate json binary", K(ret));
       }
     } else { // json tree
       if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, 0, ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
@@ -136,7 +137,7 @@ int ObExprJsonValid::eval_json_valid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (OB_FAIL(calc(ctx, *datum, arg->datum_meta_, arg->obj_meta_.has_lob_header(), &tmp_allocator, res))) {
       LOG_WARN("fail to calc json valid result", K(ret), K(arg->datum_meta_));
     }
-  } 
+  }
 
   return ret;
 }

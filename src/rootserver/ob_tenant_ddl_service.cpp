@@ -2395,6 +2395,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_value_append_update_global_indexes_for_dynamic_partition("AUTO");
   ObString config_name_mv_refresh_queuing("_enable_mv_refresh_queuing");
   ObString config_value_mv_refresh_queuing("true");
+  ObString config_name_enable_ps_meta_response_optimize("enable_ps_meta_response_optimize");
+  ObString config_value_enable_ps_meta_response_optimize("true");
 
   if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
     LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
@@ -2433,6 +2435,8 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
         LOG_WARN("fail to add config", KR(ret), K(config_name_append_update_global_indexes_for_dynamic_partition), K(config_value_append_update_global_indexes_for_dynamic_partition));
       } else if (OB_FAIL(tenant_init_config.add_config(config_name_mv_refresh_queuing, config_value_mv_refresh_queuing))) {
         LOG_WARN("fail to add config", KR(ret), K(config_name_mv_refresh_queuing), K(config_value_mv_refresh_queuing));
+      } else if (OB_FAIL(tenant_init_config.add_config(config_name_enable_ps_meta_response_optimize, config_value_enable_ps_meta_response_optimize))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name_enable_ps_meta_response_optimize), K(config_value_enable_ps_meta_response_optimize));
       }
       // ---- Add new tenant init config above this line -----
       // At the same time, to verify modification, you need modify test case tenant_init_config(_oracle).test

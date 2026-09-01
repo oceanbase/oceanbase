@@ -1542,6 +1542,12 @@ int ObSql::do_real_prepare(const ObString &sql,
   if (OB_SUCC(ret)) {
     info_ctx.param_cnt_ = param_cnt;
     info_ctx.stmt_type_ = stmt_type;
+    // PREPARE 阶段判定列 meta 稳定性，结果写入 ObPsStmtInfo 供 EXECUTE 时使用
+    if (OB_NOT_NULL(basic_stmt)) {
+      info_ctx.is_column_meta_stable_ =
+          ObSQLUtils::detect_column_meta_stable(
+              static_cast<const sql::ObDMLStmt *>(basic_stmt));
+    }
     info_ctx.is_inner_sql_ = is_inner_sql;
     info_ctx.is_sensitive_sql_ = context.is_sensitive_;
     info_ctx.raw_params_ = &pc_ctx.fp_result_.raw_params_;
@@ -6165,13 +6171,13 @@ void ObSql::generate_sql_id(ObPlanCacheCtx &pc_ctx,
       && PC_TEXT_MODE == pc_ctx.mode_
       && T_SP_CALL_STMT == parse_result.result_tree_->children_[0]->type_) {
     signature_sql = pc_ctx.fp_result_.pc_key_.name_;
-  } else if (add_plan_to_pc == false
-            || PC_PS_MODE == pc_ctx.mode_
-            || PC_PL_MODE == pc_ctx.mode_
-            || OB_SUCCESS != err_code) {
-      signature_sql = pc_ctx.raw_sql_;
+  } else if (add_plan_to_pc == false || OB_SUCCESS != err_code) {
+    signature_sql = pc_ctx.raw_sql_;
    // if err happens in parameterization, not generate format_sql;
     signature_format_sql.reset();
+  } else if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
+    signature_sql = pc_ctx.raw_sql_;
+    signature_format_sql = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
   } else {
     signature_sql = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
     signature_format_sql = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;

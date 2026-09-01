@@ -1186,6 +1186,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
       * 提示驱动发送fetch协议
       */
       LOG_WARN("failed to response query header", K(ret), K(stmt_id_));
+    } else if (FALSE_IT(cursor->set_execute_meta_sent(true))) {
     }
 
     if (OB_SUCCESS != ret && OB_NOT_NULL(cursor)) {
@@ -1237,7 +1238,7 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     is_diagnostics_stmt = ObStmt::is_diagnostic_stmt(result.get_literal_stmt_type());
     ctx_.is_show_trace_stmt_ = ObStmt::is_show_trace_stmt(result.get_literal_stmt_type());
     session.set_current_execution_id(execution_id);
-
+    result.set_statement_id(stmt_id_);
     if (OB_FAIL(ret)) {
     } else if (is_arraybinding_) {
       if (OB_FAIL(after_do_process_for_arraybinding(result))) {
@@ -1838,9 +1839,18 @@ int ObMPStmtExecute::response_result(
   // NG_TRACE_EXT(exec_begin, ID(arg1), force_sync_resp, ID(end_trans_cb), need_trans_cb);
 
   if (OB_LIKELY(NULL != result.get_physical_plan())) {
+    bool need_send_meta = true;
+    bool enable_meta_response_opt = session.is_enable_ps_meta_response_optimize()
+                                    && session.is_client_support_ps_meta_cache();
+    if (enable_meta_response_opt
+        && common::OB_INVALID_STMT_ID != stmt_id_
+        && stmt::T_SELECT == result.get_stmt_type()) {
+      need_send_meta = session.need_to_send_result_meta(
+          stmt_id_, result.get_physical_plan()->get_dependency_table());
+    }
     if (need_trans_cb) {
       ObAsyncPlanDriver drv(gctx_, ctx_, session, retry_ctrl_, *this, is_prexecute());
-      // NOTE: sql_end_cb必须在drv.response_result()之前初始化好
+      drv.set_need_send_meta(need_send_meta);
       ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
       if (OB_FAIL(sql_end_cb.init(packet_sender_, &session,
                                     stmt_id_, params_num_,
@@ -1851,7 +1861,6 @@ int ObMPStmtExecute::response_result(
       }
       async_resp_used = result.is_async_end_trans_submitted();
     } else {
-      // 试点ObQuerySyncDriver
       ObSyncPlanDriver drv(gctx_,
                            ctx_,
                            session,
@@ -1859,7 +1868,15 @@ int ObMPStmtExecute::response_result(
                            *this,
                            is_prexecute(),
                            get_iteration_count());
+      drv.set_need_send_meta(need_send_meta);
       ret = drv.response_result(result);
+    }
+    if (OB_SUCC(ret) && enable_meta_response_opt && need_send_meta) {
+      int tmp_ret = session.mark_ps_result_meta_sent(
+          stmt_id_, result.get_physical_plan()->get_dependency_table());
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to mark result meta sent", K(tmp_ret), K(stmt_id_));
+      }
     }
   } else {
     if (session.is_pl_async_commit()) {
@@ -3738,11 +3755,22 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObPsCu
     if (OB_FAIL(send_ok_packet(session, ok_param))) {
       LOG_WARN("fail to send ok packt", K(ok_param), K(ret));
     }
-  } else if (OB_FAIL(drv.response_query_header(*fields,
-                                               false,
-                                               false,
-                                               true))) {
-    LOG_WARN("fail to get autocommit", K(ret));
+  } else {
+    bool enable_meta_response_opt = session.is_enable_ps_meta_response_optimize()
+                                    && session.is_client_support_ps_meta_cache();
+    bool need_send_meta = enable_meta_response_opt ? session.need_to_send_result_meta(
+        stmt_id_, cursor.get_dep_table_versions()) : true;
+
+    drv.set_need_send_meta(need_send_meta);
+    if (OB_FAIL(drv.response_query_header(*fields, false, false, true))) {
+      LOG_WARN("fail to response query header", K(ret));
+    } else if (enable_meta_response_opt && need_send_meta) {
+      int tmp_mark_ret = session.mark_ps_result_meta_sent(
+          stmt_id_, cursor.get_dep_table_versions());
+      if (OB_SUCCESS != tmp_mark_ret) {
+        LOG_WARN("fail to mark result meta sent", K(tmp_mark_ret), K(stmt_id_));
+      }
+    }
   }
   return ret;
 }
