@@ -799,19 +799,10 @@ int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
   if (OB_ISNULL(copy_ctx_.extra_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy ctx extra info is NULL", K(ret), K(copy_ctx_));
-  } else {
-    copy_ctx_.extra_info_->add_macro_count(copy_ctx_.total_macro_count_);
-    copy_ctx_.extra_info_->add_reuse_macro_count(copy_ctx_.reuse_macro_count_);
-
-    if (!ObITable::is_major_sstable(copy_ctx_.table_key_.table_type_)) {
-      // skip
-    } else if (OB_NOT_NULL(copy_ctx_.macro_block_reuse_mgr_) &&
-         OB_FAIL(copy_ctx_.extra_info_->update_max_reuse_mgr_size(copy_ctx_.macro_block_reuse_mgr_))) {
-      LOG_WARN("failed to update max reuse mgr size", K(ret), K(copy_ctx_));
-    } else {
-      copy_ctx_.extra_info_->inc_major_count();
-      copy_ctx_.extra_info_->add_major_macro_count(copy_ctx_.total_macro_count_);
-    }
+  } else if (OB_FAIL(copy_ctx_.extra_info_->update_after_sstable_copy(
+      copy_ctx_.table_key_, copy_ctx_.total_macro_count_,
+      copy_ctx_.reuse_macro_count_, copy_ctx_.macro_block_reuse_mgr_))) {
+    LOG_WARN("failed to update copy tablet record extra info", K(ret), K(copy_ctx_));
   }
 
   if (OB_SUCC(ret)) {

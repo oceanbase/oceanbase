@@ -21,6 +21,7 @@
 #include "ob_storage_ha_src_provider.h"
 #include "ob_cs_replica_migration.h"
 #include "ob_sstable_copy_start_task.h"
+#include "ob_batch_sstable_copy_task.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #endif
@@ -2780,6 +2781,7 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
     storage_rpc_ = migration_dag_net->get_storage_rpc();
     sql_proxy_ = migration_dag_net->get_sql_proxy();
     copy_tablet_ctx_ = &copy_tablet_ctx;
+    copy_table_key_array_.set_attr(ObMemAttr(get_ha_mem_tenant_id(), "MigTableKey"));
     is_inited_ = true;
     LOG_INFO("succeed init tablet migration task", "ls id", ctx_->arg_.ls_id_, "tablet_id", copy_tablet_ctx.tablet_id_,
         "dag_id", *ObCurTraceId::get_trace_id(), "dag_net_id", ctx_->task_id_);
@@ -2839,8 +2841,6 @@ int ObTabletMigrationTask::process()
       ret = result;
       LOG_WARN("log sync or replay error, need retry", K(ret), KPC(ctx_));
     }
-  } else if (OB_FAIL(check_tablet_replica_validity_(copy_tablet_ctx_->tablet_id_))) {
-    LOG_WARN("failed to check tablet replica validity", K(ret), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(try_update_tablet_())) {
     LOG_WARN("failed to try update tablet", K(ret), KPC(copy_tablet_ctx_));
   } else if (OB_FAIL(copy_tablet_ctx_->get_copy_tablet_status(status))) {
@@ -2931,7 +2931,8 @@ int ObTabletMigrationTask::generate_migration_tasks_()
   } else if (OB_FAIL(dag_->add_task(*tablet_finish_migration_task))) {
     LOG_WARN("failed to add tablet finish migration task", K(ret));
   } else {
-    LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_), K(copy_table_key_array_));
+    LOG_INFO("generate sstable migration tasks", KPC(copy_tablet_ctx_),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   }
   return ret;
 }
@@ -3138,7 +3139,8 @@ int ObTabletMigrationTask::build_copy_table_key_info_()
     // sort copy table key array by snapshot version, copy major sstable from low version to high version
   } else if (FALSE_IT(ObStorageHAUtils::sort_table_key_array_by_snapshot_version(copy_table_key_array_))) {
   } else {
-    LOG_INFO("succeed to build copy table key info", K(copy_table_key_array_));
+    LOG_INFO("succeed to build copy table key info",
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   }
   return ret;
 }
@@ -3153,9 +3155,11 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration task do not init", K(ret));
   } else if (OB_FAIL(get_need_copy_sstable_info_key_(copy_table_key_array_, filter_table_key_array))) {
-    LOG_WARN("failed to get need copy sstable info key", K(ret), K(copy_table_key_array_));
+    LOG_WARN("failed to get need copy sstable info key", K(ret),
+        "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_));
   } else if (OB_FAIL(param.copy_table_key_array_.assign(filter_table_key_array))) {
-    LOG_WARN("failed to assign copy table key info array", K(ret), K(filter_table_key_array));
+    LOG_WARN("failed to assign copy table key info array", K(ret),
+        "filter_table_key_array", ObTableKeyArrayLogWrap(filter_table_key_array));
   } else {
     param.tenant_id_ = ctx_->tenant_id_;
     param.ls_id_ = ctx_->arg_.ls_id_;
@@ -3186,6 +3190,7 @@ int ObTabletMigrationTask::generate_copy_tasks_(
     share::ObITask *&parent_task)
 {
   int ret = OB_SUCCESS;
+  bool is_batch_copy_tasks_generated = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3193,6 +3198,15 @@ int ObTabletMigrationTask::generate_copy_tasks_(
   } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("generate copy task get invalid argument", K(ret), KP(parent_task));
+  } else if (OB_FAIL(ObBatchSSTableCopyTaskGenerator::try_generate_copy_tasks(
+                 *this,
+                 is_right_type_sstable,
+                 tablet_copy_finish_task,
+                 parent_task,
+                 is_batch_copy_tasks_generated))) {
+    LOG_WARN("failed to try generating batch CG copy tasks", K(ret));
+  } else if (is_batch_copy_tasks_generated) {
+    // This stage is fully wired by ObBatchSSTableCopyTaskGenerator.
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < copy_table_key_array_.count(); ++i) {
       const ObITable::TableKey &copy_table_key = copy_table_key_array_.at(i);
@@ -3465,27 +3479,6 @@ int ObTabletMigrationTask::check_transfer_seq_equal_(
   return ret;
 }
 
-int ObTabletMigrationTask::check_tablet_replica_validity_(const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  int64_t start_ts = ObTimeUtility::current_time();
-  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy should not be null", K(ret));
-  } else {
-    const uint64_t tenant_id = ctx_->tenant_id_;
-    const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
-    const common::ObAddr &src_addr = ctx_->major_src_.src_addr_;
-    if (OB_FAIL(ObStorageHAUtils::check_tablet_replica_validity(tenant_id, ls_id, src_addr, tablet_id, *sql_proxy_))) {
-      LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
-    } else {
-      ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
-      LOG_DEBUG("check tablet replica validity", KPC(ctx_), K(tablet_id));
-    }
-  }
-  return ret;
-}
-
 int ObTabletMigrationTask::generate_mds_copy_tasks_(
     ObTabletCopyFinishTask *tablet_copy_finish_task,
     share::ObITask *&parent_task)
@@ -3533,7 +3526,9 @@ int ObTabletMigrationTask::get_need_copy_sstable_info_key_(
       }
     }
     if (OB_SUCC(ret)) {
-      LOG_INFO("succeed get need copy sstable info key", K(copy_table_key_array), K(filter_table_key_array));
+      LOG_INFO("succeed get need copy sstable info key",
+          "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array),
+          "filter_table_key_array", ObTableKeyArrayLogWrap(filter_table_key_array));
     }
   }
   return ret;
@@ -4871,6 +4866,8 @@ int ObTabletGroupMigrationTask::process()
     LOG_WARN("failed to try remove tablets info", K(ret), KPC(ctx_));
   } else if (OB_FAIL(build_tablets_sstable_info_())) {
     LOG_WARN("failed to build tablets sstable info", K(ret));
+  } else if (OB_FAIL(batch_check_tablet_replica_validity_())) {
+    LOG_WARN("failed to batch check tablet replica validity", K(ret), K(tablet_id_array_));
   } else {
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {
@@ -5001,6 +4998,24 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
   return ret;
 }
 
+
+int ObTabletGroupMigrationTask::batch_check_tablet_replica_validity_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  if (OB_ISNULL(ctx_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx or sql proxy is null", K(ret), KP(ctx_), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObStorageHAUtils::batch_check_tablet_replica_validity(
+      ctx_->tenant_id_, ctx_->arg_.ls_id_, ctx_->major_src_.src_addr_,
+      tablet_id_array_, *GCTX.sql_proxy_))) {
+    LOG_WARN("failed to batch check tablet replica validity", K(ret),
+        "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_, K(tablet_id_array_));
+  } else {
+    ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
+  }
+  return ret;
+}
 
 int ObTabletGroupMigrationTask::build_tablets_sstable_info_()
 {

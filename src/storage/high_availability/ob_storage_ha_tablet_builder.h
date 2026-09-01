@@ -229,6 +229,9 @@ public:
     common::ObArenaAllocator allocator_;
     common::ObArray<blocksstable::ObMigrationSSTableParam> copy_table_info_array_;
     ObMigrationTabletParam tablet_meta_;
+    // Protects this tablet's array/status/meta. Separated from the map-level
+    // lock_ so concurrent tasks operating on different tablets never serialize.
+    common::SpinRWLock tablet_lock_;
     DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletTableInfoMgr);
   };
 
@@ -249,7 +252,8 @@ struct ObStorageHACopySSTableParam final
   void reset();
   int assign(const ObStorageHACopySSTableParam &param);
 
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id),
+      "copy_table_key_array", ObTableKeyArrayLogWrap(copy_table_key_array_),
       K_(src_info), K_(src_ls_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
       K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
@@ -301,7 +305,6 @@ private:
   void free_sstable_macro_range_info_reader_(ObICopySSTableMacroInfoReader *&reader);
 
 private:
-  static const int64_t MACRO_RANGE_MAX_MACRO_COUNT = 128;
   typedef hash::ObHashMap<ObITable::TableKey, ObCopySSTableMacroRangeInfo *> CopySSTableMacroRangeInfoMap;
   bool is_inited_;
   ObStorageHACopySSTableParam param_;

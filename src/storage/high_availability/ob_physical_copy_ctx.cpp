@@ -20,7 +20,7 @@ namespace storage
 
 /******************ObCopyTabletRecordExtraInfo*********************/
 ObCopyTabletRecordExtraInfo::ObCopyTabletRecordExtraInfo()
-  : cost_time_ms_(0),
+  : cost_time_us_(0),
     total_data_size_(0),
     write_data_size_(0),
     major_count_(0),
@@ -38,7 +38,7 @@ ObCopyTabletRecordExtraInfo::~ObCopyTabletRecordExtraInfo()
 
 void ObCopyTabletRecordExtraInfo::reset()
 {
-  cost_time_ms_ = 0;
+  cost_time_us_ = 0;
   total_data_size_ = 0;
   write_data_size_ = 0;
   major_count_ = 0;
@@ -63,6 +63,27 @@ int ObCopyTabletRecordExtraInfo::update_max_reuse_mgr_size(ObMacroBlockReuseMgr 
     max_reuse_mgr_size_ = MAX(count * reuse_mgr->get_item_size(), max_reuse_mgr_size_);
   }
 
+  return ret;
+}
+
+int ObCopyTabletRecordExtraInfo::update_after_sstable_copy(
+    const ObITable::TableKey &table_key,
+    const int64_t total_macro_count,
+    const int64_t reuse_macro_count,
+    ObMacroBlockReuseMgr *reuse_mgr)
+{
+  int ret = OB_SUCCESS;
+  add_macro_count(total_macro_count);
+  add_reuse_macro_count(reuse_macro_count);
+  if (!ObITable::is_major_sstable(table_key.table_type_)) {
+    // not a major sstable: only macro/reuse counts apply
+  } else if (OB_NOT_NULL(reuse_mgr)
+      && OB_FAIL(update_max_reuse_mgr_size(reuse_mgr))) {
+    LOG_WARN("failed to update max reuse mgr size", K(ret));
+  } else {
+    inc_major_count();
+    add_major_macro_count(total_macro_count);
+  }
   return ret;
 }
 
