@@ -235,9 +235,13 @@ int ObBackupArchiveScheduler::insert_job_(const ObBackupJobAttr &job_attr)
     ret = OB_BACKUP_CAN_NOT_START;
     LOG_WARN("[BACKUP_ARCHIVE]backup archive dest has been cleared", K(ret), K(new_job_attr));
     LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, "backup archive dest has been changed, please retry");
-  } else if (OB_FAIL(cur_dest.set(cur_path.ptr()))) {
+    // new_job_attr.backup_path_ is a path-only string (root path + endpoint, no credentials,
+    // see ObBackupDest::get_backup_path_str), full parse by ObBackupDest::set would fail
+    // credential validation for object storage dest. Use set_storage_path on both sides
+    // instead, since only root path and endpoint take part in the comparison below.
+  } else if (OB_FAIL(cur_dest.set_storage_path(cur_path.str()))) {
     LOG_WARN("[BACKUP_ARCHIVE]failed to set current backup archive dest", K(ret), K(new_job_attr));
-  } else if (OB_FAIL(job_dest.set(new_job_attr.backup_path_.ptr()))) {
+  } else if (OB_FAIL(job_dest.set_storage_path(new_job_attr.backup_path_.str()))) {
     LOG_WARN("[BACKUP_ARCHIVE]failed to set job backup dest", K(ret), K(new_job_attr));
   } else if (OB_FAIL(cur_dest.is_backup_path_equal(job_dest, is_path_equal))) {
     LOG_WARN("[BACKUP_ARCHIVE]failed to compare backup path", K(ret), K(new_job_attr));
