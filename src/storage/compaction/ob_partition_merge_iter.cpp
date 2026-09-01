@@ -771,7 +771,7 @@ int ObPartitionMacroMergeIter::get_curr_macro_block(
   } else {
     macro_desc = &curr_block_desc_;
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int ObPartitionMacroMergeIter::need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open, const int64_t row_id_for_cg)

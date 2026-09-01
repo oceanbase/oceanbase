@@ -21,6 +21,8 @@ namespace oceanbase
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_BATCH_CG_COPY_FORCE_LEGACY_CG);
+
 ObBatchSSTableKeysHolder::ObBatchSSTableKeysHolder(const uint64_t tenant_id)
   : pending_keys_(),
     cursor_(0)
@@ -401,6 +403,7 @@ int ObBatchSSTableCopyTaskGenerator::check_key_batch_eligible_(
 {
   int ret = OB_SUCCESS;
   const blocksstable::ObMigrationSSTableParam *src_param = nullptr;
+  bool force_legacy_cg = false;
   is_eligible = false;
 
   if (!key.is_cg_sstable()) {
@@ -410,18 +413,31 @@ int ObBatchSSTableCopyTaskGenerator::check_key_batch_eligible_(
   } else if (OB_ISNULL(src_param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("CG sstable info is null", K(ret), K(key));
-  } else if (src_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()
-      || src_param->is_shared_sstable()) {
-    // A shared sstable needs the copy start task of the legacy chain.
-  } else if (src_param->basic_meta_.data_macro_block_count_
-      > 2 * ObSSTableCopyOps::MACRO_RANGE_MAX_MACRO_COUNT) {
-    // Batch copies an SSTable's ranges serially in one worker, while the
-    // legacy path fans them out as parallel ObPhysicalCopyTasks. Keep at
-    // most two standard ranges in batch to avoid a long serial-copy tail.
-    LOG_DEBUG("CG sstable is too large to batch copy", K(key),
-        "data_macro_block_count", src_param->basic_meta_.data_macro_block_count_);
   } else {
-    is_eligible = true;
+#ifdef ERRSIM
+    const int errsim_ret = EN_BATCH_CG_COPY_FORCE_LEGACY_CG;
+    force_legacy_cg = OB_SUCCESS != errsim_ret
+        && key.get_column_group_id() == -errsim_ret;
+    if (force_legacy_cg) {
+      LOG_INFO("[ERRSIM] force CG sstable onto legacy copy path", K(key),
+          "data_macro_block_count",
+          src_param->basic_meta_.data_macro_block_count_);
+    }
+#endif
+    if (src_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()
+        || src_param->is_shared_sstable()) {
+      // A shared sstable needs the copy start task of the legacy chain.
+    } else if (force_legacy_cg
+        || src_param->basic_meta_.data_macro_block_count_
+            > 2 * ObSSTableCopyOps::MACRO_RANGE_MAX_MACRO_COUNT) {
+      // Batch copies an SSTable's ranges serially in one worker, while the
+      // legacy path fans them out as parallel ObPhysicalCopyTasks. Keep at
+      // most two standard ranges in batch to avoid a long serial-copy tail.
+      LOG_DEBUG("CG sstable is too large to batch copy", K(key),
+          "data_macro_block_count", src_param->basic_meta_.data_macro_block_count_);
+    } else {
+      is_eligible = true;
+    }
   }
   return ret;
 }

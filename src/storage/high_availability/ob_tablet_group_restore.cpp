@@ -1867,7 +1867,9 @@ ObTabletRestoreDag::~ObTabletRestoreDag()
   // tasks here explicitly, otherwise they would be freed by ~ObIDag() which runs AFTER the members
   // of this dag have been destructed.
   clear_task_list_with_lock();
-  if (OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
+  // An unregistered DAG does not own the shared tablet table info.
+  if (ObIDag::DAG_STATUS_INITING != get_dag_status()
+      && OB_NOT_NULL(tablet_restore_ctx_.ha_table_info_mgr_)) {
     if (OB_SUCCESS != (tmp_ret = tablet_restore_ctx_.ha_table_info_mgr_->remove_tablet_table_info(
         tablet_restore_ctx_.tablet_id_))) {
       LOG_WARN_RET(tmp_ret, "failed to remove tablet table info", K(tmp_ret), K(tablet_restore_ctx_));
@@ -3393,4 +3395,3 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
 
 }
 }
-

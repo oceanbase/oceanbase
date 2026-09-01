@@ -874,6 +874,71 @@ int ObFatherFinishTask::process()
   return OB_SUCCESS;
 }
 
+TEST_P(TestDagNetScheduler, test_update_status_in_dag_net_propagates_error)
+{
+  ObArenaAllocator allocator;
+  ObFatherDagNet dag_net;
+  ObBasicDag dag;
+  bool dag_net_finished = false;
+
+  ASSERT_EQ(OB_SUCCESS, dag_net.basic_init(allocator));
+  ASSERT_EQ(OB_SUCCESS, dag_net.add_dag_into_dag_net(dag));
+  ASSERT_EQ(OB_SUCCESS, dag_net.erase_dag_from_dag_net(dag));
+
+  // Simulate an inconsistent DAG Net reference: the DAG still points to the
+  // DAG Net, while its record is already absent from the DAG Net map.
+  dag.dag_net_ = &dag_net;
+  EXPECT_EQ(OB_HASH_NOT_EXIST, dag.update_status_in_dag_net(dag_net_finished));
+  EXPECT_FALSE(dag_net_finished);
+  dag.dag_net_ = nullptr;
+}
+
+TEST_P(TestDagNetScheduler, test_finish_tolerates_missing_dag_net_record)
+{
+  ObArenaAllocator allocator;
+  ObFatherDagNet dag_net;
+  ObBasicDag dag;
+  bool dag_net_finished = false;
+
+  ASSERT_EQ(OB_SUCCESS, dag.basic_init(allocator));
+  ASSERT_EQ(OB_SUCCESS, dag_net.basic_init(allocator));
+  ASSERT_EQ(OB_SUCCESS, dag_net.add_dag_into_dag_net(dag));
+  ASSERT_EQ(OB_SUCCESS, dag_net.erase_dag_from_dag_net(dag));
+
+  // Simulate finish racing with a path that already removed the record.
+  dag.dag_net_ = &dag_net;
+  EXPECT_EQ(OB_SUCCESS, dag.finish(ObIDag::DAG_STATUS_FINISH, dag_net_finished));
+  EXPECT_EQ(ObIDag::DAG_STATUS_FINISH, dag.get_dag_status());
+  EXPECT_FALSE(dag_net_finished);
+  dag.dag_net_ = nullptr;
+}
+
+TEST_P(TestDagNetScheduler, test_schedule_dag_tolerates_missing_dag_net_record)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_NE(nullptr, scheduler);
+  scheduler->stop();
+
+  ObArenaAllocator allocator;
+  ObFatherDagNet dag_net;
+  ObBasicDag dag;
+  bool move_dag_to_waiting_list = false;
+
+  ASSERT_EQ(OB_SUCCESS, dag.basic_init(allocator));
+  ASSERT_EQ(OB_SUCCESS, dag_net.basic_init(allocator));
+  ASSERT_EQ(OB_SUCCESS, dag_net.add_dag_into_dag_net(dag));
+  ASSERT_EQ(OB_SUCCESS, dag_net.erase_dag_from_dag_net(dag));
+
+  // RETRY avoids unrelated first-schedule setup and exercises status publish.
+  dag.set_dag_status(ObIDag::DAG_STATUS_RETRY);
+  dag.dag_net_ = &dag_net;
+  ObDagPrioScheduler &prio_scheduler = scheduler->prio_sche_[dag.get_priority()];
+  EXPECT_EQ(OB_SUCCESS, prio_scheduler.schedule_dag_(dag, move_dag_to_waiting_list));
+  EXPECT_EQ(ObIDag::DAG_STATUS_NODE_RUNNING, dag.get_dag_status());
+  EXPECT_FALSE(move_dag_to_waiting_list);
+  dag.dag_net_ = nullptr;
+}
+
 TEST_P(TestDagNetScheduler, test_basic_dag_net)
 {
   ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);

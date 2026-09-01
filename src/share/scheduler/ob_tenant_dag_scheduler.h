@@ -1072,7 +1072,7 @@ public:
   // 2. cancel ls compaction waiting dag
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
-  int get_compaction_dag_count(int64_t dag_count);
+  int get_compaction_dag_count(int64_t &dag_count);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(
     const ObIDag &dag,
@@ -1337,7 +1337,7 @@ public:
       ObDagId &dag_net_id,
       int64_t &start_time);
   int diagnose_all_compaction_dags();
-  int get_compaction_dag_count(int64_t dag_count);
+  int get_compaction_dag_count(int64_t &dag_count);
   void get_suggestion_reason(const int64_t priority, int64_t &reason);
 
   // 1. check ls compaction exist

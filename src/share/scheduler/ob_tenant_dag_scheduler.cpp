@@ -645,8 +645,10 @@ int ObIDag::update_status_in_dag_net(bool &dag_net_finished)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
-  if (OB_NOT_NULL(dag_net_)) {
-    dag_net_->update_dag_status(*this, dag_net_finished);
+  if (OB_NOT_NULL(dag_net_)
+      && OB_FAIL(dag_net_->update_dag_status(*this, dag_net_finished))) {
+    COMMON_LOG(ERROR, "failed to update dag status in dag net",
+        K(ret), KP(this), KP_(dag_net));
   }
   return ret;
 }
@@ -1011,7 +1013,14 @@ int ObIDag::finish(const ObDagStatus status, bool &dag_net_finished)
   if (OB_SUCC(ret)) {
     set_dag_status(status);
     set_dag_error_location();
-    update_status_in_dag_net(dag_net_finished);
+    if (OB_FAIL(update_status_in_dag_net(dag_net_finished))) {
+      // finish may race with cancel, which can remove the dag record or publish
+      // the terminal status first. The local dag is already terminal, so keep
+      // the error observable but allow the normal cleanup path to continue.
+      COMMON_LOG(ERROR, "failed to publish dag finish status to dag net, tolerate it",
+          K(ret), K(status), KP(this));
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
@@ -2388,7 +2397,13 @@ int ObDagPrioScheduler::schedule_dag_(ObIDag &dag, bool &move_dag_to_waiting_lis
     next_dag_status = ObIDag::DAG_STATUS_NODE_RUNNING;
   }
   dag.set_dag_status(next_dag_status);
-  dag.update_status_in_dag_net(unused_tmp_bret /* dag_net_finished */);
+  if (OB_FAIL(dag.update_status_in_dag_net(unused_tmp_bret /* dag_net_finished */))) {
+    // finish/cancel may have removed or finalized the dag-net record already.
+    // Do not strand a task in RUNNING before it has been dispatched.
+    COMMON_LOG(ERROR, "failed to update dag status in dag net, tolerate it",
+        K(ret), K(next_dag_status), KP(&dag));
+    ret = OB_SUCCESS;
+  }
   dag.set_start_time(); // dag start running
   scheduler_->add_scheduled_dag_cnts(dag.get_type());
   COMMON_LOG(DEBUG, "dag start running", K(ret), K(dag));
@@ -3267,9 +3282,10 @@ int ObDagPrioScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN 
   return ret;
 }
 
-int ObDagPrioScheduler::get_compaction_dag_count(int64_t dag_count)
+int ObDagPrioScheduler::get_compaction_dag_count(int64_t &dag_count)
 {
   int ret = OB_SUCCESS;
+  lib::ObMutexGuard guard(prio_lock_);
   for (int64_t i = 0; i < ObDagListIndex::DAG_LIST_MAX; ++i) {
     dag_count += dag_list_[i].get_size();
   }
@@ -4871,7 +4887,7 @@ int ObTenantDagScheduler::get_min_end_scn_from_major_dag(const ObLSID &ls_id, SC
   return ret;
 }
 
-int ObTenantDagScheduler::get_compaction_dag_count(int64_t dag_count)
+int ObTenantDagScheduler::get_compaction_dag_count(int64_t &dag_count)
 {
   int ret = OB_SUCCESS;
   dag_count = 0;

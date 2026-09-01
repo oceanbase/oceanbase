@@ -2811,7 +2811,8 @@ ObTabletMigrationDag::~ObTabletMigrationDag()
   // of this dag have been destructed.
   clear_task_list_with_lock();
   ObMigrationCtx *ctx = get_migration_ctx();
-  if (OB_NOT_NULL(ctx)) {
+  // An unregistered DAG does not own the shared tablet table info.
+  if (ObIDag::DAG_STATUS_INITING != get_dag_status() && OB_NOT_NULL(ctx)) {
     if (OB_FAIL(ctx->ha_table_info_mgr_.remove_tablet_table_info(copy_tablet_ctx_.tablet_id_))) {
       LOG_WARN("failed to remove tablet table info", K(ret), KPC(ctx), K(copy_tablet_ctx_));
     }
