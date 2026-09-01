@@ -67,6 +67,8 @@ app.info
 autom4te.cache/
 build
 build/
+!/tools/cdc_tools/k8s/release/images/cdc-base/build/
+!/tools/cdc_tools/k8s/release/images/cdc-base/build/**
 build_*/
 build_debug
 build_errsim
