@@ -5490,7 +5490,7 @@ int ObBasicSessionInfo::das_serialize_phase_(char *buf, int64_t buf_len, int64_t
           capability_.capability_,
           thread_data_.database_name_);
 
-  if (invariant_phase) {
+  if (!invariant_phase) {
     ObSEArray<ObSysVarClassType, 64> sys_var_ids;
     ObSEArray<ObString, 32> user_var_names;
     if (OB_FAIL(ret)) {
@@ -5989,36 +5989,6 @@ int ObBasicSessionInfo::das_deserialize_invariant_(const char *buf, const int64_
   rpc_tenant_id_ = (tenant_id_ >> 32);
   tenant_id_ = (tenant_id_ << 32 >> 32);
 
-  int64_t deserialize_user_var_count = 0;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, deserialize_user_var_count))) {
-    LOG_WARN("fail to deserialize user var count", K(data_len), K(pos), K(ret));
-  } else {
-    ObSessionVariable user_var_val;
-    for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_user_var_count; ++i) {
-      ObString user_var_name;
-      user_var_val.reset();
-      if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_name))) {
-        LOG_WARN("fail to deserialize user var name", K(i), K(ret));
-      } else if (OB_FAIL(sess_level_name_pool_.write_string(user_var_name, &user_var_name))) {
-        LOG_WARN("fail to write user_var_name", K(user_var_name), K(ret));
-      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.meta_))) {
-        LOG_WARN("fail to deserialize user var meta", K(i), K(ret));
-      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.value_))) {
-        LOG_WARN("fail to deserialize user var value", K(i), K(ret));
-      } else if (OB_FAIL(user_var_val_map_.set_refactored(user_var_name, user_var_val))) {
-        LOG_WARN("Insert user var into map failed", K(user_var_name), K(ret));
-      }
-#ifdef OB_BUILD_ORACLE_PL
-      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match(pl::package_key_prefix_v1))) {
-        if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
-                      this, user_var_name, user_var_val))) {
-          LOG_WARN("fail to notify package variable deserialize", K(user_var_name), K(ret));
-        }
-      }
-#endif
-    }
-  }
   sys_var_inc_info_.reset();
   if (CACHED_SYS_VAR_VERSION != sys_var_base_version_) {
     OZ (load_all_sys_vars_default());
@@ -6198,6 +6168,7 @@ int ObBasicSessionInfo::das_deserialize_invariant_(const char *buf, const int64_
 int ObBasicSessionInfo::das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  user_var_val_map_.reuse();
 
   bool has_tx_desc = 0;
   if (OB_FAIL(serialization::decode(buf, data_len, pos, has_tx_desc))) {
@@ -6209,6 +6180,38 @@ int ObBasicSessionInfo::das_deserialize_volatile_(const char *buf, const int64_t
     }
   } else {
     tx_desc_ = nullptr;
+  }
+
+  int64_t deserialize_user_var_count = 0;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, deserialize_user_var_count))) {
+    LOG_WARN("fail to deserialize user var count", K(data_len), K(pos), K(ret));
+  } else if (OB_UNLIKELY(deserialize_user_var_count < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid user var count", K(deserialize_user_var_count), K(ret));
+  } else {
+    ObSessionVariable user_var_val;
+    for (int64_t i = 0; OB_SUCC(ret) && i < deserialize_user_var_count; ++i) {
+      ObString user_var_name;
+      user_var_val.reset();
+      if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_name))) {
+        LOG_WARN("fail to deserialize user var name", K(i), K(ret));
+      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.meta_))) {
+        LOG_WARN("fail to deserialize user var meta", K(i), K(ret));
+      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, user_var_val.value_))) {
+        LOG_WARN("fail to deserialize user var value", K(i), K(ret));
+      } else if (OB_FAIL(user_var_val_map_.set_refactored(user_var_name, user_var_val))) {
+        LOG_WARN("Insert user var into map failed", K(user_var_name), K(ret));
+      }
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match(pl::package_key_prefix_v1))) {
+        if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
+                      this, user_var_name, user_var_val))) {
+          LOG_WARN("fail to notify package variable deserialize", K(user_var_name), K(ret));
+        }
+      }
+#endif
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -6308,8 +6311,8 @@ int ObBasicSessionInfo::das_deser_cache_begin_pool_request()
 int ObBasicSessionInfo::das_deser_cache_end_pool_request(bool &can_return_to_pool)
 {
   int ret = OB_SUCCESS;
+  user_var_val_map_.reuse();
   can_return_to_pool = is_das_borrowed_sys_vars_
-                       && 0 == user_var_val_map_.size()
                        && !is_session_info_changed()
                        && app_trace_id_.empty()
                        && !associated_xa_;
@@ -6387,27 +6390,6 @@ int ObBasicSessionInfo::das_apply_invariant_from(const ObBasicSessionInfo &templ
          templ.thread_data_.database_name_,
          sizeof(thread_data_.database_name_));
 
-  if (OB_SUCC(ret)) {
-    const ObSessionValMap::VarNameValMap &src_map = templ.user_var_val_map_.get_val_map();
-    for (ObSessionValMap::VarNameValMap::const_iterator it = src_map.begin();
-         OB_SUCC(ret) && it != src_map.end(); ++it) {
-      ObString user_var_name = it->first;
-      const ObSessionVariable &user_var_val = it->second;
-      if (OB_FAIL(sess_level_name_pool_.write_string(user_var_name, &user_var_name))) {
-        LOG_WARN("fail to write user_var_name", K(user_var_name), K(ret));
-      } else if (OB_FAIL(user_var_val_map_.set_refactored(user_var_name, user_var_val))) {
-        LOG_WARN("Insert user var into map failed", K(user_var_name), K(ret));
-      }
-#ifdef OB_BUILD_ORACLE_PL
-      if (OB_SUCC(ret) && OB_UNLIKELY(user_var_name.prefix_match(pl::package_key_prefix_v1))) {
-        if (OB_FAIL(pl::ObPLPackageManager::notify_package_variable_deserialize(
-                      this, user_var_name, user_var_val))) {
-          LOG_WARN("fail to notify package variable deserialize", K(user_var_name), K(ret));
-        }
-      }
-#endif
-    }
-  }
   sys_var_inc_info_.reset();
   if (OB_SUCC(ret)) {
     OZ (das_borrow_sys_vars_from(templ));
@@ -6890,7 +6872,7 @@ int ObBasicSessionInfo::das_serialize_phase_size_(int64_t &len, const bool invar
           is_master_session() ? get_sid() : master_sessid_,
           capability_.capability_,
           thread_data_.database_name_);
-  if (invariant_phase) {
+  if (!invariant_phase) {
     ObSEArray<ObSysVarClassType, 128> sys_var_ids;
     ObSEArray<ObString, 32> user_var_names;
     if (OB_FAIL(ret)) {
@@ -6916,6 +6898,14 @@ int ObBasicSessionInfo::das_serialize_phase_size_(int64_t &len, const bool invar
         }
       }
       len += serialization::encoded_length(actual_ser_user_var_count);
+    }
+  }
+  if (invariant_phase) {
+    ObSEArray<ObSysVarClassType, 128> sys_var_ids;
+    ObSEArray<ObString, 32> user_var_names;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(calc_need_serialize_vars(sys_var_ids, user_var_names))) {
+      LOG_WARN("fail to calc need serialize vars", K(ret));
     }
     if (OB_SUCC(ret)) {
       len += serialization::encoded_length(sys_var_ids.count());

@@ -17,7 +17,6 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_parallel_handler.h"
 #include "observer/omt/ob_multi_tenant.h"
-#include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "share/ob_cluster_version.h"
@@ -1151,15 +1150,13 @@ int ObDataAccessService::parallel_submit_das_task(ObDASRef &das_ref, ObDasAggreg
   return ret;
 }
 
-bool ObDataAccessService::should_use_deser_cache_format(const ObIArray<ObIDASTaskOp*> &task_ops) const
+bool ObDataAccessService::should_use_deser_cache_format(const ObIArray<ObIDASTaskOp*> &task_ops,
+                                                        ObSQLSessionInfo *session) const
 {
-  bool tenant_config_enabled = false;
+  bool tenant_config_enabled = OB_NOT_NULL(session) && session->get_das_deserialize_lib_cache_percentage() > 0;
+
   bool is_non_dml_task = task_ops.count() > 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (tenant_config.is_valid()) {
-    tenant_config_enabled = static_cast<int64_t>(tenant_config->_das_deserialize_lib_cache_percentage) > 0;
-  }
-  for (int64_t i = 0; is_non_dml_task && i < task_ops.count(); ++i) {
+  for (int64_t i = 0; tenant_config_enabled && is_non_dml_task && i < task_ops.count(); ++i) {
     const ObIDASTaskOp *task_op = task_ops.at(i);
     if (OB_NOT_NULL(task_op)) {
       is_non_dml_task = !IS_DAS_DML_OP(*task_op);
@@ -1176,8 +1173,12 @@ int ObDataAccessService::collect_das_task_info(ObIArray<ObIDASTaskOp*> &task_ops
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
+  ObSQLSessionInfo *session = nullptr;
 
-  remote_info.use_deser_cache_format_ = should_use_deser_cache_format(task_ops);
+  if (OB_NOT_NULL(remote_info.exec_ctx_)) {
+    session = remote_info.exec_ctx_->get_my_session();
+  }
+  remote_info.use_deser_cache_format_ = should_use_deser_cache_format(task_ops, session);
 
   for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
     task_op = task_ops.at(i);

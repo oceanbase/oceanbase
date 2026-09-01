@@ -15,9 +15,14 @@
 #define private public
 #define protected public
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/engine/ob_physical_plan.h"
 #include "lib/utility/utility.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_profiler.h"
+#include "pl/ob_pl_code_coverage.h"
+#endif
 
 namespace oceanbase
 {
@@ -290,6 +295,41 @@ void init_remote_extra_maps(ObSQLSessionInfo &sess)
                                       ObMemAttr(500, "ContextsMap")));
 }
 
+struct DasSplitSections
+{
+  DasSplitSections() : inv_(nullptr), inv_len_(0), var_(nullptr), var_len_(0) {}
+  const char *inv_;
+  int64_t inv_len_;
+  const char *var_;
+  int64_t var_len_;
+};
+
+int parse_das_split_sections(const char *buf, const int64_t data_len, DasSplitSections &sections)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int64_t inv_len = 0;
+  int64_t var_len = 0;
+  if (OB_ISNULL(buf) || data_len < 2 * serialization::OB_SERIALIZE_SIZE_NEED_BYTES) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &inv_len))) {
+  } else if (OB_UNLIKELY(inv_len < 0 || pos + inv_len > data_len)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    sections.inv_ = buf + pos;
+    sections.inv_len_ = inv_len;
+    pos += inv_len;
+    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &var_len))) {
+    } else if (OB_UNLIKELY(var_len < 0 || pos + var_len != data_len)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      sections.var_ = buf + pos;
+      sections.var_len_ = var_len;
+    }
+  }
+  return ret;
+}
+
 void verify_basic_fields_equal(const ObSQLSessionInfo42x &sess1, const ObSQLSessionInfo &sess2)
 {
   LOG_INFO("verify_basic_fields_equal", K(sess1.thread_data_.cur_query_start_time_), K(sess2.thread_data_.cur_query_start_time_));
@@ -504,6 +544,14 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_split_round_trip)
 
 TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
 {
+  ObPhysicalPlan user_var_plan;
+  ObSEArray<ObVarInfo, 1> plan_vars;
+  ObVarInfo user_var_info;
+  user_var_info.type_ = USER_VAR;
+  user_var_info.name_ = ObString::make_string("my_uvar");
+  ASSERT_EQ(OB_SUCCESS, plan_vars.push_back(user_var_info));
+  ASSERT_EQ(OB_SUCCESS, user_var_plan.set_vars(plan_vars));
+
   common::ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
   ObSQLSessionInfo sess_src(500);
   ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &allocator));
@@ -512,7 +560,8 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   fill_session_info(sess_src);
   sess_src.thread_data_.cur_query_start_time_ = 1234567890;
   sess_src.set_cur_sql_id(const_cast<char *>("0123456789abcdef0123456789abcdef"));
-  // exercise a user variable (invariant) so apply's user-var loop is covered
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_cur_phy_plan(&user_var_plan));
+  // Exercise a plan-referenced user variable in the volatile section.
   {
     ObSessionVariable uv;
     uv.meta_.set_int();
@@ -525,7 +574,9 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   ASSERT_TRUE(legacy_buf != nullptr);
   int64_t legacy_pos = 0;
   ASSERT_EQ(OB_SUCCESS, sess_src.serialize(legacy_buf, BUF_SIZE, legacy_pos));
+  common::ObArenaAllocator sess_ref_allocator(ObModIds::OB_SQL_SESSION);
   ObSQLSessionInfo sess_ref(500);
+  ASSERT_EQ(OB_SUCCESS, sess_ref.test_init(0, 0, 0, &sess_ref_allocator));
   init_set(sess_ref);
   sess_ref.cached_tenant_config_info_.session_ = nullptr;
   int64_t legacy_des_pos = 0;
@@ -555,6 +606,7 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   ASSERT_EQ(OB_SUCCESS,
             sess_templ.das_build_template_invariant_section(split_buf + inv_begin, inv_len, tpos));
   ASSERT_EQ(tpos, inv_len);
+  ASSERT_EQ(0, sess_templ.get_user_var_val_map().size());
 
   // ---- apply into a working session + decode the volatile suffix ----
   common::ObArenaAllocator sess_app_allocator(ObModIds::OB_SQL_SESSION);
@@ -562,6 +614,7 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   ASSERT_EQ(OB_SUCCESS, sess_app.test_init(0, 0, 0, &sess_app_allocator));
   sess_app.cached_tenant_config_info_.session_ = nullptr;
   ASSERT_EQ(OB_SUCCESS, sess_app.das_apply_invariant_section(sess_templ));
+  ASSERT_EQ(0, sess_app.get_user_var_val_map().size());
   ASSERT_TRUE(sess_app.is_das_borrowed_sys_vars());
   ASSERT_EQ(sess_templ.sys_var_base_version_, sess_app.sys_var_base_version_);
   ASSERT_FALSE(ObBasicSessionInfo::CACHED_SYS_VAR_VERSION == sess_app.sys_var_base_version_);
@@ -572,6 +625,12 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   ASSERT_EQ(OB_SUCCESS,
             sess_app.das_decode_volatile_section(split_buf + var_begin, var_len, vpos));
   ASSERT_EQ(vpos, var_len);
+  ObSessionVariable decoded_uv;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_app.get_user_variable(ObString::make_string("my_uvar"), decoded_uv));
+  ASSERT_TRUE(decoded_uv.meta_.is_int());
+  ASSERT_TRUE(decoded_uv.value_.is_int());
+  ASSERT_EQ(42, decoded_uv.value_.get_int());
 
   // ---- compare: legacy-serialize ref and applied, bytes must match ----
   char *reser_ref = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
@@ -579,6 +638,8 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   ASSERT_TRUE(reser_ref != nullptr && reser_app != nullptr);
   int64_t reser_ref_len = 0;
   int64_t reser_app_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.set_cur_phy_plan(&user_var_plan));
+  ASSERT_EQ(OB_SUCCESS, sess_app.set_cur_phy_plan(&user_var_plan));
   ASSERT_EQ(OB_SUCCESS, sess_ref.serialize(reser_ref, BUF_SIZE, reser_ref_len));
   ASSERT_EQ(OB_SUCCESS, sess_app.serialize(reser_app, BUF_SIZE, reser_app_len));
 
@@ -601,6 +662,165 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   sess_ref.cached_tenant_config_info_.session_ = nullptr;
   sess_templ.cached_tenant_config_info_.session_ = nullptr;
   sess_app.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_user_var_in_volatile)
+{
+  ObPhysicalPlan user_var_plan;
+  ObSEArray<ObVarInfo, 1> plan_vars;
+  ObVarInfo user_var_info;
+  user_var_info.type_ = USER_VAR;
+  user_var_info.name_ = ObString::make_string("my_uvar");
+  ASSERT_EQ(OB_SUCCESS, plan_vars.push_back(user_var_info));
+  ASSERT_EQ(OB_SUCCESS, user_var_plan.set_vars(plan_vars));
+
+  common::ObArenaAllocator src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &src_allocator));
+  init_set(sess_src);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(sess_src);
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_cur_phy_plan(&user_var_plan));
+
+  char *split_a = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *split_b = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *split_unset = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(OB_NOT_NULL(split_a) && OB_NOT_NULL(split_b) && OB_NOT_NULL(split_unset));
+
+  const ObString user_var_name = ObString::make_string("my_uvar");
+  ObSessionVariable uv;
+  uv.meta_.set_int();
+  uv.value_.set_int(10);
+  ASSERT_EQ(OB_SUCCESS, sess_src.replace_user_variable(user_var_name, uv));
+  int64_t split_a_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_a, BUF_SIZE, split_a_len));
+  int64_t inv_a_size = 0;
+  int64_t var_a_size = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split_size(inv_a_size, var_a_size));
+  ASSERT_EQ(split_a_len, inv_a_size + var_a_size);
+
+  uv.value_.set_int(20);
+  ASSERT_EQ(OB_SUCCESS, sess_src.replace_user_variable(user_var_name, uv));
+  int64_t split_b_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_b, BUF_SIZE, split_b_len));
+  int64_t inv_b_size = 0;
+  int64_t var_b_size = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split_size(inv_b_size, var_b_size));
+  ASSERT_EQ(split_b_len, inv_b_size + var_b_size);
+
+  ASSERT_EQ(OB_SUCCESS, sess_src.remove_user_variable(user_var_name));
+  int64_t split_unset_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_src.das_serialize_split(split_unset, BUF_SIZE, split_unset_len));
+  int64_t inv_unset_size = 0;
+  int64_t var_unset_size = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_src.das_serialize_split_size(inv_unset_size, var_unset_size));
+  ASSERT_EQ(split_unset_len, inv_unset_size + var_unset_size);
+
+  DasSplitSections sections_a;
+  DasSplitSections sections_b;
+  DasSplitSections sections_unset;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(split_a, split_a_len, sections_a));
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(split_b, split_b_len, sections_b));
+  ASSERT_EQ(OB_SUCCESS,
+            parse_das_split_sections(split_unset, split_unset_len, sections_unset));
+
+  ASSERT_EQ(sections_a.inv_len_, sections_b.inv_len_);
+  ASSERT_EQ(sections_a.inv_len_, sections_unset.inv_len_);
+  ASSERT_EQ(0, MEMCMP(sections_a.inv_, sections_b.inv_, sections_a.inv_len_));
+  ASSERT_EQ(0, MEMCMP(sections_a.inv_, sections_unset.inv_, sections_a.inv_len_));
+  ASSERT_EQ(sections_a.var_len_, sections_b.var_len_);
+  ASSERT_NE(0, MEMCMP(sections_a.var_, sections_b.var_, sections_a.var_len_));
+  ASSERT_GT(sections_a.var_len_, sections_unset.var_len_);
+
+  ObSQLSessionInfo sess_templ(500);
+  init_set(sess_templ);
+  sess_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t tpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            sess_templ.das_build_template_invariant_section(
+                sections_a.inv_, sections_a.inv_len_, tpos));
+  ASSERT_EQ(sections_a.inv_len_, tpos);
+  ASSERT_EQ(0, sess_templ.get_user_var_val_map().size());
+
+  common::ObArenaAllocator working_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo working(500);
+  ASSERT_EQ(OB_SUCCESS, working.test_init(0, 0, 0, &working_allocator));
+  working.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, working.das_apply_invariant_section(sess_templ));
+  ASSERT_EQ(0, working.get_user_var_val_map().size());
+
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_begin_pool_request());
+  int64_t vpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            working.das_decode_volatile_section(
+                sections_a.var_, sections_a.var_len_, vpos));
+  ASSERT_EQ(sections_a.var_len_, vpos);
+  ObSessionVariable decoded_uv;
+  ASSERT_EQ(OB_SUCCESS, working.get_user_variable(user_var_name, decoded_uv));
+  ASSERT_TRUE(decoded_uv.meta_.is_int());
+  ASSERT_TRUE(decoded_uv.value_.is_int());
+  ASSERT_EQ(10, decoded_uv.value_.get_int());
+  bool can_return_to_pool = false;
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_end_pool_request(can_return_to_pool));
+  ASSERT_TRUE(can_return_to_pool);
+  ASSERT_EQ(0, working.get_user_var_val_map().size());
+
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_begin_pool_request());
+  vpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            working.das_decode_volatile_section(
+                sections_b.var_, sections_b.var_len_, vpos));
+  ASSERT_EQ(sections_b.var_len_, vpos);
+  ASSERT_EQ(OB_SUCCESS, working.get_user_variable(user_var_name, decoded_uv));
+  ASSERT_EQ(20, decoded_uv.value_.get_int());
+  can_return_to_pool = false;
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_end_pool_request(can_return_to_pool));
+  ASSERT_TRUE(can_return_to_pool);
+  ASSERT_EQ(0, working.get_user_var_val_map().size());
+
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_begin_pool_request());
+  vpos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            working.das_decode_volatile_section(
+                sections_unset.var_, sections_unset.var_len_, vpos));
+  ASSERT_EQ(sections_unset.var_len_, vpos);
+  ASSERT_EQ(0, working.get_user_var_val_map().size());
+  ASSERT_EQ(OB_ERR_USER_VARIABLE_UNKNOWN,
+            working.get_user_variable(user_var_name, decoded_uv));
+  can_return_to_pool = false;
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_end_pool_request(can_return_to_pool));
+  ASSERT_TRUE(can_return_to_pool);
+
+#ifdef OB_BUILD_ORACLE_PL
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_begin_pool_request());
+  ObSessionVariable pkg_uv;
+  pkg_uv.meta_.set_int();
+  pkg_uv.value_.set_int(1);
+  ASSERT_EQ(OB_SUCCESS,
+            working.ObBasicSessionInfo::replace_user_variable(
+                ObString::make_string("pkg.pool_test"), pkg_uv, false));
+  working.pl_profiler_ = OB_NEW(pl::ObPLProfiler, ObMemAttr(500, "PoolProfiler"), working);
+  working.pl_code_coverage_ =
+      OB_NEW(pl::ObPLCodeCoverage, ObMemAttr(500, "PoolCoverage"), working);
+  ASSERT_TRUE(OB_NOT_NULL(working.pl_profiler_));
+  ASSERT_TRUE(OB_NOT_NULL(working.pl_code_coverage_));
+  can_return_to_pool = false;
+  ASSERT_EQ(OB_SUCCESS, working.das_deser_cache_end_pool_request(can_return_to_pool));
+  ASSERT_TRUE(can_return_to_pool);
+  ASSERT_EQ(0, working.get_user_var_val_map().size());
+  ASSERT_TRUE(OB_ISNULL(working.get_pl_profiler()));
+  ASSERT_TRUE(OB_ISNULL(working.get_pl_code_coverage()));
+#endif
+
+  working.das_detach_borrowed_sys_vars();
+  ob_free(split_a);
+  ob_free(split_b);
+  ob_free(split_unset);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  sess_templ.cached_tenant_config_info_.session_ = nullptr;
+  working.cached_tenant_config_info_.session_ = nullptr;
 }
 
 } // namespace sql

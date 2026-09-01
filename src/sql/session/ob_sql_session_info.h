@@ -866,6 +866,7 @@ public:
                                  enable_fk_skip_parent_pure_lock_(false),
                                  enable_json_bin_view_(false),
                                  enable_ps_meta_response_optimize_(false),
+                                 das_deserialize_lib_cache_percentage_(0),
                                  session_(session)
     {
     }
@@ -939,6 +940,7 @@ public:
     bool enable_fk_skip_parent_pure_lock() const { return ATOMIC_LOAD(&enable_fk_skip_parent_pure_lock_); }
     bool enable_json_bin_view() const { return enable_json_bin_view_; }
     bool enable_ps_meta_response_optimize() const { return enable_ps_meta_response_optimize_; }
+    int64_t get_das_deserialize_lib_cache_percentage() const { return ATOMIC_LOAD(&das_deserialize_lib_cache_percentage_); }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -994,6 +996,7 @@ public:
     bool enable_fk_skip_parent_pure_lock_;
     bool enable_json_bin_view_;
     bool enable_ps_meta_response_optimize_;
+    int64_t das_deserialize_lib_cache_percentage_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1898,6 +1901,12 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_json_bin_view();
+  }
+
+  int64_t get_das_deserialize_lib_cache_percentage()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_das_deserialize_lib_cache_percentage();
   }
 
   int get_tmp_table_size(uint64_t &size);

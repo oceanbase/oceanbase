@@ -2604,6 +2604,10 @@ int ObSQLSessionInfo::das_deser_cache_begin_pool_request()
 int ObSQLSessionInfo::das_deser_cache_end_pool_request(bool &can_return_to_pool)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  reset_pl_profiler_resource();
+  reset_pl_code_coverage_resource();
+#endif
   const bool sql_poolable = !has_temp_table_flag_
                             && gtt_session_scope_ids_.empty()
                             && gtt_trans_scope_ids_.empty()
@@ -4091,6 +4095,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&record_ps_execute_params_, tenant_config->_record_ps_execute_params);
       ATOMIC_STORE(&enable_pl_sql_parameterize_, tenant_config->_enable_pl_sql_parameterize);
       ATOMIC_STORE(&enable_ps_meta_response_optimize_, tenant_config->enable_ps_meta_response_optimize);
+      ATOMIC_STORE(&das_deserialize_lib_cache_percentage_, tenant_config->_das_deserialize_lib_cache_percentage);
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);
