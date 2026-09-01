@@ -1061,6 +1061,7 @@ int ObEvalCostHelper::fill_helper(const ObPhysicalPlanCtx &phy_plan_ctx,
     src_qb_name_ = trans_ctx.src_qb_name_;
     outline_trans_hints_count_ = trans_ctx.outline_trans_hints_.count();
     used_trans_hints_count_ = trans_ctx.used_trans_hints_.count();
+    push_down_filters_count_ = trans_ctx.push_down_filters_.count();
   }
   return ret;
 }
@@ -1088,6 +1089,7 @@ int ObEvalCostHelper::recover_context(ObPhysicalPlanCtx &phy_plan_ctx,
     ObOptimizerUtil::revert_items(trans_ctx.equal_param_constraints_, equal_param_constraints_count_);
     ObOptimizerUtil::revert_items(trans_ctx.outline_trans_hints_, outline_trans_hints_count_);
     ObOptimizerUtil::revert_items(trans_ctx.used_trans_hints_, used_trans_hints_count_);
+    ObOptimizerUtil::revert_items(trans_ctx.push_down_filters_, push_down_filters_count_);
   }
 
   // clear pre-calc result cache for exprs created by temp expr factory
