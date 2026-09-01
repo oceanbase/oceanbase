@@ -2079,17 +2079,46 @@ public:
   int close_all_ps_stmt();
   void destory_mem_context();
   void set_cur_exec_ctx(ObExecContext *cur_exec_ctx) { cur_exec_ctx_ = cur_exec_ctx; }
+  // for DAS deserialize cache
+  int das_serialize_split(char *buf, int64_t buf_len, int64_t &pos) const;
+  int das_serialize_split_size(int64_t &inv_len, int64_t &var_len) const;
+  int das_build_template_invariant_section(const char *buf,
+                                           const int64_t data_len,
+                                           int64_t &pos);
+  int das_apply_invariant_section(const ObSQLSessionInfo &templ);
+  int das_decode_volatile_section(const char *buf,
+                                  const int64_t data_len,
+                                  int64_t &pos);
   int das_deser_cache_begin_pool_request();
   int das_deser_cache_end_pool_request(bool &can_return_to_pool);
-protected:
-  // for DAS deserialize cache
-  int das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const override;
-  int das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const override;
-  int das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos) override;
-  int das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos) override;
-  int das_apply_invariant_from(const ObBasicSessionInfo &templ) override;
-
 private:
+  // for DAS deserialize cache
+  static int das_decode_session_block_header_(const char *buf,
+                                              const int64_t data_len,
+                                              int64_t &pos,
+                                              int64_t &block_begin,
+                                              int64_t &block_len,
+                                              const bool invariant_phase);
+  int das_serialize_sql_block_payload_(char *buf,
+                                       int64_t buf_len,
+                                       int64_t &pos,
+                                       const bool invariant_phase) const;
+  int das_deserialize_sql_block_payload_(const char *buf,
+                                         const int64_t data_len,
+                                         int64_t &pos,
+                                         const bool invariant_phase);
+  int das_get_sql_block_payload_size_(int64_t &len, const bool invariant_phase) const;
+  int das_apply_sql_invariant_from_(const ObSQLSessionInfo &templ);
+
+  int das_serialize_phase_blocks_(char *buf,
+                                  const int64_t buf_len,
+                                  int64_t &pos,
+                                  const bool invariant_phase) const;
+  int das_get_phase_blocks_size_(int64_t &len, const bool invariant_phase) const;
+  int das_deserialize_phase_blocks_(const char *buf,
+                                    const int64_t data_len,
+                                    int64_t &pos,
+                                    const bool invariant_phase);
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
   inline int init_mem_context(uint64_t tenant_id);
   inline int64_t get_truncated_sql_len(const ObString &stmt) override;

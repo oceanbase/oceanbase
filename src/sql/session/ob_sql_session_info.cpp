@@ -2565,178 +2565,433 @@ int ObSQLSessionInfo::calc_remote_extra_sess_state_serialize_size_(int64_t &len)
   return ret;
 }
 
-#define DAS_INV(...)                            \
+int ObSQLSessionInfo::das_decode_session_block_header_(const char *buf,
+                                                       const int64_t data_len,
+                                                       int64_t &pos,
+                                                       int64_t &block_begin,
+                                                       int64_t &block_len,
+                                                       const bool invariant_phase)
+{
+  int ret = OB_SUCCESS;
+  block_begin = 0;
+  block_len = 0;
+  if (OB_UNLIKELY(OB_ISNULL(buf) || data_len < 0 || pos < 0 || pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid DAS session block decode argument",
+             K(ret), KP(buf), K(data_len), K(pos), K(invariant_phase));
+  } else if (OB_UNLIKELY(pos == data_len)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("DAS session block length prefix is missing",
+             K(ret), K(data_len), K(pos), K(invariant_phase));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &block_len))) {
+    LOG_WARN("decode DAS session block length failed",
+             K(ret), K(data_len), K(pos), K(invariant_phase));
+  } else if (OB_UNLIKELY(block_len < 0
+                         || pos < 0
+                         || pos > data_len
+                         || block_len > data_len - pos)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid DAS session block length",
+             K(ret), K(block_len), K(data_len), K(pos), K(invariant_phase));
+  } else {
+    block_begin = pos;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_deserialize_phase_blocks_(const char *buf,
+                                                    const int64_t data_len,
+                                                    int64_t &pos,
+                                                    const bool invariant_phase)
+{
+  int ret = OB_SUCCESS;
+  int64_t basic_begin = 0;
+  int64_t basic_len = 0;
+  int64_t basic_pos = 0;
+  int64_t sql_begin = 0;
+  int64_t sql_len = 0;
+  int64_t sql_pos = 0;
+  if (OB_UNLIKELY(OB_ISNULL(buf) || data_len < 0 || pos < 0 || pos > data_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid DAS session phase blocks decode argument",
+             K(ret), KP(buf), K(data_len), K(pos), K(invariant_phase));
+  } else if (OB_FAIL(das_decode_session_block_header_(buf,
+                                                      data_len,
+                                                      pos,
+                                                      basic_begin,
+                                                      basic_len,
+                                                      invariant_phase))) {
+    LOG_WARN("decode DAS Basic block header failed", K(ret), K(data_len), K(pos));
+  } else if (OB_FAIL(das_deserialize_basic_block_payload_(
+                 buf + basic_begin, basic_len, basic_pos, invariant_phase))) {
+    LOG_WARN("deserialize DAS Basic block failed",
+             K(ret), K(basic_len), K(basic_pos), K(invariant_phase));
+  } else {
+    const int64_t ignored_tail_len = basic_len - basic_pos;
+    if (ignored_tail_len > 0) {
+      LOG_TRACE("[DAS_DESER_CACHE] ignore unknown Basic block tail",
+                K(invariant_phase), K(ignored_tail_len), K(basic_pos), K(basic_len));
+    }
+    pos = basic_begin + basic_len;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(das_decode_session_block_header_(buf,
+                                                      data_len,
+                                                      pos,
+                                                      sql_begin,
+                                                      sql_len,
+                                                      invariant_phase))) {
+    LOG_WARN("decode DAS SQL block header failed", K(ret), K(data_len), K(pos));
+  } else if (OB_FAIL(das_deserialize_sql_block_payload_(
+                 buf + sql_begin, sql_len, sql_pos, invariant_phase))) {
+    LOG_WARN("deserialize DAS SQL block failed",
+             K(ret), K(sql_len), K(sql_pos), K(invariant_phase));
+  } else {
+    const int64_t ignored_tail_len = sql_len - sql_pos;
+    if (ignored_tail_len > 0) {
+      LOG_TRACE("[DAS_DESER_CACHE] ignore unknown SQL block tail",
+                K(invariant_phase), K(ignored_tail_len), K(sql_pos), K(sql_len));
+    }
+    pos = sql_begin + sql_len;
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t ignored_tail_len = data_len - pos;
+    if (ignored_tail_len > 0) {
+      LOG_TRACE("[DAS_DESER_CACHE] ignore unknown session section tail",
+                K(invariant_phase), K(ignored_tail_len), K(pos), K(data_len));
+    }
+    pos = data_len;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_build_template_invariant_section(const char *buf,
+                                                           const int64_t data_len,
+                                                           int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(das_deserialize_phase_blocks_(buf, data_len, pos, true))) {
+    LOG_WARN("deserialize DAS invariant phase blocks failed", K(ret), K(data_len), K(pos));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_apply_invariant_section(const ObSQLSessionInfo &templ)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(das_apply_basic_invariant_from_(templ))) {
+    LOG_WARN("apply DAS Basic invariant fields failed", K(ret));
+  } else if (OB_FAIL(das_apply_sql_invariant_from_(templ))) {
+    LOG_WARN("apply DAS SQL invariant fields failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    das_detach_borrowed_sys_vars();
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_decode_volatile_section(const char *buf,
+                                                  const int64_t data_len,
+                                                  int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(das_deserialize_phase_blocks_(buf, data_len, pos, false))) {
+    LOG_WARN("deserialize DAS volatile phase blocks failed", K(ret), K(data_len), K(pos));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_get_phase_blocks_size_(int64_t &len, const bool invariant_phase) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t prefix_len = 2 * serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  int64_t basic_len = 0;
+  int64_t sql_len = 0;
+  len = 0;
+  if (OB_FAIL(das_get_basic_block_payload_size_(basic_len, invariant_phase))) {
+    LOG_WARN("get DAS Basic block payload size failed", K(ret), K(invariant_phase));
+  } else if (OB_FAIL(das_get_sql_block_payload_size_(sql_len, invariant_phase))) {
+    LOG_WARN("get DAS SQL block payload size failed", K(ret), K(invariant_phase));
+  } else if (OB_UNLIKELY(basic_len < 0
+                         || sql_len < 0
+                         || basic_len > static_cast<int64_t>(serialization::OB_MAX_V5B) - prefix_len - sql_len)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("invalid DAS session phase blocks size",
+             K(ret), K(basic_len), K(sql_len), K(invariant_phase));
+  } else {
+    len = prefix_len + basic_len + sql_len;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_serialize_phase_blocks_(char *buf,
+                                                  const int64_t buf_len,
+                                                  int64_t &pos,
+                                                  const bool invariant_phase) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(buf)
+                  || buf_len < 0
+                  || pos < 0
+                  || pos > buf_len
+                  || serialization::OB_SERIALIZE_SIZE_NEED_BYTES > buf_len - pos)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("invalid DAS phase blocks serialize argument",
+             K(ret), KP(buf), K(buf_len), K(pos), K(invariant_phase));
+  } else {
+    const int64_t basic_len_pos = pos;
+    pos += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    const int64_t basic_begin = pos;
+    int64_t tmp_pos = 0;
+    if (OB_FAIL(das_serialize_basic_block_payload_(buf, buf_len, pos, invariant_phase))) {
+      LOG_WARN("serialize DAS Basic block payload failed", K(ret), K(invariant_phase));
+    } else if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+                   buf + basic_len_pos,
+                   serialization::OB_SERIALIZE_SIZE_NEED_BYTES,
+                   tmp_pos,
+                   pos - basic_begin))) {
+      LOG_WARN("backfill DAS Basic block length failed",
+               K(ret), K(basic_len_pos), K(pos), K(invariant_phase));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(pos < 0
+                         || pos > buf_len
+                         || serialization::OB_SERIALIZE_SIZE_NEED_BYTES > buf_len - pos)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("DAS SQL block length prefix buffer is not enough",
+             K(ret), K(buf_len), K(pos), K(invariant_phase));
+  } else {
+    const int64_t sql_len_pos = pos;
+    pos += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    const int64_t sql_begin = pos;
+    int64_t tmp_pos = 0;
+    if (OB_FAIL(das_serialize_sql_block_payload_(buf, buf_len, pos, invariant_phase))) {
+      LOG_WARN("serialize DAS SQL block payload failed", K(ret), K(invariant_phase));
+    } else if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+                   buf + sql_len_pos,
+                   serialization::OB_SERIALIZE_SIZE_NEED_BYTES,
+                   tmp_pos,
+                   pos - sql_begin))) {
+      LOG_WARN("backfill DAS SQL block length failed",
+               K(ret), K(sql_len_pos), K(pos), K(invariant_phase));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_serialize_split(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t split_begin = pos;
+  if (OB_UNLIKELY(OB_ISNULL(buf)
+                  || buf_len < 0
+                  || pos < 0
+                  || pos > buf_len
+                  || serialization::OB_SERIALIZE_SIZE_NEED_BYTES > buf_len - pos)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("invalid DAS session serialize buffer",
+             K(ret), KP(buf), K(buf_len), K(pos));
+  } else {
+    const int64_t inv_len_pos = pos;
+    pos += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    const int64_t inv_begin = pos;
+    int64_t tmp_pos = 0;
+    if (OB_FAIL(das_serialize_phase_blocks_(buf, buf_len, pos, true))) {
+      LOG_WARN("serialize DAS invariant phase blocks failed", K(ret));
+    } else if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+                   buf + inv_len_pos,
+                   serialization::OB_SERIALIZE_SIZE_NEED_BYTES,
+                   tmp_pos,
+                   pos - inv_begin))) {
+      LOG_WARN("backfill DAS invariant section length failed",
+               K(ret), K(inv_len_pos), K(pos));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(pos < 0
+                         || pos > buf_len
+                         || serialization::OB_SERIALIZE_SIZE_NEED_BYTES > buf_len - pos)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("DAS volatile section length prefix buffer is not enough",
+             K(ret), K(buf_len), K(pos));
+  } else {
+    const int64_t var_len_pos = pos;
+    pos += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    const int64_t var_begin = pos;
+    int64_t tmp_pos = 0;
+    if (OB_FAIL(das_serialize_phase_blocks_(buf, buf_len, pos, false))) {
+      LOG_WARN("serialize DAS volatile phase blocks failed", K(ret));
+    } else if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+                   buf + var_len_pos,
+                   serialization::OB_SERIALIZE_SIZE_NEED_BYTES,
+                   tmp_pos,
+                   pos - var_begin))) {
+      LOG_WARN("backfill DAS volatile section length failed",
+               K(ret), K(var_len_pos), K(pos));
+    }
+  }
+  if (OB_SUCC(ret)
+      && OB_UNLIKELY(pos < split_begin
+                     || pos - split_begin
+                        > static_cast<int64_t>(serialization::OB_MAX_V5B))) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("DAS session blob exceeds length prefix range",
+             K(ret), K(split_begin), K(pos), K(serialization::OB_MAX_V5B));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::das_serialize_split_size(int64_t &inv_len, int64_t &var_len) const
+{
+  int ret = OB_SUCCESS;
+  inv_len = 0;
+  var_len = 0;
+  if (OB_FAIL(das_get_phase_blocks_size_(inv_len, true))) {
+    LOG_WARN("get DAS invariant phase blocks size failed", K(ret));
+  } else if (OB_FAIL(das_get_phase_blocks_size_(var_len, false))) {
+    LOG_WARN("get DAS volatile phase blocks size failed", K(ret));
+  } else if (OB_UNLIKELY(
+                 inv_len > static_cast<int64_t>(serialization::OB_MAX_V5B)
+                           - 2 * serialization::OB_SERIALIZE_SIZE_NEED_BYTES
+                 || var_len > static_cast<int64_t>(serialization::OB_MAX_V5B)
+                              - 2 * serialization::OB_SERIALIZE_SIZE_NEED_BYTES
+                              - inv_len)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("DAS session blob size exceeds length prefix range",
+             K(ret), K(inv_len), K(var_len), K(serialization::OB_MAX_V5B));
+  } else {
+    inv_len += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+    var_len += serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  }
+  return ret;
+}
+
+#define DAS_SESSION_ENCODE_INV(...)             \
   do {                                          \
     if (invariant_phase) {                      \
       LST_DO_CODE(OB_UNIS_ENCODE, __VA_ARGS__); \
     }                                           \
   } while (0)
 
-#define DAS_VAR(...)                            \
+#define DAS_SESSION_ENCODE_VAR(...)             \
   do {                                          \
     if (!invariant_phase) {                     \
       LST_DO_CODE(OB_UNIS_ENCODE, __VA_ARGS__); \
     }                                           \
   } while (0)
 
-int ObSQLSessionInfo::das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBasicSessionInfo::das_serialize_phase_(buf, buf_len, pos, invariant_phase))) {
-    LOG_WARN("base das serialize phase failed", K(ret), K(invariant_phase));
-  } else {
-    DAS_VAR(thread_data_.cur_query_start_time_);            // [VOLATILE] per-query
-    DAS_INV(user_priv_set_,
-            db_priv_set_);
-    DAS_VAR(trans_type_);                                   // [VOLATILE] tx
-    DAS_INV(global_sessid_,
-            inner_flag_,
-            is_max_availability_mode_,
-            session_type_,
-            has_temp_table_flag_,
-            enable_early_lock_release_,
-            enable_role_array_,
-            in_definer_named_proc_,
-            priv_user_id_,
-            xa_end_timeout_seconds_,
-            prelock_,
-            proxy_version_,
-            min_proxy_version_ps_);
-    DAS_VAR(thread_data_.is_in_retry_);                     // [VOLATILE] retry status
-    DAS_INV(ddl_info_,
-            gtt_session_scope_unique_id_,
-            gtt_trans_scope_unique_id_,
-            gtt_session_scope_ids_,
-            gtt_trans_scope_ids_);
-    DAS_VAR(affected_rows_);                                // [VOLATILE] per-query
-    DAS_INV(unit_gc_min_sup_proxy_version_,
-            gtt_tablet_info_map_,
-            trans_gtt_v2_sequence_,
-            min_data_version_of_init_sess_);
-    if (OB_FAIL(ret)) {
-    } else if (!invariant_phase
-               && OB_FAIL(const_cast<ObSQLSessionInfo *>(this)->
-                              serialize_remote_extra_sess_state_(buf, buf_len, pos))) {
-      LOG_WARN("serialize das volatile remote extra session state failed", K(ret));
-    }
-  }
-  return ret;
-}
-#undef DAS_INV
-#undef DAS_VAR
+#define DAS_SESSION_DECODE_INV(...)             \
+  do {                                          \
+    if (invariant_phase) {                      \
+      LST_DO_CODE(OB_UNIS_DECODE, __VA_ARGS__); \
+    }                                           \
+  } while (0)
 
-#define DAS_INV(...)                             \
+#define DAS_SESSION_DECODE_VAR(...)             \
+  do {                                          \
+    if (!invariant_phase) {                     \
+      LST_DO_CODE(OB_UNIS_DECODE, __VA_ARGS__); \
+    }                                           \
+  } while (0)
+
+#define DAS_SESSION_ADD_LEN_INV(...)            \
   do {                                           \
     if (invariant_phase) {                       \
       LST_DO_CODE(OB_UNIS_ADD_LEN, __VA_ARGS__); \
     }                                            \
   } while (0)
 
-#define DAS_VAR(...)                             \
+#define DAS_SESSION_ADD_LEN_VAR(...)            \
   do {                                           \
     if (!invariant_phase) {                      \
       LST_DO_CODE(OB_UNIS_ADD_LEN, __VA_ARGS__); \
     }                                            \
   } while (0)
 
-int ObSQLSessionInfo::das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const
+int ObSQLSessionInfo::das_serialize_sql_block_payload_(char *buf,
+                                                       int64_t buf_len,
+                                                       int64_t &pos,
+                                                       const bool invariant_phase) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBasicSessionInfo::das_serialize_phase_size_(len, invariant_phase))) {
-    LOG_WARN("base das serialize phase size failed", K(ret), K(invariant_phase));
-  } else {
-    DAS_VAR(thread_data_.cur_query_start_time_);
-    DAS_INV(user_priv_set_,
-            db_priv_set_);
-    DAS_VAR(trans_type_);
-    DAS_INV(global_sessid_,
-            inner_flag_,
-            is_max_availability_mode_,
-            session_type_,
-            has_temp_table_flag_,
-            enable_early_lock_release_,
-            enable_role_array_,
-            in_definer_named_proc_,
-            priv_user_id_,
-            xa_end_timeout_seconds_,
-            prelock_,
-            proxy_version_,
-            min_proxy_version_ps_);
-    DAS_VAR(thread_data_.is_in_retry_);
-    DAS_INV(ddl_info_,
-            gtt_session_scope_unique_id_,
-            gtt_trans_scope_unique_id_,
-            gtt_session_scope_ids_,
-            gtt_trans_scope_ids_);
-    DAS_VAR(affected_rows_);
-    DAS_INV(unit_gc_min_sup_proxy_version_,
-            gtt_tablet_info_map_,
-            trans_gtt_v2_sequence_,
-            min_data_version_of_init_sess_);
-    if (OB_FAIL(ret)) {
-    } else if (!invariant_phase) {
-      int64_t extra_len = 0;
-      if (OB_FAIL(const_cast<ObSQLSessionInfo *>(this)->
-                      calc_remote_extra_sess_state_serialize_size_(extra_len))) {
-        LOG_WARN("get das volatile remote extra session state serialize size failed", K(ret));
-      } else {
-        len += extra_len;
-      }
+  DAS_SESSION_ENCODE_VAR(thread_data_.cur_query_start_time_);            // [VOLATILE] per-query
+  DAS_SESSION_ENCODE_INV(user_priv_set_,
+          db_priv_set_);
+  DAS_SESSION_ENCODE_VAR(trans_type_);                                   // [VOLATILE] tx
+  DAS_SESSION_ENCODE_INV(global_sessid_,
+          inner_flag_,
+          is_max_availability_mode_,
+          session_type_,
+          has_temp_table_flag_,
+          enable_early_lock_release_,
+          enable_role_array_,
+          in_definer_named_proc_,
+          priv_user_id_,
+          xa_end_timeout_seconds_,
+          prelock_,
+          proxy_version_,
+          min_proxy_version_ps_);
+  DAS_SESSION_ENCODE_VAR(thread_data_.is_in_retry_);                     // [VOLATILE] retry status
+  DAS_SESSION_ENCODE_INV(ddl_info_,
+          gtt_session_scope_unique_id_,
+          gtt_trans_scope_unique_id_,
+          gtt_session_scope_ids_,
+          gtt_trans_scope_ids_);
+  DAS_SESSION_ENCODE_VAR(affected_rows_);                                // [VOLATILE] per-query
+  DAS_SESSION_ENCODE_INV(unit_gc_min_sup_proxy_version_,
+          gtt_tablet_info_map_,
+          trans_gtt_v2_sequence_,
+          min_data_version_of_init_sess_);
+  if (OB_SUCC(ret) && !invariant_phase) {
+    if (OB_FAIL(const_cast<ObSQLSessionInfo *>(this)->
+                    serialize_remote_extra_sess_state_(buf, buf_len, pos))) {
+      LOG_WARN("serialize das volatile remote extra session state failed", K(ret));
     }
   }
   return ret;
 }
-#undef DAS_INV
-#undef DAS_VAR
 
-int ObSQLSessionInfo::das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos)
+int ObSQLSessionInfo::das_deserialize_sql_block_payload_(const char *buf,
+                                                         const int64_t data_len,
+                                                         int64_t &pos,
+                                                         const bool invariant_phase)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBasicSessionInfo::das_deserialize_invariant_(buf, data_len, pos))) {
-    LOG_WARN("base das deserialize invariant failed", K(ret));
-  } else {
-    LST_DO_CODE(OB_UNIS_DECODE,
-        user_priv_set_,
-        db_priv_set_,
-        global_sessid_,
-        inner_flag_,
-        is_max_availability_mode_,
-        session_type_,
-        has_temp_table_flag_,
-        enable_early_lock_release_,
-        enable_role_array_,
-        in_definer_named_proc_,
-        priv_user_id_,
-        xa_end_timeout_seconds_,
-        prelock_,
-        proxy_version_,
-        min_proxy_version_ps_,
-        ddl_info_,
-        gtt_session_scope_unique_id_,
-        gtt_trans_scope_unique_id_,
-        gtt_session_scope_ids_,
-        gtt_trans_scope_ids_,
-        unit_gc_min_sup_proxy_version_,
-        gtt_tablet_info_map_,
-        trans_gtt_v2_sequence_,
-        min_data_version_of_init_sess_);
-  }
-  return ret;
-}
-
-int ObSQLSessionInfo::das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBasicSessionInfo::das_deserialize_volatile_(buf, data_len, pos))) {
-    LOG_WARN("base das deserialize volatile failed", K(ret));
-  } else {
-    LST_DO_CODE(OB_UNIS_DECODE,
-        thread_data_.cur_query_start_time_,
-        trans_type_,
-        thread_data_.is_in_retry_,
-        affected_rows_);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(deserialize_remote_extra_sess_state_(buf, data_len, pos))) {
+  DAS_SESSION_DECODE_VAR(thread_data_.cur_query_start_time_);
+  DAS_SESSION_DECODE_INV(user_priv_set_,
+          db_priv_set_);
+  DAS_SESSION_DECODE_VAR(trans_type_);
+  DAS_SESSION_DECODE_INV(global_sessid_,
+          inner_flag_,
+          is_max_availability_mode_,
+          session_type_,
+          has_temp_table_flag_,
+          enable_early_lock_release_,
+          enable_role_array_,
+          in_definer_named_proc_,
+          priv_user_id_,
+          xa_end_timeout_seconds_,
+          prelock_,
+          proxy_version_,
+          min_proxy_version_ps_);
+  DAS_SESSION_DECODE_VAR(thread_data_.is_in_retry_);
+  DAS_SESSION_DECODE_INV(ddl_info_,
+          gtt_session_scope_unique_id_,
+          gtt_trans_scope_unique_id_,
+          gtt_session_scope_ids_,
+          gtt_trans_scope_ids_);
+  DAS_SESSION_DECODE_VAR(affected_rows_);
+  DAS_SESSION_DECODE_INV(unit_gc_min_sup_proxy_version_,
+          gtt_tablet_info_map_,
+          trans_gtt_v2_sequence_,
+          min_data_version_of_init_sess_);
+  if (OB_SUCC(ret) && !invariant_phase) {
+    if (OB_FAIL(deserialize_remote_extra_sess_state_(buf, data_len, pos))) {
       LOG_WARN("deserialize das volatile remote extra session state failed", K(ret));
     } else {
       (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
@@ -2745,54 +3000,101 @@ int ObSQLSessionInfo::das_deserialize_volatile_(const char *buf, const int64_t d
   return ret;
 }
 
-int ObSQLSessionInfo::das_apply_invariant_from(const ObBasicSessionInfo &templ)
+int ObSQLSessionInfo::das_get_sql_block_payload_size_(
+    int64_t &len,
+    const bool invariant_phase) const
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBasicSessionInfo::das_apply_invariant_from(templ))) {
-    LOG_WARN("base das apply invariant failed", K(ret));
-  } else {
-    // templ is always an ObSQLSessionInfo (the cache template is built as one).
-    const ObSQLSessionInfo &s = static_cast<const ObSQLSessionInfo &>(templ);
-    user_priv_set_ = s.user_priv_set_;
-    db_priv_set_ = s.db_priv_set_;
-    global_sessid_ = s.global_sessid_;
-    inner_flag_ = s.inner_flag_;
-    is_max_availability_mode_ = s.is_max_availability_mode_;
-    session_type_ = s.session_type_;
-    has_temp_table_flag_ = s.has_temp_table_flag_;
-    enable_early_lock_release_ = s.enable_early_lock_release_;
-    in_definer_named_proc_ = s.in_definer_named_proc_;
-    priv_user_id_ = s.priv_user_id_;
-    xa_end_timeout_seconds_ = s.xa_end_timeout_seconds_;
-    prelock_ = s.prelock_;
-    proxy_version_ = s.proxy_version_;
-    min_proxy_version_ps_ = s.min_proxy_version_ps_;
-    ddl_info_ = s.ddl_info_;
-    gtt_session_scope_unique_id_ = s.gtt_session_scope_unique_id_;
-    gtt_trans_scope_unique_id_ = s.gtt_trans_scope_unique_id_;
-    unit_gc_min_sup_proxy_version_ = s.unit_gc_min_sup_proxy_version_;
-    trans_gtt_v2_sequence_ = s.trans_gtt_v2_sequence_;
-    min_data_version_of_init_sess_ = s.min_data_version_of_init_sess_;
-    if (OB_FAIL(enable_role_array_.assign(s.enable_role_array_))) {
-      LOG_WARN("fail to assign enable_role_array", K(ret));
-    } else if (OB_FAIL(gtt_session_scope_ids_.assign(s.gtt_session_scope_ids_))) {
-      LOG_WARN("fail to assign gtt_session_scope_ids", K(ret));
-    } else if (OB_FAIL(gtt_trans_scope_ids_.assign(s.gtt_trans_scope_ids_))) {
-      LOG_WARN("fail to assign gtt_trans_scope_ids", K(ret));
+  len = 0;
+  DAS_SESSION_ADD_LEN_VAR(thread_data_.cur_query_start_time_);
+  DAS_SESSION_ADD_LEN_INV(user_priv_set_,
+           db_priv_set_);
+  DAS_SESSION_ADD_LEN_VAR(trans_type_);
+  DAS_SESSION_ADD_LEN_INV(global_sessid_,
+           inner_flag_,
+           is_max_availability_mode_,
+           session_type_,
+           has_temp_table_flag_,
+           enable_early_lock_release_,
+           enable_role_array_,
+           in_definer_named_proc_,
+           priv_user_id_,
+           xa_end_timeout_seconds_,
+           prelock_,
+           proxy_version_,
+           min_proxy_version_ps_);
+  DAS_SESSION_ADD_LEN_VAR(thread_data_.is_in_retry_);
+  DAS_SESSION_ADD_LEN_INV(ddl_info_,
+           gtt_session_scope_unique_id_,
+           gtt_trans_scope_unique_id_,
+           gtt_session_scope_ids_,
+           gtt_trans_scope_ids_);
+  DAS_SESSION_ADD_LEN_VAR(affected_rows_);
+  DAS_SESSION_ADD_LEN_INV(unit_gc_min_sup_proxy_version_,
+           gtt_tablet_info_map_,
+           trans_gtt_v2_sequence_,
+           min_data_version_of_init_sess_);
+  if (OB_SUCC(ret) && !invariant_phase) {
+    int64_t extra_len = 0;
+    if (OB_FAIL(const_cast<ObSQLSessionInfo *>(this)->
+                    calc_remote_extra_sess_state_serialize_size_(extra_len))) {
+      LOG_WARN("get das volatile remote extra session state serialize size failed", K(ret));
     } else {
-      const int64_t ser_size = s.gtt_tablet_info_map_.get_serialize_size();
-      ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_SESSION);
-      char *tmp_buf = static_cast<char *>(tmp_alloc.alloc(ser_size));
-      int64_t ser_pos = 0;
-      int64_t des_pos = 0;
-      if (OB_ISNULL(tmp_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("alloc gtt map round-trip buffer failed", K(ret), K(ser_size));
-      } else if (OB_FAIL(s.gtt_tablet_info_map_.serialize(tmp_buf, ser_size, ser_pos))) {
-        LOG_WARN("serialize template gtt_tablet_info_map failed", K(ret));
-      } else if (OB_FAIL(gtt_tablet_info_map_.deserialize(tmp_buf, ser_pos, des_pos))) {
-        LOG_WARN("deserialize gtt_tablet_info_map failed", K(ret));
-      }
+      len += extra_len;
+    }
+  }
+  return ret;
+}
+
+#undef DAS_SESSION_ENCODE_INV
+#undef DAS_SESSION_ENCODE_VAR
+#undef DAS_SESSION_DECODE_INV
+#undef DAS_SESSION_DECODE_VAR
+#undef DAS_SESSION_ADD_LEN_INV
+#undef DAS_SESSION_ADD_LEN_VAR
+
+int ObSQLSessionInfo::das_apply_sql_invariant_from_(const ObSQLSessionInfo &templ)
+{
+  int ret = OB_SUCCESS;
+  user_priv_set_ = templ.user_priv_set_;
+  db_priv_set_ = templ.db_priv_set_;
+  global_sessid_ = templ.global_sessid_;
+  inner_flag_ = templ.inner_flag_;
+  is_max_availability_mode_ = templ.is_max_availability_mode_;
+  session_type_ = templ.session_type_;
+  has_temp_table_flag_ = templ.has_temp_table_flag_;
+  enable_early_lock_release_ = templ.enable_early_lock_release_;
+  in_definer_named_proc_ = templ.in_definer_named_proc_;
+  priv_user_id_ = templ.priv_user_id_;
+  xa_end_timeout_seconds_ = templ.xa_end_timeout_seconds_;
+  prelock_ = templ.prelock_;
+  proxy_version_ = templ.proxy_version_;
+  min_proxy_version_ps_ = templ.min_proxy_version_ps_;
+  ddl_info_ = templ.ddl_info_;
+  gtt_session_scope_unique_id_ = templ.gtt_session_scope_unique_id_;
+  gtt_trans_scope_unique_id_ = templ.gtt_trans_scope_unique_id_;
+  unit_gc_min_sup_proxy_version_ = templ.unit_gc_min_sup_proxy_version_;
+  trans_gtt_v2_sequence_ = templ.trans_gtt_v2_sequence_;
+  min_data_version_of_init_sess_ = templ.min_data_version_of_init_sess_;
+  if (OB_FAIL(enable_role_array_.assign(templ.enable_role_array_))) {
+    LOG_WARN("fail to assign enable_role_array", K(ret));
+  } else if (OB_FAIL(gtt_session_scope_ids_.assign(templ.gtt_session_scope_ids_))) {
+    LOG_WARN("fail to assign gtt_session_scope_ids", K(ret));
+  } else if (OB_FAIL(gtt_trans_scope_ids_.assign(templ.gtt_trans_scope_ids_))) {
+    LOG_WARN("fail to assign gtt_trans_scope_ids", K(ret));
+  } else {
+    const int64_t ser_size = templ.gtt_tablet_info_map_.get_serialize_size();
+    ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_SESSION);
+    char *tmp_buf = static_cast<char *>(tmp_alloc.alloc(ser_size));
+    int64_t ser_pos = 0;
+    int64_t des_pos = 0;
+    if (OB_ISNULL(tmp_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc gtt map round-trip buffer failed", K(ret), K(ser_size));
+    } else if (OB_FAIL(templ.gtt_tablet_info_map_.serialize(tmp_buf, ser_size, ser_pos))) {
+      LOG_WARN("serialize template gtt_tablet_info_map failed", K(ret));
+    } else if (OB_FAIL(gtt_tablet_info_map_.deserialize(tmp_buf, ser_pos, des_pos))) {
+      LOG_WARN("deserialize gtt_tablet_info_map failed", K(ret));
     }
   }
   if (OB_FAIL(ret)) {

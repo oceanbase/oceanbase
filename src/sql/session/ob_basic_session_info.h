@@ -1667,11 +1667,6 @@ public:
   int64_t get_curr_trans_last_stmt_end_time() const { return curr_trans_last_stmt_end_time_; }
 
   // for DAS deserialize cache
-  int das_serialize_split(char *buf, int64_t buf_len, int64_t &pos) const;
-  int das_serialize_split_size(int64_t &inv_len, int64_t &var_len) const;
-  int das_build_template_invariant_section(const char *buf, const int64_t data_len, int64_t &pos) { return das_deserialize_invariant_(buf, data_len, pos); }
-  int das_apply_invariant_section(const ObBasicSessionInfo &templ) { return das_apply_invariant_from(templ); }
-  int das_decode_volatile_section(const char *buf, const int64_t data_len, int64_t &pos) { return das_deserialize_volatile_(buf, data_len, pos); }
   void das_detach_borrowed_sys_vars();
   bool is_das_borrowed_sys_vars() const { return is_das_borrowed_sys_vars_; }
   int das_deser_cache_begin_pool_request();
@@ -1794,11 +1789,16 @@ public:
 
 protected:
   // for DAS deserialize cache
-  virtual int das_serialize_phase_(char *buf, int64_t buf_len, int64_t &pos, const bool invariant_phase) const;
-  virtual int das_serialize_phase_size_(int64_t &len, const bool invariant_phase) const;
-  virtual int das_deserialize_invariant_(const char *buf, const int64_t data_len, int64_t &pos);
-  virtual int das_deserialize_volatile_(const char *buf, const int64_t data_len, int64_t &pos);
-  virtual int das_apply_invariant_from(const ObBasicSessionInfo &templ);
+  int das_serialize_basic_block_payload_(char *buf,
+                                         int64_t buf_len,
+                                         int64_t &pos,
+                                         const bool invariant_phase) const;
+  int das_deserialize_basic_block_payload_(const char *buf,
+                                           const int64_t data_len,
+                                           int64_t &pos,
+                                           const bool invariant_phase);
+  int das_get_basic_block_payload_size_(int64_t &len, const bool invariant_phase) const;
+  int das_apply_basic_invariant_from_(const ObBasicSessionInfo &templ);
   int das_borrow_sys_vars_from(const ObBasicSessionInfo &templ);
 
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,

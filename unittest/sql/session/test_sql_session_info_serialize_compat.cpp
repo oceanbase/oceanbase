@@ -297,34 +297,394 @@ void init_remote_extra_maps(ObSQLSessionInfo &sess)
 
 struct DasSplitSections
 {
-  DasSplitSections() : inv_(nullptr), inv_len_(0), var_(nullptr), var_len_(0) {}
+  DasSplitSections()
+      : inv_(nullptr),
+        inv_len_(0),
+        inv_basic_(nullptr),
+        inv_basic_len_(0),
+        inv_sql_(nullptr),
+        inv_sql_len_(0),
+        inv_tail_(nullptr),
+        inv_tail_len_(0),
+        var_(nullptr),
+        var_len_(0),
+        var_basic_(nullptr),
+        var_basic_len_(0),
+        var_sql_(nullptr),
+        var_sql_len_(0),
+        var_tail_(nullptr),
+        var_tail_len_(0)
+  {}
   const char *inv_;
   int64_t inv_len_;
+  const char *inv_basic_;
+  int64_t inv_basic_len_;
+  const char *inv_sql_;
+  int64_t inv_sql_len_;
+  const char *inv_tail_;
+  int64_t inv_tail_len_;
   const char *var_;
   int64_t var_len_;
+  const char *var_basic_;
+  int64_t var_basic_len_;
+  const char *var_sql_;
+  int64_t var_sql_len_;
+  const char *var_tail_;
+  int64_t var_tail_len_;
 };
+
+int parse_das_layered_section(const char *section,
+                              const int64_t section_len,
+                              const char *&basic,
+                              int64_t &basic_len,
+                              const char *&sql,
+                              int64_t &sql_len,
+                              const char *&tail,
+                              int64_t &tail_len)
+{
+  int ret = OB_SUCCESS;
+  const int64_t fixed_len = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  int64_t pos = 0;
+  basic = nullptr;
+  basic_len = 0;
+  sql = nullptr;
+  sql_len = 0;
+  tail = nullptr;
+  tail_len = 0;
+  if (OB_ISNULL(section) || section_len < 2 * fixed_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    const int64_t basic_len_begin = pos;
+    if (OB_FAIL(serialization::decode_vi64(section, section_len, pos, &basic_len))) {
+    } else if (OB_UNLIKELY(fixed_len != pos - basic_len_begin
+                           || basic_len < 0
+                           || pos > section_len
+                           || basic_len > section_len - pos)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      basic = section + pos;
+      pos += basic_len;
+      const int64_t sql_len_begin = pos;
+      if (OB_UNLIKELY(pos >= section_len)) {
+        ret = OB_DESERIALIZE_ERROR;
+      } else if (OB_FAIL(serialization::decode_vi64(section, section_len, pos, &sql_len))) {
+      } else if (OB_UNLIKELY(fixed_len != pos - sql_len_begin
+                             || sql_len < 0
+                             || pos > section_len
+                             || sql_len > section_len - pos)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        sql = section + pos;
+        pos += sql_len;
+        tail = section + pos;
+        tail_len = section_len - pos;
+      }
+    }
+  }
+  return ret;
+}
 
 int parse_das_split_sections(const char *buf, const int64_t data_len, DasSplitSections &sections)
 {
   int ret = OB_SUCCESS;
+  const int64_t fixed_len = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
   int64_t pos = 0;
   int64_t inv_len = 0;
   int64_t var_len = 0;
-  if (OB_ISNULL(buf) || data_len < 2 * serialization::OB_SERIALIZE_SIZE_NEED_BYTES) {
+  if (OB_ISNULL(buf) || data_len < 2 * fixed_len) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &inv_len))) {
-  } else if (OB_UNLIKELY(inv_len < 0 || pos + inv_len > data_len)) {
-    ret = OB_ERR_UNEXPECTED;
+  } else {
+    const int64_t inv_len_begin = pos;
+    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &inv_len))) {
+    } else if (OB_UNLIKELY(fixed_len != pos - inv_len_begin
+                           || inv_len < 0
+                           || pos > data_len
+                           || inv_len > data_len - pos)) {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else {
     sections.inv_ = buf + pos;
     sections.inv_len_ = inv_len;
     pos += inv_len;
-    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &var_len))) {
-    } else if (OB_UNLIKELY(var_len < 0 || pos + var_len != data_len)) {
+    const int64_t var_len_begin = pos;
+    if (OB_UNLIKELY(pos >= data_len)) {
+      ret = OB_DESERIALIZE_ERROR;
+    } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &var_len))) {
+    } else if (OB_UNLIKELY(fixed_len != pos - var_len_begin
+                           || var_len < 0
+                           || pos > data_len
+                           || var_len != data_len - pos)) {
       ret = OB_ERR_UNEXPECTED;
     } else {
       sections.var_ = buf + pos;
       sections.var_len_ = var_len;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(parse_das_layered_section(sections.inv_,
+                                               sections.inv_len_,
+                                               sections.inv_basic_,
+                                               sections.inv_basic_len_,
+                                               sections.inv_sql_,
+                                               sections.inv_sql_len_,
+                                               sections.inv_tail_,
+                                               sections.inv_tail_len_))) {
+  } else if (OB_FAIL(parse_das_layered_section(sections.var_,
+                                               sections.var_len_,
+                                               sections.var_basic_,
+                                               sections.var_basic_len_,
+                                               sections.var_sql_,
+                                               sections.var_sql_len_,
+                                               sections.var_tail_,
+                                               sections.var_tail_len_))) {
+  }
+  return ret;
+}
+
+
+int append_das_split_unknown_tails(const char *src,
+                                   const int64_t src_len,
+                                   const char *inv_tail,
+                                   const int64_t inv_tail_len,
+                                   const char *var_tail,
+                                   const int64_t var_tail_len,
+                                   char *dst,
+                                   const int64_t dst_len,
+                                   int64_t &dst_pos)
+{
+  int ret = OB_SUCCESS;
+  DasSplitSections sections;
+  const int64_t len_bytes = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  dst_pos = 0;
+  if (OB_ISNULL(src) || OB_ISNULL(dst)
+      || inv_tail_len < 0 || var_tail_len < 0
+      || (inv_tail_len > 0 && OB_ISNULL(inv_tail))
+      || (var_tail_len > 0 && OB_ISNULL(var_tail))) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(parse_das_split_sections(src, src_len, sections))) {
+  } else {
+    const int64_t max_fixed_value = static_cast<int64_t>(serialization::OB_MAX_V5B);
+    if (OB_UNLIKELY(inv_tail_len > max_fixed_value - sections.inv_len_
+                    || var_tail_len > max_fixed_value - sections.var_len_)) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      const int64_t new_inv_len = sections.inv_len_ + inv_tail_len;
+      const int64_t new_var_len = sections.var_len_ + var_tail_len;
+      const int64_t required_len = 2 * len_bytes + new_inv_len + new_var_len;
+      if (OB_UNLIKELY(dst_len < 0 || required_len > dst_len)) {
+        ret = OB_SIZE_OVERFLOW;
+      }
+      int64_t tmp_pos = 0;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+              dst + dst_pos, len_bytes, tmp_pos, new_inv_len))) {
+      } else {
+        dst_pos += len_bytes;
+        MEMCPY(dst + dst_pos, sections.inv_, sections.inv_len_);
+        dst_pos += sections.inv_len_;
+        if (inv_tail_len > 0) {
+          MEMCPY(dst + dst_pos, inv_tail, inv_tail_len);
+          dst_pos += inv_tail_len;
+        }
+        tmp_pos = 0;
+        if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+                dst + dst_pos, len_bytes, tmp_pos, new_var_len))) {
+        } else {
+          dst_pos += len_bytes;
+          MEMCPY(dst + dst_pos, sections.var_, sections.var_len_);
+          dst_pos += sections.var_len_;
+          if (var_tail_len > 0) {
+            MEMCPY(dst + dst_pos, var_tail, var_tail_len);
+            dst_pos += var_tail_len;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+struct DasBlockExtensions
+{
+  DasBlockExtensions()
+      : inv_basic_(nullptr),
+        inv_basic_len_(0),
+        inv_sql_(nullptr),
+        inv_sql_len_(0),
+        var_basic_(nullptr),
+        var_basic_len_(0),
+        var_sql_(nullptr),
+        var_sql_len_(0)
+  {}
+  const char *inv_basic_;
+  int64_t inv_basic_len_;
+  const char *inv_sql_;
+  int64_t inv_sql_len_;
+  const char *var_basic_;
+  int64_t var_basic_len_;
+  const char *var_sql_;
+  int64_t var_sql_len_;
+};
+
+int append_das_test_length_prefix(char *dst,
+                                  const int64_t dst_len,
+                                  int64_t &dst_pos,
+                                  const int64_t value)
+{
+  int ret = OB_SUCCESS;
+  const int64_t fixed_len = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  if (OB_ISNULL(dst)
+      || dst_len < 0
+      || dst_pos < 0
+      || dst_pos > dst_len
+      || fixed_len > dst_len - dst_pos
+      || value < 0
+      || value > static_cast<int64_t>(serialization::OB_MAX_V5B)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    int64_t tmp_pos = 0;
+    if (OB_FAIL(serialization::encode_fixed_bytes_i64(
+            dst + dst_pos, fixed_len, tmp_pos, value))) {
+    } else if (fixed_len != tmp_pos) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      dst_pos += fixed_len;
+    }
+  }
+  return ret;
+}
+
+int append_das_test_bytes(char *dst,
+                          const int64_t dst_len,
+                          int64_t &dst_pos,
+                          const char *src,
+                          const int64_t src_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dst)
+      || src_len < 0
+      || (src_len > 0 && OB_ISNULL(src))
+      || dst_pos < 0
+      || dst_pos > dst_len
+      || src_len > dst_len - dst_pos) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (src_len > 0) {
+    MEMCPY(dst + dst_pos, src, src_len);
+    dst_pos += src_len;
+  }
+  return ret;
+}
+
+int append_das_phase_block_extensions(const char *basic,
+                                      const int64_t basic_len,
+                                      const char *sql,
+                                      const int64_t sql_len,
+                                      const char *section_tail,
+                                      const int64_t section_tail_len,
+                                      const char *basic_extension,
+                                      const int64_t basic_extension_len,
+                                      const char *sql_extension,
+                                      const int64_t sql_extension_len,
+                                      char *dst,
+                                      const int64_t dst_len,
+                                      int64_t &dst_pos)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_fixed_value = static_cast<int64_t>(serialization::OB_MAX_V5B);
+  if (basic_len < 0
+      || sql_len < 0
+      || section_tail_len < 0
+      || basic_extension_len < 0
+      || sql_extension_len < 0
+      || basic_extension_len > max_fixed_value - basic_len
+      || sql_extension_len > max_fixed_value - sql_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(append_das_test_length_prefix(
+                 dst, dst_len, dst_pos, basic_len + basic_extension_len))) {
+  } else if (OB_FAIL(append_das_test_bytes(dst, dst_len, dst_pos, basic, basic_len))) {
+  } else if (OB_FAIL(append_das_test_bytes(
+                 dst, dst_len, dst_pos, basic_extension, basic_extension_len))) {
+  } else if (OB_FAIL(append_das_test_length_prefix(
+                 dst, dst_len, dst_pos, sql_len + sql_extension_len))) {
+  } else if (OB_FAIL(append_das_test_bytes(dst, dst_len, dst_pos, sql, sql_len))) {
+  } else if (OB_FAIL(append_das_test_bytes(
+                 dst, dst_len, dst_pos, sql_extension, sql_extension_len))) {
+  } else if (OB_FAIL(append_das_test_bytes(
+                 dst, dst_len, dst_pos, section_tail, section_tail_len))) {
+  }
+  return ret;
+}
+
+int append_das_split_block_extensions(const char *src,
+                                      const int64_t src_len,
+                                      const DasBlockExtensions &extensions,
+                                      char *dst,
+                                      const int64_t dst_len,
+                                      int64_t &dst_pos)
+{
+  int ret = OB_SUCCESS;
+  DasSplitSections sections;
+  dst_pos = 0;
+  if (OB_ISNULL(src)
+      || OB_ISNULL(dst)
+      || extensions.inv_basic_len_ < 0
+      || extensions.inv_sql_len_ < 0
+      || extensions.var_basic_len_ < 0
+      || extensions.var_sql_len_ < 0
+      || (extensions.inv_basic_len_ > 0 && OB_ISNULL(extensions.inv_basic_))
+      || (extensions.inv_sql_len_ > 0 && OB_ISNULL(extensions.inv_sql_))
+      || (extensions.var_basic_len_ > 0 && OB_ISNULL(extensions.var_basic_))
+      || (extensions.var_sql_len_ > 0 && OB_ISNULL(extensions.var_sql_))) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(parse_das_split_sections(src, src_len, sections))) {
+  } else {
+    const int64_t max_fixed_value = static_cast<int64_t>(serialization::OB_MAX_V5B);
+    if (extensions.inv_basic_len_ > max_fixed_value - extensions.inv_sql_len_
+        || extensions.var_basic_len_ > max_fixed_value - extensions.var_sql_len_) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      const int64_t inv_extension_len = extensions.inv_basic_len_ + extensions.inv_sql_len_;
+      const int64_t var_extension_len = extensions.var_basic_len_ + extensions.var_sql_len_;
+      if (inv_extension_len > max_fixed_value - sections.inv_len_
+          || var_extension_len > max_fixed_value - sections.var_len_) {
+        ret = OB_SIZE_OVERFLOW;
+      }
+      const int64_t new_inv_len = sections.inv_len_ + inv_extension_len;
+      const int64_t new_var_len = sections.var_len_ + var_extension_len;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(append_das_test_length_prefix(dst, dst_len, dst_pos, new_inv_len))) {
+      } else if (OB_FAIL(append_das_phase_block_extensions(
+                     sections.inv_basic_,
+                     sections.inv_basic_len_,
+                     sections.inv_sql_,
+                     sections.inv_sql_len_,
+                     sections.inv_tail_,
+                     sections.inv_tail_len_,
+                     extensions.inv_basic_,
+                     extensions.inv_basic_len_,
+                     extensions.inv_sql_,
+                     extensions.inv_sql_len_,
+                     dst,
+                     dst_len,
+                     dst_pos))) {
+      } else if (OB_FAIL(append_das_test_length_prefix(dst, dst_len, dst_pos, new_var_len))) {
+      } else if (OB_FAIL(append_das_phase_block_extensions(
+                     sections.var_basic_,
+                     sections.var_basic_len_,
+                     sections.var_sql_,
+                     sections.var_sql_len_,
+                     sections.var_tail_,
+                     sections.var_tail_len_,
+                     extensions.var_basic_,
+                     extensions.var_basic_len_,
+                     extensions.var_sql_,
+                     extensions.var_sql_len_,
+                     dst,
+                     dst_len,
+                     dst_pos))) {
+      }
     }
   }
   return ret;
@@ -662,6 +1022,486 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
   sess_ref.cached_tenant_config_info_.session_ = nullptr;
   sess_templ.cached_tenant_config_info_.session_ = nullptr;
   sess_app.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_ignore_unknown_section_tails)
+{
+  common::ObArenaAllocator src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &src_allocator));
+  init_set(sess_src);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(sess_src);
+  sess_src.thread_data_.cur_query_start_time_ = 1234567890;
+  sess_src.set_cur_sql_id(const_cast<char *>("0123456789abcdef0123456789abcdef"));
+
+  char *split_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *future_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(OB_NOT_NULL(split_buf) && OB_NOT_NULL(future_buf));
+  int64_t split_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_buf, BUF_SIZE, split_len));
+
+  const char inv_tail[] = {static_cast<char>(0x80), 'I', 'N', 'V', 0, static_cast<char>(0xff)};
+  const char var_tail[] = {static_cast<char>(0x81), 'V', 'A', 'R', 0, static_cast<char>(0xfe), 1};
+  int64_t future_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            append_das_split_unknown_tails(split_buf,
+                                           split_len,
+                                           inv_tail,
+                                           sizeof(inv_tail),
+                                           var_tail,
+                                           sizeof(var_tail),
+                                           future_buf,
+                                           BUF_SIZE,
+                                           future_len));
+
+  DasSplitSections current_sections;
+  DasSplitSections future_sections;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(split_buf, split_len, current_sections));
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(future_buf, future_len, future_sections));
+  ASSERT_EQ(0, current_sections.inv_tail_len_);
+  ASSERT_EQ(0, current_sections.var_tail_len_);
+  ASSERT_EQ(sizeof(inv_tail), future_sections.inv_tail_len_);
+  ASSERT_EQ(sizeof(var_tail), future_sections.var_tail_len_);
+  ASSERT_EQ(0, MEMCMP(inv_tail, future_sections.inv_tail_, sizeof(inv_tail)));
+  ASSERT_EQ(0, MEMCMP(var_tail, future_sections.var_tail_, sizeof(var_tail)));
+  ASSERT_EQ(current_sections.inv_basic_len_, future_sections.inv_basic_len_);
+  ASSERT_EQ(current_sections.inv_sql_len_, future_sections.inv_sql_len_);
+  ASSERT_EQ(current_sections.var_basic_len_, future_sections.var_basic_len_);
+  ASSERT_EQ(current_sections.var_sql_len_, future_sections.var_sql_len_);
+
+  ObSQLSessionInfo strict_templ(500);
+  init_set(strict_templ);
+  strict_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t strict_inv_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            strict_templ.das_build_template_invariant_section(
+                current_sections.inv_, current_sections.inv_len_, strict_inv_pos));
+  ASSERT_EQ(current_sections.inv_len_, strict_inv_pos);
+
+  common::ObArenaAllocator strict_working_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo strict_working(500);
+  ASSERT_EQ(OB_SUCCESS, strict_working.test_init(0, 0, 0, &strict_working_allocator));
+  strict_working.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, strict_working.das_apply_invariant_section(strict_templ));
+  int64_t strict_var_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            strict_working.das_decode_volatile_section(
+                current_sections.var_, current_sections.var_len_, strict_var_pos));
+  ASSERT_EQ(current_sections.var_len_, strict_var_pos);
+
+  ObSQLSessionInfo compat_templ(500);
+  init_set(compat_templ);
+  compat_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t compat_inv_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            compat_templ.das_build_template_invariant_section(
+                future_sections.inv_, future_sections.inv_len_, compat_inv_pos));
+  ASSERT_EQ(future_sections.inv_len_, compat_inv_pos);
+
+  common::ObArenaAllocator compat_working_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo compat_working(500);
+  ASSERT_EQ(OB_SUCCESS, compat_working.test_init(0, 0, 0, &compat_working_allocator));
+  compat_working.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, compat_working.das_apply_invariant_section(compat_templ));
+  int64_t compat_var_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            compat_working.das_decode_volatile_section(
+                future_sections.var_, future_sections.var_len_, compat_var_pos));
+  ASSERT_EQ(future_sections.var_len_, compat_var_pos);
+
+  ASSERT_EQ(strict_working.user_priv_set_, compat_working.user_priv_set_);
+  ASSERT_EQ(strict_working.db_priv_set_, compat_working.db_priv_set_);
+  ASSERT_EQ(strict_working.global_sessid_, compat_working.global_sessid_);
+  ASSERT_EQ(strict_working.thread_data_.cur_query_start_time_,
+            compat_working.thread_data_.cur_query_start_time_);
+  ASSERT_EQ(strict_working.get_cur_sql_id(), compat_working.get_cur_sql_id());
+
+  strict_working.das_detach_borrowed_sys_vars();
+  compat_working.das_detach_borrowed_sys_vars();
+  ob_free(split_buf);
+  ob_free(future_buf);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  strict_templ.cached_tenant_config_info_.session_ = nullptr;
+  strict_working.cached_tenant_config_info_.session_ = nullptr;
+  compat_templ.cached_tenant_config_info_.session_ = nullptr;
+  compat_working.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_basic_extension_independent_evolution)
+{
+  common::ObArenaAllocator current_src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo current_src(500);
+  ASSERT_EQ(OB_SUCCESS, current_src.test_init(0, 0, 0, &current_src_allocator));
+  init_set(current_src);
+  current_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(current_src);
+  current_src.thread_data_.cur_query_start_time_ = 2233445566;
+  current_src.set_cur_sql_id(const_cast<char *>("fedcba9876543210fedcba9876543210"));
+
+  char *future_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *current_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(OB_NOT_NULL(future_buf) && OB_NOT_NULL(current_buf));
+  int64_t current_len = 0;
+  ASSERT_EQ(OB_SUCCESS, current_src.das_serialize_split(current_buf, BUF_SIZE, current_len));
+
+  const int64_t future_inv = 0x123456789;
+  const int64_t future_var = 0x23456789A;
+  char future_inv_buf[16];
+  char future_var_buf[16];
+  int64_t future_inv_len = 0;
+  int64_t future_var_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(
+                future_inv_buf, sizeof(future_inv_buf), future_inv_len, future_inv));
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(
+                future_var_buf, sizeof(future_var_buf), future_var_len, future_var));
+  DasBlockExtensions extensions;
+  extensions.inv_basic_ = future_inv_buf;
+  extensions.inv_basic_len_ = future_inv_len;
+  extensions.var_basic_ = future_var_buf;
+  extensions.var_basic_len_ = future_var_len;
+  int64_t future_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            append_das_split_block_extensions(
+                current_buf, current_len, extensions, future_buf, BUF_SIZE, future_len));
+  ASSERT_EQ(current_len + future_inv_len + future_var_len, future_len);
+
+  DasSplitSections future_sections;
+  DasSplitSections current_sections;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(future_buf, future_len, future_sections));
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(current_buf, current_len, current_sections));
+  ASSERT_EQ(0, future_sections.inv_tail_len_);
+  ASSERT_EQ(0, future_sections.var_tail_len_);
+  ASSERT_EQ(current_sections.inv_basic_len_ + future_inv_len,
+            future_sections.inv_basic_len_);
+  ASSERT_EQ(current_sections.var_basic_len_ + future_var_len,
+            future_sections.var_basic_len_);
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.inv_basic_,
+                   future_sections.inv_basic_,
+                   current_sections.inv_basic_len_));
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.var_basic_,
+                   future_sections.var_basic_,
+                   current_sections.var_basic_len_));
+  ASSERT_EQ(0,
+            MEMCMP(future_inv_buf,
+                   future_sections.inv_basic_ + current_sections.inv_basic_len_,
+                   future_inv_len));
+  ASSERT_EQ(0,
+            MEMCMP(future_var_buf,
+                   future_sections.var_basic_ + current_sections.var_basic_len_,
+                   future_var_len));
+  ASSERT_EQ(current_sections.inv_sql_len_, future_sections.inv_sql_len_);
+  ASSERT_EQ(current_sections.var_sql_len_, future_sections.var_sql_len_);
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.inv_sql_,
+                   future_sections.inv_sql_,
+                   current_sections.inv_sql_len_));
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.var_sql_,
+                   future_sections.var_sql_,
+                   current_sections.var_sql_len_));
+
+  ObSQLSessionInfo current_templ(500);
+  init_set(current_templ);
+  current_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t current_inv_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            current_templ.das_build_template_invariant_section(
+                future_sections.inv_, future_sections.inv_len_, current_inv_pos));
+  ASSERT_EQ(future_sections.inv_len_, current_inv_pos);
+  common::ObArenaAllocator current_working_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo current_working(500);
+  ASSERT_EQ(OB_SUCCESS, current_working.test_init(0, 0, 0, &current_working_allocator));
+  current_working.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, current_working.das_apply_invariant_section(current_templ));
+  int64_t current_var_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            current_working.das_decode_volatile_section(
+                future_sections.var_, future_sections.var_len_, current_var_pos));
+  ASSERT_EQ(future_sections.var_len_, current_var_pos);
+  ASSERT_EQ(current_src.user_priv_set_, current_working.user_priv_set_);
+  ASSERT_EQ(current_src.global_sessid_, current_working.global_sessid_);
+  ASSERT_EQ(current_src.get_cur_sql_id(), current_working.get_cur_sql_id());
+
+  current_working.das_detach_borrowed_sys_vars();
+  ob_free(future_buf);
+  ob_free(current_buf);
+  current_src.cached_tenant_config_info_.session_ = nullptr;
+  current_templ.cached_tenant_config_info_.session_ = nullptr;
+  current_working.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_basic_and_sql_extension_evolution)
+{
+  common::ObArenaAllocator current_src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo current_src(500);
+  ASSERT_EQ(OB_SUCCESS, current_src.test_init(0, 0, 0, &current_src_allocator));
+  init_set(current_src);
+  current_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(current_src);
+  current_src.thread_data_.cur_query_start_time_ = 9988776655;
+  current_src.set_cur_sql_id(const_cast<char *>("00112233445566778899aabbccddeeff"));
+  ASSERT_EQ(OB_SUCCESS, current_src.enable_role_array_.push_back(1001));
+  ASSERT_EQ(OB_SUCCESS, current_src.enable_role_array_.push_back(1002));
+
+  char *future_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *current_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(OB_NOT_NULL(future_buf) && OB_NOT_NULL(current_buf));
+  int64_t current_len = 0;
+  ASSERT_EQ(OB_SUCCESS, current_src.das_serialize_split(current_buf, BUF_SIZE, current_len));
+
+  const int64_t future_basic_inv = 1111;
+  const int64_t future_basic_var = 2222;
+  const int64_t future_sql_inv = 3333;
+  const int64_t future_sql_var = 4444;
+  char future_basic_inv_buf[16];
+  char future_basic_var_buf[16];
+  char future_sql_inv_buf[16];
+  char future_sql_var_buf[16];
+  int64_t future_basic_inv_len = 0;
+  int64_t future_basic_var_len = 0;
+  int64_t future_sql_inv_len = 0;
+  int64_t future_sql_var_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(future_basic_inv_buf,
+                                       sizeof(future_basic_inv_buf),
+                                       future_basic_inv_len,
+                                       future_basic_inv));
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(future_basic_var_buf,
+                                       sizeof(future_basic_var_buf),
+                                       future_basic_var_len,
+                                       future_basic_var));
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(future_sql_inv_buf,
+                                       sizeof(future_sql_inv_buf),
+                                       future_sql_inv_len,
+                                       future_sql_inv));
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(future_sql_var_buf,
+                                       sizeof(future_sql_var_buf),
+                                       future_sql_var_len,
+                                       future_sql_var));
+  DasBlockExtensions extensions;
+  extensions.inv_basic_ = future_basic_inv_buf;
+  extensions.inv_basic_len_ = future_basic_inv_len;
+  extensions.var_basic_ = future_basic_var_buf;
+  extensions.var_basic_len_ = future_basic_var_len;
+  extensions.inv_sql_ = future_sql_inv_buf;
+  extensions.inv_sql_len_ = future_sql_inv_len;
+  extensions.var_sql_ = future_sql_var_buf;
+  extensions.var_sql_len_ = future_sql_var_len;
+  int64_t future_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            append_das_split_block_extensions(
+                current_buf, current_len, extensions, future_buf, BUF_SIZE, future_len));
+  ASSERT_EQ(current_len
+                + future_basic_inv_len
+                + future_basic_var_len
+                + future_sql_inv_len
+                + future_sql_var_len,
+            future_len);
+
+  DasSplitSections future_sections;
+  DasSplitSections current_sections;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(future_buf, future_len, future_sections));
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(current_buf, current_len, current_sections));
+  ASSERT_EQ(current_sections.inv_basic_len_ + future_basic_inv_len,
+            future_sections.inv_basic_len_);
+  ASSERT_EQ(current_sections.var_basic_len_ + future_basic_var_len,
+            future_sections.var_basic_len_);
+  ASSERT_EQ(current_sections.inv_sql_len_ + future_sql_inv_len,
+            future_sections.inv_sql_len_);
+  ASSERT_EQ(current_sections.var_sql_len_ + future_sql_var_len,
+            future_sections.var_sql_len_);
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.inv_basic_,
+                   future_sections.inv_basic_,
+                   current_sections.inv_basic_len_));
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.var_basic_,
+                   future_sections.var_basic_,
+                   current_sections.var_basic_len_));
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.inv_sql_,
+                   future_sections.inv_sql_,
+                   current_sections.inv_sql_len_));
+  ASSERT_EQ(0,
+            MEMCMP(current_sections.var_sql_,
+                   future_sections.var_sql_,
+                   current_sections.var_sql_len_));
+  ASSERT_EQ(0,
+            MEMCMP(future_basic_inv_buf,
+                   future_sections.inv_basic_ + current_sections.inv_basic_len_,
+                   future_basic_inv_len));
+  ASSERT_EQ(0,
+            MEMCMP(future_basic_var_buf,
+                   future_sections.var_basic_ + current_sections.var_basic_len_,
+                   future_basic_var_len));
+  ASSERT_EQ(0,
+            MEMCMP(future_sql_inv_buf,
+                   future_sections.inv_sql_ + current_sections.inv_sql_len_,
+                   future_sql_inv_len));
+  ASSERT_EQ(0,
+            MEMCMP(future_sql_var_buf,
+                   future_sections.var_sql_ + current_sections.var_sql_len_,
+                   future_sql_var_len));
+
+  ObSQLSessionInfo current_templ(500);
+  init_set(current_templ);
+  current_templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t current_inv_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            current_templ.das_build_template_invariant_section(
+                future_sections.inv_, future_sections.inv_len_, current_inv_pos));
+  ASSERT_EQ(future_sections.inv_len_, current_inv_pos);
+  common::ObArenaAllocator current_working_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo current_working(500);
+  ASSERT_EQ(OB_SUCCESS, current_working.test_init(0, 0, 0, &current_working_allocator));
+  current_working.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, current_working.das_apply_invariant_section(current_templ));
+  int64_t current_var_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            current_working.das_decode_volatile_section(
+                future_sections.var_, future_sections.var_len_, current_var_pos));
+  ASSERT_EQ(future_sections.var_len_, current_var_pos);
+  ASSERT_EQ(current_src.user_priv_set_, current_working.user_priv_set_);
+  ASSERT_EQ(current_src.enable_role_array_.count(), current_working.enable_role_array_.count());
+  for (int64_t i = 0; i < current_src.enable_role_array_.count(); ++i) {
+    EXPECT_EQ(current_src.enable_role_array_.at(i), current_working.enable_role_array_.at(i));
+  }
+  ASSERT_EQ(current_src.get_cur_sql_id(), current_working.get_cur_sql_id());
+  ASSERT_EQ(current_src.thread_data_.cur_query_start_time_,
+            current_working.thread_data_.cur_query_start_time_);
+
+  current_working.das_detach_borrowed_sys_vars();
+  ob_free(future_buf);
+  ob_free(current_buf);
+  current_src.cached_tenant_config_info_.session_ = nullptr;
+  current_templ.cached_tenant_config_info_.session_ = nullptr;
+  current_working.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_layered_block_accepts_vi64_length_prefixes)
+{
+  common::ObArenaAllocator src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &src_allocator));
+  init_set(sess_src);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(sess_src);
+
+  char *split_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  char *compat_inv = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(OB_NOT_NULL(split_buf) && OB_NOT_NULL(compat_inv));
+  int64_t split_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_buf, BUF_SIZE, split_len));
+  DasSplitSections sections;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(split_buf, split_len, sections));
+
+  int64_t compat_inv_len = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(
+                compat_inv, BUF_SIZE, compat_inv_len, sections.inv_basic_len_));
+  ASSERT_EQ(OB_SUCCESS,
+            append_das_test_bytes(compat_inv,
+                                  BUF_SIZE,
+                                  compat_inv_len,
+                                  sections.inv_basic_,
+                                  sections.inv_basic_len_));
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_vi64(
+                compat_inv, BUF_SIZE, compat_inv_len, sections.inv_sql_len_));
+  ASSERT_EQ(OB_SUCCESS,
+            append_das_test_bytes(compat_inv,
+                                  BUF_SIZE,
+                                  compat_inv_len,
+                                  sections.inv_sql_,
+                                  sections.inv_sql_len_));
+  ASSERT_EQ(OB_SUCCESS,
+            append_das_test_bytes(compat_inv,
+                                  BUF_SIZE,
+                                  compat_inv_len,
+                                  sections.inv_tail_,
+                                  sections.inv_tail_len_));
+  ASSERT_LT(compat_inv_len, sections.inv_len_);
+
+  ObSQLSessionInfo templ(500);
+  init_set(templ);
+  templ.cached_tenant_config_info_.session_ = nullptr;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            templ.das_build_template_invariant_section(compat_inv, compat_inv_len, pos));
+  ASSERT_EQ(compat_inv_len, pos);
+  ASSERT_EQ(sess_src.user_priv_set_, templ.user_priv_set_);
+  ASSERT_EQ(sess_src.global_sessid_, templ.global_sessid_);
+
+  ob_free(split_buf);
+  ob_free(compat_inv);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  templ.cached_tenant_config_info_.session_ = nullptr;
+}
+
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_layered_block_malformed_lengths)
+{
+  common::ObArenaAllocator src_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_EQ(OB_SUCCESS, sess_src.test_init(0, 0, 0, &src_allocator));
+  init_set(sess_src);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  fill_session_info(sess_src);
+
+  char *split_buf = static_cast<char *>(ob_malloc(BUF_SIZE, "test"));
+  ASSERT_TRUE(OB_NOT_NULL(split_buf));
+  int64_t split_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_buf, BUF_SIZE, split_len));
+  DasSplitSections sections;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(split_buf, split_len, sections));
+  const int64_t fixed_len = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  char *mutable_inv = const_cast<char *>(sections.inv_);
+  char saved_basic_len[serialization::OB_SERIALIZE_SIZE_NEED_BYTES];
+  MEMCPY(saved_basic_len, mutable_inv, fixed_len);
+
+  auto decode_inv = [](const char *buf, int64_t data_len) {
+    ObSQLSessionInfo templ(500);
+    init_set(templ);
+    templ.cached_tenant_config_info_.session_ = nullptr;
+    int64_t pos = 0;
+    const int ret = templ.das_build_template_invariant_section(buf, data_len, pos);
+    templ.cached_tenant_config_info_.session_ = nullptr;
+    return ret;
+  };
+
+  EXPECT_EQ(OB_DESERIALIZE_ERROR, decode_inv(sections.inv_, 0));
+  EXPECT_EQ(OB_DESERIALIZE_ERROR, decode_inv(sections.inv_, fixed_len - 1));
+
+  int64_t tmp_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_fixed_bytes_i64(
+                mutable_inv, fixed_len, tmp_pos, sections.inv_len_));
+  EXPECT_EQ(OB_DESERIALIZE_ERROR, decode_inv(sections.inv_, sections.inv_len_));
+  MEMCPY(mutable_inv, saved_basic_len, fixed_len);
+
+  const int64_t sql_len_pos = fixed_len + sections.inv_basic_len_;
+  ASSERT_LE(sql_len_pos + fixed_len, sections.inv_len_);
+  char saved_sql_len[serialization::OB_SERIALIZE_SIZE_NEED_BYTES];
+  MEMCPY(saved_sql_len, mutable_inv + sql_len_pos, fixed_len);
+  tmp_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            serialization::encode_fixed_bytes_i64(
+                mutable_inv + sql_len_pos, fixed_len, tmp_pos, sections.inv_len_));
+  EXPECT_EQ(OB_DESERIALIZE_ERROR, decode_inv(sections.inv_, sections.inv_len_));
+  MEMCPY(mutable_inv + sql_len_pos, saved_sql_len, fixed_len);
+
+  EXPECT_EQ(OB_DESERIALIZE_ERROR,
+            decode_inv(sections.inv_, sql_len_pos));
+
+  ob_free(split_buf);
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
 }
 
 TEST_F(TestSQLSessionInfoSerializeCompat, test_das_user_var_in_volatile)

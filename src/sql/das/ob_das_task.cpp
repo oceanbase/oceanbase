@@ -241,7 +241,11 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
     OB_UNIS_DECODE(tenant_id);
     if (use_deser_cache_format_) {
       OB_UNIS_DECODE(sess_blob_len);
-      if (OB_SUCC(ret) && OB_UNLIKELY(sess_blob_len < 0 || pos + sess_blob_len > data_len)) {
+      if (OB_SUCC(ret)
+          && OB_UNLIKELY(sess_blob_len < 0
+                         || pos < 0
+                         || pos > data_len
+                         || sess_blob_len > data_len - pos)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid session blob length prefix", K(ret), K(sess_blob_len), K(pos), K(data_len));
       }
@@ -893,15 +897,38 @@ int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
   remote_info.cleanup_deser_cache_session();
   ObSQLSessionInfo *my_session = nullptr;
   int64_t inv_len = 0;
+  int64_t sess_blob_end = 0;
 
-  if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &inv_len))) {
+  if (OB_UNLIKELY(OB_ISNULL(buf)
+                  || data_len < 0
+                  || sess_blob_begin < 0
+                  || sess_blob_begin > data_len
+                  || sess_blob_len < 0
+                  || sess_blob_len > data_len - sess_blob_begin
+                  || pos != sess_blob_begin)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid DAS session blob decode argument",
+             K(ret), KP(buf), K(data_len), K(pos), K(sess_blob_begin), K(sess_blob_len));
+  } else {
+    sess_blob_end = sess_blob_begin + sess_blob_len;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(pos >= sess_blob_end)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invariant section length prefix is missing",
+             K(ret), K(pos), K(sess_blob_begin), K(sess_blob_len), K(sess_blob_end));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, sess_blob_end, pos, &inv_len))) {
     LOG_WARN("decode inv section len failed", K(ret), K(pos), K(data_len));
   } else if (OB_UNLIKELY(inv_len < 0
-                         || pos + inv_len > data_len
-                         || pos + inv_len > sess_blob_begin + sess_blob_len)) {
+                         || inv_len > INT32_MAX
+                         || pos < 0
+                         || pos > sess_blob_end
+                         || inv_len > sess_blob_end - pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid inv section len",
-             K(ret), K(inv_len), K(pos), K(data_len), K(sess_blob_begin), K(sess_blob_len));
+             K(ret), K(inv_len), K(pos), K(data_len), K(sess_blob_begin),
+             K(sess_blob_len), K(sess_blob_end));
   }
   const int64_t inv_begin = pos;
   ObPlanCache *lib_cache = MTL(ObPlanCache *);
@@ -955,9 +982,6 @@ int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
           int64_t tpos = 0;
           if (OB_FAIL(templ->das_build_template_invariant_section(buf + inv_begin, inv_len, tpos))) {
             LOG_WARN("build template invariant failed", K(ret), K(key_hash));
-          } else if (OB_UNLIKELY(tpos != inv_len)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("template invariant length mismatch", K(ret), K(tpos), K(inv_len));
           } else {
             cache_val->inv_len_ = inv_len;
           }
@@ -1028,20 +1052,30 @@ int ObDASRemoteInfo::deser_session_with_cache(ObDASRemoteInfo &remote_info,
       if (OB_SUCC(ret)) {
         pos = inv_begin + inv_len; // skip the invariant section bytes
         int64_t var_len = 0;
-        if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &var_len))) {
+        if (OB_UNLIKELY(pos >= sess_blob_end)) {
+          ret = OB_DESERIALIZE_ERROR;
+          LOG_WARN("volatile section length prefix is missing",
+                   K(ret), K(pos), K(sess_blob_begin), K(sess_blob_len), K(sess_blob_end));
+        } else if (OB_FAIL(serialization::decode_vi64(buf, sess_blob_end, pos, &var_len))) {
           LOG_WARN("decode var section len failed", K(ret), K(pos), K(data_len));
-        } else if (OB_UNLIKELY(var_len < 0 || pos + var_len > data_len)) {
+        } else if (OB_UNLIKELY(var_len < 0
+                               || pos < 0
+                               || pos > sess_blob_end
+                               || var_len > sess_blob_end - pos)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("invalid var section len", K(ret), K(var_len), K(pos), K(data_len));
+          LOG_ERROR("invalid var section len",
+                    K(ret), K(var_len), K(pos), K(data_len), K(sess_blob_end));
         } else {
           int64_t vpos = 0;
           if (OB_FAIL(my_session->das_decode_volatile_section(buf + pos, var_len, vpos))) {
             LOG_WARN("deserialize volatile section failed", K(ret), K(key_hash));
-          } else if (OB_UNLIKELY(vpos != var_len)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("volatile session length mismatch", K(ret), K(vpos), K(var_len), K(key_hash));
           } else {
-            pos += var_len;
+            const int64_t ignored_tail_len = sess_blob_end - (pos + var_len);
+            if (ignored_tail_len > 0) {
+              LOG_TRACE("[DAS_DESER_CACHE] ignore unknown session blob tail",
+                        K(ignored_tail_len), K(pos), K(var_len), K(sess_blob_end), K(key_hash));
+            }
+            pos = sess_blob_end;
           }
         }
       }
