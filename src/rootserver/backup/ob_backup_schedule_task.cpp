@@ -729,6 +729,8 @@ int ObBackupComplLogTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   arg.end_scn_ = end_scn_;
   arg.backup_type_ = backup_type_.type_;
   arg.is_only_calc_stat_ = is_only_calc_stat_;
+  arg.turn_id_ = turn_id_;
+  arg.retry_id_ = retry_id_;
   if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
     LOG_WARN("failed to assign backup dest", K(ret), K(backup_path_));
   } else if (OB_FAIL(rpc_proxy.to(get_dst()).backup_completing_log(arg))) {
