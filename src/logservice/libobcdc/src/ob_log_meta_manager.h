@@ -324,7 +324,8 @@ private:
       const ObIArray<uint64_t> &usr_def_col_ids,
       SCHEMA_GUARD &schema_mgr,
       ITableMeta *&table_meta,
-      volatile bool &stop_flag);
+      volatile bool &stop_flag,
+      const int64_t global_schema_version);
   int add_and_get_db_meta_(
       DBMetaInfo *meta_info,
       const DBSchemaInfo &db_schema_info,
@@ -338,7 +339,8 @@ private:
       const ObIArray<uint64_t> &usr_def_col_ids,
       SCHEMA_GUARD &schema_mgr,
       ITableMeta *&table_meta,
-      volatile bool &stop_flag);
+      volatile bool &stop_flag,
+      const int64_t global_schema_version);
   int build_db_meta_(
       const DBSchemaInfo &db_schema_info,
       const TenantSchemaInfo &tenant_schema_info,
@@ -361,6 +363,7 @@ private:
       const ObIArray<uint64_t> &usr_def_col_ids,
       TableSchemaInfo &tb_schema_info,
       SCHEMA_GUARD &schema_mgr,
+      const int64_t global_schema_version,
       volatile bool &stop_flag);
   // check_column and exact column properties useful for column_schema.
   //
@@ -454,7 +457,8 @@ private:
       const int16_t usr_column_idx,
       TableSchemaInfo &tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
-      const bool is_last_column);
+      const bool is_last_column,
+      const int64_t global_schema_version);
   int set_table_schema_(
       const int64_t version,
       const uint64_t tenant_id,

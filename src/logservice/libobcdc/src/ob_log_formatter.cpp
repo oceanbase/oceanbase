@@ -1829,11 +1829,13 @@ int ObLogFormatter::cal_virtual_generated_column_value_(
                                                       column_schema->get_accuracy(),
                                                       column_schema->get_collation_type(),
                                                       tz_info_wrap,
-                                                      column_schema->get_sub_data_type()))) {
+                                                      column_schema->get_sub_data_type(),
+                                                      stmt_task.get_global_schema_version()))) {
             LOG_ERROR("obj2str_helper obj2str fail", KR(ret),
                 "tenant_id", full_table_schema->get_tenant_id(),
                 "table_id", full_table_schema->get_table_id(),
                 "column_id", column_schema->get_column_id(),
+                "schema_version", stmt_task.get_global_schema_version(),
                 K(res_obj), K(column_schema), K(tz_info_wrap));
           } else if (is_new_row) {
             rv->new_columns_[column_schema_info->get_usr_column_idx()] = res_str;

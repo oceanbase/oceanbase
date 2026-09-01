@@ -107,7 +107,8 @@ int MutatorRow::parse_columns_(
     const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
     const bool is_macroblock_row,
     ColValueList &cols,
-    const bool is_mow_table_insert)
+    const bool is_mow_table_insert,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -265,9 +266,10 @@ int MutatorRow::parse_columns_(
                 obj2str_helper,
                 tz_info_wrap,
                 cols,
-                &udt_value_map))) {
+                &udt_value_map,
+                schema_version))) {
               LOG_ERROR("add_column_ fail", KR(ret), K(tenant_id), K(table_id), K(cols), K(column_stored_idx), K(column_id),
-                  K(obj), K(obj2str_helper), K(column_schema_info));
+                  K(obj), K(obj2str_helper), K(column_schema_info), K(schema_version));
             }
           }
         }
@@ -397,7 +399,8 @@ int MutatorRow::add_column_(
     const ObObj2strHelper *obj2str_helper/*NULL if parse all_ddl_operation_table  columns*/,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     ColValueList &cols,
-    ObCDCUdtValueMap *udt_value_map)
+    ObCDCUdtValueMap *udt_value_map,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   ColValue *cv_node = nullptr;
@@ -490,9 +493,11 @@ int MutatorRow::add_column_(
         collation_type,
         tz_info_wrap,
         (NULL != column_schema_info) ? column_schema_info->get_sub_data_type()
-                                     : common::OB_INVALID_ID))) {
+                                     : common::OB_INVALID_ID,
+        schema_version))) {
       LOG_ERROR("obj2str fail", KR(ret),
-          "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info));
+          "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info),
+          K(schema_version));
     } else if (OB_FAIL(cols.add(cv_node))) {
       LOG_ERROR("add column into ColValueList fail", KR(ret), "column_value", *cv_node, K(cols));
     }
@@ -551,7 +556,8 @@ int MutatorRow::parse_rowkey_(
     const uint64_t table_id,
     const TableSchemaInfo *tb_schema_info,
     const ObTimeZoneInfoWrap *tz_info_wrap,
-    const bool enable_output_hidden_primary_key)
+    const bool enable_output_hidden_primary_key,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   int64_t rowkey_count = rowkey.get_obj_cnt();
@@ -606,9 +612,11 @@ int MutatorRow::parse_rowkey_(
             obj2str_helper,
             tz_info_wrap,
             rowkey_cols,
-            nullptr/*udt_value_map*/))) {
+            nullptr/*udt_value_map*/,
+            schema_version))) {
           LOG_ERROR("add_column_ fail", KR(ret), K(tenant_id), K(table_id), K(rowkey_cols), K(column_id),
-              K(index), K(rowkey_objs[index]), K(obj2str_helper), KPC(tb_schema_info), K(column_schema_info));
+              K(index), K(rowkey_objs[index]), K(obj2str_helper), KPC(tb_schema_info), K(column_schema_info),
+              K(schema_version));
         }
       }
     }
@@ -917,7 +925,8 @@ int MacroBlockMutatorRow::parse_cols(
     const TableSchemaInfo *tb_schema_info /* = NULL */,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key /*  = false */,
-    const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info /* = NULL */)
+    const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info /* = NULL */,
+    const int64_t schema_version /* = OB_INVALID_VERSION */)
 {
   int ret = OB_SUCCESS;
 
@@ -952,9 +961,10 @@ int MacroBlockMutatorRow::parse_cols(
       all_ddl_operation_table_schema_info,
       true/*is_macroblock_row*/,
       new_cols_,
-      false))) {
+      false,
+      schema_version))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(obj2str_helper),
-          K(tb_schema_info), K(enable_output_hidden_primary_key));
+          K(tb_schema_info), K(enable_output_hidden_primary_key), K(schema_version));
     }
   }
 
@@ -969,8 +979,10 @@ int MacroBlockMutatorRow::parse_cols(
       table_id,
       tb_schema_info,
       tz_info_wrap,
-      enable_output_hidden_primary_key))) {
-      LOG_ERROR("parse_rowkey_ fail", KR(ret), K(row_key_), K(obj2str_helper), K(enable_output_hidden_primary_key));
+      enable_output_hidden_primary_key,
+      schema_version))) {
+      LOG_ERROR("parse_rowkey_ fail", KR(ret), K(row_key_), K(obj2str_helper), K(enable_output_hidden_primary_key),
+          K(schema_version));
     } else {
       // succ
     }
@@ -1148,7 +1160,8 @@ int MemtableMutatorRow::parse_cols(
     const TableSchemaInfo *tb_schema_info /* = NULL */,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool enable_output_hidden_primary_key /*  = false */,
-    const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info /* = NULL */)
+    const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info /* = NULL */,
+    const int64_t schema_version /* = OB_INVALID_VERSION */)
 {
   int ret = OB_SUCCESS;
 
@@ -1198,9 +1211,10 @@ int MemtableMutatorRow::parse_cols(
         all_ddl_operation_table_schema_info,
         false/*is_macroblock_row*/,
         new_cols_,
-        is_mow_table_insert))) {
+        is_mow_table_insert,
+        schema_version))) {
       LOG_ERROR("parse new columns fail", KR(ret), K(tenant_id), K(table_id), K(new_row_), K(obj2str_helper),
-          K(tb_schema_info), K(enable_output_hidden_primary_key));
+          K(tb_schema_info), K(enable_output_hidden_primary_key), K(schema_version));
     } else {
       // succ
     }
@@ -1227,9 +1241,10 @@ int MemtableMutatorRow::parse_cols(
         all_ddl_operation_table_schema_info,
         false/*is_macroblock_row*/,
         old_cols_,
-        is_mow_table_insert))) {
+        is_mow_table_insert,
+        schema_version))) {
       LOG_ERROR("parse old columns fail", KR(ret), K(tenant_id), K(table_id), K(old_row_), K(obj2str_helper),
-          K(tb_schema_info), K(enable_output_hidden_primary_key));
+          K(tb_schema_info), K(enable_output_hidden_primary_key), K(schema_version));
     } else {
       // succ
     }
@@ -1247,9 +1262,10 @@ int MemtableMutatorRow::parse_cols(
         table_id,
         tb_schema_info,
         tz_info_wrap,
-        enable_output_hidden_primary_key))) {
+        enable_output_hidden_primary_key,
+        schema_version))) {
       LOG_ERROR("parse_rowkey_ fail", KR(ret), K(rowkey_), K(obj2str_helper),
-          K(enable_output_hidden_primary_key));
+          K(enable_output_hidden_primary_key), K(schema_version));
     } else {
       // succ
     }
@@ -1513,7 +1529,9 @@ int DmlStmtTask::parse_cols(
       table_id_,
       tb_schema_info,
       tz_info_wrap,
-      enable_output_hidden_primary_key);
+      enable_output_hidden_primary_key,
+      NULL/*all_ddl_operation_table_schema_info*/,
+      get_global_schema_version());
 }
 
 int DmlStmtTask::parse_col(
@@ -1529,6 +1547,7 @@ int DmlStmtTask::parse_col(
   common::ObAccuracy accuracy;
   common::ObCollationType collation_type = ObCollationType::CS_TYPE_BINARY;
   const common::ObSqlCollectionInfo *collection_info = column_schema_info.get_collection_info();
+  const int64_t schema_version = get_global_schema_version();
   column_schema_info.get_extended_type_info(extended_type_info);
   accuracy = column_schema_info.get_accuracy();
   collation_type = column_schema_info.get_collation_type();
@@ -1545,9 +1564,10 @@ int DmlStmtTask::parse_col(
       accuracy,
       collation_type,
       tz_info_wrap,
-      column_schema_info.get_sub_data_type()))) {
+      column_schema_info.get_sub_data_type(),
+      schema_version))) {
     LOG_ERROR("obj2str fail", KR(ret), K(tenant_id), K(table_id_), K(column_id), K(column_schema_info),
-        "obj", cv_node, K(accuracy), K(collation_type));
+        "obj", cv_node, K(accuracy), K(collation_type), K(schema_version));
   }
 
   return ret;

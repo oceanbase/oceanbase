@@ -982,7 +982,9 @@ int ObUserDefinedType::text_protocol_base_type_convert(const ObPLDataType &type,
   if (OB_FAIL(ObMySQLUtil::get_length(start, orign_str_length, inc_len))) {
     LOG_WARN("get length fail.", K(ret));
   } else {
-    ObArenaAllocator alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_TEXT_PROTOCOL_CONVERT), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObArenaAllocator alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_TEXT_PROTOCOL_CONVERT),
+                           OB_MALLOC_NORMAL_BLOCK_SIZE,
+                           is_valid_tenant_id(MTL_ID()) ? MTL_ID() : OB_SERVER_TENANT_ID);
     char* tmp_buf = NULL;
     if (OB_ISNULL(tmp_buf = static_cast<char*>(alloc.alloc(orign_str_length)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1036,7 +1038,10 @@ int ObUserDefinedType::base_type_serialize_for_text(ObObj* obj,
     ObString lob_string;
     ObObj tmp_obj;
     OX (tmp_obj = *obj);
-    ObArenaAllocator local_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObArenaAllocator local_allocator(
+        GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA),
+        OB_MALLOC_NORMAL_BLOCK_SIZE,
+        is_valid_tenant_id(MTL_ID()) ? MTL_ID() : OB_SERVER_TENANT_ID);
     OZ (observer::ObQueryDriver::process_lob_locator_results(tmp_obj,
                                                   session.is_client_use_lob_locator(),
                                                   session.is_client_support_lob_locatorv2(),

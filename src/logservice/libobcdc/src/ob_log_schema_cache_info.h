@@ -70,7 +70,8 @@ public:
       const bool is_heap_table_pk_increment_column,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       ObObj2strHelper &obj2str_helper,
-      common::ObIAllocator &allocator);
+      common::ObIAllocator &allocator,
+      const int64_t schema_version);
   void destroy();
   void reset();
   // You need to call release_mem in advance before destructuring to free memory
@@ -163,7 +164,8 @@ private:
       const ObTimeZoneInfoWrap *tz_info_wrap,
       ObObj2strHelper &obj2str_helper,
       common::ObIAllocator &allocator,
-      common::ObString *&str);
+      common::ObString *&str,
+      const int64_t schema_version);
 
   template<class TABLE_SCHEMA, class COLUMN_SCHEMA>
   int init_extended_type_info_(
@@ -347,7 +349,8 @@ public:
       const int16_t usr_column_idx,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       const bool is_last_column,
-      ObObj2strHelper &obj2str_helper);
+      ObObj2strHelper &obj2str_helper,
+      const int64_t schema_version);
 
   int handle_after_adding_all_columns();
 

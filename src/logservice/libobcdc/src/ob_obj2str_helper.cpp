@@ -138,7 +138,8 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     const common::ObAccuracy &accuracy,
     const common::ObCollationType &collation_type,
     const ObTimeZoneInfoWrap *tz_info_wrap,
-    const uint64_t udt_id) const
+    const uint64_t udt_id,
+    const int64_t schema_version) const
 {
   int ret = OB_SUCCESS;
   ObObjType obj_type = obj.get_type();
@@ -177,9 +178,9 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
           K(obj), K(obj_type), K(str));
     }
   } else if (obj.is_user_defined_sql_type()) {
-    if (OB_FAIL(convert_sql_udt_to_text_(tenant_id, udt_id, obj, tz_info_wrap, allocator, str))) {
+    if (OB_FAIL(convert_sql_udt_to_text_(tenant_id, udt_id, schema_version, obj, tz_info_wrap, allocator, str))) {
       OBLOG_LOG(ERROR, "convert_sql_udt_to_text_ fail", KR(ret), K(tenant_id), K(table_id),
-          K(column_id), K(udt_id), K(obj), K(obj_type));
+          K(column_id), K(udt_id), K(schema_version), K(obj), K(obj_type));
     }
   } else if (ObGeometryType == obj_type) {
     if (OB_FAIL(convert_ob_geometry_to_ewkt_(obj, str, allocator))) {
@@ -509,6 +510,7 @@ int ObObj2strHelper::convert_xmltype_to_text_(
 int ObObj2strHelper::convert_sql_udt_to_text_(
     const uint64_t tenant_id,
     const uint64_t udt_id,
+    const int64_t schema_version,
     const common::ObObj &obj,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     common::ObIAllocator &allocator,
@@ -520,7 +522,7 @@ int ObObj2strHelper::convert_sql_udt_to_text_(
     ret = OB_INVALID_ARGUMENT;
     OBLOG_LOG(ERROR, "udt_id is invalid for sql udt obj2str", KR(ret), K(tenant_id), K(obj));
   } else if (is_online_refresh_mode(TCTX.refresh_mode_)) {
-    ret = convert_sql_udt_to_text_with_online_schema_(tenant_id, udt_id, obj,
+    ret = convert_sql_udt_to_text_with_online_schema_(tenant_id, udt_id, schema_version, obj,
         tz_info_wrap, allocator, str);
   } else if (is_data_dict_refresh_mode(TCTX.refresh_mode_)) {
     ret = convert_sql_udt_to_text_with_data_dict_(tenant_id, udt_id, obj,
@@ -528,7 +530,8 @@ int ObObj2strHelper::convert_sql_udt_to_text_(
   } else {
     ret = OB_NOT_SUPPORTED;
     OBLOG_LOG(ERROR, "sql udt column not supported under current refresh mode",
-              KR(ret), K(tenant_id), K(udt_id), K(obj), "refresh_mode", TCTX.refresh_mode_);
+              KR(ret), K(tenant_id), K(udt_id), K(schema_version), K(obj),
+              "refresh_mode", TCTX.refresh_mode_);
   }
 
   return ret;
@@ -537,6 +540,7 @@ int ObObj2strHelper::convert_sql_udt_to_text_(
 int ObObj2strHelper::convert_sql_udt_to_text_with_online_schema_(
     const uint64_t tenant_id,
     const uint64_t udt_id,
+    const int64_t schema_version,
     const common::ObObj &obj,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     common::ObIAllocator &allocator,
@@ -546,54 +550,49 @@ int ObObj2strHelper::convert_sql_udt_to_text_with_online_schema_(
   IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
   ObLogTenant *tenant = NULL;
 
-  if (OB_ISNULL(schema_getter)) {
+  if (OB_UNLIKELY(schema_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    OBLOG_LOG(ERROR, "schema_version is invalid for sql udt obj2str", KR(ret),
+              K(tenant_id), K(udt_id), K(schema_version));
+  } else if (OB_ISNULL(schema_getter)) {
     ret = OB_ERR_UNEXPECTED;
-    OBLOG_LOG(ERROR, "schema_getter is null", KR(ret), K(tenant_id), K(udt_id));
+    OBLOG_LOG(ERROR, "schema_getter is null", KR(ret), K(tenant_id), K(udt_id), K(schema_version));
   } else if (OB_ISNULL(tenant_mgr_)) {
     ret = OB_ERR_UNEXPECTED;
-    OBLOG_LOG(ERROR, "tenant_mgr_ is null", KR(ret), K(tenant_id), K(udt_id));
+    OBLOG_LOG(ERROR, "tenant_mgr_ is null", KR(ret), K(tenant_id), K(udt_id), K(schema_version));
   } else if (OB_FAIL(tenant_mgr_->get_tenant(tenant_id, tenant)) || OB_ISNULL(tenant)) {
     OBLOG_LOG(ERROR, "get_tenant fail for sql udt obj2str", KR(ret),
-              K(tenant_id), K(udt_id));
+              K(tenant_id), K(udt_id), K(schema_version));
     ret = OB_SUCCESS == ret ? OB_ERR_UNEXPECTED : ret;
   } else {
-    const int64_t schema_version = tenant->get_schema_version();
-    if (OB_UNLIKELY(schema_version <= 0)) {
-      ret = OB_ERR_UNEXPECTED;
-      OBLOG_LOG(ERROR, "tenant cached schema_version is invalid", KR(ret),
-                K(tenant_id), K(udt_id), K(schema_version));
+    ObLogSchemaGuard schema_guard;
+    static const int64_t GET_SCHEMA_TIMEOUT_US = 10L * 1000L * 1000L;
+    if (OB_FAIL(schema_getter->get_fallback_schema_guard(tenant_id, schema_version,
+                                                      GET_SCHEMA_TIMEOUT_US, schema_guard))) {
+      OBLOG_LOG(ERROR, "get_fallback_schema_guard fail", KR(ret), K(tenant_id),
+                K(udt_id), K(schema_version));
     } else {
-      ObLogSchemaGuard schema_guard;
-      static const int64_t GET_SCHEMA_TIMEOUT_US = 10L * 1000L * 1000L;
-      // Modifying a UDT that is referenced by other types is not supported yet.
-      // So we use tenant schema guard to get the udt info.
-      if (OB_FAIL(schema_getter->get_fallback_schema_guard(tenant_id, schema_version,
-                                                        GET_SCHEMA_TIMEOUT_US, schema_guard))) {
-        OBLOG_LOG(ERROR, "get_fallback_schema_guard fail", KR(ret), K(tenant_id),
-                  K(udt_id), K(schema_version));
+      //mock session for pl extend text serialize.
+      sql::ObSQLSessionInfo mock_session(tenant_id);
+      const common::ObTimeZoneInfo *tz_info = (NULL == tz_info_wrap)
+                                              ? NULL
+                                              : tz_info_wrap->get_time_zone_info();
+      if (OB_FAIL(mock_session.init_tenant(tenant->get_tenant_name(), tenant_id))) {
+        OBLOG_LOG(ERROR, "init stub session tenant fail", KR(ret), K(tenant_id),
+                  "tenant_name", tenant->get_tenant_name(), K(udt_id), K(schema_version));
       } else {
-        //mock session for pl extend text serialize.
-        sql::ObSQLSessionInfo mock_session(tenant_id);
-        const common::ObTimeZoneInfo *tz_info = (NULL == tz_info_wrap)
-                                                ? NULL
-                                                : tz_info_wrap->get_time_zone_info();
-        if (OB_FAIL(mock_session.init_tenant(tenant->get_tenant_name(), tenant_id))) {
-          OBLOG_LOG(ERROR, "init stub session tenant fail", KR(ret), K(tenant_id),
-                    "tenant_name", tenant->get_tenant_name(), K(udt_id));
+        ObString udt_data;
+        ObObj plain_obj;
+        if (OB_FAIL(obj.get_string(udt_data))) {
+          OBLOG_LOG(ERROR, "get_string from udt obj fail", KR(ret), K(obj));
         } else {
-          ObString udt_data;
-          ObObj plain_obj;
-          if (OB_FAIL(obj.get_string(udt_data))) {
-            OBLOG_LOG(ERROR, "get_string from udt obj fail", KR(ret), K(obj));
-          } else {
-            plain_obj.set_string(ObVarcharType, udt_data);
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(sql::ObSqlUdtUtils::convert_sql_udt_to_string(
-                  allocator, schema_guard.get_guard(), mock_session, tz_info, udt_id, plain_obj, str, false))) {
-            OBLOG_LOG(ERROR, "convert_sql_udt_to_string fail", KR(ret),
-                      K(tenant_id), K(udt_id), K(obj));
-          }
+          plain_obj.set_string(ObVarcharType, udt_data);
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql::ObSqlUdtUtils::convert_sql_udt_to_string(
+                allocator, schema_guard.get_guard(), mock_session, tz_info, udt_id, plain_obj, str, false))) {
+          OBLOG_LOG(ERROR, "convert_sql_udt_to_string fail", KR(ret),
+                    K(tenant_id), K(udt_id), K(schema_version), K(obj));
         }
       }
     }

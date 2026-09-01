@@ -68,7 +68,8 @@ int ColumnSchemaInfo::init(
     const bool is_heap_table_pk_increment_column,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     ObObj2strHelper &obj2str_helper,
-    common::ObIAllocator &allocator)
+    common::ObIAllocator &allocator,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   common::ObString *orig_default_value_str = NULL;
@@ -84,9 +85,9 @@ int ColumnSchemaInfo::init(
         "column_name", column_table_schema.get_column_name(),
         K(column_stored_idx));
   } else if (OB_FAIL(get_column_ori_default_value_(table_schema, column_table_schema, column_stored_idx, tz_info_wrap,
-      obj2str_helper, allocator, orig_default_value_str))) {
+      obj2str_helper, allocator, orig_default_value_str, schema_version))) {
     LOG_ERROR("get_column_ori_default_value_ fail", KR(ret), K(table_schema), K(column_table_schema),
-        K(column_stored_idx));
+        K(column_stored_idx), K(schema_version));
   } else if (OB_ISNULL(orig_default_value_str)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("orig_default_value_str is null", K(orig_default_value_str));
@@ -166,7 +167,8 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
     const ObTimeZoneInfoWrap *tz_info_wrap,
     ObObj2strHelper &obj2str_helper,
     common::ObIAllocator &allocator,
-    common::ObString *&str)
+    common::ObString *&str,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   str = NULL;
@@ -191,13 +193,15 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
             column_table_schema.get_accuracy(),
             column_table_schema.get_collation_type(),
             tz_info_wrap,
-            column_table_schema.get_sub_data_type()))) {
+            column_table_schema.get_sub_data_type(),
+            schema_version))) {
       LOG_ERROR("obj2str cast orig_default_value fail", KR(ret), K(orig_default_obj), K(*str),
           "tenant_id", table_schema.get_tenant_id(),
           "table_id", table_schema.get_table_id(),
           "table_name", table_schema.get_table_name(),
           "column_id", column_table_schema.get_column_id(),
           "column_name", column_table_schema.get_column_name(),
+          K(schema_version),
           K(column_idx));
     }
   }
@@ -751,7 +755,8 @@ int TableSchemaInfo::init_column_schema_info(
     const int16_t usr_column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_last_column,
-    ObObj2strHelper &obj2str_helper)
+    ObObj2strHelper &obj2str_helper,
+    const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
   const uint64_t column_id = column_table_schema.get_column_id();
@@ -788,11 +793,13 @@ int TableSchemaInfo::init_column_schema_info(
       is_heap_table_pk_increment_column,
       tz_info_wrap,
       obj2str_helper,
-      get_allocator()))) {
+      get_allocator(),
+      schema_version))) {
     LOG_ERROR("column_schema_info init fail", KR(ret),
         "table_id", table_schema.get_table_id(),
         "table_name", table_schema.get_table_name(),
         "version", table_schema.get_schema_version(),
+        K(schema_version),
         K(column_stored_idx), K(is_heap_table_pk_increment_column),
         K(is_usr_column), K(usr_column_idx),
         "meta_type", column_table_schema.get_meta_type(),
@@ -865,7 +872,8 @@ template int TableSchemaInfo::init_column_schema_info(
     const int16_t usr_column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_last_column,
-    ObObj2strHelper &obj2str_helper);
+    ObObj2strHelper &obj2str_helper,
+    const int64_t schema_version);
 
 template int TableSchemaInfo::init_column_schema_info(
     const datadict::ObDictTableMeta &table_schema,
@@ -875,7 +883,8 @@ template int TableSchemaInfo::init_column_schema_info(
     const int16_t usr_column_idx,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_last_column,
-    ObObj2strHelper &obj2str_helper);
+    ObObj2strHelper &obj2str_helper,
+    const int64_t schema_version);
 
 int TableSchemaInfo::get_column_schema_info_of_column_id(
     const uint64_t column_id,

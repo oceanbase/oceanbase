@@ -61,7 +61,8 @@ public:
        const common::ObAccuracy &accuracy,
        const common::ObCollationType &collation_type,
        const ObTimeZoneInfoWrap *tz_info_wrap,
-       const uint64_t udt_id = common::OB_INVALID_ID) const;
+       const uint64_t udt_id = common::OB_INVALID_ID,
+       const int64_t schema_version = common::OB_INVALID_VERSION) const;
 
 public:
   int init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
@@ -130,6 +131,7 @@ private:
   int convert_sql_udt_to_text_(
       const uint64_t tenant_id,
       const uint64_t udt_id,
+      const int64_t schema_version,
       const common::ObObj &obj,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       common::ObIAllocator &allocator,
@@ -138,6 +140,7 @@ private:
   int convert_sql_udt_to_text_with_online_schema_(
       const uint64_t tenant_id,
       const uint64_t udt_id,
+      const int64_t schema_version,
       const common::ObObj &obj,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       common::ObIAllocator &allocator,

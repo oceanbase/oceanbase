@@ -273,7 +273,7 @@ int ObLogMetaManager::get_table_meta(
             LOG_ERROR("get_usr_def_col_from_table_schema failed", K(tenant_id), K(global_schema_version),
                 K(table_schema), K(usr_def_col));
           } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, usr_def_col,
-              schema_mgr, table_meta, stop_flag))) {
+              schema_mgr, table_meta, stop_flag, global_schema_version))) {
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
@@ -335,7 +335,7 @@ int ObLogMetaManager::get_table_meta(
               "table_id", simple_table_schema->get_table_id(),
               "table_name", simple_table_schema->get_table_name(), KPC(simple_table_schema));
         } else if (OB_FAIL(add_and_get_table_meta_(meta_info, table_schema, table_schema->get_column_id_arr_order_by_table_define(),
-            *tenant_info, table_meta, stop_flag))) {
+            *tenant_info, table_meta, stop_flag, global_schema_version))) {
           // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("add_and_get_table_meta_ fail", KR(ret), K(tenant_id),
@@ -627,7 +627,8 @@ int ObLogMetaManager::add_and_get_table_meta_(
     const ObIArray<uint64_t> &usr_def_col_ids,
     SCHEMA_GUARD &schema_mgr,
     ITableMeta *&table_meta,
-    volatile bool &stop_flag)
+    volatile bool &stop_flag,
+    const int64_t global_schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -649,10 +650,12 @@ int ObLogMetaManager::add_and_get_table_meta_(
       ret = OB_SUCCESS;
 
       // Create a new Table Meta and insert the Meta into the Meta Info chain(linked list)
-      if (OB_FAIL(build_table_meta_(table_schema, usr_def_col_ids, schema_mgr, table_meta, stop_flag))) {
+      if (OB_FAIL(build_table_meta_(table_schema, usr_def_col_ids, schema_mgr, table_meta, stop_flag,
+          global_schema_version))) {
         // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
         if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("build_table_meta_ fail", K(version), K(meta_info), KR(ret), KP(table_schema));
+          LOG_ERROR("build_table_meta_ fail", K(version), K(meta_info), KR(ret), KP(table_schema),
+              K(global_schema_version));
         }
       } else if (OB_FAIL(meta_info->set(version, table_meta))) {
         LOG_ERROR("set meta info meta info fail", KR(ret), K(version), KP(table_meta));
@@ -760,7 +763,8 @@ int ObLogMetaManager::build_table_meta_(
     const ObIArray<uint64_t> &usr_def_col_ids,
     SCHEMA_GUARD &schema_mgr,
     ITableMeta *&table_meta,
-    volatile bool &stop_flag)
+    volatile bool &stop_flag,
+    const int64_t global_schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -784,10 +788,11 @@ int ObLogMetaManager::build_table_meta_(
       LOG_ERROR("createTableMeta fail, return NULL");
       ret = OB_ERR_UNEXPECTED;
     } else if (OB_FAIL(build_column_metas_(tmp_table_meta, table_schema, usr_def_col_ids, *tb_schema_info,
-          schema_mgr, stop_flag))) {
+          schema_mgr, global_schema_version, stop_flag))) {
       // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
       if (OB_IN_FATAL_STATE != ret && OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("build_column_metas_ fail", KR(ret), KP(tmp_table_meta), KPC(tb_schema_info));
+        LOG_ERROR("build_column_metas_ fail", KR(ret), KP(tmp_table_meta), KPC(tb_schema_info),
+            K(global_schema_version));
       }
     } else {
       tmp_table_meta->setName(table_schema->get_table_name());
@@ -936,6 +941,7 @@ int ObLogMetaManager::build_column_metas_(
     const ObIArray<uint64_t> &usr_def_col_ids,
     TableSchemaInfo &tb_schema_info,
     SCHEMA_GUARD &schema_mgr,
+    const int64_t global_schema_version,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -1022,9 +1028,10 @@ int ObLogMetaManager::build_column_metas_(
             usr_column_idx,
             tb_schema_info,
             tz_info_wrap,
-            is_last_column))) {
+            is_last_column,
+            global_schema_version))) {
           LOG_ERROR("set_column_schema_info_ fail", KR(ret), KPC(table_schema), K(tb_schema_info),
-              K(column_stored_idx), K(usr_column_idx), KPC(column_table_schema));
+              K(column_stored_idx), K(usr_column_idx), KPC(column_table_schema), K(global_schema_version));
         }
       }
 
@@ -2193,7 +2200,8 @@ int ObLogMetaManager::set_column_schema_info_(
     const int16_t usr_column_idx,
     TableSchemaInfo &tb_schema_info,
     const ObTimeZoneInfoWrap *tz_info_wrap,
-    const bool is_last_column)
+    const bool is_last_column,
+    const int64_t global_schema_version)
 {
   int ret = OB_SUCCESS;
 
@@ -2211,11 +2219,13 @@ int ObLogMetaManager::set_column_schema_info_(
       usr_column_idx,
       tz_info_wrap,
       is_last_column,
-      *obj2str_helper_))) {
+      *obj2str_helper_,
+      global_schema_version))) {
     LOG_ERROR("tb_schema_info init_column_schema_info fail", KR(ret),
         "table_id", table_schema.get_table_id(),
         "table_name", table_schema.get_table_name(),
         "version", table_schema.get_schema_version(),
+        K(global_schema_version),
         K(column_table_schema), K(column_stored_idx),
         K(enable_output_hidden_primary_key_));
   } else {
