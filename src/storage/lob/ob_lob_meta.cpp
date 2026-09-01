@@ -482,6 +482,23 @@ int ObLobMetaUtil::transform_from_info_to_row(ObLobMetaInfo &info, blocksstable:
   return ret;
 }
 
+int ObLobMetaUtil::build_rowkey_from_info(ObLobMetaInfo &info, blocksstable::ObDatumRow *row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row is null.", K(ret));
+  } else if (row->get_column_count() != LOB_META_SCHEMA_ROWKEY_COL_CNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid lob meta row.", K(ret), K(info));
+  } else if (OB_FAIL(transform_lob_id(info, row))) {
+    LOG_WARN("get lob id from row failed.", K(ret), K(info));
+  } else if (OB_FAIL(transform_seq_id(info, row))) {
+    LOG_WARN("get seq id from row failed.", K(ret), K(info));
+  }
+  return ret;
+}
+
 bool ObLobMetaScanIter::is_in_range(const ObLobMetaInfo& info)
 {
   bool bool_ret = false;

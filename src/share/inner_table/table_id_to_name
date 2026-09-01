@@ -430,6 +430,7 @@
 # 573: __wr_active_session_history_v2
 # 577: __all_tablet_to_global_temporary_table
 # 579: __wr_sqlstat_v2
+# 580: __all_lob_check_exception_result
 # 581: __all_sync_standby_dest
 # 582: __all_sync_standby_status
 # 585: __all_table_archive_history
@@ -1381,6 +1382,8 @@
 # 12580: __all_tablet_to_global_temporary_table  # BASE_TABLE_NAME
 # 12582: __all_virtual_wr_sqlstat_v2
 # 12582: __wr_sqlstat_v2  # BASE_TABLE_NAME
+# 12583: __all_virtual_lob_check_exception_result
+# 12583: __all_lob_check_exception_result  # BASE_TABLE_NAME
 # 12584: __all_virtual_sync_standby_dest
 # 12584: __all_sync_standby_dest  # BASE_TABLE_NAME
 # 12585: __all_virtual_sync_standby_status
@@ -1806,6 +1809,9 @@
 # 15261: __all_virtual_apply_stat  # BASE_TABLE_NAME
 # 15262: ALL_VIRTUAL_ARCHIVE_STAT
 # 15262: __all_virtual_archive_stat  # BASE_TABLE_NAME
+# 15263: ALL_VIRTUAL_KV_TTL_TASK
+# 15263: __all_kv_ttl_task  # BASE_TABLE_NAME
+# 15263: __all_virtual_kv_ttl_task  # BASE_TABLE_NAME1
 # 15266: ALL_VIRTUAL_LS_STATUS
 # 15266: __all_ls_status  # BASE_TABLE_NAME
 # 15266: __all_virtual_ls_status  # BASE_TABLE_NAME1
@@ -2156,6 +2162,9 @@
 # 15536: ALL_VIRTUAL_WR_SQLSTAT_V2
 # 15536: __wr_sqlstat_v2  # BASE_TABLE_NAME
 # 15536: __all_virtual_wr_sqlstat_v2  # BASE_TABLE_NAME1
+# 15537: ALL_VIRTUAL_LOB_CHECK_EXCEPTION_RESULT
+# 15537: __all_lob_check_exception_result  # BASE_TABLE_NAME
+# 15537: __all_virtual_lob_check_exception_result  # BASE_TABLE_NAME1
 # 15538: ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
 # 15538: __all_sensitive_rule  # BASE_TABLE_NAME
 # 15539: ALL_VIRTUAL_SENSITIVE_COLUMN_REAL_AGENT
@@ -2759,6 +2768,10 @@
 # 21693: GV$OB_SS_OBJECT_TYPE_IO_STAT
 # 21694: V$OB_SS_OBJECT_TYPE_IO_STAT
 # 21697: DBA_TABLES
+# 21698: DBA_OB_LOB_CHECK_TASKS
+# 21699: CDB_OB_LOB_CHECK_TASKS
+# 21700: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
+# 21701: CDB_OB_LOB_CHECK_EXCEPTION_RESULT
 # 21706: CDB_OB_SYNC_STANDBY_DEST
 # 21707: DBA_OB_SYNC_STANDBY_DEST
 # 21718: DBA_JAVA_POLICY
@@ -3314,6 +3327,8 @@
 # 28279: DBA_OB_PL_OBJ_CACHE_STATUS
 # 28283: GV$OB_HMS_CLIENT_POOL_STAT
 # 28284: V$OB_HMS_CLIENT_POOL_STAT
+# 28285: DBA_OB_LOB_CHECK_TASKS
+# 28287: DBA_OB_LOB_CHECK_EXCEPTION_RESULT
 # 28289: DBA_OB_SENSITIVE_RULES
 # 28290: DBA_OB_SENSITIVE_COLUMNS
 # 28291: DBA_OB_SENSITIVE_RULE_PLAINACCESS_USERS

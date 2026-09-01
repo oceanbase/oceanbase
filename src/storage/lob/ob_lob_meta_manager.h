@@ -57,7 +57,8 @@ public:
 
   int open(ObLobAccessParam &param, ObLobMetaSingleGetter* getter);
   int getlength(ObLobAccessParam &param, uint64_t &char_len);
-
+  int get_table_param(const ObTableParam *&table_param);
+  int get_table_dml_param(const ObTableDMLParam *&table_dml_param);
   TO_STRING_KV("[LOB]", "meta mngr");
 
 private:

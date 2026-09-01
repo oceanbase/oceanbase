@@ -159,7 +159,8 @@ public:
                       uint64_t len,
                       int64_t timeout,
                       ObLobLocatorV2 &lob);
-
+  int get_table_param(const ObTableParam *&table_param);
+  int get_table_dml_param(const ObTableDMLParam *&table_dml_param);
   common::ObIAllocator& get_ext_info_log_allocator() { return ext_info_log_allocator_; }
   share::LobExtInfoLogThrottleTool& get_ext_info_log_throttle_tool() { return throttle_tool_; }
   inline bool can_write_inrow(uint64_t len, int64_t inrow_threshold) { return len <= inrow_threshold; }

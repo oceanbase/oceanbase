@@ -183,7 +183,7 @@ enum ObLogBaseType
 #endif
   // for obkv table async query session id service
   TABLE_SESS_ID_LOG_BASE_TYPE = 58,
-
+  TTL_SERVICE_LOG_BASE_TYPE = 62,
   SYNC_MODE_LOG_BASE_TYPE = 63,
   //for protection_mode_mgr
   PROTECTION_MODE_MGR_LOG_BASE_TYPE = 64,
@@ -333,6 +333,8 @@ int log_base_type_to_string(const ObLogBaseType log_type,
     strncpy(str, "PROTECTION_MODE_MGR", str_len);
   } else if (log_type == SYNC_MODE_LOG_BASE_TYPE) {
     strncpy(str, "SYNC_MODE", str_len);
+  } else if (log_type == TTL_SERVICE_LOG_BASE_TYPE) {
+    strncpy(str, "TTL_SERVICE", str_len);
   } else {
     ret = OB_INVALID_ARGUMENT;
   }

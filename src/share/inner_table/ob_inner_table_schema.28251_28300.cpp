@@ -1147,6 +1147,108 @@ int ObInnerTableSchema::v_ob_hms_client_pool_stat_ora_schema(ObTableSchema &tabl
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_lob_check_tasks_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_LOB_CHECK_TASKS_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_LOB_CHECK_TASKS_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       CASE A.ls_id         WHEN -1 THEN 'TENANT'         ELSE 'LS' END AS TASK_SCOPE,       A.ls_id AS LS_ID,       CASE A.table_id         WHEN 3 THEN '__all_table'         ELSE B.table_name END AS TABLE_NAME,       A.table_id AS TABLE_ID,       A.tablet_id AS TABLET_ID,       A.task_id AS TASK_ID,       TO_CHAR(A.task_start_time / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS START_TIME,       TO_CHAR(A.task_update_time / (1000 * 60 * 60 * 24 * 1000) + TO_DATE('1970-01-01 08:00:00', 'yyyy-mm-dd hh:mi:ss'), 'yyyy-mm-dd hh24:mi:ss') AS END_TIME,       CASE A.trigger_type         WHEN 0 THEN 'PERIODIC'         WHEN 1 THEN 'USER'         ELSE 'INVALID' END AS TRIGGER_TYPE,       CASE A.status         when 0 then 'PREPARED'         when 1 then 'RUNNING'         when 2 then 'PENDING'         when 3 then 'CANCELED'         when 4 then 'FINISHED'         when 15 then 'TRIGGERING'         when 16 then 'SUSPENDING'         when 17 then 'CANCELING'         when 18 then 'CLEANING'         else 'INVALID' END AS STATUS,       CASE A.task_type         WHEN 2 THEN A.ttl_del_cnt         ELSE 0 END AS MISS_CNT,       CASE A.task_type         WHEN 2 THEN A.max_version_del_cnt         ELSE 0 END AS MISMATCH_LEN_CNT,       CASE A.task_type         WHEN 2 THEN A.scan_cnt         ELSE 0 END AS ORPHAN_CNT,       CASE A.task_type         WHEN 3 THEN A.scan_cnt         ELSE 0 END AS CORRECT_CNT,       substr(A.ret_code, 1, instr(A.ret_code, '|') - 1) AS RET_CODE,       CASE A.task_type         WHEN 2 THEN 'LOB_CHECK'         WHEN 3 THEN 'LOB_REPAIR'         ELSE 'INVALID' END AS TASK_TYPE,       A.scan_index AS SCAN_INDEX       FROM SYS.ALL_VIRTUAL_KV_TTL_TASK A LEFT OUTER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON           A.table_id = B.table_id AND A.tenant_id = B.tenant_id       WHERE A.task_type IN (2, 3) )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_lob_check_exception_result_ora_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_ORA_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_LOB_CHECK_EXCEPTION_RESULT_ORA_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_LOB_CHECK_EXCEPTION_RESULT_ORA_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       A.tenant_id AS TENANT_ID,       CASE A.ls_id         WHEN -1 THEN 'TENANT'         ELSE 'LS' END AS TASK_SCOPE,       A.ls_id AS LS_ID,       A.gmt_create AS CREATE_TIME,       A.gmt_modified AS UPDATE_TIME,       CASE A.table_id         WHEN 3 THEN '__all_table'         ELSE B.table_name END AS TABLE_NAME,       A.table_id AS TABLE_ID,       CASE A.inconsistency_type         WHEN 0 THEN 'LOB_NOT_FOUND'         WHEN 1 THEN 'LOB_LEN_MISMATCH'         WHEN 2 THEN 'LOB_ORPHANED'         ELSE 'INVALID' END AS INCONSISTENCY_TYPE,       A.tablet_ids AS TABLET_IDS       FROM SYS.ALL_VIRTUAL_LOB_CHECK_EXCEPTION_RESULT A LEFT OUTER JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B ON           A.table_id = B.table_id AND A.tenant_id = B.tenant_id )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::dba_ob_sensitive_rules_ora_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

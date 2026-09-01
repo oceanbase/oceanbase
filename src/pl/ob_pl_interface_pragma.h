@@ -71,6 +71,7 @@
 #include "pl/sys_package/ob_utl_smtp.h"
 #include "pl/sys_package/ob_utl_http.h"
 #include "pl/sys_package/ob_dbms_plsql_code_coverage.h"
+#include "pl/sys_package/ob_dbms_lob_manager.h"
 #endif
 #include "pl/sys_package/ob_dbms_xplan.h"
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -93,6 +94,7 @@
 #include "pl/sys_package/ob_dbms_data_dict.h"
 #include "pl/sys_package/ob_dbms_python.h"
 #include "pl/sys_package/ob_dbms_schema.h"
+#include "pl/sys_package/ob_dbms_lob_manager.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -1002,6 +1004,16 @@
   INTERFACE_DEF(INTERFACE_DBMS_PYTHON_LOADPYTHON_MYSQL, "DBMS_PYTHON_LOADPYTHON_MYSQL", (ObDBMSPython::loadpython_mysql))
   INTERFACE_DEF(INTERFACE_DBMS_PYTHON_DROPPYTHON_MYSQL, "DBMS_PYTHON_DROPPYTHON_MYSQL", (ObDBMSPython::droppython_mysql))
   // end of dbms_python
+
+  // start of DBMS_LOB_MANAGER
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_CHECK_LOB, "DBMS_LOB_MANAGER_CHECK_LOB", (ObDbmsLobManager::check_lob))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_CANCEL_JOB, "DBMS_LOB_MANAGER_CANCEL_JOB", (ObDbmsLobManager::cancel_job))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_SUSPEND_JOB, "DBMS_LOB_MANAGER_SUSPEND_JOB", (ObDbmsLobManager::suspend_job))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_RESUME_JOB, "DBMS_LOB_MANAGER_RESUME_JOB", (ObDbmsLobManager::resume_job))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_REPAIR_LOB, "DBMS_LOB_MANAGER_REPAIR_LOB", (ObDbmsLobManager::repair_lob))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_CHECK_LOB_INNER, "DBMS_LOB_MANAGER_CHECK_LOB_INNER", (ObDbmsLobManager::check_lob_inner))
+  INTERFACE_DEF(INTERFACE_DBMS_LOB_MANAGER_RESCHEDULE_JOB, "DBMS_LOB_MANAGER_RESCHEDULE_JOB", (ObDbmsLobManager::reschedule_job))
+  // end of DBMS_LOB_MANAGER
 
   // start of dbms_hybrid_search
 #define DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(symbol, func) \

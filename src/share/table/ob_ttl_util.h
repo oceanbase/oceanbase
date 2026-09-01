@@ -23,7 +23,6 @@
 
 namespace oceanbase
 {
-using table::ObHbaseModeType;
 namespace sql
 {
 class ObSchemaChecker;
@@ -60,7 +59,17 @@ enum ObTTLTaskType
   OB_TTL_RESUME,
   OB_TTL_CANCEL,
   OB_TTL_MOVE,
-  OB_TTL_INVALID
+  OB_TTL_INVALID,
+  OB_LOB_CHECK_TRIGGER = 10,
+  OB_LOB_CHECK_SUSPEND,
+  OB_LOB_CHECK_RESUME,
+  OB_LOB_CHECK_CANCEL,
+  OB_LOB_CHECK_INVALID,
+  OB_LOB_REPAIR_TRIGGER = 20, // FARM COMPAT WHITELIST
+  OB_LOB_REPAIR_SUSPEND,      // FARM COMPAT WHITELIST
+  OB_LOB_REPAIR_RESUME,       // FARM COMPAT WHITELIST
+  OB_LOB_REPAIR_CANCEL,       // FARM COMPAT WHITELIST
+  OB_LOB_REPAIR_INVALID,      // FARM COMPAT WHITELIST
 };
 
 enum ObTTLTaskStatus
@@ -85,7 +94,11 @@ enum ObTTLType
 {
   NORMAL = 0,
   HBASE_ROWKEY = 1,
+  LOB_CHECK = 2,
+  LOB_REPAIR = 3, // FARM COMPAT WHITELIST
 };
+
+const char *ob_ttl_type_to_string(const ObTTLType ttl_type);
 
 typedef struct ObTTLStatus {
   int64_t gmt_create_;
@@ -108,6 +121,8 @@ typedef struct ObTTLStatus {
   ObString ret_code_;
   ObTTLType task_type_;
   ObString scan_index_;
+  uint64_t ls_id_;
+  static const ObString DEFAULT_RET_CODE;
   ObTTLStatus()
   : gmt_create_(0),
     gmt_modified_(0),
@@ -123,9 +138,10 @@ typedef struct ObTTLStatus {
     max_version_del_cnt_(0),
     scan_cnt_(0),
     row_key_(),
-    ret_code_("OB_SUCCESS"),
+    ret_code_(DEFAULT_RET_CODE),
     task_type_(ObTTLType::NORMAL),
-    scan_index_(ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE) {}
+    scan_index_(ObTTLTaskConstant::TTL_SCAN_INDEX_DEFAULT_VALUE),
+    ls_id_(OB_INVALID_ID) {}
 
  TO_STRING_KV(K_(gmt_create),
               K_(gmt_modified),
@@ -142,8 +158,9 @@ typedef struct ObTTLStatus {
               K_(scan_cnt),
               K_(row_key),
               K_(ret_code),
-              K_(task_type),
-              K_(scan_index));
+              "task_type", ob_ttl_type_to_string(task_type_),
+              K_(scan_index),
+              K_(ls_id));
 } ObTTLStatus;
 
 typedef common::ObArray<ObTTLStatus> ObTTLStatusArray;
@@ -236,17 +253,22 @@ struct ObSimpleTTLInfo
 {
 public:
   uint64_t tenant_id_;
-
+  TRIGGER_TYPE trigger_type_;
+  ObString table_with_tablet_;
   ObSimpleTTLInfo()
-    : tenant_id_(OB_INVALID_TENANT_ID)
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      trigger_type_(TRIGGER_TYPE::USER_TRIGGER),
+      table_with_tablet_()
   {}
 
   ObSimpleTTLInfo(const uint64_t tenant_id)
-    : tenant_id_(tenant_id)
+    : tenant_id_(tenant_id),
+      trigger_type_(TRIGGER_TYPE::USER_TRIGGER),
+      table_with_tablet_()
   {}
 
   bool is_valid() const { return (OB_INVALID_TENANT_ID != tenant_id_); }
-  TO_STRING_KV(K_(tenant_id));
+  TO_STRING_KV(K_(tenant_id), K_(trigger_type), K_(table_with_tablet));
   OB_UNIS_VERSION(1);
 };
 
@@ -254,7 +276,7 @@ struct ObTTLParam
 {
 public:
   ObTTLParam()
-    : ttl_info_array_(), ttl_all_(false), transport_(nullptr)
+    : ttl_info_array_(), ttl_all_(false), transport_(nullptr), trigger_type_(TRIGGER_TYPE::USER_TRIGGER), table_with_tablet_()
   {}
 
   void reset()
@@ -262,6 +284,8 @@ public:
     ttl_info_array_.reset();
     ttl_all_ = false;
     transport_ = nullptr;
+    trigger_type_ = TRIGGER_TYPE::USER_TRIGGER;
+    table_with_tablet_.reset();
   }
 
   bool is_valid() const
@@ -271,12 +295,14 @@ public:
 
   int add_ttl_info(const uint64_t tenant_id);
 
-  TO_STRING_KV(K_(ttl_info_array), K_(ttl_all), KP_(transport));
+  TO_STRING_KV(K_(ttl_info_array), K_(ttl_all), KP_(transport), K_(trigger_type), K_(table_with_tablet));
 
   common::ObArray<ObSimpleTTLInfo> ttl_info_array_;
   bool ttl_all_;
   rpc::frame::ObReqTransport *transport_;
   obrpc::ObTTLRequestArg::TTLRequestType type_;
+  TRIGGER_TYPE trigger_type_; // 表示定时器触发还是手动触发
+  ObString table_with_tablet_;
 };
 
 class ObKVAttr
@@ -341,6 +367,7 @@ public:
                                 common::ObISQLClient& proxy,
                                 const ObTTLTaskStatus local_state,
                                 const int64_t local_task_id,
+                                common::ObTTLType ttl_type,
                                 bool &tenant_state_changed);
   static int insert_ttl_task(uint64_t tenant_id,
                              const char* tname,
@@ -379,6 +406,7 @@ public:
 
   static int read_tenant_ttl_task(uint64_t tenant_id,
                                   uint64_t table_id,
+                                  const common::ObTTLType task_type,
                                   common::ObISQLClient& proxy,
                                   ObTTLStatus &ttl_record,
                                   const bool for_update = false,
@@ -393,6 +421,9 @@ public:
 
 
   static bool check_can_do_work();
+  static bool is_support_scan_index_version(uint64_t data_version);
+  /// LOB consistency check/repair and __all_kv_ttl_task.ls_id column: [4.4.2.2, 4.5.0.0) or [4.5.1.0, +inf)
+  static bool is_support_lob_consistency_data_version(const uint64_t data_version);
   static bool check_can_process_tenant_tasks(uint64_t tenant_id);
 
   static int parse_kv_attributes(const ObString &kv_attributes, ObKVAttr &kv_attr);
@@ -440,6 +471,7 @@ public:
   static int check_htable_ddl_supported(share::schema::ObSchemaGetterGuard &schema_guard,
                                         const uint64_t tenant_id,
                                         const common::ObIArray<share::schema::ObDependencyInfo> &dep_infos);
+  static bool is_ttl_cmd(int32_t cmd_code) { return cmd_code >= 0 && cmd_code < obrpc::ObTTLRequestArg::TTL_INVALID_TYPE; }
   static int check_ttl_scan_index_valid(const share::schema::ObTableSchema &table_schema,
                                         share::schema::ObSchemaGetterGuard &schema_guard,
                                         ObKVAttr::ObTTLTableType ttl_type,

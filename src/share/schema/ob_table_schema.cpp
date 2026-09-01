@@ -10400,6 +10400,7 @@ DEFINE_CHECK_HAS_INDEX_FUNC(fts_index_aux);
 DEFINE_CHECK_HAS_INDEX_FUNC(vec_domain_index);
 DEFINE_CHECK_HAS_INDEX_FUNC(spatial_index);
 DEFINE_CHECK_HAS_INDEX_FUNC(multivalue_index_aux);
+DEFINE_CHECK_HAS_INDEX_FUNC(vec_index_snapshot_data_type);
 
 #undef DEFINE_CHECK_HAS_INDEX_FUNC
 

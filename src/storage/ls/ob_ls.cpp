@@ -1288,20 +1288,20 @@ int ObLS::register_user_service()
     REGISTER_TO_LOGSERVICE(DATA_DICT_LOG_BASE_TYPE, MTL(datadict::ObDataDictService *));
     REGISTER_TO_RESTORESERVICE(RECOVERY_LS_SERVICE_LOG_BASE_TYPE, MTL(ObRecoveryLSService *));
     REGISTER_TO_RESTORESERVICE(NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, MTL(ObCreateStandbyFromNetActor *));
-    REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
+    REGISTER_TO_LOGSERVICE(TTL_SERVICE_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     REGISTER_TO_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
     REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, MTL(ObPluginVectorIndexService *));
   }
 
-  if (ls_id.is_user_ls()) {
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
-        LOG_WARN("fail to init tablet ttl manager", KR(ret));
-      } else {
-        REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
-        // reuse ttl timer
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_ttl_mgr_.init(this))) {
+      LOG_WARN("fail to init tablet ttl manager", KR(ret));
+    } else {
+      REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, &tablet_ttl_mgr_);
+      // reuse ttl timer
+      if (ls_id.is_user_ls()) {
         REGISTER_TO_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
       }
     }
@@ -1483,8 +1483,7 @@ void ObLS::unregister_user_service_()
     ObRecoveryLSService* recover_ls_service = MTL(ObRecoveryLSService*);
     UNREGISTER_FROM_RESTORESERVICE(RECOVERY_LS_SERVICE_LOG_BASE_TYPE, recover_ls_service);
     ObCreateStandbyFromNetActor* net_standby_tnt_service = MTL(ObCreateStandbyFromNetActor*);
-    UNREGISTER_FROM_RESTORESERVICE(NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, net_standby_tnt_service);
-    UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
+    UNREGISTER_FROM_LOGSERVICE(TTL_SERVICE_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
     UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     UNREGISTER_FROM_LOGSERVICE(DBMS_SCHEDULER_LOG_BASE_TYPE, MTL(rootserver::ObDBMSSchedService *));
@@ -1492,9 +1491,9 @@ void ObLS::unregister_user_service_()
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(VEC_INDEX_LOG_BASE_TYPE, &tablet_ttl_mgr_.get_vector_idx_scheduler());
-    UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
-    tablet_ttl_mgr_.destroy();
   }
+  UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);
+  tablet_ttl_mgr_.destroy();
 }
 
 void ObLS::unregister_from_service_()

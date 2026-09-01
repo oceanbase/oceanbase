@@ -57,6 +57,8 @@ bool ObKVAttr::is_ttl_table() const
   return is_ttl;
 }
 
+const ObString ObTTLStatus::DEFAULT_RET_CODE = ObString::make_string("OB_SUCCESS");
+
 int ObKVAttr::deep_copy_ttl_scan_index(const ObString &ttl_scan_index)
 {
   int ret = OB_SUCCESS;
@@ -146,6 +148,28 @@ int ObTTLUtil::parse(const char* str, ObTTLDutyDuration& duration)
   return ret;
 }
 
+const char *ob_ttl_type_to_string(const ObTTLType ttl_type)
+{
+  const char *ret_str = "INVALID";
+  switch (ttl_type) {
+    case NORMAL:
+      ret_str = "NORMAL";
+      break;
+    case HBASE_ROWKEY:
+      ret_str = "HBASE_ROWKEY";
+      break;
+    case LOB_CHECK:
+      ret_str = "LOB_CHECK";
+      break;
+    case LOB_REPAIR:
+      ret_str = "LOB_REPAIR";
+      break;
+    default:
+      return "INVALID";
+  }
+  return ret_str;
+}
+
 bool ObTTLUtil::current_in_duration(ObTTLDutyDuration& duration)
 {
   bool bret = false;
@@ -181,13 +205,14 @@ int ObTTLUtil::check_tenant_state(uint64_t tenant_id,
                                   common::ObISQLClient& proxy,
                                   const ObTTLTaskStatus local_state,
                                   const int64_t local_task_id,
+                                  common::ObTTLType ttl_type,
                                   bool &tenant_state_changed)
 {
   int ret = OB_SUCCESS;
 
   ObTTLStatus tenant_task;
   ObTTLTaskStatus tenant_state;
-  if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id, table_id, proxy, tenant_task, true))) {
+  if (OB_FAIL(ObTTLUtil::read_tenant_ttl_task(tenant_id, table_id, ttl_type, proxy, tenant_task, true))) {
     if (OB_ITER_END == ret) {
       // tenant task maybe remove
       ret = OB_ERR_UNEXPECTED;
@@ -218,50 +243,32 @@ int ObTTLUtil::insert_ttl_task(uint64_t tenant_id,
   ObSqlString sql;
   int64_t affect_rows = 0;
   uint64_t data_version = 0;
+  ObCStringHelper ret_code_helper;
+  ObCStringHelper scan_index_helper;
+  const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
+  const char *scan_index_str = scan_index_helper.convert(ObHexEscapeSqlStr(task.scan_index_));
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("get data version failed", K(ret));
-  } else if (data_version < DATA_VERSION_4_4_2_0) {
-    ObCStringHelper ret_code_helper;
-    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
-    if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
-              "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
-              "task_id, task_start_time, task_update_time, trigger_type, status,"
-              " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, row_key)"
-              " VALUE "
-              "(now(), now(), %ld, %ld, %ld,"
-              " %ld, %ld, %ld, %ld, %ld, "
-              " %ld, %ld, %ld,'%s', %ld, ",
-              tname,
-              tenant_id, task.table_id_, task.tablet_id_,
-              task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_,
-              task.status_, task.ttl_del_cnt_, task.max_version_del_cnt_,
-              task.scan_cnt_, ret_code_str,
-              static_cast<int64_t>(task.task_type_)))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
-    }
-  } else {
-    ObCStringHelper ret_code_helper;
-    ObCStringHelper scan_index_helper;
-    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
-    const char *scan_index_str = scan_index_helper.convert(ObHexEscapeSqlStr(task.scan_index_));
-    if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
+  } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s "
       "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
       "task_id, task_start_time, task_update_time, trigger_type, status,"
-      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, scan_index, row_key)"
-      " VALUE "
-      "(now(), now(), %ld, %ld, %ld,"
+      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, ",
+      tname))) {
+  } else if (is_support_scan_index_version(data_version) && OB_FAIL(sql.append("scan_index, "))) {
+    LOG_WARN("fail to append scan_index", K(ret));
+  } else if (is_support_lob_consistency_data_version(data_version) && OB_FAIL(sql.append("ls_id, "))) {
+    LOG_WARN("fail to append ls_id", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("row_key) VALUE (now(), now(), %ld, %ld, %ld,"
       " %ld, %ld, %ld, %ld, %ld, "
-      " %ld, %ld, %ld,'%s', %ld, '%s', ",
-      tname,
+      " %ld, %ld, %ld,'%s', %ld, ",
       tenant_id, task.table_id_, task.tablet_id_,
       task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_,
       task.status_, task.ttl_del_cnt_, task.max_version_del_cnt_,
-      task.scan_cnt_, ret_code_str,
-      static_cast<int64_t>(task.task_type_), scan_index_str))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
+      task.scan_cnt_, ret_code_str, static_cast<int64_t>(task.task_type_)))) {
+  } else if (is_support_scan_index_version(data_version) && OB_FAIL(sql.append_fmt("'%s', ", scan_index_str))) {
+    LOG_WARN("fail to append scan_index and ls_id", K(ret));
+  } else if (is_support_lob_consistency_data_version(data_version) && OB_FAIL(sql.append_fmt("%ld, ", task.ls_id_))) {
+    LOG_WARN("fail to append ls_id", K(ret));
   } else if (OB_FAIL(sql_append_hex_escape_str(task.row_key_, sql))) {
     LOG_WARN("fail to append rowkey", K(ret));
   } else if (OB_FAIL(sql.append(")"))) {
@@ -360,17 +367,6 @@ int ObTTLUtil::update_ttl_task_all_fields(uint64_t tenant_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("get data version failed", K(ret));
-  } else if (data_version < DATA_VERSION_4_4_2_0) {
-    ObCStringHelper ret_code_helper;
-    const char *ret_code_str = ret_code_helper.convert(ObHexEscapeSqlStr(task.ret_code_));
-    if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
-      "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
-      " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, ret_code = '%s', "
-      " row_key = ",
-      tname, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-      task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, ret_code_str))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
-    }
   } else {
     ObCStringHelper ret_code_helper;
     ObCStringHelper scan_index_helper;
@@ -378,11 +374,18 @@ int ObTTLUtil::update_ttl_task_all_fields(uint64_t tenant_id,
     const char *scan_index_str = scan_index_helper.convert(ObHexEscapeSqlStr(task.scan_index_));
     if (OB_FAIL(sql.assign_fmt("UPDATE %s SET "
       "task_start_time = %ld, task_update_time = %ld, trigger_type = %ld, status = %ld,"
-      " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, ret_code = '%s', scan_index = '%s', "
-      " row_key = ",
+      " ttl_del_cnt = %ld, max_version_del_cnt = %ld, scan_cnt = %ld, ret_code = '%s', ",
       tname, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-      task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, ret_code_str, scan_index_str))) {
+      task.ttl_del_cnt_, task.max_version_del_cnt_, task.scan_cnt_, ret_code_str))) {
       LOG_WARN("sql assign fmt failed", K(ret));
+    } else if (is_support_scan_index_version(data_version)
+               && OB_FAIL(sql.append_fmt("scan_index = '%s', ", scan_index_str))) {
+      LOG_WARN("fail to append scan_index", K(ret));
+    } else if (is_support_lob_consistency_data_version(data_version)
+               && OB_FAIL(sql.append_fmt("ls_id = %ld, ", task.ls_id_))) {
+      LOG_WARN("fail to append ls_id", K(ret));
+    } else if (OB_FAIL(sql.append("row_key = "))) {
+      LOG_WARN("fail to append row_key", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -535,6 +538,23 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
                   }
                 }
               }
+              if (is_support_lob_consistency_data_version(data_version)) {
+                EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", result_arr.at(idx).ls_id_, uint64_t);
+              }
+              if (OB_SUCC(ret) && OB_NOT_NULL(allocator) && is_support_scan_index_version(data_version)) {
+                ObString scan_index;
+                char *scan_index_buf = nullptr;
+                EXTRACT_VARCHAR_FIELD_MYSQL(*result, "scan_index", scan_index);
+                if (OB_SUCC(ret) && !scan_index.empty()) {
+                  if (OB_ISNULL(scan_index_buf = static_cast<char *>(allocator->alloc(scan_index.length())))) {
+                    ret = OB_ALLOCATE_MEMORY_FAILED;
+                    LOG_WARN("failt to allocate memory", K(ret), K(scan_index));
+                  } else {
+                    MEMCPY(scan_index_buf, scan_index.ptr(), scan_index.length());
+                    result_arr.at(idx).scan_index_.assign(scan_index_buf, scan_index.length());
+                  }
+                }
+              }
 
               if (OB_SUCC(ret) && OB_NOT_NULL(allocator)) {
                 ObString err_msg;
@@ -550,20 +570,6 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
                   }
                 }
               }
-              if (OB_SUCC(ret) && OB_NOT_NULL(allocator) && data_version >= DATA_VERSION_4_4_2_0) {
-                ObString scan_index;
-                char *scan_index_buf = nullptr;
-                EXTRACT_VARCHAR_FIELD_MYSQL(*result, "scan_index", scan_index);
-                if (OB_SUCC(ret) && !scan_index.empty()) {
-                  if (OB_ISNULL(scan_index_buf = static_cast<char *>(allocator->alloc(scan_index.length())))) {
-                    ret = OB_ALLOCATE_MEMORY_FAILED;
-                    LOG_WARN("failt to allocate memory", K(ret), K(scan_index));
-                  } else {
-                    MEMCPY(scan_index_buf, scan_index.ptr(), scan_index.length());
-                    result_arr.at(idx).scan_index_.assign(scan_index_buf, scan_index.length());
-                  }
-                }
-              }
             }
           }
         }
@@ -576,6 +582,7 @@ int ObTTLUtil::read_ttl_tasks(uint64_t tenant_id,
 
 int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
                                     uint64_t table_id,
+                                    const common::ObTTLType task_type,
                                     common::ObISQLClient& sql_client,
                                     ObTTLStatus& ttl_record,
                                     const bool for_update,
@@ -583,14 +590,15 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  uint64_t data_version;
+  uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("get data version failed", K(ret));
   } else if (!is_valid_tenant_id(tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE table_id = '%ld'%s", OB_ALL_KV_TTL_TASK_TNAME, table_id, for_update ? " FOR UPDATE" : ""))) {
-    LOG_WARN("fail to append sql", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE table_id = '%ld' AND task_type = '%ld'%s",
+      OB_ALL_KV_TTL_TASK_TNAME, table_id, task_type, for_update ? " FOR UPDATE" : ""))) {
+    LOG_WARN("fail to append sql", KR(ret), K(tenant_id), K(table_id), K(task_type));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = nullptr;
@@ -644,7 +652,7 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
             }
           }
         }
-        if (OB_SUCC(ret) && OB_NOT_NULL(allocator) && data_version >= DATA_VERSION_4_4_2_0) {
+        if (OB_SUCC(ret) && OB_NOT_NULL(allocator) && is_support_scan_index_version(data_version)) {
           ObString scan_index;
           char *scan_index_buf = nullptr;
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, "scan_index", scan_index);
@@ -657,6 +665,9 @@ int ObTTLUtil::read_tenant_ttl_task(uint64_t tenant_id,
               ttl_record.scan_index_.assign(scan_index_buf, scan_index.length());
             }
           }
+        }
+        if (OB_SUCC(ret) && is_support_lob_consistency_data_version(data_version)) {
+          EXTRACT_INT_FIELD_MYSQL(*result, "ls_id", ttl_record.ls_id_, uint64_t);
         }
       }
     }
@@ -693,6 +704,21 @@ bool ObTTLUtil::check_can_do_work() {
   return bret;
 }
 
+bool ObTTLUtil::is_support_scan_index_version(uint64_t data_version)
+{
+  bool bret = true;
+  // only support in [442, 450) and [451, )
+  if (data_version < DATA_VERSION_4_4_2_0 || data_version == DATA_VERSION_4_5_0_0 ) {
+        bret = false;
+  }
+  return bret;
+}
+
+bool ObTTLUtil::is_support_lob_consistency_data_version(const uint64_t data_version)
+{
+  return (data_version >= DATA_VERSION_4_4_2_3 && data_version < DATA_VERSION_4_5_0_0)
+      || (data_version >= DATA_VERSION_4_5_1_0);
+}
 
 bool ObTTLUtil::check_can_process_tenant_tasks(uint64_t tenant_id)
 {
@@ -728,30 +754,22 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("get data version failed", K(ret));
-  } else if (data_version < DATA_VERSION_4_4_2_0) {
-    if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
-                " tenant_id, task_id, table_id, tablet_id, task_start_time,"
-                " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
-                " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type from %s"
-                " where task_id = %ld and tablet_id >= 0  and table_id >= 0"
-                " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
-                share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
-                share::OB_ALL_KV_TTL_TASK_TNAME,
-                task_id, batch_size))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
-    }
-  } else {
-    if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
-                " tenant_id, task_id, table_id, tablet_id, task_start_time,"
-                " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
-                " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type, scan_index from %s"
-                " where task_id = %ld and tablet_id >= 0  and table_id >= 0"
-                " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
-                share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
-                share::OB_ALL_KV_TTL_TASK_TNAME,
-                task_id, batch_size))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
-    }
+  } else if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
+              " tenant_id, task_id, table_id, tablet_id, task_start_time,"
+              " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type",
+              share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
+  } else if (is_support_scan_index_version(data_version) && OB_FAIL(sql.append(", scan_index"))) {
+    LOG_WARN("fail to append scan_index", K(ret));
+  } else if (is_support_lob_consistency_data_version(data_version) && OB_FAIL(sql.append(", ls_id"))) {
+    LOG_WARN("fail to append ls_id", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" from %s"
+              " where task_id = %ld and tablet_id >= 0  and table_id >= 0"
+              " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
+              share::OB_ALL_KV_TTL_TASK_TNAME,
+              task_id, batch_size))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(proxy.write(gen_meta_tenant_id(tenant_id), sql.ptr(), insert_rows))) {
@@ -780,9 +798,21 @@ int ObTTLUtil::move_tenant_task_to_history_table(const ObTTLStatusKey &key,
   ObSqlString sql;
   int64_t insert_rows = 0;
   int64_t delete_rows = 0;
-  if (OB_FAIL(sql.assign_fmt("insert into %s select * from %s "
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(key.tenant_id_, data_version))) {
+    LOG_WARN("get data version failed", K(ret));
+  } else if (OB_FAIL(sql.assign_fmt("insert into %s select gmt_create, gmt_modified,"
+              " tenant_id, task_id, table_id, tablet_id, task_start_time,"
+              " task_update_time, trigger_type, status,"
+              " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code, task_type",
+              share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME))) {
+    LOG_WARN("sql assign fmt failed", K(ret));
+  } else if (is_support_scan_index_version(data_version) && OB_FAIL(sql.append(", scan_index"))) {
+    LOG_WARN("fail to append scan_index", K(ret));
+  } else if (is_support_lob_consistency_data_version(data_version) && OB_FAIL(sql.append(", ls_id"))) {
+    LOG_WARN("fail to append ls_id", K(ret));
+  } else if (OB_FAIL(sql.append_fmt(" from %s "
               " where task_id = %ld and tablet_id = %ld",
-              share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
               share::OB_ALL_KV_TTL_TASK_TNAME,
               key.task_id_, key.tablet_id_))) {
     LOG_WARN("sql assign fmt failed", K(ret));
@@ -814,24 +844,6 @@ int ObTTLUtil::replace_ttl_task(uint64_t tenant_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
     LOG_WARN("get data version failed", K(ret));
-  } else if (data_version < DATA_VERSION_4_4_2_0) {
-    ObCStringHelper helper;
-    const char *ret_code_str = helper.convert(ObHexEscapeSqlStr(task.ret_code_));
-    if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s "
-      "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
-      "task_id, task_start_time, task_update_time, trigger_type, status,"
-      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, row_key)"
-      " VALUE "
-      "(now(), now(), %ld, %ld, %ld,"
-      " %ld, %ld, %ld, %ld, %ld, "
-      " %ld, %ld, %ld,'%s', ",
-      tname, // 0
-      tenant_id, task.table_id_, task.tablet_id_,
-      task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
-      task.ttl_del_cnt_, task.max_version_del_cnt_,
-      task.scan_cnt_, ret_code_str))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
-    }
   } else {
     ObCStringHelper ret_code_helper;
     ObCStringHelper scan_index_helper;
@@ -840,17 +852,27 @@ int ObTTLUtil::replace_ttl_task(uint64_t tenant_id,
     if (OB_FAIL(sql.assign_fmt("REPLACE INTO %s "
       "(gmt_create, gmt_modified, tenant_id, table_id, tablet_id, "
       "task_id, task_start_time, task_update_time, trigger_type, status,"
-      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, scan_index, row_key)"
+      " ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, task_type, ",
+      tname))) {
+      LOG_WARN("sql assign fmt failed", K(ret));
+    } else if (is_support_scan_index_version(data_version) && OB_FAIL(sql.append("scan_index, "))) {
+      LOG_WARN("fail to append scan_index", K(ret));
+    } else if (is_support_lob_consistency_data_version(data_version) && OB_FAIL(sql.append("ls_id, "))) {
+      LOG_WARN("fail to append ls_id", K(ret));
+    } else if (OB_FAIL(sql.append_fmt("row_key)"
       " VALUE "
       "(now(), now(), %ld, %ld, %ld,"
       " %ld, %ld, %ld, %ld, %ld, "
-      " %ld, %ld, %ld,'%s', '%s', ",
-      tname, // 0
+      " %ld, %ld, %ld,'%s', %ld, ",
       tenant_id, task.table_id_, task.tablet_id_,
       task.task_id_, task.task_start_time_, task.task_update_time_, task.trigger_type_, task.status_,
       task.ttl_del_cnt_, task.max_version_del_cnt_,
-      task.scan_cnt_, ret_code_str, scan_index_str))) {
-      LOG_WARN("sql assign fmt failed", K(ret));
+      task.scan_cnt_, ret_code_str, static_cast<int64_t>(task.task_type_)))) {
+      LOG_WARN("fail to append base values", K(ret));
+    } else if (is_support_scan_index_version(data_version) && OB_FAIL(sql.append_fmt("'%s', ", scan_index_str))) {
+      LOG_WARN("fail to append scan_index", K(ret));
+    } else if (is_support_lob_consistency_data_version(data_version) && OB_FAIL(sql.append_fmt("%ld, ", task.ls_id_))) {
+      LOG_WARN("fail to append ls_id", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
@@ -1138,10 +1160,10 @@ int ObTTLUtil::parse_kv_attributes(uint64_t tenant_id, const ObString &kv_attrib
         uint64_t data_version;
         if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
           LOG_WARN("fail to get data version", K(ret));
-        } else if (data_version < DATA_VERSION_4_4_2_0) {
+        } else if (!is_support_scan_index_version(data_version)) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("ttl scan index is not supported in data version less than 4.4.2", K(ret), K(data_version));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl scan index in data version less than 4.4.2");
+          LOG_WARN("ttl scan index is not supported in current data version", K(ret), K(data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl scan index in current data version");
         } else if (OB_FAIL(parse_kv_attributes_ttl_scan_index(kv->value_, kv_attr))) {
           LOG_WARN("fail to parse ttl scan index kv attributes", K(ret), K(kv_attributes));
         } else if (kv_attr.type_ == ObKVAttr::INVALID) {
@@ -1210,8 +1232,7 @@ int ObTTLUtil::dispatch_ttl_cmd(const ObTTLParam &param)
   int ret = OB_SUCCESS;
   int final_ret = OB_SUCCESS;
   ObSEArray<ObSimpleTTLInfo, 32> ttl_info_array;
-  if (OB_UNLIKELY(!param.is_valid()
-                  || (!param.ttl_all_ && param.ttl_info_array_.empty()))) {
+  if (OB_UNLIKELY(!param.is_valid() || (!param.ttl_all_ && param.ttl_info_array_.empty()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), KR(ret));
   } else if (OB_FAIL(get_ttl_info(param, ttl_info_array))) {
@@ -1476,6 +1497,9 @@ int ObTTLUtil::get_ttl_info(const ObTTLParam &param, ObIArray<ObSimpleTTLInfo> &
         LOG_INFO("skip do ttl task for standby tenant", K(tenant_info));
       } else if (OB_FAIL(ttl_info_array.push_back(tmp_info_array.at(i)))) {
         LOG_WARN("fail to push back ttl info", KR(ret), K(i), "ttl_info", tmp_info_array.at(i));
+      } else {
+        ttl_info_array.at(i).trigger_type_ = param.trigger_type_;
+        ttl_info_array.at(i).table_with_tablet_ = param.table_with_tablet_;
       }
     }
   }
@@ -1500,7 +1524,8 @@ int ObTTLUtil::dispatch_one_tenant_ttl(obrpc::ObTTLRequestArg::TTLRequestType ty
     uint64_t tenant_id = ttl_info.tenant_id_;
     req.tenant_id_ = tenant_id;
     req.cmd_code_ = type;
-    req.trigger_type_ = TRIGGER_TYPE::USER_TRIGGER;
+    req.trigger_type_ = ttl_info.trigger_type_;
+    req.table_with_tablet_ = ttl_info.table_with_tablet_;
     if (OB_ISNULL(GCTX.location_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid GCTX", KR(ret));
