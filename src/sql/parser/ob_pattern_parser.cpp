@@ -12,11 +12,14 @@
 
 #define USING_LOG_PREFIX SQL_PARSER
 #include <ctype.h>
-#include <regex.h>
+#include <icu/i18n/unicode/uregex.h>
+#include <icu/common/unicode/ustring.h>
+#include <icu/common/unicode/utypes.h>
 #include "lib/ob_errno.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
 #include "lib/string/ob_string_buffer.h"
+#include "lib/worker.h"
 #include "sql/parser/ob_pattern_parser.h"
 #include "sql/resolver/ddl/ob_outline_binding_rule.h"
 
@@ -55,8 +58,8 @@ namespace sql
 //   no longer truncate the variable definition. '${' nested inside
 //   the regex body is rejected with a dedicated message. Empty
 //   regex (':}') is rejected before the resolver's reference-check sees it.
-//   Trial regcomp at CREATE time still surfaces invalid syntax
-//   via OB_ERR_REGEXP_ERROR.
+//   Trial ICU compile at CREATE time still surfaces invalid syntax
+//   via OB_ERR_REGEXP_ERROR (same engine as the runtime matcher).
 //
 // Each call processes at most one ${...} occurrence per side; a second
 // occurrence is rejected with OB_NOT_SUPPORTED so that the single-variable
@@ -86,6 +89,39 @@ inline bool is_posix_metachar(char c)
 }
 
 } // anonymous namespace
+
+bool ObPatternParser::icu_regex_is_valid(const ObString &regex, ObString &err_msg, common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  bool valid = true;
+  // UChar count <= UTF-8 byte count; MAX_REGEX_LENGTH bounds the body.
+  UChar u_pat[MAX_REGEX_LENGTH + 1];
+  int32_t u_pat_len = 0;
+  UErrorCode status = U_ZERO_ERROR;
+  u_strFromUTF8(u_pat, ARRAYSIZEOF(u_pat), &u_pat_len,
+                regex.ptr(), static_cast<int32_t>(regex.length()), &status);
+  if (U_FAILURE(status)) {
+    valid = false;
+    ObString tmp_err(u_errorName(status));
+    if (OB_SUCCESS != ob_write_string(allocator, tmp_err, err_msg, true /*c_style*/)) {
+      SQL_LOG(WARN, "fail to copy icu u_strFromUTF8 error msg");
+    }
+  } else {
+    const uint32_t re_flags = lib::is_oracle_mode() ? UREGEX_CASE_INSENSITIVE : 0;
+    URegularExpression *regexp = uregex_open(u_pat, u_pat_len, re_flags, NULL, &status);
+    if (U_FAILURE(status) || OB_ISNULL(regexp)) {
+      valid = false;
+      ObString tmp_err(u_errorName(status));
+      if (OB_SUCCESS != ob_write_string(allocator, tmp_err, err_msg, true /*c_style*/)) {
+        SQL_LOG(WARN, "fail to copy icu uregex_open error msg");
+      }
+      if (OB_NOT_NULL(regexp)) { uregex_close(regexp); }
+    } else {
+      uregex_close(regexp);
+    }
+  }
+  return valid;
+}
 
 int ObPatternParser::parse_pattern_string(const ObString &pattern_str, PatternParseResult &result)
 {
@@ -245,7 +281,7 @@ int ObPatternParser::parse_pattern_string(const ObString &pattern_str, PatternPa
       while (r < length) {
         const char rc = pattern[r];
         if (rc == '\\' && r + 1 < length) {
-          // Regex body forwards backslash escapes to regcomp unchanged; we only
+          // Regex body forwards backslash escapes to the ICU trial-compile unchanged; we only
           // need to skip them for our own brace/bracket bookkeeping.
           r += 2;
           continue;
@@ -339,74 +375,11 @@ int ObPatternParser::parse_pattern_string(const ObString &pattern_str, PatternPa
     ++i;
   }
 
-  // ---- Stacked quantifier check on the regex body ----
-  // glibc's regcomp silently collapses '++' / '*+' / '+*' / '+?' / '?+' / etc.
-  // into a single quantifier. Surface them at CREATE so the outline author
-  // notices instead of getting a silently-equivalent regex.
+  // Trial-compile with ICU so a bad regex fails here instead of becoming a
+  // dead outline at match time.
   if (OB_SUCC(ret) && !tmp_var_regex.empty()) {
-    bool in_bracket = false;
-    bool prev_is_quant = false;
-    bool stacked_quant = false;
-    for (int64_t j = 0; j < tmp_var_regex.length(); ++j) {
-      char c = tmp_var_regex[j];
-      if (in_bracket) {
-        if (c == ']') {
-          in_bracket = false;
-        }
-        prev_is_quant = false;
-        continue;
-      }
-      if (c == '\\' && j + 1 < tmp_var_regex.length()) {
-        ++j;
-        prev_is_quant = false;
-        continue;
-      }
-      if (c == '[') {
-        in_bracket = true;
-        prev_is_quant = false;
-        continue;
-      }
-      bool is_quant = (c == '*' || c == '+' || c == '?');
-      if (is_quant && prev_is_quant) {
-        stacked_quant = true;
-        break;
-      }
-      prev_is_quant = is_quant;
-    }
-    if (stacked_quant) {
-      const char *msg = "Stacked quantifiers in BINDING_RULE regex";
-      ObString tmp_err(msg);
-      int tmp_ret = ob_write_string(allocator_, tmp_err, result.regex_error_, true /*c_style*/);
-      if (OB_SUCCESS != tmp_ret) {
-        SQL_LOG(WARN, "fail to copy regex error msg", K(tmp_ret));
-      }
+    if (!ObPatternParser::icu_regex_is_valid(tmp_var_regex, result.regex_error_, allocator_)) {
       ret = OB_ERR_REGEXP_ERROR;
-    }
-  }
-
-  // ---- Trial regcomp ----
-  // Surface invalid POSIX regex at CREATE so a dead outline never lands.
-  if (OB_SUCC(ret) && !tmp_var_regex.empty()) {
-    char regex_buf[MAX_REGEX_LENGTH + 1];
-    MEMCPY(regex_buf, tmp_var_regex.ptr(), tmp_var_regex.length());
-    regex_buf[tmp_var_regex.length()] = '\0';
-    regex_t compiled;
-    int reg_ret = regcomp(&compiled, regex_buf, REG_EXTENDED | REG_NOSUB);
-    if (0 != reg_ret) {
-      char err_buf[256];
-      size_t err_len = regerror(reg_ret, &compiled, err_buf, sizeof(err_buf));
-      if (err_len >= sizeof(err_buf)) {
-        err_buf[sizeof(err_buf) - 1] = '\0';
-      }
-      ObString tmp_err(err_buf);
-      int tmp_ret = ob_write_string(allocator_, tmp_err, result.regex_error_, true /*c_style*/);
-      if (OB_SUCCESS != tmp_ret) {
-        SQL_LOG(WARN, "fail to copy regex error msg", K(tmp_ret));
-      }
-      // Per POSIX, regfree must NOT be called after a failed regcomp.
-      ret = OB_ERR_REGEXP_ERROR;
-    } else {
-      regfree(&compiled);
     }
   }
 

@@ -76,6 +76,7 @@ extern int easy_vsnprintf(char *buf, size_t size, const char *fmt, va_list args)
 %token <node> OUTLINE_DEFAULT_TOKEN/*use for outline parser to just filter hint of query_sql*/
 %token <node> ID_DOT_ID_DOT_ID
 %token <node> ID_DOT_ID
+%token BINDING_RULE_KEYWORD
 /*empty_query::
 // (1) 对于只有空格或者;的查询语句需要报错：如："" 或者 "   " 或者 ";" 或者 " ;  " 都需要报错：err_msg:Query was empty  errno:1065
 // (2) 对于只含有注释或者空格或者;的查询语句则需要返回成功：如："#fadfadf " 或者"/**\/" 或者 "/**\/  ;" 返回成功
@@ -16403,17 +16404,22 @@ ROWS
  *
  *****************************************************************************/
 create_outline_stmt:
-create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON explainable_stmt opt_outline_target binding_rule_opt
+create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON
+{
+  result->in_create_outline_ = true;
+}
+explainable_stmt opt_outline_target binding_rule_opt
 {
   ParseNode *name_node = NULL;
   ParseNode *flag_node = new_terminal_node(result->malloc_pool_, T_DEFAULT);
+  result->in_create_outline_ = false;
   flag_node->value_ = 1;
 
   (void)($1);
   malloc_non_terminal_node(name_node, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $5);
   dup_node_string($5, name_node, result->malloc_pool_);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 7, $2, name_node, flag_node, $7, $8, $3, $9);
-  dup_expr_string($7, result, @7.first_column, @7.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_OUTLINE, 7, $2, name_node, flag_node, $8, $9, $3, $10);
+  dup_expr_string($8, result, @8.first_column, @8.last_column);
 }
 |
 create_with_opt_hint opt_replace outline_type OUTLINE relation_name ON STRING_VALUE USING HINT_HINT_BEGIN hint_list_with_end
@@ -16505,19 +16511,19 @@ binding_rule_opt:
 {
   $$ = NULL;
 }
-| BINDING_RULE '(' scope_binding ')'
+| BINDING_RULE_KEYWORD '(' scope_binding ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, $3, NULL);
 }
-| BINDING_RULE '(' map_binding ')'
+| BINDING_RULE_KEYWORD '(' map_binding ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, NULL, $3);
 }
-| BINDING_RULE '(' scope_binding ',' map_binding ')'
+| BINDING_RULE_KEYWORD '(' scope_binding ',' map_binding ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, $3, $5);
 }
-| BINDING_RULE '(' map_binding ',' scope_binding ')'
+| BINDING_RULE_KEYWORD '(' map_binding ',' scope_binding ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_BINDING_RULE_CLAUSE, 2, $3, $5);
 }

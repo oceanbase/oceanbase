@@ -83,7 +83,7 @@ public:
   static int reconstruct_outline_content(
       const common::ObString &template_content,
       const ObOutlineBindingRule &binding_rule,
-      const common::ObIArray<common::ObString> &actual_table_names,
+      const common::ObIArray<ObTableDbName> &actual_table_db_names,
       common::ObIAllocator &allocator,
       common::ObString &result);
 

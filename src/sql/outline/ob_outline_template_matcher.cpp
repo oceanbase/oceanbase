@@ -752,7 +752,7 @@ static int collect_hint_table_refs_dfs(
 int ObOutlineTemplateMatcher::reconstruct_outline_content(
     const ObString &template_content,
     const ObOutlineBindingRule &binding_rule,
-    const ObIArray<ObString> &actual_table_names,
+    const ObIArray<ObTableDbName> &actual_table_db_names,
     ObIAllocator &allocator,
     ObString &result)
 {
@@ -817,15 +817,24 @@ int ObOutlineTemplateMatcher::reconstruct_outline_content(
           continue;
         }
 
-        // Found match - get actual table name for this position
+        // Found match - get actual table name and db name for this position
         int64_t position = mapping.get_ast_position();
         ObString actual_table;
-        if (position > 0 && position <= actual_table_names.count()) {
-          actual_table = actual_table_names.at(position - 1);
+        ObString actual_db;
+        if (position > 0 && position <= actual_table_db_names.count()) {
+          actual_table = actual_table_db_names.at(position - 1).first;
+          actual_db = actual_table_db_names.at(position - 1).second;
         }
         if (actual_table.empty()) {
           break;
         }
+        // For cross-db template outline, the hint db must be rebuilt with the
+        // matched SQL's actual db name (not the outline's original db name),
+        // otherwise the hint misses the current table and gets dropped.
+        // Fallback to original db name when actual db is unavailable (e.g.
+        // unqualified table in a session-default-db query), consistent with
+        // the matching phase (line ~566).
+        ObString rebuild_db = actual_db.empty() ? mapping.get_original_db_name() : actual_db;
 
         // Build search and replacement strings in quoted format
         ObSqlString search;
@@ -837,7 +846,7 @@ int ObOutlineTemplateMatcher::reconstruct_outline_content(
               hint_tbl.length(), hint_tbl.ptr()))) {
             LOG_WARN("failed to build search string", K(ret));
           } else if (OB_FAIL(replacement.assign_fmt("\"%.*s\".\"%.*s\"",
-              mapping.get_original_db_name().length(), mapping.get_original_db_name().ptr(),
+              rebuild_db.length(), rebuild_db.ptr(),
               actual_table.length(), actual_table.ptr()))) {
             LOG_WARN("failed to build replacement", K(ret));
           }
@@ -1064,22 +1073,13 @@ int ObOutlineTemplateMatcher::reconstruct_content_if_needed(
         }
       }
 
-      // Build actual_table_names for reconstruct_outline_content
-      ObSEArray<ObString, 16> actual_table_names;
-      if (OB_SUCC(ret) && actual_table_db_names.count() > 0) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < actual_table_db_names.count(); ++i) {
-          if (OB_FAIL(actual_table_names.push_back(actual_table_db_names.at(i).first))) {
-            LOG_WARN("failed to extract table name from pair", K(ret));
-          }
-        }
-      }
-
       // Fallback to binding rule's original names if parse tree extraction failed
-      if (OB_SUCC(ret) && actual_table_names.empty()) {
+      if (OB_SUCC(ret) && actual_table_db_names.empty()) {
         for (int64_t i = 0; OB_SUCC(ret) && i < binding_rule.get_map_item_count(); ++i) {
           const ObOutlineRuleMapping &mapping = binding_rule.get_map_item(i);
-          if (OB_FAIL(actual_table_names.push_back(mapping.get_original_table_name()))) {
-            LOG_WARN("failed to push fallback table name", K(ret));
+          if (OB_FAIL(actual_table_db_names.push_back(
+              ObTableDbName(mapping.get_original_table_name(), mapping.get_original_db_name())))) {
+            LOG_WARN("failed to push fallback table/db name", K(ret));
           }
         }
       }
@@ -1087,7 +1087,7 @@ int ObOutlineTemplateMatcher::reconstruct_content_if_needed(
       if (OB_SUCC(ret) && binding_rule.get_map_item_count() > 0) {
         ObString reconstructed;
         if (OB_FAIL(reconstruct_outline_content(outline_content, binding_rule,
-                                                 actual_table_names, allocator,
+                                                 actual_table_db_names, allocator,
                                                  reconstructed))) {
           LOG_WARN("failed to reconstruct outline content", K(ret));
           ret = OB_SUCCESS;

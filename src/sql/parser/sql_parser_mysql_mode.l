@@ -1825,6 +1825,22 @@ BEGIN(in_c_comment);
   }
 }
 
+BINDING_RULE/{whitespace}*\({whitespace}*(SCOPE|MAP) {
+  int ret = NAME_OB;
+  ParseResult *p = (ParseResult *)yyextra;
+  if (IS_FAST_PARAMETERIZE) {
+    REPUT_NEG_SIGN(p);
+  } else if (p->in_create_outline_) {
+    ret = BINDING_RULE_KEYWORD;
+  } else {
+    const NonReservedKeyword *word = mysql_sql_keyword_lookup(yytext);
+    check_value(word);
+    yylval->non_reserved_keyword = word;
+    ret = BINDING_RULE;
+  }
+  return ret;
+}
+
 {identifier} {
   const NonReservedKeyword *word = NULL;
   if (IS_FAST_PARAMETERIZE) {

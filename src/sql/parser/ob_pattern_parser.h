@@ -56,7 +56,7 @@ struct PatternParseResult
   common::ObString fixed_prefix_;    // fixed prefix before the variable
   common::ObString fixed_suffix_;    // fixed suffix after the variable
   PatternVarInfo var_info_;  // variable info (only one variable allowed per pattern)
-  common::ObString regex_error_;     // regerror() text when regex compilation fails
+  common::ObString regex_error_;     // ICU error name (u_errorName) when regex compilation fails
                                      // (parser sets ret = OB_ERR_REGEXP_ERROR; resolver surfaces this string)
 
   PatternParseResult() {}
@@ -116,6 +116,11 @@ class ObPatternParser
 public:
   ObPatternParser(common::ObIAllocator &allocator) : allocator_(allocator) {}
   ~ObPatternParser() {}
+
+  /** Trial-compile a regex with ICU (the runtime matcher's engine); fails CREATE on syntax error. */
+  static bool icu_regex_is_valid(const common::ObString &regex,
+                                 common::ObString &err_msg,
+                                 common::ObIAllocator &allocator);
 
   /**
    * Parse a pattern string like "orders_${S}" or "orders_${S:[a-z]+}"

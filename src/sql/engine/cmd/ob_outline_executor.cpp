@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_outline_executor.h"
 
-#include <regex.h>  // For regex validation (regcomp, regerror, regfree)
 #include "sql/ob_sql.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/resolver/ddl/ob_create_outline_stmt.h"
@@ -807,63 +806,8 @@ int ObOutlineExecutor::generate_binding_rule_info(ObExecContext &ctx,
       }
     }
 
-    // 3. Validate regex patterns (fail-fast before persistence)
-    // Invalid regex should be caught at CREATE time, not MATCH time
-    // Prevents invalid regex like "[a-z" (missing ]) from being persisted
-    static const int64_t REGEX_MAX_LEN = 128;  // Same as OB_PATTERN_MAX_REGEX_LEN in ob_pattern_matcher.h
-    if (OB_SUCC(ret) && binding_rule.get_map_item_count() > 0) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < binding_rule.get_map_item_count(); ++i) {
-        const ObOutlineRuleMapping &item = binding_rule.get_map_item(i);
-        // Validate db_var_regex if present
-        const ObString &db_regex = item.get_db_var_regex();
-        if (!db_regex.empty()) {
-          regex_t test_regex;
-          char regex_buf[REGEX_MAX_LEN + 8];
-          if (db_regex.length() > REGEX_MAX_LEN) {
-            ret = OB_ERR_REGEXP_ERROR;
-            LOG_WARN("db_var_regex exceeds max length, cannot create outline",
-                     K(ret), K(i), "length", db_regex.length(), K(REGEX_MAX_LEN));
-          } else {
-            MEMCPY(regex_buf, db_regex.ptr(), db_regex.length());
-            regex_buf[db_regex.length()] = '\0';
-            int reg_ret = regcomp(&test_regex, regex_buf, REG_EXTENDED | REG_NOSUB);
-            if (0 != reg_ret) {
-              ret = OB_ERR_REGEXP_ERROR;
-              LOG_WARN("invalid db_var_regex, cannot create outline with invalid regex pattern",
-                       K(ret), K(i), K(db_regex));
-            } else {
-              regfree(&test_regex);
-            }
-          }
-        }
-        // Validate table_var_regex if present
-        if (OB_SUCC(ret)) {
-          const ObString &tbl_regex = item.get_table_var_regex();
-          if (!tbl_regex.empty()) {
-            regex_t test_regex;
-            char regex_buf[REGEX_MAX_LEN + 8];
-            if (tbl_regex.length() > REGEX_MAX_LEN) {
-              ret = OB_ERR_REGEXP_ERROR;
-              LOG_WARN("table_var_regex exceeds max length, cannot create outline",
-                       K(ret), K(i), "length", tbl_regex.length(), K(REGEX_MAX_LEN));
-            } else {
-              MEMCPY(regex_buf, tbl_regex.ptr(), tbl_regex.length());
-              regex_buf[tbl_regex.length()] = '\0';
-              int reg_ret = regcomp(&test_regex, regex_buf, REG_EXTENDED | REG_NOSUB);
-              if (0 != reg_ret) {
-                ret = OB_ERR_REGEXP_ERROR;
-                LOG_WARN("invalid table_var_regex, cannot create outline with invalid regex pattern",
-                         K(ret), K(i), K(tbl_regex));
-              } else {
-                regfree(&test_regex);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // 4. Serialize binding_rule to JSON for pattern_rules
+    // 3. Serialize binding_rule to JSON for pattern_rules.
+    // Regex syntax is already validated by ObPatternParser at resolve time.
     if (OB_SUCC(ret)) {
       const int64_t json_buf_len = OB_MAX_SQL_LENGTH;
       char *json_buf = static_cast<char *>(allocator.alloc(json_buf_len));
