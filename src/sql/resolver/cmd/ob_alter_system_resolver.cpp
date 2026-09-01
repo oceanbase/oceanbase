@@ -3039,10 +3039,14 @@ int ObChangeExternalStorageDestResolver::resolve(const ParseNode &parse_tree)
           // access info may be null
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             const ObString access_info_value = parse_tree.children_[1]->str_value_;
-            if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
+            const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+            if (min_cluster_version < MOCK_CLUSTER_VERSION_4_2_5_8
+                || (min_cluster_version >= CLUSTER_VERSION_4_3_0_0
+                    && min_cluster_version < CLUSTER_VERSION_4_3_5_2)) {
               ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "min cluster version is less than 4.3.5.2, changing ak&sk is");
-              LOG_WARN("min cluster version is less than 4.3.5.2, changing ak&sk is not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "changing ak&sk for current cluster version is");
+              LOG_WARN("changing ak&sk is not supported for current cluster version",
+                  K(ret), K(min_cluster_version));
             } else if (OB_FAIL(item.value_.assign(access_info_value))) {
               LOG_WARN("failed to assign config value", K(ret));
             }
