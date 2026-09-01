@@ -99,7 +99,11 @@ private:
     int64_t idx_;
   };
 private:
-  static const int64_t MAX_COLUMNS_COUNT = common::OB_ROW_MAX_COLUMNS_COUNT; // 4224
+  static const int64_t MAX_COLUMNS_COUNT = common::OB_ROW_MAX_COLUMNS_COUNT;
+  // Keep the open-addressed hash set below 70% load at the maximum row width.
+  static const uint64_t HASH_BUCKET_COUNT = 6037;
+  STATIC_ASSERT(MAX_COLUMNS_COUNT * 10 <= HASH_BUCKET_COUNT * 7,
+                "row desc hash bucket count is too small");
   static uint64_t HASH_COLLISIONS_COUNT;
   // data members
   typedef Desc *CellDescArray;
@@ -107,7 +111,7 @@ private:
   char cells_desc_buf_[MAX_COLUMNS_COUNT *sizeof(Desc)];
   int64_t cells_desc_count_;
   int64_t rowkey_cell_count_;
-  hash::ObArrayIndexHashSet<CellDescArray, Desc, 733> hash_map_;
+  hash::ObArrayIndexHashSet<CellDescArray, Desc, HASH_BUCKET_COUNT> hash_map_;
 };
 
 inline bool ObRowDesc::Desc::operator== (const Desc &other) const
