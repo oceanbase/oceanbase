@@ -396,10 +396,13 @@ int ObODPSTableRowIterator::next_task()
             state_.download_handle_ = tunnel_.CreateDownload(
                 project, table, std_part_spec, session_id, schema);
             state_.is_from_gi_pump_ = false;
-            LOG_TRACE("succ to create downloader handle without GI", K(ret), K(part_id), KP(sqc), K(state_.is_from_gi_pump_));
+            state_.need_complete_ = session_id_obstr.empty();
+            LOG_TRACE("succ to create downloader handle without GI", K(ret), K(part_id), KP(sqc),
+                      K(state_.is_from_gi_pump_), K(state_.need_complete_));
           } else {
             // main path: create downloader handle with GI
             state_.is_from_gi_pump_ = true;
+            state_.need_complete_ = false;
             if (OB_FAIL(sqc->get_sqc_ctx().gi_pump_.get_odps_downloader_mgr().get_or_create_odps_downloader(
                 part_id, part_spec, session_id_obstr, odps_format_, false, state_.download_handle_))) {
               LOG_WARN("failed to get or create odps downloader", K(ret), K(part_id));
@@ -1036,7 +1039,7 @@ int ObODPSTableRowIterator::StateValues::reuse()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(ret), K(lbt()));
       } else {
-        if (!is_from_gi_pump_) {
+        if (!is_from_gi_pump_ && need_complete_) {
           download_handle_->Complete();
         }
         download_handle_.reset();
@@ -1068,6 +1071,7 @@ int ObODPSTableRowIterator::StateValues::reuse()
   download_id_.clear();
   part_list_val_.reset();
   is_from_gi_pump_ = false;
+  need_complete_ = true;
   return ret;
 }
 
@@ -3106,6 +3110,7 @@ int ObOdpsPartitionDownloaderMgr::get_or_create_odps_downloader(
         temp_downloader = NULL;
       } else {
         // 成功插入 map，初始化创建 tunnel
+        temp_downloader->need_complete_ = session_id.empty();
         if (OB_FAIL(temp_downloader->odps_driver_.init_tunnel(odps_format, need_decrypt))) {
           LOG_WARN("failed to init tunnel", K(ret), K(part_id));
         } else if (OB_FAIL(temp_downloader->odps_driver_.create_downloader(part_spec, session_id,
@@ -3118,7 +3123,8 @@ int ObOdpsPartitionDownloaderMgr::get_or_create_odps_downloader(
         } else {
           download_handle = temp_downloader->odps_partition_downloader_;
           temp_downloader->downloader_init_status_ = 1;
-          LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id), KP(temp_downloader));
+          LOG_TRACE("succ to create downloader handle and set it to GI", K(ret), K(part_id),
+                    KP(temp_downloader), K(temp_downloader->need_complete_));
         }
         temp_downloader->tunnel_ready_cond_.broadcast();
         temp_downloader->tunnel_ready_cond_.unlock();
@@ -3209,7 +3215,9 @@ int ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader::reset()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null ptr", K(ret));
     } else {
-      odps_partition_downloader_->Complete();
+      if (need_complete_) {
+        odps_partition_downloader_->Complete();
+      }
       odps_partition_downloader_.reset();
     }
   } catch (const apsara::odps::sdk::OdpsTunnelException& ex) {
@@ -3230,6 +3238,7 @@ int ObOdpsPartitionDownloaderMgr::OdpsPartitionDownloader::reset()
       LOG_WARN("odps exception occured when calling Complete method", K(ret));
     }
   }
+  need_complete_ = true;
   return ret;
 }
 
