@@ -28,6 +28,7 @@ DynamicBuffer::DynamicBuffer(const char *label, const int64_t MAX_SIZE) :
   buf_limit_(MAX_SIZE),
   buf_gen_timestamp_(OB_INVALID_TIMESTAMP),
   buf_size_usage_(),
+  total_usage_(0),
   label_(label)
 {
   buf_size_usage_.set_attr(SET_USE_500(label));

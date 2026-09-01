@@ -783,6 +783,11 @@ int ObArchiveFetcher::update_log_fetch_task_(ObArchiveLogFetchTask &fetch_task,
   const LSN &cur_offset = helper.get_cur_offset();
   const LSN &end_offset = fetch_task.get_end_offset();
   const SCN &scn = helper.get_unitized_scn();
+  // Once back_fill succeeds, send_task ownership is transferred to fetch_task
+  // and will be reclaimed together with it in free_log_fetch_task. Before that,
+  // send_task is still owned locally and must be reclaimed on any failure to
+  // avoid leaking the underlying large buffer pool buffer.
+  bool send_task_owned_by_fetch_task = false;
 
   if (NULL == send_task) {
     ARCHIVE_LOG(INFO, "send_task is NULL", K(send_task), K(helper), K(fetch_task));
@@ -795,6 +800,7 @@ int ObArchiveFetcher::update_log_fetch_task_(ObArchiveLogFetchTask &fetch_task,
     ARCHIVE_LOG(WARN, "log fetch task backup fill failed", K(ret), K(helper),
         K(fetch_task), KPC(send_task));
   } else {
+    send_task_owned_by_fetch_task = true;
     ARCHIVE_LOG(INFO, "back fill log fetch task succ", K(fetch_task));
   }
 
@@ -809,6 +815,11 @@ int ObArchiveFetcher::update_log_fetch_task_(ObArchiveLogFetchTask &fetch_task,
     } else {
       ARCHIVE_LOG(INFO, "set next piece succ", K(next_piece), K(fetch_task));
     }
+  }
+
+  // send_task not attached to fetch_task, reclaim it here to avoid leak
+  if (OB_FAIL(ret) && NULL != send_task && ! send_task_owned_by_fetch_task) {
+    allocator_->free_send_task(send_task);
   }
   return ret;
 }

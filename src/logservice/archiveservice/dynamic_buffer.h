@@ -44,6 +44,7 @@ public:
   // free small buffer(size <= 1.875M), cache large buffer(size > 1.875M)
   void reclaim(void *ptr);
   int reserve(const int64_t size);
+  // purge cached buffer, only free when buffer is not referenced.
   void purge();
   bool alloc_from(void *ptr);
   int assign(const DynamicBuffer &other);

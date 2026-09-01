@@ -164,7 +164,10 @@ LargeBufferPool::BufferNode::BufferNode(const char *label) :
 LargeBufferPool::BufferNode::BufferNode(const BufferNode &other)
   : rwlock_(common::ObLatchIds::OB_LARGE_BUFFER_POOL_BUFFER_NODE_RWLOCK)
 {
-  assign(other);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign(other))) {
+    ARCHIVE_LOG(WARN, "assign buffer node failed", K(ret), K(other));
+  }
 }
 
 // BufferNode is the element of SEArray, and its contents will be transfered by assign function in SEArray reserve,
