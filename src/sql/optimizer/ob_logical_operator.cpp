@@ -2273,6 +2273,8 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
     /*do nothing*/
   } else if (T_OP_ROW == raw_expr->get_expr_type()) {
     /*do nothing*/
+  } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == raw_expr->get_expr_type()) {
+    // `inner_row_cmp_value` cannot be properly handled without its parent cmp op
   } else if (OB_FAIL(ctx.get_expr_ref_cnt(raw_expr, ref_cnt))) {
     LOG_WARN("failed to get expr ref cnt", K(ret));
   } else if (ref_cnt <= parent_ref_cnt) {
@@ -2280,9 +2282,11 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
   } else if (OB_FAIL(add_var_to_array_no_dup(shard_exprs, raw_expr))) {
     LOG_WARN("failed to add var to array", K(ret));
   }
-
-  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr) &&
-      !raw_expr->is_match_against_expr()) {
+  if (ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr)
+      || raw_expr->is_match_against_expr()
+      || T_FUN_SYS_INNER_ROW_CMP_VALUE == raw_expr->get_expr_type()) {
+    // do nothing
+  } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
       ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
                                             ctx,
