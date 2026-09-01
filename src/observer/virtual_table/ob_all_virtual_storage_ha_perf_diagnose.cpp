@@ -139,11 +139,7 @@ int ObAllVirtualStorageHAPerfDiagnose::process_curr_tenant(common::ObNewRow *&ro
           cells[i].set_int(state.last_err_code_);
           break;
         case RESULT_MSG: {
-          const int64_t msg_idx = static_cast<int64_t>(state.last_result_msg_);
-          const char *msg = (msg_idx >= 0 && msg_idx < static_cast<int64_t>(ObStorageHACostItemName::MAX_NAME))
-              ? ObTransferErrorDiagMsg[msg_idx]
-              : "Unstatistical errors";
-          cells[i].set_varchar(msg);
+          cells[i].set_varchar(ha_diag_result_msg(state.last_err_code_, state.last_result_msg_));
           cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }

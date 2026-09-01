@@ -124,6 +124,18 @@ const char *const ObTransferErrorDiagMsg[] = {
   "STOP_LS_SCHEDULE_MEMDIUM_ERROR",
 };
 
+const char *ha_diag_result_msg(
+    const int result_code,
+    const ObStorageHACostItemName result_msg)
+{
+  const int64_t msg_idx = static_cast<int64_t>(result_msg);
+  return OB_SUCCESS == result_code
+      ? "SUCCESS"
+      : (msg_idx >= 0 && msg_idx < static_cast<int64_t>(ObStorageHACostItemName::MAX_NAME))
+          ? ObTransferErrorDiagMsg[msg_idx]
+          : "Unstatistical errors";
+}
+
 STATIC_ASSERT(static_cast<int64_t>(ObStorageHADiagModule::MAX_MODULE) == ARRAYSIZEOF(ObStorageDiagModuleStr),
     "ObStorageDiagModuleStr len is mismatch");
 STATIC_ASSERT(static_cast<int64_t>(ObStorageHADiagTaskType::MAX_TYPE) == ARRAYSIZEOF(ObStorageDiagTaskTypeStr),

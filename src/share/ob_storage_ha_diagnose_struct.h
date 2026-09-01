@@ -104,6 +104,13 @@ extern const char *const ObStorageDiagTaskTypeStr[];
 extern const char *const ObStorageHACostItemNameStr[];
 extern const char *const ObTransferErrorDiagMsg[];
 
+// A successful task has no error cost item, so last_result_msg_ remains
+// MAX_NAME. Render that state explicitly instead of treating it as an
+// unclassified error.
+const char *ha_diag_result_msg(
+    const int result_code,
+    const ObStorageHACostItemName result_msg);
+
 } // namespace share
 } // namespace oceanbase
 #endif

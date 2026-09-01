@@ -178,7 +178,6 @@ int ObStorageHADiagOperator::fill_inflight_dml_(
   char ip_buf[common::OB_IP_STR_BUFF] = { 0 };
   int64_t timestamp = 0;
   const int64_t module_idx = static_cast<int64_t>(module);
-  const int64_t msg_idx = static_cast<int64_t>(state.last_result_msg_);
   if (OB_FAIL(gen_event_ts_(timestamp))) {
     LOG_WARN("failed to gen event ts", K(ret));
   } else if (OB_FAIL(dml.add_gmt_create(timestamp))) {
@@ -205,11 +204,9 @@ int ObStorageHADiagOperator::fill_inflight_dml_(
     LOG_WARN("failed to add retry id", K(ret), K(retry_id));
   } else if (OB_FAIL(dml.add_column("result_code", result_code))) {
     LOG_WARN("failed to add result code", K(ret), K(result_code));
-  } else if (OB_FAIL(dml.add_column("result_msg",
-      (msg_idx >= 0 && msg_idx < static_cast<int64_t>(ObStorageHACostItemName::MAX_NAME))
-        ? ObTransferErrorDiagMsg[msg_idx]
-        : "Unstatistical errors"))) {
-    LOG_WARN("failed to add result msg", K(ret), K(msg_idx));
+  } else if (OB_FAIL(dml.add_column(
+      "result_msg", ha_diag_result_msg(result_code, state.last_result_msg_)))) {
+    LOG_WARN("failed to add result msg", K(ret), K(result_code), K(state.last_result_msg_));
   } else if (OB_FAIL(ObHAInflightDiag::serialize_info(state, diagnose_info, sizeof(diagnose_info)))) {
     LOG_WARN("failed to serialize info", K(ret));
   } else if (OB_FAIL(dml.add_column("info", diagnose_info))) {

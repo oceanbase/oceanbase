@@ -1848,7 +1848,7 @@ int ObStorageHAChooseSrcHelper::get_available_src(const ObMigrationOpArg &arg, O
     errsim_test_(arg, src_info);
   }
 
-  if (OB_DATA_SOURCE_NOT_EXIST == ret) {
+  if (OB_DATA_SOURCE_NOT_EXIST == ret || OB_DATA_SOURCE_NOT_VALID == ret) {
     int advance_ckpt_ret = OB_SUCCESS;
     if (OB_SUCCESS != (advance_ckpt_ret = provider_->advance_src_ls_checkpoint(arg))) {
       LOG_WARN("failed to advance src ls checkpoint", K(advance_ckpt_ret), K(arg));

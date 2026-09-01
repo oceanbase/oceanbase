@@ -5208,6 +5208,9 @@ int ObAdvanceSrcLSCheckpointP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("logonly replica cannot advance checkpoint by flush", KR(ret), K(arg_), KPC(ls));
     } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls migration handler should not be NULL", KR(ret), K(arg_), KP(ls_migration_handler));
