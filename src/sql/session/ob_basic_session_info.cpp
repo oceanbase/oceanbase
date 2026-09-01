@@ -5710,8 +5710,14 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
     }
     if (OB_SUCC(ret)) {
       ObTZMapWrap tz_map_wrap;
-      if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id_, tz_map_wrap))) {
-        LOG_WARN("get tenant timezone map failed", K(ret));
+      // Inner SQL keeps login tenant_id_ as sys while effective_tenant_id_
+      // is the user tenant. Bind the named-TZ map with the effective tenant.
+      const uint64_t tz_tenant_id = is_virtual_tenant_id(effective_tenant_id_)
+                                        ? tenant_id_
+                                        : effective_tenant_id_;
+      if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tz_tenant_id, tz_map_wrap))) {
+        LOG_WARN("get tenant timezone map failed",
+                 K(ret), K(tz_tenant_id), K_(tenant_id), K_(effective_tenant_id));
       } else {
         tz_info_wrap_.set_tz_info_map(tz_map_wrap.get_tz_map());
       }
@@ -6063,8 +6069,17 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
 
     if (OB_SUCC(ret)) {
       ObTZMapWrap tz_map_wrap;
-      if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id_, tz_map_wrap))) {
-        LOG_WARN("get tenant timezone map failed", K(ret));
+      // An inner SQL session switches from the sys tenant by updating only
+      // effective_tenant_id_, while tenant_id_ remains the sys tenant. The PX worker
+      // deserializes such a session, so the per-tenant timezone map must be rebound
+      // with the effective tenant here. Otherwise a named tz_id stored in TSTZ data
+      // is looked up in the sys/default map and fails with OBE-01881.
+      const uint64_t tz_tenant_id = is_virtual_tenant_id(effective_tenant_id_)
+                                        ? tenant_id_
+                                        : effective_tenant_id_;
+      if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tz_tenant_id, tz_map_wrap))) {
+        LOG_WARN("get tenant timezone map failed",
+                 K(ret), K(tz_tenant_id), K_(tenant_id), K_(effective_tenant_id));
       } else {
         tz_info_wrap_.set_tz_info_map(tz_map_wrap.get_tz_map());
       }
@@ -6427,8 +6442,15 @@ int ObBasicSessionInfo::das_apply_basic_invariant_from_(const ObBasicSessionInfo
 
   if (OB_SUCC(ret)) {
     ObTZMapWrap tz_map_wrap;
-    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id_, tz_map_wrap))) {
-      LOG_WARN("get tenant timezone map failed", K(ret));
+    // Inner SQL keeps login tenant_id_ as sys while effective_tenant_id_
+    // is the user tenant. Bind the named-TZ map with the effective tenant,
+    // same as deserialize().
+    const uint64_t tz_tenant_id = is_virtual_tenant_id(effective_tenant_id_)
+                                      ? tenant_id_
+                                      : effective_tenant_id_;
+    if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tz_tenant_id, tz_map_wrap))) {
+      LOG_WARN("get tenant timezone map failed",
+               K(ret), K(tz_tenant_id), K_(tenant_id), K_(effective_tenant_id));
     } else {
       tz_info_wrap_.set_tz_info_map(tz_map_wrap.get_tz_map());
     }
