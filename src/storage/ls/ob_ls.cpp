@@ -880,6 +880,7 @@ void ObLS::destroy()
       MTL(transaction::ObTransIDService *)->reset_ls();
       MTL(transaction::ObTimestampService *)->reset_ls();
       MTL(sql::ObDASIDService *)->reset_ls();
+      MTL(observer::ObTableSessIDService *)->reset_ls();
     }
     tx_table_.destroy();
     lock_table_.destroy();
