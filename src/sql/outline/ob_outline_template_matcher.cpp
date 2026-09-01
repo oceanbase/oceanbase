@@ -991,24 +991,12 @@ int ObOutlineTemplateMatcher::try_match_template_outline(
           LOG_WARN("failed to get template candidates", K(ret));
         }
 
-        // Try matching with OB_PUBLIC_SCHEMA_ID for tenant-level outlines
-        if (OB_SUCC(ret) && database_id != OB_PUBLIC_SCHEMA_ID) {
-          ObArray<const ObOutlineInfo *> tenant_candidates;
-          if (OB_FAIL(schema_guard->get_outline_infos_with_signature(
-              session->get_effective_tenant_id(),
-              OB_PUBLIC_SCHEMA_ID,
-              template_signature,
-              false,
-              tenant_candidates))) {
-            LOG_WARN("failed to get tenant template candidates", K(ret));
-          } else {
-            for (int64_t i = 0; OB_SUCC(ret) && i < tenant_candidates.count(); ++i) {
-              if (OB_FAIL(template_candidates.push_back(tenant_candidates.at(i)))) {
-                LOG_WARN("failed to append tenant candidate", K(ret));
-              }
-            }
-          }
-        }
+        // NOTE: Do NOT re-fetch by OB_PUBLIC_SCHEMA_ID here. The mgr's
+        // get_outline_infos_with_signature() already merges OB_PUBLIC_SCHEMA_ID
+        // (tenant-level) candidates into the result when database_id !=
+        // OB_PUBLIC_SCHEMA_ID (see ob_outline_mgr.cpp). Re-fetching and appending
+        // here would duplicate the same PUBLIC/TENANT outline, inflating
+        // template_candidates.count() (observed =2 for a single TENANT outline).
 
         // Perform pattern matching for each candidate
         if (OB_SUCC(ret)) {
