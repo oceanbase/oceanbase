@@ -37,6 +37,7 @@ void ObTxBaseLogCb::reset()
 
 void ObTxBaseLogCb::reuse()
 {
+  AppendCb::reset();
   base_ts_.reset();
   log_ts_.reset();
   lsn_.reset();

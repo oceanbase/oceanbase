@@ -2942,10 +2942,10 @@ void ObPartTransCtx::calc_palf_cb_timing_(const ObTxLogCb *log_cb, ObLogTimeinfo
                                               ? (cb_first_handle_ts - append_finish_ts)
                                               : OB_INVALID_TIMESTAMP;
   const int64_t first_handle_to_finish = (OB_INVALID_TIMESTAMP != cb_first_handle_ts)
-                                         ? (ObClockGenerator::getClock() - cb_first_handle_ts)
+                                         ? (ObTimeUtility::fast_current_time() - cb_first_handle_ts)
                                          : OB_INVALID_TIMESTAMP;
   const int64_t append_finish_to_finish = (OB_INVALID_TIMESTAMP != append_finish_ts)
-                                         ? (ObClockGenerator::getClock() - append_finish_ts)
+                                         ? (ObTimeUtility::fast_current_time() - append_finish_ts)
                                          : OB_INVALID_TIMESTAMP;
   timing.log_id_ = log_cb->get_log_id();
   timing.gen_ts_ = gen_ts;

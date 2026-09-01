@@ -1860,6 +1860,7 @@ int ObLogHandler::emergency_append(const void *buffer,
     do {
       RLockGuard guard(lock_);
       CriticalGuard(ls_qs_);
+      cb->reset_append_trace();
       cb->set_append_start_ts(ObTimeUtility::fast_current_time());
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;
@@ -1963,6 +1964,7 @@ int ObLogHandler::append_(const void *buffer,
     do {
       RLockGuard guard(lock_);
       CriticalGuard(ls_qs_);
+      cb->reset_append_trace();
       cb->set_append_start_ts(ObTimeUtility::fast_current_time());
       if (IS_NOT_INIT) {
         ret = OB_NOT_INIT;

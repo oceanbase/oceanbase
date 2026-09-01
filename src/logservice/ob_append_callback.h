@@ -100,6 +100,9 @@ public:
   }
   void reset() {
     AppendCbBase::__reset();
+    reset_append_trace();
+  }
+  void reset_append_trace() {
     append_start_ts_ = OB_INVALID_TIMESTAMP;
     append_finish_ts_ = OB_INVALID_TIMESTAMP;
     cb_first_handle_ts_ = OB_INVALID_TIMESTAMP;

@@ -1159,7 +1159,7 @@ void ObApplyStatus::statistics_cb_cost_(AppendCb *cb,
 {
   // no need to print debug log when config [default value is true] is false;
   if (REACH_TIME_INTERVAL(10 * 1000)) {
-    const int64_t cb_finish_time = common::ObClockGenerator::getClock();
+    const int64_t cb_finish_time = ObTimeUtility::fast_current_time();
     const int64_t total_cost_time = cb_finish_time - append_start_time;
     const int64_t append_cost_time = append_finish_time - append_start_time;
     const int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
@@ -1178,7 +1178,7 @@ void ObApplyStatus::statistics_cb_cost_(AppendCb *cb,
   }
 
   if (oceanbase::lib::is_trace_log_enabled()) {
-    const int64_t cb_finish_time = common::ObClockGenerator::getClock();
+    const int64_t cb_finish_time = ObTimeUtility::fast_current_time();
     const int64_t total_cost_time = cb_finish_time - append_start_time;
     const int64_t append_cost_time = append_finish_time - append_start_time;
     const int64_t cb_wait_thread_time = cb_first_handle_time - append_finish_time;
