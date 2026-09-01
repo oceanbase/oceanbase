@@ -14744,10 +14744,12 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
     int64_t current_dfo_level = left_need_exchange ? -1 : (right_need_exchange ? 1 : 0);
     ObSEArray<ObRawExpr*, 4> left_exprs;
     ObSEArray<ObRawExpr*, 4> right_exprs;
+    ObSEArray<bool, 4> is_null_safe_cmps;
     if (OB_FAIL(ObOptimizerUtil::extract_equal_join_conditions(equal_join_conditions,
                                                                left_path.parent_->get_tables(),
                                                                left_exprs,
-                                                               right_exprs))) {
+                                                               right_exprs,
+                                                               &is_null_safe_cmps))) {
       LOG_WARN("failed format equal join conditions", K(ret));
     } else if (OB_FAIL(ObTransformUtils::extract_table_rel_ids(right_exprs, right_tables))) {
       LOG_WARN("failed to get table ids by rexprs", K(ret));
@@ -14762,6 +14764,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
                        current_dfo_level,
                        left_exprs,
                        right_exprs,
+                       is_null_safe_cmps,
                        join_filter_infos))) {
       LOG_WARN("failed to find subquery possible join filter table", K(ret));
     } else {
@@ -14824,6 +14827,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                   int64_t current_dfo_level,
                                                   const ObIArray<ObRawExpr*> &left_join_conditions,
                                                   const ObIArray<ObRawExpr*> &right_join_conditions,
+                                                  const ObIArray<bool> &is_null_safe_cmps,
                                                   ObIArray<JoinFilterInfo*> &join_filter_infos)
 {
   int ret = OB_SUCCESS;
@@ -14889,6 +14893,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
                                           right_join_conditions,
+                                          is_null_safe_cmps,
                                           *info))) {
           LOG_WARN("failed to get join filter exprs", K(ret));
         } else if (OB_FAIL(fill_join_filter_info(*info))) {
@@ -14927,6 +14932,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
       info->in_current_dfo_ = is_current_dfo;
       if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
                                         right_join_conditions,
+                                        is_null_safe_cmps,
                                         *info))) {
         LOG_WARN("failed to get join filter exprs", K(ret));
       } else if (OB_FAIL(fill_join_filter_info(*info))) {
@@ -14960,6 +14966,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                           left_current_dfo_level,
                                                           left_join_conditions,
                                                           right_join_conditions,
+                                                          is_null_safe_cmps,
                                                           join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
@@ -14982,12 +14989,14 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                         right_current_dfo_level,
                                                         left_join_conditions,
                                                         right_join_conditions,
+                                                        is_null_safe_cmps,
                                                         join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
     }
   } else if (right_path.is_subquery_path()) {
     ObSEArray<ObRawExpr*, 4> pushdown_left_quals;
     ObSEArray<ObRawExpr*, 4> pushdown_right_quals;
+    ObSEArray<bool, 4> pushdown_is_null_safe_cmps;
     ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
     JoinFilterPushdownHintInfo hint_info(allocator);
     ObSqlBitSet<> table_set;
@@ -15006,9 +15015,11 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
       LOG_WARN("failed to add member into table set", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::extract_pushdown_join_filter_quals(left_join_conditions,
                                                                            right_join_conditions,
+                                                                           is_null_safe_cmps,
                                                                            table_set,
                                                                            pushdown_left_quals,
-                                                                           pushdown_right_quals))) {
+                                                                           pushdown_right_quals,
+                                                                           pushdown_is_null_safe_cmps))) {
       LOG_WARN("failed to extract pushdown quals", K(ret));
     } else if (OB_FAIL(child_plan->pushdown_join_filter_into_subquery(stmt,
                                                                       subquery_path.root_,
@@ -15019,6 +15030,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
                                                                       current_dfo_level,
                                                                       pushdown_left_quals,
                                                                       pushdown_right_quals,
+                                                                      pushdown_is_null_safe_cmps,
                                                                       *allocator_,
                                                                       join_filter_infos))) {
       LOG_WARN("failed to find pushdown join filter table", K(ret));
@@ -15029,6 +15041,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
 
 int ObJoinOrder::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
                                        const ObIArray<ObRawExpr*> &right_join_conditions,
+                                       const ObIArray<bool> &is_null_safe_cmps,
                                        JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
@@ -15038,7 +15051,8 @@ int ObJoinOrder::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_con
       OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(get_plan()));
-  } else if (OB_UNLIKELY(left_join_conditions.count() != right_join_conditions.count())) {
+  } else if (OB_UNLIKELY(left_join_conditions.count() != right_join_conditions.count()
+                      || left_join_conditions.count() != is_null_safe_cmps.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("join condition length error", K(ret));
   } else if (OB_FAIL(table_set.add_member(stmt->get_table_bit_index(join_filter_info.table_id_)))) {
@@ -15058,6 +15072,8 @@ int ObJoinOrder::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_con
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(join_filter_info.rexprs_.push_back(rexpr))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(join_filter_info.is_null_safe_cmps_.push_back(is_null_safe_cmps.at(j)))) {
+        LOG_WARN("failed to push back null safe flag", K(ret));
       }
     }
   }

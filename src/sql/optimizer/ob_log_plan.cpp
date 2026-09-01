@@ -18343,6 +18343,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                 int64_t current_dfo_level,
                                                 const ObIArray<ObRawExpr*> &left_join_conditions,
                                                 const ObIArray<ObRawExpr*> &right_join_conditions,
+                                                const ObIArray<bool> &is_null_safe_cmps,
                                                 common::ObIAllocator &allocator,
                                                 ObIArray<JoinFilterInfo*> &join_filter_infos)
 {
@@ -18373,6 +18374,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                         current_dfo_level,
                                                                         left_join_conditions,
                                                                         right_join_conditions,
+                                                                        is_null_safe_cmps,
                                                                         allocator,
                                                                         join_filter_infos))) {
         LOG_WARN("failed to find pushdown join filter table", K(ret));
@@ -18438,6 +18440,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
                                                 right_join_conditions,
+                                                is_null_safe_cmps,
                                                 *info))) {
           LOG_WARN("failed to get join filter exprs", K(ret));
         } else if (OB_FAIL(fill_join_filter_info(*info))) {
@@ -18476,6 +18479,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
       info->in_current_dfo_ = is_current_dfo;
       if (OB_FAIL(get_join_filter_exprs(left_join_conditions,
                                         right_join_conditions,
+                                        is_null_safe_cmps,
                                         *info))) {
         LOG_WARN("failed to get join filter exprs", K(ret));
       } else if (OB_FAIL(fill_join_filter_info(*info))) {
@@ -18489,6 +18493,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
     ObLogicalOperator* child_op;
     ObSEArray<ObRawExpr*, 4> pushdown_left_quals;
     ObSEArray<ObRawExpr*, 4> pushdown_right_quals;
+    ObSEArray<bool, 4> pushdown_is_null_safe_cmps;
     ObSqlBitSet<> table_set;
     uint64_t subquery_id = static_cast<ObLogSubPlanScan*>(op)->get_subquery_id();
     if (OB_UNLIKELY(op->get_num_of_child() == 0) ||
@@ -18500,9 +18505,11 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
       LOG_WARN("failed to add member into table set", K(ret));
     } else if (OB_FAIL(ObOptimizerUtil::extract_pushdown_join_filter_quals(left_join_conditions,
                                                                            right_join_conditions,
+                                                                           is_null_safe_cmps,
                                                                            table_set,
                                                                            pushdown_left_quals,
-                                                                           pushdown_right_quals))) {
+                                                                           pushdown_right_quals,
+                                                                           pushdown_is_null_safe_cmps))) {
       LOG_WARN("failed to extract pushdown quals", K(ret));
     } else if (OB_FAIL(child_plan->pushdown_join_filter_into_subquery(
                                    stmt,
@@ -18514,6 +18521,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                    current_dfo_level,
                                    pushdown_left_quals,
                                    pushdown_right_quals,
+                                   pushdown_is_null_safe_cmps,
                                    allocator,
                                    join_filter_infos))) {
       LOG_WARN("failed to find pushdown join filter table", K(ret));
@@ -18536,6 +18544,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
+                                                                    is_null_safe_cmps,
                                                                     allocator,
                                                                     join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
@@ -18547,6 +18556,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                                     current_dfo_level,
                                                                     left_join_conditions,
                                                                     right_join_conditions,
+                                                                    is_null_safe_cmps,
                                                                     allocator,
                                                                     join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
@@ -18571,6 +18581,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                             current_dfo_level,
                                                             left_join_conditions,
                                                             right_join_conditions,
+                                                            is_null_safe_cmps,
                                                             allocator,
                                                             join_filter_infos)))) {
       LOG_WARN("failed to find shuffle table scan", K(ret));
@@ -18586,6 +18597,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
                                                               current_dfo_level,
                                                               left_join_conditions,
                                                               right_join_conditions,
+                                                              is_null_safe_cmps,
                                                               allocator,
                                                               join_filter_infos)))) {
         LOG_WARN("failed to find shuffle table scan", K(ret));
@@ -18679,6 +18691,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                  int64_t current_dfo_level,
                                                  const ObIArray<ObRawExpr*> &left_join_conditions,
                                                  const ObIArray<ObRawExpr*> &right_join_conditions,
+                                                 const ObIArray<bool> &is_null_safe_cmps,
                                                  common::ObIAllocator &allocator,
                                                  ObIArray<JoinFilterInfo*> &join_filter_infos)
 {
@@ -18689,6 +18702,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
   ObSEArray<ObRawExpr*, 4> candi_left_filters;
   ObSEArray<ObRawExpr*, 4> candi_right_quals;
   ObSEArray<ObRawExpr*, 4> candi_right_filters;
+  ObSEArray<bool, 4> candi_is_null_safe_cmps;
   ObRelIds right_tables;
   bool can_pushdown = false;
   if (OB_ISNULL(child_op) ||
@@ -18701,8 +18715,10 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                                          *child_stmt,
                                                                          left_join_conditions,
                                                                          right_join_conditions,
+                                                                         is_null_safe_cmps,
                                                                          candi_left_filters,
                                                                          candi_right_quals,
+                                                                         candi_is_null_safe_cmps,
                                                                          can_pushdown))) {
     LOG_WARN("failed to pushdown join filter into subquery", K(ret));
   } else if (!can_pushdown) {
@@ -18726,6 +18742,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
                                                       current_dfo_level,
                                                       candi_left_filters,
                                                       candi_right_filters,
+                                                      candi_is_null_safe_cmps,
                                                       allocator,
                                                       join_filter_infos))) {
     LOG_WARN("failed to find possible join filter table", K(ret));
@@ -18735,6 +18752,7 @@ int ObLogPlan::pushdown_join_filter_into_subquery(const ObDMLStmt *parent_stmt,
 
 int ObLogPlan::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_conditions,
                                      const ObIArray<ObRawExpr*> &right_join_conditions,
+                                     const ObIArray<bool> &is_null_safe_cmps,
                                      JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
@@ -18743,7 +18761,8 @@ int ObLogPlan::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_condi
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null stmt", K(ret));
-  } else if (OB_UNLIKELY(left_join_conditions.count() != right_join_conditions.count())) {
+  } else if (OB_UNLIKELY(left_join_conditions.count() != right_join_conditions.count()
+                      || left_join_conditions.count() != is_null_safe_cmps.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("join condition length error", K(ret));
   } else if (OB_FAIL(table_set.add_member(stmt->get_table_bit_index(join_filter_info.table_id_)))) {
@@ -18763,6 +18782,8 @@ int ObLogPlan::get_join_filter_exprs(const ObIArray<ObRawExpr*> &left_join_condi
         LOG_WARN("failed to push back expr", K(ret));
       } else if (OB_FAIL(join_filter_info.rexprs_.push_back(rexpr))) {
         LOG_WARN("failed to push back expr", K(ret));
+      } else if (OB_FAIL(join_filter_info.is_null_safe_cmps_.push_back(is_null_safe_cmps.at(j)))) {
+        LOG_WARN("failed to push back null safe flag", K(ret));
       }
     }
   }
