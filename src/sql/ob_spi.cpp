@@ -2141,9 +2141,9 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         ObPLSqlAuditRecord audit_record(sql::PLSql);
         ObQueryRetryCtrl retry_ctrl;
         ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, *session, ret);
-#ifdef OB_BUILD_SPM
-        spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
-#endif
+// #ifdef OB_BUILD_SPM
+//         spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+// #endif
         ObSPIExecEnvGuard env_guard(*session);
         ctx->set_saved_sql_code_info();
         if (lib::is_oracle_mode()) {
@@ -4325,9 +4325,9 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   if (OB_SUCC(ret)) {
 
     {
-#ifdef OB_BUILD_SPM
-      spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
-#endif
+// #ifdef OB_BUILD_SPM
+//       spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+// #endif
       ObSPIExecEnvGuard env_guard(session_info, cursor.is_ps_cursor());
       ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
       bool is_retry = false;
@@ -4478,9 +4478,9 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
       ObPLSqlAuditRecord audit_record(sql::PLSql);
       ObQueryRetryCtrl retry_ctrl;
       ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
-#ifdef OB_BUILD_SPM
-      spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
-#endif
+// #ifdef OB_BUILD_SPM
+//       spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+// #endif
       ObSPIExecEnvGuard env_guard(session_info, cursor.is_ps_cursor());
       bool is_retry = false;
 
