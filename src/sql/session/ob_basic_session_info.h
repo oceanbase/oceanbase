@@ -1011,6 +1011,23 @@ public:
     LockGuard lock_guard(thread_data_mutex_);
     thread_data_.cur_query_start_time_ = time;
   }
+  void set_fetch_request_info(int64_t start_time, int64_t execution_id)
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.fetch_start_time_ = start_time;
+    thread_data_.fetch_execution_id_ = execution_id;
+  }
+  void set_fetch_execution_id(int64_t execution_id)
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.fetch_execution_id_ = execution_id;
+  }
+  void reset_fetch_request_info()
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.fetch_start_time_ = 0;
+    thread_data_.fetch_execution_id_ = -1;
+  }
     void set_pl_cur_query_start_time_bak(int64_t time)
   {
     ATOMIC_STORE(&thread_data_.pl_cur_query_start_time_bak_, time);
@@ -1026,6 +1043,14 @@ public:
   int64_t get_pl_internal_time_split_point_no_atomic() const { return thread_data_.pl_internal_time_split_point_; }
   int64_t get_pl_internal_time_split_point() const { return ATOMIC_LOAD(&thread_data_.pl_internal_time_split_point_); }
   int64_t get_query_start_time() const { return thread_data_.cur_query_start_time_; }
+  int64_t get_fetch_start_time() const { return thread_data_.fetch_start_time_; }
+  int64_t get_fetch_execution_id() const { return thread_data_.fetch_execution_id_; }
+  int64_t get_current_request_start_time() const
+  {
+    return thread_data_.fetch_start_time_ > 0
+        ? thread_data_.fetch_start_time_
+        : thread_data_.cur_query_start_time_;
+  }
   int64_t get_cur_state_start_time() const { return thread_data_.cur_state_start_time_; }
   int64_t get_pl_cur_query_start_time_bak() const { return ATOMIC_LOAD(&thread_data_.pl_cur_query_start_time_bak_); }
   void set_interactive(bool is_interactive)
@@ -1885,6 +1910,8 @@ protected:
                          sock_desc_(),
                          mysql_cmd_(obmysql::COM_SLEEP),
                          cur_query_start_time_(0),
+                         fetch_start_time_(0),
+                         fetch_execution_id_(-1),
                          cur_state_start_time_(0),
                          pl_internal_time_split_point_(0),
                          pl_cur_query_start_time_bak_(0),
@@ -1933,6 +1960,8 @@ protected:
       sock_desc_.reset();
       mysql_cmd_ = obmysql::COM_SLEEP;
       cur_query_start_time_ = 0;
+      fetch_start_time_ = 0;
+      fetch_execution_id_ = -1;
       cur_state_start_time_ = ::oceanbase::common::ObTimeUtility::current_time();
       pl_internal_time_split_point_ = 0;
       pl_cur_query_start_time_bak_ = 0;
@@ -1977,6 +2006,9 @@ protected:
     rpc::ObSqlSockDesc sock_desc_;
     obmysql::ObMySQLCmd mysql_cmd_;
     int64_t cur_query_start_time_;
+    // Fetch request state is local-only and must not be serialized with the session.
+    int64_t fetch_start_time_;
+    int64_t fetch_execution_id_;
     int64_t cur_state_start_time_;
     int64_t pl_internal_time_split_point_;
     int64_t pl_cur_query_start_time_bak_;
