@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LIB_OBJPOOL_OB_SMALL_OBJ_POOL_H__
 #define OCEANBASE_LIB_OBJPOOL_OB_SMALL_OBJ_POOL_H__
 
+#include <algorithm>
 #include "lib/allocator/ob_small_allocator.h"   // ObSmallAllocator
 #include "lib/queue/ob_link_queue.h"            // ObLinkQueue
 
@@ -59,7 +60,7 @@ public:
   int64_t get_alloc_count() const { return alloc_count_; }
   int64_t get_fixed_count() const { return fixed_count_; }
   int64_t get_cached_total_count() const { return free_count_; }
-  int64_t get_cached_free_count() const { return max(0, fixed_count_ - free_count_); }
+  int64_t get_cached_free_count() const { return std::max<int64_t>(0, fixed_count_ - free_count_); }
 
 public:
   int init(const int64_t fixed_count = DEFAULT_FIXED_COUNT,
