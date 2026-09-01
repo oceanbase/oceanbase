@@ -59,7 +59,19 @@ public:
       uint64_t delete_:1;
       uint64_t logon_ :1;
       uint64_t logoff_:1;
-      uint64_t reserved_:59;
+      uint64_t create_:1;
+      uint64_t alter_:1;
+      uint64_t drop_:1;
+      uint64_t truncate_:1;
+      uint64_t rename_:1;
+      uint64_t comment_:1;
+      uint64_t analyze_:1;
+      uint64_t audit_:1;
+      uint64_t noaudit_:1;
+      uint64_t grant_:1;
+      uint64_t revoke_:1;
+      uint64_t ddl_:1;
+      uint64_t reserved_:47;
     };
   };
 #undef TE_INSERT

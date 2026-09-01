@@ -2789,6 +2789,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_MATCH_TYPE_DEF, -9846, -1, "HY000", "XML elem
 DEFINE_ORACLE_ERROR(OB_ERR_JAVA_SESSION_STATE_CLEARED, -9847, -1, "HY000", "Java session state cleared", 29550, "Java session state cleared");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_CANNOT_CONVERT_TO_TYPE, -9848, -1, "HY000", "Cannot convert the given XMLType to the required type", 19029, "Cannot convert the given XMLType to the required type");
 DEFINE_ORACLE_ERROR(OB_ERR_PL_XML_STRING_ARG_INVALID, -9849, -1, "HY000", "NULL or invalid string argument specified", 64505, "NULL or invalid string argument specified");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_CANNOT_END_TRANS_IN_TRIGGER, -9850, -1, "HY000", "cannot COMMIT or ROLLBACK in a trigger", "cannot %s in a trigger", 4092, "cannot COMMIT or ROLLBACK in a trigger", "cannot %s in a trigger", "A trigger attempted to commit or rollback.", "Rewrite the trigger so it does not commit or rollback.");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

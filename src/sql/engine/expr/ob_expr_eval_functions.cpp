@@ -1514,6 +1514,17 @@ ObExprRandCanonical::calc_random_expr_canonical,                    /* 890 */
   NULL, // ObExprArrayDims::eval_array_dims,                           /* 918 */
   NULL, // ObExprArrayUpper::eval_array_upper,                         /* 919 */
   NULL, // ObExprArrayLower::eval_array_lower,                         /* 920 */
+  NULL, // ObExprOraSysEvent::eval_ora_sysevent,                       /* 921 */
+  NULL, // ObExprOraInstanceNum::eval_ora_instance_num,                /* 922 */
+  NULL, // ObExprOraDatabaseName::eval_ora_database_name,              /* 923 */
+  NULL, // ObExprOraDictObjOwner::eval_ora_dict_obj_owner,             /* 924 */
+  NULL, // ObExprOraDictObjName::eval_ora_dict_obj_name,               /* 925 */
+  NULL, // ObExprOraDictObjType::eval_ora_dict_obj_type,               /* 926 */
+  NULL, // ObExprOraIsAlterColumn::eval_ora_is_alter_column,           /* 927 */
+  NULL, // ObExprOraIsDropColumn::eval_ora_is_drop_column,             /* 928 */
+  NULL, // ObExprOraIsCreatingNestedTable::eval_ora_is_creating_nested_table, /* 929 */
+  NULL, // ObExprOraWithGrantOption::eval_ora_with_grant_option,       /* 930 */
+  NULL, // ObExprOraDesEncryptedPassword::eval_ora_des_encrypted_password, /* 931 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
