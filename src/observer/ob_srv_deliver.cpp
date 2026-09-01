@@ -538,7 +538,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
       !req.is_retry_on_lock() && oceanbase::lib::is_diagnose_info_enabled();
   const bool is_stream = pkt.is_stream();
   uint64_t tenant_id = pkt.get_tenant_id();
-  const uint64_t group_id = pkt.get_group_id();
+  const uint64_t group_id = OB_GET_GTS_REQUEST == pkt.get_pcode() ? share::OBCG_DEFAULT : pkt.get_group_id();  // for diagnostic info;
 
   if (stop_
       || SS_STOPPING == GCTX.status_
