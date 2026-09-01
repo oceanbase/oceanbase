@@ -48,6 +48,8 @@ using namespace lib;
 
 namespace logservice
 {
+ERRSIM_POINT_DEF(ERRSIM_SKIP_STANDBY_COMMITTED_END_LSN_UPDATE);
+
 ObTransportServiceTask::ObTransportServiceTask()
   : lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
     type_(ObTransportServiceTaskType::INVALID_TRANSPORT_TASK),
@@ -329,10 +331,13 @@ int ObTransportServiceSubmitTask::reset_iterator(const share::ObLSID &id, const 
   }
 
   if (OB_FAIL(seek_log_iterator(id, next_to_submit_lsn_, iterator_))) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "seek iterator failed", K(begin_lsn), K(next_to_submit_lsn_), K(ret));
+    CLOG_LOG(WARN, "seek iterator failed", KR(ret), K(id), K(begin_lsn), K(next_to_submit_lsn_));
   } else if (OB_FAIL(iterator_.next())) {
-    CLOG_LOG(WARN, "iterator next failed", K(begin_lsn), K(next_to_submit_lsn_), K(ret));
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(WARN, "iterator next failed", K(begin_lsn), K(next_to_submit_lsn_), K(ret));
+    }
   }
   return ret;
 }
@@ -1323,42 +1328,39 @@ int LogTransportStatus::update_standby_committed_end_lsn(const palf::LSN &end_ls
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(end_lsn), K(end_scn));
   } else {
-    // 获取读锁后再检查 is_enabled_
     RLockGuard guard(lock_);
-
-    const palf::LSN current_lsn = get_standby_committed_end_lsn();
-    const share::SCN current_scn = get_standby_committed_end_scn();
-    palf::LSN notify_apply_service_lsn = end_lsn;
-    share::SCN notify_apply_service_scn = end_scn;
-
-    // no need to check whether sync_mode is enabled
-    // MA mode need this
-
-    // 检查位点是否回退（备库重启或切主可能导致位点回退）
-    if (current_lsn.is_valid() && end_lsn < current_lsn
-        && current_scn.is_valid() && end_scn < current_scn) {
-      notify_apply_service_lsn = current_lsn;
-      notify_apply_service_scn = current_scn;
-      ret = OB_STATE_NOT_MATCH;
-      CLOG_LOG(WARN, "standby committed_end_lsn and committed_end_scn rollback, skip update",
-               K(end_lsn), K(current_lsn), K(end_scn), K(current_scn), K(ls_id_));
-    } else if (end_lsn == current_lsn && end_scn == current_scn) {
-      ret = OB_NO_NEED_UPDATE;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(OB_E(ERRSIM_SKIP_STANDBY_COMMITTED_END_LSN_UPDATE, ls_id_.id()) OB_SUCCESS)) {
+      CLOG_LOG(INFO, "ERRSIM_SKIP_STANDBY_COMMITTED_END_LSN_UPDATE enabled, skip update",
+               K(tmp_ret), K_(ls_id), K(end_lsn), K(end_scn));
     } else {
-      // 原子更新两个位点（虽然不是完全原子，但在读锁保护下是安全的）
-      notify_apply_service_lsn = standby_committed_end_lsn_.inc_update(end_lsn);
-      notify_apply_service_scn = standby_committed_end_scn_.inc_update(end_scn);
-      CLOG_LOG(TRACE, "update standby committed_end_lsn and committed_end_scn success",
-               K(end_lsn), K(current_lsn), K(end_scn), K(current_scn), K(ls_id_));
-    }
+      const palf::LSN current_lsn = get_standby_committed_end_lsn();
+      const share::SCN current_scn = get_standby_committed_end_scn();
+      palf::LSN notify_apply_service_lsn = end_lsn;
+      share::SCN notify_apply_service_scn = end_scn;
 
-    // 通知 apply service 更新备库位点
-    if (OB_NOT_NULL(tp_sv_) && notify_apply_service_lsn.is_valid() && notify_apply_service_scn.is_valid()) {
-      int notify_ret = tp_sv_->notify_apply_service(ls_id_, notify_apply_service_lsn, notify_apply_service_scn);
-      if (OB_SUCCESS != notify_ret) {
-        // 通知失败不影响位点更新，仅记录日志
-        CLOG_LOG(WARN, "notify_apply_service failed",
-                  K(notify_ret), K(ls_id_), K(notify_apply_service_lsn), K(notify_apply_service_scn));
+      if (current_lsn.is_valid() && end_lsn < current_lsn
+          && current_scn.is_valid() && end_scn < current_scn) {
+        notify_apply_service_lsn = current_lsn;
+        notify_apply_service_scn = current_scn;
+        ret = OB_STATE_NOT_MATCH;
+        CLOG_LOG(WARN, "standby committed_end_lsn and committed_end_scn rollback, skip update",
+                 K(end_lsn), K(current_lsn), K(end_scn), K(current_scn), K(ls_id_));
+      } else if (end_lsn == current_lsn && end_scn == current_scn) {
+        ret = OB_NO_NEED_UPDATE;
+      } else {
+        notify_apply_service_lsn = standby_committed_end_lsn_.inc_update(end_lsn);
+        notify_apply_service_scn = standby_committed_end_scn_.inc_update(end_scn);
+        CLOG_LOG(TRACE, "update standby committed_end_lsn and committed_end_scn success",
+                 K(end_lsn), K(current_lsn), K(end_scn), K(current_scn), K(ls_id_));
+      }
+
+      if (OB_NOT_NULL(tp_sv_) && notify_apply_service_lsn.is_valid() && notify_apply_service_scn.is_valid()) {
+        int notify_ret = tp_sv_->notify_apply_service(ls_id_, notify_apply_service_lsn, notify_apply_service_scn);
+        if (OB_SUCCESS != notify_ret) {
+          CLOG_LOG(WARN, "notify_apply_service failed",
+                   K(notify_ret), K(ls_id_), K(notify_apply_service_lsn), K(notify_apply_service_scn));
+        }
       }
     }
   }
@@ -3114,30 +3116,31 @@ int ObLogTransportService::handle_init_task_(ObTransportServiceInitTask *init_ta
 
   if (OB_ISNULL(init_task)) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(ERROR, "init_task is NULL", K(ret));
+    CLOG_LOG(ERROR, "init_task is NULL", KR(ret));
   } else if (OB_FAIL(init_task->do_sync_mode_init())) {
-    CLOG_LOG(WARN, "do_sync_mode_init failed", K(ret), KPC(init_task));
-    // 检查日志流是否被删除
+    CLOG_LOG(WARN, "do_sync_mode_init failed", KR(ret), KPC(init_task));
     LogTransportStatus *transport_status = init_task->get_transport_status();
     if (OB_ISNULL(transport_status)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(WARN, "transport_status is NULL", KPC(init_task), KR(ret));
     } else {
       share::ObLSID ls_id;
-      if (OB_SUCC(transport_status->get_ls_id(ls_id))) {
-        ObTpStatusGuard guard;
-        int check_ret = get_transport_status(ls_id, guard);
-        if (OB_ENTRY_NOT_EXIST == check_ret) {
+      ObTpStatusGuard guard;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(transport_status->get_ls_id(ls_id))) {
+        CLOG_LOG(WARN, "get ls id failed", KR(tmp_ret), KPC(init_task));
+      } else if (OB_TMP_FAIL(get_transport_status(ls_id, guard))) {
+        if (OB_ENTRY_NOT_EXIST == tmp_ret) {
           CLOG_LOG(INFO, "log stream is deleted, finish init_task", K(ls_id));
           ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          CLOG_LOG(WARN, "get transport status failed", KR(tmp_ret), K(ls_id));
         }
       }
     }
   } else {
     CLOG_LOG(INFO, "init task execute success");
   }
-
-  // 引用计数和 lease 管理统一由 handle() 函数处理，与其他任务保持一致
 
   return ret;
 }

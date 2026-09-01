@@ -204,9 +204,10 @@ static void try_fill_flush_ack_(const ObLogTransportReq &req,
   } else if (OB_FAIL(palf_handle_guard.get_end_scn(palf_committed_end_scn))) {
     CLOG_LOG(WARN, "get_end_scn failed", K(ret), K(req.ls_id_));
   } else {
+    int tmp_ret = OB_SUCCESS;
     ERRSIM_POINT_DEF(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
-    if (ERRSIM_DELAY_STANDBY_TRANSPORT_RESP > 0) {
-      const int64_t delay_s = abs(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
+    if (OB_TMP_FAIL(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP)) {
+      const int64_t delay_s = abs(tmp_ret);
       CLOG_LOG(INFO, "ERRSIM_DELAY_STANDBY_TRANSPORT_RESP enabled, sleep", K(delay_s), K(req.ls_id_));
       ob_usleep(static_cast<uint32_t>(delay_s * 1000 * 1000));
     }

@@ -15,6 +15,7 @@
 
 #define private public
 #include "logservice/transportservice/ob_log_transport_task_queue.h"
+#include "logservice/transportservice/ob_log_transport_service.h"
 #include "logservice/restoreservice/ob_log_restore_handler.h"
 #include "logservice/transportservice/ob_log_standby_rpc_processor.h"
 #undef private
@@ -89,6 +90,41 @@ protected:
     (void)ObTenantMutilAllocatorMgr::get_instance().init();
   }
 };
+
+TEST(TestLogTransportService, init_task_failure_keeps_original_ret)
+{
+  const share::ObLSID ls_id(1);
+  ObLogTransportService transport_service;
+  LogTransportStatus transport_status;
+  ObTransportServiceInitTask init_task;
+
+  ASSERT_EQ(OB_SUCCESS, transport_service.transport_status_map_.init("TRANSP_TEST", MTL_ID()));
+  transport_service.is_inited_ = true;
+  transport_status.ls_id_ = ls_id;
+  transport_status.proposal_id_ = 2;
+  transport_status.tp_sv_ = &transport_service;
+  transport_status.ref_cnt_ = 1;
+  ATOMIC_STORE(&transport_status.is_in_stop_state_, false);
+  ASSERT_EQ(OB_SUCCESS, transport_service.transport_status_map_.insert(ls_id, &transport_status));
+
+  ASSERT_EQ(OB_SUCCESS, init_task.init(ls_id, 1, SyncMode::SYNC, LSN(0), &transport_status));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, init_task.do_sync_mode_init());
+  EXPECT_EQ(OB_INVALID_ARGUMENT, transport_service.handle_init_task_(&init_task));
+
+  transport_service.is_inited_ = false;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, transport_service.handle_init_task_(&init_task));
+  transport_service.is_inited_ = true;
+
+  ASSERT_EQ(OB_SUCCESS, transport_service.transport_status_map_.destroy());
+  ASSERT_EQ(OB_SUCCESS, transport_service.transport_status_map_.init("TRANSP_TEST", MTL_ID()));
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, transport_service.handle_init_task_(&init_task));
+
+  EXPECT_EQ(OB_SUCCESS, transport_service.transport_status_map_.destroy());
+  transport_service.is_inited_ = false;
+  transport_status.ref_cnt_ = 0;
+  transport_status.tp_sv_ = nullptr;
+  ATOMIC_STORE(&transport_status.is_in_stop_state_, true);
+}
 
 TEST_F(TestLogTransportTaskQueue, init_destroy_clear_state)
 {
