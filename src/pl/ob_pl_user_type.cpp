@@ -1114,8 +1114,8 @@ int ObUserDefinedSubType::deserialize(share::schema::ObSchemaGetterGuard &schema
                                       int64_t &dst_pos) const
 {
   int ret = OB_SUCCESS;
-  OZ (base_type_.deserialize(
-    schema_guard, allocator, session, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos));
+  OZ (SMART_CALL(base_type_.deserialize(
+    schema_guard, allocator, session, charset, cs_type, ncs_type, tz_info, src, dst, dst_len, dst_pos)));
   return ret;
 }
 
@@ -2322,8 +2322,8 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
           value->set_null();
         }
         OX (new_dst_pos += sizeof(ObObj));
-      } else if (OB_FAIL(type->deserialize(schema_guard, *record->get_allocator(), session, charset, cs_type, ncs_type,
-                                           tz_info, src, new_dst, new_dst_len, new_dst_pos))) {
+      } else if (OB_FAIL(SMART_CALL(type->deserialize(schema_guard, *record->get_allocator(), session, charset, cs_type, ncs_type,
+                                           tz_info, src, new_dst, new_dst_len, new_dst_pos)))) {
         LOG_WARN("deserialize record element type failed", K(i), K(*this), KP(src), KP(dst), K(dst_len), K(dst_pos), K(ret));
       }
       if (OB_FAIL(ret)) {
@@ -3335,8 +3335,8 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
             }
             OX (table_data_pos += sizeof(ObObj));
           } else {
-            if (OB_FAIL(element_type_.deserialize(schema_guard, *collection_allocator, session, charset, cs_type, ncs_type,
-                                                tz_info, src, table_data, table_data_len, table_data_pos))) {
+            if (OB_FAIL(SMART_CALL(element_type_.deserialize(schema_guard, *collection_allocator, session, charset, cs_type, ncs_type,
+                                                tz_info, src, table_data, table_data_len, table_data_pos)))) {
               LOG_WARN("deserialize element failed", K(ret), K(i), K(element_init_size), K(count));
             }
           }

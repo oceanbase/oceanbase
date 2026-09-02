@@ -1318,9 +1318,9 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("user type is null", K(ret), K(user_type));
     } else if (OB_FAIL(user_type->init_obj(schema_guard, allocator, *obj, new_dst_len))) {
       LOG_WARN("failed to init obj", K(ret));
-    } else if (OB_FAIL(user_type->deserialize(schema_guard, allocator, session,
+    } else if (OB_FAIL(SMART_CALL(user_type->deserialize(schema_guard, allocator, session,
                   charset, cs_type, ncs_type, tz_info, src,
-                  reinterpret_cast<char *>(obj->get_ext()), new_dst_len, new_dst_pos))) {
+                  reinterpret_cast<char *>(obj->get_ext()), new_dst_len, new_dst_pos)))) {
       LOG_WARN("failed to deserialize user type", K(ret));
     } else {
       dst_pos += sizeof(ObObj);
