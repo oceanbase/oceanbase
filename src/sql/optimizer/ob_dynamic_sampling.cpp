@@ -1710,31 +1710,29 @@ int ObDynamicSamplingUtils::get_ds_table_part_info(ObOptimizerContext &ctx,
     }
   } else {
     need_specify_partition = true;
-    for (int64_t i = 0; OB_SUCC(ret) && i < used_tablets.count(); ++i) {
-      bool found_it = false;
-      if (table_schema->get_part_level() == share::schema::PARTITION_LEVEL_ONE) {
-        for (int64_t j = 0; OB_SUCC(ret) && !found_it && j < tmp_part_infos.count(); ++j) {
-          if (tmp_part_infos.at(j).tablet_id_ == used_tablets.at(i)) {
-            found_it = true;
-            if (OB_FAIL(partition_infos.push_back(tmp_part_infos.at(j)))) {
-              LOG_WARN("failed to push back", K(ret));
-            }
-          }
-        }
+    const ObIArray<PartInfo> &lookup_infos =
+        (table_schema->get_part_level() == share::schema::PARTITION_LEVEL_ONE)
+            ? tmp_part_infos : tmp_subpart_infos;
+    if (OB_UNLIKELY(lookup_infos.empty() && !used_tablets.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition info is empty while used tablets are not empty",
+               K(ret), K(used_tablets), K(tmp_part_infos), K(tmp_subpart_infos));
+    } else if (lookup_infos.count() > 0) {
+      ObStatInt64Map tablet_to_idx_map;
+      if (OB_FAIL(ObDbmsStatsUtils::generate_tablet_id_to_idx_map(
+              lookup_infos, tablet_to_idx_map, MTL_ID()))) {
+        LOG_WARN("failed to generate tablet id to idx map", K(ret));
       }
-      if (table_schema->get_part_level() == share::schema::PARTITION_LEVEL_TWO) {
-        for (int64_t j = 0; OB_SUCC(ret) && !found_it && j < tmp_subpart_infos.count(); ++j) {
-          if (tmp_subpart_infos.at(j).tablet_id_ == used_tablets.at(i)) {
-            found_it = true;
-            if (OB_FAIL(partition_infos.push_back(tmp_subpart_infos.at(j)))) {
-              LOG_WARN("failed to push back", K(ret));
-            }
+      for (int64_t i = 0; OB_SUCC(ret) && i < used_tablets.count(); ++i) {
+        int64_t found_idx = -1;
+        if (OB_SUCCESS == tablet_to_idx_map.get_refactored(used_tablets.at(i).id(), found_idx)) {
+          if (OB_FAIL(partition_infos.push_back(lookup_infos.at(found_idx)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(used_tablets.at(i)), K(tmp_part_infos), K(tmp_subpart_infos));
         }
-      }
-      if (OB_SUCC(ret) && !found_it) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(used_tablets.at(i)), K(tmp_part_infos), K(tmp_subpart_infos));
       }
     }
   }

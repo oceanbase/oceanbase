@@ -57,6 +57,15 @@ private:
                                      const ObIArray<int64_t> &locked_partition_ids,
                                      int64_t &idx);
 
+  static bool is_partition_id_locked(int64_t partition_id,
+                                     const ObStatInt64Map &locked_partition_idx_map,
+                                     int64_t &idx);
+
+  static int generate_locked_partition_idx_map(
+      const ObIArray<int64_t> &locked_partition_ids,
+      ObStatInt64Map &locked_partition_idx_map,
+      const uint64_t tenant_id);
+
   static int get_stats_history_sql(ObExecContext &ctx,
                                    ObMySQLTransaction &trans,
                                    const ObTableStatParam &param,
@@ -66,6 +75,7 @@ private:
                                    ObIArray<uint64_t> &part_stattypes);
 
   static int get_no_stats_partition_ids(const StatTypeLocked stattype,
+                                        const uint64_t tenant_id,
                                         const ObIArray<int64_t> &all_partition_ids,
                                         const ObIArray<int64_t> &stat_partition_ids,
                                         const ObIArray<int64_t> &stattype_locked,

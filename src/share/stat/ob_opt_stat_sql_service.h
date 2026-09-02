@@ -51,6 +51,8 @@ struct ObOptKeyInfo
                K(column_id_));
 };
 
+typedef ObStatHashMap<ObOptKeyInfo, int64_t> ObOptKeyInfoIndexMap;
+
 struct ObOptKeyColumnStat
 {
   ObOptKeyColumnStat() : key_(NULL), stat_(NULL), only_histogram_stat_(false) {}
@@ -130,7 +132,7 @@ public:
 
   int fill_column_stat(ObIAllocator &allocator,
                        common::sqlclient::ObMySQLResult &result,
-                       hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
+                       ObOptKeyInfoIndexMap &key_index_map,
                        ObIArray<ObOptKeyColumnStat> &key_col_stats,
                        const uint64_t tenant_id);
   int fetch_column_stat(const uint64_t tenant_id,
@@ -307,11 +309,11 @@ private:
 
   int generate_key_index_map(const uint64_t tenant_id,
                              ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                             hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map);
+                             ObOptKeyInfoIndexMap &key_index_map);
 
   int fill_bucket_stat(ObIAllocator &allocator,
                        sqlclient::ObMySQLResult &result,
-                       hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
+                       ObOptKeyInfoIndexMap &key_index_map,
                        ObIArray<ObOptKeyColumnStat> &key_col_stats);
 
   int get_column_stat_min_max_meta(share::schema::ObSchemaGetterGuard *schema_guard,

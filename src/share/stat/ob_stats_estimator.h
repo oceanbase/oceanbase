@@ -98,7 +98,8 @@ private:
   int copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &column_params,
                           const PartitionIdBlockMap *partition_id_block_map,
                           ObOptStat &src_opt_stat,
-                          ObIArray<ObOptStat> &dst_opt_stats);
+                          ObIArray<ObOptStat> &dst_opt_stats,
+                          const ObStatInt64Map &part_idx_map);
 
   int copy_basic_col_stats(const int64_t cur_row_cnt,
                            const int64_t total_row_cnt,

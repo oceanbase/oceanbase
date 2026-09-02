@@ -115,7 +115,8 @@ public:
   static int check_partition_stat_state(const int64_t partition_id,
                                         const int64_t inc_mod_count,
                                         const double stale_percent_threshold,
-                                        ObIArray<ObPartitionStatInfo> &partition_stat_infos);
+                                        ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                        ObStatInt64Map &partition_stat_idx_map);
 
   static int gen_tablet_list(const ObTableStatParam &param,
                              ObSqlString &tablet_list,
@@ -205,7 +206,8 @@ public:
                  bool use_plan_cache);
 
   static int set_partition_stat_no_regather(const int64_t partition_id,
-                                            ObIArray<ObPartitionStatInfo> &partition_stat_infos);
+                                            ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                            ObStatInt64Map &partition_stat_idx_map);
 
   int fill_partition_info(ObIAllocator &allocator,
                           const ObOptStatGatherParam &param,
@@ -248,13 +250,11 @@ public:
 
 private:
 
-  static int generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
-                                         hash::ObHashMap<int64_t, int64_t> &first_part_idx_map);
-
   int refine_basic_stats(const ObOptStatGatherParam &param,
                          ObIArray<ObOptStat> &dst_opt_stats);
 
   int check_stat_need_re_estimate(const ObOptStatGatherParam &origin_param,
+                                  const int64_t partition_idx,
                                   ObOptStat &opt_stat,
                                   bool &need_re_estimate,
                                   ObOptStatGatherParam &new_param);

@@ -419,10 +419,10 @@ int ObStrictPwjComparer::is_physically_equal_partitioned(const PwjTable &l_table
     TabletIdLocationMap r_tablet_id_map;
     const int64_t N = left_locations.count();
     if (OB_FAIL(l_tablet_id_map.create(std::max(N, MIN_ID_LOCATION_BUCKET_NUMBER),
-                                     "SqlPwjCompare"))) {
+                                       "SqlPwjCompare", ObModIds::OB_HASH_NODE, MTL_ID()))) {
       LOG_WARN("failed to create hash map", K(ret));
     } else if (OB_FAIL(r_tablet_id_map.create(std::max(N, MIN_ID_LOCATION_BUCKET_NUMBER),
-                                            "SqlPwjCompare"))) {
+                                              "SqlPwjCompare", ObModIds::OB_HASH_NODE, MTL_ID()))) {
       LOG_WARN("failed to create hash map", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
@@ -543,10 +543,23 @@ int ObStrictPwjComparer::check_logical_equal_and_calc_match_map(const PwjTable &
       if (l_table.is_subpartition_single_ && r_table.is_subpartition_single_) {
         uint64_t l_subpart_tablet_id = 0;
         uint64_t r_subpart_tablet_id = 0;
+        ObSEArray<std::pair<int64_t, int64_t>, 128> l_subpartition_index_pairs;
+        ObSEArray<std::pair<int64_t, int64_t>, 128> r_subpartition_index_pairs;
+        if (OB_FAIL(build_subpartition_index_pairs(l_table, l_subpartition_index_pairs))) {
+          LOG_WARN("failed to build left subpartition index pairs", K(ret));
+        } else if (OB_FAIL(build_subpartition_index_pairs(r_table, r_subpartition_index_pairs))) {
+          LOG_WARN("failed to build right subpartition index pairs", K(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < part_index_map_.count(); ++i) {
-          if (OB_FAIL(get_sub_part_tablet_id(l_table, part_index_map_.at(i).first, l_subpart_tablet_id))) {
+          if (OB_FAIL(get_sub_part_tablet_id(l_table,
+                                             l_subpartition_index_pairs,
+                                             part_index_map_.at(i).first,
+                                             l_subpart_tablet_id))) {
             LOG_WARN("failed to get sub part id", K(ret));
-          } else if (OB_FAIL(get_sub_part_tablet_id(r_table, part_index_map_.at(i).second, r_subpart_tablet_id))) {
+          } else if (OB_FAIL(get_sub_part_tablet_id(r_table,
+                                                    r_subpartition_index_pairs,
+                                                    part_index_map_.at(i).second,
+                                                    r_subpart_tablet_id))) {
             LOG_WARN("failed to get sub part id", K(ret));
           } else if (OB_FAIL(phy_part_map_.set_refactored(l_subpart_tablet_id,
                                                           r_subpart_tablet_id))) {
@@ -657,8 +670,14 @@ int ObStrictPwjComparer::is_sub_partition_logically_equal(const PwjTable &l_tabl
   is_equal = true;
   ObSEArray<int64_t, 128> l_used_partition_indexes;
   ObSEArray<int64_t, 128> r_used_partition_indexes;
+  ObSEArray<std::pair<int64_t, int64_t>, 128> l_subpartition_index_pairs;
+  ObSEArray<std::pair<int64_t, int64_t>, 128> r_subpartition_index_pairs;
   if (l_table.subpart_type_ != r_table.subpart_type_) {
     is_equal = false;
+  } else if (OB_FAIL(build_subpartition_index_pairs(l_table, l_subpartition_index_pairs))) {
+    LOG_WARN("failed to build left subpartition index pairs", K(ret));
+  } else if (OB_FAIL(build_subpartition_index_pairs(r_table, r_subpartition_index_pairs))) {
+    LOG_WARN("failed to build right subpartition index pairs", K(ret));
   } else {
     ObPartition *l_part = NULL;
     ObPartition *r_part = NULL;
@@ -672,10 +691,10 @@ int ObStrictPwjComparer::is_sub_partition_logically_equal(const PwjTable &l_tabl
           OB_ISNULL(r_part = r_table.partition_array_[part_index_map_.at(i).second])) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(get_subpartition_indexes_by_part_index(l_table, l_part_index,
+      } else if (OB_FAIL(get_subpartition_indexes_by_part_index(l_subpartition_index_pairs, l_part_index,
                                                                 l_used_partition_indexes))) {
         LOG_WARN("failed to get subpartition indexes by part index", K(ret));
-      } else if (OB_FAIL(get_subpartition_indexes_by_part_index(r_table, r_part_index,
+      } else if (OB_FAIL(get_subpartition_indexes_by_part_index(r_subpartition_index_pairs, r_part_index,
                                                                 r_used_partition_indexes))) {
         LOG_WARN("failed to get subpartition indexes by part index", K(ret));
       } else if (l_used_partition_indexes.count() != r_used_partition_indexes.count()) {
@@ -729,20 +748,58 @@ int ObStrictPwjComparer::is_sub_partition_logically_equal(const PwjTable &l_tabl
   return ret;
 }
 
-int ObStrictPwjComparer::get_subpartition_indexes_by_part_index(const PwjTable &table,
-                                                                const int64_t part_index,
-                                                                ObIArray<int64_t> &used_subpart_indexes)
+int ObStrictPwjComparer::build_subpartition_index_pairs(
+    const PwjTable &table,
+    ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(table.all_partition_indexes_.count() != table.all_subpartition_indexes_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected partition index count", K(ret),
+             K(table.all_partition_indexes_.count()), K(table.all_subpartition_indexes_.count()));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < table.all_partition_indexes_.count(); ++i) {
-    if (part_index != table.all_partition_indexes_.at(i)) {
-      // do nothing
-    } else if (OB_FAIL(used_subpart_indexes.push_back(table.all_subpartition_indexes_.at(i)))) {
-      LOG_WARN("failed to push back subpartition indexes", K(ret));
+    if (OB_FAIL(subpartition_index_pairs.push_back(
+            std::make_pair(table.all_partition_indexes_.at(i), table.all_subpartition_indexes_.at(i))))) {
+      LOG_WARN("failed to push back subpartition index pair", K(ret), K(i));
     }
   }
-  if (OB_SUCC(ret)) {
-    lib::ob_sort(&used_subpart_indexes.at(0), &used_subpart_indexes.at(0) + used_subpart_indexes.count());
+  if (OB_SUCC(ret) && !subpartition_index_pairs.empty()) {
+    lib::ob_sort(&subpartition_index_pairs.at(0),
+                 &subpartition_index_pairs.at(0) + subpartition_index_pairs.count());
+  }
+  return ret;
+}
+
+int64_t ObStrictPwjComparer::lower_bound_subpartition_index_pair(
+    const ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs,
+    const int64_t part_index)
+{
+  int64_t left = 0;
+  int64_t right = subpartition_index_pairs.count();
+  while (left < right) {
+    const int64_t mid = (left + right) / 2;
+    if (subpartition_index_pairs.at(mid).first >= part_index) {
+      right = mid;
+    } else {
+      left = mid + 1;
+    }
+  }
+  return left;
+}
+
+int ObStrictPwjComparer::get_subpartition_indexes_by_part_index(
+    const ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs,
+    const int64_t part_index,
+    ObIArray<int64_t> &used_subpart_indexes)
+{
+  int ret = OB_SUCCESS;
+  const int64_t left = lower_bound_subpartition_index_pair(subpartition_index_pairs, part_index);
+  for (int64_t i = left; OB_SUCC(ret) && i < subpartition_index_pairs.count() &&
+                         subpartition_index_pairs.at(i).first == part_index; ++i) {
+    if (OB_FAIL(used_subpart_indexes.push_back(subpartition_index_pairs.at(i).second))) {
+      LOG_WARN("failed to push back subpartition indexes", K(ret), K(part_index), K(i));
+    }
   }
   return ret;
 }
@@ -1024,9 +1081,11 @@ int ObStrictPwjComparer::get_part_tablet_id_by_part_index(const PwjTable &table,
   return ret;
 }
 
-int ObStrictPwjComparer::get_sub_part_tablet_id(const PwjTable &table,
-                                                const int64_t &part_index,
-                                                uint64_t &sub_part_tablet_id)
+int ObStrictPwjComparer::get_sub_part_tablet_id(
+    const PwjTable &table,
+    const ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs,
+    const int64_t part_index,
+    uint64_t &sub_part_tablet_id)
 {
   int ret = OB_SUCCESS;
   ObPartition *part = NULL;
@@ -1034,25 +1093,23 @@ int ObStrictPwjComparer::get_sub_part_tablet_id(const PwjTable &table,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table.partition_array_));
   } else {
-    bool find = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !find && i < table.all_partition_indexes_.count(); ++i) {
-      if (part_index == table.all_partition_indexes_.at(i)) {
-        int64_t subpart_index = table.all_subpartition_indexes_.at(i);
-        if (OB_ISNULL(part = table.partition_array_[part_index]) ||
-            OB_ISNULL(part->get_subpart_array()) ||
-            OB_ISNULL(part->get_subpart_array()[subpart_index])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else {
-          sub_part_tablet_id = part->get_subpart_array()[subpart_index]->get_tablet_id().id();
-          find = true;
-        }
-      }
-    }
-    if (OB_SUCC(ret) && !find) {
+    const int64_t left = lower_bound_subpartition_index_pair(subpartition_index_pairs, part_index);
+    if (left >= subpartition_index_pairs.count() ||
+        subpartition_index_pairs.at(left).first != part_index) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to find part_index in all_partition_indexes", K(ret),
-                  K(part_index), K(table.all_partition_indexes_));
+      LOG_WARN("failed to find part index in subpartition index pairs", K(ret),
+               K(part_index), K(subpartition_index_pairs));
+    } else {
+      const int64_t subpart_index = subpartition_index_pairs.at(left).second;
+      if (OB_ISNULL(part = table.partition_array_[part_index]) ||
+          subpart_index < 0 || subpart_index >= part->get_sub_part_num() ||
+          OB_ISNULL(part->get_subpart_array()) ||
+          OB_ISNULL(part->get_subpart_array()[subpart_index])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected subpartition", K(ret), K(part_index), K(subpart_index));
+      } else {
+        sub_part_tablet_id = part->get_subpart_array()[subpart_index]->get_tablet_id().id();
+      }
     }
   }
   return ret;

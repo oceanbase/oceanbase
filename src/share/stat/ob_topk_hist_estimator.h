@@ -63,7 +63,7 @@ struct ObTopkDatumItem : public ObTopkBaseItem
   ObDatum *datum_;
 };
 
-typedef common::hash::ObHashMap<uint64_t, uint64_t, common::hash::NoPthreadDefendMode> ObTopkMap;
+typedef ObStatUInt64Map ObTopkMap;
 
 class ObTopKFrequencyHistograms
 {

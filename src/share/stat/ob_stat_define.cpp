@@ -281,7 +281,8 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   return ret;
 }
 
-int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
+int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other,
+                                 const int64_t reserved_partition_idx)
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
@@ -319,9 +320,22 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   part_level_ = other.part_level_;
   consumer_group_id_ = other.consumer_group_id_;
   use_part_derive_global_ = other.use_part_derive_global_;
-  if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
-    LOG_WARN("failed to assign", K(ret));
-  } else if (OB_FAIL(column_params_.assign(other.column_params_))) {
+  if (OB_INVALID_ID == reserved_partition_idx) {
+    if (OB_FAIL(partition_infos_.assign(other.partition_infos_))) {
+      LOG_WARN("failed to assign", K(ret));
+    }
+  } else if (reserved_partition_idx < 0 ||
+             reserved_partition_idx >= other.partition_infos_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reserved partition index is invalid", K(ret), K(reserved_partition_idx),
+             K(other.partition_infos_.count()));
+  } else {
+    partition_infos_.reuse();
+    if (OB_FAIL(partition_infos_.push_back(other.partition_infos_.at(reserved_partition_idx)))) {
+      LOG_WARN("failed to push reserved partition info", K(ret), K(reserved_partition_idx));
+    }
+  }
+  if (FAILEDx(column_params_.assign(other.column_params_))) {
     LOG_WARN("failed to assign", K(ret));
   } else {/*do nothing*/}
   return ret;

@@ -478,6 +478,10 @@ public:
                                const ObQualifiedName &q_name,
                                const ObColumnRefRawExpr &col_ref,
                                bool &is_hit);
+  static int resolve_partition_hints(const ParseNode &part_node,
+                                     const share::schema::ObTableSchema &table_schema,
+                                     common::ObIArray<common::ObObjectID> &part_ids,
+                                     common::ObIArray<common::ObString> &part_names);
   static int resolve_partition_list_value_expr(ObResolverParams &params,
                                                const ParseNode &node,
                                                const common::ObString &part_name,

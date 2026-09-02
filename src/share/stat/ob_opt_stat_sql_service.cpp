@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX COMMON
 #include "ob_opt_stat_sql_service.h"
 #include "observer/ob_sql_client_decorator.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
 #include "share/stat/ob_dbms_stats_preferences.h"
 
@@ -209,6 +210,23 @@ using namespace common::sqlclient;
 namespace common
 {
 
+namespace
+{
+struct ObOptTableStatPartIdGetter
+{
+  int operator()(const ObOptTableStat *table_stat, const int64_t, int64_t &part_id) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(table_stat)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      part_id = table_stat->get_partition_id();
+    }
+    return ret;
+  }
+};
+} // namespace
+
 ObOptStatSqlService::ObOptStatSqlService()
     : inited_(false), mysql_proxy_(nullptr), mutex_(ObLatchIds::OPT_STAT_SQL_SERVICE_LOCK), config_(nullptr)
 {
@@ -343,9 +361,20 @@ int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t tenant_id,
     ObSqlString part_list;
     ObSqlString part_str;
     uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    ObStatInt64Map part_id_to_idx_map;
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("sql service has not been initialized.", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::build_hash_map(
+                   all_part_stats,
+                   part_id_to_idx_map,
+                   ObOptTableStatPartIdGetter(),
+                   ObStatHashMapIndexGetter(),
+                   "OptStatSql",
+                   ObModIds::OB_HASH_NODE,
+                   tenant_id,
+                   false /* ignore_duplicate */))) {
+      LOG_WARN("failed to build part_id_to_idx_map", K(ret), K(tenant_id));
     } else if (OB_FAIL(sql.append_fmt("SELECT partition_id, "
                                       "object_type, "
                                       "row_cnt as row_count, "
@@ -380,6 +409,7 @@ int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t tenant_id,
     while (OB_SUCC(ret)) {
       ObOptTableStat stat;
       stat.set_table_id(table_id);
+      int64_t idx = OB_INVALID_INDEX;
       if (OB_FAIL(result->next())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("get next row failed", K(ret));
@@ -389,22 +419,24 @@ int ObOptStatSqlService::batch_fetch_table_stats(const uint64_t tenant_id,
         }
       } else if (OB_FAIL(fill_table_stat(*result, stat))) {
         LOG_WARN("failed to fill table stat", K(ret));
-      } else {
-        bool found_it = false;
-        for (int64_t i = 0; OB_SUCC(ret) && i < all_part_stats.count(); ++i) {
-          if (OB_ISNULL(all_part_stats.at(i))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret));
-          } else if (all_part_stats.at(i)->get_table_id() == stat.get_table_id() &&
-                     all_part_stats.at(i)->get_partition_id() == stat.get_partition_id()) {
-            found_it = true;
-            *all_part_stats.at(i) = stat;
-          }
-        }
-        if (OB_SUCC(ret) && !found_it) {
+      } else if (OB_FAIL(part_id_to_idx_map.get_refactored(stat.get_partition_id(), idx))) {
+        if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(all_part_stats), K(stat));
+          LOG_WARN("get unexpected error: partition_id not found in all_part_stats",
+                   K(ret), K(stat), K(all_part_stats.count()));
+        } else {
+          LOG_WARN("failed to get refactored from part_id_to_idx_map", K(ret), K(stat));
         }
+      } else if (OB_UNLIKELY(idx < 0 || idx >= all_part_stats.count())
+                 || OB_ISNULL(all_part_stats.at(idx))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(idx), K(all_part_stats.count()));
+      } else if (OB_UNLIKELY(all_part_stats.at(idx)->get_table_id() != stat.get_table_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error: table_id mismatch",
+                 K(ret), K(idx), K(all_part_stats.at(idx)->get_table_id()), K(stat));
+      } else {
+        *all_part_stats.at(idx) = stat;
       }
     }
   }
@@ -1292,7 +1324,7 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
   ObSqlString keys_list_str;
-  hash::ObHashMap<ObOptKeyInfo, int64_t> key_index_map;
+  ObOptKeyInfoIndexMap key_index_map;
   if (key_col_stats.empty()) {
   } else if (OB_FAIL(generate_specified_keys_list_str_for_column(tenant_id, key_col_stats, keys_list_str))) {
     LOG_WARN("failed to generate specified keys list str for column", K(ret), K(key_col_stats));
@@ -1360,7 +1392,7 @@ int ObOptStatSqlService::fetch_column_stat(const uint64_t tenant_id,
 
 int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
                                           common::sqlclient::ObMySQLResult &result,
-                                          hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map,
+                                          ObOptKeyInfoIndexMap &key_index_map,
                                           ObIArray<ObOptKeyColumnStat> &key_col_stats,
                                           const uint64_t tenant_id)
 {
@@ -1712,8 +1744,8 @@ int ObOptStatSqlService::generate_specified_keys_list_str_for_column(const uint6
   uint64_t table_id = 0;
   ObSqlString partition_list_str;
   ObSqlString column_list_str;
-  hash::ObHashMap<int64_t, bool> partition_ids_map;
-  hash::ObHashMap<uint64_t, bool> column_ids_map;
+  ObStatInt64BoolMap partition_ids_map;
+  ObStatUInt64BoolMap column_ids_map;
   if (OB_UNLIKELY(key_col_stats.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(key_col_stats));
@@ -1789,7 +1821,7 @@ int ObOptStatSqlService::generate_specified_keys_list_str_for_column(const uint6
 
 int ObOptStatSqlService::generate_key_index_map(const uint64_t tenant_id,
                                                 ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                                                hash::ObHashMap<ObOptKeyInfo, int64_t> &key_index_map)
+                                                ObOptKeyInfoIndexMap &key_index_map)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < key_col_stats.count(); ++i) {

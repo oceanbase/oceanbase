@@ -6,12 +6,30 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_stats_estimator.h"
 #include "observer/ob_inner_sql_connection_pool.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/ob_opt_selectivity.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+namespace
+{
+struct ObOptStatPartIdGetter
+{
+  int operator()(const ObOptStat &opt_stat, const int64_t, int64_t &part_id) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(opt_stat.table_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      part_id = opt_stat.table_stat_->get_partition_id();
+    }
+    return ret;
+  }
+};
+} // namespace
 
 ObStatsEstimator::ObStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator) :
   ctx_(ctx),
@@ -458,6 +476,20 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to execute sql", K(ret));
       } else {
+        ObStatInt64Map part_idx_map;
+        if (need_copy_basic_stat) {
+          if (OB_FAIL(ObDbmsStatsUtils::build_hash_map(
+                  dst_opt_stats,
+                  part_idx_map,
+                  ObOptStatPartIdGetter(),
+                  ObStatHashMapIndexGetter(),
+                  "OptStatPartIdx",
+                  ObModIds::OB_HASH_NODE,
+                  gather_param.tenant_id_,
+                  true /* ignore_duplicate */))) {
+            LOG_WARN("failed to build part idx map", K(ret), K(dst_opt_stats.count()));
+          }
+        }
         while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
           for (int64_t i = 0; OB_SUCC(ret) && i < get_item_size(); ++i) {
             ObObj tmp;
@@ -477,7 +509,8 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
                        OB_FAIL(copy_basic_opt_stat(gather_param.column_params_,
                                                    gather_param.partition_id_block_map_,
                                                    src_opt_stat,
-                                                   dst_opt_stats))) {
+                                                   dst_opt_stats,
+                                                   part_idx_map))) {
               LOG_WARN("failed to copy stat to target opt stat", K(ret));
             } else {
               results_.reset();
@@ -613,7 +646,8 @@ int ObStatsEstimator::decode(ObIAllocator &allocator)
 int ObStatsEstimator::copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &column_params,
                                           const PartitionIdBlockMap *partition_id_block_map,
                                           ObOptStat &src_opt_stat,
-                                          ObIArray<ObOptStat> &dst_opt_stats)
+                                          ObIArray<ObOptStat> &dst_opt_stats,
+                                          const ObStatInt64Map &part_idx_map)
 {
   int ret = OB_SUCCESS;
   ObOptTableStat *tmp_tab_stat = src_opt_stat.table_stat_;
@@ -622,39 +656,39 @@ int ObStatsEstimator::copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &col
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(tmp_tab_stat));
   } else {
-    int64_t partition_id = tmp_tab_stat->get_partition_id();
-    bool find_it = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !find_it && i < dst_opt_stats.count(); ++i) {
-      if (OB_ISNULL(dst_opt_stats.at(i).table_stat_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret), K(dst_opt_stats.at(i).table_stat_));
-      } else if (dst_opt_stats.at(i).table_stat_->get_partition_id() == partition_id) {
-        find_it = true;
-        int64_t row_cnt = tmp_tab_stat->get_row_count();
-        if (sample_value_ >= 0.000001 &&
-            sample_value_ < 100.0 &&
-            OB_FAIL(scale_row_count(partition_id_block_map,
-                                    partition_id,
-                                    tmp_tab_stat->get_row_count(),
-                                    sample_value_,
-                                    row_cnt))) {
-          LOG_WARN("failed to scale row count", K(ret));
-        } else {
-          dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
-          dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
-          dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
-          if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(),
-                                          row_cnt,
-                                          column_params,
-                                          tmp_col_stats,
-                                          dst_opt_stats.at(i).column_stats_))) {
-            LOG_WARN("failed to copy col stat", K(ret));
-          } else {/*do nothing*/}
-        }
-      } else {/*do nothing*/}
-    }
-    if (OB_SUCC(ret) && !find_it) {
-      LOG_TRACE("this partition id isn't in needed partition ids, no need gather stats",K(partition_id));
+    const int64_t partition_id = tmp_tab_stat->get_partition_id();
+    int64_t dst_idx = OB_INVALID_INDEX;
+    const int hash_ret = part_idx_map.get_refactored(partition_id, dst_idx);
+    if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+      ret = hash_ret;
+      LOG_WARN("failed to get refactored from part idx map", K(ret), K(partition_id));
+    } else if (OB_HASH_NOT_EXIST == hash_ret) {
+      LOG_TRACE("this partition id isn't in needed partition ids, no need gather stats", K(partition_id));
+    } else if (OB_UNLIKELY(dst_idx < 0 || dst_idx >= dst_opt_stats.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected destination index", K(ret), K(partition_id), K(dst_idx), K(dst_opt_stats.count()));
+    } else {
+      int64_t row_cnt = tmp_tab_stat->get_row_count();
+      if (sample_value_ >= 0.000001 &&
+          sample_value_ < 100.0 &&
+          OB_FAIL(scale_row_count(partition_id_block_map,
+                                  partition_id,
+                                  tmp_tab_stat->get_row_count(),
+                                  sample_value_,
+                                  row_cnt))) {
+        LOG_WARN("failed to scale row count", K(ret));
+      } else {
+        dst_opt_stats.at(dst_idx).table_stat_->set_row_count(row_cnt);
+        dst_opt_stats.at(dst_idx).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
+        dst_opt_stats.at(dst_idx).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
+        if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(),
+                                        row_cnt,
+                                        column_params,
+                                        tmp_col_stats,
+                                        dst_opt_stats.at(dst_idx).column_stats_))) {
+          LOG_WARN("failed to copy col stat", K(ret));
+        } else {/*do nothing*/}
+      }
     }
   }
   return ret;

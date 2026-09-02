@@ -152,6 +152,7 @@ int ObDbmsStatsLockUnlock::get_stats_history_sql(ObExecContext &ctx,
       LOG_WARN("failed to get stat locked partition ids", K(ret));
     } else if (set_locked) {//lock
       if (OB_FAIL(get_no_stats_partition_ids(param.stattype_,
+                                             param.tenant_id_,
                                              all_partition_ids,
                                              stat_partition_ids,
                                              stattype_locked,
@@ -388,8 +389,13 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
   int64_t idx = -1;
   bool has_part_locked = false;
   ObSEArray<PartInfo, 4> new_subpart_infos;
+  ObStatInt64Map locked_partition_idx_map;
+  if (OB_FAIL(generate_locked_partition_idx_map(
+          locked_partition_ids, locked_partition_idx_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate locked partition idx map", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
-    if (!is_partition_id_locked(param.subpart_infos_.at(i).part_id_, locked_partition_ids, idx)) {
+    if (!is_partition_id_locked(param.subpart_infos_.at(i).part_id_, locked_partition_idx_map, idx)) {
       if (OB_FAIL(new_subpart_infos.push_back(param.subpart_infos_.at(i)))) {
         LOG_WARN("failed to push back", K(ret));
       } else {
@@ -409,7 +415,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
   if (OB_SUCC(ret)) {
     ObSEArray<PartInfo, 4> new_part_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
-      if (!is_partition_id_locked(param.part_infos_.at(i).part_id_, locked_partition_ids, idx)) {
+      if (!is_partition_id_locked(param.part_infos_.at(i).part_id_, locked_partition_idx_map, idx)) {
         has_valid_partition_id |= param.part_stat_param_.need_modify_;
         if (param.part_stat_param_.can_use_approx_ &&
             param.subpart_stat_param_.need_modify_ &&
@@ -437,7 +443,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
   }
   if (OB_SUCC(ret)) {
     int64_t part_id = param.global_part_id_;
-    if (is_partition_id_locked(part_id, locked_partition_ids, idx)) {
+    if (is_partition_id_locked(part_id, locked_partition_idx_map, idx)) {
       param.global_stat_param_.reset_gather_stat();
     } else if (param.global_stat_param_.need_modify_) {
       has_valid_partition_id = true;
@@ -465,16 +471,24 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_param(const ObIArray<int64_t> &lock
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected error", K(ret), K(param));
       } else {
+        ObStatInt64Set subpart_id_set;
+        if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_set(param.subpart_infos_,
+                                                           subpart_id_set,
+                                                           param.tenant_id_))) {
+          LOG_WARN("failed to build subpart id set", K(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < param.all_subpart_infos_.count(); ++i) {
           if (param.all_subpart_infos_.at(i).first_part_id_ == param.approx_part_infos_.at(0).part_id_) {
-            bool found_it = false;
-            for (int64_t j = 0; !found_it && j < param.subpart_infos_.count(); ++j) {
-              found_it = param.all_subpart_infos_.at(i).part_id_ == param.subpart_infos_.at(j).part_id_;
-            }
-            if (!found_it) {
+            int tmp_ret = subpart_id_set.exist_refactored(param.all_subpart_infos_.at(i).part_id_);
+            if (OB_HASH_NOT_EXIST == tmp_ret) {
               if (OB_FAIL(param.no_regather_partition_ids_.push_back(param.all_subpart_infos_.at(i).part_id_))) {
                 LOG_WARN("failed to push back", K(ret));
               }
+            } else if (OB_HASH_EXIST == tmp_ret) {
+              // do nothing
+            } else {
+              ret = tmp_ret;
+              LOG_WARN("failed to check subpart id set", K(ret), K(param.all_subpart_infos_.at(i)));
             }
           }
         }
@@ -490,9 +504,14 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_locked(const ObIArray<int64_t> &loc
 {
   int ret = OB_SUCCESS;
   int64_t idx = -1;
-  if (param.global_stat_param_.need_modify_) {
+  ObStatInt64Map locked_partition_idx_map;
+  if (OB_FAIL(generate_locked_partition_idx_map(
+          locked_partition_ids, locked_partition_idx_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate locked partition idx map", K(ret));
+  }
+  if (OB_SUCC(ret) && param.global_stat_param_.need_modify_) {
     int64_t part_id = param.global_part_id_;
-    if (is_partition_id_locked(part_id, locked_partition_ids, idx)) {
+    if (is_partition_id_locked(part_id, locked_partition_idx_map, idx)) {
       if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked_array.count() ||
                       stattype_locked_array.at(idx) <= 0)) {
         ret = OB_ERR_UNEXPECTED;
@@ -504,7 +523,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_locked(const ObIArray<int64_t> &loc
   }
   if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
-      if (is_partition_id_locked(param.subpart_infos_.at(i).part_id_, locked_partition_ids, idx)) {
+      if (is_partition_id_locked(param.subpart_infos_.at(i).part_id_, locked_partition_idx_map, idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked_array.count() ||
                         stattype_locked_array.at(idx) <= 0)) {
           ret = OB_ERR_UNEXPECTED;
@@ -517,7 +536,7 @@ int ObDbmsStatsLockUnlock::adjust_table_stat_locked(const ObIArray<int64_t> &loc
   }
   if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
-      if (is_partition_id_locked(param.part_infos_.at(i).part_id_, locked_partition_ids, idx)) {
+      if (is_partition_id_locked(param.part_infos_.at(i).part_id_, locked_partition_idx_map, idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked_array.count() ||
                         stattype_locked_array.at(idx) <= 0)) {
           ret = OB_ERR_UNEXPECTED;
@@ -545,7 +564,36 @@ bool ObDbmsStatsLockUnlock::is_partition_id_locked(int64_t partition_id,
   return find_it;
 }
 
+bool ObDbmsStatsLockUnlock::is_partition_id_locked(
+    int64_t partition_id,
+    const ObStatInt64Map &locked_partition_idx_map,
+    int64_t &idx)
+{
+  bool find_it = false;
+  int tmp_ret = locked_partition_idx_map.get_refactored(partition_id, idx);
+  if (OB_SUCCESS == tmp_ret) {
+    find_it = true;
+  } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+    idx = -1;
+  } else {
+    idx = -1;
+    LOG_WARN_RET(tmp_ret, "failed to get locked partition idx", K(tmp_ret), K(partition_id));
+  }
+  return find_it;
+}
+
+int ObDbmsStatsLockUnlock::generate_locked_partition_idx_map(
+    const ObIArray<int64_t> &locked_partition_ids,
+    ObStatInt64Map &locked_partition_idx_map,
+    const uint64_t tenant_id)
+{
+  return ObDbmsStatsUtils::generate_int64_to_idx_map(locked_partition_ids,
+                                                      locked_partition_idx_map,
+                                                      tenant_id);
+}
+
 int ObDbmsStatsLockUnlock::get_no_stats_partition_ids(const StatTypeLocked stattype,
+                                                      const uint64_t tenant_id,
                                                       const ObIArray<int64_t> &all_partition_ids,
                                                       const ObIArray<int64_t> &stat_partition_ids,
                                                       const ObIArray<int64_t> &stattype_locked,
@@ -562,19 +610,33 @@ int ObDbmsStatsLockUnlock::get_no_stats_partition_ids(const StatTypeLocked statt
                                      K(stattype_locked.count()));
   } else {
     bool need_reset_array = false;
+    ObStatInt64Map stat_partition_idx_map;
+    if (OB_FAIL(ObDbmsStatsUtils::generate_int64_to_idx_map(stat_partition_ids,
+                                                            stat_partition_idx_map,
+                                                            tenant_id))) {
+      LOG_WARN("failed to generate stat partition idx map", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < all_partition_ids.count(); ++i) {
       bool is_record = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !is_record && j < stat_partition_ids.count(); ++j) {
-        if (all_partition_ids.at(i) == stat_partition_ids.at(j)) {
-          is_record = true;
-          if (!(stattype & stattype_locked.at(j))) {
-            need_update_lock = true;
-          } else {
-            need_update_lock = false;
-          }
+      int64_t idx = -1;
+      int tmp_ret = stat_partition_idx_map.get_refactored(all_partition_ids.at(i), idx);
+      if (OB_SUCCESS == tmp_ret) {
+        is_record = true;
+        if (OB_UNLIKELY(idx < 0 || idx >= stattype_locked.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected stattype locked idx", K(ret), K(idx), K(stattype_locked.count()));
+        } else if (!(stattype & stattype_locked.at(idx))) {
+          need_update_lock = true;
+        } else {
+          need_update_lock = false;
         }
+      } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+        // do nothing
+      } else {
+        ret = tmp_ret;
+        LOG_WARN("failed to get stat partition idx", K(ret), K(all_partition_ids.at(i)));
       }
-      if (!is_record) {
+      if (OB_SUCC(ret) && !is_record) {
         if (OB_FAIL(no_stats_partition_ids.push_back(all_partition_ids.at(i)))) {
           LOG_WARN("failed to push back", K(ret));
         } else if (OB_FAIL(part_stattypes.push_back(stattype))) {
@@ -607,20 +669,29 @@ int ObDbmsStatsLockUnlock::get_insert_locked_type_sql(const ObTableStatParam &pa
     uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
     uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, param.table_id_);
     StatLevel stat_level = INVALID_LEVEL;
-    int64_t cur_part_id = OB_INVALID_ID;
+    ObStatInt64Map subpart_id_to_first_map;
+    if (OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(param.all_subpart_infos_,
+                                                                    subpart_id_to_first_map,
+                                                                    param.tenant_id_))) {
+      LOG_WARN("failed to generate subpart id to first map", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < no_stats_partition_ids.count(); ++i) {
+      int64_t first_part_id = OB_INVALID_ID;
+      int tmp_ret = OB_SUCCESS;
       if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_ZERO ||
           no_stats_partition_ids.at(i) == -1) {
         stat_level = TABLE_LEVEL;
-      } else if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                 no_stats_partition_ids.at(i),
-                                                 cur_part_id)) {
+      } else if (OB_SUCCESS == (tmp_ret = subpart_id_to_first_map.get_refactored(no_stats_partition_ids.at(i),
+                                                                                 first_part_id))) {
         stat_level = SUBPARTITION_LEVEL;
+      } else if (OB_HASH_NOT_EXIST != tmp_ret) {
+        ret = tmp_ret;
+        LOG_WARN("failed to get first part id from subpart map", K(ret), K(no_stats_partition_ids.at(i)));
       } else {
         stat_level = PARTITION_LEVEL;
       }
       char suffix = (i == no_stats_partition_ids.count() - 1 ? ';' : ',');
-      if (OB_FAIL(insert_sql.append_fmt("(%lu, %ld, %ld, %d, %u, 0, -1, -1, 0, 0, -1,\
+      if (FAILEDx(insert_sql.append_fmt("(%lu, %ld, %ld, %d, %u, 0, -1, -1, 0, 0, -1,\
                                         -1, 0, 0, %ld)%c",
                                         ext_tenant_id,
                                         pure_table_id,

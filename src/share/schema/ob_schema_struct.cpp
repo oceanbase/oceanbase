@@ -7290,6 +7290,77 @@ int ObPartitionUtils::get_tablet_and_subpart_id(
   return ret;
 }
 
+int ObPartitionUtils::get_tablet_and_subpart_id_by_idx(
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t part_idx,
+      const common::ObNewRange &range,
+      common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObObjectID> &subpart_ids,
+      RelatedTableInfo *related_table /*= NULL*/)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<PartitionIndex, DEFAULT_PARTITION_INDEX_NUM> partition_indexes;
+  ObPartitionLevel part_level = table_schema.get_part_level();
+  const uint64_t table_id = table_schema.get_table_id();
+  const ObPartition *partition = NULL;
+  common::ObPartID part_id = OB_INVALID_ID;
+  if (OB_FAIL(check_param_valid_(table_schema, related_table))) {
+    LOG_WARN("fail to check param", KR(ret), K(table_schema), KP(related_table));
+  } else if (PARTITION_LEVEL_TWO != part_level) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported part level", KR(ret), K(part_level));
+  } else if (OB_FAIL(table_schema.get_partition_by_partition_index(
+             part_idx, CHECK_PARTITION_MODE_NORMAL, partition))) {
+    LOG_WARN("fail to get partition by part_idx", KR(ret), K(part_idx));
+  } else if (OB_ISNULL(partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition not exist", KR(ret), K(part_idx));
+  } else {
+    part_id = partition->get_part_id();
+    ObSubPartition * const* subpartition_array = partition->get_subpart_array();
+    int64_t subpartition_num = partition->get_subpartition_num();
+    if (table_schema.is_hash_like_subpart()) {
+      if (OB_FAIL(ObPartitionUtils::get_hash_tablet_and_subpart_id_(
+                  part_id, range,
+                  subpartition_array, subpartition_num,
+                  partition_indexes))) {
+        LOG_WARN("fail to fill hash tablet_id and subpart_id",
+                 KR(ret), K(part_id), K(range), K(table_id));
+      }
+    } else if (table_schema.is_range_subpart()) {
+      if (OB_FAIL(ObPartitionUtils::get_range_tablet_and_subpart_id_(
+                  part_id, range,
+                  subpartition_array, subpartition_num,
+                  partition_indexes))) {
+        LOG_WARN("fail to fill range tablet_id and subpart_id",
+                 KR(ret), K(part_id), K(range), K(table_id));
+      }
+    } else if (table_schema.is_list_subpart()) {
+      if (OB_FAIL(ObPartitionUtils::get_list_tablet_and_subpart_id_(
+                  part_id, range,
+                  subpartition_array, subpartition_num,
+                  partition_indexes))) {
+        LOG_WARN("fail to fill list tablet_id and subpart_id",
+                 KR(ret), K(part_id), K(range), K(table_id));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported subpart option", KR(ret), K(table_id),
+               "subpart_option", table_schema.get_sub_part_option());
+    }
+    const bool fill_tablet_id = true;
+    if (FAILEDx(fill_tablet_and_object_ids_(
+        fill_tablet_id, part_idx, partition_indexes, table_schema,
+        related_table, tablet_ids, subpart_ids))) {
+      LOG_WARN("fail to fill tablet and subpart_ids", KR(ret),
+               K(fill_tablet_id), K(table_id), K(partition_indexes));
+    }
+    LOG_TRACE("table schema get tablet and subpart id by idx",
+              K(table_id), K(part_idx), K(part_id), K(tablet_ids), K(subpart_ids));
+  }
+  return ret;
+}
+
 int ObPartitionUtils::get_tablet_and_subpart_id(
     const share::schema::ObTableSchema &table_schema,
     const common::ObPartID &part_id,

@@ -22,6 +22,18 @@ using namespace sqlclient;
 
 namespace common
 {
+namespace
+{
+struct ObExpiredTableInfoTableIdGetter
+{
+  int operator()(const OptStatExpiredTableInfo &info, const int64_t, int64_t &table_id) const
+  {
+    table_id = static_cast<int64_t>(info.table_id_);
+    return OB_SUCCESS;
+  }
+};
+} // namespace
+
 #define INSERT_COLUMN_USAGE "INSERT INTO __all_column_usage(tenant_id," \
                                                             "table_id," \
                                                             "column_id," \
@@ -915,7 +927,17 @@ int ObOptStatMonitorManager::do_get_opt_stats_expired_table_info(const int64_t t
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
       ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_);
-      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+      ObStatInt64Map table_id_idx_map;
+      if (OB_FAIL(ObDbmsStatsUtils::build_hash_map(
+              stale_infos,
+              table_id_idx_map,
+              ObExpiredTableInfoTableIdGetter(),
+              ObStatHashMapIndexGetter(),
+              "StaleInfoMap",
+              ObModIds::OB_HASH_NODE,
+              tenant_id))) {
+        LOG_WARN("failed to build table id idx map", K(ret));
+      } else if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
         LOG_WARN("failed to execute sql", K(ret), K(select_sql));
       } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
         ret = OB_ERR_UNEXPECTED;
@@ -940,18 +962,16 @@ int ObOptStatMonitorManager::do_get_opt_stats_expired_table_info(const int64_t t
                      OB_FAIL(obj3.get_int(inserts))) {
             LOG_WARN("failed to get int", K(ret), K(obj1), K(obj2), K(inserts));
           } else {
-            bool is_found = false;
-            for (int64_t i = 0; !is_found && OB_SUCC(ret) && i < stale_infos.count(); ++i) {
-              if (table_id == stale_infos.at(i).table_id_) {
-                is_found = true;
-                if (OB_FAIL(stale_infos.at(i).tablet_ids_.push_back(tablet_id))) {
-                  LOG_WARN("failed to push back", K(ret));
-                } else {
-                  stale_infos.at(i).inserts_ += inserts;
-                }
+            int64_t found_idx = -1;
+            int tmp_ret = table_id_idx_map.get_refactored(table_id, found_idx);
+            if (OB_SUCCESS == tmp_ret) {
+              if (OB_FAIL(stale_infos.at(found_idx).tablet_ids_.push_back(tablet_id))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else {
+                stale_infos.at(found_idx).inserts_ += inserts;
               }
-            }
-            if (OB_SUCC(ret) && !is_found) {
+            } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+              int64_t new_idx = stale_infos.count();
               OptStatExpiredTableInfo stale_info;
               stale_info.tenant_id_ = tenant_id;
               stale_info.table_id_ = table_id;
@@ -960,7 +980,12 @@ int ObOptStatMonitorManager::do_get_opt_stats_expired_table_info(const int64_t t
                 LOG_WARN("failed to push back", K(ret));
               } else if (OB_FAIL(stale_infos.push_back(stale_info))) {
                 LOG_WARN("failed to push back", K(ret));
+              } else if (OB_FAIL(table_id_idx_map.set_refactored(table_id, new_idx))) {
+                LOG_WARN("failed to set refactored", K(ret));
               }
+            } else {
+              ret = tmp_ret;
+              LOG_WARN("failed to get refactored", K(ret));
             }
           }
         }
@@ -1097,21 +1122,21 @@ int ObOptStatMonitorManager::get_need_check_opt_stat_partition_ids(const OptStat
         }
       }
     } else {
+      ObStatInt64Map tablet_to_part_map;
+      if (OB_FAIL(ObDbmsStatsUtils::generate_tablet_id_to_part_id_map(
+              part_infos, tablet_to_part_map, expired_table_info.tenant_id_))) {
+        LOG_WARN("failed to generate tablet id to part id map", K(ret));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < expired_table_info.tablet_ids_.count(); ++i) {
-        bool found_it = false;
-        for (int64_t j = 0; OB_SUCC(ret) && !found_it && j < part_infos.count(); ++j) {
-          if (expired_table_info.tablet_ids_.at(i) == static_cast<int64_t>(part_infos.at(j).tablet_id_.id())) {
-            if (OB_FAIL(partition_ids.push_back(part_infos.at(j).part_id_))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              found_it = true;
-            }
+        int64_t part_id = 0;
+        if (OB_SUCCESS == tablet_to_part_map.get_refactored(expired_table_info.tablet_ids_.at(i), part_id)) {
+          if (OB_FAIL(partition_ids.push_back(part_id))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
     }
   } else if (!part_infos.empty() && !subpart_infos.empty()) {//subpart table
-    hash::ObHashMap<int64_t, bool> partition_ids_map;
     if (expired_table_info.tablet_ids_.count() == subpart_infos.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < part_infos.count(); ++i) {
         if (OB_FAIL(partition_ids.push_back(part_infos.at(i).part_id_))) {
@@ -1123,31 +1148,32 @@ int ObOptStatMonitorManager::get_need_check_opt_stat_partition_ids(const OptStat
           LOG_WARN("failed to push back", K(ret));
         }
       }
-    } else if (OB_FAIL(partition_ids_map.create(part_infos.count(), "PartIdsMap", "PartIdsMapNode", expired_table_info.tenant_id_))) {
-      LOG_WARN("fail to create hash map", K(ret), K(expired_table_info.tablet_ids_.count()));
     } else {
+      ObStatInt64Set first_part_id_set;
+      ObStatInt64Map tablet_to_subpart_idx_map;
+      if (OB_FAIL(first_part_id_set.create(part_infos.count(),
+                                           "FirstPartSet",
+                                           "FirstPartNd",
+                                           expired_table_info.tenant_id_))) {
+        LOG_WARN("failed to create hash set", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsUtils::generate_tablet_id_to_idx_map(
+              subpart_infos, tablet_to_subpart_idx_map, expired_table_info.tenant_id_))) {
+        LOG_WARN("failed to generate tablet id to subpart idx map", K(ret));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < expired_table_info.tablet_ids_.count(); ++i) {
-        bool found_it = false;
-        for (int64_t j = 0; OB_SUCC(ret) && !found_it && j < subpart_infos.count(); ++j) {
-          if (expired_table_info.tablet_ids_.at(i) == static_cast<int64_t>(subpart_infos.at(j).tablet_id_.id())) {
-            bool tmp_var = false;
-            if (OB_FAIL(partition_ids.push_back(subpart_infos.at(j).part_id_))) {
-              LOG_WARN("failed to push back", K(ret));
+        int64_t subpart_idx = -1;
+        if (OB_SUCCESS == tablet_to_subpart_idx_map.get_refactored(expired_table_info.tablet_ids_.at(i), subpart_idx)) {
+          const int64_t first_part_id = subpart_infos.at(subpart_idx).first_part_id_;
+          if (OB_FAIL(partition_ids.push_back(subpart_infos.at(subpart_idx).part_id_))) {
+            LOG_WARN("failed to push back", K(ret));
+          } else if (OB_FAIL(first_part_id_set.set_refactored(first_part_id, 0 /* do not overwrite */))) {
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
             } else {
-              found_it = true;
-              if (OB_FAIL(partition_ids_map.get_refactored(subpart_infos.at(j).first_part_id_, tmp_var))) {
-                if (OB_HASH_NOT_EXIST == ret) {
-                  ret = OB_SUCCESS;
-                  if (OB_FAIL(partition_ids.push_back(subpart_infos.at(j).first_part_id_))) {
-                    LOG_WARN("failed to push back", K(ret));
-                  } else if (OB_FAIL(partition_ids_map.set_refactored(subpart_infos.at(j).first_part_id_, true))) {
-                    LOG_WARN("failed to set refactored", K(ret));
-                  } else {/*do nothing*/}
-                } else {
-                  LOG_WARN("failed to get refactored", K(ret));
-                }
-              }
+              LOG_WARN("failed to set refactored", K(ret));
             }
+          } else if (OB_FAIL(partition_ids.push_back(first_part_id))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }

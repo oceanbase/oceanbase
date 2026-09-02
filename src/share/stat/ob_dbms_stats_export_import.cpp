@@ -1394,6 +1394,12 @@ int ObDbmsStatsExportImport::gen_part_and_subpart_sel_str(const ObTableStatParam
       } else if (OB_FAIL(subpart_str.append("CASE stat.PARTITION_ID"))) {
         LOG_WARN("fail to append SQL stmt string.", K(subpart_str), K(ret));
       } else {
+        ObStatInt64Map first_part_id_to_idx_map;
+        if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(param.part_infos_,
+                                                                  first_part_id_to_idx_map,
+                                                                  param.tenant_id_))) {
+          LOG_WARN("failed to generate first part id to idx map", K(ret));
+        }
         for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
           if (OB_FAIL(subpart_str.append_fmt(" WHEN %ld THEN '%.*s'",
                                               param.subpart_infos_.at(i).part_id_,
@@ -1402,25 +1408,29 @@ int ObDbmsStatsExportImport::gen_part_and_subpart_sel_str(const ObTableStatParam
             LOG_WARN("fail to append SQL stmt string.", K(subpart_str), K(ret));
           } else {
             ObString part_name;
-            bool find_it = false;
             int64_t cur_part_id = param.subpart_infos_.at(i).first_part_id_;
-            for (int64_t j = 0; !find_it && j < param.part_infos_.count(); ++j) {
-              if (cur_part_id != param.part_infos_.at(j).part_id_) {
-                // do nothing
+            int64_t part_idx = -1;
+            int tmp_ret = first_part_id_to_idx_map.get_refactored(cur_part_id, part_idx);
+            if (OB_SUCCESS == tmp_ret) {
+              if (OB_UNLIKELY(part_idx < 0 || part_idx >= param.part_infos_.count())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected part idx", K(ret), K(part_idx), K(param.part_infos_.count()));
               } else {
-                part_name = param.part_infos_.at(j).part_name_;
-                find_it = true;
+                part_name = param.part_infos_.at(part_idx).part_name_;
               }
-            }
-            if (OB_SUCC(ret) && !find_it) {
+            } else if (OB_HASH_NOT_EXIST == tmp_ret) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("get unexpected error, partition id isn't found", K(ret), K(cur_part_id));
-            } else if (OB_FAIL(part_str.append_fmt(" WHEN %ld THEN '%.*s'",
-                                                    param.subpart_infos_.at(i).part_id_,
-                                                    part_name.length(),
-                                                    part_name.ptr()))) {
+            } else {
+              ret = tmp_ret;
+              LOG_WARN("failed to get part idx", K(ret), K(cur_part_id));
+            }
+            if (FAILEDx(part_str.append_fmt(" WHEN %ld THEN '%.*s'",
+                                            param.subpart_infos_.at(i).part_id_,
+                                            part_name.length(),
+                                            part_name.ptr()))) {
               LOG_WARN("fail to append SQL stmt string.", K(part_str), K(ret));
-            } else {/*do nothing*/}
+            }
           }
         }
         if (OB_SUCC(ret)) {

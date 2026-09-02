@@ -1968,49 +1968,15 @@ int ObLoadBaseResolver::resolve_partitions(
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is nullptr", KR(ret));
-  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), table_id, table_schema))) {
+  } else if (OB_FAIL(schema_checker_->get_table_schema(
+                 session_info_->get_effective_tenant_id(), table_id, table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret));
-  }
-  OB_ASSERT(1 == node.num_child_ && node.children_[0]->num_child_ > 0);
-  if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[0]) && T_NAME_LIST == node.children_[0]->type_) {
-    const ParseNode *name_list = node.children_[0];
-    ObString partition_name;
-    ObArray<ObObjectID> tmp_part_ids;
-    ObArray<ObString> tmp_part_names;
-    for (int i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
-      ObArray<ObObjectID> partition_ids;
-      partition_name.assign_ptr(name_list->children_[i]->str_value_,
-                                static_cast<int32_t>(name_list->children_[i]->str_len_));
-      //here just conver partition_name to its lowercase
-      ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
-      ObPartGetter part_getter(*table_schema);
-      if (T_USE_PARTITION == node.type_) {
-        if (OB_FAIL(part_getter.get_part_ids(partition_name, partition_ids))) {
-          LOG_WARN("fail to get part ids", K(ret), K(partition_name));
-          if (OB_UNKNOWN_PARTITION == ret && lib::is_mysql_mode()) {
-            LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
-                          table_schema->get_table_name_str().length(),
-                          table_schema->get_table_name_str().ptr());
-          }
-        }
-      } else if (OB_FAIL(part_getter.get_subpart_ids(partition_name, partition_ids))) {
-        LOG_WARN("fail to get subpart ids", K(ret), K(partition_name));
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(append_array_no_dup(tmp_part_ids, partition_ids))) {
-          LOG_WARN("Push partition id error", K(ret));
-        } else if (OB_FAIL(tmp_part_names.push_back(partition_name))) {
-          LOG_WARN("Push partition name error", K(ret));
-        }
-      }
-    } // end of for
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(part_ids.assign(tmp_part_ids))) {
-        LOG_WARN("fail to assign partition ids", KR(ret));
-      } else if (OB_FAIL(part_names.assign(tmp_part_names))) {
-        LOG_WARN("fail to assign partition names", KR(ret));
-      }
-    }
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is nullptr", KR(ret), K(table_id));
+  } else if (OB_FAIL(ObResolverUtils::resolve_partition_hints(
+                 node, *table_schema, part_ids, part_names))) {
+    LOG_WARN("failed to resolve partition hints", KR(ret), K(table_id));
   }
   return ret;
 }

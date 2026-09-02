@@ -151,6 +151,8 @@ int ObOptStatService::get_column_stat(const uint64_t tenant_id,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("statistics service is not initialized. ", K(ret), K(keys));
+  } else if (OB_FAIL(handles.reserve(keys.count()))) {
+    LOG_WARN("failed to reserve", K(ret));
   } else {
     LOG_TRACE("begin get column stat", K(keys));
     for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
@@ -714,7 +716,7 @@ int ObOptStatService::evict_all_opt_stat_kvcache(const uint64_t tenant_id,
   bool has_read_only_zone = false; // UNUSED;
   int64_t timeout = MAX_OPT_STATS_PROCESS_RPC_TIMEOUT;
   ObSchemaGetterGuard schema_guard;
-  hash::ObHashSet<uint64_t> table_ids_set;
+  ObStatUInt64Set table_ids_set;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("statistics service is not initialized. ", K(ret), K(tenant_id));
@@ -729,7 +731,10 @@ int ObOptStatService::evict_all_opt_stat_kvcache(const uint64_t tenant_id,
   } else if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
                                                                        has_read_only_zone))) {
     LOG_WARN("fail to get server locality", K(ret));
-  } else if (OB_FAIL(table_ids_set.create(max_table_cnt, "TableIdsSet", "TableIdsSetNode", tenant_id))) {
+  } else if (OB_FAIL(table_ids_set.create(max_table_cnt,
+                                          "TableIdsSet",
+                                          "TableIdsSetNode",
+                                          tenant_id))) {
     LOG_WARN("failed to create table ids set", K(ret));
   } else {
     LOG_INFO("begin evict standby opt stat kvcache", K(tenant_id), K(last_gmt_modified));
@@ -745,7 +750,7 @@ int ObOptStatService::evict_all_opt_stat_kvcache(const uint64_t tenant_id,
           const ObEvictTableKey &key = keys.at(i);
           if (OB_FAIL(THIS_WORKER.check_status())) {
             LOG_WARN("failed to check status", K(ret));
-          } else if (OB_FAIL(table_ids_set.set_refactored(key.table_id_))) {
+          } else if (OB_FAIL(table_ids_set.set_refactored(key.table_id_, 0 /* do not overwrite */))) {
             if (OB_HASH_EXIST == ret) {
               ret = OB_SUCCESS;
               last_gmt_modified = key.gmt_modified_;

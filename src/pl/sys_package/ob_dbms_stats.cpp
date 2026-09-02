@@ -7413,11 +7413,16 @@ int ObDbmsStats::adjust_auto_gather_stat_option(const ObIArray<ObPartitionStatIn
 {
   int ret = OB_SUCCESS;
   bool has_part_locked = false;
-  if (param.subpart_stat_param_.need_modify_) {
+  ObStatInt64Map part_stat_info_map;
+  if (OB_FAIL(ObDbmsStatsUtils::generate_partition_stat_id_to_idx_map(
+          partition_stat_infos, part_stat_info_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate partition stat id to idx map", K(ret));
+  } else if (param.subpart_stat_param_.need_modify_) {
     ObSEArray<PartInfo, 4> new_subpart_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
       bool is_locked = false;
-      if (is_partition_no_regather(param.subpart_infos_.at(i).part_id_, partition_stat_infos, is_locked)) {
+      if (is_partition_no_regather(param.subpart_infos_.at(i).part_id_, partition_stat_infos,
+                                   part_stat_info_map, is_locked)) {
         if (OB_FAIL(param.no_regather_partition_ids_.push_back(param.subpart_infos_.at(i).part_id_))) {
           LOG_WARN("failed to push back", K(ret));
         } else {
@@ -7437,7 +7442,8 @@ int ObDbmsStats::adjust_auto_gather_stat_option(const ObIArray<ObPartitionStatIn
     ObSEArray<PartInfo, 4> new_part_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
       bool is_locked = false;
-      if (is_partition_no_regather(param.part_infos_.at(i).part_id_, partition_stat_infos, is_locked)) {
+      if (is_partition_no_regather(param.part_infos_.at(i).part_id_, partition_stat_infos,
+                                   part_stat_info_map, is_locked)) {
         if (OB_FAIL(param.no_regather_partition_ids_.push_back(param.part_infos_.at(i).part_id_))) {
           LOG_WARN("failed to push back", K(ret));
         } else {
@@ -7467,11 +7473,13 @@ int ObDbmsStats::adjust_auto_gather_stat_option(const ObIArray<ObPartitionStatIn
     if (param.global_stat_param_.gather_approx_ &&
         (has_part_locked || !param.part_stat_param_.need_modify_)) {
       param.global_stat_param_.gather_approx_ = false;
-      if (is_partition_no_regather(param.global_part_id_, partition_stat_infos, is_locked)) {
+      if (is_partition_no_regather(param.global_part_id_, partition_stat_infos,
+                                   part_stat_info_map, is_locked)) {
         param.global_stat_param_.need_modify_ = false;
       }
     } else if (!param.global_stat_param_.gather_approx_ &&
-               is_partition_no_regather(param.global_part_id_, partition_stat_infos, is_locked)) {
+               is_partition_no_regather(param.global_part_id_, partition_stat_infos,
+                                        part_stat_info_map, is_locked)) {
       param.global_stat_param_.need_modify_ = false;
     }
   }
@@ -7481,16 +7489,16 @@ int ObDbmsStats::adjust_auto_gather_stat_option(const ObIArray<ObPartitionStatIn
 
 bool ObDbmsStats::is_partition_no_regather(int64_t part_id,
                                            const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                           const ObStatInt64Map &part_stat_info_map,
                                            bool &is_locked)
 {
   bool is_true = false;
-  bool found_it = false;
-  for (int64_t i = 0; !found_it && i < partition_stat_infos.count(); ++i) {
-    if (part_id == partition_stat_infos.at(i).partition_id_) {
-      is_true = !partition_stat_infos.at(i).is_regather();
-      is_locked = partition_stat_infos.at(i).is_stat_locked_;
-      found_it = true;
-    }
+  int64_t idx = -1;
+  if (part_stat_info_map.created() &&
+      OB_SUCCESS == part_stat_info_map.get_refactored(part_id, idx) &&
+      idx >= 0 && idx < partition_stat_infos.count()) {
+    is_true = !partition_stat_infos.at(idx).is_regather();
+    is_locked = partition_stat_infos.at(idx).is_stat_locked_;
   }
   return is_true;
 }
@@ -7697,47 +7705,50 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
                                                  ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<int64_t, 4> approx_first_part_ids;
-  //If the value of async_full_table_size_ is 0, it means that the table no need to async gather stats.
-  if (param.async_full_table_size_ == 0) {
+  ObStatInt64Set async_part_id_set;
+  ObStatInt64Set approx_first_part_id_set;
+  if (OB_FAIL(approx_first_part_id_set.create(MAX(param.subpart_infos_.count(), 1),
+                                              "ApproxPartSet",
+                                              "ApproxPartNd",
+                                              param.tenant_id_))) {
+    LOG_WARN("failed to create hash set", K(ret));
+  } else if (async_partition_ids.count() > 0 &&
+             OB_FAIL(ObDbmsStatsUtils::build_hash_set(
+                 async_partition_ids,
+                 async_part_id_set,
+                 ObStatHashIdentityGetter<int64_t>(),
+                 async_partition_ids.count(),
+                 "AsyncPartSet",
+                 "AsyncPartNd",
+                 param.tenant_id_))) {
+    LOG_WARN("failed to build hash set", K(ret));
+  } else if (param.async_full_table_size_ == 0) {
+    //If the value of async_full_table_size_ is 0, it means that the table no need to async gather stats.
     param.subpart_stat_param_.reset_gather_stat();
     param.part_stat_param_.reset_gather_stat();
     param.global_stat_param_.reset_gather_stat();
   } else if (param.auto_sample_row_cnt_ == 0) {
     param.auto_sample_row_cnt_ = DEFAULT_ASYNC_SAMPLE_ROW_COUNT;
   }
-  if (param.subpart_stat_param_.need_modify_) {
+  if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     ObSEArray<PartInfo, 4> new_subpart_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
-      bool found_it = false;
-      int64_t first_part_id = 0;
-      for (int64_t j = 0; OB_SUCC(ret) && !found_it && j < async_partition_ids.count(); ++j) {
-        if (async_partition_ids.at(j) == param.subpart_infos_.at(i).part_id_) {
-          if (OB_FAIL(new_subpart_infos.push_back(param.subpart_infos_.at(i)))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {
-            found_it = true;
-            first_part_id = param.subpart_infos_.at(i).first_part_id_;
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (found_it) {//check first partition id need approx regather
-          bool has_it = false;
-          for (int64_t j = 0; !has_it && j < approx_first_part_ids.count(); ++j) {
-            has_it = (first_part_id == approx_first_part_ids.at(j));
-          }
-          if (!has_it) {
-            if (OB_FAIL(add_var_to_array_no_dup(approx_first_part_ids, first_part_id))) {
-              LOG_WARN("failed to add var to array no dup", K(ret));
-            }
-          }
-        } else if (OB_FAIL(param.no_regather_partition_ids_.push_back(param.subpart_infos_.at(i).part_id_))) {
+      bool found_it = (async_part_id_set.created() &&
+                       OB_HASH_EXIST == async_part_id_set.exist_refactored(param.subpart_infos_.at(i).part_id_));
+      if (found_it) {
+        int64_t first_part_id = param.subpart_infos_.at(i).first_part_id_;
+        if (OB_FAIL(new_subpart_infos.push_back(param.subpart_infos_.at(i)))) {
           LOG_WARN("failed to push back", K(ret));
+        } else if (OB_FAIL(approx_first_part_id_set.set_refactored(first_part_id, 0 /* do not overwrite */))) {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to set refactored", K(ret));
+          }
         }
+      } else if (OB_FAIL(param.no_regather_partition_ids_.push_back(param.subpart_infos_.at(i).part_id_))) {
+        LOG_WARN("failed to push back", K(ret));
       }
-
     }
 
     if (OB_SUCC(ret)) {
@@ -7752,28 +7763,24 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
     ObSEArray<PartInfo, 4> new_part_infos;
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
       bool gather_part = false;
-      bool approx_found_it = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !approx_found_it && j < approx_first_part_ids.count(); ++j) {
-        if (approx_first_part_ids.at(j) == param.part_infos_.at(i).part_id_) {
-          approx_found_it = true;
-          if (param.part_stat_param_.can_use_approx_ &&
-              param.subpart_stat_param_.need_modify_ &&
-              param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
-            if (OB_FAIL(param.approx_part_infos_.push_back(param.part_infos_.at(i)))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              gather_part = true;
-            }
-          } else {/*do nothing*/}
-        }
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && !gather_part && j < async_partition_ids.count(); ++j) {
-        if (async_partition_ids.at(j) == param.part_infos_.at(i).part_id_) {
-          gather_part = true;
-          if (OB_FAIL(new_part_infos.push_back(param.part_infos_.at(i)))) {
+      bool approx_found_it = (OB_HASH_EXIST == approx_first_part_id_set.exist_refactored(param.part_infos_.at(i).part_id_));
+      if (approx_found_it) {
+        if (param.part_stat_param_.can_use_approx_ &&
+            param.subpart_stat_param_.need_modify_ &&
+            param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
+          if (OB_FAIL(param.approx_part_infos_.push_back(param.part_infos_.at(i)))) {
             LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
-        }
+          } else {
+            gather_part = true;
+          }
+        } else {/*do nothing*/}
+      }
+      if (OB_SUCC(ret) && !gather_part && async_part_id_set.created() &&
+          OB_HASH_EXIST == async_part_id_set.exist_refactored(param.part_infos_.at(i).part_id_)) {
+        gather_part = true;
+        if (OB_FAIL(new_part_infos.push_back(param.part_infos_.at(i)))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {/*do nothing*/}
       }
       if (OB_SUCC(ret) && !gather_part) {
         if (OB_FAIL(param.no_regather_partition_ids_.push_back(param.part_infos_.at(i).part_id_))) {
@@ -7781,7 +7788,6 @@ int ObDbmsStats::adjust_async_gather_stat_option(ObExecContext &ctx,
         }
       }
     }
-
 
     if (OB_SUCC(ret)) {
       if (OB_FAIL(param.part_infos_.assign(new_part_infos))) {

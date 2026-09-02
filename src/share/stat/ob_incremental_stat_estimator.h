@@ -103,6 +103,7 @@ private:
                                    bool need_derive_hist,
                                    const StatLevel &approx_level,
                                    const int64_t partition_id,
+                                   const PartInfo *partition_info,
                                    ObOptStat &global_opt_stat);
 
   static int derive_global_tbl_stat(ObIAllocator &alloc,
@@ -121,6 +122,7 @@ private:
                                     bool need_derive_hist,
                                     const StatLevel &approx_level,
                                     const int64_t partition_id,
+                                    const PartInfo *partition_info,
                                     ObOptStat &global_opt_stat);
 
   static int derive_global_histogram(ObIArray<ObHistogram> &all_part_histogram,

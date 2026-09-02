@@ -7,6 +7,7 @@
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_storage_estimator.h"
 #include "sql/engine/table/ob_table_scan_op.h"
+#include "sql/ob_sql_utils.h"
 #include "ob_opt_est_parameter_normal.h"
 #include "sql/optimizer/ob_sel_estimator.h"
 namespace oceanbase {
@@ -960,12 +961,16 @@ int ObAccessPathEstimation::add_storage_estimation_task_by_ranges(ObOptimizerCon
                                                                             tablet_ids))) {
       LOG_WARN("failed to get scan range partitions", K(chosen_scan_ranges.at(i)));
     } else if (!tablet_ids.empty()) {
+      ObSqlHashSet<ObTabletID> tablet_id_set;
       if (OB_FAIL(valid_partitions_for_range.reserve(tablet_ids.count()))) {
         LOG_WARN("failed to reserve", K(ret));
+      } else if (OB_FAIL(build_hash_set<ObTabletID>(tablet_ids, tablet_id_set,
+                                                    "TabIdSet", "TabIdSetNd", MTL_ID()))) {
+        LOG_WARN("failed to build tablet id set", K(ret));
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < ori_partitions.count(); j ++) {
-        if (ObOptimizerUtil::find_item(tablet_ids,
-                        ori_partitions.at(j).get_partition_location().get_tablet_id()) &&
+        if (OB_HASH_EXIST == tablet_id_set.exist_refactored(
+                ori_partitions.at(j).get_partition_location().get_tablet_id()) &&
             OB_FAIL(valid_partitions_for_range.push_back(index_partitions.at(j)))) {
           LOG_WARN("failed to push back", K(ret));
         }

@@ -3857,6 +3857,15 @@ public:
       common::ObIArray<common::ObObjectID> &subpart_ids,
       RelatedTableInfo *related_table = NULL);
 
+  // Accept part_idx directly to skip the part_id lookup.
+  static int get_tablet_and_subpart_id_by_idx(
+      const share::schema::ObTableSchema &table_schema,
+      const int64_t part_idx,
+      const common::ObNewRange &range,
+      common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObObjectID> &subpart_ids,
+      RelatedTableInfo *related_table = NULL);
+
   // for secondary-partitioned table
   // param[@in]:
   // - row

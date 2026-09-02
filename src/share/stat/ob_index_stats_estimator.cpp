@@ -12,6 +12,41 @@ namespace oceanbase
 namespace common
 {
 
+struct ObDataIndexPartIdPair
+{
+  ObDataIndexPartIdPair() : data_part_id_(OB_INVALID_ID), index_part_id_(OB_INVALID_ID) {}
+  ObDataIndexPartIdPair(const int64_t data_part_id, const int64_t index_part_id)
+    : data_part_id_(data_part_id), index_part_id_(index_part_id)
+  {}
+
+  TO_STRING_KV(K_(data_part_id), K_(index_part_id));
+
+  int64_t data_part_id_;
+  int64_t index_part_id_;
+};
+
+struct ObDataPartIdGetter
+{
+  int operator()(const ObDataIndexPartIdPair &part_id_pair,
+                 const int64_t,
+                 int64_t &data_part_id) const
+  {
+    data_part_id = part_id_pair.data_part_id_;
+    return OB_SUCCESS;
+  }
+};
+
+struct ObIndexPartIdGetter
+{
+  int operator()(const ObDataIndexPartIdPair &part_id_pair,
+                 const int64_t,
+                 int64_t &index_part_id) const
+  {
+    index_part_id = part_id_pair.index_part_id_;
+    return OB_SUCCESS;
+  }
+};
+
 ObIndexStatsEstimator::ObIndexStatsEstimator(ObExecContext &ctx, ObIAllocator &allocator)
   : ObBasicStatsEstimator(ctx, allocator)
 {}
@@ -235,6 +270,60 @@ int ObIndexStatsEstimator::fill_partition_condition(ObIAllocator &allocator,
   return ret;
 }
 
+int ObIndexStatsEstimator::build_data_to_index_part_id_map(
+    const ObTableStatParam &data_param,
+    const ObTableStatParam &index_param,
+    ObStatInt64Map &data_to_index_part_id_map)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDataIndexPartIdPair, 4> part_id_pairs;
+  if (OB_FAIL(part_id_pairs.push_back(ObDataIndexPartIdPair(
+          data_param.global_part_id_, index_param.global_part_id_)))) {
+    LOG_WARN("failed to add global part id mapping", K(ret), K(data_param.global_part_id_));
+  } else if (index_param.is_global_index_) {
+    // Global indexes only reuse the global statistics of the data table. Their
+    // partition layout is independent from that of the data table.
+  } else if (OB_UNLIKELY(data_param.part_level_ != index_param.part_level_
+                         || data_param.all_part_infos_.count()
+                            != index_param.all_part_infos_.count()
+                         || data_param.all_subpart_infos_.count()
+                            != index_param.all_subpart_infos_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data and index partition count mismatch", K(ret),
+             K(data_param.part_level_), K(index_param.part_level_),
+             K(data_param.all_part_infos_.count()), K(index_param.all_part_infos_.count()),
+             K(data_param.all_subpart_infos_.count()), K(index_param.all_subpart_infos_.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !index_param.is_global_index_
+                          && i < data_param.all_part_infos_.count(); ++i) {
+    const int64_t data_part_id = data_param.all_part_infos_.at(i).part_id_;
+    const int64_t index_part_id = index_param.all_part_infos_.at(i).part_id_;
+    if (OB_FAIL(part_id_pairs.push_back(ObDataIndexPartIdPair(data_part_id, index_part_id)))) {
+      LOG_WARN("failed to add part id mapping", K(ret), K(i), K(data_part_id));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !index_param.is_global_index_
+                          && i < data_param.all_subpart_infos_.count(); ++i) {
+    const int64_t data_part_id = data_param.all_subpart_infos_.at(i).part_id_;
+    const int64_t index_part_id = index_param.all_subpart_infos_.at(i).part_id_;
+    if (OB_FAIL(part_id_pairs.push_back(ObDataIndexPartIdPair(data_part_id, index_part_id)))) {
+      LOG_WARN("failed to add subpart id mapping", K(ret), K(i), K(data_part_id));
+    }
+  }
+  if (FAILEDx(ObDbmsStatsUtils::build_hash_map(
+          part_id_pairs,
+          data_to_index_part_id_map,
+          ObDataPartIdGetter(),
+          ObIndexPartIdGetter(),
+          ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
+          ObModIds::OB_HASH_NODE,
+          index_param.tenant_id_,
+          true /* ignore_duplicate */))) {
+    LOG_WARN("failed to build data to index part id map", K(ret));
+  }
+  return ret;
+}
+
 int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
                                                    const ObTableStatParam &data_param,
                                                    const ObTableStatParam &index_param,
@@ -247,6 +336,7 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   ObSEArray<ObOptTableStat *, 4> index_table_stats;
   ObArenaAllocator allocator(ObModIds::OB_SQL_PARSER);
   PartitionIdBlockMap partition_id_block_map;
+  ObStatInt64Map data_to_index_part_id_map;
   bool use_column_store = false;
   bool use_split_part = false;
   is_fast_gather = false;
@@ -261,7 +351,8 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   } else if (OB_FAIL(mgr.get_table_stat(data_param.tenant_id_, data_param.table_id_, gather_part_ids, data_table_stats))) {
     LOG_WARN("failed to get table stat", K(ret));
   } else if (index_param.need_estimate_block_ &&
-             OB_FAIL(partition_id_block_map.create(10000,
+             OB_FAIL(partition_id_block_map.create(index_param.all_part_infos_.count() +
+                                                   index_param.all_subpart_infos_.count() + 1,
                                                    ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                                    ObModIds::OB_HASH_BUCKET_TABLE_STATISTICS,
                                                    index_param.tenant_id_))) {
@@ -272,60 +363,75 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
                                                                  use_column_store
                                                                  ))) {
     LOG_WARN("failed to estimate block count", K(ret));
+  } else if (OB_FAIL(build_data_to_index_part_id_map(data_param,
+                                                     index_param,
+                                                     data_to_index_part_id_map))) {
+    LOG_WARN("failed to build data to index part id map", K(ret));
   } else {
     bool is_continued = true;
+    ObSEArray<uint64_t, 4> column_ids;
+    bool column_ids_inited = false;
     for (int64_t i = 0; OB_SUCC(ret) && is_continued && i < data_table_stats.count(); ++i) {
       ObOptTableStat &data_tab_stat = data_table_stats.at(i);
       int64_t idx_part_id = -1;
-      if (OB_FAIL(get_index_part_id(data_tab_stat.get_partition_id(),
-                                    data_param,
-                                    index_param,
-                                    idx_part_id))) {
-        LOG_WARN("failed to get index part id", K(ret));
+      if (OB_FAIL(data_to_index_part_id_map.get_refactored(
+              data_tab_stat.get_partition_id(), idx_part_id))) {
+        LOG_WARN("failed to get index partition id from data-to-index partition id map",
+                 K(ret), K(data_tab_stat.get_partition_id()));
       } else if (data_tab_stat.get_last_analyzed() > 0) {
-        void *ptr = NULL;
-        if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptTableStat)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("memory is not enough", K(ret), K(ptr));
-        } else {
-          ObOptTableStat *index_stat = new (ptr) ObOptTableStat();
-          index_stat->set_table_id(index_param.table_id_);
-          index_stat->set_partition_id(idx_part_id);
-          index_stat->set_object_type(data_tab_stat.get_object_type());
-          index_stat->set_stattype_locked(index_param.stattype_);
-          index_stat->set_row_count(data_tab_stat.get_row_count());
-          int64_t avg_len = 0;
-          if (OB_FAIL(fast_get_index_avg_len(data_tab_stat.get_partition_id(),
-                                             data_param,
-                                             index_param,
-                                             is_continued,
-                                             avg_len))) {
-            LOG_WARN("failed to fast get index avg len", K(ret));
-          } else if (!is_continued) {
-            //do nothing
+        if (!column_ids_inited) {
+          if (OB_FAIL(get_data_column_ids(data_param, index_param, column_ids))) {
+            LOG_WARN("failed to get data column ids", K(ret));
           } else {
-            index_stat->set_avg_row_size(avg_len);
-            BlockNumStat *block_num_stat = NULL;
-            if (OB_FAIL(partition_id_block_map.get_refactored(idx_part_id, block_num_stat))) {
-              if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("failed to get refactored", K(ret));
-              }
-            } else if (OB_ISNULL(block_num_stat)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get unexpected error", K(ret), K(block_num_stat));
+            column_ids_inited = true;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          void *ptr = NULL;
+          if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObOptTableStat)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("memory is not enough", K(ret), K(ptr));
+          } else {
+            ObOptTableStat *index_stat = new (ptr) ObOptTableStat();
+            index_stat->set_table_id(index_param.table_id_);
+            index_stat->set_partition_id(idx_part_id);
+            index_stat->set_object_type(data_tab_stat.get_object_type());
+            index_stat->set_stattype_locked(index_param.stattype_);
+            index_stat->set_row_count(data_tab_stat.get_row_count());
+            int64_t avg_len = 0;
+            if (OB_FAIL(fast_get_index_avg_len(data_tab_stat.get_partition_id(),
+                                               data_param,
+                                               index_param,
+                                               column_ids,
+                                               is_continued,
+                                               avg_len))) {
+              LOG_WARN("failed to fast get index avg len", K(ret));
+            } else if (!is_continued) {
+              //do nothing
             } else {
-              index_stat->set_macro_block_num(block_num_stat->tab_macro_cnt_);
-              index_stat->set_micro_block_num(block_num_stat->tab_micro_cnt_);
-              index_stat->set_sstable_row_count(block_num_stat->sstable_row_cnt_);
-              index_stat->set_memtable_row_count(block_num_stat->memtable_row_cnt_);
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(index_table_stats.push_back(index_stat))) {
-                LOG_WARN("failed to push back", K(ret));
+              index_stat->set_avg_row_size(avg_len);
+              BlockNumStat *block_num_stat = NULL;
+              if (OB_FAIL(partition_id_block_map.get_refactored(idx_part_id, block_num_stat))) {
+                if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("failed to get refactored", K(ret));
+                }
+              } else if (OB_ISNULL(block_num_stat)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get unexpected error", K(ret), K(block_num_stat));
               } else {
-                LOG_TRACE("Succeed to fast gather index stat", K(index_table_stats));
+                index_stat->set_macro_block_num(block_num_stat->tab_macro_cnt_);
+                index_stat->set_micro_block_num(block_num_stat->tab_micro_cnt_);
+                index_stat->set_sstable_row_count(block_num_stat->sstable_row_cnt_);
+                index_stat->set_memtable_row_count(block_num_stat->memtable_row_cnt_);
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(index_table_stats.push_back(index_stat))) {
+                  LOG_WARN("failed to push back", K(ret));
+                } else {
+                  LOG_TRACE("Succeed to fast gather index stat", K(index_table_stats));
+                }
               }
             }
           }
@@ -363,21 +469,16 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
   return ret;
 }
 
-int ObIndexStatsEstimator::fast_get_index_avg_len(const int64_t data_partition_id,
-                                                  const ObTableStatParam &data_param,
-                                                  const ObTableStatParam &index_param,
-                                                  bool &is_fast_get,
-                                                  int64_t &avg_len)
+int ObIndexStatsEstimator::get_data_column_ids(const ObTableStatParam &data_param,
+                                                const ObTableStatParam &index_param,
+                                                ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<uint64_t, 4> column_ids;
-  avg_len = 0;
-  is_fast_get = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < index_param.column_params_.count(); ++i) {
     bool is_found = false;
     for (int64_t j = 0; OB_SUCC(ret) && !is_found && j < data_param.column_params_.count(); ++j) {
       if (0 == index_param.column_params_.at(i).column_name_.case_compare(
-                                                    data_param.column_params_.at(j).column_name_)) {
+                                                  data_param.column_params_.at(j).column_name_)) {
         if (OB_FAIL(column_ids.push_back(data_param.column_params_.at(j).column_id_))) {
           LOG_WARN("failed to push back", K(ret));
         } else {
@@ -390,6 +491,19 @@ int ObIndexStatsEstimator::fast_get_index_avg_len(const int64_t data_partition_i
       LOG_WARN("get unexpected error", K(ret), K(is_found), K(data_param), K(index_param));
     }
   }
+  return ret;
+}
+
+int ObIndexStatsEstimator::fast_get_index_avg_len(const int64_t data_partition_id,
+                                                  const ObTableStatParam &data_param,
+                                                  const ObTableStatParam &index_param,
+                                                  const ObIArray<uint64_t> &column_ids,
+                                                  bool &is_fast_get,
+                                                  int64_t &avg_len)
+{
+  int ret = OB_SUCCESS;
+  avg_len = 0;
+  is_fast_get = false;
   if (OB_SUCC(ret) && !column_ids.empty()) {
     bool is_all_valid = true;
     //need refine
@@ -454,43 +568,6 @@ int ObIndexStatsEstimator::get_all_need_gather_partition_ids(const ObTableStatPa
       if (OB_FAIL(gather_part_ids.push_back(data_param.subpart_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObIndexStatsEstimator::get_index_part_id(const int64_t data_tab_partition_id,
-                                             const ObTableStatParam &data_param,
-                                             const ObTableStatParam &index_param,
-                                             int64_t &index_partition_id)
-{
-  int ret = OB_SUCCESS;
-  if (data_tab_partition_id == data_param.global_part_id_) {
-    index_partition_id = index_param.global_part_id_;
-  } else if (OB_UNLIKELY(data_param.part_level_ != index_param.part_level_ ||
-                         data_param.all_part_infos_.count() != index_param.all_part_infos_.count() ||
-                         data_param.all_subpart_infos_.count() != index_param.all_subpart_infos_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(data_param), K(index_param));
-  } else {
-    bool is_found = false;
-    for (int64_t i = 0; !is_found && i < data_param.all_part_infos_.count(); ++i) {
-      if (data_tab_partition_id == data_param.all_part_infos_.at(i).part_id_) {
-        index_partition_id = index_param.all_part_infos_.at(i).part_id_;
-        is_found = true;
-      }
-    }
-    if (!is_found) {
-      for (int64_t i = 0; !is_found && i < data_param.all_subpart_infos_.count(); ++i) {
-        if (data_tab_partition_id == data_param.all_subpart_infos_.at(i).part_id_) {
-          index_partition_id = index_param.all_subpart_infos_.at(i).part_id_;
-          is_found = true;
-        }
-      }
-    }
-    if (!is_found) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(data_tab_partition_id), K(data_param), K(index_param));
     }
   }
   return ret;

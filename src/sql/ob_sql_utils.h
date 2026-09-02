@@ -61,6 +61,105 @@ struct ObPreCalcExprFrameInfo;
 typedef common::ObSEArray<common::ObNewRange *, 1> ObQueryRangeArray;
 struct ObExprConstraint;
 typedef common::ObSEArray<common::ObSpatialMBR, 1> ObMbrFilterArray;
+template <typename T,
+          int64_t EXTEND_RATIO = 1>
+using ObSqlHashSet = common::hash::ObHashSet<T,
+                                             common::hash::NoPthreadDefendMode,
+                                             common::hash::hash_func<T>,
+                                             common::hash::equal_to<T>,
+                                             common::hash::SimpleAllocer<
+                                                 typename common::hash::HashSetTypes<T>::AllocType>,
+                                             common::hash::NormalPointer,
+                                             common::ObMalloc,
+                                             EXTEND_RATIO>;
+template <typename K,
+          typename V,
+          int64_t EXTEND_RATIO = 1>
+using ObSqlHashMap = common::hash::ObHashMap<K,
+                                             V,
+                                             common::hash::NoPthreadDefendMode,
+                                             common::hash::hash_func<K>,
+                                             common::hash::equal_to<K>,
+                                             common::hash::SimpleAllocer<
+                                                 typename common::hash::HashMapTypes<K, V>::AllocType>,
+                                             common::hash::NormalPointer,
+                                             common::ObMalloc,
+                                             EXTEND_RATIO>;
+template <typename T>
+int build_hash_set(const common::ObIArray<T> &values,
+                   ObSqlHashSet<T> &value_set,
+                   const uint64_t tenant_id)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(value_set.create(std::max<int64_t>(values.count(), 1),
+                               "SqlValueSet", ObModIds::OB_HASH_NODE, tenant_id))) {
+    SQL_LOG(WARN, "fail to create value set", K(ret), K(values.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+    if (common::OB_HASH_EXIST == (ret = value_set.set_refactored(values.at(i), 0 /* do not overwrite */))) {
+      ret = common::OB_SUCCESS;
+    } else if (OB_FAIL(ret)) {
+      SQL_LOG(WARN, "fail to set value", K(ret), K(i), K(values.at(i)));
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+int build_hash_set(const common::ObIArray<T> &values,
+                   ObSqlHashSet<T> &value_set,
+                   const char *bucket_label,
+                   const char *node_label,
+                   const uint64_t tenant_id)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(value_set.create(std::max<int64_t>(values.count(), 1), bucket_label, node_label, tenant_id))) {
+    SQL_LOG(WARN, "fail to create value set", K(ret), K(values.count()), K(tenant_id));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < values.count(); ++i) {
+    if (common::OB_HASH_EXIST == (ret = value_set.set_refactored(values.at(i), 0 /* do not overwrite */))) {
+      ret = common::OB_SUCCESS;
+    } else if (OB_FAIL(ret)) {
+      SQL_LOG(WARN, "fail to set value", K(ret), K(i), K(values.at(i)));
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+int stable_dedup_array(common::ObIArray<T> &array)
+{
+  int ret = common::OB_SUCCESS;
+  if (array.count() > 1) {
+    common::ObSEArray<T, 64> dedup_array;
+    ObSqlHashSet<T> value_set;
+    if (OB_FAIL(dedup_array.reserve(array.count()))) {
+      SQL_LOG(WARN, "fail to reserve dedup array", K(ret), K(array.count()));
+    } else if (OB_FAIL(value_set.create(array.count(),
+                                        "SqlDedupSet", ObModIds::OB_HASH_NODE, MTL_ID()))) {
+      SQL_LOG(WARN, "fail to create value set", K(ret), K(array.count()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); ++i) {
+      const T &value = array.at(i);
+      int tmp_ret = value_set.set_refactored(value, 0 /* do not overwrite */);
+      if (common::OB_HASH_EXIST == tmp_ret) {
+        // do nothing
+      } else if (common::OB_SUCCESS != tmp_ret) {
+        ret = tmp_ret;
+        SQL_LOG(WARN, "fail to set value", K(ret), K(i), K(value));
+      } else if (OB_FAIL(dedup_array.push_back(value))) {
+        SQL_LOG(WARN, "fail to push value", K(ret), K(i), K(value));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(array.assign(dedup_array))) {
+        SQL_LOG(WARN, "fail to assign dedup array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 class ObSelectStmt;
 class ObConstRawExpr;
 class ObColumnRefRawExpr;
@@ -931,7 +1030,7 @@ public:
 
 protected:
   static const int64_t CHECKER_BUCKET_NUM = 1000;
-  common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> duplicated_checker_;
+  ObSqlHashSet<uint64_t> duplicated_checker_;
 };
 
 
@@ -973,7 +1072,7 @@ public:
   int add_expr(ObRawExpr *&expr);
 private:
   common::ObIArray<ObRawExprPointer> &rel_array_;
-  common::hash::ObHashMap<uint64_t, uint64_t, common::hash::NoPthreadDefendMode> expr_id_map_;
+  ObSqlHashMap<uint64_t, uint64_t, 2> expr_id_map_;
 };
 
 class AllExprPointerCollector : public RelExprCheckerBase

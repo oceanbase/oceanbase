@@ -8,6 +8,7 @@
 #include "share/ob_define.h"
 #include "share/schema/ob_schema_struct.h"
 #include "lib/container/ob_fixed_array.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/das/ob_das_define.h"
 #include "sql/optimizer/ob_route_policy.h"
 #include "storage/tablet/ob_session_tablet_info_map.h"
@@ -32,7 +33,10 @@ class ObQueryRetryInfo;
 class ObDASCtx;
 struct ValueItemExpr;
 typedef common::ObFixedArray<common::ObAddr, common::ObIAllocator> AddrArray;
-typedef common::hash::ObHashMap<common::ObObjectID, common::ObObjectID, common::hash::NoPthreadDefendMode> ObPartitionIdMap;
+typedef ObSqlHashMap<common::ObObjectID,
+                     common::ObObjectID,
+                     2> ObPartitionIdMap;
+typedef ObSqlHashMap<common::ObObjectID, int64_t> ObPartIdToIdxMap;
 
 class VirtualSvrPair
 {
@@ -109,7 +113,7 @@ public:
     Value val_;
   };
   typedef common::ObList<MapEntry, common::ObIAllocator> RelatedTabletList;
-  typedef common::hash::ObHashMap<Key*, Value*, common::hash::NoPthreadDefendMode> RelatedTabletMap;
+  typedef ObSqlHashMap<Key*, Value*, 2> RelatedTabletMap;
 public:
   DASRelatedTabletMap(common::ObIAllocator &allocator)
     : list_(allocator),
@@ -161,22 +165,32 @@ public:
       object_id_(OB_INVALID_ID),
       related_list_(nullptr),
       partition_id_map_(nullptr),
+      part_id_to_idx_map_(),
       sess_tablet_info_map_(nullptr),
       gtt_tablet_info_()
   {
   }
+  ~ObDASTabletMapper();
 
   int get_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                const common::ObPartID part_id,
                                const ObIArray<common::ObNewRange*> &ranges,
                                common::ObIArray<common::ObTabletID> &tablet_ids,
-                               common::ObIArray<common::ObObjectID> &out_part_ids);
+                               common::ObIArray<common::ObObjectID> &out_part_ids,
+                               const bool need_dedup = true);
+  int get_tablet_and_object_id_batch(const share::schema::ObPartitionLevel part_level,
+                                     const common::ObIArray<common::ObObjectID> &part_ids,
+                                     const ObIArray<common::ObNewRange*> &ranges,
+                                     common::ObIArray<common::ObTabletID> &tablet_ids,
+                                     common::ObIArray<common::ObObjectID> &out_part_ids,
+                                     const bool need_dedup);
 
   int get_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                const common::ObPartID part_id,
                                const common::ObObj &value,
                                common::ObIArray<common::ObTabletID> &tablet_ids,
-                               common::ObIArray<common::ObObjectID> &out_part_ids);
+                               common::ObIArray<common::ObObjectID> &out_part_ids,
+                               const bool need_dedup = true);
 
   /**
    * Get a set of partition_id and tablet_id according to the range
@@ -198,7 +212,8 @@ public:
       const common::ObPartID part_id,
       const common::ObNewRange &range,
       common::ObIArray<common::ObTabletID> &tablet_ids,
-      common::ObIArray<common::ObObjectID> &object_ids);
+      common::ObIArray<common::ObObjectID> &object_ids,
+      const bool need_dedup = true);
   /**
    * Get partition_id and tablet_id according to the single partition key value
    * For non-partitioned table or one-level partitions, tablet_id is the final data object id,
@@ -238,16 +253,21 @@ public:
                                    common::ObIArray<common::ObTabletID> &tablet_ids,
                                    common::ObIArray<common::ObObjectID> &out_part_ids,
                                    const bool need_dedup);
+  int get_all_tablet_and_object_id_batch(const share::schema::ObPartitionLevel part_level,
+                                         const common::ObIArray<common::ObObjectID> &part_ids,
+                                         common::ObIArray<common::ObTabletID> &tablet_ids,
+                                         common::ObIArray<common::ObObjectID> &out_part_ids,
+                                         const bool need_dedup);
   int get_all_tablet_and_object_id(common::ObIArray<common::ObTabletID> &tablet_ids,
                                    common::ObIArray<common::ObObjectID> &out_part_ids);
   int get_default_tablet_and_object_id(const share::schema::ObPartitionLevel part_level,
                                        const common::ObIArray<common::ObObjectID> &part_hint_ids,
                                        common::ObTabletID &tablet_id,
                                        common::ObObjectID &object_id);
-  int get_related_partition_id(const common::ObTableID &src_table_id,
-                               const common::ObObjectID &src_part_id,
-                               const common::ObTableID &dst_table_id,
-                               common::ObObjectID &dst_object_id);
+  int get_related_partition_ids(const common::ObTableID &src_table_id,
+                                const common::ObIArray<common::ObObjectID> &src_part_ids,
+                                const common::ObTableID &dst_table_id,
+                                common::ObIArray<common::ObObjectID> &dst_object_ids);
   share::schema::RelatedTableInfo &get_related_table_info() { return related_info_; }
   bool is_non_partition_optimized() const { return is_non_partition_optimized_; }
   void set_non_partitioned_table_ids(const common::ObTabletID &tablet_id,
@@ -274,8 +294,12 @@ public:
   int get_partition_id_map(common::ObObjectID first_level_part_id, common::ObObjectID &object_id);
   void set_table_schema(const share::schema::ObTableSchema *schema)
   {
-    table_schema_ = schema;
+    if (table_schema_ != schema) {
+      part_id_to_idx_map_.destroy();
+      table_schema_ = schema;
+    }
   }
+  int prepare_part_id_to_idx_map(const int64_t lookup_count);
   int get_tablet_and_object_id(
       const share::schema::ObPartitionLevel part_level,
       const ObPartID part_id,
@@ -284,7 +308,8 @@ public:
       const ObDataTypeCastParams &dtc_params,
       const common::ObIArray<ValueItemExpr*> &vies,
       ObIArray<ObTabletID> &tablet_ids,
-      ObIArray<ObObjectID> &object_ids);
+      ObIArray<ObObjectID> &object_ids,
+      const bool need_dedup = true);
 
   // Only for list partitioned table!!
   // param[@in]:
@@ -347,6 +372,7 @@ private:
       const share::schema::ObTableSchema &table_schema,
       share::schema::RelatedTableInfo *related_info_ptr,
       common::ObTabletID &tablet_id);
+  int build_part_id_to_idx_map();
 private:
   const share::schema::ObTableSchema *table_schema_;
   const VirtualSvrPair *vt_svr_pair_;
@@ -356,6 +382,7 @@ private:
   ObObjectID object_id_;
   const RelatedTabletList *related_list_;
   ObPartitionIdMap *partition_id_map_;
+  ObPartIdToIdxMap part_id_to_idx_map_;
   storage::ObSessionTabletInfoMap *sess_tablet_info_map_;
   storage::ObGTTTabletInfo gtt_tablet_info_;
 };

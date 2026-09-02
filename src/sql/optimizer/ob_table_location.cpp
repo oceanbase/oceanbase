@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_table_location.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "sql/engine/expr/ob_expr_func_part_hash.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
@@ -1886,22 +1887,64 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
       } else {
         ObSEArray<ObTabletID, 1> tmp_tablet_ids;
         ObSEArray<ObObjectID, 1> tmp_part_ids;
-        if (OB_FAIL(partition_id_map.create(128, "PartitionIdMap", "PartitionIdMap"))) {
+        ObSEArray<ObObjectID, 4> hinted_first_level_part_ids;
+        ObSEArray<int64_t, 4> schema_subpart_hint_ids;
+        ObSEArray<int64_t, 4> schema_first_level_part_ids;
+        int64_t hinted_subpart_count = 0;
+        const share::schema::ObTableSchema *table_schema = tablet_mapper.get_table_schema();
+        for (int64_t i = 0; OB_SUCC(ret) && i < part_hint_ids_.count(); ++i) {
+          if (OB_FAIL(schema_subpart_hint_ids.push_back(
+                  static_cast<int64_t>(part_hint_ids_.at(i))))) {
+            LOG_WARN("failed to convert partition hint id", K(ret), K(i), K(part_hint_ids_));
+          }
+        }
+        if (OB_FAIL(ret) || part_hint_ids_.empty()) {
+        } else if (OB_NOT_NULL(table_schema)
+            && table_schema->is_partitioned_table()
+            && OB_FAIL(table_schema->get_part_ids_by_subpart_ids(schema_subpart_hint_ids,
+                                                                 schema_first_level_part_ids,
+                                                                 hinted_subpart_count))) {
+          LOG_WARN("failed to get first level partition ids for partition hint", K(ret),
+                   K(part_hint_ids_));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < schema_first_level_part_ids.count(); ++i) {
+            if (OB_FAIL(hinted_first_level_part_ids.push_back(
+                    static_cast<ObObjectID>(schema_first_level_part_ids.at(i))))) {
+              LOG_WARN("failed to convert first level partition id", K(ret), K(i),
+                       K(schema_first_level_part_ids));
+            }
+          }
+        }
+        if (FAILEDx(partition_id_map.create(128, "PartitionIdMap", "PartitionIdMap",
+              OB_NOT_NULL(table_schema) ? table_schema->get_tenant_id() : MTL_ID()))) {
           LOG_WARN("failed to create partition id map");
-        } else if (OB_FALSE_IT(tablet_mapper.set_partition_id_map(&partition_id_map))) {
-        } else if (OB_FAIL(calc_partition_ids_by_calc_node(exec_ctx, tablet_mapper, params,
-                                                           calc_node_, gen_col_node_,
-                                                           se_gen_col_expr_,
-                                                           part_get_all_, tmp_tablet_ids,
-                                                           tmp_part_ids, dtc_params))) {
+        } else {
+          tablet_mapper.set_partition_id_map(&partition_id_map);
+        }
+        if (OB_SUCC(ret)) {
+          if (part_get_all_ && !hinted_first_level_part_ids.empty()) {
+            if (OB_FAIL(tmp_part_ids.assign(hinted_first_level_part_ids))) {
+              LOG_WARN("failed to assign hinted first level partition ids", K(ret));
+            }
+          } else if (OB_FAIL(calc_partition_ids_by_calc_node(exec_ctx, tablet_mapper, params,
+                                                             calc_node_, gen_col_node_,
+                                                             se_gen_col_expr_,
+                                                             part_get_all_, tmp_tablet_ids,
+                                                             tmp_part_ids, dtc_params))) {
+            LOG_WARN("Calc partition ids by calc node error", K_(stmt_type), K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && !hinted_first_level_part_ids.empty()
+            && OB_FAIL(intersect_partition_ids(hinted_first_level_part_ids, tmp_part_ids))) {
+          LOG_WARN("failed to intersect hinted first level partition ids", K(ret));
+        }
+        if (FAILEDx(calc_partition_ids_by_calc_node(exec_ctx, tablet_mapper, params,
+                                                    subcalc_node_, sub_gen_col_node_,
+                                                    se_sub_gen_col_expr_, subpart_get_all_,
+                                                    tablet_ids, partition_ids,
+                                                    dtc_params, &tmp_part_ids))) {
           LOG_WARN("Calc partition ids by calc node error", K_(stmt_type), K(ret));
-        } else if (OB_FAIL(calc_partition_ids_by_calc_node(exec_ctx, tablet_mapper, params,
-                                                           subcalc_node_, sub_gen_col_node_,
-                                                           se_sub_gen_col_expr_, subpart_get_all_,
-                                                           tablet_ids, partition_ids,
-                                                           dtc_params, &tmp_part_ids))) {
-          LOG_WARN("Calc partition ids by calc node error", K_(stmt_type), K(ret));
-        } else { }
+        }
       }
     }
 
@@ -3495,17 +3538,25 @@ int ObTableLocation::intersect_partition_ids(
 {
   int ret = OB_SUCCESS;
   ObSEArray<T, 128> intersect_tmp;
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_ids.count(); ++idx) {
-    if (has_exist_in_array(to_inter_ids, partition_ids.at(idx), NULL)) {
-      if (OB_FAIL(intersect_tmp.push_back(partition_ids.at(idx)))) {
-        LOG_WARN("Failed to add partition id", K(ret));
+  ObSqlHashSet<T> to_inter_id_set;
+  if (to_inter_ids.empty() || partition_ids.empty()) {
+    partition_ids.reuse();
+  } else if (OB_FAIL(build_hash_set(to_inter_ids, to_inter_id_set, MTL_ID()))) {
+    LOG_WARN("failed to build partition id set", K(ret), K(to_inter_ids.count()));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < partition_ids.count(); ++idx) {
+      const int hash_ret = to_inter_id_set.exist_refactored(partition_ids.at(idx));
+      if (OB_HASH_EXIST == hash_ret) {
+        if (OB_FAIL(intersect_tmp.push_back(partition_ids.at(idx)))) {
+          LOG_WARN("failed to add partition id", K(ret), K(idx));
+        }
+      } else if (OB_HASH_NOT_EXIST != hash_ret) {
+        ret = hash_ret;
+        LOG_WARN("failed to find partition id in set", K(ret), K(idx));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    partition_ids.reset();
-    if (OB_FAIL(partition_ids.assign(intersect_tmp))) {
-      LOG_WARN("Failed to assign intersect tmp ids", K(ret));
+    if (FAILEDx(partition_ids.assign(intersect_tmp))) {
+      LOG_WARN("failed to assign intersect tmp ids", K(ret));
     }
   }
   return ret;
@@ -3994,6 +4045,12 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext &exec_ctx,
       }
     } else {
       const ObIArray<ObNewRange*> &single_ranges = need_try_split_range ? splited_ranges : ranges;
+      if (OB_NOT_NULL(part_ids)
+          && OB_FAIL(tablet_mapper.prepare_part_id_to_idx_map(
+                         part_ids->count() * single_ranges.count()))) {
+        LOG_WARN("failed to prepare part id to index map",
+                 K(ret), K(part_ids->count()), K(single_ranges.count()));
+      }
       for (int64_t i = 0; OB_SUCC(ret) && !all_part && i < single_ranges.count(); ++i) {
         ObNewRange *range = single_ranges.at(i);
         ObNewRow input_row;
@@ -4021,14 +4078,23 @@ int ObTableLocation::calc_partition_ids_by_ranges(ObExecContext &exec_ctx,
               result_row.cells_ = &gen_col_val;
               result_row.count_ = 1;
               if (OB_FAIL(calc_partition_id_by_row(exec_ctx, tablet_mapper, result_row,
-                                                   tablet_ids, partition_ids, part_ids))) {
+                                                   tablet_ids, partition_ids, part_ids,
+                                                   false /* need_dedup */))) {
                 LOG_WARN("Failed to calc partition id by row", K(ret));
               }
             }
           } else if (OB_FAIL(calc_partition_id_by_row(exec_ctx, tablet_mapper, input_row,
-                                                      tablet_ids, partition_ids, part_ids))) {
+                                                      tablet_ids, partition_ids, part_ids,
+                                                      false /* need_dedup */))) {
             LOG_WARN("Calc partition id by row error", K(ret));
           } else { }//do nothing
+        }
+      }
+      if (OB_SUCC(ret) && !all_part) {
+        if (OB_FAIL(stable_dedup_array(tablet_ids))) {
+          LOG_WARN("fail to deduplicate tablet ids", K(ret));
+        } else if (OB_FAIL(stable_dedup_array(partition_ids))) {
+          LOG_WARN("fail to deduplicate partition ids", K(ret));
         }
       }
     }
@@ -4058,12 +4124,9 @@ int ObTableLocation::get_part_ids_by_ranges(ObDASTabletMapper &tablet_mapper,
       LOG_WARN("fail to get tablet ids", K(ranges), K(ret));
     }
   } else {
-    for (int64_t p_idx = 0; OB_SUCC(ret) && p_idx < part_ids->count(); ++p_idx) {
-      ObObjectID part_id = part_ids->at(p_idx);
-      if (OB_FAIL((tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_TWO, part_id,
-                                     ranges, tablet_ids, partition_ids)))) {
-        LOG_WARN("fail to get tablet ids", K(ranges), K(ret));
-      }
+    if (OB_FAIL((tablet_mapper.get_tablet_and_object_id_batch(PARTITION_LEVEL_TWO, *part_ids,
+                                   ranges, tablet_ids, partition_ids, true /* need_dedup */)))) {
+      LOG_WARN("fail to get tablet ids", K(ranges), K(ret));
     }
   }
   return ret;
@@ -4075,7 +4138,8 @@ int ObTableLocation::calc_partition_id_by_func_value(
    const bool calc_oracle_hash,
    ObIArray<ObTabletID> &tablet_ids,
    ObIArray<ObObjectID> &partition_ids,
-   const ObIArray<ObObjectID> *part_ids) const
+   const ObIArray<ObObjectID> *part_ids,
+   const bool need_dedup) const
 {
   int ret = OB_SUCCESS;
   ObObj result = func_value;
@@ -4105,11 +4169,19 @@ int ObTableLocation::calc_partition_id_by_func_value(
   } else {
     if (NULL == part_ids) {
       OZ(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                        result, tablet_ids, partition_ids));
+                        result, tablet_ids, partition_ids, need_dedup));
     } else {
+      OZ(tablet_mapper.prepare_part_id_to_idx_map(part_ids->count()));
       for (int64_t idx = 0; OB_SUCC(ret) && idx < part_ids->count(); ++idx) {
         OZ(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_TWO, part_ids->at(idx),
-                          result, tablet_ids, partition_ids));
+                          result, tablet_ids, partition_ids, false /* need_dedup */));
+      }
+      if (OB_SUCC(ret) && need_dedup) {
+        if (OB_FAIL(stable_dedup_array(tablet_ids))) {
+          LOG_WARN("fail to deduplicate tablet ids", K(ret));
+        } else if (OB_FAIL(stable_dedup_array(partition_ids))) {
+          LOG_WARN("fail to deduplicate partition ids", K(ret));
+        }
       }
     }
   }
@@ -4390,7 +4462,8 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
                                               ObNewRow &row,
                                               ObIArray<ObTabletID> &tablet_ids,
                                               ObIArray<ObObjectID> &partition_ids,
-                                              const ObIArray<ObObjectID> *part_ids) const
+                                              const ObIArray<ObObjectID> *part_ids,
+                                              const bool need_dedup) const
 {
   int ret = OB_SUCCESS;
   ObObj func_result;
@@ -4406,8 +4479,8 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
       OZ(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
                           row, tablet_id, partition_id));
       if (OB_INVALID_ID != partition_id) {
-        OZ(add_var_to_array_no_dup(partition_ids, partition_id));
-        OZ(add_var_to_array_no_dup(tablet_ids, tablet_id));
+        OZ(partition_ids.push_back(partition_id));
+        OZ(tablet_ids.push_back(tablet_id));
       }
       range_columns = true;
     } else {
@@ -4423,8 +4496,8 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
       OZ(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_TWO, part_ids->at(idx),
                  row, tablet_id, partition_id));
       if (OB_INVALID_ID != partition_id) {
-        OZ(add_var_to_array_no_dup(partition_ids, partition_id));
-        OZ(add_var_to_array_no_dup(tablet_ids, tablet_id));
+        OZ(partition_ids.push_back(partition_id));
+        OZ(tablet_ids.push_back(tablet_id));
       }
     }
     range_columns = true;
@@ -4432,10 +4505,19 @@ int ObTableLocation::calc_partition_id_by_row(ObExecContext &exec_ctx,
     CK(OB_NOT_NULL(se_subpart_expr_));
     OZ(se_subpart_expr_->eval(exec_ctx, row, func_result));
   }
-  if (OB_FAIL(ret) || range_columns) {
-  } else if (OB_FAIL(calc_partition_id_by_func_value(tablet_mapper, func_result, false,
-                                                      tablet_ids, partition_ids, part_ids))) {
-    LOG_WARN("Failed to calc partition id by func value", K(ret));
+  if (OB_SUCC(ret) && !range_columns) {
+    if (OB_FAIL(calc_partition_id_by_func_value(tablet_mapper, func_result, false,
+                                                tablet_ids, partition_ids, part_ids,
+                                                need_dedup))) {
+      LOG_WARN("Failed to calc partition id by func value", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && range_columns && need_dedup) {
+    if (OB_FAIL(stable_dedup_array(tablet_ids))) {
+      LOG_WARN("fail to deduplicate tablet ids", K(ret));
+    } else if (OB_FAIL(stable_dedup_array(partition_ids))) {
+      LOG_WARN("fail to deduplicate partition ids", K(ret));
+    }
   }
   return ret;
 }
@@ -4450,21 +4532,17 @@ int ObTableLocation::get_all_part_ids(
   if (!is_partitioned_) {
     OZ (tablet_mapper.get_non_partition_tablet_id(tablet_ids, partition_ids));
   } else {
-    bool need_dedup = !(tablet_ids.empty() && partition_ids.empty());
     if (NULL == part_ids) {
       if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(
                                              PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                             tablet_ids, partition_ids, need_dedup))) {
+                                             tablet_ids, partition_ids, true /* need_dedup */))) {
         LOG_WARN("fail to get tablet ids", K(ret));
       }
     } else {
-      for (int64_t idx = 0; OB_SUCC(ret) && idx < part_ids->count(); ++idx) {
-        ObObjectID part_id = part_ids->at(idx);
-        if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id(
-                                               PARTITION_LEVEL_TWO, part_id,
-                                               tablet_ids, partition_ids, need_dedup))) {
-          LOG_WARN("fail to get tablet ids", K(ret));
-        }
+      if (OB_FAIL(tablet_mapper.get_all_tablet_and_object_id_batch(
+                                        PARTITION_LEVEL_TWO, *part_ids,
+                                        tablet_ids, partition_ids, true /* need_dedup */))) {
+        LOG_WARN("fail to get tablet ids by batch", K(ret));
       }
     }
   }
@@ -4502,15 +4580,16 @@ int ObTableLocation::deal_partition_selection(ObIArray<ObTabletID> &tablet_ids,
   }
   part_ids.reset();
   tablet_ids.reset();
-  bool found = false;
-  for (int tmp_idx = 0; OB_SUCC(ret) && tmp_idx < tmp_part_ids.count(); tmp_idx++) {
-    found = false;
-    for (int hint_idx = 0; !found && hint_idx < part_hint_ids_.count(); hint_idx++) {
-      if (tmp_part_ids.at(tmp_idx) == part_hint_ids_.at(hint_idx)) {
-        found = true;
-      }
+  ObSqlHashSet<ObObjectID> hint_id_set;
+  if (OB_SUCC(ret) && !part_hint_ids_.empty()) {
+    if (OB_FAIL(build_hash_set<ObObjectID>(part_hint_ids_, hint_id_set, MTL_ID()))) {
+      LOG_WARN("fail to build hint id set", K(ret), K(part_hint_ids_.count()));
     }
-    if (found ) {
+  }
+  for (int tmp_idx = 0; OB_SUCC(ret) && !part_hint_ids_.empty()
+                       && tmp_idx < tmp_part_ids.count(); tmp_idx++) {
+    const bool found = OB_HASH_EXIST == hint_id_set.exist_refactored(tmp_part_ids.at(tmp_idx));
+    if (found) {
       OZ(part_ids.push_back(tmp_part_ids.at(tmp_idx)));
       OZ(tablet_ids.push_back(tmp_tablet_ids.at(tmp_idx)));
     }
@@ -4716,25 +4795,21 @@ int ObTableLocation::replace_ref_table_id(const uint64_t ref_table_id, ObExecCon
   LOG_DEBUG("set log op infos", K(ref_table_id), K(loc_meta_));
   //replace the partition hint ids with local index object id
   ObDASTabletMapper tablet_mapper;
+  ObSEArray<ObObjectID, 8> dst_part_hint_ids;
   if (is_non_partition_optimized_) {
     tablet_mapper.set_non_partitioned_table_ids(tablet_id_, object_id_, &related_list_);
   }
   if (OB_FAIL(DAS_CTX(exec_ctx).get_das_tablet_mapper(loc_meta_.ref_table_id_, tablet_mapper))) {
     LOG_WARN("get das tablet mapper failed", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_hint_ids_.count(); ++i) {
-    ObObjectID dst_object_id;
-    if (OB_FAIL(tablet_mapper.get_related_partition_id(loc_meta_.ref_table_id_,
-                                                       part_hint_ids_.at(i),
-                                                       ref_table_id,
-                                                       dst_object_id))) {
-      LOG_WARN("get related partition id failed", K(ret), K(loc_meta_),
-               K(ref_table_id), K(part_hint_ids_.at(i)), K(i));
-    } else {
-      part_hint_ids_.at(i) = dst_object_id;
-    }
-  }
-  if (OB_SUCC(ret)) {
+  } else if (OB_FAIL(tablet_mapper.get_related_partition_ids(loc_meta_.ref_table_id_,
+                                                             part_hint_ids_,
+                                                             ref_table_id,
+                                                             dst_part_hint_ids))) {
+    LOG_WARN("get related partition ids failed", K(ret), K(loc_meta_),
+             K(ref_table_id), K(part_hint_ids_.count()));
+  } else if (OB_FAIL(part_hint_ids_.assign(dst_part_hint_ids))) {
+    LOG_WARN("assign related partition ids failed", K(ret), K(dst_part_hint_ids.count()));
+  } else {
     //replace the ref table id finally
     loc_meta_.ref_table_id_ = ref_table_id;
   }
@@ -6430,15 +6505,24 @@ int ObTableLocation::calc_list_value_partition_ids(
     LOG_WARN("Calc node should not be NULL", K(ret));
   } else if (NULL == part_ids) {
     if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_ONE, OB_INVALID_ID,
-                                   exec_ctx, params, dtc_params, calc_node->vies_, tablet_ids, partition_ids))) {
+                                   exec_ctx, params, dtc_params, calc_node->vies_,
+                                   tablet_ids, partition_ids, true /* need_dedup */))) {
       LOG_WARN("fail to get tablet ids", K(ret));
     }
   } else {
     for (int64_t p_idx = 0; OB_SUCC(ret) && p_idx < part_ids->count(); ++p_idx) {
       ObObjectID part_id = part_ids->at(p_idx);
       if (OB_FAIL(tablet_mapper.get_tablet_and_object_id(PARTITION_LEVEL_TWO, part_id,
-                                     exec_ctx, params, dtc_params, calc_node->vies_, tablet_ids, partition_ids))) {
+                                     exec_ctx, params, dtc_params, calc_node->vies_,
+                                     tablet_ids, partition_ids, false /* need_dedup */))) {
         LOG_WARN("fail to get tablet ids", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(stable_dedup_array(tablet_ids))) {
+        LOG_WARN("fail to deduplicate tablet ids", K(ret));
+      } else if (OB_FAIL(stable_dedup_array(partition_ids))) {
+        LOG_WARN("fail to deduplicate partition ids", K(ret));
       }
     }
   }

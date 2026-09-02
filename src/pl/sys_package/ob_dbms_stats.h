@@ -675,6 +675,7 @@ private:
 
   static bool is_partition_no_regather(int64_t part_id,
                                        const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                       const ObStatInt64Map &part_stat_info_map,
                                        bool &is_locked);
 
   static int check_system_stats_name_valid(const ObString& name, bool &is_valid);

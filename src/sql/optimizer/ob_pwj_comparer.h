@@ -242,12 +242,23 @@ public:
                                        const PwjTable &r_table,
                                        bool &is_equal);
 
+  int build_subpartition_index_pairs(const PwjTable &table,
+                                     ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs);
+
+  /**
+   * 在按part_index升序排列的二级分区下标对中，查找首个part_index大于等于指定值的位置
+   */
+  int64_t lower_bound_subpartition_index_pair(
+      const ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs,
+      const int64_t part_index);
+
   /**
    * 获取指定part_index下的所有用到的二级分区的subpart_index，并按升序排列
    */
-  int get_subpartition_indexes_by_part_index(const PwjTable &table,
-                                             const int64_t part_index,
-                                             ObIArray<int64_t> &used_subpart_indexes);
+  int get_subpartition_indexes_by_part_index(
+      const ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs,
+      const int64_t part_index,
+      ObIArray<int64_t> &used_subpart_indexes);
 
   /**
    * 检查一级hash/key分区是否逻辑上相等, 要求:
@@ -340,9 +351,11 @@ public:
   /**
    * 获取二级分区表某个part_index对应的二级分区的subpart_id(二级逻辑分区id)
    */
-  int get_sub_part_tablet_id(const PwjTable &table,
-                             const int64_t &part_index,
-                             uint64_t &sub_part_tablet_id);
+  int get_sub_part_tablet_id(
+      const PwjTable &table,
+      const ObIArray<std::pair<int64_t, int64_t> > &subpartition_index_pairs,
+      const int64_t part_index,
+      uint64_t &sub_part_tablet_id);
 
 private:
   // 保存基表part_id(一级逻辑分区id)的映射关系

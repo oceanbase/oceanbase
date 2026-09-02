@@ -72,6 +72,7 @@ int ObIncrementalStatEstimator::derive_global_stat_by_direct_load(ObExecContext 
                                           need_derive_hist,
                                           TABLE_LEVEL,
                                           param.global_part_id_,
+                                          NULL,
                                           global_opt_stat))) {
           LOG_WARN("Failed to derive global stat from part stat", K(ret));
         } else if (OB_FAIL(all_derive_opt_stats.push_back(global_opt_stat))) {
@@ -172,6 +173,7 @@ int ObIncrementalStatEstimator::derive_global_stat_from_part_stats(
                                         need_derive_hist,
                                         TABLE_LEVEL,
                                         param.global_part_id_,
+                                        NULL,
                                         global_opt_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else {
@@ -283,6 +285,7 @@ int ObIncrementalStatEstimator::derive_split_gather_stats(ObExecContext &ctx,
                                         need_derive_hist,
                                         TABLE_LEVEL,
                                         param.global_part_id_,
+                                        NULL,
                                         global_opt_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(derive_opt_stats.push_back(global_opt_stat))) {
@@ -328,69 +331,108 @@ int ObIncrementalStatEstimator::do_derive_part_stats_from_subpart_stats(
     ObIArray<ObOptStat> &approx_part_opt_stats)
 {
   int ret = OB_SUCCESS;
-  int64_t cur_part_id = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
-    ObOptStat opt_part_stat;
-    ObSEArray<ObOptStat, 4> subpart_opt_stats;
-    //get no regather subpart stats
-    for (int64_t j = 0; OB_SUCC(ret) && j < no_regather_subpart_opt_stats.count(); ++j) {
-      const ObOptStat &tmp_subpart_opt_stat = no_regather_subpart_opt_stats.at(j);
-      if (OB_ISNULL(tmp_subpart_opt_stat.table_stat_) ||
-          OB_UNLIKELY(!ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                       tmp_subpart_opt_stat.table_stat_->get_partition_id(),
-                                                       cur_part_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(tmp_subpart_opt_stat.table_stat_));
-      } else if (param.approx_part_infos_.at(i).part_id_ == cur_part_id) {
-        if (OB_FAIL(subpart_opt_stats.push_back(tmp_subpart_opt_stat))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {/*do nothing*/}
-      } else {/*do nothing*/}
-    }
-    //get regather subpart stats
-    for (int64_t j = 0; OB_SUCC(ret) && j < gather_subpart_opt_stats.count(); ++j) {
-      if (OB_ISNULL(gather_subpart_opt_stats.at(j).table_stat_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(gather_subpart_opt_stats.at(j).table_stat_));
-      } else if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                 gather_subpart_opt_stats.at(j).table_stat_->get_partition_id(),
-                                                 cur_part_id)) {
-        if (param.approx_part_infos_.at(i).part_id_ == cur_part_id) {
-          if (OB_FAIL(subpart_opt_stats.push_back(gather_subpart_opt_stats.at(j)))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
-        } else {/*do nothing*/}
-      } else {/*do nothing*/}
-    }
-
-
-    //derive part stat from subpart stats
-    if (OB_SUCC(ret)) {
-      if (OB_UNLIKELY(subpart_opt_stats.count() != param.approx_part_infos_.at(i).subpart_cnt_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(subpart_opt_stats.count()),
-                                         K(param.approx_part_infos_.at(i)));
-      } else if (OB_FAIL(do_derive_global_stat(ctx,
-                                               alloc,
-                                               param,
-                                               subpart_opt_stats,
-                                               partition_id_block_map,
-                                               audit,
-                                               param.part_stat_param_.need_modify_ &&
-                                                   param.part_stat_param_.gather_histogram_,
-                                               PARTITION_LEVEL,
-                                               param.approx_part_infos_.at(i).part_id_,
-                                               opt_part_stat))) {
-        LOG_WARN("Failed to derive global stat from part stat", K(ret));
-      } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
-        LOG_WARN("faield to push back", K(ret));
-      } else { /*do nothing*/
+  const int64_t approx_part_cnt = param.approx_part_infos_.count();
+  ObStatInt64Map subpart_id_to_first_map;
+  ObStatInt64Map first_part_id_to_idx_map;
+  ObSEArray<ObSEArray<const ObOptStat *, 4>, 4> buckets;
+  if (OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(
+          param.all_subpart_infos_, subpart_id_to_first_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate subpart id to first map", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(
+          param.approx_part_infos_, first_part_id_to_idx_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate first part id to idx map", K(ret));
+  } else if (OB_FAIL(buckets.prepare_allocate(approx_part_cnt))) {
+    LOG_WARN("failed to prepare allocate buckets", K(ret), K(approx_part_cnt));
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < no_regather_subpart_opt_stats.count(); ++j) {
+    const ObOptStat &tmp_subpart_opt_stat = no_regather_subpart_opt_stats.at(j);
+    int64_t first_part_id = OB_INVALID_ID;
+    int64_t bucket_idx = OB_INVALID_ID;
+    if (OB_ISNULL(tmp_subpart_opt_stat.table_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(tmp_subpart_opt_stat.table_stat_));
+    } else if (OB_FAIL(subpart_id_to_first_map.get_refactored(
+                           tmp_subpart_opt_stat.table_stat_->get_partition_id(), first_part_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error: subpart_id not found in map",
+               K(ret), K(tmp_subpart_opt_stat.table_stat_));
+    } else if (OB_FAIL(first_part_id_to_idx_map.get_refactored(first_part_id, bucket_idx))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get bucket idx", K(ret), K(first_part_id));
       }
+    } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= approx_part_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected bucket_idx", K(ret), K(bucket_idx), K(approx_part_cnt));
+    } else if (OB_FAIL(buckets.at(bucket_idx).push_back(&tmp_subpart_opt_stat))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < gather_subpart_opt_stats.count(); ++j) {
+    const ObOptStat &tmp_opt_stat = gather_subpart_opt_stats.at(j);
+    int64_t first_part_id = OB_INVALID_ID;
+    int64_t bucket_idx = OB_INVALID_ID;
+    if (OB_ISNULL(tmp_opt_stat.table_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(tmp_opt_stat.table_stat_));
+    } else if (OB_FAIL(subpart_id_to_first_map.get_refactored(
+                           tmp_opt_stat.table_stat_->get_partition_id(), first_part_id))) {
+      LOG_WARN("failed to get first part id from subpart map",
+               K(ret), K(tmp_opt_stat.table_stat_));
+    } else if (OB_FAIL(first_part_id_to_idx_map.get_refactored(first_part_id, bucket_idx))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get bucket idx", K(ret), K(first_part_id));
+      }
+    } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= approx_part_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected bucket_idx", K(ret), K(bucket_idx), K(approx_part_cnt));
+    } else if (OB_FAIL(buckets.at(bucket_idx).push_back(&tmp_opt_stat))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  // Bucket pointers preserve input order and avoid copies during dispatch.
+  for (int64_t i = 0; OB_SUCC(ret) && i < approx_part_cnt; ++i) {
+    ObOptStat opt_part_stat;
+    ObSEArray<ObOptStat, 4> tmp_part_stats;
+    const ObSEArray<const ObOptStat *, 4> &bucket = buckets.at(i);
+    if (OB_UNLIKELY(bucket.count() != param.approx_part_infos_.at(i).subpart_cnt_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(bucket.count()),
+                                       K(param.approx_part_infos_.at(i)));
+    } else if (OB_FAIL(tmp_part_stats.reserve(bucket.count()))) {
+      LOG_WARN("failed to reserve tmp_part_stats", K(ret), K(bucket.count()));
+    }
+    for (int64_t k = 0; OB_SUCC(ret) && k < bucket.count(); ++k) {
+      if (OB_ISNULL(bucket.at(k))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null bucket entry", K(ret), K(i), K(k));
+      } else if (OB_FAIL(tmp_part_stats.push_back(*bucket.at(k)))) {
+        LOG_WARN("failed to push back tmp_part_stats", K(ret), K(i), K(k));
+      }
+    }
+    if (FAILEDx(do_derive_global_stat(ctx,
+                                      alloc,
+                                      param,
+                                      tmp_part_stats,
+                                      partition_id_block_map,
+                                      audit,
+                                      param.part_stat_param_.need_modify_ &&
+                                      param.part_stat_param_.gather_histogram_,
+                                      PARTITION_LEVEL,
+                                      param.approx_part_infos_.at(i).part_id_,
+                                      &param.approx_part_infos_.at(i),
+                                      opt_part_stat))) {
+      LOG_WARN("Failed to derive global stat from part stat", K(ret));
+    } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
+      LOG_WARN("faield to push back", K(ret));
+    } else { /*do nothing*/
     }
   }
   return ret;
 }
-
 int ObIncrementalStatEstimator::generate_all_opt_stat(ObIArray<ObOptTableStat> &table_stats,
                                                       const ObIArray<ObOptColumnStatHandle> &col_handles,
                                                       int64_t col_cnt,
@@ -540,6 +582,7 @@ int ObIncrementalStatEstimator::do_derive_global_stat(ObExecContext &ctx,
                                                       bool need_derive_hist,
                                                       const StatLevel &approx_level,
                                                       const int64_t partition_id,
+                                                      const PartInfo *partition_info,
                                                       ObOptStat &global_opt_stat)
 {
   int ret = OB_SUCCESS;
@@ -559,6 +602,7 @@ int ObIncrementalStatEstimator::do_derive_global_stat(ObExecContext &ctx,
                                             need_derive_hist,
                                             approx_level,
                                             partition_id,
+                                            partition_info,
                                             global_opt_stat))) {
     LOG_WARN("failed to derive global col stat from part col stat", K(ret));
   } else {
@@ -638,6 +682,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
                                                        bool need_derive_hist,
                                                        const StatLevel &approx_level,
                                                        const int64_t partition_id,
+                                                       const PartInfo *partition_info,
                                                        ObOptStat &global_opt_stat)
 {
   int ret = OB_SUCCESS;
@@ -807,12 +852,14 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
       } else if (OB_FAIL(gather_param.column_params_.assign(param.column_params_))) {
         LOG_WARN("failed to assign", K(ret));
       } else if (gather_param.stat_level_ != TABLE_LEVEL &&
-                 OB_FAIL(gather_param.partition_infos_.assign(param.approx_part_infos_))) {
-        LOG_WARN("failed to assign", K(ret));
+                 (OB_ISNULL(partition_info) ||
+                  partition_info->part_id_ != global_opt_stat.table_stat_->get_partition_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected partition info", K(ret), K(partition_info),
+                 K(global_opt_stat.table_stat_->get_partition_id()));
       } else if (gather_param.stat_level_ != TABLE_LEVEL &&
-                 OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(global_opt_stat.table_stat_->get_partition_id(),
-                                                                                   gather_param))) {
-        LOG_WARN("failed to remove stat gather param partition info", K(ret));
+                 OB_FAIL(gather_param.partition_infos_.push_back(*partition_info))) {
+        LOG_WARN("failed to push back partition info", K(ret));
       } else if (OB_FAIL(adjust_derive_gather_histogram_param(global_opt_stat,
                                                               param.need_estimate_block_ ?
                                                                 partition_id_block_map : NULL,
@@ -977,27 +1024,25 @@ int ObIncrementalStatEstimator::get_need_hybrid_part_infos(const ObTableStatPara
                                                            ObIArray<PartInfo> &hybrid_part_infos)
 {
   int ret = OB_SUCCESS;
+  ObStatInt64Map first_part_id_to_idx_map;
+  if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(param.approx_part_infos_,
+                                                            first_part_id_to_idx_map,
+                                                            param.tenant_id_))) {
+    LOG_WARN("failed to generate first part id to idx map", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < need_hybrid_hist_opt_stats.count(); ++i) {
+    int64_t part_idx = -1;
     if (OB_ISNULL(need_hybrid_hist_opt_stats.at(i).table_stat_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(need_hybrid_hist_opt_stats.at(i).table_stat_));
-    } else {
-      bool find_it = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !find_it && j < param.approx_part_infos_.count(); ++j) {
-        if (need_hybrid_hist_opt_stats.at(i).table_stat_->get_partition_id() ==
-                                                        param.approx_part_infos_.at(j).part_id_) {
-          if (OB_FAIL(hybrid_part_infos.push_back(param.approx_part_infos_.at(j)))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {
-            find_it = true;
-          }
-        } else {/*do noting*/}
-      }
-      if (OB_SUCC(ret) && !find_it) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(param.approx_part_infos_),
-                                          K(*need_hybrid_hist_opt_stats.at(i).table_stat_));
-      }
+    } else if (OB_FAIL(first_part_id_to_idx_map.get_refactored(
+          need_hybrid_hist_opt_stats.at(i).table_stat_->get_partition_id(), part_idx))) {
+      LOG_WARN("failed to get approx part idx", K(ret), K(*need_hybrid_hist_opt_stats.at(i).table_stat_));
+    } else if (OB_UNLIKELY(part_idx < 0 || part_idx >= param.approx_part_infos_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected part idx", K(ret), K(part_idx), K(param.approx_part_infos_.count()));
+    } else if (OB_FAIL(hybrid_part_infos.push_back(param.approx_part_infos_.at(part_idx)))) {
+      LOG_WARN("failed to push back", K(ret));
     }
   }
   return ret;
@@ -1157,24 +1202,55 @@ int ObIncrementalStatEstimator::derive_part_index_stat_by_subpart_index_stats(
     ObIArray<ObOptTableStat *> &part_index_stats)
 {
   int ret = OB_SUCCESS;
-  int64_t cur_part_id = OB_INVALID_ID;
+  ObStatInt64Map subpart_id_to_first_map;
+  ObStatInt64Map first_part_id_to_idx_map;
+  ObSEArray<ObSEArray<ObOptTableStat *, 4>, 4> buckets;
+  const int64_t approx_cnt = param.approx_part_infos_.count();
+  if (OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(
+          param.all_subpart_infos_, subpart_id_to_first_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate subpart id to first map", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(
+          param.approx_part_infos_, first_part_id_to_idx_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate first part id to idx map", K(ret));
+  } else if (OB_FAIL(buckets.prepare_allocate(approx_cnt))) {
+    LOG_WARN("failed to prepare allocate buckets", K(ret), K(approx_cnt));
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < subpart_index_stats.count(); ++j) {
+    int64_t first_part_id = OB_INVALID_ID;
+    int64_t bucket_idx = OB_INVALID_ID;
+    if (OB_ISNULL(subpart_index_stats.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(subpart_index_stats.at(j)));
+    } else if (OB_FAIL(subpart_id_to_first_map.get_refactored(
+          subpart_index_stats.at(j)->get_partition_id(), first_part_id))) {
+      LOG_WARN("failed to get first part id from subpart map", K(ret), KPC(subpart_index_stats.at(j)));
+    } else if (OB_FAIL(first_part_id_to_idx_map.get_refactored(first_part_id, bucket_idx))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get bucket idx", K(ret), K(first_part_id));
+      }
+    } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= approx_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected bucket_idx", K(ret), K(bucket_idx), K(approx_cnt));
+    } else if (OB_FAIL(buckets.at(bucket_idx).push_back(subpart_index_stats.at(j)))) {
+      LOG_WARN("failed to push back subpart index stat", K(ret));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
     ObSEArray<ObOptStat, 4> subpart_opt_stats;
-    for (int64_t j = 0; OB_SUCC(ret) && j < subpart_index_stats.count(); ++j) {
-      if (OB_ISNULL(subpart_index_stats.at(j))) {
+    const ObSEArray<ObOptTableStat *, 4> &bucket = buckets.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < bucket.count(); ++j) {
+      if (OB_ISNULL(bucket.at(j))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(subpart_index_stats.at(j)));
-      } else if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                 subpart_index_stats.at(j)->get_partition_id(),
-                                                 cur_part_id)) {
-        if (param.approx_part_infos_.at(i).part_id_ == cur_part_id) {
-          ObOptStat tmp_opt_stat;
-          tmp_opt_stat.table_stat_ = subpart_index_stats.at(j);
-          if (OB_FAIL(subpart_opt_stats.push_back(tmp_opt_stat))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
-        } else {/*do nothing*/}
-      } else {/*do nothing*/}
+        LOG_WARN("get unexpected error", K(ret), K(bucket.at(j)));
+      } else {
+        ObOptStat tmp_opt_stat;
+        tmp_opt_stat.table_stat_ = bucket.at(j);
+        if (OB_FAIL(subpart_opt_stats.push_back(tmp_opt_stat))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
     }
     //derive part stat from subpart stats
     if (OB_SUCC(ret)) {
@@ -1257,22 +1333,45 @@ int ObIncrementalStatEstimator::prepare_get_opt_stats_param(const ObTableStatPar
       }
     } else {
       new_param.subpart_stat_param_.set_gather_stat();
-      for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
-        int64_t subpart_cnt = 0;
-        for (int64_t j = 0;
-            OB_SUCC(ret) && subpart_cnt < param.approx_part_infos_.at(i).subpart_cnt_ && j < param.all_subpart_infos_.count();
-            ++j) {
-          if (param.approx_part_infos_.at(i).part_id_ == param.all_subpart_infos_.at(j).first_part_id_) {
-            if (OB_FAIL(new_param.subpart_infos_.push_back(param.all_subpart_infos_.at(j)))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              ++ subpart_cnt;
-            }
+      // Bucket subpartitions by first_part_id while preserving source order.
+      const int64_t approx_cnt = param.approx_part_infos_.count();
+      ObStatInt64Map first_part_id_to_idx_map;
+      ObSEArray<ObSEArray<PartInfo, 4>, 4> buckets;
+      if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(
+              param.approx_part_infos_, first_part_id_to_idx_map, param.tenant_id_))) {
+        LOG_WARN("failed to generate first part id to idx map", K(ret));
+      } else if (OB_FAIL(buckets.prepare_allocate(approx_cnt))) {
+        LOG_WARN("failed to prepare allocate buckets", K(ret), K(approx_cnt));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < param.all_subpart_infos_.count(); ++j) {
+        const PartInfo &subpart_info = param.all_subpart_infos_.at(j);
+        int64_t bucket_idx = OB_INVALID_ID;
+        if (subpart_info.first_part_id_ == OB_INVALID_ID) {
+        } else if (OB_FAIL(first_part_id_to_idx_map.get_refactored(
+                               subpart_info.first_part_id_, bucket_idx))) {
+          if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to get bucket idx", K(ret), K(subpart_info.first_part_id_));
           }
-        }
-        if (OB_UNLIKELY(subpart_cnt != param.approx_part_infos_.at(i).subpart_cnt_)) {
+        } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= approx_cnt)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected error", K(ret), K(subpart_cnt), K(param));
+          LOG_WARN("get unexpected bucket_idx", K(ret), K(bucket_idx), K(approx_cnt));
+        } else if (OB_FAIL(buckets.at(bucket_idx).push_back(subpart_info))) {
+          LOG_WARN("failed to push back subpart_info", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < approx_cnt; ++i) {
+        const ObSEArray<PartInfo, 4> &bucket = buckets.at(i);
+        if (OB_UNLIKELY(bucket.count() != param.approx_part_infos_.at(i).subpart_cnt_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(bucket.count()),
+                                           K(param.approx_part_infos_.at(i)));
+        }
+        for (int64_t k = 0; OB_SUCC(ret) && k < bucket.count(); ++k) {
+          if (OB_FAIL(new_param.subpart_infos_.push_back(bucket.at(k)))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
         }
       }
     }
@@ -1287,23 +1386,52 @@ int ObIncrementalStatEstimator::derive_part_index_column_stat_by_subpart_index(O
                                                                                ObIArray<ObOptStat> &approx_part_opt_stats)
 {
   int ret = OB_SUCCESS;
-  int64_t cur_part_id = OB_INVALID_ID;
+  ObStatInt64Map subpart_id_to_first_map;
+  ObStatInt64Map first_part_id_to_idx_map;
+  ObSEArray<ObSEArray<const ObOptStat *, 4>, 4> buckets;
+  const int64_t approx_cnt = param.approx_part_infos_.count();
+  if (OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(
+          param.all_subpart_infos_, subpart_id_to_first_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate subpart id to first map", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(
+          param.approx_part_infos_, first_part_id_to_idx_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate first part id to idx map", K(ret));
+  } else if (OB_FAIL(buckets.prepare_allocate(approx_cnt))) {
+    LOG_WARN("failed to prepare allocate buckets", K(ret), K(approx_cnt));
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < part_index_stats.count(); ++j) {
+    int64_t first_part_id = OB_INVALID_ID;
+    int64_t bucket_idx = OB_INVALID_ID;
+    if (OB_ISNULL(part_index_stats.at(j).table_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(part_index_stats.at(j).table_stat_));
+    } else if (OB_FAIL(subpart_id_to_first_map.get_refactored(
+            part_index_stats.at(j).table_stat_->get_partition_id(), first_part_id))) {
+      LOG_WARN("failed to get first part id from subpart map", K(ret), K(part_index_stats.at(j)));
+    } else if (OB_FAIL(first_part_id_to_idx_map.get_refactored(first_part_id, bucket_idx))) {
+      if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get bucket idx", K(ret), K(first_part_id));
+      }
+    } else if (OB_UNLIKELY(bucket_idx < 0 || bucket_idx >= approx_cnt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected bucket_idx", K(ret), K(bucket_idx), K(approx_cnt));
+    } else if (OB_FAIL(buckets.at(bucket_idx).push_back(&part_index_stats.at(j)))) {
+      LOG_WARN("failed to push back part index stat", K(ret));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < param.approx_part_infos_.count(); ++i) {
     ObOptStat opt_part_stat;
     ObSEArray<ObOptStat, 4> subpart_opt_stats;
-    for (int64_t j = 0; OB_SUCC(ret) && j < part_index_stats.count(); ++j) {
-      if (OB_ISNULL(part_index_stats.at(j).table_stat_)) {
+    const ObSEArray<const ObOptStat *, 4> &bucket = buckets.at(i);
+    for (int64_t j = 0; OB_SUCC(ret) && j < bucket.count(); ++j) {
+      if (OB_ISNULL(bucket.at(j)) || OB_ISNULL(bucket.at(j)->table_stat_)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected error", K(ret), K(part_index_stats.at(j).table_stat_));
-      } else if (ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_,
-                                                 part_index_stats.at(j).table_stat_->get_partition_id(),
-                                                 cur_part_id)) {
-        if (param.approx_part_infos_.at(i).part_id_ == cur_part_id) {
-          if (OB_FAIL(subpart_opt_stats.push_back(part_index_stats.at(j)))) {
-            LOG_WARN("failed to push back", K(ret));
-          } else {/*do nothing*/}
-        } else {/*do nothing*/}
-      } else {/*do nothing*/}
+        LOG_WARN("get unexpected error", K(ret), K(bucket.at(j)));
+      } else if (OB_FAIL(subpart_opt_stats.push_back(*bucket.at(j)))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
     }
     //derive part stat from subpart stats
     if (OB_SUCC(ret)) {
@@ -1320,6 +1448,7 @@ int ObIncrementalStatEstimator::derive_part_index_column_stat_by_subpart_index(O
                                                false,
                                                PARTITION_LEVEL,
                                                param.approx_part_infos_.at(i).part_id_,
+                                               &param.approx_part_infos_.at(i),
                                                opt_part_stat))) {
         LOG_WARN("Failed to derive global stat from part stat", K(ret));
       } else if (OB_FAIL(approx_part_opt_stats.push_back(opt_part_stat))) {
@@ -1354,6 +1483,7 @@ int ObIncrementalStatEstimator::derive_global_index_column_stat_by_part_index(Ob
                                            false,
                                            TABLE_LEVEL,
                                            param.global_part_id_,
+                                           NULL,
                                            global_opt_stat))) {
     LOG_WARN("Failed to derive global stat from part stat", K(ret));
   } else {

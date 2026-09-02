@@ -16,9 +16,184 @@
 namespace oceanbase {
 namespace common {
 
+struct ObStatHashMapIndexGetter
+{
+  template <typename T>
+  int operator()(const T &, const int64_t idx, int64_t &value) const
+  {
+    value = idx;
+    return OB_SUCCESS;
+  }
+};
+
+struct ObStatHashContainerAcceptAll
+{
+  template <typename T>
+  bool operator()(const T &, const int64_t) const
+  {
+    return true;
+  }
+};
+
+template <typename T>
+struct ObStatHashIdentityGetter
+{
+  int operator()(const T &item, const int64_t, T &value) const
+  {
+    value = item;
+    return OB_SUCCESS;
+  }
+};
+
 class ObDbmsStatsUtils
 {
 public:
+
+  template <typename Item,
+            typename Key,
+            typename Value,
+            typename KeyGetter,
+            typename ValueGetter,
+            typename ItemFilter>
+  static int build_hash_map_if(const ObIArray<Item> &items,
+                               ObStatHashMap<Key, Value> &hash_map,
+                               const KeyGetter &key_getter,
+                               const ValueGetter &value_getter,
+                               const ItemFilter &item_filter,
+                               const char *bucket_label,
+                               const char *node_label,
+                               const uint64_t tenant_id,
+                               const bool ignore_duplicate = false)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t bucket_num = std::max<int64_t>(items.count(), 1);
+    if (OB_FAIL(hash_map.create(bucket_num, bucket_label, node_label, tenant_id))) {
+      COMMON_LOG(WARN, "failed to create hash map", K(ret), K(bucket_num), K(tenant_id));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); ++i) {
+      if (item_filter(items.at(i), i)) {
+        Key key;
+        Value value;
+        if (OB_FAIL(key_getter(items.at(i), i, key))) {
+          COMMON_LOG(WARN, "failed to get hash map key", K(ret), K(i));
+        } else if (OB_FAIL(value_getter(items.at(i), i, value))) {
+          COMMON_LOG(WARN, "failed to get hash map value", K(ret), K(i));
+        } else {
+          const int tmp_ret = hash_map.set_refactored(key, value);
+          if (OB_SUCCESS != tmp_ret && !(OB_HASH_EXIST == tmp_ret && ignore_duplicate)) {
+            ret = tmp_ret;
+            COMMON_LOG(WARN, "failed to set hash map", K(ret), K(i));
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  template <typename Item, typename Key, typename Value, typename KeyGetter, typename ValueGetter>
+  static int build_hash_map(const ObIArray<Item> &items,
+                            ObStatHashMap<Key, Value> &hash_map,
+                            const KeyGetter &key_getter,
+                            const ValueGetter &value_getter,
+                            const char *bucket_label,
+                            const char *node_label,
+                            const uint64_t tenant_id,
+                            const bool ignore_duplicate = false)
+  {
+    return build_hash_map_if(items,
+                             hash_map,
+                             key_getter,
+                             value_getter,
+                             ObStatHashContainerAcceptAll(),
+                             bucket_label,
+                             node_label,
+                             tenant_id,
+                             ignore_duplicate);
+  }
+
+  template <typename Item, typename Value, typename ValueGetter, typename ItemFilter>
+  static int append_hash_set_if(const ObIArray<Item> &items,
+                                ObStatHashSet<Value> &hash_set,
+                                const ValueGetter &value_getter,
+                                const ItemFilter &item_filter,
+                                const bool ignore_duplicate = true)
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); ++i) {
+      if (item_filter(items.at(i), i)) {
+        Value value;
+        if (OB_FAIL(value_getter(items.at(i), i, value))) {
+          COMMON_LOG(WARN, "failed to get hash set value", K(ret), K(i));
+        } else {
+          const int tmp_ret = hash_set.set_refactored(value, 0 /* do not overwrite */);
+          if (OB_SUCCESS != tmp_ret && !(OB_HASH_EXIST == tmp_ret && ignore_duplicate)) {
+            ret = tmp_ret;
+            COMMON_LOG(WARN, "failed to set hash set", K(ret), K(i));
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  template <typename Item, typename Value, typename ValueGetter>
+  static int append_hash_set(const ObIArray<Item> &items,
+                             ObStatHashSet<Value> &hash_set,
+                             const ValueGetter &value_getter,
+                             const bool ignore_duplicate = true)
+  {
+    return append_hash_set_if(items,
+                              hash_set,
+                              value_getter,
+                              ObStatHashContainerAcceptAll(),
+                              ignore_duplicate);
+  }
+
+  template <typename Item, typename Value, typename ValueGetter, typename ItemFilter>
+  static int build_hash_set_if(const ObIArray<Item> &items,
+                               ObStatHashSet<Value> &hash_set,
+                               const ValueGetter &value_getter,
+                               const ItemFilter &item_filter,
+                               const int64_t bucket_num,
+                               const char *bucket_label,
+                               const char *node_label,
+                               const uint64_t tenant_id,
+                               const bool ignore_duplicate = true)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t actual_bucket_num = bucket_num > 0 ? bucket_num : 1;
+    if (OB_FAIL(hash_set.create(actual_bucket_num, bucket_label, node_label, tenant_id))) {
+      COMMON_LOG(WARN, "failed to create hash set", K(ret), K(actual_bucket_num), K(tenant_id));
+    } else if (OB_FAIL(append_hash_set_if(items,
+                                          hash_set,
+                                          value_getter,
+                                          item_filter,
+                                          ignore_duplicate))) {
+      COMMON_LOG(WARN, "failed to append hash set", K(ret));
+    }
+    return ret;
+  }
+
+  template <typename Item, typename Value, typename ValueGetter>
+  static int build_hash_set(const ObIArray<Item> &items,
+                            ObStatHashSet<Value> &hash_set,
+                            const ValueGetter &value_getter,
+                            const int64_t bucket_num,
+                            const char *bucket_label,
+                            const char *node_label,
+                            const uint64_t tenant_id,
+                            const bool ignore_duplicate = true)
+  {
+    return build_hash_set_if(items,
+                             hash_set,
+                             value_getter,
+                             ObStatHashContainerAcceptAll(),
+                             bucket_num,
+                             bucket_label,
+                             node_label,
+                             tenant_id,
+                             ignore_duplicate);
+  }
 
   static int init_table_stats(ObIAllocator &allocator,
                             int64_t cnt,
@@ -95,9 +270,36 @@ public:
 
   static int parse_granularity(const ObString &granularity, ObGranularityType &granu_type);
 
-  static bool is_subpart_id(const ObIArray<PartInfo> &partition_infos,
-                            const int64_t partition_id,
-                            int64_t &part_id);
+  // Entries with an invalid first_part_id_ are not subpartitions and are skipped.
+  static int generate_subpart_id_to_first_map(const ObIArray<PartInfo> &all_subpart_infos,
+                                              ObStatInt64Map &subpart_id_to_first_map,
+                                              const uint64_t tenant_id);
+
+  static int generate_part_id_to_idx_map(const ObIArray<PartInfo> &part_infos,
+                                         ObStatInt64Map &part_id_to_idx_map,
+                                         const uint64_t tenant_id);
+
+  static int generate_part_id_set(const ObIArray<PartInfo> &part_infos,
+                                  ObStatInt64Set &part_id_set,
+                                  const uint64_t tenant_id,
+                                  const bool ignore_duplicate = true);
+
+  static int generate_int64_to_idx_map(const ObIArray<int64_t> &ids,
+                                       ObStatInt64Map &id_to_idx_map,
+                                       const uint64_t tenant_id);
+
+  static int generate_tablet_id_to_part_id_map(const ObIArray<PartInfo> &partition_infos,
+                                               ObStatInt64Map &tablet_id_to_part_id_map,
+                                               const uint64_t tenant_id);
+
+  static int generate_tablet_id_to_idx_map(const ObIArray<PartInfo> &partition_infos,
+                                           ObStatInt64Map &tablet_id_to_idx_map,
+                                           const uint64_t tenant_id);
+
+  static int generate_partition_stat_id_to_idx_map(
+      const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+      ObStatInt64Map &partition_stat_id_to_idx_map,
+      const uint64_t tenant_id);
 
   static int get_subpart_ids(const ObIArray<PartInfo> &partition_infos,
                              const int64_t partition_id,
@@ -109,11 +311,6 @@ public:
   static int get_valid_duration_time(const int64_t start_time,
                                      const int64_t max_duration_time,
                                      int64_t &valid_duration_time);
-
-  static int get_dst_partition_by_tablet_id(sql::ObExecContext &ctx,
-                                            const uint64_t tablet_id,
-                                            const ObIArray<PartInfo> &partition_infos,
-                                            int64_t &partition_id);
 
   static int calssify_opt_stat(const ObIArray<ObOptStat> &opt_stats,
                                ObIArray<ObOptTableStat *> &table_stats,
@@ -154,9 +351,6 @@ public:
   static int truncate_string_for_opt_stats(ObObj &obj, ObIAllocator &allocator);
 
   static int64_t get_truncated_str_len(const ObString &str, const ObCollationType cs_type);
-
-  static int remove_stat_gather_param_partition_info(int64_t reserved_partition_id,
-                                                     ObOptStatGatherParam &param);
 
   static int64_t check_text_can_reuse(const ObObj &obj, bool &can_reuse);
 
@@ -222,7 +416,7 @@ public:
   static int build_index_part_to_table_part_maps(share::schema::ObSchemaGetterGuard *schema_guard,
                                                  uint64_t tenant_id,
                                                  uint64_t index_table_id,
-                                                 common::hash::ObHashMap<ObObjectID, ObObjectID> &part_id_map);
+                                                 ObStatObjectIDMap &part_id_map);
 
   static int deduce_index_column_stat_to_table(share::schema::ObSchemaGetterGuard *schema_guard,
                                                uint64_t tenant_id,
@@ -309,7 +503,7 @@ private:
                                  const ObPartition *index_part,
                                  const ObPartition *table_part,
                                  ObCheckPartitionMode mode,
-                                 common::hash::ObHashMap<ObObjectID, ObObjectID> &part_id_map);
+                                 ObStatObjectIDMap &part_id_map);
 
 };
 

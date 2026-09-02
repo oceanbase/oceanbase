@@ -23,11 +23,24 @@ class ObOptTableStat;
 class ObOptColumnStat;
 struct BlockNumStat;
 struct SkipRateStat;
-typedef hash::ObHashMap<int64_t, BlockNumStat *, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
-typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
-typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *, common::hash::NoPthreadDefendMode> OSGColStatIndMap;
-typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
-typedef hash::ObHashMap<int64_t, SkipRateStat*, common::hash::NoPthreadDefendMode> PartitionIdSkipRateMap;
+typedef common::hash::NoPthreadDefendMode ObStatHashDefendMode;
+template <typename T>
+using ObStatHashSet = common::hash::ObHashSet<T, ObStatHashDefendMode>;
+template <typename K, typename V>
+using ObStatHashMap = common::hash::ObHashMap<K, V, ObStatHashDefendMode>;
+typedef ObStatHashMap<int64_t, int64_t> ObStatInt64Map;
+typedef ObStatHashMap<uint64_t, uint64_t> ObStatUInt64Map;
+typedef ObStatHashMap<uint64_t, int64_t> ObStatUInt64Int64Map;
+typedef ObStatHashSet<int64_t> ObStatInt64Set;
+typedef ObStatHashSet<uint64_t> ObStatUInt64Set;
+typedef ObStatHashMap<int64_t, bool> ObStatInt64BoolMap;
+typedef ObStatHashMap<uint64_t, bool> ObStatUInt64BoolMap;
+typedef ObStatHashMap<ObObjectID, ObObjectID> ObStatObjectIDMap;
+typedef ObStatHashMap<int64_t, BlockNumStat *> PartitionIdBlockMap;
+typedef ObStatHashMap<ObOptTableStat::Key, ObOptTableStat *> TabStatIndMap;
+typedef ObStatHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *> OSGColStatIndMap;
+typedef ObStatHashMap<ObOptColumnStat::Key, ObOptColumnStat *> ColStatIndMap;
+typedef ObStatHashMap<int64_t, SkipRateStat*> PartitionIdSkipRateMap;
 
 enum StatOptionFlags  // FARM COMPAT WHITELIST
 {
@@ -813,7 +826,8 @@ struct ObOptStatGatherParam {
     all_column_params_(),
     use_part_derive_global_(false)
   {}
-  int assign(const ObOptStatGatherParam &other);
+  int assign(const ObOptStatGatherParam &other,
+             const int64_t reserved_partition_idx = OB_INVALID_ID);
   int64_t get_need_gather_column() const;
   uint64_t tenant_id_;
   ObString db_name_;
@@ -898,6 +912,11 @@ struct ObOptStat
   ObOptTableStat *table_stat_;
   // turn the column stat into pointer
   ObArray<ObOptColumnStat *> column_stats_;
+  int assign(const ObOptStat &other)
+  {
+    table_stat_ = other.table_stat_;
+    return column_stats_.assign(other.column_stats_);
+  }
   TO_STRING_KV(K(table_stat_),
                K(column_stats_));
 };
@@ -1128,7 +1147,7 @@ public:
   ObTabletID tablet_id_;
   TO_STRING_KV(K_(part_id), K_(tablet_id));
 };
-typedef common::hash::ObHashMap<ObObjectID, OSGPartInfo, common::hash::NoPthreadDefendMode> OSGPartMap;
+typedef ObStatHashMap<ObObjectID, OSGPartInfo> OSGPartMap;
 
 class AuditBaseItem
 {

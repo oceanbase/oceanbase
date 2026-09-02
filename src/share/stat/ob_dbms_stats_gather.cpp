@@ -56,12 +56,12 @@ int ObDbmsStatsGather::gather_stats(ObExecContext &ctx,
           LOG_WARN("check status failed", KR(ret));
         } else if (opt_stats.at(i).table_stat_->get_row_count() <= 0) {
           //empty table or empty partition, no need gather histogram, just skip.
-        } else if (OB_FAIL(new_param.assign(param))) {
+        } else if (OB_FAIL(new_param.assign(
+                               param,
+                               param.stat_level_ != TABLE_LEVEL
+                                 ? i
+                                 : OB_INVALID_ID))) {
           LOG_WARN("failed to assign", K(ret));
-        } else if (new_param.stat_level_ != TABLE_LEVEL &&
-                   OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(opt_stats.at(i).table_stat_->get_partition_id(),
-                                                                                     new_param))) {
-          LOG_WARN("failed to remove stat gather param partition info", K(ret));
         } else if (OB_FAIL(classfy_column_histogram(new_param, opt_stats.at(i)))) {
           LOG_WARN("failed to classfy column histogram", K(ret));
         } else if (OB_FALSE_IT(start_time = ObTimeUtility::current_time())) {
@@ -92,12 +92,12 @@ int ObDbmsStatsGather::gather_stats(ObExecContext &ctx,
           LOG_WARN("check status failed", KR(ret));
         } else if (opt_stats.at(i).table_stat_->get_row_count() <= 0) {
           //empty table or empty partition, no need gather histogram, just skip.
-        } else if (OB_FAIL(new_param.assign(param))) {
+        } else if (OB_FAIL(new_param.assign(
+                               param,
+                               param.stat_level_ != TABLE_LEVEL
+                                 ? i
+                                 : OB_INVALID_ID))) {
           LOG_WARN("failed to assign", K(ret));
-        } else if (new_param.stat_level_ != TABLE_LEVEL &&
-                   OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(opt_stats.at(i).table_stat_->get_partition_id(),
-                                                                                     new_param))) {
-          LOG_WARN("failed to remove stat gather param partition info", K(ret));
         } else if (OB_FALSE_IT(start_time = ObTimeUtility::current_time())) {
         } else if (OB_FAIL(min_max_est.estimate(new_param, opt_stats.at(i)))) {
           LOG_WARN("failed to estimate hybrid histogram", K(ret));
@@ -132,12 +132,12 @@ int ObDbmsStatsGather::gather_stats(ObExecContext &ctx,
           LOG_WARN("check status failed", KR(ret));
         } else if (opt_stats.at(i).table_stat_->get_row_count() <= 0) {
           //empty table or empty partition, no need gather histogram, just skip.
-        } else if (OB_FAIL(new_param.assign(param))) {
+        } else if (OB_FAIL(new_param.assign(
+                               param,
+                               param.stat_level_ != TABLE_LEVEL
+                                 ? i
+                                 : OB_INVALID_ID))) {
           LOG_WARN("failed to assign", K(ret));
-        } else if (new_param.stat_level_ != TABLE_LEVEL &&
-                   OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(opt_stats.at(i).table_stat_->get_partition_id(),
-                                                                                     new_param))) {
-          LOG_WARN("failed to remove stat gather param partition info", K(ret));
         } else if (OB_FALSE_IT(new_param.gather_start_time_ = refine_start_time)) {
         } else if (OB_FALSE_IT(new_param.max_duration_time_ = max_duration_time)) {
         } else if (OB_FALSE_IT(start_time = ObTimeUtility::current_time())) {

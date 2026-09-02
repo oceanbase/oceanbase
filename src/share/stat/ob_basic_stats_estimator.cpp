@@ -166,7 +166,8 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
   ObSEArray<ObTabletID, 4> tablet_ids;
   ObSEArray<ObObjectID, 4> partition_ids;
   ObSEArray<EstimateBlockRes, 4> estimate_result;
-  hash::ObHashMap<int64_t, int64_t> first_part_idx_map;
+  ObStatInt64Map first_part_idx_map;
+  ObStatInt64Map subpart_id_to_first_map;
   ObArray<uint64_t> column_group_ids;
   uint64_t table_id = share::is_oracle_mapping_real_virtual_table(param.table_id_)
                           ? share::get_real_table_mappings_tid(param.table_id_)
@@ -180,8 +181,13 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
              OB_FAIL(first_part_tab_stats.prepare_allocate(param.all_part_infos_.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
-             OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
+             OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(
+                 param.all_part_infos_, first_part_idx_map, param.tenant_id_))) {
     LOG_WARN("failed to generate first part idx map", K(ret));
+  } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
+             OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(
+                 param.all_subpart_infos_, subpart_id_to_first_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate subpart id to first map", K(ret));
   } else if (OB_FAIL(generate_column_group_ids(param, column_group_ids))) {
     LOG_WARN("failed to generate column group ids", K(ret), K(param));
   } else if (OB_FAIL(do_estimate_block_count(
@@ -227,9 +233,10 @@ int ObBasicStatsEstimator::estimate_block_count(ObExecContext &ctx,
           }
         } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO) {
           int64_t cur_part_id = -1;
-          if (OB_UNLIKELY(!ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_, partition_id, cur_part_id))) {
+          if (OB_FAIL(subpart_id_to_first_map.get_refactored(partition_id, cur_part_id))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret), K(partition_id), K(cur_part_id), K(param));
+            LOG_WARN("get unexpected error, subpart_id not found in map",
+                     K(ret), K(partition_id), K(cur_part_id), K(param));
           } else {
             if (OB_FAIL(global_tab_stat.add(1,
                                             0,
@@ -751,12 +758,31 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
   ObSqlString select_sql;
   bool is_valid = true;
   ObSEArray<int64_t, 4> monitor_modified_part_ids;
+  ObStatInt64Map subpart_id_to_first_map;
+  ObStatInt64Map tablet_id_to_part_id_map;
+  ObStatInt64Map partition_stat_idx_map;
+  ObStatInt64Set monitor_modified_part_id_set;
   int64_t table_inc_modified = 0;
   bool has_part_invalid_inc = false;
   if (OB_FAIL(ObDbmsStatsUtils::check_table_read_write_valid(tenant_id, is_valid))) {
     LOG_WARN("failed to check table read write valid", K(ret));
   } else if (!is_valid) {
     // do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(partition_infos,
+                                                                        subpart_id_to_first_map,
+                                                                        tenant_id))) {
+    LOG_WARN("failed to generate subpart id to first map", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::generate_tablet_id_to_part_id_map(partition_infos,
+                                                                         tablet_id_to_part_id_map,
+                                                                         tenant_id))) {
+    LOG_WARN("failed to generate tablet id to part id map", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::generate_partition_stat_id_to_idx_map(
+          partition_stat_infos, partition_stat_idx_map, tenant_id))) {
+    LOG_WARN("failed to generate partition stat idx map", K(ret));
+  } else if (OB_FAIL(monitor_modified_part_id_set.create(
+          std::max<int64_t>(partition_infos.count(), 1),
+          "MonitorPartSet", ObModIds::OB_HASH_NODE, tenant_id))) {
+    LOG_WARN("failed to create monitor modified part id set", K(ret));
   } else if (OB_FAIL(select_sql.append_fmt(
           "select tablet_id, (inserts + updates + deletes - last_inserts - " \
           "last_updates - last_deletes) as inc_mod_count "\
@@ -797,37 +823,61 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
           } else if (!inc_mod_count_obj.is_null() &&
                      OB_FAIL(inc_mod_count_obj.get_int(inc_mod_count))) {
             LOG_WARN("failed to get int", K(ret), K(inc_mod_count_obj));
-          } else if (OB_FAIL(ObDbmsStatsUtils::get_dst_partition_by_tablet_id(ctx,
-                                                                              dst_tablet_id,
-                                                                              partition_infos,
-                                                                              dst_partition))) {
-            LOG_WARN("failed to get dst partition by tablet id", K(ret));
+          } else if (OB_FAIL(tablet_id_to_part_id_map.get_refactored(dst_tablet_id, dst_partition))) {
+            LOG_WARN("failed to get dst partition by tablet id", K(ret), K(dst_tablet_id));
           } else if (OB_FAIL(check_partition_stat_state(dst_partition,
                                                         inc_mod_count,
                                                         stale_percent_threshold,
-                                                        partition_stat_infos))) {
+                                                        partition_stat_infos,
+                                                        partition_stat_idx_map))) {
             LOG_WARN("failed to check partition stat state", K(ret));
-          } else if (OB_FAIL(monitor_modified_part_ids.push_back(dst_partition))) {
-            LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
-          } else if (OB_FAIL(add_var_to_array_no_dup(monitor_modified_part_ids, cur_part_id))) {
-            LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
+          }
+          if (OB_SUCC(ret)) {
+            int tmp_ret = monitor_modified_part_id_set.set_refactored(dst_partition, 0 /* do not overwrite */);
+            if (OB_HASH_EXIST == tmp_ret) {
+              // do nothing
+            } else if (OB_SUCCESS != tmp_ret) {
+              ret = tmp_ret;
+              LOG_WARN("failed to set monitor modified part id", K(ret), K(dst_partition));
+            } else if (OB_FAIL(monitor_modified_part_ids.push_back(dst_partition))) {
+              LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret), K(dst_partition));
+            }
+          }
+          if (OB_SUCC(ret) && cur_part_id != -1) {
+            int tmp_ret = monitor_modified_part_id_set.set_refactored(cur_part_id, 0 /* do not overwrite */);
+            if (OB_HASH_EXIST == tmp_ret) {
+              // do nothing
+            } else if (OB_SUCCESS != tmp_ret) {
+              ret = tmp_ret;
+              LOG_WARN("failed to set monitor modified first part id", K(ret), K(cur_part_id));
+            } else if (OB_FAIL(monitor_modified_part_ids.push_back(cur_part_id))) {
+              LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret), K(cur_part_id));
+            }
+          }
           // cacl inc_mod_count in order
-          } else if (ObDbmsStatsUtils::is_subpart_id(partition_infos, dst_partition, dst_part_id)) {
-            has_subpart_invalid_inc |= inc_mod_count < 0;
-            if (cur_part_id == dst_part_id) {
-              cur_inc_mod_count += inc_mod_count;
-            } else if (cur_part_id == -1) {
-              cur_part_id = dst_part_id;
-              cur_inc_mod_count = inc_mod_count;
-            } else if (OB_FAIL(check_partition_stat_state(cur_part_id,
-                                                          has_subpart_invalid_inc ? -1 : cur_inc_mod_count,
-                                                          stale_percent_threshold,
-                                                          partition_stat_infos))) {
-              LOG_WARN("failed to check partition stat state", K(ret));
-            } else {
-              cur_part_id = dst_part_id;
-              cur_inc_mod_count = inc_mod_count;
-              has_subpart_invalid_inc = false;
+          if (OB_SUCC(ret)) {
+            int tmp_ret = subpart_id_to_first_map.get_refactored(dst_partition, dst_part_id);
+            if (OB_SUCCESS == tmp_ret) {
+              has_subpart_invalid_inc |= inc_mod_count < 0;
+              if (cur_part_id == dst_part_id) {
+                cur_inc_mod_count += inc_mod_count;
+              } else if (cur_part_id == -1) {
+                cur_part_id = dst_part_id;
+                cur_inc_mod_count = inc_mod_count;
+              } else if (OB_FAIL(check_partition_stat_state(cur_part_id,
+                                                            has_subpart_invalid_inc ? -1 : cur_inc_mod_count,
+                                                            stale_percent_threshold,
+                                                            partition_stat_infos,
+                                                            partition_stat_idx_map))) {
+                LOG_WARN("failed to check partition stat state", K(ret));
+              } else {
+                cur_part_id = dst_part_id;
+                cur_inc_mod_count = inc_mod_count;
+                has_subpart_invalid_inc = false;
+              }
+            } else if (OB_HASH_NOT_EXIST != tmp_ret) {
+              ret = tmp_ret;
+              LOG_WARN("failed to get first part id from subpart map", K(ret), K(dst_partition));
             }
           }
 
@@ -845,14 +895,26 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
                 OB_FAIL(check_partition_stat_state(cur_part_id,
                                                    has_subpart_invalid_inc ? -1 : cur_inc_mod_count,
                                                    stale_percent_threshold,
-                                                   partition_stat_infos))) {
+                                                   partition_stat_infos,
+                                                   partition_stat_idx_map))) {
               LOG_WARN("failed to check partition stat state", K(ret));
-            } else if (OB_FAIL(add_var_to_array_no_dup(monitor_modified_part_ids, cur_part_id))) {
-              LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret));
-            } else if (OB_FAIL(check_partition_stat_state(global_part_id,
-                                                          has_part_invalid_inc ? -1 : table_inc_modified,
-                                                          stale_percent_threshold,
-                                                          partition_stat_infos))) {
+            }
+            if (OB_SUCC(ret) && cur_part_id != -1) {
+              int tmp_ret = monitor_modified_part_id_set.set_refactored(cur_part_id, 0 /* do not overwrite */);
+              if (OB_HASH_EXIST == tmp_ret) {
+                // do nothing
+              } else if (OB_SUCCESS != tmp_ret) {
+                ret = tmp_ret;
+                LOG_WARN("failed to set monitor modified first part id", K(ret), K(cur_part_id));
+              } else if (OB_FAIL(monitor_modified_part_ids.push_back(cur_part_id))) {
+                LOG_WARN("failed to push back part ids occurred in monitor_modified", K(ret), K(cur_part_id));
+              }
+            }
+            if (FAILEDx(check_partition_stat_state(global_part_id,
+                                                   has_part_invalid_inc ? -1 : table_inc_modified,
+                                                   stale_percent_threshold,
+                                                   partition_stat_infos,
+                                                   partition_stat_idx_map))) {
               LOG_WARN("failed to check partition stat state", K(ret));
             } else {/*do nothing*/}
           }
@@ -868,25 +930,42 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
       }
     }
 
-    ObSEArray<int64_t, 4> record_first_part_ids;
+    ObStatInt64Set record_first_part_id_set;
+    if (FAILEDx(record_first_part_id_set.create(
+            std::max<int64_t>(partition_stat_infos.count(), 1),
+            "RecordPartSet", ObModIds::OB_HASH_NODE, tenant_id))) {
+      LOG_WARN("failed to create record first part id set", K(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_stat_infos.count(); ++i) {
       int64_t partition_id = partition_stat_infos.at(i).partition_id_;
       int64_t first_part_id = OB_INVALID_ID;
+      int tmp_ret = OB_SUCCESS;
       // Partitions who not have dml infos are no need to regather stats
-      if (!is_contain(monitor_modified_part_ids, partition_id)) {
-        if (OB_FAIL(set_partition_stat_no_regather(partition_id, partition_stat_infos))) {
+      if (OB_HASH_NOT_EXIST == monitor_modified_part_id_set.exist_refactored(partition_id)) {
+        if (OB_FAIL(set_partition_stat_no_regather(partition_id,
+                                                   partition_stat_infos,
+                                                   partition_stat_idx_map))) {
           LOG_WARN("failed to set paritition stat no regather", K(ret));
         }
       }
-      if (OB_SUCC(ret) && ObDbmsStatsUtils::is_subpart_id(partition_infos, partition_id, first_part_id)) {
-        if (first_part_id != OB_INVALID_ID && !is_contain(monitor_modified_part_ids, first_part_id) &&
-            !is_contain(record_first_part_ids, first_part_id)) {
-          if (OB_FAIL(set_partition_stat_no_regather(first_part_id, partition_stat_infos))) {
+      if (OB_SUCC(ret) &&
+          OB_SUCCESS == (tmp_ret = subpart_id_to_first_map.get_refactored(partition_id, first_part_id))) {
+        if (first_part_id != OB_INVALID_ID &&
+            OB_HASH_NOT_EXIST == monitor_modified_part_id_set.exist_refactored(first_part_id)) {
+          tmp_ret = record_first_part_id_set.set_refactored(first_part_id, 0 /* do not overwrite */);
+          if (OB_HASH_EXIST == tmp_ret) {
+            // do nothing
+          } else if (OB_SUCCESS != tmp_ret) {
+            ret = tmp_ret;
+            LOG_WARN("failed to set record first part id", K(ret), K(first_part_id));
+          } else if (OB_FAIL(set_partition_stat_no_regather(
+                         first_part_id, partition_stat_infos, partition_stat_idx_map))) {
             LOG_WARN("failed to set paritition stat no regather", K(ret));
-          } else if (OB_FAIL(record_first_part_ids.push_back(first_part_id))) {
-            LOG_WARN("failed to push back", K(ret));
           }
         }
+      } else if (OB_SUCC(ret) && OB_HASH_NOT_EXIST != tmp_ret) {
+        ret = tmp_ret;
+        LOG_WARN("failed to get first part id from subpart map", K(ret), K(partition_id));
       }
     }
   }
@@ -1061,27 +1140,45 @@ int ObBasicStatsEstimator::check_table_statistics_state(ObExecContext &ctx,
 int ObBasicStatsEstimator::check_partition_stat_state(const int64_t partition_id,
                                                       const int64_t inc_mod_count,
                                                       const double stale_percent_threshold,
-                                                      ObIArray<ObPartitionStatInfo> &partition_stat_infos)
+                                                      ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                                      ObStatInt64Map &partition_stat_idx_map)
 {
   int ret = OB_SUCCESS;
   bool find_it = false;
-  for (int64_t i = 0; !find_it && i < partition_stat_infos.count(); ++i) {
-    if (partition_stat_infos.at(i).partition_id_ == partition_id) {
+  int64_t idx = -1;
+  int tmp_ret = partition_stat_idx_map.get_refactored(partition_id, idx);
+  if (OB_SUCCESS == tmp_ret) {
+    find_it = true;
+  } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+    // do nothing
+  } else {
+    ret = tmp_ret;
+    LOG_WARN("failed to get partition stat idx", K(ret), K(partition_id));
+  }
+  if (OB_SUCC(ret) && find_it) {
+    if (OB_UNLIKELY(idx < 0 || idx >= partition_stat_infos.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected partition stat idx", K(ret), K(idx), K(partition_stat_infos.count()));
+    } else {
       //locked partition id or no arrived stale percent threshold no need regather stats.
       double stale_percent = 0.0;
-      if (inc_mod_count < 0 || partition_stat_infos.at(i).row_cnt_ <= 0) {
+      if (inc_mod_count < 0 || partition_stat_infos.at(idx).row_cnt_ <= 0) {
         stale_percent = inc_mod_count == 0 ? 0.0 : 1.0;
       } else {
-        stale_percent = 1.0 * inc_mod_count / partition_stat_infos.at(i).row_cnt_;
+        stale_percent = 1.0 * inc_mod_count / partition_stat_infos.at(idx).row_cnt_;
       }
-      partition_stat_infos.at(i).is_no_stale_ = stale_percent <= stale_percent_threshold;
-      find_it = true;
+      partition_stat_infos.at(idx).is_no_stale_ = stale_percent <= stale_percent_threshold;
     }
   }
-  if (!find_it) {
+  if (OB_SUCC(ret) && !find_it) {
     ObPartitionStatInfo partition_stat_info(partition_id, 0, false, false, false);
     partition_stat_info.is_no_stale_ = false;
-    ret = partition_stat_infos.push_back(partition_stat_info);
+    int64_t new_idx = partition_stat_infos.count();
+    if (OB_FAIL(partition_stat_infos.push_back(partition_stat_info))) {
+      LOG_WARN("failed to push back partition stat info", K(ret), K(partition_id));
+    } else if (OB_FAIL(partition_stat_idx_map.set_refactored(partition_id, new_idx))) {
+      LOG_WARN("failed to set partition stat idx", K(ret), K(partition_id), K(new_idx));
+    }
   }
   return ret;
 }
@@ -1106,13 +1203,19 @@ int ObBasicStatsEstimator::gen_tablet_list(const ObTableStatParam &param,
           LOG_WARN("failed to push back", K(ret));
         }
       }
-    } else if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
-        for (int64_t j = 0; OB_SUCC(ret) && j < param.subpart_infos_.count(); ++j) {
-          if (param.part_infos_.at(i).part_id_ == param.subpart_infos_.at(j).first_part_id_) {
-            if (OB_FAIL(tablet_ids.push_back(param.subpart_infos_.at(j).tablet_id_.id()))) {
-              LOG_WARN("failed to push back", K(ret));
-            }
+    } else if (param.part_level_ == share::schema::ObPartitionLevel::PARTITION_LEVEL_TWO &&
+               param.part_infos_.count() > 0) {
+      ObStatInt64Set part_id_set;
+      if (OB_FAIL(ObDbmsStatsUtils::generate_part_id_set(param.part_infos_,
+                                                         part_id_set,
+                                                         param.tenant_id_,
+                                                         false /* ignore_duplicate */))) {
+        LOG_WARN("failed to build hash set", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < param.subpart_infos_.count(); ++j) {
+        if (OB_HASH_EXIST == part_id_set.exist_refactored(param.subpart_infos_.at(j).first_part_id_)) {
+          if (OB_FAIL(tablet_ids.push_back(param.subpart_infos_.at(j).tablet_id_.id()))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
@@ -1334,25 +1437,6 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
   return ret;
 }
 
-int ObBasicStatsEstimator::generate_first_part_idx_map(const ObIArray<PartInfo> &all_part_infos,
-                                                       hash::ObHashMap<int64_t, int64_t> &first_part_idx_map)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(all_part_infos.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected empty", K(ret), K(all_part_infos.empty()));
-  } else if (OB_FAIL(first_part_idx_map.create(all_part_infos.count(), "ObStatsEst"))) {
-    LOG_WARN("failed to create hash map", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_part_infos.count(); ++i) {
-      if (OB_FAIL(first_part_idx_map.set_refactored(all_part_infos.at(i).part_id_, i))) {
-        LOG_WARN("failed to set refactored", K(ret));
-      } else {/*do nothing*/}
-    }
-  }
-  return ret;
-}
-
 /**
  * @brief ObBasicStatsEstimator::refine_basic_stats
  *   when the user specify estimate_percent is too small, the sample data isn't enough to describe the
@@ -1372,7 +1456,7 @@ int ObBasicStatsEstimator::refine_basic_stats(const ObOptStatGatherParam &param,
       ObOptStatGatherParam new_param;
       ObSEArray<ObOptStat, 1> tmp_opt_stats;
       ObBasicStatsEstimator basic_re_est(ctx_, *param.allocator_, false);
-      if (OB_FAIL(check_stat_need_re_estimate(param, dst_opt_stats.at(i), need_re_estimate, new_param))) {
+      if (OB_FAIL(check_stat_need_re_estimate(param, i, dst_opt_stats.at(i), need_re_estimate, new_param))) {
         LOG_WARN("failed to check stat need re-estimate", K(ret));
       } else if (!need_re_estimate) {
         //do nothing
@@ -1392,6 +1476,7 @@ int ObBasicStatsEstimator::refine_basic_stats(const ObOptStatGatherParam &param,
 }
 
 int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObOptStatGatherParam &origin_param,
+                                                       const int64_t partition_idx,
                                                        ObOptStat &opt_stat,
                                                        bool &need_re_estimate,
                                                        ObOptStatGatherParam &new_param)
@@ -1403,7 +1488,10 @@ int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObOptStatGatherPara
     LOG_WARN("get unexpected error", K(ret), K(opt_stat.table_stat_));
   } else if (opt_stat.table_stat_->get_row_count() * sample_value_ / 100 >= MAGIC_MIN_SAMPLE_SIZE) {
     //do nothing
-  } else if (OB_FAIL(new_param.assign(origin_param))) {
+  } else if (OB_FAIL(new_param.assign(origin_param,
+                                      origin_param.stat_level_ != TABLE_LEVEL
+                                        ? partition_idx
+                                        : OB_INVALID_ID))) {
     LOG_WARN("failed to assign", K(ret));
   } else {
     need_re_estimate = true;
@@ -1419,14 +1507,7 @@ int ObBasicStatsEstimator::check_stat_need_re_estimate(const ObOptStatGatherPara
       new_param.sample_info_.sample_value_ = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
       new_param.sample_info_.sample_type_ = PercentSample;
     }
-    //2.set partition info
-    if (new_param.stat_level_ != TABLE_LEVEL) {
-      if (OB_FAIL(ObDbmsStatsUtils::remove_stat_gather_param_partition_info(opt_stat.table_stat_->get_partition_id(),
-                                                                            new_param))) {
-        LOG_WARN("failed to remove stat gather param partition info", K(ret));
-      }
-    }
-    //3.reset opt stat
+    //2.reset opt stat
     if (OB_SUCC(ret)) {
       opt_stat.table_stat_->set_row_count(0);
       opt_stat.table_stat_->set_avg_row_size(0);
@@ -1654,19 +1735,37 @@ int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
 }
 
 int ObBasicStatsEstimator::set_partition_stat_no_regather(const int64_t partition_id,
-                                                          ObIArray<ObPartitionStatInfo> &partition_stat_infos)
+                                                          ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                                          ObStatInt64Map &partition_stat_idx_map)
 {
   int ret = OB_SUCCESS;
   bool find_it = false;
-  for (int64_t i = 0; !find_it && i < partition_stat_infos.count(); ++i) {
-    if (partition_stat_infos.at(i).partition_id_ == partition_id) {
-      partition_stat_infos.at(i).is_no_dml_modified_ = true;
-      find_it = true;
+  int64_t idx = -1;
+  int tmp_ret = partition_stat_idx_map.get_refactored(partition_id, idx);
+  if (OB_SUCCESS == tmp_ret) {
+    find_it = true;
+  } else if (OB_HASH_NOT_EXIST == tmp_ret) {
+    // do nothing
+  } else {
+    ret = tmp_ret;
+    LOG_WARN("failed to get partition stat idx", K(ret), K(partition_id));
+  }
+  if (OB_SUCC(ret) && find_it) {
+    if (OB_UNLIKELY(idx < 0 || idx >= partition_stat_infos.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected partition stat idx", K(ret), K(idx), K(partition_stat_infos.count()));
+    } else {
+      partition_stat_infos.at(idx).is_no_dml_modified_ = true;
     }
   }
-  if (!find_it) {
+  if (OB_SUCC(ret) && !find_it) {
     ObPartitionStatInfo partition_stat_info(partition_id, 0, false, true, false);
-    ret = partition_stat_infos.push_back(partition_stat_info);
+    int64_t new_idx = partition_stat_infos.count();
+    if (OB_FAIL(partition_stat_infos.push_back(partition_stat_info))) {
+      LOG_WARN("failed to push back partition stat info", K(ret), K(partition_id));
+    } else if (OB_FAIL(partition_stat_idx_map.set_refactored(partition_id, new_idx))) {
+      LOG_WARN("failed to set partition stat idx", K(ret), K(partition_id), K(new_idx));
+    }
   }
   return ret;
 }
@@ -1764,7 +1863,8 @@ int ObBasicStatsEstimator::estimate_skip_rate(ObExecContext &ctx,
   ObSEArray<ObTabletID, 4> tablet_ids;
   ObSEArray<ObObjectID, 4> partition_ids;
   ObSEArray<EstimateSkipRateRes, 4> estimate_result;
-  hash::ObHashMap<int64_t, int64_t> first_part_idx_map;
+  ObStatInt64Map first_part_idx_map;
+  ObStatInt64Map subpart_id_to_first_map;
   ObSEArray<uint64_t, 4> column_ids;
   ObSEArray<uint64_t, 4> sample_counts;
   uint64_t table_id = share::is_oracle_mapping_real_virtual_table(param.table_id_)
@@ -1783,8 +1883,13 @@ int ObBasicStatsEstimator::estimate_skip_rate(ObExecContext &ctx,
              OB_FAIL(first_part_skip_rates.prepare_allocate(param.all_part_infos_.count()))) {
     LOG_WARN("failed to prepare allocate", K(ret));
   } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
-             OB_FAIL(generate_first_part_idx_map(param.all_part_infos_, first_part_idx_map))) {
+             OB_FAIL(ObDbmsStatsUtils::generate_part_id_to_idx_map(
+                 param.all_part_infos_, first_part_idx_map, param.tenant_id_))) {
     LOG_WARN("failed to generate first part idx map", K(ret));
+  } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO &&
+             OB_FAIL(ObDbmsStatsUtils::generate_subpart_id_to_first_map(
+                 param.all_subpart_infos_, subpart_id_to_first_map, param.tenant_id_))) {
+    LOG_WARN("failed to generate subpart id to first map", K(ret));
   } else if (OB_FAIL(get_topn_tablet_id_and_object_id(param, id_block_map, tablet_ids, partition_ids))) {
     LOG_WARN("failed to get all tablet id and object id", K(ret));
   } else if (OB_FAIL(prepare_skip_params(param, sample_counts, column_ids))) {
@@ -1842,9 +1947,10 @@ int ObBasicStatsEstimator::estimate_skip_rate(ObExecContext &ctx,
           }
         } else if (param.part_level_ == share::schema::PARTITION_LEVEL_TWO) {
           int64_t cur_part_id = -1;
-          if (OB_UNLIKELY(!ObDbmsStatsUtils::is_subpart_id(param.all_subpart_infos_, partition_id, cur_part_id))) {
+          if (OB_FAIL(subpart_id_to_first_map.get_refactored(partition_id, cur_part_id))) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected error", K(ret), K(partition_id), K(cur_part_id), K(param));
+            LOG_WARN("get unexpected error, subpart_id not found in map",
+                     K(ret), K(partition_id), K(cur_part_id), K(param));
           } else if (OB_FAIL(add_global_skip_rate(global_skip_rate, estimate_result.at(i), block_num_stat))) {
             LOG_WARN("faild to add", K(ret));
           } else {

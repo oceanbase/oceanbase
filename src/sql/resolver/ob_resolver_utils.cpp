@@ -9,6 +9,7 @@
 #include <orc/Writer.hh>
 
 #include "sql/resolver/ob_resolver_utils.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_expr_vector.h"
 #include "sql/parser/parse_malloc.h"
 #include "sql/parser/ob_parser.h"
@@ -27,6 +28,7 @@
 #include "pl/ob_pl_dependency_util.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "sql/engine/dml/ob_dml_ctx_define.h"
+#include "share/schema/ob_part_mgr_util.h"
 
 namespace oceanbase
 {
@@ -4476,6 +4478,300 @@ int ObResolverUtils::log_err_msg_for_partition_value(const ObQualifiedName &name
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("name is invalid", K(name), K(ret));
+  }
+  return ret;
+}
+
+struct ObPartitionHintName
+{
+  ObPartitionHintName() : name_() {}
+  explicit ObPartitionHintName(const ObString &name) : name_(name) {}
+
+  uint64_t hash() const
+  {
+    return ObCharset::hash(CS_TYPE_UTF8MB4_GENERAL_CI, name_, 0);
+  }
+
+  int hash(uint64_t &hash_value) const
+  {
+    hash_value = hash();
+    return OB_SUCCESS;
+  }
+
+  bool operator==(const ObPartitionHintName &other) const
+  {
+    return ObCharset::case_insensitive_equal(name_, other.name_);
+  }
+
+  ObString name_;
+};
+
+int build_partition_hint_name_map(const ParseNode &name_list,
+                                  ObSqlHashMap<ObPartitionHintName, int64_t> &hint_name_map,
+                                  ObSEArray<const ObPartition *, 4> &matched_parts,
+                                  ObSEArray<ObObjectID, 4> &matched_part_ids,
+                                  ObSEArray<ObObjectID, 4> &matched_subpart_ids,
+                                  const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(hint_name_map.create(name_list.num_child_,
+                                   "PartHintMap", "PartHintMap", tenant_id))) {
+    LOG_WARN("failed to create partition hint name map", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < name_list.num_child_; ++i) {
+    ObString partition_name(name_list.children_[i]->str_len_, name_list.children_[i]->str_value_);
+    ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
+    if (OB_FAIL(matched_parts.push_back(NULL))) {
+      LOG_WARN("failed to add matched partition slot", K(ret));
+    } else if (OB_FAIL(matched_part_ids.push_back(OB_INVALID_ID))) {
+      LOG_WARN("failed to add matched partition id slot", K(ret));
+    } else if (OB_FAIL(matched_subpart_ids.push_back(OB_INVALID_ID))) {
+      LOG_WARN("failed to add matched subpartition slot", K(ret));
+    } else if (OB_FAIL(hint_name_map.set_refactored(ObPartitionHintName(partition_name), i))) {
+      if (OB_LIKELY(OB_HASH_EXIST == ret)) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to add partition hint name", K(ret), K(partition_name));
+      }
+    }
+  }
+  return ret;
+}
+
+int match_partition_hints(const ParseNode &part_node,
+                          const ObTableSchema &table_schema,
+                          ObSqlHashMap<ObPartitionHintName, int64_t> &hint_name_map,
+                          ObSEArray<const ObPartition *, 4> &matched_parts,
+                          ObSEArray<ObObjectID, 4> &matched_part_ids,
+                          ObSEArray<ObObjectID, 4> &matched_subpart_ids)
+{
+  int ret = OB_SUCCESS;
+  int64_t matched_count = 0;
+  const int64_t target_count = hint_name_map.size();
+  const ObPartitionLevel part_level = table_schema.get_part_level();
+  const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+  const ObPartition *part = NULL;
+  ObPartIterator part_iter(table_schema, mode);
+  // Preserve ObPartGetter's schema scan order: partition, its subpartitions,
+  // then the next partition.
+  while (OB_SUCC(ret)
+         && (T_USE_PARTITION == part_node.type_ || PARTITION_LEVEL_TWO == part_level)
+         && matched_count < target_count && OB_SUCC(part_iter.next(part))) {
+    if (OB_ISNULL(part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition", K(ret));
+    } else {
+      if (T_USE_PARTITION == part_node.type_) {
+        int64_t hint_idx = OB_INVALID_INDEX;
+        int tmp_ret = hint_name_map.get_refactored(
+            ObPartitionHintName(part->get_part_name()), hint_idx);
+        if (OB_SUCCESS == tmp_ret) {
+          if (OB_INVALID_ID == matched_part_ids.at(hint_idx)
+              && OB_INVALID_ID == matched_subpart_ids.at(hint_idx)) {
+            ++matched_count;
+            matched_part_ids.at(hint_idx) = PARTITION_LEVEL_ZERO == part_level
+                                             ? table_schema.get_object_id()
+                                             : part->get_part_id();
+            // The level-zero part is owned by part_iter and cannot escape this function.
+            if (PARTITION_LEVEL_ZERO != part_level) {
+              matched_parts.at(hint_idx) = part;
+            }
+          }
+        } else if (OB_HASH_NOT_EXIST != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("failed to match partition hint", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && PARTITION_LEVEL_TWO == part_level) {
+        const ObSubPartition *subpart = NULL;
+        ObSubPartIterator subpart_iter(table_schema, *part, mode);
+        while (OB_SUCC(ret) && matched_count < target_count
+               && OB_SUCC(subpart_iter.next(subpart))) {
+          if (OB_ISNULL(subpart)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid subpartition", K(ret));
+          } else {
+            int64_t hint_idx = OB_INVALID_INDEX;
+            int tmp_ret = hint_name_map.get_refactored(
+                ObPartitionHintName(subpart->get_part_name()), hint_idx);
+            if (OB_SUCCESS == tmp_ret) {
+              if (OB_INVALID_ID == matched_part_ids.at(hint_idx)
+                  && OB_INVALID_ID == matched_subpart_ids.at(hint_idx)) {
+                matched_subpart_ids.at(hint_idx) = subpart->get_sub_part_id();
+                ++matched_count;
+              }
+            } else if (OB_HASH_NOT_EXIST != tmp_ret) {
+              ret = tmp_ret;
+              LOG_WARN("failed to match subpartition hint", K(ret));
+            }
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int get_partition_ids_by_hint(const ParseNode &part_node,
+                              const ObTableSchema &table_schema,
+                              const ObString &partition_name,
+                              const ObSqlHashMap<ObPartitionHintName, int64_t> &hint_name_map,
+                              const ObSEArray<const ObPartition *, 4> &matched_parts,
+                              const ObSEArray<ObObjectID, 4> &matched_part_ids,
+                              const ObSEArray<ObObjectID, 4> &matched_subpart_ids,
+                              ObIArray<ObObjectID> &partition_ids)
+{
+  int ret = OB_SUCCESS;
+  const ObPartitionLevel part_level = table_schema.get_part_level();
+  if (T_USE_PARTITION == part_node.type_) {
+    if (PARTITION_LEVEL_ZERO == part_level
+        || PARTITION_LEVEL_ONE == part_level
+        || PARTITION_LEVEL_TWO == part_level) {
+      int64_t hint_idx = OB_INVALID_INDEX;
+      if (OB_FAIL(hint_name_map.get_refactored(ObPartitionHintName(partition_name), hint_idx))) {
+        LOG_WARN("failed to get partition hint match", K(ret), K(partition_name));
+      } else if (PARTITION_LEVEL_ZERO == part_level
+                 && OB_INVALID_ID != matched_part_ids.at(hint_idx)) {
+        if (OB_FAIL(partition_ids.push_back(matched_part_ids.at(hint_idx)))) {
+          LOG_WARN("failed to push back non-partitioned table object id", K(ret));
+        }
+      } else if (OB_NOT_NULL(matched_parts.at(hint_idx))) {
+        const ObPartition *part = matched_parts.at(hint_idx);
+        if (PARTITION_LEVEL_TWO == part_level) {
+          const ObCheckPartitionMode mode = CHECK_PARTITION_MODE_NORMAL;
+          const ObSubPartition *subpart = NULL;
+          ObSubPartIterator subpart_iter(table_schema, *part, mode);
+          while (OB_SUCC(ret) && OB_SUCC(subpart_iter.next(subpart))) {
+            if (OB_ISNULL(subpart)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid subpartition", K(ret));
+            } else if (OB_FAIL(partition_ids.push_back(subpart->get_sub_part_id()))) {
+              LOG_WARN("failed to push back subpart id", K(ret));
+            }
+          }
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
+        } else if (OB_FAIL(partition_ids.push_back(part->get_part_id()))) {
+          LOG_WARN("failed to push back part id", K(ret));
+        }
+      } else if (PARTITION_LEVEL_TWO == part_level
+                 && OB_INVALID_ID != matched_subpart_ids.at(hint_idx)) {
+        if (OB_FAIL(partition_ids.push_back(matched_subpart_ids.at(hint_idx)))) {
+          LOG_WARN("failed to push back subpart id", K(ret));
+        }
+      } else {
+        ret = OB_UNKNOWN_PARTITION;
+      }
+    } else {
+      ret = OB_UNKNOWN_PARTITION;
+    }
+    if (OB_UNKNOWN_PARTITION == ret && lib::is_mysql_mode()) {
+      LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+                     table_schema.get_table_name_str().length(),
+                     table_schema.get_table_name_str().ptr());
+    }
+  } else if (PARTITION_LEVEL_TWO == part_level) {
+    int64_t hint_idx = OB_INVALID_INDEX;
+    if (OB_FAIL(hint_name_map.get_refactored(ObPartitionHintName(partition_name), hint_idx))) {
+      LOG_WARN("failed to get subpartition hint match", K(ret), K(partition_name));
+    } else if (OB_INVALID_ID == matched_subpart_ids.at(hint_idx)) {
+      ret = OB_UNKNOWN_SUBPARTITION;
+      LOG_WARN("subpartition no exists", K(ret), K(partition_name));
+    } else if (OB_FAIL(partition_ids.push_back(matched_subpart_ids.at(hint_idx)))) {
+      LOG_WARN("failed to push back subpart id", K(ret));
+    }
+  } else if (PARTITION_LEVEL_ZERO == part_level) {
+    ret = OB_ERR_NOT_PARTITIONED;
+    LOG_WARN("table is not partitioned", K(ret));
+  } else {
+    // Oracle uses subpartition() on the primary partition table to report
+    // Specified subpartition does not exist.
+    ret = OB_UNKNOWN_SUBPARTITION;
+    LOG_WARN("subpartition no exists", K(ret));
+  }
+  return ret;
+}
+
+int resolve_partition_hint_list(const ParseNode &part_node,
+                                const ObTableSchema &table_schema,
+                                const ObSqlHashMap<ObPartitionHintName, int64_t> &hint_name_map,
+                                const ObSEArray<const ObPartition *, 4> &matched_parts,
+                                const ObSEArray<ObObjectID, 4> &matched_part_ids,
+                                const ObSEArray<ObObjectID, 4> &matched_subpart_ids,
+                                ObIArray<ObObjectID> &part_ids,
+                                ObIArray<ObString> &part_names)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode &name_list = *part_node.children_[0];
+  for (int64_t i = 0; OB_SUCC(ret) && i < name_list.num_child_; ++i) {
+    ObSEArray<ObObjectID, 16> partition_ids;
+    ObString partition_name(name_list.children_[i]->str_len_, name_list.children_[i]->str_value_);
+    ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
+    if (OB_FAIL(get_partition_ids_by_hint(part_node, table_schema, partition_name,
+                                          hint_name_map, matched_parts,
+                                          matched_part_ids,
+                                          matched_subpart_ids, partition_ids))) {
+      LOG_WARN("failed to get partition ids by hint", K(ret), K(partition_name));
+    } else if (OB_FAIL(append(part_ids, partition_ids))) {
+      LOG_WARN("failed to append part ids", K(ret), K(partition_ids));
+    } else if (OB_FAIL(part_names.push_back(partition_name))) {
+      LOG_WARN("failed to push back partition name", K(ret));
+    } else {
+      LOG_INFO("part ids", K(partition_name), K(partition_ids));
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::resolve_partition_hints(const ParseNode &part_node,
+                                             const share::schema::ObTableSchema &table_schema,
+                                             common::ObIArray<common::ObObjectID> &part_ids,
+                                             common::ObIArray<common::ObString> &part_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(1 != part_node.num_child_
+                  || OB_ISNULL(part_node.children_[0])
+                  || T_NAME_LIST != part_node.children_[0]->type_
+                  || part_node.children_[0]->num_child_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid partition hint node", K(ret), K(part_node.type_),
+             K(part_node.num_child_));
+  } else {
+    const ParseNode &name_list = *part_node.children_[0];
+    ObSEArray<ObObjectID, 4> tmp_part_ids;
+    ObSEArray<ObString, 4> tmp_part_names;
+    ObSqlHashMap<ObPartitionHintName, int64_t> hint_name_map;
+    ObSEArray<const ObPartition *, 4> matched_parts;
+    ObSEArray<ObObjectID, 4> matched_part_ids;
+    ObSEArray<ObObjectID, 4> matched_subpart_ids;
+    if (OB_FAIL(build_partition_hint_name_map(name_list, hint_name_map,
+                                              matched_parts, matched_part_ids,
+                                              matched_subpart_ids,
+                                              table_schema.get_tenant_id()))) {
+      LOG_WARN("failed to build partition hint name map", K(ret));
+    } else if (OB_FAIL(match_partition_hints(part_node, table_schema, hint_name_map,
+                                             matched_parts, matched_part_ids,
+                                             matched_subpart_ids))) {
+      LOG_WARN("failed to match partition hints", K(ret));
+    } else if (OB_FAIL(resolve_partition_hint_list(part_node, table_schema, hint_name_map,
+                                                   matched_parts, matched_part_ids,
+                                                   matched_subpart_ids,
+                                                   tmp_part_ids, tmp_part_names))) {
+      LOG_WARN("failed to resolve partition hint list", K(ret));
+    } else if (OB_FAIL(stable_dedup_array(tmp_part_ids))) {
+      LOG_WARN("failed to deduplicate part ids", K(ret));
+    } else if (OB_FAIL(part_ids.assign(tmp_part_ids))) {
+      LOG_WARN("failed to assign part ids", K(ret));
+    } else if (OB_FAIL(part_names.assign(tmp_part_names))) {
+      LOG_WARN("failed to assign part names", K(ret));
+    }
   }
   return ret;
 }

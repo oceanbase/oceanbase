@@ -43,17 +43,21 @@ private:
   static int fast_get_index_avg_len(const int64_t data_partition_id,
                                     const ObTableStatParam &data_param,
                                     const ObTableStatParam &index_param,
+                                    const ObIArray<uint64_t> &column_ids,
                                     bool &is_fast_get,
                                     int64_t &avg_len);
+
+  static int get_data_column_ids(const ObTableStatParam &data_param,
+                                 const ObTableStatParam &index_param,
+                                 ObIArray<uint64_t> &column_ids);
 
   static int get_all_need_gather_partition_ids(const ObTableStatParam &data_param,
                                                const ObTableStatParam &index_param,
                                                ObIArray<int64_t> &gather_part_ids);
 
-  static int get_index_part_id(const int64_t data_tab_partition_id,
-                               const ObTableStatParam &data_param,
-                               const ObTableStatParam &index_param,
-                               int64_t &index_partition_id);
+  static int build_data_to_index_part_id_map(const ObTableStatParam &data_param,
+                                             const ObTableStatParam &index_param,
+                                             ObStatInt64Map &data_to_index_part_id_map);
 
   int add_no_use_das_hint(common::ObIAllocator &alloc, const ObString &table_name);
 };

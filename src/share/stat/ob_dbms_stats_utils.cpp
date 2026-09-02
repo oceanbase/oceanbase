@@ -25,6 +25,53 @@ namespace oceanbase
 namespace common
 {
 
+namespace
+{
+struct ObPartInfoPartIdGetter
+{
+  int operator()(const PartInfo &info, const int64_t, int64_t &part_id) const
+  {
+    part_id = info.part_id_;
+    return OB_SUCCESS;
+  }
+};
+
+struct ObPartInfoFirstPartIdGetter
+{
+  int operator()(const PartInfo &info, const int64_t, int64_t &first_part_id) const
+  {
+    first_part_id = info.first_part_id_;
+    return OB_SUCCESS;
+  }
+};
+
+struct ObPartInfoTabletIdGetter
+{
+  int operator()(const PartInfo &info, const int64_t, int64_t &tablet_id) const
+  {
+    tablet_id = static_cast<int64_t>(info.tablet_id_.id());
+    return OB_SUCCESS;
+  }
+};
+
+struct ObValidSubpartInfoFilter
+{
+  bool operator()(const PartInfo &info, const int64_t) const
+  {
+    return OB_INVALID_ID != info.first_part_id_;
+  }
+};
+
+struct ObPartitionStatInfoIdGetter
+{
+  int operator()(const ObPartitionStatInfo &info, const int64_t, int64_t &partition_id) const
+  {
+    partition_id = info.partition_id_;
+    return OB_SUCCESS;
+  }
+};
+} // namespace
+
 int ObDbmsStatsUtils::init_table_stats(ObIAllocator &allocator,
                                      int64_t cnt,
                                      ObIArray<ObOptTableStat*> &table_stats)
@@ -590,20 +637,111 @@ int ObDbmsStatsUtils::split_batch_write(sqlclient::ObISQLConnection *conn,
   return ret;
 }
 
-bool ObDbmsStatsUtils::is_subpart_id(const ObIArray<PartInfo> &partition_infos,
-                                     const int64_t partition_id,
-                                     int64_t &part_id)
+int ObDbmsStatsUtils::generate_subpart_id_to_first_map(
+    const ObIArray<PartInfo> &all_subpart_infos,
+    ObStatInt64Map &subpart_id_to_first_map,
+    const uint64_t tenant_id)
 {
-  bool is_true = false;
-  part_id = OB_INVALID_ID;
-  for (int64_t i = 0; !is_true && i < partition_infos.count(); ++i) {
-    is_true = (partition_infos.at(i).first_part_id_ != OB_INVALID_ID &&
-               partition_id == partition_infos.at(i).part_id_);
-    if (is_true) {
-      part_id = partition_infos.at(i).first_part_id_;
-    }
-  }
-  return is_true;
+  return build_hash_map_if(all_subpart_infos,
+                           subpart_id_to_first_map,
+                           ObPartInfoPartIdGetter(),
+                           ObPartInfoFirstPartIdGetter(),
+                           ObValidSubpartInfoFilter(),
+                           "ObStatsEst",
+                           ObModIds::OB_HASH_NODE,
+                           tenant_id,
+                           true /* ignore_duplicate */);
+}
+
+int ObDbmsStatsUtils::generate_part_id_to_idx_map(
+    const ObIArray<PartInfo> &part_infos,
+    ObStatInt64Map &part_id_to_idx_map,
+    const uint64_t tenant_id)
+{
+  return build_hash_map(part_infos,
+                        part_id_to_idx_map,
+                        ObPartInfoPartIdGetter(),
+                        ObStatHashMapIndexGetter(),
+                        "ObStatsEst",
+                        ObModIds::OB_HASH_NODE,
+                        tenant_id,
+                        true /* ignore_duplicate */);
+}
+
+int ObDbmsStatsUtils::generate_part_id_set(
+    const ObIArray<PartInfo> &part_infos,
+    ObStatInt64Set &part_id_set,
+    const uint64_t tenant_id,
+    const bool ignore_duplicate)
+{
+  return build_hash_set(part_infos,
+                        part_id_set,
+                        ObPartInfoPartIdGetter(),
+                        std::max<int64_t>(part_infos.count(), 1),
+                        "ObStatsEst",
+                        ObModIds::OB_HASH_NODE,
+                        tenant_id,
+                        ignore_duplicate);
+}
+
+int ObDbmsStatsUtils::generate_int64_to_idx_map(
+    const ObIArray<int64_t> &ids,
+    ObStatInt64Map &id_to_idx_map,
+    const uint64_t tenant_id)
+{
+  return build_hash_map(ids,
+                        id_to_idx_map,
+                        ObStatHashIdentityGetter<int64_t>(),
+                        ObStatHashMapIndexGetter(),
+                        "ObStatsEst",
+                        ObModIds::OB_HASH_NODE,
+                        tenant_id,
+                        true /* ignore_duplicate */);
+}
+
+int ObDbmsStatsUtils::generate_tablet_id_to_part_id_map(
+    const ObIArray<PartInfo> &partition_infos,
+    ObStatInt64Map &tablet_id_to_part_id_map,
+    const uint64_t tenant_id)
+{
+  return build_hash_map(partition_infos,
+                        tablet_id_to_part_id_map,
+                        ObPartInfoTabletIdGetter(),
+                        ObPartInfoPartIdGetter(),
+                        "ObStatsEst",
+                        ObModIds::OB_HASH_NODE,
+                        tenant_id,
+                        true /* ignore_duplicate */);
+}
+
+int ObDbmsStatsUtils::generate_tablet_id_to_idx_map(
+    const ObIArray<PartInfo> &partition_infos,
+    ObStatInt64Map &tablet_id_to_idx_map,
+    const uint64_t tenant_id)
+{
+  return build_hash_map(partition_infos,
+                        tablet_id_to_idx_map,
+                        ObPartInfoTabletIdGetter(),
+                        ObStatHashMapIndexGetter(),
+                        "ObStatsEst",
+                        ObModIds::OB_HASH_NODE,
+                        tenant_id,
+                        true /* ignore_duplicate */);
+}
+
+int ObDbmsStatsUtils::generate_partition_stat_id_to_idx_map(
+    const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+    ObStatInt64Map &partition_stat_id_to_idx_map,
+    const uint64_t tenant_id)
+{
+  return build_hash_map(partition_stat_infos,
+                        partition_stat_id_to_idx_map,
+                        ObPartitionStatInfoIdGetter(),
+                        ObStatHashMapIndexGetter(),
+                        "ObStatsEst",
+                        ObModIds::OB_HASH_NODE,
+                        tenant_id,
+                        true /* ignore_duplicate */);
 }
 
 int ObDbmsStatsUtils::get_subpart_ids(const ObIArray<PartInfo> &partition_infos,
@@ -629,31 +767,40 @@ int ObDbmsStatsUtils::get_no_need_collect_part_ids(const ObTableStatParam &param
   ObSEArray<int64_t, 4> part_or_subpart_ids; //
   if (OB_FAIL(ObDbmsStatsUtils::get_subpart_ids(param.all_subpart_infos_, partition_id, part_or_subpart_ids))) {
     LOG_WARN("failed to push back", K(ret));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < part_or_subpart_ids.count(); ++i) {
-    bool found = false;
-    for (int64_t j = 0; OB_SUCC(ret) && j < param.subpart_infos_.count(); ++j) {
-      if (part_or_subpart_ids.at(i) == param.subpart_infos_.at(j).part_id_) {
-        found = true;
-        break;
+  } else {
+    const int64_t total_cnt = param.subpart_infos_.count() +
+                              param.approx_part_infos_.count() +
+                              param.part_infos_.count();
+    if (total_cnt == 0) {
+      if (OB_FAIL(append(no_collect_subpart_ids, part_or_subpart_ids))) {
+        LOG_WARN("failed to append", K(ret));
       }
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < param.approx_part_infos_.count(); ++j) {
-      if (part_or_subpart_ids.at(i) == param.approx_part_infos_.at(j).part_id_) {
-        found = true;
-        break;
+    } else {
+      ObStatInt64Set collect_part_id_set;
+      if (OB_FAIL(build_hash_set(param.subpart_infos_,
+                                 collect_part_id_set,
+                                 ObPartInfoPartIdGetter(),
+                                 total_cnt,
+                                 "CollPartSet",
+                                 "CollPartNd",
+                                 param.tenant_id_))) {
+        LOG_WARN("failed to build collect part id set", K(ret));
+      } else if (OB_FAIL(append_hash_set(param.approx_part_infos_,
+                                         collect_part_id_set,
+                                         ObPartInfoPartIdGetter()))) {
+        LOG_WARN("failed to append approx part ids", K(ret));
+      } else if (OB_FAIL(append_hash_set(param.part_infos_,
+                                         collect_part_id_set,
+                                         ObPartInfoPartIdGetter()))) {
+        LOG_WARN("failed to append part ids", K(ret));
       }
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < param.part_infos_.count(); ++j) {
-      if (part_or_subpart_ids.at(i) == param.part_infos_.at(j).part_id_) {
-        found = true;
-        break;
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_or_subpart_ids.count(); ++i) {
+        const int64_t part_or_subpart_id = part_or_subpart_ids.at(i);
+        if (OB_HASH_NOT_EXIST == collect_part_id_set.exist_refactored(part_or_subpart_id)
+            && OB_FAIL(no_collect_subpart_ids.push_back(part_or_subpart_id))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       }
-    }
-
-    if (OB_SUCC(ret) && !found && OB_FAIL(no_collect_subpart_ids.push_back(part_or_subpart_ids.at(i)))) {
-      LOG_WARN("failed to push back", K(ret));
     }
   }
   return ret;
@@ -675,28 +822,6 @@ int ObDbmsStatsUtils::get_valid_duration_time(const int64_t start_time,
     LOG_WARN("reach the duration time", K(ret), K(current_time), K(start_time), K(max_duration_time));
   } else {
     valid_duration_time = max_duration_time - (current_time - start_time);
-  }
-  return ret;
-}
-
-int ObDbmsStatsUtils::get_dst_partition_by_tablet_id(sql::ObExecContext &ctx,
-                                                     const uint64_t tablet_id,
-                                                     const ObIArray<PartInfo> &partition_infos,
-                                                     int64_t &partition_id)
-{
-  int ret = OB_SUCCESS;
-  partition_id = -1;
-  ObTabletID tmp_tablet_id(tablet_id);
-  for (int64_t i = 0; partition_id == -1 && i < partition_infos.count(); ++i) {
-    if (partition_infos.at(i).tablet_id_ == tmp_tablet_id) {
-      partition_id = partition_infos.at(i).part_id_;
-    }
-  }
-  if (OB_UNLIKELY(partition_id == -1)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(tablet_id), K(partition_infos));
-  } else {
-    LOG_TRACE("succeed to get dst partition by tablet id", K(tablet_id), K(partition_infos), K(partition_id));
   }
   return ret;
 }
@@ -1231,28 +1356,6 @@ bool ObDbmsStatsUtils::find_part(const ObIArray<PartInfo> &part_infos,
   return found;
 }
 
-int ObDbmsStatsUtils::remove_stat_gather_param_partition_info(int64_t reserved_partition_id,
-                                                              ObOptStatGatherParam &param)
-{
-  int ret = OB_SUCCESS;
-  bool found_it = false;
-  for (int64_t i = 0; !found_it && i < param.partition_infos_.count(); ++i) {
-    if (reserved_partition_id == param.partition_infos_.at(i).part_id_) {
-      found_it = true;
-      PartInfo tmp_part_info = param.partition_infos_.at(i);
-      param.partition_infos_.reset();
-      if (OB_FAIL(param.partition_infos_.push_back(tmp_part_info))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
-    }
-  }
-  if (!found_it) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret), K(param), K(reserved_partition_id));
-  }
-  return ret;
-}
-
 int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
                                                 StatLevel stat_level,
                                                 const PartitionIdBlockMap *partition_id_block_map,
@@ -1667,7 +1770,7 @@ int ObDbmsStatsUtils::check_can_async_gather_stats(sql::ObExecContext &ctx)
 int ObDbmsStatsUtils::build_index_part_to_table_part_maps(share::schema::ObSchemaGetterGuard *schema_guard,
                                                           uint64_t tenant_id,
                                                           uint64_t index_table_id,
-                                                          common::hash::ObHashMap<ObObjectID, ObObjectID> &part_id_map)
+                                                          ObStatObjectIDMap &part_id_map)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
@@ -1722,7 +1825,7 @@ int ObDbmsStatsUtils::build_sub_part_maps(const ObTableSchema* table_schema,
                                           const ObPartition *index_part,
                                           const ObPartition *table_part,
                                           ObCheckPartitionMode mode,
-                                          common::hash::ObHashMap<ObObjectID, ObObjectID> &part_id_map)
+                                          ObStatObjectIDMap &part_id_map)
 {
   int ret = OB_SUCCESS;
   ObSubPartIterator table_itr(*table_schema, *table_part, mode);
@@ -1761,7 +1864,7 @@ int ObDbmsStatsUtils::deduce_index_column_stat_to_table(share::schema::ObSchemaG
       }
     }
   } else {
-    common::hash::ObHashMap<ObObjectID, ObObjectID> part_ids;
+    ObStatObjectIDMap part_ids;
     if (OB_FAIL(part_ids.create(128, "DbmsStatsParts"))) {
       LOG_WARN("failed to create map", K(ret));
     } else if (OB_FAIL(build_index_part_to_table_part_maps(schema_guard,
@@ -1948,7 +2051,7 @@ int ObDbmsStatsUtils::get_all_prefix_index_text_pairs(const share::schema::ObTab
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 4> ref_column_ids;
   int64_t prefix_length = 0;
-  common::hash::ObHashMap<uint64_t, int64_t> prefix_columns;
+  ObStatUInt64Int64Map prefix_columns;
   if (OB_FAIL(prefix_columns.create(64, "DbmsStatsPrefix"))) {
     LOG_WARN("failed to create map", K(ret));
   }
