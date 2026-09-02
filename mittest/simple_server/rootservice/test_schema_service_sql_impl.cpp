@@ -264,6 +264,15 @@ TEST_F(TestSchemaServiceSqlImpl, test_latest_schema_guard_uses_transaction_clien
 
   {
     ObLatestSchemaGuard latest_schema_guard(GCTX.schema_service_, g_tenant_id, &trans);
+    const ObTenantSchema *tenant_schema = NULL;
+    const int get_tenant_ret = latest_schema_guard.get_tenant_schema(
+        g_tenant_id, tenant_schema);
+    EXPECT_EQ(OB_SUCCESS, get_tenant_ret);
+    if (OB_SUCCESS == get_tenant_ret) {
+      ASSERT_TRUE(OB_NOT_NULL(tenant_schema));
+      EXPECT_EQ(g_tenant_id, tenant_schema->get_tenant_id());
+    }
+
     const ObTableSchema *actual_table_schema = NULL;
     const int get_ret = latest_schema_guard.get_table_schema(table_id, actual_table_schema);
     EXPECT_EQ(OB_SUCCESS, get_ret);

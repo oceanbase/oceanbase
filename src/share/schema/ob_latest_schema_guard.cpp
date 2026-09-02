@@ -81,6 +81,8 @@ int ObLatestSchemaGuard::get_schema_(
   const ObSchema *base_schema = NULL;
   ObSchemaService *schema_service_impl = NULL;
   ObISQLClient *sql_client = NULL;
+  // A non-sys-tenant transaction cannot switch to sys tenant to read tenant schemas.
+  const bool use_sql_proxy = TENANT_SCHEMA == schema_type && tenant_id_ != tenant_id;
   schema = NULL;
   if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
     LOG_WARN("fail to get schema service", KR(ret));
@@ -98,6 +100,9 @@ int ObLatestSchemaGuard::get_schema_(
              || OB_INVALID_ID == schema_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(schema_type), K(tenant_id), K(schema_id));
+  } else if (use_sql_proxy && OB_ISNULL(sql_client = schema_service_->get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret), K(schema_type), K_(tenant_id));
   } else if (OB_FAIL(get_from_local_cache_(schema_type, tenant_id, schema_id, schema))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get schema from cache", KR(ret), K(schema_type), K(tenant_id), K(schema_id));
