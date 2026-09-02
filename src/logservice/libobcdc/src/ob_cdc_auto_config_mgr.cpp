@@ -136,6 +136,20 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   const int64_t parser_flow_control_queue_backlog_threshold = 1 << factor_;
   const int64_t max_chunk_cache_size =  factor_ <= 13 ? (1 << (factor_ - 11)) * 512 * _M_ : 4096 * _M_;
   const int64_t task_pool_allocator_total_limit = memory_limit_;
+  const int64_t part_trans_task_redo_size_in_memory_threshold = factor_ <= 11
+      ? 512 * _K_
+      : (factor_ == 12 ? 1 * _M_ : (factor_ == 13 ? 2 * _M_ : 4 * _M_));
+  const int64_t configured_part_trans_task_redo_size_in_memory_threshold =
+      config.part_trans_task_redo_size_in_memory_threshold.get();
+
+  if (0 == configured_part_trans_task_redo_size_in_memory_threshold) {
+    set_part_trans_task_redo_size_in_memory_threshold(part_trans_task_redo_size_in_memory_threshold);
+    LOG_INFO("[AUTO_CONFIG][AUTO]", K_(part_trans_task_redo_size_in_memory_threshold));
+  } else {
+    set_part_trans_task_redo_size_in_memory_threshold(
+        configured_part_trans_task_redo_size_in_memory_threshold);
+    LOG_INFO("[AUTO_CONFIG][USER_CONFIG]", K_(part_trans_task_redo_size_in_memory_threshold));
+  }
 
   REFRESH_NUM_FIELD_WITH_CONFIG(redo_dispatcher_memory_limit, redo_dispatcher_limit, config.redo_dispatcher_memory_limit.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(extra_redo_dispatch_memory_size, extra_redo_dispatch_memory_size, config.extra_redo_dispatch_memory_size.get());

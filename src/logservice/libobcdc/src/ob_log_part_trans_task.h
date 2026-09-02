@@ -1396,7 +1396,7 @@ private:
   // alloc LogEntryNode with specifed LSN, free while PartTransTask destroy.
   int alloc_log_entry_node_(const palf::LSN &lsn, LogEntryNode *&log_entry_node);
   // 1. memory / storage / auto working mode
-  // 2. accumulated redo size vs part_trans_task_redo_log_size_threshold (TCONF, 0 disables)
+  // 2. accumulated redo size vs effective part_trans_task_redo_log_size_threshold (negative disables)
   // 3. enable_part_trans_task_redo_storage_follow: once any redo persisted to storage, keep persisting
   bool need_store_data_(int64_t buf_size) const;
   // Handling of row start

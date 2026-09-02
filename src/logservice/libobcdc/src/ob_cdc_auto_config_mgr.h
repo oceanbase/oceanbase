@@ -56,6 +56,7 @@ private:
 // | br_queue_length                               | 8192  | 16384 | 32768 | 65536 | 10W   | 10W   |
 // | part_trans_task_prealloc_count                | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
 // | auto_part_trans_task_upper_bound              | 2W    | 4W    | 8W    | 16W   | 32W   | 128W  |
+// | part_trans_task_redo_size_in_memory_threshold | 512K  | 1M    | 2M    | 4M    | 4M    | 4M    |
 // | redo_dispatcher_memory_limit                  | 32M   | 64M   | 128M  | 256M  | 512M  | 2G    |
 // | extra_redo_dispatch_memory_size               | 1K    | 8M    | 32M   | 96M   | 256M  | 1.5G  |
 // | redo_dispatch_exceed_ratio                    | 1     | 1     | 1     | 2     | 4     | 16    |
@@ -82,6 +83,7 @@ DEFINE_FIELD_WITH_GETTER(int64_t, part_trans_task_prealloc_count);
 
 // flow controll
 DEFINE_FIELD_WITH_GETTER(int64_t, memory_limit);
+DEFINE_FIELD_WITH_GETTER(int64_t, part_trans_task_redo_size_in_memory_threshold);
 DEFINE_FIELD_WITH_GETTER(int64_t, redo_dispatcher_memory_limit);
 DEFINE_FIELD_WITH_GETTER(int64_t, extra_redo_dispatch_memory_size);
 DEFINE_FIELD_WITH_GETTER(int64_t, redo_dispatched_memory_limit_exceed_ratio);

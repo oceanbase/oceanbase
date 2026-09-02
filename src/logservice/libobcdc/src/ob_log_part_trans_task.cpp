@@ -3096,7 +3096,7 @@ void PartTransTask::set_redo_store_policy_()
   const int64_t percentage = TCONF.memory_usage_warn_threshold;
   const int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
   working_mode_ = TCTX.working_mode_;
-  redo_log_size_threshold_ = TCONF.part_trans_task_redo_size_in_memory_threshold;
+  redo_log_size_threshold_ = CDC_CFG_MGR.get_part_trans_task_redo_size_in_memory_threshold();
   enable_redo_store_storage_follow_ = (0 != TCONF.enable_part_trans_task_redo_storage_follow);
   global_memory_threshold_ =
       memory_limit > 0 ? memory_limit * percentage / 100 : 0;
