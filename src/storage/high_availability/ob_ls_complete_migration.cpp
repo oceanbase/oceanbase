@@ -1444,10 +1444,14 @@ int ObWaitDataReadyTask::wait_src_ls_match_barrier_(
   // TODO(zeyong): timeout ctx is required to control all data ready task timeout.
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
+  ObLS *dest_ls = nullptr;
 
   if (!transfer_meta_info.is_prepare_status()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("transfer status not prepare", K(ret), K(transfer_meta_info));
+  } else if (OB_ISNULL(dest_ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be null", K(ret), KPC(ctx_));
   } else if (OB_FAIL(get_wait_timeout_(timeout))) {
     LOG_WARN("failed to get wait timeout", K(ret));
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
@@ -1473,9 +1477,10 @@ int ObWaitDataReadyTask::wait_src_ls_match_barrier_(
       LOG_WARN("failed to get ObLSService from MTL", K(ret));
     }
 
-    // TODO(zeyong): exit the while loop after dag net is cancel
     while(OB_SUCC(ret)) {
-      if (timeout_ctx.is_timeouted()) {
+      if (OB_FAIL(check_ls_and_task_status_(dest_ls))) {
+        LOG_WARN("failed to check ls and task status", K(ret), KPC(ctx_));
+      } else if (timeout_ctx.is_timeouted()) {
         if (OB_FAIL(ctx_->set_result(OB_TRANSFER_SRC_LS_NOT_EXIST,
                                      true /*allow_retry*/,
                                      this->get_dag()->get_type()))) {
@@ -1509,7 +1514,9 @@ int ObWaitDataReadyTask::wait_src_ls_match_barrier_(
 
     // 2 wait source ls replay over transfer start scn
     while(OB_SUCC(ret)) {
-      if (timeout_ctx.is_timeouted()) {
+      if (OB_FAIL(check_ls_and_task_status_(dest_ls))) {
+        LOG_WARN("failed to check ls and task status", K(ret), KPC(ctx_));
+      } else if (timeout_ctx.is_timeouted()) {
         if (OB_FAIL(ctx_->set_result(OB_WAIT_REPLAY_TIMEOUT,
                                      true /*allow_retry*/,
                                      this->get_dag()->get_type()))) {
@@ -1596,11 +1603,10 @@ int ObWaitDataReadyTask::check_self_is_valid_member_(bool &is_valid_member) cons
       return ret;
     }
   }
-#else
-    if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
-      LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
-    }
 #endif
+  if (OB_FAIL(ObStorageHADagUtils::check_self_is_valid_member(ctx_->arg_.ls_id_, is_valid_member))) {
+    LOG_WARN("failed to check self is valid member", K(ret), KPC(ctx_));
+  }
 
   return ret;
 }

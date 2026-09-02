@@ -1588,7 +1588,9 @@ int ObTransferHandler::get_tablet_start_transfer_out_scn_(
         }
       } else {
         if (user_data.transfer_scn_.is_min()) {
-          LOG_INFO("tablet status is transfer out, but on_redo is not executed. Retry is required", K(user_data), KPC(tablet));
+          if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+            LOG_INFO("tablet status is transfer out, but on_redo is not executed. Retry is required", K(user_data), KPC(tablet));
+          }
         } else if (index > 0) {
           if (user_data.transfer_scn_ != start_scn) {
             ret = OB_EAGAIN;
@@ -2385,7 +2387,9 @@ int ObTransferHandler::check_and_kill_tx_(
     } else if (OB_FAIL(get_ls_active_trans_count_(ls_id, active_trans_count))) {
       LOG_WARN("failed to get src ls has active trans", K(ret));
     } else if (0 != active_trans_count) {
-      LOG_INFO("still has active trans", K(tenant_id), K(ls_id), K(active_trans_count));
+      if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+        LOG_INFO("still has active trans", K(tenant_id), K(ls_id), K(active_trans_count));
+      }
       if (with_trans_kill && OB_FAIL(kill_tx_(tenant_id, ls_id, gts_seq_))) {
         if (OB_EAGAIN == ret) {
           ret = OB_SUCCESS;
@@ -2758,7 +2762,9 @@ int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
      while (OB_SUCC(ret)) {
        SCN weak_read_ts = ls_->get_ls_wrs_handler()->get_ls_weak_read_ts();
        if (weak_read_ts <= transfer_dest_prepare_scn) {
-         LOG_WARN("wait src_ls weak_read_ts advance", K(task_info.task_id_), K(weak_read_ts), K(transfer_dest_prepare_scn));
+         if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+           LOG_WARN("wait src_ls weak_read_ts advance", K(task_info.task_id_), K(weak_read_ts), K(transfer_dest_prepare_scn));
+         }
          if (ObClockGenerator::getClock() - start_time > timeout) {
            ret = OB_TIMEOUT;
            FLOG_WARN("failed to wait src_ls advance transfer_dest_prepare_scn", KR(ret), K(task_info), K(transfer_dest_prepare_scn));
@@ -3737,6 +3743,8 @@ int ObTransferHandler::wait_parallel_tablet_info_dag_finish_(
   const int64_t start_ts = ObTimeUtil::current_time();
   bool is_exist = true;
   bool unused_is_emergency = false;
+  bool cancel_succ = false;
+  bool stop_result_set = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -3750,17 +3758,50 @@ int ObTransferHandler::wait_parallel_tablet_info_dag_finish_(
   } else if (OB_FAIL(fake_dag.init(task_info.src_ls_id_, &ctx_, &timeout_ctx))) {
     LOG_WARN("failed to create fake dag", K(ret), K(task_info));
   } else {
+    // A running task does not call dag_yield() while iterating tablets. Mark the
+    // shared context failed as well, so it can observe cancellation between two
+    // tablets instead of relying only on the scheduler's stop flag.
+    ctx_.set_result(OB_CANCELED);
     while (true) {
-      if (OB_FAIL(scheduler->cancel_dag(&fake_dag, force_cancel))) {
-        LOG_WARN("failed to cancel dag", K(ret), K(task_info));
+      if (!stop_result_set && timeout_ctx.is_timeouted()) {
+        stop_result_set = true;
+        ctx_.set_result(OB_TIMEOUT);
+        if (OB_SUCC(ret)) {
+          ret = OB_TIMEOUT;
+        }
+        LOG_WARN("wait parallel tablet info dag finish timeout", K(ret), K(task_info));
+      } else if (!stop_result_set && ls_->is_stopped()) {
+        stop_result_set = true;
+        ctx_.set_result(OB_NOT_RUNNING);
+        if (OB_SUCC(ret)) {
+          ret = OB_NOT_RUNNING;
+        }
+        LOG_WARN("ls is not running, stop waiting parallel tablet info dag", K(ret), K(task_info));
       }
-      //overwrite ret
-      if (OB_FAIL(scheduler->check_dag_exist(&fake_dag, is_exist, unused_is_emergency))) {
-        LOG_WARN("failed to check dag exist", K(ret), K(fake_dag));
+
+      if (!cancel_succ) {
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(&fake_dag, force_cancel))) {
+          LOG_WARN("failed to cancel dag", K(tmp_ret), K(task_info));
+          if (OB_SUCC(ret)) {
+            ret = tmp_ret;
+          }
+        } else {
+          cancel_succ = true;
+        }
+      }
+      if (OB_SUCCESS != (tmp_ret = scheduler->check_dag_exist(
+          &fake_dag, is_exist, unused_is_emergency))) {
+        LOG_WARN("failed to check dag exist", K(tmp_ret), K(fake_dag));
+        if (OB_SUCC(ret)) {
+          ret = tmp_ret;
+        }
       }
 
       if (FALSE_IT(child_task_num = ctx_.get_child_task_num())) {
-      } else if (0 == child_task_num && !is_exist) {
+      } else if (0 == child_task_num) {
+        // Child tasks own the references to ctx_ and timeout_ctx. Once their
+        // destructors have all run, the caller can safely reuse ctx_ even if
+        // checking the scheduler state failed transiently.
         break;
       }
 
@@ -3799,7 +3840,12 @@ void ObTransferHandler::finish_parallel_tablet_info_dag_(
     LOG_WARN("failed to wait parallel tablet info dag finish", K(ret), K(task_info));
   }
 
-  ctx_.reuse();
+  if (0 == ctx_.get_child_task_num()) {
+    ctx_.reuse();
+  } else {
+    LOG_ERROR("parallel tablet info tasks are still referencing ctx, skip reuse",
+        K(ret), "child_task_num", ctx_.get_child_task_num(), K(task_info));
+  }
 }
 
 }

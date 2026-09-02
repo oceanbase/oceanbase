@@ -1236,6 +1236,15 @@ int ObTransferBuildTabletInfoHelper::loop_to_build_tablet_infos(
       if (timeout_ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
         LOG_WARN("build tablet infos already timeout", K(ret));
+      } else if (ctx.is_failed()) {
+        ret = ctx.get_result();
+        if (OB_SUCC(ret)) {
+          ret = OB_CANCELED;
+        }
+        LOG_WARN("build tablet infos has been canceled", K(ret));
+      } else if (ls->is_stopped()) {
+        ret = OB_NOT_RUNNING;
+        LOG_WARN("ls is not running, stop building tablet infos", K(ret), KPC(ls));
       } else if (OB_FAIL(ctx.get_next_tablet_info(tablet_info))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;

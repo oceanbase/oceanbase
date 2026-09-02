@@ -8,6 +8,7 @@
 
 #include "lib/thread/ob_work_queue.h"
 #include "lib/thread/ob_dynamic_thread_pool.h"
+#include "lib/atomic/ob_atomic.h"
 #include "share/ob_common_rpc_proxy.h" // ObCommonRpcProxy
 #include "share/ob_srv_rpc_proxy.h" // ObPartitionServiceRpcProxy
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
@@ -91,6 +92,26 @@ struct ObPhysicalCopyCtx final
   ~ObPhysicalCopyCtx();
   bool is_valid() const;
   void reset();
+  OB_INLINE void reset_macro_block_count()
+  {
+    ATOMIC_SET(&total_macro_count_, 0);
+    ATOMIC_SET(&reuse_macro_count_, 0);
+  }
+  OB_INLINE void add_macro_block_count(
+      const int64_t total_macro_count,
+      const int64_t reuse_macro_count)
+  {
+    ATOMIC_FAA(&total_macro_count_, total_macro_count);
+    ATOMIC_FAA(&reuse_macro_count_, reuse_macro_count);
+  }
+  OB_INLINE int64_t get_total_macro_count() const
+  {
+    return ATOMIC_LOAD(&total_macro_count_);
+  }
+  OB_INLINE int64_t get_reuse_macro_count() const
+  {
+    return ATOMIC_LOAD(&reuse_macro_count_);
+  }
 
   TO_STRING_KV(K_(tenant_id),
                K_(ls_id),
@@ -105,17 +126,15 @@ struct ObPhysicalCopyCtx final
                KP_(ha_dag),
                KP_(sstable_index_builder),
                KP_(restore_macro_block_id_mgr),
-               K_(need_sort_macro_meta),
                K_(need_check_seq),
                K_(ls_rebuild_seq),
                K_(table_key),
                KP_(macro_block_reuse_mgr),
-               K_(total_macro_count),
-               K_(reuse_macro_count),
+               "total_macro_count", get_total_macro_count(),
+               "reuse_macro_count", get_reuse_macro_count(),
                KPC_(extra_info));
 
 
-  common::SpinRWLock lock_;
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -129,13 +148,12 @@ struct ObPhysicalCopyCtx final
   ObStorageHADag *ha_dag_;
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
-  bool need_sort_macro_meta_; // not use
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   ObITable::TableKey table_key_;
   ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
-  int total_macro_count_; // total macro block count of single sstable
-  int reuse_macro_count_; // reuse macro block count of single sstable
+  int64_t total_macro_count_; // total macro block count of single sstable
+  int64_t reuse_macro_count_; // reuse macro block count of single sstable
   ObCopyTabletRecordExtraInfo *extra_info_;
 
 private:

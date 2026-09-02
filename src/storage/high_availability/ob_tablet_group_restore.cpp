@@ -2151,7 +2151,6 @@ int ObTabletRestoreTask::process()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool is_exist = false;
   ObTablet *tablet = nullptr;
   ObTabletRestoreStatus::STATUS current_status = ObTabletRestoreStatus::RESTORE_STATUS_MAX;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
@@ -2184,7 +2183,7 @@ int ObTabletRestoreTask::process()
     LOG_WARN("failed to build copy table key info", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(build_copy_sstable_info_mgr_())) {
     LOG_WARN("failed to build copy sstable info mgr", K(ret), KPC(tablet_restore_ctx_));
-  } else if (OB_FAIL(OB_FAIL(tablet_restore_ctx_->get_copy_tablet_status(status)))) {
+  } else if (OB_FAIL(tablet_restore_ctx_->get_copy_tablet_status(status))) {
     LOG_WARN("failed to get copy tablet status", K(ret), KPC(tablet_restore_ctx_));
   } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == status) {
     FLOG_INFO("copy tablet is not exist, skip copy it", KPC(tablet_restore_ctx_));
@@ -2401,7 +2400,6 @@ int ObTabletRestoreTask::generate_physical_restore_task_(
   } else if (FALSE_IT(init_param.restore_base_info_ = tablet_restore_ctx_->restore_base_info_)) {
   } else if (FALSE_IT(init_param.meta_index_store_ = tablet_restore_ctx_->meta_index_store_)) {
   } else if (FALSE_IT(init_param.second_meta_index_store_ = tablet_restore_ctx_->second_meta_index_store_)) {
-  } else if (FALSE_IT(init_param.need_sort_macro_meta_ = !copy_table_key.is_normal_cg_sstable())) {
   } else if (FALSE_IT(init_param.need_check_seq_ = tablet_restore_ctx_->need_check_seq_)) {
   } else if (FALSE_IT(init_param.ls_rebuild_seq_ = tablet_restore_ctx_->ls_rebuild_seq_)) {
   } else if (FALSE_IT(init_param.extra_info_ = &tablet_restore_ctx_->extra_info_)) {
@@ -2634,7 +2632,6 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
 {
   int ret = OB_SUCCESS;
   tablet_copy_finish_task = nullptr;
-  observer::ObIMetaReport *reporter = GCTX.ob_service_;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
 
   if (!is_inited_) {
@@ -2650,7 +2647,6 @@ int ObTabletRestoreTask::generate_tablet_copy_finish_task_(
     param.ls_ = ls_;
     param.tablet_id_ = tablet_restore_ctx_->tablet_id_;
     param.copy_tablet_ctx_ = tablet_restore_ctx_;
-    param.reporter_ = reporter;
     param.restore_action_ = tablet_restore_ctx_->action_;
     param.src_tablet_meta_ = src_tablet_meta;
     param.is_leader_restore_ = tablet_restore_ctx_->is_leader_;
@@ -2910,7 +2906,6 @@ int ObTabletRestoreTask::generate_mds_restore_tasks_(
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
-  bool is_remote_sstable_exist = true;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;

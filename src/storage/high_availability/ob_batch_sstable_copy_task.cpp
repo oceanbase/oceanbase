@@ -178,7 +178,6 @@ void ObBatchSSTableCopyTask::fill_copy_ctx_from_param_(
   copy_ctx.is_leader_restore_ = false;
   copy_ctx.restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
   copy_ctx.ha_dag_ = static_cast<ObStorageHADag *>(dag);
-  copy_ctx.need_sort_macro_meta_ = false;
   copy_ctx.need_check_seq_ = true;
   copy_ctx.ls_rebuild_seq_ = param.src_ls_rebuild_seq_;
   copy_ctx.extra_info_ = param.extra_info_;
@@ -375,15 +374,15 @@ int ObBatchSSTableCopyTask::process()
                      param_.tablet_copy_finish_task_->add_sstable(table_handle))) {
         LOG_WARN("failed to add batch-copied sstable", K(ret), K(key));
       } else if (OB_FAIL(copy_ctx.extra_info_->update_after_sstable_copy(
-                     copy_ctx.table_key_, copy_ctx.total_macro_count_,
-                     copy_ctx.reuse_macro_count_,
+                     copy_ctx.table_key_, copy_ctx.get_total_macro_count(),
+                     copy_ctx.get_reuse_macro_count(),
                      copy_ctx.macro_block_reuse_mgr_))) {
         LOG_WARN("failed to update batch-copied sstable extra info",
             K(ret), K(key));
       }
 #ifdef ERRSIM
       if (OB_SUCC(ret)) {
-        batch_reuse_macro_count += copy_ctx.reuse_macro_count_;
+        batch_reuse_macro_count += copy_ctx.get_reuse_macro_count();
       }
 #endif
     }

@@ -155,51 +155,6 @@ bool ObCopyMacroBlockReaderInitParam::is_valid() const
   return bool_ret;
 }
 
-void ObCopyMacroBlockReaderInitParam::reset()
-{
-  tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  table_key_.reset();
-  copy_macro_range_info_ = nullptr;
-  src_info_.reset();
-  is_leader_restore_ = false;
-  restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
-  ha_svc_ctx_.reset();
-  restore_base_info_ = nullptr;
-  meta_index_store_ = nullptr;
-  second_meta_index_store_ = nullptr;
-  restore_macro_block_id_mgr_ = nullptr;
-  need_check_seq_ = false;
-  ls_rebuild_seq_ = -1;
-  backfill_tx_scn_.reset();
-}
-
-int ObCopyMacroBlockReaderInitParam::assign(const ObCopyMacroBlockReaderInitParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("assign copy macro block reader init param get invalid argument", K(ret), K(param));
-  } else {
-    tenant_id_ = param.tenant_id_;
-    ls_id_ = param.ls_id_;
-    table_key_ = param.table_key_;
-    src_info_ = param.src_info_;
-    is_leader_restore_ = param.is_leader_restore_;
-    restore_action_ = param.restore_action_;
-    ha_svc_ctx_ = param.ha_svc_ctx_;
-    restore_base_info_ = param.restore_base_info_;
-    meta_index_store_ = param.meta_index_store_;
-    second_meta_index_store_ = param.second_meta_index_store_;
-    restore_macro_block_id_mgr_ = param.restore_macro_block_id_mgr_;
-    copy_macro_range_info_ = param.copy_macro_range_info_;
-    need_check_seq_ = param.need_check_seq_;
-    ls_rebuild_seq_ = param.ls_rebuild_seq_;
-    backfill_tx_scn_ = param.backfill_tx_scn_;
-  }
-  return ret;
-}
-
 /******************ObCopyMacroBlockObReader*********************/
 ObCopyMacroBlockObReader::ObCopyMacroBlockObReader()
   : is_inited_(false),
@@ -4699,24 +4654,6 @@ ObCopySSTableMacroIdInfoReaderInitParam::~ObCopySSTableMacroIdInfoReaderInitPara
 {
 }
 
-void ObCopySSTableMacroIdInfoReaderInitParam::reset()
-{
-  tenant_id_ = OB_INVALID_ID;
-  ls_id_.reset();
-  table_key_.reset();
-  src_info_.reset();
-  is_leader_restore_ = false;
-  restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
-  ha_svc_ctx_.reset();
-  restore_base_info_ = nullptr;
-  meta_index_store_ = nullptr;
-  second_meta_index_store_ = nullptr;
-  restore_macro_block_id_mgr_ = nullptr;
-  need_check_seq_ = false;
-  ls_rebuild_seq_ = -1;
-  filled_tx_scn_.reset();
-}
-
 bool ObCopySSTableMacroIdInfoReaderInitParam::is_valid() const
 {
   bool bool_ret = false;
@@ -4736,31 +4673,6 @@ bool ObCopySSTableMacroIdInfoReaderInitParam::is_valid() const
      }
   }
   return bool_ret;
-}
-
-int ObCopySSTableMacroIdInfoReaderInitParam::assign(const ObCopySSTableMacroIdInfoReaderInitParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(param));
-  } else {
-    tenant_id_ = param.tenant_id_;
-    ls_id_ = param.ls_id_;
-    table_key_ = param.table_key_;
-    src_info_ = param.src_info_;
-    is_leader_restore_ = param.is_leader_restore_;
-    restore_action_ = param.restore_action_;
-    ha_svc_ctx_ = param.ha_svc_ctx_;
-    restore_base_info_ = param.restore_base_info_;
-    meta_index_store_ = param.meta_index_store_;
-    second_meta_index_store_ = param.second_meta_index_store_;
-    restore_macro_block_id_mgr_ = param.restore_macro_block_id_mgr_;
-    need_check_seq_ = param.need_check_seq_;
-    ls_rebuild_seq_ = param.ls_rebuild_seq_;
-    filled_tx_scn_ = param.filled_tx_scn_;
-  }
-  return ret;
 }
 
 ObCopySSTableMacroIdInfoObReader::ObCopySSTableMacroIdInfoObReader()

@@ -3184,7 +3184,6 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
     } else if (FALSE_IT(init_param.src_info_ = src_info)) {
     } else if (FALSE_IT(init_param.tablet_copy_finish_task_ = tablet_copy_finish_task)) {
     } else if (FALSE_IT(init_param.ls_ = ls)) {
-    } else if (FALSE_IT(init_param.need_sort_macro_meta_ = false)) {
     } else if (FALSE_IT(init_param.need_check_seq_ = true)) {
     } else if (FALSE_IT(init_param.ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_)) {
     } else if (FALSE_IT(init_param.extra_info_ = &copy_tablet_ctx_->extra_info_)) {
@@ -3259,7 +3258,6 @@ int ObTabletMigrationTask::generate_physical_copy_task_(
 int ObTabletMigrationTask::build_copy_table_key_info_()
 {
   int ret = OB_SUCCESS;
-  common::ObArray<ObITable::TableKey> table_key_array;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet migration task do not init", K(ret));
@@ -3374,7 +3372,6 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
   tablet_copy_finish_task = nullptr;
   ObLS *ls = nullptr;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
-  observer::ObIMetaReport *reporter = GCTX.ob_service_;
   const ObTabletRestoreAction::ACTION restore_action = ObTabletRestoreAction::RESTORE_NONE;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
 
@@ -3395,7 +3392,6 @@ int ObTabletMigrationTask::generate_tablet_copy_finish_task_(
     param.ls_ = ls;
     param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
     param.copy_tablet_ctx_ = copy_tablet_ctx_;
-    param.reporter_ = reporter;
     param.restore_action_ = restore_action;
     param.src_tablet_meta_ = src_tablet_meta;
     param.is_leader_restore_ = false;

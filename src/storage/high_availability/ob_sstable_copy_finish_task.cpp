@@ -41,10 +41,8 @@ ObPhysicalCopyTaskInitParam::ObPhysicalCopyTaskInitParam()
     restore_base_info_(nullptr),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
-    need_sort_macro_meta_(true),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
-    macro_block_reuse_mgr_(nullptr),
     extra_info_(nullptr)
 {
 }
@@ -95,7 +93,6 @@ void ObPhysicalCopyTaskInitParam::reset()
   restore_base_info_ = nullptr;
   meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
-  need_sort_macro_meta_ = true;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
   extra_info_ = nullptr;
@@ -413,7 +410,6 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
     copy_ctx_.ha_dag_ = ha_dag;
     copy_ctx_.sstable_index_builder_ = &sstable_index_builder_;
     copy_ctx_.restore_macro_block_id_mgr_ = restore_macro_block_id_mgr_;
-    copy_ctx_.need_sort_macro_meta_ = init_param.need_sort_macro_meta_;
     copy_ctx_.need_check_seq_ = init_param.need_check_seq_;
     copy_ctx_.ls_rebuild_seq_ = init_param.ls_rebuild_seq_;
     copy_ctx_.table_key_ = init_param.sstable_param_->table_key_;
@@ -763,8 +759,8 @@ int ObSSTableCopyFinishTask::update_copy_tablet_record_extra_info_()
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("copy ctx extra info is NULL", K(ret), K(copy_ctx_));
   } else if (OB_FAIL(copy_ctx_.extra_info_->update_after_sstable_copy(
-      copy_ctx_.table_key_, copy_ctx_.total_macro_count_,
-      copy_ctx_.reuse_macro_count_, copy_ctx_.macro_block_reuse_mgr_))) {
+      copy_ctx_.table_key_, copy_ctx_.get_total_macro_count(),
+      copy_ctx_.get_reuse_macro_count(), copy_ctx_.macro_block_reuse_mgr_))) {
     LOG_WARN("failed to update copy tablet record extra info", K(ret), K(copy_ctx_));
   }
 

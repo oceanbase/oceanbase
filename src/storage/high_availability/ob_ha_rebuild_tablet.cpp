@@ -1654,7 +1654,6 @@ int ObTabletRebuildMajorTask::generate_tablet_copy_finish_task_(
   tablet_copy_finish_task = nullptr;
   ObLS *ls = nullptr;
   ObTabletRebuildMajorDag *tablet_rebuild_dag = nullptr;
-  observer::ObIMetaReport *reporter = GCTX.ob_service_;
   const ObTabletRestoreAction::ACTION restore_action = ObTabletRestoreAction::RESTORE_NONE;
   const ObMigrationTabletParam *src_tablet_meta = nullptr;
   ObTabletCopyFinishTaskParam param;
@@ -1671,7 +1670,6 @@ int ObTabletRebuildMajorTask::generate_tablet_copy_finish_task_(
     param.ls_ = ls;
     param.tablet_id_ = copy_tablet_ctx_->tablet_id_;
     param.copy_tablet_ctx_ = copy_tablet_ctx_;
-    param.reporter_ = reporter;
     param.restore_action_ = restore_action;
     param.src_tablet_meta_ = &copy_tablet_ctx_->copy_header_.tablet_meta_;
     param.is_only_replace_major_ = true;

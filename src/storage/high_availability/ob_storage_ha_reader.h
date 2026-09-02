@@ -71,9 +71,7 @@ struct ObCopyMacroBlockReaderInitParam final
 {
   ObCopyMacroBlockReaderInitParam();
   ~ObCopyMacroBlockReaderInitParam();
-  void reset();
   bool is_valid() const;
-  int assign(const ObCopyMacroBlockReaderInitParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), KPC_(copy_macro_range_info), K_(src_info),
       K_(is_leader_restore), K_(restore_action), K_(ha_svc_ctx),
@@ -954,9 +952,7 @@ struct ObCopySSTableMacroIdInfoReaderInitParam final
 {
   ObCopySSTableMacroIdInfoReaderInitParam();
   ~ObCopySSTableMacroIdInfoReaderInitParam();
-  void reset();
   bool is_valid() const;
-  int assign(const ObCopySSTableMacroIdInfoReaderInitParam &param);
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key),
       K_(src_info), K_(is_leader_restore), K_(restore_action), K_(ha_svc_ctx),
       KP_(restore_base_info), KP_(meta_index_store), KP_(second_meta_index_store),

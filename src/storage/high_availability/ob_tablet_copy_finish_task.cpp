@@ -20,7 +20,6 @@ namespace storage
 ObTabletCopyFinishTaskParam::ObTabletCopyFinishTaskParam()
   : ls_(nullptr),
     tablet_id_(),
-    reporter_(nullptr),
     restore_action_(ObTabletRestoreAction::MAX),
     is_leader_restore_(false),
     src_tablet_meta_(nullptr),
@@ -32,7 +31,7 @@ ObTabletCopyFinishTaskParam::ObTabletCopyFinishTaskParam()
 
 bool ObTabletCopyFinishTaskParam::is_valid() const
 {
-  return OB_NOT_NULL(ls_) && tablet_id_.is_valid() && OB_NOT_NULL(reporter_) && OB_NOT_NULL(copy_tablet_ctx_)
+  return OB_NOT_NULL(ls_) && tablet_id_.is_valid() && OB_NOT_NULL(copy_tablet_ctx_)
       && ObTabletRestoreAction::is_valid(restore_action_);
 }
 
@@ -40,7 +39,6 @@ void ObTabletCopyFinishTaskParam::reset()
 {
   ls_ = nullptr;
   tablet_id_.reset();
-  reporter_ = nullptr;
   restore_action_ = ObTabletRestoreAction::MAX;
   is_leader_restore_ = false;
   src_tablet_meta_ = nullptr;

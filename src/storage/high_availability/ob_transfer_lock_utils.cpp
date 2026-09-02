@@ -21,6 +21,46 @@ namespace storage {
 ERRSIM_POINT_DEF(EN_START_UNLOCK_CONFIG_CHANGE_SUCC_AND_REMOVE_INNER_TABLE_FAILED);
 ERRSIM_POINT_DEF(EN_DOING_UNLOCK_CONFIG_CHANGE_SUCC_AND_REMOVE_INNER_TABLE_FAILED);
 
+namespace {
+
+class ObTransferStorageRpcGuard final
+{
+public:
+  ObTransferStorageRpcGuard()
+    : storage_svr_rpc_proxy_(),
+      storage_rpc_()
+  {
+  }
+
+  ~ObTransferStorageRpcGuard()
+  {
+    storage_svr_rpc_proxy_.destroy();
+    storage_rpc_.destroy();
+  }
+
+  int init()
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(storage_svr_rpc_proxy_.init(
+        GCTX.net_frame_->get_req_transport(), GCTX.self_addr()))) {
+      LOG_WARN("failed to init storage svr rpc proxy", K(ret));
+    } else if (OB_FAIL(storage_rpc_.init(
+        &storage_svr_rpc_proxy_, GCTX.self_addr(), GCTX.rs_rpc_proxy_))) {
+      STORAGE_LOG(WARN, "fail to init partition service rpc", K(ret));
+    }
+    return ret;
+  }
+
+  ObStorageRpc &get_rpc() { return storage_rpc_; }
+
+private:
+  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy_;
+  ObStorageRpc storage_rpc_;
+  DISALLOW_COPY_AND_ASSIGN(ObTransferStorageRpcGuard);
+};
+
+}  // namespace
+
 static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
@@ -267,21 +307,15 @@ int ObMemberListLockUtils::try_lock_config_change_(
     const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
-  bool ls_exist = false;
-  ObLSService *ls_svr = NULL;
-  const uint64_t tenant_id = lock_info.tenant_id_;
-  const share::ObLSID &ls_id = lock_info.ls_id_;
-  const int64_t lock_owner = lock_info.lock_owner_;
-  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy;
-  storage::ObStorageRpc storage_rpc;
-  if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
+  ObTransferStorageRpcGuard storage_rpc_guard;
+  if (OB_FAIL(storage_rpc_guard.init())) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(inner_try_lock_config_change_(lock_info, lock_timeout, group_id, storage_rpc))) {
+  } else if (OB_FAIL(inner_try_lock_config_change_(
+      lock_info, lock_timeout, group_id, storage_rpc_guard.get_rpc()))) {
     LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("try lock config change fallback", K(lock_info), K(lock_timeout));
   }
-  destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("TRANSFER_LOCK", "LOCK_CONFIG_CHANGE",
       "tenant_id", lock_info.tenant_id_,
@@ -317,20 +351,15 @@ int ObMemberListLockUtils::get_config_change_lock_stat_(
     const ObTransferTaskLockInfo &lock_info, const int32_t group_id, int64_t &palf_lock_owner, bool &is_locked)
 {
   int ret = OB_SUCCESS;
-  bool ls_exist = false;
-  ObLSService *ls_svr = NULL;
-  const uint64_t tenant_id = lock_info.tenant_id_;
-  const share::ObLSID &ls_id = lock_info.ls_id_;
-  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy;
-  storage::ObStorageRpc storage_rpc;
-  if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
+  ObTransferStorageRpcGuard storage_rpc_guard;
+  if (OB_FAIL(storage_rpc_guard.init())) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(get_config_change_lock_stat_fallback_(lock_info, group_id, palf_lock_owner, is_locked, storage_rpc))) {
+  } else if (OB_FAIL(get_config_change_lock_stat_fallback_(
+      lock_info, group_id, palf_lock_owner, is_locked, storage_rpc_guard.get_rpc()))) {
     LOG_WARN("failed to get lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("get lock config change stat fallback", K(lock_info), K(palf_lock_owner), K(is_locked));
   }
-  destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
 #ifdef ERRSIM
   SERVER_EVENT_ADD("TRANSFER_LOCK", "GET_CONFIG_CHANGE_LOCK_STAT",
       "tenant_id", lock_info.tenant_id_,
@@ -368,21 +397,15 @@ int ObMemberListLockUtils::unlock_config_change_(
     const ObTransferTaskLockInfo &lock_info, const int64_t lock_timeout, const int32_t group_id)
 {
   int ret = OB_SUCCESS;
-  bool ls_exist = false;
-  ObLSService *ls_svr = NULL;
-  const uint64_t tenant_id = lock_info.tenant_id_;
-  const share::ObLSID &ls_id = lock_info.ls_id_;
-  const int64_t lock_owner = lock_info.lock_owner_;
-  obrpc::ObStorageRpcProxy storage_svr_rpc_proxy;
-  storage::ObStorageRpc storage_rpc;
-  if (OB_FAIL(init_storage_rpc_(storage_svr_rpc_proxy, storage_rpc))) {
+  ObTransferStorageRpcGuard storage_rpc_guard;
+  if (OB_FAIL(storage_rpc_guard.init())) {
     LOG_WARN("failed to init storage rpc", K(ret));
-  } else if (OB_FAIL(unlock_config_change_fallback_(lock_info, lock_timeout, group_id, storage_rpc))) {
+  } else if (OB_FAIL(unlock_config_change_fallback_(
+      lock_info, lock_timeout, group_id, storage_rpc_guard.get_rpc()))) {
     LOG_WARN("failed to try lock config change fallback", K(ret), K(lock_info));
   } else {
     LOG_INFO("unlock lock config change fallback", K(lock_info), K(lock_timeout));
   }
-  destory_storage_rpc_(storage_svr_rpc_proxy, storage_rpc);
   if (OB_SUCC(ret)) {
     SERVER_EVENT_ADD("TRANSFER_LOCK", "UNLOCK_CONFIG_CHANGE",
         "tenant_id", lock_info.tenant_id_,
@@ -614,28 +637,6 @@ int ObMemberListLockUtils::relock_before_unlock_(const ObTransferTaskLockInfo &l
                     "result", ret);
   }
   return ret;
-}
-
-// TODO(yangyi.yyy): change the use of storage rpc later
-int ObMemberListLockUtils::init_storage_rpc_(
-    obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy,
-    storage::ObStorageRpc &storage_rpc)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(storage_svr_rpc_proxy.init(GCTX.net_frame_->get_req_transport(), GCTX.self_addr()))) {
-    LOG_WARN("failed to init storage svr rpc proxy", K(ret));
-  } else if (OB_FAIL(storage_rpc.init(&storage_svr_rpc_proxy, GCTX.self_addr(), GCTX.rs_rpc_proxy_))) {
-    STORAGE_LOG(WARN, "fail to init partition service rpc", K(ret));
-  }
-  return ret;
-}
-
-void ObMemberListLockUtils::destory_storage_rpc_(
-    obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy,
-    storage::ObStorageRpc &storage_rpc)
-{
-  storage_svr_rpc_proxy.destroy();
-  storage_rpc.destroy();
 }
 
 int ObMemberListLockUtils::unlock_for_ob_admin(

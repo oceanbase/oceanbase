@@ -514,8 +514,7 @@ int ObSSTableCopyOps::copy_one_sstable(
                K(ret), K(sstable_param), KPC(sstable_macro_range_info));
     } else {
       copy_ctx.table_key_ = sstable_param.table_key_;
-      copy_ctx.total_macro_count_ = 0;
-      copy_ctx.reuse_macro_count_ = 0;
+      copy_ctx.reset_macro_block_count();
       copy_ctx.sstable_index_builder_ = nullptr;
 
       const int64_t t_start = ObTimeUtility::current_time();
@@ -560,8 +559,8 @@ int ObSSTableCopyOps::copy_one_sstable(
         // Keep the legacy finish-task accounting semantics: include any
         // blocks already copied even when this range subsequently reports an
         // error. In particular, OB_TABLET_NOT_EXIST remains unchanged in ret.
-        copy_ctx.total_macro_count_ += copied_ctx.get_macro_block_count();
-        copy_ctx.reuse_macro_count_ += copied_ctx.use_old_macro_block_count_;
+        copy_ctx.add_macro_block_count(
+            copied_ctx.get_macro_block_count(), copied_ctx.use_old_macro_block_count_);
       }
       t_after_copy = ObTimeUtility::current_time();
 

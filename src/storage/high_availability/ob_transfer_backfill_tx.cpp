@@ -399,6 +399,8 @@ int ObTransferWorkerMgr::check_task_exist_(
 int ObTransferWorkerMgr::cancel_dag_net()
 {
   int ret = OB_SUCCESS;
+  const int64_t cancel_timeout_us = 60 * 1000 * 1000L;
+  const int64_t check_interval_us = 10 * 1000L;
   ObTenantDagScheduler *scheduler = nullptr;
   bool is_exist = false;
   if (IS_NOT_INIT) {
@@ -417,14 +419,18 @@ int ObTransferWorkerMgr::cancel_dag_net()
     }
     if (OB_FAIL(ret)) {
     } else {
-      int64_t start_ts = ObTimeUtil::current_time();
+      const int64_t start_ts = ObTimeUtil::current_time();
       do {
         if (OB_FAIL(check_task_exist_(task_id_, is_exist))) {
           LOG_WARN("fail to check task exist", K(ret), K_(task_id));
-        } else if (is_exist && REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        } else if (!is_exist) {
+          // dag net has been removed
+        } else if (ObTimeUtil::current_time() - start_ts >= cancel_timeout_us) {
           ret = OB_EAGAIN;
           LOG_WARN("cancel dag task cost too much time", K(ret), K_(task_id),
               "cost_time", ObTimeUtil::current_time() - start_ts);
+        } else {
+          ob_usleep(check_interval_us);
         }
       } while (is_exist && OB_SUCC(ret));
     }

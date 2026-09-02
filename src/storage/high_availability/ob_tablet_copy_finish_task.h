@@ -38,7 +38,6 @@ struct ObTabletCopyFinishTaskParam final
 
   ObLS *ls_;
   common::ObTabletID tablet_id_;
-  observer::ObIMetaReport *reporter_;
   ObTabletRestoreAction::ACTION restore_action_;
   bool is_leader_restore_;
   const ObMigrationTabletParam *src_tablet_meta_;

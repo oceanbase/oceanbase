@@ -51,10 +51,8 @@ struct ObPhysicalCopyTaskInitParam final
                KP_(restore_base_info),
                KP_(meta_index_store),
                KP_(second_meta_index_store),
-               K_(need_sort_macro_meta),
                K_(need_check_seq),
                K_(ls_rebuild_seq),
-               KP_(macro_block_reuse_mgr),
                KPC_(extra_info));
 
 
@@ -75,10 +73,8 @@ struct ObPhysicalCopyTaskInitParam final
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
-  bool need_sort_macro_meta_; // not use
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
-  ObMacroBlockReuseMgr *macro_block_reuse_mgr_;
   ObCopyTabletRecordExtraInfo *extra_info_;
 
 private:

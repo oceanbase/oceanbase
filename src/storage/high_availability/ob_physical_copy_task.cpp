@@ -121,8 +121,8 @@ int ObPhysicalCopyTask::process()
             K(copied_ctx.get_macro_block_count()), K(copied_ctx));
       }
     }
-    copy_ctx_->total_macro_count_ += copied_ctx.get_macro_block_count();
-    copy_ctx_->reuse_macro_count_ += copied_ctx.use_old_macro_block_count_;
+    copy_ctx_->add_macro_block_count(
+        copied_ctx.get_macro_block_count(), copied_ctx.use_old_macro_block_count_);
     LOG_INFO("physical copy task finish", K(ret), KPC(copy_macro_range_id_info_), KPC(copy_ctx_));
   }
 

@@ -7,6 +7,7 @@
 #include "ob_storage_restore_struct.h"
 #include "storage/restore/ob_ls_restore_args.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "lib/hash/ob_hashmap.h"
 #include "storage/backup/ob_backup_factory.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 namespace oceanbase
@@ -889,27 +890,63 @@ int ObRestoreMacroBlockIdMgr::sort_block_id_array(
     common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(block_id_array_.count() != logic_id_list.count())) {
-    ret = OB_ERR_UNEXPECTED;
-  }
-
+  const int64_t block_count = block_id_array_.count();
+  typedef common::hash::ObHashMap<blocksstable::ObLogicMacroBlockId, int64_t> LogicIdIndexMap;
+  LogicIdIndexMap logic_id_index_map;
   ObSEArray<ObRestoreMacroBlockId, 16> tmp_sort_array;
-  for (int64_t i = 0; OB_SUCC(ret) && i < logic_id_list.count(); ++i) {
-    const blocksstable::ObLogicMacroBlockId &cur_id = logic_id_list.at(i);
-    for (int64_t j = 0; OB_SUCC(ret) && j < block_id_array_.count(); ++j) {
-      if (cur_id != block_id_array_.at(j).logic_block_id_) {
-        continue;
-      } else if (OB_FAIL(tmp_sort_array.push_back(block_id_array_.at(j)))) {
-        LOG_WARN("failed to add block id", K(ret), K(j));
-      } else {
-        break;
+
+  if (OB_UNLIKELY(block_count != logic_id_list.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("macro block id count does not match", K(ret), K(block_count),
+        "logic_id_count", logic_id_list.count());
+  } else if (0 == block_count) {
+    block_id_array_.reuse();
+  } else if (OB_FAIL(logic_id_index_map.create(
+      block_count, ObMemAttr(MTL_ID(), "RstMacroIdMap")))) {
+    LOG_WARN("failed to create logic id index map", K(ret), K(block_count));
+  } else if (OB_FAIL(tmp_sort_array.reserve(block_count))) {
+    LOG_WARN("failed to reserve sorted macro block id array", K(ret), K(block_count));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < block_count; ++i) {
+      const ObRestoreMacroBlockId &block_id = block_id_array_.at(i);
+      if (OB_UNLIKELY(!block_id.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid restore macro block id", K(ret), K(i), K(block_id));
+      } else if (OB_FAIL(logic_id_index_map.set_refactored(block_id.logic_block_id_, i))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("duplicate restore logic macro block id", K(ret), K(i), K(block_id));
+        } else {
+          LOG_WARN("failed to add restore logic macro block id", K(ret), K(i), K(block_id));
+        }
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    block_id_array_.reuse();
-    if (OB_FAIL(block_id_array_.assign(tmp_sort_array))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < logic_id_list.count(); ++i) {
+      const blocksstable::ObLogicMacroBlockId &logic_id = logic_id_list.at(i);
+      int64_t block_index = -1;
+      if (OB_FAIL(logic_id_index_map.get_refactored(logic_id, block_index))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("logic macro block id is missing or duplicated", K(ret), K(i), K(logic_id));
+        } else {
+          LOG_WARN("failed to find logic macro block id", K(ret), K(i), K(logic_id));
+        }
+      } else if (OB_UNLIKELY(block_index < 0 || block_index >= block_count)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid restore macro block index", K(ret), K(i), K(block_index), K(block_count));
+      } else if (OB_FAIL(tmp_sort_array.push_back(block_id_array_.at(block_index)))) {
+        LOG_WARN("failed to add sorted macro block id", K(ret), K(i), K(block_index));
+      } else if (OB_FAIL(logic_id_index_map.erase_refactored(logic_id))) {
+        LOG_WARN("failed to erase matched logic macro block id", K(ret), K(i), K(logic_id));
+      }
+    }
+
+    if (OB_SUCC(ret) && (!logic_id_index_map.empty() || tmp_sort_array.count() != block_count)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("macro block id mapping is not one-to-one", K(ret), K(block_count),
+          "matched_count", tmp_sort_array.count(), "unmatched_count", logic_id_index_map.size());
+    } else if (OB_SUCC(ret) && OB_FAIL(block_id_array_.assign(tmp_sort_array))) {
       LOG_WARN("failed to assign block id array", K(ret), K(tmp_sort_array));
     }
   }

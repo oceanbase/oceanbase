@@ -1067,7 +1067,6 @@ int ObTabletBackfillTXTask::wait_memtable_frozen_()
     LOG_WARN("tablet should not be NULL", K(ret), K(ls_id_), K(tablet_info_));
   } else {
     const int64_t wait_memtable_start_ts = ObTimeUtility::current_time();
-    const int64_t current_ts = 0;
     while (OB_SUCC(ret)) {
       memtables.reset();
       bool is_memtable_ready = true;

@@ -71,8 +71,6 @@ private:
       const int64_t inner_table_lock_owner, bool &need_unlock, bool &need_relock_before_unlock);
   static int relock_before_unlock_(const ObTransferTaskLockInfo &lock_info, const int64_t palf_lock_owner,
       const int64_t lock_timeout, const int32_t group_id);
-  static int init_storage_rpc_(obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy, storage::ObStorageRpc &storage_rpc);
-  static void destory_storage_rpc_(obrpc::ObStorageRpcProxy &storage_svr_rpc_proxy, storage::ObStorageRpc &storage_rpc);
   static int check_is_palf_leader_(const uint64_t tenant_id, const share::ObLSID &ls_id);
 
 private:

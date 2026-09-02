@@ -834,8 +834,10 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
           LOG_WARN("wait transfer in tablet ready time out",
               "dest_ls_id", user_data.transfer_ls_id_, "dest user data", dest_user_data);
         } else {
-          LOG_INFO("wait transfer in tablet ready", "dest user data", dest_user_data,
-              KPC(dest_tablet));
+          if (REACH_THREAD_TIME_INTERVAL(1_s)) {
+            LOG_INFO("wait transfer in tablet ready", "dest user data", dest_user_data,
+                KPC(dest_tablet));
+          }
           ob_usleep(MAX_SLEEP_INTERVAL_MS);
         }
       }

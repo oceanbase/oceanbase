@@ -77,8 +77,7 @@ int ObCopyTabletRecordExtraInfo::update_after_sstable_copy(
 
 /******************ObPhysicalCopyCtx*********************/
 ObPhysicalCopyCtx::ObPhysicalCopyCtx()
-  : lock_(common::ObLatchIds::OB_PHYSICAL_COPY_CTX_LOCK),
-    tenant_id_(OB_INVALID_ID),
+  : tenant_id_(OB_INVALID_ID),
     ls_id_(),
     tablet_id_(),
     src_info_(),
@@ -91,7 +90,6 @@ ObPhysicalCopyCtx::ObPhysicalCopyCtx()
     ha_dag_(nullptr),
     sstable_index_builder_(nullptr),
     restore_macro_block_id_mgr_(nullptr),
-    need_sort_macro_meta_(true),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
     table_key_(),
@@ -118,8 +116,8 @@ bool ObPhysicalCopyCtx::is_valid() const
              && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
              && table_key_.is_valid()
              && OB_NOT_NULL(macro_block_reuse_mgr_)
-             && total_macro_count_ >= 0
-             && reuse_macro_count_ >= 0
+             && get_total_macro_count() >= 0
+             && get_reuse_macro_count() >= 0
              && OB_NOT_NULL(extra_info_);
   if (bool_ret) {
     if (!is_leader_restore_) {
@@ -151,13 +149,11 @@ void ObPhysicalCopyCtx::reset()
   ha_dag_ = nullptr;
   sstable_index_builder_ = nullptr;
   restore_macro_block_id_mgr_ = nullptr;
-  need_sort_macro_meta_ = true;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
   table_key_.reset();
   macro_block_reuse_mgr_ = nullptr;
-  total_macro_count_ = 0;
-  reuse_macro_count_ = 0;
+  reset_macro_block_count();
   extra_info_ = nullptr;
 }
 
