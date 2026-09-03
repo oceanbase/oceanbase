@@ -4,6 +4,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "share/ob_cluster_version.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
@@ -1223,7 +1224,20 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
   if (use_hash_join_seed_) {
     seed = ObHashJoinVecOp::HASH_SEED;
   }
-  if (child_brs->size_ > 0 && is_active_) {
+  if (child_brs->size_ > 0 && is_active_ && !is_null_reject_vectors_inited_
+      && OB_UNLIKELY(need_null_cmp_flags_.count() != expr_array.count())) {
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_2_0
+        || (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_0_0
+         && GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_4_2_3)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null compare flags count", K(ret), K(need_null_cmp_flags_.count()),
+               K(expr_array.count()), K(GET_MIN_CLUSTER_VERSION()));
+    } else {
+      is_active_ = false;
+      LOG_WARN("skip runtime in filter as null compare flags count does not match",
+               K(ret), K(need_null_cmp_flags_.count()), K(expr_array.count()));
+    }
+  } else if (child_brs->size_ > 0 && is_active_) {
     EvalBound bound(child_brs->size_, child_brs->all_rows_active_);
     if (need_calc_hash_values) {
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_array.count(); ++i) {
@@ -1241,11 +1255,6 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
 
     if (!is_null_reject_vectors_inited_) {
       null_reject_vectors_.reuse();
-      if (OB_UNLIKELY(need_null_cmp_flags_.count() != expr_array.count())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null compare flags count", K(ret), K(need_null_cmp_flags_.count()),
-                 K(expr_array.count()));
-      }
       for (int64_t i = 0; OB_SUCC(ret) && i < expr_array.count(); ++i) {
         if (!need_null_cmp_flags_.at(i)
             && OB_FAIL(null_reject_vectors_.push_back(expr_array.at(i)->get_vector(eval_ctx)))) {
