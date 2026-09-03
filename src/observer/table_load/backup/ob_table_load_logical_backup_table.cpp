@@ -22,11 +22,6 @@ using namespace common;
 using namespace share;
 using namespace share::schema;
 
-bool backup_version_cmp_func(const ObString &left, const ObString &right)
-{
-  return std::atoi(left.ptr()) > std::atoi(right.ptr());
-}
-
 ObTableLoadLogicalBackupTable::ObTableLoadLogicalBackupTable()
   : allocator_("TLD_LogBT"),
     backup_version_(ObTableLoadBackupVersion::INVALID),
@@ -216,47 +211,54 @@ int ObTableLoadLogicalBackupTable::parse_path(const ObString &path)
           LOG_WARN("fail to ob_write_string", KR(ret), K(split_result[backup_table_id_idx]));
         } else if (OB_FAIL(ob_write_string(allocator_, split_result[backup_tenant_id_idx], backup_tenant_id_))) {
           LOG_WARN("fail to ob_write_string", KR(ret), K(split_result[backup_tenant_id_idx]));
-        } else if (OB_FAIL(ob_write_string(allocator_, split_result[backup_version_idx], backup_set_id_))) {
+        } else if (OB_FAIL(ob_write_string(allocator_, split_result[backup_version_idx], backup_set_id_, true/*c_style*/))) {
           LOG_WARN("fail to ob_write_string", KR(ret), K(split_result[backup_version_idx]));
         } else {
+          int64_t backup_set_id = 0;
+          int64_t base_data_version = 0;
+          ObString base_data_version_str;
           pos = str.length() + 1;
           buf[pos] = '\0';
           ObString dir_path(pos, buf);
           ObArray<ObString> dir_list;
-          ObArray<ObString> backup_version_list;
           dir_list.set_tenant_id(MTL_ID());
-          backup_version_list.set_tenant_id(MTL_ID());
           ObString pattern("base_data_");
-          if (OB_FAIL(ObTableLoadBackupFileUtil::list_directories(dir_path, &storage_info_, dir_list, allocator_))) {
+          if (OB_FAIL(ob_atoll(backup_set_id_.ptr(), backup_set_id))) {
+            LOG_WARN("fail to parse backup set id", KR(ret), K(backup_set_id_));
+          } else if (OB_UNLIKELY(backup_set_id <= 0)) {
+            ret = OB_INVALID_BACKUP_DEST;
+            LOG_WARN("backup set id must be positive", KR(ret), K(backup_set_id_));
+          } else if (OB_FAIL(ObTableLoadBackupFileUtil::list_directories(dir_path, &storage_info_, dir_list, allocator_))) {
             LOG_WARN("fail to list directories", KR(ret), K(dir_path));
           }
           for (int64_t i = 0; OB_SUCC(ret) && i < dir_list.count(); i++) {
-            char *match_ptr = nullptr;
-            if (OB_NOT_NULL(match_ptr = strstr(dir_list[i].ptr(), pattern.ptr()))) {
-              if (OB_FAIL(backup_version_list.push_back(ObString(dir_list[i].length() - pattern.length(), match_ptr + pattern.length())))) {
-                LOG_WARN("fail to push back", KR(ret));
+            if (dir_list[i].prefix_match(pattern)) {
+              int tmp_ret = OB_SUCCESS;
+              int64_t backup_version = 0;
+              const ObString version_str(dir_list[i].length() - pattern.length(),
+                                         dir_list[i].ptr() + pattern.length());
+              if (OB_TMP_FAIL(ob_atoll(version_str.ptr(), backup_version))) {
+                LOG_WARN("skip invalid base data version", KR(tmp_ret), K(dir_list[i]), K(version_str));
+              } else if (OB_UNLIKELY(backup_version <= 0)) {
+                LOG_WARN("skip non-positive base data version", K(dir_list[i]), K(backup_version));
+              } else if (backup_version <= backup_set_id && backup_version > base_data_version) {
+                base_data_version = backup_version;
+                base_data_version_str = version_str;
               }
             }
           }
-          if (OB_UNLIKELY(backup_version_list.empty())) {
-            ret = OB_INVALID_BACKUP_DEST;
-            LOG_WARN("not file base data directory", KR(ret), K(dir_path), K(dir_list));
-          } else {
-            ob_sort(backup_version_list.begin(), backup_version_list.end(), backup_version_cmp_func);
-            for (int64_t i = 0; i < backup_version_list.size(); i++) {
-              if (atoi(backup_version_list[i].ptr()) > atoi(backup_set_id_.ptr())) {
-                // do nothing
-              } else if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s%.*s/%.*s/%.*s/",
-                                                 pattern.length(), pattern.ptr(),
-                                                 backup_version_list[i].length(), backup_version_list[i].ptr(),
-                                                 backup_tenant_id_.length(), backup_tenant_id_.ptr(),
-                                                 backup_table_id_.length(), backup_table_id_.ptr()))) {
-                LOG_WARN("fail to fill buf", KR(ret), K(pos), K(path));
-              } else if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), data_path_, true))) {
-                LOG_WARN("fail to ob_write_string", KR(ret));
-              } else {
-                break;
-              }
+          if (OB_SUCC(ret)) {
+            if (OB_UNLIKELY(base_data_version_str.empty())) {
+              ret = OB_INVALID_BACKUP_DEST;
+              LOG_WARN("no matching base data version", KR(ret), K(backup_set_id), K(dir_path), K(dir_list));
+            } else if (OB_FAIL(databuff_printf(buf, OB_MAX_URI_LENGTH, pos, "%.*s%.*s/%.*s/%.*s/",
+                                               pattern.length(), pattern.ptr(),
+                                               base_data_version_str.length(), base_data_version_str.ptr(),
+                                               backup_tenant_id_.length(), backup_tenant_id_.ptr(),
+                                               backup_table_id_.length(), backup_table_id_.ptr()))) {
+              LOG_WARN("fail to fill buf", KR(ret), K(pos), K(path));
+            } else if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), data_path_, true))) {
+              LOG_WARN("fail to ob_write_string", KR(ret));
             }
           }
         }
