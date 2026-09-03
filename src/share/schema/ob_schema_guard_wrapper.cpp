@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "share/schema/ob_schema_guard_wrapper.h"
+#include "share/schema/ob_constraint.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
 using namespace oceanbase::lib;
@@ -290,6 +291,54 @@ int ObSchemaGuardWrapper::get_constraint_id(const uint64_t database_id,
   } else if (OB_FAIL(latest_schema_guard_->get_constraint_id(
                      database_id, constraint_name, constraint_id))) {
     LOG_WARN("fail to get constraint id", KR(ret), K(database_id),
+             K(constraint_name));
+  }
+  return ret;
+}
+
+int ObSchemaGuardWrapper::get_constraint_info(common::ObIAllocator &allocator,
+                                              const uint64_t database_id,
+                                              const ObString &constraint_name,
+                                              ObConstraintInfo &constraint_info)
+{
+  int ret = OB_SUCCESS;
+  constraint_info.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_NOT_NULL(local_schema_guard_)) {
+    // This branch is kept for interface consistency with other Wrapper methods
+    // (in parallel DDL mode local_schema_guard_ stays null so this branch is
+    // never taken in practice). Local guard only provides ObSimpleConstraintInfo;
+    // use static_cast to fill the base-class portion of constraint_info directly
+    // (ObSchemaGetterGuard internally does the "assign after assignment" for
+    // constraint_name_).
+    if (OB_FAIL(local_schema_guard_->get_constraint_info(
+                tenant_id_, database_id, constraint_name,
+                static_cast<ObSimpleConstraintInfo &>(constraint_info)))) {
+      LOG_WARN("fail to get constraint info", KR(ret), K(database_id),
+               K(constraint_name));
+    } else if (OB_INVALID_ID != constraint_info.constraint_id_) {
+      const ObTableSchema *cst_table = NULL;
+      if (OB_FAIL(local_schema_guard_->get_table_schema(
+                  tenant_id_, constraint_info.table_id_, cst_table))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(constraint_info));
+      } else if (OB_ISNULL(cst_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema not found", KR(ret), K(constraint_info));
+      } else {
+        const ObConstraint *cst_obj = cst_table->get_constraint(
+            constraint_info.constraint_id_);
+        if (OB_ISNULL(cst_obj)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("constraint not found in table schema", KR(ret), K(constraint_info));
+        } else {
+          constraint_info.constraint_type_ = cst_obj->get_constraint_type();
+        }
+      }
+    }
+  } else if (OB_FAIL(latest_schema_guard_->get_constraint_info(
+                     allocator, database_id, constraint_name, constraint_info))) {
+    LOG_WARN("fail to get constraint info", KR(ret), K(database_id),
              K(constraint_name));
   }
   return ret;

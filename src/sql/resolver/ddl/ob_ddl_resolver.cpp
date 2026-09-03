@@ -9249,6 +9249,165 @@ int ObDDLResolver::check_index_name_duplicate(const ObTableSchema &table_schema,
   return ret;
 }
 
+// Unified entry: dispatches to sub-checks based on check_type flags.
+// NOTE: We use schema_guard->get_tenant_compat_mode() instead of lib::is_oracle_mode()
+// because this function is also called from the RS (rootserver) layer where
+// lib::is_oracle_mode() is unreliable (thread-local compat mode may not be set).
+int ObDDLResolver::reject_oracle_name_conflict(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const common::ObString &name,
+    share::schema::ObSchemaGetterGuard *schema_guard,
+    const int check_type)
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::MYSQL;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is null", KR(ret));
+  } else if (OB_FAIL(schema_guard->get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get tenant compat mode", KR(ret), K(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE != compat_mode) {
+    // MySQL mode: Oracle namespace conflict check is not applicable, skip.
+  } else {
+    // Oracle mode: dispatch to sub-checks based on check_type flags.
+    if (OB_SUCC(ret) && (check_type & CHECK_VS_INDEX)
+        && OB_FAIL(reject_oracle_name_conflict_with_index(tenant_id, database_id, name, schema_guard))) {
+      LOG_WARN("fail to check oracle name conflict with index", KR(ret), K(tenant_id), K(database_id), K(name));
+    }
+    if (OB_SUCC(ret) && (check_type & CHECK_VS_PK)
+        && OB_FAIL(reject_oracle_name_conflict_with_pk_constraint(tenant_id, database_id, name, schema_guard))) {
+      LOG_WARN("fail to check oracle name conflict with pk constraint", KR(ret), K(tenant_id), K(database_id), K(name));
+    }
+    if (OB_SUCC(ret) && (check_type & CHECK_VS_CONSTRAINT)
+        && OB_FAIL(reject_oracle_name_conflict_with_constraint(tenant_id, database_id, name, schema_guard))) {
+      LOG_WARN("fail to check oracle name conflict with constraint", KR(ret), K(tenant_id), K(database_id), K(name));
+    }
+  }
+  return ret;
+}
+
+// Reject name that conflicts with existing INDEX in the database namespace.
+// On conflict, set ret = OB_ERR_EXIST_OBJECT (ORA-00955) directly.
+int ObDDLResolver::reject_oracle_name_conflict_with_index(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const common::ObString &name,
+    share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *existing_idx_schema = NULL;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is null", KR(ret));
+  } else if (name.prefix_match(OB_INDEX_PREFIX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name has internal index prefix", KR(ret), K(tenant_id), K(database_id), K(name));
+  } else if (OB_FAIL(schema_guard->get_idx_schema_by_origin_idx_name(
+      tenant_id, database_id, name, existing_idx_schema))) {
+    LOG_WARN("fail to get index schema by name", KR(ret),
+             K(tenant_id), K(database_id), K(name));
+  } else if (OB_NOT_NULL(existing_idx_schema)) {
+    ret = OB_ERR_EXIST_OBJECT;
+    LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+    LOG_WARN("name conflicts with existing index in database",
+             KR(ret), K(name), K(tenant_id), K(database_id));
+  }
+  return ret;
+}
+
+// Reject name that conflicts with PK constraint in the database namespace.
+// On conflict, set ret = OB_ERR_EXIST_OBJECT (ORA-00955) directly.
+int ObDDLResolver::reject_oracle_name_conflict_with_pk_constraint(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const common::ObString &name,
+    share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSimpleConstraintInfo cst_info;
+
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is null", KR(ret));
+  } else if (name.prefix_match(OB_INDEX_PREFIX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name has internal index prefix", KR(ret), K(tenant_id), K(database_id), K(name));
+  // 1. lookup __all_constraint by name directly (O(1); UK is NOT in this table)
+  } else if (OB_FAIL(schema_guard->get_constraint_info(
+      tenant_id, database_id, name, cst_info))) {
+    LOG_WARN("fail to get constraint info", KR(ret),
+             K(tenant_id), K(database_id), K(name));
+  } else if (OB_INVALID_ID == cst_info.constraint_id_) {
+    // constraint not found, no conflict
+  } else {
+    // 2. found a constraint with this name, get table_schema to read type
+    const share::schema::ObTableSchema *cst_table_schema = NULL;
+    if (OB_FAIL(schema_guard->get_table_schema(
+        tenant_id, cst_info.table_id_, cst_table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(cst_info.table_id_));
+    } else if (OB_ISNULL(cst_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", KR(ret));
+    } else {
+      // 3. explicitly check if the constraint type is PK
+      for (share::schema::ObTableSchema::const_constraint_iterator iter =
+               cst_table_schema->constraint_begin();
+           iter != cst_table_schema->constraint_end(); ++iter) {
+        if ((*iter)->get_constraint_name_str() == name) {
+          if (share::schema::CONSTRAINT_TYPE_PRIMARY_KEY == (*iter)->get_constraint_type()) {
+            ret = OB_ERR_EXIST_OBJECT;
+            LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+            LOG_WARN("name conflicts with existing PK constraint in database",
+                     KR(ret), K(name), K(tenant_id), K(database_id));
+          } else {
+            // UK is not written to __all_constraint in OceanBase, so it cannot be
+            // looked up here; UK name conflicts are covered by the vs-INDEX check.
+            // CHECK / NOT NULL etc. do not share namespace with index in Oracle mode.
+          }
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Reject name that conflicts with ANY constraint type in the database namespace.
+// On conflict, set ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE (ORA-02264) directly.
+int ObDDLResolver::reject_oracle_name_conflict_with_constraint(
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const common::ObString &name,
+    share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObSimpleConstraintInfo cst_info;
+
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is null", KR(ret));
+  } else if (name.prefix_match(OB_INDEX_PREFIX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name has internal index prefix", KR(ret), K(tenant_id), K(database_id), K(name));
+  } else if (OB_FAIL(schema_guard->get_constraint_info(
+      tenant_id, database_id, name, cst_info))) {
+    LOG_WARN("fail to get constraint info", KR(ret),
+             K(tenant_id), K(database_id), K(name));
+  } else if (OB_INVALID_ID != cst_info.constraint_id_) {
+    ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+    // Compatible with native Oracle ORA-02264 which does NOT carry the
+    // object name.  LOG_USER_ERROR would use __ORA_USER_ERROR_MSG (with '%.*s')
+    // and produce '(null)' when called without params, so we use
+    // FORWARD_USER_ERROR + ob_oracle_strerror to deliver the plain message.
+    FORWARD_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE,
+                       common::ob_oracle_strerror(OB_ERR_CONSTRAINT_NAME_DUPLICATE));
+    LOG_WARN("name conflicts with existing constraint in database",
+             KR(ret), K(name), K(tenant_id), K(database_id));
+  }
+  return ret;
+}
+
 // child 5 of root node, resolve index partition node,
 // 1 this index is global, we need to first generate index schema,
 //   than resolve global index partition info
@@ -9787,11 +9946,32 @@ int ObDDLResolver::resolve_pk_constraint_node(const ParseNode &pk_cst_node,
                    })) {
         ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
         LOG_WARN("duplicate constraint name", K(ret), K(cst_name));
-      } else if (OB_FAIL(cst.set_constraint_name(cst_name))) {
-      } else {
-        cst.set_name_generated_type(is_sys_generated_cst_name ? GENERATED_TYPE_SYSTEM : GENERATED_TYPE_USER);
-        cst.set_constraint_type(CONSTRAINT_TYPE_PRIMARY_KEY);
-        ret = csts.push_back(cst);
+      // [CREATE TABLE PK] Database-level name conflict checks for Oracle mode.
+      // These verify name uniqueness across the entire database.
+      // Oracle shares a single namespace for index/UNIQUE and PK constraint names.
+      } else if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+        if (OB_ISNULL(schema_checker_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "schema checker is null", KR(ret));
+        } else if (OB_FAIL(reject_oracle_name_conflict(
+            session_info_->get_effective_tenant_id(), session_info_->get_database_id(),
+            cst_name, schema_checker_->get_schema_guard(),
+            CHECK_VS_INDEX | CHECK_VS_CONSTRAINT))) {
+          SQL_RESV_LOG(WARN, "oracle name conflict check failed for CREATE TABLE PK",
+                       KR(ret), K(cst_name));
+        }
+        // Oracle checks done; fall through to set_constraint_name + push_back below
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(cst.set_constraint_name(cst_name))) {
+          SQL_RESV_LOG(WARN, "set constraint name failed", KR(ret));
+        } else {
+          cst.set_name_generated_type(is_sys_generated_cst_name ? GENERATED_TYPE_SYSTEM : GENERATED_TYPE_USER);
+          cst.set_constraint_type(CONSTRAINT_TYPE_PRIMARY_KEY);
+          if (OB_FAIL(csts.push_back(cst))) {
+            SQL_RESV_LOG(WARN, "push back constraint failed", KR(ret));
+          }
+        }
       }
     }
   }

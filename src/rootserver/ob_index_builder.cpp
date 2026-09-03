@@ -60,12 +60,26 @@ int ObIndexBuilder::create_index(
     LOG_WARN("generate_schema failed", K(arg), K(ret));
   }
   if (OB_ERR_TABLE_EXIST == ret) {
-    if (true == arg.if_not_exist_) {
+    bool is_oracle = false;
+    if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(arg.tenant_id_, is_oracle))) {
+      LOG_WARN("fail to check oracle mode", KR(ret));
+    } else if (true == arg.if_not_exist_) {
       ret = OB_SUCCESS;
-      LOG_USER_WARN(OB_ERR_KEY_NAME_DUPLICATE, arg.index_name_.length(), arg.index_name_.ptr());
+      if (is_oracle) {
+        LOG_USER_WARN(OB_ERR_EXIST_OBJECT);
+      } else {
+        LOG_USER_WARN(OB_ERR_KEY_NAME_DUPLICATE, arg.index_name_.length(), arg.index_name_.ptr());
+      }
     } else {
-      ret = OB_ERR_KEY_NAME_DUPLICATE;
-      LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, arg.index_name_.length(), arg.index_name_.ptr());
+      if (is_oracle) {
+        ret = OB_ERR_EXIST_OBJECT;
+        LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+        LOG_WARN("duplicate index name", KR(ret), K(arg.index_name_));
+      } else {
+        ret = OB_ERR_KEY_NAME_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, arg.index_name_.length(), arg.index_name_.ptr());
+        LOG_WARN("duplicate index name", KR(ret), K(arg.index_name_));
+      }
     }
   }
   LOG_INFO("finish create index", K(arg), K(ret));
@@ -1896,6 +1910,28 @@ int ObIndexBuilder::do_create_index(
     LOG_WARN("check whether the foreign key related table is executing ddl failed", K(ret));
   } else if (OB_FAIL(ObTTLUtil::check_htable_ddl_supported(*table_schema, false/*by_admin*/))) {
     LOG_WARN("failed to check htable ddl supported", K(ret));
+  }
+  // Oracle namespace: INDEX names conflict only with INDEX/PK/UK; CHECK/NOT NULL
+  // are allowed to share names with INDEX, so no further cross-check needed here.
+  if (OB_SUCC(ret)) {
+    bool is_oracle_mode = false;
+    if (OB_FAIL(table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check oracle mode", KR(ret));
+    } else if (is_oracle_mode) {
+      // INDEX name vs existing PK: CREATE INDEX - serial path (database-wide)
+      // (vs UK is already covered by vs INDEX in create_index_table, since UK is registered as an INDEX.)
+      if (OB_SUCC(ret)
+          && OB_FAIL(ObDDLResolver::reject_oracle_name_conflict(
+                       table_schema->get_tenant_id(),
+                       table_schema->get_database_id(),
+                       arg.index_name_,
+                       &schema_guard,
+                       CHECK_VS_PK))) {
+        LOG_WARN("fail to check index name conflict with pk", KR(ret), K(arg.index_name_));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (INDEX_TYPE_NORMAL_LOCAL == arg.index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == arg.index_type_
              || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == arg.index_type_

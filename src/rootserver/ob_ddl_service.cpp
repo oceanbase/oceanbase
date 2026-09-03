@@ -3360,6 +3360,20 @@ int ObDDLService::get_add_pk_index_name(const ObTableSchema &origin_table_schema
         ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
         LOG_WARN("check constraint name is duplicate", K(ret), K(index_name));
       }
+      // PK name vs existing INDEX: ALTER TABLE ADD [CONSTRAINT name] PRIMARY KEY — serial path
+      if (OB_SUCC(ret)) {
+        bool idx_name_conflict = false;
+        if (OB_FAIL(check_index_table_exist(
+                     origin_table_schema.get_tenant_id(),
+                     origin_table_schema.get_database_id(),
+                     origin_table_schema.get_table_id(),
+                     index_name, schema_guard, idx_name_conflict))) {
+          LOG_WARN("fail to check index name conflict", KR(ret), K(index_name));
+        } else if (idx_name_conflict) {
+          ret = OB_ERR_EXIST_OBJECT;
+          LOG_WARN("pk constraint name conflicts with existing index name", KR(ret), K(index_name));
+        }
+      }
     }
   }
   return ret;
@@ -7152,10 +7166,43 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                 }
               }
               if (is_exist) {
-                ret = OB_ERR_KEY_NAME_DUPLICATE;
-                LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, index_name.length(), index_name.ptr());
-                LOG_WARN("duplicate index name", K(index_name), K(ret));
+                bool is_oracle_mode_dup = false;
+                if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode_dup))) {
+                  LOG_WARN("fail to check oracle mode", KR(ret));
+                } else if (is_oracle_mode_dup) {
+                  ret = OB_ERR_EXIST_OBJECT;
+                  LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+                  LOG_WARN("duplicate index name", KR(ret), K(index_name));
+                } else {
+                  ret = OB_ERR_KEY_NAME_DUPLICATE;
+                  LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, index_name.length(), index_name.ptr());
+                  LOG_WARN("duplicate index name", KR(ret), K(index_name));
+                }
               }
+            }
+          }
+          // [ALTER TABLE ADD [CONSTRAINT] UNIQUE] Oracle-mode database-level name conflict checks.
+          // Index name vs existing PK constraint across the whole database.
+          // (vs-INDEX is already covered by check_index_table_exist above.)
+          bool is_oracle_mode_pk = false;
+          if (OB_SUCC(ret)
+              && OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode_pk))) {
+            LOG_WARN("fail to check oracle mode", KR(ret));
+          } else if (OB_SUCC(ret) && is_oracle_mode_pk) {
+            // index name vs existing PK constraint (database-wide)
+            // TODO: current check covers only PK/UK constraint; extend to all constraint types to align with Oracle.
+            //       UK constraint name conflicts are already covered by the vs-INDEX check
+            //       (UK is registered as an INDEX), so only PK name is checked here.
+            if (OB_FAIL(ObDDLResolver::reject_oracle_name_conflict(
+                origin_table_schema.get_tenant_id(),
+                origin_table_schema.get_database_id(),
+                create_index_arg->index_name_,
+                &schema_guard,
+                CHECK_VS_PK))) {
+              LOG_WARN("fail to check oracle index name conflict with pk",
+                       KR(ret), K(origin_table_schema.get_tenant_id()),
+                       K(origin_table_schema.get_database_id()),
+                       K(create_index_arg->index_name_));
             }
           }
           if (OB_SUCC(ret)) {
@@ -7509,9 +7556,18 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
             }
           } else if (OB_HASH_EXIST == add_index_name_set.exist_refactored(new_index_key)) {
             // add new_idx, rename ori_idx to new_idx // ERROR 1061 (42000): Duplicate key name 'new_idx'
-            ret = OB_ERR_KEY_NAME_DUPLICATE;
-            LOG_WARN("duplicate index name", K(new_index_name), K(ret));
-            LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, new_index_name.length(), new_index_name.ptr());
+            bool is_oracle_mode_add = false;
+            if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode_add))) {
+              LOG_WARN("fail to check oracle mode", KR(ret));
+            } else if (is_oracle_mode_add) {
+              ret = OB_ERR_EXIST_OBJECT;
+              LOG_WARN("duplicate index name", KR(ret), K(new_index_name));
+              LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+            } else {
+              ret = OB_ERR_KEY_NAME_DUPLICATE;
+              LOG_WARN("duplicate index name", KR(ret), K(new_index_name));
+              LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, new_index_name.length(), new_index_name.ptr());
+            }
           } else if (OB_HASH_EXIST == drop_index_name_set.exist_refactored(ori_index_key)) {
               // drop ori_idx, rename ori_idx to new_idx
               const ObString &data_table_name = origin_table_schema.get_table_name_str();
@@ -7522,7 +7578,28 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                                        alter_table_arg.alter_table_schema_.get_database_name(),
                                                        ori_index_name))) {
             LOG_WARN("fail to check fts rename index conflict", K(ret), K(ori_index_name));
-          } else if (OB_FAIL(ObVectorIndexUtil::check_rename_rebuild_confilt(schema_guard, trans, *this, origin_table_schema, ori_index_name))) {
+          } else {
+            // Oracle namespace: INDEX names conflict only with PK/UK;
+            // CHECK/NOT NULL are allowed to share names with INDEX, so no further cross-check needed here.
+            // (vs-INDEX is already covered by check_index_table_exist above.)
+            bool is_oracle_mode_rename = false;
+            if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode_rename))) {
+              LOG_WARN("fail to check oracle mode", KR(ret));
+            } else if (is_oracle_mode_rename) {
+              // INDEX name vs existing PK: ALTER INDEX RENAME — serial path (database-wide)
+              // (vs UK is already covered by vs INDEX above, since UK is registered as an INDEX.)
+              if (OB_SUCC(ret)
+                  && OB_FAIL(ObDDLResolver::reject_oracle_name_conflict(
+                               origin_table_schema.get_tenant_id(),
+                               origin_table_schema.get_database_id(),
+                               new_index_name,
+                               &schema_guard,
+                               CHECK_VS_PK))) {
+                LOG_WARN("fail to check index name conflict with pk", KR(ret), K(new_index_name));
+              }
+            }
+          }
+          if (FAILEDx(ObVectorIndexUtil::check_rename_rebuild_confilt(schema_guard, trans, *this, origin_table_schema, ori_index_name))) {
             LOG_WARN("fail to check vector rename and rebuild confilt", K(ret), K(ori_index_name));
           } else {
             SMART_VAR(ObTableSchema, new_index_schema) {

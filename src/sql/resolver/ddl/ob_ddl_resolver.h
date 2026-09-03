@@ -106,6 +106,13 @@ struct ObDefaultValueRes
   common::ObObjParam &value_;
 };
 
+// Check type flags for ObDDLResolver::reject_oracle_name_conflict, support bitwise OR.
+enum OracleNameConflictCheckType {
+  CHECK_VS_INDEX      = 0x1,  // vs INDEX/UK
+  CHECK_VS_PK         = 0x2,  // vs PK constraint only
+  CHECK_VS_CONSTRAINT = 0x4   // vs ANY constraint (ORA-02264)
+};
+
 class ObDDLResolver : public ObStmtResolver
 {
 public:
@@ -540,6 +547,32 @@ public:
                                         const obrpc::ObCreateIndexArg &create_index_arg,
                                         ObSchemaChecker &schema_checker,
                                         bool &has_same_index_name);
+  // Database-level name conflict checks for Oracle mode.
+  // On conflict, reject directly by setting ret to the corresponding error code.
+  // Check type flags for reject_oracle_name_conflict, support bitwise OR.
+  // Uses schema_guard to determine tenant compat mode (safe for both resolver and RS layers).
+  static int reject_oracle_name_conflict(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const common::ObString &name,
+      share::schema::ObSchemaGetterGuard *schema_guard,
+      const int check_type);
+  static int reject_oracle_name_conflict_with_index(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const common::ObString &name,
+      share::schema::ObSchemaGetterGuard *schema_guard);
+  static int reject_oracle_name_conflict_with_pk_constraint(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const common::ObString &name,
+      share::schema::ObSchemaGetterGuard *schema_guard);
+  // Reject name that conflicts with ANY constraint type in namespace (PK/CHECK/NOT NULL etc.)
+  static int reject_oracle_name_conflict_with_constraint(
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      const common::ObString &name,
+      share::schema::ObSchemaGetterGuard *schema_guard);
   static int resolve_check_constraint_expr(
         ObResolverParams &params,
         const ParseNode *node,

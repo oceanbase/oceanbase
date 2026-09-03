@@ -50,6 +50,10 @@ public:
                         const uint64_t database_id,
                         const ObString &constraint_name,
                         uint64_t &constraint_id);
+  int get_constraint_info(common::ObIAllocator &allocator,
+                          const uint64_t database_id,
+                          const common::ObString &constraint_name,
+                          ObConstraintInfo &constraint_info);
   int get_udt_info(const uint64_t udt_id,
                    const ObUDTTypeInfo *&udt_info);
   int get_mock_fk_parent_table_id(const uint64_t database_id,
@@ -218,11 +222,11 @@ int get_trigger_info(const uint64_t tenant_id,
   uint64_t get_session_id() const { return OB_ISNULL(local_schema_guard_) ? OB_INVALID_ID : local_schema_guard_->get_session_id(); }
   void set_session_id(const uint64_t session_id) { if (OB_NOT_NULL(local_schema_guard_)) { local_schema_guard_->set_session_id(session_id); } }
   ObLatestSchemaGuard* get_latest_schema_guard() { return latest_schema_guard_; }
-  // NOTE: get_local_schema_guard() was intentionally removed. In parallel DDL
-  // mode (is_local_guard_ == false), local_schema_guard_ is never initialized,
-  // so exposing it as a raw reference would hand callers an empty guard. All
-  // schema access in parallel mode must go through the typed wrapper methods
-  // (which dispatch to latest_schema_guard_) or the serial path must be used.
+  // NOTE: In parallel DDL mode local_schema_guard_ is never initialized
+  // (stays null), so callers of get_local_schema_guard() must null-check the
+  // returned pointer before use. All schema access in parallel mode must go
+  // through the typed wrapper methods (which dispatch to latest_schema_guard_)
+  // or the serial path must be used.
 private:
   int check_inner_stat_() const;
 private:

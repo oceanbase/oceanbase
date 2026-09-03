@@ -11109,6 +11109,112 @@ int ObSchemaServiceSQLImpl::get_constraint_id(
   return ret;
 }
 
+int ObSchemaServiceSQLImpl::get_constraint_info(
+    common::ObIAllocator &allocator,
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    const ObString &constraint_name,
+    ObConstraintInfo &constraint_info)
+{
+  int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  const bool skip_escape = false;
+  const bool use_oracle_mode = false;
+  constraint_info.reset();
+  ObCStringHelper helper;
+  const char* cst_name = helper.convert(ObHexEscapeSqlStr(constraint_name, skip_escape, use_oracle_mode));
+  if (OB_UNLIKELY(!check_inner_stat())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+             || constraint_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id/constraint_name",
+             KR(ret), K(tenant_id), K(constraint_name));
+  } else if (OB_ISNULL(cst_name)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc cst_name failed", KR(ret), K(tenant_id), K(constraint_name));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(
+             tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret), K(tenant_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObSqlString sql;
+    ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.assign_fmt(
+        "SELECT /*+ LEADING(cst) */ cst.constraint_id, cst.constraint_name, cst.table_id, "
+        "cst.constraint_type, t.table_mode, t.table_type "
+        "FROM %s cst JOIN %s t ON cst.tenant_id = t.tenant_id AND cst.table_id = t.table_id "
+        "WHERE cst.tenant_id = %lu AND cst.constraint_name = '%s' and t.database_id = %lu",
+        OB_ALL_CONSTRAINT_TNAME, OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, cst_name, database_id))) {
+      LOG_WARN("fail to assign fmt", KR(ret), K(tenant_id), K(database_id),
+               K(constraint_name), "cst_name", cst_name);
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to read", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret), K(tenant_id));
+    }
+    uint64_t tmp_constraint_id = OB_INVALID_ID;
+    uint64_t tmp_table_id = OB_INVALID_ID;
+    uint64_t tmp_constraint_type = CONSTRAINT_TYPE_INVALID;
+    ObString tmp_constraint_name;
+    ObTableType tmp_table_type = MAX_TABLE_TYPE;
+    ObTableMode tmp_table_mode;
+    const bool case_compare = !is_oracle_mode;
+    const bool compare_with_collation = true;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("fail to get next", KR(ret), K(tenant_id), K(sql));
+        }
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "constraint_id", tmp_constraint_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_id", tmp_table_id, uint64_t);
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "constraint_name", tmp_constraint_name);
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_type", tmp_table_type, ObTableType);
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_mode", tmp_table_mode.mode_, uint32_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "constraint_type", tmp_constraint_type, uint64_t);
+
+        if (OB_FAIL(ret)) {
+        } else if (tmp_table_mode.is_user_hidden_table()
+                   || is_index_table(tmp_table_type)
+                   || is_aux_lob_table(tmp_table_type)
+                   || is_mysql_tmp_table(tmp_table_type)) {
+          // skip
+        } else if (schema_name_is_equal(
+                   constraint_name, tmp_constraint_name,
+                   case_compare, compare_with_collation)) {
+          // Deep-copy constraint name into allocator-managed memory so that
+          // constraint_name_ outlives the MySQL result set buffer.
+          if (FAILEDx(ob_write_string(allocator, tmp_constraint_name,
+                                      constraint_info.constraint_name_, true/*c_style*/))) {
+            LOG_WARN("fail to deep-copy constraint name", KR(ret));
+          } else {
+            constraint_info.tenant_id_ = tenant_id;
+            constraint_info.database_id_ = database_id;
+            constraint_info.table_id_ = tmp_table_id;
+            constraint_info.constraint_id_ = tmp_constraint_id;
+            constraint_info.constraint_type_ = static_cast<ObConstraintType>(tmp_constraint_type);
+          }
+          break;
+        }
+      }
+    } // end while
+    if (OB_SUCC(ret)) {
+      LOG_TRACE("get constraint info by name",
+                K(tenant_id), K(database_id), K(constraint_info),
+                K(constraint_name), "cst_name", cst_name);
+    }
+    } // end SMART_VAR
+  }
+  return ret;
+}
+
 int ObSchemaServiceSQLImpl::get_foreign_key_id(
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,

@@ -13004,6 +13004,9 @@ OB_SERIALIZE_MEMBER(ObSimpleConstraintInfo,
                     constraint_name_,
                     constraint_id_);
 
+OB_SERIALIZE_MEMBER((ObConstraintInfo, ObSimpleConstraintInfo),
+                    constraint_type_);
+
 int ObCompareNameWithTenantID::compare(const common::ObString &str1, const common::ObString &str2)
 {
   common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;

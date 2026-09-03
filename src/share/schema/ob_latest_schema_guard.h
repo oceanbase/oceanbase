@@ -140,6 +140,10 @@ public:
   int get_constraint_id(const uint64_t database_id,
                         const ObString &constraint_name,
                         uint64_t &constraint_id);
+  int get_constraint_info(common::ObIAllocator &allocator,
+                          const uint64_t database_id,
+                          const common::ObString &constraint_name,
+                          ObConstraintInfo &constraint_info);
 
   // 1. foreign key name comparsion:
   // - case sensitive: oracle

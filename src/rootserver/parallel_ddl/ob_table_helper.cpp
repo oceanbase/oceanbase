@@ -944,6 +944,33 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
         LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE, cst_name.length(), cst_name.ptr());
       }
       LOG_WARN("cst name is duplicate", KR(ret), K_(tenant_id), K(database_id), K(cst_name));
+    } else if (is_oracle_mode) {
+      // For Oracle mode: check PK/UK name against existing INDEX names in the database.
+      // Note: UK never reaches this loop — in resolve_table_elements, UK is diverted
+      // to the INDEX path (resolve_index_node → index_arg_list_), so only PK can
+      // appear here.
+      if (CONSTRAINT_TYPE_PRIMARY_KEY == cst.get_constraint_type()) {
+        // PK name vs existing INDEX: CREATE TABLE CONSTRAINT — serial/parallel shared path
+        ObString encoded_index_name;
+        bool idx_name_conflict = false;
+        // table_id is only used for encoding; in oracle mode, ObIndexSchemaHashWrapper ignores it
+        if (OB_FAIL(ObTableSchema::build_index_table_name(allocator_,
+                     new_table.get_table_id(), cst_name, encoded_index_name))) {
+          LOG_WARN("fail to build index table name", KR(ret), K(cst_name));
+        } else if (OB_FAIL(ddl_service_->get_index_name_checker().check_index_name_exist(
+                     tenant_id_, database_id, encoded_index_name, idx_name_conflict))) {
+          LOG_WARN("fail to check index name conflict", KR(ret), K_(tenant_id), K(database_id), K(cst_name));
+        } else if (idx_name_conflict) {
+          ret = OB_ERR_EXIST_OBJECT;
+          LOG_WARN("constraint name conflicts with existing index name",
+                   KR(ret), K_(tenant_id), K(database_id), K(cst_name));
+        }
+      } else {
+        // CHECK/NOT NULL (and any future constraint types) are allowed to be
+        // the same as index names in Oracle mode, no cross-check needed.
+        // UK also does not need cross-check here because it never appears in
+        // constraint_list_; its name conflict is covered by the INDEX path.
+      }
     }
   } // end for
 
@@ -1044,6 +1071,10 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data table is nullptr", KR(ret));
     }
+    bool is_oracle_mode = false;
+    if (OB_SUCC(ret) && OB_FAIL(data_table->check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check oracle mode", KR(ret));
+    }
     if (OB_SUCC(ret)) {
       data_table = &(new_tables_.at(0));
       // 0. fetch object_ids
@@ -1134,24 +1165,46 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
         } else if (OB_FAIL(index_schema.generate_origin_index_name())) {
           // For the later operation ObIndexNameChecker::add_index_name()
           LOG_WARN("fail to generate origin index name", KR(ret), K(index_schema));
+        // UK name vs existing INDEX: CREATE TABLE UK — serial/parallel shared path (in oracle mode)
         } else if (OB_FAIL(ddl_service_->get_index_name_checker().check_index_name_exist(
                    index_schema.get_tenant_id(),
                    index_schema.get_database_id(),
                    index_schema.get_table_name_str(),
                    index_exist))) {
         } else if (index_exist) {
-          // actually, only index name in oracle tenant will be checked.
-          ret = OB_ERR_KEY_NAME_DUPLICATE;
-          LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
-                   "database_id", index_schema.get_database_id(),
-                   "index_name", index_schema.get_origin_index_name_str());
-          LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
-                         index_schema.get_origin_index_name_str().length(),
-                         index_schema.get_origin_index_name_str().ptr());
-        } else if (OB_FAIL(new_tables_.push_back(index_schema))) {
-          LOG_WARN("push_back failed", KR(ret));
-        } else {
-          data_table = &(new_tables_.at(0)); // memory of data table may change after add table to new_tables_
+          if (is_oracle_mode) {
+            ret = OB_ERR_EXIST_OBJECT;
+            LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
+                      "database_id", index_schema.get_database_id(),
+                      "index_name", index_schema.get_origin_index_name_str());
+            LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+          } else {
+            ret = OB_ERR_KEY_NAME_DUPLICATE;
+            LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
+                      "database_id", index_schema.get_database_id(),
+                      "index_name", index_schema.get_origin_index_name_str());
+            LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
+                            index_schema.get_origin_index_name_str().length(),
+                            index_schema.get_origin_index_name_str().ptr());
+          }
+        } else if (is_oracle_mode) {
+          // UK name vs existing CONSTRAINT: CREATE TABLE UK — serial/parallel shared path (in oracle mode)
+          // Oracle mode does not allow inline INDEX in CREATE TABLE, only UK reaches this path.
+          const ObString &origin_idx_name = index_schema.get_origin_index_name_str();
+          // TODO: current check covers only PK/UK constraint; extend to all constraint types to align with Oracle.
+          //       UK constraint name conflicts are already covered by the vs-INDEX check
+          //       (UK is registered as an INDEX), so only PK name is checked here.
+          if (OB_FAIL(reject_oracle_index_name_conflict_with_pk_(data_table->get_database_id(), origin_idx_name))) {
+            LOG_WARN("fail to check oracle index name conflict with pk",
+                     KR(ret), K_(tenant_id), K(origin_idx_name));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(new_tables_.push_back(index_schema))) {
+            LOG_WARN("push_back failed", KR(ret));
+          } else {
+            data_table = &(new_tables_.at(0)); // memory of data table may change after add table to new_tables_
+          }
         }
       } // end for
 

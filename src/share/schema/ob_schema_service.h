@@ -1403,6 +1403,14 @@ public:
               const ObString &constraint_name,
               uint64_t &constraint_id) = 0;
 
+  virtual int get_constraint_info(
+              common::ObIAllocator &allocator,
+              common::ObISQLClient &sql_client,
+              const uint64_t tenant_id,
+              const uint64_t database_id,
+              const ObString &constraint_name,
+              ObConstraintInfo &constraint_info) = 0;
+
   virtual int get_foreign_key_id(
               common::ObISQLClient &sql_client,
               const uint64_t tenant_id,

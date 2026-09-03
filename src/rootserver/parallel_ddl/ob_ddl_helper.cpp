@@ -817,6 +817,46 @@ int ObDDLHelper::check_constraint_name_exist_(
   return ret;
 }
 
+// Reject INDEX name that conflicts with existing PK constraint in Oracle mode.
+// On conflict, set ret = OB_ERR_EXIST_OBJECT (ORA-00955) directly.
+int ObDDLHelper::reject_oracle_index_name_conflict_with_pk_(
+    const uint64_t database_id,
+    const common::ObString &index_name)
+{
+  int ret = OB_SUCCESS;
+  ObConstraintInfo cst_info;
+  const ObTenantSchema *tenant_schema = NULL;
+  if (OB_FAIL(schema_guard_wrapper_.get_tenant_schema(tenant_id_, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(tenant_schema)) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("tenant not exist", KR(ret), K_(tenant_id));
+  } else if (!tenant_schema->is_oracle_tenant()) {
+    // MySQL mode: INDEX vs PK name conflict check is not applicable, skip.
+  } else if (index_name.prefix_match(OB_INDEX_PREFIX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index_name has internal index prefix, expect origin name",
+             KR(ret), K_(tenant_id), K(database_id), K(index_name));
+  } else if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(schema_guard_wrapper_.get_constraint_info(
+             allocator_, database_id, index_name, cst_info))) {
+    LOG_WARN("fail to get constraint info", KR(ret), K_(tenant_id), K(database_id), K(index_name));
+  } else if (OB_INVALID_ID != cst_info.constraint_id_) {
+    if (CONSTRAINT_TYPE_PRIMARY_KEY == cst_info.constraint_type_) {
+      ret = OB_ERR_EXIST_OBJECT;
+      LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+      LOG_WARN("index name conflicts with existing PK constraint in database",
+               KR(ret), K_(tenant_id), K(database_id), K(index_name));
+    } else {
+      // UK is not written to __all_constraint in OceanBase; UK-vs-INDEX conflicts
+      // are already covered by the vs-INDEX check. CHECK / NOT NULL do not share
+      // the namespace with INDEX names in Oracle mode, no conflict.
+    }
+  }
+  return ret;
+}
+
 int ObDDLHelper::gen_object_ids_(
     const int64_t object_cnt,
     share::ObIDGenerator &id_generator)

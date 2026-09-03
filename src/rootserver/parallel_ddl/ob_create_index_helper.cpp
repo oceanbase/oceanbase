@@ -424,11 +424,20 @@ int ObCreateIndexHelper::generate_index_schema_()
                                                                               name_exist))) {
     LOG_WARN("fail to check index name exist", KR(ret), K_(tenant_id), K(index_schema->get_table_name_str()));
     } else if (name_exist) {
-      ret = OB_ERR_KEY_NAME_DUPLICATE;
+      ret = OB_ERR_EXIST_OBJECT;
       LOG_WARN("duplicate index name", KR(ret), K_(tenant_id),
                "database_id", orig_data_table_schema_->get_database_id(),
                "data_table_id", orig_data_table_schema_->get_table_id(),
                "index_name", arg_.index_name_);
+    } else {
+      // INDEX name vs existing PK: CREATE INDEX — parallel path
+      // Oracle namespace: INDEX names conflict only with INDEX/PK/UK; CHECK/NOT NULL
+      // are allowed to share names with INDEX, so no further cross-check needed here.
+      const ObString &idx_name = index_schema->get_origin_index_name_str();
+      if (OB_FAIL(reject_oracle_index_name_conflict_with_pk_(
+                     database_id_, idx_name))) {
+        LOG_WARN("fail to check index name conflict with pk", KR(ret), K_(tenant_id), K(idx_name));
+      }
     }
   }
   uint64_t object_id = OB_INVALID_ID;
@@ -860,12 +869,21 @@ int ObCreateIndexHelper::construct_and_adjust_result_(int &return_ret) {
       }
     }
   }
-  if (OB_ERR_KEY_NAME_DUPLICATE == ret) {
+  if (OB_ERR_KEY_NAME_DUPLICATE == ret || OB_ERR_EXIST_OBJECT == ret) {
+    int orig_ret = ret;
     if (true == arg_.if_not_exist_) {
       ret = OB_SUCCESS;
-      LOG_USER_WARN(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
+      if (OB_ERR_KEY_NAME_DUPLICATE == orig_ret) {
+        LOG_USER_WARN(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
+      } else if (OB_ERR_EXIST_OBJECT == orig_ret) {
+        LOG_USER_WARN(OB_ERR_EXIST_OBJECT);
+      }
     } else {
-      LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
+      if (OB_ERR_KEY_NAME_DUPLICATE == orig_ret) {
+        LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE, arg_.index_name_.length(), arg_.index_name_.ptr());
+      } else if (OB_ERR_EXIST_OBJECT == orig_ret) {
+        LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+      }
     }
   }
   return ret;

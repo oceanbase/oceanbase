@@ -525,9 +525,31 @@ int ObCreateIndexResolver::resolve_index_column_node(
                                                 has_same_index_name))) {
             SQL_RESV_LOG(WARN, "check index name duplicate failed", K(ret));
           } else if (has_same_index_name) {
-            ret = OB_OBJ_ALREADY_EXIST;
+            ret = OB_ERR_EXIST_OBJECT;
             SQL_RESV_LOG(WARN, "index name is already used by an existing index", K(ret));
           }
+        }
+        // [CREATE INDEX] Database-level name conflict checks for Oracle mode.
+        // Unlike the table-level check above, these verify name uniqueness across the entire database.
+        // Oracle shares a single namespace for index/UNIQUE and PK constraint names.
+        // Note: the original code path had no explicit oracle-mode guard here (the sub-functions
+        // checked internally). We keep an explicit lib::is_oracle_mode() for readability and
+        // defense-in-depth; reject_oracle_name_conflict() also checks via get_tenant_compat_mode().
+        if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+          if (OB_ISNULL(schema_checker_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_RESV_LOG(WARN, "schema checker is null", KR(ret));
+          } else if (OB_FAIL(reject_oracle_name_conflict(
+              tbl_schema->get_tenant_id(), tbl_schema->get_database_id(),
+              create_index_arg.index_name_, schema_checker_->get_schema_guard(),
+              CHECK_VS_INDEX | CHECK_VS_PK))) {
+            SQL_RESV_LOG(WARN, "oracle name conflict check failed for CREATE INDEX",
+                         KR(ret), K(create_index_arg.index_name_));
+          }
+          // Oracle namespace: INDEX names conflict only with INDEX/PK/UK; CHECK/NOT NULL
+          // are allowed to share names with INDEX, so no further cross-check needed here.
+          // UK constraint name conflicts are already covered by the vs-INDEX check above
+          // (UK is registered as an INDEX in OB), so only PK name is checked here.
         }
         if (OB_SUCC(ret)) {
           if (OB_FAIL(check_indexes_on_same_cols(*tbl_schema,

@@ -3676,6 +3676,24 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
       } else if (ObItemType::T_INDEX == node->type_ && OB_FAIL(resolve_table_options(node->children_[2], true))) {
         SQL_RESV_LOG(WARN, "resolve index options failed", K(ret));
       }
+      // [CREATE TABLE UK] Database-level name conflict checks for Oracle mode.
+      // These verify name uniqueness across the entire database.
+      // Oracle shares a single namespace for index/UNIQUE and PK constraint names.
+      if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+        if (OB_ISNULL(schema_checker_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "schema checker is null", KR(ret));
+        } else if (OB_FAIL(reject_oracle_name_conflict(
+            session_info_->get_effective_tenant_id(), session_info_->get_database_id(),
+            index_name_, schema_checker_->get_schema_guard(),
+            CHECK_VS_INDEX | CHECK_VS_PK))) {
+          SQL_RESV_LOG(WARN, "oracle name conflict check failed for CREATE TABLE UK",
+                       KR(ret), K(index_name_));
+        }
+        // TODO: current check covers only PK/UK constraint; extend to all constraint types to align with Oracle.
+        //       UK constraint name conflicts are already covered by the vs-INDEX check
+        //       (UK is registered as an INDEX), so only PK name is checked here.
+      }
       if (OB_SUCC(ret) && lib::is_mysql_mode()) {
         if (ObItemType::T_INDEX == node->type_ && NULL != node->children_[4]) {
           if (1 != node->children_[4]->num_child_ || T_PARTITION_OPTION != node->children_[4]->type_) {
@@ -3867,10 +3885,15 @@ int ObCreateTableResolver::resolve_index_name(
     ObIndexNameHashWrapper index_key(index_name_);
     if (OB_HASH_EXIST == (ret = current_index_name_set_.exist_refactored(index_key))) {
       SQL_RESV_LOG(WARN, "duplicate index name", K(ret), K(index_name_));
-      ret = OB_ERR_KEY_NAME_DUPLICATE;
-      LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
-                     index_name_.length(),
-                     index_name_.ptr());
+      if (lib::is_oracle_mode()) {
+        ret = OB_ERR_EXIST_OBJECT;
+        LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+      } else {
+        ret = OB_ERR_KEY_NAME_DUPLICATE;
+        LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
+                       index_name_.length(),
+                       index_name_.ptr());
+      }
     } else if (0 == ObString::make_string("primary").case_compare(index_name_)) {
     //index name can not be 'primary'
       ret = OB_WRONG_NAME_FOR_INDEX;
@@ -4307,9 +4330,14 @@ int ObCreateTableResolver::check_building_domain_index_legal()
       ObIndexNameHashWrapper index_name_key(index_arg.index_name_);
       if (OB_FAIL(index_aux_name_set_.exist_refactored(index_name_key))) {
         if (OB_HASH_EXIST == ret) {
-          ret = OB_ERR_KEY_NAME_DUPLICATE;
-          LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
-              index_arg.index_name_.length(), index_arg.index_name_.ptr());
+          if (lib::is_oracle_mode()) {
+            ret = OB_ERR_EXIST_OBJECT;
+            LOG_USER_ERROR(OB_ERR_EXIST_OBJECT);
+          } else {
+            ret = OB_ERR_KEY_NAME_DUPLICATE;
+            LOG_USER_ERROR(OB_ERR_KEY_NAME_DUPLICATE,
+                index_arg.index_name_.length(), index_arg.index_name_.ptr());
+          }
           LOG_WARN("there is duplicate index aux name", K(ret), K(index_arg.index_name_));
         } else if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
