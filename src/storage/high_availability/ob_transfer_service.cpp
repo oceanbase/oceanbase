@@ -165,7 +165,7 @@ int ObTransferService::get_ls_id_array_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer service do not init", K(ret));
-  } else if (OB_FAIL(ls_service_->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else if (OB_ISNULL(ls_iter = ls_iter_guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -225,7 +225,7 @@ int ObTransferService::do_transfer_handler_(const share::ObLSID &ls_id)
   } else if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do ha handler get invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

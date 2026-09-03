@@ -34,7 +34,7 @@ int check_exist(const share::ObLSID &ls_id, ObLSHandle &ls_handle)
   if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLELOCK_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -413,7 +413,7 @@ int ObAdminRemoveLockP::process()
       LOG_ERROR("mtl ObLSService should not be null", K(ret));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_,
                                           ls_handle,
-                                          ObLSGetMod::TABLELOCK_MOD))) {
+                                          ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -447,7 +447,7 @@ int ObAdminUpdateLockP::process()
       LOG_ERROR("mtl ObLSService should not be null", K(ret));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_,
                                           ls_handle,
-                                          ObLSGetMod::TABLELOCK_MOD))) {
+                                          ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -484,7 +484,7 @@ int ObAdminRemoveLockPriorityP::process()
       LOG_ERROR("mtl ObLSService should not be null", K(ret));
     } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_,
                                           ls_handle,
-                                          ObLSGetMod::TABLELOCK_MOD))) {
+                                          ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

@@ -89,7 +89,7 @@ int ObDirectLoadOriginTable::init(const ObDirectLoadOriginTableCreateParam &para
     if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
       ret = OB_ERR_SYS;
       LOG_WARN("MTL ObLSService is null", KR(ret), "tenant_id", MTL_ID());
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get ls", KR(ret), K(ls));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

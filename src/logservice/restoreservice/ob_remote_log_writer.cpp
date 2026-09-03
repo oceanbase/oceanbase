@@ -27,7 +27,8 @@ using namespace share;
   ObLS *ls = NULL;      \
   ObLSHandle ls_handle;         \
   ObLogRestoreHandler *restore_handler = NULL;       \
-  if (OB_FAIL(ls_svr_->get_ls(id, ls_handle, ObLSGetMod::LOG_MOD))) {   \
+  if (OB_FAIL(ls_svr_->get_ls(id, ls_handle, ObLSGetMod::LOG_MOD,      \
+                              ObLSAccessAttr::DISABLE_LOGONLY))) {        \
     LOG_WARN("get ls failed", K(ret), K(id));     \
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {      \
     ret = OB_ERR_UNEXPECTED;       \
@@ -154,7 +155,8 @@ void ObRemoteLogWriter::do_thread_task_()
   ObLS *ls = NULL;
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
-  if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+  if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD,
+                                   ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

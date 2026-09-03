@@ -69,7 +69,7 @@ int ObStoreCtx::init_for_read(const ObLSID &ls_id,
   int ret = OB_SUCCESS;
   ObLSService *ls_svr = MTL(ObLSService*);
   ObLSHandle ls_handle;
-  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "get_ls from ls service fail.", K(ret), K(*ls_svr));
   } else {
     ret = init_for_read(ls_handle, timeout, tx_lock_timeout, snapshot_version);

@@ -75,7 +75,7 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
   } else if (OB_UNLIKELY(!tablet_id.is_valid()) || OB_ISNULL(freezer) || OB_ISNULL(t3m)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(tablet_id), KP(freezer), KP(t3m));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))){
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))){
     STORAGE_LOG(WARN, "Get ls from ls service failed.", KR(ret));
   } else if (ls_handle.get_ls()->is_logonly_replica()) {
     STORAGE_LOG(TRACE, "logonly replica do not need tx data mem table", KR(ret));

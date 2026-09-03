@@ -425,7 +425,7 @@ int ObTenantMetaChecker::check_dangling_replicas_(
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(
           it->first,
           ls_handle,
-          ObLSGetMod::OBSERVER_MOD))) {
+          ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         if (OB_LS_NOT_EXIST == ret) { // not exist in local, remove it from table
           ret = OB_SUCCESS;
           ++dangling_count;
@@ -510,8 +510,8 @@ int ObTenantMetaChecker::check_tablet_not_exist_in_local_(
   } else if (OB_FAIL(MTL(ObLSService*)->get_ls(
       ls_id,
       ls_handle,
-      ObLSGetMod::OBSERVER_MOD))) {
-    if (OB_LS_NOT_EXIST == ret) {
+      ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+    if (OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret) {
       ret = OB_SUCCESS;
       not_exist = true;
     } else {
@@ -552,7 +552,8 @@ int ObTenantMetaChecker::check_report_replicas_(
     LOG_WARN("ob_service is null", KR(ret));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(
       ls_iter,
-      ObLSGetMod::OBSERVER_MOD))) {
+      ObLSGetMod::OBSERVER_MOD,
+      ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls iter", KR(ret));
   } else {
     ObLS *ls = NULL;
@@ -626,7 +627,7 @@ int ObTenantMetaChecker::check_report_replicas_(
     LOG_WARN("ob_service is null", KR(ret));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(
       ls_iter,
-      ObLSGetMod::OBSERVER_MOD))) {
+      ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", KR(ret));
   } else {
     ObLS *ls = NULL;

@@ -70,7 +70,8 @@ int ObLogRestoreDriverBase::do_schedule()
   if (OB_UNLIKELY(! inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreArchiveDriver not init", K(ret));
-  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

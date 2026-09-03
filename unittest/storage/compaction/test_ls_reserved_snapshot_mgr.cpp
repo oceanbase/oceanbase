@@ -78,7 +78,7 @@ TEST_F(TestLSReservedSnapshotMgr, test_add_del_dependent_tablet)
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObLSReservedSnapshotMgr &reserved_snapshot_mgr = ls_handle.get_ls()->reserved_snapshot_mgr_;
@@ -125,7 +125,7 @@ TEST_F(TestLSReservedSnapshotMgr, test_update_with_smaller_snapshot)
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObLSReservedSnapshotMgr &reserved_snapshot_mgr = ls_handle.get_ls()->reserved_snapshot_mgr_;

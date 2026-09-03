@@ -133,7 +133,7 @@ void TestLSTabletInfoWR::fill_tablet_meta()
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ObLSID(TEST_LS_ID), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletMapKey src_key;

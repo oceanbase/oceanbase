@@ -614,7 +614,7 @@ int ObTenantWeakReadService::scan_all_ls_(storage::ObLSService *ls_svr)
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected ls service", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(iter, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(iter, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_NOT_RUNNING != ret) {
       LOG_WARN("fail to alloc ls iter", KR(ret));
     }
@@ -751,7 +751,7 @@ int ObTenantWeakReadService::check_can_start_service(const SCN &current_gts,
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     FLOG_ERROR("unexpected ls service", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(iter, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(iter, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_NOT_RUNNING != ret) {
       FLOG_WARN("fail to alloc ls iter", KR(ret));
     }

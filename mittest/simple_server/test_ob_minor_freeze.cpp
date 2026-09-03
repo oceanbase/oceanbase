@@ -287,7 +287,7 @@ void ObMinorFreezeTest::get_ls()
     ObLSService *ls_srv = MTL(ObLSService *);
     ASSERT_NE(nullptr, ls_srv);
     OB_LOG(INFO, "ls_id", K(ls_ids_.at(i)));
-    ASSERT_EQ(OB_SUCCESS, ls_srv->get_ls(ls_ids_.at(i), ls_handle, ObLSGetMod::STORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_srv->get_ls(ls_ids_.at(i), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ASSERT_EQ(true, ls_handle.is_valid());
     ls_handles_.push_back(ls_handle);
   }

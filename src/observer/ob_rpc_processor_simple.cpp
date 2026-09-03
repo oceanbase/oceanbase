@@ -204,7 +204,12 @@ int ObRpcLSTypeTransformP::process()
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (REPLICA_TYPE_LOGONLY == arg_.src_.get_replica_type()
+        || REPLICA_TYPE_LOGONLY == arg_.dst_.get_replica_type()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("change replica op involving logonly replica is not allowed", K(ret), K(arg_));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -254,7 +259,8 @@ int ObRpcLSModifyPaxosReplicaNumberP::process()
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "mtl ObLSService should not be null", KR(ret));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD,
+                                          ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -289,7 +295,7 @@ int ObRpcLSCheckDRTaskExistP::process()
     if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "ls service should not be null", K(ret), K(tenant_id));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       if (OB_LS_NOT_EXIST == ret) {
         is_exist = false;
         ret = OB_SUCCESS;
@@ -381,7 +387,8 @@ int ObRpcAddArbP::process()
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                    ObLSAccessAttr::DISABLE_LOGONLY))) {
     COMMON_LOG(WARN, "get ls failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -411,7 +418,8 @@ int ObRpcRemoveArbP::process()
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                    ObLSAccessAttr::DISABLE_LOGONLY))) {
     COMMON_LOG(WARN, "get ls failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -990,7 +998,7 @@ int ObDumpMemtableP::process()
         LOG_WARN("MTL ObLSService is null", KR(ret), K(arg_.tenant_id_));
       } else if (OB_FAIL(ls_svr->get_ls(ObLSID(arg_.ls_id_),
                                         ls_handle,
-                                        ObLSGetMod::OBSERVER_MOD))) {
+                                        ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get log_stream's ls_handle", KR(ret), K(arg_.tenant_id_), K(arg_.ls_id_));
         } else {
@@ -1053,7 +1061,7 @@ int ObDumpTxDataMemtableP::process()
         LOG_WARN("MTL ObLSService is null", KR(ret), K(arg_.tenant_id_));
       } else if (OB_FAIL(ls_svr->get_ls(ObLSID(arg_.ls_id_),
                                         ls_handle,
-                                        ObLSGetMod::OBSERVER_MOD))) {
+                                        ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get log_stream's ls_handle", KR(ret), K(arg_.tenant_id_), K(arg_.ls_id_));
         } else {
@@ -1115,7 +1123,7 @@ int ObDumpSingleTxDataP::process()
         LOG_WARN("MTL ObLSService is null", KR(ret), K(arg_.tenant_id_));
       } else if (OB_FAIL(ls_svr->get_ls(ObLSID(arg_.ls_id_),
                                         ls_handle,
-                                        ObLSGetMod::OBSERVER_MOD))) {
+                                        ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         if (OB_ENTRY_NOT_EXIST != ret) {
           LOG_WARN("fail to get log_stream's ls_handle", KR(ret), K(arg_.tenant_id_), K(arg_.ls_id_));
         } else {
@@ -1547,7 +1555,8 @@ int ObRpcCheckLSCanOfflineP::process()
     if (OB_ISNULL(ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "mtl ObLSService should not be null", KR(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                      ObLSAccessAttr::ALLOW_LOGONLY))) {
       COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1591,7 +1600,8 @@ int ObRpcGetLSAccessModeP::process()
     } else if (!is_strong_leader(role)) {
       ret = OB_NOT_MASTER;
       LOG_WARN("the ls not master", KR(ret), K(ls_id));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                      ObLSAccessAttr::DISABLE_LOGONLY))) {
       COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1642,7 +1652,8 @@ int ObRpcChangeLSAccessModeP::process()
     if (OB_ISNULL(ls_svr) || OB_ISNULL(log_ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "mtl ObLSService or ObLogService should not be null", KR(ret), KP(ls_svr), KP(log_ls_svr));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                      ObLSAccessAttr::ALLOW_LOGONLY))) {
       COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1702,7 +1713,8 @@ int ObRpcSetMemberListP::process()
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                    ObLSAccessAttr::ALLOW_LOGONLY))) {
     COMMON_LOG(WARN, "get ls failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2236,7 +2248,7 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
       write_info.size_= arg_.redo_info_.data_buffer_.length();
       write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       const int64_t io_timeout_ms = max(DDL_FLUSH_MACRO_BLOCK_TIMEOUT / 1000L, GCONF._data_storage_io_timeout / 1000L);
-      if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(arg_));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -2284,7 +2296,7 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
     if (OB_UNLIKELY(!arg_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid arguments", K(ret), K_(arg));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2381,8 +2393,17 @@ int ObQueryLSIsValidMemberP::process()
       bool is_valid_member = true;
       obrpc::LogMemberGCStat stat = obrpc::LogMemberGCStat::LOG_MEMBER_NORMAL_GC_STAT;
       ObLSHandle handle;
-      if (OB_SUCCESS != (tmp_ret = ls_service->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD))) {
-        if (OB_LS_NOT_EXIST == tmp_ret || OB_NOT_RUNNING == tmp_ret) {
+      if (OB_SUCCESS != (tmp_ret = ls_service->get_ls(
+          id, handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+        // A logonly replica cannot be the active leader that serves this RPC.
+        // Preserve the former externally visible error while rejecting it at
+        // the LS access boundary, before get_member_gc_stat() is invoked.
+        if (OB_LS_OFFLINE == tmp_ret) {
+          tmp_ret = OB_NOT_MASTER;
+        }
+        if (OB_LS_NOT_EXIST == tmp_ret
+            || OB_NOT_RUNNING == tmp_ret
+            || OB_NOT_MASTER == tmp_ret) {
           COMMON_LOG(WARN, "get log stream failed", K(id), K(tmp_ret));
         } else {
           COMMON_LOG(ERROR, "get log stream failed", K(id), K(tmp_ret));
@@ -3245,7 +3266,7 @@ int ObRebuildTabletP::process()
       rebuild_info.type_ = ObLSRebuildType::TABLET;
       if (OB_FAIL(rebuild_info.tablet_id_array_.assign(arg_.tablet_id_array_))) {
         LOG_WARN("failed to assign tablet id array", K(ret), K(arg_));
-      } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+      } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(arg_));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;

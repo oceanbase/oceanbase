@@ -177,7 +177,7 @@ TEST_F(ObLockTableBeforeRestartTest, test_commit_log)
   ASSERT_EQ(OB_SUCCESS, ret);
   // 1.2 check exist
   LOG_INFO("ObLockTableBeforeRestartTest::test_commit_log 1.2");
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::TABLELOCK_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
   checkpoint_executor = ls->get_checkpoint_executor();
   ASSERT_NE(nullptr, checkpoint_executor);
@@ -298,7 +298,7 @@ TEST_F(ObLockTableAfterRestartTest, test_recover_lock_table)
   ObLS *ls = nullptr;
   ObLSHandle handle;
   share::ObLSID ls_id = share::LOCK_SERVICE_LS;
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
   ObCheckpointExecutor *checkpoint_executor = ls->get_checkpoint_executor();
   ASSERT_NE(nullptr, checkpoint_executor);

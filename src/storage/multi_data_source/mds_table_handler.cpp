@@ -67,7 +67,7 @@ int ObMdsTableHandler::get_mds_table_handle(mds::MdsTableHandle &handle,
           MDS_LOG_INIT(WARN, "ls service should not be NULL");
         } else if (MDS_FAIL(ls_service->get_ls(ls_id,
                                                ls_handle,
-                                               ObLSGetMod::TABLET_MOD))) {
+                                               ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           MDS_LOG_INIT(WARN, "failed to get ls");
         } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
           ret = OB_ERR_UNEXPECTED;

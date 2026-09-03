@@ -77,7 +77,7 @@ int ObAllVirtualTxDataTable::process_curr_tenant(common::ObNewRow *&row)
     SERVER_LOG(WARN, "allocator_ shouldn't be nullptr", K(allocator_), KR(ret));
   } else if (FALSE_IT(start_to_read_ = true)) {
   } else if (ls_iter_guard_.get_ptr() == nullptr &&
-             OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
+             OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     SERVER_LOG(WARN, "get_ls_iter fail", KR(ret));
   } else if (OB_FAIL(get_next_tx_data_table_(tx_data_table))) {
     if (OB_ITER_END != ret) {

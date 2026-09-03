@@ -96,7 +96,7 @@ TEST_F(TestTabletRefCnt, test_persist_tablet)
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
   common::ObArenaAllocator allocator;
@@ -153,7 +153,7 @@ TEST_F(TestTabletRefCnt, test_meta_ref_cnt)
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
   int64_t offset = 0;
@@ -260,7 +260,7 @@ TEST_F(TestTabletRefCnt, test_empty_shell_macro_ref_cnt)
   ObTablet *tablet = nullptr;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
 
   // create and get empty shell

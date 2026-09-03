@@ -74,11 +74,15 @@ int ObAllVirtualIDService::get_next_tenant_id_info_()
   if (OB_SUCC(ret)) {
     cur_tenant_id_ = all_tenants_.at(tenant_ids_index_);
     MTL_SWITCH(cur_tenant_id_) {
-      bool exist = false;
-      if (OB_FAIL(MTL(ObLSService*)->check_ls_exist(IDS_LS, exist))) {
-        SERVER_LOG(WARN, "check ls exist fail", K(ret), K_(cur_tenant_id));
-      } else if (!exist) {
-        ret = OB_LS_NOT_EXIST;
+      bool is_logonly = false;
+      if (OB_FAIL(MTL(ObLSService*)->check_ls_is_logonly(IDS_LS, is_logonly))) {
+        if (OB_LS_NOT_EXIST == ret) {
+          tenant_ids_index_++;
+        } else {
+          SERVER_LOG(WARN, "check ls is logonly fail", K(ret), K_(cur_tenant_id));
+        }
+      } else if (is_logonly) {
+        ret = OB_LS_OFFLINE;
         tenant_ids_index_++;
       } else {
         transaction::ObIDService *id_service = NULL;
@@ -139,11 +143,11 @@ int ObAllVirtualIDService::inner_get_next_row(ObNewRow *&row)
   } else {
     do {
       if (OB_FAIL(get_next_tenant_id_info_())) {
-        if (OB_ITER_END != ret) {
+        if (OB_ITER_END != ret && OB_LS_NOT_EXIST != ret && OB_LS_OFFLINE != ret) {
           SERVER_LOG(WARN, "ObAllVirtualIDService iter error", K(ret));
         }
       }
-    } while (OB_TENANT_NOT_IN_SERVER == ret || OB_LS_NOT_EXIST == ret);
+    } while (OB_TENANT_NOT_IN_SERVER == ret || OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret);
   }
   if (OB_SUCC(ret)) {
     SERVER_LOG(INFO, "ObAllVirtualIDService iter success", K(*this));

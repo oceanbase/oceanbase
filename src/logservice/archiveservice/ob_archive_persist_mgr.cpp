@@ -39,7 +39,7 @@ class ObArchivePersistMgr::DeleteStaleLSFunctor
       int ret = OB_SUCCESS;
       bool bret = false;
       ObLSHandle handle;
-      if (OB_FAIL(ls_svr_->get_ls(id, handle, ObLSGetMod::ARCHIVE_MOD))) {
+      if (OB_FAIL(ls_svr_->get_ls(id, handle, ObLSGetMod::ARCHIVE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         ARCHIVE_LOG(WARN, "get_ls failed, remove archive persist value", K(ret), K(id));
         bret = true;
       }
@@ -349,7 +349,8 @@ int ObArchivePersistMgr::persist_archive_progress_()
       ARCHIVE_LOG(INFO, "server is in diff round", K(key), K(attr));
     }
   } else if (! need_do) {
-  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::ARCHIVE_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::ARCHIVE_MOD,
+                                          ObLSAccessAttr::ALLOW_LOGONLY))) {
     ARCHIVE_LOG(WARN, "get ls iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -471,7 +472,8 @@ int ObArchivePersistMgr::load_archive_progress_(const ArchiveKey &key)
   common::ObSharedGuard<ObLSIterator> guard;
   if (! key.is_valid()) {
     // just skip
-  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::ARCHIVE_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::ARCHIVE_MOD,
+                                          ObLSAccessAttr::ALLOW_LOGONLY))) {
     ARCHIVE_LOG(WARN, "get ls iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

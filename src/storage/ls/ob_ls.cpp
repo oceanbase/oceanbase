@@ -1347,12 +1347,18 @@ int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_pa
   const int64_t cost_time = 10 * 1000 * 1000; // 10s
   bool archive_force = false;
   bool archive_ignore = false;
+  archive::ObArchiveService *archive_service = nullptr;
   const ObLSID &id = get_ls_id();
-  share::SCN tx_data_recycle_scn;
+  // Replicas without ssstore (for example LOGONLY replicas) do not initialize
+  // TabletService or the tx data table.  Their HA meta package only needs the
+  // LS/PALF metadata, so use min_scn as the conservative recycle boundary and
+  // avoid accessing an unavailable data plane.
+  share::SCN tx_data_recycle_scn = share::SCN::min_scn();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_FAIL(get_tx_data_sstable_recycle_scn(tx_data_recycle_scn))) {
+  } else if (ObReplicaTypeCheck::is_replica_with_ssstore(ls_meta_.get_replica_type())
+      && OB_FAIL(get_tx_data_sstable_recycle_scn(tx_data_recycle_scn))) {
     LOG_WARN("failed to get tx data recycle scn", K(ret));
   } else {
     meta_package.tx_data_recycle_scn_ = tx_data_recycle_scn;
@@ -1362,7 +1368,10 @@ int ObLS::get_ls_meta_package(const bool check_archive, ObLSMetaPackage &meta_pa
     time_guard.click();
     if (! check_archive) {
       LOG_TRACE("no need check archive", K(id), K(check_archive));
-    } else if (OB_FAIL(MTL(archive::ObArchiveService*)->get_ls_archive_progress(
+    } else if (OB_ISNULL(archive_service = MTL(archive::ObArchiveService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("archive service should not be null", K(ret), K(id));
+    } else if (OB_FAIL(archive_service->get_ls_archive_progress(
             id, archive_lsn, unused_archive_scn, archive_force, archive_ignore))) {
       LOG_WARN("get ls archive progress failed", K(ret), K(id));
     } else if (archive_ignore) {
@@ -2034,7 +2043,7 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
                                        ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
                                        : input_abs_timeout_ts;
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_meta_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_meta_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_meta_.ls_id_));
     } else {
       ret = logstream_freeze_task(trace_id, abs_timeout_ts);

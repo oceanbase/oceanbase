@@ -635,7 +635,7 @@ int ObSharedMacroBlockMgr::update_tablet(
     ObLSService *ls_svr = MTL(ObLSService*);
     ObLSHandle ls_handle;
 
-    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get ls handle", K(ret), K(ls_id), KPC(tablet_handle.get_obj()));
     } else {
       const int64_t rebuild_seq = ls_handle.get_ls()->get_rebuild_seq();

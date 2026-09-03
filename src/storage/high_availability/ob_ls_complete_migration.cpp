@@ -336,7 +336,7 @@ int ObLSCompleteMigrationDagNet::clear_dag_net_ctx()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls complete migration dag net do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
@@ -1023,7 +1023,7 @@ int ObStartCompleteMigrationTask::init()
   } else if (OB_ISNULL(complete_dag_net = static_cast<ObLSCompleteMigrationDagNet*>(dag_net))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("complete dag net should not be NULL", K(ret), KP(complete_dag_net));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(complete_dag_net->get_ctx()->arg_.ls_id_, ls_handle_))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(complete_dag_net->get_ctx()->arg_.ls_id_, ls_handle_, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(dag_net));
   } else {
     ctx_ = complete_dag_net->get_ctx();
@@ -1960,7 +1960,7 @@ int ObStartCompleteMigrationTask::inner_check_tablet_transfer_table_ready_(
   } else if (!tablet->get_tablet_meta().has_transfer_table()) {
     LOG_INFO("tablet do not has transfer table", K(ret), K(tablet_id), "ls_id", ls->get_ls_id());
     need_check_again = false;
-  } else if (OB_FAIL(ls_service->get_ls(tablet->get_tablet_meta().transfer_info_.ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(tablet->get_tablet_meta().transfer_info_.ls_id_, src_ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get transfer src ls", K(ret), KPC(tablet));
     if (OB_LS_NOT_EXIST == ret) {
       if (OB_SUCCESS != (tmp_ret = ctx_->set_result(OB_TRANSFER_SRC_LS_NOT_EXIST, true /*allow_retry*/))) {
@@ -2019,7 +2019,10 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start complete migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (!ObReplicaTypeCheck::is_replica_with_ssstore(ctx_->arg_.dst_.get_replica_type())) {
+    need_wait = false;
+    LOG_INFO("replica without ssstore, no need to wait log replay to max minor end scn", KPC(ctx_));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2420,4 +2423,3 @@ int ObFinishCompleteMigrationTask::record_server_event_()
   }
   return ret;
 }
-

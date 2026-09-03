@@ -31,7 +31,8 @@ bool RetryParam::check_ls_in_gc_state() const {
   if (OB_ISNULL(ls_service)) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG(ERROR, "ls service is null", K(*this));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD,
+                                        ObLSAccessAttr::ALLOW_LOGONLY))) {
     MDS_LOG(WARN, "fail to get ls", K(*this));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     MDS_LOG(WARN, "fail to get ls", K(*this));

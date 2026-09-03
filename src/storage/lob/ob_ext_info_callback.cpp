@@ -617,7 +617,7 @@ int ObExtInfoCbRegister::check_is_during_freeze(bool &is_during_freeze,
   if (OB_ISNULL(lob_param_)) { // if lob_param_ is null, means this is not outrow lob reading, so no need check
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls(lob_param_->ls_id_,
                                                 ls_handle,
-                                                ObLSGetMod::STORAGE_MOD))) {
+                                                ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls handle failed", KR(ret), K(lob_param_->ls_id_));
   } else if (ls_handle.get_ls()->is_logonly_replica()) {
     is_during_freeze = false;

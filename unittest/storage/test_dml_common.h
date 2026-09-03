@@ -161,7 +161,7 @@ int TestDmlCommon::create_ls(
   } else if (!b_exist) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected error, ls does not exist", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "failed to get ls", K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -255,7 +255,7 @@ int TestDmlCommon::mock_ls_tablet_service(
   ObLSService *ls_svr = MTL(ObLSService*);
   ObLS *ls = nullptr;
 
-  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

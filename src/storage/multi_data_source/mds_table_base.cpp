@@ -166,7 +166,7 @@ int MdsTableBase::get_ls_max_consequent_callbacked_scn_(share::SCN &max_conseque
   } else if (OB_ISNULL(ls_service)) {
     ret = OB_BAD_NULL_ERROR;
     MDS_LOG(WARN, "ls tx service is null", KR(ret), K(*this));
-  } else if (MDS_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+  } else if (MDS_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     MDS_LOG(WARN, "fail to get ls handle", KR(ret), K(*this));
   } else if (MDS_FAIL(ls_handle.get_ls()->get_freezer()->get_max_consequent_callbacked_scn(max_consequent_callbacked_scn))) {
     MDS_LOG(WARN, "fail to get max_consequent_callbacked_scn", KR(ret), K(*this));

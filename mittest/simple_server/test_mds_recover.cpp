@@ -92,7 +92,7 @@ void create_or_find_test_table(const char *table_name, share::ObLSID &ls_id, ObT
                                                             ls_id));
   // 4. 从ls_id找到ls
   storage::ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 }
 
 void insert_row_to_write_inc_seq(const char *table_name)
@@ -129,7 +129,7 @@ void add_column_to_write_dll_info(const char *table_name, share::ObLSID &ls_id, 
                                                             ls_id));
   // 4. 从ls_id找到ls
   storage::ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 }
 
 void do_major_to_write_medium_info()
@@ -143,7 +143,7 @@ void do_flush_mds_table(share::ObLSID ls_id, ObTabletID tablet_id)
 {
   // 1. 从ls_id找到ls
   storage::ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   // 2. 从ls拿到tablet handle
   storage::ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
@@ -172,7 +172,7 @@ void do_recycle_and_gc_mds_table(share::ObLSID ls_id, ObTabletID tablet_id)
   int ret = OB_SUCCESS;
   // 1. 从ls_id找到ls
   storage::ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   // 2. 从ls拿到tablet handle
   storage::ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
@@ -225,7 +225,7 @@ void advance_checkpoint(share::ObLSID ls_id, share::SCN aim_scn)
   int ret = OB_SUCCESS;
   // 1. 从ls_id找到ls
   storage::ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   int64_t retry_times = 60;
   SCN checkpoint = SCN::min_scn();
   // 2. 等max_decided_scn推过目标点

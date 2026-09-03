@@ -323,7 +323,7 @@ void TestConcurrentT3M::run1()
   share::ObTenantEnv::set_tenant(tenant_base_);
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   int count = TABLET_CNT_PER_THREAD;
@@ -548,7 +548,7 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.get_tablet(WashTabletPriority::WTP_HIGH, key, handle);
@@ -658,7 +658,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
@@ -757,7 +757,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
@@ -869,7 +869,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
@@ -952,7 +952,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
@@ -1046,7 +1046,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
@@ -1142,7 +1142,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);
@@ -1263,7 +1263,7 @@ TEST_F(TestTenantMetaMemMgr, test_replace_tablet)
   ObTabletHandle handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = t3m_.create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle);

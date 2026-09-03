@@ -425,8 +425,12 @@ int ObBackupUtils::check_ls_valid_for_backup(const uint64_t tenant_id, const sha
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
-    LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+    if (OB_LS_OFFLINE == ret) {
+      ret = OB_REPLICA_CANNOT_BACKUP;
+    } else {
+      LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+    }
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream not exist", K(ret), K(ls_id));
@@ -2020,7 +2024,7 @@ int ObBackupTabletProvider::inner_get_tablet_handle_without_memtables_(const uin
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2084,7 +2088,7 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
         if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
-        } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+        } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("failed to get log stream", K(ret), K(ls_id));
         } else if (OB_ISNULL(ls = handle.get_ls())) {
           ret = OB_ERR_UNEXPECTED;

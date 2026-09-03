@@ -125,7 +125,8 @@ public:
       const bool allow_retry = true);
   static int get_ls(
       const share::ObLSID &ls_id,
-      ObLSHandle &ls_handle);
+      ObLSHandle &ls_handle,
+      ObLSAccessAttr access_attr);
   static int check_self_is_valid_member(
       const share::ObLSID &ls_id,
       bool &is_valid_member);

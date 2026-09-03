@@ -22,7 +22,8 @@ namespace logservice
   ObLS *ls = NULL;      \
   ObLSHandle ls_handle;         \
   ObLogRestoreHandler *restore_handler = NULL;       \
-  if (OB_FAIL(ls_svr_->get_ls(id, ls_handle, ObLSGetMod::LOG_MOD))) {   \
+  if (OB_FAIL(ls_svr_->get_ls(id, ls_handle, ObLSGetMod::LOG_MOD,      \
+                              ObLSAccessAttr::DISABLE_LOGONLY))) {        \
     LOG_WARN("get ls failed", K(ret), K(id));     \
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {      \
     ret = OB_ERR_UNEXPECTED;       \

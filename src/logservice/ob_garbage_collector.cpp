@@ -229,7 +229,7 @@ int ObGarbageCollector::QueryLSIsValidMemberFunctor::handle_rpc_response_(const 
       } else if (OB_ISNULL(ls_service_)) {
         ret = OB_ERR_UNEXPECTED;
         CLOG_LOG(WARN, "log stream service is NULL", K(ret));
-      } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         if (OB_LS_NOT_EXIST == tmp_ret) {
           CLOG_LOG(INFO, "ls does not exist anymore, maybe removed", K(tmp_ret), K(id));
         } else {
@@ -1462,7 +1462,8 @@ int ObGarbageCollector::construct_server_ls_map_for_member_list_(ServerLSMap &se
   int64_t cluster_id = obrpc::ObRpcNetHandler::CLUSTER_ID;
   uint64_t tenant_id = MTL_ID();
   ObMigrationStatus migration_status;
-  if (OB_FAIL(ls_service_->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+  if (OB_FAIL(ls_service_->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD,
+                                       ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1555,7 +1556,8 @@ void ObGarbageCollector::gc_check_ls_status_(ObGCCandidateArray &gc_candidates)
   int ret = OB_SUCCESS;
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
-  if (OB_FAIL(ls_service_->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+  if (OB_FAIL(ls_service_->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD,
+                                       ObLSAccessAttr::ALLOW_LOGONLY))) {
     CLOG_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1671,7 +1673,7 @@ void ObGarbageCollector::execute_gc_(ObGCCandidateArray &gc_candidates)
     } else if (OB_ISNULL(ls_service_)) {
       ret = OB_NOT_INIT;
       CLOG_LOG(ERROR, "ls service is NULL", K(ret));
-    } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_SUCCESS != (tmp_ret = ls_service_->get_ls(id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       if (OB_LS_NOT_EXIST == tmp_ret) {
         CLOG_LOG(INFO, "ls does not exist anymore, maybe removed", K(tmp_ret), K(id));
       } else {

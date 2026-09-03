@@ -419,7 +419,7 @@ TEST_F(TestTabletCreateDeleteHelper, create_pure_data_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -578,7 +578,7 @@ TEST_F(TestTabletCreateDeleteHelper, create_mixed_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -689,7 +689,7 @@ TEST_F(TestTabletCreateDeleteHelper, two_level_create_arg)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -734,7 +734,7 @@ TEST_F(TestTabletCreateDeleteHelper, slog_create_partital_tablets_and_replay)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -884,7 +884,7 @@ TEST_F(TestTabletCreateDeleteHelper, create_pure_index_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1082,7 +1082,7 @@ TEST_F(TestTabletCreateDeleteHelper, abort_create_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1126,7 +1126,7 @@ TEST_F(TestTabletCreateDeleteHelper, abort_create_tablets_no_redo)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1195,7 +1195,7 @@ TEST_F(TestTabletCreateDeleteHelper, remove_pure_data_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1325,7 +1325,7 @@ TEST_F(TestTabletCreateDeleteHelper, remove_mixed_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1510,7 +1510,7 @@ TEST_F(TestTabletCreateDeleteHelper, remove_pure_index_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1720,7 +1720,7 @@ TEST_F(TestTabletCreateDeleteHelper, remove_unbatched_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1851,7 +1851,7 @@ TEST_F(TestTabletCreateDeleteHelper, roll_back_prepare_remove_tablet)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -1924,7 +1924,7 @@ TEST_F(TestTabletCreateDeleteHelper, abort_remove_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2095,7 +2095,7 @@ TEST_F(TestTabletCreateDeleteHelper, abort_remove_tablets_no_redo)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2248,7 +2248,7 @@ TEST_F(TestTabletCreateDeleteHelper, replay_abort_remove_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2378,7 +2378,7 @@ TEST_F(TestTabletCreateDeleteHelper, partial_prepare_remove_and_full_abort_remov
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2544,7 +2544,7 @@ TEST_F(TestTabletCreateDeleteHelper, abort_create_tablets_for_switch_leader)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2577,7 +2577,7 @@ TEST_F(TestTabletCreateDeleteHelper, abort_remove_tablets_for_switch_leader)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2732,7 +2732,7 @@ TEST_F(TestTabletCreateDeleteHelper, get_tablet_with_timeout)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
@@ -2758,7 +2758,7 @@ TEST_F(TestTabletCreateDeleteHelper, migrate_lob_tablets)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2886,7 +2886,7 @@ TEST_F(TestTabletCreateDeleteHelper, tablet_not_exist_commit)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2931,7 +2931,7 @@ TEST_F(TestTabletCreateDeleteHelper, force_kill_create_tablet_tx)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -2966,7 +2966,7 @@ TEST_F(TestTabletCreateDeleteHelper, force_kill_remove_tablet_tx)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -3042,7 +3042,7 @@ TEST_F(TestTabletCreateDeleteHelper, empty_memtable_replay_commit)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;

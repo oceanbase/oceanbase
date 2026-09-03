@@ -29,7 +29,7 @@ bool ObDataValidationService::need_delay_resource_recycle(const ObLSID ls_id)
   if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_LS_NOT_EXIST != ret) {
       TRANS_LOG(DEBUG, "get log stream failed", K(ls_id), K(ret));
     }
@@ -60,7 +60,7 @@ void ObDataValidationService::set_delay_resource_recycle(const ObLSID ls_id)
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_LS_NOT_EXIST != ret) {
       TRANS_LOG(DEBUG, "get log stream failed", K(ls_id), K(ret));
     }

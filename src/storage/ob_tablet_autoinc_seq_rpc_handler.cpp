@@ -140,7 +140,7 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
         LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
         LOG_WARN("failed to get tablet", KR(ret), K(arg));
@@ -178,7 +178,7 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
         LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else if (OB_FAIL(res.autoinc_params_.reserve(arg.src_tablet_ids_.count()))) {
         LOG_WARN("failed to reserve autoinc param", K(ret));
@@ -239,7 +239,7 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
       } else if (!is_strong_leader(role)) {
         ret = OB_NOT_MASTER;
         LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < res.autoinc_params_.count(); i++) {

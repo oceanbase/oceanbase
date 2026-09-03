@@ -107,7 +107,7 @@ int ObTabletMemtableMgr::init(const common::ObTabletID &tablet_id,
     TRANS_LOG(WARN, "ls service should not be NULL", K(ret), KP(ls_service));
   } else if (OB_FAIL(ls_service->get_ls(ls_id,
                                         ls_handle,
-                                        ObLSGetMod::TABLET_MOD))) {
+                                        ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(MTL_ID()));
   } else if (OB_ISNULL(ls_ = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -227,7 +227,7 @@ int ObTabletMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
     } else if (OB_ISNULL(memtable = static_cast<memtable::ObMemtable *>(memtable_handle.get_table()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get memtable", K(ret), K(ls_id), K(tablet_id_), K(memtable_handle));
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD))) {
+    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("failed to get log stream", K(ret), K(ls_id), K(tablet_id_));
     } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

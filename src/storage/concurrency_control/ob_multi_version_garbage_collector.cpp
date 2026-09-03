@@ -880,7 +880,9 @@ int ObMultiVersionGarbageCollector::reclaim()
   ObTimeGuard timeguard(__func__, 1 * 1000 * 1000);
 
   if (OB_FAIL(MTL(storage::ObLSService*)->
-              get_ls(share::SYS_LS, ls_handle, ObLSGetMod::MULTI_VERSION_GARBAGE_COLLOECTOR_MOD))) {
+              get_ls(share::SYS_LS, ls_handle,
+                     ObLSGetMod::MULTI_VERSION_GARBAGE_COLLOECTOR_MOD,
+                     ObLSAccessAttr::ALLOW_LOGONLY))) {
     MVCC_LOG(WARN, "get sys ls failed", K(ret));
     ret = OB_SUCCESS;
   } else if (OB_ISNULL(ls = ls_handle.get_ls())

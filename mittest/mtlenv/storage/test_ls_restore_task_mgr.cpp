@@ -233,7 +233,7 @@ public:
     EXPECT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, id_100, arg));
     arg.tenant_info_.tenant_role_ = share::RESTORE_TENANT_ROLE;
     EXPECT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
-    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_100, handle, ObLSGetMod::STORAGE_MOD));
+    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_100, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     EXPECT_EQ(OB_SUCCESS, handle.get_ls()->get_restore_status(restore_status));
     EXPECT_EQ(ObLSRestoreStatus::Status::RESTORE_START, restore_status);
   }
@@ -245,7 +245,7 @@ public:
     ObLSHandle handle;
     ObLSID id_100(100);
     ObLSService* ls_svr = MTL(ObLSService*);
-    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_100, handle, ObLSGetMod::STORAGE_MOD));
+    EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_100, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ls = handle.get_ls();
   }
 private:

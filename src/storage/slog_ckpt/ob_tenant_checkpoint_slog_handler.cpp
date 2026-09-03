@@ -536,7 +536,9 @@ int ObTenantCheckpointSlogHandler::replay_dup_table_ls_meta(
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(dup_ls_meta.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(dup_ls_meta.ls_id_, ls_handle,
+                                         ObLSGetMod::STORAGE_MOD,
+                                         ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ret), K(dup_ls_meta));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -646,7 +648,8 @@ int ObTenantCheckpointSlogHandler::check_is_need_record_transfer_info(
   } else if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::STORAGE_MOD,
+                                    ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       is_need = false;
       LOG_WARN("source ls is not exist", KR(ret), K(src_ls_id));
@@ -1245,7 +1248,10 @@ int ObTenantCheckpointSlogHandler::inner_replay_dup_table_ls_slog(
 
   if (OB_FAIL(slog_entry.deserialize(param.buf_, param.disk_addr_.size(), pos))) {
     LOG_WARN("fail to deserialize slog", K(ret), K(param), K(pos));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(slog_entry.get_dup_ls_meta().ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(slog_entry.get_dup_ls_meta().ls_id_,
+                                                ls_handle,
+                                                ObLSGetMod::STORAGE_MOD,
+                                                ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       LOG_INFO("this is possible when writing ls checkpoint but ls is removing", K(slog_entry));
       ret = OB_SUCCESS;
@@ -1460,7 +1466,7 @@ int ObTenantCheckpointSlogHandler::get_tablet_svr(
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls handle", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

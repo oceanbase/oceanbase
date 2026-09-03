@@ -134,7 +134,7 @@ void TestTabletStatus::wait_for_tablet(
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ObLSTabletService &ls_tablet_service = ls->ls_tablet_svr_;
@@ -163,7 +163,7 @@ TEST_F(TestTabletStatus, misc)
   // get ls
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
 

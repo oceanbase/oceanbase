@@ -1316,7 +1316,7 @@ int ObTransferStorageSchemaMgr::build_latest_storage_schema_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(task_info.src_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(task_info.src_ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(task_info));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -73,7 +73,7 @@ int ObTabletReplayExecutor::execute(const share::SCN &scn, const share::ObLSID &
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-  } else if (CLICK_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+  } else if (CLICK_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(WARN, "fail to get log stream", KR(ret), K(ls_id));
   } else if (CLICK_FAIL(check_can_skip_replay_(ls_handle, scn, can_skip_replay))) {
     CLOG_LOG(WARN, "failed to check can skip reply", K(ret), K(scn), K(ls_id));
@@ -238,7 +238,7 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     ObLS *ls = nullptr;
     const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
     const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       CLOG_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -283,7 +283,7 @@ int ObTabletReplayExecutor::replay_to_mds_table_(
     ObLS *ls = nullptr;
     const share::ObLSID &ls_id = tablet->get_tablet_meta().ls_id_;
     const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD))) {
+    if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       CLOG_LOG(WARN, "failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

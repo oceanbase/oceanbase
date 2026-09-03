@@ -48,10 +48,12 @@ public:
   // allow_multi_true is used during replay
   int add_ls(ObLS &ls);
   int del_ls(const share::ObLSID &ls_id);
-  int get_all_ls_id(ObIArray<ObLSID> &ls_id_array);
+  int get_all_ls_id(ObIArray<ObLSID> &ls_id_array,
+                    ObLSAccessAttr access_attr);
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
-             ObLSGetMod mod) const;
+             ObLSGetMod mod,
+             ObLSAccessAttr access_attr) const;
   OB_INLINE void revert_ls(ObLS *ls, ObLSGetMod mod) const;
   template <typename Function>
   int operate_ls(const share::ObLSID &ls_id, Function &fn);
@@ -87,9 +89,12 @@ public:
   virtual ~ObLSIterator();
   virtual int get_next(ObLS *&ls);
   void reset();
-  void set_ls_map(ObLSMap &ls_map, ObLSGetMod mod) {
+  void set_ls_map(ObLSMap &ls_map,
+                  ObLSGetMod mod,
+                  ObLSAccessAttr access_attr) {
     ls_map_ = &ls_map;
     mod_ = mod;
+    access_attr_ = access_attr;
   }
   TO_STRING_KV("ls_count", lss_.count(), K_(bucket_pos), K_(array_idx));
 private:
@@ -98,6 +103,7 @@ private:
   int64_t array_idx_;
   ObLSMap *ls_map_;
   ObLSGetMod mod_;
+  ObLSAccessAttr access_attr_;
 };
 
 OB_INLINE void ObLSMap::free_ls(ObLS *ls) const

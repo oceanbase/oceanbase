@@ -978,7 +978,7 @@ int ObTabletCreateMdsHelper::get_ls(
   int ret = OB_SUCCESS;
   ObLSService *ls_service = MTL(ObLSService*);
 
-  if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+  if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   }
 

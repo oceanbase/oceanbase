@@ -153,7 +153,7 @@ int ObTransferTx::do_transfer_start_abort(uint64_t tenant_id, ObLSID dest_ls_id,
     ObTimeoutCtx timeout_ctx;
     int64_t stmt_timeout = 10_s;
     const int32_t group_id = share::OBCG_TRANSFER;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else if (FALSE_IT(transfer_handler = ls_handle.get_ls()->get_transfer_handler())) {
     } else if (FALSE_IT(task_info.tenant_id_ = tenant_id)) {
     } else if (FALSE_IT(task_info.src_ls_id_ = src_ls_id)) {

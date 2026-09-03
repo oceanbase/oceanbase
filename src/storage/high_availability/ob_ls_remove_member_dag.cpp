@@ -271,7 +271,8 @@ int ObLSRemoveMemberTask::do_change_member_()
     if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD,
+                                        ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(*ctx_));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -439,5 +440,4 @@ int ObLSRemoveMemberTask::report_to_rs_()
   }
   return ret;
 }
-
 

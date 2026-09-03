@@ -309,7 +309,7 @@ int ObLSPrepareMigrationDagNet::clear_dag_net_ctx()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls prepare migration dag net do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_.arg_.ls_id_, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
@@ -827,7 +827,7 @@ int ObStartPrepareMigrationTask::deal_with_local_ls_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
@@ -882,7 +882,7 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -979,7 +979,7 @@ int ObStartPrepareMigrationTask::prepare_backfill_tx_tablets_()
   if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1046,7 +1046,7 @@ int ObStartPrepareMigrationTask::generate_prepare_migration_dags_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1153,7 +1153,7 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1228,7 +1228,7 @@ int ObStartPrepareMigrationTask::remove_local_incomplete_tablets_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1293,7 +1293,7 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start prepare migration task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1410,7 +1410,7 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
       } else if (dag_net->is_cancel()) {
         ret = OB_CANCELED;
         LOG_WARN("task is cancelled", K(ret), K(*this));
-      } else if (OB_FAIL(ObStorageHADagUtils::get_ls(user_data.transfer_ls_id_, dest_ls_handle))) {
+      } else if (OB_FAIL(ObStorageHADagUtils::get_ls(user_data.transfer_ls_id_, dest_ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           break;

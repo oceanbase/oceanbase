@@ -328,7 +328,7 @@ int ObLockMemtable::check_tablet_write_allow_(const ObTableLockOp &lock_op,
   } else if (!lock_op.lock_id_.is_tablet_lock()) {
   } else if (OB_FAIL(lock_op.lock_id_.convert_to(tablet_id))) {
     LOG_WARN("convert lock id to tablet_id failed", K(ret), K(lock_op));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::TABLELOCK_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::TABLELOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

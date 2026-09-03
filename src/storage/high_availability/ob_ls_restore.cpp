@@ -430,7 +430,7 @@ int ObLSRestoreDagNet::report_result_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls restore dag net do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -910,7 +910,7 @@ int ObStartLSRestoreTask::deal_with_local_ls_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start ls restore task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_SYS;
@@ -1040,7 +1040,7 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls handle", K(ret), "ls_id", ctx_->arg_.ls_id_);
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1119,7 +1119,7 @@ int ObStartLSRestoreTask::update_ls_meta_()
 
   if (!is_inited_) {
     LOG_WARN("start ls restore task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1312,7 +1312,7 @@ int ObSysTabletsRestoreTask::init()
     meta_index_store_ = ls_restore_dag_net->get_meta_index_store();
     second_meta_index_store_ = ls_restore_dag_net->get_second_meta_index_store();
     const ObTabletRestoreAction::ACTION &restore_action = ObTabletRestoreAction::ACTION::RESTORE_ALL;
-    if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
+    if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->sys_tablet_id_array_, tablet_id_array))) {
       LOG_WARN("failed to append tablet list", K(ret));
@@ -2051,7 +2051,7 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablets_()
   } else if (tablet_id_array_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_INFO("tablet id array should not be Empty", KPC(ctx_), K(tablet_id_array_));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

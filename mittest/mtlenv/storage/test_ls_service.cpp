@@ -19,6 +19,7 @@
 #define protected public
 #define private public
 #include "src/storage/slog/ob_storage_log_item.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_tablet_helper.h"
 #include "deps/oblib/src/lib/ob_define.h"
@@ -101,11 +102,11 @@ TEST_F(TestLSService, basic)
   // TEST_F(ObLSServiceTest, get_ls)
   LOG_INFO("get_ls begin");
   // 1. exist get
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(exist_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(exist_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   EXPECT_EQ(exist_id, handle.get_ls()->get_ls_id());
 
   // 2. not exist get
-  EXPECT_EQ(OB_LS_NOT_EXIST, ls_svr->get_ls(not_exist_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_LS_NOT_EXIST, ls_svr->get_ls(not_exist_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   // TEST_F(ObLSServiceTest, check_ls_exist)
   LOG_INFO("check_ls_exist begin");
@@ -119,7 +120,7 @@ TEST_F(TestLSService, basic)
   // TEST_F(ObLSServiceTest, get_ls_iter)
   LOG_INFO("get_ls_iter begin");
   // 1. create iter
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   // 2. iter LS
   EXPECT_EQ(OB_SUCCESS, iter->get_next(ls));
@@ -154,7 +155,7 @@ TEST_F(TestLSService, basic)
 
   // 3. check empty iter.
   iter.reset();
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   EXPECT_EQ(OB_ITER_END, iter->get_next(ls));
 }
 
@@ -180,7 +181,7 @@ TEST_F(TestLSService, tablet_test)
   // create ls
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   GlobalLearnerList learner_list;
@@ -248,7 +249,7 @@ TEST_F(TestLSService, ls_safe_destroy)
   // 2. hold the ls with ls handle
   LOG_INFO("TestLSService::ls_safe_destroy 1.2");
   LOG_INFO("get_ls begin");
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(id_104, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(id_104, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(id_104, handle.get_ls()->get_ls_id());
 
   // 3. remove ls
@@ -330,9 +331,9 @@ TEST_F(TestLSService, create_logonly_ls)
   ObCreateLSArg arg;
   ObLSService* ls_svr = MTL(ObLSService*);
   bool exist = false;
+  bool waiting = false;
   ObLSID id_200(200);  // 使用不同的LS ID避免冲突
   ObLSHandle handle;
-  ObLS *ls = NULL;
 
   LOG_INFO("create_logonly_ls begin");
 
@@ -341,12 +342,16 @@ TEST_F(TestLSService, create_logonly_ls)
   LOG_INFO("create_logonly_ls", K(arg), K(id_200));
   EXPECT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
 
-  // 2. verify LS exists
+  // 2. Existence checks include logonly LS without granting data-plane access.
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
   EXPECT_TRUE(exist);
 
-  // 3. get LS and verify replica type
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(id_200, handle, ObLSGetMod::STORAGE_MOD));
+  // 3. DISABLE_LOGONLY rejects the logonly LS; an audited log path can opt in explicitly.
+  EXPECT_EQ(OB_LS_OFFLINE,
+            ls_svr->get_ls(id_200, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
+  EXPECT_FALSE(handle.is_valid());
+  EXPECT_EQ(OB_SUCCESS,
+            ls_svr->get_ls(id_200, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
   EXPECT_EQ(id_200, handle.get_ls()->get_ls_id());
 
   // 4. verify it's a logonly replica
@@ -363,15 +368,14 @@ TEST_F(TestLSService, create_logonly_ls)
   EXPECT_FALSE(ObReplicaTypeCheck::is_full_replica(replica_type));
   EXPECT_FALSE(ObReplicaTypeCheck::is_readonly_replica(replica_type));
 
-  // 7. remove the LS
+  // 7. The generic remove path supports a logonly LS and schedules safe destroy.
   EXPECT_EQ(OB_SUCCESS, ls_svr->remove_ls(id_200, true));
+  handle.reset();
   EXPECT_EQ(OB_SUCCESS, ls_svr->check_ls_exist(id_200, exist));
   EXPECT_FALSE(exist);
 
-  // 8. wait safe destroy
-  handle.reset();
-  int64_t cnt = 0;
-  bool waiting = false;
+  // Wait for the asynchronous safe-destroy task so it does not affect later cases.
+  int cnt = 0;
   while (cnt++ < 20) {
     ASSERT_EQ(OB_SUCCESS, ls_svr->check_ls_waiting_safe_destroy(id_200, waiting));
     if (waiting) {
@@ -381,7 +385,131 @@ TEST_F(TestLSService, create_logonly_ls)
     }
   }
   ASSERT_FALSE(waiting);
+
   LOG_INFO("create_logonly_ls end");
+}
+
+TEST_F(TestLSService, set_member_list_rpc_initializes_logonly_palf)
+{
+  const uint64_t tenant_id = MTL_ID();
+  const ObLSID ls_id(201);
+  ObCreateLSArg create_arg;
+  ObLSService *ls_service = MTL(ObLSService*);
+  ObLSHandle handle;
+
+  // OB_CREATE_LS has already succeeded on this observer, so the local LS and
+  // its Palf handle are real and their replica type is LOGONLY.
+  ASSERT_EQ(OB_SUCCESS, gen_create_logonly_ls_arg(tenant_id, ls_id, create_arg));
+  ASSERT_EQ(OB_SUCCESS, ls_service->create_ls(create_arg));
+  ASSERT_EQ(OB_SUCCESS,
+            ls_service->get_ls(ls_id,
+                               handle,
+                               ObLSGetMod::OBSERVER_MOD,
+                               ObLSAccessAttr::ALLOW_LOGONLY));
+  ASSERT_NE(nullptr, handle.get_ls());
+  ASSERT_TRUE(handle.get_ls()->is_logonly_replica());
+
+  // Mirror a concrete 2F1L tenant.  The current observer is L; the two F
+  // addresses need not be running because set_initial_member_list persists
+  // the initial configuration locally on every observer independently.
+  const ObAddr self_addr = GCONF.self_addr_;
+  const ObAddr full_addr_1(ObAddr::VER::IPV4, "127.0.0.2", 2882);
+  const ObAddr full_addr_2(ObAddr::VER::IPV4, "127.0.0.3", 2882);
+  const int64_t member_timestamp = ObTimeUtility::current_time();
+  ObMember full_member_1(full_addr_1, member_timestamp);
+  ObMember full_member_2(full_addr_2, member_timestamp);
+  ObMember logonly_member(self_addr, member_timestamp);
+  logonly_member.set_logonly();
+  ObMemberList member_list;
+  ASSERT_EQ(OB_SUCCESS, member_list.add_member(full_member_1));
+  ASSERT_EQ(OB_SUCCESS, member_list.add_member(full_member_2));
+  ASSERT_EQ(OB_SUCCESS, member_list.add_member(logonly_member));
+  ASSERT_EQ(1, member_list.get_logonly_replica_member_number());
+  GlobalLearnerList learner_list;
+
+  // This is the distinction under test: the generic data-plane lookup rejects
+  // L, while OB_SET_MEMBER_LIST must opt in because Palf on L needs the same
+  // initial Paxos configuration as F replicas.
+  ObLSHandle disabled_handle;
+  EXPECT_EQ(OB_LS_OFFLINE,
+            ls_service->get_ls(ls_id,
+                               disabled_handle,
+                               ObLSGetMod::OBSERVER_MOD,
+                               ObLSAccessAttr::DISABLE_LOGONLY));
+  EXPECT_FALSE(disabled_handle.is_valid());
+
+  // MockTenantModuleEnv starts the real RPC transport and receiver, but its
+  // GCTX.srv_rpc_proxy_ client is intentionally left uninitialized.  Use a
+  // local initialized client to cover the complete OB_SET_MEMBER_LIST round
+  // trip without changing shared test-environment state.
+  obrpc::ObSrvRpcProxy rpc_client;
+  int rpc_ret = rpc_client.init(GCTX.net_frame_->get_req_transport(), self_addr);
+  EXPECT_EQ(OB_SUCCESS, rpc_ret);
+  if (OB_SUCCESS == rpc_ret) {
+    obrpc::ObSetMemberListArgV2 rpc_arg;
+    ObMember arbitration_service;
+    rpc_ret = rpc_arg.init(tenant_id,
+                           ls_id,
+                           member_list.get_member_number(),
+                           member_list,
+                           arbitration_service,
+                           learner_list);
+    EXPECT_EQ(OB_SUCCESS, rpc_ret);
+    if (OB_SUCCESS == rpc_ret) {
+      rootserver::ObSetMemberListProxy rpc_proxy(
+          rpc_client, &obrpc::ObSrvRpcProxy::set_member_list);
+      const int64_t rpc_timeout_us = 10 * 1000 * 1000;
+      rpc_ret = rpc_proxy.call(self_addr, rpc_timeout_us, tenant_id, rpc_arg);
+      EXPECT_EQ(OB_SUCCESS, rpc_ret);
+      if (OB_SUCCESS == rpc_ret) {
+        ObArray<int> rpc_return_codes;
+        rpc_ret = rpc_proxy.wait_all(rpc_return_codes);
+        EXPECT_EQ(OB_SUCCESS, rpc_ret);
+        EXPECT_EQ(1, rpc_return_codes.count());
+        if (1 == rpc_return_codes.count()) {
+          EXPECT_EQ(OB_SUCCESS, rpc_return_codes.at(0));
+        }
+        EXPECT_EQ(1, rpc_proxy.get_results().count());
+        if (1 == rpc_proxy.get_results().count()) {
+          const obrpc::ObSetMemberListResult *rpc_result =
+              rpc_proxy.get_results().at(0);
+          EXPECT_NE(nullptr, rpc_result);
+          if (nullptr != rpc_result) {
+            EXPECT_EQ(OB_SUCCESS, rpc_result->get_result());
+          }
+        }
+      }
+    }
+  }
+
+  // A successful return is not enough: read the configuration back from the
+  // real Palf handle and verify that all 2F1L members, including the L flag,
+  // were installed.
+  ObMemberList persisted_member_list;
+  int64_t persisted_paxos_replica_num = 0;
+  EXPECT_EQ(OB_SUCCESS,
+            handle.get_ls()->get_log_handler()->get_paxos_member_list(
+                persisted_member_list,
+                persisted_paxos_replica_num,
+                false /* filter_logonly_replica */));
+  EXPECT_EQ(member_list.get_member_number(), persisted_paxos_replica_num);
+  EXPECT_TRUE(persisted_member_list.member_addr_equal(member_list));
+  ObMember persisted_self_member;
+  EXPECT_EQ(OB_SUCCESS,
+            persisted_member_list.get_member_by_addr(self_addr, persisted_self_member));
+  EXPECT_TRUE(persisted_self_member.is_logonly());
+
+  handle.reset();
+  EXPECT_EQ(OB_SUCCESS, ls_service->remove_ls(ls_id, true));
+  bool waiting = true;
+  int64_t retry_count = 0;
+  while (waiting && retry_count++ < 20) {
+    ASSERT_EQ(OB_SUCCESS, ls_service->check_ls_waiting_safe_destroy(ls_id, waiting));
+    if (waiting) {
+      ::sleep(1);
+    }
+  }
+  EXPECT_FALSE(waiting);
 }
 
 TEST_F(TestLSService, check_ls_iter_cnt)
@@ -400,7 +528,7 @@ TEST_F(TestLSService, check_ls_iter_cnt)
   common::ObSharedGuard<ObLSIterator> guard;
   // 1. get ls iter 100 times.
   for (int i = 0; i < 100; i++) {
-    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls iter failed");
     }
   }
@@ -412,7 +540,7 @@ TEST_F(TestLSService, check_ls_iter_cnt)
   LOG_INFO("recheck get");
   EventTable::instance().set_event("ALLOC_LS_ITER_GUARD_FAIL", item);
   for (int i = 0; i < 100; i++) {
-    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD))) {
+    if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls iter failed again");
     }
   }
@@ -445,11 +573,11 @@ TEST_F(TestLSService, check_ls_iter_cnt)
 
   // 7. stop ls service
   ls_svr->stop();
-  ASSERT_EQ(OB_NOT_RUNNING, ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD));
+  ASSERT_EQ(OB_NOT_RUNNING, ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ls_svr->is_inited_ = false;
   // 8. get iter failed.
-  ASSERT_EQ(OB_NOT_INIT, ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD));
+  ASSERT_EQ(OB_NOT_INIT, ls_svr->get_ls_iter(guard, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   // 9. destroy immediately
   guard.reset();

@@ -134,7 +134,7 @@ void TestMultiVersionMerge::SetUpTestCase()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   MTL(ObTenantTabletScheduler*)->resume_major_merge();
 
   // create tablet
@@ -234,7 +234,7 @@ void TestMultiVersionMerge::prepare_merge_context(const ObMergeType &merge_type,
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   merge_context.ls_handle_ = ls_handle;
 
   ObTabletHandle tablet_handle;
@@ -1040,7 +1040,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -1204,7 +1204,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -1368,7 +1368,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -1507,7 +1507,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_with_shadow)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObVersionRange trans_version_range;
   trans_version_range.snapshot_version_ = 100;
@@ -1612,7 +1612,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_macro_reused_without_shadow)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -1820,7 +1820,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_greater_multi_version_and_uncommit
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -1943,7 +1943,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_ghost_row)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -2344,7 +2344,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_with_last_shadow_version_less_t
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -2568,7 +2568,7 @@ TEST_F(TestMultiVersionMerge, rowkey_cross_macro_without_open_next_macro)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -2810,7 +2810,7 @@ TEST_F(TestMultiVersionMerge, test_merge_base_iter_have_ghost_row)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -3036,7 +3036,7 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -3157,7 +3157,7 @@ TEST_F(TestMultiVersionMerge, test_trans_cross_macro_with_ghost_row2)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;
@@ -3272,7 +3272,7 @@ TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTxTable *tx_table = nullptr;
   ObTxTableGuard tx_table_guard;

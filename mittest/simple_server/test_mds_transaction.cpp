@@ -175,7 +175,7 @@ TEST_F(TestMdsTransactionTest, test_for_each_kv_in_unit_in_tablet)
                                                               ls_id));
     // 4. 从ls_id找到ls
     storage::ObLSHandle ls_handle;
-    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     // 5. 从LS找到tablet结构
     storage::ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
@@ -224,7 +224,7 @@ TEST_F(TestMdsTransactionTest, test_mds_table_gc_and_recycle)
                                                               ls_id));
     // 4. 从ls_id找到ls
     storage::ObLSHandle ls_handle;
-    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     // 5. 从LS找到tablet结构1
     storage::ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
@@ -293,7 +293,7 @@ TEST_F(TestMdsTransactionTest, test_mds_table_get_tablet_status_transfer_in_writ
                                                               ls_id));
     // 4. 从ls_id找到ls
     storage::ObLSHandle ls_handle;
-    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     // 5. 从LS找到tablet结构
     storage::ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));

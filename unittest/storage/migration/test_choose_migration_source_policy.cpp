@@ -51,7 +51,7 @@ public:
   MOCK_METHOD6(get_ls_member_list_and_learner_list_, int(const uint64_t, const share::ObLSID &,
       const bool, common::ObAddr &, common::GlobalLearnerList &, common::ObMemberList &));
   MOCK_METHOD3(get_ls_leader, int(const uint64_t, const share::ObLSID &, common::ObAddr &));
-  MOCK_METHOD2(get_ls, int(const share::ObLSID &, ObLSHandle &));
+  MOCK_METHOD3(get_ls, int(const share::ObLSID &, ObLSHandle &, ObLSAccessAttr));
   MOCK_METHOD0(check_tenant_primary, bool());
 };
 
@@ -256,14 +256,14 @@ public:
     return ret;
   }
 
-  int get_ls_succ(const share::ObLSID &, ObLSHandle &ls_handle)
+  int get_ls_succ(const share::ObLSID &, ObLSHandle &ls_handle, ObLSAccessAttr)
   {
     int ret = OB_SUCCESS;
     ls_handle.ls_ = &mock_ls_;
     return ret;
   }
 
-  int get_ls_succ_with_palf(const share::ObLSID &, ObLSHandle &ls_handle)
+  int get_ls_succ_with_palf(const share::ObLSID &, ObLSHandle &ls_handle, ObLSAccessAttr)
   {
     int ret = OB_SUCCESS;
     common::ObAddr parent;
@@ -278,7 +278,7 @@ public:
     return ret;
   }
 
-  int get_ls_fail(const share::ObLSID &, ObLSHandle &ls_handle)
+  int get_ls_fail(const share::ObLSID &, ObLSHandle &ls_handle, ObLSAccessAttr)
   {
     int ret = OB_ERR_UNEXPECTED;
     ls_handle.ls_ = &mock_ls_;
@@ -448,7 +448,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_checkpoint_policy
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_checkpoint));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
-  EXPECT_CALL(member_helper_, get_ls(_, _))
+  EXPECT_CALL(member_helper_, get_ls(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
@@ -482,7 +482,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_rs_recommand));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
-  EXPECT_CALL(member_helper_, get_ls(_, _))
+  EXPECT_CALL(member_helper_, get_ls(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_fail));
   const uint64_t tenant_id = 1001;
   const share::ObLSID ls_id(1);
@@ -989,7 +989,7 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_condition_fail)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_replica_type_failed));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
-  EXPECT_CALL(member_helper_, get_ls(_, _))
+  EXPECT_CALL(member_helper_, get_ls(_, _, _))
       .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   EXPECT_CALL(member_helper_, check_tenant_primary())
@@ -1035,7 +1035,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_check_replica_fail)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_idc_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
-  EXPECT_CALL(member_helper_, get_ls(_, _))
+  EXPECT_CALL(member_helper_, get_ls(_, _, _))
       .WillOnce(Invoke(&member_list, &MockMemberList::get_ls_fail))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   EXPECT_CALL(member_helper_, check_tenant_primary())
@@ -1084,7 +1084,7 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_r_replica_init)
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_idc_mode_idc_leader));
   EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
-  EXPECT_CALL(member_helper_, get_ls(_, _))
+  EXPECT_CALL(member_helper_, get_ls(_, _, _))
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_succ_with_palf));
   EXPECT_CALL(member_helper_, check_tenant_primary())
       .WillRepeatedly(Invoke(&member_list, &MockMemberList::check_tenant_primary_true));

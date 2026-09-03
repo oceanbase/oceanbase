@@ -193,7 +193,7 @@ TEST_F(ObTableLockServiceTest, iter_ls)
   if (OB_FAIL(tenant_guard.switch_to(OB_SYS_TENANT_ID))) {
     LOG_WARN("switch tenant failed", KR(ret));
   } else if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter,
-                                                     ObLSGetMod::OBSERVER_MOD))) {
+                                                     ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", KR(ret));
   } else {
     ObLS *ls = NULL;

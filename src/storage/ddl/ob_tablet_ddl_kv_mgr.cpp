@@ -285,7 +285,7 @@ int ObTabletDDLKvMgr::schedule_ddl_merge_task(ObTablet &tablet, const SCN &start
       LOG_WARN("failed to get ddl kv", K(ret), K(param));
     } else if (OB_FAIL(freeze_ddl_kv(tablet))) {
       LOG_WARN("ddl kv manager try freeze failed", K(ret), K(param));
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(param));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                  param.tablet_id_,
@@ -408,7 +408,7 @@ int ObTabletDDLKvMgr::get_rec_scn(SCN &rec_scn)
     LOG_WARN("not init", K(ret), K(is_inited_));
   }
   if (OB_SUCC(ret) && !is_commit_succ) {
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
                                                       tablet_handle,
@@ -596,7 +596,7 @@ int ObTabletDDLKvMgr::online()
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
                                                     tablet_handle,
@@ -643,7 +643,7 @@ int ObTabletDDLKvMgr::register_to_tablet(const SCN &ddl_start_scn, ObDDLKvMgrHan
   } else if (OB_UNLIKELY(!ddl_start_scn.is_valid_and_not_min() || kv_mgr_handle.get_obj() != this)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_start_scn), KP(kv_mgr_handle.get_obj()), KP(this));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
                                                     tablet_handle,
@@ -683,7 +683,7 @@ int ObTabletDDLKvMgr::unregister_from_tablet(const SCN &ddl_start_scn, ObDDLKvMg
   } else if (OB_UNLIKELY(!ddl_start_scn.is_valid_and_not_min() || kv_mgr_handle.get_obj() != this)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ddl_start_scn), KP(kv_mgr_handle.get_obj()), KP(this));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id_,
                                                     tablet_handle,
@@ -762,7 +762,7 @@ int ObTabletDDLKvMgr::update_tablet(ObTablet &tablet,
   } else if (OB_UNLIKELY(!start_scn.is_valid_and_not_min() || snapshot_version <= 0 || !ddl_checkpoint_scn.is_valid_and_not_min())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(start_scn), K(snapshot_version), K(ddl_checkpoint_scn));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("failed to load storage schema", K(ret), K(tablet));
@@ -821,7 +821,7 @@ int ObTabletDDLKvMgr::update_ddl_major_sstable(ObTablet &tablet)
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(tablet.load_storage_schema(allocator, storage_schema))) {
     LOG_WARN("load storage schema failed", K(ret), K(ls_id_), K(tablet_id_));

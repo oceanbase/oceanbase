@@ -2499,7 +2499,7 @@ int ObTablet::get_src_tablet_read_tables_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(user_data));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -4279,7 +4279,7 @@ int ObTablet::start_ddl_if_need()
     if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -4356,7 +4356,7 @@ int ObTablet::check_schema_version_elapsed(
       transaction::ObTransService *txs = MTL(transaction::ObTransService*);
       ObLSService *ls_service = MTL(ObLSService*);
       ObLSHandle ls_handle;
-      if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
+      if (OB_FAIL(ls_service->get_ls(tablet_meta_.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", K(ret), "ls_id", tablet_meta_.ls_id_);
       } else if (OB_FAIL(ls_handle.get_ls()->check_modify_schema_elapsed(tablet_id, schema_version, pending_tx_id))) {
         if (OB_EAGAIN != ret) {

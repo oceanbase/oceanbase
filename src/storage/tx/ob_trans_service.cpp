@@ -445,7 +445,7 @@ int ObTransService::get_trans_start_session_id_and_ts(const share::ObLSID &ls_id
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "ObLSService is null", K(ret), K(ls_id), K(tx_id));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id), K(tx_id));
   } else if (!ls_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -728,7 +728,7 @@ int ObTransService::check_dup_table_lease_valid(const ObLSID ls_id,
   } else if (!dup_table_loop_worker_.is_useful_dup_ls(ls_id)) {
     is_dup_ls = false;
     ret = OB_SUCCESS;
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     is_dup_ls = false;
     TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id), K(ls_handle));
   } else if (!ls_handle.is_valid()) {
@@ -1130,7 +1130,7 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
   if (OB_UNLIKELY(!tx_desc.is_valid() || !ls_id.is_valid() || OB_ISNULL(buf) || buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_desc), K(ls_id), KP(buf), K(buf_len));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get ls handle fail", K(ret), K(ls_id));
   } else if (FALSE_IT(store_ctx.ls_id_ = ls_id)) {
   } else if (FALSE_IT(store_ctx.ls_ = ls_handle.get_ls())) {

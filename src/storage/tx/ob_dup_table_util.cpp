@@ -178,6 +178,7 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  bool is_logonly = false;
 
   TabletIDArray tablet_id_array;
   bool need_refreh_dup_schema = true;
@@ -210,9 +211,13 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
   } else if (!has_valid_dup_schema_()) {
     DUP_TABLE_LOG(DEBUG, "refresh dup table schema failed", K(ret), KPC(this));
     // do nothing
+  } else if (OB_FAIL(MTL(ObLSService *)->check_ls_is_logonly(min_dup_ls_status_info_.ls_id_, is_logonly))) {
+    DUP_TABLE_LOG(WARN, "check ls is logonly failed", K(ret), K(min_dup_ls_status_info_), KPC(this));
+  } else if (is_logonly) {
+    // do nothing
   } else if (OB_FAIL(
                  MTL(ObLSService *)
-                     ->get_ls(min_dup_ls_status_info_.ls_id_, ls_handle, ObLSGetMod::TRANS_MOD))) {
+                     ->get_ls(min_dup_ls_status_info_.ls_id_, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     DUP_TABLE_LOG(WARN, "get dup ls failed", K(ret), KPC(this));
   } else {
 
@@ -1820,7 +1825,7 @@ void ObDupTableLoopWorker::run1()
         ObLSHandle ls_handle;
 
         if (OB_ISNULL(MTL(ObLSService *))
-            || (OB_FAIL(MTL(ObLSService *)->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))
+            || (OB_FAIL(MTL(ObLSService *)->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))
                 || !ls_handle.is_valid())) {
           if (OB_SUCC(ret)) {
             ret = OB_INVALID_ARGUMENT;
@@ -1910,7 +1915,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_it
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
-      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
       } else if (!ls_handle.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
@@ -1950,7 +1955,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_i
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
-      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
       } else if (!ls_handle.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
@@ -1990,7 +1995,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_ite
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
-      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
       } else if (!ls_handle.is_valid()) {
         ret = OB_INVALID_ARGUMENT;

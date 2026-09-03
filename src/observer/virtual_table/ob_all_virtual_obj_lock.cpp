@@ -333,7 +333,7 @@ int ObAllVirtualObjLock::prepare_start_to_read()
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
   } else if (OB_ISNULL(ls_iter_guard_.get_ptr())
-             && OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
+             && OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     SERVER_LOG(WARN, "init ls_iter_guard_ failed", K(ret));
   } else if (OB_FAIL(get_next_ls())) {
     SERVER_LOG(WARN, "init ls_ failed", K(ret));

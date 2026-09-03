@@ -10791,7 +10791,7 @@ int ObPartTransCtx::get_ls_replica_readable_scn_(const ObLSID &ls_id, SCN &snaps
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get log stream failed", K(ret));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -11589,7 +11589,7 @@ int ObPartTransCtx::recover_ls_transfer_status_()
   ObLSHandle ls_handle;
   share::SCN op_scn;
   bool need_recover = false;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", KR(ret), K(ls_id_));
   } else if (ls_handle.get_ls()->is_logonly_replica()) {
     ret = OB_STATE_NOT_MATCH;

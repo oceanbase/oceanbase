@@ -105,7 +105,8 @@ public:
   // @param [out] handle, a guard of the specified logsream.
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
-             ObLSGetMod mod);
+             ObLSGetMod mod,
+             ObLSAccessAttr access_attr);
   // @param [in] func, iterate all ls diagnose info
   int iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)> &func);
 
@@ -119,6 +120,10 @@ public:
   // @param [out] exist, true if the ls exist, else false.
   int check_ls_exist(const share::ObLSID &ls_id,
                      bool &exist);
+  // Check whether the local replica of the specified LS is a logonly replica.
+  // Return OB_LS_NOT_EXIST if the LS does not exist locally.
+  int check_ls_is_logonly(const share::ObLSID &ls_id,
+                          bool &is_logonly);
   // check whether a ls waiting for destroy or not.
   // @param [in] ls_id, the ls we will check.
   // @param [out] waiting, true if the ls waiting for destroy, else false.
@@ -127,10 +132,13 @@ public:
   // get a log stream iterator.
   // @param [out] guard, the iterator created.
   // use guard just like a pointer of ObLSIterator
-  int get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGetMod mod);
+  int get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard,
+                  ObLSGetMod mod,
+                  ObLSAccessAttr access_attr);
 
-  // get all ls ids
-  int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array);
+  // get all accessible ls ids
+  int get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array,
+                 ObLSAccessAttr access_attr);
 
   // tablet operation in transactions
   // Create tablets for a ls

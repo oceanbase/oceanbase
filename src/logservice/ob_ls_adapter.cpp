@@ -60,7 +60,7 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLSAdapter not inited", K(ret));
-  } else if (OB_FAIL(ls_service_->get_ls(replay_task->ls_id_, ls_handle, ObLSGetMod::ADAPTER_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls(replay_task->ls_id_, ls_handle, ObLSGetMod::ADAPTER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(ERROR, "get log stream failed", KPC(replay_task), K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -117,7 +117,8 @@ int ObLSAdapter::wait_append_sync(const share::ObLSID &ls_id)
   ObLS *ls = NULL;
   ObLSHandle ls_handle;
   ObLogHandler *log_handler = NULL;
-  if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::ADAPTER_MOD))) {
+  if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::ADAPTER_MOD,
+                                  ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(WARN, "get log stream failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -485,7 +485,7 @@ int ObRebuildService::build_rebuild_ctx_map_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild service do not init", K(ret));
-  } else if (OB_FAIL(ls_service_->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else if (OB_ISNULL(ls_iter = ls_iter_guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -551,7 +551,7 @@ int ObRebuildService::scheduler_rebuild_mgr_()
       ObLS *ls = nullptr;
       ObLSRebuildInfo rebuild_info;
       ObDIActionGuard(ObDIActionGuard::NS_ACTION, "rebuild LSID:%ld", rebuild_ctx.ls_id_.id());
-      if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+      if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -613,7 +613,7 @@ int ObRebuildService::check_rebuild_ctx_map_()
       ObLS *ls = nullptr;
       ObLSRebuildInfo rebuild_info;
       bool in_final_state = false;
-      if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+      if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           if (OB_FAIL(ls_id_array.push_back(ls_id))) {
@@ -689,7 +689,7 @@ int ObRebuildService::build_ls_rebuild_info_()
       ObLSRebuildInfo rebuild_info;
       ObMigrationStatus status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
       bool can_rebuild = false;
-      if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+      if (OB_FAIL(ls_service_->get_ls(rebuild_ctx.ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
@@ -842,7 +842,7 @@ int ObLSRebuildMgr::init(
   } else if (!rebuild_ctx.is_valid() || OB_ISNULL(ls_service)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init ls rebuild mgr get invalid argument", K(ret), K(rebuild_ctx), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(rebuild_ctx.ls_id_, ls_handle_, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(rebuild_ctx.ls_id_, ls_handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(rebuild_ctx));
   } else {
     rebuild_ctx_ = rebuild_ctx;

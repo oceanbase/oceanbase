@@ -422,7 +422,7 @@ int ObRebuildTabletDagNet::clear_dag_net_ctx()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("rebuild tablet dag net do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -792,7 +792,7 @@ int ObInitialRebuildTabletTask::check_tablet_status_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial rebuild tablet task do not init", K(ret));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1205,7 +1205,7 @@ int ObTabletRebuildMajorDag::init(
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(rebuild_tablet_dag_net = static_cast<ObRebuildTabletDagNet*>(dag_net))) {
   } else if (FALSE_IT(ctx = rebuild_tablet_dag_net->get_rebuild_tablet_ctx())) {
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx->arg_.ls_id_, ls_handle_))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx->arg_.ls_id_, ls_handle_, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

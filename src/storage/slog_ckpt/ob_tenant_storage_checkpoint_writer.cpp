@@ -90,7 +90,8 @@ int ObTenantStorageCheckpointWriter::write_ls_checkpoint(MacroBlockId &ls_entry_
 
   ls_item_writer_.reset();
   tablet_item_writer_.reset();
-  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD,
+                                              ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get log stream iter", K(ret));
   } else if (OB_FAIL(ls_item_writer_.init(false /*whether need addr*/))) {
     LOG_WARN("failed to init log stream item writer", K(ret));
@@ -321,7 +322,7 @@ int ObTenantStorageCheckpointWriter::batch_compare_and_swap_tablet(const bool is
     } else if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service is null", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(addr_info.tablet_key_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(addr_info.tablet_key_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get ls", K(ret), K(addr_info));
     } else if (!is_replay_old) {
       if (OB_FAIL(get_tablet_with_addr(addr_info, new_tablet_handle))) {

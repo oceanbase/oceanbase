@@ -76,7 +76,7 @@ bool ObAllVirtualTabletDDLKVInfo::is_need_process(uint64_t tenant_id)
 int ObAllVirtualTabletDDLKVInfo::get_next_ls(ObLS *&ls)
 {
   int ret = OB_SUCCESS;
-  if (nullptr == ls_iter_guard_.get_ptr() && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD))) {
+  if (nullptr == ls_iter_guard_.get_ptr() && OB_FAIL(MTL(ObLSService*)->get_ls_iter(ls_iter_guard_, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     SERVER_LOG(WARN, "fail to get ls iter", K(ret));
   } else if (OB_FAIL(ls_iter_guard_->get_next(ls))) {
     if (OB_ITER_END != ret) {

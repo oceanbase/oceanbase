@@ -173,7 +173,7 @@ int ObTableLoadPartitionLocation::fetch_tablet_handle(uint64_t tenant_id, const 
   if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("MTL ObLSService failed", KR(ret), "tenant_id", OB_SYS_TENANT_ID, K(MTL_ID()));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_UNLIKELY(OB_LS_NOT_EXIST == ret)) {
       LOG_WARN("get ls handle failed", KR(ret), "log_stream_id", ls_id.id());
     }

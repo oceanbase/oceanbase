@@ -104,7 +104,7 @@ void TestRangeSpliter::SetUpTestCase()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   // create tablet
   obrpc::ObBatchCreateTabletArg create_tablet_arg;

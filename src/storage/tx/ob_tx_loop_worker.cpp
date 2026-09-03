@@ -170,7 +170,7 @@ int ObTxLoopWorker::scan_all_ls_(bool can_tx_gc,
   int64_t ls_cnt = 0;
 
   if (OB_ISNULL(MTL(ObLSService *))
-      || OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::TRANS_MOD))
+      || OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))
       || !ls_iter_guard.is_valid()) {
     if (OB_SUCCESS == ret) {
       ret = OB_INVALID_ARGUMENT;

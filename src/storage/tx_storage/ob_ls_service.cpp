@@ -283,7 +283,7 @@ int ObLSService::stop()
     static const int64_t SLEEP_TS = 100_ms;
 
     lib::ObMutexGuard change_guard(change_lock_);
-    if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
+    if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls iter", K(ret));
     } else {
       while (OB_SUCC(ret)) {
@@ -845,7 +845,8 @@ int ObLSService::replay_create_ls_commit(const share::ObLSID &ls_id)
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::TXSTORAGE_MOD,
+                            ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -871,7 +872,8 @@ int ObLSService::gc_ls_after_replay_slog()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("the ls service has not been inited", K(ret));
-  } else if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD,
+                                 ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -929,7 +931,8 @@ int ObLSService::enable_replay()
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
   bool can_replay = true;
-  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD,
+                          ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -966,7 +969,8 @@ int ObLSService::replay_update_ls_(const ObLSMeta &ls_meta)
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
-  if (OB_FAIL(get_ls(ls_meta.ls_id_, ls_handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(get_ls(ls_meta.ls_id_, ls_handle, ObLSGetMod::TXSTORAGE_MOD,
+                     ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ls_meta));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -984,7 +988,8 @@ int ObLSService::restore_update_ls_(const ObLSMetaPackage &meta_package)
   ObLSHandle ls_handle;
   ObLSMeta ls_meta = meta_package.ls_meta_;
   const bool is_rebuild = false;
-  if (OB_FAIL(get_ls(ls_meta.ls_id_, ls_handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(get_ls(ls_meta.ls_id_, ls_handle, ObLSGetMod::TXSTORAGE_MOD,
+                     ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("fail to get ls", K(meta_package));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1002,7 +1007,8 @@ int ObLSService::replay_remove_ls_(const share::ObLSID &ls_id)
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
-  if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSGetMod::TXSTORAGE_MOD,
+                     ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1073,7 +1079,8 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
 int ObLSService::get_ls(
     const share::ObLSID &ls_id,
     ObLSHandle &handle,
-    ObLSGetMod mod)
+    ObLSGetMod mod,
+    ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
 
@@ -1083,8 +1090,8 @@ int ObLSService::get_ls(
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id));
-  } else if (OB_FAIL(ls_map_.get_ls(ls_id, handle, mod))) {
-    if (OB_LS_NOT_EXIST != ret || REACH_TIME_INTERVAL(1000 * 1000)) {
+  } else if (OB_FAIL(ls_map_.get_ls(ls_id, handle, mod, access_attr))) {
+    if ((OB_LS_NOT_EXIST != ret && OB_LS_OFFLINE != ret) || REACH_TIME_INTERVAL(1_s)) {
       LOG_WARN("get log stream fail", K(ret), K(ls_id));
     }
   }
@@ -1125,7 +1132,7 @@ int ObLSService::remove_ls(
     } else if (OB_ISNULL(gc_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gc service is null", K(ret));
-    } else if (OB_FAIL(get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+    } else if (OB_FAIL(get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       if (ret == OB_LS_NOT_EXIST) {
         ret = OB_SUCCESS;
       } else {
@@ -1412,7 +1419,7 @@ int ObLSService::check_ls_exist(const share::ObLSID &ls_id, bool &exist)
   } else if (OB_UNLIKELY(!ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     if (OB_LS_NOT_EXIST != ret) {
       LOG_DEBUG("get log stream failed", K(ls_id), K(ret));
     }
@@ -1425,6 +1432,34 @@ int ObLSService::check_ls_exist(const share::ObLSID &ls_id, bool &exist)
   if (OB_LS_NOT_EXIST == ret) {
     exist = false;
     ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+int ObLSService::check_ls_is_logonly(const share::ObLSID &ls_id,
+                                     bool &is_logonly)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle handle;
+  is_logonly = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id));
+  } else if (OB_FAIL(get_ls(ls_id,
+                            handle,
+                            ObLSGetMod::TXSTORAGE_MOD,
+                            ObLSAccessAttr::ALLOW_LOGONLY))) {
+    if (OB_LS_NOT_EXIST != ret) {
+      LOG_DEBUG("get log stream failed", K(ls_id), K(ret));
+    }
+  } else if (OB_ISNULL(handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get log stream failed", K(ls_id), K(ret));
+  } else {
+    is_logonly = handle.get_ls()->is_logonly_replica();
   }
   return ret;
 }
@@ -1459,7 +1494,9 @@ int ObLSService::check_ls_waiting_safe_destroy(const share::ObLSID &ls_id, bool 
 }
 
 ERRSIM_POINT_DEF(ALLOC_LS_ITER_GUARD_FAIL)
-int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGetMod mod)
+int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard,
+                             ObLSGetMod mod,
+                             ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
   ObLSIterator *ls_iter = NULL;
@@ -1477,7 +1514,7 @@ int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGet
     LOG_WARN("Fail to allocate memory for log stream iterator.", K(ret));
   } else {
     ls_iter = new (buf) ObLSIterator();
-    ls_iter->set_ls_map(ls_map_, mod);
+    ls_iter->set_ls_map(ls_map_, mod, access_attr);
     inc_iter_cnt();
     if (OB_FAIL(ALLOC_LS_ITER_GUARD_FAIL)) {
       LOG_WARN("ALLOC_LS_ITER_GUARD_FAIL");
@@ -1498,14 +1535,15 @@ int ObLSService::get_ls_iter(common::ObSharedGuard<ObLSIterator> &guard, ObLSGet
   return ret;
 }
 
-int ObLSService::get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array)
+int ObLSService::get_ls_ids(common::ObIArray<share::ObLSID> &ls_id_array,
+                           ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
   ls_id_array.reuse();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ls_map_.get_all_ls_id(ls_id_array))) {
+  } else if (OB_FAIL(ls_map_.get_all_ls_id(ls_id_array, access_attr))) {
     LOG_WARN("failed to get all ls id", K(ret));
   }
   return ret;
@@ -1527,7 +1565,7 @@ int ObLSService::iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)>
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
 
-  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::OBSERVER_MOD))) {
+  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -1580,7 +1618,8 @@ int ObLSService::dump_ls_info()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD,
+                                 ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   }
   while (OB_SUCC(ret)) {
@@ -1602,4 +1641,3 @@ int ObLSService::dump_ls_info()
 
 } // storage
 } // oceanbase
-

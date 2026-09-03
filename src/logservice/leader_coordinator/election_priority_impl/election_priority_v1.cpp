@@ -177,7 +177,8 @@ int PriorityV1::get_role_(const share::ObLSID &ls_id, common::ObRole &role) cons
 
   if (OB_ISNULL(ls_srv)) {
     COORDINATOR_LOG_(ERROR, "ObLSService is nullptr");
-  } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD,
+                                    ObLSAccessAttr::ALLOW_LOGONLY))) {
     COORDINATOR_LOG_(WARN, "get_ls failed", K(ls_id));
   } else if (OB_UNLIKELY(false == ls_handle.is_valid())) {
     COORDINATOR_LOG_(WARN, "ls_handler is invalid", K(ls_id), K(ls_handle));

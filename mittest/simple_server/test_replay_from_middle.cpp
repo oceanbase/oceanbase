@@ -69,7 +69,7 @@ public:
       ObLSIterator *ls_iter = nullptr;
       ObLSHandle ls_handle;
       ObLSService *ls_svr = MTL(ObLSService *);
-      OB_ASSERT(OB_SUCCESS == ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+      OB_ASSERT(OB_SUCCESS == ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
       OB_ASSERT(nullptr != (ls = ls_handle.get_ls()));
     }
     return ls;
@@ -662,7 +662,7 @@ int ObLSService::enable_replay()
   common::ObSharedGuard<ObLSIterator> ls_iter;
   ObLS *ls = nullptr;
   bool can_replay = true;
-  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(get_ls_iter(ls_iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -703,7 +703,7 @@ int ObLSAdapter::replay(ObLogReplayTask *replay_task)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLSAdapter not inited", K(ret));
-  } else if (OB_FAIL(ls_service_->get_ls(replay_task->ls_id_, ls_handle, ObLSGetMod::ADAPTER_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls(replay_task->ls_id_, ls_handle, ObLSGetMod::ADAPTER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(ERROR, "get log stream failed", KPC(replay_task), K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

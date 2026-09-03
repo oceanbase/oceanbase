@@ -75,7 +75,7 @@ TEST_F(TestTabletToLSCache, tablet_to_ls_cache)
     ObArray<ObTabletID> remove_tablet_ids;
     ObLSHandle ls_handle;
     ls_id = tablet_ls_pairs.at(0).get_ls_id();
-    ASSERT_EQ(OB_SUCCESS, ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ObLSTabletService *ls_tablet_svr = ls_handle.get_ls()->get_tablet_svr();
     ARRAY_FOREACH(tablet_ls_pairs, i) {
       const ObTabletLSPair &pair = tablet_ls_pairs.at(i);

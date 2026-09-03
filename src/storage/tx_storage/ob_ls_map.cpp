@@ -30,7 +30,8 @@ ObLSIterator::ObLSIterator()
     bucket_pos_(0),
     array_idx_(0),
     ls_map_(NULL),
-    mod_(ObLSGetMod::INVALID_MOD)
+    mod_(ObLSGetMod::INVALID_MOD),
+    access_attr_(ObLSAccessAttr::DISABLE_LOGONLY)
 {
 }
 
@@ -49,6 +50,7 @@ void ObLSIterator::reset()
     bucket_pos_ = 0;
     array_idx_ = 0;
     mod_ = ObLSGetMod::INVALID_MOD;
+    access_attr_ = ObLSAccessAttr::DISABLE_LOGONLY;
   }
 }
 
@@ -82,7 +84,9 @@ int ObLSIterator::get_next(ObLS *&ls)
             ls = ls_map_->ls_buckets_[bucket_pos_];
 
             while (OB_NOT_NULL(ls) && OB_SUCC(ret)) {
-              if (OB_FAIL(ls->get_ref_mgr().inc(mod_))) {
+              if (!can_access_logonly(access_attr_) && ls->is_logonly_replica()) {
+                ls = static_cast<ObLS *>(ls->next_);
+              } else if (OB_FAIL(ls->get_ref_mgr().inc(mod_))) {
                 LOG_WARN("ls inc ref fail", K(ret));
               } else if (OB_FAIL(lss_.push_back(ls))) {
                 LOG_WARN("Fail to push ls to array, ", K(ret));
@@ -288,7 +292,8 @@ void ObLSMap::del_ls_impl(ObLS *ls)
 
 int ObLSMap::get_ls(const share::ObLSID &ls_id,
                     ObLSHandle &handle,
-                    ObLSGetMod mod) const
+                    ObLSGetMod mod,
+                    ObLSAccessAttr access_attr) const
 {
   int ret = OB_SUCCESS;
   ObLS *ls = NULL;
@@ -311,6 +316,15 @@ int ObLSMap::get_ls(const share::ObLSID &ls_id,
 
     if (OB_ISNULL(ls)) {
       ret = OB_LS_NOT_EXIST;
+    } else if (!can_access_logonly(access_attr) && ls->is_logonly_replica()) {
+      ret = OB_LS_OFFLINE;
+      handle.reset();
+      // for QA test
+      LOG_WARN("reject DISABLE_LOGONLY access to LOGONLY replica: LS data plane is unavailable",
+                K(ret), K_(tenant_id), K(ls_id), "replica_type", ls->get_replica_type(),
+                K(mod), K(access_attr), "is_offline", ls->is_offline(),
+                "switch_epoch", ls->get_switch_epoch(), K(lbt()));
+
     } else if (OB_FAIL(handle.set_ls(*this, *ls, mod))) {
       LOG_WARN("get_ls fail", K(ret), K(ls_id));
     }
@@ -318,7 +332,8 @@ int ObLSMap::get_ls(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObLSMap::get_all_ls_id(ObIArray<ObLSID> &ls_id_array)
+int ObLSMap::get_all_ls_id(ObIArray<ObLSID> &ls_id_array,
+                           ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = NULL;
@@ -331,9 +346,12 @@ int ObLSMap::get_all_ls_id(ObIArray<ObLSID> &ls_id_array)
       ObQSyncLockReadGuard bucket_guard(buckets_lock_[bucket_idx]);
       ls = ls_buckets_[bucket_idx];
       while (OB_SUCC(ret) && OB_NOT_NULL(ls)) {
-        if (OB_FAIL(ls_id_array.push_back(ls->get_ls_id()))) {
-          LOG_WARN("failed to push back ls id", K(ret), KP(ls));
-        } else {
+        if (can_access_logonly(access_attr) || !ls->is_logonly_replica()) {
+          if (OB_FAIL(ls_id_array.push_back(ls->get_ls_id()))) {
+            LOG_WARN("failed to push back ls id", K(ret), KP(ls));
+          }
+        }
+        if (OB_SUCC(ret)) {
           ls = static_cast<ObLS *>(ls->next_);
         }
       } // end of while

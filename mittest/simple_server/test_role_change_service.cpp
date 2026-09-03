@@ -111,7 +111,7 @@ TEST_F(RoleChangeService, basic_func)
   ASSERT_NE(nullptr, ls_service);
   {
     ObLSHandle ls;
-    EXPECT_EQ(OB_SUCCESS, ls_service->get_ls(ObLSID(1001), ls, ObLSGetMod::LOG_MOD));
+    EXPECT_EQ(OB_SUCCESS, ls_service->get_ls(ObLSID(1001), ls, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
     // 停止回放
     EXPECT_EQ(OB_SUCCESS, ls.get_ls()->disable_replay());
     ObLogHandler *log_handler = &ls.get_ls()->log_handler_;
@@ -180,7 +180,7 @@ TEST_F(RoleChangeService, test_offline)
   CLOG_LOG(INFO, "runlin trace commit success");
   ObLSService *ls_service = MTL(ObLSService *);
   ObLSHandle ls_handle;
-  EXPECT_EQ(OB_SUCCESS, ls_service->get_ls(id, ls_handle, ObLSGetMod::LOG_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_service->get_ls(id, ls_handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
   ObLS *ls = ls_handle.get_ls();
   int tmp_ret = OB_SUCCESS;
   while (OB_SUCCESS != (tmp_ret = ls->offline())) {

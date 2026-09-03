@@ -537,7 +537,7 @@ int ObTabletGroupRestoreDagNet::report_result_()
   } else if (OB_ISNULL(ls_service =  (MTL(ObLSService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -767,7 +767,7 @@ int ObInitialTabletGroupRestoreTask::init()
     meta_index_store_ = restore_dag_net->get_meta_index_store();
     second_meta_index_store_ = restore_dag_net->get_second_meta_index_store();
 
-    if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle_, ObLSGetMod::HA_MOD))) {
+    if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else {
       is_inited_ = true;
@@ -1275,7 +1275,7 @@ int ObStartTabletGroupRestoreTask::init(
     meta_index_store_ = restore_dag_net->get_meta_index_store();
     second_meta_index_store_ = restore_dag_net->get_second_meta_index_store();
     finish_dag_ = finish_dag;
-    if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle_, ObLSGetMod::HA_MOD))) {
+    if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->tablet_id_array_, tablet_id_array))) {
       LOG_WARN("failed to append tablet list", K(ret), KPC(ctx_));
@@ -1904,7 +1904,7 @@ int ObTabletRestoreDag::init(
   } else if (OB_ISNULL(ls_service = (MTL(ObLSService *)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(param.ls_id_, ls_handle_, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(param.ls_id_, ls_handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(param));
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

@@ -371,7 +371,7 @@ int TestCompactionPolicy::mock_memtable(
     LOG_WARN("failed to get memtable", K(ret));
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(ls_svr->get_ls(mt_mgr->ls_->get_ls_id(), ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(mt_mgr->ls_->get_ls_id(), ls_handle, ObLSGetMod::DATA_MEMTABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls handle", K(ret));
   } else if (OB_FAIL(memtable->init(table_key, ls_handle, mt_mgr->freezer_, mt_mgr, 0, mt_mgr->freezer_->get_freeze_clock()))) {
     LOG_WARN("failed to init memtable", K(ret));
@@ -428,7 +428,7 @@ int TestCompactionPolicy::mock_tablet(
     LOG_WARN("failed to del tablet", K(ret));
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls handle", K(ret));
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(key));
@@ -774,7 +774,7 @@ TEST_F(TestCompactionPolicy, basic_create_tablet)
   int ret = OB_SUCCESS;
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);

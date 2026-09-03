@@ -91,7 +91,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   ObTabletHandle tablet_handle;
 
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS *ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
   ASSERT_EQ(OB_SUCCESS, ls->get_tablet(tablet_id_, tablet_handle));

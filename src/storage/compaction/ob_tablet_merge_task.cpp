@@ -274,7 +274,7 @@ int ObBasicTabletMergeDag::prepare_merge_ctx()
 
   if (OB_FAIL(alloc_merge_ctx())) {
     LOG_WARN("failed to alloc memory for merge ctx", K(ret), KPC(this));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ctx_->ls_handle_, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ctx_->ls_handle_, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else {
     int tmp_ret = OB_SUCCESS;
@@ -293,7 +293,7 @@ int ObBasicTabletMergeDag::get_tablet_and_compat_mode()
   ObLSHandle tmp_ls_handle;
   ObTabletHandle tmp_tablet_handle;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, tmp_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, tmp_ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id_));
   } else if (OB_FAIL(tmp_ls_handle.get_ls()->get_tablet_svr()->get_tablet(
           tablet_id_,

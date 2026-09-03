@@ -455,7 +455,8 @@ int ObArchiveFetcher::check_need_delay_(const ObArchiveLogFetchTask &task,
   int64_t cur_file_id = cal_archive_file_id(start_lsn, MAX_ARCHIVE_FILE_SIZE);
   bool file_id_exist_in_dest_set = false;
 
-  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(id, handle, ObLSGetMod::ARCHIVE_MOD))) {
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(id, handle, ObLSGetMod::ARCHIVE_MOD,
+                                                 ObLSAccessAttr::ALLOW_LOGONLY))) {
     ARCHIVE_LOG(WARN, "get ls failed", K(id));
   } else if (OB_FAIL(handle.get_ls()->get_offline_scn(offline_scn))) {
     ARCHIVE_LOG(WARN, "get offline_scn failed", K(id));

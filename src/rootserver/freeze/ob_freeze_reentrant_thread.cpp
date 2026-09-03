@@ -84,7 +84,8 @@ int ObFreezeReentrantThread::obtain_proposal_id_from_ls(
   storage::ObLSHandle ls_handle;
   logservice::ObLogHandler *handler = nullptr;
   logservice::ObLogRestoreHandler *restore_handler = nullptr;
-  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(SYS_LS, ls_handle, ObLSGetMod::RS_MOD))) {
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(
+      SYS_LS, ls_handle, ObLSGetMod::RS_MOD, storage::ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("fail to get ls", KR(ret));
   } else if (is_primary_service) {
     if (OB_ISNULL(ls_handle.get_ls())

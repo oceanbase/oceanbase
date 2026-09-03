@@ -198,7 +198,7 @@ int TestTransferHandler::wait_transfer_out_deleted_tablet_become_empty_shell(
     } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be NULL", K(ret), K(task));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

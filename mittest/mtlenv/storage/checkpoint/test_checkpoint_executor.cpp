@@ -246,7 +246,7 @@ TEST_F(TestCheckpointExecutor, calculate_checkpoint)
   ObLSID ls_id(102);
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS * ls2 = handle.get_ls();
   ASSERT_NE(nullptr, ls2);
   ObDataCheckpoint *data_checkpoint = ls2->get_data_checkpoint();
@@ -315,7 +315,7 @@ TEST_F(TestCheckpointExecutor, timer_verify_rec_scn_stable)
   ObLSID ls_id(103);
   ASSERT_EQ(OB_SUCCESS, gen_create_ls_arg(tenant_id_, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS * ls2 = handle.get_ls();
   ASSERT_NE(nullptr, ls2);
   ObDataCheckpoint *data_checkpoint = ls2->get_data_checkpoint();

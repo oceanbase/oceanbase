@@ -259,7 +259,7 @@ public:
     ASSERT_NE(nullptr, ls_svr);
     ObLSHandle handle;
     share::ObLSID ls_id(1001);
-    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ASSERT_NE(nullptr, ls = handle.get_ls());
   }
 

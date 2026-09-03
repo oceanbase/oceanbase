@@ -122,7 +122,7 @@ TEST_F(TestBigTxData, big_tx_data)
     DoNothingOP op;
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle handle;
-    DO(ls_service->get_ls(ObLSID(1), handle, storage::ObLSGetMod::DEADLOCK_MOD));
+    DO(ls_service->get_ls(ObLSID(1), handle, storage::ObLSGetMod::DEADLOCK_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY));
     fprintf(stdout, "start read tx data from sstable, test_tx_id = %ld\n", TEST_TX_ID);
     ObTxDataMiniCache fake_cache;
     ObReadTxDataArg read_arg(ObTransID(ATOMIC_LOAD(&TEST_TX_ID)), 0, fake_cache);
@@ -140,7 +140,7 @@ void TestBigTxData::minor_freeze_and_wait()
     int64_t retry_times = 40;
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle handle;
-    DO(ls_service->get_ls(ObLSID(1), handle, storage::ObLSGetMod::DEADLOCK_MOD));
+    DO(ls_service->get_ls(ObLSID(1), handle, storage::ObLSGetMod::DEADLOCK_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY));
     ObTxDataMemtableMgr *mgr = handle.get_ls()->tx_table_.tx_data_table_.memtable_mgr_;
     ASSERT_NE(nullptr, mgr);
 

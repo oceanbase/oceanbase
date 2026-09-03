@@ -240,7 +240,8 @@ int ObTenantInfoLoader::check_server_has_logonly_replica_(const uint64_t tenant_
     if (OB_ISNULL(ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
-    } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, storage::ObLSGetMod::RS_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, handle, storage::ObLSGetMod::RS_MOD,
+                                    storage::ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls", KR(ret));
     } else if (OB_UNLIKELY(!handle.is_valid())) {
       ret = OB_ERR_UNEXPECTED;

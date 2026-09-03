@@ -664,7 +664,7 @@ struct AsyncFreezeFunctor {
     int ret = OB_SUCCESS;
     common::ObDIActionGuard ag1("OccamThreadPool", "AsyncFreezer", "detect task");
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_id_));
     } else {
       // freezer_ cannot be nullptr because AsyncFreezeFunctor is constructed by ObFreezer::this pointer
@@ -713,7 +713,7 @@ void ObFreezer::submit_an_async_freeze_task(const int64_t trace_id, const bool i
     ObSpinLockGuard freeze_thread_pool(tenant_freezer->freeze_thread_pool_lock_);
 
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_id));
     } else if (acquired_exec_async_task_permission_(is_ls_freeze)) {
       AsyncFreezeFunctor async_freeze_functor(trace_id, is_ls_freeze, this, ls_handle);
@@ -1945,7 +1945,7 @@ void ObFreezer::PendTenantReplayHelper::pend_tenant_replay_()
   int ret = OB_SUCCESS;
   ObLSService *ls_srv = MTL(ObLSService *);
   common::ObSharedGuard<ObLSIterator> iter;
-  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
   } else {
     ObLS *ls = nullptr;
@@ -1958,7 +1958,7 @@ void ObFreezer::PendTenantReplayHelper::pend_tenant_replay_()
     while (OB_SUCC(iter->get_next(ls))) {
       ObLSHandle ls_handle;
       iterate_ls_count++;
-      if (OB_FAIL(ls_srv->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(ls_srv->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         STORAGE_LOG(WARN, "[ObFreezer] get ls handle failed", KR(ret), KP(ls));
       } else if (OB_FAIL(ls_handle_array_.push_back(ls_handle))) {
         STORAGE_LOG(WARN, "[ObFreezer] push back ls handle failed", KR(ret), KP(ls));

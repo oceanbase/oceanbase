@@ -49,7 +49,7 @@ int ObRpcGetLSReplicaCheckpointInfoP::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ls service is null", KR(ret), K_(arg));
       } else if (OB_FAIL(ls_svr->get_ls(
-          arg_.get_ls_id(), ls_handle, ObLSGetMod::TXSTORAGE_MOD))) {
+          arg_.get_ls_id(), ls_handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get log stream failed", KR(ret), K_(arg));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;

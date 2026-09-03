@@ -379,7 +379,7 @@ int ObLSServiceHelper::get_ls_replica_sync_scn(const uint64_t tenant_id,
       if (OB_ISNULL(ls_svr) || OB_ISNULL(log_svr)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ls log service is null", KR(ret), K(tenant_id), KP(ls_svr), KP(log_svr));
-      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, storage::ObLSGetMod::RS_MOD))) {
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, storage::ObLSGetMod::RS_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("failed to get ls", KR(ret));
       } else {
         ObLS *ls = NULL;

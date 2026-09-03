@@ -383,7 +383,7 @@ int ObSimpleServer::simple_close()
     if (OB_SUCC(guard.switch_to(tenant_id))) {
       ObSEArray<share::ObLSID, 10> ls_ids;
       common::ObSharedGuard<storage::ObLSIterator> ls_iter;
-      if (OB_SUCC(MTL(ObLSService*)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_SUCC(MTL(ObLSService*)->get_ls_iter(ls_iter, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         while (true) {
           if (OB_SUCC(ls_iter->get_next(ls))) {
             ls_ids.push_back(ls->get_ls_id());

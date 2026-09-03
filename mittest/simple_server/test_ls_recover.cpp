@@ -159,7 +159,7 @@ void ObLSBeforeRestartTest::minor_freeze_tx_ctx_table()
   ASSERT_EQ(OB_SUCCESS, tguard.switch_to(RunCtx.tenant_id_));
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_NE(nullptr, ls_svr);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(guard, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls_iter(guard, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, iter = guard.get_ptr());
 
   while (OB_SUCC(ret)) {

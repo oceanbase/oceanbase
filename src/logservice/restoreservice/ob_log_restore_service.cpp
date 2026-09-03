@@ -322,7 +322,8 @@ void ObLogRestoreService::refresh_error_context_()
   ObLSIterator *iter = NULL;
   common::ObSharedGuard<ObLSIterator> guard;
   ObLogRestoreHandler *restore_handler = NULL;
-  if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+  if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD,
+                                   ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

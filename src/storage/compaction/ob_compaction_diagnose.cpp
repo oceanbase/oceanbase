@@ -794,7 +794,8 @@ int ObCompactionDiagnoseMgr::gen_ls_check_status(
   ls_status.reset();
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                         ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())){
     ret = OB_ERR_UNEXPECTED;

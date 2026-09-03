@@ -46,7 +46,9 @@ public:
       common::ObAddr &leader_addr, common::GlobalLearnerList &learner_list,
       common::ObMemberList &member_list);
   virtual int get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &addr);
-  virtual int get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle);
+  virtual int get_ls(const share::ObLSID &ls_id,
+                     ObLSHandle &ls_handle,
+                     ObLSAccessAttr access_attr);
   virtual bool check_tenant_primary();
 
 private:

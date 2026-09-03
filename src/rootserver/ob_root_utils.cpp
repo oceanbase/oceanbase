@@ -2078,7 +2078,8 @@ int ObRootUtils::get_proposal_id_from_sys_ls(int64_t &proposal_id, ObRole &role)
   storage::ObLSHandle ls_handle;
   logservice::ObLogHandler *handler = nullptr;
   MTL_SWITCH(OB_SYS_TENANT_ID) {
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(SYS_LS, ls_handle, ObLSGetMod::RS_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(SYS_LS, ls_handle, ObLSGetMod::RS_MOD,
+                                        ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("fail to get ls", KR(ret));
     } else if (OB_UNLIKELY(!ls_handle.is_valid())
         || OB_ISNULL(ls_handle.get_ls())

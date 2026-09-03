@@ -73,7 +73,7 @@ TEST_F(TestGCTabletInOfflineTest, test_gc_tablet_in_offline)
     ObTabletID tablet_id(200001);
     ObLSID ls_id(1);
     storage::ObLSHandle ls_handle;
-    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     storage::ObTabletHandle tablet_handle;
     ASSERT_EQ(OB_TABLET_NOT_EXIST, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
     ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, 10*1_s, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
@@ -83,7 +83,7 @@ TEST_F(TestGCTabletInOfflineTest, test_gc_tablet_in_offline)
     ls_handle.reset();
     tablet_handle.reset();
 
-    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD));
+    ASSERT_EQ(OB_SUCCESS, MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ASSERT_EQ(OB_TABLET_NOT_EXIST, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, 10*1_s, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
   }
 }

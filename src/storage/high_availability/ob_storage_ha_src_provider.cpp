@@ -163,7 +163,7 @@ int ObStorageHAGetMemberHelper::get_ls_member_list_and_learner_list_(
   obrpc::ObFetchLSMemberListInfo member_info;
   obrpc::ObFetchLSMemberAndLearnerListInfo member_and_learner_info;
   ObLSService *ls_service = nullptr;
-  if (OB_FAIL(get_ls(ls_id, ls_handle))) {
+  if (OB_FAIL(get_ls(ls_id, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls handle", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -251,7 +251,9 @@ int ObStorageHAGetMemberHelper::fetch_ls_member_list_and_learner_list_(const uin
   return ret;
 }
 
-int ObStorageHAGetMemberHelper::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle)
+int ObStorageHAGetMemberHelper::get_ls(const share::ObLSID &ls_id,
+                                       ObLSHandle &ls_handle,
+                                       ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
   ls_handle.reset();
@@ -261,7 +263,7 @@ int ObStorageHAGetMemberHelper::get_ls(const share::ObLSID &ls_id, ObLSHandle &l
   } else if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(ls_id));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle, access_attr))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   }
   return ret;
@@ -536,7 +538,8 @@ int ObStorageHASrcProvider::get_palf_parent_addr_(const uint64_t tenant_id, cons
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
   parent_addr.reset();
-  if (OB_FAIL(member_helper_->get_ls(ls_id, ls_handle))) {
+  if (OB_FAIL(member_helper_->get_ls(
+      ls_id, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

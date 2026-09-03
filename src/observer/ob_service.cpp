@@ -1162,7 +1162,7 @@ int ObService::check_modify_time_elapsed(
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(DDL_SIM(arg.tenant_id_, arg.ddl_task_id_, CHECK_MODIFY_TIME_ELAPSED_SLOW))) {
           LOG_WARN("ddl sim failure: check modify time elapsed slow", K(tmp_ret), K(arg.tenant_id_), K(arg.ddl_task_id_));
-        } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(ls_id));
         } else if (OB_TMP_FAIL(ls_handle.get_ls()->check_modify_time_elapsed(tablet_id,
                                                                              arg.sstable_exist_ts_,
@@ -1218,7 +1218,7 @@ int ObService::check_schema_version_elapsed(
         bool is_leader_serving = false;
         if (OB_TMP_FAIL(DDL_SIM(arg.tenant_id_, arg.ddl_task_id_, CHECK_SCHEMA_TRANS_END_SLOW))) {
           LOG_WARN("ddl sim failure: check schema version elapsed slow", K(tmp_ret), K(arg));
-        } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("get ls failed", K(tmp_ret), K(i), K(ls_id));
         } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->check_in_leader_serving_state(is_leader_serving))) {
           LOG_WARN("fail to check ls in leader serving state", K(tmp_ret), K(ls_id));
@@ -1295,7 +1295,7 @@ int ObService::check_ddl_tablet_merge_status(
         } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid arguments", K(ret), K(arg));
-        } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("get ls failed", K(ret), K(arg));
         } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
           LOG_WARN("get tablet failed", K(ret));
@@ -1862,7 +1862,8 @@ int ObService::do_remove_ls_paxos_replica(const obrpc::ObLSDropPaxosReplicaArg &
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mtl ObLSService should not be null", KR(ret));
-    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD,
+                                          ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls", KR(ret), K(arg));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1901,7 +1902,8 @@ int ObService::do_remove_ls_nonpaxos_replica(const obrpc::ObLSDropNonPaxosReplic
     if (OB_ISNULL(ls_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("mtl ObLSService should not be null", KR(ret));
-    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD,
+                                          ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls", KR(ret), K(arg));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2796,11 +2798,11 @@ int ObService::fill_tablet_report_info(
       if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        if (OB_LS_NOT_EXIST != ret) {
+      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+        if (OB_LS_NOT_EXIST != ret && OB_LS_OFFLINE != ret) {
           LOG_WARN("fail to get log_stream's ls_handle", KR(ret), K(tenant_id), K(ls_id));
         } else {
-          LOG_TRACE("log stream not exist in this tenant", KR(ret), K(tenant_id), K(ls_id));
+          LOG_TRACE("log stream has no local tablet", KR(ret), K(tenant_id), K(ls_id));
         }
       } else if (FALSE_IT(ls = ls_handle.get_ls())) {
       } else if (OB_FAIL(inner_fill_tablet_info_(tenant_id,
@@ -2879,7 +2881,8 @@ int ObService::fill_ls_replica(
         LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
       } else if (OB_FAIL(ls_svr->get_ls(
             ObLSID(ls_id),
-            ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+            ls_handle, ObLSGetMod::OBSERVER_MOD,
+            ObLSAccessAttr::ALLOW_LOGONLY))) {
         LOG_WARN("get ls handle failed", KR(ret));
       } else if (OB_FAIL(ls_handle.get_ls()->get_paxos_member_list_and_learner_list(ob_member_list, paxos_replica_number, learner_list))) {
         LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
@@ -3059,7 +3062,8 @@ int ObService::get_leader_locations(
         } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD))) {
+        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD,
+                                               ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("fail to get ls iter guard", KR(ret), K(tenant_id));
         }
         while (OB_SUCC(ret) && OB_SUCCESS == actual_ret) {
@@ -3194,7 +3198,8 @@ int ObService::get_ls_sync_scn(
     } else if (!is_strong_leader(role)) {
       ret = OB_NOT_MASTER;
       LOG_WARN("ls on this server is not master", KR(ret), K(ls_id));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                      ObLSAccessAttr::DISABLE_LOGONLY))) {
       COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3265,7 +3270,8 @@ int ObService::force_set_ls_as_single_replica(
     if (OB_ISNULL(ls_svr) || OB_ISNULL(log_ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(ERROR, "should not be null", KR(ret), KP(ls_svr), KP(log_ls_svr));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::OBSERVER_MOD,
+                                      ObLSAccessAttr::DISABLE_LOGONLY))) {
       COMMON_LOG(WARN, "get ls failed", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3309,7 +3315,8 @@ int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, 
         if (OB_ISNULL(ls_svr) || OB_ISNULL(log_service)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("ptr is null", KR(ret), K(tenant_id), KP(ls_svr), KP(log_service));
-        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD))) {
+        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD,
+                                               ObLSAccessAttr::DISABLE_LOGONLY))) {
           LOG_WARN("fail to get ls iter guard", KR(ret), K(tenant_id));
         }
 
@@ -3490,7 +3497,8 @@ int ObService::get_ls_replayed_scn(
     if (OB_ISNULL(ls_svr)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
-    } else if (OB_FAIL(ls_svr->get_ls(arg.get_ls_id(), ls_handle, ObLSGetMod::RS_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(arg.get_ls_id(), ls_handle, ObLSGetMod::RS_MOD,
+                                      ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("get log stream failed", KR(ret), K(arg));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

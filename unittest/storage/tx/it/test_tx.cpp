@@ -2742,7 +2742,7 @@ TEST_F(ObTestTx, logonly_replica_local_read_snapshot_no_core)
   // release this stack address through its allocator.
   ASSERT_EQ(OB_SUCCESS, logonly_ls.get_ref_mgr().inc(ObLSGetMod::TXSTORAGE_MOD));
   ASSERT_EQ(OB_SUCCESS, node.add_ls_for_test(logonly_ls));
-  EXPECT_EQ(OB_NOT_MASTER,
+  EXPECT_EQ(OB_LS_OFFLINE,
             node.txs_.acquire_local_snapshot_(logonly_ls_id,
                                                snapshot,
                                                true /* is_read_only */,

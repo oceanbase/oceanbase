@@ -73,7 +73,7 @@ int ObIDService::check_and_fill_ls()
     if (OB_ISNULL(ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(IDS_LS, handle, ObLSGetMod::TRANS_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(IDS_LS, handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       TRANS_LOG(WARN, "get id service log stream failed");
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -266,7 +266,8 @@ int ObIDService::update_ls_id_meta_for_flush(
   ObLSHandle ls_handle;
   const bool write_slog = true;
 
-  if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(IDS_LS, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  if (OB_FAIL(MTL(storage::ObLSService *)->get_ls(
+      IDS_LS, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
     TRANS_LOG(WARN, "get id service log stream failed", KR(ret), K(id_service_type),
         K(limited_id), K(latest_log_ts));
   } else if (OB_FAIL(ls_handle.get_ls()->update_id_meta(id_service_type,

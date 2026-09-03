@@ -135,7 +135,7 @@ void TestTrans::create_ls(uint64_t tenant_id, ObLSID &ls_id, ObLS *&ls)
   // set member list
   LOG_INFO("set member list");
   ObLSHandle handle;
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ls = handle.get_ls();
   ObMemberList member_list;
   int64_t paxos_replica_num = 1;
@@ -233,7 +233,7 @@ TEST_F(TestTrans, create_ls_and_tablet)
   ObLSHandle ls_handle;
   uint64_t table_id = 12345;
   ASSERT_EQ(OB_SUCCESS, build_test_schema(table_schema_, table_id));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, table_schema_, allocator_));
 }
 
@@ -261,7 +261,7 @@ TEST_F(TestTrans, basic)
   ASSERT_EQ(OB_SUCCESS, tx_service->tx_ctx_mgr_.revert_tx_ctx(part_ctx));
 
   ObLSHandle ls_handle;
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObTabletHandle tablet_handle;
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, tablet_handle, 0));
   ObIMemtableMgr *mt_mgr = tablet_handle.get_obj()->get_memtable_mgr();
@@ -334,7 +334,7 @@ TEST_F(TestTrans, dist_trans)
   ObLSTabletService *ls_tablet_svr = ls2->get_tablet_svr();
   ObLSService* ls_svr = MTL(ObLSService*);
   ObLSHandle ls_handle2;
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id2, ls_handle2, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id2, ls_handle2, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle2, tablet_id2, table_schema_, allocator_));
 
 
@@ -367,7 +367,7 @@ TEST_F(TestTrans, freeze)
   ObLSID ls_id(100);
   ObLSHandle ls_handle;
   ObLS *ls;
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ls = ls_handle.get_ls();
   ASSERT_EQ(OB_SUCCESS, ls->logstream_freeze());
 }

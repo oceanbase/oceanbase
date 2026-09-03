@@ -79,7 +79,8 @@ int ObDDLCtrlSpeedItem::refresh()
   if (OB_ISNULL(log_service) || OB_ISNULL(archive_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, nullptr found", K(ret), KP(log_service), KP(archive_service));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                                ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       // log stream may be removed during timer refresh task.
       ret = OB_SUCCESS;
@@ -156,7 +157,8 @@ int ObDDLCtrlSpeedItem::check_cur_node_is_leader(bool &is_leader)
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_svr is nullptr", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id_, handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id_, handle, ObLSGetMod::STORAGE_MOD,
+                                    ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls handle", K(ret), K_(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -595,8 +597,8 @@ int ObDDLCtrlSpeedHandle::GetNeedRemoveItemsFn::operator() (
   } else {
     MTL_SWITCH(speed_handle_key.tenant_id_) {
       ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService *)->get_ls(speed_handle_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-        if (OB_LS_NOT_EXIST == ret) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(speed_handle_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+        if (OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret) {
           erase = true;
           ret = OB_SUCCESS;
         } else {
@@ -1219,7 +1221,7 @@ int ObDDLSSTableRedoWriter::start_ddl_redo(const ObITable::TableKey &table_key,
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(data_format_version));
   } else if (OB_FAIL(log.init(table_key, data_format_version, execution_id))) {
     LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(data_format_version));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1270,7 +1272,7 @@ int ObDDLSSTableRedoWriter::end_ddl_redo_and_create_ddl_sstable(
   if (OB_UNLIKELY(!ls_id.is_valid() || !table_key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ls", K(ret), K(ls_id), K(table_key));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle))) {
     LOG_WARN("get tablet failed", K(ret));
@@ -1386,7 +1388,8 @@ int ObDDLSSTableRedoWriter::write_redo_log(const ObDDLMacroBlockRedoInfo &redo_i
   } else if (OB_UNLIKELY(!redo_info.is_valid() || 0 == task_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(task_id));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD,
+                                                ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1490,7 +1493,8 @@ int ObDDLSSTableRedoWriter::write_commit_log(ObTabletHandle &tablet_handle,
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(start_scn_));
   } else if (OB_FAIL(log.init(table_key, get_start_scn()))) {
     LOG_WARN("fail to init DDLCommitLog", K(ret), K(table_key), K(start_scn_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD,
+                                                ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1660,7 +1664,7 @@ int ObDDLRedoLogWriterCallback::init(const ObDDLMacroBlockType block_type,
   } else if (OB_UNLIKELY(!table_key.is_valid() || nullptr == ddl_writer || DDL_MB_INVALID_TYPE == block_type || 0 == task_id || !ddl_kv_mgr_handle.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(block_type), K(task_id));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ddl_kv_mgr_handle.get_obj()->get_ls_id(), ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ddl_kv_mgr_handle.get_obj()->get_ls_id(), ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), KPC(ddl_kv_mgr_handle.get_obj()));
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                ddl_kv_mgr_handle.get_obj()->get_tablet_id(),

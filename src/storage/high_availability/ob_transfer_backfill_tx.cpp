@@ -266,7 +266,7 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     if (OB_LS_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       LOG_INFO("[TRANSFER_BACKFILL]source ls not exist", K(ls_id), K(tablet_id));
@@ -601,9 +601,9 @@ int ObTransferBackfillTXCtx::init_ls_handle()
   if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(src_ls_id_, src_ls_handle_, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(src_ls_id_, src_ls_handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get src ls", K(ret), K(src_ls_id_));
-  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id_, dest_ls_handle_, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id_, dest_ls_handle_, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get dest ls", K(ret), K(dest_ls_id_));
   } else if (OB_ISNULL(src_ls = src_ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1534,7 +1534,7 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), "ls_id", ctx_->src_ls_id_);
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1819,7 +1819,7 @@ int ObTransferReplaceTableTask::process()
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1912,12 +1912,12 @@ void ObTransferReplaceTableTask::transfer_tablet_restore_stat_() const
   if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, dest_ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, dest_ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dest ls should not be NULL", K(ret), KP(dest_ls), KPC(ctx_));
-  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
   } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

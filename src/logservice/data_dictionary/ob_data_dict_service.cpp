@@ -325,8 +325,11 @@ int ObDataDictService::do_dump_data_dict_()
     LOG_TRACE("check_cluster_status_normal_ failed", KR(ret), K(is_cluster_status_normal));
   } else if (OB_UNLIKELY(! is_cluster_status_normal)) {
     LOG_TRACE("cluster_status not normal, won't dump_data_dict", K(is_cluster_status_normal));
-  } else if (OB_FAIL(ls_service_->get_ls(share::SYS_LS, ls_handle, ObLSGetMod::DATA_DICT_MOD))) {
-    if (OB_LS_NOT_EXIST != ret || REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_DETAIL_INTERVAL)) {
+  } else if (OB_FAIL(ls_service_->get_ls(share::SYS_LS, ls_handle, ObLSGetMod::DATA_DICT_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+    if (OB_LS_OFFLINE == ret) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("disable logonly replica, won't do_dump_data_dict_ cause ls offline", KR(ret), K_(tenant_id));
+    } else if (OB_LS_NOT_EXIST != ret || REACH_TIME_INTERVAL_THREAD_LOCAL(PRINT_DETAIL_INTERVAL)) {
       LOG_WARN("get_ls for data_dict_service from ls_service failed", KR(ret), K_(tenant_id));
     }
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {

@@ -38,6 +38,7 @@ int ObAllVirtualTxData::inner_get_next_row(common::ObNewRow *&row)
       }
     } else if (is_logonly_replica) {
       // skip logonly replica
+      ret = OB_ITER_END;
     } else if (OB_FAIL(fill_in_row_(tx_data_row_, row))) {
       SERVER_LOG(WARN, "fill in row failed", KR(ret));
     } else {
@@ -188,8 +189,20 @@ int ObAllVirtualTxData::generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_
     ObLSHandle ls_handle;
     ObLS *ls = nullptr;
     ObLSService *ls_service = MTL(ObLSService *);
-    if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+    if (OB_FAIL(ls_service->check_ls_is_logonly(ls_id_, is_logonly_replica))) {
       if (OB_LS_NOT_EXIST == ret) {
+        ret = OB_ITER_END;
+      } else {
+        SERVER_LOG(WARN, "check ls is logonly failed", KR(ret), K(tenant_id_), K(ls_id_));
+      }
+    } else if (is_logonly_replica) {
+      // skip logonly replica
+    } else if (OB_FAIL(ls_service->get_ls(
+                   ls_id_,
+                   ls_handle,
+                   ObLSGetMod::OBSERVER_MOD,
+                   ObLSAccessAttr::DISABLE_LOGONLY))) {
+      if (OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret) {
         ret = OB_ITER_END;
       } else {
         SERVER_LOG(WARN, "get ls from ls service failed", KR(ret), K(ls_id_));
@@ -197,9 +210,6 @@ int ObAllVirtualTxData::generate_virtual_tx_data_row_(VirtualTxDataRow &tx_data_
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       SERVER_LOG(ERROR, "get ls failed from ls handle", KR(ret), K(ls_handle), K(tenant_id_), K(ls_id_));
-    } else if (ObReplicaTypeCheck::is_log_replica(ls->get_replica_type())) {
-      // skip logonly replica
-      is_logonly_replica = true;
     } else if (OB_FAIL(ls->generate_virtual_tx_data_row(tx_id_, tx_data_row))) {
       SERVER_LOG(WARN, "ls genenrate virtual tx data row failed", KR(ret), K(ls_handle), K(tenant_id_), K(ls_id_));
     } else {

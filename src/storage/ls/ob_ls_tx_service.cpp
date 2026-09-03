@@ -286,7 +286,7 @@ int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
     if (!src_ls_handle.is_valid()) {
       TRANS_LOG(ERROR, "src tx guard is valid when src ls handle not valid", K(store_ctx));
       ObLSHandle ls_handle;
-      if (OB_TMP_FAIL(MTL(ObLSService*)->get_ls(src_tx_table_guard.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD))) {
+      if (OB_TMP_FAIL(MTL(ObLSService*)->get_ls(src_tx_table_guard.get_ls_id(), ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         TRANS_LOG(ERROR, "get_ls failed", KR(tmp_ret), K(src_tx_table_guard));
       } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->end_request_for_transfer())) {
         TRANS_LOG(ERROR, "end request for transfer", KR(tmp_ret), K(src_tx_table_guard));

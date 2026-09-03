@@ -58,7 +58,7 @@ int SimpleServerHelper::create_ls(uint64_t tenant_id, ObAddr addr)
     LOG_INFO("set member list");
     ObLSHandle handle;
     ObLS *ls = nullptr;
-    FR(ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    FR(ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY));
     ls = handle.get_ls();
     ObMemberList member_list;
     int64_t paxos_replica_num = 1;
@@ -282,7 +282,7 @@ int SimpleServerHelper::submit_redo(uint64_t tenant_id, ObLSID ls_id)
   ObTransID failed_tx_id;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else if (OB_FAIL(ls_handle.get_ls()->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
     }
   }
@@ -297,7 +297,7 @@ int SimpleServerHelper::wait_checkpoint_newest(uint64_t tenant_id, ObLSID ls_id)
   SCN end_scn;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else if (OB_FAIL(ls_handle.get_ls()->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
     } else if (OB_FAIL(ls_handle.get_ls()->get_end_scn(end_scn))) {
     } else {
@@ -324,7 +324,7 @@ int SimpleServerHelper::freeze(uint64_t tenant_id, ObLSID ls_id, ObTabletID tabl
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id, true))) {
     }
   }
@@ -336,7 +336,7 @@ int SimpleServerHelper::freeze_tx_data(uint64_t tenant_id, ObLSID ls_id)
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else {
       storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = ls_handle.get_ls()->get_checkpoint_executor();
       ObTxDataMemtableMgr *tx_data_memtable_mgr
@@ -362,7 +362,7 @@ int SimpleServerHelper::freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id)
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else {
       storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = ls_handle.get_ls()->get_checkpoint_executor();
       ObTxCtxMemtable *tx_ctx_memtable
@@ -387,7 +387,7 @@ int SimpleServerHelper::wait_flush_finish(uint64_t tenant_id, ObLSID ls_id, ObTa
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else {
       while (OB_SUCC(ret)) {
         ObTabletHandle handle;
@@ -426,7 +426,7 @@ int SimpleServerHelper::remove_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret), K(ls_id));
     } else {
       auto &m = ls_handle.get_ls()->ls_tx_svr_.mgr_->ls_tx_ctx_map_;
@@ -453,7 +453,7 @@ int SimpleServerHelper::get_tx_ctx(uint64_t tenant_id,
     ObLSHandle ls_handle;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id,
                                           ls_handle,
-                                          ObLSGetMod::STORAGE_MOD))) {
+                                          ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tx_ctx(tx_id, false, ctx))) {
       LOG_WARN("fail to get tx ctx", KR(ret), K(ls_id));
@@ -471,7 +471,7 @@ int SimpleServerHelper::revert_tx_ctx(uint64_t tenant_id,
     ObLSHandle ls_handle;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id,
                                           ls_handle,
-                                          ObLSGetMod::STORAGE_MOD))) {
+                                          ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_handle.get_ls()->revert_tx_ctx(ctx))) {
       LOG_WARN("fail to revert tx ctx", KR(ret), K(ls_id));
@@ -486,7 +486,7 @@ int SimpleServerHelper::abort_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
     ObPartTransCtx *ctx = nullptr;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tx_ctx(tx_id, false, ctx))) {
     } else {
@@ -585,7 +585,7 @@ int SimpleServerHelper::ls_resume(uint64_t tenant_id, ObLSID ls_id)
 
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else if (OB_FAIL(ls_handle.get_ls()->ls_tx_svr_.switch_to_follower_gracefully())) {
     } else if (OB_FAIL(ls_handle.get_ls()->ls_tx_svr_.switch_to_leader())) {
     }
@@ -598,7 +598,7 @@ int SimpleServerHelper::find_tx_info(uint64_t tenant_id, ObLSID ls_id, ObTransID
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret), K(ls_id));
     } else {
       ObPartTransCtx *ctx = nullptr;
@@ -625,7 +625,7 @@ int SimpleServerHelper::wait_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_i
   while (OB_SUCC(ret) && !wait_end) {
     MTL_SWITCH(tenant_id) {
       ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", KR(ret), K(ls_id));
       } else {
         ObPartTransCtx *ctx = nullptr;
@@ -654,7 +654,7 @@ int SimpleServerHelper::wait_tx_exit(uint64_t tenant_id, ObLSID ls_id, ObTransID
   while (OB_SUCC(ret)) {
     MTL_SWITCH(tenant_id) {
       ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", KR(ret), K(ls_id));
       } else {
         ObPartTransCtx *ctx = nullptr;
@@ -679,7 +679,7 @@ int SimpleServerHelper::get_ls_end_scn(uint64_t tenant_id, ObLSID ls_id, SCN &en
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("get ls failed", KR(ret), K(ls_id));
     } else if (OB_FAIL(ls_handle.get_ls()->get_end_scn(end_scn))) {
     }
@@ -710,7 +710,7 @@ int SimpleServerHelper::enable_wrs(uint64_t tenant_id, ObLSID ls_id, bool enable
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else {
       ls_handle.get_ls()->get_ls_wrs_handler()->is_enabled_ = enable;
     }
@@ -728,8 +728,8 @@ int SimpleServerHelper::wait_weak_read_ts_advance(uint64_t tenant_id, ObLSID ls_
     MTL_SWITCH(tenant_id) {
       ObLSHandle ls_handle1;
       ObLSHandle ls_handle2;
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id1, ls_handle1, ObLSGetMod::STORAGE_MOD))) {
-      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id2, ls_handle2, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id1, ls_handle1, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+      } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id2, ls_handle2, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       } else if (FALSE_IT(ts1 = ls_handle1.get_ls()->get_ls_wrs_handler()->ls_weak_read_ts_)) {
       } else if (FALSE_IT(ts2 = ls_handle2.get_ls()->get_ls_wrs_handler()->ls_weak_read_ts_)) {
       } else if (ts1 > ts2) {
@@ -749,7 +749,7 @@ int SimpleServerHelper::modify_wrs(uint64_t tenant_id, ObLSID ls_id, int64_t add
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else {
       SCN &wrs_scn = ls_handle.get_ls()->get_ls_wrs_handler()->ls_weak_read_ts_;
       SCN old_scn = wrs_scn;
@@ -776,7 +776,7 @@ int SimpleServerHelper::ls_reboot(uint64_t tenant_id, ObLSID ls_id)
     MTL_SWITCH(tenant_id) {
       ObLSHandle ls_handle;
       SCN end_scn;
-      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", KR(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(ls_handle.get_ls()->ls_tx_svr_.switch_to_follower_gracefully())) {
         LOG_WARN("switch to follower failed", KR(ret));
@@ -882,7 +882,7 @@ int InjectTxFaultHelper::inject_tx_block(uint64_t tenant_id, ObLSID ls_id, ObTra
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     ObLSHandle ls_handle;
-    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     } else if (OB_FAIL(tx_injects_.set_refactored(tx_id, log_type))) {
     } else if (OB_ISNULL(mgr_)) {
       // replace log_adapter

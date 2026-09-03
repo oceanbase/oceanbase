@@ -526,7 +526,7 @@ int ObTenantTabletScheduler::update_upper_trans_version_and_gc_sstable()
   ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLS *ls = nullptr;
 
-  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls_iter(ls_iter_guard, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iterator", K(ret));
   }
 
@@ -2091,7 +2091,8 @@ int ObCompactionScheduleIterator::build_iter(const int64_t batch_tablet_cnt)
     LOG_WARN("invalid argument", KR(ret), K(batch_tablet_cnt));
   } else if (!is_valid()) {
     ls_ids_.reuse();
-    if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids_))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(
+        ls_ids_, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get all ls id", K(ret));
     } else {
       ls_idx_ = -1;
@@ -2215,7 +2216,8 @@ int ObCompactionScheduleIterator::get_next_tablet(ObTabletHandle &tablet_handle)
 // TODO(@lixia.yq) add errsim obtest here
 int ObCompactionScheduleIterator::get_cur_ls_handle(ObLSHandle &ls_handle)
 {
-  return MTL(storage::ObLSService *)->get_ls(ls_ids_[ls_idx_], ls_handle, mod_);
+  return MTL(storage::ObLSService *)->get_ls(
+      ls_ids_[ls_idx_], ls_handle, mod_, ObLSAccessAttr::DISABLE_LOGONLY);
 }
 
 int ObCompactionScheduleIterator::get_tablet_ids()

@@ -862,7 +862,8 @@ int ObCdcFetcher::check_ls_sync_status_(const ObLSID &ls_id,
     logservice::ObLogHandler *log_handler = NULL;
     bool is_need_rebuild = false;
 
-    if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+    if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD,
+                                  ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("ls_service get_ls fail", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

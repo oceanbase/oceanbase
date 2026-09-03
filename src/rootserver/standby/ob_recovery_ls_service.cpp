@@ -717,7 +717,7 @@ int ObRecoveryLSService::get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *
   } else if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service is null", KR(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", KR(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1398,7 +1398,8 @@ int ObRecoveryLSService::init_restore_status(const share::SCN &sync_scn, int err
     RestoreSyncStatus sync_status;
     ObLSService *ls_svr = MTL(ObLSService *);
     ObLSHandle ls_handle;
-    if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD))) {
+    if (OB_FAIL(ls_svr->get_ls(SYS_LS, ls_handle, storage::ObLSGetMod::RS_MOD,
+                             storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", KR(ret));
     } else {
       ObLogHandler *log_handler = NULL;

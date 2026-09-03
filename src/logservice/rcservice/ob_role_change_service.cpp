@@ -301,7 +301,8 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
   if (false == event.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(event));
-  } else if (OB_FAIL(ls_service_->get_ls(event.ls_id_, ls_handle, ObLSGetMod::LOG_MOD))
+  } else if (OB_FAIL(ls_service_->get_ls(event.ls_id_, ls_handle, ObLSGetMod::LOG_MOD,
+                                         ObLSAccessAttr::ALLOW_LOGONLY))
              || NULL == (ls = ls_handle.get_ls())) {
     ret = OB_ENTRY_NOT_EXIST;
     CLOG_LOG(WARN, "get log stream from ObLSService failed", K(ret), K(event));

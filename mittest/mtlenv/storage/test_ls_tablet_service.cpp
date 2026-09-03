@@ -98,7 +98,7 @@ void TestLSTabletService::SetUp()
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
 
@@ -144,7 +144,7 @@ void TestLSTabletService::construct_and_get_tablet_list(
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -202,7 +202,7 @@ TEST_F(TestLSTabletService, test_try_update_tablet_after_persist_stale_addr)
   ObLSHandle ls_handle;
   ObTableSchema schema;
   TestSchemaUtils::prepare_data_schema(schema);
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
 
   ObTimeGuard time_guard("TestTryUpdateAfterPersistStale");
@@ -263,7 +263,7 @@ TEST_F(TestLSTabletService, test_build_new_tablet_from_mds_table_retry)
   valid_tablet_num(inner_tablet_count);
   const int64_t normal_tablet_count = t3m->tablet_buffer_pool_.get_used_obj_cnt();
   const int64_t large_tablet_count = t3m->large_tablet_buffer_pool_.get_used_obj_cnt();
-  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
 
   EventItem retry_once;
@@ -323,7 +323,7 @@ TEST_F(TestLSTabletService, test_create_tablet_without_index)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -352,7 +352,7 @@ TEST_F(TestLSTabletService, test_serialize_tablet)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -618,7 +618,7 @@ TEST_F(TestLSTabletService, test_create_tablet_with_index)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ret = TestTabletHelper::create_tablet(ls_handle, data_tablet_id, data_schema, allocator_);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = TestTabletHelper::create_tablet(ls_handle, index_tablet_id, index_schema, allocator_);
@@ -652,7 +652,7 @@ TEST_F(TestLSTabletService, test_create_index_tablet)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ret = TestTabletHelper::create_tablet(ls_handle, data_tablet_id, data_schema, allocator_);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -702,7 +702,7 @@ TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_);
@@ -749,7 +749,7 @@ TEST_F(TestLSTabletService, test_replay_empty_shell)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
@@ -837,7 +837,7 @@ TEST_F(TestLSTabletService, test_cover_empty_shell)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
@@ -891,7 +891,7 @@ TEST_F(TestLSTabletService, test_migrate_empty_shell)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator, ObTabletStatus::Status::DELETED);
@@ -984,7 +984,7 @@ TEST_F(TestLSTabletService, test_migrate_param)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator, ObTabletStatus::Status::DELETED);
@@ -1040,7 +1040,7 @@ TEST_F(TestLSTabletService, test_migrate_param_empty_shell)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator, ObTabletStatus::Status::DELETED);
@@ -1096,7 +1096,7 @@ TEST_F(TestLSTabletService, test_update_empty_shell)
   TestSchemaUtils::prepare_data_schema(schema);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -1155,7 +1155,7 @@ TEST_F(TestLSTabletService, test_migrate_with_tablet_meta_merge)
 
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator, ObTabletStatus::Status::NORMAL);

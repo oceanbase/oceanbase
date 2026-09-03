@@ -7226,7 +7226,8 @@ int ObLSTabletService::check_real_leader_for_4377_(const ObLSID ls_id)
     LOG_ERROR("MTL(ObLSService*) fail, MTL not init?", K(ret));
   } else if (OB_FAIL(ls_srv->get_ls(ls_id,
                                     ls_handle,
-                                    ObLSGetMod::TRANS_MOD))) {
+                                    ObLSGetMod::TRANS_MOD,
+                                    ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_ERROR("ls_srv->get_ls() fail", KR(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

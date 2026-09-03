@@ -204,7 +204,7 @@ int ObTenantMdsService::for_each_ls_in_tenant(const ObFunction<int(ObLS &)> &op)
   if (!op.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG_NONE(WARN, "invalid op");
-  } else if (MDS_FAIL(MTL(ObLSService*)->get_ls_iter(iter, ObLSGetMod::MDS_TABLE_MOD))) {
+  } else if (MDS_FAIL(MTL(ObLSService*)->get_ls_iter(iter, ObLSGetMod::MDS_TABLE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     MDS_LOG_NONE(WARN, "fail to get ls iterator");
   } else {
     do {

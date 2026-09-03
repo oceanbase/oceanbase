@@ -129,7 +129,7 @@ void ObTabletGCService::ObTabletChangeTask::runTimerTask()
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", KR(ret));
   } else if (OB_UNLIKELY(skip_gc_task)) {
     // do nothing
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "get log stream iter failed", KR(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

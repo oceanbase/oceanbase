@@ -370,6 +370,7 @@ int ObTabletTableUpdater::generate_tasks_(
                                                          checksum_item))) {
           if (OB_TABLET_NOT_EXIST == ret
               || OB_LS_NOT_EXIST == ret
+              || OB_LS_OFFLINE == ret
               || OB_TENANT_NOT_IN_SERVER == ret) {
             ret = OB_SUCCESS;
             // fill primary keys of the replica for removing

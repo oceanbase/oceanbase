@@ -115,7 +115,7 @@ TEST_F(TestWriteTabletSlog, basic)
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_NE(nullptr, ls_svr);
 
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
 

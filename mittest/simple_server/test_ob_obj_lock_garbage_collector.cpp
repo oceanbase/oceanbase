@@ -81,7 +81,7 @@ public:
     ObLSService *ls_svr = MTL(ObLSService*);
     ASSERT_NE(nullptr, ls_svr);
     ObLSHandle handle;
-    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
     ASSERT_NE(nullptr, ls = handle.get_ls());
     LOG_INFO("get_ls end");
   }

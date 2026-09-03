@@ -159,7 +159,8 @@ int ObStorageHAService::get_ls_id_array_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha service do not init", K(ret));
-  } else if (OB_FAIL(ls_service_->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD,
+                                              ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else if (OB_ISNULL(ls_iter = ls_iter_guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -218,7 +219,8 @@ int ObStorageHAService::do_ha_handler_(const share::ObLSID &ls_id)
   } else if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do ha handler get invalid argument", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD,
+                                         ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -228,7 +230,9 @@ int ObStorageHAService::do_ha_handler_(const share::ObLSID &ls_id)
       LOG_WARN("failed to do ls migration handler process", K(tmp_ret), K(ls_id));
     }
 
-    if (OB_SUCCESS != (tmp_ret = ls->get_ls_restore_handler()->process())) {
+    // Logonly replicas do not have a tablet data plane and must not schedule restore tasks.
+    if (!ls->is_logonly_replica()
+        && OB_SUCCESS != (tmp_ret = ls->get_ls_restore_handler()->process())) {
       LOG_WARN("failed to do ls restore handler process", K(tmp_ret), K(ls_id));
     }
 
@@ -268,7 +272,7 @@ int ObStorageHAService::errsim_set_ls_migration_status_hold_()
           const ObLSID ls_id(errsim_migration_ls_id);
           if (errsim_migration_ls_id <= 0 || !ls_id.is_valid()) {
             //do nothing
-          } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+          } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
             LOG_WARN("failed to get ls", K(ret), K(ls_id));
           } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
             ret = OB_ERR_UNEXPECTED;

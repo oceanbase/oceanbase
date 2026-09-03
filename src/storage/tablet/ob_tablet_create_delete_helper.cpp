@@ -593,7 +593,7 @@ int ObTabletCreateDeleteHelper::create_tmp_tablet(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key));
-  } else if (OB_FAIL(ls_service->get_ls(key.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(key.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ret), "ls_id", key.ls_id_);
   } else if (OB_FAIL(t3m->create_tmp_tablet(WashTabletPriority::WTP_HIGH, key, allocator, ls_handle, handle))) {
     LOG_WARN("fail to create temporary tablet", K(ret), K(key));
@@ -625,7 +625,7 @@ int ObTabletCreateDeleteHelper::create_msd_tablet(
   if (OB_UNLIKELY(!key.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(key));
-  } else if (OB_FAIL(ls_service->get_ls(key.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(key.ls_id_, ls_handle, ObLSGetMod::TABLET_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", K(ret), "ls_id", key.ls_id_);
   } else if (OB_FAIL(t3m->create_msd_tablet(WashTabletPriority::WTP_HIGH, key, ls_handle, handle))) {
     LOG_WARN("fail to create multi source data tablet", K(ret), K(key));

@@ -85,7 +85,7 @@ int ObTenantFreezerP::do_tx_data_table_freeze_()
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", K(ret));
   } else if (!tenant_freeze_guard.can_freeze()) {
     // skip tx data self freeze due to another freeze task is running
-  } else if (OB_FAIL(ls_srv->get_ls_iter(iter_guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls_iter(iter_guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", K(ret));
   } else {
     int ls_cnt = 0;
@@ -178,7 +178,7 @@ int ObTenantFreezerP::do_mds_table_freeze_()
   common::ObSharedGuard<ObLSIterator> iter_guard;
   ObLSService *ls_srv = MTL(ObLSService *);
 
-  if (OB_FAIL(ls_srv->get_ls_iter(iter_guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(ls_srv->get_ls_iter(iter_guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", K(ret));
   } else {
     int ls_cnt = 0;

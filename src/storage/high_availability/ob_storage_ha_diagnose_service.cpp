@@ -594,8 +594,8 @@ int ObStorageHADiagService::do_clean_related_info_(ObLSService *ls_service, cons
   ObLS *ls = nullptr;
   share::ObTransferTaskID task_id;
   int64_t result_count = 0;
-  if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
+  if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
+    if (OB_ENTRY_NOT_EXIST == ret || OB_LS_NOT_EXIST == ret || OB_LS_OFFLINE == ret) {
       // overwrite ret
       ret = OB_SUCCESS;
     } else {
@@ -646,7 +646,7 @@ int ObStorageHADiagService::get_ls_id_array_(ObLSService *ls_service, ObIArray<s
   ls_id_array.reset();
   common::ObSharedGuard<ObLSIterator> ls_iter_guard;
   ObLSIterator *ls_iter = nullptr;
-  if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD))) {
+  if (OB_FAIL(ls_service->get_ls_iter(ls_iter_guard, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls iter", K(ret));
   } else if (OB_ISNULL(ls_iter = ls_iter_guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

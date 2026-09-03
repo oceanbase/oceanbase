@@ -181,7 +181,7 @@ void TestIndexBlockDataPrepare::SetUpTestCase()
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::create_ls(tenant_id_, ObLSID(ls_id_), ls_handle));
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   // create tablet
   share::schema::ObTableSchema table_schema;
@@ -344,7 +344,7 @@ void TestIndexBlockDataPrepare::prepare_schema()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTabletHandle tablet_handle;
   void *ptr = nullptr;
@@ -424,7 +424,7 @@ void TestIndexBlockDataPrepare::prepare_data()
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObSSTableMergeRes res;
   ASSERT_EQ(OB_SUCCESS, root_index_builder_->close(res));
@@ -527,7 +527,7 @@ void TestIndexBlockDataPrepare::prepare_ddl_kv()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
 
   share::SCN ddl_start_scn;

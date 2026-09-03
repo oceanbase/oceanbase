@@ -545,7 +545,7 @@ int ObTransDeadlockDetectorAdapter::get_trans_info_on_participant(const ObTransI
   if (OB_ISNULL(ls_service)) {
     ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(ERROR, "ls_service is NULL", PRINT_WRAPPER);
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DEADLOCK_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DEADLOCK_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     DETECT_LOG(WARN, "fail to get ls", PRINT_WRAPPER);
   } else if (OB_FAIL(ls_handle.get_ls()->get_tx_scheduler_and_sess_id(trans_id,
                                                                       scheduler_addr,
@@ -570,7 +570,7 @@ int ObTransDeadlockDetectorAdapter::get_conflict_trans_scheduler(const ObTransID
   if (OB_UNLIKELY(ls_service == nullptr)) {
     ret = OB_ERR_UNEXPECTED;
     DETECT_LOG(WARN, "can not get ls service", PRINT_WRAPPER);
-  } else if (OB_FAIL(ls_service->get_ls_iter(iter, storage::ObLSGetMod::DEADLOCK_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls_iter(iter, storage::ObLSGetMod::DEADLOCK_MOD, storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
     DETECT_LOG(WARN, "fail to get ls iter", PRINT_WRAPPER);
   } else {
     do {

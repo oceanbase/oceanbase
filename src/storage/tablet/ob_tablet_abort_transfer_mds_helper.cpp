@@ -83,7 +83,7 @@ int ObTabletAbortTransferHelper::on_register_success_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (CLICK_FAIL(ls_service->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_service->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", KR(ret), K(transfer_in_aborted_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -198,7 +198,7 @@ int ObTabletAbortTransferHelper::on_replay_success_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (CLICK_FAIL(ls_service->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_service->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", KR(ret), K(transfer_in_aborted_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -291,7 +291,7 @@ int ObTabletAbortTransferHelper::do_tx_end_before_commit_(
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(transfer_in_aborted_info));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -319,7 +319,7 @@ int ObTabletAbortTransferHelper::check_can_skip_replay_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(transfer_in_aborted_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get ls", KR(ret), K(transfer_in_aborted_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;

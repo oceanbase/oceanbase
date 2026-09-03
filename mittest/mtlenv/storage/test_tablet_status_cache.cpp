@@ -120,7 +120,7 @@ int TestTabletStatusCache::create_tablet(
   ObLS *ls = nullptr;
   mds::MdsTableHandle mds_table;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -409,7 +409,7 @@ TEST_F(TestTabletStatusCache, get_transfer_out_tablet)
   ctx3.single_log_commit(commit_scn, commit_scn);
 
   ObLSHandle ls_handle;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
@@ -435,7 +435,7 @@ TEST_F(TestTabletStatusCache, get_transfer_deleted)
   ASSERT_NE(nullptr, tablet);
 
   ObLSHandle ls_handle;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
@@ -498,7 +498,7 @@ TEST_F(TestTabletStatusCache, get_transfer_out_deleted)
   ASSERT_NE(nullptr, tablet);
 
   ObLSHandle ls_handle;
-  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ret = MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObLS *ls = ls_handle.get_ls();
   ASSERT_NE(nullptr, ls);
@@ -648,7 +648,7 @@ TEST_F(TestTabletStatusCache, get_empty_result_tablet)
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
 
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(LS_ID, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

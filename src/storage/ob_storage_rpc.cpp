@@ -438,7 +438,11 @@ void ObCopyLSInfo::reset()
 
 bool ObCopyLSInfo::is_valid() const
 {
-  return ls_meta_package_.is_valid() && tablet_id_array_.count() > 0 && version_ != OB_INVALID_ID;
+  return ls_meta_package_.is_valid()
+      && (!ObReplicaTypeCheck::is_replica_with_ssstore(
+              ls_meta_package_.ls_meta_.get_replica_type())
+          || tablet_id_array_.count() > 0)
+      && version_ != OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyLSInfo,
@@ -1591,7 +1595,7 @@ int ObFetchTabletInfoP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1693,7 +1697,7 @@ int ObFetchSSTableInfoP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1804,10 +1808,25 @@ int ObFetchLSInfoP::process()
     ObDeviceHealthStatus dhs = DEVICE_HEALTH_NORMAL;
     int64_t disk_abnormal_time = 0;
     ObMigrationStatus migration_status;
-    ObLSMetaPackage ls_meta_package;
     bool is_need_rebuild = false;
     bool is_log_sync = false;
     const bool check_archive = true;
+
+    auto fetch_ls_meta_and_tablet_ids = [&]() -> int {
+      int ret = OB_SUCCESS;
+      if (ls->is_logonly_replica()) {
+        // An L replica can be the source of an L migration/rebuild, but it has
+        // no TabletService. Only return the LS/PALF metadata in this case.
+        result_.tablet_id_array_.reset();
+        if (OB_FAIL(ls->get_ls_meta_package(check_archive, result_.ls_meta_package_))) {
+          LOG_WARN("failed to get logonly ls meta package", K(ret), K_(arg), KPC(ls));
+        }
+      } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(
+          check_archive, result_.ls_meta_package_, result_.tablet_id_array_))) {
+        LOG_WARN("failed to get ls meta package and tablet ids", K(ret), K_(arg));
+      }
+      return ret;
+    };
 
     LOG_INFO("start to fetch log stream info", K(arg_.ls_id_), K(arg_));
 
@@ -1830,7 +1849,8 @@ int ObFetchLSInfoP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                          ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("faield to get log stream", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1838,9 +1858,8 @@ int ObFetchLSInfoP::process()
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log handler should not be NULL", K(ret), KP(log_handler), K(arg_));
-    } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(check_archive,
-            result_.ls_meta_package_, result_.tablet_id_array_))) {
-      LOG_WARN("failed to get ls meta package and tablet ids", K(ret));
+    } else if (OB_FAIL(fetch_ls_meta_and_tablet_ids())) {
+      LOG_WARN("failed to fetch ls meta and tablet ids", K(ret), K(arg_));
     } else if (OB_FAIL(result_.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), K(result_));
     } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status) || ls->is_stopped()
@@ -1908,7 +1927,7 @@ int ObFetchLSMetaInfoP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("faield to get log stream", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1999,7 +2018,8 @@ int ObFetchLSMemberListP::process()
     } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                      ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2057,7 +2077,8 @@ int ObFetchLSMemberAndLearnerListP::process()
     } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                      ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2121,7 +2142,7 @@ int ObFetchSSTableMacroInfoP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -2315,7 +2336,7 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_out_tablets_()
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(arg_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2374,7 +2395,7 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(arg_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2459,7 +2480,7 @@ int ObNotifyRestoreTabletsP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2530,7 +2551,7 @@ int ObInquireRestoreP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2779,7 +2800,7 @@ int ObGetLSActiveTransCountP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2838,7 +2859,7 @@ int ObGetTransferStartScnP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -2922,7 +2943,8 @@ int OFetchLSReplayScnDelegate::process()
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;
@@ -2986,7 +3008,7 @@ int ObCheckTransferTabletsBackfillDelegate::process()
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3127,7 +3149,8 @@ int ObStorageGetConfigVersionAndTransferScnDelegate::process()
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3229,7 +3252,7 @@ int ObStorageFetchLSViewP::process()
 
     timeguard.click();
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("fail to get log stream", K(ret), K_(arg));
     }
 
@@ -3238,6 +3261,13 @@ int ObStorageFetchLSViewP::process()
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream should not be NULL", KR(ret), K_(arg), KP(ls));
+    } else if (ls->is_logonly_replica()) {
+      ObLSMetaPackage ls_meta_package;
+      if (OB_FAIL(ls->get_ls_meta_package(false /* check_archive */, ls_meta_package))) {
+        LOG_WARN("failed to get logonly ls meta package", K(ret), K_(arg), KPC(ls));
+      } else if (OB_FAIL(fill_ls_meta_f(ls_meta_package))) {
+        LOG_WARN("failed to fill logonly ls meta package", K(ret), K_(arg), K(ls_meta_package));
+      }
     } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_metas(
                        false/* no need check archive */,
                        fill_ls_meta_f,
@@ -3271,7 +3301,7 @@ int ObStorageSubmitTxLogP::process()
     if (!arg_.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid args", K(ret), K_(arg));
-    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("ls_srv->get_ls() fail", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3309,7 +3339,8 @@ int ObStorageGetTransferDestPrepareSCNP::process()
     if (!arg_.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid args", K(ret), K_(arg));
-    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                                 ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("ls_srv->get_ls() fail", K(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3354,7 +3385,8 @@ int ObStorageLockConfigChangeP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3396,7 +3428,8 @@ int ObStorageUnlockConfigChangeP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3436,7 +3469,8 @@ int ObStorageGetLogConfigStatP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3509,7 +3543,7 @@ int ObCheckTransferInTabletAbortDelegate::process()
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3606,7 +3640,7 @@ int ObUpdateTransferMetaInfoDelegate::process()
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -3674,7 +3708,7 @@ int ObRebuildTabletSSTableInfoP::process()
     } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", KR(ret), K(arg_));
     } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
       ret = OB_ERR_UNEXPECTED;

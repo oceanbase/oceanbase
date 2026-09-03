@@ -257,7 +257,7 @@ int ObComplementDataParam::split_task_ranges(
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("fail to get log stream", K(ret), K(arg));
   } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1245,7 +1245,7 @@ int ObComplementWriteTask::do_local_scan()
     const int64_t schema_version = param_->dest_schema_version_;
     ObTxDesc *read_tx_desc = nullptr; // for reading lob column from aux_lob_table by table_scan
 
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->orig_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->orig_ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("fail to get log stream", K(ret), KPC(param_));
     } else if (OB_UNLIKELY(nullptr == ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1746,7 +1746,7 @@ int ObComplementMergeTask::process()
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     const ObSSTable *first_major_sstable = nullptr;
     ObSSTableMetaHandle sst_meta_hdl;
-    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get log stream", K(ret), K(*param_));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle,
                                                  param_->dest_tablet_id_,
@@ -1825,7 +1825,7 @@ int ObComplementMergeTask::add_build_hidden_table_sstable()
       || OB_UNLIKELY(!param_->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected", K(ret), KP(param_), KP(context_));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(param_->dest_ls_id_, ls_handle, ObLSGetMod::DDL_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(param_->dest_ls_id_));
   } else if (OB_FAIL(param_->get_hidden_table_key(hidden_table_key))) {
     LOG_WARN("fail to get hidden table key", K(ret), K(hidden_table_key));

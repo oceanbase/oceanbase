@@ -183,7 +183,8 @@ int ObLSRecoveryReportor::check_ls_change_member_list_(bool &is_changing)
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", KR(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, storage::ObLSGetMod::RS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, storage::ObLSGetMod::RS_MOD,
+                                         storage::ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream iter failed", KR(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;
@@ -335,7 +336,8 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mtl pointer is null", KR(ret), KP(ls_svr), KP(tenant_info_loader));
     } else if (OB_FAIL(ls_svr->get_ls_iter(guard,
-            storage::ObLSGetMod::RS_MOD))) {
+            storage::ObLSGetMod::RS_MOD,
+            storage::ObLSAccessAttr::ALLOW_LOGONLY))) {
       LOG_WARN("get log stream iter failed", KR(ret));
     } else if (OB_ISNULL(iter = guard.get_ptr())) {
       ret = OB_ERR_UNEXPECTED;
@@ -367,6 +369,8 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
           if (ls->is_sys_ls() && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
             // nothing todo
             // sys ls of user standby/restore tenant is in ls_recovery
+          } else if (ls->is_logonly_replica()) {
+            // nothing todo for logonly replica in update_ls_recovery
           } else if (OB_FAIL(update_ls_recovery(ls, sql_proxy_))) {
             LOG_WARN("failed to update ls recovery", KR(ret), KPC(ls));
           }
@@ -574,7 +578,8 @@ int ObLSRecoveryReportor::update_replayable_point_from_meta_()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mtl ObLSService should not be null", KR(ret));
   } else if (OB_FAIL(ls_svr->get_ls_iter(guard,
-          storage::ObLSGetMod::RS_MOD))) {
+          storage::ObLSGetMod::RS_MOD,
+          storage::ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("get log stream iter failed", KR(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

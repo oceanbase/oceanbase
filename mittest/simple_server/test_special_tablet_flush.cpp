@@ -213,7 +213,7 @@ TEST_F(ObTabletFlushTest, test_special_tablet_flush)
   ObLS *ls = nullptr;
   ObLSHandle handle;
   share::ObLSID ls_id(1001);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_NE(nullptr, ls = handle.get_ls());
   ObCheckpointExecutor *checkpoint_executor = ls->get_checkpoint_executor();
   ASSERT_NE(nullptr, checkpoint_executor);

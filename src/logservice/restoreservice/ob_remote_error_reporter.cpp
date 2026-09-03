@@ -73,7 +73,8 @@ int ObRemoteErrorReporter::report_error()
     // skip
   } else if (! is_user_tenant(tenant_id_)) {
     // not user tenant, just skip
-  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls_iter(guard, ObLSGetMod::LOG_MOD,
+                                          ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     ret = OB_ERR_UNEXPECTED;

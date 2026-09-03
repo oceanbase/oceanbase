@@ -1751,7 +1751,7 @@ OB_NOINLINE int ObTransService::acquire_local_snapshot_(const share::ObLSID &ls_
   ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
   const bool can_elr = MTL_TENANT_ROLE_CACHE_IS_PRIMARY() ? true : false;
   ObLSHandle ls_handle;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get ls fail", K(ret), K(ls_id));
   } else if (!ls_handle.is_valid() || OB_ISNULL(ls_handle.get_ls())) {
     ret = OB_NOT_MASTER;
@@ -2161,7 +2161,7 @@ int ObTransService::get_tx_state_from_tx_table_(const share::ObLSID &ls_id,
   int ret = OB_SUCCESS;
   ObTxTableGuard tx_table_guard;
   ObLSHandle ls_handle;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get ls handle fail", K(ret), K(ls_id));
   } else if (ls_handle.get_ls()->is_logonly_replica()) {
     ret = OB_STATE_NOT_MATCH;
@@ -3743,7 +3743,7 @@ int ObTransService::mds_infer_standby_trx_state(const ObLS *ls_ptr,
   } else {
     const ObLS *tmp_ls_ptr = nullptr;
     if (OB_ISNULL(ls_ptr)) {
-      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         TRANS_LOG(WARN, "get ls failed", K(ret), K(ls_id));
       } else {
         tmp_ls_ptr = ls_handle.get_ls();
@@ -3850,7 +3850,7 @@ int ObTransService::check_and_fill_state_info(const ObTransID &tx_id, ObStateInf
       if (OB_ISNULL(ls_svr)) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-      } else if (OB_FAIL(ls_svr->get_ls(state_info.ls_id_, handle, ObLSGetMod::TRANS_MOD))) {
+      } else if (OB_FAIL(ls_svr->get_ls(state_info.ls_id_, handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         TRANS_LOG(WARN, "get log stream failed", K(ret));
       } else if (OB_ISNULL(ls = handle.get_ls())) {
         ret = OB_TRANS_CTX_NOT_EXIST;
@@ -4047,7 +4047,7 @@ bool ObTransService::is_ls_dropped_(const share::ObLSID ls_id) {
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "get id service log stream failed");
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

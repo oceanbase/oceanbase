@@ -208,7 +208,7 @@ public:
     {
       ObLSHandle ls_handle;
       ObLSService *ls_svr = MTL(ObLSService *);
-      OB_ASSERT(OB_SUCCESS == ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+      OB_ASSERT(OB_SUCCESS == ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
       OB_ASSERT(nullptr != (ls = ls_handle.get_ls()));
     }
     return ls;

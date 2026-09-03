@@ -498,7 +498,8 @@ int LockForReadFunctor::check_gc_handler_()
     TRANS_LOG(ERROR, "fail to get ls service", K(tmp_ret), KPC(this));
   } else if (OB_TMP_FAIL(ls_service->get_ls(ls_id_,
                                             ls_handle,
-                                            ObLSGetMod::TRANS_MOD))) {
+                                            ObLSGetMod::TRANS_MOD,
+                                            ObLSAccessAttr::DISABLE_LOGONLY))) {
     TRANS_LOG(WARN, "fail to get ls handle", K(tmp_ret), KPC(this));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     tmp_ret = OB_ERR_UNEXPECTED;

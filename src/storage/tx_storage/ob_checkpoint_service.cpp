@@ -143,7 +143,8 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
   ObLSService *ls_svr = MTL(ObLSService*);
   if (OB_ISNULL(ls_svr)) {
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD,
+                                         ObLSAccessAttr::ALLOW_LOGONLY))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
@@ -154,7 +155,8 @@ void ObCheckPointService::ObCheckpointTask::runTimerTask()
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       const ObLSID &ls_id = ls->get_ls_id();
-      if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::APPLY_MOD))) {
+      if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::APPLY_MOD,
+                                 ObLSAccessAttr::ALLOW_LOGONLY))) {
         STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls_id));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -256,7 +258,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
   int64_t cannot_recycle_log_size = 0;
   if (OB_ISNULL(ls_svr)) {
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
@@ -266,7 +268,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
     for (; OB_SUCC(ret) && OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
-      if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
+      if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;
@@ -303,7 +305,7 @@ int ObCheckPointService::flush_to_recycle_clog_()
   ObLSService *ls_svr = MTL(ObLSService*);
   if (OB_ISNULL(ls_svr)) {
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
@@ -339,7 +341,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
   ObLSService *ls_svr = MTL(ObLSService*);
   if (OB_ISNULL(ls_svr)) {
     STORAGE_LOG(WARN, "mtl ObLSService should not be null", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     STORAGE_LOG(WARN, "get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     STORAGE_LOG(WARN, "iter is NULL", K(ret));
@@ -349,7 +351,7 @@ void ObCheckPointService::ObTraversalFlushTask::runTimerTask()
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
       ObLSHandle ls_handle;
       ObCheckpointExecutor *checkpoint_executor = nullptr;
-      if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD))) {
+      if (OB_FAIL(ls_svr->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::APPLY_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         STORAGE_LOG(WARN, "get log stream failed", K(ret), K(ls->get_ls_id()));
       } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
         ret = OB_ERR_UNEXPECTED;

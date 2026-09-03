@@ -240,7 +240,7 @@ void ObTxDataTableTest::basic_test()
   share::ObLSID ls_id(1001);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService *);
-  ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY);
 
   ls = ls_handle.get_ls();
   int64_t clog_checkpoint_before_freeze = ls->get_ls_meta().get_clog_checkpoint_scn().get_val_for_tx();

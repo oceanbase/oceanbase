@@ -162,7 +162,7 @@ bool ObTenantFreezer::exist_ls_freezing()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
     ObLS *ls = nullptr;
@@ -200,7 +200,7 @@ bool ObTenantFreezer::exist_ls_throttle_is_skipping()
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-    } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+    } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
     } else {
       ObLS *ls = nullptr;
@@ -383,7 +383,7 @@ int ObTenantFreezer::tenant_freeze_data_()
   FLOG_INFO("[TenantFreezer] tenant_freeze start", KR(ret));
 
   ObTenantFreezeGuard freeze_guard(ret, tenant_info_);
-  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
     ObLS *ls = nullptr;
@@ -432,7 +432,7 @@ int ObTenantFreezer::tenant_freeze()
   } else if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FREEZE_TIMEOUT_US /* default timeout */,
                                                   abs_timeout_ts))) {
     LOG_WARN("get timeout ts failed", KR(ret));
-  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls_iter(guard, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream iter failed", K(ret));
   } else if (OB_ISNULL(iter = guard.get_ptr())) {
     LOG_WARN("iter is NULL", K(ret));
@@ -476,7 +476,7 @@ int ObTenantFreezer::ls_freeze_all_unit(const share::ObLSID &ls_id)
   } else if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FREEZE_TIMEOUT_US /* default timeout */,
                                                   abs_timeout_ts))) {
     LOG_WARN("get timeout ts failed", KR(ret));
-  } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -515,7 +515,7 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
   } else if (!ls_id.is_valid()) {
     LOG_ERROR("[TenantFreezer] ls id can not be invalid", KR(ret), K(tablet_id));
-  } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls(ls_id, handle, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -637,7 +637,7 @@ int ObTenantFreezer::get_tx_data_info_for_freeze_(int64_t &tenant_tx_data_frozen
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
     ObLS *ls = nullptr;
@@ -683,7 +683,7 @@ int ObTenantFreezer::get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
   } else {
     ObLS *ls = nullptr;

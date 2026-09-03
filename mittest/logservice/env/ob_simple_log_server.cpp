@@ -243,7 +243,8 @@ int ObSimpleLogServer::add_empty_ls_to_ls_map_(const int64_t palf_id, ObLS *&ls)
   const ObLSGetMod mod = ObLSGetMod::LOG_MOD;
   ls = NULL;
 
-  if (OB_SUCCESS == ls_service_.get_ls(ObLSID(palf_id), ls_handle, mod)) {
+  if (OB_SUCCESS == ls_service_.get_ls(
+      ObLSID(palf_id), ls_handle, mod, ObLSAccessAttr::ALLOW_LOGONLY)) {
     ls = ls_handle.get_ls();
     LOG_INFO("ls exists", K(palf_id));
   } else if (OB_ISNULL(buf = ls_service_.ls_allocator_.alloc(sizeof(ObLS)))) {
@@ -347,7 +348,7 @@ int ObSimpleLogServer::remove_ls(const int64_t palf_id)
   if (OB_ISNULL(palf_env_impl)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "unexpected error", K(ret), K(palf_id));
-  } else if (OB_SUCCESS == ls_service_.get_ls(ObLSID(palf_id), ls_handle, ObLSGetMod::LOG_MOD)
+  } else if (OB_SUCCESS == ls_service_.get_ls(ObLSID(palf_id), ls_handle, ObLSGetMod::LOG_MOD, ObLSAccessAttr::ALLOW_LOGONLY)
       && OB_NOT_NULL(ls = ls_handle.get_ls())
       && ls->log_handler_.palf_handle_.is_valid()) {
     if (OB_FAIL(log_service_.remove_ls(

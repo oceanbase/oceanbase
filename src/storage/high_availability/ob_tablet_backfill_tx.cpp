@@ -296,7 +296,7 @@ int ObTabletBackfillTXDag::init(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -443,7 +443,7 @@ int ObTabletBackfillTXDag::inner_reset_status_for_retry()
     if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(ls_id_));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -628,7 +628,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
   } else if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get backfll tx memtables get invalid argument", K(ret), KP(tablet));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id_, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id_, ls_handle, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id_), KPC(tablet));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

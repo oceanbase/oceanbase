@@ -390,7 +390,9 @@ int ObStorageHADagUtils::deal_with_fo(
   return ret;
 }
 
-int ObStorageHADagUtils::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handle)
+int ObStorageHADagUtils::get_ls(const share::ObLSID &ls_id,
+                                ObLSHandle &ls_handle,
+                                ObLSAccessAttr access_attr)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_service = nullptr;
@@ -402,7 +404,8 @@ int ObStorageHADagUtils::get_ls(const share::ObLSID &ls_id, ObLSHandle &ls_handl
   } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD,
+                                        access_attr))) {
     LOG_WARN("fail to get log stream", KR(ret), K(ls_id));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -438,7 +441,8 @@ int ObStorageHADagUtils::check_self_is_valid_member(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD,
+                                        ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -835,7 +839,7 @@ int ObStorageHACancelDagNetUtils::cancel_task(const share::ObLSID &ls_id, const 
   if (!ls_id.is_valid() || !task_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id), K(task_id));
-  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle, ObLSAccessAttr::ALLOW_LOGONLY))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else {
     bool is_exist = false;
@@ -870,4 +874,3 @@ int ObStorageHACancelDagNetUtils::cancel_migration_task_(const share::ObTaskId &
 
 }
 }
-

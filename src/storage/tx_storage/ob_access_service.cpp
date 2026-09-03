@@ -461,7 +461,7 @@ int ObAccessService::get_write_store_ctx_guard_(
   if (OB_FAIL(ctx_guard.init(ls_id))) {
     LOG_WARN("ctx_guard init fail", K(ret), K(ls_id), K(tx_desc));
   // DML statement will always use invalid snapshot
-  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream failed.", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -520,7 +520,7 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObTxTableGuard src_tx_table_guard;
-    if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::HA_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("failed to get ls", K(ret), K(user_data));
     } else if (OB_ISNULL(src_ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -590,7 +590,7 @@ int ObAccessService::check_read_allowed_(
   LOG_TRACE("print check read allowed, scan param", K(ls_id), K(tablet_id), K(scan_param.fb_read_tx_uncommitted_));
   if (OB_FAIL(ctx_guard.init(ls_id))) {
     LOG_WARN("ctx_guard init fail", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ctx_guard.get_ls_handle(), ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream failed.", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ctx_guard.get_ls_handle().get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1289,7 +1289,7 @@ int ObAccessService::estimate_row_count(
   } else if (OB_UNLIKELY(!param.is_estimate_valid() || !scan_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(param), K(scan_range), K(ret));
-  } else if (OB_FAIL(ls_svr_->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls(param.ls_id_, ls_handle, ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(param.ls_id_));
   } else if (nullptr == (ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1320,7 +1320,7 @@ int ObAccessService::estimate_block_count_and_row_count(
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ls_id), K(tablet_id), K(ret));
-  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (nullptr == (ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1353,7 +1353,7 @@ int ObAccessService::get_multi_ranges_cost(
       || OB_UNLIKELY(ranges.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1434,7 +1434,7 @@ int ObAccessService::split_multi_ranges(
       || OB_UNLIKELY(ranges.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD))) {
+  } else if (OB_FAIL(ls_svr_->get_ls(ls_id, ls_handle, ObLSGetMod::DAS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get log stream failed", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

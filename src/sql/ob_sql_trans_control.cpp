@@ -1469,7 +1469,7 @@ bool ObSqlTransControl::has_same_lsid(const ObDASCtx &das_ctx,
         ObLSService *ls_svr = NULL;
         if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
           bret = false;
-        } else if (OB_FAIL(ls_svr->get_ls(first_lsid, ls_handle, ObLSGetMod::TRANS_MOD))) {
+        } else if (OB_FAIL(ls_svr->get_ls(first_lsid, ls_handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
           bret = false;
         } else {
           // do nothing
@@ -2086,7 +2086,7 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
     if (OB_ISNULL(ls_svr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream service is NULL", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
+    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
       LOG_WARN("get ls handle failed", K(ret));
     } else if (OB_ISNULL(ls = handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;

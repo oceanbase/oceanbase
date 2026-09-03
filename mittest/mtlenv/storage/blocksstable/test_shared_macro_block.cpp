@@ -88,7 +88,7 @@ TEST_F(TestSharedMacroBlk, test_rebuild_sstable)
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle));
   ObSharedMacroBlockMgr *shared_blk_mgr = MTL(ObSharedMacroBlockMgr*);
   ObArenaAllocator allocator;

@@ -1264,7 +1264,8 @@ int ObLogRestoreHandler::get_offline_scn_(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
   storage::ObLSHandle handle;
-  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD))) {
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD,
+                                                 ObLSAccessAttr::DISABLE_LOGONLY))) {
     CLOG_LOG(WARN, "get ls failed", K(id_));
   } else if (OB_FAIL(handle.get_ls()->get_offline_scn(scn))) {
     CLOG_LOG(WARN, "get offline_scn failed", K(id_));

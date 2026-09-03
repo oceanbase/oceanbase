@@ -91,7 +91,7 @@ void TestTabletFreeze::create_ls(const ObLSID ls_id, ObLS *&ls)
   // create ls
   ASSERT_EQ(OB_SUCCESS, storage::gen_create_ls_arg(tenant_id, ls_id, arg));
   ASSERT_EQ(OB_SUCCESS, ls_svr->create_ls(arg));
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   GlobalLearnerList learner_list;
@@ -118,7 +118,7 @@ void TestTabletFreeze::create_tablets(const ObLSID ls_id){
   // 1. create a tablet
   ObLSHandle handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+  EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   ObLS *ls = handle.get_ls();
   ASSERT_NE(nullptr, ls);
   share::schema::ObTableSchema table_schema;

@@ -238,7 +238,7 @@ public:
     ObLSHandle ls_handle;
     EXPECT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id_,
                                          ls_handle,
-                                         ObLSGetMod::STORAGE_MOD));
+                                         ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
     ObMemtable *memtable = new ObMemtable();
     ObFreezer *freezer = new ObFreezer;

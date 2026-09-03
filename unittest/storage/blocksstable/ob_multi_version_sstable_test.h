@@ -377,7 +377,7 @@ void ObMultiVersionSSTableTest::prepare_table_schema(
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
-  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
 
   ObTabletHandle tablet_handle;
   void *ptr = nullptr;
@@ -527,7 +527,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
   ObLSID lsid(ls_id_);
-  OK(ls_svr->get_ls(lsid, ls_handle, ObLSGetMod::STORAGE_MOD));
+  OK(ls_svr->get_ls(lsid, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
   void *buf = allocator_.alloc(sizeof(ObSSTable));
   ASSERT_TRUE(nullptr != buf);
   ObSSTable *sstable = new (buf) ObSSTable();

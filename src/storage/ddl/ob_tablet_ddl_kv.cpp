@@ -745,7 +745,8 @@ int ObDDLKV::wait_pending()
   } else if (OB_UNLIKELY(!is_freezed())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("ddl kv not freezed", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD,
+                                        ObLSAccessAttr::DISABLE_LOGONLY))) {
     LOG_WARN("get ls handle failed", K(ret), K(ls_id_));
   } else {
     SCN max_decided_scn;
