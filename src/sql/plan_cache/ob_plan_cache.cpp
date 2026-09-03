@@ -1127,7 +1127,9 @@ int ObPlanCache::add_plan_cache(ObILibCacheCtx &ctx,
         SQL_PC_LOG(WARN, "invalid expired plan", K(tmp_ret), KP(old_plan_guard.cache_obj_));
       } else {
         ObPhysicalPlan *old_plan = static_cast<ObPhysicalPlan*>(old_plan_guard.cache_obj_);
-        if (new_plan->get_plan_hash_value() == old_plan->get_plan_hash_value()) {
+        //FIXME: fix mult stmt plan expiration
+        bool is_multi_stmt_batch = pc_ctx.sql_ctx_.is_batch_params_execute();
+        if (new_plan->get_plan_hash_value() == old_plan->get_plan_hash_value() && !is_multi_stmt_batch) {
           int64_t old_exec_usec = ATOMIC_LOAD(&old_plan->stat_.first_exec_usec_);
           int64_t old_row_count = ATOMIC_LOAD(&old_plan->stat_.first_exec_row_count_);
           ATOMIC_STORE(&old_plan->stat_.first_exec_usec_, old_exec_usec * 2);
