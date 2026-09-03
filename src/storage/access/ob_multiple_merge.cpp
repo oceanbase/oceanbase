@@ -1000,7 +1000,8 @@ void ObMultipleMerge::update_and_report_tablet_stat()
   } else if (0 == access_ctx_->table_store_stat_.out_row_cnt_ && 0 == access_ctx_->table_store_stat_.storage_filtered_row_cnt_) {
     // if update_and_report_tablet_stat has been called before, and no new row has been processed, do nothing
   } else {
-    EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, scan_cnt_);
+    EVENT_ADD(ObStatEventIds::STORAGE_READ_ROW_COUNT, access_ctx_->table_store_stat_.out_row_cnt_ +
+                                                      access_ctx_->table_store_stat_.storage_filtered_row_cnt_);
     scan_cnt_ = 0;
     if (NULL != access_ctx_->table_scan_stat_) {
       access_ctx_->table_scan_stat_->out_row_cnt_ += access_ctx_->table_store_stat_.out_row_cnt_;

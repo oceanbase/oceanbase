@@ -448,6 +448,11 @@ bool ObRelativeTable::is_index_table() const
   return schema_param_->is_index_table();
 }
 
+bool ObRelativeTable::is_user_table() const
+{
+  return schema_param_->is_user_table();
+}
+
 bool ObRelativeTable::is_storage_index_table() const
 {
   return schema_param_->is_storage_index_table();

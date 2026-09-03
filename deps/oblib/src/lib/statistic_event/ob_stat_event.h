@@ -420,6 +420,10 @@ STAT_EVENT_ADD_DEF(IO_REMOTE_PUBLIC_WRITE_DELAY, "remote public write delay", Ob
 STAT_EVENT_ADD_DEF(IO_REMOTE_PUBLIC_READ_COUNT, "remote public read count", ObStatClassIds::STORAGE, 60107, true, true, true, "")
 STAT_EVENT_ADD_DEF(IO_REMOTE_PUBLIC_READ_BYTES, "remote public read bytes", ObStatClassIds::STORAGE, 60108, true, true, true, "")
 STAT_EVENT_ADD_DEF(IO_REMOTE_PUBLIC_READ_DELAY, "remote public read delay", ObStatClassIds::STORAGE, 60109, true, true, true, "")
+STAT_EVENT_ADD_DEF(TABLE_INSERT_ROW_COUNT, "table insert row count", ObStatClassIds::STORAGE, 60200, true, true, true)
+STAT_EVENT_ADD_DEF(TABLE_UPDATE_ROW_COUNT, "table update row count", ObStatClassIds::STORAGE, 60201, true, true, true)
+STAT_EVENT_ADD_DEF(TABLE_DELETE_ROW_COUNT, "table delete row count", ObStatClassIds::STORAGE, 60202, true, true, true)
+
 // backup & restore
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, 69000, true, true, true, "Deprecated in V4.4.1. Please check this metric in the I/O manager.")
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_BYTES, "backup io read bytes", ObStatClassIds::STORAGE, 69001, true, true, true, "Deprecated in V4.4.1. Please check this metric in the I/O manager.")
