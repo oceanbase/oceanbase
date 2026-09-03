@@ -2831,6 +2831,10 @@ DEF_STR_WITH_CHECKER(ob_storage_s3_url_encode_type, OB_CLUSTER_PARAMETER, "compl
 DEF_BOOL(_enable_drop_and_add_index, OB_TENANT_PARAMETER, "False",
          "it specifies that whether we can drop and add index in single statement",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_disable_longtime_offline_ddl, OB_TENANT_PARAMETER, "False",
+         "Specifies whether to reject DDL operations that acquire a table lock blocking concurrent DML and hold them for a long time. "
+         "When set to True, such DDL statements are rejected with an explicit error.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_system_trig_enabled, OB_TENANT_PARAMETER, "True",
          "Enable or disable system trigger feature.",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

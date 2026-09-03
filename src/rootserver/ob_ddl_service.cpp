@@ -114,6 +114,21 @@ namespace rootserver
 #define GRANT_SYS_ROLE_NUM 2       /* len of role array is 2 */
 #define GRANT_ROLE_MIN_ROLE_NUM 3  /* min len of role array is 3 */
 
+static int check_disable_longtime_offline_ddl_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant config is invalid", K(ret), K(tenant_id));
+  } else if (tenant_config->_disable_longtime_offline_ddl) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("longtime offline ddl is disabled by tenant configuration", K(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "longtime offline DDL is disabled by tenant configuration _disable_longtime_offline_ddl, so this DDL is");
+  }
+  return ret;
+}
+
 ObDDLService::ObDDLService()
   : inited_(false),
     rpc_proxy_(NULL),
@@ -14334,6 +14349,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else if (OB_FAIL(check_can_bind_tablets(ddl_type, bind_tablets))) {
     LOG_WARN("failed to check can bind tablets", K(ret), K(ddl_type));
+  } else if (OB_FAIL(check_disable_longtime_offline_ddl_(tenant_id))) {
+    LOG_WARN("longtime offline ddl is disabled", K(ret), K(tenant_id), K(ddl_type));
   } else {
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     ObTableSchema new_table_schema;
@@ -14980,6 +14997,8 @@ int ObDDLService::create_hidden_table(
         K(orig_database_schema->is_in_recyclebin()));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_disable_longtime_offline_ddl_(tenant_id))) {
+    LOG_WARN("longtime offline ddl is disabled", K(ret), K(tenant_id));
   } else {
     HEAP_VARS_2((ObTableSchema, new_table_schema),
                 (AlterTableSchema, alter_table_schema)) {
