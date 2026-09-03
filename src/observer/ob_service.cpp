@@ -3503,6 +3503,11 @@ int ObService::get_ls_replayed_scn(
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
+    } else if (ls->is_logonly_replica()) {
+      ret = OB_ERR_UNEXPECTED;
+      if (!GCONF.in_upgrade_mode()) {
+        LOG_ERROR("logonly replica cannot report readable scn", KR(ret), K(arg), KPC(ls));
+      }
     } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), KPC(ls));
     } else if (!ObMigrationStatusHelper::check_can_report_readable_scn(migration_status)) {
