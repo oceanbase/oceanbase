@@ -1680,6 +1680,13 @@ int ObPLPackageManager::get_package_state(const ObPLResolveCtx &resolve_ctx,
                                                   state_version, package_body_state, package_spec))) {
         LOG_WARN("get pacakge body state failed", K(ret));
       } else {
+        if (OB_NOT_NULL(package_body_state) && OB_INVALID_VERSION == package_spec_state->get_state_version().package_body_version_) {
+          // update spec package state version body info to body package state version
+          ObPackageStateVersion &spec_state_version = package_spec_state->get_state_version();
+          spec_state_version.package_body_version_ = package_body_state->get_state_version().package_body_version_;
+          spec_state_version.body_merge_version_ = package_body_state->get_state_version().body_merge_version_;
+          spec_state_version.body_public_syn_count_ = package_body_state->get_state_version().body_public_syn_count_;
+        }
         if (package_id == package_spec->get_id()) {
           package_state = package_spec_state;
         } else {
