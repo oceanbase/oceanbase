@@ -1453,6 +1453,7 @@ int ObMicroBlockCSEncoder<IS_MULTI_VERSION>::build_block(char *&buf, int64_t &si
         micro_header_.min_merged_trans_version_ = min_merged_trans_version_;
         micro_header_.contain_uncommitted_rows_ = contain_uncommitted_row_;
         micro_header_.is_last_row_last_flag_ = is_last_row_last_flag_;
+        micro_header_.is_first_row_first_flag_ = is_first_row_first_flag_;
         micro_header_.has_row_header_ = IS_MULTI_VERSION;
       }
 

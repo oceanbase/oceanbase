@@ -1133,6 +1133,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
   ASSERT_EQ(1, header->single_version_rows_);
   ASSERT_EQ(0, header->contain_uncommitted_rows_);
   ASSERT_EQ(1, header->is_last_row_last_flag_);
+  ASSERT_EQ(1, header->is_first_row_first_flag_);
   ASSERT_EQ(1, header->has_row_header_);
   column_headers = reinterpret_cast<ObCSColumnHeader *>(block_buf + header->header_size_ + sizeof(ObAllColumnHeader));
   ASSERT_EQ(ObCSRowMultiVersionHeader::TYPE.get_type(), column_headers[header->column_count_].obj_type_);
@@ -1155,6 +1156,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
   // currently `contain_uncommitted_rows_` is set in macro writer
   ASSERT_EQ(0, header->contain_uncommitted_rows_);
   ASSERT_EQ(1, header->is_last_row_last_flag_);
+  ASSERT_EQ(1, header->is_first_row_first_flag_);
   ASSERT_EQ(1, header->has_row_header_);
   encoder_.reuse();
 
@@ -1174,6 +1176,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
   ASSERT_EQ(0, header->single_version_rows_);
   ASSERT_EQ(0, header->contain_uncommitted_rows_);
   ASSERT_EQ(1, header->is_last_row_last_flag_);
+  ASSERT_EQ(1, header->is_first_row_first_flag_);
   ASSERT_EQ(1, header->has_row_header_);
   encoder_.reuse();
 
@@ -1193,6 +1196,7 @@ TEST_F(TestMultiVersionCSEncoder, micro_header)
   ASSERT_EQ(0, header->single_version_rows_);
   ASSERT_EQ(0, header->contain_uncommitted_rows_);
   ASSERT_EQ(0, header->is_last_row_last_flag_);
+  ASSERT_EQ(1, header->is_first_row_first_flag_);
   ASSERT_EQ(1, header->has_row_header_);
 
   reuse();
