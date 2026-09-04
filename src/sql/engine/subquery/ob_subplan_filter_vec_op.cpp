@@ -86,22 +86,14 @@ int ObSubPlanFilterVecOp::rescan()
   }
   drive_iter_.reset();
 
-  if (!MY_SPEC.enable_das_group_rescan_) {
-    // call each child's rescan when not batch rescan
-    for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
+  // Ordinary subplans are rescanned by ObSubQueryIterator::rewind() after the
+  // current left row has filled the rescan parameters. Init and onetime plans
+  // are not rescanned by rewind(), so reset them for the new SPF scan here.
+  for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
+    if (MY_SPEC.init_plan_idxs_.has_member(i) || MY_SPEC.one_time_idxs_.has_member(i)) {
       if (OB_FAIL(children_[i]->rescan())) {
         LOG_WARN("rescan child operator failed", K(ret),
                  "op", op_name(), "child", children_[i]->op_name());
-      }
-    }
-  } else {
-    for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
-      if (MY_SPEC.init_plan_idxs_.has_member(i) || MY_SPEC.one_time_idxs_.has_member(i)) {
-        // rescan for init plan and onetime expr when batch rescan
-        if (OB_FAIL(children_[i]->rescan())) {
-          LOG_WARN("rescan child operator failed", K(ret),
-                  "op", op_name(), "child", children_[i]->op_name());
-        }
       }
     }
   }
