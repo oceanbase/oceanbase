@@ -70,6 +70,16 @@ class ObTableMetaInfo;
 class ObOptimizerUtil
 {
 public:
+  /**
+   * Check whether group-by expressions can be safely evaluated in split aggregation stages.
+   *
+   * @param groupby_exprs Group-by expressions to validate.
+   * @param is_valid True when every expression is deterministic and non-volatile.
+   * @return OB_SUCCESS on a complete check, or an error for an invalid expression array.
+   */
+  static int check_groupby_exprs_valid(const common::ObIArray<ObRawExpr *> &groupby_exprs,
+                                       bool &is_valid);
+
   static int is_prefix_ordering(const ObIArray<OrderItem> &first,
                                 const ObIArray<OrderItem> &second,
                                 const EqualSets &equal_sets,

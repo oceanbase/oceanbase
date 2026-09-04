@@ -17,7 +17,6 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_optimizer_context.h"
-#include "lib/utility/ob_tracepoint.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -62,7 +61,6 @@ int ObGroupByPushdownRule::apply_rule(ObLogPlan *root_plan,
       OPT_TRACE("rewriter result", root_op);
     }
   }
-
   return ret;
 }
 
@@ -132,14 +130,22 @@ int ObGroupByPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *> 
   ObRawExprCopier copier(expr_factory);
   ObSEArray<ObRawExpr*, 4> replaced_exprs;
   ObSEArray<ObRawExpr*, 4> replaced_aggr_exprs;
-  ObSEArray<ObRawExpr*, 4> replaced_original_exprs;
-  if (OB_FAIL(copier.add_replaced_expr(from_exprs, to_exprs))) {
+  if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument(s)", K(ret), KP(session_info));
+  } else if (OB_FAIL(copier.add_replaced_expr(from_exprs, to_exprs))) {
     LOG_WARN("failed to add replace pair", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < groupby_exprs_.count(); ++i) {
-    ObRawExpr*  replaced_expr;
-    if (OB_FAIL(copier.copy_on_replace(groupby_exprs_.at(i), replaced_expr))) {
+    ObRawExpr *replaced_expr = NULL;
+    if (OB_ISNULL(groupby_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null group by expr", K(ret), K(i));
+    } else if (OB_FAIL(copier.copy_on_replace(groupby_exprs_.at(i), replaced_expr))) {
       LOG_WARN("failed to map pushdown context", K(ret));
+    } else if (OB_ISNULL(replaced_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null replaced expr", K(ret), K(i));
     } else if (OB_FAIL(replaced_exprs.push_back(replaced_expr))) {
       LOG_WARN("failed to pushback expr", K(ret));
     } else if (check_valid && groupby_exprs_.at(i) == replaced_expr) {
@@ -151,9 +157,15 @@ int ObGroupByPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *> 
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < aggr_exprs_.count(); ++i) {
-    ObRawExpr*  replaced_expr;
-    if (OB_FAIL(copier.copy_on_replace(aggr_exprs_.at(i), replaced_expr))) {
+    ObRawExpr *replaced_expr = NULL;
+    if (OB_ISNULL(aggr_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null aggregate expr", K(ret), K(i));
+    } else if (OB_FAIL(copier.copy_on_replace(aggr_exprs_.at(i), replaced_expr))) {
       LOG_WARN("failed to map pushdown context", K(ret));
+    } else if (OB_ISNULL(replaced_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null replaced expr", K(ret), K(i));
     } else if (OB_FAIL(replaced_aggr_exprs.push_back(replaced_expr))) {
       LOG_WARN("failed to pushback expr", K(ret));
     } else if (check_valid && aggr_exprs_.at(i) == replaced_expr) {
@@ -175,18 +187,24 @@ int ObGroupByPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *> 
     } else if (OB_FAIL(aggr_exprs_.assign(replaced_aggr_exprs))) {
       LOG_WARN("failed to assign aggr exprs", K(ret));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < groupby_exprs_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < groupby_exprs_.count(); ++i) {
       if (OB_FAIL(groupby_exprs_.at(i)->formalize(session_info))) {
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(groupby_exprs_.at(i)->pull_relation_id())) {
         LOG_WARN("failed to formalize expr", K(ret));
+      } else if (!groupby_exprs_.at(i)->is_deterministic()
+                 || groupby_exprs_.at(i)->has_flag(CNT_VOLATILE_CONST)) {
+        is_valid = false;
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < aggr_exprs_.count(); ++i) {
       if (OB_FAIL(aggr_exprs_.at(i)->formalize(session_info))) {
         LOG_WARN("failed to formalize expr", K(ret));
       } else if (OB_FAIL(aggr_exprs_.at(i)->pull_relation_id())) {
         LOG_WARN("failed to formalize expr", K(ret));
+      } else if (!aggr_exprs_.at(i)->is_deterministic()
+                 || aggr_exprs_.at(i)->has_flag(CNT_VOLATILE_CONST)) {
+        is_valid = false;
       }
     }
   }
@@ -196,12 +214,14 @@ int ObGroupByPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *> 
 int ObGroupByPushdownContext::map(const common::ObIArray<ObRawExpr *> &from_exprs,
                                 const common::ObIArray<ObRawExpr *> &to_exprs,
                                 ObRawExprFactory &expr_factory,
-                                const ObSQLSessionInfo *session_info)
+                                const ObSQLSessionInfo *session_info,
+                                bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  bool is_valid = true;
   if (OB_FAIL(this->map_and_check(from_exprs, to_exprs, expr_factory, session_info, false, is_valid))) {
     LOG_WARN("failed to map group by context", K(ret));
+  } else if (!is_valid) {
+    OPT_TRACE("mapped group by context contains volatile or non-deterministic expression");
   }
   return ret;
 }
@@ -408,42 +428,67 @@ int ObGroupByPushDownPlanRewriter::visit_table_scan(ObLogTableScan *table_scan,
 {
   int ret = OB_SUCCESS;
   bool can_transform = true;
-  if (OB_ISNULL(table_scan) || OB_ISNULL(result) || OB_ISNULL(table_scan->get_plan())) {
+  ObLogPlan *plan = NULL;
+  if (OB_ISNULL(table_scan) || OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid arguments", K(ret), KP(table_scan), KP(result), KP(table_scan->get_plan()));
+    LOG_WARN("invalid arguments", K(ret), KP(table_scan), KP(result));
+  } else if (OB_ISNULL(plan = table_scan->get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(plan));
   } else if (NULL == ctx || ctx->is_empty()) {
     can_transform = false;
     OPT_TRACE("ctx is empty, skip table scan: ", table_scan->get_name(), table_scan->get_op_id());
-  } else if (!table_scan->get_pushdown_aggr_exprs().empty()) {
+  } else if (table_scan->has_group_by_or_aggr()) {
     can_transform = false;
-    OPT_TRACE("table scan already has pushdown aggr exprs, skip: ", table_scan->get_name(), table_scan->get_op_id());
+    OPT_TRACE("table scan already has pushdown groupby or aggr exprs, skip: ",
+              table_scan->get_name(), table_scan->get_op_id());
   } else {
     ObSEArray<ObRawExpr *, 4> pushdown_groupby_columns;
     bool can_pushdown = false;
     ObArray<ObAggFunRawExpr *> aggr_items;
+    ObAggFunRawExpr *count_expr = NULL;
     OPT_TRACE("try pushdown groupby into storage: ", table_scan->get_name(), table_scan->get_op_id());
+    // Include an auxiliary COUNT(*) because join-side pre-aggregation needs row multiplicity.
     if (OB_FAIL(ctx->get_aggr_items(aggr_items))) {
       LOG_WARN("failed to get aggr context", K(ret));
-    } else if (OB_FAIL(table_scan->get_plan()->
-                        check_storage_groupby_pushdown(aggr_items, ctx->groupby_exprs_,
-                                                      pushdown_groupby_columns,
-                                                      can_pushdown))) {
+    } else if (ctx->need_count_) {
+      if (OB_ISNULL(opt_ctx_.get_session_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null session info", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_dummy_count_expr(
+                     opt_ctx_.get_expr_factory(), opt_ctx_.get_session_info(), count_expr))) {
+        LOG_WARN("failed to build count expr", K(ret));
+      } else if (OB_ISNULL(count_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null count expr", K(ret));
+      } else if (OB_FAIL(aggr_items.push_back(count_expr))) {
+        LOG_WARN("failed to append count expr", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(plan->check_storage_groupby_pushdown(aggr_items,
+                                                            ctx->groupby_exprs_,
+                                                            pushdown_groupby_columns,
+                                                            can_pushdown))) {
       LOG_WARN("failed to check aggr storage pushdown", K(ret));
     } else if (can_pushdown
-               && OB_FAIL(table_scan->get_plan()->try_push_aggr_into_table_scan(table_scan,
-                                                                                aggr_items,
-                                                                                ctx->groupby_exprs_))) {
+               && OB_FAIL(plan->try_push_aggr_into_table_scan(table_scan,
+                                                              aggr_items,
+                                                              ctx->groupby_exprs_))) {
       LOG_WARN("failed to pushdown aggr into scan", K(ret));
     } else {
-      if (!table_scan->get_pushdown_aggr_exprs().empty()) {
-        OPT_TRACE("pushed down aggr exprs into storage: ", table_scan->get_name(), table_scan->get_op_id());
+      if (table_scan->has_group_by_or_aggr()) {
+        OPT_TRACE("pushed down groupby or aggr exprs into storage: ", table_scan->get_name(), table_scan->get_op_id());
         // if pushed down, need to update result
         result->is_materialized_ = true;
         if (OB_FAIL(result->new_aggr_exprs_.assign(ctx->aggr_exprs_))) {
           LOG_WARN("failed to assign new aggr exprs", K(ret));
+        } else {
+          result->count_expr_ = count_expr;
+          transform_happened_ = true;
         }
       } else {
-        OPT_TRACE("no aggr exprs pushed down into storage");
+        OPT_TRACE("no groupby or aggr exprs pushed down into storage");
       }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(try_place_groupby(table_scan, ctx, result))) {
@@ -467,14 +512,28 @@ int ObGroupByPushDownPlanRewriter::visit_subplan_scan(ObLogSubPlanScan *subplan_
   bool can_transform = true;
   bool not_valid = false;
   const ObDMLStmt *child_stmt = NULL;
+  const ObDMLStmt *parent_stmt = NULL;
   const ObSelectStmt *child_select_stmt = NULL;
-  // child of subplan scan is root
-  ObLogicalOperator* child_op = subplan_scan->get_child(0);
-  if (OB_ISNULL(subplan_scan) || OB_ISNULL(result) || OB_ISNULL(child_op) || OB_ISNULL(child_op->get_plan())
-      || OB_ISNULL(subplan_scan->get_plan()) || OB_ISNULL(child_stmt = child_op->get_plan()->get_stmt())) {
+  const TableItem *view_table_item = NULL;
+  ObLogicalOperator *child_op = NULL;
+  ObExecContext *exec_ctx = NULL;
+  ObPhysicalPlanCtx *physical_plan_ctx = NULL;
+  if (OB_ISNULL(subplan_scan) || OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), KP(subplan_scan), KP(result), KP(child_op),
-             KP(child_op->get_plan()), KP(subplan_scan->get_plan()), KP(child_stmt));
+    LOG_WARN("get unexpected null", K(ret), KP(subplan_scan), KP(result));
+  } else if (OB_UNLIKELY(1 != subplan_scan->get_num_of_child())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child count", K(ret), K(subplan_scan->get_num_of_child()));
+  } else if (OB_ISNULL(child_op = subplan_scan->get_child(0)) || OB_ISNULL(child_op->get_plan())
+             || OB_ISNULL(subplan_scan->get_plan())
+             || OB_ISNULL(child_stmt = child_op->get_plan()->get_stmt())
+             || OB_ISNULL(parent_stmt = subplan_scan->get_plan()->get_stmt())
+             || OB_ISNULL(view_table_item = parent_stmt->get_table_item_by_id(subplan_scan->get_subquery_id()))
+             || OB_ISNULL(exec_ctx = opt_ctx_.get_exec_ctx())
+             || OB_ISNULL(physical_plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(child_op), KP(subplan_scan->get_plan()),
+             KP(child_stmt), KP(parent_stmt), KP(view_table_item), KP(exec_ctx), KP(physical_plan_ctx));
   } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
@@ -530,6 +589,9 @@ int ObGroupByPushDownPlanRewriter::visit_subplan_scan(ObLogSubPlanScan *subplan_
                                                                                   input_cols,
                                                                                   output_cols))) {
       LOG_WARN("failed to convert subplan scan expr", K(ret));
+    } else if (OB_UNLIKELY(input_cols.count() != output_cols.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected mapping expr count", K(ret), K(input_cols.count()), K(output_cols.count()));
     } else if (OB_FAIL(child_ctx.map_and_check(output_cols,
                                                input_cols,
                                                opt_ctx_.get_expr_factory(),
@@ -565,15 +627,18 @@ int ObGroupByPushDownPlanRewriter::visit_subplan_scan(ObLogSubPlanScan *subplan_
                   opt_ctx_.get_session_info(),
                   child_op->get_plan()->get_allocator(),
                   &opt_ctx_.get_expr_factory(),
-                  opt_ctx_.get_exec_ctx()->get_physical_plan_ctx(),
-                  *subplan_scan->get_plan()->get_stmt()->get_table_item_by_id(subplan_scan->get_subquery_id()),
-                  *const_cast<ObDMLStmt *>(subplan_scan->get_plan()->get_stmt()),
+                  physical_plan_ctx,
+                  *const_cast<TableItem *>(view_table_item),
+                  *const_cast<ObDMLStmt *>(parent_stmt),
                   new_select_list,
                   new_columns_list))) {
           LOG_WARN("failed to add new select items to view");
         }
         if (OB_SUCC(ret) && child_ctx.need_count_) {
-          if (OB_ISNULL(result->count_expr_ = new_columns_list.at(new_columns_list.count() - 1))) {
+          if (OB_UNLIKELY(new_columns_list.empty())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected empty column list", K(ret));
+          } else if (OB_ISNULL(result->count_expr_ = new_columns_list.at(new_columns_list.count() - 1))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null count expr", K(ret));
           } else {
@@ -603,6 +668,61 @@ int ObGroupByPushDownPlanRewriter::visit_subplan_scan(ObLogSubPlanScan *subplan_
   return ret;
 }
 
+int ObGroupByPushDownPlanRewriter::check_set_child_types_same(const ObLogSet *set, bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = true;
+  ObSEArray<ObRawExpr *, 8> first_child_exprs;
+  ObSEArray<ObRawExpr *, 8> child_exprs;
+  if (OB_ISNULL(set)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(set));
+  } else if (OB_UNLIKELY(set->get_num_of_child() < 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set child count", K(ret), K(set->get_num_of_child()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_same && i < set->get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = set->get_child(i);
+    const ObDMLStmt *child_stmt = NULL;
+    const ObSelectStmt *child_select_stmt = NULL;
+    child_exprs.reset();
+    if (OB_ISNULL(child) || OB_ISNULL(child->get_plan()) ||
+        OB_ISNULL(child_stmt = child->get_plan()->get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(child), K(child_stmt));
+    } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
+    } else if (OB_ISNULL(child_select_stmt = static_cast<const ObSelectStmt *>(child_stmt))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KP(child_select_stmt));
+    } else if (OB_FAIL(child_select_stmt->get_select_exprs(child_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (0 == i) {
+      if (OB_FAIL(first_child_exprs.assign(child_exprs))) {
+        LOG_WARN("failed to assign select exprs", K(ret));
+      }
+    } else if (first_child_exprs.count() != child_exprs.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected set child expr count", K(ret));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && is_same && j < child_exprs.count(); ++j) {
+        if (OB_ISNULL(first_child_exprs.at(j)) || OB_ISNULL(child_exprs.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(first_child_exprs.at(j)), K(child_exprs.at(j)));
+        } else {
+          const ObRawExprResType &first_type = first_child_exprs.at(j)->get_result_type();
+          const ObRawExprResType &child_type = child_exprs.at(j)->get_result_type();
+          is_same = first_type == child_type &&
+                    first_type.get_obj_meta().get_scale() == child_type.get_obj_meta().get_scale() &&
+                    first_type.get_result_flag() == child_type.get_result_flag();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObGroupByPushDownPlanRewriter::visit_set(ObLogSet *set,
                                             ObGroupByPushdownContext *ctx,
                                             ObGroupByPushdownResult *&result)
@@ -612,6 +732,12 @@ int ObGroupByPushDownPlanRewriter::visit_set(ObLogSet *set,
   if (OB_ISNULL(set) || OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguments", K(ret), KP(set), KP(result));
+  } else if (OB_ISNULL(set->get_plan()) || OB_ISNULL(set->get_stmt())
+             || OB_UNLIKELY(!set->get_stmt()->is_select_stmt())
+             || OB_UNLIKELY(set->get_num_of_child() < 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set operator", K(ret), KP(set->get_plan()), KP(set->get_stmt()),
+             K(set->get_num_of_child()));
   } else if (NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0) {
     can_transform = false;
   } else if (set->is_recursive_union()) {
@@ -621,6 +747,10 @@ int ObGroupByPushDownPlanRewriter::visit_set(ObLogSet *set,
     // only union all
     can_transform = false;
     OPT_TRACE("set is not union all, can not push through");
+  } else if (OB_FAIL(check_set_child_types_same(set, can_transform))) {
+    LOG_WARN("failed to check set child types", K(ret));
+  } else if (!can_transform) {
+    OPT_TRACE("set child types are different, can not push through");
   } else {
     bool has_pushed_down = false;
     // union all
@@ -642,22 +772,21 @@ int ObGroupByPushDownPlanRewriter::visit_set(ObLogSet *set,
     //              sum(v1.c1) -> 'UNION([idx]'
     //              'UNION([idx]' is added to select item of union (what if union is in the same stage with agg)?
     // T_OP_UNION
-    const ObSelectStmt *stmt = NULL;
     const ObSelectStmt *pushdown_child_stmt = NULL;
     ObIAllocator &allocator = opt_ctx_.get_allocator();
     int64_t child_count = set->get_num_of_child();
     ObFixedArray<ObGroupByPushdownContext, ObIAllocator> child_contexts(allocator, child_count);
     ObFixedArray<ObGroupByPushdownResult, ObIAllocator> child_results(allocator, child_count);
     OPT_TRACE("try rewrite set children: ", set->get_name(), set->get_op_id());
-    if (OB_ISNULL(stmt = static_cast<const ObSelectStmt *>(set->get_stmt()))){
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(stmt), K(ret));
-    } else if (OB_FAIL(child_contexts.prepare_allocate(child_count))) {
+    if (OB_FAIL(child_contexts.prepare_allocate(child_count))) {
       LOG_WARN("failed to prepare allocate", K(ret));
     } else if (OB_FAIL(child_results.prepare_allocate(child_count))) {
       LOG_WARN("failed to prepare allocate", K(ret));
-    } else if (OB_FAIL(try_rewrite_set_children(set, ctx, child_contexts, child_results, has_pushed_down, pushdown_child_stmt))) {
+    } else if (OB_FAIL(try_rewrite_set_children(set, ctx, child_contexts, child_results,
+                                                can_transform, has_pushed_down, pushdown_child_stmt))) {
       LOG_WARN("failed to try rewrite set children", K(ret));
+    } else if (!can_transform) {
+      OPT_TRACE("set child context mapping is invalid, can not push through");
     } else if (!has_pushed_down) {
       OPT_TRACE("none of children pushed down, do nothing");
       // do nothing
@@ -747,9 +876,9 @@ int ObGroupByPushDownPlanRewriter::default_rewrite_child(ObLogicalOperator *chil
 
 int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, bool &can_push)
 {
-  // TODO tuliwei.tlw: need to check more, such as if group by expr is deterministic, etc.
   int ret = OB_SUCCESS;
   can_push = false;
+  bool is_groupby_exprs_valid = true;
   ObLogPlan *plan = NULL;
   const ObDMLStmt *stmt = NULL;
   ObLogicalOperator *child = NULL;
@@ -769,6 +898,12 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
   } else if (groupby->has_rollup() || groupby->get_grouping_set_info() != NULL) {
     can_push = false;
     OPT_TRACE("groupby has rollup, can not push");
+  } else if (OB_FAIL(ObOptimizerUtil::check_groupby_exprs_valid(groupby->get_group_by_exprs(),
+                                                                is_groupby_exprs_valid))) {
+    LOG_WARN("failed to check group by exprs valid", K(ret));
+  } else if (!is_groupby_exprs_valid) {
+    can_push = false;
+    OPT_TRACE("groupby has volatile or non-deterministic expr, can not push");
   } else if (groupby->get_algo() == MERGE_AGGREGATE && groupby->get_group_by_exprs().count() != 0) {
     can_push = false;
     OPT_TRACE("groupby algo is MERGE_AGGREGATE with group by exprs, can not push");
@@ -780,7 +915,6 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
     OPT_TRACE("groupby is three stage aggr, skip");
   } else {
     // 2. 收集聚合函数
-    bool is_valid_aggr = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < groupby->get_aggr_funcs().count(); ++i) {
       ObRawExpr *raw_expr = groupby->get_aggr_funcs().at(i);
       ObAggFunRawExpr *aggr_expr = NULL;
@@ -793,17 +927,11 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
       } else if (OB_FALSE_IT(aggr_expr = static_cast<ObAggFunRawExpr *>(raw_expr))) {
       } else if (OB_FAIL(aggr_items.push_back(aggr_expr))) {
         LOG_WARN("failed to push back aggr expr", K(ret));
-      } else if ((OB_E(EventTable::EN_PARTIAL_GROUP_BY_PUSHDOWN_CONTROLER) OB_SUCCESS) == OB_SUCCESS &&
-                 raw_expr->get_expr_type() != T_FUN_MIN && raw_expr->get_expr_type() != T_FUN_MAX) {
-        is_valid_aggr = false;
-        can_push = false;
-        OPT_TRACE("aggr type is not min/max, cannot push down partial groupby");
-        break;
       }
     }
     // 3. 检查是否满足 only_full_group_by
     bool is_only_full_group_by = false;
-    if (OB_FAIL(ret) || !is_valid_aggr) {
+    if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(ObTransformUtils::check_stmt_is_only_full_group_by(
                         static_cast<const ObSelectStmt*>(stmt),
@@ -1220,7 +1348,10 @@ int ObGroupByPushDownPlanRewriter::try_pushdown_as_mask_aggr_expr(ObRawExpr *agg
     ObRawExpr *mask_expr = NULL;
     ObRawExpr *param_expr = NULL;
     ObRawExpr *default_expr = NULL;
-    if (case_expr->get_when_expr_size() != 1 || case_expr->get_then_expr_size() != 1) {
+    if (case_expr->is_arg_case() || case_expr->is_decode_func()) {
+      can_push = false;
+      OPT_TRACE("simple case and decode are not supported as mask aggr", aggr_expr);
+    } else if (case_expr->get_when_expr_size() != 1 || case_expr->get_then_expr_size() != 1) {
       can_push = false;
       OPT_TRACE("mask aggr case expr has multiple when/then branches, can not push as mask aggr", aggr_expr);
     } else if (OB_ISNULL(mask_expr = case_expr->get_when_param_expr(0))
@@ -1228,7 +1359,7 @@ int ObGroupByPushDownPlanRewriter::try_pushdown_as_mask_aggr_expr(ObRawExpr *agg
                || OB_ISNULL(default_expr = case_expr->get_default_param_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null mask expr or param expr", K(ret));
-    } else if (!default_expr->is_static_const_expr()
+    } else if (!default_expr->is_const_raw_expr()
                || !static_cast<ObConstRawExpr *>(default_expr)->get_param().is_null()) {
       can_push = false;
       OPT_TRACE("default expr is not null, can not push as mask aggr", aggr_expr);
@@ -1277,17 +1408,16 @@ int ObGroupByPushDownPlanRewriter::distribute_mask_aggr_param_expr(ObRawExpr *ag
     LOG_WARN("aggr_expr is not aggr expr", K(ret));
   } else {
     ObAggFunRawExpr *aggr_fun_expr = static_cast<ObAggFunRawExpr *>(aggr_expr);
-    ObItemType aggr_type = aggr_fun_expr->get_expr_type();
-    // 先检查是否已经有相同 param_expr 的 mask_info
+    const ObItemType aggr_type = aggr_fun_expr->get_expr_type();
     ObRawExpr *existing_new_param_expr = NULL;
-    bool found_existing = ctx->find_existing_mask_aggr_param_expr(param_expr, existing_new_param_expr);
+    bool found_existing = ctx->find_existing_mask_aggr_param_expr(aggr_type,
+                                                                  param_expr,
+                                                                  existing_new_param_expr);
     if (found_existing) {
       OPT_TRACE("reuse existing mask aggr param expr", param_expr, existing_new_param_expr);
-      // 复用现有的 new_param_expr，不需要再次 distribute
       new_param_expr = static_cast<ObAggFunRawExpr *>(existing_new_param_expr);
     } else {
       OPT_TRACE("generate new mask aggr param expr", param_expr);
-      // 生成新的 new_param_expr
       if (OB_FAIL(generate_mask_aggr_param_expr(aggr_type,
                                                 param_expr,
                                                 new_param_expr))) {
@@ -1296,7 +1426,6 @@ int ObGroupByPushDownPlanRewriter::distribute_mask_aggr_param_expr(ObRawExpr *ag
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null new param expr", K(ret));
       } else {
-        // 只有新生成的 new_param_expr 才需要 distribute
         bool param_is_from_single_side = false;
         if (OB_FAIL(distribute_aggr_expr(new_param_expr,
                                          left_child,
@@ -1312,15 +1441,13 @@ int ObGroupByPushDownPlanRewriter::distribute_mask_aggr_param_expr(ObRawExpr *ag
       }
     }
 
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || !can_push) {
     } else if (OB_ISNULL(new_param_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null new param expr", K(ret));
-    } else if (!can_push) {
-      // can_push 已经被设置为 false，不需要继续处理
     } else {
-      // 生成 mask_info 并 push_back（不管是新生成的还是复用的，都需要记录）
       ObGroupByPushdownContext::MaskAggrExprInfo mask_info;
+      mask_info.aggr_type_ = aggr_type;
       mask_info.aggr_expr_ = aggr_expr;
       mask_info.param_expr_ = param_expr;
       mask_info.new_param_expr_ = new_param_expr;
@@ -1464,13 +1591,13 @@ int ObGroupByPushDownPlanRewriter::rewrite_join_node(ObLogJoin *join,
                                                      ObGroupByPushdownResult *result)
 {
   int ret = OB_SUCCESS;
-  result->reset();
   if (OB_ISNULL(join) || OB_ISNULL(left_ctx) || OB_ISNULL(left_result) ||
       OB_ISNULL(right_ctx) || OB_ISNULL(right_result) || OB_ISNULL(ctx) || OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(join), KP(left_ctx), KP(left_result),
              KP(right_ctx), KP(right_result), KP(ctx), KP(result));
   } else {
+    result->reset();
     ObSEArray<ObRawExpr *, 4> new_left_exprs;
     ObSEArray<ObRawExpr *, 4> new_right_exprs;
     ObSEArray<ObRawExpr *, 4> from_exprs;
@@ -1793,47 +1920,77 @@ int ObGroupByPushDownPlanRewriter::try_rewrite_set_children(ObLogSet *set,
                                                             ObGroupByPushdownContext *ctx,
                                                             ObFixedArray<ObGroupByPushdownContext, ObIAllocator> &child_contexts,
                                                             ObFixedArray<ObGroupByPushdownResult, ObIAllocator> &child_results,
+                                                            bool &is_valid,
                                                             bool &has_pushed_down,
                                                             const ObSelectStmt *&pushdown_child_stmt)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> select_exprs;
   ObSEArray<ObRawExpr*, 4> child_select_exprs;
-  const ObSelectStmt *child_stmt = NULL;
-  int64_t child_count = set->get_num_of_child();
+  int64_t child_count = 0;
   bool enable_reshuffle = false;
+  is_valid = true;
+  has_pushed_down = false;
+  pushdown_child_stmt = NULL;
 
   if (OB_ISNULL(set) || OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguments", K(ret), KP(set), KP(ctx));
-  } else if (OB_FAIL(set->get_set_exprs(select_exprs))) {
-    LOG_WARN("failed to get set exprs", K(ret));
+  } else if (OB_ISNULL(set->get_plan()) || OB_ISNULL(set->get_stmt()) || OB_UNLIKELY(!set->get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set operator", K(ret), KP(set->get_plan()), KP(set->get_stmt()));
+  } else if (OB_UNLIKELY((child_count = set->get_num_of_child()) < 2)
+             || OB_UNLIKELY(child_contexts.count() != child_count)
+             || OB_UNLIKELY(child_results.count() != child_count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set child count", K(ret), K(child_count),
+             K(child_contexts.count()), K(child_results.count()));
+  } else if (OB_FAIL(set->get_pure_set_exprs(select_exprs))) {
+    LOG_WARN("failed to get pure set exprs", K(ret));
   } else {
     // TODO tuliwei.tlw: check union all algorithm to determine if enable reshuffle
     enable_reshuffle = false;
   }
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_count; ++i) {
-    ObLogicalOperator* child_op = set->get_child(i);
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_count; ++i) {
+    ObLogicalOperator *child_op = NULL;
+    const ObDMLStmt *child_dml_stmt = NULL;
+    const ObSelectStmt *child_stmt = NULL;
     ObGroupByPushdownContext &child_ctx = child_contexts.at(i);
-    ObGroupByPushdownResult &child_result = child_results.at(i);
-    ObGroupByPushdownResult *dummy_pointer = &child_result;
     if (OB_ISNULL(child_op = set->get_child(i)) ||
         OB_ISNULL(child_op->get_plan()) ||
-        OB_ISNULL(child_stmt = static_cast<const ObSelectStmt *>(child_op->get_plan()->get_stmt()))) {
+        OB_ISNULL(child_dml_stmt = child_op->get_plan()->get_stmt())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(child_op), K(child_stmt));
-    } else if (OB_UNLIKELY(!child_stmt->is_select_stmt())) {
+      LOG_WARN("get unexpected null", K(ret), KP(child_op), KP(child_dml_stmt));
+    } else if (OB_UNLIKELY(!child_dml_stmt->is_select_stmt())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_stmt));
+      LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_dml_stmt));
+    } else if (OB_FALSE_IT(child_stmt = static_cast<const ObSelectStmt *>(child_dml_stmt))) {
     } else if (OB_FALSE_IT(child_select_exprs.reset())) {
     } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_exprs))) {
       LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_UNLIKELY(select_exprs.count() != child_select_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected set expr count", K(ret), K(select_exprs.count()),
+               K(child_select_exprs.count()), K(i));
     } else if (OB_FAIL(child_ctx.assign(*ctx))) {
       LOG_WARN("failed to assign pushdown context", K(ret));
     } else if (FALSE_IT(child_ctx.enable_reshuffle_ = enable_reshuffle)) {
-    } else if (OB_FAIL(child_ctx.map(select_exprs, child_select_exprs, opt_ctx_.get_expr_factory(), opt_ctx_.get_session_info()))) {
+    } else if (OB_FAIL(child_ctx.map(select_exprs, child_select_exprs,
+                                     opt_ctx_.get_expr_factory(), opt_ctx_.get_session_info(), is_valid))) {
       LOG_WARN("failed to map pushdown context", K(ret));
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < child_count; ++i) {
+    ObLogicalOperator *child_op = set->get_child(i);
+    const ObSelectStmt *child_stmt = static_cast<const ObSelectStmt *>(child_op->get_plan()->get_stmt());
+    ObGroupByPushdownContext &child_ctx = child_contexts.at(i);
+    ObGroupByPushdownResult &child_result = child_results.at(i);
+    ObGroupByPushdownResult *dummy_pointer = &child_result;
+    if (OB_FALSE_IT(child_select_exprs.reset())) {
+    } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_exprs))) {
+      LOG_WARN("failed to get select exprs", K(ret));
     } else if (OB_FAIL(SMART_CALL(rewrite_child(child_op, &child_ctx, dummy_pointer)))) {
       LOG_WARN("failed to rewrite child", K(ret), K(child_op->get_name()));
     } else {
@@ -1878,6 +2035,11 @@ int ObGroupByPushDownPlanRewriter::add_projection_for_set_children(ObLogSet *set
   if (OB_ISNULL(set)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arguments", K(ret), KP(set));
+  } else if (OB_UNLIKELY(child_contexts.count() != set->get_num_of_child())
+             || OB_UNLIKELY(child_results.count() != set->get_num_of_child())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set child count", K(ret), K(set->get_num_of_child()),
+             K(child_contexts.count()), K(child_results.count()));
   } else {
     OPT_TRACE("add projection for set children: ", set->get_name(), set->get_op_id());
     ObSEArray<ObRawExpr*, 4> new_select_list;
@@ -1885,11 +2047,16 @@ int ObGroupByPushDownPlanRewriter::add_projection_for_set_children(ObLogSet *set
     for (int64_t i = 0; OB_SUCC(ret) && i < set->get_num_of_child(); ++i) {
       if (!child_results.at(i).is_materialized_) {
         ObLogicalOperator* child_op = set->get_child(i);
+        const ObDMLStmt *child_dml_stmt = NULL;
         ObSelectStmt *child_stmt = NULL;
         if (OB_ISNULL(child_op) || OB_ISNULL(child_op->get_plan())
-            || OB_ISNULL(child_stmt = const_cast<ObSelectStmt *>(static_cast<const ObSelectStmt *>(child_op->get_plan()->get_stmt())))) {
+            || OB_ISNULL(child_dml_stmt = child_op->get_plan()->get_stmt())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(child_op));
+        } else if (OB_UNLIKELY(!child_dml_stmt->is_select_stmt())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("child stmt is not select stmt", K(ret), KPC(child_dml_stmt));
+        } else if (OB_FALSE_IT(child_stmt = const_cast<ObSelectStmt *>(static_cast<const ObSelectStmt *>(child_dml_stmt)))) {
         } else if (OB_FAIL(do_place_groupby(child_op, &child_contexts.at(i), &child_results.at(i), child_op->get_card(), false))) {
           LOG_WARN("failed to add partial group by", K(ret), K(child_op->get_name()));
         } else if (OB_FAIL(new_select_list.assign(child_results.at(i).new_aggr_exprs_))) {
@@ -2083,13 +2250,17 @@ int ObGroupByPushDownPlanRewriter::do_place_groupby(ObLogicalOperator *op,
                                                     bool need_reshuffle)
 {
   int ret = OB_SUCCESS;
-  ObLogicalOperator *parent = op->get_parent();
-  ObLogicalOperator *top = op;
+  ObLogicalOperator *parent = NULL;
+  ObLogicalOperator *top = NULL;
   ObLogPlan *plan = NULL;
-  if (OB_ISNULL(op) || OB_ISNULL(ctx) || OB_ISNULL(result) || OB_ISNULL(parent) || OB_ISNULL(plan = op->get_plan())) {
+  if (OB_ISNULL(op) || OB_ISNULL(ctx) || OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(op), KP(ctx), KP(result), KP(parent), KP(plan));
+  } else if (OB_ISNULL(parent = op->get_parent()) || OB_ISNULL(plan = op->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), KP(op), KP(ctx), KP(result), KP(parent), KP(plan));
   } else {
+    top = op;
     OPT_TRACE("do place groupby");
     OPT_TRACE_BEGIN_SECTION;
     OPT_TRACE("op name: ", op->get_name());
@@ -2140,12 +2311,18 @@ int ObGroupByPushDownPlanRewriter::try_place_groupby(ObLogicalOperator *op,
   bool should_place = false;
   bool is_unique = false;
   bool is_sharding_match = false;
+  ObLogicalOperator *parent = NULL;
+  ObLogPlan *plan = NULL;
   OPT_TRACE("try place groupby:");
   OPT_TRACE_BEGIN_SECTION;
-  if (OB_ISNULL(op) || OB_ISNULL(ctx) || OB_ISNULL(result) || OB_ISNULL(op->get_plan())
-      || OB_ISNULL(op->get_parent()) || ctx->is_empty()) {
+  if (OB_ISNULL(op) || OB_ISNULL(ctx) || OB_ISNULL(result)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(op), KP(ctx), KP(result), KP(op->get_plan()), KP(op->get_parent()));
+    LOG_WARN("unexpected null", K(ret), KP(op), KP(ctx), KP(result));
+  } else if (OB_ISNULL(plan = op->get_plan()) || OB_ISNULL(parent = op->get_parent())
+             || OB_ISNULL(opt_ctx_.get_session_info()) || ctx->is_empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(op), KP(ctx), KP(result), KP(plan), KP(parent),
+             KP(opt_ctx_.get_session_info()));
   } else {
     OPT_TRACE("current operator: ", op->get_name(), op->get_op_id());
   }
@@ -2154,7 +2331,7 @@ int ObGroupByPushDownPlanRewriter::try_place_groupby(ObLogicalOperator *op,
     OPT_TRACE("enable_place_groupby_ is false, do nothing");
   } else if (ctx->in_broadcast_side_path_) {
     OPT_TRACE("in broadcast side path, do nothing");
-  } else if (op->get_parent()->get_type() == log_op_def::LOG_GROUP_BY) {
+  } else if (parent->get_type() == log_op_def::LOG_GROUP_BY) {
     OPT_TRACE("parent is groupby, do nothing");
     // do nothing
   } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(ctx->groupby_exprs_,
@@ -2195,9 +2372,9 @@ int ObGroupByPushDownPlanRewriter::try_place_groupby(ObLogicalOperator *op,
                                                 ctx->groupby_exprs_,
                                                 simplified_exprs))) {
       LOG_WARN("failed to simplify pushdown context", K(ret));
-    } else if (FALSE_IT(op->get_plan()->get_selectivity_ctx().init_op_ctx(op))) {
-    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(op->get_plan()->get_update_table_metas(),
-                                                            op->get_plan()->get_selectivity_ctx(),
+    } else if (FALSE_IT(plan->get_selectivity_ctx().init_op_ctx(op))) {
+    } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
+                                                            plan->get_selectivity_ctx(),
                                                             simplified_exprs,
                                                             op->get_card(),
                                                             ndv))) {

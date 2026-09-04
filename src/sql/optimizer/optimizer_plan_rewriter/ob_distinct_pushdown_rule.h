@@ -90,7 +90,8 @@ struct ObDistinctPushdownContext : public RewriterContext
   int map(const common::ObIArray<ObRawExpr *> &from_exprs,
           const common::ObIArray<ObRawExpr *> &to_exprs,
           ObRawExprFactory &expr_factory,
-          const ObSQLSessionInfo *session_info);
+          const ObSQLSessionInfo *session_info,
+          bool &is_valid);
 
   // The distinct expressions to be pushed down.
   common::ObSEArray<ObRawExpr*, 4> distinct_exprs_;

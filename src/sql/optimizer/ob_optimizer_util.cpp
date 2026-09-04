@@ -38,6 +38,23 @@ int MergeKeyInfo::assign(MergeKeyInfo &other)
   return ret;
 }
 
+int ObOptimizerUtil::check_groupby_exprs_valid(const ObIArray<ObRawExpr *> &groupby_exprs,
+                                               bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < groupby_exprs.count(); ++i) {
+    const ObRawExpr *expr = groupby_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null group by expr", K(ret), K(i));
+    } else {
+      is_valid = expr->is_deterministic() && !expr->has_flag(CNT_VOLATILE_CONST);
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::is_prefix_ordering(const ObIArray<OrderItem> &first,
                                         const ObIArray<OrderItem> &second,
                                         const EqualSets &equal_sets,

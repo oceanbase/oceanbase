@@ -62,12 +62,18 @@ struct ObGroupByPushdownContext : public RewriterContext
 
   struct MaskAggrExprInfo
   {
-    MaskAggrExprInfo() : aggr_expr_(NULL), new_param_expr_(NULL) {}
+    MaskAggrExprInfo()
+        : aggr_type_(T_INVALID),
+          aggr_expr_(NULL),
+          param_expr_(NULL),
+          new_param_expr_(NULL)
+    {}
     virtual ~MaskAggrExprInfo() {}
+    ObItemType aggr_type_;
     ObRawExpr *aggr_expr_;
     ObRawExpr *param_expr_;
     ObRawExpr *new_param_expr_;
-    TO_STRING_KV(K_(aggr_expr), K_(new_param_expr));
+    TO_STRING_KV(K_(aggr_type), K_(aggr_expr), K_(param_expr), K_(new_param_expr));
   };
 
   ObGroupByPushdownContext()
@@ -85,6 +91,7 @@ struct ObGroupByPushdownContext : public RewriterContext
   void reset() {
     groupby_exprs_.reset();
     aggr_exprs_.reset();
+    mask_aggr_infos_.reset();
     need_count_ = false;
     enable_reshuffle_ = false;
     enable_place_groupby_ = false;
@@ -93,19 +100,23 @@ struct ObGroupByPushdownContext : public RewriterContext
   }
 
   /**
-   * @brief 查找是否已经有包含相同 param_expr 的 mask_info
-   * @param param_expr 要查找的参数表达式
-   * @param new_param_expr 如果找到，返回对应的 new_param_expr
-   * @return true 如果找到，false 否则
+   * Find a reusable mask aggregate parameter with the same aggregate semantics.
+   *
+   * @param aggr_type Aggregate function type of the mask expression.
+   * @param param_expr Parameter expression to aggregate below the join.
+   * @param new_param_expr Reusable aggregate expression when found.
+   * @return true if a matching aggregate type and parameter expression exist.
    */
-  bool find_existing_mask_aggr_param_expr(ObRawExpr *param_expr, ObRawExpr *&new_param_expr) const
+  bool find_existing_mask_aggr_param_expr(ObItemType aggr_type,
+                                          ObRawExpr *param_expr,
+                                          ObRawExpr *&new_param_expr) const
   {
     bool found = false;
     new_param_expr = NULL;
     if (OB_NOT_NULL(param_expr)) {
       for (int64_t i = 0; !found && i < mask_aggr_infos_.count(); ++i) {
         const MaskAggrExprInfo &mask_info = mask_aggr_infos_.at(i);
-        if (mask_info.param_expr_ == param_expr) {
+        if (mask_info.aggr_type_ == aggr_type && mask_info.param_expr_ == param_expr) {
           new_param_expr = mask_info.new_param_expr_;
           found = true;
         }
@@ -126,7 +137,8 @@ struct ObGroupByPushdownContext : public RewriterContext
   int map(const common::ObIArray<ObRawExpr *> &from_exprs,
           const common::ObIArray<ObRawExpr *> &to_exprs,
           ObRawExprFactory &expr_factory,
-          const ObSQLSessionInfo *session_info);
+          const ObSQLSessionInfo *session_info,
+          bool &is_valid);
 
   // The group by expressions to be pushed down.
   common::ObSEArray<ObRawExpr*, 4> groupby_exprs_;
@@ -542,11 +554,20 @@ private:
   int set_context_flags_for_exchange(ObLogExchange *exchange, ObGroupByPushdownContext *ctx);
 
   /**
+   * Check whether all SET children expose identical select-item result types.
+   * @param set SET operator whose children are checked.
+   * @param is_same Whether all child result types are identical.
+   * @return OB_SUCCESS on a complete check, or an error for an invalid SET tree.
+   */
+  int check_set_child_types_same(const ObLogSet *set, bool &is_same);
+
+  /**
    * @brief 尝试重写Set节点的所有子节点
    * @param set Set节点
    * @param ctx 上下文
    * @param child_contexts 子节点上下文数组
    * @param child_results 子节点结果数组
+   * @param is_valid Whether all child contexts can be safely mapped before rewriting starts.
    * @param has_pushed_down 是否有子节点被下推
    * @param pushdown_child_stmt 被下推的子节点stmt
    * @return OB_SUCCESS 成功，其他值表示失败
@@ -555,6 +576,7 @@ private:
                                ObGroupByPushdownContext *ctx,
                                ObFixedArray<ObGroupByPushdownContext, ObIAllocator> &child_contexts,
                                ObFixedArray<ObGroupByPushdownResult, ObIAllocator> &child_results,
+                               bool &is_valid,
                                bool &has_pushed_down,
                                const ObSelectStmt *&pushdown_child_stmt);
 
