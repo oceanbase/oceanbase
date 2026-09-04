@@ -5,6 +5,7 @@ create or replace package body utl_recomp AS
   num_threads number;
   num_batch number;
   current_batch number := 0;
+  job_user_prefix varchar2(100);
   job_name_prefix varchar2(100);
 
   sorted_table varchar2(50) := 'SYS.UTL_RECOMP_SORTED';
@@ -193,7 +194,8 @@ create or replace package body utl_recomp AS
   procedure drop_jobs is
     job_names str_array;
   begin
-    select job_name bulk collect into job_names from SYS.DBA_SCHEDULER_JOBS where job_name like job_name_prefix || '%';
+    select job_name bulk collect into job_names from SYS.DBA_SCHEDULER_JOBS
+      where substr(job_name, 1, length(job_user_prefix)) = job_user_prefix;
     for i in 1 .. job_names.count() loop
       begin
         dbms_scheduler.drop_job(job_names(i), true);
@@ -315,7 +317,7 @@ create or replace package body utl_recomp AS
     loop
       SELECT count(*) INTO remain_job_cnt
         FROM sys.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT a
-        WHERE a.JOB_NAME LIKE job_name_prefix || '%'
+        WHERE substr(a.JOB_NAME, 1, length(job_name_prefix)) = job_name_prefix
           AND a.job = 0
           AND NOT EXISTS (
             SELECT 1 FROM sys.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT b
@@ -332,7 +334,8 @@ create or replace package body utl_recomp AS
   procedure recomp_parallel(threads PLS_INTEGER := NULL, schema varchar2 := NULL, flags PLS_INTEGER := 0) as
   begin
     current_batch := 0;
-    job_name_prefix := 'UTL_RECOMP_SLAVE_' || USER || '_';
+    job_user_prefix := 'UTL_RECOMP_SLAVE_' || TO_CHAR(UID) || '_';
+    job_name_prefix := job_user_prefix || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF6') || '_';
     prepare_table(skip_list_table, skip_list_table_ddl, flags);
     prepare_table(sorted_table, sorted_table_ddl, flags);
     prepare_table(compiled_table, compiled_table_ddl, flags);
