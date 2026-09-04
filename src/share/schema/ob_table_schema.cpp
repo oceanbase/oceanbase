@@ -1350,7 +1350,7 @@ int ObSimpleTableSchemaV2::get_part_idx_by_tablets(const ObIArray<uint64_t> &tab
   } else if (OB_FAIL(id_hashmap.create(std::max<int64_t>(tablet_ids.count(), 1),
                                        ObModIds::OB_SCHEMA,
                                        ObModIds::OB_HASH_NODE,
-                                       get_tenant_id()))) {
+                                       MTL_ID()))) {
     LOG_WARN("create hashmap failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i ++) {
@@ -1587,7 +1587,7 @@ int ObSimpleTableSchemaV2::get_part_ids_by_subpart_ids(const ObIArray<int64_t> &
   } else if (OB_FAIL(subpart_hashset.create(std::max<int64_t>(subpart_ids.count(), 1),
                                             ObModIds::OB_SCHEMA,
                                             ObModIds::OB_HASH_NODE,
-                                            get_tenant_id()))) {
+                                            MTL_ID()))) {
     LOG_WARN("create hashset failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < subpart_ids.count(); i ++) {
@@ -1659,7 +1659,7 @@ int ObSimpleTableSchemaV2::get_part_idx_by_part_id(const ObIArray<int64_t> &part
   } else if (OB_FAIL(id_hashmap.create(std::max<int64_t>(part_ids.count(), 1),
                                        ObModIds::OB_SCHEMA,
                                        ObModIds::OB_HASH_NODE,
-                                       get_tenant_id()))) {
+                                       MTL_ID()))) {
     LOG_WARN("create hashmap failed", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); i ++) {
