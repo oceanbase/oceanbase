@@ -816,10 +816,9 @@ int ObMVChecker::get_equivalent_count_aggr(const ObSelectStmt &stmt,
     ObNotNullContext not_null_ctx(session_info->get_cur_exec_ctx(),
                                   &session_info->get_cur_exec_ctx()->get_allocator(),
                                   &stmt);
-    if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
-                                                   count_param,
-                                                   is_not_null,
-                                                   NULL))) {
+    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
+      LOG_WARN("failed to generate stmt context", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, count_param, is_not_null, NULL))) {
       LOG_WARN("failed to check expr not null", K(ret));
     } else if (is_not_null) {
       // equivalent to count(*)
