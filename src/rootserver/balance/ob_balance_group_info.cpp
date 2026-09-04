@@ -245,6 +245,46 @@ int ObBalanceGroupInfo::swap_largest_for_smallest_pg(ObBalanceGroupInfo &dest_bg
   return ret;
 }
 
+int ObBalanceGroupInfo::swap_for_smallest_pg(
+    ObPartGroupInfo *const inner_pg,
+    ObBalanceGroupInfo &dest_bg_info)
+{
+  int ret = OB_SUCCESS;
+  ObPartGroupInfo *smallest_pg = nullptr;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_ISNULL(inner_pg)
+      || OB_UNLIKELY(!inner_pg->is_valid()
+      || !dest_bg_info.is_valid()
+      || bg_id_ != dest_bg_info.bg_id_
+      || ls_id_ == dest_bg_info.ls_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(inner_pg), K(*this), K(dest_bg_info));
+  } else if (OB_ISNULL(pg_container_) || OB_ISNULL(dest_bg_info.pg_container_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part group container is null", KR(ret), KP(pg_container_), KP(dest_bg_info.pg_container_));
+  } else if (OB_FAIL(dest_bg_info.pg_container_->get_smallest_part_group(smallest_pg))) {
+    LOG_WARN("get smallest pg info failed", KR(ret), K(dest_bg_info));
+  } else if (OB_ISNULL(smallest_pg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("smallest pg is null", KR(ret), K(dest_bg_info));
+  } else if (OB_UNLIKELY(inner_pg->get_data_size() <= smallest_pg->get_data_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner pg can not be smaller than smallest", KR(ret),
+        KPC(inner_pg), KPC(smallest_pg));
+  } else if (OB_FAIL(pg_container_->remove_part_group(inner_pg))) {
+    LOG_WARN("remove failed", KR(ret), KPC(pg_container_), KPC(inner_pg));
+  } else if (OB_FAIL(dest_bg_info.pg_container_->append_part_group(inner_pg))) {
+    LOG_WARN("append failed", KR(ret), K(dest_bg_info), KPC(inner_pg));
+  } else if (OB_FAIL(dest_bg_info.pg_container_->remove_part_group(smallest_pg))) {
+    LOG_WARN("remove failed", KR(ret), K(dest_bg_info), KPC(smallest_pg));
+  } else if (OB_FAIL(pg_container_->append_part_group(smallest_pg))) {
+    LOG_WARN("append failed", KR(ret), KPC(pg_container_), KPC(smallest_pg));
+  }
+  return ret;
+}
+
 int ObBalanceGroupInfo::get_balance_weight_array(
     ObIArray<int64_t> &weight_arr)
 {
