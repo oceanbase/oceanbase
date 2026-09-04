@@ -874,11 +874,23 @@ int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
   if (OB_SUCCESS != exec_errcode_) {
     bool has_store_pl_msg = false;
     scanner.set_err_code(exec_errcode_);
+    // RAISE_APPLICATION_ERROR stores the user message in the warning buffer with
+    // OB_SP_RAISE_APPLICATION_ERROR, while exec_errcode_ is the user error code.
+    // Therefore, the TSI message lookup by exec_errcode_ can be empty.
+    ObString err_msg = ob_get_tsi_err_msg(exec_errcode_);
+    if (0 == err_msg.length()
+        && exec_errcode_ >= OB_MIN_RAISE_APPLICATION_ERROR
+        && exec_errcode_ <= OB_MAX_RAISE_APPLICATION_ERROR) {
+      const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+      if (OB_NOT_NULL(wb)) {
+        err_msg = ObString::make_string(wb->get_err_msg());
+      }
+    }
     if (OB_NOT_NULL(session) && 0 < session->get_pl_exact_err_msg().length()) {
       ObSqlString msg;
       const int64_t max_msg_buf = 8192 - 256;   // same as MAX_MSGBUF_SIZE
-      ObString str = 0 < ob_get_tsi_err_msg(exec_errcode_).length()
-                       ? ob_get_tsi_err_msg(exec_errcode_)
+      ObString str = 0 < err_msg.length()
+                       ? err_msg
                        : ob_errpkt_strerror(exec_errcode_, lib::is_oracle_mode());
       if (OB_SUCCESS == msg.append(str)
             && OB_SUCCESS == msg.append(session->get_pl_exact_err_msg().ptr())
@@ -892,7 +904,7 @@ int ObRemoteBaseExecuteP<T>::base_before_response(common::ObScanner &scanner)
       }
     }
     if (!has_store_pl_msg) {
-      scanner.store_err_msg(ob_get_tsi_err_msg(exec_errcode_));
+      scanner.store_err_msg(err_msg);
     }
     exec_errcode_ = OB_SUCCESS;
   }
