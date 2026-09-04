@@ -269,12 +269,15 @@ int ObDASBMWOp::inner_get_next_row_with_pruning(ObDASRowID &curr_id, double &sco
     }
     case SearchStatus::EVALUATE_PIVOT: {
       int64_t dim_cnt = 0;
-      if (OB_FAIL(evaluate_pivot(pivot_id, curr_id, score, dim_cnt))) {
+      bool is_valid_pivot = false;
+      if (OB_FAIL(evaluate_pivot(pivot_id, curr_id, score, dim_cnt, is_valid_pivot))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to evaluate pivot", K(ret));
         }
       } else {
-        found_row = score > min_competitive_score_ && dim_cnt >= minimum_should_match_;
+        found_row = is_valid_pivot
+            && score > min_competitive_score_
+            && dim_cnt >= minimum_should_match_;
         status_ = SearchStatus::FIND_NEXT_PIVOT;
       }
       break;
@@ -336,13 +339,25 @@ int ObDASBMWOp::evaluate_pivot(
     const ObDASRowID &pivot_id,
     ObDASRowID &curr_id,
     double &score,
-    int64_t &dim_cnt)
+    int64_t &dim_cnt,
+    bool &is_valid_pivot)
 {
   int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  is_valid_pivot = false;
   if (OB_FAIL(row_merger_->rebuild_with_advance(pivot_id))) {
     LOG_WARN("failed to rebuild with advance", K(ret));
-  } else if (OB_FAIL(row_merger_->merge_one_row(curr_id, score, dim_cnt))) {
-    LOG_WARN("failed to merge one row", K(ret));
+  } else if (OB_FAIL(row_merger_->get_top_id(curr_id))) {
+    LOG_WARN("failed to get top id", K(ret));
+  } else if (OB_FAIL(compare_rowid(curr_id, pivot_id, cmp_ret))) {
+    LOG_WARN("failed to compare rowid", K(ret));
+  } else {
+    is_valid_pivot = 0 == cmp_ret;
+    if (!is_valid_pivot) {
+      // A pivot selected from a shallow iterator may only be an inexact block lower bound.
+    } else if (OB_FAIL(row_merger_->merge_one_row(curr_id, score, dim_cnt))) {
+      LOG_WARN("failed to merge one row", K(ret));
+    }
   }
   return ret;
 }

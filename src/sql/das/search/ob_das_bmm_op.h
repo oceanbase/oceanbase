@@ -87,7 +87,8 @@ private:
       const double non_essential_block_max_score,
       ObDASRowID &collected_id,
       double &essential_score,
-      bool &is_candidate);
+      bool &is_candidate,
+      bool &is_valid_pivot);
   int evaluate_pivot(const ObDASRowID &pivot_id, const double &essential_score, double &score);
   int next_filter_rowid(ObDASRowID &next_id);
   int advance_filter_to(const ObDASRowID &target, ObDASRowID &curr_id);

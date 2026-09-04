@@ -71,7 +71,12 @@ private:
   int inner_get_next_row_with_pruning(ObDASRowID &next_id, double &score);
   int find_next_pivot(ObDASRowID &pivot_id);
   int evaluate_pivot_range(const ObDASRowID &pivot_id, bool &is_candidate);
-  int evaluate_pivot(const ObDASRowID &pivot_id, ObDASRowID &curr_id, double &score, int64_t &dim_cnt);
+  int evaluate_pivot(
+      const ObDASRowID &pivot_id,
+      ObDASRowID &curr_id,
+      double &score,
+      int64_t &dim_cnt,
+      bool &is_valid_pivot);
   int find_next_pivot_range();
 private:
   enum SearchStatus {

@@ -516,26 +516,33 @@ int ObDASBMMOp::evaluate_essential_pivot(
     const double non_essential_block_max_score,
     ObDASRowID &collected_id,
     double &essential_score,
-    bool &is_candidate)
+    bool &is_candidate,
+    bool &is_valid_pivot)
 {
   int ret = OB_SUCCESS;
   is_candidate = false;
+  is_valid_pivot = false;
   int cmp_ret = 0;
   int64_t dim_cnt = 0;
   if (OB_FAIL(row_merger_->rebuild_with_advance(pivot_id))) {
     LOG_WARN("failed to rebuild with advance", K(ret));
-  } else if (OB_FAIL(row_merger_->merge_one_row(collected_id, essential_score, dim_cnt))) {
-    LOG_WARN("failed to merge one row", K(ret));
+  } else if (OB_FAIL(row_merger_->get_top_id(collected_id))) {
+    LOG_WARN("failed to get top id", K(ret));
   } else if (OB_FAIL(search_ctx_.compare_rowid(collected_id, pivot_id, cmp_ret))) {
     LOG_WARN("failed to compare rowid", K(ret));
-  } else if (0 != cmp_ret) {
-    // collected id different from pivot id, need full evaluation
-    is_candidate = true;
   } else {
-    is_candidate = non_essential_block_max_score + essential_score > min_competitive_score_;
+    is_valid_pivot = 0 == cmp_ret;
+    if (!is_valid_pivot) {
+      // A pivot selected from a shallow iterator may only be an inexact block lower bound.
+    } else if (OB_FAIL(row_merger_->merge_one_row(collected_id, essential_score, dim_cnt))) {
+      LOG_WARN("failed to merge one row", K(ret));
+    } else {
+      is_candidate = non_essential_block_max_score + essential_score > min_competitive_score_;
+    }
   }
   LOG_DEBUG("[Sparse Retrieval] eval essential pivot", K(ret), K(pivot_id), K(collected_id),
-        K(non_essential_block_max_score), K(essential_score), K_(min_competitive_score), K(is_candidate));
+        K(non_essential_block_max_score), K(essential_score), K_(min_competitive_score),
+        K(is_candidate), K(is_valid_pivot));
   return ret;
 }
 
@@ -745,10 +752,13 @@ int ObDASBMMOp::evaluate_bmm_pivot(
   ObDASRowID collected_id;
   double essential_score = 0.0;
   bool is_candidate = false;
+  bool is_valid_pivot = false;
   bool need_forward_filter_after_evaluate = false;
   if (OB_FAIL(evaluate_essential_pivot(
-      pivot_id, non_essential_bm_score, collected_id, essential_score, is_candidate))) {
+      pivot_id, non_essential_bm_score, collected_id, essential_score, is_candidate, is_valid_pivot))) {
     LOG_WARN("failed to evaluate essential pivot", K(ret));
+  } else if (!is_valid_pivot) {
+    // Retry with the next pivot without advancing the filter for an inexact block pivot.
   } else if (is_candidate) {
     bool filter_match = true;
     if (has_filter()) {
