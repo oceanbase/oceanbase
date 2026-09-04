@@ -39,6 +39,9 @@ public:
   static int get_recent_tenant_mlog_purge_scns(
     const int64_t read_snapshot,
     MlogPurgeScnMap &mlog_purge_scn_map);
+
+private:
+  static bool is_ignorable_mlog_query_error(const int ret);
 };
 
 } // namespace storage

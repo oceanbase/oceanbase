@@ -50,6 +50,12 @@ int ObTenantMlogPurgeScnMapCache::get_purge_scn(
   return ret;
 }
 
+bool ObMLogPurgeInfoHelper::is_ignorable_mlog_query_error(const int ret)
+{
+  return OB_TABLE_DEFINITION_CHANGED == ret || OB_SNAPSHOT_DISCARDED == ret
+      || OB_INVALID_QUERY_TIMESTAMP == ret || OB_TENANT_NOT_EXIST == ret;
+}
+
 int ObMLogPurgeInfoHelper::get_mlog_purge_scn(
   const uint64_t mlog_id,
   const int64_t read_snapshot,
@@ -71,7 +77,7 @@ int ObMLogPurgeInfoHelper::get_mlog_purge_scn(
         OB_ALL_MLOG_TNAME, read_snapshot, mlog_id))) {
       LOG_WARN("fail to assign sql", KR(ret));
     } else if (OB_FAIL(sql_client->read(res, exec_tenant_id, sql.ptr()))) {
-      if (OB_TABLE_DEFINITION_CHANGED == ret || OB_SNAPSHOT_DISCARDED == ret) {
+      if (is_ignorable_mlog_query_error(ret)) {
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("execute sql failed", KR(ret), K(sql));
@@ -122,7 +128,7 @@ int ObMLogPurgeInfoHelper::get_recent_tenant_mlog_purge_scns(
               OB_ALL_MLOG_TNAME, read_snapshot, last_mlog_id, BATCH_LIMIT))) {
         LOG_WARN("fail to assign sql", KR(ret));
       } else if (OB_FAIL(sql_client->read(res, exec_tenant_id, sql.ptr()))) {
-        if (OB_TABLE_DEFINITION_CHANGED == ret || OB_SNAPSHOT_DISCARDED == ret || OB_TENANT_NOT_EXIST == ret) {
+        if (is_ignorable_mlog_query_error(ret)) {
           ret = OB_SUCCESS;
           // overwrite ret
           scan_done = true;
