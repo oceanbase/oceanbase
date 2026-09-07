@@ -66,6 +66,7 @@ private:
       const ObTableSchema &data_table_schema,
       const ObTableSchema &ori_index_schema,
       const int64_t auto_part_size,
+      const ObIArray<uint64_t> &func_index_column_ids,
       ObTableSchema &new_index_schema);
 
   int generate_tablet_and_part_id(ObTableSchema &new_table_schema);
@@ -141,6 +142,7 @@ private:
   int get_estimated_table_size(
       const ObTableSchema &data_table_schema,
       const ObTableSchema &index_table_schema,
+      const ObIArray<uint64_t> &func_index_column_ids,
       int64_t &table_size);
 
   int get_exist_table_size(

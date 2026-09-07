@@ -189,10 +189,48 @@ int ObPartitionPreSplit::get_data_table_part_ids(
   return ret;
 }
 
+// Only columns mapped to reliable base-table statistics contribute to the estimated index size.
+// Known derived columns are skipped; an unknown mapping disables pre-split.
+static int collect_reliable_index_stat_column_ids(
+    const ObTableSchema &data_table_schema,
+    const ObTableSchema &index_table_schema,
+    const ObIArray<uint64_t> &func_index_column_ids,
+    ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  for (ObTableSchema::const_column_iterator iter = index_table_schema.column_begin();
+       OB_SUCC(ret) && iter != index_table_schema.column_end(); ++iter) {
+    const ObColumnSchemaV2 *index_column = *iter;
+    if (OB_ISNULL(index_column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[PRE_SPLIT] index column schema is null", K(ret));
+    } else if (has_exist_in_array(func_index_column_ids, index_column->get_column_id())
+               || index_column->is_shadow_column()
+               || index_column->is_func_idx_column()
+               || index_column->is_prefix_index_column()) {
+      // Derived payload size cannot be estimated reliably from base-table statistics.
+    } else {
+      const uint64_t column_id = index_column->get_column_id();
+      const ObColumnSchemaV2 *data_column = data_table_schema.get_column_schema(column_id);
+      if (OB_ISNULL(data_column)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_DEBUG("[PRE_SPLIT] index column has no matching base-table column",
+            K(ret), K(column_id), "column_name", index_column->get_column_name_str());
+      } else if (data_column->is_func_idx_column() || data_column->is_prefix_column()) {
+        // Skip derived columns whose result width cannot be inferred reliably.
+      } else if (OB_FAIL(add_var_to_array_no_dup(column_ids, column_id))) {
+        LOG_WARN("[PRE_SPLIT] fail to add data column id", K(ret), K(column_id));
+      }
+    }
+  }
+  return ret;
+}
+
 // only for global index
 int ObPartitionPreSplit::get_estimated_table_size(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &index_table_schema,
+    const ObIArray<uint64_t> &func_index_column_ids,
     int64_t &table_size)
 {
   int ret = OB_SUCCESS;
@@ -200,15 +238,18 @@ int ObPartitionPreSplit::get_estimated_table_size(
   ObSEArray<uint64_t, 4> column_ids;
   ObSEArray<uint64_t, 1> part_sizes;
   ObSEArray<int64_t, 1> part_ids;
+  ObDbmsSpace::IndexCostInfo cost_info;
   table_size = 0; // reset
 
-  if (OB_FAIL(index_table_schema.get_column_ids(column_ids))) {
-    LOG_WARN("[PRE_SPLIT] fail to get mapping column ids.", K(ret));
-  } else if (OB_FAIL(part_ids.push_back(-1))) {
+  if (OB_FAIL(part_ids.push_back(-1))) {
     LOG_WARN("[PRE_SPLIT] fail to get data table part id.", K(ret), K(data_table_schema));
+  } else if (OB_FAIL(collect_reliable_index_stat_column_ids(
+      data_table_schema, index_table_schema, func_index_column_ids, column_ids))) {
+    if (OB_NOT_SUPPORTED != ret) {
+      LOG_WARN("[PRE_SPLIT] fail to collect reliable index statistic columns", K(ret));
+    }
   } else {
     common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
-    ObDbmsSpace::IndexCostInfo cost_info;
     if (OB_FAIL(cost_info.part_ids_.assign(part_ids))) {
       LOG_WARN("[PRE_SPLIT] fail to assign cost info part id.", K(ret), K(part_ids));
     } else if (OB_FAIL(cost_info.column_ids_.assign(column_ids))) {
@@ -224,7 +265,9 @@ int ObPartitionPreSplit::get_estimated_table_size(
         &data_table_schema,
         cost_info,
         part_sizes))) {
-      LOG_WARN("[PRE_SPLIT] fail to estimate index table size", K(ret), K(cost_info));
+      if (OB_NOT_SUPPORTED != ret) {
+        LOG_WARN("[PRE_SPLIT] fail to estimate index table size", K(ret), K(cost_info));
+      }
     } else if (part_sizes.count() != part_ids.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("[PRE_SPLIT] return count not match", K(ret), K(part_sizes.count()), K(part_ids.count()));
@@ -236,6 +279,33 @@ int ObPartitionPreSplit::get_estimated_table_size(
   }
   return ret;
 }
+
+static int collect_func_index_column_ids(
+    const ObCreateIndexArg &create_index_arg,
+    const ObTableSchema &index_schema,
+    ObIArray<uint64_t> &func_index_column_ids)
+{
+  int ret = OB_SUCCESS;
+  const ObRowkeyInfo &rowkey_info = index_schema.get_rowkey_info();
+  if (OB_UNLIKELY(create_index_arg.index_columns_.count() > rowkey_info.get_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[PRE_SPLIT] index column count exceeds rowkey column count",
+        K(ret), K(create_index_arg.index_columns_.count()), K(rowkey_info.get_size()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < create_index_arg.index_columns_.count(); ++i) {
+    uint64_t column_id = OB_INVALID_ID;
+    // Only the original index argument preserves functional-index identity.
+    if (create_index_arg.index_columns_.at(i).is_func_index_) {
+      if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+        LOG_WARN("[PRE_SPLIT] fail to get derived index column id", K(ret), K(i));
+      } else if (OB_FAIL(func_index_column_ids.push_back(column_id))) {
+        LOG_WARN("[PRE_SPLIT] fail to add derived index column id", K(ret), K(column_id));
+      }
+    }
+  }
+  return ret;
+}
+
 /*
  description:
    1. exist main table
@@ -343,39 +413,63 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
       if (index_arg->index_action_type_ == ObIndexArg::ADD_INDEX) {
         HEAP_VAR(ObTableSchema, index_schema) {
           ObCreateIndexArg *create_index_arg = static_cast<ObCreateIndexArg *>(index_arg);
+          ObSEArray<uint64_t, 4> func_index_column_ids;
           bool has_prefix_index_column = false;
-          for (int64_t j = 0; !has_prefix_index_column && j < create_index_arg->index_columns_.count(); ++j) {
-            has_prefix_index_column = create_index_arg->index_columns_.at(j).prefix_len_ > 0;
+          bool has_func_index_column = false;
+          for (int64_t j = 0;
+               (!has_prefix_index_column || !has_func_index_column)
+                   && j < create_index_arg->index_columns_.count();
+               ++j) {
+            has_prefix_index_column = has_prefix_index_column
+                || create_index_arg->index_columns_.at(j).prefix_len_ > 0;
+            has_func_index_column = has_func_index_column
+                || create_index_arg->index_columns_.at(j).is_func_index_;
           }
           if (OB_FAIL(index_schema.assign(create_index_arg->index_schema_))) {
             LOG_WARN("fail to assign index schema", K(ret));
           } else if (OB_FALSE_IT(index_schema.set_tenant_id(data_table_schema->get_tenant_id()))) {
           } else if (OB_FALSE_IT(index_schema.set_data_table_id(data_table_schema->get_table_id()))) {
-          } else if (index_schema.get_column_count() == 0 &&
-              OB_FAIL(ObIndexBuilderUtil::set_index_table_columns(*create_index_arg, *data_table_schema, index_schema))) {
-            LOG_WARN("[PRE_SPLIT] fail to set index table columns", K(ret));
-          } else if (has_prefix_index_column
-                     && index_schema.get_partition_key_info().get_size() == 0
-                     && index_schema.get_part_option().get_part_func_expr_str().empty()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("[PRE_SPLIT] not support prefix global index without explicit partition key pre-split",
-                     K(ret), K(index_schema));
-          } else if (OB_FAIL(check_table_can_do_pre_split(*data_table_schema, index_schema))) {
-            LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
-          } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, auto_part_size, index_schema))) {
-            LOG_WARN("[PRE_SPLIT] fail to get new index table split range", K(ret), K(tenant_id), K(database_name));
-          } else if (OB_FAIL(check_global_index_bound(index_schema))) {
-            LOG_WARN("[PRE_SPLIT] fail to check high bound outrow lob", K(ret), K(index_schema));
           } else {
-            LOG_DEBUG("[PRE_SPLIT] success pre split index schema", K(index_schema));
+            if (has_func_index_column && index_schema.get_column_count() == 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_INFO("[PRE_SPLIT] function index schema is incomplete, skip pre-split",
+                  K(ret), KPC(create_index_arg));
+            } else if (index_schema.get_column_count() == 0
+                       && OB_FAIL(ObIndexBuilderUtil::set_index_table_columns(
+                           *create_index_arg, *data_table_schema, index_schema))) {
+              LOG_WARN("[PRE_SPLIT] fail to set index table columns", K(ret), KPC(create_index_arg));
+            } else if (has_prefix_index_column
+                       && index_schema.get_partition_key_info().get_size() == 0
+                       && index_schema.get_part_option().get_part_func_expr_str().empty()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_INFO("[PRE_SPLIT] not support prefix global index without explicit partition key pre-split",
+                       K(ret), K(index_schema));
+            } else if (OB_FAIL(collect_func_index_column_ids(
+                *create_index_arg, index_schema, func_index_column_ids))) {
+              LOG_WARN("[PRE_SPLIT] fail to collect function index column ids", K(ret));
+            } else if (OB_FAIL(check_table_can_do_pre_split(*data_table_schema, index_schema))) {
+              LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
+            } else if (OB_FAIL(do_pre_split_global_index(
+                database_name, *data_table_schema, index_schema, auto_part_size,
+                func_index_column_ids, index_schema))) {
+              if (OB_NOT_SUPPORTED != ret) {
+                LOG_WARN("[PRE_SPLIT] fail to get new index table split range",
+                    K(ret), K(tenant_id), K(database_name));
+              }
+            } else if (OB_FAIL(check_global_index_bound(index_schema))) {
+              LOG_WARN("[PRE_SPLIT] fail to check high bound outrow lob", K(ret), K(index_schema));
+            } else {
+              LOG_DEBUG("[PRE_SPLIT] success pre split index schema", K(index_schema));
+            }
           }
           if (OB_SUCC(ret) && index_schema.is_partitioned_table()) {
             if (OB_FAIL(create_index_arg->index_schema_.assign(index_schema))) {
               LOG_WARN("[PRE_SPLIT] fail to assign index schema", K(ret), K(index_schema));
             }
           } else if (ret == OB_NOT_SUPPORTED) {
+            LOG_INFO("[PRE_SPLIT] skip unsupported global index pre-split",
+                K(ret), K(index_schema));
             ret = OB_SUCCESS;
-            LOG_INFO("[PRE_SPLIT] not support pre-split schema. do nothing", K(ret), K(index_schema));
           }
         }
       }
@@ -448,18 +542,32 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
   }
   if (OB_FAIL(ret)) {
     if (ret == OB_NOT_SUPPORTED) {
+      LOG_INFO("[PRE_SPLIT] skip unsupported pre-split schema",
+          K(ret), K(new_table_schema));
       ret = OB_SUCCESS; // some ddl type no need to do pre split, just return success.
-      LOG_INFO("not support pre-split schema. do nothing", K(ret), K(new_table_schema));
     }
   } else if (is_building_global_index) {
     // 1. create index global (partition or not partition table)
     // 2. alter table add index global (partition or not partition table)
     ObTableSchema ori_index_table_schema;
+    ObSEArray<uint64_t, 1> func_index_column_ids;
     if (OB_FAIL(ori_index_table_schema.assign(new_table_schema))) {
       LOG_WARN("fail to assign schema", K(ret), K(new_table_schema));
-    } else if (OB_FAIL(do_pre_split_global_index(db_name, data_table_schema, ori_index_table_schema, new_table_schema.get_part_option().get_auto_part_size(), new_table_schema))) {
-      LOG_WARN("fail to do pre split global index", K(ret),
-        K(db_name), K(data_table_schema), K(ori_index_table_schema), K(new_table_schema));
+    } else if (OB_FAIL(do_pre_split_global_index(
+        db_name,
+        data_table_schema,
+        ori_index_table_schema,
+        new_table_schema.get_part_option().get_auto_part_size(),
+        func_index_column_ids,
+        new_table_schema))) {
+      if (ret == OB_NOT_SUPPORTED) {
+        LOG_INFO("[PRE_SPLIT] skip unsupported global index pre-split",
+            K(ret), K(db_name), K(data_table_schema), K(new_table_schema));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to do pre split global index", K(ret),
+          K(db_name), K(data_table_schema), K(new_table_schema));
+      }
     } else {
       pre_splited_global_index = true;
     }
@@ -501,9 +609,11 @@ int ObPartitionPreSplit::do_pre_split_global_index(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &ori_index_schema,
     const int64_t auto_part_size,
+    const ObIArray<uint64_t> &func_index_column_ids,
     ObTableSchema &new_index_schema)
 {
   int ret = OB_SUCCESS;
+  split_ranges_.reset();
   ObTableSchema inc_partition_schema;
   ObArray<TabletIDSize> tablets_size_array;
   ObTabletID source_tablet_id;
@@ -514,8 +624,11 @@ int ObPartitionPreSplit::do_pre_split_global_index(
   const int64_t tenant_id = new_index_schema.get_tenant_id();
   const bool need_generate_part_name = true;
   DEBUG_SYNC(START_DDL_PRE_SPLIT_PARTITION);
-  if (OB_FAIL(get_estimated_table_size(data_table_schema, new_index_schema, physical_size))) { // estimate global index table size
-    LOG_WARN("[PRE_SPLIT] fail to get create table size", K(ret), K(new_index_schema));
+  if (OB_FAIL(get_estimated_table_size(
+      data_table_schema, new_index_schema, func_index_column_ids, physical_size))) { // estimate global index table size
+    if (OB_NOT_SUPPORTED != ret) {
+      LOG_WARN("[PRE_SPLIT] fail to get create table size", K(ret), K(new_index_schema));
+    }
   } else if (OB_FAIL(get_exist_table_size(data_table_schema, data_table_physical_size))) {  // get data table size
     LOG_WARN("[PRE_SPLIT] fail to get data table size", K(ret), K(data_table_schema));
   }
@@ -537,7 +650,9 @@ int ObPartitionPreSplit::do_pre_split_global_index(
     LOG_WARN("[PRE_SPLIT] fail to build pre split ranges",
       K(ret), K(source_tablet_id), K(tenant_id), K(physical_size));
   }
-  if(OB_FAIL(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (split_ranges_.empty()) {
+    LOG_DEBUG("[PRE_SPLIT] no global index split range generated", K(split_num));
   } else if (OB_FAIL(build_split_tablet_partition_schema(
       tenant_id,
       source_tablet_id,
@@ -582,7 +697,7 @@ int ObPartitionPreSplit::do_pre_split_main_table(
   return ret;
 }
 
-static int check_prefix_part_key(
+static int check_derived_part_key(
     const ObTableSchema &data_table_schema,
     const ObTableSchema &index_schema,
     const uint64_t column_id)
@@ -597,6 +712,11 @@ static int check_prefix_part_key(
              || (OB_NOT_NULL(data_col) && data_col->is_prefix_column())) {
     ret = OB_NOT_SUPPORTED;
     LOG_INFO("[PRE_SPLIT] not support prefix column as global index pre-split partition key",
+             K(ret), KPC(index_col), KPC(data_col));
+  } else if (index_col->is_func_idx_column()
+             || (OB_NOT_NULL(data_col) && data_col->is_func_idx_column())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_INFO("[PRE_SPLIT] not support function column as global index pre-split partition key",
              K(ret), KPC(index_col), KPC(data_col));
   }
   return ret;
@@ -654,8 +774,8 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
         uint64_t part_key_col_id = OB_INVALID_ID;
         if (OB_FAIL(part_key_info.get_column_id(i, part_key_col_id))) {
           LOG_WARN("[PRE_SPLIT] fail to get partition key column id", K(ret), K(i), K(part_key_info));
-        } else if (OB_FAIL(check_prefix_part_key(data_table_schema, table_schema, part_key_col_id))) {
-          LOG_WARN("[PRE_SPLIT] fail to check prefix part key", K(ret), K(i), K(part_key_col_id));
+        } else if (OB_FAIL(check_derived_part_key(data_table_schema, table_schema, part_key_col_id))) {
+          LOG_WARN("[PRE_SPLIT] fail to check derived part key", K(ret), K(i), K(part_key_col_id));
         }
       }
     } else if (part_option.get_part_func_expr_str().empty()) {
@@ -665,8 +785,9 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
         if (OB_ISNULL(index_column)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("[PRE_SPLIT] index column is null", K(ret), K(i), K(index_info));
-        } else if (OB_FAIL(check_prefix_part_key(data_table_schema, table_schema, index_column->column_id_))) {
-          LOG_WARN("[PRE_SPLIT] fail to check prefix part key", K(ret), K(i), K(index_column->column_id_));
+        } else if (OB_FAIL(check_derived_part_key(
+            data_table_schema, table_schema, index_column->column_id_))) {
+          LOG_WARN("[PRE_SPLIT] fail to check derived part key", K(ret), K(i), K(index_column->column_id_));
         }
       }
     }
