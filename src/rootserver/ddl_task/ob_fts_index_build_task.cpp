@@ -2567,6 +2567,9 @@ int ObFtsIndexBuildTask::cleanup_impl()
   }
 
   DEBUG_SYNC(CREATE_INDEX_SUCCESS);
+  if (0 == parent_task_id_) {
+    DEBUG_SYNC(BEFORE_DELETE_FTS_DDL_TASK_RECORD);
+  }
 
   if(OB_FAIL(ret)) {
   } else if (OB_FAIL(ObDDLTaskRecordOperator::delete_record(*GCTX.sql_proxy_,

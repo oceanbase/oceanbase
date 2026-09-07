@@ -36957,9 +36957,17 @@ int ObDDLService::check_fts_rename_conflict(ObSchemaGetterGuard &schema_guard,
       ObCStringHelper helper;
       for (int64_t i = 0; OB_SUCC(ret) && i < task_records.count(); ++i) {
         const ObDDLTaskRecord &cur_record = task_records.at(i);
-        if ((cur_record.ddl_type_ == ObDDLType::DDL_CREATE_FTS_INDEX
-             || cur_record.ddl_type_ == ObDDLType::DDL_DROP_FTS_INDEX)
-            && cur_record.target_object_id_ == index_table_id) {
+        const bool is_create_fts_task = (ObDDLType::DDL_CREATE_FTS_INDEX == cur_record.ddl_type_);
+        const bool is_drop_fts_task = (ObDDLType::DDL_DROP_FTS_INDEX == cur_record.ddl_type_);
+        const ObDDLTaskStatus task_status = static_cast<ObDDLTaskStatus>(cur_record.task_status_);
+        // cleanup_impl reports success before delete_record(); leftover CREATE
+        // SUCCESS + readable index is not in-progress and may be renamed.
+        const bool allow_rename_after_create_success = is_create_fts_task
+            && ObDDLTaskStatus::SUCCESS == task_status
+            && orig_index_schema->can_read_index();
+        if ((is_create_fts_task || is_drop_fts_task)
+            && cur_record.target_object_id_ == index_table_id
+            && !allow_rename_after_create_success) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("not support to rename fts index while build or drop is in progress",
                    K(ret), K(ori_index_name), K(cur_record));
