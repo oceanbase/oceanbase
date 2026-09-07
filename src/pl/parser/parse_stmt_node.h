@@ -40,6 +40,7 @@ typedef struct _ObScannerCtx
   int first_column_;
   int sql_start_loc;
   int sql_end_loc;
+  int initial_paren_level;
 } ObScannerCtx;
 
 typedef struct _ObParseCtx
