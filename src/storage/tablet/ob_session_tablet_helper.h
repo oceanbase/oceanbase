@@ -152,6 +152,28 @@ public:
   void set_timeout_us(int64_t timeout_us) { timeout_us_ = timeout_us; }
   TO_STRING_KV(K_(tenant_id), K_(tablet_infos));
 private:
+  struct ObTabletLSInfo
+  {
+  public:
+    ObTabletLSInfo()
+      : tablet_id_(),
+        ls_id_()
+    {}
+    ObTabletLSInfo(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id)
+      : tablet_id_(tablet_id),
+        ls_id_(ls_id)
+    {}
+    TO_STRING_KV(K_(tablet_id), K_(ls_id));
+    common::ObTabletID tablet_id_;
+    share::ObLSID ls_id_;
+  };
+  struct ObTabletLSInfoCmp
+  {
+    bool operator()(const ObTabletLSInfo &lhs, const ObTabletLSInfo &rhs) const
+    {
+      return lhs.ls_id_ == rhs.ls_id_ ? lhs.tablet_id_ < rhs.tablet_id_ : lhs.ls_id_ < rhs.ls_id_;
+    }
+  };
   /// @brief Remove entries whose data table id exists in @p failed_data_tb_id_set
   ///        from @p tablet_ids_for_delete and @p table_schemas_for_delete in place.
   /// @pre tablet_ids_for_delete.count() == table_schemas_for_delete.count()
@@ -207,6 +229,15 @@ private:
       /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos);
   int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
   int delete_schema_missing_tablets(const ObIArray<ObSessionTabletInfo *> &tablet_infos, const int64_t schema_version);
+  int build_sorted_tablet_ls_infos(
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      const common::ObIArray<share::ObLSID> &ls_ids,
+      common::ObIArray<ObTabletLSInfo> &tablet_ls_infos);
+  int mds_remove_tablets_by_ls(
+      const uint64_t tenant_id,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      const common::ObIArray<share::ObLSID> &ls_ids,
+      common::ObMySQLTransaction &trans);
   int mds_remove_tablet(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

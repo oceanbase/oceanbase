@@ -26,6 +26,7 @@
 #include "share/ob_cluster_version.h"
 #include "share/tablet/ob_drop_gtt_v2_session_tablet_arg.h"
 #include "storage/tablet/ob_drop_gtt_v2_session_tablet_rpc.h"
+#include "lib/utility/ob_sort.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -34,6 +35,7 @@ namespace oceanbase
 namespace storage
 {
 ERRSIM_POINT_DEF(EN_SESSION_TABLET_GC_FAILED);
+ERRSIM_POINT_DEF(EN_CHOOSE_GTT_SESSION_TABLET_LS_ID, "Use ERROR_CODE as LS ID when choosing GTT session tablet LS");
 
 int serialize_inc_schema(
     const uint64_t tenant_id,
@@ -344,6 +346,17 @@ int ObSessionTabletCreateHelper::choose_log_stream(
       LOG_WARN("ls id array count not match", KR(ret), K(ls_id_array), K(table_schema));
     } else {
       ls_id = ls_id_array.at(0);
+#ifdef ERRSIM
+      const int64_t errsim_ls_id = -EVENT_CODE(EN_CHOOSE_GTT_SESSION_TABLET_LS_ID);
+      const share::ObLSID specified_ls_id(errsim_ls_id);
+      if (errsim_ls_id > 0 && OB_UNLIKELY(!specified_ls_id.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("[ERRSIM] invalid gtt session tablet ls id", KR(ret), K(errsim_ls_id), K(ls_id), K(table_schema));
+      } else if (errsim_ls_id > 0) {
+        ls_id = specified_ls_id;
+        LOG_INFO("[ERRSIM] choose gtt session tablet ls id", K(ls_id), K(table_schema));
+      }
+#endif
     }
   }
   return ret;
@@ -443,8 +456,8 @@ int ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
 
 // if the table is a related table of a data table, we need to lock the data table
 // if the table was dropped and gc tasks call this function, we can delete the tablet directly
-// All tablet_info.is_creator_ should be true. Also, the LS must be the same for all,
-// and should be fetched from the internal table since it may change after migration.
+// All tablet_info.is_creator_ should be true. The actual LS of each tablet must be
+// fetched from the internal table since it may change after migration.
 int ObSessionTabletDeleteHelper::do_work()
 {
   int ret = OB_SUCCESS;
@@ -800,17 +813,10 @@ int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletI
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet ids ls ids", KR(ret), K(ls_ids), K(tablet_ids));
   } else {
-    share::ObLSID &new_ls_id = ls_ids.at(0);
-    ARRAY_FOREACH(ls_ids, idx) {
-      if (OB_UNLIKELY(new_ls_id != ls_ids.at(idx))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet ids ls ids, ls id must be the same", KR(ret), K(ls_ids), K(tablet_ids));
-      }
-    }
     if (FAILEDx(share::ObTabletToLSTableOperator::batch_remove(*trans_, tenant_id_, tablet_ids))) {
       LOG_WARN("failed to batch remove tablet", KR(ret), K(tablet_ids), K(tablet_infos_));
-    } else if (OB_FAIL(mds_remove_tablet(tenant_id_, new_ls_id, tablet_ids, *trans_))) {
-      LOG_WARN("failed to mds remove tablet", KR(ret), K(tablet_ids), K(tablet_infos_));
+    } else if (OB_FAIL(mds_remove_tablets_by_ls(tenant_id_, tablet_ids, ls_ids, *trans_))) {
+      LOG_WARN("failed to mds remove tablets by ls", KR(ret), K(tablet_ids), K(ls_ids), K(tablet_infos_));
     } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_remove(*trans_, tenant_id_, tablet_ids))) {
       LOG_WARN("failed to batch remove session tablet", KR(ret), K(tablet_ids), K(tablet_infos_));
     } else if (OB_FAIL(share::ObTabletToTableHistoryOperator::drop_tablet_to_table_history(*trans_, tenant_id_, schema_version, tablet_ids))) {
@@ -859,6 +865,72 @@ int ObSessionTabletDeleteHelper::delete_schema_missing_tablets(const ObIArray<Ob
   ret = OB_ERR_UNEXPECTED;
   LOG_ERROR("The schema for tablets are missing, manual deletion required", K(ret), K(tablet_infos), K(schema_version));
 #endif
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::build_sorted_tablet_ls_infos(
+    const common::ObIArray<common::ObTabletID> &tablet_ids,
+    const common::ObIArray<share::ObLSID> &ls_ids,
+    common::ObIArray<ObTabletLSInfo> &tablet_ls_infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tablet_ids.empty() || tablet_ids.count() != ls_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tablet_ids), K(ls_ids));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+    const common::ObTabletID &tablet_id = tablet_ids.at(i);
+    const share::ObLSID &ls_id = ls_ids.at(i);
+    if (OB_UNLIKELY(!tablet_id.is_valid() || !ls_id.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid tablet id or ls id", KR(ret), K(tablet_id), K(ls_id), K(i));
+    } else if (OB_FAIL(tablet_ls_infos.push_back(ObTabletLSInfo(tablet_id, ls_id)))) {
+      LOG_WARN("failed to push tablet ls info", KR(ret), K(tablet_id), K(ls_id), K(i));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    lib::ob_sort(&tablet_ls_infos.at(0),
+        &tablet_ls_infos.at(0) + tablet_ls_infos.count(),
+        ObTabletLSInfoCmp());
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::mds_remove_tablets_by_ls(
+    const uint64_t tenant_id,
+    const common::ObIArray<common::ObTabletID> &tablet_ids,
+    const common::ObIArray<share::ObLSID> &ls_ids,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<ObTabletLSInfo, 8> tablet_ls_infos;
+  common::ObSEArray<common::ObTabletID, 8> tablet_ids_per_ls;
+  if (OB_FAIL(build_sorted_tablet_ls_infos(tablet_ids, ls_ids, tablet_ls_infos))) {
+    LOG_WARN("failed to build sorted tablet ls infos", KR(ret), K(tablet_ids), K(ls_ids));
+  } else {
+    share::ObLSID cur_ls_id;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ls_infos.count(); ++i) {
+      const ObTabletLSInfo &tablet_ls_info = tablet_ls_infos.at(i);
+      if (tablet_ids_per_ls.empty()) {
+        cur_ls_id = tablet_ls_info.ls_id_;
+      } else if (cur_ls_id != tablet_ls_info.ls_id_) {
+        if (OB_FAIL(mds_remove_tablet(tenant_id, cur_ls_id, tablet_ids_per_ls, trans))) {
+          LOG_WARN("failed to mds remove tablets", KR(ret), K(cur_ls_id), K(tablet_ids_per_ls));
+        } else {
+          tablet_ids_per_ls.reuse();
+          cur_ls_id = tablet_ls_info.ls_id_;
+        }
+      }
+      if (FAILEDx(tablet_ids_per_ls.push_back(tablet_ls_info.tablet_id_))) {
+        LOG_WARN("failed to push tablet id", KR(ret), K(tablet_ls_info), K(cur_ls_id));
+      }
+    }
+    if (OB_SUCC(ret) && !tablet_ids_per_ls.empty()) {
+      if (OB_FAIL(mds_remove_tablet(tenant_id, cur_ls_id, tablet_ids_per_ls, trans))) {
+        LOG_WARN("failed to mds remove tablets", KR(ret), K(cur_ls_id), K(tablet_ids_per_ls));
+      }
+    }
+  }
   return ret;
 }
 
