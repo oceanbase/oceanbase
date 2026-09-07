@@ -295,8 +295,7 @@ ObMultiTenant::ObMultiTenant()
       has_synced_(false),
       tenant_limiter_head_(NULL),
       limiter_mutex_(common::ObLatchIds::OB_MULTI_TENANT_LIMITER_MUTEX),
-      async_proc_cpu_sampler_started_(0)
-
+      async_proc_cpu_sampler_(*this)
 {
 }
 
@@ -718,6 +717,8 @@ int ObMultiTenant::start()
     LOG_ERROR("create virtual tenants failed", K(ret));
   } else if (OB_FAIL(ObThreadPool::start())) {
     LOG_ERROR("start multi tenant thread fail", K(ret));
+  } else if (OB_FAIL(start_async_proc_cpu_sampler_())) {
+    LOG_ERROR("start async proc cpu sampler thread failed", K(ret));
   } else if (OB_FAIL(ObTenantNodeBalancer::get_instance().start())) {
     LOG_ERROR("start tenant node balancer thread failed", K(ret));
   // start memstore print timer.
@@ -740,6 +741,7 @@ void ObMultiTenant::stop()
   // necessary to put ahead, but it isn't harmful and can exclude
   // affection for balancer.
   ObTenantNodeBalancer::get_instance().stop();
+  TG_STOP(lib::TGDefIDs::OMTProcCpuSampler);
   // Stop workers of all tenants thus no request of tenant would be
   // processed any more. All tenants will be removed indeed.
   {
@@ -764,6 +766,7 @@ void ObMultiTenant::stop()
 void ObMultiTenant::wait()
 {
   ObTenantNodeBalancer::get_instance().wait();
+  TG_WAIT(lib::TGDefIDs::OMTProcCpuSampler);
   ObThreadPool::wait();
 }
 
@@ -2823,15 +2826,6 @@ void ObMultiTenant::run1()
         }
       }
       timeguard.click("check_cgroup_status");
-      // Check if we need to enable async proc cpu sampling mode
-      // Trigger condition: cgroup invalid AND tenant count >= threshold
-      if (!is_async_proc_cpu_mode() && !(OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid())
-          && tenants_.size() >= ASYNC_PROC_CPU_MODE_TRIGGER_TENANT_CNT) {
-        int ret = try_start_async_proc_cpu_sampler_();
-        if (OB_FAIL(ret)) {
-          LOG_WARN("Failed to start async proc cpu sampler, will retry later", K(ret));
-        }
-      }
       for (TenantList::iterator it = tenants_.begin(); it != tenants_.end(); it++) {
         if (OB_ISNULL(*it)) {
           LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected condition");
@@ -2863,11 +2857,6 @@ void ObMultiTenant::run1()
       }
     }
   }
-  if (ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1) {
-    LOG_INFO("stop and wait async proc cpu sampler");
-    TG_STOP(lib::TGDefIDs::OMTProcCpuSampler);
-    TG_WAIT(lib::TGDefIDs::OMTProcCpuSampler);
-  }
   LOG_INFO("OMT quit");
 }
 
@@ -2893,27 +2882,17 @@ void ObMultiTenant::ObAsyncProcCpuSampler::run1()
     if (has_set_stop()) {
       break;
     }
-    GCTX.omt_->update_tenants_cpu_time();
+    omt_.update_tenants_cpu_time();
   }
   LOG_INFO("OMTProcCpuSampler thread exit");
 }
 
-bool ObMultiTenant::is_async_proc_cpu_mode() const
-{
-  return ATOMIC_LOAD(&async_proc_cpu_sampler_started_) == 1;
-}
-
-int ObMultiTenant::try_start_async_proc_cpu_sampler_()
+int ObMultiTenant::start_async_proc_cpu_sampler_()
 {
   int ret = OB_SUCCESS;
-  // CAS to ensure only start once
-  if (!ATOMIC_BCAS(&async_proc_cpu_sampler_started_, 0, 1)) {
-    // Already started, not an error
-  } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::OMTProcCpuSampler,
-                                                async_proc_cpu_sampler_))) {
+  if (OB_FAIL(TG_SET_RUNNABLE_AND_START(lib::TGDefIDs::OMTProcCpuSampler,
+                                        async_proc_cpu_sampler_))) {
     LOG_WARN("start OMTProcCpuSampler failed", K(ret));
-    // Rollback the started flag on failure
-    ATOMIC_STORE(&async_proc_cpu_sampler_started_, 0);
   } else {
     LOG_INFO("OMTProcCpuSampler started successfully");
   }

@@ -528,14 +528,14 @@ void ObResourceGroup::check_worker_count()
     int64_t group_index = 0;
     DLIST_FOREACH_REMOVESAFE(wnode, workers_) {
       const auto w = static_cast<ObThWorker*>(wnode->get_data());
-      if (OB_LIKELY(w->is_running())) {
-        ++running_cnt;
-      }
       if (w->has_set_stop()) {
         ATOMIC_DEC(&idle_cnt_);
         workers_.remove(wnode);
         destroy_worker(w);
       } else {
+        if (OB_LIKELY(w->is_running())) {
+          ++running_cnt;
+        }
         w->set_group_index(group_index++);
         if (w->has_req_flag()
                   && 0 != w->blocking_ts()
@@ -600,7 +600,7 @@ void ObResourceGroup::check_worker_count()
     } else {
       queue_size = req_queue_.size() + (nullptr != multi_level_queue_ ? multi_level_queue_->get_total_size() : 0);
       if (queue_size == 0) {
-        token = 0;
+        token = share::ObCgSet::instance().has_group_flag(group_id_, share::PRESERVE_ONE_WORKER) ? 1 : 0;
       } else {
         token = max(new_token, min(workers_.get_size() + queue_size, min_worker_cnt()));
         token = std::min(token, max_worker_cnt());
@@ -2627,48 +2627,6 @@ void ObTenant::update_token_usage()
     token_usage_ = std::max(.0, 1.0 * (total_us - idle_us) / total_us);
     IGNORE_RETURN ATOMIC_FAA(&worker_us_, total_us - idle_us);
   }
-
-  if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid()) {
-    //do nothing
-  } else if (GCTX.omt_->is_async_proc_cpu_mode()) {
-    // async mode enabled, skip /proc sampling in main loop
-  } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {  // every second
-    timeguard.click("thread_list_lock");
-    int64_t cpu_time_inc = 0;
-    DLIST_FOREACH_REMOVESAFE(thread_list_node_, thread_list_)
-    {
-      Thread *thread = thread_list_node_->get_data();
-      int64_t inc = 0;
-      if (OB_SUCC(thread->get_cpu_time_inc(inc))) {
-        cpu_time_inc += inc;
-      }
-    }
-    timeguard.click("get_cpu_time_inc");
-    thread_list_lock_.unlock();
-    IGNORE_RETURN ATOMIC_FAA(&cpu_time_us_, cpu_time_inc);
-  }
-  if (GCTX.omt_->is_async_proc_cpu_mode()) {
-    // async mode enabled, skip /proc sampling in main loop
-  } else if (duration >= 1000 * 1000 && OB_SUCC(thread_list_lock_.trylock())) {
-    timeguard.click("thread_list_lock2");
-    int64_t group_cpu_time_inc[OB_TENANT_THREAD_GROUP_MAXNUM];
-    MEMSET(group_cpu_time_inc, 0, sizeof(group_cpu_time_inc));
-    for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
-      DLIST_FOREACH_REMOVESAFE(group_list_node_, group_thread_list_array_[i])
-      {
-        int64_t inc = 0;
-        Thread *thread = group_list_node_->get_data();
-        if (OB_SUCC(thread->get_group_cpu_time_inc(inc))) {
-          group_cpu_time_inc[i] += inc;
-        }
-      }
-    }
-    timeguard.click("get_group_cpu_time_inc");
-    thread_list_lock_.unlock();
-    for (uint32_t i = 0; i < OB_TENANT_THREAD_GROUP_MAXNUM; i++) {
-      IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[i], group_cpu_time_inc[i]);
-    }
-  }
 }
 
 void ObTenant::sample_cpu_time_from_proc_once()
@@ -2706,6 +2664,21 @@ void ObTenant::sample_cpu_time_from_proc_once()
       IGNORE_RETURN ATOMIC_FAA(&group_cpu_time_us_[i], group_cpu_time_inc[i]);
     }
   }
+#ifdef ENABLE_DEBUG_LOG
+  if (OB_FAIL(for_each_group([](ObResourceGroup *group) {
+        if (share::ObCgSet::instance().has_group_flag(group->get_group_id(), share::PRESERVE_ONE_WORKER)
+            && OB_SUCCESS == group->workers_lock_.trylock()) {
+          if (!group->is_deleted() && 0 == group->workers_.get_size()) {
+            LOG_ERROR_RET(OB_ERR_UNEXPECTED, "preserved resource group has no worker",
+                K(group->get_tenant()->id()), K(group->get_group_id()));
+          }
+          IGNORE_RETURN group->workers_lock_.unlock();
+        }
+        return OB_SUCCESS;
+      }))) {
+    LOG_WARN("check preserved group worker count failed", K(ret), K_(id));
+  }
+#endif
 }
 
 void ObTenant::periodically_check()

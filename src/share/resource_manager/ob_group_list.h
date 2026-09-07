@@ -8,11 +8,12 @@
 // CGID_DEF(group_name, group_id[, flags=DEFAULT][, worker_concurrency=1])
 // example: CGID_DEF(OBCG_EXAMPLE1, 1, CRITICAL)
 //          CGID_DEF(OBCG_EXAMPLE2, 2, DEFAULT, 4)
-// flags option:
-//     DEFAULT. No flags.
-//     CRITICAL. If a group is not critical, the thread num of it can be set to 0 when idle.
+// flags options:
+//     DEFAULT. The thread num of it can be set to 0 when idle.
+//     CRITICAL. Keep min_worker_cnt workers when idle.
+//     PRESERVE_ONE_WORKER. Keep one worker when a non-critical group is idle.
 CGID_DEF(OBCG_DEFAULT, 0)
-CGID_DEF(OBCG_CLOG, 1)
+CGID_DEF(OBCG_CLOG, 1, PRESERVE_ONE_WORKER)
 CGID_DEF(OBCG_ELECTION, 2, CRITICAL)
 CGID_DEF(OBCG_ID_SERVICE, 5, CRITICAL)
 CGID_DEF(OBCG_ID_SQL_REQ_LEVEL1, 6, DEFAULT, 4)

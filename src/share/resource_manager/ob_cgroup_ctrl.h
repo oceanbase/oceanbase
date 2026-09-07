@@ -35,6 +35,7 @@ enum class ObCgroupVersion : int32_t
 typedef enum  : uint64_t {
   DEFAULT = 0,
   CRITICAL = 1 << 0,
+  PRESERVE_ONE_WORKER = 1 << 1,
   INVALID = UINT64_MAX
 } group_flags_t;
 
@@ -54,7 +55,7 @@ enum ObCgId
 class ObCgInfo
 {
 public:
-  ObCgInfo() : name_(nullptr), is_critical_(false), worker_concurrency_(1), is_quick_expand_(false) {}
+  ObCgInfo() : name_(nullptr), flags_(DEFAULT), worker_concurrency_(1), is_quick_expand_(false) {}
   void set_name(const char *name) { name_ = name; }
   void set_args(group_flags_t flags = group_flags_t::DEFAULT, uint64_t worker_concurrency = 1, group_expand_mode_t expand_mode = group_expand_mode_t::NORMAL_EXPAND)
   {
@@ -64,12 +65,8 @@ public:
   }
   void set_flags(group_flags_t flags = group_flags_t::DEFAULT)
   {
-    if (DEFAULT == flags || share::INVALID == flags) {
-      // do nothing
-    } else {
-      if (CRITICAL & flags) {
-        is_critical_ = true;
-      }
+    if (share::INVALID != flags) {
+      flags_ = flags;
     }
   }
   void set_worker_concurrency(uint64_t worker_concurrency = 1) { worker_concurrency_ = worker_concurrency; }
@@ -80,7 +77,7 @@ public:
     }
   }
   const char *name_;
-  bool is_critical_;
+  group_flags_t flags_;
   uint64_t worker_concurrency_;
   bool is_quick_expand_;
 };
@@ -114,13 +111,18 @@ public:
     return worker_concurrency;
   }
 
+  bool has_group_flag(int64_t id, group_flags_t flag) const
+  {
+    bool has_flag = false;
+    if (id >= 0 && id < OBCG_MAXNUM && DEFAULT != flag && INVALID != flag) {
+      has_flag = 0 != (group_infos_[id].flags_ & flag);
+    }
+    return has_flag;
+  }
+
   bool is_group_critical(int64_t id) const
   {
-    bool is_group_critical = false;
-    if (id >= 0 && id < OBCG_MAXNUM) {
-      is_group_critical = group_infos_[id].is_critical_;
-    }
-    return is_group_critical;
+    return has_group_flag(id, CRITICAL);
   }
 
   bool is_group_quick_expand(int64_t id) const
