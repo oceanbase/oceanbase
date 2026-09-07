@@ -5,6 +5,11 @@ unalias -a
 
 PWD="$(cd $(dirname $0); pwd)"
 
+DEP_PROFILE=base
+if [[ "${1:-}" == "--cdc-deps-only" ]]; then
+  DEP_PROFILE=cdc
+fi
+
 OS_ARCH="$(uname -m)" || exit 1
 OS_RELEASE="0"
 AL3_RELEASE="0"
@@ -169,13 +174,44 @@ fi
 
 DEP_FILE="oceanbase.${OS_TAG}.deps"
 
-MD5=`md5sum ${DEP_FILE} | cut -d" " -f1`
+if [[ ! -f "${DEP_FILE}" ]]; then
+    echo_err "check dependencies profile for ${DEP_FILE}... NOT FOUND"
+    exit 2
+fi
+
+CDC_DEP_PACKAGE=""
+if [[ "$DEP_PROFILE" == "cdc" ]]; then
+    CDC_DEP_FILE="${PWD}/cdc.deps"
+    if [[ ! -f "$CDC_DEP_FILE" ]]; then
+        echo_err "CDC dependencies profile not found: ${CDC_DEP_FILE}"
+        exit 2
+    fi
+    CDC_DEP_PACKAGE=$(awk -v os_tag="$OS_TAG" '
+        $1 == os_tag { package = $2; count++; valid = (NF == 2) }
+        END { if (count != 1 || !valid) exit 1; print package }
+    ' "$CDC_DEP_FILE")
+    if [[ $? -ne 0 ]]; then
+        echo_err "expected exactly one CDC dependency package for ${OS_TAG}"
+        exit 2
+    fi
+    MD5=$({
+        cat "$DEP_FILE"
+        printf '\nDEP_PROFILE=cdc\n%s\n' "$CDC_DEP_PACKAGE"
+    } | md5sum | cut -d" " -f1)
+else
+    MD5=$(md5sum "$DEP_FILE" | cut -d" " -f1)
+fi
+echo_log "dependency profile: ${DEP_PROFILE}, cache key: ${MD5}"
 
 # 是否需要共享依赖缓存，默认为ON，在特定条件将OFF
 NEED_SHARE_CACHE=ON
 
 WORKSACPE_DEPS_DIR="$(cd $(dirname $0); cd ..; pwd)"
-WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/3rd
+if [[ "$DEP_PROFILE" == "cdc" ]]; then
+    WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/cdc_3rd
+else
+    WORKSPACE_DEPS_3RD=${WORKSACPE_DEPS_DIR}/3rd
+fi
 WORKSAPCE_DEPS_3RD_DONE=${WORKSPACE_DEPS_3RD}/DONE
 WORKSAPCE_DEPS_3RD_MD5=${WORKSPACE_DEPS_3RD}/${MD5}
 
@@ -240,12 +276,7 @@ if [ ${NEED_SHARE_CACHE} == "ON" ]; then
     fi
 fi
 
-if [[ ! -f "${DEP_FILE}" ]]; then
-    echo_err "check dependencies profile for ${DEP_FILE}... NOT FOUND"
-    exit 2
-else
-    echo_log "check dependencies profile for ${DEP_FILE}... FOUND"
-fi
+echo_log "check dependencies profile for ${DEP_FILE}... FOUND"
 
 declare -A targets
 declare -A packages
@@ -280,6 +311,11 @@ do
     fi
 done < $DEP_FILE
 save_content
+
+if [[ "$DEP_PROFILE" == "cdc" ]]; then
+    packages=()
+    packages["cdc-deps"]=$'\n'"$CDC_DEP_PACKAGE"
+fi
 
 # 真正开始下载
 echo_log "start to download dependencies..."
