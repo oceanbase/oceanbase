@@ -377,14 +377,17 @@ private:
   int ensure_segment_(Dir *dir, const int64_t seg_idx, Segment *&seg)
   {
     int ret = OB_SUCCESS;
+    Segment *new_seg = NULL;
     if (estrylock_()) {
       if (dir != load_dir_()) {
         ret = OB_EAGAIN; // Dir changed.
       } else if (NULL != dir->segs_[seg_idx]) {
         // Segment not NULL.
-      } else if (NULL == (dir->segs_[seg_idx] = new_segment_())) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LIB_LOG(ERROR, "failed to new Segment", K(ret), K(seg_idx));
+      } else if (NULL == (new_seg = new_segment_())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LIB_LOG(ERROR, "failed to new Segment", K(ret), K(seg_idx));
+      } else {
+        UNUSED(ATOMIC_STORE(&(dir->segs_[seg_idx]), new_seg));
       }
       if (OB_SUCC(ret)) {
         // Acquire haz, so Segment is safe.
@@ -478,8 +481,11 @@ private:
       int64_t begin_sn = load_begin_sn_();
       ctrl_sn = calc_ctrl_sn_(begin_sn, dir);
       SlotIdx slot_idx = calc_slot_idx_(ctrl_sn, dir);
-      Segment *&seg = dir->segs_[slot_idx.first];
-      if (NULL != seg || (NULL != (seg = new_segment_()))) {
+      Segment *seg = dir->segs_[slot_idx.first];
+      if (NULL == seg && NULL != (seg = new_segment_())) {
+        UNUSED(ATOMIC_STORE(&(dir->segs_[slot_idx.first]), seg));
+      }
+      if (NULL != seg) {
         SlotT &slot = seg->slots_[slot_idx.second];
         SlotOp::lock(slot);
         // Double check.
