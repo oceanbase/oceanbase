@@ -37,6 +37,8 @@ public:
 
   MOCK_METHOD4(post_ls_meta_info_request, int(const uint64_t, const ObStorageHASrcInfo &,
       const share::ObLSID &, obrpc::ObFetchLSMetaInfoResp &));
+  MOCK_METHOD4(advance_src_ls_checkpoint, int(const uint64_t, const ObStorageHASrcInfo &,
+      const share::ObLSID &, const share::SCN &));
 };
 
 class MockGetMemberHelper : public ObStorageHAGetMemberHelper
@@ -411,6 +413,43 @@ public:
   ObLS mock_ls_;
 };
 
+class MockRSRecommendMemberList
+{
+public:
+  int get_ls_member_list_for_rs_recommand(const uint64_t, const share::ObLSID &,
+      const bool, common::ObAddr &leader, common::GlobalLearnerList &learner_list,
+      common::ObIArray<common::ObAddr> &addr_list)
+  {
+    int ret = OB_SUCCESS;
+    common::ObAddr rs_recommand_addr;
+    common::ObAddr dst;
+    if (OB_FAIL(mock_leader_addr(leader))) {
+      LOG_WARN("failed to mock addr", K(ret));
+    } else if (OB_FAIL(mock_addr_list(3/*addr_count*/, addr_list))) {
+      LOG_WARN("failed to mock addr list", K(ret));
+    } else if (OB_FAIL(mock_rs_recommand_addr(rs_recommand_addr))) {
+      LOG_WARN("failed to mock rs recommand addr", K(ret));
+    } else if (OB_FAIL(mock_learner_list(rs_recommand_addr, learner_list))) {
+      LOG_WARN("failed to mock learner list", K(ret));
+    } else if (OB_FAIL(mock_dst_addr(dst))) {
+      LOG_WARN("failed to mock addr", K(ret));
+    } else if (OB_FAIL(add_learner_list(dst, learner_list))) {
+      LOG_WARN("failed to mock to add dst to learner list ", K(ret));
+    }
+    return ret;
+  }
+
+  int get_ls_leader_succ(const uint64_t, const share::ObLSID &, common::ObAddr &leader)
+  {
+    return mock_leader_addr(leader);
+  }
+
+  int get_ls_fail(const share::ObLSID &, ObLSHandle &)
+  {
+    return OB_ERR_UNEXPECTED;
+  }
+};
+
 class MockLsMetaInfo
 {
 public:
@@ -598,6 +637,39 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
   EXPECT_EQ(expect_addr, src_info.src_addr_);
 }
+
+TEST_F(TestChooseMigrationSourcePolicy, rs_recommend_checkpoint_not_enough_triggers_advance)
+{
+  MockLsMetaInfo ls_meta;
+  EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+      .WillRepeatedly(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint));
+  EXPECT_CALL(storage_rpc_, advance_src_ls_checkpoint(_, _, _, _))
+      .Times(1)
+      .WillOnce(::testing::Return(OB_SUCCESS));
+  MockRSRecommendMemberList member_list;
+  EXPECT_CALL(member_helper_, get_ls_member_list_and_learner_list_(_, _, _, _, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockRSRecommendMemberList::get_ls_member_list_for_rs_recommand));
+  EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockRSRecommendMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, get_ls(_, _))
+      .WillRepeatedly(Invoke(&member_list, &MockRSRecommendMemberList::get_ls_fail));
+  const uint64_t tenant_id = 1001;
+  const share::ObLSID ls_id(1);
+  share::SCN local_ls_checkpoint_scn;
+  local_ls_checkpoint_scn.set_base();
+  ObMigrationOpArg mock_arg;
+  EXPECT_EQ(OB_SUCCESS, mock_migrate_arg_for_rs_recommand(mock_arg));
+  ObMigrationChooseSrcHelperInitParam param;
+  EXPECT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(
+      tenant_id, ls_id, local_ls_checkpoint_scn, mock_arg, param));
+  EXPECT_EQ(OB_SUCCESS, member_helper_.get_member_list_by_replica_type(
+      tenant_id, ls_id, mock_arg.dst_, param.info_, param.is_first_c_replica_));
+  EXPECT_EQ(OB_SUCCESS, get_recommand_policy(mock_arg, tenant_id, param.info_.learner_list_,
+      param.policy_, param.use_c_replica_policy_));
+  ObStorageHASrcInfo src_info;
+  EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
+  EXPECT_EQ(OB_DATA_SOURCE_NOT_VALID, choose_src_helper_.get_available_src(mock_arg, src_info));
+}
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
 // 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader
@@ -631,8 +703,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_leader)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
@@ -671,8 +743,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_idc_follower)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_FOLLOWER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.2:1234", expect_addr));
@@ -709,8 +781,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_leader)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_REGION_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
@@ -747,8 +819,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_region_follower)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_REGION_FOLLOWER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.2:1234", expect_addr));
@@ -783,8 +855,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_leader)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_DIFF_REGION_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
@@ -820,8 +892,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_diff_region_follower)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_DIFF_REGION_FOLLOWER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.2:1234", expect_addr));
@@ -858,8 +930,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_follower)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::REGION_MODE_REGION_FOLLOWER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.2:1234", expect_addr));
@@ -897,8 +969,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_region_leader)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::REGION_MODE_REGION_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
@@ -935,8 +1007,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_follower)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::REGION_MODE_DIFF_REGION_FOLLOWER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.2:1234", expect_addr));
@@ -972,8 +1044,8 @@ TEST_F(TestChooseMigrationSourcePolicy, region_mode_diff_region_leader)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::REGION_MODE_DIFF_REGION_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::REGION, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
@@ -1013,8 +1085,8 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rebuild)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", expect_addr));
@@ -1236,8 +1308,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_check_replica_fail)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
@@ -1287,8 +1359,8 @@ TEST_F(TestChooseMigrationSourcePolicy, idc_mode_r_replica_init)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
@@ -1339,8 +1411,8 @@ TEST_F(TestChooseMigrationSourcePolicy, c_replica_no_other)
   ObStorageHASrcInfo src_info;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
-  EXPECT_EQ(ObStorageHASrcProvider::ChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  EXPECT_EQ(ObMigrationChooseSourcePolicy::IDC, choose_src_helper_.get_provider()->get_policy_type());
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
@@ -1393,7 +1465,7 @@ TEST_F(TestChooseMigrationSourcePolicy, c_replica_have_other)
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(param, &storage_rpc_, &member_helper_));
   EXPECT_EQ(true, param.use_c_replica_policy_);
   EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
-  static_cast<ObMigrationSrcByLocationProvider *>(choose_src_helper_.get_provider())->set_locality_manager_(&locality_manager_);
+  GCTX.locality_manager_ = &locality_manager_;
   EXPECT_EQ(OB_SUCCESS, choose_src_helper_.get_available_src(mock_arg, src_info));
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
@@ -1412,4 +1484,3 @@ int main(int argc, char **argv)
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-

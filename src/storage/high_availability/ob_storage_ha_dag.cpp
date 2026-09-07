@@ -965,4 +965,3 @@ int ObStorageHACancelDagNetUtils::cancel_migration_task_(const share::ObTaskId &
 
 }
 }
-

@@ -517,6 +517,8 @@ PCODE_DEF(OB_HA_REBUILD_TABLET_SSTABLE_INFO, 0x4C7)
 // fetch macro block logic id array 
 // PCODE_DEF(OB_HA_FETCH_SSTABLE_MACRO_ID_INFO, 0x4C8)  // FARM COMPAT WHITELIST, 重命名，兼容检测加白名单
 
+PCODE_DEF(OB_HA_ADVANCE_SRC_LS_CHECKPOINT, 0x4D1)
+
 // sql, including executor
 
 // sql

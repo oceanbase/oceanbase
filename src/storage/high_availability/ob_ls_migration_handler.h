@@ -106,6 +106,8 @@ public:
   void set_dag_net_cleared();
   int set_result(const int32_t result);
   int set_result_for_split(const int32_t result);
+  int update_advance_ls_checkpoint_scn(const share::SCN &scn);
+  int advance_ls_checkpoint();
 private:
   void reuse_();
   void wakeup_();
@@ -150,6 +152,8 @@ private:
   int switch_next_stage_with_nolock_(const int32_t result);
   int generate_build_tablet_dag_net_();
   int check_need_to_abort_(bool &need_to_abort);
+  void get_advance_checkpoint_info_(int64_t &last_ts, share::SCN &scn);
+  void update_last_advance_checkpoint_ts_();
   template<typename DagNetType>
   int schedule_dag_net_(const share::ObIDagInitParam *param, const bool check_cancel);
 private:
@@ -171,6 +175,9 @@ private:
   ObStorageHASrcInfo chosen_src_;
   bool is_complete_; // true when ObLSCompleteMigrationDagNet has been generated
   bool is_dag_net_cleared_;
+
+  int64_t last_advance_checkpoint_ts_; // won't clear when handler is reused
+  share::SCN advance_checkpoint_scn_; // won't clear when handler is reused
 
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
