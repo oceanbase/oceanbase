@@ -285,6 +285,15 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeExecuteDag);
 };
 
+class ObTabletMetaMajorMergeDag : public ObTabletMergeExecuteDag
+{
+public:
+  ObTabletMetaMajorMergeDag() : ObTabletMergeExecuteDag(share::ObDagType::DAG_TYPE_META_MAJOR_MERGE) {}
+  virtual ~ObTabletMetaMajorMergeDag() = default;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTabletMetaMajorMergeDag);
+};
+
 class ObTabletMergeTask: public share::ObITask
 {
 public:

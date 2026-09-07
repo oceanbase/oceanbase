@@ -148,7 +148,9 @@ public:
 
   TO_STRING_KV(K_(rank_helper), K_(rank_dags), K_(fetch_co_dag_limit));
 private:
-  int prepare_rank_dags_(const int64_t batch_size);
+  bool is_meta_major_merge_dag_(const share::ObIDag &dag) const;
+  int add_meta_dag_if_needed_(share::ObIDag *cur_dag, const share::ObIDag *head);
+  int prepare_rank_dags_(const int64_t batch_size, const bool try_add_meta_dag);
   int sort_();
   int move_dags_to_ready_dag_list_();
 private:

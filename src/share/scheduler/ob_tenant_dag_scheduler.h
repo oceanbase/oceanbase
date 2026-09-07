@@ -526,7 +526,7 @@ public:
 
   static const int64_t MergeDagPrioCnt = 5;
   static const ObDagPrio::ObDagPrioEnum MergeDagPrio[];
-  static const int64_t MergeDagTypeCnt = 8;
+  static const int64_t MergeDagTypeCnt = 9;
   static const ObDagType::ObDagTypeEnum MergeDagType[];
 
   explicit ObIDag(const ObDagType::ObDagTypeEnum type);
@@ -1225,6 +1225,9 @@ public:
   int get_minor_exe_dag_info(
     compaction::ObTabletMergeExecuteDag &dag,
     ObIArray<share::ObScnRange> &merge_range_array);
+  int get_meta_major_exe_dag_info(
+    compaction::ObTabletMergeExecuteDag &dag,
+    ObIArray<share::ObScnRange> &merge_range_array);
   void add_compaction_info(
     int64_t &idx,
     const int64_t total_cnt,
@@ -1310,6 +1313,7 @@ private:
   {
     return is_mini_compaction_dag(dag_type) ||
            is_minor_compaction_dag(dag_type) ||
+           ObDagType::DAG_TYPE_META_MAJOR_MERGE == dag_type ||
            ObDagType::DAG_TYPE_CO_MERGE_PREPARE == dag_type ||
            ObDagType::DAG_TYPE_MAJOR_MERGE == dag_type;
   }

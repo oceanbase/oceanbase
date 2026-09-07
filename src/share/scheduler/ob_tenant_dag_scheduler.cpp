@@ -741,6 +741,7 @@ const ObDagPrio::ObDagPrioEnum ObIDag::MergeDagPrio[] = {
 const ObDagType::ObDagTypeEnum ObIDag::MergeDagType[] = {
     ObDagType::DAG_TYPE_MERGE_EXECUTE,
     ObDagType::DAG_TYPE_MAJOR_MERGE,
+    ObDagType::DAG_TYPE_META_MAJOR_MERGE,
     ObDagType::DAG_TYPE_MINI_MERGE,
     ObDagType::DAG_TYPE_CO_MERGE_EXECUTE,
     ObDagType::DAG_TYPE_CO_MERGE_PREPARE,
@@ -3313,13 +3314,18 @@ int ObDagPrioScheduler::get_minor_exe_dag_info(
     }
     cur = cur->get_next();
   } // end of while
+  return ret;
+}
 
-  // get meta major
+int ObDagPrioScheduler::get_meta_major_exe_dag_info(
+    compaction::ObTabletMergeExecuteDag &dag,
+    ObIArray<share::ObScnRange> &merge_range_array)
+{
+  int ret = OB_SUCCESS;
+  common::SpinRLockGuard guard(prio_rwlock_);
   ObIDag *stored_dag = nullptr;
-  dag.merge_type_ = compaction::META_MAJOR_MERGE;
   compaction::ObTabletMergeExecuteDag *other_dag = nullptr;
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
+  if (OB_FAIL(dag_map_.get_refactored(&dag, stored_dag))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get from dag map", K(ret));
     } else {
@@ -4888,6 +4894,9 @@ void ObTenantDagScheduler::get_suggestion_reason(
     if (compaction::ObCompactionSuggestionMgr::ObCompactionSuggestionReason::MAX_REASON == reason) {
       inner_get_suggestion_reason(ObDagType::DAG_TYPE_CO_MERGE_EXECUTE, reason);
     }
+    if (compaction::ObCompactionSuggestionMgr::ObCompactionSuggestionReason::MAX_REASON == reason) {
+      inner_get_suggestion_reason(ObDagType::DAG_TYPE_META_MAJOR_MERGE, reason);
+    }
   }
 }
 
@@ -5100,14 +5109,21 @@ int ObTenantDagScheduler::get_minor_exe_dag_info(
 {
   int ret = OB_SUCCESS;
   compaction::ObTabletMergeExecuteDag dag;
+  compaction::ObTabletMetaMajorMergeDag meta_dag;
+  compaction::ObTabletMergeDagParam meta_param = param;
+  meta_param.merge_type_ = compaction::META_MAJOR_MERGE;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObDagScheduler is not inited", K(ret));
   } else if (OB_FAIL(dag.init_by_param(&param))) {
     STORAGE_LOG(WARN, "failed to init dag", K(ret), K(param));
+  } else if (OB_FAIL(meta_dag.init_by_param(&meta_param))) {
+    STORAGE_LOG(WARN, "failed to init meta major merge dag", K(ret), K(meta_param));
   } else if (OB_FAIL(prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].get_minor_exe_dag_info(dag, merge_range_array))) {
     COMMON_LOG(WARN, "fail to get minor exe dag info", K(ret), K(dag));
+  } else if (OB_FAIL(prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].get_meta_major_exe_dag_info(meta_dag, merge_range_array))) {
+    COMMON_LOG(WARN, "fail to get meta major exe dag info", K(ret), K(meta_dag));
   }
   return ret;
 }

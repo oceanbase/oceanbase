@@ -1164,7 +1164,10 @@ int ObPartitionMergePolicy::diagnose_minor_dag(
     const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  ObTabletMergeExecuteDag dag;
+  const ObDagType::ObDagTypeEnum dag_type = is_meta_major_merge(merge_type)
+                                          ? ObDagType::DAG_TYPE_META_MAJOR_MERGE
+                                          : ObDagType::DAG_TYPE_MERGE_EXECUTE;
+  ObTabletMergeExecuteDag dag(dag_type);
   ObDiagnoseTabletCompProgress progress;
   if (OB_FAIL(ObCompactionDiagnoseMgr::diagnose_dag(
           merge_type,

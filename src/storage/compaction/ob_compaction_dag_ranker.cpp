@@ -300,6 +300,32 @@ ObCompactionDagRanker::~ObCompactionDagRanker()
   rank_dags_.reset();
 }
 
+bool ObCompactionDagRanker::is_meta_major_merge_dag_(const ObIDag &dag) const
+{
+  return ObDagType::DAG_TYPE_META_MAJOR_MERGE == dag.get_type();
+}
+
+int ObCompactionDagRanker::add_meta_dag_if_needed_(
+    ObIDag *cur_dag,
+    const ObIDag *head)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret) && nullptr != cur_dag && head != cur_dag) {
+    if (ObIDag::DAG_STATUS_READY == cur_dag->get_dag_status()
+        && is_meta_major_merge_dag_(*cur_dag)) {
+      ObTabletMergeDag *meta_dag = static_cast<ObTabletMergeDag *>(cur_dag);
+      if (OB_FAIL(rank_dags_.push_back(meta_dag))) {
+        LOG_WARN("failed to add meta dag to rank dags", K(ret), KPC(meta_dag));
+      } else {
+        rank_helper_->update(meta_dag->get_param());
+      }
+      break;
+    }
+    cur_dag = cur_dag->get_next();
+  }
+  return ret;
+}
+
 int ObCompactionDagRanker::process(
     const int64_t priority,
     const int64_t batch_size,
@@ -307,6 +333,7 @@ int ObCompactionDagRanker::process(
 {
   int ret = OB_SUCCESS;
   fetch_co_dag_limit_ = 0;
+  const bool try_add_meta_dag = ObDagPrio::DAG_PRIO_COMPACTION_LOW == priority;
 
   if (ObDagPrio::DAG_PRIO_COMPACTION_HIGH == priority) {
     rank_helper_ = &mini_helper_;
@@ -332,7 +359,7 @@ int ObCompactionDagRanker::process(
     LOG_WARN("get invalid argument", K(ret), K(priority));
   }
 
-  if (FAILEDx(prepare_rank_dags_(batch_size))) {
+  if (FAILEDx(prepare_rank_dags_(batch_size, try_add_meta_dag))) {
     LOG_WARN("failed to collect and sort dags", K(ret), K(priority));
   } else if (OB_FAIL(sort_())) {
     LOG_WARN("failed to sort dags", K(ret));
@@ -342,11 +369,14 @@ int ObCompactionDagRanker::process(
   return ret;
 }
 
-int ObCompactionDagRanker::prepare_rank_dags_(const int64_t batch_size)
+int ObCompactionDagRanker::prepare_rank_dags_(
+    const int64_t batch_size,
+    const bool try_add_meta_dag)
 {
   int ret = OB_SUCCESS;
   compaction::ObTabletMergeDag *compaction_dag = nullptr;
   int64_t add_co_dag_cnt = 0;
+  bool has_meta_dag = false;
   const ObIDag *head = rank_dag_list_.get_header();
   ObIDag *cur = const_cast<ObIDag *>(head->get_next());
 
@@ -368,12 +398,24 @@ int ObCompactionDagRanker::prepare_rank_dags_(const int64_t batch_size)
     }
 
     if (OB_SUCC(ret)) {
+      if (try_add_meta_dag
+          && !has_meta_dag
+          && ObIDag::DAG_STATUS_READY == dag_status
+          && is_meta_major_merge_dag_(*cur)) {
+        has_meta_dag = true;
+      }
       if (rank_dags_.count() >= batch_size
           || (fetch_co_dag_limit_ > 0 && add_co_dag_cnt >= fetch_co_dag_limit_)) {
         break;
       }
       cur = cur->get_next();
     }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (!try_add_meta_dag || has_meta_dag || head == cur /*alreay iterate all dags*/) {
+  } else if (OB_FAIL(add_meta_dag_if_needed_(cur->get_next(), head))) {
+    LOG_WARN("failed to add meta dag to rank dags", K(ret));
   }
 
   if (OB_FAIL(ret)) {

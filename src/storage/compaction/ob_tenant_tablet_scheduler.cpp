@@ -1200,7 +1200,7 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
           ls_id, *tablet, META_MAJOR_MERGE, result.merge_version_, EXEC_MODE_LOCAL, dag_param))) {
           LOG_WARN("failed to fill param", KR(ret));
         } else {
-          // meta major merge has no parallel dags, no need to rank, but we still to fill its rank param
+          // meta major merge has no parallel dags, but still needs rank parameters
           dag_param.compaction_param_.parallel_dag_cnt_ = 1;
           dag_param.compaction_param_.sstable_cnt_ = result.handle_.get_count();
           dag_param.compaction_param_.add_time_ = common::ObTimeUtility::fast_current_time();
@@ -1208,7 +1208,7 @@ int ObTenantTabletScheduler::schedule_tablet_meta_merge(
           dag_param.compaction_param_.parallel_sstable_cnt_ = result.handle_.get_count();
         }
 
-        if (FAILEDx(schedule_merge_execute_dag<ObTabletMergeExecuteDag>(dag_param, ls_handle, tablet_handle, result))) {
+        if (FAILEDx(schedule_merge_execute_dag<ObTabletMetaMajorMergeDag>(dag_param, ls_handle, tablet_handle, result))) {
           if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
             LOG_WARN("failed to schedule tablet meta merge dag", K(ret), K(dag_param));
           }
