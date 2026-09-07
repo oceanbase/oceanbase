@@ -8,11 +8,6 @@
 #include "ob_sstable_private_object_cleaner.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/ob_file_manager.h"
-#include "storage/incremental/ob_ss_compact_object_cleaner.h"
-#endif
-
 namespace oceanbase
 {
 namespace blocksstable
@@ -72,15 +67,6 @@ void ObSSTablePrivateObjectCleaner::reset()
 int ObSSTablePrivateObjectCleaner::add_new_macro_block_id(const MacroBlockId &macro_id)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  // Only GC private data or meta.
-  if (is_ss_mode_ && macro_id.is_private_data_or_meta()) {
-    SpinWLockGuard guard(lock_);
-    if (OB_FAIL(new_macro_block_ids_.push_back(macro_id))) {
-      LOG_WARN("fail to add new macro block id", K(ret), K(macro_id));
-    }
-  }
-#endif
   return ret;
 }
 
@@ -99,32 +85,15 @@ int ObSSTablePrivateObjectCleaner::mark_succeed()
 void ObSSTablePrivateObjectCleaner::clean()
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  // Actively GC only enabled in shared storage mode.
-  if (is_ss_mode_) {
-    SpinRLockGuard guard(lock_);
-    if (new_macro_block_ids_.count() == 0) {
-      // do nothing.
-    } else if (OB_FAIL(MTL(ObTenantFileManager*)->delete_files(new_macro_block_ids_))) {
-      LOG_WARN("fail to clean in sstable private object cleaner", K(ret), KP(this), K(new_macro_block_ids_.count()));
-    }
-  }
-#endif
 }
 
 int ObSSTableObjectCleanerFactory::build_object_cleaner(const ObDataStoreDesc &data_store_desc, ObIAllocator &allocator, ObISSTableObjectCleaner *&cleaner)
 {
   int ret = OB_SUCCESS;
   if (GCTX.is_shared_storage_mode()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_FAIL(ObSSTableSharedObjectCacheCleaner::build(data_store_desc, allocator, cleaner))) {
-      LOG_WARN("fail to build shared object cleaner", K(ret), K(data_store_desc));
-    }
-#else
     cleaner = nullptr;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("fail to build object cleaner", K(ret));
-#endif
   } else {
     cleaner = OB_NEWx(ObSSTablePrivateObjectCleaner, &allocator);
     if (OB_ISNULL(cleaner)) {

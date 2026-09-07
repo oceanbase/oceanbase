@@ -22,16 +22,8 @@ storage_object_type_strs = []
 # Base class function signatures for validation
 BASE_FUNCTION_SIGNATURES = {
     'is_valid': 'bool is_valid(const MacroBlockId &file_id) const',
-    'to_local_path_format': 'int to_local_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const',
-    'to_remote_path_format': 'int to_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const',
-    'local_path_to_macro_id': 'int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const',
-    'get_parent_dir': 'int get_parent_dir(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const',
-    'create_parent_dir': 'int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const',
-    'remote_path_to_macro_id': 'int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const',
-    'get_effective_tablet_id': 'int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const',
     'opt_to_string': 'int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const',
     'get_object_id': 'int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const',
-    'to_relative_remote_path_format': 'int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const',
 }
 
 def extract_function_signature(code_str):
@@ -193,9 +185,6 @@ def start_generate_h(h_file_name):
 #ifndef OCEANBASE_BLOCKSSTABLE_OB_STORAGE_OBJECT_TYPE_H_
 #define OCEANBASE_BLOCKSSTABLE_OB_STORAGE_OBJECT_TYPE_H_
 
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/shared_storage/ob_ss_reader_writer.h"
-#endif
 #include "common/storage/ob_device_common.h"
 
 namespace oceanbase
@@ -204,9 +193,6 @@ namespace blocksstable
 {
 class MacroBlockId;
 class ObStorageObjectOpt;
-struct ObStorageObjectReadInfo;
-struct ObStorageObjectWriteInfo;
-class ObStorageObjectHandle;
 
 #define STI(object_type) (ObStorageObjectTypeInstance::get_instance(object_type))
 
@@ -236,10 +222,6 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
   //the ObjectType is macro type, true or false
   bool is_macro() const { return is_macro_data() || is_macro_meta(); }
-  int get_open_flag_for_write() const;
-  int get_open_flag_for_read() const;
-  int aio_read(const ObStorageObjectReadInfo &read_info, ObStorageObjectHandle &object_handle) const;
-  int aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle) const;
   bool has_write_back_strategy() const;
   bool has_write_through_and_try_write_lcache_strategy() const;
   // the ObjectType is macro data type, true or false
@@ -293,30 +275,6 @@ public:
   virtual bool has_effective_tablet_id() const { return false; }
   virtual bool is_shared_tablet_sub_meta() const { return is_shared() && is_tablet_meta() && !is_store_in_table(); }
   virtual bool is_shared_tablet_sub_meta_in_table() const { return is_shared() && is_tablet_meta() && is_store_in_table(); }
-#ifdef OB_BUILD_SHARED_STORAGE
-  // path format reverse, macro id to local path
-  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,
-                                   const MacroBlockId &file_id, const uint64_t tenant_id,
-                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
-  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const { return OB_NOT_SUPPORTED; }
-  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,
-                                    const MacroBlockId &file_id, const char *object_storage_root_dir,
-                                    const uint64_t cluster_id, const uint64_t tenant_id,
-                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
-  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const { return OB_NOT_SUPPORTED; }
-  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const { return OB_NOT_SUPPORTED; }
-  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,
-                             const MacroBlockId &file_id, const uint64_t tenant_id,
-                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
-  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
-                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const { return OB_NOT_SUPPORTED; }
-  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const { return OB_NOT_SUPPORTED; }
-  //whethe the objecttype has effective tablet id, true or false
-  void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &ss_macro_block_type) const;
-  int get_macro_cache_type(const uint64_t effective_tablet_id, const bool use_effective_tablet_id,
-                           storage::ObSSMacroCacheType &macro_cache_type) const;
-  int stract_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id) const;
-#endif
   virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const { return OB_SUCCESS; }
   virtual int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const { return OB_SUCCESS; }
   void set_ss_object_first_id_(const uint64_t incarnation_id, const uint64_t column_group_id, MacroBlockId &object_id) const;
@@ -344,11 +302,6 @@ def start_generate_cpp(cpp_file_name):
 #include "storage/blocksstable/ob_object_manager.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/shared_storage/ob_file_helper.h"
-#include "close_modules/shared_storage/storage/shared_storage/ob_dir_manager.h"
-#include "close_modules/shared_storage/storage/shared_storage/storage_cache_policy/ob_storage_cache_service.h"
-#endif
 
 namespace oceanbase
 {
@@ -366,71 +319,6 @@ def end_generate_cpp():
     end = '''
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-
-static inline const char *get_ls_inner_tablet_name_(const int64_t tablet_id)
-{
-  return ObFileHelper::get_ls_inner_tablet_name(tablet_id);
-}
-
-static int get_ls_inner_tablet_id_(const char *str, int64_t &tablet_id)
-{
-  return ObFileHelper::get_ls_inner_tablet_id(str, tablet_id);
-}
-
-static int prewarm_file_to_remote_path_format(char *path, const int64_t length, int64_t &pos,
-  const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id,
-  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id)
-{
-  int ret = OB_SUCCESS;
-  // cluster_id/tenant_id/tablet/tablet_id/reorganization_scn/major/prewarm_info/scn%ld
-  if (OB_ISNULL(path)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), KP(path));
-  } else if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%lu/%s_%lu/%s/%ld/%ld/%s/%s/%s%ld",
-              object_storage_root_dir, CLUSTER_DIR_STR, cluster_id,
-              TENANT_DIR_STR, tenant_id, TABLET_DIR_STR, file_id.second_id(),
-              file_id.fourth_id(), MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, file_id.third_id()))) {
-    LOG_WARN("fail to databuff printf", KR(ret));
-  }
-  return ret;
-}
-
-static int prewarm_file_remote_path_to_macro_id(const char *path, const ObStorageObjectType type, MacroBlockId &macro_id)
-{
-  int ret = OB_SUCCESS;
-  char format[512] = {0};
-  int num = 0;
-  const char *sub_path = nullptr;
-  // /tablet_id/reorganization_scn/major/prewarm_info/scn%ld
-  if (OB_ISNULL(path)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", KR(ret), KP(path));
-  } else if (OB_ISNULL(sub_path = ObString(path).reverse_find('/', 5))) {
-    ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
-    LOG_ERROR("unexpected file in macro cache path", KR(ret), K(path));
-  } else {
-    int64_t tablet_id = 0;
-    int64_t scn_id = 0;
-    int64_t fourth_id = 0;
-    if (OB_FAIL(databuff_printf(format, sizeof(format), "/%%ld/%%ld/%s/%s/%s%%ld.T%hhu",
-                MAJOR_DIR_STR, PREWARM_INFO_DIR_STR, SCN_KEY_STR, (uint8_t)type))) {
-      LOG_WARN("fail to databuff printf", KR(ret));
-    } else if (FALSE_IT(num = sscanf(sub_path, format, &tablet_id, &fourth_id, &scn_id))) {
-    } else if (OB_UNLIKELY(3 != num)) {
-      ret = OB_UNEXPECTED_MACRO_CACHE_FILE;
-      LOG_ERROR("unexpected file in macro cache path", KR(ret), K(sub_path), K(path));
-    } else {
-      macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
-      macro_id.set_storage_object_type((uint64_t)type);
-      macro_id.set_second_id(tablet_id);
-      macro_id.set_third_id(scn_id);
-      macro_id.set_fourth_id(fourth_id);
-    }
-  }
-  return ret;
-}
-#endif
 
 const char *get_storage_objet_type_str(const ObStorageObjectType type)
 {
@@ -462,269 +350,6 @@ int64_t ObStorageObjectTypeBase::to_string(char *buf, const int64_t buf_len) con
   return pos;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-void ObStorageObjectTypeBase::get_ss_macro_block_type(
-  const MacroBlockId &macro_id, storage::ObSSMacroBlockType &ss_macro_block_type) const
-{
-  ss_macro_block_type = ObSSMacroBlockType::MAX_TYPE;
-  if (ObStorageObjectType::EXTERNAL_TABLE_FILE == type_) {
-    ss_macro_block_type = ObSSMacroBlockType::EXTERNAL_TABLE;
-  } else if (macro_id.is_shared_data_block_or_meta_block()) {
-    ss_macro_block_type = ObSSMacroBlockType::SHARED_MACRO;
-  } else if (macro_id.is_private_macro()) {
-    ss_macro_block_type = ObSSMacroBlockType::PRIVATE_MACRO;
-  }
-}
-
-int ObStorageObjectTypeBase::get_macro_cache_type(const uint64_t effective_tablet_id,
-    const bool use_effective_tablet_id, storage::ObSSMacroCacheType &macro_cache_type) const
-{
-  int ret = OB_SUCCESS;
-  macro_cache_type = ObSSMacroCacheType::MAX_TYPE;
-  if (OB_UNLIKELY(ObStorageObjectType::MAX == type_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid object type", KR(ret), K(type_));
-  } else {
-    switch (type_) {
-      // SHARED_TABLET_SUB_META is always treated as ObSSMacroCacheType::MACRO_BLOCK because it needs to be evicted
-      case ObStorageObjectType::PRIVATE_TABLET_META: {
-        macro_cache_type = ObSSMacroCacheType::META_FILE;
-        break;
-      }
-      case ObStorageObjectType::TMP_FILE: {
-        macro_cache_type = ObSSMacroCacheType::TMP_FILE;
-        break;
-      }
-      default: {
-        macro_cache_type = ObSSMacroCacheType::MACRO_BLOCK;
-        break;
-      }
-    }
-  }
-  if ((macro_cache_type == ObSSMacroCacheType::MACRO_BLOCK) && !is_shared_tablet_sub_meta()) {
-      // treat macro_cache_type as ObSSMacroCacheType::MACRO_BLOCK in default.
-      // e.g., PRIVATE_DATA_MACRO, SHARED_MINI_DATA_MACRO, SHARED_MDS_MINI_DATA_MACRO, SHARED_MAJOR_DATA_MACRO...
-      // SHARED_TABLET_SUB_META is always treated as ObSSMacroCacheType::MACRO_BLOCK
-    if (OB_UNLIKELY(use_effective_tablet_id && ObTabletID::INVALID_TABLET_ID == effective_tablet_id)) {
-      // ObIndexBlockScanEstimator and ObSSTableSecMetaIterator do not fill effective_tablet_id.
-      // preread io triggered by these routes has no effective_tablet_id.
-      // treat these macros as ObSSMacroCacheType::MACRO_BLOCK.
-    } else if (use_effective_tablet_id && is_valid_tenant_id(MTL_ID())) {
-      // both oracle mode and mysql mode user tenants have ObStorageCachePolicyService,
-      // although oracle mode user tenant's ObStorageCachePolicyService is empty.
-      PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
-      ObStorageCachePolicyService *storage_cache_policy_service = nullptr;
-      if (OB_ISNULL(storage_cache_policy_service = MTL(ObStorageCachePolicyService *))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("storage cache policy service is null", KR(ret));
-      } else if (OB_FAIL(storage_cache_policy_service->get_tablet_policy_status(effective_tablet_id, policy_status))) {
-        LOG_WARN("fail to get tablet policy status", KR(ret), K(effective_tablet_id));
-      } else if (PolicyStatus::HOT == policy_status) { // 1. partition-level storage_cache_policy
-        macro_cache_type = ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK;
-      } else if ((PolicyStatus::MACRO_HOT == policy_status)) { // 2. block-level storage_cache_policy
-        if (is_major()) { // 2.1 consider major macro as non-hot data
-          macro_cache_type = ObSSMacroCacheType::MACRO_BLOCK;
-        } else { // 2.2 consider incremental macro as hot data
-          macro_cache_type = ObSSMacroCacheType::HOT_TABLET_MACRO_BLOCK;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObStorageObjectTypeBase::get_open_flag_for_write() const
-{
-  int open_flag = ObSSIOCommonOp::SS_DEFAULT_WRITE_FLAG;
-  switch (type_) {
-    case ObStorageObjectType::TMP_FILE: {
-      open_flag = ObSSIOCommonOp::SS_TMP_FILE_WRITE_FLAG;
-      break;
-    }
-    case ObStorageObjectType::PRIVATE_SLOG_FILE: {
-      open_flag = ObSSIOCommonOp::SS_SLOG_WRITE_FLAG;
-      break;
-    }
-    default: {
-      open_flag = ObSSIOCommonOp::SS_DEFAULT_WRITE_FLAG;
-      break;
-    }
-  }
-  return open_flag;
-}
-
-int ObStorageObjectTypeBase::get_open_flag_for_read() const
-{
-  int open_flag = ObSSIOCommonOp::SS_DEFAULT_READ_FLAG;
-  switch (type_) {
-    case ObStorageObjectType::TMP_FILE: {
-      open_flag = ObSSIOCommonOp::SS_TMP_FILE_READ_FLAG;
-      break;
-    }
-    default: {
-      open_flag = ObSSIOCommonOp::SS_DEFAULT_READ_FLAG;
-      break;
-    }
-  }
-  return open_flag;
-}
-
-int ObStorageObjectTypeBase::aio_read(
-  const ObStorageObjectReadInfo &read_info, ObStorageObjectHandle &object_handle) const
-{
-  int ret = OB_SUCCESS;
-  if (is_direct_read()) {
-    ObSSObjectStorageReader object_storage_reader;
-    if (OB_FAIL(object_storage_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else if (is_pin_local()) {
-    ObSSLocalCacheReader local_cache_reader;
-    if (OB_FAIL(local_cache_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else if ((is_shared() && is_macro()) || is_shared_tablet_sub_meta()) {
-    ObSSShareMacroReader share_macro_reader;
-    if (OB_FAIL(share_macro_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else if (is_private() && is_macro()) {
-    ObSSPrivateMacroReader private_macro_reader;
-    if (OB_FAIL(private_macro_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else if (is_private() && is_tablet_meta()) {
-    ObSSPrivateTabletMetaReader private_tablet_meta_reader;
-    if (OB_FAIL(private_tablet_meta_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else if (is_tmp_file()) {
-    ObSSTmpFileReader tmp_file_reader;
-    if (OB_FAIL(tmp_file_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else if (is_shared_tablet_sub_meta_in_table()) {
-    ObSSTableReader table_reader;
-    if (OB_FAIL(table_reader.aio_read(read_info, object_handle))) {
-      LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-    }
-  } else {
-    switch (type_) {
-      case ObStorageObjectType::PRIVATE_SLOG_FILE: {
-        ObSSPrivateSlogReader private_slog_reader;
-        if (OB_FAIL(private_slog_reader.aio_read(read_info, object_handle))) {
-          LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-        }
-        break;
-      }
-      case ObStorageObjectType::EXTERNAL_TABLE_FILE: {
-        ObSSExternalFileReader external_file_reader;
-        if (OB_FAIL(external_file_reader.init(&read_info))) {
-          LOG_WARN("fail to init external data reader", KR(ret), K(read_info));
-        } else if (OB_FAIL(external_file_reader.aio_read(read_info, object_handle))) {
-          LOG_WARN("fail to aio read", KR(ret), K(read_info), K(object_handle));
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected storage object type", KR(ret), K(type_), "object_type_str",
-                 get_type_str(), K(read_info), K(object_handle));
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObStorageObjectTypeBase::aio_write(
-  const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle) const
-{
-  int ret = OB_SUCCESS;
-  if (is_direct_read()) {
-    ObSSObjectStorageWriter object_storage_writer;
-    if (OB_FAIL(object_storage_writer.aio_write(write_info, object_handle))) {
-      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-    }
-  } else if (is_pin_local()) {
-    ObSSLocalCacheWriter local_cache_writer;
-    if (OB_FAIL(local_cache_writer.aio_write(write_info, object_handle))) {
-      if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-        LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-      }
-    }
-  } else if ((is_shared() && is_macro()) || is_shared_tablet_sub_meta()) {
-    ObSSShareMacroWriter share_macro_writer;
-    if (OB_FAIL(share_macro_writer.aio_write(write_info, object_handle))) {
-      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-    }
-  } else if (is_private() && is_macro()) {
-    ObSSPrivateMacroWriter private_macro_writer;
-    if (OB_FAIL(private_macro_writer.aio_write(write_info, object_handle))) {
-      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-    }
-  } else if (is_private() && is_tablet_meta()) {
-    ObSSPrivateTabletMetaWriter private_tablet_meta_writer;
-    if (OB_FAIL(private_tablet_meta_writer.aio_write(write_info, object_handle))) {
-      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-    }
-  } else if (is_private() && is_tmp_file()) {
-    ObSSTmpFileWriter tmp_file_writer;
-    if (OB_FAIL(tmp_file_writer.aio_write(write_info, object_handle))) {
-      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-    }
-  } else if (is_shared_tablet_sub_meta_in_table()) {
-    ObSSTableWriter table_writer;
-    if (OB_FAIL(table_writer.aio_write(write_info, object_handle))) {
-      LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-    }
-  } else {
-    ObSSPrivateSlogWriter private_slog_writer;
-    switch (type_) {
-      case ObStorageObjectType::PRIVATE_SLOG_FILE: {
-        ObSSPrivateSlogWriter private_slog_writer;
-        if (OB_FAIL(private_slog_writer.aio_write(write_info, object_handle))) {
-          if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-            LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-          }
-        }
-        break;
-      }
-      case ObStorageObjectType::EXTERNAL_TABLE_FILE: {
-        ObSSLocalCacheWriter local_cache_writer;
-        if (OB_FAIL(local_cache_writer.aio_write(write_info, object_handle))) {
-          if (OB_NO_SUCH_FILE_OR_DIRECTORY != ret) {
-            LOG_WARN("fail to aio write", KR(ret), K(write_info), K(object_handle));
-          }
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected storage object type", KR(ret), K(type_), "object_type_str",
-                 get_type_str(), K(write_info), K(object_handle));
-        break;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObStorageObjectTypeBase::stract_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id) const
-{
-  int ret = OB_SUCCESS;
-  char relative_path[common::MAX_PATH_SIZE] = {0};
-  int64_t relative_pos = 0;
-  if (OB_FAIL(to_relative_remote_path_format(relative_path, sizeof(relative_path), relative_pos, file_id))) {
-    LOG_WARN("fail to convert to relative remote path format", KR(ret), K(file_id));
-  } else if (OB_FAIL(databuff_printf(path, length, pos, "%s/%s_%ld/%s_%lu/%s",
-                object_storage_root_dir, CLUSTER_DIR_STR, cluster_id, TENANT_DIR_STR, tenant_id, relative_path))) {
-    LOG_WARN("fail to databuff printf", KR(ret), K(file_id), K(object_storage_root_dir), K(cluster_id), K(tenant_id), K(relative_path));
-  }
-  return ret;
-}
-
-#endif
 
 bool ObStorageObjectTypeBase::has_write_back_strategy() const
 {
@@ -904,48 +529,8 @@ public:
         if cfg.get('is_valid') and cfg['is_valid'] != 'OB_NOT_SUPPORTED':
             h_f.write('  virtual bool is_valid(const MacroBlockId &file_id) const;\n')
 
-        # Collect shared storage functions to group them under one macro
-        shared_storage_functions = []
-
-        if cfg.get('to_local_path_format') and cfg['to_local_path_format'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int to_local_path_format(char *path, const int64_t length, int64_t &pos,\n'
-                                         '                                   const MacroBlockId &file_id, const uint64_t tenant_id,\n'
-                                         '                                   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;')
-
-        if cfg.get('to_remote_path_format') and cfg['to_remote_path_format'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int to_remote_path_format(char *path, const int64_t length, int64_t &pos,\n'
-                                         '                                    const MacroBlockId &file_id, const char *object_storage_root_dir,\n'
-                                         '                                    const uint64_t cluster_id, const uint64_t tenant_id,\n'
-                                         '                                    const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const;')
-        if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;')
-
-        if cfg.get('to_relative_remote_path_format') and cfg['to_relative_remote_path_format'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const;')
-
-        if cfg.get('local_path_to_macro_id') and cfg['local_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const;')
-
-
-        if cfg.get('get_parent_dir') and cfg['get_parent_dir'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int get_parent_dir(char *path, const int64_t length, int64_t &pos,\n'
-                                         '                             const MacroBlockId &file_id, const uint64_t tenant_id,\n'
-                                         '                             const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;')
-
-        if cfg.get('create_parent_dir') and cfg['create_parent_dir'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,\n'
-                                         '                                const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const;')
-
-        if cfg.get('get_effective_tablet_id') and cfg['get_effective_tablet_id'] != 'OB_NOT_SUPPORTED':
-            shared_storage_functions.append('  virtual int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id) const;')
+        if cfg.get('has_effective_tablet_id'):
             h_f.write('  virtual bool has_effective_tablet_id() const { return true; }\n')
-
-        # Write shared storage functions under one macro
-        if shared_storage_functions:
-            h_f.write('\n#ifdef OB_BUILD_SHARED_STORAGE\n')
-            for func_decl in shared_storage_functions:
-                h_f.write(func_decl + '\n')
-            h_f.write('\n#endif\n')
 
         if cfg.get('opt_to_string') and cfg['opt_to_string'] != 'OB_NOT_SUPPORTED':
             h_f.write('  virtual int opt_to_string(char *buf, const int64_t buf_len, int64_t &pos, const ObStorageObjectOpt &opt) const;\n')
@@ -972,66 +557,6 @@ def generate_class_implementations():
             cpp_f.write(f'\nbool {class_name}::is_valid(const MacroBlockId &file_id) const\n')
             cpp_f.write(extract_function_body(cfg['is_valid']))
             cpp_f.write('\n')  # Add blank line after function
-
-        # Collect shared storage function implementations to group them under one macro
-        shared_storage_impls = []
-
-        if cfg.get('to_local_path_format') and cfg['to_local_path_format'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::to_local_path_format(char *path, const int64_t length, int64_t &pos,\n'
-            impl += '  const MacroBlockId &file_id, const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const\n'
-            impl += extract_function_body(cfg['to_local_path_format'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('to_remote_path_format') and cfg['to_remote_path_format'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::to_remote_path_format(char *path, const int64_t length, int64_t &pos,\n'
-            impl += '  const MacroBlockId &file_id, const char *object_storage_root_dir, const uint64_t cluster_id,\n'
-            impl += '  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id) const\n'
-            impl += extract_function_body(cfg['to_remote_path_format'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('to_relative_remote_path_format') and cfg['to_relative_remote_path_format'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::to_relative_remote_path_format(char *path, const int64_t length, int64_t &pos, const MacroBlockId &file_id) const\n'
-            impl += extract_function_body(cfg['to_relative_remote_path_format'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('remote_path_to_macro_id') and cfg['remote_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::remote_path_to_macro_id(const char *path, MacroBlockId &macro_id) const\n'
-            impl += extract_function_body(cfg['remote_path_to_macro_id'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('local_path_to_macro_id') and cfg['local_path_to_macro_id'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::local_path_to_macro_id(const char *path, MacroBlockId &macro_id) const\n'
-            impl += extract_function_body(cfg['local_path_to_macro_id'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('get_parent_dir') and cfg['get_parent_dir'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::get_parent_dir(char *path, const int64_t length, int64_t &pos,\n'
-            impl += '  const MacroBlockId &file_id, const uint64_t tenant_id,\n'
-            impl += '  const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const\n'
-            impl += extract_function_body(cfg['get_parent_dir'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('create_parent_dir') and cfg['create_parent_dir'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,\n'
-            impl += '  const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const\n'
-            impl += extract_function_body(cfg['create_parent_dir'])
-            shared_storage_impls.append(impl)
-
-        if cfg.get('get_effective_tablet_id') and cfg['get_effective_tablet_id'] != 'OB_NOT_SUPPORTED':
-            impl = f'int {class_name}::get_effective_tablet_id(const MacroBlockId &macro_id,\n'
-            impl += '  uint64_t &effective_tablet_id) const\n'
-            impl += extract_function_body(cfg['get_effective_tablet_id'])
-            shared_storage_impls.append(impl)
-
-        # Write shared storage implementations under one macro
-        if shared_storage_impls:
-            cpp_f.write('\n#ifdef OB_BUILD_SHARED_STORAGE')
-            for i, impl in enumerate(shared_storage_impls):
-                cpp_f.write('\n' + impl)
-                # Add blank line between functions within the #ifdef block
-                if i < len(shared_storage_impls) - 1:
-                    cpp_f.write('\n')
-            cpp_f.write('\n#endif\n')
 
         if cfg.get('opt_to_string') and cfg['opt_to_string'] != 'OB_NOT_SUPPORTED':
             cpp_f.write(f'\nint {class_name}::opt_to_string(char *buf, const int64_t buf_len, int64_t &pos,\n')

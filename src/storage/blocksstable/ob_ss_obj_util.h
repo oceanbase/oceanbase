@@ -63,35 +63,6 @@ public:
   static bool is_shared_tablet_sub_meta(const MacroBlockId &macro_id);
   static bool is_shared_tablet_sub_meta_in_table(const ObStorageObjectType type);
   static bool is_shared_tablet_sub_meta_in_table(const MacroBlockId &macro_id);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int get_open_flag_for_write(const ObStorageObjectType type);
-  static int get_open_flag_for_read(const ObStorageObjectType type);
-  static int aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle);
-  static int aio_read(const ObStorageObjectReadInfo &read_info, ObStorageObjectHandle &object_handle);
-  static int get_macro_cache_type(const ObStorageObjectType type, const uint64_t effective_tablet_id,
-                          const bool use_effective_tablet_id, storage::ObSSMacroCacheType &macro_cache_type);
-  static int local_path_to_macro_id(const ObStorageObjectType type,const char *path, MacroBlockId &macro_id);
-  static int remote_path_to_macro_id(const ObStorageObjectType type, const char *path, MacroBlockId &macro_id);
-  static int remote_path_to_macro_id(const char *path, MacroBlockId &macro_id);
-  static int get_effective_tablet_id(const MacroBlockId &macro_id, uint64_t &effective_tablet_id);
-  static int get_open_flag_for_read(const MacroBlockId &macro_id);
-  static void get_ss_macro_block_type(const MacroBlockId &macro_id, storage::ObSSMacroBlockType &block_type);
-  static int to_local_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                                  const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
-  static int to_remote_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                                   const char *object_storage_root_dir, const uint64_t cluster_id, const uint64_t tenant_id,
-                                   const uint64_t tenant_epoch_id, const uint64_t server_id, const int64_t ls_epoch_id);
-  static int local_path_to_macro_id(const MacroBlockId &macro_id, const char *path);
-  static int get_parent_dir(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos,
-                            const uint64_t tenant_id, const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
-  static int create_parent_dir(const MacroBlockId &macro_id, const uint64_t tenant_id,
-                               const uint64_t tenant_epoch_id, const int64_t ls_epoch_id);
-  static int to_relative_remote_path_format(const MacroBlockId &macro_id, char *path, const int64_t length, int64_t &pos);
-  // only macro bloclk in user tenant with type of SHARED_TABLET_SUB_META return true.
-  static bool is_exist_store_in_table_object(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id);
-  static int get_store_in_table_macro_id(const uint64_t tenant_id, const blocksstable::MacroBlockId &macro_id,
-                                         blocksstable::MacroBlockId &in_table_macro_id);
-#endif
 };
 }
 }

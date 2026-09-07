@@ -12,9 +12,6 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "share/ob_io_device_helper.h"
 
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "share/compaction/ob_shared_storage_compaction_util.h"
-#endif
 
 namespace oceanbase
 {

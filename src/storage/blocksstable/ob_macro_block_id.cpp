@@ -7,9 +7,6 @@
 #include "ob_macro_block_id.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_ss_obj_util.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_inc_ss_macro_seq_define.h"
-#endif
 
 namespace oceanbase
 {
@@ -140,17 +137,6 @@ int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
       int64_t seq = 0;
       bool fallback = false;
       if (is_shared_mini_minor_v1()) {
-#ifdef OB_BUILD_SHARED_STORAGE
-        op_id = third_id_ >> 32;
-        seq = third_id_ & 0xFFFFFFFF;
-      } else if (is_shared_mini_v2()) {
-        ObIncSSMacroSeqHelper::parse_shared_mini_data_seq(third_id_, source_type, op_id, seq);
-        source_type_str = ObIncSSMacroSeqHelper::get_shared_mini_source_str(source_type);
-      } else if (is_shared_minor_v2()) {
-        ObIncSSMacroSeqHelper::parse_shared_minor_data_seq(third_id_, source_type, op_id, seq);
-        source_type_str = ObIncSSMacroSeqHelper::get_shared_minor_source_str(source_type);
-      } else {
-#endif
         fallback = true;
       }
       if (!fallback) {

@@ -405,38 +405,11 @@ public:
   }
   int read_or_format_super_block_(const bool need_format);
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  int alloc_tenant_epoch(const uint64_t tenant_id, int64_t &tenant_epoch);
-  int create_super_block_tenant_item(
-      const uint64_t tenant_id,
-      const int64_t tenant_epoch,
-      const storage::ObTenantCreateStatus status);
-  int delete_super_block_tenant_item(
-      const uint64_t tenant_id, const int64_t tenant_epoch);
-  static int ss_get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id);
-  static int ss_is_exist_object(const MacroBlockId &object_id, const int64_t ls_epoch, bool &is_exist);
-  static int seal_object(const MacroBlockId &object_id, const int64_t ls_epoch_id);
-  static int delete_object(const MacroBlockId &object_id, const int64_t ls_epoch_id);
-  static int async_write_object(
-    const blocksstable::MacroBlockId &macro_block_id,
-    const ObStorageObjectWriteInfo &write_info,
-    ObStorageObjectHandle &object_handle);
-#endif
 
 private:
   ObObjectManager();
   ~ObObjectManager();
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  static void set_ss_object_first_id_(
-      const uint64_t object_type, const uint64_t incarnation_id,
-      const uint64_t column_group_id, MacroBlockId &object_id);
-  static MacroBlockId ss_get_super_block_object_id_();
-  int ss_read_or_format_super_block_();
-  int ss_read_super_block_(const MacroBlockId &macro_id, storage::ObServerSuperBlock &super_block);
-  int ss_write_super_block_(const storage::ObServerSuperBlock &super_block);
-
-#endif
 
 private:
   bool is_inited_;
