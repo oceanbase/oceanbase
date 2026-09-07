@@ -39,14 +39,6 @@ public:
   static int schedule_ddl_merge(ObLS *ls, ObTabletHandle &tablet_handle);
   static int schedule_ddl_merge(ObLS *ls, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   static int schedule_ddl_merge(ObLS *ls, ObTabletHandle &tablet_handle, ObDDLKvMgrHandle &ddl_kv_mgr_handle);
-  #ifdef OB_BUILD_SHARED_STORAGE
-  static int schedule_ddl_minor_merge_on_demand(const bool need_freeze,
-                                                const share::ObLSID &ls_id,
-                                                ObDDLKvMgrHandle &ddl_kv_mgr_handle);
-  static int schedule_ss_gc_inc_major_ddl_dump(ObLS *ls, ObTabletHandle &tablet_handle);
-  static int schedule_ss_update_inc_major_and_gc_inc_major(ObLS *ls, const ObTabletHandle &tablet_handle);
-  static int finish_log_freeze_ddl_kv(const ObLSID &ls_id, ObTabletHandle &tablet_handle);
-  #endif
   static int schedule_tablet_ddl_major_merge(ObLS *ls, ObTabletHandle &tablet_handle);
   static int schedule_tablet_ddl_inc_major_merge(ObLS *ls, ObTabletHandle &tablet_handle);
   static int schedule_tablet_ddl_inc_major_merge(ObLSHandle &ls_handle, ObTabletHandle &tablet_handle);
@@ -60,11 +52,6 @@ private:
   static int check_need_merge_for_idem_sn(ObTablet &tablet, ObArray<ObDDLKVHandle> &ddl_kvs, bool &need_schedule_merge, ObDDLKVType &ddl_kv_type);
   static int check_need_merge_for_inc_major(ObTablet &tablet, ObArray<ObDDLKVHandle> &ddl_kvs, bool &need_schedule_merge, ObDDLKVType &ddl_kv_type);
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int check_need_merge_for_ss(ObTablet &tablet, ObArray<ObDDLKVHandle> &ddl_kvs, bool &need_schedule_merge, ObDDLKVType &ddl_kv_type);
-
-  static int schedule_task_if_split_src(ObTabletHandle &tablet_handle);
-#endif
 
   static int check_ddl_kv_dump_delay(ObDDLKV &ddl_kv);
   static int check_inc_major_merge_delay(
@@ -73,9 +60,6 @@ private:
       const transaction::ObTxSEQ &cur_seq_no,
       const share::SCN &trans_version);
   static int schedule_tablet_ddl_inc_major_merge_for_sn(ObLS *ls, ObTabletHandle &tablet_handle);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int schedule_tablet_ddl_inc_major_merge_for_ss(ObLS *ls, ObTabletHandle &tablet_handle);
-#endif
 
 private:
   static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000L; // 2m

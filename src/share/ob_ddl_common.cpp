@@ -27,12 +27,6 @@
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "share/compaction/ob_shared_storage_compaction_util.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h" // for OTTZ_MGR
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
-#include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/direct_load/ob_direct_load_auto_inc_seq_service.h"
-#include "storage/direct_load/ob_direct_load_auto_inc_seq_data.h"
-#endif
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "share/search_index/ob_search_index_builder_util.h"
@@ -1625,7 +1619,7 @@ int ObDDLUtil::generate_build_replica_sql(
             LOG_WARN("failed to generated ddl schema hint", K(ret));
           }
         }
-        const char *io_read_hint = GCTX.is_shared_storage_mode() ? " opt_param('io_read_batch_size', '2M') opt_param('io_read_redundant_limit_percentage', 0) " : " ";
+        const char *io_read_hint = " ";
         if (dest_table_schema->is_vec_vid_rowkey_type()) {
           src_table_schema_version_hint_sql_string.reset();
         }
@@ -5457,8 +5451,7 @@ int ObDDLUtil::batch_check_tablet_checksum(
 
 bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
 {
-  return (GCTX.is_shared_storage_mode() && data_format_version >= DATA_VERSION_4_3_3_0)
-         || data_format_version >= DDL_IDEM_DATA_FORMAT_VERSION;
+  return data_format_version >= DDL_IDEM_DATA_FORMAT_VERSION;
 }
 
 bool ObDDLUtil::need_fill_column_group(const bool is_row_store, const bool need_process_cs_replica, const int64_t data_format_version)
@@ -5481,35 +5474,9 @@ int ObDDLUtil::init_macro_block_seq(
   if (OB_UNLIKELY(parallel_idx < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(parallel_idx));
-  } else if (!GCTX.is_shared_storage_mode() || !is_incremental_major_direct_load(direct_load_type)) {
+  } else {
     start_seq.macro_data_seq_ = parallel_idx * compaction::MACRO_STEP_SIZE;
   }
-#ifdef OB_BUILD_SHARED_STORAGE
-  else {
-    share::ObLocationService *location_service = GCTX.location_service_;
-    ObLSID ls_id;
-    bool is_cache_hit = false;
-    ObDirectLoadAutoIncSeqData inc_start_seq;
-    if (OB_UNLIKELY(!is_valid_direct_load(direct_load_type)
-                    || !tablet_id.is_valid())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", KR(ret), K(direct_load_type), K(tablet_id));
-    } else if (OB_ISNULL(location_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("location service is nullptr", KR(ret));
-    } else if (OB_FAIL(location_service->get(MTL_ID(), tablet_id,
-                                             0/*expire_renew_time*/, is_cache_hit, ls_id))) {
-      LOG_WARN("fail to get ls id", KR(ret), K(tablet_id));
-    } else if (OB_FAIL(ObDirectLoadAutoIncSeqService::get_start_seq(ls_id,
-                                                                    tablet_id,
-                                                                    compaction::MACRO_STEP_SIZE,
-                                                                    inc_start_seq))) {
-      LOG_WARN("fail to get inc major direct load start macro block seq", KR(ret), K(ls_id), K(tablet_id));
-    } else {
-      start_seq.macro_data_seq_ = inc_start_seq.get_seq_val();
-    }
-  }
-#endif
   return ret;
 }
 

@@ -306,25 +306,6 @@ int ObCreateIndexResolver::resolve_index_column_node(
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector and fts index in same main table");
         }
       }
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (OB_SUCC(ret)) {
-        if (GCTX.is_shared_storage_mode() && FTS_KEY == index_keyname_ && tenant_data_version < DATA_VERSION_4_3_5_2) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode() && VEC_KEY == index_keyname_) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("vector index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode()
-                   && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
-                   && tenant_data_version < DATA_VERSION_4_3_5_2) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
-        }
-      }
-#endif
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY) {
@@ -943,18 +924,6 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating vector index on table with STRING type as primary key or partition key is");
     }
   }
-  // Check storage cache policy for index
-  if (OB_FAIL(ret)) {
-  } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
-    ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
-    ObString storage_cache_policy = crt_idx_stmt->get_create_index_arg().index_option_.storage_cache_policy_;
-    // Version validation is included in check_and_set_default_storage_cache_policy
-    if (OB_FAIL(check_create_stmt_storage_cache_policy(storage_cache_policy, &index_schema))) {
-      LOG_WARN("fail to check storage cache policy", K(ret), K(storage_cache_policy));;
-    }
-  }
-
-
 if (OB_SUCC(ret) &&
       OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(
           data_tbl_schema, &crt_idx_stmt->get_create_index_arg()))) {

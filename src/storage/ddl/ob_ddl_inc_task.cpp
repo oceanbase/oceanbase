@@ -309,45 +309,8 @@ ObDDLIncWaitDumpTask::ObDDLIncWaitDumpTask(const ObLSID &ls_id,
 int ObDDLIncWaitDumpTask::process()
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
-  ObDDLKvMgrHandle ddl_kv_mgr_handle;
-  ObDDLKVQueryParam ddl_kv_query_param;
-  ObArray<ObDDLKVHandle> ddl_kvs;
-
-  if (!GCTX.is_shared_storage_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ObDDLIncWaitDumpTask should work in shared storage mode", KR(ret));
-  } else if (OB_FAIL(ObDirectLoadMgrUtil::get_tablet_handle(ls_id_, tablet_id_, tablet_handle))) {
-    LOG_WARN("fail to get tablet handle", KR(ret), K(ls_id_), K(tablet_id_));
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_TASK_EXPIRED;
-      LOG_INFO("ddl kv mgr is not exist", KR(ret), K(tablet_id_));
-    } else {
-      LOG_WARN("fail to get ddl kv mgr", KR(ret), K(tablet_id_));
-    }
-  } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/,
-                                                        ddl_kvs,
-                                                        ddl_kv_query_param))) {
-    LOG_WARN("fail to get all ddl kvs", KR(ret), K(tablet_id_));
-  } else if (ddl_kvs.count() > 0) {
-    ObDDLKVHandle first_ddl_kv = ddl_kvs.at(0);
-    if (OB_UNLIKELY(!first_ddl_kv.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid ddl kv", KR(ret), K(first_ddl_kv));
-    } else if (OB_UNLIKELY(first_ddl_kv.get_obj()->get_ddl_kv_type() != DDL_KV_INC_MAJOR)) {
-      ret = OB_DAG_TASK_IS_SUSPENDED;
-      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-        LOG_INFO("unexpected ddl kv type", KR(ret), K(*first_ddl_kv.get_obj()));
-      }
-    } else if (first_ddl_kv.get_obj()->get_trans_id() != trans_id_ || first_ddl_kv.get_obj()->get_seq_no() != seq_no_) {
-      (void) schedule_ddl_merge_dag(first_ddl_kv);
-      ret = OB_DAG_TASK_IS_SUSPENDED;
-      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-        LOG_INFO("unexpected ddl kv type", KR(ret), K(*first_ddl_kv.get_obj()));
-      }
-    }
-  }
+  ret = OB_ERR_UNEXPECTED;
+  LOG_WARN("ObDDLIncWaitDumpTask should work in shared storage mode", KR(ret));
   return ret;
 }
 
@@ -393,11 +356,6 @@ int ObDDLIncPrepareTask::process()
     } else if (is_prepared_) {
       ++tablet_idx_;
     } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (GCTX.is_shared_storage_mode()) {
-        (void) ObIncDDLMergeTaskUtils::gc_ss_inc_major_ddl_dump(ls_tablet_ids);
-      }
-#endif
       ret = OB_INC_MAJOR_COUNT_REACH_LIMIT;
       LOG_WARN("inc major count exceeds max limit",
                KR(ret), "ls_id", ls_tablet_id.first, "tablet_id", ls_tablet_id.second,

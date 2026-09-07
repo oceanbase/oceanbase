@@ -45,12 +45,8 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
         const uint64_t tenant_data_version = param.tenant_data_version_;
         const bool need_submit_io = !with_cs_replica;
         ObITable::TableKey cg_table_key;
-        compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() && !is_inc_minor
-                                           ? compaction::ObExecMode::EXEC_MODE_OUTPUT
-                                           : compaction::ObExecMode::EXEC_MODE_LOCAL;
-        ObSSTableIndexBuilder::ObSpaceOptimizationMode space_opt_mode = GCTX.is_shared_storage_mode() ?
-                                                                        ObSSTableIndexBuilder::DISABLE :
-                                                                        ObSSTableIndexBuilder::ENABLE;
+        compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL;
+        ObSSTableIndexBuilder::ObSpaceOptimizationMode space_opt_mode = ObSSTableIndexBuilder::ENABLE;
         ObMacroMetaTempStore *macro_meta_store = nullptr;
 
         cg_table_key.tablet_id_ = param.tablet_id_;
@@ -123,45 +119,8 @@ int ObWriterArgs::init(const ObWriteMacroParam &param,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("object cleaner is nullptr", KR(ret));
           }
-#ifdef OB_BUILD_SHARED_STORAGE
-          else if (GCTX.is_shared_storage_mode() && is_inc_minor && OB_FAIL(object_cleaner_->mark_succeed())) {
-            LOG_WARN("fail to mark succeed", KR(ret), K(is_inc_minor));
-          }
-#endif
         }
 
-      #ifdef OB_BUILD_SHARED_STORAGE
-        if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
-          ObMacroMetaStoreManager *macro_meta_store_mgr = param.macro_meta_store_mgr_;
-          data_desc_.get_static_desc().schema_version_ = param.schema_version_;
-          if (is_need_ddl_redo_callback_type(writer_type)) {
-            if (OB_ISNULL(macro_meta_store_mgr)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("macro meta store manager in shared storage mode is null", K(ret));
-            } else if (OB_FAIL(macro_meta_store_mgr->get_macro_meta_store(cg_table_key.tablet_id_,
-                                                                          param.cg_idx_,
-                                                                          parallel_idx_,
-                                                                          macro_meta_store))) {
-              if (OB_ENTRY_NOT_EXIST == ret) {
-                ret = OB_SUCCESS;
-                if (nullptr != macro_meta_store) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("macro meta store is not null", K(ret));
-                } else if (OB_FAIL(macro_meta_store_mgr->add_macro_meta_store(cg_table_key.tablet_id_,
-                                                                              param.cg_idx_,
-                                                                              parallel_idx_,
-                                                                              0/*lob_start_seq*/,
-                                                                              macro_meta_store))) {
-                  LOG_WARN("fail to add macro meta store", K(ret), K(param.cg_idx_), K(parallel_idx_));
-                }
-              } else {
-                LOG_WARN("fail to get macro meta store",
-                    K(ret), K(cg_table_key.tablet_id_), K(param.cg_idx_), K(parallel_idx_));
-              }
-            }
-          }
-        }
-      #endif
 
         if (OB_SUCC(ret) && is_need_ddl_redo_callback_type(writer_type)) {
           const int64_t row_offset = param.row_offset_;

@@ -294,12 +294,6 @@ int ObLSDDLLogHandler::replay(const void *buffer,
         ret = replay_tablet_freeze_log_(log_buf, buf_size, tmp_pos, log_scn);
         break;
       }
-      #ifdef OB_BUILD_SHARED_STORAGE
-      case ObDDLClogType::DDL_FINISH_LOG: {
-        ret = replay_ddl_finish_log_(log_buf, buf_size, tmp_pos, log_scn);
-        break;
-      }
-      #endif
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Unknown ddl log type", K(ddl_header.get_ddl_clog_type()), K(ret));
@@ -476,25 +470,6 @@ int ObLSDDLLogHandler::replay_ddl_commit_log_(const char *log_buf,
   }
   return ret;
 }
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObLSDDLLogHandler::replay_ddl_finish_log_(const char *log_buf,
-                                              const int64_t buf_size,
-                                              int64_t pos,
-                                              const SCN &log_scn)
-{
-  int ret = OB_SUCCESS;
-  ObDDLFinishLog log;
-  if (OB_FAIL(log.deserialize(log_buf, buf_size, pos))) {
-    LOG_WARN("fail to deserialize ddl finish log", K(ret));
-  } else if (OB_FAIL(ddl_log_replayer_.replay_finish(log, log_scn))) {
-    if (OB_TABLET_NOT_EXIST != ret && OB_EAGAIN != ret) {
-      LOG_WARN("fail to replay ddl finish log", K(ret), K(log));
-      ret = OB_EAGAIN;
-    }
-  }
-  return ret;
-}
-#endif
 
 int ObLSDDLLogHandler::replay_ddl_tablet_schema_version_change_log_(const char *log_buf,
                                                                     const int64_t buf_size,

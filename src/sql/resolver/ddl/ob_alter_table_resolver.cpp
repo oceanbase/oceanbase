@@ -385,14 +385,6 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
-      // Version validation is included in check_alter_stmt_storage_cache_policy
-      if (OB_FAIL(check_alter_stmt_storage_cache_policy(table_schema_))) {
-        LOG_WARN("check alter stmt storage cache policy failed", K(ret));
-      }
-    }
-
     if (OB_SUCC(ret)) {
       if (OB_FAIL(resolve_hints(parse_tree.children_[ALTER_HINT],
           *alter_table_stmt, nullptr == index_schema_ ? *table_schema_ : *index_schema_))) {
@@ -2681,22 +2673,6 @@ int ObAlterTableResolver::resolve_add_subpartition(const ParseNode &node,
     alter_stmt->set_use_def_sub_part(false);
     // 先设置好sub part option, 解析二级分区的定义时依赖
     alter_table_schema.get_sub_part_option() = orig_table_schema.get_sub_part_option();
-    if (GCTX.is_shared_storage_mode() && is_mysql_mode()) {
-      uint64_t compat_version = 0;
-      if (OB_ISNULL(session_info_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("session info is null", KR(ret));
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), compat_version))) {
-        LOG_WARN("get tenant data version failed", KR(ret));
-      } else if (compat_version < DATA_VERSION_4_4_1_0) {
-        // do nothing
-      } else if (orig_table_schema.has_sub_part_template_def()) {
-        // If the subpartition template exists, propagate the flag to alter_table_schema
-        // Because later it is needed to decide whether to use storage_cache_policy based on whether it is a template partition
-        alter_table_schema.set_sub_part_template_def_exist();
-        alter_table_schema.set_part_level(orig_table_schema.get_part_level());
-      }
-    }
     if (OB_FAIL(ret)) {
     } else {
       // resolve partition name
@@ -2955,24 +2931,6 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
-#ifdef OB_BUILD_SHARED_STORAGE
-        } else if (GCTX.is_shared_storage_mode() &&
-                   FTS_KEY == index_keyname_ &&
-                   tenant_data_version < DATA_VERSION_4_3_5_2) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode() && VEC_KEY == index_keyname_) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("vector index search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index search index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode()
-                   && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
-                   && tenant_data_version < DATA_VERSION_4_3_5_2) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
-#endif
         } else if (tenant_data_version < DATA_VERSION_4_3_1_0 && index_keyname_ == FTS_KEY) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.1, fulltext index not supported", K(ret), K(tenant_data_version));
@@ -4943,16 +4901,9 @@ int ObAlterTableResolver::resolve_index_options(const ParseNode &action_node_lis
         break;
       }
     case T_INDEX_ALTER_STORAGE_CACHE_POLICY: {
-      if (!GCTX.is_shared_storage_mode()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
-      } else {
-        ParseNode *index_node = node.children_[0];
-        if (OB_FAIL(resolve_alter_index_storage_cache_policy(*index_node))) {
-          SQL_RESV_LOG(WARN, "Resolve alter index storage cache policy error!", K(ret));
-        }
-      }
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("storage cache policy is not supported in shared nothing mode", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared nothing mode");
       break;
     }
     case T_INDEX_RENAME: {
@@ -5776,33 +5727,15 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
           break;
         }
         case T_ALTER_PARTITION_STORAGE_CACHE_POLICY: {
-          if (!GCTX.is_shared_storage_mode()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
-          } else {
-            if (OB_FAIL(resolve_alter_partition_storage_cache_policy(*partition_node, *table_schema_))) {
-              SQL_RESV_LOG(WARN, "Resolve alter partition storage cache policy error!", K(ret));
-            } else {
-            alter_table_stmt->get_alter_table_arg().alter_part_type_ =
-                ObAlterTableArg::ALTER_PARTITION_STORAGE_CACHE_POLICY;
-            }
-          }
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("storage cache policy is not supported in shared nothing mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared nothing mode");
           break;
         }
         case T_ALTER_SUBPARTITION_STORAGE_CACHE_POLICY: {
-          if (!GCTX.is_shared_storage_mode()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("storage cache policy is not supported in shared storage mode", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared storage mode");
-          } else {
-            if (OB_FAIL(resolve_alter_subpartition_storage_cache_policy(*partition_node, *table_schema_))) {
-              SQL_RESV_LOG(WARN, "Resolve alter subpartition storage cache policy error!", K(ret));
-            } else {
-            alter_table_stmt->get_alter_table_arg().alter_part_type_ =
-                ObAlterTableArg::ALTER_SUBPARTITION_STORAGE_CACHE_POLICY;
-            }
-          }
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("storage cache policy is not supported in shared nothing mode", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "storage cache policy is not supported in shared nothing mode");
           break;
         }
         case T_ALTER_PARTITION_DROP: {

@@ -255,55 +255,6 @@ private:
   share::SCN start_scn_;
   ObTabletID lob_meta_tablet_id_; // avoid replay get newest mds data
 };
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObDDLFinishLog final
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObDDLFinishLog();
-  ~ObDDLFinishLog() = default;
-  void reset();
-  int init(const int64_t tenant_id,
-           const share::ObLSID ls_id,
-           const ObITable::TableKey &table_key,
-           const char* buf,
-           const int64_t buf_len,
-           const uint64_t data_format_version);
-  int assign(const storage::ObDDLFinishLogInfo &other);
-
-  bool is_valid() const { return finish_info_.is_valid(); }
-  ObITable::TableKey get_table_key() const { return finish_info_.table_key_; }
-  ObString get_data_buffer() const { return finish_info_.data_buffer_; }
-  share::ObLSID get_ls_id() const { return finish_info_.ls_id_; }
-  storage::ObDDLFinishLogInfo get_log_info() const { return finish_info_; }
-  uint64_t get_data_format_version() const { return finish_info_.data_format_version_; }
-  TO_STRING_KV(K_(finish_info));
-private:
-  storage::ObDDLFinishLogInfo finish_info_;
-};
-
-class ObDDLFinishClogCb : public logservice::AppendCb
-{
-public:
-  ObDDLFinishClogCb();
-  virtual ~ObDDLFinishClogCb() = default;
-  int init(const ObDDLFinishLog &finish_log, ObTabletHandle &tablet_handle);
-  virtual int on_success() override;
-  virtual int on_failure() override;
-  inline bool is_success() const { return status_.is_success(); }
-  inline bool is_failed() const { return status_.is_failed(); }
-  inline bool is_finished() const { return status_.is_finished(); }
-  int get_ret_code() const { return status_.get_ret_code(); }
-  void try_release();
-  const char *get_cb_name() const override { return "DDLFinishClogCb"; }
-  TO_STRING_KV(K(is_inited_), K(status_), K(finish_log_));
-private:
-  bool is_inited_;
-  ObDDLClogCbStatus status_;
-  ObDDLFinishLog finish_log_;
-  ObTabletHandle tablet_handle_;
-};
-#endif
 
 class ObTabletSchemaVersionChangeLog final
 {

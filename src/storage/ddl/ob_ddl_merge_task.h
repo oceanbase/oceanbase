@@ -87,16 +87,6 @@ public:
   int init(const ObDDLTableMergeDagParam &ddl_dag_param, const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs);
   virtual int process() override;
   TO_STRING_KV(K_(is_inited), K_(merge_param));
-#ifdef OB_BUILD_SHARED_STORAGE
-private:
-  int dump_in_shared_storage_mode(
-    const ObLSHandle &ls_handle,
-    ObTablet &tablet_handle,
-    ObTableStoreIterator &ddl_table_iter,
-    const ObDDLKvMgrHandle &ddl_kv_mgr_handle,
-    common::ObArenaAllocator &allocator,
-    ObTableHandleV2 &compacted_sstable_handle);
-#endif
 private:
   int merge_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
   int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);

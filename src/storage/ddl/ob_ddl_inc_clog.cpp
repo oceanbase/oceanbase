@@ -259,29 +259,6 @@ int ObDDLIncCommitLog::init(const ObDDLIncLogBasic &log_basic, const bool is_rol
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObDDLIncCommitLog::set_ss_inc_major(
-    const ObSSTable *data_inc_major,
-    const ObSSTable *lob_inc_major)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObIncDDLMergeTaskUtils::serialize_inc_major_to_string(allocator_,
-                                                                    data_inc_major,
-                                                                    log_basic_.get_data_format_version(),
-                                                                    data_inc_major_buffer_))) {
-    LOG_WARN("fail to serialize inc major", KR(ret));
-  } else if (log_basic_.get_lob_meta_tablet_id().is_valid()
-             && OB_FAIL(ObIncDDLMergeTaskUtils::serialize_inc_major_to_string(allocator_,
-                                                                              lob_inc_major,
-                                                                              log_basic_.get_data_format_version(),
-                                                                              lob_inc_major_buffer_))) {
-    LOG_WARN("fail to serialize lob inc major", KR(ret));
-  } else {
-    is_co_sstable_ = data_inc_major->is_co_sstable();
-  }
-  return ret;
-}
-#endif
 
 OB_DEF_SERIALIZE_SIZE(ObDDLIncCommitLog)
 {
@@ -320,15 +297,6 @@ OB_DEF_DESERIALIZE(ObDDLIncCommitLog)
               lob_inc_major_buffer_,
               start_scn_);
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObIncDDLMergeTaskUtils::deep_copy_string_buffer(allocator_, data_inc_major_buffer_))) {
-      LOG_WARN("fail to deep copy string buffer", KR(ret));
-    } else if (OB_FAIL(ObIncDDLMergeTaskUtils::deep_copy_string_buffer(allocator_, lob_inc_major_buffer_))) {
-      LOG_WARN("fail to deep copy string buffer", KR(ret));
-    }
-  }
-#endif
   return ret;
 }
 

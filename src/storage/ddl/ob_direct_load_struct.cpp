@@ -3779,30 +3779,16 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
                                 SCN::min_scn(),
                                 cg_schema,
                                 cg_idx,
-                                GCTX.is_shared_storage_mode() ? compaction::ObExecMode::EXEC_MODE_OUTPUT : compaction::ObExecMode::EXEC_MODE_LOCAL,
+                                compaction::ObExecMode::EXEC_MODE_LOCAL,
                                 need_submit_io))) {
       LOG_WARN("init data store desc failed", K(ret));
     } else if (OB_FAIL(index_builder_.init(data_desc_.get_desc(), // data_desc is deep copied
-            GCTX.is_shared_storage_mode() ? ObSSTableIndexBuilder::DISABLE : ObSSTableIndexBuilder::ENABLE/*small SSTable op*/))) {
+            ObSSTableIndexBuilder::ENABLE/*small SSTable op*/))) {
       LOG_WARN("init sstable index builder failed", K(ret), K(ls_id), K(table_key), K(data_desc_));
     } else {
       // for build the tail index block in macro block
       data_desc_.get_desc().sstable_index_builder_ = &index_builder_;
     }
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
-      ObSSTabletDirectLoadMgr *ss_direct_load_mgr = static_cast<ObSSTabletDirectLoadMgr *>(tablet_direct_load_mgr);
-      if (OB_ISNULL(ss_direct_load_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("direct load manager in shared storage mode is null", K(ret));
-      } else if (OB_FAIL(ss_direct_load_mgr->get_macro_meta_store_manager().add_macro_meta_store(cg_idx, parallel_idx, ss_direct_load_mgr->get_dir_id(), macro_meta_store))) {
-        LOG_WARN("add macro meta store failed", K(ret), K(cg_idx), K(parallel_idx));
-      } else {
-        macro_meta_store_ = macro_meta_store;
-        data_desc_.get_static_desc().schema_version_ = ss_direct_load_mgr->get_build_param().runtime_only_param_.schema_version_;
-      }
-    }
-#endif
     if (OB_SUCC(ret)) {
       ObDDLRedoLogWriterCallbackInitParam init_param;
       init_param.ls_id_ = ls_id;
@@ -5267,7 +5253,7 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
         table_key_.scn_range_.start_scn_ = start_scn;
         inc_major_trans_version_ = inc_major_trans_version;
       } else {
-        if (is_column_store && !GCTX.is_shared_storage_mode()) {
+        if (is_column_store) {
           table_key_.table_type_ = ObITable::TableType::INC_MAJOR_DDL_MERGE_CO_SSTABLE;
         } else {
           table_key_.table_type_ = ObITable::TableType::INC_MAJOR_DDL_DUMP_SSTABLE;
@@ -5284,7 +5270,7 @@ int ObDDLTabletMergeDagParamV2::init(const bool for_major,
         }
         table_key_.version_range_.snapshot_version_ = task_param.snapshot_version_;
       } else {
-        if (is_column_store && !GCTX.is_shared_storage_mode()) {
+        if (is_column_store) {
           table_key_.table_type_ = ObITable::TableType::DDL_MERGE_CO_SSTABLE;
         } else {
           table_key_.table_type_ = ObITable::TableType::DDL_DUMP_SSTABLE;
@@ -5489,9 +5475,7 @@ int ObDDLTabletMergeDagParamV2::init_cg_sstable_array( hash::ObHashSet<int64_t> 
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("merge ctx should not be null", K(ret), KPC(this));
   } else {
-    if (GCTX.is_shared_storage_mode() && is_incremental_major_direct_load(direct_load_type_)) {
-      cg_count = for_major_ ? max(cg_count, storage_schema->get_column_group_count()) : 1;
-    } else if (ObITable::is_column_store_sstable(table_key_.table_type_)) {
+    if (ObITable::is_column_store_sstable(table_key_.table_type_)) {
       cg_count = max(cg_count, storage_schema->get_column_group_count());
     }
   }

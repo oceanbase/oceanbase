@@ -273,9 +273,6 @@ private:
       const ObAddr &addr,
       ObSingleReplicaBuildCtx *&replica_build_ctx,
       bool &is_found);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int schedule_tablet_split_to_leader(const ObDDLReplicaBuildExecutorParam &param);
-#endif
 
 private:
   bool is_inited_;

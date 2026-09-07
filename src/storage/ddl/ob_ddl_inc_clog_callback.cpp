@@ -330,10 +330,6 @@ int ObDDLIncCommitClogCb::prepare_(const ObLSHandle &ls_handle, const ObTabletID
     // 增量基线
     if (is_rollback_) {
       // do nothing
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode()) {
-      // do nothing
-#endif
     } else {
       ObLS *ls = ls_handle.get_ls();
       ObTabletHandle tablet_handle;
@@ -401,10 +397,6 @@ int ObDDLIncCommitClogCb::on_success_(const ObLSHandle &ls_handle, const ObTable
       LOG_WARN("fail to freeze inc major ddl kv", KR(ret), K(ls_id_), K(tablet_id), K(commit_scn), K(log_basic_));
     } else if (is_rollback_) {
       // do nothing
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode()) {
-      // do nothing
-#endif
     } else if (OB_FAIL(ObIncDDLMergeTaskUtils::update_tablet_table_store(ls_handle.get_ls(), tablet_handle))) {
       LOG_WARN("fail to update tablet table store", KR(ret), K(ls_id_), K(tablet_id));
     }

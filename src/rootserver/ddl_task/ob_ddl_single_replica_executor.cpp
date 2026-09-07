@@ -189,21 +189,8 @@ int ObDDLReplicaBuildExecutor::build(const ObDDLReplicaBuildExecutorParam &param
   //   "type", type_,
   //   K_(schema_version),
   //   table_id_buffer);
-#ifdef OB_BUILD_SHARED_STORAGE
-  uint64_t data_version = 0;
-#endif
   if (OB_FAIL(ret)) {
     LOG_INFO("fail to build single replica task", K(ret), "ddl_event_info", ObDDLEventInfo());
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-    LOG_WARN("get_min_data_version failed", KR(ret), K_(tenant_id));
-  } else if (data_version >= DATA_VERSION_4_4_0_0 && is_tablet_split(ddl_type_) && GCTX.is_shared_storage_mode()) {
-    if (OB_FAIL(schedule_tablet_split_to_leader(param))) {
-      LOG_WARN("failed to schedule tablet split to leader", K(ret));
-    }
-#endif
-  }
-  if (OB_FAIL(ret)) {
   } else {
     LOG_INFO("start to schedule task", K(src_tablet_ids_.count()), "ddl_event_info", ObDDLEventInfo());
     if (OB_FAIL(schedule_task())) {
@@ -844,47 +831,6 @@ int ObDDLReplicaBuildExecutor::get_replica_build_ctx(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObDDLReplicaBuildExecutor::schedule_tablet_split_to_leader(const ObDDLReplicaBuildExecutorParam &param)
-{
-  int ret = OB_SUCCESS;
-  const int64_t cluster_id = GCONF.cluster_id;
-  oceanbase::obrpc::ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
-  ObAddr leader_addr;
-  oceanbase::obrpc::ObTabletSplitScheduleArg arg;
-  oceanbase::obrpc::ObLSTabletSplitScheduleRes res;
-  uint64_t tenant_id = param.tenant_id_;
-  int64_t ddl_rpc_timeout_us = -1;
-  //since src data tablet, all local index tablets and lob data tablet are located in the same ls
-  ObTabletID src_data_tablet_id = param.source_tablet_ids_.at(0);
-  int64_t schedule_time = ObTimeUtility::current_time();
-  if (OB_ISNULL(srv_rpc_proxy)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("root service or location_cache is null", K(ret), KP(srv_rpc_proxy));
-  } else if (OB_FAIL(ObDDLUtil::get_tablet_leader(tenant_id, src_data_tablet_id, leader_addr))) {
-    LOG_WARN("failed to get tablet leader", K(ret), K(tenant_id), K(src_data_tablet_id));
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(param.source_tablet_ids_.count(), ddl_rpc_timeout_us))) {
-    LOG_WARN("failed to get ddl rpc timeout", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < param.source_tablet_ids_.count(); ++i) {
-    oceanbase::common::ObTabletID source_tablet_id = param.source_tablet_ids_.at(i);
-    if (OB_FAIL(arg.tablet_ids_.push_back(source_tablet_id))) {
-      LOG_WARN("failed ot push back into task array", K(ret), K(source_tablet_id));
-    } else if (OB_FAIL(arg.tenant_ids_.push_back(tenant_id))) {
-      LOG_WARN("failed to push back into tenant_ids", K(ret), K(tenant_id));
-    } else if (OB_FAIL(arg.schedule_time_.push_back(schedule_time))) {
-      LOG_WARN("failed to pusch back into schedule_time_", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr).timeout(ddl_rpc_timeout_us).schedule_tablet_split(arg, res))) {
-    LOG_WARN("fail to schedule_tablet_split", K(ret));
-  } else if (OB_FAIL(res.ret_code_)) {
-    LOG_WARN("failed to schedule_tablet_split", K(ret));
-  }
-  return ret;
-}
-#endif
 
 
 // NOTE as caller, update_build_progress(), update_build_ctx() will hold lock

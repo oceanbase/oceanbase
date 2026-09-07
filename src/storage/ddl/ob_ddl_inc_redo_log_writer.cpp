@@ -249,17 +249,7 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
           K_(trans_id), K_(seq_no), K(snapshot_version), K(data_format_version));
     } else if (OB_FAIL(log.init(log_basic, false/*is_rollback*/, start_scn))) {
       LOG_WARN("fail to init DDLIncCommitLog", K(ret), K(log_basic));
-    }
-#ifdef OB_BUILD_SHARED_STORAGE
-    else if (GCTX.is_shared_storage_mode()
-             && is_incremental_major_direct_load(direct_load_type_)
-             && OB_FAIL(log.set_ss_inc_major(inc_major,
-                                             lob_inc_major))) {
-      LOG_WARN("fail to set ss inc major",
-               KR(ret), K_(direct_load_type), KP(inc_major), KP(lob_inc_major));
-    }
-#endif
-    else if (OB_FAIL(local_write_inc_commit_log(log, tx_desc, commit_scn))) {
+    } else if (OB_FAIL(local_write_inc_commit_log(log, tx_desc, commit_scn))) {
       if (ObDDLUtil::need_remote_write(ret) && allow_remote_write) {
         if (OB_FAIL(switch_to_remote_write())) {
           LOG_WARN("fail to switch to remote write", K(ret), K(tablet_id_));
@@ -790,15 +780,7 @@ int ObDDLIncRedoLogWriter::remote_write_inc_commit_log(
       LOG_WARN("fail to init ObRpcRemoteWriteDDLIncCommitLogArg", K(ret), K_(leader_ls_id),
           K_(tablet_id),K(lob_meta_tablet_id), K(tx_desc), K_(direct_load_type),
           K_(trans_id), K_(seq_no), K(snapshot_version), K(data_format_version), K(start_scn));
-    }
-#ifdef OB_BUILD_SHARED_STORAGE
-    else if (GCTX.is_shared_storage_mode()
-             && is_incremental_major_direct_load(direct_load_type_)
-             && OB_FAIL(arg.set_ss_inc_major(inc_major, lob_inc_major))) {
-      LOG_WARN("fail to set ss inc major", KR(ret), K(data_format_version), KP(inc_major), KP(lob_inc_major));
-    }
-#endif
-    else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_inc_commit_log(arg, res))) {
+    } else if (OB_FAIL(srv_rpc_proxy->to(leader_addr_).by(MTL_ID()).remote_write_ddl_inc_commit_log(arg, res))) {
       LOG_WARN("remote write inc commit log failed", K(ret), K_(leader_ls_id), K_(leader_addr));
     } else if (OB_FAIL(MTL(ObTransService *)->add_tx_exec_result(*arg.tx_desc_, res.tx_result_))) {
       LOG_WARN("fail to get_tx_exec_result", K(ret), K(*arg.tx_desc_));

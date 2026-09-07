@@ -88,9 +88,6 @@ public:
                          const blocksstable::ObDatumRowkey *rowkey,
                          const blocksstable::ObDataMacroBlockMeta *meta,
                          const int64_t co_sstable_row_offset);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int insert_macro_block(const ObDDLMacroHandle &macro_handle);
-#endif
   int locate_key(const blocksstable::ObDatumRange &range,
                  const blocksstable::ObStorageDatumUtils &datum_utils,
                  blocksstable::DDLBtreeIterator &iter,
@@ -381,9 +378,6 @@ private:
   int wait_pending();
   int full_load_freeze_(const share::SCN &freeze_scn);
   int inc_load_freeze_();
-#ifdef OB_BUILD_SHARED_STORAGE
-  int warmup_index_block(const ObDDLMacroBlock &macro_block);
-#endif
 
   int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
 private:

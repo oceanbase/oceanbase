@@ -69,9 +69,7 @@ int ObCgMacroBlockWriter::init(
 
     macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
     macro_seq_param.start_ = start_sequence.macro_data_seq_;
-    compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() && is_inc_major
-                                       ? compaction::ObExecMode::EXEC_MODE_OUTPUT
-                                       : compaction::ObExecMode::EXEC_MODE_LOCAL;
+    compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL;
     int64_t cg_idx = table_key.get_column_group_id();
     blocksstable::ObMacroMetaTempStore *macro_meta_store = nullptr;
     ObDDLWriteStat *ddl_write_stat = nullptr;
@@ -108,19 +106,6 @@ int ObCgMacroBlockWriter::init(
       data_desc_.get_desc().sstable_index_builder_ = &index_builder_;
     }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_SUCC(ret) && is_inc_major && GCTX.is_shared_storage_mode()) {
-      ObMacroMetaStoreManager *macro_meta_store_mgr = const_cast<ObMacroMetaStoreManager *>(param.macro_meta_store_mgr_);
-      if (OB_ISNULL(macro_meta_store_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("macro meta store manager in shared storage mode is null", K(ret), KP(macro_meta_store_mgr), K(param));
-      } else if (OB_FAIL(macro_meta_store_mgr->add_macro_meta_store(table_key.tablet_id_, cg_idx, parallel_idx, lob_start_seq, macro_meta_store))) {
-        LOG_WARN("fail to add macro meta store", K(ret), K(cg_idx), K(parallel_idx));
-      } else {
-        data_desc_.get_static_desc().schema_version_ = param.schema_version_;
-      }
-    }
-#endif
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObDDLUtil::get_ddl_write_stat(param, table_key, ddl_write_stat))) {
@@ -178,12 +163,8 @@ int ObCgMacroBlockWriter::init(
     ObMacroSeqParam macro_seq_param;
     ObPreWarmerParam pre_warm_param;
     ObDDLRedoLogWriterCallback *ddl_redo_callback = nullptr;
-    compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
-                                       compaction::ObExecMode::EXEC_MODE_OUTPUT :
-                                       compaction::ObExecMode::EXEC_MODE_LOCAL;
-    ObSSTableIndexBuilder::ObSpaceOptimizationMode space_opt_mode = GCTX.is_shared_storage_mode() ?
-                                                                    ObSSTableIndexBuilder::DISABLE :
-                                                                    ObSSTableIndexBuilder::ENABLE;
+    compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL;
+    ObSSTableIndexBuilder::ObSpaceOptimizationMode space_opt_mode = ObSSTableIndexBuilder::ENABLE;
     blocksstable::ObMacroMetaTempStore *macro_meta_store = nullptr;
     ObDDLWriteStat *ddl_write_stat = nullptr;
     const int64_t parallel_idx = param.slice_idx_;
@@ -221,19 +202,6 @@ int ObCgMacroBlockWriter::init(
       data_desc_.get_desc().sstable_index_builder_ = &index_builder_;
     }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode()) {
-      ObMacroMetaStoreManager *macro_meta_store_mgr = const_cast<ObMacroMetaStoreManager *>(param.macro_meta_store_mgr_);
-      if (OB_ISNULL(macro_meta_store_mgr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("macro meta store manager in shared storage mode is null", K(ret), KP(macro_meta_store_mgr), K(param));
-      } else if (OB_FAIL(macro_meta_store_mgr->add_macro_meta_store(table_key.tablet_id_, cg_idx, parallel_idx, lob_start_seq, macro_meta_store))) {
-        LOG_WARN("fail to add macro meta store", K(ret), K(cg_idx), K(parallel_idx));
-      } else {
-        data_desc_.get_static_desc().schema_version_ = param.schema_version_;
-      }
-    }
-#endif
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObDDLUtil::get_ddl_write_stat(param, table_key, ddl_write_stat))) {
       LOG_WARN("get ddl write stat failed", K(ret), K(table_key), K(with_cs_replica), K(param), KPC(ddl_write_stat));

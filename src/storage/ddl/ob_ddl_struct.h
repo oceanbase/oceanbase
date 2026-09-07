@@ -253,24 +253,6 @@ private:
   ObIAllocator *allocator;
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-struct ObDDLFinishLogInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObDDLFinishLogInfo();
-  ~ObDDLFinishLogInfo() = default;
-  bool is_valid() const;
-  int assign(const ObDDLFinishLogInfo &other);
-  void reset();
-  TO_STRING_KV(K_(ls_id), K_(table_key), K_(data_buffer), K_(data_format_version));
-public:
-  share::ObLSID ls_id_;
-  storage::ObITable::TableKey table_key_;
-  ObString data_buffer_;
-  uint64_t data_format_version_;
-};
-#endif
 
 class ObIDirectLoadRowIterator : public ObIStoreRowIterator
 {

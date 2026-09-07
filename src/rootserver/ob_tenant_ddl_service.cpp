@@ -26,9 +26,6 @@
 #include "share/ob_schema_status_proxy.h"
 #include "share/backup/ob_log_restore_config.h"//ObLogRestoreSourceServiceConfigParser
 #include "storage/tx/ob_ts_mgr.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_shared_meta_service.h"
-#endif
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -857,22 +854,6 @@ int ObTenantDDLService::create_tenant(const ObCreateTenantArg &arg,
       } else if (OB_FAIL(ObShareUtil::check_replica_type_in_locality(user_tenant_schema))) {
         LOG_WARN("fail to check replica type in locality", KR(ret), K(user_tenant_schema));
       } else if (FALSE_IT(user_tenant_id = user_tenant_schema.get_tenant_id())) {
-#ifdef OB_BUILD_SHARED_STORAGE
-      } else if (GCTX.is_shared_storage_mode()) {
-        MTL_SWITCH(OB_SYS_TENANT_ID) {
-          storage::ObSSMetaService *ss_meta_service = MTL(storage::ObSSMetaService *);
-          if (OB_ISNULL(ss_meta_service)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ObSSMetaService is null", KR(ret), K(user_tenant_id), K(ss_meta_service), K(MTL_ID()));
-          } else if (OB_FAIL(ss_meta_service->add_tenant_id(user_tenant_id))) {
-            LOG_WARN("fail to add tenant id to sslog", KR(ret), K(user_tenant_id));
-          }
-        } else {
-          LOG_WARN("switch to sys tenant failed", KR(ret), K(user_tenant_id));
-        }
-      }
-      if (OB_FAIL(ret)) {
-#endif
       } else if (OB_FAIL(init_schema_status(
               user_tenant_schema.get_tenant_id(), tenant_role))) {
         LOG_WARN("fail to init schema status", KR(ret), K(user_tenant_id));
@@ -4533,11 +4514,6 @@ int ObTenantDDLService::check_locality_compatible_(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not create tenant with column-store replica below data version 4.3.3", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with C-replica in locality below data version 4.3.3");
-      } else if (GCTX.is_shared_storage_mode()
-                  && 0 != this_set.get_columnstore_replica_num()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("can not create tenant with column-store replica in shared-storage mode", KR(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "In shared-storage mode, C-replica is");
       }
     }
   }

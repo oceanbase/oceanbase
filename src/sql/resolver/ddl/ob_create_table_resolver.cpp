@@ -463,8 +463,6 @@ int ObCreateTableResolver::set_default_micro_index_clustered_(share::schema::ObT
   // set default value. If user_specified, it is modifed in resolve_table_option.
   if (OB_FAIL(ret)) {
     // error occurred
-  } else if (GCTX.is_shared_storage_mode()) {
-    table_schema.set_micro_index_clustered(true);
   } else { // shared_nothing
     table_schema.set_micro_index_clustered(false);
   }
@@ -1140,14 +1138,6 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             create_table_stmt->set_direct_load_hint(sel_global_hint.direct_load_hint_);
           }
         }
-      }
-    }
-
-    // Storage cache policy check (only know partition status after resolve_table_options)
-    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && is_mysql_mode) {
-      ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-      if (OB_FAIL(check_create_stmt_storage_cache_policy(table_schema.get_storage_cache_policy(), &table_schema))) {
-        LOG_WARN("fail to check storage cache policy", K(ret), K(table_schema.get_storage_cache_policy()));;
       }
     }
 
@@ -3226,16 +3216,6 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("vector index and fts coexist in main table is not support yet", K(ret), K(index_column_list_node->num_child_));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index and fts coexist in main table is");
-#ifdef OB_BUILD_SHARED_STORAGE
-        } else if (GCTX.is_shared_storage_mode() && is_fts_index && tenant_data_version < DATA_VERSION_4_3_5_2) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("fulltext search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search index in shared storage mode is");
-        } else if (GCTX.is_shared_storage_mode() && is_vec_index) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("vector index search index isn't supported in shared storage mode", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "vector index search index in shared storage mode is");
-#endif
         } else if (is_search_index && tenant_data_version < DATA_VERSION_4_5_1_0) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("search index is not support yet", K(ret));
@@ -3292,14 +3272,6 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                                                                           reinterpret_cast<int*>(&index_keyname_)))) {
                   LOG_WARN("failed to resolve index type by parse node", K(ret));
                 }
-#ifdef OB_BUILD_SHARED_STORAGE
-              } else if (GCTX.is_shared_storage_mode()
-                         && (MULTI_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_)
-                         && tenant_data_version < DATA_VERSION_4_3_5_2) {
-                  ret = OB_NOT_SUPPORTED;
-                  LOG_WARN("multivalue search index isn't supported in shared storage mode", K(ret));
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "multivalue search index in shared storage mode is");
-#endif
               } else if (NULL != index_column_node->children_[1]) {
                 sort_item.prefix_len_ = static_cast<int32_t>(index_column_node->children_[1]->value_);
                 if (0 == sort_item.prefix_len_) {

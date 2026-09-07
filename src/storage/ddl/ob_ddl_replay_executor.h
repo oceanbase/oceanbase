@@ -119,9 +119,6 @@ protected:
   // @return other error codes, failed to replay.
   virtual int do_replay_(ObTabletHandle &handle) override;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  int write_ss_block(blocksstable::ObStorageObjectWriteInfo &write_info, blocksstable::ObStorageObjectHandle &macro_handle);
-#endif
 private:
   int do_inc_replay_(
       ObTabletHandle &tablet_handle,
@@ -176,31 +173,6 @@ private:
   const ObDDLCommitLog *log_;
 };
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObDDLFinishReplayExecutor final : public ObDDLReplayExecutor
-{
-public:
-  ObDDLFinishReplayExecutor();
-
-  int init(
-      ObLS *ls,
-      const ObDDLFinishLog &log,
-      const share::SCN &scn);
-
-protected:
-  // replay to the tablet
-  // @return OB_SUCCESS, replay successfully, data has written to tablet.
-  // @return OB_EAGAIN, failed to replay, need retry.
-  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
-  // @return OB_TASK_EXPIRED, ddl task expired.
-  // @return other error codes, failed to replay.
-  int do_replay_(ObTabletHandle &handle) override;
-  int replay_ddl_finish(ObTabletHandle &handle);
-
-private:
-  const ObDDLFinishLog *log_;
-};
-#endif
 
 class ObDDLIncMinorStartReplayExecutor final : public ObDDLReplayExecutor
 {
@@ -296,9 +268,6 @@ protected:
   int do_replay_(ObTabletHandle &handle) override;
 
 private:
-#ifdef OB_BUILD_SHARED_STORAGE
-  int deserialize_and_update_ss_inc_major(ObTabletHandle &tablet_handle);
-#endif
 private:
   common::ObTabletID tablet_id_;
   transaction::ObTransID trans_id_;

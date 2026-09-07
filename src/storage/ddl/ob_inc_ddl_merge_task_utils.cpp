@@ -19,10 +19,6 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/ddl/ob_ddl_merge_schedule.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_shared_meta_service.h"
-#include "close_modules/shared_storage/storage/ddl/ob_ss_ddl_util.h"
-#endif
 
 using namespace oceanbase::observer;
 using namespace oceanbase::share::schema;
@@ -47,32 +43,23 @@ int ObIncDDLMergeTaskUtils::prepare_freeze_inc_major_ddl_kv(
   } else {
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      // ss模式
-      // do nothing
+    // sn模式
+    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
+      LOG_WARN("create ddl kv mgr failed", K(ret));
     } else {
-#endif
-      // sn模式
-      if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
-        LOG_WARN("create ddl kv mgr failed", K(ret));
-      } else {
-        static const int64_t max_retry_cnt = 100;
-        int64_t retry_cnt = 0;
-        while (OB_SUCC(ret)) {
-          if (ddl_kv_mgr_handle.get_obj()->can_freeze()) {
-            break;
-          } else if (retry_cnt < max_retry_cnt) {
-            ++retry_cnt;
-            ob_usleep(1000);
-          } else {
-            ret = OB_EAGAIN;
-          }
+      static const int64_t max_retry_cnt = 100;
+      int64_t retry_cnt = 0;
+      while (OB_SUCC(ret)) {
+        if (ddl_kv_mgr_handle.get_obj()->can_freeze()) {
+          break;
+        } else if (retry_cnt < max_retry_cnt) {
+          ++retry_cnt;
+          ob_usleep(1000);
+        } else {
+          ret = OB_EAGAIN;
         }
       }
-#ifdef OB_BUILD_SHARED_STORAGE
     }
-#endif
 
   }
   return ret;
@@ -103,29 +90,11 @@ int ObIncDDLMergeTaskUtils::freeze_inc_major_ddl_kv(
     ObDDLKvMgrHandle ddl_kv_mgr_handle;
     SCN freeze_scn;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      // ss模式
-      freeze_scn = SCN::min_scn();
-      if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          LOG_WARN("fail to get ddl kv mgr", KR(ret), K(tablet_handle));
-        } else {
-          // There is no ddl kv mgr, don't need to freeze ddl kv
-          LOG_INFO("ddl kv mgr not exist", K(tablet_handle));
-          ret = OB_SUCCESS;
-        }
-      }
-    } else {
-#endif
-      // sn模式
-      freeze_scn = commit_scn;
-      if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
-        LOG_WARN("create ddl kv mgr failed", K(ret));
-      }
-#ifdef OB_BUILD_SHARED_STORAGE
+    // sn模式
+    freeze_scn = commit_scn;
+    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle, true/*try_create*/))) {
+      LOG_WARN("create ddl kv mgr failed", K(ret));
     }
-#endif
 
     if (OB_SUCC(ret) && ddl_kv_mgr_handle.is_valid()) {
       ObITable::TableType table_type = ObITable::MAX_TABLE_TYPE;
@@ -313,51 +282,6 @@ int ObIncDDLMergeTaskUtils::update_tablet_table_store_with_storage_schema(
   }
   return ret;
 }
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObIncDDLMergeTaskUtils::link_inc_major(
-    ObLS *ls,
-    const ObTabletHandle &tablet_handle,
-    const ObTransID &trans_id,
-    const ObTxSEQ &seq_no)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(ls == nullptr || !tablet_handle.is_valid() || !trans_id.is_valid() ||
-                  !seq_no.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(ls), K(tablet_handle), K(trans_id), K(seq_no));
-  } else {
-    const ObLSID &ls_id = ls->get_ls_id();
-    const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
-    const int64_t snapshot_version = tablet_handle.get_obj()->get_snapshot_version();
-    const share::SCN transfer_scn = tablet_handle.get_obj()->get_reorganization_scn();
-    ObArenaAllocator allocator(ObMemAttr(MTL_ID(), "LinkIncMajor"));
-    ObTabletHandle ss_tablet_handle;
-    share::SCN ss_tablet_version;
-    bool is_exist = false;
-    if (OB_FAIL(MTL(ObSSMetaService*)->get_tablet(ls_id,
-                                                  tablet_id,
-                                                  transfer_scn,
-                                                  allocator,
-                                                  ss_tablet_handle,
-                                                  ss_tablet_version))) {
-      LOG_WARN("fail to get ss tablet handle", KR(ret), K(ls_id), K(tablet_id), K(transfer_scn));
-    } else if (OB_UNLIKELY(!ss_tablet_handle.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ss tablet handle is invalid", KR(ret), K(ss_tablet_handle));
-    } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_exist(ss_tablet_handle,
-                                                                 trans_id,
-                                                                 seq_no,
-                                                                 is_exist))) {
-      LOG_WARN("fail to check inc major exist", KR(ret), K(ss_tablet_handle), K(trans_id), K(seq_no));
-    } else {
-      FLOG_INFO("[SS INC MAJOR] link inc major succeed", K(ls_id), K(tablet_id), K(trans_id),
-                K(seq_no), K(is_exist));
-    }
-  }
-  return ret;
-}
-
-#endif
 
 int ObIncDDLMergeTaskUtils::get_all_inc_major_ddl_sstables(
     const ObTablet *tablet,
@@ -504,9 +428,7 @@ int ObIncDDLMergeTaskUtils::check_unfinished_inc_major_before_merge(
   bool can_read = false;
   exists_unfinished_inc_major = false;
 
-  if (GCTX.is_shared_storage_mode()) {
-    // ss mode don't need to check
-  } else if (OB_UNLIKELY(OB_ISNULL(ls) || OB_ISNULL(tablet) || !tablet->is_valid())) {
+  if (OB_UNLIKELY(OB_ISNULL(ls) || OB_ISNULL(tablet) || !tablet->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ls or invalid tablet", KR(ret), KP(ls), KPC(tablet));
   } else if (FALSE_IT(tablet_id = tablet->get_tablet_id())) {
@@ -744,158 +666,6 @@ int ObIncDDLMergeTaskUtils::calculate_recycle_scn_from_inc_ddl_kv(
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObIncDDLMergeTaskUtils::gc_ss_inc_major_ddl_dump(const ObIArray<std::pair<share::ObLSID, ObTabletID>> &ls_tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_service = MTL(ObLSService *);
-  if (OB_ISNULL(ls_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service is null", KR(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_tablet_ids.count(); ++i) {
-      const ObLSID &ls_id = ls_tablet_ids.at(i).first;
-      const ObTabletID &tablet_id = ls_tablet_ids.at(i).second;
-      ObLSHandle ls_handle;
-      ObTabletHandle tablet_handle;
-      if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-        LOG_WARN("fail to get ls", KR(ret), K(ls_id));
-      } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid ls handle", KR(ret), K(ls_id));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle))) {
-        LOG_WARN("fail to get tablet", KR(ret), K(ls_id), K(tablet_id));
-      } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid tablet handle", KR(ret), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(ObDDLMergeScheduler::schedule_ss_gc_inc_major_ddl_dump(ls_handle.get_ls(), tablet_handle))) {
-        LOG_WARN("fail to schedule ss gc inc major ddl dump", KR(ret), K(ls_id), K(tablet_id));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObIncDDLMergeTaskUtils::serialize_inc_major_to_string(
-    ObIAllocator &allocator,
-    const ObSSTable *inc_major,
-    const uint64_t data_format_version,
-    ObString &data_buf)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(nullptr == inc_major
-                  || !is_data_version_support_inc_major_direct_load(data_format_version))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(inc_major), K(data_format_version));
-  } else {
-    char *buf = nullptr;
-    int64_t pos = 0;
-    ObSSTablePersistWrapper sstable_persister(data_format_version, inc_major);
-    const int64_t buf_size = sstable_persister.get_serialize_size();
-    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", KR(ret), K(buf_size), KPC(inc_major));
-    } else if (OB_FAIL(sstable_persister.serialize(buf, buf_size, pos))) {
-      LOG_WARN("fail to serialize sstable persister",
-               KR(ret), K(buf_size), K(pos), K(sstable_persister));
-    } else {
-      data_buf.assign_ptr(buf, buf_size);
-    }
-    if (OB_FAIL(ret) && nullptr != buf) {
-      allocator.free(buf);
-      buf = nullptr;
-    }
-  }
-  return ret;
-}
-
-int ObIncDDLMergeTaskUtils::deserialize_inc_major_from_string(
-  ObArenaAllocator &allocator,
-  const ObString &inc_major_buffer,
-  ObSSTable *inc_major)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-  if (OB_UNLIKELY(inc_major_buffer.empty() || inc_major == nullptr)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid nullptr", KR(ret), K(inc_major_buffer.length()),
-                                KP(inc_major_buffer.ptr()), KP(inc_major));
-  } else if (OB_FAIL(inc_major->deserialize(allocator,
-                                            inc_major_buffer.ptr(),
-                                            inc_major_buffer.length(),
-                                            pos))) {
-    LOG_WARN("fail to deserialize inc major",
-             KR(ret), KPC(inc_major), KP(inc_major_buffer.ptr()), K(inc_major_buffer.length()));
-  } else if (pos != inc_major_buffer.length()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("deserialize length mismatch", KR(ret), K(pos), K(inc_major_buffer.length()));
-  } else if (nullptr == inc_major || !inc_major->is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected inc major", KR(ret), KPC(inc_major));
-  }
-  return ret;
-}
-
-int ObIncDDLMergeTaskUtils::deep_copy_string_buffer(ObArenaAllocator &allocator, ObString &buffer)
-{
-  int ret = OB_SUCCESS;
-  if (!buffer.empty()) {
-    char *buf = nullptr;
-    const int64_t buf_len = buffer.length();
-    if (OB_ISNULL(buf = static_cast<char*>(allocator.alloc(buf_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory", KR(ret));
-    } else {
-      MEMCPY(buf, buffer.ptr(), buf_len);
-      buffer.assign_ptr(buf, buf_len);
-    }
-  }
-  return ret;
-}
-
-int ObIncDDLMergeTaskUtils::check_ss_inc_major_exist(
-    ObArenaAllocator &allocator,
-    const ObLSID &ls_id,
-    const ObTabletID &tablet_id,
-    const SCN &transfer_scn,
-    const transaction::ObTransID &trans_id,
-    const transaction::ObTxSEQ &seq_no,
-    const uint64_t &data_format_version,
-    bool &is_exist)
-{
-  int ret = OB_SUCCESS;
-  is_exist = false;
-  ObSSMetaService* ss_meta_service = MTL(ObSSMetaService*);
-  ObTabletHandle ss_tablet_handle;
-  if (OB_UNLIKELY(!ls_id.is_valid()
-                  || !tablet_id.is_valid()
-                  || !trans_id.is_valid()
-                  || !seq_no.is_valid()
-                  || !is_data_version_support_inc_major_direct_load(data_format_version))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id),
-                                 K(trans_id), K(seq_no), K(data_format_version));
-  } else if (OB_ISNULL(ss_meta_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ss meta service", KR(ret));
-  } else if (OB_FAIL(ss_meta_service->get_tablet(ls_id,
-                                                 tablet_id,
-                                                 transfer_scn,
-                                                 allocator,
-                                                 ss_tablet_handle))) {
-    LOG_WARN("fail to get tablet", KR(ret), K(ls_id), K(tablet_id), K(transfer_scn));
-  } else if (OB_UNLIKELY(!ss_tablet_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected ss tablet handle", KR(ret), K(ls_id), K(tablet_id), K(transfer_scn));
-  } else if (OB_FAIL(ObIncMajorTxHelper::check_inc_major_exist(ss_tablet_handle,
-                                                               trans_id,
-                                                               seq_no,
-                                                               is_exist))) {
-    LOG_WARN("fail to check inc major exist", KR(ret), K(ls_id), K(tablet_id), K(trans_id), K(seq_no));
-  }
-  return ret;
-}
-#endif
 
 } //namespace storage
 } //namespace oceanbase
