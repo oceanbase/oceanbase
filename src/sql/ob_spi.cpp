@@ -9206,6 +9206,12 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           ret =OB_ERR_EXPRESSION_WRONG_TYPE;
           LOG_WARN("expr is wrong type", K(ret));
         } else {
+          bool enable_new_padding = false;
+          OZ (ctx->exec_ctx_->get_my_session()->check_feature_enable(ObCompatFeatureType::PL_CHAR_BINARY_PADDING, enable_new_padding));
+          if (OB_SUCC(ret) && !enable_new_padding) {
+            OZ (spi_pad_char_or_varchar(ctx->exec_ctx_->get_my_session(), result_types[0].get_obj_type(),
+                                    accuracy, &tmp_alloc, &src_obj));
+          }
           OZ (deep_copy_obj(*ctx->allocator_, src_obj, result));
         }
         if (OB_SUCC(ret)) {
