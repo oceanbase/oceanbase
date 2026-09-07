@@ -4452,11 +4452,34 @@ int ObLogTableScan::generate_auto_split_filter()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema is null", K(ret), K(table_id), K(is_index_scan()), K(index_table_id_), K(ref_table_id_), K(table_id_));
   } else if (table_schema->get_hidden_partition_num() > 0) {
-    bool need_filter = false;
     if (table_schema->is_range_part() && !table_schema->is_interval_part()) {
-      if (OB_FAIL(check_need_table_split_range_filter(*schema_guard, *table_schema, need_filter))) {
+      // IndexMergePath sets index_id_ to the data table id, so is_index_scan() is false and
+      // table_schema here is the data table. Partkey is usually a data-table rowkey prefix,
+      // which would skip the filter. Child local indexes may still need it, so check them too.
+      if (use_index_merge()) {
+        ObSEArray<ObTableID, 8> index_tids;
+        if (OB_FAIL(get_index_merge_tids(index_tids))) {
+          LOG_WARN("failed to get index merge tids", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && !need_filter && i < index_tids.count(); ++i) {
+          const share::schema::ObTableSchema *index_schema = NULL;
+          if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                     index_tids.at(i),
+                                                     index_schema))) {
+            LOG_WARN("get index schema failed", K(ret), K(index_tids.at(i)));
+          } else if (OB_ISNULL(index_schema)) {
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("index schema is null", K(ret), K(index_tids.at(i)));
+          } else if (index_schema->is_index_local_storage()
+                     && OB_FAIL(check_need_table_split_range_filter(*schema_guard, *index_schema, need_filter))) {
+            LOG_WARN("failed to check need filter", K(ret), K(index_tids.at(i)));
+          }
+        }
+      } else if (OB_FAIL(check_need_table_split_range_filter(*schema_guard, *table_schema, need_filter))) {
         LOG_WARN("failed to check need filter", K(ret));
-      } else if (need_filter && OB_FAIL(construct_table_split_range_filter(session, static_cast<int64_t>(ObTabletSplitType::RANGE)))) {
+      }
+      if (OB_SUCC(ret) && need_filter
+          && OB_FAIL(construct_table_split_range_filter(session, static_cast<int64_t>(ObTabletSplitType::RANGE)))) {
         LOG_WARN("fail to construct table split range filter", K(ret));
       }
     } else if (table_schema->is_key_part()) {
@@ -4466,7 +4489,8 @@ int ObLogTableScan::generate_auto_split_filter()
     }
     if (OB_SUCC(ret) && need_filter) {
       LOG_INFO("generate filter for splitting table", K(need_filter), K(ref_table_id_), K(table_id_),
-          K(get_index_back()), K(is_index_scan()), K(table_schema->get_table_id()), K(table_schema->get_schema_version()));
+          K(get_index_back()), K(is_index_scan()), K(use_index_merge()), K(table_schema->get_table_id()),
+          K(table_schema->get_schema_version()));
     }
   }
   return ret;

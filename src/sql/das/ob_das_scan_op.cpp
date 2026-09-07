@@ -2493,6 +2493,9 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.table_scan_opt_ = lookup_ctdef_->table_scan_opt_;
   scan_param_.fb_snapshot_ = lookup_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = lookup_rtdef_->fb_read_tx_uncommitted_;
+  scan_param_.auto_split_filter_type_ = lookup_ctdef_->pd_expr_spec_.auto_split_filter_type_;
+  scan_param_.auto_split_filter_ = lookup_ctdef_->pd_expr_spec_.auto_split_expr_;
+  scan_param_.auto_split_params_ = const_cast<ExprFixedArray *>(&(lookup_ctdef_->pd_expr_spec_.auto_split_params_));
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
   scan_param_.main_table_scan_stat_.tsc_monitor_info_ = lookup_rtdef_->tsc_monitor_info_;

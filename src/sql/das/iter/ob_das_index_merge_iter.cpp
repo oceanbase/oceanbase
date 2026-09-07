@@ -417,6 +417,9 @@ int ObDASIndexMergeIter::init_scan_param(const share::ObLSID &ls_id,
     scan_param.pd_storage_flag_ = ctdef->pd_expr_spec_.pd_storage_flag_.pd_flag_;
     scan_param.fb_snapshot_ = rtdef->fb_snapshot_;
     scan_param.fb_read_tx_uncommitted_ = rtdef->fb_read_tx_uncommitted_;
+    scan_param.auto_split_filter_type_ = ctdef->pd_expr_spec_.auto_split_filter_type_;
+    scan_param.auto_split_filter_ = ctdef->pd_expr_spec_.auto_split_expr_;
+    scan_param.auto_split_params_ = const_cast<ExprFixedArray *>(&(ctdef->pd_expr_spec_.auto_split_params_));
     scan_param.ls_id_ = ls_id;
     scan_param.tablet_id_ = tablet_id;
     scan_param.enable_new_false_range_ = ctdef->enable_new_false_range_;

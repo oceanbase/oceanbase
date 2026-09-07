@@ -1054,6 +1054,12 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
                                                lookup_pushdown_filters))) {
       LOG_WARN("failed to extract lookup pushdown filters", K(ret));
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(op.get_auto_split_filter())) {
+      ObRawExpr *auto_split_expr = const_cast<ObRawExpr *>(op.get_auto_split_filter());
+      if (OB_FAIL(lookup_pushdown_filters.push_back(auto_split_expr))) {
+        LOG_WARN("fail to push back auto split filter to lookup", K(ret));
+      }
+    }
 
     if (OB_FAIL(ret)) {
     } else if (lookup_ctdef != nullptr && OB_FAIL(generate_pd_storage_flag(op,
@@ -1925,6 +1931,14 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
       }
     } else if (OB_FAIL(op.get_index_filters(scan_ctdef.index_merge_idx_, scan_pushdown_filters))) {
       LOG_WARN("failed to get index filters", K(ret));
+    }
+    // Index merge children skip generate_tsc_filter()'s scan_pushdown_filters, so attach
+    // auto_split_filter here; otherwise dest tablet still reads src SSTable rows.
+    if (OB_SUCC(ret) && OB_NOT_NULL(op.get_auto_split_filter())) {
+      ObRawExpr *auto_split_expr = const_cast<ObRawExpr *>(op.get_auto_split_filter());
+      if (OB_FAIL(scan_pushdown_filters.push_back(auto_split_expr))) {
+        LOG_WARN("fail to push back auto split filter", K(ret));
+      }
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(generate_pd_storage_flag(op,

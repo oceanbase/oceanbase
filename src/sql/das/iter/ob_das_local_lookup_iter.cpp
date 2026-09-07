@@ -131,6 +131,9 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
     param.pd_storage_flag_ = ctdef->pd_expr_spec_.pd_storage_flag_.pd_flag_;
     param.fb_snapshot_ = rtdef->fb_snapshot_;
     param.fb_read_tx_uncommitted_ = rtdef->fb_read_tx_uncommitted_;
+    param.auto_split_filter_type_ = ctdef->pd_expr_spec_.auto_split_filter_type_;
+    param.auto_split_filter_ = ctdef->pd_expr_spec_.auto_split_expr_;
+    param.auto_split_params_ = const_cast<ExprFixedArray *>(&(ctdef->pd_expr_spec_.auto_split_params_));
     if (rtdef->is_for_foreign_check_) {
       param.trans_desc_ = trans_desc_;
     }
