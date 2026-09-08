@@ -113,10 +113,9 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, SCN
 {
   int ret = OB_SUCCESS;
   ArchiveKey key;
-  ObArchivePersistValue *value = NULL;
   ObLSArchivePersistInfo info;
   bool is_madatory = false;
-  int64_t unused_speed = 0;
+  bool record_exist = false;
   ignore = false;
   force = false;
   ObArchiveRoundState state;
@@ -130,35 +129,46 @@ int ObArchivePersistMgr::get_ls_archive_progress(const ObLSID &id, LSN &lsn, SCN
   if (OB_UNLIKELY(! id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     ARCHIVE_LOG(WARN, "invalid argument", K(ret), K(id));
+  } else if (state.is_invalid()) {
+    // The local tenant archive state may not have been restored after restart.
+    bool tenant_in_archive = false;
+    if (! is_user_tenant(tenant_id_)) {
+      ignore = true;
+    } else if (OB_FAIL(check_tenant_in_archive(tenant_in_archive))) {
+      ARCHIVE_LOG(WARN, "check tenant in archive failed", K(ret), K(id));
+    } else if (tenant_in_archive) {
+      ret = OB_EAGAIN;
+      ARCHIVE_LOG(WARN, "archive round has not been initialized, need retry", K(ret), K(id));
+    } else {
+      ignore = true;
+    }
   } else if (! state_in_archive_(state)) {
     // archive not in beginning or doing or suspend state, just ignore it
     ignore = true;
-  } else if (OB_FAIL(map_.get(id, value))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      // archive progress not exist, need retry
+  } else if (OB_FAIL(get_ls_archive_progress_info_(id, key, info, is_madatory, record_exist))) {
+    ARCHIVE_LOG(WARN, "get ls archive progress info failed", K(ret), K(id), K(key));
+  } else if (! record_exist) {
+    force = is_madatory;
+    if (is_madatory) {
       ret = OB_EAGAIN;
-      ARCHIVE_LOG(WARN, "archive progress not exist, need retry", K(ret), K(id));
+      ARCHIVE_LOG(WARN, "mandatory archive progress not exist, need retry", K(ret), K(id));
     } else {
-      ARCHIVE_LOG(WARN, "get archive progress failed", K(ret), K(id));
-    }
-  } else if (OB_ISNULL(value)) {
-    ret = OB_ERR_UNEXPECTED;
-    ARCHIVE_LOG(ERROR, "archive progress value is NULL", K(ret), K(id), K(value));
-  } else {
-    value->get(is_madatory, unused_speed, info);
-    if (ArchiveKey(info.incarnation_, info.key_.dest_id_, info.key_.round_id_) != key) {
-      ret = OB_EAGAIN;
-      ARCHIVE_LOG(WARN, "ls archive progress not match with tenant, need retry",
-          K(key), K(is_madatory), K(info));
-    } else if (info.state_.is_interrupted()) {
       ignore = true;
-      ARCHIVE_LOG(WARN, "ls archive progress is interrupted, skip it", K(id), K(info));
-    } else {
-      lsn = palf::LSN(info.lsn_);
-      scn = info.checkpoint_scn_;
-      force = is_madatory;
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+        ARCHIVE_LOG(INFO, "optional archive progress not exist, just ignore it", K(id));
+      }
     }
-    map_.revert(value);
+  } else if (ArchiveKey(info.incarnation_, info.key_.dest_id_, info.key_.round_id_) != key) {
+    ret = OB_EAGAIN;
+    ARCHIVE_LOG(WARN, "ls archive progress not match with tenant, need retry",
+        K(key), K(is_madatory), K(info));
+  } else if (info.state_.is_interrupted()) {
+    ignore = true;
+    ARCHIVE_LOG(WARN, "ls archive progress is interrupted, skip it", K(id), K(info));
+  } else {
+    lsn = palf::LSN(info.lsn_);
+    scn = info.checkpoint_scn_;
+    force = is_madatory;
   }
   return ret;
 }
@@ -529,6 +539,40 @@ int ObArchivePersistMgr::clear_stale_ls_()
 bool ObArchivePersistMgr::state_in_archive_(const share::ObArchiveRoundState &state) const
 {
   return state.is_beginning() || state.is_doing() || state.is_suspending() || state.is_suspend();
+}
+
+int ObArchivePersistMgr::get_ls_archive_progress_info_(const ObLSID &id,
+    const ArchiveKey &key,
+    ObLSArchivePersistInfo &info,
+    bool &is_madatory,
+    bool &record_exist)
+{
+  int ret = OB_SUCCESS;
+  ObArchivePersistValue *value = NULL;
+  int64_t unused_speed = 0;
+  is_madatory = false;
+  record_exist = false;
+  info.reset();
+  if (OB_FAIL(map_.get(id, value))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(load_ls_archive_progress_(id, key, info, record_exist))) {
+        ARCHIVE_LOG(WARN, "load ls archive progress failed", K(ret), K(id), K(key));
+      } else if (OB_FAIL(load_dest_mode_(is_madatory))) {
+        ARCHIVE_LOG(WARN, "load archive dest mode failed", K(ret), K(id));
+      }
+    } else {
+      ARCHIVE_LOG(WARN, "get archive progress failed", K(ret), K(id));
+    }
+  } else if (OB_ISNULL(value)) {
+    ret = OB_ERR_UNEXPECTED;
+    ARCHIVE_LOG(ERROR, "archive progress value is NULL", K(ret), K(id), K(value));
+  } else {
+    value->get(is_madatory, unused_speed, info);
+    record_exist = true;
+    map_.revert(value);
+  }
+  return ret;
 }
 
 int ObArchivePersistMgr::load_ls_archive_progress_(const ObLSID &id,
