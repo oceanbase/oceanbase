@@ -261,6 +261,7 @@ struct ObOptParamHint
     DEF(PARTITION_ORDERED,)                         \
     DEF(ENABLE_ADAPTIVE_AUTO_DOP,)                \
     DEF(EXTERNAL_TABLE_FILE_SIZE_LOAD_BALANCE,)    \
+    DEF(_ENABLE_PX_TASK_REBALANCE,)                \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

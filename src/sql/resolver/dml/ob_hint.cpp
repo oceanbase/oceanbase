@@ -957,7 +957,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_MERGE_INTO:
     case ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK:
     case VEC_BATCH_ACCUM_ENABLED:
-    case PRESERVE_ORDER_FOR_GROUPBY: {
+    case PRESERVE_ORDER_FOR_GROUPBY:
+    case _ENABLE_PX_TASK_REBALANCE: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
