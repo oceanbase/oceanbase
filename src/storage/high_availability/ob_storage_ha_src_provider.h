@@ -98,6 +98,7 @@ public:
   const static char *ObChooseSourcePolicyStr[static_cast<int64_t>(ChooseSourcePolicy::MAX_POLICY)];
   const static char *get_policy_str(const ChooseSourcePolicy policy_type);
   int check_tenant_primary(bool &is_primary);
+  int advance_src_ls_checkpoint(const ObMigrationOpArg &arg);
 
 protected:
   // The validity assessment of replicas includes:
@@ -134,6 +135,7 @@ private:
       const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, share::SCN &parent_checkpoint_scn);
   int get_palf_parent_addr_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObReplicaType replica_type, const ObMigrationOpType::TYPE op_type, common::ObAddr &parent_addr);
+  int record_checkpoint_failed_src_(const common::ObAddr &addr);
 
 private:
   uint64_t tenant_id_;
@@ -144,6 +146,7 @@ private:
   ObStorageHAGetMemberHelper *member_helper_;
   storage::ObStorageRpc *storage_rpc_;
   ChooseSourcePolicy policy_type_;
+  common::ObSEArray<common::ObAddr, 3> checkpoint_failed_srcs_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHASrcProvider);
 };
 

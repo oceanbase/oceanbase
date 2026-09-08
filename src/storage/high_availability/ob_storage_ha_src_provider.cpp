@@ -285,7 +285,8 @@ ObStorageHASrcProvider::ObStorageHASrcProvider()
     palf_parent_checkpoint_scn_(),
     member_helper_(nullptr),
     storage_rpc_(nullptr),
-    policy_type_(ChooseSourcePolicy::IDC)
+    policy_type_(ChooseSourcePolicy::IDC),
+    checkpoint_failed_srcs_()
 {}
 
 ObStorageHASrcProvider::~ObStorageHASrcProvider()
@@ -561,8 +562,10 @@ int ObStorageHASrcProvider::check_replica_validity(
     const common::GlobalLearnerList &learner_list, obrpc::ObFetchLSMetaInfoResp &ls_info)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ls_info.reset();
-  bool is_replica_type_valid;
+  bool is_replica_type_valid = false;
+  bool checkpoint_not_enough = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObStorageHASrcProvider is not init.", K(ret));
@@ -589,12 +592,41 @@ int ObStorageHASrcProvider::check_replica_validity(
     LOG_WARN("failed to check replica validity", K(ret), K(ls_info));
   } else if (local_clog_checkpoint_scn_ > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {
     ret = OB_DATA_SOURCE_NOT_VALID;
+    checkpoint_not_enough = true;
     LOG_WARN("do not choose this src, local checkpoint scn check failed", K(ret), K(tenant_id_), K(ls_id_), K(member), K(dst), K(learner_list),
         K(local_clog_checkpoint_scn_), K(ls_info));
   } else if (palf_parent_checkpoint_scn_ > ls_info.ls_meta_package_.ls_meta_.get_clog_checkpoint_scn()) {
     ret = OB_DATA_SOURCE_NOT_VALID;
+    checkpoint_not_enough = true;
     LOG_WARN("do not choose this src, parent checkpoint scn check failed", K(ret), K(tenant_id_), K(ls_id_), K(member), K(dst), K(learner_list),
         K(palf_parent_checkpoint_scn_), K(ls_info));
+  }
+
+  if (checkpoint_not_enough && !member.is_logonly() && member.get_server() != dst.get_server()) {
+    if (OB_TMP_FAIL(record_checkpoint_failed_src_(member.get_server()))) {
+      LOG_WARN("failed to record source with an insufficient checkpoint", K(tmp_ret), K(member), K(dst));
+    }
+  }
+  return ret;
+}
+
+int ObStorageHASrcProvider::record_checkpoint_failed_src_(const common::ObAddr &addr)
+{
+  int ret = OB_SUCCESS;
+  bool exist = false;
+  if (!addr.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid source address", K(ret), K(addr));
+  } else {
+    for (int64_t i = 0; i < checkpoint_failed_srcs_.count(); ++i) {
+      if (checkpoint_failed_srcs_.at(i) == addr) {
+        exist = true;
+        break;
+      }
+    }
+    if (!exist && OB_FAIL(checkpoint_failed_srcs_.push_back(addr))) {
+      LOG_WARN("failed to record source address", K(ret), K(addr));
+    }
   }
   return ret;
 }
@@ -628,6 +660,33 @@ int ObStorageHASrcProvider::check_tenant_primary(bool &is_primary)
     LOG_WARN("ObStorageHASrcProvider is not init.", K(ret));
   } else {
     is_primary = member_helper_->check_tenant_primary();
+  }
+  return ret;
+}
+
+int ObStorageHASrcProvider::advance_src_ls_checkpoint(const ObMigrationOpArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObStorageHASrcProvider is not init.", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (checkpoint_failed_srcs_.empty()) {
+    LOG_INFO("no source has an insufficient checkpoint, skip advancing checkpoint", K(arg));
+  } else {
+    const common::ObAddr &chosen_src_addr = checkpoint_failed_srcs_.at(rand() % checkpoint_failed_srcs_.count());
+    ObStorageHASrcInfo src_info;
+    src_info.src_addr_ = chosen_src_addr;
+    src_info.cluster_id_ = GCONF.cluster_id;
+    const share::SCN recycle_scn = MAX(local_clog_checkpoint_scn_, palf_parent_checkpoint_scn_);
+    if (OB_FAIL(storage_rpc_->advance_src_ls_checkpoint(tenant_id_, src_info, ls_id_, recycle_scn))) {
+      LOG_WARN("failed to request advancing source ls checkpoint", K(ret), K(chosen_src_addr),
+          K(local_clog_checkpoint_scn_), K(palf_parent_checkpoint_scn_));
+    } else {
+      LOG_INFO("requested advancing source ls checkpoint", K(chosen_src_addr), K(recycle_scn));
+    }
   }
   return ret;
 }
@@ -1518,6 +1577,14 @@ int ObStorageHAChooseSrcHelper::get_available_src(const ObMigrationOpArg &arg, O
     src_info.cluster_id_ = GCONF.cluster_id;
     LOG_INFO("succeed to choose src", K(src_info));
     errsim_test_(arg, src_info);
+  }
+  if (OB_DATA_SOURCE_NOT_EXIST == ret || OB_DATA_SOURCE_NOT_VALID == ret) {
+    int advance_ckpt_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (advance_ckpt_ret = provider_->advance_src_ls_checkpoint(arg))) {
+      LOG_WARN("failed to advance src ls checkpoint", K(advance_ckpt_ret), K(arg));
+    } else {
+      LOG_INFO("succeed to advance src ls checkpoint", K(advance_ckpt_ret), K(arg));
+    }
   }
   SERVER_EVENT_ADD("storage_ha", "choose_src",
                    "tenant_id", provider_->get_tenant_id(),

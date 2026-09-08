@@ -808,6 +808,20 @@ public:
   uint64_t version_;
 };
 
+struct ObAdvanceSrcLSCheckpointArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAdvanceSrcLSCheckpointArg();
+  ~ObAdvanceSrcLSCheckpointArg();
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(recycle_scn));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  share::SCN recycle_scn_;
+};
 
 //src
 class ObStorageRpcProxy : public obrpc::ObRpcProxy
@@ -839,6 +853,7 @@ public:
   RPC_S(PR5 get_config_change_lock_stat, OB_HA_GET_CONFIG_CHANGE_LOCK_STAT, (ObStorageConfigChangeOpArg), ObStorageConfigChangeOpRes);
   RPC_S(PR5 wakeup_transfer_service, OB_HA_WAKEUP_TRANSFER_SERVICE, (ObStorageWakeupTransferServiceArg));
   RPC_S(PR5 fetch_ls_member_and_learner_list, OB_HA_FETCH_LS_MEMBER_AND_LEARNER_LIST, (ObFetchLSMemberAndLearnerListArg), ObFetchLSMemberAndLearnerListInfo);
+  RPC_S(PR5 advance_src_ls_checkpoint, OB_HA_ADVANCE_SRC_LS_CHECKPOINT, (ObAdvanceSrcLSCheckpointArg), obrpc::Int64);
 
 
   // RPC_AP stands for asynchronous RPC.
@@ -1267,6 +1282,16 @@ private:
   int build_sstable_info_(ObLS *ls);
 };
 
+class ObAdvanceSrcLSCheckpointP:
+  public ObStorageRpcProxy::Processor<OB_HA_ADVANCE_SRC_LS_CHECKPOINT>
+{
+public:
+  ObAdvanceSrcLSCheckpointP() = default;
+  virtual ~ObAdvanceSrcLSCheckpointP() {}
+protected:
+  int process();
+};
+
 } // obrpc
 
 
@@ -1478,6 +1503,11 @@ public:
       const share::ObLSID &ls_id,
       const ObStorageHASrcInfo &src_info,
       obrpc::ObFetchLSMemberAndLearnerListInfo &member_info);
+  virtual int advance_src_ls_checkpoint(
+      const uint64_t tenant_id,
+      const ObStorageHASrcInfo &src_info,
+      const share::ObLSID &ls_id,
+      const share::SCN &recycle_scn);
 private:
   bool is_inited_;
   obrpc::ObStorageRpcProxy *rpc_proxy_;

@@ -461,7 +461,11 @@ public:
                                          ObLSMetaPackage &meta_package,
                                          common::ObIArray<common::ObTabletID> &tablet_ids);
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
-  DELEGATE_WITH_RET(ls_meta_, set_rebuild_info, int);
+  int set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
+  {
+    ObLSLockGuard guard(this, lock_, LSLOCKLS, LSLOCKLOGMETA);
+    return ls_meta_.set_rebuild_info(rebuild_info);
+  }
   DELEGATE_WITH_RET(ls_meta_, get_rebuild_info, int);
 
 

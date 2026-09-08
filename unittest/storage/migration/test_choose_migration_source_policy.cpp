@@ -37,6 +37,8 @@ public:
 
   MOCK_METHOD4(post_ls_meta_info_request, int(const uint64_t, const ObStorageHASrcInfo &,
       const share::ObLSID &, obrpc::ObFetchLSMetaInfoResp &));
+  MOCK_METHOD4(advance_src_ls_checkpoint, int(const uint64_t, const ObStorageHASrcInfo &,
+      const share::ObLSID &, const share::SCN &));
 };
 
 class MockGetMemberHelper : public ObStorageHAGetMemberHelper
@@ -498,6 +500,73 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
   common::ObAddr expect_addr;
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
   EXPECT_EQ(expect_addr, src_info.src_addr_);
+}
+
+TEST_F(TestChooseMigrationSourcePolicy, rs_recommend_checkpoint_not_enough_triggers_advance)
+{
+  MockLsMetaInfo ls_meta;
+  EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+      .WillRepeatedly(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint));
+  EXPECT_CALL(storage_rpc_, advance_src_ls_checkpoint(_, _, _, _))
+      .Times(1)
+      .WillOnce(::testing::Return(OB_SUCCESS));
+  MockMemberList member_list;
+  EXPECT_CALL(member_helper_, get_ls_member_list_and_learner_list_(_, _, _, _, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_member_list_for_rs_recommand));
+  EXPECT_CALL(member_helper_, get_ls_leader(_, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_leader_succ));
+  EXPECT_CALL(member_helper_, get_ls(_, _, _))
+      .WillRepeatedly(Invoke(&member_list, &MockMemberList::get_ls_fail));
+  const uint64_t tenant_id = 1001;
+  const share::ObLSID ls_id(1);
+  share::SCN local_ls_checkpoint_scn;
+  local_ls_checkpoint_scn.set_base();
+  ObMigrationOpArg mock_arg;
+  EXPECT_EQ(OB_SUCCESS, mock_migrate_arg_for_rs_recommand(mock_arg));
+  ObStorageHASrcProvider::ChooseSourcePolicy policy;
+  EXPECT_EQ(OB_SUCCESS, get_recommand_policy(mock_arg, tenant_id, policy));
+  ObStorageHASrcInfo src_info;
+  EXPECT_EQ(OB_SUCCESS, choose_src_helper_.init(tenant_id, ls_id, local_ls_checkpoint_scn,
+      mock_arg, policy, &storage_rpc_, &member_helper_));
+  EXPECT_EQ(OB_DATA_SOURCE_NOT_VALID, choose_src_helper_.get_available_src(mock_arg, src_info));
+}
+
+TEST_F(TestChooseMigrationSourcePolicy, logonly_checkpoint_source_is_not_recorded)
+{
+  MockLsMetaInfo ls_meta;
+  EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+      .WillRepeatedly(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_min_checkpoint));
+  const uint64_t tenant_id = 1001;
+  const share::ObLSID ls_id(1);
+  share::SCN local_ls_checkpoint_scn;
+  local_ls_checkpoint_scn.set_base();
+  ObMigrationLogOnlyProvider provider;
+  provider.is_inited_ = true;
+  provider.tenant_id_ = tenant_id;
+  provider.ls_id_ = ls_id;
+  provider.local_clog_checkpoint_scn_ = local_ls_checkpoint_scn;
+  provider.palf_parent_checkpoint_scn_.set_min();
+  provider.storage_rpc_ = &storage_rpc_;
+
+  common::ObAddr src_addr;
+  common::ObAddr dst_addr;
+  EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", src_addr));
+  EXPECT_EQ(OB_SUCCESS, mock_dst_addr(dst_addr));
+  common::ObMember logonly_member(src_addr, 0);
+  logonly_member.set_logonly();
+  common::ObReplicaMember dst(dst_addr, 0, common::ObReplicaType::REPLICA_TYPE_LOGONLY);
+  common::GlobalLearnerList learner_list;
+  obrpc::ObFetchLSMetaInfoResp ls_info;
+
+  EXPECT_EQ(OB_DATA_SOURCE_NOT_VALID,
+      provider.check_replica_validity(logonly_member, dst, learner_list, ls_info));
+  EXPECT_TRUE(provider.checkpoint_failed_srcs_.empty());
+
+  common::ObMember full_member(src_addr, 0);
+  EXPECT_EQ(OB_DATA_SOURCE_NOT_VALID,
+      provider.check_replica_validity(full_member, dst, learner_list, ls_info));
+  ASSERT_EQ(1, provider.checkpoint_failed_srcs_.count());
+  EXPECT_EQ(src_addr, provider.checkpoint_failed_srcs_.at(0));
 }
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
