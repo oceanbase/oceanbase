@@ -206,8 +206,15 @@ int ObSqlStatManager::get_or_create_sql_stat_record(
       ret = OB_SUCCESS;
       is_create = true;
       if (OB_FAIL(sql_stat_infos_.create(key, record))) {
-        LOG_WARN("failed to insert and get sql stat record", K(ret), K(key),
-                 KP(record), K(record));
+        if (OB_ENTRY_EXIST == ret) {
+          is_create = false;
+          if (OB_FAIL(sql_stat_infos_.get(key, record))) {
+            LOG_WARN("failed to get sql stat record after concurrent create", K(ret), K(key));
+          }
+        } else {
+          LOG_WARN("failed to insert and get sql stat record", K(ret), K(key),
+                   KP(record), K(record));
+        }
       }
     } else {
       LOG_WARN("failed to get sql stat record", K(ret), K(key));
