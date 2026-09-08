@@ -1122,32 +1122,43 @@ int ObCompressTmpFileBunch::init(
       if (OB_FAIL(ret)) {
         int tmp_ret = OB_SUCCESS;
         for (int64_t j = 0; j <= i; j++) {
+          int64_t remove_fd = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
+          ObCompressTmpFileHandle comp_tmp_file_handle;
           ObCompressTmpFile *alloced_file = nullptr;
           if (j < i) {
-            int64_t remove_fd = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
-            ObCompressTmpFileHandle comp_tmp_file_handle;
             if (OB_UNLIKELY(j >= fds_.count())) {
               tmp_ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected fds_", KR(ret), KR(tmp_ret), K(target_fd), K(j), K(fds_));
-            } else if (FALSE_IT(remove_fd = fds_.at(j))) {
-            } else if (OB_TMP_FAIL(compressible_files_->get(ObTmpFileKey(remove_fd), comp_tmp_file_handle))) {
-              LOG_WARN("fail to get compressible tmp file", KR(ret), KR(tmp_ret), K(remove_fd));
-            } else if (OB_ISNULL(comp_tmp_file_handle.get())) {
-              tmp_ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get invalid compressible tmp file pointer", KR(ret), KR(tmp_ret), K(remove_fd), KP(comp_tmp_file_handle.get()));
             } else {
-              alloced_file = comp_tmp_file_handle.get();
+              remove_fd = fds_.at(j);
             }
           } else { //j == i
             alloced_file = comp_tmp_file;
+            if (NULL != alloced_file && ObTmpFileGlobal::INVALID_TMP_FILE_FD != fd) {
+              remove_fd = fd;
+            }
+          }
+          if (ObTmpFileGlobal::INVALID_TMP_FILE_FD != remove_fd) {
+            int erase_ret = compressible_files_->erase(ObTmpFileKey(remove_fd), comp_tmp_file_handle);
+            if (OB_SUCCESS == erase_ret) {
+              if (NULL == alloced_file) {
+                alloced_file = comp_tmp_file_handle.get();
+              }
+            } else if (OB_ENTRY_NOT_EXIST != erase_ret) {
+              tmp_ret = erase_ret;
+              LOG_WARN("fail to erase compressible tmp file from map", KR(ret), KR(tmp_ret), K(remove_fd));
+            }
           }
           if (NULL != alloced_file) {
             if (OB_TMP_FAIL(alloced_file->remove_files_if_needed(tenant_id))) {
               LOG_WARN("fail to remove files if needed", KR(ret), KR(tmp_ret), K(fd), K(tenant_id), KPC(comp_tmp_file));
             } else {
+              comp_tmp_file_handle.reset();
+              if (j < i && j < comp_file_handles_.count()) {
+                comp_file_handles_.at(j).reset();
+              }
               alloced_file->~ObCompressTmpFile();
               comp_tmp_file_allocator->free(alloced_file);
-              alloced_file = nullptr;
             }
           }
         }
