@@ -10171,6 +10171,7 @@ int ObDDLService::alter_dependent_prefix_index_column(
         LOG_WARN("schema service update aux column failed", K(ret), K(table_schema), K(new_prefix_column));
       } else if (OB_FAIL(alter_table_update_index_and_view_column(table_schema,
                                                                   new_prefix_column,
+                                                                  OB_DDL_MODIFY_COLUMN,
                                                                   schema_guard_wrapper,
                                                                   ddl_operator,
                                                                   trans,
@@ -10297,6 +10298,7 @@ int ObDDLService::check_new_column_for_index(
 int ObDDLService::alter_table_update_index_and_view_column(
     const ObTableSchema &new_table_schema,
     const ObColumnSchemaV2 &new_column_schema,
+    const ObSchemaOperationType column_operation_type,
     ObSchemaGuardWrapper &schema_guard,
     ObDDLOperator &ddl_operator,
     common::ObMySQLTransaction &trans,
@@ -10314,12 +10316,11 @@ int ObDDLService::alter_table_update_index_and_view_column(
     // MLOG / MVIEW are only handled on the serial path because ObMviewAlterService
     // requires a real ObSchemaGetterGuard. The parallel path (Wrapper) already
     // guards against mlog/mview tables in check_can_drop_column_ and falls back.
-    if (OB_FAIL(ObMviewAlterService::update_mlog_in_modify_column(
-                                    new_table_schema, *local_guard, ddl_operator, trans))) {
-      LOG_WARN("fail to update mlog column", K(ret), K(new_table_schema));
-    } else if (OB_FAIL(ObMviewAlterService::update_mview_in_modify_column(
-                                    new_table_schema, *local_guard, ddl_operator, trans))) {
-      LOG_WARN("fail to update mview column", K(ret), K(new_table_schema));
+    if (OB_FAIL(ObMviewAlterService::update_mlog_and_mview_in_alter_column(
+            new_table_schema, new_column_schema, column_operation_type,
+            *local_guard, ddl_operator, trans))) {
+      LOG_WARN("fail to update mlog or mview column", K(ret), K(new_table_schema),
+               K(new_column_schema), K(column_operation_type));
     }
   }
   return ret;
@@ -11435,6 +11436,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
             } else if (OB_FAIL(alter_table_update_index_and_view_column(
                                  new_table_schema,
                                  new_column_schema,
+                                 alter_column_schema->alter_type_,
                                  schema_guard_wrapper,
                                  ddl_operator,
                                  trans,
@@ -11565,6 +11567,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                 RS_LOG(WARN, "failed to alter shadow column for index", K(ret));
               } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                           new_column_schema,
+                                                                          alter_column_schema->alter_type_,
                                                                           schema_guard_wrapper,
                                                                           ddl_operator,
                                                                           trans))) {
@@ -11669,6 +11672,7 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                   RS_LOG(WARN, "failed to alter column", K(alter_column_schema), K(ret));
                 } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema,
                                                                             new_column_schema,
+                                                                            alter_column_schema->alter_type_,
                                                                             schema_guard_wrapper,
                                                                             ddl_operator,
                                                                             trans))) {
@@ -25540,6 +25544,30 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
             LOG_WARN("fail to lock mview", KR(ret), KPC(table_schema));
           } else if (OB_FAIL(lock_table(trans, *container_table_schema))) {
             LOG_WARN("fail to lock_table", KR(ret), KPC(container_table_schema));
+          } else {
+            ObSEArray<sql::ObMVDepInfo, 16> mv_dep_infos;
+            if (OB_FAIL(sql::ObMVDepUtils::get_mview_dep_infos(trans,
+                                                               tenant_id,
+                                                               table_schema->get_table_id(),
+                                                               mv_dep_infos,
+                                                               true /*ignore_udt_udf*/))) {
+              LOG_WARN("failed to get mview dep infos", KR(ret), K(table_schema->get_table_id()));
+            }
+            for (int64_t j = 0; OB_SUCC(ret) && j < mv_dep_infos.count(); ++j) {
+              const sql::ObMVDepInfo &dep_info = mv_dep_infos.at(j);
+              const uint64_t base_table_id = dep_info.p_obj_;
+              const ObTableSchema *base_table_schema = nullptr;
+              if (static_cast<int64_t>(ObObjectType::TABLE) != dep_info.p_type_) {
+              } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_id, base_table_schema))) {
+                LOG_WARN("failed to get base table schema", KR(ret), K(base_table_id));
+              } else if (OB_ISNULL(base_table_schema)) {
+                // do nothing
+              } else if (!base_table_schema->has_mlog_table()) {
+                // do nothing
+              } else if (OB_FAIL(lock_table(trans, *base_table_schema))) {
+                LOG_WARN("failed to lock mview base table", KR(ret), K(base_table_id));
+              }
+            }
           }
         }
       }
@@ -35292,8 +35320,8 @@ int ObDDLService::pre_rename_mysql_columns_online(
                                                                      new_col_schemas.at(i), need_del_stats))) {
         LOG_WARN("failed to update column and column group", KR(ret), K(new_col_schemas.at(i)));
       } else if (OB_FAIL(alter_table_update_index_and_view_column(
-                   new_table_schema, new_col_schemas.at(i), schema_guard_wrapper, ddl_operator, trans,
-                   global_idx_schema_array))) {
+                   new_table_schema, new_col_schemas.at(i), OB_DDL_CHANGE_COLUMN,
+                   schema_guard_wrapper, ddl_operator, trans, global_idx_schema_array))) {
         LOG_WARN("failedt o update index column", K(ret));
       } else {
         ObColumnNameHashWrapper orig_col_name_key(orig_col_names.at(i));

@@ -12387,6 +12387,7 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_MODE)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::ENCRYPTION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TABLESPACE_ID)
+                || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::AUTO_INCREMENT)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::INCREMENT_MODE)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)
                 || arg.alter_table_schema_.alter_option_bitset_.has_member(ObAlterTableArg::KV_ATTRIBUTES)))

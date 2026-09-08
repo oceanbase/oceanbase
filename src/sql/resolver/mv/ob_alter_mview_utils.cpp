@@ -360,8 +360,20 @@ int ObAlterMviewUtils::check_column_option_for_mv_base_table(const ObTableSchema
 {
   int ret = OB_SUCCESS;
   if (table_schema.required_by_mv_refresh()) {
+    bool is_allowed = false;
     if (T_COLUMN_ADD == type || T_COLUMN_MODIFY == type || T_COLUMN_ALTER == type) {
-    } else {
+      is_allowed = true;
+    } else if (T_COLUMN_CHANGE == type
+               || T_COLUMN_RENAME == type
+               || T_COLUMN_DROP == type) {
+      uint64_t data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+        LOG_WARN("failed to get tenant data version", K(ret), K(table_schema));
+      } else {
+        is_allowed = data_version >= DATA_VERSION_5_0_2_0;
+      }
+    }
+    if (OB_SUCC(ret) && !is_allowed) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
                      "modify column to table required by materialized view is");

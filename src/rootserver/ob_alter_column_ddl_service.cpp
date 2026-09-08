@@ -734,7 +734,9 @@ int ObDDLService::drop_column_online(
     } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, origin_table_schema, new_table_schema,
                                                                    *new_column_schema, true/*need_del_stats*/))) {
       LOG_WARN("failed to update column and column group", KR(ret), KPC(new_column_schema));
-    } else if (OB_FAIL(alter_table_update_index_and_view_column(new_table_schema, *new_column_schema, schema_guard, ddl_operator, trans))) {
+    } else if (OB_FAIL(alter_table_update_index_and_view_column(
+                   new_table_schema, *new_column_schema, OB_DDL_DROP_COLUMN,
+                   schema_guard, ddl_operator, trans))) {
       LOG_WARN("update column in aux table failed", KR(ret));
     }
   }

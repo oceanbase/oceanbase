@@ -368,34 +368,16 @@ int ObAlterTableDropColumnAction::check_can_drop_column_()
       LOG_WARN("oracle temporary table column is not allowed to be dropped", KR(ret));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "drop column on oracle temporary table is");
     }
-    // MLOG / MVIEW handling, aligned with master resolver
-    // (ObAlterMviewUtils::check_column_option_for_mlog_master) and serial path
-    // (ObMviewAlterService::update_mview_in_modify_column).
-    //
-    //   has_mlog_table()            -> OB_NOT_SUPPORTED (resolver also rejects)
-    //   is_materialized_view()      -> OB_NOT_SUPPORTED (MV itself does not go
-    //                                  through normal alter column)
-    //   table_referenced_by_mv()    -> fall back to serial
-    //
-    // A plain base table referenced only by full-refresh MVs (no MLOG, no
-    // incremental MV, no nested MV) can be supported in the future once the
-    // parallel path gains an equivalent of ObMviewAlterService.
-    if (OB_SUCC(ret) && orig_table_schema->has_mlog_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "modify column to table with materialized view log is");
-      LOG_WARN("modify column to table with materialized view log is not supported",
-               KR(ret), "table_id", orig_table_schema->get_table_id());
-    } else if (OB_SUCC(ret) && orig_table_schema->is_materialized_view()) {
+    // The serial path updates MLOG metadata and checks the dropped column against
+    // every referring MV. Parallel drop falls back so those checks are not bypassed.
+    if (OB_SUCC(ret) && orig_table_schema->is_materialized_view()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop column on materialized view is");
       LOG_WARN("drop column on materialized view is not supported",
                KR(ret), "table_id", orig_table_schema->get_table_id());
-    } else if (OB_SUCC(ret) && orig_table_schema->table_referenced_by_mv()) {
+    } else if (OB_SUCC(ret) && orig_table_schema->required_by_mv_refresh()) {
       ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-      LOG_INFO("table referenced by materialized view, parallel drop column "
-               "falls back to serial (serial will rebuild MV container schema "
-               "or reject nested MV)", KR(ret),
+      LOG_INFO("materialized view base table falls back to serial drop column", KR(ret),
                "table_id", orig_table_schema->get_table_id());
     }
   }

@@ -17,6 +17,52 @@ using namespace share::schema;
 namespace rootserver
 {
 
+class ObMviewAlterService::ObMviewStmtHandler
+{
+public:
+  virtual ~ObMviewStmtHandler() = default;
+  virtual int handle(const sql::ObSelectStmt *stmt, sql::ObSQLSessionInfo &session_info) = 0;
+};
+
+class ObMviewAlterService::ObCheckColumnReferenceHandler final : public ObMviewAlterService::ObMviewStmtHandler
+{
+public:
+  ObCheckColumnReferenceHandler(const uint64_t base_table_id, const uint64_t base_column_id, bool &is_referenced)
+      : base_table_id_(base_table_id),
+        base_column_id_(base_column_id),
+        is_referenced_(is_referenced)
+  {}
+
+  virtual ~ObCheckColumnReferenceHandler() = default;
+
+  virtual int handle(const sql::ObSelectStmt *stmt, sql::ObSQLSessionInfo &session_info) override
+  {
+    UNUSED(session_info);
+    return ObMviewAlterService::check_column_referenced_by_stmt(stmt, base_table_id_, base_column_id_, is_referenced_);
+  }
+
+private:
+  const uint64_t base_table_id_;
+  const uint64_t base_column_id_;
+  bool &is_referenced_;
+};
+
+class ObMviewAlterService::ObUpdateMvContainerSchemaHandler final : public ObMviewAlterService::ObMviewStmtHandler
+{
+public:
+  explicit ObUpdateMvContainerSchemaHandler(share::schema::ObTableSchema &mv_container_schema)
+      : mv_container_schema_(mv_container_schema)
+  {}
+
+  virtual ~ObUpdateMvContainerSchemaHandler() = default;
+
+  virtual int handle(const sql::ObSelectStmt *stmt, sql::ObSQLSessionInfo &session_info) override
+  { return ObMviewAlterService::update_mv_container_schema_with_stmt(stmt, session_info, mv_container_schema_); }
+
+private:
+  share::schema::ObTableSchema &mv_container_schema_;
+};
+
 int ObMviewAlterService::alter_mview_or_mlog_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                       obrpc::ObAlterTableRes &res,
                                                       ObSchemaGetterGuard &schema_guard,
@@ -364,6 +410,104 @@ int ObMviewAlterService::alter_mlog_attributes(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMviewAlterService::update_mlog_and_mview_in_alter_column(
+    const ObTableSchema &new_table_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    const ObSchemaOperationType column_operation_type,
+    ObSchemaGetterGuard &schema_guard,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  bool is_referenced = false;
+
+  if (!new_table_schema.required_by_mv_refresh()) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(new_table_schema.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get tenant data version", K(ret), K(new_table_schema));
+  } else if (data_version < DATA_VERSION_5_0_2_0
+             && (OB_DDL_DROP_COLUMN == column_operation_type || OB_DDL_CHANGE_COLUMN == column_operation_type)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("drop or change column on materialized view base table is not supported before 5.0.2.0",
+             K(ret), K(data_version), K(new_table_schema), K(new_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "drop or change column on materialized view base table before 5.0.2.0 is");
+  } else if (OB_FAIL(check_column_referenced_by_mlog_or_mview(new_table_schema,
+                                                              new_column_schema.get_column_id(),
+                                                              schema_guard,
+                                                              trans,
+                                                              is_referenced))) {
+    LOG_WARN("fail to check column referenced by mlog or mview", K(ret),
+             K(new_table_schema), K(new_column_schema));
+  } else if (!is_referenced) {
+    // do nothing
+  } else if (OB_DDL_MODIFY_COLUMN != column_operation_type
+             && OB_DDL_ALTER_COLUMN != column_operation_type) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only modify or alter column is supported for a column referenced by mlog or mview",
+             K(ret), K(column_operation_type), K(new_table_schema), K(new_column_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "modify column to table required by materialized view is");
+  } else if (OB_FAIL(update_mlog_in_modify_column(new_table_schema, schema_guard, ddl_operator, trans))) {
+    LOG_WARN("fail to update mlog column", K(ret), K(new_table_schema));
+  } else if (OB_FAIL(update_mview_in_modify_column(new_table_schema, schema_guard, ddl_operator, trans))) {
+    LOG_WARN("fail to update mview column", K(ret), K(new_table_schema));
+  }
+  return ret;
+}
+
+int ObMviewAlterService::check_column_referenced_by_mlog_or_mview(const ObTableSchema &base_table_schema,
+                                                                  const uint64_t base_column_id,
+                                                                  ObSchemaGetterGuard &schema_guard,
+                                                                  common::ObMySQLTransaction &trans,
+                                                                  bool &is_referenced)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = base_table_schema.get_tenant_id();
+  const uint64_t base_table_id = base_table_schema.get_table_id();
+  const ObTableSchema *mlog_schema = NULL;
+  ObSEArray<uint64_t, 4> mv_list;
+  is_referenced = false;
+
+  if (base_table_schema.has_mlog_table()) {
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_schema.get_mlog_tid(), mlog_schema))) {
+      LOG_WARN("fail to get mlog schema", K(ret), K(base_table_schema));
+    } else if (OB_ISNULL(mlog_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mlog schema is null", K(ret), K(base_table_schema));
+    } else {
+      const uint64_t mlog_column_id = ObTableSchema::gen_mlog_col_id_from_ref_col_id(base_column_id);
+      is_referenced = NULL != mlog_schema->get_column_schema(mlog_column_id);
+    }
+  }
+
+  if (OB_SUCC(ret) && !is_referenced && base_table_schema.table_referenced_by_mv()) {
+    bool exists_nested_mv = false;
+    if (OB_FAIL(ObMVDepUtils::get_referring_mv_of_base_table(trans,
+                                                             tenant_id,
+                                                             base_table_id,
+                                                             mv_list,
+                                                             exists_nested_mv))) {
+      LOG_WARN("fail to get referring mv of base table", K(ret), K(base_table_schema));
+    } else if (mv_list.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("referring mv list of base table is empty", K(ret), K(base_table_schema));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !is_referenced && i < mv_list.count(); ++i) {
+      if (OB_FAIL(check_column_referenced_by_mview(tenant_id,
+                                                   mv_list.at(i),
+                                                   base_table_id,
+                                                   base_column_id,
+                                                   schema_guard,
+                                                   is_referenced))) {
+        LOG_WARN("fail to check column referenced by mview", K(ret), K(mv_list.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMviewAlterService::update_mlog_in_modify_column(
     const ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
@@ -456,6 +600,87 @@ int ObMviewAlterService::update_mview_in_modify_column(
       uint64_t mv_id = mv_list.at(i);
       if (OB_FAIL(update_mview_with_new_table(mv_id, new_table_schema, schema_guard, ddl_operator, trans))) {
         LOG_WARN("fail to update mview with new column", K(ret), K(mv_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMviewAlterService::check_column_referenced_by_mview(
+    const uint64_t tenant_id,
+    const uint64_t mview_id,
+    const uint64_t base_table_id,
+    const uint64_t base_column_id,
+    ObSchemaGetterGuard &schema_guard,
+    bool &is_referenced)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *mview_schema = NULL;
+  ObSchemaChecker schema_checker;
+  ObSqlSchemaGuard sql_schema_guard;
+  is_referenced = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || OB_INVALID_ID == mview_id
+                  || OB_INVALID_ID == base_table_id
+                  || OB_INVALID_ID == base_column_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(mview_id), K(base_table_id),
+             K(base_column_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_id, mview_schema))) {
+    LOG_WARN("fail to get mview schema", K(ret), K(mview_id));
+  } else if (OB_ISNULL(mview_schema) || OB_UNLIKELY(!mview_schema->is_materialized_view())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mview schema", K(ret), K(mview_id), KPC(mview_schema));
+  } else if (OB_FALSE_IT(sql_schema_guard.set_schema_guard(&schema_guard))) {
+  } else if (OB_FAIL(schema_checker.init(sql_schema_guard, mview_schema->get_tenant_id()))) {
+    LOG_WARN("fail to init schema checker", K(ret), K(mview_id));
+  } else {
+    ObCheckColumnReferenceHandler handler(base_table_id, base_column_id, is_referenced);
+    if (OB_FAIL(resolve_mv_definition(schema_checker, *mview_schema, handler))) {
+      LOG_WARN("failed to check column referenced by mview stmt", K(ret), K(base_table_id), K(base_column_id));
+    }
+  }
+  return ret;
+}
+
+int ObMviewAlterService::check_column_referenced_by_stmt(const sql::ObSelectStmt *stmt,
+                                                         const uint64_t base_table_id,
+                                                         const uint64_t base_column_id,
+                                                         bool &is_referenced)
+{
+  int ret = OB_SUCCESS;
+  is_referenced = false;
+  if (OB_ISNULL(stmt) || OB_UNLIKELY(OB_INVALID_ID == base_table_id || OB_INVALID_ID == base_column_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(stmt), K(base_table_id), K(base_column_id));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_referenced && i < stmt->get_table_size(); ++i) {
+    const sql::TableItem *table_item = stmt->get_table_item(i);
+    common::ObSEArray<sql::ColumnItem, 8> column_items;
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table item", K(ret), K(i));
+    } else if (base_table_id != table_item->ref_id_) {
+      // do nothing
+    } else if (OB_FAIL(stmt->get_column_items(table_item->table_id_, column_items))) {
+      LOG_WARN("fail to get column items", K(ret), KPC(table_item));
+    } else {
+      for (int64_t j = 0; !is_referenced && j < column_items.count(); ++j) {
+        is_referenced = base_column_id == column_items.at(j).column_id_;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_referenced) {
+    common::ObSEArray<sql::ObSelectStmt *, 4> child_stmts;
+    if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+      LOG_WARN("fail to get child stmts", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && !is_referenced && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_column_referenced_by_stmt(child_stmts.at(i),
+                                                             base_table_id,
+                                                             base_column_id,
+                                                             is_referenced)))) {
+        LOG_WARN("fail to check child stmt", K(ret), K(i));
       }
     }
   }
@@ -585,8 +810,54 @@ int ObMviewAlterService::rebuild_mv_container_schema(sql::ObSchemaChecker &schem
                                                      ObTableSchema &new_container_schema)
 {
   int ret = OB_SUCCESS;
+  ObUpdateMvContainerSchemaHandler handler(new_container_schema);
+  if (OB_FAIL(new_container_schema.assign(orig_container_schema))) {
+    LOG_WARN("failed to assign mv schema", K(ret));
+  } else if (OB_FAIL(resolve_mv_definition(schema_checker, orig_mv_schema, handler))) {
+    LOG_WARN("failed to update mv schema with stmt", K(ret));
+  }
+  return ret;
+}
+
+int ObMviewAlterService::update_mv_container_schema_with_stmt(const sql::ObSelectStmt *stmt,
+                                                              sql::ObSQLSessionInfo &session_info,
+                                                              share::schema::ObTableSchema &mv_container_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); ++i) {
+    const ObRawExpr *select_expr = stmt->get_select_item(i).expr_;
+    ObColumnSchemaV2 *col_schema = mv_container_schema.get_column_schema(OB_APP_MIN_COLUMN_ID + i);
+    bool is_nullable = true;  // for the primary key of MV, we should remain not nullable
+    if (OB_ISNULL(select_expr) || OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FALSE_IT(is_nullable = col_schema->is_nullable())) {
+    } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_expr,
+                                                                    mv_container_schema.get_charset_type(),
+                                                                    mv_container_schema.get_table_id(),
+                                                                    session_info,
+                                                                    *col_schema,
+                                                                    true))) {
+      LOG_WARN("failed to fill column meta infos", K(ret));
+    } else {
+      col_schema->set_nullable(is_nullable);
+      col_schema->set_charset_type(ObCharset::charset_type_by_coll(col_schema->get_collation_type()));
+    }
+  }
+  return ret;
+}
+
+int ObMviewAlterService::resolve_mv_definition(sql::ObSchemaChecker &schema_checker,
+                                               const share::schema::ObTableSchema &mv_schema,
+                                               ObMviewStmtHandler &handler)
+{
+  int ret = OB_SUCCESS;
   lib::ContextParam param;
-  const uint64_t tenant_id = orig_mv_schema.get_tenant_id();
+  const uint64_t tenant_id = mv_schema.get_tenant_id();
   param.set_mem_attr(tenant_id, "DDLResolver", ObCtxIds::DEFAULT_CTX_ID)
         .set_properties(lib::USE_TL_PAGE_OPTIONAL)
         .set_page_size(OB_MALLOC_NORMAL_BLOCK_SIZE);
@@ -613,7 +884,7 @@ int ObMviewAlterService::rebuild_mv_container_schema(sql::ObSchemaChecker &schem
         LOG_WARN("failed to load system variable", K(ret));
       } else if (OB_FAIL(session_info.load_default_configs_in_pc())) {
         LOG_WARN("failed to load default configs", K(ret));
-      } else if (OB_FAIL(orig_mv_schema.get_local_session_var().update_session_vars_with_local(session_info))) {
+      } else if (OB_FAIL(mv_schema.get_local_session_var().update_session_vars_with_local(session_info))) {
         LOG_WARN("failed to update session_info vars", K(ret));
       } else if (OB_FALSE_IT(exec_ctx.set_my_session(&session_info))) {
       } else if (OB_FALSE_IT(exec_ctx.set_physical_plan_ctx(&phy_plan_ctx))) {
@@ -627,46 +898,12 @@ int ObMviewAlterService::rebuild_mv_container_schema(sql::ObSchemaChecker &schem
                                                         expr_factory,
                                                         schema_checker,
                                                         session_info,
-                                                        orig_mv_schema,
+                                                        mv_schema,
                                                         view_stmt))) {
         LOG_WARN("failed to generate mv stmt", K(ret));
-      } else if (OB_FAIL(new_container_schema.assign(orig_container_schema))) {
-        LOG_WARN("failed to assign mv schema", K(ret));
-      } else if (OB_FAIL(update_mv_container_schema_with_stmt(view_stmt, session_info, new_container_schema))) {
-        LOG_WARN("failed to update mv schema with stmt", K(ret));
+      } else if (OB_FAIL(handler.handle(view_stmt, session_info))) {
+        LOG_WARN("failed to handle mv stmt", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObMviewAlterService::update_mv_container_schema_with_stmt(const sql::ObSelectStmt *stmt,
-                                                              sql::ObSQLSessionInfo &session_info,
-                                                              share::schema::ObTableSchema &mv_container_schema)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_select_item_size(); ++i) {
-    const ObRawExpr *select_expr = stmt->get_select_item(i).expr_;
-    ObColumnSchemaV2 *col_schema = mv_container_schema.get_column_schema(OB_APP_MIN_COLUMN_ID + i);
-    bool is_nullable = true; // for the primary key of MV, we should remain not nullable
-    if (OB_ISNULL(select_expr) || OB_ISNULL(col_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FALSE_IT(is_nullable = col_schema->is_nullable())) {
-    } else if (OB_FAIL(ObCreateViewResolver::fill_column_meta_infos(*select_expr,
-                                                                    mv_container_schema.get_charset_type(),
-                                                                    mv_container_schema.get_table_id(),
-                                                                    session_info,
-                                                                    *col_schema,
-                                                                    true))) {
-      LOG_WARN("failed to fill column meta infos", K(ret));
-    } else {
-      col_schema->set_nullable(is_nullable);
-      col_schema->set_charset_type(ObCharset::charset_type_by_coll(col_schema->get_collation_type()));
     }
   }
   return ret;

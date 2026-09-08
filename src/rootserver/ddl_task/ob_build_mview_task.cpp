@@ -455,8 +455,6 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
           LOG_WARN("column schema is null", KR(ret), K(column_name));
         } else if (column_schema->is_rowkey_column() || column_schema->is_heap_table_primary_key_column()) {
           // rowkey columns will be added automatically, ignore
-        } else if (column_schema->is_generated_column()) {
-          // mlog can not be built for generated columns, ignore
         } else if (OB_FAIL(final_missing_columns.push_back(column_name))) {
           LOG_WARN("failed to add missing column", KR(ret), K(column_name));
         }
@@ -944,8 +942,6 @@ int ObBuildMViewTask::check_mlog_valid(bool &is_valid)
         if (OB_ISNULL(column_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column schema is null", KR(ret), K(column_id));
-        } else if (column_schema->is_generated_column()) {
-          // ignore generated columns
         } else if (OB_ISNULL(mlog_schema->get_column_schema(mlog_column_id))) {
           is_valid = false;
         }
