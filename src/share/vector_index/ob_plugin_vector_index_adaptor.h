@@ -908,6 +908,7 @@ public:
   void log_deseri_snap_without_lock(ObVectorIndexAlgorithmType index_type, const ObString &target_prefix,
                                     const ObString &key_prefix, int64_t cost_ms);
   int print_adapter_info(char *buf, int64_t buf_len, int64_t &pos) const;
+  const ObVectorIndexDumpInfo &get_dump_info() const { return dump_info_; }
   void reset_dump_info() { dump_info_.reset(); }
 
   TO_STRING_KV(KP(this), K_(create_type), K_(type), KP_(algo_data),
