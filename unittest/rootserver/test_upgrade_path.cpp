@@ -67,6 +67,7 @@ TEST_F(TestUpgradePath, 42x) // 42x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[0].direct_upgrade_path_num_);
 }
@@ -112,6 +113,7 @@ TEST_F(TestUpgradePath, 43x) // 43x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[1].direct_upgrade_path_num_
       + ObUpgradeChecker::upgrade_versions[1].non_direct_upgrade_path_num_);
@@ -132,6 +134,7 @@ TEST_F(TestUpgradePath, 44x) // 44x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   versions.insert(MOCK_DATA_VERSION_4_4_0_1);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(MOCK_DATA_VERSION_4_4_0_1, path), OB_SUCCESS);
@@ -141,6 +144,7 @@ TEST_F(TestUpgradePath, 44x) // 44x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   versions.insert(DATA_VERSION_4_4_1_0);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_1_0, path), OB_SUCCESS);
@@ -149,6 +153,7 @@ TEST_F(TestUpgradePath, 44x) // 44x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   versions.insert(DATA_VERSION_4_4_2_0);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_2_0, path), OB_SUCCESS);
@@ -156,20 +161,28 @@ TEST_F(TestUpgradePath, 44x) // 44x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   versions.insert(DATA_VERSION_4_4_2_1);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_2_1, path), OB_SUCCESS);
   check_upgrade_path(path, {
     {DATA_VERSION_4_4_2_2, true},
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   versions.insert(DATA_VERSION_4_4_2_2);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_2_2, path), OB_SUCCESS);
   check_upgrade_path(path, {
     {DATA_VERSION_4_4_2_3, true},
+    {DATA_VERSION_4_4_2_4, true},
   });
   versions.insert(DATA_VERSION_4_4_2_3);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_2_3, path), OB_SUCCESS);
+  check_upgrade_path(path, {
+    {DATA_VERSION_4_4_2_4, true},
+  });
+  versions.insert(DATA_VERSION_4_4_2_4);
+  ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_2_4, path), OB_SUCCESS);
   check_upgrade_path(path, {
   });
   ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[2].direct_upgrade_path_num_);
