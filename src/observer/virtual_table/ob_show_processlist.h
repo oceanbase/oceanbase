@@ -95,6 +95,7 @@ private:
     {
       trace_id_[0] = '\0';
       top_trace_id_[0] = '\0';
+      resource_group_name_[0] = '\0';
     }
     virtual ~FillScanner(){}
     bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo* sess_info);
@@ -117,6 +118,7 @@ private:
       ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
       char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
       char top_trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+      char resource_group_name_[common::OB_MAX_RESOURCE_PLAN_NAME_LENGTH];
       const share::schema::ObTableSchema *table_schema_;
       char pl_info_string_[24] = "In inner PL processing.";
       DISALLOW_COPY_AND_ASSIGN(FillScanner);

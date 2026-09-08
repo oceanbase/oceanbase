@@ -18,6 +18,7 @@
 #include "lib/stat/ob_diagnostic_info_container.h"
 #include "observer/ob_server.h"
 #include "share/catalog/ob_catalog_utils.h"
+#include "share/resource_manager/ob_resource_manager.h"
 #include "sql/optimizer/ob_route_policy.h"
 #include "lib/number/ob_number_v2.h"
 
@@ -1087,6 +1088,30 @@ const ObString ObBasicSessionInfo::get_database_name() const
   ObString str_ret;
   str_ret.assign_ptr(const_cast<char*>(thread_data_.database_name_),
                  static_cast<int32_t>(strlen(thread_data_.database_name_)));
+  return str_ret;
+}
+
+const ObString ObBasicSessionInfo::get_resource_group_name(char *buf, const int64_t buf_len) const
+{
+  ObString str_ret;
+  const uint64_t resource_group_id = get_resource_group_id();
+  if (OB_NOT_NULL(buf) && buf_len > 0 && OB_INVALID_ID != resource_group_id) {
+    ObGroupName group_name;
+    int ret = G_RES_MGR.get_mapping_rule_mgr().get_group_name_by_id(effective_tenant_id_,
+                                                                    resource_group_id,
+                                                                    group_name);
+    if (OB_SUCCESS == ret) {
+      const ObString &group_name_str = group_name.get_value();
+      if (OB_UNLIKELY(group_name_str.length() > buf_len)) {
+        LOG_WARN("resource group name buffer is not enough", K(buf_len), K(group_name_str));
+      } else if (!group_name_str.empty()) {
+        MEMCPY(buf, group_name_str.ptr(), group_name_str.length());
+        str_ret.assign_ptr(buf, group_name_str.length());
+      }
+    } else if (OB_HASH_NOT_EXIST != ret) {
+      LOG_WARN("failed to get resource group name", K(ret), K(effective_tenant_id_), K(resource_group_id));
+    }
+  }
   return str_ret;
 }
 
@@ -2892,6 +2917,10 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       PROCESS_SESSION_INT_VARIABLE(thread_data_.wait_timeout_);
       break;
     }
+    case SYS_VAR_OB_RESOURCE_GROUP: {
+      OZ (process_session_resource_group_value(val), val);
+      break;
+    }
     case SYS_VAR_DEBUG_SYNC: {
       const bool is_global = false;
       ret = process_session_debug_sync(val, is_global, is_update_sys_var);
@@ -4270,6 +4299,32 @@ int ObBasicSessionInfo::check_optimizer_features_enable_valid(const ObObj &val)
   } else if (OB_UNLIKELY(!ObGlobalHint::is_valid_opt_features_version(version))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "version for optimizer_features_enable");
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::process_session_resource_group_value(const ObObj &value)
+{
+  int ret = OB_SUCCESS;
+  ObString resource_group;
+  uint64_t resource_group_id = OB_INVALID_ID;
+  if (OB_FAIL(value.get_string(resource_group))) {
+    LOG_WARN("failed to get resource group name", K(ret), K(value));
+  } else if (OB_UNLIKELY(resource_group.length() > OB_MAX_RESOURCE_PLAN_NAME_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("resource group name is too long", K(ret), K(resource_group));
+  } else if (!resource_group.empty()) {
+    ObGroupName group_name;
+    if (OB_FAIL(group_name.set_value(resource_group))) {
+      LOG_WARN("failed to set resource group name", K(ret), K(resource_group));
+    } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_name(effective_tenant_id_,
+                                                                             group_name,
+                                                                             resource_group_id))) {
+      LOG_WARN("failed to get resource group id", K(ret), K(effective_tenant_id_), K(group_name));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ATOMIC_STORE(&thread_data_.resource_group_id_, resource_group_id);
   }
   return ret;
 }

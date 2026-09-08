@@ -1177,6 +1177,9 @@ public:
   bool get_use_pl_inner_info_string() { return use_pl_inner_info_string_; }
   void set_use_pl_inner_info_string(bool use_pl_inner_info_string) { use_pl_inner_info_string_ = use_pl_inner_info_string; }
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
+  uint64_t get_resource_group_id() const { return ATOMIC_LOAD(&thread_data_.resource_group_id_); }
+  // The caller must keep buf alive while using the returned ObString.
+  const common::ObString get_resource_group_name(char *buf, const int64_t buf_len) const;
   int update_session_timeout();
   int is_timeout(bool &is_timeout);
   int is_trx_commit_timeout(transaction::ObITxCallback *&callback, int &retcode);
@@ -1816,6 +1819,7 @@ protected:
   int process_session_time_zone_value(const common::ObObj &value, const bool check_timezone_valid);
   int process_session_overlap_time_value(const ObObj &value);
   int process_session_autocommit_value(const common::ObObj &val);
+  int process_session_resource_group_value(const ObObj &value);
   int process_session_debug_sync(const common::ObObj &val, const bool is_global,
                                 const bool is_update_sys_var);
   // session切换接口
@@ -1905,6 +1909,7 @@ protected:
                          top_query_(nullptr),
                          top_query_len_(0),
                          cur_statement_id_(0),
+                         resource_group_id_(common::OB_INVALID_ID),
                          last_active_time_(0),
                          dis_state_(CLIENT_FORCE_DISCONNECT),
                          state_(SESSION_SLEEP),
@@ -1954,6 +1959,7 @@ protected:
       cur_query_len_ = 0;
       top_query_len_ = 0;
       cur_statement_id_ = 0;
+      resource_group_id_ = common::OB_INVALID_ID;
       last_active_time_ = 0;
       dis_state_ = CLIENT_FORCE_DISCONNECT;
       state_ = SESSION_SLEEP;
@@ -2001,6 +2007,7 @@ protected:
     char *top_query_;
     volatile int64_t top_query_len_;
     uint64_t cur_statement_id_;
+    uint64_t resource_group_id_;
     int64_t last_active_time_;
     ObDisconnectState dis_state_;
     ObSQLSessionState state_;
