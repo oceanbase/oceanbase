@@ -1857,7 +1857,8 @@ int ObTenant::recv_request(ObRequest &req)
         } else if (req_level >= MULTI_LEVEL_THRESHOLD) {
           recv_level_rpc_cnt_.atomic_inc(req_level);
           if (OB_FAIL(multi_level_queue_->push(req, req_level, 0))) {
-            LOG_WARN("push request to queue fail", K(ret), K(this));
+            LOG_WARN("push RPC request to tenant multi-level queue fail", K(ret), "tenant_id", id_,
+                K(this), K(req_level));
           }
         } else {
           // (0,5) High priority
@@ -1868,24 +1869,28 @@ int ObTenant::recv_request(ObRequest &req)
             ATOMIC_INC(&recv_hp_rpc_cnt_);
             if (OB_FAIL(req_queue_.push(&req, QQ_HIGH))) {
               if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-                LOG_WARN("push request to queue fail", K(ret), K(*this));
+                LOG_WARN("push RPC request to tenant QQ_HIGH queue fail", K(ret), "tenant_id", id_,
+                    K(*this));
               }
             }
           } else if (req.is_retry_on_lock())  {
             ATOMIC_INC(&recv_retry_on_lock_rpc_cnt_);
             if (OB_FAIL(req_queue_.push(&req, QQ_NORMAL))) {
-              LOG_WARN("push request to QQ_NORMAL queue fail", K(ret), K(this));
+              LOG_WARN("push RPC request to tenant QQ_NORMAL queue fail", K(ret), "tenant_id", id_,
+                  K(this));
             }
           } else if (pkt.is_kv_request()) {
             // the same as sql request, kv request use q4
             ATOMIC_INC(&recv_np_rpc_cnt_);
             if (OB_FAIL(req_queue_.push(&req, RQ_NORMAL))) {
-              LOG_WARN("push kv request to queue fail", K(ret), K(this));
+              LOG_WARN("push KV request to tenant RQ_NORMAL queue fail", K(ret), "tenant_id", id_,
+                  K(this));
             }
           } else if (is_normal_prio(pkt) || is_low_prio(pkt)) {
             ATOMIC_INC(&recv_np_rpc_cnt_);
             if (OB_FAIL(req_queue_.push(&req, QQ_LOW))) {
-              LOG_WARN("push request to queue fail", K(ret), K(this));
+              LOG_WARN("push RPC request to tenant QQ_LOW queue fail", K(ret), "tenant_id", id_,
+                  K(this));
             }
           } else if (is_ddl(pkt)) {
             ret = OB_ERR_UNEXPECTED;
@@ -1893,7 +1898,8 @@ int ObTenant::recv_request(ObRequest &req)
           } else if (is_warmup(pkt)) {
             ATOMIC_INC(&recv_lp_rpc_cnt_);
             if (OB_FAIL(req_queue_.push(&req, RQ_LOW))) {
-              LOG_WARN("push request to queue fail", K(ret), K(this));
+              LOG_WARN("push RPC request to tenant RQ_LOW queue fail", K(ret), "tenant_id", id_,
+                  K(this));
             }
           } else {
             ret = OB_ERR_UNEXPECTED;
@@ -1906,12 +1912,14 @@ int ObTenant::recv_request(ObRequest &req)
         if (req.is_retry_on_lock()) {
           ATOMIC_INC(&recv_retry_on_lock_mysql_cnt_);
           if (OB_FAIL(req_queue_.push(&req, RQ_HIGH))) {
-            LOG_WARN("push request to RQ_HIGH queue fail", K(ret), K(this));
+            LOG_WARN("push MySQL request to tenant RQ_HIGH queue fail", K(ret), "tenant_id", id_,
+                K(this));
           }
         } else {
           ATOMIC_INC(&recv_mysql_cnt_);
           if (OB_FAIL(req_queue_.push(&req, RQ_NORMAL))) {
-            LOG_WARN("push request to queue fail", K(ret), K(this));
+            LOG_WARN("push MySQL request to tenant RQ_NORMAL queue fail", K(ret), "tenant_id", id_,
+                K(this));
           }
         }
         break;
@@ -1920,14 +1928,16 @@ int ObTenant::recv_request(ObRequest &req)
       case ObRequest::OB_TS_TASK: {
         ATOMIC_INC(&recv_task_cnt_);
         if (OB_FAIL(req_queue_.push(&req, RQ_HIGH))) {
-          LOG_WARN("push request to queue fail", K(ret), K(this));
+          LOG_WARN("push task to tenant RQ_HIGH queue fail", K(ret), "tenant_id", id_,
+              K(this));
         }
         break;
       }
       case ObRequest::OB_SQL_TASK: {
         ATOMIC_INC(&recv_sql_task_cnt_);
         if (OB_FAIL(req_queue_.push(&req, RQ_NORMAL))) {
-          LOG_WARN("push request to queue fail", K(ret), K(this));
+          LOG_WARN("push SQL task to tenant RQ_NORMAL queue fail", K(ret), "tenant_id", id_,
+              K(this));
         }
         break;
       }
