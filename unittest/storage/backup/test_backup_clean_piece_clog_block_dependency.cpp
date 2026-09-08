@@ -29,8 +29,10 @@ namespace backup {
 struct LSFileInfo {
   ObLSID ls_id;
   std::vector<int64_t> file_ids;
+  bool deleted;  // ObSingleLSInfoDesc::deleted_, marked on the last piece of a deleted ls
 
-  LSFileInfo(ObLSID id, std::vector<int64_t> files) : ls_id(id), file_ids(files) {}
+  LSFileInfo(ObLSID id, std::vector<int64_t> files, bool is_deleted = false)
+    : ls_id(id), file_ids(files), deleted(is_deleted) {}
 };
 
 struct PieceInfo {
@@ -104,6 +106,7 @@ protected:
       for (int64_t file_id : ls_file.file_ids) {
         add_file_to_ls_desc(ls_desc, file_id);
       }
+      ls_desc.deleted_ = ls_file.deleted;
 
       ASSERT_EQ(OB_SUCCESS, piece.filelist_.push_back(ls_desc));
     }
@@ -377,6 +380,160 @@ TEST_F(TestBackupCleanPieceClogBlockDependency, TestComplexScenarioWithMultipleS
 
   int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
   EXPECT_EQ(1, min_depended_pieces_idx);
+}
+
+// The last piece contains an deleted ls which has empty filelist, should has no dependency
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListDeletedLSInLastPiece) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1005, 5, 5, {LSFileInfo(ObLSID(1), {10})}),
+    PieceInfo(1005, 5, 6, {LSFileInfo(ObLSID(1), {11})}),
+    PieceInfo(1005, 5, 7, {LSFileInfo(ObLSID(1030), {}, true /*deleted*/)})
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  // ls1030 has no file in p7 and is deleted, nothing can be depended on. p7 only depends on itself.
+  EXPECT_EQ(2, min_depended_pieces_idx);
+}
+
+// The last piece contains an non-deleted ls which has empty filelist, should keep all
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListNotDeletedLSInLastPiece) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {10})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {11})}),
+    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {})})
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  EXPECT_EQ(0, min_depended_pieces_idx);
+}
+
+// The last piece has both a normal ls and an empty-filelist deleted ls, should has no dependency
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListDeletedLSWithNormalLS) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
+    PieceInfo(1, 1, 3, {
+      LSFileInfo(ObLSID(1001), {10}),
+      LSFileInfo(ObLSID(1030), {}, true /*deleted*/)
+    })
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  // ls1001 chain goes back to p2 (idx 1); ls1030 is skipped and does not pull idx to 0.
+  EXPECT_EQ(1, min_depended_pieces_idx);
+}
+
+// The last piece has both a normal ls and an empty-filelist deleted ls, should keep all
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListNotDeletedLSWithNormalLS) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
+    PieceInfo(1, 1, 3, {
+      LSFileInfo(ObLSID(1001), {10}),
+      LSFileInfo(ObLSID(1030), {}, false /*deleted*/)
+    })
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  // ls1001 chain goes back to p2 (idx 1); ls1030 is skipped and does not pull idx to 0.
+  EXPECT_EQ(0, min_depended_pieces_idx);
+}
+
+// Normal ls has no dependency, but a not-deleted empty ls after it forces keeping all candidates.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListNotDeletedLSOverridesNormalLS) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9}), LSFileInfo(ObLSID(1002), {20})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10}), LSFileInfo(ObLSID(1002), {})}),
+    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {11}), LSFileInfo(ObLSID(1002), {})})
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  EXPECT_EQ(0, min_depended_pieces_idx);
+}
+
+// An intermediate piece has the ls with an empty filelist. Archive file id is decided by lsn, so
+// p3's file 10 may continue the block ended in p1. The empty p2 must not stop the look-back.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListInMiddlePieceKeepsLookingBack) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {10})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {})}),   // no log archived in p2
+    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {10})})
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  // p3 -> (p2 empty, keep looking back) -> p1 last file is 10 == p3 first file, so depends on p1.
+  EXPECT_EQ(0, min_depended_pieces_idx);
+}
+
+// Same as above but the older piece ends with a different file id: chain breaks, p2 and p1 deletable.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListInMiddlePieceNoDependency) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {})}),
+    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {10})})
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  EXPECT_EQ(2, min_depended_pieces_idx);
+}
+
+// All older pieces are empty for the ls: look-back reaches the beginning without crashing.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestAllOlderPiecesEmptyForLS) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {})}),
+    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {10})})
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  EXPECT_EQ(2, min_depended_pieces_idx);
+}
+
+// Deleted empty ls is listed before the normal ls. It must be skipped (not break) so that the
+// dependency of the normal ls is still computed.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestDeletedEmptyLSFirstThenNormalLSWithDependency) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
+    PieceInfo(1, 1, 3, {
+      LSFileInfo(ObLSID(1030), {}, true /*deleted*/),
+      LSFileInfo(ObLSID(1001), {10})
+    })
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  // ls1030 skipped, ls1001 depends on p2 -> idx 1 (not 2, which would mean ls1001 was never checked).
+  EXPECT_EQ(1, min_depended_pieces_idx);
+}
+
+// Deleted empty ls first, normal ls has no dependency: result stays at the sentinel itself.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestDeletedEmptyLSFirstThenNormalLSNoDependency) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
+    PieceInfo(1, 1, 3, {
+      LSFileInfo(ObLSID(1030), {}, true /*deleted*/),
+      LSFileInfo(ObLSID(1001), {11})
+    })
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  EXPECT_EQ(2, min_depended_pieces_idx);
+}
+
+// Not deleted empty ls first: conservative branch wins immediately regardless of the ls after it.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestNotDeletedEmptyLSFirstKeepsAll) {
+  std::vector<PieceInfo> piece_infos = {
+    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9}), LSFileInfo(ObLSID(1002), {20})}),
+    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10}), LSFileInfo(ObLSID(1002), {21})}),
+    PieceInfo(1, 1, 3, {
+      LSFileInfo(ObLSID(1002), {}),
+      LSFileInfo(ObLSID(1001), {11})
+    })
+  };
+
+  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
+  EXPECT_EQ(0, min_depended_pieces_idx);
 }
 
 } // namespace backup
