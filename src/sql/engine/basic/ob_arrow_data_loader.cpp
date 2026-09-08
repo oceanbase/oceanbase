@@ -12,6 +12,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "lib/alloc/alloc_struct.h"
 #include "lib/string/ob_sql_string.h"
+#include "lib/wide_integer/ob_wide_integer.h"
 #include "lib/json_type/ob_json_parse.h"
 #include "lib/json_type/ob_json_bin.h"
 #include "lib/geo/ob_geo_utils.h"
@@ -778,28 +779,104 @@ int ObBoolToIntArrowDataLoader::load(const Array &arrow_array, ObEvalCtx &eval_c
   return ret;
 }
 
+int ObDecimalArrowDataLoader::init(const DataType &arrow_type, const ObDatumMeta &datum_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(Type::DECIMAL128 != arrow_type.id() && Type::DECIMAL256 != arrow_type.id())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid arrow decimal type", K(ret), K(arrow_type.id()));
+  } else {
+    const DecimalType &arrow_decimal = static_cast<const DecimalType &>(arrow_type);
+    in_bytes_ = arrow_decimal.byte_width();
+    in_scale_ = arrow_decimal.scale();
+    // Direct copy is safe only when Arrow and OB decimal-int share the same scale
+    // and storage width, and the Arrow precision fits in the target column.
+    const bool is_same_scale = in_scale_ == datum_type.scale_;
+    const bool is_same_width = in_bytes_
+        == wide::ObDecimalIntConstValue::get_int_bytes_by_precision(datum_type.precision_);
+    const bool is_arrow_precision_fits_in_ob = arrow_decimal.precision() <= datum_type.precision_;
+    enable_direct_copy_ = is_same_scale && is_same_width && is_arrow_precision_fits_in_ob;
+  }
+  return ret;
+}
+
 int ObDecimalArrowDataLoader::load(const Array &arrow_array, ObEvalCtx &eval_ctx, ObExpr *expr)
 {
   int ret = OB_SUCCESS;
   const FixedSizeBinaryArray &decimal_array = static_cast<const FixedSizeBinaryArray &>(arrow_array);
-  const DecimalType &in_decimal_type = static_cast<const DecimalType &>(*arrow_array.type());
-  const int32_t in_scale = in_decimal_type.scale();
-  const ObScale out_scale = expr->datum_meta_.scale_;
-  const ObPrecision out_precision = expr->datum_meta_.precision_;
   ObIVector *out_vec = expr->get_vector(eval_ctx);
-  const int32_t in_bytes = in_decimal_type.byte_width();
-  ObDecimalIntBuilder decimal_builder;
-  for (int64_t i = 0; OB_SUCC(ret) && i < arrow_array.length(); ++i) {
-    if (arrow_array.IsNull(i)) {
-      out_vec->set_null(i);
-    } else if (OB_FAIL(ObDatumCast::common_scale_decimalint(
-                   reinterpret_cast<ObDecimalInt *>(const_cast<uint8_t *>(decimal_array.Value(i))),
-                   in_bytes, in_scale, out_scale, out_precision, expr->extra_,
-                   decimal_builder, eval_ctx.exec_ctx_.get_user_logging_ctx()))) {
-      LOG_WARN("scale decimal int failed", K(ret));
+  // Compatible decimals share the same fixed-width value layout. Copy values in
+  // bulk while rebuilding the null state for the current batch.
+  if (enable_direct_copy_) {
+    ObFixedLengthBase *fixed_vec = nullptr;
+    ObBitVector *nulls = nullptr;
+    const int64_t length = arrow_array.length();
+    const int64_t null_count = arrow_array.null_count();
+    const uint8_t *in_values = decimal_array.raw_values();
+    char *out_data = nullptr;
+    if (OB_ISNULL(out_vec) || VEC_FIXED != out_vec->get_format()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid decimal vector in expr", K(ret), KP(out_vec));
     } else {
-      out_vec->set_decimal_int(i, decimal_builder.get_decimal_int(),
-                               decimal_builder.get_int_bytes());
+      fixed_vec = static_cast<ObFixedLengthBase *>(out_vec);
+      out_data = fixed_vec->get_data();
+      if (OB_ISNULL(nulls = fixed_vec->get_nulls())
+          || length > fixed_vec->get_max_row_cnt()
+          || fixed_vec->get_length() != in_bytes_
+          || (length > 0 && OB_ISNULL(out_data))
+          || (length > 0 && null_count != length && OB_ISNULL(in_values))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN(
+            "invalid decimal vector or arrow array",
+            K(ret),
+            KP(fixed_vec),
+            KP(nulls),
+            KP(in_values),
+            K(length),
+            K(null_count),
+            K(in_bytes_));
+      } else if (0 == length) {
+        nulls->unset_all(static_cast<int64_t>(0), length);
+        fixed_vec->reset_has_null();
+      } else if (null_count == length) {
+        // Null payloads have no observable value, so only update the null state.
+        nulls->set_all(static_cast<int64_t>(0), length);
+        fixed_vec->set_has_null();
+      } else if (0 == null_count) {
+        MEMCPY(out_data, in_values, in_bytes_ * length);
+        nulls->unset_all(static_cast<int64_t>(0), length);
+        fixed_vec->reset_has_null();
+      } else {
+        MEMCPY(out_data, in_values, in_bytes_ * length);
+        bool has_null = false;
+        for (int64_t i = 0; i < length; ++i) {
+          if (arrow_array.IsNull(i)) {
+            nulls->set(i);
+            has_null = true;
+          } else {
+            nulls->unset(i);
+          }
+        }
+        fixed_vec->set_has_null(has_null);
+      }
+    }
+  } else {
+    const ObScale out_scale = expr->datum_meta_.scale_;
+    const ObPrecision out_precision = expr->datum_meta_.precision_;
+    ObDecimalIntBuilder decimal_builder;
+    for (int64_t i = 0; OB_SUCC(ret) && i < arrow_array.length(); ++i) {
+      if (arrow_array.IsNull(i)) {
+        out_vec->set_null(i);
+      } else if (OB_FAIL(ObDatumCast::common_scale_decimalint(
+                     reinterpret_cast<ObDecimalInt *>(
+                         const_cast<uint8_t *>(decimal_array.Value(i))),
+                     in_bytes_, in_scale_, out_scale, out_precision, expr->extra_,
+                     decimal_builder, eval_ctx.exec_ctx_.get_user_logging_ctx()))) {
+        LOG_WARN("scale decimal int failed", K(ret));
+      } else {
+        out_vec->set_decimal_int(i, decimal_builder.get_decimal_int(),
+                                 decimal_builder.get_int_bytes());
+      }
     }
   }
   return ret;

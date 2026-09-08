@@ -1176,17 +1176,12 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
           need_dup_filter = false;
         }
       } else if (ObExternalFileFormat::CPP_PLUGIN_FORMAT == external_table_type) {
-        // C++ .so plugin (LAKE_PLUGIN): filtering is DELEGATED, not duplicated.
+        // C++ .so plugin (LAKE_PLUGIN): keep the storage filter on the plugin row
+        // iterator instead of duplicating it into spec.filters_.
         // The pushdown-able predicates stay in scan_pushdown_filters -> pd_storage_filters_;
         // ObExtTablePluginRowIterator converts them to a predicate JSON handed to the plugin's
-        // reader_create (-> SetPredicate), and runs calc_filters only for the black-box
-        // residual. We deliberately do NOT copy all filters into spec.filters_: the plugin
-        // is the backstop for the pushed predicates (the user's chosen trust model), so
-        // need_dup_filter=false, mirroring Parquet/ORC.
-        // CORRECTNESS IS LOAD-BEARING ON THE PLUGIN: once reader_create accepts the
-        // predicate JSON it MUST actually apply it (SetPredicate). If the plugin ever
-        // silently skips filtering (returns success without SetPredicate), rows leak with
-        // no OB backstop — see ObExtTablePluginRowIterator reader_predicate_fully_pushed_.
+        // reader_create (-> SetPredicate) for optional reader pruning. The iterator
+        // still evaluates the complete pd_storage_filters_ tree as the OB backstop.
         // external_pushdown_filters (the legacy JNI string mechanism) is left empty: the
         // CPP plugin path uses the JSON predicate, not it.
         need_dup_filter = false;
@@ -7078,9 +7073,6 @@ int ObLogTableScan::pick_out_lake_table_part_exprs()
   int ret = OB_SUCCESS;
   // Hive partition columns and Iceberg identity transforms are exact: after
   // file pruning, a precise partition predicate is redundant at row-scan time.
-  // Plugin tables are included for symmetry: ObExtFilePruner currently reports
-  // no partition ranges (base-class get_part_id_and_range_exprs), so this is a
-  // no-op until the plugin contract supports partition pruning.
   if (!share::is_lake_external_table(lake_table_format_)) {
     // do nothing
   } else {

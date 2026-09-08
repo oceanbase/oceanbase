@@ -20,8 +20,9 @@
 ///   buffers + the host API + the opaque reader state refs. Evolving a control
 ///   structure (adding a column attribute, a predicate operator, a stat, a scan-task
 ///   field) is a JSON schema change, NOT an ABI break — old plugins ignore
-///   unknown keys, new OB tolerates missing keys. This is what lets independently
-///   compiled/shipped .so's coexist across versions.
+///   unknown keys, while new OB tolerates missing optional keys. Fields documented
+///   as required remain mandatory. This is what lets independently compiled/shipped
+///   .so's coexist across versions.
 ///
 /// ## Memory ownership (STRICT)
 /// Plugin OUTPUT (schema / scan-tasks / stats JSON) is released **by the plugin**,
@@ -73,9 +74,9 @@
 ///                               "nullable":false},
 ///                              {"name":"value","field_id":K,"ext_type":"INT",
 ///                               "nullable":true}]}]}
-///   Partition columns are carried as a top-level name list (option B: mark, do
-///   NOT build OB partitions — partition pruning is delegated to the plugin/SDK
-///   via partition_filter_json at plan_create):
+///   Partition columns are carried as a top-level name list. OB materializes
+///   standard external-table partition metadata from each task's partition_values
+///   tuple; plugin-reader and OB file-scan routes share that metadata:
 ///     {"columns":[...],"partition_keys":["ds","hr"]}
 ///   (Field names below are the OB_EXT_K_* constants — OB and every plugin MUST
 ///   use those constants, not bare string literals, so a typo is a compile error
@@ -94,26 +95,37 @@
 ///       in/not_in: children=[col, lit, lit, ...].
 ///       is_null/is_not_null: children=[col].
 ///       and/or: children=[pred, ...]; not: children=[pred].
-///     ops:   eq/ne/lt/le/gt/ge. NULL or "" root = no pushdown.
-///   For partition_filter the plugin flattens eq/AND conjuncts into
-///   SetPartitionFilter's vector<map<string,string>> (OR->vector, AND->map,
-///   eq col=lit -> entry keyed by col name); non-eq partition predicates are
-///   demoted to the row predicate (the plugin logs and skips them for
-///   SetPartitionFilter).
+///     ops: eq/ne/lt/le/gt/ge. NULL or "" root = no pushdown.
+///   predicate is the complete convertible scan predicate. partition_filter is an
+///   exact partition-only candidate built from the same raw expressions. A plugin
+///   that fully converts that candidate reports top-level
+///   partition_filter_applied=true in the plan result; missing, false, or a
+///   non-boolean value means no planning proof. This proof is only for partition
+///   residual elision and does not report reader predicate acceptance.
 ///   read_projection (OB->plugin):
 ///     {"field_ids":[..]}   (null / absent -> read all columns)
-///   scan tasks (plugin->OB) — two-part: a generic part OB understands (for
-///   scheduling / runtime filter / finer parallelism) + a format-private
-///   `payload_b64` (opaque bytes the plugin serialized, base64; OB never parses).
-///   "Scan task" (not "split") is the neutral term: every plugin projects its
-///   format-specific work item onto this generic shape:
-///     {"tasks":[{"row_count":N,"byte_size":N,
-///                "files":[{"path":"..","size":N}],
-///                "min_max":{"<col_idx>":["lo","hi"]},
-///                "splittable":true,
-///                "payload_b64":".."}]}
-///     OB today reads only row_count / byte_size; the rest is reserved for OB to
-///     learn to exploit incrementally without a protocol change.
+///   scan tasks (plugin->OB) carry the plugin-owned split and the optional
+///   plan-atomic OB file-reader command:
+///     {"partition_filter_applied":true,
+///      "tasks":[{"row_count":N,"byte_size":N,
+///                "partition_values":[{"field_id":N,"value":"2025-01-15"},
+///                                    {"field_id":M,"value":null}],
+///                "ob_file_scan":{"version":1,"file_format":"parquet",
+///                                "files":[{"path":"..","byte_size":N,
+///                                           "row_count":N}]},
+///                "plugin_split":".."}]}
+///   Producers emit partition_values for every task. For a partitioned table it
+///   must contain exactly one schema-ordered entry per partition key; every file
+///   represented by the task must belong to that tuple. Missing or invalid metadata
+///   is then a hard plan error. JSON null represents the configured default
+///   partition. For an unpartitioned table, absent or [] means no partition;
+///   a non-empty tuple is invalid.
+///   ob_file_scan is plan-atomic: absence keeps the complete batch on the plugin
+///   reader; a valid descriptor selects the OB file reader, which does not fall
+///   back to plugin_split during execution. Version 1 supports parquet/orc and
+///   requires a non-empty files array whose entries have a non-empty path,
+///   non-negative size, and exact non-negative row_count. A present invalid
+///   descriptor, mixed presence, or mixed formats is a hard plan error.
 ///   statistics (plugin->OB):
 ///     {"table":{"row_count":N,"byte_size":N},
 ///      "columns":[{"col_idx":N,"row_count":N,"null_count":N,"ndv":N,
@@ -164,7 +176,7 @@ extern "C" {
 // Bumped on incompatible changes to the vtable layout / entry contract. With the
 // control plane now JSON, ordinary schema/predicate/stat/split evolution does NOT
 // require a bump. The plugin returns NULL for a mismatched version.
-#define OB_EXT_TABLE_PLUGIN_ABI_VERSION 1
+#define OB_EXT_TABLE_PLUGIN_ABI_VERSION 2
 
 // =============================================================================
 // The PROTOCOL plane lives in ob_external_table_protocol.h (included by bare
@@ -288,14 +300,17 @@ struct ObExtTablePluginApi {
                          const ObExtTableHostApi* host);
 
   // ---- plan / scan tasks ----
-  // The plugin prunes partitions (partition_filter) and files (predicate)
-  // internally, reads metadata/files via `host`, and returns ALL scan tasks at once
+  // The plugin uses partition_filter for partition pruning and predicate for scan
+  // pruning, validates the exact partition_filter candidate for planning proof,
+  // and returns ALL scan tasks at once
   // as one JSON document in *out_tasks_json. OB parses it, copies the tasks it
   // needs (each task's JSON object is what OB later hands to reader_open_task), then
   // releases the buffer via tasks_destroy below. As with schema, the plugin owns
   // the release.
   // partition_filter / predicate are OB-built predicate-tree JSON, valid only for
-  // the call (NULL or "" = no pushdown). catalog_context from load_schema is
+  // the call (NULL or "" = no pushdown). Planning proof for partition_filter is
+  // reported by partition_filter_applied; it is not a reader-acceptance signal.
+  // catalog_context from load_schema is
   // carried inside options_json (OB_EXT_K_CATALOG_CONTEXT); the plugin may
   // return OB_OLD_SCHEMA_VERSION on catalog/plan schema drift. limit == -1 =>
   // unlimited; desired_task_count is a PX parallelism hint (may be ignored).
@@ -334,7 +349,7 @@ struct ObExtTablePluginApi {
       ObExtTableReaderWorkerStateConstRef,
       ObExtTableReaderScanStateRef,
       const char *predicate_json);
-  // Open one task on the scan's pipeline: deserializes task_json's payload_b64
+  // Open one task on the scan's pipeline: deserializes task_json's plugin_split
   // and creates the batch reader. Writes task state only. start_row /
   // row_count = row-range subdivision (pass 0 / task_row_count for the whole
   // task). The caller brackets every scan/rescan with reader_open_scan and

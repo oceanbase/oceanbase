@@ -7,11 +7,19 @@
 #define _OCEANBASE_SQL_OPTIMIZER_FILE_PRUNE_OB_EXT_FILE_PRUNER_H
 
 #include "sql/optimizer/file_prune/ob_i_lake_table_file_pruner.h"
+#include "sql/optimizer/file_prune/ob_lake_table_fwd.h"
 #include "share/catalog/ob_catalog_properties.h"  // ObLakeTableFormat
+#include "share/external_table/ob_external_table_part_info.h"
 #include "plugin/v2/include/ob_external_table_plugin.h"  // ObExtTablePluginApi (fwd decls only here)
 
 namespace oceanbase
 {
+namespace share
+{
+struct ObExtFileScanDescriptor;
+struct ObExtScanTask;
+struct ObExtTaskPartitionValue;
+}
 namespace sql
 {
 namespace ext_plugin
@@ -25,29 +33,35 @@ enum class ObExtTableDispatchMode
   PARTITION_BUCKET_WISE = 1
 };
 
-/// Prune-stage scan-task descriptor for the generic plugin contract (analogous
-/// to ObIcebergFileDesc / ObHiveFileDesc). Payload = contract task_json.
-/// Converted to ObOptPluginFile when attaching to a tablet loc.
+/// Prune-stage plugin task, converted to ObOptPluginFile at location selection.
+/// Plugin-reader tasks carry plugin_task_json_; OB-file tasks carry one physical file.
 struct ObPluginSplitDesc
 {
 public:
-  explicit ObPluginSplitDesc(common::ObIAllocator &allocator)
-      : task_json_(), record_count_(0), allocator_(allocator) {}
-  int assign(common::ObIAllocator &allocator, const ObPluginSplitDesc &other);
-  void reset();
-  TO_STRING_KV(K_(task_json), K_(record_count));
+  ObPluginSplitDesc()
+      : plugin_task_json_(), file_url_(), file_size_(0), part_id_(OB_INVALID_PARTITION_ID),
+        record_count_(0), reader_type_(ObPluginReaderType::INVALID) {}
+  TO_STRING_KV(K_(plugin_task_json), K_(file_url), K_(file_size), K_(part_id),
+               K_(record_count), K_(reader_type));
 
-  ObString task_json_;                 // single scan-task JSON text (carries payload_b64)
-  int64_t record_count_;               // task row_count (-1 => 0 unknown)
-  common::ObIAllocator &allocator_;
+  ObString plugin_task_json_;          // Empty for OB file tasks
+  ObString file_url_;                  // Empty for plugin-reader tasks
+  int64_t file_size_;
+  int64_t part_id_;
+  int64_t record_count_;               // Plugin estimate (0 unknown); OB file exact row count
+  ObPluginReaderType reader_type_;
 };
 
-/// Push-model pruner for plugin-backed lake tables. Drives the
-/// plugin contract's `plan_create` to obtain ALL scan tasks at once, then emits
-/// one `ObPluginSplitDesc` per task (task_json_ = the single-task JSON text the
-/// row iter later hands to `reader_create`; record_count_ = task row_count). The
-/// existing `select_location_for_plugin` distributes them across PX servers — the
-/// PX plumbing is reused unchanged.
+/// Produces the complete scan-task transport for a plugin lake table.
+///
+///   plan_create root task
+///     |-- plugin_split -> plugin-reader split(plugin_task_json)
+///     `-- ob_file_scan -> OB file splits(path, byte size, row count, Parquet/ORC)
+///              |
+///              `--> location/PX --> ObPluginScanTask --> AccessService
+///
+/// Partition values are converted once into the standard CTDEF partition rows;
+/// every split from the same root task keeps that root's part_id.
 class ObExtFilePruner : public ObILakeTableFilePruner
 {
 public:
@@ -65,15 +79,48 @@ public:
                        common::ObIArray<ObPluginSplitDesc *> &splits,
                        ObExtTableDispatchMode &dispatch_mode);
 
+  virtual int get_part_id_and_range_exprs(
+      common::ObIArray<uint64_t> &part_column_ids,
+      common::ObIArray<ObRawExpr *> &range_exprs) override;
+
+  int copy_partition_infos_to(
+      common::ObIAllocator &target_allocator,
+      share::ObExternalTablePartInfoArray &target) const;
   virtual int assign(const ObILakeTableFilePruner &o) override;
   virtual int clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const override;
 
 private:
+  int cast_task_partition_value(
+      const share::ObExtTaskPartitionValue &source,
+      const ObColumnMeta &column_meta,
+      common::ObObj &result);
+  int build_task_partition_info(
+      const share::ObExtScanTask &task,
+      const common::ObIArray<uint64_t> &partition_col_ids,
+      const common::ObIArray<int64_t> &partition_col_idxs,
+      int64_t part_id,
+      share::ObExternalTablePartInfo &part_info);
+  int append_scan_task_splits(
+      const share::ObExtScanTask &task,
+      int64_t part_id,
+      ObPluginReaderType reader_type,
+      const share::ObExtFileScanDescriptor *ob_file_scan,
+      common::ObIArray<ObPluginSplitDesc *> &splits);
+  int build_plugin_splits(
+      const char *tasks_json,
+      int32_t tasks_len,
+      const common::ObIArray<uint64_t> &partition_col_ids,
+      const common::ObIArray<ObRawExpr *> &partition_filter_exprs,
+      const common::ObString &predicate_json,
+      common::ObIArray<ObPluginSplitDesc *> &splits);
   common::ObString table_uri_;
   common::ObString access_info_;
   share::ObLakeTableFormat plugin_format_ = share::ObLakeTableFormat::INVALID;
   const ext_plugin::ObExtTableMetadata *ext_metadata_;
   common::ObSEArray<ObRawExpr *, 4> filter_exprs_;
+  common::ObSEArray<uint64_t, 4> proven_part_column_ids_;
+  common::ObSEArray<ObRawExpr *, 4> proven_part_filter_exprs_;
+  share::ObExternalTablePartInfoArray partition_infos_;
   ObExecContext *exec_ctx_;
   // Per-query tuning blob from the EXT_TABLE_OPTIONS opt_param hint: an opaque
   // JSON string passed verbatim into the plugin's options_json (under

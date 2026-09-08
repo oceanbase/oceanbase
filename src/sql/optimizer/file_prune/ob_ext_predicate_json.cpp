@@ -252,13 +252,37 @@ int emit_node(const EmitCtx &ctx, const ObRawExpr *e, bool &partition_eligible,
               ret = OB_SUCCESS;  // non-foldable const -> skip this cmp
             } else if (OB_FAIL(out.append("]}"))) {
             } else {
-              // partition_filter only carries equality (IN is OR-of-eq, handled
-              // in the T_OP_IN branch). Range / NE on a partition col is still
-              // a valid residual predicate, just not partition-eligible.
-              if (op != T_OP_EQ && op != T_OP_NSEQ) { partition_eligible = false; }
               ok = true;
             }
           }
+        }
+        break;
+      }
+      case T_OP_BTW: {
+        const ObOpRawExpr *op_expr = static_cast<const ObOpRawExpr *>(e);
+        const ObColumnRefRawExpr *col = nullptr;
+        if (OB_ISNULL(op_expr) || op_expr->get_param_count() != 3) {
+        } else if (OB_FAIL(get_column_ref(op_expr->get_param_expr(0), col))) {
+          LOG_WARN("get between col ref failed", K(ret), KPC(e));
+        } else if (OB_ISNULL(col)) {
+        } else if (OB_FAIL(out.append_fmt(
+                       "{\"%s\":\"and\",\"%s\":[{\"%s\":\"cmp\",\"%s\":\"ge\",\"%s\":[",
+                       OB_EXT_K_KIND, OB_EXT_K_CHILDREN, OB_EXT_K_KIND, OB_EXT_K_OP,
+                       OB_EXT_K_CHILDREN))) {
+        } else if (OB_FAIL(emit_col(ctx, *col, partition_eligible, out))) {
+        } else if (OB_FAIL(out.append(","))) {
+        } else if (OB_FAIL(emit_lit(ctx, op_expr->get_param_expr(1), out))) {
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(out.append_fmt(
+                       "]},{\"%s\":\"cmp\",\"%s\":\"le\",\"%s\":[",
+                       OB_EXT_K_KIND, OB_EXT_K_OP, OB_EXT_K_CHILDREN))) {
+        } else if (OB_FAIL(emit_col(ctx, *col, partition_eligible, out))) {
+        } else if (OB_FAIL(out.append(","))) {
+        } else if (OB_FAIL(emit_lit(ctx, op_expr->get_param_expr(2), out))) {
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(out.append("]}]}"))) {
+        } else {
+          ok = true;
         }
         break;
       }
@@ -277,8 +301,6 @@ int emit_node(const EmitCtx &ctx, const ObRawExpr *e, bool &partition_eligible,
           } else {
             const ObOpRawExpr *row_expr = static_cast<const ObOpRawExpr *>(right);
             const char *kind = (T_OP_IN == type) ? "in" : "not_in";
-            // NOT_IN is never partition-eligible (can't express as equality maps).
-            if (T_OP_NOT_IN == type) { partition_eligible = false; }
             if (OB_FAIL(out.append_fmt("{\"%s\":\"%s\",\"%s\":[", OB_EXT_K_KIND, kind,
                                        OB_EXT_K_CHILDREN))) {
             } else if (OB_FAIL(emit_col(ctx, *col, partition_eligible, out))) {
@@ -319,7 +341,6 @@ int emit_node(const EmitCtx &ctx, const ObRawExpr *e, bool &partition_eligible,
             // IS <not-null> is not the IS NULL pattern; skip.
           } else {
             const char *kind = (T_OP_IS == type) ? "is_null" : "is_not_null";
-            partition_eligible = false;  // NULL can't be a partition equality map entry
             if (OB_FAIL(out.append_fmt("{\"%s\":\"%s\",\"%s\":[", OB_EXT_K_KIND, kind,
                                        OB_EXT_K_CHILDREN))) {
             } else if (OB_FAIL(emit_col(ctx, *col, partition_eligible, out))) {
@@ -346,7 +367,8 @@ int emit_node(const EmitCtx &ctx, const ObRawExpr *e, bool &partition_eligible,
               LOG_WARN("emit and-child failed", K(ret), K(i));
             } else if (!child_ok) {
               // Skip non-convertible conjunct: emitting a weaker AND is safe for
-              // partition_filter (prunes less) and for residual (OB filters).
+              // predicate pushdown, but the original expr cannot be proven exact.
+              all_part_eligible = false;
             } else {
               if (any_ok && OB_FAIL(out.append(","))) {}
               if (OB_SUCC(ret) && OB_FAIL(out.append(child_json.string()))) {
@@ -417,7 +439,7 @@ int emit_node(const EmitCtx &ctx, const ObRawExpr *e, bool &partition_eligible,
           } else if (OB_FAIL(out.append(child_json.string()))) {
           } else if (OB_FAIL(out.append("]}"))) {
           } else {
-            partition_eligible = false;  // NOT is never a partition equality conjunct
+            partition_eligible = child_part;
             ok = true;
           }
         }
@@ -433,17 +455,17 @@ int emit_node(const EmitCtx &ctx, const ObRawExpr *e, bool &partition_eligible,
 
 // Wrap a list of node JSON strings into an AND root (or return the single node
 // as-is). `parts` are already-emitted node JSON strings.
-int wrap_and(const common::ObIArray<common::ObSqlString *> &parts, common::ObSqlString &out)
+int wrap_and(const common::ObIArray<common::ObSqlString> &parts, common::ObSqlString &out)
 {
   int ret = OB_SUCCESS;
   if (parts.count() == 1) {
-    ret = out.append(parts.at(0)->string());
+    ret = out.append(parts.at(0).string());
   } else if (OB_FAIL(out.append_fmt("{\"%s\":\"and\",\"%s\":[", OB_EXT_K_KIND,
                                      OB_EXT_K_CHILDREN))) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < parts.count(); ++i) {
       if (i > 0 && OB_FAIL(out.append(","))) {}
-      if (OB_SUCC(ret) && OB_FAIL(out.append(parts.at(i)->string()))) {}
+      if (OB_SUCC(ret) && OB_FAIL(out.append(parts.at(i).string()))) {}
     }
     if (OB_SUCC(ret)) { ret = out.append("]}"); }
   }
@@ -685,51 +707,41 @@ int emit_runtime_white_filter(const RuntimeEmitCtx &ctx,
 int emit_runtime_node(const RuntimeEmitCtx &ctx,
                       ObPushdownFilterExecutor *filter,
                       bool &ok,
-                      bool &fully_converted,
                       common::ObSqlString &out)
 {
   int ret = OB_SUCCESS;
   ok = false;
-  fully_converted = false;
   if (OB_ISNULL(filter)) {
     ret = OB_ERR_UNEXPECTED;
   } else if (filter->is_logic_and_node() || filter->is_logic_or_node()) {
     const bool is_and = filter->is_logic_and_node();
     bool all_ok = true;
-    bool all_fully_converted = true;
     common::ObSEArray<common::ObSqlString, 4> children;
     ObPushdownFilterExecutor **child_filters = filter->get_childs();
     for (uint32_t i = 0; OB_SUCC(ret) && (is_and || all_ok)
                          && i < filter->get_child_count(); ++i) {
       bool child_ok = false;
-      bool child_fully_converted = false;
       common::ObSqlString child_json;
       if (OB_ISNULL(child_filters) || OB_ISNULL(child_filters[i])) {
         ret = OB_ERR_UNEXPECTED;
-      } else if (OB_FAIL(emit_runtime_node(ctx, child_filters[i], child_ok,
-                                           child_fully_converted, child_json))) {
+      } else if (OB_FAIL(emit_runtime_node(ctx, child_filters[i], child_ok, child_json))) {
         LOG_WARN("emit runtime predicate child failed", K(ret), K(i));
       } else if (!child_ok) {
-        all_fully_converted = false;
         if (!is_and) {
           all_ok = false;  // Partial OR could incorrectly discard rows.
         }
       } else if (OB_FAIL(children.push_back(child_json))) {
-      } else if (!child_fully_converted) {
-        all_fully_converted = false;
       }
     }
     if (OB_SUCC(ret) && all_ok && !children.empty()) {
       if (OB_FAIL(wrap_runtime_children(is_and ? "and" : "or", children, out))) {
       } else {
         ok = true;
-        fully_converted = all_fully_converted;
       }
     }
   } else if (filter->is_filter_white_node()) {
     ret = emit_runtime_white_filter(
         ctx, *static_cast<ObWhiteFilterExecutor *>(filter), ok, out);
-    fully_converted = ok;
   }
   // Black/sample/other nodes remain as OB-side residual filters.
   return ret;
@@ -762,29 +774,24 @@ int build_predicate_json_from_raw_expr(common::ObIAllocator &alloc,
                                        ObExecContext *exec_ctx,
                                        const common::ObIArray<ObRawExpr *> &filters,
                                        const common::ObIArray<uint64_t> &partition_col_ids,
-                                       common::ObString &out_predicate_json)
+                                       common::ObString &out_predicate_json,
+                                       common::ObString &out_partition_filter_json,
+                                       common::ObIArray<ObRawExpr *> &out_partition_filter_exprs)
 {
-  // Single predicate tree (the AND of every convertible top-level filter). We do
-  // NOT split partition vs residual here anymore: paimon's SDK splits the one
-  // Predicate internally (CreatePickedFieldFilter picks partition-key conjuncts
-  // for partition pruning; ExcludePredicateWithFields yields the residual row
-  // predicate). That mirrors the deleted native paimon path, which only ever
-  // called SetPredicate and never SetPartitionFilter. OB therefore keeps zero
-  // format-specific classification; the plan_create `partition_filter_json`
-  // argument is left NULL (see ob_ext_file_pruner.cpp). `partition_col_ids`
-  // stays in the signature only because emit_node tags columns with it; it no
-  // longer gates the output. Non-convertible conjuncts are dropped (OB's own
-  // pipeline still evaluates the full filter, so correctness is preserved).
   int ret = OB_SUCCESS;
   out_predicate_json.reset();
+  out_partition_filter_json.reset();
+  out_partition_filter_exprs.reset();
   EmitCtx ctx = {alloc, exec_ctx, partition_col_ids};
-  common::ObSEArray<common::ObSqlString, 4> parts;  // every convertible top-level filter
+  common::ObSEArray<common::ObSqlString, 4> parts;
+  common::ObSEArray<common::ObSqlString, 4> partition_parts;
   if (OB_FAIL(parts.reserve(filters.count()))) {
+  } else if (OB_FAIL(partition_parts.reserve(filters.count()))) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      const ObRawExpr *f = filters.at(i);
+      ObRawExpr *f = filters.at(i);
       bool ok = false;
-      bool part_eligible = true;  // computed by emit_node; no longer used to split
+      bool part_eligible = true;
       common::ObSqlString node;
       if (OB_FAIL(emit_node(ctx, f, part_eligible, ok, node))) {
         LOG_WARN("emit predicate node failed", K(ret), K(i), KPC(f));
@@ -792,20 +799,33 @@ int build_predicate_json_from_raw_expr(common::ObIAllocator &alloc,
         // non-convertible — OB's own pipeline filters it.
       } else if (OB_FAIL(parts.push_back(node))) {
         LOG_WARN("push back predicate part failed", K(ret));
+      } else if (part_eligible && OB_FAIL(partition_parts.push_back(node))) {
+        LOG_WARN("push back partition predicate part failed", K(ret));
+      } else if (part_eligible && OB_FAIL(out_partition_filter_exprs.push_back(f))) {
+        LOG_WARN("push back partition predicate expr failed", K(ret));
       }
     }
   }
   if (OB_SUCC(ret) && !parts.empty()) {
     common::ObSqlString assembled;
-    common::ObSEArray<common::ObSqlString *, 4> ptrs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < parts.count(); ++i) {
-      if (OB_FAIL(ptrs.push_back(&parts.at(i)))) {}
-    }
-    if (OB_SUCC(ret) && OB_FAIL(wrap_and(ptrs, assembled))) {
+    if (OB_FAIL(wrap_and(parts, assembled))) {
       LOG_WARN("assemble predicate json failed", K(ret));
     } else if (OB_FAIL(copy_out(alloc, assembled, out_predicate_json))) {
       LOG_WARN("copy predicate json failed", K(ret));
     }
+  }
+  if (OB_SUCC(ret) && !partition_parts.empty()) {
+    common::ObSqlString assembled;
+    if (OB_FAIL(wrap_and(partition_parts, assembled))) {
+      LOG_WARN("assemble partition predicate json failed", K(ret));
+    } else if (OB_FAIL(copy_out(alloc, assembled, out_partition_filter_json))) {
+      LOG_WARN("copy partition predicate json failed", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    out_predicate_json.reset();
+    out_partition_filter_json.reset();
+    out_partition_filter_exprs.reset();
   }
   return ret;
 }
@@ -815,12 +835,10 @@ int build_predicate_json_from_pushdown_filter(
     ObPushdownFilterExecutor *filter,
     const common::ObIArray<uint64_t> &column_ids,
     const common::ObIArray<common::ObString> &column_names,
-    common::ObString &out_predicate_json,
-    bool &out_fully_converted)
+    common::ObString &out_predicate_json)
 {
   int ret = OB_SUCCESS;
   out_predicate_json.reset();
-  out_fully_converted = false;
   if (column_ids.count() != column_names.count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("runtime predicate column mapping count mismatch",
@@ -829,13 +847,10 @@ int build_predicate_json_from_pushdown_filter(
     RuntimeEmitCtx ctx = {column_ids, column_names};
     bool ok = false;
     common::ObSqlString node;
-    if (OB_FAIL(emit_runtime_node(ctx, filter, ok, out_fully_converted, node))) {
+    if (OB_FAIL(emit_runtime_node(ctx, filter, ok, node))) {
       LOG_WARN("emit runtime predicate failed", K(ret));
     } else if (ok && OB_FAIL(copy_out(alloc, node, out_predicate_json))) {
       LOG_WARN("copy runtime predicate json failed", K(ret));
-      out_fully_converted = false;
-    } else if (!ok) {
-      out_fully_converted = false;
     }
   }
   return ret;

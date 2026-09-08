@@ -14,10 +14,11 @@
 ///
 /// Scan tasks are produced by the optimizer-side plugin pruner and distributed
 /// through the existing PX path. At execution time the iterator converts the
-/// instantiated storage filter into the contract predicate JSON for
-/// `reader_open_scan`; OB still evaluates the same filter as the correctness
-/// fallback. If the format's plugin .so is not loaded, init returns
-/// OB_NOT_SUPPORTED.
+/// instantiated storage filter into optional predicate JSON for
+/// `reader_open_scan`. CPP_PLUGIN does not duplicate the tree into
+/// spec.filters_, so this iterator always evaluates pd_storage_filters_ via
+/// calc_filters as the correctness backstop. If the format's plugin .so is
+/// not loaded, init returns OB_NOT_SUPPORTED.
 
 #ifndef OB_EXT_TABLE_PLUGIN_ROW_ITER_H
 #define OB_EXT_TABLE_PLUGIN_ROW_ITER_H
@@ -64,6 +65,7 @@ private:
   int import_current_arrow_batch(struct ArrowArray *arrow_array,
                                  struct ArrowSchema *arrow_schema);
   int init_column_mapping_if_need();
+  int fill_partition_meta_columns(const int64_t read_count);
   int project_column(ObEvalCtx &eval_ctx, const ObExpr *from, const ObExpr *to,
                      const int64_t read_count);
   int project_output_columns(const int64_t read_count);
@@ -112,33 +114,6 @@ private:
   ObBitVector *bit_vector_cache_;
   bool filter_eval_inited_;
   bool reader_predicate_built_;
-  // True iff the WHOLE pushdown filter tree was converted to the plugin JSON
-  // predicate (only white/logic nodes; black/sample/other "black-box" nodes are
-  // never emitted). Set in build_reader_predicate_json from the builder's
-  // out_fully_converted. When true, get_next_rows TRUSTS the plugin — once
-  // reader_open_scan's parse_predicate_json accepts it and SetPredicate succeeds,
-  // paimon owns the filtering — and SKIPS calc_filters. When false, a black-box
-  // part was never pushed, so OB MUST run calc_filters to evaluate it.
-  //
-  // SAFETY MODEL (by design, chosen for CPP_PLUGIN_FORMAT): the optimizer's
-  // ObLogTableScan::extract_pushdown_filters sets need_dup_filter=false for
-  // CPP_PLUGIN_FORMAT, so the pushed predicates are NOT duplicated into
-  // spec.filters_. There is therefore NO upper-layer backstop for them — the
-  // plugin (SetPredicate) is the sole filterer of the pushed predicates, and
-  // calc_filters inside the reader is only the "evaluate the black-box part"
-  // path. Correctness is LOAD-BEARING on the plugin actually applying the
-  // predicate: reader_open_scan currently returns SUCCESS even if parse_predicate_json
-  // skips SetPredicate, so "no error" does NOT imply "filtered". The plugin MUST
-  // apply SetPredicate for every JSON it accepts, or return an error so OB can
-  // fall back. The only residual risk is the plugin OVER-filtering (dropping
-  // qualifying rows), which OB cannot recover — the cost of trusting SetPredicate.
-  //
-  // If this trust model is ever abandoned (e.g. revert need_dup_filter to true to
-  // restore the spec.filters_ backstop), the skip below can stay; the upper pass
-  // would then just be redundant. If the plugin stops consuming predicate_json
-  // (parse_predicate_json->SetPredicate) while need_dup_filter stays false, this
-  // skip becomes unsafe — revert to unconditional calc_filters.
-  bool reader_predicate_fully_pushed_;
   common::ObString reader_predicate_json_;
   // {"field_ids":[...]} projection handed to reader_create. Empty => read all.
   common::ObString reader_projection_json_;

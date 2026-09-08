@@ -456,7 +456,6 @@ int ObParquetTableRowIterator::next_file()
   bool is_count_aggr = file_column_exprs_.count() == 0;
   ObFileScanTask *scan_task = nullptr;
   bool skip_create_file_reader = false;
-
   do {
     ret = OB_SUCCESS;
     skip_create_file_reader = false;

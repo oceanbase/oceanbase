@@ -57,11 +57,9 @@ public:
   // Accessors for the pruner (plugin plan_create needs the table URI + access info).
   const ObString &get_table_location() const { return table_location_; }
   const ObString &get_access_info() const { return access_info_; }
-  // Partition column ids (option B): the OB column ids (field_id + OB_APP_MIN_COLUMN_ID)
-  // of columns the plugin declared as partition keys. Used by the pruner/iter to split
-  // WHERE predicates into partition_filter_json (partition pruning) vs predicate_json
-  // (row filter). Empty when the plugin declared no partition keys. No OB partitions
-  // are built — partition pruning is delegated to the plugin/SDK.
+  // Schema-ordered OB column ids (field_id + OB_APP_MIN_COLUMN_ID) for the
+  // plugin-declared partition keys. Used for predicate splitting and runtime
+  // partition-tuple binding. Empty when the table is unpartitioned.
   const common::ObIArray<uint64_t> &get_partition_col_ids() const { return partition_col_ids_; }
   // Opaque catalog context from load_schema (plugin-defined JSON). Passed verbatim
   // to plan_create; OB does not interpret it.

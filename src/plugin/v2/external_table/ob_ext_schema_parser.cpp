@@ -232,10 +232,9 @@ int parse_schema_json(ObIAllocator &alloc, const char *json, int64_t len,
       }
     }
 
-    // Parse partition_keys (option B: mark partition columns, do NOT build OB
-    // partitions). Absent member => no partition columns (not an error). A
-    // present-but-non-array member is a hard error (STRICT). Names are deep-
-    // copied into the caller's `alloc`.
+    // Parse the schema-ordered partition key names. An absent member denotes
+    // an unpartitioned table; a present non-array member is a hard error.
+    // Names are deep-copied into the caller's `alloc`.
     if (OB_SUCC(ret) && OB_NOT_NULL(out_partition_key_names)) {
       const ObJsonNode *pkeys = find_member(root, OB_EXT_K_PARTITION_KEYS);
       if (OB_NOT_NULL(pkeys)) {
@@ -255,7 +254,10 @@ int parse_schema_json(ObIAllocator &alloc, const char *json, int64_t len,
               } else {
                 const ObString s(static_cast<int32_t>(it->get_data_length()), it->get_data());
                 ObString copied;
-                if (OB_FAIL(ob_write_string(alloc, s, copied))) {
+                if (s.empty() || contains_column_name(*out_partition_key_names, s)) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("partition_keys entry is empty or duplicate", K(ret), K(s));
+                } else if (OB_FAIL(ob_write_string(alloc, s, copied))) {
                   LOG_WARN("deep copy partition key name failed", K(ret));
                 } else if (OB_FAIL(out_partition_key_names->push_back(copied))) {
                   LOG_WARN("push back partition key name failed", K(ret));

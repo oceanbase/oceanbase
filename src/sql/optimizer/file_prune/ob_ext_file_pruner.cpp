@@ -16,6 +16,7 @@
 #include "plugin/v2/external_table/ob_ext_format_registry.h"
 #include "plugin/v2/external_table/ob_ext_json_protocol.h"  // build_options_json, parse_scan_tasks_json
 #include "share/rc/ob_tenant_base.h"
+#include "share/object/ob_obj_cast.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/oblog/ob_log_module.h"
 
@@ -27,30 +28,304 @@ namespace sql
 {
 using namespace ext_plugin;
 
-int ObPluginSplitDesc::assign(ObIAllocator &allocator, const ObPluginSplitDesc &other)
+int ObExtFilePruner::cast_task_partition_value(
+    const share::ObExtTaskPartitionValue &source,
+    const ObColumnMeta &column_meta,
+    ObObj &result)
 {
   int ret = OB_SUCCESS;
-  if (this != &other) {
-    if (OB_FAIL(ob_write_string(allocator, other.task_json_, task_json_))) {
-      LOG_WARN("failed to copy plugin task json", K(ret));
-    } else {
-      record_count_ = other.record_count_;
+  ObObj string_value;
+  ObObj casted;
+  if (source.is_null_) {
+    result.set_null();
+  } else {
+    string_value.set_varchar(source.value_);
+    string_value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    ObCastCtx cast_ctx(&allocator_, nullptr, CM_NONE, column_meta.cs_type_);
+    if (OB_FAIL(ObObjCaster::to_type(
+            column_meta.type_, column_meta.cs_type_, cast_ctx, string_value, casted))) {
+      LOG_WARN("failed to cast plugin partition value", K(ret), K(source.field_id_));
+    } else if (OB_FAIL(ob_write_obj(allocator_, casted, result))) {
+      LOG_WARN("failed to copy plugin partition value", K(ret), K(source.field_id_));
     }
   }
   return ret;
 }
 
-void ObPluginSplitDesc::reset()
+int ObExtFilePruner::build_task_partition_info(
+    const share::ObExtScanTask &task,
+    const ObIArray<uint64_t> &partition_col_ids,
+    const ObIArray<int64_t> &partition_col_idxs,
+    const int64_t part_id,
+    share::ObExternalTablePartInfo &part_info)
 {
-  task_json_.reset();
-  record_count_ = 0;
+  int ret = OB_SUCCESS;
+  share::ObExtTaskPartitionValues values;
+  ObObj *cells = nullptr;
+  if (OB_FAIL(share::ObExtTaskPartitionValues::parse(
+          allocator_, task.task_json, task.task_json_len, values))) {
+    LOG_WARN("failed to parse task partition values", K(ret));
+  } else if (partition_col_ids.empty()) {
+    if (0 != values.count_) {
+      ret = OB_INVALID_DATA;
+      LOG_WARN("unpartitioned plugin task has partition values", K(ret), K(values.count_));
+    }
+  } else if (values.count_ != partition_col_ids.count()) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("plugin task partition values do not match schema", K(ret),
+             K(values.count_), K(partition_col_ids.count()));
+  } else if (!partition_col_ids.empty()) {
+    cells = static_cast<ObObj *>(allocator_.alloc(sizeof(ObObj) * partition_col_ids.count()));
+    if (OB_ISNULL(cells)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate plugin partition row", K(ret), K(partition_col_ids.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_col_ids.count(); ++i) {
+        new (&cells[i]) ObObj();
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_col_ids.count(); ++i) {
+      const uint64_t column_id = partition_col_ids.at(i);
+      const share::ObExtTaskPartitionValue &source = values.values_[i];
+      const int64_t column_idx = partition_col_idxs.at(i);
+      if (column_id < OB_APP_MIN_COLUMN_ID) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid plugin partition column id", K(ret), K(column_id), K(i));
+      } else {
+        const int64_t expected_field_id = column_id - OB_APP_MIN_COLUMN_ID;
+        if (expected_field_id != source.field_id_) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("plugin task partition field id does not match schema", K(ret),
+                   K(expected_field_id), K(source.field_id_), K(column_id), K(i));
+        }
+        if (OB_SUCC(ret)) {
+          // Unreferenced partition columns have no query column meta; leave their cells unconverted.
+          if (OB_INVALID_INDEX != column_idx) {
+            if (OB_UNLIKELY(column_idx >= column_metas_.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("plugin partition column meta is missing", K(ret), K(column_idx),
+                       K(column_metas_.count()));
+            } else {
+              const ObColumnMeta &column_meta = column_metas_.at(column_idx);
+              if (OB_FAIL(cast_task_partition_value(source, column_meta, cells[i]))) {
+                LOG_WARN("failed to cast plugin partition value", K(ret), K(column_id), K(i));
+              }
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      part_info.part_id_ = part_id;
+      part_info.list_row_value_.assign(cells, partition_col_ids.count());
+    }
+  }
+  return ret;
+}
+
+int ObExtFilePruner::append_scan_task_splits(
+    const share::ObExtScanTask &task,
+    const int64_t part_id,
+    const ObPluginReaderType reader_type,
+    const share::ObExtFileScanDescriptor *ob_file_scan,
+    ObIArray<ObPluginSplitDesc *> &splits)
+{
+  int ret = OB_SUCCESS;
+  int64_t split_count = 1;
+  if (ObPluginReaderType::PLUGIN != reader_type) {
+    if (OB_ISNULL(ob_file_scan)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("plugin OB file scan descriptor is null", K(ret), K(reader_type));
+    } else {
+      split_count = ob_file_scan->file_count_;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < split_count; ++i) {
+    ObPluginSplitDesc *desc = OB_NEWx(ObPluginSplitDesc, &allocator_);
+    if (OB_ISNULL(desc)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc plugin split", K(ret), K(i));
+    } else {
+      desc->part_id_ = part_id;
+      desc->reader_type_ = reader_type;
+      if (ObPluginReaderType::PLUGIN == reader_type) {
+        desc->record_count_ = task.row_count > 0 ? task.row_count : 0;
+        if (OB_FAIL(ob_write_string(
+                allocator_,
+                ObString(task.task_json_len, task.task_json),
+                desc->plugin_task_json_))) {
+          LOG_WARN("failed to copy plugin task json", K(ret));
+        }
+      } else {
+        desc->file_size_ = ob_file_scan->files_[i].byte_size_;
+        // Preserve the per-file count while lowering one plugin split into physical
+        // file tasks. The root split count covers all files and cannot be copied to
+        // each file without double counting.
+        desc->record_count_ = ob_file_scan->files_[i].row_count_;
+        if (OB_FAIL(ob_write_string(
+                allocator_, ob_file_scan->files_[i].file_path_, desc->file_url_))) {
+          LOG_WARN("failed to copy plugin OB file url", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(splits.push_back(desc))) {
+          LOG_WARN("failed to push plugin split", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExtFilePruner::build_plugin_splits(
+    const char *tasks_json,
+    const int32_t tasks_len,
+    const ObIArray<uint64_t> &partition_col_ids,
+    const ObIArray<ObRawExpr *> &partition_filter_exprs,
+    const ObString &predicate_json,
+    ObIArray<ObPluginSplitDesc *> &splits)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator task_alloc("ExtPrunerTask");
+  share::ObExtScanTaskArray scan_tasks = share::ObExtScanTaskArray();
+  share::ObExtFileScanDescriptor *first_ob_file_scan = nullptr;
+  ObPluginReaderType reader_type = ObPluginReaderType::PLUGIN;
+  share::ObExternalTablePartInfo part_info;
+  ObSEArray<int64_t, 4> partition_col_idxs;
+  if (OB_FAIL(share::parse_scan_tasks_json(task_alloc, tasks_json, tasks_len, scan_tasks))) {
+    LOG_WARN("failed to parse scan tasks json", K(ret));
+  } else {
+    if (scan_tasks.partition_filter_applied) {
+      if (OB_FAIL(proven_part_column_ids_.assign(partition_col_ids))) {
+        LOG_WARN("failed to store plugin planning proof columns", K(ret));
+      } else if (OB_FAIL(proven_part_filter_exprs_.assign(partition_filter_exprs))) {
+        LOG_WARN("failed to store plugin planning proof expressions", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (scan_tasks.count > 0) {
+        if (OB_FAIL(share::ObExtFileScanDescriptor::parse(
+                task_alloc,
+                scan_tasks.tasks[0].task_json,
+                scan_tasks.tasks[0].task_json_len,
+                first_ob_file_scan))) {
+          LOG_WARN("failed to parse plugin OB file scan descriptor", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(first_ob_file_scan)) {
+        if (share::ObExtFileScanFormat::PARQUET == first_ob_file_scan->file_format_) {
+          reader_type = ObPluginReaderType::OB_PARQUET;
+        } else if (share::ObExtFileScanFormat::ORC == first_ob_file_scan->file_format_) {
+          reader_type = ObPluginReaderType::OB_ORC;
+        } else {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("unsupported plugin OB file format",
+                   K(ret), K(first_ob_file_scan->file_format_));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!partition_col_ids.empty() && scan_tasks.count > 0) {
+        if (OB_FAIL(partition_infos_.reserve(scan_tasks.count))) {
+          LOG_WARN("failed to reserve plugin partition infos", K(ret), K(scan_tasks.count));
+        }
+        // Column metadata is fixed for this plan. Map each partition column to its
+        // column_ids_/column_metas_ index once and reuse the mapping for all tasks.
+        for (int64_t i = 0; OB_SUCC(ret) && i < partition_col_ids.count(); ++i) {
+          int64_t column_idx = OB_INVALID_INDEX;
+          for (int64_t j = 0; OB_INVALID_INDEX == column_idx && j < column_ids_.count(); ++j) {
+            if (partition_col_ids.at(i) == column_ids_.at(j)) {
+              column_idx = j;
+            }
+          }
+          if (OB_FAIL(partition_col_idxs.push_back(column_idx))) {
+            LOG_WARN("failed to store plugin partition column index", K(ret), K(i));
+          }
+        }
+      }
+    }
+    for (int32_t i = 0; OB_SUCC(ret) && i < scan_tasks.count; ++i) {
+      const int64_t part_id = partition_col_ids.empty() ? 0 : i + 1;
+      if (OB_FAIL(build_task_partition_info(
+              scan_tasks.tasks[i], partition_col_ids, partition_col_idxs, part_id, part_info))) {
+        LOG_WARN("failed to build plugin task partition info", K(ret), K(i));
+      } else if (!partition_col_ids.empty()) {
+        if (OB_FAIL(partition_infos_.set_part_pair_by_idx(i, part_info))) {
+          LOG_WARN("failed to store plugin task partition info", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      LOG_INFO("ext pruner plan_create result", K(predicate_json),
+               "predicate_pushed", !predicate_json.empty(),
+               "partition_filter_applied", scan_tasks.partition_filter_applied,
+               "scan_task_count", scan_tasks.count, K(reader_type));
+    }
+    for (int32_t i = 0; OB_SUCC(ret) && i < scan_tasks.count; ++i) {
+      const share::ObExtScanTask &task = scan_tasks.tasks[i];
+      const int64_t part_id = partition_col_ids.empty() ? 0 : i + 1;
+      share::ObExtFileScanDescriptor *ob_file_scan = nullptr;
+      if (0 == i) {
+        ob_file_scan = first_ob_file_scan;
+      } else if (OB_FAIL(share::ObExtFileScanDescriptor::parse(
+                     task_alloc, task.task_json, task.task_json_len, ob_file_scan))) {
+        LOG_WARN("failed to parse plugin OB file scan descriptor", K(ret), K(i));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(first_ob_file_scan) != OB_ISNULL(ob_file_scan)) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("plugin OB file scan plan is not atomic", K(ret), K(i));
+        } else if (OB_NOT_NULL(ob_file_scan)
+                   && ob_file_scan->file_format_ != first_ob_file_scan->file_format_) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("plugin OB file scan plan has mixed formats", K(ret), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(append_scan_task_splits(
+                task, part_id, reader_type, ob_file_scan, splits))) {
+          LOG_WARN("failed to append plugin scan-task splits", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 ObExtFilePruner::ObExtFilePruner(ObIAllocator &allocator)
     : ObILakeTableFilePruner(allocator), table_uri_(), access_info_(),
       plugin_format_(share::ObLakeTableFormat::INVALID), ext_metadata_(nullptr), filter_exprs_(),
+      proven_part_column_ids_(), proven_part_filter_exprs_(), partition_infos_(allocator),
       exec_ctx_(nullptr)
 {
+}
+
+int ObExtFilePruner::copy_partition_infos_to(
+    ObIAllocator &target_allocator,
+    share::ObExternalTablePartInfoArray &target) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t partition_info_count = partition_infos_.count();
+  share::ObExternalTablePartInfo target_info;
+  if (partition_info_count > 0 && OB_FAIL(target.reserve(partition_info_count))) {
+    LOG_WARN("failed to reserve plugin partition infos", K(ret), K(partition_info_count));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_info_count; ++i) {
+    const share::ObExternalTablePartInfo &source = partition_infos_.at(i);
+    target_info.part_id_ = source.part_id_;
+    if (OB_FAIL(ob_write_row(
+            target_allocator, source.list_row_value_, target_info.list_row_value_))) {
+      LOG_WARN("failed to copy plugin partition row", K(ret), K(i));
+    } else if (OB_FAIL(ob_write_string(
+                   target_allocator, source.partition_spec_, target_info.partition_spec_))) {
+      LOG_WARN("failed to copy plugin partition spec", K(ret), K(i));
+    } else if (OB_FAIL(target.set_part_pair_by_idx(i, target_info))) {
+      LOG_WARN("failed to store plugin partition info", K(ret), K(i));
+    }
+  }
+  return ret;
 }
 
 int ObExtFilePruner::clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const
@@ -79,17 +354,34 @@ int ObExtFilePruner::assign(const ObILakeTableFilePruner &o)
     LOG_WARN("failed to deep copy table uri", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, other.access_info_, access_info_))) {
     LOG_WARN("failed to deep copy access info", K(ret));
+  } else if (OB_FAIL(
+                 ob_write_string(allocator_, other.ext_options_hint_, ext_options_hint_, true))) {
+    LOG_WARN("failed to deep copy ext_options hint", K(ret));
+  } else if (OB_FAIL(proven_part_column_ids_.assign(other.proven_part_column_ids_))) {
+    LOG_WARN("failed to copy proven partition column ids", K(ret));
+  } else if (OB_FAIL(proven_part_filter_exprs_.assign(other.proven_part_filter_exprs_))) {
+    LOG_WARN("failed to copy proven partition filter exprs", K(ret));
+  } else if (OB_FAIL(other.copy_partition_infos_to(allocator_, partition_infos_))) {
+    LOG_WARN("failed to copy plugin partition infos", K(ret));
   } else {
     plugin_format_ = other.plugin_format_;
-  }
-  if (OB_SUCC(ret) && OB_FAIL(ob_write_string(allocator_, other.ext_options_hint_,
-                                     ext_options_hint_, true))) {
-    LOG_WARN("failed to deep copy ext_options hint", K(ret));
-  } else {
     ext_metadata_ = other.ext_metadata_;
     exec_ctx_ = other.exec_ctx_;
   }
   // filter_exprs_ are optimizer-stage pointers, not deep-copied in assign
+  return ret;
+}
+
+int ObExtFilePruner::get_part_id_and_range_exprs(
+    ObIArray<uint64_t> &part_column_ids,
+    ObIArray<ObRawExpr *> &range_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(part_column_ids.assign(proven_part_column_ids_))) {
+    LOG_WARN("failed to assign proven partition column ids", K(ret));
+  } else if (OB_FAIL(range_exprs.assign(proven_part_filter_exprs_))) {
+    LOG_WARN("failed to assign proven partition filter exprs", K(ret));
+  }
   return ret;
 }
 
@@ -161,6 +453,8 @@ int ObExtFilePruner::prune_ext_splits(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   dispatch_mode = ObExtTableDispatchMode::ROUND_ROBIN;
+  proven_part_column_ids_.reset();
+  proven_part_filter_exprs_.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ext file pruner not inited", K(ret));
@@ -225,26 +519,28 @@ int ObExtFilePruner::prune_ext_splits(ObExecContext &exec_ctx,
                                                    raw_keys, raw_count))) {
         LOG_WARN("failed to build options json", K(ret));
       } else {
-        // Build the single predicate-tree JSON from the optimizer filter exprs.
-        // OB does NOT split partition vs residual: the plugin's SDK splits the
-        // one Predicate internally (paimon: CreatePickedFieldFilter picks
-        // partition-key conjuncts for pruning, ExcludePredicateWithFields yields
-        // the residual row predicate) — mirroring the deleted native paimon
-        // path that only called SetPredicate. The plan_create
-        // partition_filter_json argument is therefore passed NULL (kept in the
-        // ABI; not bumped). predicate_json may be empty (NULL -> no pushdown).
-        // See the protocol comment in ob_external_table_plugin.h for the grammar.
+        // predicate_json carries the complete convertible scan predicate.
+        // partition_filter_json is an exact partition-only planning candidate.
+        // Residuals are removable only after plan_create reports partition_filter_applied.
+        // On conversion failure OB evaluates all filters.
         ObString predicate_json;
+        ObString partition_filter_json;
+        ObSEArray<ObRawExpr *, 4> partition_filter_exprs;
         const common::ObIArray<uint64_t> &part_col_ids = ext_metadata_->get_partition_col_ids();
         if (OB_FAIL(ext_predicate::build_predicate_json_from_raw_expr(
-                allocator_, exec_ctx_, filter_exprs_, part_col_ids, predicate_json))) {
+                allocator_, exec_ctx_, filter_exprs_, part_col_ids, predicate_json,
+                partition_filter_json, partition_filter_exprs))) {
           LOG_WARN("failed to build predicate json, scanning without pushdown",
                    K(ret), K(part_col_ids.count()));
           ret = OB_SUCCESS;  // degrade gracefully: no pushdown, OB filters rows
           predicate_json.reset();
+          partition_filter_json.reset();
+          partition_filter_exprs.reset();
         }
         const char *predicate_cstr =
             predicate_json.empty() ? nullptr : predicate_json.ptr();
+        const char *partition_filter_cstr =
+            partition_filter_json.empty() ? nullptr : partition_filter_json.ptr();
         char *tasks_json = nullptr;
         int32_t tasks_len = 0;
         // desired_task_count is a PX parallelism hint the plugin may ignore.
@@ -252,41 +548,16 @@ int ObExtFilePruner::prune_ext_splits(ObExecContext &exec_ctx,
         // (with plugin-side source location) via host->log before returning —
         // grep "[ExtPlugin]" in observer.log for the stack.
         int rc = api->plan_create(loc_str.ptr(), options_json.ptr(),
-                                  /*partition_filter_json*/ nullptr, predicate_cstr,
+                                  partition_filter_cstr, predicate_cstr,
                                   /*limit*/ -1, /*desired_task_count*/ 1,
                                   &host, &tasks_json, &tasks_len);
         if (rc != OB_SUCCESS || OB_ISNULL(tasks_json) || tasks_len <= 0) {
           ret = (rc != OB_SUCCESS) ? rc : OB_ERR_UNEXPECTED;
           LOG_WARN("plugin plan_create failed", K(ret));
-        } else {
-          share::ObExtScanTaskArray scan_tasks = {};
-          ObArenaAllocator task_alloc("ExtPrunerTask");
-          if (OB_FAIL(share::parse_scan_tasks_json(task_alloc, tasks_json, tasks_len,
-                                                   scan_tasks))) {
-            LOG_WARN("failed to parse scan tasks json", K(ret));
-          } else {
-            LOG_INFO("ext pruner plan_create result",
-                     K(predicate_json),
-                     "predicate_pushed", !predicate_json.empty(),
-                     "scan_task_count", scan_tasks.count);
-            for (int32_t i = 0; OB_SUCC(ret) && i < scan_tasks.count; ++i) {
-              const share::ObExtScanTask &t = scan_tasks.data[i];
-              ObPluginSplitDesc *desc = OB_NEWx(ObPluginSplitDesc, &allocator_, allocator_);
-              if (OB_ISNULL(desc)) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                LOG_WARN("failed to alloc ObPluginSplitDesc", K(ret), K(i));
-              } else if (OB_FAIL(ob_write_string(allocator_,
-                                                  ObString(t.size, t.data),
-                                                  desc->task_json_))) {
-                LOG_WARN("failed to deep copy task json", K(ret), K(i));
-              } else {
-                desc->record_count_ = (t.row_count > 0) ? t.row_count : 0;
-                if (OB_FAIL(splits.push_back(desc))) {
-                  LOG_WARN("failed to push back split desc", K(ret), K(i));
-                }
-              }
-            }
-          }
+        } else if (OB_FAIL(build_plugin_splits(
+                       tasks_json, tasks_len, part_col_ids, partition_filter_exprs,
+                       predicate_json, splits))) {
+          LOG_WARN("failed to build plugin splits", K(ret));
         }
         // Release the plugin's output buffer via the plugin's tasks_destroy (the
         // plugin owns the release — it may be static/own-alloc/host-alloc).

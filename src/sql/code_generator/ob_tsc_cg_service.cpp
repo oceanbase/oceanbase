@@ -19,6 +19,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "src/share/vector_index/ob_vector_index_util.h"
+#include "sql/optimizer/ob_lake_table_partition_info.h"
 namespace oceanbase
 {
 
@@ -213,6 +214,20 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
               }
             }
           }
+        }
+      }
+
+      if (OB_SUCC(ret) && share::is_lake_plugin_table(scan_ctdef.lake_table_format_)) {
+        const ObLakeTablePartitionInfo *lake_part_info
+            = static_cast<const ObLakeTablePartitionInfo *>(op.get_table_partition_info());
+        const ObExtFilePruner *ext_pruner = OB_NOT_NULL(lake_part_info)
+            ? static_cast<const ObExtFilePruner *>(lake_part_info->get_file_pruner()) : nullptr;
+        if (OB_ISNULL(ext_pruner)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("plugin file pruner is null", K(ret));
+        } else if (OB_FAIL(ext_pruner->copy_partition_infos_to(
+                       cg_.phy_plan_->get_allocator(), scan_ctdef.partition_infos_))) {
+          LOG_WARN("failed to copy plugin partition infos", K(ret));
         }
       }
 

@@ -159,7 +159,13 @@ public:
 class ObDecimalArrowDataLoader : public ObArrowDataLoader
 {
 public:
+  int init(const arrow::DataType &arrow_type, const ObDatumMeta &datum_type) override;
   int load(const arrow::Array &array, ObEvalCtx &eval_ctx, ObExpr *expr) override;
+
+private:
+  int32_t in_bytes_ = 0;
+  int32_t in_scale_ = 0;
+  bool enable_direct_copy_ = false;
 };
 
 class ObDecimalToIntArrowDataLoader : public ObArrowDataLoader

@@ -62,8 +62,8 @@ static const char *const OB_EXT_K_SCALE       = "scale";     // schema column
 static const char *const OB_EXT_K_LENGTH      = "length";    // schema column
 static const char *const OB_EXT_K_NULLABLE    = "nullable";  // schema column
 static const char *const OB_EXT_K_CHILDREN    = "children";  // schema column (ARRAY element) | predicate node children
-// schema: top-level array of partition column NAMES (option B: mark partition
-// columns, do NOT build OB partitions). Empty/absent => no partition columns.
+// schema: top-level array of partition column names. OB uses it to define the
+// standard external-table partition tuple. Empty/absent => no partition columns.
 static const char *const OB_EXT_K_PARTITION_KEYS = "partition_keys";
 // Opaque plugin-defined blob from load_schema (T0). OB stores it verbatim and
 // passes it back inside options_json at plan_create and reader_create (raw
@@ -71,15 +71,30 @@ static const char *const OB_EXT_K_PARTITION_KEYS = "partition_keys";
 // (schema version, etc.).
 static const char *const OB_EXT_K_CATALOG_CONTEXT = "catalog_context";
 static const char *const OB_EXT_K_TASKS       = "tasks";     // scan tasks: top array
-static const char *const OB_EXT_K_ROW_COUNT   = "row_count"; // scan task
+// plan_create result: plugin proved that partition_filter_json was fully
+// converted and installed in its planner. Missing/false keeps the OB residual.
+static const char *const OB_EXT_K_PARTITION_FILTER_APPLIED = "partition_filter_applied";
+static const char *const OB_EXT_K_ROW_COUNT   = "row_count"; // scan task or OB file
 static const char *const OB_EXT_K_BYTE_SIZE   = "byte_size"; // scan task
-static const char *const OB_EXT_K_PAYLOAD_B64 = "payload_b64"; // scan task
+// Opaque plugin-owned serialized split encoded as Base64 for JSON transport.
+// OB preserves the enclosing task JSON and passes it back to the plugin reader.
+static const char *const OB_EXT_K_PLUGIN_SPLIT = "plugin_split";
+// scan task: canonical schema partition-key order; field_id identifies each value.
+static const char *const OB_EXT_K_PARTITION_VALUES = "partition_values";
 // scan task: reserved generic fields (OB reads row_count/byte_size today; the
 // rest OB learns to exploit incrementally). All are known keys — the strict
 // unknown-key WARN must not fire on them.
-static const char *const OB_EXT_K_FILES       = "files";     // scan task: [{"path","size"}]
+// Scan task uses []; OB file scan uses [{"path","byte_size","row_count"}].
+static const char *const OB_EXT_K_FILES       = "files";
 static const char *const OB_EXT_K_MIN_MAX     = "min_max";   // scan task: {"<col_idx>":["lo","hi"]}
 static const char *const OB_EXT_K_SPLITTABLE  = "splittable";// scan task
+// Plan-atomic OB file-reader command carried by a scan task. Absence selects
+// the plugin reader; a valid descriptor selects OB Parquet/ORC execution.
+static const char *const OB_EXT_K_OB_FILE_SCAN           = "ob_file_scan";
+static const char *const OB_EXT_K_OB_FILE_SCAN_VERSION   = "version";
+static const char *const OB_EXT_K_OB_FILE_SCAN_FORMAT    = "file_format";
+static const char *const OB_EXT_K_OB_FILE_SCAN_PATH      = "path";
+static const char *const OB_EXT_K_OB_FILE_SCAN_BYTE_SIZE = "byte_size";
 // read_projection (OB->plugin): {"field_ids":[..]} (null/absent -> read all).
 static const char *const OB_EXT_K_FIELD_IDS   = "field_ids";
 

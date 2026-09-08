@@ -131,8 +131,8 @@ int ObExtTableMetadata::load_ext_schema_()
       const bool is_oracle = lib::is_oracle_mode();
       const ObCharsetType cs_type = ObCharsetType::CHARSET_UTF8MB4;
       const ObCollationType collation = ObCollationType::CS_TYPE_UTF8MB4_BIN;
-      // Collect the partition-key name list alongside the columns (option B) so the
-      // pruner/iter can split WHERE predicates without OB-side partition info.
+      // Collect partition keys in schema order for predicate splitting and
+      // runtime partition-tuple binding.
       ObSEArray<ObString, 4> partition_key_names;
       // The plugin returns an OB errno verbatim and logs its own diagnostic (with the
       // plugin-side source location) via host->log before returning — grep "[ExtPlugin]"
@@ -152,9 +152,7 @@ int ObExtTableMetadata::load_ext_schema_()
                                                   &catalog_context_json_))) {
         LOG_WARN("failed to parse schema json", K(ret));
       } else {
-        // Resolve partition key names to OB column ids (field_id + OB_APP_MIN_COLUMN_ID).
-        // Names not found in the column set are logged and skipped (STRICT would be too
-        // harsh here — a stale partition list must not break schema load).
+        // Resolve every partition key name to exactly one OB column id.
         for (int64_t i = 0; OB_SUCC(ret) && i < partition_key_names.count(); ++i) {
           const ObString &pk_name = partition_key_names.at(i);
           bool found = false;
@@ -176,8 +174,8 @@ int ObExtTableMetadata::load_ext_schema_()
             }
           }
           if (OB_SUCC(ret) && !found) {
-            LOG_WARN("ext schema: partition key name not found in columns, skipped",
-                     K(pk_name));
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("ext schema partition key name not found in columns", K(ret), K(pk_name));
           }
         }
       }
@@ -233,8 +231,10 @@ int ObExtTableMetadata::setup_columns_(ObTableSchema &table_schema)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ext schema is empty", K(ret), K(columns_.count()));
   } else {
+    ObSqlString prop_str;
     for (int32_t i = 0; OB_SUCC(ret) && i < columns_.count(); ++i) {
       ObColumnSchemaV2 *col = columns_.at(i);
+      int64_t partition_ordinal = OB_INVALID_INDEX;
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("parsed column is null", K(ret), K(i));
@@ -250,10 +250,21 @@ int ObExtTableMetadata::setup_columns_(ObTableSchema &table_schema)
       } else {
         col->set_column_id(ob_col_id);
       }
-      ObSqlString prop_str;
+      for (int64_t j = 0; OB_SUCC(ret) && OB_INVALID_INDEX == partition_ordinal
+           && j < partition_col_ids_.count(); ++j) {
+        if (ob_col_id == partition_col_ids_.at(j)) {
+          partition_ordinal = j;
+        }
+      }
+      prop_str.reset();
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(prop_str.append_fmt("%s%ld", N_EXTERNAL_TABLE_COLUMN_ID,
-                                             static_cast<int64_t>(field_id)))) {
+      } else if (OB_INVALID_INDEX != partition_ordinal
+                 && OB_FAIL(prop_str.append_fmt("%s%ld", N_PARTITION_LIST_COL,
+                                                partition_ordinal + 1))) {
+        LOG_WARN("failed to append partition column property", K(ret), K(partition_ordinal));
+      } else if (OB_INVALID_INDEX == partition_ordinal
+                 && OB_FAIL(prop_str.append_fmt("%s%ld", N_EXTERNAL_TABLE_COLUMN_ID,
+                                                static_cast<int64_t>(field_id)))) {
         LOG_WARN("failed to append column id property", K(ret));
       } else if (OB_FAIL(ObDMLResolver::set_basic_column_properties(*col, prop_str.string()))) {
         LOG_WARN("failed to set basic column properties", K(ret), K(i));
@@ -261,6 +272,9 @@ int ObExtTableMetadata::setup_columns_(ObTableSchema &table_schema)
         col->set_table_id(table_id_);
         if (OB_FAIL(table_schema.add_column(*col))) {
           LOG_WARN("failed to add column", K(ret), K(i));
+        } else if (OB_INVALID_INDEX != partition_ordinal
+                   && OB_FAIL(table_schema.add_partition_key(col->get_column_name()))) {
+          LOG_WARN("failed to add plugin partition key", K(ret), K(i), K(partition_ordinal));
         }
       }
     }

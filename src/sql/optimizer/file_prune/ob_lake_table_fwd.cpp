@@ -224,10 +224,16 @@ int ObOptPluginFile::assign(const ObIOptLakeTableFile &other)
     const ObOptPluginFile &plugin_file = static_cast<const ObOptPluginFile&>(other);
     if (OB_FAIL(ObIOptLakeTableFile::assign(other))) {
       LOG_WARN("failed to assign ObIOptLakeTableFile");
-    } else if (OB_FAIL(ob_write_string(allocator_, plugin_file.task_json_, task_json_))) {
+    } else if (OB_FAIL(ob_write_string(
+            allocator_, plugin_file.plugin_task_json_, plugin_task_json_))) {
       LOG_WARN("failed to copy plugin task json", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, plugin_file.file_url_, file_url_))) {
+      LOG_WARN("failed to copy plugin file url", K(ret));
     } else {
+      file_size_ = plugin_file.file_size_;
+      part_id_ = plugin_file.part_id_;
       record_count_ = plugin_file.record_count_;
+      reader_type_ = plugin_file.reader_type_;
     }
   }
   return ret;
@@ -236,8 +242,12 @@ int ObOptPluginFile::assign(const ObIOptLakeTableFile &other)
 void ObOptPluginFile::reset()
 {
   ObIOptLakeTableFile::reset();
-  task_json_.reset();
+  plugin_task_json_.reset();
+  file_url_.reset();
+  file_size_ = 0;
+  part_id_ = OB_INVALID_PARTITION_ID;
   record_count_ = 0;
+  reader_type_ = ObPluginReaderType::INVALID;
 }
 
 OB_SERIALIZE_MEMBER(ObIExtTblScanTask);
@@ -332,8 +342,9 @@ int ObHiveScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
 
 OB_SERIALIZE_MEMBER((ObPluginScanTask, ObFileScanTask),
                     part_id_,
-                    task_json_,
-                    record_count_);
+                    plugin_task_json_,
+                    record_count_,
+                    reader_type_);
 
 int ObPluginScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
                                                     const ObIOptLakeTableFile &opt_table_file)
@@ -344,10 +355,19 @@ int ObPluginScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
     LOG_WARN("get unexpected opt table file type", K(opt_table_file.get_file_type()));
   } else {
     const ObOptPluginFile &opt_plugin_file = static_cast<const ObOptPluginFile &>(opt_table_file);
-    if (OB_FAIL(ob_write_string(allocator, opt_plugin_file.task_json_, task_json_))) {
+    if (OB_FAIL(ob_write_string(allocator, opt_plugin_file.plugin_task_json_, plugin_task_json_))) {
       LOG_WARN("failed to write plugin task json");
+    } else if (OB_FAIL(ob_write_string(allocator, opt_plugin_file.file_url_, file_url_))) {
+      LOG_WARN("failed to write plugin file url");
     } else {
-      record_count_ = opt_plugin_file.record_count_;
+      file_size_ = opt_plugin_file.file_size_;
+      part_id_ = opt_plugin_file.part_id_;
+      reader_type_ = opt_plugin_file.reader_type_;
+      // The per-file count has already been consumed by the optimizer. A positive
+      // runtime record_count_ enables the Parquet/ORC metadata COUNT(*) shortcut,
+      // which remains disabled for plugin OB-file scans.
+      record_count_ = ObPluginReaderType::PLUGIN == reader_type_
+          ? opt_plugin_file.record_count_ : -1;
     }
   }
   return ret;

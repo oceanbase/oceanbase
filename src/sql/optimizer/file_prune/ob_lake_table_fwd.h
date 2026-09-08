@@ -74,11 +74,19 @@ enum class LakeFileType
   ICEBERG = 1,
   HIVE = 2,
   // A scan task produced by the generic external-table plugin contract
-  // (ob_external_table_plugin.h). Payload = the contract task_json string (a
-  // single scan-task JSON object, incl. payload_b64). Used by any plugin-backed
+  // (ob_external_table_plugin.h). plugin_task_json_ carries one contract scan
+  // task JSON object, including plugin_split. Used by any plugin-backed
   // format — not a format-specific task type. Value 3 reuses the legacy PAIMON
   // enum value so previously serialized plugin scan tasks stay compatible.
   EXT_PLUGIN = 3
+};
+
+enum class ObPluginReaderType : int8_t
+{
+  INVALID = 0,
+  PLUGIN = 1,
+  OB_PARQUET = 2,
+  OB_ORC = 3
 };
 
 enum class CsvTaskType{
@@ -163,16 +171,25 @@ struct ObOptPluginFile : public ObIOptLakeTableFile
 public:
   explicit ObOptPluginFile(common::ObIAllocator &allocator)
   : ObIOptLakeTableFile(LakeFileType::EXT_PLUGIN),
-    task_json_(),
+    plugin_task_json_(),
+    file_url_(),
+    file_size_(0),
+    part_id_(OB_INVALID_PARTITION_ID),
     record_count_(0),
+    reader_type_(ObPluginReaderType::INVALID),
     allocator_(allocator)
   {}
   virtual int assign(const ObIOptLakeTableFile &other) override;
   virtual void reset() override;
-  VIRTUAL_TO_STRING_KV(K_(type), K_(task_json), K_(record_count));
+  VIRTUAL_TO_STRING_KV(K_(type), K_(plugin_task_json), K_(file_url), K_(file_size),
+                       K_(part_id), K_(record_count), K_(reader_type));
 
-  ObString task_json_;                 // single scan-task JSON text
-  int64_t record_count_;
+  ObString plugin_task_json_;          // Empty for OB file tasks
+  ObString file_url_;                  // Empty for plugin-reader tasks
+  int64_t file_size_;
+  int64_t part_id_;
+  int64_t record_count_;               // Plugin estimate (0 unknown); OB file exact row count
+  ObPluginReaderType reader_type_;
   common::ObIAllocator &allocator_;
 };
 
@@ -254,7 +271,8 @@ public:
   int64_t modification_time_;
   int64_t file_id_;
   common::ObString content_digest_;
-  int64_t record_count_; // 在 ObIcebergScanTask 中序列化
+  int64_t record_count_;  // serialized in ObIcebergScanTask;
+                          // in plugin, used as an estimate; OB file uses -1 for unset
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFileScanTask);
   int assign(const ObFileScanTask &other);
@@ -320,10 +338,8 @@ private:
   int assign(const ObHiveScanTask &other);
 };
 
-/// Execution-side scan task for the generic plugin contract. Carries the
-/// contract task_json (the single scan-task JSON text) which the row iterator
-/// hands to `reader_create`. Rides in ObVTableScanParam::scan_tasks_ alongside
-/// the format-specific task types.
+/// Serializable plugin task. Plugin-reader mode carries plugin_task_json_;
+/// OB-file mode carries one physical file for the existing Parquet/ORC iterator.
 struct ObPluginScanTask : public ObFileScanTask
 {
 public:
@@ -331,7 +347,8 @@ public:
 public:
   explicit ObPluginScanTask()
   : ObFileScanTask(LakeFileType::EXT_PLUGIN),
-    task_json_()
+    plugin_task_json_(),
+    reader_type_(ObPluginReaderType::INVALID)
   {}
   virtual ~ObPluginScanTask() {}
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
@@ -339,9 +356,10 @@ public:
 
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
                       K_(file_id), K_(part_id), K_(content_digest), K_(record_count),
-                      K_(task_json));
+                      K_(plugin_task_json), K_(reader_type));
 
-  ObString task_json_;  // single scan-task JSON text (carries payload_b64)
+  ObString plugin_task_json_;  // Empty for OB file tasks
+  ObPluginReaderType reader_type_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPluginScanTask);
   int assign(const ObPluginScanTask &other);

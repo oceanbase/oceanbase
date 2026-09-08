@@ -776,10 +776,8 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
 
   } else if (share::is_lake_plugin_table(lake_table_metadata->get_format_type())) {
     // cpp .so plugin-backed format: metadata is sql::ext_plugin::ObExtTableMetadata.
-    // ObExtFilePruner drives the plugin contract's plan_create to obtain scan tasks
-    // (one ObPluginSplitDesc per task, task_json_ = task JSON), then
-    // select_location_for_plugin distributes them across PX servers — the existing
-    // PX plumbing is reused unchanged.
+    // ObExtFilePruner lowers root tasks to SDK or native file tasks before the
+    // existing location/PX transport distributes them.
     const sql::ext_plugin::ObExtTableMetadata *ext_table_metadata
         = static_cast<const sql::ext_plugin::ObExtTableMetadata *>(lake_table_metadata);
     ObExtFilePruner *ext_file_pruner = NULL;
@@ -1437,10 +1435,17 @@ int ObLakeTablePartitionInfo::add_table_file_for_plugin(ObCandiTabletLoc &tablet
     LOG_WARN("failed to push back plugin lake table file", K(ret));
   } else {
     ObOptPluginFile *plugin_file = static_cast<ObOptPluginFile *>(file);
-    if (OB_FAIL(ob_write_string(allocator_, split_desc->task_json_, plugin_file->task_json_))) {
+    if (OB_FAIL(ob_write_string(
+            allocator_, split_desc->plugin_task_json_, plugin_file->plugin_task_json_))) {
       LOG_WARN("failed to copy plugin task json", K(ret));
+    } else if (OB_FAIL(ob_write_string(
+                   allocator_, split_desc->file_url_, plugin_file->file_url_))) {
+      LOG_WARN("failed to copy plugin file url", K(ret));
     } else {
+      plugin_file->file_size_ = split_desc->file_size_;
+      plugin_file->part_id_ = split_desc->part_id_;
       plugin_file->record_count_ = split_desc->record_count_;
+      plugin_file->reader_type_ = split_desc->reader_type_;
     }
   }
   return ret;

@@ -896,6 +896,18 @@ STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_MEM_CACHE_MISS_BYTES, "external table memory c
 STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_IO_CNT, "external table io count", ObStatClassIds::CACHE, 240037, true, true, true, "")
 STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_IO_TIME, "external table io time", ObStatClassIds::CACHE, 240038, true, true, true, "")
 STAT_EVENT_ADD_DEF(EXTERNAL_TABLE_IO_SIZE, "external table io size", ObStatClassIds::CACHE, 240039, true, true, true, "")
+STAT_EVENT_ADD_DEF(EXT_PLUGIN_OB_PARQUET_SCAN_COUNT,
+                   "external plugin OB parquet scan count",
+                   ObStatClassIds::DEBUG, 240040, true, true, true,
+                   "Number of C++ external plugin scans routed to the OB Parquet reader.")
+STAT_EVENT_ADD_DEF(EXT_PLUGIN_OB_ORC_SCAN_COUNT,
+                   "external plugin OB orc scan count",
+                   ObStatClassIds::DEBUG, 240041, true, true, true,
+                   "Number of C++ external plugin scans routed to the OB ORC reader.")
+STAT_EVENT_ADD_DEF(EXT_PLUGIN_READER_SCAN_COUNT,
+                   "external plugin reader scan count",
+                   ObStatClassIds::DEBUG, 240042, true, true, true,
+                   "Number of C++ external plugin scans kept on the plugin reader.")
 
 // shared-storage diagnose(2401xx)
 STAT_EVENT_ADD_DEF(SS_META_READ_COUNT, "ss meta read count", ObStatClassIds::OBSERVER, 240101, true, true, true, "")

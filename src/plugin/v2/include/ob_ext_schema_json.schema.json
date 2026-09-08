@@ -14,7 +14,7 @@
       "items": { "$ref": "#/$defs/column" }
     },
     "partition_keys": {
-      "description": "Names of partition columns (option B: mark only; OB builds no partitions, partition pruning is the plugin's job via the predicate JSON at plan_create). Absent/empty = no partition columns.",
+      "description": "Names of partition columns used to define the standard external-table partition tuple. Absent/empty means no partition columns.",
       "type": "array",
       "items": { "type": "string" },
       "uniqueItems": true

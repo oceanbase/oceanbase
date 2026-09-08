@@ -34,14 +34,74 @@ namespace oceanbase
 namespace share
 {
 
-/// One scan task parsed from the scan-tasks JSON. `data`/`size` point at the
+enum class ObExtFileScanFormat
+{
+  INVALID = 0,
+  PARQUET,
+  ORC,
+};
+
+struct ObExtFileScanEntry
+{
+  common::ObString file_path_;
+  int64_t byte_size_ = -1;
+  int64_t row_count_ = -1;  // unset until the descriptor supplies an exact non-negative value
+};
+
+struct ObExtTaskPartitionValue
+{
+  int64_t field_id_ = -1;
+  bool is_null_ = true;
+  common::ObString value_;
+};
+
+struct ObExtTaskPartitionValues
+{
+  static int parse(common::ObIAllocator &alloc,
+                   const char *json,
+                   int64_t len,
+                   ObExtTaskPartitionValues &values);
+
+  ObExtTaskPartitionValue *values_ = nullptr;
+  int64_t count_ = 0;
+};
+
+struct ObExtFileScanDescriptor
+{
+  /// Parse the optional ob_file_scan object from one task JSON. A missing
+  /// descriptor leaves `descriptor` null; a present invalid descriptor is an
+  /// error. Returned objects are allocator-owned.
+  /// @param [in] alloc allocator that owns all returned objects
+  /// @param [in] json single task JSON text
+  /// @param [in] len task JSON byte length
+  /// @param [out] descriptor parsed descriptor, or null when absent
+  /// @return OB_SUCCESS for absence or a valid descriptor; otherwise a JSON,
+  /// protocol, or allocation error
+  static int parse(
+      common::ObIAllocator &alloc,
+      const char *json,
+      int64_t len,
+      ObExtFileScanDescriptor *&descriptor);
+
+  ObExtFileScanFormat file_format_ = ObExtFileScanFormat::INVALID;
+  ObExtFileScanEntry *files_ = nullptr;
+  int64_t file_count_ = 0;
+
+  TO_STRING_KV(
+      K_(file_format),
+      KP_(files),
+      K_(file_count));
+};
+
+/// One scan task parsed from the scan-tasks JSON. `task_json`/`task_json_len`
+/// point at the
 /// single task's JSON text (re-serialized into the allocator) that OB later
 /// hands to `reader_create` as `task_json`. row_count/byte_size are the generic
 /// fields OB uses for scheduling (-1 = unknown).
 struct ObExtScanTask
 {
-  const char *data = nullptr;   // single-task JSON text, allocator-owned
-  int32_t size = 0;
+  const char *task_json = nullptr;   // single-task JSON text, allocator-owned
+  int32_t task_json_len = 0;
   int64_t row_count = -1;
   int64_t byte_size = -1;
 };
@@ -49,8 +109,9 @@ struct ObExtScanTask
 /// All scan tasks of a scan (parse output of plan_create's JSON).
 struct ObExtScanTaskArray
 {
-  ObExtScanTask *data = nullptr;
+  ObExtScanTask *tasks = nullptr;
   int32_t count = 0;
+  bool partition_filter_applied = false;
 };
 
 /// Canonical `ext_type` name <-> enum. Both OB and every plugin share these exact
@@ -58,8 +119,8 @@ struct ObExtScanTaskArray
 ob_ext_obj_type ext_type_from_name(const char *name, int64_t len);
 
 /// Parse the scan-tasks JSON into `out_scan_tasks` (array + per-task JSON text
-/// allocated in `alloc`). STRICT: `tasks` must be a non-empty array and every
-/// task must carry `payload_b64`; unknown keys are LOG_WARN'd. Returns an OB errno.
+/// allocated in `alloc`). `tasks` must be an array and every task must carry
+/// `plugin_split`; an empty plan is valid. Unknown keys are LOG_WARN'd.
 int parse_scan_tasks_json(common::ObIAllocator &alloc,
                           const char *json, int64_t len,
                           ObExtScanTaskArray &out_scan_tasks);

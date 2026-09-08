@@ -74,7 +74,6 @@ ObExtTablePluginRowIterator::ObExtTablePluginRowIterator()
       bit_vector_cache_(nullptr),
       filter_eval_inited_(false),
       reader_predicate_built_(false),
-      reader_predicate_fully_pushed_(false),
       reader_predicate_json_(),
       allocator_(lib::ObMemAttr(MTL_ID(), "ExtRowIter"))
 {
@@ -90,7 +89,6 @@ int ObExtTablePluginRowIterator::init(const storage::ObTableScanParam *scan_para
   int ret = OB_SUCCESS;
   filter_eval_inited_ = false;
   reader_predicate_built_ = false;
-  reader_predicate_fully_pushed_ = false;
   reader_predicate_json_.reset();
   reader_projection_json_.reset();
   close_ext();  // has its own guard
@@ -278,26 +276,19 @@ int ObExtTablePluginRowIterator::build_reader_predicate_json()
     if (OB_FAIL(ensure_filter_eval_inited_once(filter))) {
       LOG_WARN("failed to init runtime predicate datums", K(ret));
     } else {
-      // fully_converted = the WHOLE pushdown filter tree was turned into the
-      // plugin JSON predicate (only white/logic nodes; black/sample/other nodes
-      // are never emitted — those are the "black box" residual). Stored so
-      // get_next_rows can SKIP calc_filters when true (we trust the plugin once
-      // it accepts SetPredicate; paimon owns the filtering) and MUST run
-      // calc_filters when false (a black-box part was never pushed; OB evaluates
-      // it for correctness). Any build failure / non-convertible node forces
-      // false -> OB re-filters.
-      bool fully_converted = false;
+      // Predicate JSON for the plugin reader is optional. CPP_PLUGIN leaves
+      // need_dup_filter=false, so this tree is not copied into spec.filters_;
+      // get_next_rows always runs calc_filters on the complete
+      // pd_storage_filters_ tree.
+      // A partial/failed conversion only loses reader-side pruning.
       const int build_ret = ext_predicate::build_predicate_json_from_pushdown_filter(
           allocator_, filter, reader_file_column_ids_, reader_file_column_names_,
-          reader_predicate_json_, fully_converted);
+          reader_predicate_json_);
       if (OB_SUCCESS != build_ret) {
-        // Reader pushdown is optional. OB still evaluates the complete filter.
         LOG_WARN("failed to build reader predicate json, continue without reader pushdown",
                  K(build_ret));
         reader_predicate_json_.reset();
-        fully_converted = false;
       }
-      reader_predicate_fully_pushed_ = fully_converted;
     }
   }
   if (OB_SUCC(ret)) {
@@ -373,10 +364,8 @@ int ObExtTablePluginRowIterator::open_next_task()
     // init(), so the first task of each scan also refreshes execution parameters.
     LOG_WARN("failed to prepare plugin reader predicate", K(ret));
   } else {
-    // Push model: the per-thread scan task was produced by ObExtFilePruner's
-    // plan_create and stashed in scan_param_->scan_tasks_ by the lake-table
-    // plumbing. It is an ObPluginScanTask whose task_json_ carries the contract
-    // single-scan-task JSON text (incl. payload_b64).
+    // SDK tasks keep the root task JSON produced by ObExtFilePruner. Native
+    // tasks are routed to the Parquet/ORC iterator before reaching this class.
     ObIExtTblScanTask *base_task = scan_param_->scan_tasks_.at(state_.file_idx_);
     ObPluginScanTask *scan_task = dynamic_cast<ObPluginScanTask *>(base_task);
     if (OB_ISNULL(scan_task)) {
@@ -399,7 +388,7 @@ int ObExtTablePluginRowIterator::open_next_task()
       }
     }
     if (OB_SUCC(ret)) {
-      const ObString &task_json = scan_task->task_json_;
+      const ObString &plugin_task_json = scan_task->plugin_task_json_;
       // start_row=0, row_count = whole task (read to EOF; row subdivision is a follow-up).
       // The plugin returns an OB errno verbatim and logs its own diagnostic (with
       // plugin-side source location) via host->log before returning.
@@ -408,8 +397,8 @@ int ObExtTablePluginRowIterator::open_next_task()
           reader_worker_state_,
           reader_scan_state_,
           reader_task_state_,
-          task_json.ptr(),
-          static_cast<int32_t>(task_json.length()),
+          plugin_task_json.ptr(),
+          static_cast<int32_t>(plugin_task_json.length()),
           /*start_row*/ 0,
           rows);
       if (rc2 != OB_SUCCESS) {
@@ -417,9 +406,20 @@ int ObExtTablePluginRowIterator::open_next_task()
         LOG_WARN("plugin reader_open_task failed", K(ret), K(state_.file_idx_));
       } else {
         has_open_task_ = true;
-        state_.file_idx_++;
-        state_.cur_file_url_ = scan_param_->external_file_location_;
-        state_.cur_line_number_ = 0;
+        state_.part_id_ = scan_task->part_id_;
+        if (0 == state_.part_id_) {
+          state_.part_list_val_.reset();
+        } else if (OB_FAIL(calc_file_part_list_value_by_array(
+                       state_.part_id_, allocator_, scan_param_->partition_infos_,
+                       state_.part_list_val_))) {
+          LOG_WARN("load plugin task partition row failed", K(ret), K(state_.file_idx_),
+                   K(state_.part_id_));
+        }
+        if (OB_SUCC(ret)) {
+          state_.file_idx_++;
+          state_.cur_file_url_ = scan_param_->external_file_location_;
+          state_.cur_line_number_ = 0;
+        }
       }
     }
   }
@@ -603,6 +603,28 @@ int ObExtTablePluginRowIterator::get_next_row()
   return common::OB_NOT_SUPPORTED;
 }
 
+int ObExtTablePluginRowIterator::fill_partition_meta_columns(const int64_t read_count)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  for (int64_t i = 0; OB_SUCC(ret) && i < file_meta_column_exprs_.count(); ++i) {
+    ObExpr *expr = file_meta_column_exprs_.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plugin file meta expression is null", K(ret), K(i));
+    } else if (T_PSEUDO_PARTITION_LIST_COL == expr->type_) {
+      if (OB_FAIL(expr->init_vector_for_write(eval_ctx, VEC_UNIFORM_CONST, read_count))) {
+        LOG_WARN("init plugin partition vector failed", K(ret), K(i));
+      } else if (OB_FAIL(fill_file_partition_expr(expr, state_))) {
+        LOG_WARN("fill plugin partition vector failed", K(ret), K(i));
+      } else {
+        expr->set_evaluated_projected(eval_ctx);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExtTablePluginRowIterator::get_next_rows(int64_t &count, int64_t capacity)
 {
   int ret = OB_SUCCESS;
@@ -642,6 +664,8 @@ int ObExtTablePluginRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           LOG_WARN("failed to slice record batch", K(ret), K(rows_to_read));
         } else if (OB_FAIL(init_column_mapping_if_need())) {
           LOG_WARN("failed to init column mapping", K(ret));
+        } else if (OB_FAIL(fill_partition_meta_columns(rows_to_read))) {
+          LOG_WARN("failed to fill plugin partition columns", K(ret));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < file_column_exprs_.count(); ++i) {
             ObExpr *expr = get_column_expr_by_id(i);
@@ -667,16 +691,9 @@ int ObExtTablePluginRowIterator::get_next_rows(int64_t &count, int64_t capacity)
           } else if (OB_FAIL(calc_exprs_for_rowid(read_count, state_))) {
             LOG_WARN("failed to calc row id exprs", K(ret));
           } else if (OB_NOT_NULL(filter)) {
-            // need_dup_filter is already false on the CPP_PLUGIN path (see
-            // ObLogTableScan::extract_pushdown_filters), so OB does NOT also copy
-            // all predicates into spec.filters_ — the plugin's SetPredicate is the
-            // only filterer of the pushed tree. For now we run calc_filters +
-            // reorder_output UNCONDITIONALLY here as the OB-side backstop, ignoring
-            // reader_predicate_fully_pushed_. The fully_pushed_ flag is still
-            // computed and kept (see build_reader_predicate_json) so that, once we
-            // trust the plugin's SetPredicate as the sole backstop, we can skip
-            // this block on fully_pushed_=true to avoid double filtering. Kept for
-            // future optimization — do NOT delete reader_predicate_fully_pushed_.
+            // CPP_PLUGIN does not duplicate this tree into spec.filters_. Evaluate
+            // it here unconditionally as the OB correctness backstop; plugin
+            // SetPredicate remains an independent reader-side optimization.
             const common::ObBitmap *filter_result = nullptr;
             if (OB_FAIL(ensure_filter_eval_inited_once(filter))) {
               LOG_WARN("failed to init filter evaluated datums once", K(ret));
@@ -1044,7 +1061,6 @@ void ObExtTablePluginRowIterator::reset()
   cur_batch_row_count_ = 0;
   filter_eval_inited_ = false;
   reader_predicate_built_ = false;
-  reader_predicate_fully_pushed_ = false;
   reader_predicate_json_.reset();
   reader_projection_json_.reset();
   if (has_open_task_ && OB_NOT_NULL(reader_worker_state_) && OB_NOT_NULL(reader_task_state_)

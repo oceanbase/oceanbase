@@ -572,7 +572,40 @@ int ObExternalTableAccessService::table_scan(
         }
       }
 
-      switch (format_type) {
+      if (OB_SUCC(ret) && ObExternalFileFormat::CPP_PLUGIN_FORMAT == format_type) {
+        const ObPluginScanTask *plugin_task
+            = static_cast<const ObPluginScanTask *>(scan_param.scan_tasks_.at(0));
+        if (ObPluginReaderType::PLUGIN == plugin_task->reader_type_) {
+          format_type = ObExternalFileFormat::CPP_PLUGIN_FORMAT;
+        } else if (ObPluginReaderType::OB_PARQUET == plugin_task->reader_type_) {
+          format_type = ObExternalFileFormat::PARQUET_FORMAT;
+          scan_param.external_file_format_.parquet_format_.column_index_type_
+              = ColumnIndexType::NAME;
+          scan_param.external_file_format_.parquet_format_.column_name_case_sensitive_ = false;
+        } else if (ObPluginReaderType::OB_ORC == plugin_task->reader_type_) {
+          format_type = ObExternalFileFormat::ORC_FORMAT;
+          scan_param.external_file_format_.orc_format_.column_index_type_ = ColumnIndexType::NAME;
+          scan_param.external_file_format_.orc_format_.column_name_case_sensitive_ = false;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected plugin reader type", K(ret), K(plugin_task->reader_type_));
+        }
+      }
+
+      if (OB_SUCC(ret)
+          && ObExternalFileFormat::CPP_PLUGIN_FORMAT
+                 == param.external_file_format_.format_type_) {
+        if (ObExternalFileFormat::CPP_PLUGIN_FORMAT == format_type) {
+          EVENT_INC(ObStatEventIds::EXT_PLUGIN_READER_SCAN_COUNT);
+        } else if (ObExternalFileFormat::PARQUET_FORMAT == format_type) {
+          EVENT_INC(ObStatEventIds::EXT_PLUGIN_OB_PARQUET_SCAN_COUNT);
+        } else if (ObExternalFileFormat::ORC_FORMAT == format_type) {
+          EVENT_INC(ObStatEventIds::EXT_PLUGIN_OB_ORC_SCAN_COUNT);
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        switch (format_type) {
         case ObExternalFileFormat::CSV_FORMAT:
           if (OB_ISNULL(row_iter = OB_NEWx(ObCSVTableRowIterator, (scan_param.allocator_)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -660,6 +693,7 @@ int ObExternalTableAccessService::table_scan(
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
+        }
       }
     }
   }
@@ -695,9 +729,10 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
       case ObExternalFileFormat::PARQUET_FORMAT:
       case ObExternalFileFormat::ORC_FORMAT:
       case ObExternalFileFormat::KAFKA_FORMAT:
-      case ObExternalFileFormat::CPP_PLUGIN_FORMAT:
+      case ObExternalFileFormat::CPP_PLUGIN_FORMAT: {
         result->reset();
         break;
+      }
       case ObExternalFileFormat::ODPS_FORMAT:
 #if defined (OB_BUILD_CPP_ODPS) || defined (OB_BUILD_JNI_ODPS)
         result->reset();

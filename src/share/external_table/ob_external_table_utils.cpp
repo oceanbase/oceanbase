@@ -498,14 +498,16 @@ int ObExternalTableUtils::convert_lake_table_scan_task(const int64_t file_id,
   if (OB_ISNULL(scan_task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null scan task", K(ret), KP(scan_task));
-  } else if (scan_task->get_file_type() == LakeFileType::ICEBERG) {
+  } else if (LakeFileType::ICEBERG == scan_task->get_file_type()) {
     scan_task->file_id_ = file_id;
     // 新路径中的 part_id_ 是 manifest 分区信息数组的稠密下标，不能再被 tablet
     // 分区号覆盖；旧版本仍使用 tablet 分区号解析路径分区值。
     if (!sql::iceberg::ObIcebergUtils::is_manifest_partition_value_supported()) {
       scan_task->part_id_ = part_id;
     }
-  } else if (scan_task->get_file_type() == LakeFileType::HIVE) {
+  } else if (LakeFileType::HIVE == scan_task->get_file_type()) {
+    scan_task->file_id_ = file_id;
+  } else if (LakeFileType::EXT_PLUGIN == scan_task->get_file_type()) {
     scan_task->file_id_ = file_id;
   }
   return ret;

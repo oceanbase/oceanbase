@@ -41,9 +41,9 @@ namespace share
 /// validation. Returns an OB errno.
 ///
 /// If `out_partition_key_names` is non-null, also collects the top-level
-/// `partition_keys` name list (option B: mark partition columns, do NOT build
-/// OB partitions). Each name is deep-copied into `alloc`. Absent/empty list is
-/// valid (no partition columns); a non-array member is a hard error.
+/// schema-ordered `partition_keys` name list. Each name is deep-copied into
+/// `alloc`. Absent/empty is valid for an unpartitioned table; a non-array
+/// member is a hard error.
 ///
 /// If `out_catalog_context` is non-null, deep-copies the optional top-level
 /// `catalog_context` object (serialized JSON text). Empty when absent. OB
