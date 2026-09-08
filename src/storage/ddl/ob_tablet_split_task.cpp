@@ -419,6 +419,7 @@ int ObTabletSplitCtx::get_split_majors_infos()
       ObSplitSSTableType::SPLIT_MAJOR, table_store_iterator_,
       false/*is_table_restore*/,
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
+      false/*filter_meta_major_sstables*/,
       major_sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else if (OB_UNLIKELY(major_sstables.empty())) {
@@ -451,6 +452,7 @@ int ObTabletSplitCtx::get_index_in_source_sstables(
       tmp_type/*split_sstable_type*/, table_store_iterator_,
       false/*is_table_restore*/,
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
+      false/*filter_meta_major_sstables*/,
       source_sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else {
@@ -488,7 +490,7 @@ int ObTabletSplitCtx::prepare_index_builder(
   } else if (OB_FAIL(index_builder_map_.create(bucket_num, "SplitSstIdxMap"))) {
     LOG_WARN("create sstable record map failed", K(ret));
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
-    param.split_sstable_type_, table_store_iterator_, false, skipped_split_major_keys_, sstables))) {
+    param.split_sstable_type_, table_store_iterator_, false, skipped_split_major_keys_, false/*filter_meta_major_sstables*/, sstables))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else if (OB_FAIL(ObTabletSplitUtil::get_storage_schema_from_mds(tablet_handle_, param.data_format_version_, storage_schema, tmp_arena))) {
     LOG_WARN("failed to get storage schema", K(ret));
@@ -709,7 +711,7 @@ int ObTabletSplitDag::create_first_task()
 #endif
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
       param_.split_sstable_type_, context_.table_store_iterator_, false/*is_table_restore*/,
-      context_.skipped_split_major_keys_, source_sstables))) {
+      context_.skipped_split_major_keys_, false/*filter_meta_major_sstables*/, source_sstables))) {
     LOG_WARN("get all sstables failed", K(ret));
   } else if (OB_FAIL(alloc_task(prepare_task))) {
     LOG_WARN("allocate task failed", K(ret));
@@ -1881,7 +1883,7 @@ int ObTabletSplitMergeTask::create_sstable(
     LOG_WARN("invalid arg", K(ret), K(split_sstable_type), KPC(param_));
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
       split_sstable_type, context_->table_store_iterator_, false/*is_table_restore*/,
-      context_->skipped_split_major_keys_, participants))) {
+      context_->skipped_split_major_keys_, false/*filter_meta_major_sstables*/, participants))) {
     LOG_WARN("get participants failed", K(ret));
   } else {
     ObTableHandleV2 table_handle;
@@ -3002,6 +3004,7 @@ int ObSplitDownloadSSTableTask::collect_split_sstables(
       split_sstable_type, ss_table_store_iterator,
       false/*is_table_restore*/,
       ObArray<ObITable::TableKey>()/*skip_split_majors*/,
+      false/*filter_meta_major_sstables*/,
       sstables_in_table_store))) {
     LOG_WARN("get participant sstables failed", K(ret));
   } else if (OB_UNLIKELY(share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type

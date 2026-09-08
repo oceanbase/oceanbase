@@ -92,6 +92,7 @@ public:
       const ObTableStoreIterator &table_store_iterator,
       const bool is_table_restore,
       const ObIArray<ObITable::TableKey> &skipped_table_keys,
+      const bool filter_meta_major_sstables,
       ObIArray<ObITable *> &participants);
   static int split_task_ranges(
       ObIAllocator &allocator,

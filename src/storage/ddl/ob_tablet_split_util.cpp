@@ -161,6 +161,7 @@ int ObTabletSplitUtil::get_participants(
     const ObTableStoreIterator &const_table_store_iter,
     const bool is_table_restore,
     const ObIArray<ObITable::TableKey> &skipped_table_keys,
+    const bool filter_meta_major_sstables,
     ObIArray<ObITable *> &participants)
 {
   int ret = OB_SUCCESS;
@@ -206,7 +207,9 @@ int ObTabletSplitUtil::get_participants(
       } else if (table->is_major_sstable()) {
         if (share::ObSplitSSTableType::SPLIT_MAJOR == split_sstable_type
           || share::ObSplitSSTableType::SPLIT_BOTH == split_sstable_type) {
-          if (OB_FAIL(participants.push_back(table))) {
+          if (filter_meta_major_sstables && table->is_meta_major_sstable()) {
+            LOG_INFO("skip meta major sstable", K(ret), KPC(table));
+          } else if (OB_FAIL(participants.push_back(table))) {
             LOG_WARN("push back major failed", K(ret));
           }
         }
@@ -255,7 +258,8 @@ int ObTabletSplitUtil::split_task_ranges(
   } else if (OB_FAIL(tablet_handle.get_obj()->get_all_sstables(table_store_iterator))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
-      share::ObSplitSSTableType::SPLIT_BOTH, table_store_iterator, is_table_restore, empty_skipped_keys, tables))) {
+      share::ObSplitSSTableType::SPLIT_BOTH, table_store_iterator, is_table_restore, empty_skipped_keys,
+      false/*filter_meta_major_sstables*/, tables))) {
     LOG_WARN("get participants failed", K(ret));
   } else if (is_table_restore && tables.empty()) {
     ObDatumRowkey tmp_min_key;
@@ -645,7 +649,7 @@ int ObTabletSplitUtil::check_medium_compaction_info_list_cnt(
     } else if (OB_FAIL(tablet->get_all_sstables(table_store_iterator))) {
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_FAIL(ObTabletSplitUtil::get_participants(ObSplitSSTableType::SPLIT_MAJOR, table_store_iterator, false/*is_table_restore*/,
-        empty_skipped_keys, major_tables))) {
+        empty_skipped_keys, true/*filter_meta_major_sstables*/, major_tables))) {
       LOG_WARN("get participant sstables failed", K(ret));
     } else {
       result.info_list_cnt_ = 0;
@@ -947,7 +951,8 @@ int ObTabletSplitUtil::check_sstables_skip_data_split(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(dest_tablets_id));
   } else if (OB_FAIL(ObTabletSplitUtil::get_participants(
-      share::ObSplitSSTableType::SPLIT_MAJOR, source_table_store_iter, false/*is_table_restore*/, empty_skipped_keys, major_sstables))) {
+      share::ObSplitSSTableType::SPLIT_MAJOR, source_table_store_iter, false/*is_table_restore*/, empty_skipped_keys,
+      false/*filter_meta_major_sstables*/, major_sstables))) {
     LOG_WARN("get all majors failed", K(ret), K(dest_tablets_id));
   } else if (OB_UNLIKELY(major_sstables.empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1523,7 +1528,9 @@ int ObSSDataSplitHelper::start_add_minor_op(
       ObSplitSSTableType::SPLIT_MINOR,
       src_table_store_iterator,
       false/*is_table_restore*/,
-      ObArray<ObITable::TableKey>()/*skip_split_majors*/, source_minors))) {
+      ObArray<ObITable::TableKey>()/*skip_split_majors*/,
+      false/*filter_meta_major_sstables*/,
+      source_minors))) {
     LOG_WARN("get participants failed", K(ret));
   } else if (OB_UNLIKELY(source_minors.empty())) {
     // do nothing.
