@@ -176,6 +176,7 @@ protected:
   bool iter_del_row_;
   bool read_memtable_only_;
   bool is_unprojected_row_valid_; // whether unprojected_row_ is ready for refresh_table_on_demand currently
+  bool need_scan_di_base_;
   ObGetTableParam *get_table_param_;
   ObBlockRowStore *block_row_store_;
   ObGroupByCellBase *group_by_cell_;

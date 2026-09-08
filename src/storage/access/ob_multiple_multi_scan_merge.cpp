@@ -222,6 +222,9 @@ int ObMultipleMultiScanMerge::construct_iters()
           STORAGE_LOG(DEBUG, "add di base iter for consumer", KPC(table));
         }
       }
+      if (OB_SUCC(ret)) {
+        need_scan_di_base_ = use_di_merge_scan();
+      }
     }
 
     consumer_cnt_ = 0;
