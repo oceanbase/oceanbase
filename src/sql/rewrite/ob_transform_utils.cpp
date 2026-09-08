@@ -7120,7 +7120,7 @@ int ObTransformUtils::create_simple_view(ObTransformerCtx *ctx,
   ObSQLSessionInfo *session_info = NULL;
   ObSEArray<ObRawExpr *, 4> select_list;
   ObSEArray<ObRawExpr *, 8> norm_conds;
-  ObSEArray<ObRawExpr *, 8> rownum_conds;
+  ObSEArray<ObRawExpr *, 8> other_conds;
   ObSEArray<TableItem *, 4> from_tables;
   ObSEArray<SemiInfo *, 4> semi_infos;
   ObSEArray<ObRawExpr *, 4> group_exprs;
@@ -7145,18 +7145,20 @@ int ObTransformUtils::create_simple_view(ObTransformerCtx *ctx,
 
   // handle where conditions
   if (OB_SUCC(ret) && push_conditions) {
-    if (OB_FAIL(classify_rownum_conds(*stmt, norm_conds, rownum_conds))) {
+    if (OB_FAIL(classify_spj_conds(*stmt, norm_conds, other_conds))) {
       LOG_WARN("failed to classify rownum conditions", K(ret));
     }
   }
 
   // let the view_stmt process some subqueries
   if (OB_SUCC(ret) && push_subquery) {
-    ObSEArray<ObRawExpr *, 4> post_join_exprs;
+    ObSEArray<ObRawExpr *, 4> upper_exprs;
     ObSEArray<ObRawExpr *, 4> non_scalar_query_refs;
-    if (OB_FAIL(get_post_join_exprs(stmt, post_join_exprs))) {
+    if (OB_FAIL(get_post_join_exprs(stmt, upper_exprs))) {
       LOG_WARN("failed to get additional push down exprs", K(ret));
-    } else if (OB_FAIL(classify_scalar_query_ref(post_join_exprs,
+    } else if (OB_FAIL(append(upper_exprs, other_conds))) {
+      LOG_WARN("failed to append", K(ret));
+    } else if (OB_FAIL(classify_scalar_query_ref(upper_exprs,
                                                  select_list,
                                                  non_scalar_query_refs))) {
       LOG_WARN("failed to classify scalar query ref", K(ret));
@@ -8720,7 +8722,7 @@ int ObTransformUtils::replace_table_in_joined_tables(TableItem *table,
   return ret;
 }
 
-int ObTransformUtils::classify_rownum_conds(ObDMLStmt &stmt,
+int ObTransformUtils::classify_spj_conds(ObDMLStmt &stmt,
                                             ObIArray<ObRawExpr *> &spj_conds,
                                             ObIArray<ObRawExpr *> &other_conds)
 {

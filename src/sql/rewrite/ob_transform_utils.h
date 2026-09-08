@@ -1271,7 +1271,7 @@ public:
                                             TableItem *other_table,
                                             TableItem *current_table);
 
-  static int classify_rownum_conds(ObDMLStmt &stmt,
+  static int classify_spj_conds(ObDMLStmt &stmt,
                                    ObIArray<ObRawExpr *> &spj_conds,
                                    ObIArray<ObRawExpr *> &rownum_conds);
 
