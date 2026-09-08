@@ -4504,8 +4504,8 @@ int ObDelUpdResolver::generate_insert_table_info(const TableItem &table_item,
       LOG_WARN("failed to add rowkey columns", K(ret));
     } else if (add_column && OB_FAIL(add_all_columns_to_stmt(table_item, table_info.column_exprs_))) {
       LOG_WARN("failed to add columns", K(ret));
-    // } else if (OB_FAIL(prune_columns_for_ddl(table_item, table_info.column_exprs_))) {
-      // LOG_WARN("failed to prune columns for ddl", K(ret));
+    } else if (add_column && OB_FAIL(prune_columns_for_ddl(table_item, table_info))) {
+      LOG_WARN("failed to prune columns for ddl", K(ret));
     } else if (add_column && session_info_->get_ddl_info().is_search_index_ddl()
       && OB_FAIL(add_all_part_columns_to_stmt(table_item, table_info.column_exprs_))) {
       LOG_WARN("failed to add part key columns", K(ret));
@@ -5360,7 +5360,7 @@ int ObDelUpdResolver::get_label_se_columns(ObInsertTableInfo& table_info,
 }
 
 int ObDelUpdResolver::prune_columns_for_ddl(const TableItem &table_item,
-                                            ObIArray<ObColumnRefRawExpr*> &column_exprs)
+                                          ObInsertTableInfo &table_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
@@ -5369,6 +5369,7 @@ int ObDelUpdResolver::prune_columns_for_ddl(const TableItem &table_item,
   } else if (session_info_->get_ddl_info().is_ddl()) {
     const ObTableSchema *ddl_table_schema = nullptr;
     uint64_t ddl_table_id = table_item.ddl_table_id_;
+    ObIArray<ObColumnRefRawExpr*> &column_exprs = table_info.column_exprs_;
     ObSEArray<ObColumnRefRawExpr*, 8> tmp_column_exprs;
     if (OB_FAIL(tmp_column_exprs.assign(column_exprs))) {
       LOG_WARN("failed to assign column exprs", K(ret));
@@ -5382,13 +5383,16 @@ int ObDelUpdResolver::prune_columns_for_ddl(const TableItem &table_item,
       column_exprs.reuse();
       for (int64_t i = 0; OB_SUCC(ret) && i < tmp_column_exprs.count(); ++i) {
         ObColumnRefRawExpr* column = tmp_column_exprs.at(i);
+        ObRawExpr *value_expr = nullptr;
         bool has_column = false;
         if (OB_ISNULL(column)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(column));
         } else if (OB_FAIL(ddl_table_schema->has_column(column->get_column_id(), has_column))) {
-          LOG_WARN("faild to check schema has column", K(ret));
-        } else if (!has_column) {
+          LOG_WARN("failed to check schema has column", K(ret));
+        } else if (!has_column && OB_FAIL(find_value_desc(table_info, column->get_column_id(), value_expr))) {
+          LOG_WARN("failed to find value desc", K(ret));
+        } else if (!has_column && OB_ISNULL(value_expr)) {
           // do nothing
         } else if (OB_FAIL(column_exprs.push_back(column))) {
           LOG_WARN("failed to push back column expr", K(ret));

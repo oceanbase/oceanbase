@@ -283,7 +283,7 @@ protected:
                                  bool in_generated_column = false);
   int get_label_se_columns(ObInsertTableInfo& table_info, ObIArray<uint64_t>& label_se_columns);
   int prune_columns_for_ddl(const TableItem &table_item,
-                            ObIArray<ObColumnRefRawExpr*> &column_exprs);
+                            ObInsertTableInfo &table_info);
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
   int build_autoinc_param(
