@@ -1597,6 +1597,24 @@ int ObResolverUtils::pick_routine(const pl::ObPLResolveCtx &resolve_ctx,
   } else { // 存在多个匹配, 继续pick
     OZ (pick_routine(match_infos, routine_info));
   }
+  if (OB_SUCC(ret)
+      && OB_NOT_NULL(routine_info)
+      && OB_INVALID_ID != routine_info->get_dblink_id()) {
+    bool has_ref_cursor = false;
+    const ObIRoutineParam *ret_param = routine_info->get_ret_info();
+    has_ref_cursor = OB_NOT_NULL(ret_param) && ret_param->get_pl_data_type().is_ref_cursor_type();
+    for (int64_t i = 0; OB_SUCC(ret) && !has_ref_cursor && i < routine_info->get_param_count(); ++i) {
+      ObIRoutineParam *param = NULL;
+      OZ (routine_info->get_routine_param(i, param));
+      CK (OB_NOT_NULL(param));
+      OX (has_ref_cursor = param->get_pl_data_type().is_ref_cursor_type());
+    }
+    if (OB_SUCC(ret) && has_ref_cursor) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("cursor variable is not supported in dblink routine call", K(ret), KPC(routine_info));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cursor variables as DBLink routine parameters or return values are");
+    }
+  }
   OZ (record_deduced_type(resolve_ctx, routine_info, expr_params, routine_infos.count() > 1));
   return ret;
 }
