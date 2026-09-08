@@ -361,7 +361,16 @@ int ObSql::fill_result_set(ObResultSet &result_set,
             field.type_.set_number(number);
           }
 
-          if (expr->get_result_type().is_geometry()) {
+          if (expr->get_result_type().is_user_defined_sql_type()) {
+            if (OB_FAIL(fill_sql_udt_column_field(result_set,
+                                                  collation_type,
+                                                  *expr,
+                                                  alloc,
+                                                  context->schema_guard_,
+                                                  field))) {
+              LOG_WARN("fail to fill sql udt returning field", K(ret), K(i));
+            }
+          } else if (expr->get_result_type().is_geometry()) {
             uint16_t subschema_id = ObInvalidSqlType;
             ObSqlUDTMeta udt_meta;
             field.type_.meta_.set_ext();
@@ -378,6 +387,18 @@ int ObSql::fill_result_set(ObResultSet &result_set,
             } else {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("udt type not supported", K(ret), K(subschema_id));
+            }
+          } else if (expr->get_result_type().is_ext()) {
+            const uint64_t udt_id = expr->get_result_type().get_udt_id();
+            field.type_.meta_.set_extend_type(expr->get_result_type().get_extend_type());
+            if (OB_INVALID_ID != udt_id
+                && (PL_VARRAY_TYPE == expr->get_result_type().get_extend_type()
+                    || PL_NESTED_TABLE_TYPE == expr->get_result_type().get_extend_type()
+                    || PL_ASSOCIATIVE_ARRAY_TYPE == expr->get_result_type().get_extend_type()
+                    || PL_RECORD_TYPE == expr->get_result_type().get_extend_type())) {
+              if (OB_FAIL(fill_udt_field_type_name(alloc, context->schema_guard_, udt_id, field))) {
+                LOG_WARN("fail to fill extend returning field", K(ret), K(udt_id));
+              }
             }
           }
         }
@@ -399,6 +420,8 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           field.dname_.assign(NULL, 0);
           field.tname_.assign(NULL, 0);
           field.org_tname_.assign(NULL, 0);
+          field.type_name_.assign(NULL, 0);
+          field.type_owner_.assign(NULL, 0);
           field.type_.reset();
           field.type_.set_type(ObExtendType);
         }
@@ -667,6 +690,100 @@ int ObSql::fill_result_set(ObResultSet &result_set,
   return ret;
 }
 
+int ObSql::fill_udt_field_type_name(ObIAllocator &alloc,
+                             ObSchemaGetterGuard *schema_guard,
+                             const uint64_t udt_id,
+                             ObField &field)
+{
+  int ret = OB_SUCCESS;
+  const ObUDTTypeInfo *udt_info = NULL;
+  const ObSimpleDatabaseSchema *db_schema = NULL;
+  if (OB_INVALID_ID == udt_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid udt id", K(ret), K(udt_id));
+  } else if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is null", K(ret), K(udt_id));
+  } else {
+    const uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+    if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
+      LOG_WARN("fail to get udt info", K(ret), K(tenant_id), K(udt_id));
+    } else if (OB_ISNULL(udt_info)) {
+      LOG_WARN("udt is not schema-level, skip fill type name", K(tenant_id), K(udt_id));
+    } else if (OB_FAIL(ob_write_string(alloc, udt_info->get_type_name(), field.type_name_))) {
+      LOG_WARN("fail to alloc type_name", K(ret), K(udt_info->get_type_name()));
+    } else if (!ObObjUDTUtil::ob_is_sys_sql_udt(udt_id)) {
+      if (OB_FAIL(schema_guard->get_database_schema(
+              tenant_id, udt_info->get_database_id(), db_schema))) {
+        LOG_WARN("get database info fail", K(ret), K(tenant_id), K(udt_info->get_database_id()));
+      } else if (OB_ISNULL(db_schema)) {
+        LOG_WARN("database is invalid", K(ret), K(tenant_id), K(udt_id));
+      } else if (OB_FAIL(ob_write_string(alloc,
+                                         OB_SYS_TENANT_ID == db_schema->get_tenant_id()
+                                           ? ObString("SYS") : db_schema->get_database_name_str(),
+                                         field.type_owner_))) {
+        LOG_WARN("fail to alloc type_owner", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSql::fill_sql_udt_column_field(ObResultSet &result_set,
+                              ObCollationType collation_type,
+                              ObRawExpr &expr,
+                              ObIAllocator &alloc,
+                              ObSchemaGetterGuard *schema_guard,
+                              ObField &field)
+{
+  int ret = OB_SUCCESS;
+  uint16_t subschema_id = expr.get_result_type().get_subschema_id();
+  uint16_t tmp_subschema_id = ObInvalidSqlType;
+  uint64_t udt_id = expr.get_result_type().get_udt_id();
+  ObSqlUDTMeta udt_meta;
+  if (subschema_id == ObXMLSqlType) {
+    udt_id = T_OBJ_XML;
+  }
+  if (expr.get_result_type().is_geometry()) {
+    udt_id = T_OBJ_SDO_GEOMETRY;
+    field.type_.meta_.set_ext();
+    field.accuracy_.set_accuracy(T_OBJ_SDO_GEOMETRY);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
+    LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
+  } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(tmp_subschema_id, udt_meta))) {
+    LOG_WARN("failed to get udt meta", K(ret), K(tmp_subschema_id));
+  } else if (ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+    if (udt_meta.udt_id_ == T_OBJ_XML) {
+      field.accuracy_.set_accuracy(T_OBJ_XML);
+    } else if (udt_id != udt_meta.udt_id_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("udt id mismatch", K(ret), K(udt_id), K(udt_meta.udt_id_));
+    } else {
+      field.accuracy_.set_accuracy(udt_meta.udt_id_);
+    }
+    if (OB_SUCC(ret)) {
+      field.type_.set_subschema_id(tmp_subschema_id);
+      field.length_ = OB_MAX_LONGTEXT_LENGTH;
+      if (udt_meta.udt_id_ == T_OBJ_XML) {
+        field.charsetnr_ = CS_TYPE_BINARY;
+      } else if (ObCharset::is_valid_collation(collation_type)) {
+        field.charsetnr_ = static_cast<uint16_t>(collation_type);
+      } else {
+        field.charsetnr_ = static_cast<uint16_t>(expr.get_collation_type());
+      }
+      if (OB_FAIL(fill_udt_field_type_name(alloc, schema_guard, udt_meta.udt_id_, field))) {
+        LOG_WARN("fail to fill udt type name", K(ret), K(udt_meta.udt_id_));
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("udt type not supported", K(ret), K(tmp_subschema_id));
+  }
+  return ret;
+}
+
 int ObSql::get_composite_type_field_name(ObSchemaGetterGuard &schema_guard,
                                          int64_t type_id,
                                          ObSqlString &composite_field_name)
@@ -852,63 +969,23 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             LOG_WARN("get length failed", K(ret), KPC(expr));
           }
         } else if (is_user_sql_expr) {//oracle gis ps protocol
-          uint16_t subschema_id = expr->get_result_type().get_subschema_id();
-          uint16_t tmp_subschema_id = ObInvalidSqlType;
-          uint64_t udt_id = expr->get_result_type().get_udt_id();
-          ObSqlUDTMeta udt_meta;
-          if (subschema_id == ObXMLSqlType) {
-            udt_id = T_OBJ_XML;
-          }
-          if (expr->get_result_type().is_geometry()) {
-            udt_id = T_OBJ_SDO_GEOMETRY;
-            field.type_.meta_.set_ext();
-            field.accuracy_.set_accuracy(T_OBJ_SDO_GEOMETRY);
-          }
           if (expr->get_result_type().is_collection_sql_type()
-              && !ObObjUDTUtil::ob_is_sys_sql_udt(udt_id)) {
+              && !ObObjUDTUtil::ob_is_sys_sql_udt(expr->get_result_type().get_udt_id())) {
             // array type
-            field.type_.set_subschema_id(subschema_id);
+            field.type_.set_subschema_id(expr->get_result_type().get_subschema_id());
             field.charsetnr_ = CS_TYPE_UTF8MB4_BIN;
             field.length_ = OB_MAX_LONGTEXT_LENGTH;
-          } else if (OB_FAIL(result_set.get_exec_context().get_subschema_id_by_udt_id(udt_id, tmp_subschema_id))) {
-            LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
-          } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(tmp_subschema_id, udt_meta))) {
-            LOG_WARN("failed to get udt meta", K(ret), K(tmp_subschema_id));
-          } else if(ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
-            // common udt constructors or functions set udt id , but xml exprs not
-            if (udt_meta.udt_id_ == T_OBJ_XML) {
-              field.accuracy_.set_accuracy(T_OBJ_XML);
-            } else if (udt_id != udt_meta.udt_id_) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("udt id mismarch", K(ret), K(udt_id), K(udt_meta.udt_id_));
-            } else {
-              field.accuracy_.set_accuracy(udt_meta.udt_id_);
+          } else if (OB_FAIL(fill_sql_udt_column_field(result_set, collation_type, *expr, alloc,
+                                                context->schema_guard_, field))) {
+            LOG_WARN("fill sql udt column field failed", K(ret));
+          } else if (T_OBJ_XML != field.accuracy_.get_accuracy()
+                     && NULL == context->secondary_namespace_ // pl resolve
+                     && NULL == context->session_info_->get_pl_context()) {
+            if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
+                                                      field.accuracy_.get_accuracy(),
+                                                      composite_field_name))) {
+              LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
             }
-            field.type_.set_subschema_id(tmp_subschema_id);
-            field.length_ = OB_MAX_LONGTEXT_LENGTH;
-            if (udt_meta.udt_id_ == T_OBJ_XML) {
-              field.charsetnr_ = CS_TYPE_BINARY;
-            } else if (ObCharset::is_valid_collation(collation_type)) {
-              field.charsetnr_ = static_cast<uint16_t>(collation_type);
-            } else {
-              field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
-            }
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
-                LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
-              } else if (T_OBJ_XML != udt_meta.udt_id_
-                         && NULL == context->secondary_namespace_ // pl resolve
-                         && NULL == context->session_info_->get_pl_context()) {
-                if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
-                                                          udt_meta.udt_id_,
-                                                          composite_field_name))) {
-                  LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
-                }
-              }
-            }
-          } else {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("udt type not supported", K(ret), K(tmp_subschema_id));
           }
         } else if (expr->get_result_type().is_ext()) {
           field.type_.meta_.set_extend_type(expr->get_result_type().get_extend_type());

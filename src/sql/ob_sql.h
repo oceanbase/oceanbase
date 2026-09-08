@@ -307,6 +307,16 @@ private:
   static int get_composite_type_field_name(share::schema::ObSchemaGetterGuard &schema_guard,
                                            int64_t type_id,
                                            ObSqlString &name_string);
+  static int fill_udt_field_type_name(common::ObIAllocator &alloc,
+                                      share::schema::ObSchemaGetterGuard *schema_guard,
+                                      const uint64_t udt_id,
+                                      common::ObField &field);
+  static int fill_sql_udt_column_field(ObResultSet &result_set,
+                                       common::ObCollationType collation_type,
+                                       ObRawExpr &expr,
+                                       common::ObIAllocator &alloc,
+                                       share::schema::ObSchemaGetterGuard *schema_guard,
+                                       common::ObField &field);
   int pc_add_udr_plan(const ObUDRItemMgr::UDRItemRefGuard &item_guard,
                       ObPlanCacheCtx &pc_ctx,
                       ObResultSet &result,
