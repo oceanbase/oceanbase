@@ -859,7 +859,7 @@ int ObPLDbmsSql::do_parse(ObPLExecCtx &ctx,
     bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
-    ObPLExecCtx pl_ctx(cursor->get_allocator(), cursor->get_allocator(), exec_ctx, &dummy_params,
+    ObPLExecCtx pl_ctx(cursor->get_allocator(), cursor->get_allocator(), *cursor->get_allocator(), exec_ctx, &dummy_params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   CK (OB_NOT_NULL(exec_ctx->get_my_session()));
     OZ (sql_str.append(sql_cs));
@@ -1162,9 +1162,11 @@ int ObPLDbmsSql::do_execute(ObPLExecCtx &ctx,
   int ret = OB_SUCCESS;
   sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
   CK (OB_NOT_NULL(exec_ctx));
-  ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), dbms_cursor.get_allocator(), exec_ctx, NULL/*params*/,
-                     NULL/*result*/, &ret, NULL/*func*/, true);
-  OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, dbms_cursor));
+  if (OB_SUCC(ret)) {
+    ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), dbms_cursor.get_allocator(), *dbms_cursor.get_allocator(), exec_ctx, NULL/*params*/,
+                      NULL/*result*/, &ret, NULL/*func*/, true);
+    OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, dbms_cursor));
+  }
   return ret;
 }
 
@@ -1179,15 +1181,17 @@ int ObPLDbmsSql::do_execute(ObPLExecCtx &ctx,
   ObIAllocator *expr_alloc = ctx.get_top_expr_allocator();
   CK (OB_NOT_NULL(exec_ctx));
   CK (OB_NOT_NULL(expr_alloc));
-  ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), exec_ctx, &params,
-                     NULL/*result*/, &ret, NULL/*func*/, true);
-  OZ (cursor.expand_params());
-  OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor, true));
-  if (OB_SUCC(ret) && cursor.get_into_names().count() > 0) { // DML Returning
-    OZ (do_fetch(ctx, params, result, cursor));
-  } else {
-    OZ (num.from(cursor.get_affected_rows() < 0 ? 0 : cursor.get_affected_rows(), *expr_alloc));
-    OX (result.set_number(num));
+  if (OB_SUCC(ret)) {
+    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), *cursor.get_allocator(), exec_ctx, &params,
+                      NULL/*result*/, &ret, NULL/*func*/, true);
+    OZ (cursor.expand_params());
+    OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor, true));
+    if (OB_SUCC(ret) && cursor.get_into_names().count() > 0) { // DML Returning
+      OZ (do_fetch(ctx, params, result, cursor));
+    } else {
+      OZ (num.from(cursor.get_affected_rows() < 0 ? 0 : cursor.get_affected_rows(), *expr_alloc));
+      OX (result.set_number(num));
+    }
   }
   return ret;
 }
@@ -1223,7 +1227,7 @@ int ObPLDbmsSql::do_fetch(ObPLExecCtx &ctx,
   if (OB_SUCC(ret)) {
     sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
     CK (OB_NOT_NULL(exec_ctx));
-    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), exec_ctx, &params,
+    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), *cursor.get_allocator(), exec_ctx, &params,
                         NULL/*result*/, &ret, NULL/*func*/, true);
     int64_t fetch_cnt = 0;
     ObNumber row_count;

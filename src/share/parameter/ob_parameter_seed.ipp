@@ -3651,3 +3651,11 @@ DEF_BOOL(_enable_trigger_dml_snapshot_opt, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_search_index, OB_TENANT_PARAMETER, "True",
          "enable search index merge optimization for scalar predicates on search indexes",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_trigger_precise_batch_exec, OB_TENANT_PARAMETER, "False",
+         "enable precise cross-trigger-point conflict detection for batched DML with row triggers."
+         " When false (default), use conservative judgment: any trigger with side-effect flags"
+         " forces single-row execution. When true, only force single-row when before-row and"
+         " after-row triggers have actual write-read/write conflicts across four domains"
+         " (SQL data, package variable, sequence, external state).",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

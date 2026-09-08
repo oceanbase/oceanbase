@@ -902,8 +902,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
     // do nothing ...
   } else if (!resolve_ctx.is_prepare_with_params_
              && T_QUESTIONMARK == expr->get_expr_type()
-             && (resolve_ctx.is_prepare_protocol_ || !resolve_ctx.is_sql_scope_
-                 || resolve_ctx.session_info_.get_pl_context() != NULL)
+             && resolve_ctx.is_ps_prepare_stage_
              && (ObUnknownType == expr->get_result_type().get_type()
                  || (ObNullType == expr->get_result_type().get_type() && !is_pure_null)
                  || (is_oracle_mode() ? expr->get_result_type().is_oracle_question_mark_type()
@@ -1794,6 +1793,7 @@ int ObResolverUtils::get_routine(pl::ObPLPackageGuard &package_guard,
     resolve_ctx.param_list_ = params.param_list_;
     resolve_ctx.is_execute_call_stmt_ = params.is_execute_call_stmt_;
     resolve_ctx.is_prepare_with_params_ = params.is_prepare_with_params_;
+    resolve_ctx.is_ps_prepare_stage_ = params.is_prepare_stage_;
     if (dblink_name.empty()) {
       OZ (get_routine(resolve_ctx,
                       tenant_id,
@@ -3531,7 +3531,8 @@ int ObResolverUtils::resolve_columns_for_const_expr(ObRawExpr *&expr, ObArray<Ob
                                                            resolve_params.param_list_,
                                                            resolve_params.is_prepare_protocol_,
                                                            false, /*is_check_mode*/
-                                                           true /*is_sql_scope*/))) {
+                                                           true, /*is_sql_scope*/
+                                                           resolve_params.is_prepare_stage_))) {
         LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
       }
     } else {
@@ -6853,7 +6854,8 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
                                                              params.param_list_,
                                                              params.is_prepare_protocol_,
                                                              false, /*is_check_mode*/
-                                                             true /*is_sql_scope*/))) {
+                                                             true, /*is_sql_scope*/
+                                                             params.is_prepare_stage_))) {
           LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));
         } else if (OB_ISNULL(real_ref_expr)) {
           ret = OB_ERR_UNEXPECTED;
@@ -9362,6 +9364,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                                              bool is_prepare_protocol,
                                              bool is_check_mode,
                                              bool is_sql_scope,
+                                             bool is_prepare_stage,
                                              ObIArray<ObSchemaObjVersion> *dep_tbl,
                                              ObQueryCtx *query_ctx)
 {
@@ -9415,6 +9418,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
         pl_resolver.get_current_namespace() = *ns;
       }
       OX (pl_resolver.get_params().secondary_namespace_ = ns);
+      OX (pl_resolver.get_resolve_ctx().is_ps_prepare_stage_ = is_prepare_stage);
       if (OB_NOT_NULL(query_ctx)) {
         OX (pl_resolver.get_resolve_ctx().forbid_pl_sql_transpiler_ = query_ctx->forbid_pl_sql_transpiler_);
         OZ (pl_resolver.get_resolve_ctx().pl_sql_transpiled_exprs_.assign(query_ctx->pl_sql_transpiled_exprs_));
@@ -9466,19 +9470,15 @@ int ObResolverUtils::revert_external_param_info(ExternalParams &param_infos, ObR
             }
           }
           child = param_infos.at(j).element<0>();
-          param_infos.at(j).element<2>()--;
-          if (0 == param_infos.at(j).element<2>()) {
-            ObConstRawExpr *null_expr = nullptr;
-            if (OB_FAIL(expr_factory.create_raw_expr(T_NULL, null_expr))) {
-              LOG_WARN("fail to create null expr", K(ret));
-            } else {
-              ObObjParam null_val;
-              null_val.set_null();
-              null_val.set_param_meta();
-              null_expr->set_value(null_val);
-              param_infos.at(j).element<0>() = null_expr;
-            }
+          if (param_infos.at(j).element<2>() > 0) {
+            param_infos.at(j).element<2>()--;
           }
+          // Do NOT replace element<0>() with null_expr here. When QM_new is shared
+          // (e.g. via make_var_from_access copying get_sysfunc_ without incrementing
+          // ref_count), the first revert correctly restores and drops ref_count to 0.
+          // Subsequent encounters of the same QM_new in recursive traversal must also
+          // restore to the original expr (element<0>()) without double-decrementing.
+          // ref_count==0 already marks the slot as available in resolve_external_param_info.
           break;
         }
       }
@@ -9504,6 +9504,12 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
     for (int64_t i = 0;
         OB_SUCC(ret) && OB_INVALID_INDEX == same_idx && i < param_infos.count();
         ++i) {
+      if (0 == param_infos.at(i).element<2>()) {
+        // skip freed slots (ref_count==0 means available for reuse, not a live binding)
+        LOG_TRACE("Skip freed slot because ref_count is already 0",
+          K(i), K(param_infos.at(i).element<0>()), K(param_infos.at(i).element<1>()));
+        continue;
+      }
       ObRawExpr *original_expr = param_infos.at(i).element<0>();
       if (OB_ISNULL(original_expr)) {
         ret = OB_ERR_UNEXPECTED;
@@ -12771,7 +12777,8 @@ int ObResolverUtils::collect_trigger_ref_column(ObSQLSessionInfo &session_info,
                         const ObTriggerInfo &trigger_info,
                         const ObTableSchema &table_schema,
                         int64_t col_cnt,
-                        ObIArray<ObTriggerRowRefType> &ref_types)
+                        ObIArray<ObTriggerRowRefType> &ref_types,
+                        uint64_t &compiled_analyze_flag)
 {
   int ret = OB_SUCCESS;
   if (trigger_info.is_enable()
@@ -12794,6 +12801,7 @@ int ObResolverUtils::collect_trigger_ref_column(ObSQLSessionInfo &session_info,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("package body is NULL", K(ret));
     } else {
+      compiled_analyze_flag = pkg_body->get_compiled_analyze_flag();
       if (trigger_info.has_when_condition()) {
         ObPLFunction *func = pkg_body->get_routine_table().at(sql::TriggerHandle::get_when_condition_routine_id());
         if (OB_FAIL(collect_trigger_func_ref_column(func, col_cnt, table_schema, ref_types))) {

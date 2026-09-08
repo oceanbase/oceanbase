@@ -68,6 +68,7 @@ inline void dealloc_stack(void *stack_addr, size_t stack_size)
   all_stack_size -= stack_size;
 }
 
+#define STACK_RESERVED_SIZE_MACRO STACK_RESERVED_SIZE
 
 #ifndef OB_USE_ASAN
 #define CALL_WITH_NEW_STACK(func, stack_addr, stack_size)                 \
@@ -95,7 +96,7 @@ inline void dealloc_stack(void *stack_addr, size_t stack_size)
     int ret = OB_SUCCESS;                                                   \
     bool is_overflow = false;                                               \
     RECURSION_CHECKER_GUARD;                                                \
-    if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE))) {  \
+    if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE_MACRO))) {  \
     } else if (!is_overflow) {                                              \
       ret = func;                                                           \
     } else {                                                                \
@@ -119,7 +120,7 @@ inline void dealloc_stack(void *stack_addr, size_t stack_size)
   ({                                                                        \
     int ret = OB_SUCCESS;                                                   \
     bool is_overflow = false;                                               \
-    if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE))) {  \
+    if (OB_FAIL(check_stack_overflow(is_overflow, STACK_RESERVED_SIZE_MACRO))) {  \
     } else if (!is_overflow) {                                              \
       ret = func;                                                           \
     } else {                                                                \
