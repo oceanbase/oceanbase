@@ -1764,7 +1764,8 @@ public:
                            ObSqlBitSet<> &table_ids,
                            ObIArray<ObRawExpr*> &join_keys);
 
-  static int check_joined_table_combinable(ObDMLStmt *stmt,
+  static int check_joined_table_combinable(ObTransformerCtx *ctx,
+                                           ObDMLStmt *stmt,
                                            JoinedTable *joined_table,
                                            TableItem *target_table,
                                            bool is_right_child,
@@ -2090,7 +2091,8 @@ public:
   static int check_const_select(ObTransformerCtx *ctx,
                                 const ObSelectStmt *stmt,
                                 bool &is_const_select);
-  static int get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
+  static int get_extra_condition_from_parent(ObTransformerCtx *ctx,
+                                             ObDMLStmt *parent_stmt,
                                              ObDMLStmt *stmt,
                                              ObIArray<ObRawExpr *> &conditions);
   static int check_left_join_chain_recursively(ObDMLStmt *stmt,
@@ -2180,7 +2182,8 @@ private:
                                         ObSqlBitSet<> &expr_relation_ids,
                                         bool in_full_join,
                                         bool &is_valid);
-  static int check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
+  static int check_left_join_right_view_combinable(ObTransformerCtx *ctx,
+                                                  ObDMLStmt *parent_stmt,
                                                   TableItem *view_table,
                                                   ObIArray<ObRawExpr*> &outer_join_conditions,
                                                   bool &combinable);
