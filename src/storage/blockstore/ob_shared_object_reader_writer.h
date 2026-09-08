@@ -66,10 +66,12 @@ public:
 struct ObSharedObjectsWriteCtx final
 {
 public:
-  ObSharedObjectsWriteCtx()
-    : addr_(), block_ids_(), next_opt_()
+  explicit ObSharedObjectsWriteCtx(
+      const uint64_t tenant_id = MTL_ID(),
+      const uint64_t ctx_id = common::ObCtxIds::DEFAULT_CTX_ID)
+    : addr_(), block_ids_(), next_opt_(), tenant_id_(tenant_id), ctx_id_(ctx_id)
   {
-    block_ids_.set_attr(ObMemAttr(MTL_ID(), "SharedBlkWCtx"));
+    block_ids_.set_attr(ObMemAttr(tenant_id_, "SharedBlkWCtx", ctx_id_));
   }
   ~ObSharedObjectsWriteCtx();
   bool is_valid() const;
@@ -81,8 +83,12 @@ public:
   TO_STRING_KV(K_(addr), K_(block_ids), K_(next_opt));
 public:
   ObMetaDiskAddr addr_;
-  ObArray<blocksstable::MacroBlockId> block_ids_;
+  ObSEArray<blocksstable::MacroBlockId, 1> block_ids_;
   blocksstable::ObStorageObjectOpt next_opt_;
+private:
+  uint64_t tenant_id_;
+  uint64_t ctx_id_;
+public:
   DISALLOW_COPY_AND_ASSIGN(ObSharedObjectsWriteCtx);
 };
 
@@ -124,9 +130,14 @@ class ObSharedObjectBaseHandle
   friend class ObSharedObjectReaderWriter;
   friend class ObSharedObjectLinkIter;
 public:
-  ObSharedObjectBaseHandle()
+  explicit ObSharedObjectBaseHandle(
+      const uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
+      const uint64_t ctx_id = common::ObCtxIds::DEFAULT_CTX_ID)
     : object_handles_(), addrs_()
-  {}
+  {
+    object_handles_.set_attr(lib::ObMemAttr(tenant_id, "SharedObjHandle", ctx_id));
+    addrs_.set_attr(lib::ObMemAttr(tenant_id, "SharedObjAddr", ctx_id));
+  }
   virtual ~ObSharedObjectBaseHandle() = default;
   void reset();
   TO_STRING_KV(K(addrs_.count()), K(object_handles_.count()), K_(addrs), K_(object_handles));
@@ -218,9 +229,16 @@ class ObSharedObjectBatchHandle final : public ObSharedObjectBaseHandle
 {
   friend class ObSharedObjectReaderWriter;
 public:
-  ObSharedObjectBatchHandle() = default;
+  explicit ObSharedObjectBatchHandle(
+      const uint64_t tenant_id = common::OB_SERVER_TENANT_ID,
+      const uint64_t ctx_id = common::ObCtxIds::DEFAULT_CTX_ID)
+    : ObSharedObjectBaseHandle(tenant_id, ctx_id), write_ctxs_()
+  {
+    write_ctxs_.set_attr(lib::ObMemAttr(tenant_id, "SharedObjWrCtx", ctx_id));
+  }
   ~ObSharedObjectBatchHandle() = default;
   void reset();
+  int reserve(const int64_t count);
   bool is_valid() const;
   int batch_get_write_ctx(ObIArray<ObSharedObjectsWriteCtx> &write_ctxs);
   INHERIT_TO_STRING_KV("ObSharedObjectBaseHandle", ObSharedObjectBaseHandle, K_(write_ctxs));

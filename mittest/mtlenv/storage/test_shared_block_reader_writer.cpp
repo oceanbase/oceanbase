@@ -510,6 +510,45 @@ TEST_F(TestSharedBlockRWriter, test_batch_write_switch_block)
   }
 }
 
+TEST_F(TestSharedBlockRWriter, test_batch_write_reserve_ctx_after_switch)
+{
+  ObSharedObjectReaderWriter rwriter;
+  OK(rwriter.init(true/*need align*/, false/*need cross*/));
+
+  // Make a one-element batch flush both the previous hanging object and the current object.
+  rwriter.offset_ = (2L << 20) - 10;
+  rwriter.align_offset_ = (2L << 20) - 4096;
+  rwriter.hanging_ = true;
+
+  char data[1L << 10] = "";
+  ObSharedObjectWriteInfo write_info;
+  write_info.buffer_ = data;
+  write_info.offset_ = 0;
+  write_info.size_ = sizeof(data);
+  write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+  ObArray<ObSharedObjectWriteInfo> write_infos;
+  OK(write_infos.push_back(write_info));
+
+  const uint64_t ctx_id = ObCtxIds::MERGE_RESERVE_CTX_ID;
+  ObSharedObjectBatchHandle write_handle(MTL_ID(), ctx_id);
+  blocksstable::ObStorageObjectOpt curr_opt;
+  curr_opt.set_private_object_opt();
+  OK(rwriter.async_batch_write(write_infos, write_handle, curr_opt));
+  ASSERT_TRUE(write_handle.is_valid());
+  ASSERT_EQ(2, write_handle.object_handles_.count());
+  ASSERT_GE(write_handle.object_handles_.get_capacity(), write_infos.count() + 1);
+  ASSERT_EQ(ctx_id, write_handle.write_ctxs_.get_block_allocator().get_attr().ctx_id_);
+  ASSERT_EQ(ctx_id, write_handle.write_ctxs_.at(0).ctx_id_);
+  ASSERT_EQ(1, write_handle.write_ctxs_.at(0).block_ids_.count());
+
+  ObArray<ObSharedObjectsWriteCtx> write_ctxs;
+  write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "TestWriteCtx", ctx_id));
+  OK(write_handle.batch_get_write_ctx(write_ctxs));
+  ASSERT_EQ(1, write_ctxs.count());
+  ASSERT_EQ(ctx_id, write_ctxs.at(0).ctx_id_);
+  ASSERT_EQ(1, write_ctxs.at(0).block_ids_.count());
+}
+
 TEST_F(TestSharedBlockRWriter, test_batch_write_bug1)
 {
   /* batch_write_bug1:

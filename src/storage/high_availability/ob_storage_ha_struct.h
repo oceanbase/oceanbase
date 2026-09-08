@@ -715,7 +715,9 @@ private:
       K_(data_checksum));
   };
   // logical ID -> [physical ID, data checksum] mapping of a major sstable.
-  typedef ObLinearHashMap<blocksstable::ObLogicMacroBlockId, MacroBlockReuseInfo> ReuseMap;
+  typedef ObLinearHashMap<blocksstable::ObLogicMacroBlockId,
+                          MacroBlockReuseInfo,
+                          common::UniqueMemMgrTag> ReuseMap;
   // Key of the reuse_maps, use the tablet_id, column_group_idx and table_type to identify the lastest local snapshot version
   // and the reuse info (logical ID -> [physical ID, data checksum] mapping) of a major sstable.
   struct ReuseMajorTableKey final
@@ -757,7 +759,9 @@ private:
     int64_t co_base_snapshot_version_;
     ReuseMap reuse_map_;
   };
-  typedef ObLinearHashMap<ReuseMajorTableKey, ReuseMajorTableValue *> ReuseMaps;
+  typedef ObLinearHashMap<ReuseMajorTableKey,
+                          ReuseMajorTableValue *,
+                          common::UniqueMemMgrTag> ReuseMaps;
 private:
   int get_reuse_key_(const ObITable::TableKey &table_key, ReuseMajorTableKey &reuse_key);
   int get_reuse_value_(const ObITable::TableKey &table_key, ReuseMap *&reuse_map, int64_t &snapshot_version, int64_t &co_base_snapshot_version);

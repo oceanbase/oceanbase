@@ -1635,7 +1635,10 @@ int ObTabletPersister::batch_write_sstable_info(
     ObBlockInfoSet &block_info_set)
 {
   int ret = OB_SUCCESS;
-  ObSharedObjectBatchHandle handle;
+  const uint64_t ctx_id = share::is_reserve_mode()
+                        ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                        : ObCtxIds::DEFAULT_CTX_ID;
+  ObSharedObjectBatchHandle handle(MTL_ID(), ctx_id);
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   blocksstable::ObStorageObjectOpt curr_opt;
   build_async_write_start_opt_(curr_opt);
@@ -2204,7 +2207,10 @@ int ObTabletPersister::write_and_fill_args(
   int ret = OB_SUCCESS;
   ObTenantStorageMetaService *meta_service = MTL(ObTenantStorageMetaService*);
   ObSharedObjectReaderWriter &reader_writer = meta_service->get_shared_object_reader_writer();
-  ObSharedObjectBatchHandle handle;
+  const uint64_t ctx_id = share::is_reserve_mode()
+                        ? ObCtxIds::MERGE_RESERVE_CTX_ID
+                        : ObCtxIds::DEFAULT_CTX_ID;
+  ObSharedObjectBatchHandle handle(MTL_ID(), ctx_id);
   ObMetaDiskAddr* addr[] = { // NOTE: The order must be the same as the batch async write.
     &arg.table_store_addr_,
     &arg.storage_schema_addr_,
@@ -2218,9 +2224,6 @@ int ObTabletPersister::write_and_fill_args(
   }
 
   common::ObSEArray<ObSharedObjectsWriteCtx, sizeof(addr)/sizeof(addr[0])> write_ctxs;
-  const int64_t ctx_id = share::is_reserve_mode()
-                       ? ObCtxIds::MERGE_RESERVE_CTX_ID
-                       : ObCtxIds::DEFAULT_CTX_ID;
   write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "WriteCtxs", ctx_id));
 
   blocksstable::ObStorageObjectOpt curr_opt;

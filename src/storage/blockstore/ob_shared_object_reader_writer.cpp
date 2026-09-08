@@ -128,6 +128,9 @@ int ObSharedObjectsWriteCtx::assign(const ObSharedObjectsWriteCtx &other)
   int ret = OB_SUCCESS;
   if (this != &other) {
     clear();
+    tenant_id_ = other.tenant_id_;
+    ctx_id_ = other.ctx_id_;
+    block_ids_.set_attr(ObMemAttr(tenant_id_, "SharedBlkWCtx", ctx_id_));
     if (OB_FAIL(set_addr(other.addr_))) {
       LOG_WARN("Fail to set add", K(ret), K(other));
     } else {
@@ -509,6 +512,26 @@ void ObSharedObjectBatchHandle::reset()
   write_ctxs_.reset();
   ObSharedObjectBaseHandle::reset();
 }
+
+int ObSharedObjectBatchHandle::reserve(const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid reserve count", K(ret), K(count));
+  } else if (OB_UNLIKELY(INT64_MAX == count)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("reserve count is too large", K(ret), K(count));
+  } else if (OB_FAIL(object_handles_.reserve(count + 1))) {
+    LOG_WARN("fail to reserve object handles", K(ret), K(count));
+  } else if (OB_FAIL(addrs_.reserve(count))) {
+    LOG_WARN("fail to reserve meta addrs", K(ret), K(count));
+  } else if (OB_FAIL(write_ctxs_.reserve(count))) {
+    LOG_WARN("fail to reserve write ctxs", K(ret), K(count));
+  }
+  return ret;
+}
+
 bool ObSharedObjectBatchHandle::is_valid() const
 {
   return object_handles_.count() > 0 && addrs_.count() > 0
@@ -852,10 +875,14 @@ int ObSharedObjectReaderWriter::async_batch_write(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Not init", K(ret));
+  } else if (OB_FAIL(shared_obj_handle.reserve(write_infos.count()))) {
+    LOG_WARN("fail to reserve batch handle", K(ret), K(write_infos));
   } else {
     lib::ObMutexGuard guard(mutex_);
     ObSharedObjectWriteArgs write_args;
-    ObSharedObjectsWriteCtx write_ctx;
+    const lib::ObMemAttr &handle_mem_attr =
+        shared_obj_handle.write_ctxs_.get_block_allocator().get_attr();
+    ObSharedObjectsWriteCtx write_ctx(handle_mem_attr.tenant_id_, handle_mem_attr.ctx_id_);
     if (GCTX.is_shared_storage_mode()
         && write_infos.count() >= 1
         && OB_FAIL(do_switch(curr_opt))) {
