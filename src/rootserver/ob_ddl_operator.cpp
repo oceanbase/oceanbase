@@ -11044,6 +11044,52 @@ int ObDDLOperator::handle_label_se_user_level_function(ObSchemaOperationType ddl
   return ret;
 }
 
+static int validate_profile_password_limits(const ObProfileSchema &schema, ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const ObProfileSchema *default_profile = NULL;
+  int64_t rollover_time = schema.get_password_rollover_time();
+  int64_t life_time = schema.get_password_life_time();
+  int64_t grace_time = schema.get_password_grace_time();
+  const bool need_default_profile = ObProfileSchema::DEFAULT_VALUE == rollover_time
+                                    || ObProfileSchema::DEFAULT_VALUE == life_time
+                                    || ObProfileSchema::DEFAULT_VALUE == grace_time;
+  const int64_t min_rollover_time = 10 * USECS_PER_SEC;
+  const int64_t max_rollover_time = 60 * USECS_PER_DAY;
+
+  if (need_default_profile
+      && OB_FAIL(schema_guard.get_profile_schema_by_id(schema.get_tenant_id(),
+                                                       OB_ORACLE_TENANT_INNER_PROFILE_ID,
+                                                       default_profile))) {
+    LOG_WARN("fail to get default profile", K(ret), K(schema));
+  } else if (need_default_profile && OB_ISNULL(default_profile)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("default profile is null", K(ret), K(schema));
+  } else {
+    if (need_default_profile) {
+      rollover_time = ObProfileSchema::DEFAULT_VALUE == rollover_time ? default_profile->get_password_rollover_time()
+                                                                      : rollover_time;
+      life_time = ObProfileSchema::DEFAULT_VALUE == life_time ? default_profile->get_password_life_time() : life_time;
+      grace_time = ObProfileSchema::DEFAULT_VALUE == grace_time ? default_profile->get_password_grace_time()
+                                                                : grace_time;
+    }
+    rollover_time = ObProfileSchema::INVALID_VALUE == rollover_time ? 0 : rollover_time;
+    life_time = ObProfileSchema::INVALID_VALUE == life_time ? ObProfileSchema::UNLIMITED_VALUE : life_time;
+    grace_time = ObProfileSchema::INVALID_VALUE == grace_time ? ObProfileSchema::UNLIMITED_VALUE : grace_time;
+    if (0 != rollover_time
+        && (rollover_time < min_rollover_time
+            || rollover_time > max_rollover_time
+            || (ObProfileSchema::UNLIMITED_VALUE != life_time && rollover_time > life_time)
+            || (0 != grace_time && ObProfileSchema::UNLIMITED_VALUE != grace_time && rollover_time > grace_time))) {
+      ret = OB_ERR_INVALID_RESOURCE_LIMIT;
+      LOG_WARN("invalid password rollover time", K(ret), K(rollover_time), K(life_time), K(grace_time));
+      LOG_USER_ERROR(OB_ERR_INVALID_RESOURCE_LIMIT,
+                     ObProfileSchema::PARAM_VALUE_NAMES[ObProfileSchema::PASSWORD_ROLLOVER_TIME]);
+    }
+  }
+  return ret;
+}
+
 int ObDDLOperator::handle_profile_function(
     ObProfileSchema &schema,
     ObMySQLTransaction &trans,
@@ -11128,7 +11174,10 @@ int ObDDLOperator::handle_profile_function(
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(schema_sql_service->get_profile_sql_service()
+    if (OB_DDL_DROP_PROFILE != ddl_type
+        && OB_FAIL(validate_profile_password_limits(schema, schema_guard))) {
+      LOG_WARN("fail to validate profile password limits", K(ret), K(schema));
+    } else if (OB_FAIL(schema_sql_service->get_profile_sql_service()
                        .apply_new_schema(schema, trans, ddl_type, ddl_stmt_str))) {
       LOG_WARN("apply profile failed", K(ret));
     }

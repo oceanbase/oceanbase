@@ -5550,6 +5550,8 @@ int ObGrantArg::assign(const ObGrantArg &other)
     SHARE_LOG(WARN, "fail to assign sel_col_ids_", K(ret));
   } else if (OB_FAIL(column_names_priv_.assign(other.column_names_priv_))) {
     SHARE_LOG(WARN, "fail to assign column_names_priv_", K(ret));
+  } else if (OB_FAIL(modify_password_.assign(other.modify_password_))) {
+    SHARE_LOG(WARN, "fail to assign modify_password_", K(ret));
   }
   return ret;
 }
@@ -5586,7 +5588,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               grantor_host_,
               catalog_,
               sensitive_rule_,
-              plugins_);
+              plugins_,
+              modify_password_);
 return ret;
 }
 
@@ -5622,7 +5625,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               grantor_host_,
               catalog_,
               sensitive_rule_,
-              plugins_);
+              plugins_,
+              modify_password_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5640,6 +5644,16 @@ OB_DEF_DESERIALIZE(ObGrantArg)
     for (int64_t i = 0; i < hosts_.count() && OB_SUCC(ret); ++i) {
       if (OB_FAIL(plugins_.push_back(EMPTY_PLUGIN))) {
         LOG_WARN("fail to push_back empty plugin", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && hosts_.count() > 0 && modify_password_.empty()) {
+    for (int64_t i = 0; i < hosts_.count() && OB_SUCC(ret); ++i) {
+      ObString pwd;
+      if (OB_FAIL(users_passwd_.at(2 * i + 1, pwd))) {
+        LOG_WARN("fail to get password", K(ret), K(i));
+      } else if (OB_FAIL(modify_password_.push_back(!pwd.empty()))) {
+        LOG_WARN("fail to push back modify password flag", K(ret), K(i));
       }
     }
   }
@@ -5677,7 +5691,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               grantor_host_,
               catalog_,
               sensitive_rule_,
-              plugins_);
+              plugins_,
+              modify_password_);
   return len;
 }
 

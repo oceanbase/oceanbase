@@ -36,6 +36,7 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
   const uint64_t tenant_id = stmt.get_tenant_id();
   const ObStrings &users = stmt.get_users();
   const ObStrings &plugins = stmt.get_plugins();
+  const ObIArray<bool> &modify_passwords = stmt.get_modify_passwords();
   ObIAllocator &allocator = ctx.get_allocator();
   obrpc::ObGrantArg &arg = static_cast<obrpc::ObGrantArg &>(stmt.get_ddl_arg());
   const bool is_role = arg.roles_.count() > 0;
@@ -60,32 +61,39 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
     ObString pwd;
     ObString need_enc;
     ObString plugin;
-    //i += 4, each with user_name, host_name, pwd, need_enc
+    bool modify_password = false;
     if (OB_UNLIKELY(users.count() <= 0) || OB_UNLIKELY(0 != users.count() % 4)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Resolve users error. Users should have user and pwd",
-               "ObStrings count", users.count(), K(ret));
+      LOG_WARN("Resolve users error. Users should have user and pwd", "ObStrings count", users.count(), K(ret));
     } else if (OB_UNLIKELY(users.count() / 4 != plugins.count())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("User count and plugin count mismatch", "user count", users.count() / 4, "plugin count", plugins.count());
+      LOG_WARN("User count and plugin count mismatch",
+               "user count",
+               users.count() / 4,
+               "plugin count",
+               plugins.count());
+    } else if (OB_UNLIKELY(plugins.count() != modify_passwords.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("User count and modify password count mismatch",
+               "user count",
+               plugins.count(),
+               "modify password count",
+               modify_passwords.count());
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < users.count(); i += 4) {
       const int64_t user_idx = i / 4;
       if (OB_FAIL(users.get_string(i, user_name))) {
-        LOG_WARN("Get string from ObStrings error", "count",
-            users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(users.get_string(i + 1, host_name))) {
-        LOG_WARN("Get string from ObStrings error", "count",
-            users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(users.get_string(i + 2, pwd))) {
-        LOG_WARN("Get string from ObStrings error", "count",
-            users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(users.get_string(i + 3, need_enc))) {
-        LOG_WARN("Get string from ObStrings error", "count",
-            users.count(), K(i), K(ret));
+        LOG_WARN("Get string from ObStrings error", "count", users.count(), K(i), K(ret));
       } else if (OB_FAIL(plugins.get_string(user_idx, plugin))) {
-        LOG_WARN("Get plugin from plugins error", "plugin count",
-            plugins.count(), K(user_idx), K(ret));
+        LOG_WARN("Get plugin from plugins error", "plugin count", plugins.count(), K(user_idx), K(ret));
+      } else if (OB_FAIL(modify_passwords.at(user_idx, modify_password))) {
+        LOG_WARN("Get modify password flag error", "count", modify_passwords.count(), K(user_idx), K(ret));
       } else {
         if (OB_FAIL(arg.users_passwd_.push_back(user_name))) {
           LOG_WARN("failed to add user", K(ret));
@@ -93,6 +101,8 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
           LOG_WARN("failed to add user", K(ret));
         } else if (OB_FAIL(arg.plugins_.push_back(plugin))) {
           LOG_WARN("failed to add plugin", K(ret));
+        } else if (OB_FAIL(arg.modify_password_.push_back(modify_password))) {
+          LOG_WARN("failed to add modify password flag", K(ret));
         } else if (ObString::make_string("YES") == need_enc) {
           ObString pwd_enc;
           if (pwd.length() > 0) {

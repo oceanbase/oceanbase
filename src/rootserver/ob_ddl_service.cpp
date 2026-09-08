@@ -32753,35 +32753,35 @@ int ObDDLService::set_passwd_in_trans(
 {
   int ret = OB_SUCCESS;
   ObDDLSQLTransaction trans(schema_service_);
+  int64_t refreshed_schema_version = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Tenant_id or user_id is invalid", K(tenant_id), K(user_id), K(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+    LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
   } else {
-    int64_t refreshed_schema_version = 0;
-    if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
-      LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
-      LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else {
-      ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ddl_operator.set_passwd(tenant_id,
-                                          user_id,
-                                          new_passwd,
-                                          ddl_stmt_str,
-                                          trans,
-                                          plugin,
-                                          retain_current_password,
-                                          discard_old_password))) {
-        LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
-      }
-      if (trans.is_started()) {
-        int temp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-          ret = (OB_SUCC(ret)) ? temp_ret : ret;
-        }
+    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
+    if (OB_FAIL(ddl_operator.set_passwd(tenant_id,
+                                        user_id,
+                                        new_passwd,
+                                        ddl_stmt_str,
+                                        trans,
+                                        plugin,
+                                        retain_current_password,
+                                        discard_old_password))) {
+      LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
       }
     }
   }
@@ -33369,12 +33369,21 @@ int ObDDLService::grant(const ObGrantArg &arg)
       const ObSArray<ObString> &users_passwd = arg.users_passwd_;
       const ObSArray<ObString> &hosts = arg.hosts_;
       const ObSArray<ObString> &plugins = arg.plugins_;
+      const ObSArray<bool> &modify_password = arg.modify_password_;
+      const int64_t user_count = users_passwd.count() / 2;
       if (OB_UNLIKELY(users_passwd.count() % 2 != 0)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("users should have even string", K(users_passwd.count()), K(ret));
-      } else if (OB_UNLIKELY(plugins.count() != users_passwd.count() / 2)) {
+      } else if (OB_UNLIKELY(hosts.count() != user_count)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("plugins should have even string", K(plugins.count()), K(users_passwd.count()), K(ret));
+        LOG_WARN("hosts should match users", K(hosts.count()), K(user_count), K(ret));
+      } else if (OB_UNLIKELY(plugins.count() != user_count)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("plugins should match users", K(plugins.count()), K(user_count), K(ret));
+      } else if (OB_UNLIKELY(modify_password.count() != user_count)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("modify password flags should match users",
+                 K(modify_password.count()), K(user_count), K(ret));
       } else {
         ObString user_name;
         ObString host_name;
@@ -33383,24 +33392,29 @@ int ObDDLService::grant(const ObGrantArg &arg)
         int tmp_ret = OB_SUCCESS;
         for (int64_t i = 0; OB_SUCC(ret) && i < users_passwd.count(); i += 2) {
           bool is_user_exist = false;
+          bool modify_user_password = false;
           uint64_t user_id = OB_INVALID_ID;
+          const int64_t user_idx = i / 2;
           if (OB_FAIL(users_passwd.at(i, user_name))) {
             SQL_ENG_LOG(WARN, "Get string from ObSArray error", "count",
                 users_passwd.count(), K(i), K(ret));
-          } else if (OB_FAIL(hosts.at(i / 2, host_name))) {
+          } else if (OB_FAIL(hosts.at(user_idx, host_name))) {
             SQL_ENG_LOG(WARN, "Get string from ObSArray error", "count",
-                hosts.count(), K(i), K(ret));
+                hosts.count(), K(user_idx), K(ret));
           } else if (OB_FAIL(users_passwd.at(i + 1, pwd))) {
             SQL_ENG_LOG(WARN, "Get string from ObSArray error", "count",
                 users_passwd.count(), K(i), K(ret));
-          } else if (OB_FAIL(plugins.at(i / 2, plugin))) {
+          } else if (OB_FAIL(plugins.at(user_idx, plugin))) {
             SQL_ENG_LOG(WARN, "Get string from ObSArray error", "count",
-                plugins.count(), K(i), K(ret));
+                plugins.count(), K(user_idx), K(ret));
+          } else if (OB_FAIL(modify_password.at(user_idx, modify_user_password))) {
+            SQL_ENG_LOG(WARN, "Get modify password flag from ObSArray error", "count",
+                modify_password.count(), K(user_idx), K(ret));
           } else if (OB_FAIL(schema_service_->check_user_exist(arg.tenant_id_, user_name, host_name,
                   user_id, is_user_exist))) {
             LOG_WARN("Failed to check whether user exist", K(arg.tenant_id_), K(user_name), K(host_name), K(ret));
           } else if (is_user_exist) {
-            if (!pwd.empty()) { //change password
+            if (modify_user_password) { //change password
               ObSqlString ddl_stmt_str;
               ObString ddl_sql;
               bool is_oracle_mode = false;
@@ -33801,11 +33815,13 @@ int ObDDLService::grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
   int64_t refreshed_schema_version = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", KR(ret));
-  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
-    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_key is invalid", K(ret));
+  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     if (!is_user_exist(arg.tenant_id_, user_id)) {

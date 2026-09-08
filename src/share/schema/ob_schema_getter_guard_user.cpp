@@ -434,6 +434,8 @@ int ObSchemaGetterGuard::check_user_access(
               int64_t expire_ts = start_ts + password_rollover_time;
               expire_ts = (expire_ts < start_ts) ? INT64_MAX : expire_ts;
               dual_password_valid = (ObTimeUtility::current_time() < expire_ts);
+            } else {
+              dual_password_valid = false;
             }
           }
           if (OB_SUCC(ret) && dual_password_valid) {

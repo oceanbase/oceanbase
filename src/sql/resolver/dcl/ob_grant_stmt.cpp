@@ -30,6 +30,7 @@ ObGrantStmt::ObGrantStmt(ObIAllocator &allocator)
       grantees_(),
       users_(),
       plugins_(),
+      modify_passwords_(allocator),
       masked_sql_(),
       need_create_user_(false),
       need_create_user_priv_(false),
@@ -60,7 +61,8 @@ int ObGrantStmt::add_user(const common::ObString &user_name,
                           const common::ObString &host_name,
                           const common::ObString &pwd,
                           const common::ObString &need_enc,
-                          const common::ObString &plugin)
+                          const common::ObString &plugin,
+                          const bool modify_password)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(users_.add_string(user_name))) {
@@ -73,6 +75,8 @@ int ObGrantStmt::add_user(const common::ObString &user_name,
     LOG_WARN("failed to add need enc", K(ret));
   } else if (OB_FAIL(plugins_.add_string(plugin))) {
     LOG_WARN("failed to add plugin to plugins array", K(ret));
+  } else if (OB_FAIL(modify_passwords_.push_back(modify_password))) {
+    LOG_WARN("failed to add modify password flag", K(ret));
   } else {
     //do nothing
   }
@@ -191,6 +195,7 @@ int64_t ObGrantStmt::to_string(char *buf, const int64_t buf_len) const
          "database", database_,
          "table", table_,
          "users", users_,
+         "modify_passwords", modify_passwords_,
          "object_type", object_type_,
          "object_id", object_id_);
     J_OBJ_END();
@@ -200,5 +205,3 @@ int64_t ObGrantStmt::to_string(char *buf, const int64_t buf_len) const
 
 }
 }
-
-

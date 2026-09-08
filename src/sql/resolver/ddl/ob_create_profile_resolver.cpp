@@ -122,7 +122,8 @@ int ObUserProfileResolver::fill_arg(int64_t type, ObObj &value, obrpc::ObProfile
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "specified profile type");
     }
     if (OB_SUCC(ret)) {
-      if (ObProfileSchema::PASSWORD_ROLLOVER_TIME == type) {
+      if (ObProfileSchema::PASSWORD_ROLLOVER_TIME == type
+          || ObProfileSchema::PASSWORD_GRACE_TIME == type) {
         if (schema_value < 0) {
           ret = OB_ERR_INVALID_RESOURCE_LIMIT;
           LOG_USER_ERROR(OB_ERR_INVALID_RESOURCE_LIMIT, ObProfileSchema::PARAM_VALUE_NAMES[type]);

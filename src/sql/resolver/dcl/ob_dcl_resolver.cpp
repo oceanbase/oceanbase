@@ -60,6 +60,24 @@ int ObDCLResolver::check_and_convert_name(ObString &db, ObString &table)
   return ret;
 }
 
+int ObDCLResolver::check_plain_password_length(const ObString &password)
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_password_length = OB_MAX_PASSWORD_LENGTH;
+  if (OB_UNLIKELY(password.length() > max_password_length)) {
+    if (lib::is_oracle_mode()) {
+      ret = OB_ERR_MISSING_OR_INVALID_PASSWORD;
+      LOG_USER_ERROR(OB_ERR_MISSING_OR_INVALID_PASSWORD);
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "use an excessively long password");
+    }
+    LOG_WARN("plain password is too long",
+             K(ret), K(password.length()), K(max_password_length));
+  }
+  return ret;
+}
+
 int ObDCLResolver::check_password_strength(common::ObString &password)
 {
   int ret = OB_SUCCESS;

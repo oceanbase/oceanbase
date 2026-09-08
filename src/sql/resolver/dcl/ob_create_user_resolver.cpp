@@ -206,14 +206,8 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
             if (OB_SUCC(ret) && user_name.length() > max_user_name_len) {
               ret = OB_WRONG_USER_NAME_LENGTH;
               LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), max_user_name_len);
-            } else if (password.length() > OB_MAX_PASSWORD_LENGTH) {
-              if (lib::is_oracle_mode()) {
-                ret = OB_ERR_MISSING_OR_INVALID_PASSWORD;
-                LOG_USER_ERROR(OB_ERR_MISSING_OR_INVALID_PASSWORD);
-              } else {
-                ret = OB_NOT_SUPPORTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "create a user with an excessively long password");
-              }
+            } else if (OB_FAIL(check_plain_password_length(password))) {
+              LOG_WARN("plain password is too long", K(ret));
             } else if (OB_FAIL(ObEncryptedHelper::
                                check_data_version_for_auth_plugin(plugin,
                                                                   params_.session_info_->get_effective_tenant_id(),

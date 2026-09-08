@@ -32,6 +32,35 @@ ObGrantResolver::~ObGrantResolver()
 {
 }
 
+int ObGrantResolver::resolve_auth_plugin(const ParseNode *plugin_node,
+                                         const uint64_t tenant_id,
+                                         const ObString &user_name,
+                                         const ObString &host_name,
+                                         ObString &plugin)
+{
+  int ret = OB_SUCCESS;
+  int user_info_ret = OB_SUCCESS;
+  const ObUserInfo *user_info = NULL;
+  if (OB_NOT_NULL(plugin_node)) {
+    plugin.assign_ptr(plugin_node->str_value_, static_cast<int32_t>(plugin_node->str_len_));
+    if (OB_UNLIKELY(plugin.empty() || !ObEncryptedHelper::is_valid_auth_plugin(plugin))) {
+      ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
+      LOG_WARN("invalid auth plugin", K(plugin), K(ret));
+    }
+  } else if (OB_UNLIKELY(OB_SUCCESS != (user_info_ret = params_.schema_checker_->get_user_info(
+                                            tenant_id, user_name, host_name, user_info)))
+             && OB_USER_NOT_EXIST != user_info_ret) {
+    ret = user_info_ret;
+    LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
+  } else if (OB_NOT_NULL(user_info)) {
+    plugin = user_info->get_plugin_str();
+  } else if (OB_FAIL(params_.session_info_->get_sys_variable(share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+                                                              plugin))) {
+    LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
+  }
+  return ret;
+}
+
 int ObGrantResolver::resolve_grantee_clause(
     const ParseNode *grantee_clause,
     ObSQLSessionInfo *session_info,
@@ -1109,6 +1138,7 @@ int ObGrantResolver::resolve_grant_obj_privileges(
         ObString pwd;
         ObString need_enc = ObString::make_string("NO");
         ObString plugin;
+        bool modify_password = false;
         bool is_plugin_supported = true;
         if (OB_ISNULL(user_node)) {
           ret = OB_ERR_PARSE_SQL;
@@ -1137,19 +1167,16 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                 static_cast<int32_t>(user_node->children_[3]->str_len_));
           }
           if (lib::is_mysql_mode()) {
-            if (NULL != user_node->children_[4]) {
-              ObString auth_plugin(static_cast<int32_t>(user_node->children_[4]->str_len_),
-                                   user_node->children_[4]->str_value_);
-              plugin = auth_plugin;
-            } else {
-              // Use default_authentication_plugin system variable as default
-              if (OB_FAIL(session_info_->get_sys_variable(
-                      share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
-                LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
-              }
+            if (OB_FAIL(resolve_auth_plugin(user_node->children_[4],
+                                            tenant_id,
+                                            user_name,
+                                            host_name,
+                                            plugin))) {
+              LOG_WARN("failed to resolve auth plugin", K(ret), K(user_name), K(host_name));
             }
           }
           if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
+            modify_password = true;
             if (0 != user_name.compare(session_info_->get_user_name())) {
               grant_stmt->set_need_create_user_priv(true);
             }
@@ -1163,6 +1190,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                 ret = OB_ERR_PASSWORD_FORMAT;
                 LOG_WARN("Wrong password hash format");
               }
+            } else if (OB_FAIL(check_plain_password_length(pwd))) {
+              LOG_WARN("plain password is too long", K(ret));
             } else {
               need_enc = ObString::make_string("YES");
             }
@@ -1192,7 +1221,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
                                                   host_name,
                                                   pwd,
                                                   need_enc,
-                                                  ObEncryptedHelper::format_plugin_name(plugin)))) {
+                                                  ObEncryptedHelper::format_plugin_name(plugin),
+                                                  modify_password))) {
             LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
           } else {
             //do nothing
@@ -1471,6 +1501,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
               ObString pwd;
               ObString need_enc = ObString::make_string("NO");
               ObString plugin;
+              bool modify_password = false;
               bool is_plugin_supported = true;
               if (OB_ISNULL(user_node)) {
                 ret = OB_ERR_PARSE_SQL;
@@ -1501,23 +1532,12 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                       static_cast<int32_t>(user_node->children_[3]->str_len_));
                 }
                 if (lib::is_mysql_mode()) {
-                  if (NULL != user_node->children_[4]) {
-                    plugin.assign_ptr(str_tolower(const_cast<char *>(user_node->children_[4]->str_value_),
-                                                  static_cast<int32_t>(user_node->children_[4]->str_len_)),
-                                                  static_cast<int32_t>(user_node->children_[4]->str_len_));
-                    if (plugin.empty()) {
-                      ret = OB_ERR_PLUGIN_IS_NOT_LOADED;
-                      LOG_WARN("invalid auth plugin", K(plugin), K(ret));
-                    }
-                  } else {
-                    // Use default_authentication_plugin system variable as default
-                    if (OB_FAIL(session_info_->get_sys_variable(
-                            share::SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN, plugin))) {
-                      LOG_WARN("fail to get default_authentication_plugin variable", K(ret));
-                    }
+                  if (OB_FAIL(resolve_auth_plugin(user_node->children_[4], tenant_id, user_name, host_name, plugin))) {
+                    LOG_WARN("failed to resolve auth plugin", K(ret), K(user_name), K(host_name));
                   }
                 }
                 if (OB_SUCC(ret) && user_node->children_[1] != NULL) {
+                  modify_password = true;
                   if (0 != user_name.compare(session_info_->get_user_name())) {
                     grant_stmt->set_need_create_user_priv(true);
                   }
@@ -1531,6 +1551,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                       ret = OB_ERR_PASSWORD_FORMAT;
                       LOG_WARN("Wrong password hash format", K(pwd), K(plugin), K(ret));
                     }
+                  } else if (OB_FAIL(check_plain_password_length(pwd))) {
+                    LOG_WARN("plain password is too long", K(ret));
                   } else if (OB_FAIL(check_password_strength(pwd))) {
                     LOG_WARN("fail to check password strength", K(ret));
                   } else {
@@ -1562,7 +1584,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                                         host_name,
                                                         pwd,
                                                         need_enc,
-                                                        ObEncryptedHelper::format_plugin_name(plugin)))) {
+                                                        ObEncryptedHelper::format_plugin_name(plugin),
+                                                        modify_password))) {
                   LOG_WARN("Add user and pwd error", K(user_name), K(pwd), K(plugin), K(ret));
                 } else {
                   //do nothing

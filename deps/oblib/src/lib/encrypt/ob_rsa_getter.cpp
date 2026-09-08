@@ -54,54 +54,49 @@ ObRsaGetter::~ObRsaGetter()
 int ObRsaGetter::init()
 {
   int ret = OB_SUCCESS;
+  int load_ret = OB_SUCCESS;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LIB_LOG(WARN, "ObRsaGetter init twice", K(ret));
+  } else if (OB_FAIL(create_wallet_directory(DEFAULT_WALLET_PATH))) {
+    LIB_LOG(WARN, "failed to create wallet directory", K(ret), K(DEFAULT_WALLET_PATH));
   } else {
-    // Try to create wallet directory
-    if (OB_FAIL(create_wallet_directory(DEFAULT_WALLET_PATH))) {
-      LIB_LOG(WARN, "failed to create wallet directory", K(ret), K(DEFAULT_WALLET_PATH));
-    } else {
-      // Try to load existing keys
-      int load_ret = load_key_from_wallet(DEFAULT_WALLET_PATH);
-      if (OB_SUCCESS == load_ret) {
-        LIB_LOG(INFO, "RSA key loaded from wallet", K(DEFAULT_WALLET_PATH));
-      } else if (OB_FILE_NOT_EXIST == load_ret) {
-        // If file doesn't exist, generate new key pair
-        LIB_LOG(INFO, "RSA key file not exist, will generate new key pair", K(DEFAULT_WALLET_PATH));
-        if (OB_FAIL(generate_rsa_key_pair())) {
-          LIB_LOG(WARN, "failed to generate RSA key pair", K(ret));
-        } else if (OB_FAIL(save_key_to_wallet(DEFAULT_WALLET_PATH))) {
-          LIB_LOG(WARN, "failed to save RSA key to wallet", K(ret));
-        } else {
-          LIB_LOG(INFO, "RSA key pair generated and saved", K(DEFAULT_WALLET_PATH));
-        }
+    load_ret = load_key_from_wallet(DEFAULT_WALLET_PATH);
+    if (OB_SUCCESS == load_ret) {
+      LIB_LOG(INFO, "RSA key loaded from wallet", K(DEFAULT_WALLET_PATH));
+    } else if (OB_FILE_NOT_EXIST == load_ret) {
+      LIB_LOG(INFO, "RSA key file not exist, will generate new key pair", K(DEFAULT_WALLET_PATH));
+      if (OB_FAIL(generate_rsa_key_pair())) {
+        LIB_LOG(WARN, "failed to generate RSA key pair", K(ret));
+      } else if (OB_FAIL(save_key_to_wallet(DEFAULT_WALLET_PATH))) {
+        LIB_LOG(WARN, "failed to save RSA key to wallet", K(ret));
       } else {
-        ret = load_ret;
-        LIB_LOG(WARN, "failed to load RSA key from wallet", K(ret), K(DEFAULT_WALLET_PATH));
+        LIB_LOG(INFO, "RSA key pair generated and saved", K(DEFAULT_WALLET_PATH));
       }
-
-      if (OB_SUCC(ret)) {
-        is_inited_ = true;
-      }
+    } else {
+      ret = load_ret;
+      LIB_LOG(WARN, "failed to load RSA key from wallet", K(ret), K(DEFAULT_WALLET_PATH));
     }
   }
 
-  if (!is_inited_) {
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+    LIB_LOG(INFO, "ObRsaGetter init finished", K(DEFAULT_WALLET_PATH));
+  } else if (OB_INIT_TWICE != ret) {
+    LIB_LOG(WARN, "failed to init RSA getter, RSA-based full authentication over insecure channels is unavailable",
+            K(ret), K(DEFAULT_WALLET_PATH));
     destroy();
+    ret = OB_SUCCESS;
   }
 
-  LIB_LOG(INFO, "ObRsaGetter init finished", K(ret), K(DEFAULT_WALLET_PATH));
   return ret;
 }
 
 void ObRsaGetter::destroy()
 {
-  if (is_inited_) {
-    rsa_key_.reset();
-    is_inited_ = false;
-  }
+  rsa_key_.reset();
+  is_inited_ = false;
 }
 
 int ObRsaGetter::generate_rsa_key_pair(int key_bits)
@@ -111,81 +106,92 @@ int ObRsaGetter::generate_rsa_key_pair(int key_bits)
   BIGNUM *bn = nullptr;
   BIO *bio_private = nullptr;
   BIO *bio_public = nullptr;
+  char *private_key_data = nullptr;
+  char *public_key_data = nullptr;
+  long private_key_len = 0;
+  long public_key_len = 0;
 
   if (key_bits < 1024 || key_bits > 4096) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "invalid key bits", K(ret), K(key_bits));
   } else {
+    ERR_clear_error();
     // Create BIGNUM for public exponent
     bn = BN_new();
     if (bn == nullptr) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LIB_LOG(WARN, "failed to create BIGNUM", K(ret));
+      log_openssl_error_stack("BN_new");
     } else if (BN_set_word(bn, OB_RSA_PUBLIC_EXPONENT) != 1) {
       ret = OB_ERR_UNEXPECTED;
       LIB_LOG(WARN, "failed to set BIGNUM", K(ret));
+      log_openssl_error_stack("BN_set_word");
     } else {
       // Generate RSA key pair
       rsa = RSA_new();
       if (rsa == nullptr) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LIB_LOG(WARN, "failed to create RSA", K(ret));
+        log_openssl_error_stack("RSA_new");
       } else if (RSA_generate_key_ex(rsa, key_bits, bn, nullptr) != 1) {
         ret = OB_ERR_UNEXPECTED;
         LIB_LOG(WARN, "failed to generate RSA key", K(ret));
+        log_openssl_error_stack("RSA_generate_key_ex");
+      } else if (OB_ISNULL(bio_private = BIO_new(BIO_s_mem()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LIB_LOG(WARN, "failed to create BIO for private key", K(ret));
+        log_openssl_error_stack("BIO_new private key");
+      } else if (PEM_write_bio_RSAPrivateKey(
+                     bio_private, rsa, nullptr, nullptr, 0, nullptr, nullptr) != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(WARN, "failed to write private key to BIO", K(ret));
+        log_openssl_error_stack("PEM_write_bio_RSAPrivateKey");
+      } else if (OB_ISNULL(bio_public = BIO_new(BIO_s_mem()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LIB_LOG(WARN, "failed to create BIO for public key", K(ret));
+        log_openssl_error_stack("BIO_new public key");
+      } else if (PEM_write_bio_RSA_PUBKEY(bio_public, rsa) != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(WARN, "failed to write public key to BIO", K(ret));
+        log_openssl_error_stack("PEM_write_bio_RSA_PUBKEY");
+      } else if (OB_UNLIKELY(0 >= (private_key_len = BIO_get_mem_data(bio_private, &private_key_data)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(WARN, "failed to get private key data from BIO", K(ret), K(private_key_len));
+        log_openssl_error_stack("BIO_get_mem_data private key");
+      } else if (OB_UNLIKELY(OB_RSA_MAX_KEY_LENGTH <= private_key_len)) {
+        ret = OB_SIZE_OVERFLOW;
+        LIB_LOG(WARN, "private key size overflow", K(ret), K(private_key_len));
+      } else if (OB_UNLIKELY(0 >= (public_key_len = BIO_get_mem_data(bio_public, &public_key_data)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LIB_LOG(WARN, "failed to get public key data from BIO", K(ret), K(public_key_len));
+        log_openssl_error_stack("BIO_get_mem_data public key");
+      } else if (OB_UNLIKELY(OB_RSA_MAX_KEY_LENGTH <= public_key_len)) {
+        ret = OB_SIZE_OVERFLOW;
+        LIB_LOG(WARN, "public key size overflow", K(ret), K(public_key_len));
       } else {
-        bio_private = BIO_new(BIO_s_mem());
-        bio_public = BIO_new(BIO_s_mem());
-        if (bio_private == nullptr) {
+        // Allocate memory for private key
+        rsa_key_.private_key_ = static_cast<char *>(ob_malloc(OB_RSA_MAX_KEY_LENGTH, "RsaPrivKey"));
+        // Allocate memory for public key
+        rsa_key_.public_key_ = static_cast<char *>(ob_malloc(OB_RSA_MAX_KEY_LENGTH, "RsaPubKey"));
+        if (rsa_key_.private_key_ == nullptr) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LIB_LOG(WARN, "failed to create BIO for private key", K(ret));
-        } else if (PEM_write_bio_RSAPrivateKey(bio_private, rsa, nullptr, nullptr, 0, nullptr, nullptr) != 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(WARN, "failed to write private key to BIO", K(ret));
-        } else if (bio_public == nullptr) {
+          LIB_LOG(WARN, "failed to allocate memory for private key", K(ret));
+        } else if (rsa_key_.public_key_ == nullptr) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LIB_LOG(WARN, "failed to create BIO for public key", K(ret));
-        } else if (PEM_write_bio_RSA_PUBKEY(bio_public, rsa) != 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LIB_LOG(WARN, "failed to write public key to BIO", K(ret));
+          LIB_LOG(WARN, "failed to allocate memory for public key", K(ret));
         } else {
-          char *private_key_data = nullptr;
-          long private_key_len = BIO_get_mem_data(bio_private, &private_key_data);
-          char *public_key_data = nullptr;
-          long public_key_len = BIO_get_mem_data(bio_public, &public_key_data);
+          MEMSET(rsa_key_.private_key_, 0, OB_RSA_MAX_KEY_LENGTH);
+          MEMCPY(rsa_key_.private_key_, private_key_data, private_key_len);
+          rsa_key_.private_key_[private_key_len] = '\0';
+          rsa_key_.private_key_len_ = private_key_len;
 
-          if (private_key_len <= 0 || private_key_len >= OB_RSA_MAX_KEY_LENGTH) {
-            ret = OB_SIZE_OVERFLOW;
-            LIB_LOG(WARN, "private key size overflow", K(ret), K(private_key_len));
-          } else if (public_key_len <= 0 || public_key_len >= OB_RSA_MAX_KEY_LENGTH) {
-            ret = OB_SIZE_OVERFLOW;
-            LIB_LOG(WARN, "public key size overflow", K(ret), K(public_key_len));
-          } else {
-            // Allocate memory for private key
-            rsa_key_.private_key_ = static_cast<char *>(ob_malloc(OB_RSA_MAX_KEY_LENGTH, "RsaPrivKey"));
-            // Allocate memory for public key
-            rsa_key_.public_key_ = static_cast<char *>(ob_malloc(OB_RSA_MAX_KEY_LENGTH, "RsaPubKey"));
-            if (rsa_key_.private_key_ == nullptr) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LIB_LOG(WARN, "failed to allocate memory for private key", K(ret));
-            } else if (rsa_key_.public_key_ == nullptr) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LIB_LOG(WARN, "failed to allocate memory for public key", K(ret));
-            } else {
-              MEMSET(rsa_key_.private_key_, 0, OB_RSA_MAX_KEY_LENGTH);
-              MEMCPY(rsa_key_.private_key_, private_key_data, private_key_len);
-              rsa_key_.private_key_[private_key_len] = '\0';
-              rsa_key_.private_key_len_ = private_key_len;
+          MEMSET(rsa_key_.public_key_, 0, OB_RSA_MAX_KEY_LENGTH);
+          MEMCPY(rsa_key_.public_key_, public_key_data, public_key_len);
+          rsa_key_.public_key_[public_key_len] = '\0';
+          rsa_key_.public_key_len_ = public_key_len;
 
-              MEMSET(rsa_key_.public_key_, 0, OB_RSA_MAX_KEY_LENGTH);
-              MEMCPY(rsa_key_.public_key_, public_key_data, public_key_len);
-              rsa_key_.public_key_[public_key_len] = '\0';
-              rsa_key_.public_key_len_ = public_key_len;
-
-              LIB_LOG(INFO, "RSA key pair generated successfully",
-                      K(key_bits), K(private_key_len), K(public_key_len));
-            }
-          }
+          LIB_LOG(INFO, "RSA key pair generated successfully",
+                  K(key_bits), K(private_key_len), K(public_key_len));
         }
       }
     }
@@ -460,6 +466,8 @@ int ObRsaGetter::load_key_from_wallet(const char *wallet_path)
   char *private_key_path = nullptr;
   char *public_key_path = nullptr;
   FILE *fp = nullptr;
+  size_t private_key_len = 0;
+  size_t public_key_len = 0;
 
   // This function is only called during init phase, no concurrency at this time
   // Allocate path buffers
@@ -496,14 +504,14 @@ int ObRsaGetter::load_key_from_wallet(const char *wallet_path)
         fp = nullptr;
       } else {
         MEMSET(temp_private_key, 0, OB_RSA_MAX_KEY_LENGTH);
-        size_t read_len = fread(temp_private_key, 1, OB_RSA_MAX_KEY_LENGTH - 1, fp);
+        private_key_len = fread(temp_private_key, 1, OB_RSA_MAX_KEY_LENGTH - 1, fp);
 
-        if (read_len <= 0 || ferror(fp)) {
+        if (0 == private_key_len || ferror(fp)) {
           ret = OB_IO_ERROR;
-          LIB_LOG(WARN, "failed to read private key", K(ret), K(read_len));
+          LIB_LOG(WARN, "failed to read private key", K(ret), K(private_key_len));
         } else {
-          temp_private_key[read_len] = '\0';
-          LIB_LOG(INFO, "private key loaded", K(read_len));
+          temp_private_key[private_key_len] = '\0';
+          LIB_LOG(INFO, "private key loaded", K(private_key_len));
         }
 
         fclose(fp);
@@ -531,18 +539,27 @@ int ObRsaGetter::load_key_from_wallet(const char *wallet_path)
                 fp = nullptr;
               } else {
                 MEMSET(temp_public_key, 0, OB_RSA_MAX_KEY_LENGTH);
-                read_len = fread(temp_public_key, 1, OB_RSA_MAX_KEY_LENGTH - 1, fp);
+                public_key_len = fread(temp_public_key, 1, OB_RSA_MAX_KEY_LENGTH - 1, fp);
 
-                if (read_len <= 0 || ferror(fp)) {
+                if (0 == public_key_len || ferror(fp)) {
                   ret = OB_IO_ERROR;
-                  LIB_LOG(WARN, "failed to read public key", K(ret), K(read_len));
+                  LIB_LOG(WARN, "failed to read public key", K(ret), K(public_key_len));
                 } else {
-                  temp_public_key[read_len] = '\0';
-                  LIB_LOG(INFO, "public key loaded", K(read_len));
+                  temp_public_key[public_key_len] = '\0';
+                  LIB_LOG(INFO, "public key loaded", K(public_key_len));
                 }
 
                 fclose(fp);
                 fp = nullptr;
+
+                if (OB_SUCC(ret)) {
+                  if (OB_FAIL(validate_rsa_key_pair(temp_private_key,
+                                                    private_key_len,
+                                                    temp_public_key,
+                                                    public_key_len))) {
+                    LIB_LOG(WARN, "failed to validate RSA key pair", K(ret), K(wallet_path));
+                  }
+                }
 
                 if (OB_SUCC(ret)) {
                   // Save to member variables (no lock needed, no concurrency during init phase)
@@ -551,9 +568,9 @@ int ObRsaGetter::load_key_from_wallet(const char *wallet_path)
 
                   // Transfer temporary buffers to rsa_key_
                   rsa_key_.private_key_ = temp_private_key;
-                  rsa_key_.private_key_len_ = strlen(temp_private_key);
+                  rsa_key_.private_key_len_ = private_key_len;
                   rsa_key_.public_key_ = temp_public_key;
-                  rsa_key_.public_key_len_ = read_len;
+                  rsa_key_.public_key_len_ = public_key_len;
 
                   // Set temporary pointers to null to prevent deallocation
                   temp_private_key = nullptr;
@@ -573,6 +590,7 @@ int ObRsaGetter::load_key_from_wallet(const char *wallet_path)
 
         // If failed, free temporary memory
         if (temp_private_key != nullptr) {
+          MEMSET(temp_private_key, 0, OB_RSA_MAX_KEY_LENGTH);
           ob_free(temp_private_key);
         }
       }
@@ -652,6 +670,79 @@ int ObRsaGetter::create_wallet_directory(const char *wallet_path)
     }
   }
 
+  return ret;
+}
+
+void ObRsaGetter::log_openssl_error_stack(const char *operation)
+{
+  unsigned long error_code = 0;
+  char error_buf[256];
+  while (0 != (error_code = ERR_get_error())) {
+    ERR_error_string_n(error_code, error_buf, sizeof(error_buf));
+    LIB_LOG_RET(WARN, OB_ERR_UNEXPECTED, "OpenSSL error",
+                KCSTRING(operation), K(error_code), KCSTRING(error_buf));
+  }
+}
+
+int ObRsaGetter::validate_rsa_key_pair(const char *private_key,
+                                       const int64_t private_key_len,
+                                       const char *public_key,
+                                       const int64_t public_key_len)
+{
+  int ret = OB_SUCCESS;
+  BIO *private_bio = NULL;
+  BIO *public_bio = NULL;
+  EVP_PKEY *private_pkey = NULL;
+  EVP_PKEY *public_pkey = NULL;
+
+  if (OB_ISNULL(private_key) || OB_ISNULL(public_key)
+      || OB_UNLIKELY(0 >= private_key_len || OB_RSA_MAX_KEY_LENGTH <= private_key_len
+                     || 0 >= public_key_len || OB_RSA_MAX_KEY_LENGTH <= public_key_len)) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "invalid RSA key pair", K(ret), K(private_key_len), K(public_key_len));
+  } else {
+    ERR_clear_error();
+    if (OB_ISNULL(private_bio = BIO_new_mem_buf(private_key, static_cast<int>(private_key_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LIB_LOG(WARN, "failed to create BIO for RSA private key", K(ret), K(private_key_len));
+      log_openssl_error_stack("BIO_new_mem_buf private key");
+    } else if (OB_ISNULL(private_pkey = PEM_read_bio_PrivateKey(private_bio, NULL, NULL, NULL))) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "failed to read RSA private key", K(ret), K(private_key_len));
+      log_openssl_error_stack("PEM_read_bio_PrivateKey");
+    } else if (EVP_PKEY_RSA != EVP_PKEY_base_id(private_pkey)) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "wallet private key is not RSA", K(ret));
+    } else if (OB_ISNULL(public_bio = BIO_new_mem_buf(public_key, static_cast<int>(public_key_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LIB_LOG(WARN, "failed to create BIO for RSA public key", K(ret), K(public_key_len));
+      log_openssl_error_stack("BIO_new_mem_buf public key");
+    } else if (OB_ISNULL(public_pkey = PEM_read_bio_PUBKEY(public_bio, NULL, NULL, NULL))) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "failed to read RSA public key", K(ret), K(public_key_len));
+      log_openssl_error_stack("PEM_read_bio_PUBKEY");
+    } else if (EVP_PKEY_RSA != EVP_PKEY_base_id(public_pkey)) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "wallet public key is not RSA", K(ret));
+    } else if (1 != EVP_PKEY_cmp(private_pkey, public_pkey)) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "wallet RSA public key does not match private key", K(ret));
+      log_openssl_error_stack("EVP_PKEY_cmp");
+    }
+  }
+
+  if (NULL != public_pkey) {
+    EVP_PKEY_free(public_pkey);
+  }
+  if (NULL != private_pkey) {
+    EVP_PKEY_free(private_pkey);
+  }
+  if (NULL != public_bio) {
+    BIO_free(public_bio);
+  }
+  if (NULL != private_bio) {
+    BIO_free(private_bio);
+  }
   return ret;
 }
 

@@ -174,6 +174,11 @@ private:
                            const int padding_mode,
                            const char *padding_name,
                            const bool need_oaep_sha1);
+  static void log_openssl_error_stack(const char *operation);
+  static int validate_rsa_key_pair(const char *private_key,
+                                   const int64_t private_key_len,
+                                   const char *public_key,
+                                   const int64_t public_key_len);
 
 private:
   static const char *DEFAULT_WALLET_PATH;        // Default wallet path

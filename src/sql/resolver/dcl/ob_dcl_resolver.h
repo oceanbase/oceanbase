@@ -44,6 +44,7 @@ public:
 
 protected:
   int check_and_convert_name(common::ObString &db, common::ObString &table);
+  int check_plain_password_length(const common::ObString &password);
   int check_password_strength(common::ObString &password);
   int check_user_name(common::ObString &password, const common::ObString &user_name);
   int check_oracle_password_strength(int64_t tenant_id,

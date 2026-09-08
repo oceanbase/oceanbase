@@ -31,7 +31,7 @@ public:
   virtual ~ObGrantStmt();
   int add_user(const common::ObString &user_name, const common::ObString &host_name,
                const common::ObString &pwd, const common::ObString &need_enc,
-               const common::ObString &plugin);
+               const common::ObString &plugin, const bool modify_password);
   int add_role(const common::ObString &role);
   int add_user(const common::ObString &user_name, const common::ObString &host_name);
   void add_priv(const ObPrivType priv);
@@ -52,6 +52,7 @@ public:
   bool need_create_user_priv() const { return need_create_user_priv_; }
   const common::ObStrings& get_users() const { return users_; }
   const common::ObStrings& get_plugins() const { return plugins_; }
+  const common::ObIArray<bool>& get_modify_passwords() const { return modify_passwords_; }
   const common::ObSArray<common::ObString>& get_role_names() const { return grant_arg_.roles_; };
   const common::ObString& get_database_name() const { return database_; }
   const common::ObString& get_table_name() const { return table_; }
@@ -105,8 +106,9 @@ private:
   common::ObString table_;
   uint64_t tenant_id_;
   common::ObStrings grantees_;
-  common::ObStrings users_;//user1, host1, pwd1, nec1; user2, host2, pwd2, nec2;..
+  common::ObStrings users_; // user1, host1, pwd1, need_enc1; user2, host2, pwd2, need_enc2; ...
   common::ObStrings plugins_; // plugin1, plugin2, ... 单独记录plugin信息，使用时校验user数量和plugin数量
+  ObSqlArray<bool> modify_passwords_;
   common::ObString masked_sql_;
   bool need_create_user_;
   bool need_create_user_priv_; // grant user identified by pwd

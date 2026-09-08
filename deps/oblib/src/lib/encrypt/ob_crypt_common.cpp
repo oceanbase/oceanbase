@@ -809,11 +809,11 @@ int ObCryptCommon::deserialize_auth_string(char expected_digest_type,
         errno = 0;
         unsigned long iteration_count = strtoul(iteration_str, &end_ptr, 16);
 
-        if (errno != 0 || OB_ISNULL(end_ptr) || *end_ptr != '\0') {
+        if (errno != 0 || OB_ISNULL(end_ptr) || *end_ptr != '\0' || 0 == iteration_count) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid auth string format: invalid iteration count", K(ret), K(iteration_str));
         } else {
-          iterations = static_cast<int64_t>(iteration_count * OB_CRYPT_AUTH_ITERATION_MULTIPLIER);
+          iterations = static_cast<int64_t>(iteration_count) * OB_CRYPT_AUTH_ITERATION_MULTIPLIER;
         }
       }
 

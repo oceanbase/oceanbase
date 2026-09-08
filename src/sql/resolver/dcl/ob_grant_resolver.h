@@ -205,6 +205,11 @@ private:
   int resolve_grant_role_or_sys_to_user_ora(const ParseNode *grant_system_privileges,
                                             ObGrantStmt *grant_stmt);
   int resolve_grantee_clause(const ParseNode *grantee_clause, ObGrantStmt *grant_stmt);
+  int resolve_auth_plugin(const ParseNode *plugin_node,
+                          const uint64_t tenant_id,
+                          const common::ObString &user_name,
+                          const common::ObString &host_name,
+                          common::ObString &plugin);
 
 private:
   // disallow copy

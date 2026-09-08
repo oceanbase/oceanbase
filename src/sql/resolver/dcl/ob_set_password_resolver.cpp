@@ -309,7 +309,9 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
             set_pwd_stmt->set_need_enc(false);
           }
         } else {
-          if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
+          if (OB_FAIL(check_plain_password_length(password))) {
+            LOG_WARN("plain password is too long", K(ret));
+          } else if (!lib::is_oracle_mode() && OB_FAIL(check_password_strength(password))) {
             LOG_WARN("fail to check password strength", K(ret));
           } else if (lib::is_oracle_mode()
                      && OB_FAIL(resolve_oracle_password_strength(user_name, host_name, password))) {
