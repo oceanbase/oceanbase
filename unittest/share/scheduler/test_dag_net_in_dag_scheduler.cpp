@@ -2220,7 +2220,7 @@ static int64_t count_dag_net_in_list(ObTenantDagScheduler &scheduler,
 {
   int64_t count = 0;
   ObDagNetScheduler &dag_net_sche = scheduler.dag_net_sche_;
-  ObMutexGuard guard(dag_net_sche.dag_net_map_lock_);
+  common::SpinRLockGuard guard(dag_net_sche.dag_net_map_rwlock_);
   ObIDagNet *head = dag_net_sche.dag_net_list_[list_index].get_header();
   for (ObIDagNet *cur = head->get_next(); NULL != cur && head != cur; cur = cur->get_next()) {
     if (cur->get_type() == type) {

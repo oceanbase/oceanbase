@@ -155,7 +155,7 @@ public:
   virtual bool is_ha_dag_net() const override { return true; }
 
   ObTransferBackfillTXCtx *get_ctx() { return &ctx_; }
-  const share::ObLSID &get_ls_id() const { return ctx_.src_ls_id_; }
+  virtual share::ObLSID get_ls_id() const override { return ctx_.src_ls_id_; }
   const share::SCN &get_backfill_scn() const { return ctx_.backfill_scn_; }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(ctx));
 private:

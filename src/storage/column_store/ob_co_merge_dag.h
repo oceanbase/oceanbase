@@ -298,6 +298,8 @@ public:
   int64_t get_batch_dag_count() const { return ATOMIC_LOAD(&batch_dag_cnt_); }
   void inc_batch_dag_count() { ATOMIC_INC(&batch_dag_cnt_); }
   void set_prepare_dag_running_ts() { prepare_dag_running_ts_ = ObTimeUtility::fast_current_time(); }
+  virtual share::ObLSID get_ls_id() const override { return ls_id_; }
+  virtual common::ObTabletID get_tablet_id() const override { return tablet_id_; }
   int64_t get_prepare_dag_running_ts() const { return prepare_dag_running_ts_; }
   void collect_running_info(const uint32_t start_cg_idx, const uint32_t end_cg_idx, const int64_t hash,
       const share::ObDagId &dag_id, const ObCompactionTimeGuard &time_guard);

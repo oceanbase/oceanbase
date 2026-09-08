@@ -38,6 +38,7 @@ struct ObTabletMergeDagParam;
 class ObTabletMergeDag;
 struct ObIBasicInfoParam;
 class ObCompactionMemoryContext;
+class ObCompactionDagSnapshot;
 }
 namespace share
 {
@@ -730,6 +731,10 @@ public:
   void diagnose_dag(common::ObIArray<compaction::ObDiagnoseTabletCompProgress> &progress_list);
   int add_dag_warning_info(ObIDag *dag);
   int add_dag_warning_info();
+  void diagnose_dag_unsafe(common::ObIArray<compaction::ObDiagnoseTabletCompProgress> &progress_list);
+  lib::ObMutex &get_lock() { return lock_; }
+  virtual share::ObLSID get_ls_id() const { return ObLSID(share::ObLSID::INVALID_LS_ID); }
+  virtual common::ObTabletID get_tablet_id() const { return common::ObTabletID(common::ObTabletID::INVALID_TABLET_ID); }
 public:
 
   virtual bool is_valid() const = 0;
@@ -884,7 +889,7 @@ public:
     : allocator_(nullptr),
       ha_allocator_(nullptr),
       scheduler_(nullptr),
-      dag_net_map_lock_(ObLatchIds::DAG_NET_SCHEDULER),
+      dag_net_map_rwlock_(ObLatchIds::DAG_NET_SCHEDULER),
       max_co_major_running_dag_net_cnt_(0),
       co_major_running_cnt_(0)
   {}
@@ -923,20 +928,16 @@ public:
       ObDagInfo *info_list,
       common::ObIArray<void *> &dag_infos,
       int64_t &idx, const int64_t total_cnt);
-  int diagnose_dag_net(
-      ObIDagNet &dag_net,
-      common::ObIArray<compaction::ObDiagnoseTabletCompProgress> &progress_list,
-      ObDagId &dag_net_id,
-      int64_t &start_time);
   int64_t get_dag_net_count(const ObDagNetType::ObDagNetTypeEnum type);
   int loop_running_dag_net_list();
-  // do not hold dag_net_map_lock_, otherwise deadlock when clear_dag_net_ctx,  see
+  // do not hold dag_net_map_rwlock_, otherwise deadlock when clear_dag_net_ctx,  see
   int loop_finished_dag_net_list();
   int loop_blocking_dag_net_list();
   int check_dag_net_exist(
     const ObDagId &dag_id, bool &exist);
   int cancel_dag_net(const ObDagId &dag_id);
   int get_first_dag_net(ObIDagNet *&dag_net);
+  int export_dag_net_states(compaction::ObCompactionDagSnapshot &snapshot);
   int check_ls_compaction_dag_exist_with_cancel(const ObLSID &ls_id, bool &exist);
   int get_min_end_scn_from_major_dag(const ObLSID &ls_id, SCN &min_end_scn);
 private:
@@ -962,17 +963,17 @@ private:
   ObIAllocator* allocator_;
   ObIAllocator* ha_allocator_;
   ObTenantDagScheduler *scheduler_;
-  lib::ObMutex dag_net_map_lock_;
-  DagNetMap dag_net_map_; // lock by dag_net_map_lock_
+  common::SpinRWLock dag_net_map_rwlock_;
+  DagNetMap dag_net_map_; // lock by dag_net_map_rwlock_
   /*
-   * blocking and running list should always locked by dag_net_map_lock_, but finished not.
+   * blocking and running list should always locked by dag_net_map_rwlock_, but finished not.
    * finished dag net list must without lock when free dag net, otherwise it would deadlock when clearing dag net ctx
    */
   DagNetList dag_net_list_[DAG_NET_LIST_MAX];
-  DagNetIdMap dag_net_id_map_; // for HA to search dag_net of specified dag_id  // lock by dag_net_map_lock_
-  int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_lock_
-  int64_t max_co_major_running_dag_net_cnt_;  // lock by dag_net_map_lock_; refreshed via refresh_co_major_cap
-  int64_t co_major_running_cnt_;  // lock by dag_net_map_lock_
+  DagNetIdMap dag_net_id_map_; // for HA to search dag_net of specified dag_id  // lock by dag_net_map_rwlock_
+  int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_rwlock_
+  int64_t max_co_major_running_dag_net_cnt_;  // lock by dag_net_map_rwlock_; refreshed via refresh_co_major_cap
+  int64_t co_major_running_cnt_;  // lock by dag_net_map_rwlock_
 };
 
 class ObReclaimUtil
@@ -1001,7 +1002,7 @@ class ObDagPrioScheduler
 public:
   typedef common::ObDList<ObTenantDagWorker> WorkerList;
   ObDagPrioScheduler()
-    : prio_lock_(ObLatchIds::DAG_PRIO_SCHEDULER),
+    : prio_rwlock_(ObLatchIds::DAG_PRIO_SCHEDULER),
       allocator_(nullptr),
       ha_allocator_(nullptr),
       scheduler_(nullptr),
@@ -1022,10 +1023,10 @@ public:
       ObTenantDagScheduler &scheduler);
   bool is_empty() const
   {
-    // Hold prio_lock_ and also check dag_map_: move_dag_to_list_ removes a dag
+    // Hold prio_rwlock_ and also check dag_map_: move_dag_to_list_ removes a dag
     // from one list before adding it to another, so an unlocked list-only check
     // can transiently observe all lists empty while the dag is still alive in dag_map_.
-    lib::ObMutexGuard guard(prio_lock_);
+    common::SpinRLockGuard guard(prio_rwlock_);
     bool bret = true;
     bret &= (dag_list_[READY_DAG_LIST].is_empty()
       && dag_list_[WAITING_DAG_LIST].is_empty()
@@ -1076,7 +1077,7 @@ public:
   int get_dag_progress(const T &dag, int64_t &row_inserted, int64_t &cg_row_inserted, int64_t &physical_row_count)
   {
     int ret = OB_SUCCESS;
-    lib::ObMutexGuard guard(prio_lock_);
+    common::SpinRLockGuard guard(prio_rwlock_);
     ObIDag *stored_dag = nullptr;
     if (OB_UNLIKELY(dag.get_type() != ObDagType::DAG_TYPE_DDL
         && dag.get_type() != ObDagType::DAG_TYPE_TABLET_SPLIT
@@ -1098,10 +1099,6 @@ public:
     return ret;
   }
 
-  int diagnose_compaction_dags();
-  int get_complement_data_dag_progress(const ObIDag &dag,
-    int64_t &row_scanned,
-    int64_t &row_inserted);
   int deal_with_finish_task(ObITask *&task, ObIDag *&dag, ObTenantDagWorker &worker, int error_code);
   // After self-schedule finishes a task, only release the worker; never finalize the dag.
   // Scheduler thread finalizes finished dags later in pop_task_from_ready_list_.
@@ -1116,6 +1113,18 @@ public:
   int64_t get_running_task_cnt();
   int set_thread_score(const int64_t score, int64_t &old_val, int64_t &new_val);
   bool try_switch(ObTenantDagWorker &worker);
+
+  // For ObTenantDagScheduler::collect_compaction_dag_snapshot
+  /*
+   * Merges responsibilities of original diagnose_compaction_dags: hang detection
+   * (add diagnose tablets for long-running tasks) + state export (put progress
+   * into snapshot). Traversal and export complete within a single prio_rwlock_
+   * read lock.
+   */
+  int export_compaction_dag_states(
+      compaction::ObCompactionDagSnapshot &snapshot,
+      const int64_t hang_interval_us);
+  static const int64_t TASK_MAY_HANG_INTERVAL = 90 * 60 * 1000L * 1000L; // 90 min
 private:
   OB_INLINE bool is_waiting_dag_type(ObDagType::ObDagTypeEnum dag_type)
   { // will add into waiting dag list in add_dag() func
@@ -1144,7 +1153,7 @@ private:
         || ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID == priority_;
   }
   int sys_task_start(ObIDag &dag);
-  // Please lock prio_lock_ before calling the function with _ suffix
+  // Please lock prio_rwlock_ before calling the function with _ suffix
   int move_dag_to_list_(
     ObIDag &dag,
     ObDagListIndex from_list_index,
@@ -1191,13 +1200,12 @@ private:
                           common::hash::equal_to<const ObIDag *> > DagMap;
   static const int32_t COMPACTION_DAG_RERANK_FACTOR = 10;
   static const int64_t DUMP_STATUS_INTERVAL = 10 * 1000LL * 1000LL;
-  static const int64_t TASK_MAY_HANG_INTERVAL = 90 * 60 * 1000L * 1000L; // 90 min
 private:
   DagMap dag_map_;
   DagList dag_list_[DAG_LIST_MAX];
-  mutable lib::ObMutex prio_lock_;  // Make sure the lock is outside if there are nested locks
+  mutable common::SpinRWLock prio_rwlock_;  // Make sure the lock is outside if there are nested locks
   WorkerList waiting_workers_;  // workers waiting for time slice to run
-  WorkerList running_workers_;  // running workers // lock with prio_lock_
+  WorkerList running_workers_;  // running workers // lock with prio_rwlock_
   ObIAllocator* allocator_;
   ObIAllocator* ha_allocator_;
   ObTenantDagScheduler *scheduler_;
@@ -1322,12 +1330,12 @@ public:
       compaction::ObDiagnoseTabletCompProgress &progress);
   int get_max_major_finish_time(const int64_t version, int64_t &estimated_finish_time);
   int diagnose_dag(const ObIDag *dag, compaction::ObDiagnoseTabletCompProgress &input_progress);
-  int diagnose_dag_net(
-      ObIDagNet *dag_net,
-      common::ObIArray<compaction::ObDiagnoseTabletCompProgress> &progress_list,
-      ObDagId &dag_net_id,
-      int64_t &start_time);
-  int diagnose_all_compaction_dags();
+  /*
+   * Invoked during the snapshot collection phase of each diagnostic cycle.
+   * Lock contention: 5 prio_rwlock_ read locks (one per MergeDagPrio) + 1
+   * dag_net_map_rwlock_ read lock (from dag_net_sche_.export_dag_net_states).
+   */
+  int collect_compaction_dag_snapshot(compaction::ObCompactionDagSnapshot &snapshot);
   int get_compaction_dag_count(int64_t &dag_count);
   void get_suggestion_reason(const int64_t priority, int64_t &reason);
 
