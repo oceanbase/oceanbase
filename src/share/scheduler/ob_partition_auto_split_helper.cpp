@@ -2502,7 +2502,7 @@ int ObAutoSplitArgBuilder::build_ddl_stmt_str_(
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (sql_string.append_fmt(" %s(%.*s) (",
+      } else if (OB_FAIL(sql_string.append_fmt(" %s(%.*s) (",
             is_oracle_mode ? "MODIFY PARTITION BY RANGE" : ((is_multi_partkey || part_func_type == PARTITION_FUNC_TYPE_RANGE_COLUMNS) ? "PARTITION BY RANGE COLUMNS" : "PARTITION BY RANGE"),
             part_func_expr.length(), part_func_expr.ptr())) {
         LOG_WARN("failed to append fmt", K(ret));
