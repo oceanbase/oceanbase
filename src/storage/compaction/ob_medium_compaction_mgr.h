@@ -46,6 +46,7 @@ public:
   virtual void destroy() override;
   void reset();
   bool is_inited() const { return is_inited_; }
+  int update_max_saved_medium_scn(const int64_t medium_scn);
   // for leader
   int submit_medium_compaction_info(ObMediumCompactionInfo &medium_info, ObIAllocator &allocator);
   // follower

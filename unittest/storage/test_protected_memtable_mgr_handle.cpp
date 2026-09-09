@@ -89,6 +89,19 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
   ASSERT_EQ(OB_SUCCESS, protected_handle->get_active_memtable(handle));
   ASSERT_EQ(1, pool->count_);
 
+  // Verify recorder values greater than one are returned without bool truncation.
+  ObITabletMemtable *active_memtable = nullptr;
+  ObTabletMemtableMgr *tablet_memtable_mgr = nullptr;
+  const int64_t max_saved_medium_scn = 123456789;
+  ASSERT_EQ(OB_SUCCESS, handle.get_tablet_memtable(active_memtable));
+  ASSERT_NE(nullptr, active_memtable);
+  tablet_memtable_mgr = active_memtable->get_memtable_mgr();
+  ASSERT_NE(nullptr, tablet_memtable_mgr);
+  ASSERT_EQ(OB_SUCCESS, tablet_memtable_mgr->get_medium_info_recorder()
+      .update_max_saved_medium_scn(max_saved_medium_scn));
+  ASSERT_EQ(max_saved_medium_scn,
+      protected_handle->get_max_saved_version_from_medium_info_recorder());
+
   // release a memtable, memtable count is 1
   ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->release_memtables(scn1));
 
@@ -112,6 +125,14 @@ TEST_F(TestTabletMemtableMgr, tablet_memtable_mgr) {
     memtable::ObMemtable *mt = (memtable::ObMemtable *)(i_mt);
     mt->memtable_mgr_handle_.reset();
   }
+  ASSERT_EQ(0, pool->count_);
+
+  // A callback after the LS offline cleanup must not recreate the memtable manager.
+  const int64_t offline_medium_scn = 123456788;
+  ASSERT_EQ(OB_SUCCESS, ls_handle.get_ls()->offline(false));
+  ASSERT_EQ(0, ls_handle.get_ls()->get_switch_epoch() & 1);
+  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->update_max_sync_medium_scn(offline_medium_scn));
+  ASSERT_EQ(0, protected_handle->get_max_saved_version_from_medium_info_recorder());
   ASSERT_EQ(0, pool->count_);
 
   ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->remove_ls(ls_id));

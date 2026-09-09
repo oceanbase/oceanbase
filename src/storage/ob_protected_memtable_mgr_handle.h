@@ -67,7 +67,7 @@ int function(Args &&...args) \
 #define READ_FOR_STORAGE_SCHEMA(recorder, value) \
 int64_t get_##value##_from_##recorder() \
 { \
-  bool ret = 0; \
+  int64_t ret = 0; \
   SpinRLockGuard guard(memtable_mgr_handle_lock_); \
   if (memtable_mgr_handle_.is_valid()) { \
     ObTabletMemtableMgr *tablet_memtable_mgr = static_cast<ObTabletMemtableMgr*>(memtable_mgr_handle_.get_memtable_mgr()); \
@@ -95,6 +95,8 @@ namespace oceanbase
 
 namespace storage
 {
+class ObLS;
+
 class ObProtectedMemtableMgrHandle
 {
 public:
@@ -151,7 +153,28 @@ public:
   READ_FOR_STORAGE_SCHEMA(storage_schema_recorder, max_saved_version);
   READ_FOR_STORAGE_SCHEMA(storage_schema_recorder, max_column_cnt);
 
-  WRITE_FOR_STORAGE_SCHEMA(medium_info_recorder, submit_medium_compaction_info);
+  template <typename ...Args>
+  int submit_medium_compaction_info(const ObTabletMeta &tablet_meta, Args &&...args)
+  {
+    int ret = OB_SUCCESS;
+    // Keep the memtable manager alive without waiting for the CLOG callback under the handle lock.
+    ObMemtableMgrHandle memtable_mgr_handle;
+    PROCESS_FOR_MEMTABLE_MGR(
+    {
+      memtable_mgr_handle = memtable_mgr_handle_;
+    })
+    if (OB_SUCC(ret)) {
+      ObTabletMemtableMgr *tablet_memtable_mgr =
+          static_cast<ObTabletMemtableMgr*>(memtable_mgr_handle.get_memtable_mgr());
+      ret = tablet_memtable_mgr->get_medium_info_recorder().submit_medium_compaction_info(
+          std::forward<Args>(args)...);
+    }
+    return ret;
+  }
+  int update_max_saved_medium_scn_if_ls_online(
+      const ObTabletMeta &tablet_meta,
+      const ObLS &ls,
+      const int64_t medium_scn);
   WRITE_FOR_STORAGE_SCHEMA(medium_info_recorder, replay_medium_compaction_log);
   WRITE_FOR_STORAGE_SCHEMA(storage_schema_recorder, try_update_storage_schema);
   WRITE_FOR_STORAGE_SCHEMA(storage_schema_recorder, replay_schema_log);

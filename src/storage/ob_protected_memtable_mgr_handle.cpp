@@ -11,6 +11,7 @@
  */
 
 #include "ob_protected_memtable_mgr_handle.h"
+#include "storage/ls/ob_ls.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 
 using namespace oceanbase::share;
@@ -82,6 +83,39 @@ int ObProtectedMemtableMgrHandle::reset()
     }
     memtable_mgr_handle_.reset();
     STORAGE_LOG(INFO, "protected_memtable_mgr_handle reset", KR(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObProtectedMemtableMgrHandle::update_max_saved_medium_scn_if_ls_online(
+    const ObTabletMeta &tablet_meta,
+    const ObLS &ls,
+    const int64_t medium_scn)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(memtable_mgr_handle_lock_);
+  const int64_t ls_switch_epoch = ls.get_switch_epoch();
+  if (!(ls_switch_epoch & 1)) {
+    // Do not recreate volatile tablet resources once the LS starts going offline.
+    STORAGE_LOG(INFO, "skip updating max saved medium scn for offline ls",
+        K(ls_switch_epoch), K(medium_scn), K(tablet_meta.ls_id_), K(tablet_meta.tablet_id_));
+  } else {
+    // If offline starts after this check, its reset waits for this lock and
+    // releases the manager created here as part of the normal cleanup.
+    if (!memtable_mgr_handle_.is_valid()
+        && OB_FAIL(create_tablet_memtable_mgr_(
+            tablet_meta.ls_id_, tablet_meta.tablet_id_, tablet_meta.compat_mode_))) {
+      STORAGE_LOG(WARN, "failed to create tablet memtable mgr for medium scn update",
+          K(ret), K(medium_scn), K(tablet_meta.ls_id_), K(tablet_meta.tablet_id_));
+    } else {
+      ObTabletMemtableMgr *tablet_memtable_mgr =
+          static_cast<ObTabletMemtableMgr*>(memtable_mgr_handle_.get_memtable_mgr());
+      if (OB_FAIL(tablet_memtable_mgr->get_medium_info_recorder()
+          .update_max_saved_medium_scn(medium_scn))) {
+        STORAGE_LOG(WARN, "failed to update max saved medium scn",
+            K(ret), K(medium_scn), K(tablet_meta.ls_id_), K(tablet_meta.tablet_id_));
+      }
+    }
   }
   return ret;
 }

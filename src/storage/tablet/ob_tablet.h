@@ -218,6 +218,7 @@ public:
   }
   int get_rec_log_scn(share::SCN &rec_scn, bool &is_frozen_memtable);
   int get_max_sync_medium_scn(int64_t &max_medium_scn) const;
+  int update_max_sync_medium_scn(const int64_t max_medium_scn);
   inline int64_t get_last_major_snapshot_version() const { return table_store_cache_.last_major_snapshot_version_; }
   inline int64_t get_major_table_count() const { return table_store_cache_.major_table_cnt_; }
   inline int64_t get_minor_table_count() const { return table_store_cache_.minor_table_cnt_; }

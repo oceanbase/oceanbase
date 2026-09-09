@@ -4259,6 +4259,35 @@ int ObTablet::get_max_sync_medium_scn(int64_t &max_medium_snapshot) const
   return ret;
 }
 
+int ObTablet::update_max_sync_medium_scn(const int64_t max_medium_scn)
+{
+  int ret = OB_SUCCESS;
+  ObProtectedMemtableMgrHandle *protected_handle = nullptr;
+  ObTabletBasePointer *tablet_pointer = nullptr;
+  ObLS *ls = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(max_medium_scn < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid max medium scn", K(ret), K(max_medium_scn));
+  } else if (tablet_meta_.tablet_id_.is_special_merge_tablet()) {
+    // do nothing
+  } else if (OB_ISNULL(tablet_pointer = get_tablet_pointer_())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer is null", K(ret), KPC(this));
+  } else if (OB_ISNULL(ls = tablet_pointer->get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), KPC(this));
+  } else if (OB_FAIL(get_protected_memtable_mgr_handle(protected_handle))) {
+    LOG_WARN("failed to get protected memtable mgr handle", K(ret), KPC(this));
+  } else if (OB_FAIL(protected_handle->update_max_saved_medium_scn_if_ls_online(
+          get_tablet_meta(), *ls, max_medium_scn))) {
+    LOG_WARN("failed to update max saved medium scn", K(ret), K(max_medium_scn), KPC(this));
+  }
+  return ret;
+}
+
 int ObTablet::get_max_sync_storage_schema_version_(int64_t &max_schema_version) const
 {
   int ret = OB_SUCCESS;

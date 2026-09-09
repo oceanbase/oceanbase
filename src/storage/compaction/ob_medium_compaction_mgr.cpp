@@ -183,6 +183,18 @@ int ObTabletMediumCompactionInfoRecorder::submit_medium_compaction_info(
   return ret;
 }
 
+int ObTabletMediumCompactionInfoRecorder::update_max_saved_medium_scn(const int64_t medium_scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(medium_scn < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid medium scn", K(ret), K(medium_scn), K_(tablet_id));
+  } else {
+    common::inc_update(&max_saved_version_, medium_scn);
+  }
+  return ret;
+}
+
 int ObTabletMediumCompactionInfoRecorder::reset_for_retry_in_lock()
 {
   int ret = OB_SUCCESS;
@@ -311,6 +323,11 @@ int ObTabletMediumCompactionInfoRecorder::sync_clog_succ_for_leader(const int64_
   } else if (OB_FAIL(submit_trans_on_mds_table(true/*is_commit*/))) {
     LOG_WARN("failed to dec ref on memtable", K(ret), K_(tablet_id), KPC(medium_info_));
   } else {
+    // The memtable manager used for submission may have been reset while waiting for the callback.
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(tablet_handle_ptr_->get_obj()->update_max_sync_medium_scn(update_version))) {
+      LOG_WARN("failed to update max sync medium scn", K(tmp_ret), K(update_version), K_(tablet_id));
+    }
     LOG_TRACE("success to save medium info for leader", K(ret), K_(ls_id), K_(tablet_id), KPC(medium_info_),
         K(max_saved_version_), K_(clog_scn));
   }
