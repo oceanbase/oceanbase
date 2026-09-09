@@ -2868,82 +2868,101 @@ int ObStorageOssAppendWriter::do_write(const char *buf, const int64_t size, cons
     if (OB_ISNULL(headers1 = aos_table_make(aos_pool_, 0))) {
       ret = OB_OBJECT_STORAGE_IO_ERROR;
       OB_LOG(WARN, "fail to make apr table", K(ret));
-    } else if (OB_ISNULL(aos_ret = oss_head_object(oss_option_, &bucket, &object, headers1, &resp_headers))) {
-      handle_oss_error(headers1, resp_headers, aos_ret, ret);
-      ret = OB_OBJECT_STORAGE_IO_ERROR;
-      OB_LOG(WARN, "oss head object fail", K(ret), K_(bucket), K_(object), K(aos_ret));
+    } else if (OB_ISNULL(aos_ret = oss_head_object(oss_option_, &bucket, &object, headers1, &resp_headers))
+        || !aos_status_is_ok(aos_ret)) {
+      // An appendable object is created by its first append, so 'object not exist' here only
+      // means the object has not been created yet, and the append should start from position 0.
+      // Any other failure(null status/403/429/5xx/network error) means the current append
+      // position is UNKNOWN. It must not fall through with position = 0, otherwise the real
+      // error would be masked and misreported as OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH,
+      // which would also trigger the expensive read-back in ObStorageAppender::pwrite.
+      convert_io_error(aos_ret, ret);
+      if (OB_OBJECT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        position = 0;
+      } else {
+        OB_LOG(WARN, "oss head object fail before appending",
+            K(ret), K_(bucket), K_(object), K(offset), K(size));
+        handle_oss_error(headers1, resp_headers, aos_ret, ret);
+      }
     } else {
-      if (0 != aos_status_is_ok(aos_ret)) { // != 0 means ok
-        char *object_type = (char*)(apr_table_get(resp_headers, OSS_OBJECT_TYPE));
-        if (OB_ISNULL(object_type)) {
+      char *object_type = (char*)(apr_table_get(resp_headers, OSS_OBJECT_TYPE));
+      if (OB_ISNULL(object_type)) {
+        ret = OB_OBJECT_STORAGE_IO_ERROR;
+        OB_LOG(ERROR, "oss type is null", K(ret));
+      } else if (0 != strncmp(OSS_OBJECT_TYPE_APPENDABLE, object_type, strlen(OSS_OBJECT_TYPE_APPENDABLE))) {
+        ret = OB_CLOUD_OBJECT_NOT_APPENDABLE;
+        OB_LOG(WARN, "oss object must be appendable", K(ret), KCSTRING(object_type));
+      } else {
+        char *next_append_position = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
+        if (OB_ISNULL(next_append_position)) {
           ret = OB_OBJECT_STORAGE_IO_ERROR;
-          OB_LOG(ERROR, "oss type is null", K(ret));
-        } else if (0 != strncmp(OSS_OBJECT_TYPE_APPENDABLE, object_type, strlen(OSS_OBJECT_TYPE_APPENDABLE))) {
-          ret = OB_CLOUD_OBJECT_NOT_APPENDABLE;
-          OB_LOG(WARN, "oss object must be appendable", K(ret), KCSTRING(object_type));
+          OB_LOG(WARN, "next_append_position is not found", K(ret), K_(bucket), K_(object));
+        } else if (OB_FAIL(c_str_to_int(next_append_position, position))) {
+          OB_LOG(WARN, "fail to get position", K(ret), K(next_append_position), K_(object));
         } else {
-          char *next_append_position = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
-          if (OB_ISNULL(next_append_position)) {
+          if (0 > position) {
+            ObString tmp_position_string(next_append_position);
             ret = OB_OBJECT_STORAGE_IO_ERROR;
-            OB_LOG(WARN, "next_append_position is not found", K(ret), K_(bucket), K_(object));
-          } else if (OB_FAIL(c_str_to_int(next_append_position, position))) {
-            OB_LOG(WARN, "fail to get position", K(ret), K(next_append_position), K_(object));
-          } else {
-            if (0 > position) {
-              ObString tmp_position_string(next_append_position);
-              ret = OB_OBJECT_STORAGE_IO_ERROR;
-              OB_LOG(WARN, "invalid append position", K(ret), K(position), K(tmp_position_string));
-            }
+            OB_LOG(WARN, "invalid append position", K(ret), K(position), K(tmp_position_string));
           }
         }
       }
+    }
 
-      if (OB_SUCC(ret) && is_pwrite && position != offset) {
-        ret = OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH;
-        OB_LOG(WARN, "position and offset do not match", K(ret), K(position), K(offset));
-      }
+    if (OB_SUCC(ret) && is_pwrite && position != offset) {
+      ret = OB_OBJECT_STORAGE_PWRITE_OFFSET_NOT_MATCH;
+      OB_LOG(WARN, "position and offset do not match", K(ret), K(position), K(offset));
+    }
 
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(headers2 = aos_table_make(aos_pool_, AOS_TABLE_INIT_SIZE))) {
-          ret = OB_OBJECT_STORAGE_IO_ERROR;
-          OB_LOG(WARN, "fail to make apr table", K(ret));
-        } else if (OB_ISNULL(content = aos_buf_pack(aos_pool_, buf, static_cast<int32_t>(size)))) {
-          ret = OB_OBJECT_STORAGE_IO_ERROR;
-          OB_LOG(WARN, "fail to pack buf", K(content), K(ret));
-        } else if ((checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO)
-            && OB_FAIL(add_content_md5(oss_option_, buf, size, headers2))) {
-          OB_LOG(WARN, "fail to add content md5 when appending object", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(headers2 = aos_table_make(aos_pool_, AOS_TABLE_INIT_SIZE))) {
+        ret = OB_OBJECT_STORAGE_IO_ERROR;
+        OB_LOG(WARN, "fail to make apr table", K(ret));
+      } else if (OB_ISNULL(content = aos_buf_pack(aos_pool_, buf, static_cast<int32_t>(size)))) {
+        ret = OB_OBJECT_STORAGE_IO_ERROR;
+        OB_LOG(WARN, "fail to pack buf", K(content), K(ret));
+      } else if ((checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO)
+          && OB_FAIL(add_content_md5(oss_option_, buf, size, headers2))) {
+        OB_LOG(WARN, "fail to add content md5 when appending object", K(ret));
+      } else {
+        aos_list_add_tail(&content->node, &buffer);
+        // append interface, do not retry
+        aos_ret = oss_append_object_from_buffer(oss_option_, &bucket, &object, position, &buffer,
+            headers2, &resp_headers);
+        if (OB_NOT_NULL(aos_ret) && 0 != aos_status_is_ok(aos_ret)) { // != 0 means ok
+          file_length_ += size;
         } else {
-          aos_list_add_tail(&content->node, &buffer);
-          // append interface, do not retry
-          aos_ret = oss_append_object_from_buffer(oss_option_, &bucket, &object, position, &buffer,
-              headers2, &resp_headers);
-          if (OB_NOT_NULL(aos_ret) && 0 != aos_status_is_ok(aos_ret)) { // != 0 means ok
-            file_length_ += size;
-          } else {
-            convert_io_error(aos_ret, ret);
-            handle_oss_error(headers2, resp_headers, aos_ret, ret);
-            OB_LOG(WARN, "fail to append", K(content), K(ret));
+          convert_io_error(aos_ret, ret);
+          handle_oss_error(headers2, resp_headers, aos_ret, ret);
+          OB_LOG(WARN, "fail to append", K(content), K(ret));
 
-            // If append failed, print the current object meta, to help debugging.
-            aos_table_t *headers3 = NULL;
-            int tmp_ret = OB_SUCCESS;
-            if(OB_NOT_NULL(headers3 = aos_table_make(aos_pool_, 0))) {
-              if(OB_NOT_NULL(aos_ret = oss_head_object(oss_option_, &bucket, &object, headers3, &resp_headers))) {
-                if ((0 != aos_status_is_ok(aos_ret))) {
-                  int64_t cur_pos = -1;
-                  char *append_pos_str = (char*)(apr_table_get(resp_headers, OSS_NEXT_APPEND_POSITION));
-                  if (OB_ISNULL(append_pos_str)) {
-                    // ignore ret
-                    OB_LOG(WARN, "after append fail, current append pos is not found", K(ret));
-                  } else if (OB_TMP_FAIL(c_str_to_int(append_pos_str, cur_pos))) {
-                    OB_LOG(WARN, "after append fail, fail to get append pos",
-                        K(ret), K(tmp_ret), K(append_pos_str), K_(object));
-                  } else {
-                    OB_LOG(WARN, "after append fail, we got the object meta", K(ret), K(cur_pos));
-                  }
-                }
-              }
+          // If append failed, print the current object meta, to help debugging.
+          // This is only for diagnosis, so ret must keep the original append error and
+          // must not be overwritten by the failure of this head object.
+          aos_table_t *headers3 = NULL;
+          aos_table_t *head_resp_headers = NULL;
+          aos_status_t *head_aos_ret = NULL;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_ISNULL(headers3 = aos_table_make(aos_pool_, 0))) {
+            OB_LOG(WARN, "after append fail, fail to make apr table", K(ret));
+          } else if (OB_ISNULL(head_aos_ret = oss_head_object(oss_option_, &bucket, &object,
+              headers3, &head_resp_headers))
+              || 0 == aos_status_is_ok(head_aos_ret)) { // 0 means not ok
+            OB_LOG(WARN, "after append fail, fail to head object",
+                K(ret), K_(bucket), K_(object), K(position), K(offset));
+            handle_oss_error(headers3, head_resp_headers, head_aos_ret, tmp_ret);
+          } else {
+            int64_t cur_pos = -1;
+            char *append_pos_str = (char*)(apr_table_get(head_resp_headers, OSS_NEXT_APPEND_POSITION));
+            if (OB_ISNULL(append_pos_str)) {
+              // ignore ret
+              OB_LOG(WARN, "after append fail, current append pos is not found", K(ret));
+            } else if (OB_TMP_FAIL(c_str_to_int(append_pos_str, cur_pos))) {
+              OB_LOG(WARN, "after append fail, fail to get append pos",
+                  K(ret), K(tmp_ret), K(append_pos_str), K_(object));
+            } else {
+              OB_LOG(WARN, "after append fail, we got the object meta", K(ret), K(cur_pos));
             }
           }
         }
