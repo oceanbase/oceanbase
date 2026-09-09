@@ -1041,7 +1041,8 @@ public:
       int8_t udf_has_select_stmt_ : 1; // udf has select stmt, not contain other dml stmt
       int8_t udf_has_dml_stmt_ : 1; // udf has dml stmt
       int8_t has_dblink_udf_ : 1; // udf is dblink udf
-      int8_t reserved_:4;
+      int8_t has_package_var_ : 1; // sql access package variable (T_OP_GET_PACKAGE_VAR)
+      int8_t reserved_:3;
     };
   };
   bool has_dblink_;

@@ -14911,6 +14911,11 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
     }
   } else if (T_OBJ_ACCESS_REF == expr->get_expr_type()) {
     OX (stmt->get_query_ctx()->disable_udf_parallel_ |= true);
+  } else if (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()) {
+    // statement references package variable: pkg.* user variables need to be
+    // serialized to px workers / remote execution so the package var value is
+    // resolvable there (see ObBasicSessionInfo::calc_need_serialize_vars)
+    OX (stmt->get_query_ctx()->has_package_var_ = true);
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {

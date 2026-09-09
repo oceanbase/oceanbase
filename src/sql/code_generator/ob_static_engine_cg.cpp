@@ -10894,7 +10894,9 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
       if (!phy_plan_->contain_pl_udf_or_trigger()) {
-        phy_plan_->set_contain_pl_udf_or_trigger(log_plan.get_stmt()->get_query_ctx()->has_pl_udf_);
+        phy_plan_->set_contain_pl_udf_or_trigger(
+            log_plan.get_stmt()->get_query_ctx()->has_pl_udf_
+            || log_plan.get_stmt()->get_query_ctx()->has_package_var_);
       }
       if (!phy_plan_->udf_has_dml_stmt()) {
         phy_plan_->set_udf_has_dml_stmt(log_plan.get_stmt()->get_query_ctx()->udf_has_dml_stmt_);
