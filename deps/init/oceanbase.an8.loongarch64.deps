@@ -43,6 +43,7 @@ devdeps-icu-69.1-20260630.an8.loongarch64.rpm
 babassl-ob-8.3.7-20260627.an8.loongarch64.rpm
 devdeps-s2geometry-0.10.0-20260630.an8.loongarch64.rpm
 libpalf-1.1.0-472025111911.an8.loongarch64.rpm
+libobclient-2.2.14-5.an8.loongarch64.rpm
 devdeps-drcmsg-1.1-312026052510.an8.loongarch64.rpm
 
 [tools]
