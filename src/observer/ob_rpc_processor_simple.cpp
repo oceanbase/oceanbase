@@ -19,6 +19,7 @@
 #include "rootserver/ob_root_service.h"
 #include "sql/ob_sql.h"
 #include "observer/mysql/ob_diag.h"
+#include "share/location_cache/ob_location_service.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -1425,7 +1426,6 @@ int ObReportReplicaP::process()
   return ret;
 }
 
-
 int ObFlushCacheP::process()
 {
   int ret = OB_SUCCESS;
@@ -1686,11 +1686,32 @@ int ObFlushCacheP::process()
     case CACHE_TYPE_BLOCK:
     case CACHE_TYPE_ROW:
     case CACHE_TYPE_BLOOM_FILTER:
-    case CACHE_TYPE_LOCATION:
     case CACHE_TYPE_CLOG:
     case CACHE_TYPE_ILOG: {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("cache type not supported flush", "type", arg_.cache_type_, K(ret));
+    } break;
+    case CACHE_TYPE_LOCATION: {
+      ObSEArray<uint64_t, 1> tenant_ids;
+      if (arg_.is_all_tenant_) {
+        // do nothing, flush all tenant cache
+      } else {
+        if (!is_valid_tenant_id(arg_.tenant_id_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid tenant id for flushing location cache",
+                   KR(ret), K(arg_.tenant_id_));
+        } else if (OB_FAIL(tenant_ids.push_back(arg_.tenant_id_))) {
+          LOG_WARN("failed to add tenant id", KR(ret), K(arg_.tenant_id_));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(GCTX.location_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("location service is null", KR(ret));
+      } else if (OB_FAIL(GCTX.location_service_->flush_cache(tenant_ids))) {
+        LOG_WARN("failed to flush location cache", KR(ret), K(tenant_ids));
+      }
     } break;
     case CACHE_TYPE_SEQUENCE: {
       if (arg_.is_fine_grained_) { // fine-grained sequence cache evict

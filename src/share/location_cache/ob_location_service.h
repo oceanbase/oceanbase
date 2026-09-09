@@ -221,6 +221,9 @@ public:
       const uint64_t table_id);
   // --------------------- End interfaces for virtual table location -----------------------
 
+  // Flush location cache on the current observer. Empty tenant_ids means all tenants.
+  int flush_cache(const common::ObIArray<uint64_t> &tenant_ids);
+
   /* check if the ls exists by querying __all_ls_status and __all_tenant_info
    *
    * @param[in] tenant_id:   target tenant_id

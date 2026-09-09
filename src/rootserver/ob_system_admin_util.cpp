@@ -2356,9 +2356,18 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg &arg)
   // This because fine-grained plan evict must specify tenant
   // if tenant num is 0, flush all tenant, else, flush appointed tenant
   if (tenant_num != 0) { //flush appointed tenant
+    // Location cache for a tenant may exist on observers that do not host the tenant.
+    // Ideally, all tenant IDs should be sent to every observer in a single RPC.
+    // However, ObFlushCacheArg currently supports only one tenant_id_, so fetch all
+    // observers once and reuse the list to send one RPC for each tenant below.
+    const bool is_location_cache = (CACHE_TYPE_LOCATION == arg.cache_type_);
+    if (is_location_cache && OB_FAIL(get_all_servers(server_list))) {
+      LOG_WARN("fail to get all servers", KR(ret));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_num; ++i) {
       //get tenant server list;
-      if (OB_FAIL(get_tenant_servers(arg.tenant_ids_.at(i), server_list))) {
+      // get_tenant_servers has server_list.reset() inside
+      if (!is_location_cache && OB_FAIL(get_tenant_servers(arg.tenant_ids_.at(i), server_list))) {
         LOG_WARN("fail to get tenant servers", "tenant_id", arg.tenant_ids_.at(i));
       } else {
         //call tenant servers;
@@ -2387,7 +2396,6 @@ int ObAdminFlushCache::execute(const obrpc::ObAdminFlushCacheArg &arg)
           }
         }
       }
-      server_list.reset();
     }
   } else { // flush all tenant
     //get all server list, server_mgr_.get_alive_servers

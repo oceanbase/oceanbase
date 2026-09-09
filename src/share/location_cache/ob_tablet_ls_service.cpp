@@ -706,5 +706,57 @@ int ObTabletLSService::submit_update_task(const ObTabletLocationBroadcastTask &t
   return ret;
 }
 
+class ObTabletLSService::FlushCacheFunctor
+{
+public:
+  explicit FlushCacheFunctor(const ObHashSet<uint64_t> &tenant_id_set)
+      : tenant_id_set_(tenant_id_set), removed_count_(0) {}
+  ~FlushCacheFunctor() {}
+
+  bool operator()(const ObTabletLSCache &cache)
+  {
+    // If tenant_id_set_ is empty, it means flush all cache, so need_remove is true.
+    bool need_remove = tenant_id_set_.empty();
+    if (!need_remove) {
+      const uint64_t tenant_id = cache.get_tenant_id();
+      int ret = tenant_id_set_.exist_refactored(tenant_id);
+      if (OB_HASH_EXIST == ret) {
+        need_remove = true;
+      } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("failed to check tenant id in tenant id set",
+                 KR(ret), K(tenant_id), K(tenant_id_set_));
+      }
+    }
+    if (need_remove) {
+      ++removed_count_;
+    }
+    return need_remove;
+  }
+
+  int64_t get_removed_count() const { return removed_count_; }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(FlushCacheFunctor);
+  const ObHashSet<uint64_t> &tenant_id_set_;
+  int64_t removed_count_;
+};
+
+int ObTabletLSService::flush_cache(const ObHashSet<uint64_t> &tenant_id_set)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet ls service not init", KR(ret));
+  } else {
+    FlushCacheFunctor functor(tenant_id_set);
+    if (OB_FAIL(inner_cache_.for_each_and_delete_if(functor))) {
+      LOG_WARN("failed to flush tablet ls cache", KR(ret));
+    }
+    LOG_INFO("flush tablet ls cache on local observer", KR(ret),
+             "removed_count", functor.get_removed_count(), "cache_size", inner_cache_.size());
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase

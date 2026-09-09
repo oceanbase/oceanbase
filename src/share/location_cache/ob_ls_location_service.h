@@ -16,6 +16,7 @@
 #include "share/location_cache/ob_location_struct.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/location_cache/ob_ls_location_map.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -193,6 +194,7 @@ public:
   int schedule_dump_cache_timer_task();
   // Dump all ls locations in cache.
   int dump_cache();
+  int flush_cache(const common::hash::ObHashSet<uint64_t> &tenant_id_set);
   /*
     Check if the ls_id cache needs renewal:
     renew if cache time < expire_renew_time or ls_id info is missing.
@@ -208,6 +210,7 @@ public:
       const ObLSID &ls_id);
 
 private:
+  class FlushCacheFunctor; // use to flush ls-location cache of specified tenants
   int check_inner_stat_() const;
   int get_from_cache_(
       const int64_t cluster_id,

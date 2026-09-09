@@ -237,8 +237,8 @@ int ObLSLocationMap::check_and_generate_dead_cache(ObLSLocationArray &arr)
   ObLSLocation *ls_location = NULL;
   // ignore ret code
   for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-    ls_location = ls_buckets_[i];
     ObQSyncLockWriteGuard guard(buckets_lock_[i]);
+    ls_location = ls_buckets_[i];
     // foreach bucket
     while (OB_NOT_NULL(ls_location)) {
       if (common::ObClockGenerator::getClock() - ls_location->get_last_access_ts()
@@ -258,8 +258,8 @@ int ObLSLocationMap::get_all(ObLSLocationArray &arr)
   int ret = OB_SUCCESS;
   ObLSLocation *ls_location = NULL;
   for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
-    ls_location = ls_buckets_[i];
     ObQSyncLockReadGuard guard(buckets_lock_[i]);
+    ls_location = ls_buckets_[i];
     // foreach bucket
     while (OB_NOT_NULL(ls_location) && OB_SUCC(ret)) {
       if (OB_FAIL(arr.push_back(*ls_location))) {

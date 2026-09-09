@@ -309,6 +309,34 @@ int ObLocationService::vtable_nonblock_renew(
   return ret;
 }
 
+int ObLocationService::flush_cache(const ObIArray<uint64_t> &tenant_ids)
+{
+  int ret = OB_SUCCESS;
+  hash::ObHashSet<uint64_t> tenant_id_set;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("location service not init", KR(ret), K(tenant_ids));
+  } else if (!tenant_ids.empty() && OB_FAIL(tenant_id_set.create(tenant_ids.count()))) {
+    LOG_WARN("failed to create tenant id set", KR(ret), K(tenant_ids));
+  } else {
+    ARRAY_FOREACH(tenant_ids, idx) {
+      const uint64_t tenant_id = tenant_ids.at(idx);
+      if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid tenant id", KR(ret), K(tenant_id), K(idx));
+      } else if (OB_FAIL(tenant_id_set.set_refactored(tenant_id, 1 /*cover exists object*/))) {
+        LOG_WARN("failed to add tenant id", KR(ret), K(tenant_id), K(idx));
+      }
+    }
+    if (FAILEDx(ls_location_service_.flush_cache(tenant_id_set))) {
+      LOG_WARN("failed to flush ls location cache", KR(ret), K(tenant_ids));
+    } else if (OB_FAIL(tablet_ls_service_.flush_cache(tenant_id_set))) {
+      LOG_WARN("failed to flush tablet ls cache", KR(ret), K(tenant_ids));
+    }
+  }
+  return ret;
+}
+
 int ObLocationService::init(
     ObLSTableOperator &ls_pt,
     schema::ObMultiVersionSchemaService &schema_service,

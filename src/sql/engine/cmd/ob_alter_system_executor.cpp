@@ -14,6 +14,7 @@
 
 #include "sql/engine/cmd/ob_alter_system_executor.h"
 #include "observer/ob_server.h"
+#include "share/location_cache/ob_location_service.h"
 #include "sql/resolver/cmd/ob_bootstrap_stmt.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "share/arbitration_service/ob_arbitration_service_utils.h" //ObArbitrationServiceUtils
@@ -550,9 +551,20 @@ int ObFlushCacheExecutor::execute(ObExecContext &ctx, ObFlushCacheStmt &stmt)
                  K(ret));
       } break;
       case CACHE_TYPE_LOCATION: {
-        // TODO: @wangzhennan.wzn
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("location cache not supported to flush");
+        share::ObLocationService *location_service = GCTX.location_service_;
+        ObSQLSessionInfo *session = ctx.get_my_session();
+        if (OB_ISNULL(location_service) || OB_ISNULL(session)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("location service or session is null", KR(ret));
+        } else if (0 == tenant_num
+                   && OB_SYS_TENANT_ID != session->get_effective_tenant_id()) {
+          ret = OB_ERR_NO_PRIVILEGE;
+          LOG_WARN("only sys tenant can flush all location cache",
+                   KR(ret), "tenant_id", session->get_effective_tenant_id());
+        } else if (OB_FAIL(location_service->flush_cache(stmt.flush_cache_arg_.tenant_ids_))) {
+          LOG_WARN("failed to flush location cache", KR(ret),
+                   "tenant_ids", stmt.flush_cache_arg_.tenant_ids_);
+        }
       } break;
       default: {
         ret = OB_INVALID_ARGUMENT;

@@ -18,6 +18,7 @@
 #include "share/location_cache/ob_tablet_ls_map.h" // ObTabletLSMap
 #include "share/location_cache/ob_tablet_location_refresh_service.h"
 #include "share/location_cache/ob_tablet_location_broadcast.h" // ObTabletLocationSender, ObTabletLocationUpdater
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -111,6 +112,7 @@ public:
   int reload_config();
 
   int clear_expired_cache();
+  int flush_cache(const common::hash::ObHashSet<uint64_t> &tenant_id_set);
   int submit_broadcast_task(const ObTabletLocationBroadcastTask &task);
   int submit_update_task(const ObTabletLocationBroadcastTask &task);
 
@@ -148,6 +150,7 @@ private:
     ObTabletLSCache &tablet_ls_cache);
 private:
   class IsDroppedTenantCacheFunctor; // use to clear expired cache of dropped tenant
+  class FlushCacheFunctor; // use to flush tablet-ls cache of specified tenants
 
   const int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
   const int64_t USER_TASK_QUEUE_SIZE = 100 * 1000; // 10W partitions

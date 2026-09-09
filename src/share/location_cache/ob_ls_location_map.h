@@ -74,6 +74,9 @@ public:
   int check_and_generate_dead_cache(ObLSLocationArray &arr);
   int get_all(ObLSLocationArray &arr);
   int64_t size() { return size_; }
+
+  template <typename Function>
+  int for_each_and_delete_if(Function &func);
 private:
   static const int64_t MAX_ACCESS_TIME_UPDATE_THRESHOLD = 10000000;
 
@@ -85,6 +88,39 @@ private:
   common::ObQSyncLock *buckets_lock_;
 };
 
+template <typename Function>
+int ObLSLocationMap::for_each_and_delete_if(Function &func)
+{
+  int ret = OB_SUCCESS;
+  ObLSLocation *prev = NULL;
+  ObLSLocation *curr = NULL;
+  ObLSLocation *next = NULL;
+  for (int64_t i = 0; i < BUCKETS_CNT; ++i) {
+    ObQSyncLockWriteGuard guard(buckets_lock_[i]);
+    prev = NULL;
+    curr = ls_buckets_[i];
+    next = NULL;
+    // foreach bucket
+    while (OB_NOT_NULL(curr) && OB_SUCC(ret)) {
+      next = static_cast<ObLSLocation *>(curr->next_);
+      if (func(*curr)) { // need to delete
+        if (OB_ISNULL(prev)) {
+          // the first node
+          ls_buckets_[i] = next;
+        } else {
+          prev->next_ = curr->next_;
+        }
+        curr->next_ = NULL;
+        op_free(curr);
+        ATOMIC_DEC(&size_);
+      } else { // no need to delete
+        prev = curr;
+      }
+      curr = next;
+    }
+  }
+  return ret;
+}
 
 } // end namespace share
 } // end namespace oceanbase

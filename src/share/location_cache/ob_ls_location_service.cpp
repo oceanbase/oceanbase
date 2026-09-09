@@ -1310,6 +1310,58 @@ int ObLSLocationService::batch_renew_ls_locations(
   return ret;
 }
 
+class ObLSLocationService::FlushCacheFunctor
+{
+public:
+  explicit FlushCacheFunctor(const hash::ObHashSet<uint64_t> &tenant_id_set)
+      : tenant_id_set_(tenant_id_set), removed_count_(0) {}
+  ~FlushCacheFunctor() {}
+
+  bool operator()(const ObLSLocation &location)
+  {
+    // If tenant_id_set_ is empty, it means flush all cache, so need_remove is true.
+    bool need_remove = tenant_id_set_.empty();
+    if (!need_remove) {
+      const uint64_t tenant_id = location.get_tenant_id();
+      int ret = tenant_id_set_.exist_refactored(tenant_id);
+      if (OB_HASH_EXIST == ret) {
+        need_remove = true;
+      } else if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("failed to check tenant id in tenant id set",
+                 KR(ret), K(tenant_id), K(tenant_id_set_));
+      }
+    }
+    if (need_remove) {
+      ++removed_count_;
+    }
+    return need_remove;
+  }
+
+  int64_t get_removed_count() const { return removed_count_; }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(FlushCacheFunctor);
+  const hash::ObHashSet<uint64_t> &tenant_id_set_;
+  int64_t removed_count_;
+};
+
+int ObLSLocationService::flush_cache(const hash::ObHashSet<uint64_t> &tenant_id_set)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls location service not init", KR(ret));
+  } else {
+    FlushCacheFunctor functor(tenant_id_set);
+    if (OB_FAIL(inner_cache_.for_each_and_delete_if(functor))) {
+      LOG_WARN("failed to flush ls location cache", KR(ret));
+    }
+    LOG_INFO("flush ls location cache on local observer", KR(ret),
+             "removed_count", functor.get_removed_count(), "cache_size", inner_cache_.size());
+  }
+  return ret;
+}
+
 int ObLSLocationService::try_clear_dropped_tenant_caches_()
 {
   int ret = OB_SUCCESS;

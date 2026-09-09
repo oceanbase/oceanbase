@@ -882,6 +882,14 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     } else {
       stmt->flush_cache_arg_.cache_type_ = (ObCacheType)cache_type_node->value_;
     }
+    // ALTER SYSTEM FLUSH LOCATION CACHE through OBProxy is not allowed
+    if (OB_SUCC(ret)
+        && CACHE_TYPE_LOCATION == stmt->flush_cache_arg_.cache_type_
+        && ObBasicSessionInfo::VALID_PROXY_SESSID != sess->get_proxy_sessid()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("can't flush location cache via obproxy", K(ret));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "ALTER SYSTEM FLUSH LOCATION CACHE through OBProxy is");
+    }
     // second child: resolve namespace
     ParseNode *namespace_node = parse_tree.children_[1];
     // third child: resolve sql_id
