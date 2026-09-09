@@ -325,51 +325,87 @@ static int collect_wildcard_spans_dfs(const ObString &sql,
       ? ObString::make_string("\"*\"") : ObString::make_string("`*`");
   const ObString star_star = is_oracle
       ? ObString::make_string("\"*\".\"*\"") : ObString::make_string("`*`.`*`");
-  if (OB_ISNULL(node)) {
-    // skip
-  } else if (is_hint_subtree_root(node)) {
-    // ignore hint-only subtrees
-  } else if (T_RELATION_FACTOR == node->type_) {
-    const ParseNode *db_node = node->num_child_ > 0 ? node->children_[0] : NULL;
-    const ParseNode *tbl_node = node->num_child_ > 1 ? node->children_[1] : NULL;
-    const bool has_db = OB_NOT_NULL(db_node) && T_IDENT == db_node->type_ && db_node->str_len_ > 0;
-    if (has_db) {
-      if (OB_FAIL(add_ident_span(sql, db_node, star, spans))) {
-        LOG_WARN("failed add relation db span", K(ret));
-      } else if (OB_FAIL(add_ident_span(sql, tbl_node, star, spans))) {
-        LOG_WARN("failed add relation tbl span", K(ret));
-      }
-    } else if (OB_NOT_NULL(tbl_node) && T_IDENT == tbl_node->type_ && tbl_node->str_len_ > 0) {
-      if (OB_FAIL(add_ident_span(sql, tbl_node, star_star, spans))) {
-        LOG_WARN("failed add relation bare tbl span", K(ret));
-      }
-    }
-    // leaf: do NOT recurse into children_[2+]
-  } else if (T_COLUMN_REF == node->type_) {
-    const ParseNode *db_node = node->num_child_ > 0 ? node->children_[0] : NULL;
-    const ParseNode *tbl_node = node->num_child_ > 1 ? node->children_[1] : NULL;
-    const bool has_db = OB_NOT_NULL(db_node) && T_IDENT == db_node->type_ && db_node->str_len_ > 0;
-    const bool has_tbl = OB_NOT_NULL(tbl_node) && T_IDENT == tbl_node->type_ && tbl_node->str_len_ > 0;
-    if (has_db && has_tbl) {
-      // db.tbl.col -> *.*.col
-      if (OB_FAIL(add_ident_span(sql, db_node, star, spans))) {
-        LOG_WARN("failed add col db span", K(ret));
-      } else if (OB_FAIL(add_ident_span(sql, tbl_node, star, spans))) {
-        LOG_WARN("failed add col tbl span", K(ret));
-      }
-    } else if (has_tbl) {
-      // tbl.col -> *.*.col; qualifier wildcarded unconditionally (physical table
-      // or alias alike -- the FROM-clause position guard disambiguates).
-      if (OB_FAIL(add_ident_span(sql, tbl_node, star_star, spans))) {
-        LOG_WARN("failed add col bare tbl span", K(ret));
-      }
-    }
-    // column child (children_[2]) is never wildcarded; no recursion needed
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
-      if (OB_NOT_NULL(node->children_) && OB_NOT_NULL(node->children_[i])) {
-        if (OB_FAIL(collect_wildcard_spans_dfs(sql, node->children_[i], spans))) {
-          LOG_WARN("failed wildcard span dfs", K(ret));
+  // Iterative DFS with an explicit worklist. The parse tree can be very deep:
+  // the parser only flattens T_OP_AND/OR/CNN into n-ary nodes, while +/-/*/
+  // (and most binary ops) stay left-deep, so a long arithmetic/concat chain
+  // yields depth == term count. The previous recursive form overflowed the
+  // worker thread stack at ~2000 frames (SIGSEGV at this function's prologue).
+  // Span collection order is irrelevant -- apply_spans_and_get_key() sorts spans
+  // by offset before use -- so a LIFO worklist yields a byte-identical signature.
+  // A node-count cap bounds pathological / self-referential input: on overflow we
+  // abort with an error, which try_gen_template_signature swallows (best-effort),
+  // so the query proceeds without a template outline instead of crashing.
+  const int64_t MAX_VISIT = 1 << 20; // 1M nodes, well above any sane query
+  // Worklist stores parse-node pointers as uintptr_t: ObIArray<T> instantiates
+  // to_string(T) for its element type, and ParseNode is a C struct without one,
+  // so storing ParseNode* directly would not compile. uintptr_t is a scalar
+  // with an integer print specialization, sidestepping that entirely.
+  ObSEArray<uintptr_t, 256> worklist;
+  int64_t visited = 0;
+  if (OB_NOT_NULL(node)
+      && OB_FAIL(worklist.push_back(reinterpret_cast<uintptr_t>(node)))) {
+    LOG_WARN("failed to push root to worklist", K(ret));
+  }
+  while (OB_SUCC(ret) && !worklist.empty()) {
+    uintptr_t cur_raw = 0;
+    if (OB_FAIL(worklist.pop_back(cur_raw))) {
+      LOG_WARN("failed to pop worklist", K(ret));
+    } else {
+      const ParseNode *cur = reinterpret_cast<const ParseNode*>(cur_raw);
+      if (++visited > MAX_VISIT) {
+        spans.reset();
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("template-sig DFS exceeded node cap, skip template signature",
+                 K(visited), K(MAX_VISIT));
+      } else if (OB_ISNULL(cur)) {
+        // skip null child
+      } else if (is_hint_subtree_root(cur)) {
+        // ignore hint-only subtrees
+      } else if (T_RELATION_FACTOR == cur->type_) {
+        const ParseNode *db_node = cur->num_child_ > 0 ? cur->children_[0] : NULL;
+        const ParseNode *tbl_node = cur->num_child_ > 1 ? cur->children_[1] : NULL;
+        const bool has_db = OB_NOT_NULL(db_node) && T_IDENT == db_node->type_ && db_node->str_len_ > 0;
+        if (has_db) {
+          if (OB_FAIL(add_ident_span(sql, db_node, star, spans))) {
+            LOG_WARN("failed add relation db span", K(ret));
+          } else if (OB_FAIL(add_ident_span(sql, tbl_node, star, spans))) {
+            LOG_WARN("failed add relation tbl span", K(ret));
+          }
+        } else if (OB_NOT_NULL(tbl_node) && T_IDENT == tbl_node->type_ && tbl_node->str_len_ > 0) {
+          if (OB_FAIL(add_ident_span(sql, tbl_node, star_star, spans))) {
+            LOG_WARN("failed add relation bare tbl span", K(ret));
+          }
+        }
+        // leaf: do NOT push children_[2+]
+      } else if (T_COLUMN_REF == cur->type_) {
+        const ParseNode *db_node = cur->num_child_ > 0 ? cur->children_[0] : NULL;
+        const ParseNode *tbl_node = cur->num_child_ > 1 ? cur->children_[1] : NULL;
+        const bool has_db = OB_NOT_NULL(db_node) && T_IDENT == db_node->type_ && db_node->str_len_ > 0;
+        const bool has_tbl = OB_NOT_NULL(tbl_node) && T_IDENT == tbl_node->type_ && tbl_node->str_len_ > 0;
+        if (has_db && has_tbl) {
+          // db.tbl.col -> *.*.col
+          if (OB_FAIL(add_ident_span(sql, db_node, star, spans))) {
+            LOG_WARN("failed add col db span", K(ret));
+          } else if (OB_FAIL(add_ident_span(sql, tbl_node, star, spans))) {
+            LOG_WARN("failed add col tbl span", K(ret));
+          }
+        } else if (has_tbl) {
+          // tbl.col -> *.*.col; qualifier wildcarded unconditionally (physical table
+          // or alias alike -- the FROM-clause position guard disambiguates).
+          if (OB_FAIL(add_ident_span(sql, tbl_node, star_star, spans))) {
+            LOG_WARN("failed add col bare tbl span", K(ret));
+          }
+        }
+        // column child (children_[2]) is never wildcarded; do not push it
+      } else {
+        // push children in reverse so they are visited left-to-right (cosmetic;
+        // order does not affect the signature because spans are sorted by offset)
+        for (int64_t i = cur->num_child_ - 1; OB_SUCC(ret) && i >= 0; --i) {
+          if (OB_NOT_NULL(cur->children_) && OB_NOT_NULL(cur->children_[i])) {
+            if (OB_FAIL(worklist.push_back(reinterpret_cast<uintptr_t>(cur->children_[i])))) {
+              LOG_WARN("failed to push child to worklist", K(ret));
+            }
+          }
         }
       }
     }
