@@ -317,7 +317,9 @@ int to_number(const int64_t v, int16_t scale, uint32_t *digits, int32_t digit_le
   if (integer > 0) {
     exp = 0;
     uint32_t remain = static_cast<uint32_t>(integer % number::ObNumber::BASE);
-    if (remain > 0) {
+    // the zero low group can only be omitted when no fractional group was written,
+    // otherwise a following group would be shifted into its position
+    if (remain > 0 || decimal > 0) {
       digits[--idx] = remain;
     }
     integer = integer / number::ObNumber::BASE;
