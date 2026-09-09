@@ -2926,7 +2926,9 @@ int ObDDLUtil::obtain_snapshot(
         } else if (persisted_snapshot > 0) {
           // found a persisted snapshot, do not hold it again.
           FLOG_INFO("found a persisted snapshot in inner table", "task_id", task->get_task_id(), K(persisted_snapshot), K(new_fetched_snapshot));
-        } else if (OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, GCTX.root_service_, new_fetched_snapshot, extra_mv_tablet_ids))) {
+        } else if (!share::is_direct_load_task(task->get_task_type()) &&
+                   OB_FAIL(hold_snapshot(trans, task, table_id, target_table_id, GCTX.root_service_,
+                                         new_fetched_snapshot, extra_mv_tablet_ids))) {
           if (OB_SNAPSHOT_DISCARDED == ret) {
             wait_trans_ctx->reset();
           } else {
