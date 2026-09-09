@@ -21,6 +21,7 @@ function(ob_unittest_archive case)
 endfunction()
 
 #ob_unittest_archive(test_archive_manage test_archive_manage.cpp)
+ob_unittest_archive(test_archive_suspend_new_ls test_archive_suspend_new_ls.cpp)
 ob_unittest_archive(test_archive_file_utils test_archive_file_utils.cpp)
 ob_unittest_archive(test_restore_archive_log test_restore_archive_log.cpp)
 #ob_unittest_archive(test_restore_mysql_proxy test_restore_mysql_proxy.cpp)
