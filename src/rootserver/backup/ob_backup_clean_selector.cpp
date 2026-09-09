@@ -1639,12 +1639,25 @@ int ObBackupDeleteSelector::get_min_depended_piece_idx_(
       // traverse the first not expired piece's all ls
       for (int64_t ls_idx = 0; OB_SUCC(ret) && ls_idx < last_piece_info_desc.filelist_.count(); ++ls_idx) {
         ObSingleLSInfoDesc &ls_info = last_piece_info_desc.filelist_.at(ls_idx);
-        int64_t file_id = ls_info.filelist_.at(0).file_id_;
-        // for each ls, find the min depended piece idx
-        if (OB_FAIL(get_min_depended_piece_idx_ls_(candidate_piece_infos, ls_info, file_id, min_depended_pieces_idx))) {
-          LOG_WARN("Failed to get min depended piece idx for ls", K(ret), K(ls_idx));
-        } else if (min_depended_pieces_idx == 0) {
-          break;
+        if (ls_info.filelist_.empty()) {
+          if (ls_info.deleted_) {
+            // detect a deleted ls which has no file in the last candidate piece, nothing can depend on older pieces.
+            LOG_INFO("deleted ls has empty filelist, skip", "ls_id", ls_info.ls_id_, "piece_id", last_piece_info_desc.piece_id_);
+          } else {
+            // detect a non-deleted ls with empty filelist, the following non-empty piece may rely on the older pieces
+            // the last candidate piece cannot used to decide the dependency, keep all candidates in curr round.
+            min_depended_pieces_idx = 0;
+            LOG_INFO("ls with empty filelist is not deleted, keep all candidates this round", "ls_id", ls_info.ls_id_, "piece_id", last_piece_info_desc.piece_id_);
+            break;
+          }
+        } else {
+          int64_t file_id = ls_info.filelist_.at(0).file_id_;
+          // for each ls, find the min depended piece idx
+          if (OB_FAIL(get_min_depended_piece_idx_ls_(candidate_piece_infos, ls_info, file_id, min_depended_pieces_idx))) {
+            LOG_WARN("Failed to get min depended piece idx for ls", K(ret), K(ls_idx));
+          } else if (min_depended_pieces_idx == 0) {
+            break;
+          }
         }
       }
     }
@@ -1683,7 +1696,10 @@ int ObBackupDeleteSelector::get_min_depended_piece_idx_ls_(
         if (temp_ls_info.ls_id_ == ls_info.ls_id_) {
           // check the dependency of the file in this ls
           has_same_ls_id = true;
-          if (temp_ls_info.filelist_.at(temp_ls_info.filelist_.count() - 1).file_id_ == file_id) {
+          if (temp_ls_info.filelist_.empty()) {
+            LOG_INFO("ls has no archive file in the piece, skip", "ls_id", ls_info.ls_id_, "piece_id", temp_piece_info_desc.piece_id_);
+            temp_piece_idx--;
+          } else if (temp_ls_info.filelist_.at(temp_ls_info.filelist_.count() - 1).file_id_ == file_id) {
             LOG_INFO("find dependency by 64M block question", "piece_id", temp_piece_info_desc.piece_id_);
             min_depended_pieces_idx = MIN(min_depended_pieces_idx, temp_piece_idx);
             if (temp_ls_info.filelist_.at(0).file_id_ == file_id) { // need to look back continue
