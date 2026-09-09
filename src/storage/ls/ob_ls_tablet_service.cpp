@@ -3664,6 +3664,7 @@ int ObLSTabletService::insert_rows(
 
   NG_TRACE(S_insert_rows_begin);
   int64_t afct_num = 0;
+  bool is_data_table = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -3689,6 +3690,7 @@ int ObLSTabletService::insert_rows(
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
         ObRelativeTable &relative_table = run_ctx.relative_table_;
+        is_data_table = relative_table.is_user_table();
         const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
         blocksstable::ObDatumRowIterator *unused_dup_row_iter = nullptr;
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
@@ -3742,6 +3744,9 @@ int ObLSTabletService::insert_rows(
     LOG_DEBUG("succeeded to insert rows", K(ret), K(afct_num));
     affected_rows = afct_num;
     EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
+    if (is_data_table) {
+      EVENT_ADD(TABLE_INSERT_ROW_COUNT, afct_num);
+    }
   }
   NG_TRACE(S_insert_rows_end);
 
@@ -3809,6 +3814,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
 {
   int ret = OB_SUCCESS;
   int64_t afct_num = 0;
+  bool is_data_table = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
@@ -3837,6 +3843,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
         int64_t dup_row_count = 0;
         bool has_ignore_dup_error = false;
         ObRelativeTable &relative_table = run_ctx.relative_table_;
+        is_data_table = relative_table.is_user_table();
         const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
           // need to be called just after get_next_row to ensure that previous row's LOB memoroy is valid if get_next_row accesses it
@@ -3922,6 +3929,9 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
     LOG_DEBUG("succeeded to insert rows with fetch dup", K(ret));
     affected_rows = afct_num;
     EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
+    if (is_data_table) {
+      EVENT_ADD(TABLE_INSERT_ROW_COUNT, afct_num);
+    }
   }
   return ret;
 }
@@ -4197,6 +4207,9 @@ int ObLSTabletService::update_rows(
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
       EVENT_ADD(STORAGE_UPDATE_ROW_COUNT, afct_num);
+      if (relative_table.is_user_table()) {
+        EVENT_ADD(TABLE_UPDATE_ROW_COUNT, afct_num);
+      }
     }
   }
   NG_TRACE(S_update_rows_end);
@@ -4266,6 +4279,7 @@ int ObLSTabletService::put_rows(
   NG_TRACE(S_update_rows_begin);
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   int64_t afct_num = 0;
+  bool is_data_table = false;
   ObTimeGuard timeguard(__func__, 3_s);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -4293,6 +4307,7 @@ int ObLSTabletService::put_rows(
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
       const ObRelativeTable &data_table = run_ctx.relative_table_;
+      is_data_table = data_table.is_user_table();
       const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
         while (OB_SUCC(ret) && OB_SUCC(get_next_rows(row_iter, rows, row_count))) {
           ObStoreRow reserved_row;
@@ -4348,6 +4363,9 @@ int ObLSTabletService::put_rows(
     LOG_DEBUG("succeeded to put rows", K(ret));
     affected_rows = afct_num;
     EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
+    if (is_data_table) {
+      EVENT_ADD(TABLE_INSERT_ROW_COUNT, afct_num);
+    }
   }
   NG_TRACE(S_update_row_end);
 
@@ -4367,6 +4385,7 @@ int ObLSTabletService::delete_rows(
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   ObRowReshape *row_reshape = nullptr;
   int64_t afct_num = 0;
+  bool is_data_table = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -4399,6 +4418,7 @@ int ObLSTabletService::delete_rows(
 
       SMART_VAR(ObRowsInfo, rows_info) {
         ObRelativeTable &relative_table = run_ctx.relative_table_;
+        is_data_table = relative_table.is_user_table();
         const ObColDescIArray &col_descs = *(run_ctx.col_descs_);
          ObIAllocator &work_allocator = run_ctx.allocator_;
         int64_t cur_time = 0;
@@ -4470,6 +4490,9 @@ int ObLSTabletService::delete_rows(
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
       EVENT_ADD(STORAGE_DELETE_ROW_COUNT, afct_num);
+      if (is_data_table) {
+        EVENT_ADD(TABLE_DELETE_ROW_COUNT, afct_num);
+      }
     }
   }
   NG_TRACE(S_delete_rows_end);
