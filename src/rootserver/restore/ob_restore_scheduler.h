@@ -62,6 +62,7 @@ protected:
   int restore_wait_quick_restore_finish(const share::ObPhysicalRestoreJob &job_info);
   int restore_wait_ls_finish(const share::ObPhysicalRestoreJob &job_info);
   int restore_wait_tenant_finish(const share::ObPhysicalRestoreJob &job_info);
+  int check_restore_key_(const share::ObPhysicalRestoreJob &job_info, const bool allow_table_not_exist);
 
   int fill_create_tenant_arg(const share::ObPhysicalRestoreJob &job_info,
                              const ObSqlString &pool_list,
