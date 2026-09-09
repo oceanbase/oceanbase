@@ -206,6 +206,7 @@ protected:
   int add_lock_object_by_tablegroup_name_(
       const ObString &tablegroup_name,
       const transaction::tablelock::ObTableLockMode lock_mode);
+  int set_tablegroup_id(const share::schema::ObTableSchema &table_schema);
   int get_current_version_(int64_t &version);
 private:
   int add_lock_object_to_map_(

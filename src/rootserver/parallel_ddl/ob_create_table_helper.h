@@ -88,7 +88,6 @@ private:
       const uint64_t database_id,
       const ObString &table_name);
   int check_table_name_();
-  int set_tablegroup_id_();
   int set_tablespace_id_();
   int check_and_set_parent_table_id_();
 

@@ -133,8 +133,6 @@ ObCreateViewHelper::ObCreateViewHelper(
    } else if (OB_UNLIKELY(database_id != arg_.schema_.get_database_id())) {
      ret = OB_ERR_PARALLEL_DDL_CONFLICT;
      LOG_WARN("database_id not consistent", KR(ret), K(database_id), K(arg_.schema_.get_database_id()));
-   } else {
-     (void) const_cast<ObTableSchema&>(arg_.schema_).set_database_id(database_id);
    }
    return ret;
  }
@@ -162,8 +160,14 @@ int ObCreateViewHelper::lock_and_check_view_name_()
   const ObString &database_name = arg_.db_name_;
   const ObString &table_name = arg_.schema_.get_table_name();
   const uint64_t database_id = arg_.schema_.get_database_id();
+  const ObString &tablegroup_name = arg_.schema_.is_materialized_view() && !arg_.mv_ainfo_.empty()
+                                    ? arg_.mv_ainfo_.at(0).container_table_schema_.get_tablegroup_name()
+                                    : ObString::make_empty_string();
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check to inner stat", KR(ret));
+  } else if (!tablegroup_name.empty()
+             && OB_FAIL(add_lock_object_by_tablegroup_name_(tablegroup_name, transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to add tablegroup name lock", KR(ret), K_(tenant_id), K(tablegroup_name));
   } else if (OB_FAIL(add_lock_object_by_name_(database_name, table_name, share::schema::TABLE_SCHEMA,
              transaction::tablelock::EXCLUSIVE))) {
     LOG_WARN("fail to lock object by table name", KR(ret), K_(tenant_id), K(database_name), K(table_name));
@@ -277,11 +281,20 @@ int ObCreateViewHelper::lock_and_check_view_name_()
 int ObCreateViewHelper::lock_object_id_()
 {
   int ret = OB_SUCCESS;
+  const ObTableSchema *container_table = arg_.schema_.is_materialized_view() && !arg_.mv_ainfo_.empty()
+                                         ? &arg_.mv_ainfo_.at(0).container_table_schema_ : NULL;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(add_lock_object_by_id_(arg_.schema_.get_database_id(),
              share::schema::DATABASE_SCHEMA, transaction::tablelock::SHARE))) {
     LOG_WARN("fail to add lock databse id", KR(ret), K_(tenant_id), K(arg_.schema_.get_database_id()));
+  } else if (NULL != container_table && OB_FAIL(set_tablegroup_id(*container_table))) {
+    LOG_WARN("fail to set container tablegroup id", KR(ret), KPC(container_table));
+  } else if (NULL != container_table && OB_INVALID_ID != container_table->get_tablegroup_id()
+             && OB_FAIL(add_lock_object_by_id_(container_table->get_tablegroup_id(),
+                                               TABLEGROUP_SCHEMA,
+                                               transaction::tablelock::SHARE))) {
+    LOG_WARN("fail to add container tablegroup id lock", KR(ret), KPC(container_table));
   } else if (OB_INVALID_ID != orig_table_id_
              && OB_FAIL(add_lock_object_by_id_(orig_table_id_, VIEW_SCHEMA, transaction::tablelock::EXCLUSIVE))) {
     LOG_WARN("fail to add lock object", KR(ret));
@@ -1140,5 +1153,3 @@ int ObCreateViewHelper::construct_and_adjust_result_(int &return_ret)
   }
   return ret;
 }
-
-

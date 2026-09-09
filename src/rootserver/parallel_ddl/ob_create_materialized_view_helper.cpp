@@ -78,8 +78,6 @@ int ObCreateMaterializedViewHelper::generate_container_table_schema_()
           LOG_WARN("fail to print table name", KR(ret));
         } else if (OB_FAIL(container_table_schema.set_table_name(buf))) {
           LOG_WARN("fail to set table_name", KR(ret));
-        } else {
-          container_table_schema.set_database_id(new_view_schema_->get_database_id());
         }
       }
 

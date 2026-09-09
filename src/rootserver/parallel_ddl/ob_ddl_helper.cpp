@@ -1317,6 +1317,72 @@ int ObDDLHelper::add_lock_object_by_tablegroup_name_(
   }
   return ret;
 }
+
+int ObDDLHelper::set_tablegroup_id(const ObTableSchema &table)
+{
+  int ret = OB_SUCCESS;
+  const ObString &tablegroup_name = table.get_tablegroup_name();
+  uint64_t tablegroup_id = OB_INVALID_ID;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (tablegroup_name.empty()) {
+    if (table.has_partition()) {
+      // try use default tablegroup id
+      const uint64_t database_id = table.get_database_id();
+      const ObDatabaseSchema *database_schema = NULL;
+      if (OB_FAIL(schema_guard_wrapper_.get_database_schema(database_id, database_schema))) {
+        LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K(database_id));
+      } else if (OB_ISNULL(database_schema)) {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_WARN("database not exist", KR(ret), K_(tenant_id), K(database_id));
+      } else {
+        tablegroup_id = database_schema->get_default_tablegroup_id();
+      }
+
+      if (OB_SUCC(ret) && OB_INVALID_ID == tablegroup_id) {
+        const ObTenantSchema *tenant_schema = NULL;
+        if (OB_FAIL(schema_guard_wrapper_.get_tenant_schema(tenant_id_, tenant_schema))) {
+          LOG_WARN("fail to get tenant schema", KR(ret), K_(tenant_id));
+        } else if (OB_ISNULL(tenant_schema)) {
+          ret = OB_TENANT_NOT_EXIST;
+          LOG_WARN("tenant not exist", KR(ret), K_(tenant_id));
+        } else {
+          tablegroup_id = tenant_schema->get_default_tablegroup_id();
+        }
+      }
+    }
+  } else if (!table.has_partition()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table which has no partitions with tablegroup", KR(ret), K(table));
+  } else if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_id(tablegroup_name, tablegroup_id))) {
+    LOG_WARN("fail to get tablegroup id", KR(ret), K_(tenant_id), K(tablegroup_name));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tablegroup_id)) {
+    ret = OB_TABLEGROUP_NOT_EXIST;
+    LOG_WARN("tablegroup not exist", KR(ret), K_(tenant_id), K(tablegroup_name));
+  }
+
+  if (OB_SUCC(ret) && OB_INVALID_ID != tablegroup_id) {
+    // TODO:(yanmu.ztl) after 4.2, we can use ObSimpleTableSchema instead of ObTablegroupSchema
+    const ObTablegroupSchema *tablegroup_schema = NULL;
+    if (OB_FAIL(schema_guard_wrapper_.get_tablegroup_schema(tablegroup_id, tablegroup_schema))) {
+      LOG_WARN("fail to get tablegroup schema", KR(ret), K_(tenant_id), K(tablegroup_id));
+    } else if (OB_ISNULL(tablegroup_schema)) {
+      ret = OB_TABLEGROUP_NOT_EXIST;
+      LOG_WARN("tablegroup not exist", KR(ret), K_(tenant_id), K(tablegroup_id));
+    } else if (OB_UNLIKELY(ObDuplicateScope::DUPLICATE_SCOPE_NONE != table.get_duplicate_scope())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("duplicated table in tablegroup is not supported", KR(ret),
+               "table_id", table.get_table_id(), K(tablegroup_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "duplicated table in tablegroup");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    (void) const_cast<ObTableSchema &>(table).set_tablegroup_id(tablegroup_id);
+  }
+  return ret;
+}
+
 int ObDDLHelper::get_current_version_(int64_t &version)
 {
   int ret = OB_SUCCESS;
