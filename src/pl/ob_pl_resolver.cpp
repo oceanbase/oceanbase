@@ -9144,8 +9144,12 @@ int ObPLResolver::resolve_declare_cursor(
           LOG_USER_ERROR(OB_ERR_SP_DUP_CURSOR, name.length(), name.ptr());
         } else if (NULL == sql_node) { //only declare
           if (OB_INVALID_INDEX == cursor_index) { //没有declare过，添加进符号表
+            ObPLDataType cursor_var_type(PL_CURSOR_TYPE);
+            if (return_type.is_valid_type()) {
+              cursor_var_type.set_user_type_id(PL_CURSOR_TYPE, return_type.get_user_type_id());
+            }
             if (OB_FAIL(current_block_->get_namespace().add_cursor(name,
-                                                                   ObPLDataType(PL_CURSOR_TYPE),
+                                                                   cursor_var_type,
                                                                    ObString(),
                                                                    ObArray<int64_t>(),
                                                                    ObString(),
