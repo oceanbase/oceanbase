@@ -918,28 +918,16 @@ int LogConfigMeta::generate(
     const int64_t prev_mode_pid)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
   if (INVALID_PROPOSAL_ID == proposal_id || false == curr_config_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    PALF_LOG(WARN, "get tenant data version failed", K(ret));
   } else {
-    if (tenant_data_version < DATA_VERSION_4_1_0_0) {
-      version_ = LOG_CONFIG_META_VERSION;
-    } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
-      version_ = LOG_CONFIG_META_VERSION_INC;
-    } else {
-      version_ = LOG_CONFIG_META_VERSION_42;
-    }
-
+    version_ = LOG_CONFIG_META_VERSION_42;
     proposal_id_ = proposal_id;
     prev_ = prev_config_info;
     curr_ = curr_config_info;
-    if (tenant_data_version >= DATA_VERSION_4_1_0_0) {
-      prev_log_proposal_id_ = prev_log_proposal_id;
-      prev_lsn_ = prev_lsn;
-      prev_mode_pid_ = prev_mode_pid;
-    }
+    prev_log_proposal_id_ = prev_log_proposal_id;
+    prev_lsn_ = prev_lsn;
+    prev_mode_pid_ = prev_mode_pid;
   }
   return ret;
 }

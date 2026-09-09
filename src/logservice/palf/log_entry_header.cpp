@@ -12,8 +12,6 @@
 
 #include "log_entry_header.h"
 #include "lib/checksum/ob_parity_check.h"   // parity_check
-#include "share/ob_cluster_version.h"       // GET_MIN_DATA_VERSION
-#include "share/rc/ob_tenant_base.h"        // MTL_ID
 #include "logservice/ob_log_base_header.h"  // ObLogBaseHeader
 
 namespace oceanbase
@@ -242,16 +240,7 @@ int LogEntryHeader::generate_padding_header_(const char *log_data,
 
 int16_t LogEntryHeader::get_version_() const
 {
-  int16_t version = LOG_ENTRY_HEADER_VERSION;
-  int ret = OB_SUCCESS;
-  uint64_t min_data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
-    PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", K(ret));
-  } else if ((min_data_version >= MOCK_DATA_VERSION_4_2_5_0 && min_data_version < DATA_VERSION_4_3_0_0)
-             || min_data_version >= DATA_VERSION_4_3_3_0) {
-    version = LOG_ENTRY_HEADER_VERSION2;
-  }
-  return version;
+  return LOG_ENTRY_HEADER_VERSION2;
 }
 
 int64_t LogEntryHeader::get_padding_mask_() const

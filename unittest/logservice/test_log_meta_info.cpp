@@ -12,6 +12,8 @@
 
 #define private public
 #include "logservice/palf/log_meta_info.h"            // LogPrepareMeta...
+#include "logservice/palf/log_entry_header.h"         // LogEntryHeader
+#include "logservice/palf/log_group_entry_header.h"   // LogGroupEntryHeader
 #undef private
 #include <gtest/gtest.h>
 
@@ -208,6 +210,10 @@ TEST(TestLogMetaInfos, test_log_config_meta)
     EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
         barrier_log_proposal_id, barrier_lsn, barrier_mode_pid));
     EXPECT_TRUE(log_config_meta1.is_valid());
+    EXPECT_EQ(static_cast<int64_t>(LogConfigMeta::LOG_CONFIG_META_VERSION_42), log_config_meta1.version_);
+    EXPECT_EQ(barrier_log_proposal_id, log_config_meta1.prev_log_proposal_id_);
+    EXPECT_EQ(barrier_lsn, log_config_meta1.prev_lsn_);
+    EXPECT_EQ(barrier_mode_pid, log_config_meta1.prev_mode_pid_);
 
     // Test serialzie and deserialize
     int64_t pos = 0;
@@ -714,6 +720,14 @@ TEST(TestLogMetaInfos, test_log_config_version)
     EXPECT_EQ(OB_SUCCESS, cv3.inc_update_version(2));
     EXPECT_TRUE(cv2 < cv3);
   }
+}
+
+TEST(TestLogMetaInfos, test_log_header_version)
+{
+  LogEntryHeader log_entry_header;
+  LogGroupEntryHeader log_group_entry_header;
+  EXPECT_EQ(LogEntryHeader::LOG_ENTRY_HEADER_VERSION2, log_entry_header.get_version_());
+  EXPECT_EQ(LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION2, log_group_entry_header.get_version_());
 }
 
 } // end of unittest
