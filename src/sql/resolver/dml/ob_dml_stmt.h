@@ -5,6 +5,7 @@
 
 #ifndef OCEANBASE_SQL_STMT_H_
 #define OCEANBASE_SQL_STMT_H_
+#include <type_traits>
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "common/object/ob_object.h"
 #include "lib/string/ob_string.h"
@@ -681,6 +682,33 @@ struct CheckConstraintItem
   ObSqlArray<int64_t> check_flags_;
 };
 
+struct ObDMLSequenceInfo
+{
+  enum UsageFlag : uint64_t
+  {
+    NEXTVAL_USAGE = 1ULL << 0,
+    CURRVAL_USAGE = 1ULL << 1,
+    PRIV_CHECK_USAGE = 1ULL << 2,
+    VALUE_USAGE = NEXTVAL_USAGE | CURRVAL_USAGE | PRIV_CHECK_USAGE
+  };
+
+  bool has_any_usage(const uint64_t usage_mask) const
+  {
+    return 0 != (usage_flags_ & usage_mask);
+  }
+
+  TO_STRING_KV(K_(sequence_id), K_(usage_flags));
+
+  uint64_t sequence_id_;
+  uint64_t usage_flags_;
+};
+
+static_assert(sizeof(ObDMLSequenceInfo) == 16, "unexpected ObDMLSequenceInfo size");
+static_assert(std::is_trivial<ObDMLSequenceInfo>::value,
+              "ObDMLSequenceInfo must remain trivial");
+static_assert(std::is_trivially_copyable<ObDMLSequenceInfo>::value,
+              "ObDMLSequenceInfo must remain trivially copyable");
+
 class ObDMLStmt : public ObStmt
 {
 public:
@@ -1036,18 +1064,14 @@ public:
   int get_table_items(common::ObIArray<int64_t> &table_ids) const;
   int get_CTE_table_items(ObIArray<TableItem *> &cte_table_items) const;
   int get_all_CTE_table_items_recursive(ObIArray<TableItem *> &cte_table_items) const;
-  const common::ObIArray<uint64_t> &get_nextval_sequence_ids() const { return nextval_sequence_ids_; }
-  common::ObIArray<uint64_t> &get_nextval_sequence_ids() { return nextval_sequence_ids_; }
-  const common::ObIArray<uint64_t> &get_currval_sequence_ids() const { return currval_sequence_ids_; }
-  common::ObIArray<uint64_t> &get_currval_sequence_ids() { return currval_sequence_ids_; }
-  int add_nextval_sequence_id(uint64_t id) { return nextval_sequence_ids_.push_back(id); }
-  int add_currval_sequence_id(uint64_t id) { return currval_sequence_ids_.push_back(id); }
-  bool has_sequence() const { return nextval_sequence_ids_.count() > 0 || currval_sequence_ids_.count() > 0; }
-  void clear_sequence()
-  {
-    nextval_sequence_ids_.reset();
-    currval_sequence_ids_.reset();
-  }
+  const common::ObIArray<ObDMLSequenceInfo> &get_sequence_infos() const { return sequence_infos_; }
+  bool has_sequence_usage(uint64_t sequence_id, uint64_t usage_mask) const;
+  bool has_any_sequence_usage(uint64_t usage_mask) const;
+  int add_sequence_usage(uint64_t sequence_id, uint64_t usage_mask);
+  int get_sequence_ids(uint64_t usage_mask, common::ObIArray<uint64_t> &sequence_ids) const;
+  int merge_sequence_infos(const ObDMLStmt &other, uint64_t usage_mask);
+  bool has_sequence() const { return has_any_sequence_usage(ObDMLSequenceInfo::VALUE_USAGE); }
+  void clear_sequence() { sequence_infos_.reset(); }
   bool has_part_key_sequence() const { return has_part_key_sequence_; }
   void set_has_part_key_sequence(const bool v) { has_part_key_sequence_ = v; }
   int add_condition_expr(ObRawExpr *expr) { return condition_exprs_.push_back(expr); }
@@ -1156,8 +1180,7 @@ public:
                N_TABLE, table_items_,
                N_PARTITION_EXPR, part_expr_items_,
                N_COLUMN, column_items_,
-               N_COLUMN, nextval_sequence_ids_,
-               N_COLUMN, currval_sequence_ids_,
+               "sequence_infos", sequence_infos_,
                N_WHERE, condition_exprs_,
                N_ORDER_BY, order_items_,
                N_LIMIT, limit_count_expr_,
@@ -1343,10 +1366,8 @@ protected:
   // insert into values (s1.nextval, ...) s1.nextval 对应位置正好是一个分区列
   // 就设置这个标记为 true，提示生成 multi-dml 计划
   bool has_part_key_sequence_;
-  // sequence 对象个数，用于 ObSequence 计算 nextval，已去重
-  ObSqlArray<uint64_t> nextval_sequence_ids_;
-  // sequence 对象个数，用于记录 currval 的sequence id，已去重
-  ObSqlArray<uint64_t> currval_sequence_ids_;
+  // stmt 引用的 sequence 对象及其用途，按 sequence id 去重
+  ObSqlArray<ObDMLSequenceInfo> sequence_infos_;
   // `table_items` 在resolve_from_clause的时候生成, 顺序是从SQL语句左到右push_back的.
   ObSqlArray<TableItem *> table_items_;
   ObSqlArray<ColumnItem> column_items_;

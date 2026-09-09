@@ -910,13 +910,9 @@ int ObTransformQueryPushDown::push_down_stmt_exprs(ObSelectStmt *select_stmt,
     } else if (select_stmt->has_limit() && OB_FAIL(do_limit_merge(*select_stmt, *view_stmt))) {
       LOG_WARN("failed to merge limit", K(ret));
     } else if (select_stmt->has_sequence() && //处理sequence
-               OB_FAIL(append(view_stmt->get_nextval_sequence_ids(),
-                              select_stmt->get_nextval_sequence_ids()))) {
-      LOG_WARN("failed to append nextval sequence ids", K(ret));
-    } else if (select_stmt->has_sequence()
-               && OB_FAIL(append(view_stmt->get_currval_sequence_ids(),
-                                 select_stmt->get_currval_sequence_ids()))) {
-      LOG_WARN("failed to append currval sequence ids", K(ret));
+               OB_FAIL(view_stmt->merge_sequence_infos(*select_stmt,
+                                                        ObDMLSequenceInfo::VALUE_USAGE))) {
+      LOG_WARN("failed to merge sequence infos", K(ret));
     } else if (view_stmt->is_set_stmt()) {
       if (select_offset.empty()){
         /*do nothing*/

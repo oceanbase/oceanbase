@@ -430,8 +430,7 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
       is_contains_assignment_(false),
       affected_last_insert_id_(false),
       has_part_key_sequence_(false),
-      nextval_sequence_ids_(allocator),
-      currval_sequence_ids_(allocator),
+      sequence_infos_(allocator),
       table_items_(allocator),
       column_items_(allocator),
       condition_exprs_(allocator),
@@ -452,6 +451,77 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type, ObIAllocator &allocator)
 
 ObDMLStmt::~ObDMLStmt()
 {
+}
+
+bool ObDMLStmt::has_sequence_usage(uint64_t sequence_id, uint64_t usage_mask) const
+{
+  bool has_usage = false;
+  for (int64_t i = 0; !has_usage && i < sequence_infos_.count(); ++i) {
+    const ObDMLSequenceInfo &sequence_info = sequence_infos_.at(i);
+    has_usage = sequence_info.sequence_id_ == sequence_id
+                && sequence_info.has_any_usage(usage_mask);
+  }
+  return has_usage;
+}
+
+bool ObDMLStmt::has_any_sequence_usage(uint64_t usage_mask) const
+{
+  bool has_usage = false;
+  for (int64_t i = 0; !has_usage && i < sequence_infos_.count(); ++i) {
+    has_usage = sequence_infos_.at(i).has_any_usage(usage_mask);
+  }
+  return has_usage;
+}
+
+int ObDMLStmt::add_sequence_usage(uint64_t sequence_id, uint64_t usage_mask)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  for (int64_t i = 0; !found && i < sequence_infos_.count(); ++i) {
+    ObDMLSequenceInfo &sequence_info = sequence_infos_.at(i);
+    if (sequence_info.sequence_id_ == sequence_id) {
+      sequence_info.usage_flags_ |= usage_mask;
+      found = true;
+    }
+  }
+  if (!found) {
+    ObDMLSequenceInfo sequence_info;
+    sequence_info.sequence_id_ = sequence_id;
+    sequence_info.usage_flags_ = usage_mask;
+    if (OB_FAIL(sequence_infos_.push_back(sequence_info))) {
+      LOG_WARN("failed to add sequence usage", K(ret), K(sequence_id), K(usage_mask));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_sequence_ids(uint64_t usage_mask,
+                                ObIArray<uint64_t> &sequence_ids) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < sequence_infos_.count(); ++i) {
+    const ObDMLSequenceInfo &sequence_info = sequence_infos_.at(i);
+    if (sequence_info.has_any_usage(usage_mask)
+        && OB_FAIL(add_var_to_array_no_dup(sequence_ids, sequence_info.sequence_id_))) {
+      LOG_WARN("failed to append sequence id", K(ret), K(sequence_info), K(usage_mask));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::merge_sequence_infos(const ObDMLStmt &other, uint64_t usage_mask)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObDMLSequenceInfo> &other_sequence_infos = other.get_sequence_infos();
+  for (int64_t i = 0; OB_SUCC(ret) && i < other_sequence_infos.count(); ++i) {
+    const ObDMLSequenceInfo &sequence_info = other_sequence_infos.at(i);
+    const uint64_t merged_usage = sequence_info.usage_flags_ & usage_mask;
+    if (0 != merged_usage
+        && OB_FAIL(add_sequence_usage(sequence_info.sequence_id_, merged_usage))) {
+      LOG_WARN("failed to merge sequence usage", K(ret), K(sequence_info), K(usage_mask));
+    }
+  }
+  return ret;
 }
 
 // tables come from table_items_
@@ -534,10 +604,8 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("assgin pseudo column exprs fail", K(ret));
   } else if (OB_FAIL(autoinc_params_.assign(other.autoinc_params_))) {
     LOG_WARN("assign autoinc params fail", K(ret));
-  } else if (OB_FAIL(nextval_sequence_ids_.assign(other.nextval_sequence_ids_))) {
-    LOG_WARN("failed to assign sequence ids", K(ret));
-  } else if (OB_FAIL(currval_sequence_ids_.assign(other.currval_sequence_ids_))) {
-    LOG_WARN("failed to assign sequence ids", K(ret));
+  } else if (OB_FAIL(sequence_infos_.assign(other.sequence_infos_))) {
+    LOG_WARN("failed to assign sequence infos", K(ret));
   } else if (OB_FAIL(user_var_exprs_.assign(other.user_var_exprs_))) {
     LOG_WARN("assign user var exprs fail", K(ret));
   } else if (OB_FAIL(check_constraint_items_.assign(other.check_constraint_items_))) {
@@ -719,10 +787,8 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("assign stmt hint failed", K(ret));
   } else if (OB_FAIL(autoinc_params_.assign(other.autoinc_params_))) {
     LOG_WARN("assign autoinc params failed", K(ret));
-  } else if (OB_FAIL(nextval_sequence_ids_.assign(other.nextval_sequence_ids_))) {
-    LOG_WARN("failed to assign sequence ids", K(ret));
-  } else if (OB_FAIL(currval_sequence_ids_.assign(other.currval_sequence_ids_))) {
-    LOG_WARN("failed to assign sequence ids", K(ret));
+  } else if (OB_FAIL(sequence_infos_.assign(other.sequence_infos_))) {
+    LOG_WARN("failed to assign sequence infos", K(ret));
   } else if (OB_FAIL(vector_index_query_param_.assign(other.vector_index_query_param_))) {
     LOG_WARN("faield to assign vector index query param", K(ret));
   } else {

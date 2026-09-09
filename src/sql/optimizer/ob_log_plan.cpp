@@ -3559,14 +3559,18 @@ int ObLogPlan::check_has_dblink_sequence(bool &has)
   if (OB_ISNULL(session) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is invalid", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && !has && i < get_stmt()->get_nextval_sequence_ids().count(); ++i) {
-    const ObSequenceSchema *seq_schema = NULL;
-    if (OB_FAIL(session->get_dblink_sequence_schema(get_stmt()->get_nextval_sequence_ids().at(i),
-                                                    seq_schema))) {
-      LOG_WARN("failed to get dblink sequence schema", K(ret));
-    } else if (NULL != seq_schema) {
-      has = true;
+  } else {
+    const ObIArray<ObDMLSequenceInfo> &sequence_infos = get_stmt()->get_sequence_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && !has && i < sequence_infos.count(); ++i) {
+      const ObSequenceSchema *seq_schema = NULL;
+      const ObDMLSequenceInfo &sequence_info = sequence_infos.at(i);
+      if (!sequence_info.has_any_usage(ObDMLSequenceInfo::NEXTVAL_USAGE)) {
+      } else if (OB_FAIL(session->get_dblink_sequence_schema(sequence_info.sequence_id_,
+                                                             seq_schema))) {
+        LOG_WARN("failed to get dblink sequence schema", K(ret));
+      } else if (NULL != seq_schema) {
+        has = true;
+      }
     }
   }
   return ret;
@@ -3591,9 +3595,9 @@ int ObLogPlan::allocate_sequence_as_top(ObLogicalOperator *&old_top)
                                   allocate(*this, LOG_SEQUENCE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate sequence operator", K(ret));
-  } else if (OB_FAIL(append_array_no_dup(sequence->get_sequence_ids(),
-                                         get_stmt()->get_nextval_sequence_ids()))) {
-    LOG_WARN("failed to append array no dup", K(ret));
+  } else if (OB_FAIL(get_stmt()->get_sequence_ids(ObDMLSequenceInfo::NEXTVAL_USAGE,
+                                                  sequence->get_sequence_ids()))) {
+    LOG_WARN("failed to append nextval sequence ids", K(ret));
   } else {
     if (NULL != old_top) {
       sequence->set_child(ObLogicalOperator::first_child, old_top);

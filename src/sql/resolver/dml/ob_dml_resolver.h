@@ -340,7 +340,9 @@ public:
                               ObRawExpr *&new_expr);
 
 
-  int add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval = false);
+  int add_sequence_id_to_stmt(uint64_t sequence_id,
+                              bool is_currval = false,
+                              bool need_priv_check = true);
   int add_object_version_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
                                        uint64_t object_id,

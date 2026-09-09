@@ -14704,7 +14704,9 @@ int ObDMLResolver::update_errno_if_sequence_object(
   return ret;
 }
 
-int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval)
+int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id,
+                                           bool is_currval,
+                                           bool need_priv_check)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *stmt = NULL;
@@ -14712,17 +14714,16 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(stmt), K(ret));
   } else {
-    bool exist = false;
-    // 一般来说，同一个语句中 nextval 会比较少，因此用 for 搜索效率也不是问题
-    const ObIArray<uint64_t> &ids = is_currval ? stmt->get_currval_sequence_ids() :
-                                                 stmt->get_nextval_sequence_ids();
-
-    FOREACH_CNT_X(id, ids, !exist) {
-      if (*id == sequence_id) {
-        exist = true;
+    const uint64_t value_usage = is_currval ? ObDMLSequenceInfo::CURRVAL_USAGE :
+                                              ObDMLSequenceInfo::NEXTVAL_USAGE;
+    const bool exist = stmt->has_sequence_usage(sequence_id, value_usage);
+    // 权限来源与执行列表独立去重：同一个序列可能同时被 identity 隐式使用和用户显式引用。
+    if (need_priv_check && sequence_id != OB_INVALID_ID) {
+      if (OB_FAIL(stmt->add_sequence_usage(sequence_id, ObDMLSequenceInfo::PRIV_CHECK_USAGE))) {
+        LOG_WARN("failed to add privilege check sequence id", K(sequence_id), K(ret));
       }
     }
-    if (!exist && sequence_id != OB_INVALID_ID) {
+    if (OB_SUCC(ret) && !exist && sequence_id != OB_INVALID_ID) {
       // 如果是 CURRVAL 表达式，则指示 stmt 生成 SEQUENCE 算子，但不做具体事情
       //
       // 如果是 NEXTVAL 表达式，则添加到 STMT 中，提示 SEQUENCE 算子为它计算 NEXTVALUE
@@ -14743,15 +14744,8 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
       } else if (OB_ISNULL(seq_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("database_schema is null", K(ret));
-      } else if (is_currval) {
-        if (OB_FAIL(stmt->add_currval_sequence_id(sequence_id))) {
-          LOG_WARN("failed to push back sequence id",K(ret));
-        } else {
-          // do nothing
-        }
-      } else if (OB_FAIL(stmt->add_nextval_sequence_id(sequence_id))) {
-        LOG_WARN("fail push back sequence id",
-                 K(sequence_id), K(ids), K(ret));
+      } else if (OB_FAIL(stmt->add_sequence_usage(sequence_id, value_usage))) {
+        LOG_WARN("failed to add sequence usage", K(ret), K(sequence_id), K(value_usage));
       }
       if (OB_SUCC(ret) &&
           OB_INVALID_ID == seq_schema->get_dblink_id() &&

@@ -1441,7 +1441,9 @@ int add_seqs_priv_in_dml(
           const ObSequenceRawExpr *seq_raw_expr = static_cast<const ObSequenceRawExpr *>(expr);
           uint64_t sequence_id = seq_raw_expr->get_sequence_id();
           const ObString &action = seq_raw_expr->get_action();
-          if (sequence_id == OB_INVALID_ID) {
+          if (sequence_id == OB_INVALID_ID
+              || !dml_stmt->has_sequence_usage(sequence_id,
+                                                ObDMLSequenceInfo::PRIV_CHECK_USAGE)) {
           } else if (action.case_compare("CURRVAL")) {
             OZ (currval_sequence_ids.push_back(sequence_id));
           } else {
@@ -1458,8 +1460,8 @@ int add_seqs_priv_in_dml(
       }
     }
   } else {
-    OZ (append(nextval_sequence_ids, dml_stmt->get_nextval_sequence_ids()));
-    OZ (append(currval_sequence_ids, dml_stmt->get_currval_sequence_ids()));
+    OZ (dml_stmt->get_sequence_ids(ObDMLSequenceInfo::PRIV_CHECK_USAGE,
+                                   nextval_sequence_ids));
   }
   if (OB_SUCC(ret)) {
     OZ (add_seqs_priv_in_dml_inner(user_id, ctx, nextval_sequence_ids, OBJ_PRIV_ID_SELECT,

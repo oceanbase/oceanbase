@@ -168,8 +168,7 @@ TEST_F(TestSQLCompile, stmt_member_size)
     PRINT_MEMBER_SIZE(of_result, is_contains_assignment_);
     PRINT_MEMBER_SIZE(of_result, affected_last_insert_id_);
     PRINT_MEMBER_SIZE(of_result, has_part_key_sequence_);
-    PRINT_MEMBER_SIZE(of_result, nextval_sequence_ids_);
-    PRINT_MEMBER_SIZE(of_result, currval_sequence_ids_);
+    PRINT_MEMBER_SIZE(of_result, sequence_infos_);
     PRINT_MEMBER_SIZE(of_result, table_items_);
     PRINT_MEMBER_SIZE(of_result, column_items_);
     PRINT_MEMBER_SIZE(of_result, condition_exprs_);
@@ -337,6 +336,7 @@ TEST_F(TestSQLCompile, stmt_related_struct_size)
   PRINT_SIZE(of_result, SemiInfo)
   PRINT_SIZE(of_result, PartExprItem)
   PRINT_SIZE(of_result, CheckConstraintItem)
+  PRINT_SIZE(of_result, ObDMLSequenceInfo)
   PRINT_SIZE(of_result, SelectItem)
   PRINT_SIZE(of_result, ObSelectIntoItem)
   PRINT_SIZE(of_result, ObGroupbyExpr)

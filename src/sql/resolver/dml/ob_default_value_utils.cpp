@@ -1219,7 +1219,9 @@ int ObDefaultValueUtils::build_default_expr_for_identity_column(const ColumnItem
                   sequence_schema->get_sequence_name(), seq_oper, sequence_id,
                   resolver_->get_stmt()))) {
         LOG_WARN("resolve column item fail", K(sequence_id), K(ret));
-      } else if (OB_FAIL(resolver_->add_sequence_id_to_stmt(sequence_id))) {
+      } else if (OB_FAIL(resolver_->add_sequence_id_to_stmt(sequence_id,
+                                                            false /* is_currval */,
+                                                            false /* need_priv_check */))) {
         LOG_WARN("fail add sequence id to stmt", K(sequence_id), K(ret));
       } else if ((column.get_expr()->is_table_part_key_column() || 
                   column.get_expr()->is_table_part_key_org_column()) && scope == T_INSERT_SCOPE) {
