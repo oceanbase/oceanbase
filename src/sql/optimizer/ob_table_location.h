@@ -974,7 +974,8 @@ private:
                                       const bool calc_oracle_hash,
                                       common::ObIArray<common::ObTabletID> &tablet_ids,
                                       common::ObIArray<common::ObObjectID> &partition_ids,
-                                      const common::ObIArray<common::ObObjectID> *part_ids = NULL) const;
+                                      const common::ObIArray<common::ObObjectID> *part_ids = NULL,
+                                      const bool need_dedup = true) const;
 
 
   int calc_partition_ids_by_calc_node(ObExecContext &exec_ctx,
@@ -1151,7 +1152,8 @@ private:
                                common::ObNewRow &row,
                                common::ObIArray<common::ObTabletID> &tablet_ids,
                                common::ObIArray<common::ObObjectID> &partition_ids,
-                               const common::ObIArray<common::ObObjectID> *part_ids = NULL) const;
+                               const common::ObIArray<common::ObObjectID> *part_ids = NULL,
+                               const bool need_dedup = true) const;
 
   int calc_partition_ids_by_rowkey(ObExecContext &exec_ctx,
                                    ObDASTabletMapper &tablet_mapper,

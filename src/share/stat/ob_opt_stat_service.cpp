@@ -156,6 +156,8 @@ int ObOptStatService::get_column_stat(const uint64_t tenant_id,
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("statistics service is not initialized. ", K(ret), K(keys));
+  } else if (OB_FAIL(handles.reserve(keys.count()))) {
+    LOG_WARN("failed to reserve", K(ret));
   } else {
     LOG_TRACE("begin get column stat", K(keys));
     for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
