@@ -370,18 +370,21 @@ int ObLSRecoveryStatHandler::get_all_replica_min_readable_scn(share::SCN &readab
     if (palf_stat_first.config_version_ != config_version_) {
       ret = OB_NEED_RETRY;
       LOG_WARN("config version not match", KR(ret), K(config_version_), K(palf_stat_first));
-    } else if (replicas_scn_.count() < paxos_member_list.get_member_number()) {
+    } else if (replicas_scn_.count() < paxos_member_list.get_member_number()
+        - paxos_member_list.get_logonly_replica_member_number()) {
       ret = OB_NEED_RETRY;
       LOG_WARN("not enough replica", KR(ret), K(replicas_scn_), K(paxos_member_list));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < paxos_member_list.get_member_number(); ++i) {
-      ObAddr member;
+      ObMember member;
       int64_t index = 0;
-      if (OB_FAIL(paxos_member_list.get_server_by_index(i, member))) {
-        LOG_WARN("failed to get server by index", KR(ret), K(i));
+      if (OB_FAIL(paxos_member_list.get_member_by_index(i, member))) {
+        LOG_WARN("failed to get member by index", KR(ret), K(i));
+      } else if (member.is_logonly()) {
+        continue;
       }
       for (; OB_SUCC(ret) && index < replicas_scn_.count(); ++index) {
-        if (replicas_scn_.at(index).get_server() == member) {
+        if (replicas_scn_.at(index).get_server() == member.get_server()) {
           readable_scn = SCN::min(readable_scn, replicas_scn_.at(index).get_readable_scn());
           break;
         }
@@ -637,7 +640,9 @@ int ObLSRecoveryStatHandler::construct_new_member_list_(
       } else if (degraded_list.contains(member.get_server())) {
         paxos_replica_number_new--;
         // do not count degraded member
-      } else if (FALSE_IT(full_replica_num += (member.is_logonly() ? 0 : 1))) {
+      } else if (member.is_logonly()) {
+        // logonly replica cannot report readable scn
+      } else if (FALSE_IT(full_replica_num++)) {
       } else if (OB_FAIL(member_list_new.push_back(member.get_server()))) {
         LOG_WARN("fail to push back member_list_new", KR(ret), K(member), K(member_list_new));
       } else if (member.get_server() == GCTX.self_addr()) {
@@ -793,6 +798,8 @@ int ObLSRecoveryStatHandler::construct_addr_list_(
     for (int64_t i = 0; OB_SUCC(ret) && i < member_list.get_member_number(); ++i) {
       if (OB_FAIL(member_list.get_member_by_index(i, member))) {
         LOG_WARN("failed to get member by index", KR(ret), K(i));
+      } else if (member.is_logonly()) {
+        // logonly replica cannot report readable scn
       } else if (OB_FAIL(addr_list.push_back(member.get_server()))) {
         LOG_WARN("failed to push back member", KR(ret), K(member));
       }
