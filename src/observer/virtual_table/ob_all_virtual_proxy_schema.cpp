@@ -1082,9 +1082,10 @@ int ObAllVirtualProxySchema::get_next_tenant_server_(
   return ret;
 }
 
-int ObAllVirtualProxySchema::get_replica_type_from_locality_(
+int ObAllVirtualProxySchema::get_effective_replica_type_(
     const ZoneLocalityIArray &zone_locality_array,
     const ObZone &zone,
+    const ObReplicaType pool_replica_type,
     ObReplicaType &replica_type)
 {
   int ret = OB_SUCCESS;
@@ -1092,7 +1093,11 @@ int ObAllVirtualProxySchema::get_replica_type_from_locality_(
   if (OB_UNLIKELY(zone_locality_array.empty() || zone.is_empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(zone_locality_array), K(zone));
-  } else {
+  } else if (REPLICA_TYPE_LOGONLY == pool_replica_type) {
+    // The unit in LOGONLY resource pool always returns LOGONLY replica type.
+    // Because it remains non-routable even if its zone is no longer in the tenant locality.
+    replica_type = REPLICA_TYPE_LOGONLY;
+  } else { // For other resource pools, get replica type from locality
     bool zone_found = false;
     FOREACH_CNT_X(zone_locality, zone_locality_array, !zone_found && OB_SUCCESS == ret) {
       if (zone_locality->get_zone_set().at(0) == zone) {
@@ -1131,6 +1136,7 @@ int ObAllVirtualProxySchema::fill_tenant_servers_(
   ObString svr_ip;
   int64_t sql_port = OB_INVALID_INDEX;
   ObReplicaType replica_type = REPLICA_TYPE_FULL;
+  ObReplicaType pool_replica_type = REPLICA_TYPE_INVALID;
   ObReplicaProperty property;
   ObLSRestoreStatus restore_status;
   ObAddr server;
@@ -1158,12 +1164,14 @@ int ObAllVirtualProxySchema::fill_tenant_servers_(
     tenant_server.reset();
     svr_ip.reset();
     zone.reset();
+    pool_replica_type = REPLICA_TYPE_INVALID;
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "svr_ip", svr_ip);
     EXTRACT_INT_FIELD_MYSQL(result, "svr_port", svr_port, int32_t);
     EXTRACT_INT_FIELD_MYSQL(result, "inner_port", sql_port, int64_t);
     EXTRACT_VARCHAR_FIELD_MYSQL(result, "zone", zone);
-    if (FAILEDx(get_replica_type_from_locality_(zone_locality, zone, replica_type))) {
-      LOG_WARN("failed to get replica_type", KR(ret), K(zone_locality), K(zone));
+    EXTRACT_INT_FIELD_MYSQL(result, "pool_replica_type", pool_replica_type, ObReplicaType);
+    if (FAILEDx(get_effective_replica_type_(zone_locality, zone, pool_replica_type, replica_type))) {
+      LOG_WARN("failed to get replica_type", KR(ret), K(zone_locality), K(zone), K(pool_replica_type));
     } else if (OB_UNLIKELY(!server.set_ip_addr(svr_ip, svr_port))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to set_ip_addr", KR(ret), K(svr_ip), K(svr_port));
@@ -1223,7 +1231,7 @@ int ObAllVirtualProxySchema::get_tenant_servers_by_join_(
       first_idx_in_zone.reset();
       tenant_servers_.reset();
       const static char *SELECT_TENANT_ACTIVE_SERVERS_SQL =
-          "SELECT S.svr_ip, S.svr_port, S.inner_port, S.zone "
+          "SELECT S.svr_ip, S.svr_port, S.inner_port, S.zone, R.replica_type AS pool_replica_type "
           "FROM oceanbase.%s R, oceanbase.%s U, oceanbase.%s S "
           "WHERE R.tenant_id = %lu "
           "AND R.resource_pool_id = U.resource_pool_id "
