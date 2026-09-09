@@ -644,7 +644,7 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
   bool bret = false;
   bool is_evolution = ATOMIC_LOAD(&stat_.is_evolution_);
   is_evolution &= (NULL != stat_.evolution_stat_.records_);
-  bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_usec_)) >= 0;
+  bool info_inited = ATOMIC_LOAD(&(stat_.first_exec_usec_)) > 0;
   if (!is_evolution && stat_.enable_plan_expiration_ && check_if_is_expired_by_error(record.status_)) {
     set_is_expired(EXPIRED_BY_EXEC_ERROR);
     LOG_INFO("query plan is expired due to execution error", K(record.status_), K(stat_));
@@ -665,11 +665,8 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
     }
   } else if (!info_inited && !is_evolution) {
     /* finish evolution, init use sampling infos */
-    int64_t first_exec_row_count = 0;
-    do {
-      first_exec_row_count = ATOMIC_LOAD(&(stat_.first_exec_row_count_));
-    } while (first_exec_row_count != ATOMIC_VCAS(&(stat_.first_exec_row_count_), first_exec_row_count, 0));
-    if (-1 == first_exec_row_count) {  // only one thread can init first exec infos by get sample_count
+    if (-1 == ATOMIC_VCAS(&stat_.first_exec_row_count_, -1, 0)) {
+      // only one thread can init first exec infos by get sample_count
       int64_t sample_count = ATOMIC_LOAD(&(stat_.sample_times_));
       if (sample_count <= 0) {
         sample_count = 1;

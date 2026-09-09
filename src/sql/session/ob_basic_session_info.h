@@ -1124,6 +1124,10 @@ public:
   bool get_is_in_retry() const {
     return SESS_NOT_IN_RETRY != thread_data_.is_in_retry_;
   }
+  ObSessionRetryStatus get_session_retry_status() const
+  {
+    return thread_data_.is_in_retry_;
+  }
   bool get_is_in_retry_for_dup_tbl() {
     return SESS_IN_RETRY_FOR_DUP_TBL == thread_data_.is_in_retry_;
   }

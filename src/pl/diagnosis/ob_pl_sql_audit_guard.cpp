@@ -113,6 +113,22 @@ ObPLSqlAuditGuard::~ObPLSqlAuditGuard()
       session_info_.get_raw_audit_record().try_cnt_ = retry_ctrl_.get_retry_times();
       session_info_.get_raw_audit_record().pl_trace_id_.set(traceid_guard_.origin_trace_id_);
       session_info_.get_raw_audit_record().parent_trace_id_.set(traceid_guard_.parent_sql_trace_id_);
+#ifdef OB_BUILD_SPM
+      const bool is_spm_fallback =
+        ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN == spi_result_.get_sql_ctx().spm_ctx_.spm_stat_;
+      const bool is_spm_timeout_retry = is_spm_fallback && retry_ctrl_.need_retry();
+      if (is_spm_timeout_retry
+          && OB_NOT_NULL(spi_result_.get_result_set()->get_physical_plan())) {
+        ObExecStatUtils::record_exec_timestamp(record_.time_record_, false, record_.exec_timestamp_);
+        record_.exec_timestamp_.update_stage_time();
+        ObAuditRecordData &audit_record = session_info_.get_raw_audit_record();
+        audit_record.exec_timestamp_ = record_.exec_timestamp_;
+        audit_record.exec_timestamp_.receive_ts_ = spi_result_.get_sql_ctx().spm_ctx_.receive_ts_;
+        const int64_t timeout_penalty = spi_result_.get_sql_ctx().spm_ctx_.get_timeout_penalty();
+        spi_result_.get_result_set()->get_physical_plan()->update_evolution_stat(
+            audit_record, timeout_penalty, timeout_penalty);
+      }
+#endif
       if ((ret_ == OB_SUCCESS && is_ps_cursor_open_) || OB_SQL_RETRY_SPM == ret_) {
         // if ps cursor open succeed, record audit after fill cursor
       } else {

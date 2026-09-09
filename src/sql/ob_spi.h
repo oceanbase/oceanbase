@@ -100,6 +100,7 @@ public:
   ~ObSPIExecEnvGuard();
 private:
   ObSQLSessionInfo &session_info_;
+  ObSessionRetryStatus retry_status_bk_;
   int64_t query_start_time_bk_;
   bool is_ps_cursor_;
   char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
@@ -252,12 +253,16 @@ public:
     allocator_.reset();
     flags_ = 0;
   }
-  void reset_member_for_retry(sql::ObSQLSessionInfo &session_info)
+  void reset_member_for_retry(sql::ObSQLSessionInfo &session_info, bool is_spm_retry = false)
   {
     if (result_set_ != NULL) {
       result_set_->~ObResultSet();
     }
-    sql_ctx_.reset();
+    if (is_spm_retry) {
+      sql_ctx_.clear();
+    } else {
+      sql_ctx_.reset();
+    }
     exec_params_str_.reset();
     //allocator_.reset();
     mem_context_->get_arena_allocator().reset();
