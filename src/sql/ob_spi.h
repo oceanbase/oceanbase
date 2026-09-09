@@ -61,6 +61,16 @@ struct ObPLSPITraceIdGuard
   int &ret_;
 };
 
+class ObSPIRetryInfoGuard
+{
+public:
+  ObSPIRetryInfoGuard(ObSQLSessionInfo &session_info);
+  ~ObSPIRetryInfoGuard();
+private:
+  ObSQLSessionInfo &session_info_;
+  int64_t saved_retry_cnt_;
+};
+
 class ObSPIRetryCtrlGuard
 {
 public:
@@ -79,7 +89,6 @@ private:
   ObSPIResultSet &spi_result_;
   ObSQLSessionInfo &session_info_;
   int &ret_;
-  int saved_retry_cnt_;
   bool init_;
 };
 

@@ -1958,6 +1958,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         ObSPIExecEnvGuard env_guard(*session, spi_result);
         int save_sqlcode = session->get_pl_sqlcode_info()->get_sqlcode();
 
+        ObSPIRetryInfoGuard retry_info_guard(*session);
         do {
 
           bool can_retry = true;
@@ -3912,7 +3913,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   OZ (ob_write_string(spi_result->get_allocator(), ps_sql, ps_sql_copy));
 
   if (OB_SUCC(ret)) {
-
+    ObSPIRetryInfoGuard retry_info_guard(session_info);
     ObPLSqlAuditRecord audit_record(sql::PLSql);
     ObQueryRetryCtrl retry_ctrl;
     ObSPIExecEnvGuard env_guard(session_info, *spi_result, cursor.is_ps_cursor());
@@ -4030,7 +4031,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
     OZ (spi_result.start_nested_stmt_if_need(ctx, sql, static_cast<stmt::StmtType>(type), for_update));
 
     if (OB_SUCC(ret)) {
-
+      ObSPIRetryInfoGuard retry_info_guard(session_info);
       ObPLSqlAuditRecord audit_record(sql::PLSql);
       ObQueryRetryCtrl retry_ctrl;
       ObSPIExecEnvGuard env_guard(session_info, spi_result, cursor.is_ps_cursor());
@@ -7248,6 +7249,7 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
     OX (result_set->get_exec_context().get_physical_plan_ctx()->
               set_timeout_timestamp(min_timeout_ts + time_gap));
     if (OB_SUCC(ret)) {
+      ObSPIRetryInfoGuard retry_info_guard(*session);
       do {
         ret = OB_SUCCESS;
         bool can_retry = true;
@@ -10082,16 +10084,22 @@ ObSPIRetryCtrlGuard::ObSPIRetryCtrlGuard(
     retry_ctrl_.set_tenant_local_schema_version(tenant_version);
     retry_ctrl_.set_sys_local_schema_version(sys_version);
     spi_result_.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard();
-    saved_retry_cnt_ = session_info_.get_retry_info_for_update().get_retry_cnt();
     init_ = true;
   }
 }
 
+ObSPIRetryInfoGuard::ObSPIRetryInfoGuard(ObSQLSessionInfo &session_info) : session_info_(session_info)
+{
+  saved_retry_cnt_ = session_info_.get_retry_info_for_update().get_retry_cnt();
+}
+
+ObSPIRetryInfoGuard::~ObSPIRetryInfoGuard()
+{
+  session_info_.get_retry_info_for_update().set_retry_cnt(saved_retry_cnt_);
+}
+
 ObSPIRetryCtrlGuard::~ObSPIRetryCtrlGuard()
 {
-  if (init_) {
-    session_info_.get_retry_info_for_update().set_retry_cnt(saved_retry_cnt_);
-  }
 }
 
 void ObSPIRetryCtrlGuard::test()
