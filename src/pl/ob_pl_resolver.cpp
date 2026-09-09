@@ -17978,21 +17978,29 @@ int ObPLResolver::add_external_cursor(ObPLBlockNS &ns,
         OZ (ObPLExprCopier::copy_expr(expr_factory_, org_expr, expr));
       } else if (cursor.get_package_id() == ns.get_package_id()
                   || (cursor.is_define_in_body() && cursor.get_package_body_id() == ns.get_package_id())) {
+        // sql_params indexes into the exprs of the ns where the cursor was found.
+        // For spec-declared/body-defined cursors, that is usually the package SPEC ns (exprs were copied onto SPEC during define); for body-private cursors it is BODY.
         ObRawExpr *org_expr = NULL;
-        const ObPLBlockNS *body_ns = &ns;
-        while (OB_NOT_NULL(body_ns)
-          && body_ns->get_block_type() != ObPLBlockNS::BLOCK_PACKAGE_BODY
-          && body_ns->get_block_type() != ObPLBlockNS::BLOCK_OBJECT_BODY) {
-          if (OB_ISNULL(body_ns->get_pre_ns()) && OB_NOT_NULL(body_ns->get_external_ns())) {
-            body_ns = body_ns->get_external_ns()->get_parent_ns();
-          } else {
-            body_ns = body_ns->get_pre_ns();
+        const ObPLBlockNS *src_ns = external_ns;
+        if (OB_ISNULL(src_ns) || OB_ISNULL(src_ns->get_exprs())) {
+          src_ns = &ns;
+          while (OB_NOT_NULL(src_ns)
+            && src_ns->get_block_type() != ObPLBlockNS::BLOCK_PACKAGE_BODY
+            && src_ns->get_block_type() != ObPLBlockNS::BLOCK_OBJECT_BODY) {
+            if (OB_ISNULL(src_ns->get_pre_ns()) && OB_NOT_NULL(src_ns->get_external_ns())) {
+              src_ns = src_ns->get_external_ns()->get_parent_ns();
+            } else {
+              src_ns = src_ns->get_pre_ns();
+            }
           }
         }
-        CK (OB_NOT_NULL(body_ns));
+        CK (OB_NOT_NULL(src_ns));
+        CK (ObPLBlockNS::BLOCK_PACKAGE_SPEC == src_ns->get_block_type()
+            || ObPLBlockNS::BLOCK_PACKAGE_BODY == src_ns->get_block_type());
+        CK (OB_NOT_NULL(src_ns->get_exprs()));
         CK (cursor.get_sql_params().at(i) >= 0
-            && cursor.get_sql_params().at(i) < body_ns->get_exprs()->count());
-        OX (org_expr = body_ns->get_exprs()->at(cursor.get_sql_params().at(i)));
+            && cursor.get_sql_params().at(i) < src_ns->get_exprs()->count());
+        OX (org_expr = src_ns->get_exprs()->at(cursor.get_sql_params().at(i)));
         OZ (ObPLExprCopier::copy_expr(expr_factory_, org_expr, expr));
       } else {
         ObPLPackageManager &package_manager =

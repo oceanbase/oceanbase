@@ -1444,15 +1444,22 @@ int ObPLBlockNS::check_dup_cursor(const ObString &name, bool &is_dup) const
     LOG_WARN("cursor table or symbol table is NULL", K(cursor_table_), K(symbol_table_), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < cursors_.count(); ++i) {
-      if (OB_ISNULL(cursor_table_->get_cursor(cursors_.at(i)))) {
+      const ObPLCursor *cursor = cursor_table_->get_cursor(cursors_.at(i));
+      if (OB_ISNULL(cursor)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("cursor is NULL", K(i), K(cursors_.at(i)), K(ret));
-      } else if (OB_ISNULL(symbol_table_->get_symbol(cursor_table_->get_cursor(cursors_.at(i))->get_index()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("condition is NULL", K(i), K(cursors_.at(i)), K(ret));
-      } else if (symbol_table_->get_symbol(cursor_table_->get_cursor(cursors_.at(i))->get_index())->get_name() == name) {
-        is_dup = true;
-      } else { /*do nothing*/ }
+      } else if (get_package_id() != cursor->get_package_id()
+                 || get_routine_id() != cursor->get_routine_id()) {
+        // External cursor copies (e.g. SPEC-declared cursor mirrored into BODY ns)
+      } else {
+        const ObPLVar *var = symbol_table_->get_symbol(cursor->get_index());
+        if (OB_ISNULL(var)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cursor symbol is NULL", K(i), K(cursors_.at(i)), KPC(cursor), K(ret));
+        } else if (var->get_name() == name) {
+          is_dup = true;
+        } else { /*do nothing*/ }
+      }
     }
   }
   return ret;
