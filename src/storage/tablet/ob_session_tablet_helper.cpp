@@ -390,6 +390,93 @@ int ObSessionTabletCreateHelper::set_reuse_result(
   return ret;
 }
 
+int ObSessionTabletCreateHelper::lock_and_check_table_schema(
+    observer::ObInnerSQLConnection &conn,
+    const share::schema::ObTableSchema &table_schema,
+    share::schema::ObLatestSchemaGuard &latest_schema_guard,
+    const share::schema::ObTableSchema *&latest_table_schema,
+    const share::schema::ObTablegroupSchema *&tablegroup_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
+  const uint64_t table_id = table_schema.is_oracle_tmp_table_v2_index_table()
+      ? table_schema.get_data_table_id()
+      : table_schema.get_table_id();
+  transaction::tablelock::ObLockTableRequest table_lock_arg;
+  uint64_t table_id_get_from_guard = OB_INVALID_ID;
+  ObTableType table_type = MAX_TABLE_TYPE;
+  int64_t schema_version = OB_INVALID_VERSION;
+
+  latest_table_schema = nullptr;
+  tablegroup_schema = nullptr;
+  table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
+  table_lock_arg.timeout_us_ = timeout_us;
+  table_lock_arg.table_id_ = table_id;
+  table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
+  table_lock_arg.owner_id_.convert_from_client_sessid(
+      conn.get_session().get_sessid_for_table(),
+      conn.get_session().get_client_create_time());
+  if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, &conn))) {
+    LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
+  } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(
+                 tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us, trans_))) {
+    LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
+  } else if (OB_FAIL(latest_schema_guard.get_table_id(table_schema.get_database_id(),
+                                                      table_schema.get_session_id(),
+                                                      table_schema.get_table_name(),
+                                                      table_id_get_from_guard,
+                                                      table_type,
+                                                      schema_version))) {
+    // When ObLatestSchemaGuard::get_table_schema is invoked on a non-RS side（e.g. executer),
+    // requesting a non-existent table may return error `-4002`.
+    // To address this, check whether the target table exists before calling ObLatestSchemaGuard::get_table_schema.
+    LOG_WARN("fail to get table id", KR(ret), K(table_schema.get_database_id()), K(table_schema.get_table_name()));
+  } else if (OB_INVALID_ID == table_id_get_from_guard) {
+    const share::schema::ObTableSchema *latest_table_schema_by_id = nullptr;
+    const int tmp_ret = latest_schema_guard.get_table_schema(table_schema.get_table_id(), latest_table_schema_by_id);
+    if (OB_SUCCESS != tmp_ret) {
+      if (OB_TABLE_NOT_EXIST == tmp_ret || OB_SCHEMA_ERROR == tmp_ret || OB_INVALID_ARGUMENT == tmp_ret) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("failed to get latest table schema by stale table id, keep table not exist semantics",
+                 KR(ret), KR(tmp_ret), "stale_table_id", table_schema.get_table_id());
+      } else {
+        ret = tmp_ret;
+        LOG_WARN("failed to get latest table schema by stale table id",
+                 KR(ret), "stale_table_id", table_schema.get_table_id());
+      }
+    } else if (OB_NOT_NULL(latest_table_schema_by_id) && latest_table_schema_by_id->is_hidden_schema()) {
+      ret = OB_SCHEMA_EAGAIN;
+      LOG_WARN("table name is not found but latest table schema is hidden, retry with latest schema",
+               KR(ret), KPC(latest_table_schema_by_id));
+    } else {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exist", KR(ret), K(table_schema.get_database_id()), K(table_schema.get_table_name()));
+    }
+  } else if (OB_UNLIKELY(table_id_get_from_guard != table_schema.get_table_id())) {
+    ret = OB_SCHEMA_EAGAIN;
+    LOG_WARN("table id has changed after acquiring ddl lock, retry with latest schema",
+             KR(ret), K(table_id_get_from_guard), "stale_table_id", table_schema.get_table_id(),
+             K(table_schema.get_database_id()), K(table_schema.get_table_name()));
+  } else if (OB_FAIL(latest_schema_guard.get_table_schema(table_ids_.at(0), latest_table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret), K(table_ids_.at(0)));
+  } else if (OB_ISNULL(latest_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("latest table schema is null", KR(ret), K(table_ids_.at(0)));
+  } else if (OB_UNLIKELY(latest_table_schema->is_hidden_schema())) {
+    ret = OB_SCHEMA_EAGAIN;
+    LOG_WARN("latest table schema is hidden after acquiring ddl lock, retry with latest schema",
+             KR(ret), KPC(latest_table_schema));
+  } else if (OB_INVALID_ID != latest_table_schema->get_tablegroup_id()) {
+    if (OB_FAIL(latest_schema_guard.get_tablegroup_schema(latest_table_schema->get_tablegroup_id(), tablegroup_schema))) {
+      LOG_WARN("failed to get tablegroup schema", KR(ret), K(latest_table_schema->get_tablegroup_id()));
+    } else if (OB_ISNULL(tablegroup_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablegroup schema is null", KR(ret), K(latest_table_schema->get_tablegroup_id()), KPC(latest_table_schema));
+    }
+  }
+  return ret;
+}
+
 int ObSessionTabletCreateHelper::do_work()
 {
   int ret = OB_SUCCESS;
@@ -448,50 +535,13 @@ int ObSessionTabletCreateHelper::do_work()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("connection is null", KR(ret), K(tenant_id_));
     } else {
-      // 1. Acquire a ROW EXCLUSIVE table lock on the table (Table ID).
-      // 2. Acquire a SHARE Online DDL lock on the table (Table ID).
-      const int64_t timeout_us = MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */);
-      const uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
-      transaction::tablelock::ObLockTableRequest table_lock_arg;
       share::schema::ObLatestSchemaGuard latest_schema_guard(schema_service, tenant_id_);
-      uint64_t table_id_get_from_guard = OB_INVALID_ID;
-      ObTableType table_type = MAX_TABLE_TYPE;
-      int64_t schema_version = OB_INVALID_VERSION;
-
-      table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
-      table_lock_arg.timeout_us_ = timeout_us;
-      table_lock_arg.table_id_ = table_id;
-      table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
-      table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
-      if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
-        LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us, trans_))) {
-        LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
-      } else if (OB_FAIL(latest_schema_guard.get_table_id(table_schema->get_database_id(), table_schema->get_session_id(), table_schema->get_table_name(),
-                               table_id_get_from_guard, table_type, schema_version))) {
-        // When ObLatestSchemaGuard::get_table_schema is invoked on a non-RS side（e.g. executer),
-        // requesting a non-existent table may return error `-4002`.
-        // To address this, check whether the target table exists before calling ObLatestSchemaGuard::get_table_schema.
-        LOG_WARN("fail to get table id", KR(ret), K(table_schema->get_database_id()), K(table_schema->get_table_name()));
-      } else if (OB_INVALID_ID == table_id_get_from_guard) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("table not exist", KR(ret), K(table_schema->get_database_id()), K(table_schema->get_table_name()));
+      const share::schema::ObTableSchema *latest_table_schema = nullptr;
+      const share::schema::ObTablegroupSchema *tablegroup_schema = nullptr;
+      if (OB_FAIL(lock_and_check_table_schema(*conn, *table_schema, latest_schema_guard,
+                                              latest_table_schema, tablegroup_schema))) {
+        LOG_WARN("failed to lock and check table schema", KR(ret), KPC(table_schema));
       } else {
-        const share::schema::ObTableSchema *latest_table_schema = nullptr;
-        const share::schema::ObTablegroupSchema *tablegroup_schema = nullptr;
-        if (OB_FAIL(latest_schema_guard.get_table_schema(table_ids_.at(0), latest_table_schema))) {
-          LOG_WARN("failed to get table schema", KR(ret), K(table_ids_.at(0)));
-        } else if (OB_ISNULL(latest_table_schema)) {
-          ret = OB_TABLE_NOT_EXIST;
-          LOG_WARN("latest table schema is null", KR(ret), K(table_ids_.at(0)));
-        } else if (OB_INVALID_ID != latest_table_schema->get_tablegroup_id()) {
-          if (OB_FAIL(latest_schema_guard.get_tablegroup_schema(latest_table_schema->get_tablegroup_id(), tablegroup_schema))) {
-            LOG_WARN("failed to get tablegroup schema", KR(ret), K(latest_table_schema->get_tablegroup_id()));
-          } else if (OB_ISNULL(tablegroup_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tablegroup schema is null", KR(ret), K(latest_table_schema->get_tablegroup_id()), KPC(latest_table_schema));
-          }
-        }
         // to_create_indices_ is either populated by set_reuse_result()
         // (caller ran ObSessionTabletInfoMap::try_reuse_truncated_tablets)
         // or filled with all positions in the no-reuse fallback above.

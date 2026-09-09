@@ -4161,6 +4161,11 @@ int ObDbmsStats::parse_table_info(ObExecContext &ctx,
     param.table_id_ = table_schema->get_table_id();
     param.ref_table_type_ = table_schema->get_table_type();
     param.part_level_ = table_schema->get_part_level();
+#ifdef ERRSIM
+    if (table_schema->is_oracle_tmp_table_v2_index_table()) {
+      DEBUG_SYNC(BEFORE_CREATE_GTT_INDEX_SESSION_TABLET_FOR_STATS);
+    }
+#endif
     if (OB_FAIL(set_param_global_part_id(ctx, param))) {
       LOG_WARN("failed to set param globa part id", K(ret));
     }

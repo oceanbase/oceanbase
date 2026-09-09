@@ -22,6 +22,10 @@
 
 namespace oceanbase
 {
+namespace observer
+{
+class ObInnerSQLConnection;
+}
 namespace storage
 {
 class ObTabletTruncateMdsArg;
@@ -96,6 +100,12 @@ public:
 private:
   const static int64_t DEFAULT_TABLE_CREATE_COUNT = 4;
 private:
+  int lock_and_check_table_schema(
+    observer::ObInnerSQLConnection &conn,
+    const share::schema::ObTableSchema &table_schema,
+    share::schema::ObLatestSchemaGuard &latest_schema_guard,
+    const share::schema::ObTableSchema *&latest_table_schema,
+    const share::schema::ObTablegroupSchema *&tablegroup_schema);
   int fetch_tablet_id(
     const int64_t tablet_cnt,
     share::schema::ObMultiVersionSchemaService &schema_service,
