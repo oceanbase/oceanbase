@@ -274,6 +274,11 @@ int ObLSMemberListService::get_leader_config_version_and_transfer_scn_(
                                                     leader_config_version,
                                                     leader_transfer_scn))) {
     STORAGE_LOG(WARN, "failed to process result from async rpc", KR(ret), KR(tmp_ret));
+  } else if (!leader_config_version.is_valid()) {
+    //leader config version is needed by member change, retry to get it again
+    ret = OB_NEED_RETRY;
+    STORAGE_LOG(WARN, "failed to get leader config version, need retry", K(ret), K(addr),
+        K(return_code_array));
   }
   return ret;
 }
@@ -470,6 +475,11 @@ int ObLSMemberListService::check_ls_transfer_scn_validity_for_standby_(palf::Log
                          "member_list_count", addr_list.count(),
                          "check_pass_count", check_pass_count);
 #endif
+      } else if (!leader_config_version.is_valid()) {
+        //leader config version is needed by member change, retry to get it again
+        ret = OB_NEED_RETRY;
+        STORAGE_LOG(WARN, "failed to get leader config version, need retry", K(ret),
+            K(leader_addr), K(addr_list), K(check_pass_count));
       } else {
         STORAGE_LOG(INFO, "passed transfer scn check for standby", K(ret), K(addr_list), K(check_pass_count));
       }
@@ -489,38 +499,56 @@ int ObLSMemberListService::process_result_from_async_rpc_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
-    const ObStorageChangeMemberRes *response = proxy.get_results().at(idx);
-    const int res_ret = return_code_array.at(idx);
-    bool check_pass = false;
-    if (OB_SUCCESS != res_ret) {
+  // The async rpc proxy appends one return code and one result for every callback in its
+  // callback list, but args_/dests_ are only appended when the rpc is recorded successfully.
+  // If recording failed (e.g. allocate memory failed), dests_ would be shorter than the
+  // result array and the result index CANNOT be used to visit dests_ any more. So all the
+  // counts of the proxy MUST be checked before visiting them by index.
+  if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+    STORAGE_LOG(WARN, "async rpc count does not match", K(ret), K(leader_addr),
+        K(for_standby), "return_cnt", return_code_array.count());
+  } else {
+    ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+      const ObStorageChangeMemberRes *response = proxy.get_results().at(idx);
+      const int res_ret = return_code_array.at(idx);
+      bool check_pass = false;
+      if (OB_SUCCESS != res_ret) {
+        STORAGE_LOG(WARN, "failed to get config version and transfer scn from server", K(res_ret),
+            "addr", proxy.get_dests().at(idx), "leader_addr", leader_addr, K(for_standby));
 #ifdef ERRSIM
-      SERVER_EVENT_ADD("storage_ha", "check_ls_transfer_scn_validity_for_standby_failed",
-                      "tenant_id", ls_->get_tenant_id(),
-                      "ls_id", ls_->get_ls_id().id(),
-                      "result", res_ret);
+        SERVER_EVENT_ADD("storage_ha", "check_ls_transfer_scn_validity_for_standby_failed",
+                        "tenant_id", ls_->get_tenant_id(),
+                        "ls_id", ls_->get_ls_id().id(),
+                        "result", res_ret);
 #endif
-    } else if (OB_ISNULL(response)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "hb_response is null", KR(ret), KR(tmp_ret));
-    } else if (for_standby && OB_FAIL(check_ls_transfer_scn_(response->transfer_scn_, check_pass))) {
-      STORAGE_LOG(WARN, "failed to check ls transfer scn", K(ret));
-    } else if (for_standby && !check_pass) {
-      continue;
-    } else {
-      const palf::LogConfigVersion &config_version = response->config_version_;
-      const ObAddr &addr = proxy.get_dests().at(idx);
-      if (addr == leader_addr) {
-        if (!config_version.is_valid()) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "config version is not valid", K(ret), K(config_version));
-        } else {
-          leader_config_version = config_version;
-          leader_transfer_scn = response->transfer_scn_;
+      } else if (OB_ISNULL(response)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "hb_response is null", KR(ret), KR(tmp_ret));
+      } else {
+        const palf::LogConfigVersion &config_version = response->config_version_;
+        const ObAddr &addr = proxy.get_dests().at(idx);
+        // leader config version is only used as the barrier of member change, it should
+        // be recorded whenever leader responses successfully. It CANNOT be coupled with
+        // the transfer scn check, otherwise the config version will be lost when leader
+        // transfer scn is larger than local transfer scn, which is a normal case for standby.
+        if (addr == leader_addr) {
+          if (!config_version.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "config version is not valid", K(ret), K(config_version));
+          } else {
+            leader_config_version = config_version;
+            leader_transfer_scn = response->transfer_scn_;
+          }
         }
-      }
-      if (OB_SUCC(ret)) {
-        pass_count++;
+
+        if (OB_FAIL(ret)) {
+        } else if (for_standby && OB_FAIL(check_ls_transfer_scn_(response->transfer_scn_, check_pass))) {
+          STORAGE_LOG(WARN, "failed to check ls transfer scn", K(ret));
+        } else if (for_standby && !check_pass) {
+          //this server does not pass transfer scn check, do not count it into pass_count
+        } else {
+          pass_count++;
+        }
       }
     }
   }
