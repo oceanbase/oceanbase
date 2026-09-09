@@ -697,4 +697,5 @@ GLOBAL_ERRSIM_POINT_DEF(2701, EN_DUMP_THREAD_LEVEL_MEM_CTX, "Whether enable dump
 GLOBAL_ERRSIM_POINT_DEF(2702, EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY, "Whether to generate skip index adaptively for row store delta sstable");
 GLOBAL_ERRSIM_POINT_DEF(2703, EN_ENABLE_OPERATOR_DUMMY_MEM_CHECK, "Used to track whether the operator has been closed && destroyed in test mode");
 GLOBAL_ERRSIM_POINT_DEF(2704, EN_VSLICE_ALLOC_INIT_MEM, "Used to enable ObVSliceAlloc block memory initialization");
+GLOBAL_ERRSIM_POINT_DEF(2707, EN_SQL_MEM_TOTAL_ALLOC_SIZE_CHECK, "Log error when sql memory total alloc size is negative");
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

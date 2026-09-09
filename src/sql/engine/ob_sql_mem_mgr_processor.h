@@ -13,6 +13,7 @@
 #ifndef OB_SQL_MEM_MGR_PROCESSOR_H
 #define OB_SQL_MEM_MGR_PROCESSOR_H
 
+#include "lib/utility/ob_tracepoint.h"
 #include "share/rc/ob_tenant_base.h"
 #include "ob_tenant_sql_memory_manager.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
@@ -74,11 +75,19 @@ public:
   void destroy()
   {
     if (0 < profile_.mem_used_ && OB_NOT_NULL(mem_callback_)) {
+      total_alloc_size_ -= profile_.mem_used_;
+      if (OB_UNLIKELY(total_alloc_size_ < 0)
+          && OB_UNLIKELY(OB_SUCCESS != (
+              OB_E(common::EventTable::EN_SQL_MEM_TOTAL_ALLOC_SIZE_CHECK) OB_SUCCESS))) {
+        SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "total_alloc_size_ is less than 0",
+                        K(total_alloc_size_), "free_size", profile_.mem_used_);
+      }
       mem_callback_->free(profile_.mem_used_);
     }
     mem_callback_ = nullptr;
     sql_mem_mgr_ = nullptr;
     profile_.mem_used_ = 0;
+    total_alloc_size_ = 0;
   }
   void reset()
   {
@@ -95,7 +104,7 @@ public:
   int extend_max_memory_size(ObIAllocator *allocator, PredFunc dump_fun, bool &need_dump,
     int64_t mem_used, int64_t max_times = 1024);
 
-  int update_used_mem_size(int64_t used_size);
+  void update_used_mem_size(int64_t used_size);
 
   void set_periodic_cnt(int64_t cnt) { periodic_cnt_ = cnt; }
   int64_t get_periodic_cnt() const { return periodic_cnt_; }
@@ -113,17 +122,12 @@ public:
   {
     profile_.delta_size_ += size;
     update_memory_delta_size(profile_.delta_size_);
-    total_alloc_size_ += size;
   }
 
   void free(int64_t size)
   {
     profile_.delta_size_ -= size;
     update_memory_delta_size(profile_.delta_size_);
-    total_alloc_size_ -= size;
-    if (total_alloc_size_ < 0) {
-      SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "total_alloc_size_ is less than 0", K(total_alloc_size_));
-    }
   }
 
   void dumped(int64_t delta_size)
@@ -148,6 +152,7 @@ public:
   {
     if (delta_size > 0 && delta_size >= UPDATED_DELTA_SIZE) {
       if (OB_NOT_NULL(mem_callback_)) {
+        total_alloc_size_ += delta_size;
         mem_callback_->alloc(delta_size);
       }
       profile_.mem_used_ += delta_size;
@@ -161,6 +166,13 @@ public:
       profile_.data_size_ += delta_size;
     } else if (delta_size < 0 && -delta_size >= UPDATED_DELTA_SIZE) {
       if (OB_NOT_NULL(mem_callback_)) {
+        total_alloc_size_ += delta_size;
+        if (OB_UNLIKELY(total_alloc_size_ < 0)
+            && OB_UNLIKELY(OB_SUCCESS != (
+                OB_E(common::EventTable::EN_SQL_MEM_TOTAL_ALLOC_SIZE_CHECK) OB_SUCCESS))) {
+          SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "total_alloc_size_ is less than 0",
+                          K(total_alloc_size_), "free_size", delta_size);
+        }
         mem_callback_->free(-delta_size);
       }
       profile_.mem_used_ += delta_size;
