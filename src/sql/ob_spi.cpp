@@ -2153,6 +2153,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
           }
         }
 
+        ObSPIRetryInfoGuard retry_info_guard(*session);
         do {
           ParamStore *array_params = NULL;
           ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_STATIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -4323,7 +4324,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   OZ (ob_write_string(spi_result->get_allocator(), sql, sql_copy));
   OZ (ob_write_string(spi_result->get_allocator(), ps_sql, ps_sql_copy));
   if (OB_SUCC(ret)) {
-
+    ObSPIRetryInfoGuard retry_info_guard(session_info);
     {
 // #ifdef OB_BUILD_SPM
 //       spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
@@ -4474,7 +4475,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
     OZ (save_unstreaming_cursor_sql(cursor, (sql != NULL ? sql : ps_sql)));
     CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
     if (OB_SUCC(ret)) {
-
+      ObSPIRetryInfoGuard retry_info_guard(session_info);
       ObPLSqlAuditRecord audit_record(sql::PLSql);
       ObQueryRetryCtrl retry_ctrl;
       ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
@@ -8049,6 +8050,7 @@ int ObSPIService::inner_fetch_with_retry(ObPLExecCtx *ctx,
     OX (result_set->get_exec_context().get_physical_plan_ctx()->
               set_timeout_timestamp(min_timeout_ts + time_gap));
     if (OB_SUCC(ret)) {
+      ObSPIRetryInfoGuard retry_info_guard(*session);
       do {
         ret = OB_SUCCESS;
         bool can_retry = true;
@@ -11221,17 +11223,23 @@ ObSPIRetryCtrlGuard::ObSPIRetryCtrlGuard(
       retry_ctrl_.set_tenant_local_schema_version(tenant_version);
       retry_ctrl_.set_sys_local_schema_version(sys_version);
       spi_result_.get_sql_ctx().schema_guard_ = schema_guard;
-      saved_retry_cnt_ = session_info_.get_retry_info_for_update().get_retry_cnt();
       init_ = true;
     }
   }
 }
 
+ObSPIRetryInfoGuard::ObSPIRetryInfoGuard(ObSQLSessionInfo &session_info) : session_info_(session_info)
+{
+  saved_retry_cnt_ = session_info_.get_retry_info_for_update().get_retry_cnt();
+}
+
+ObSPIRetryInfoGuard::~ObSPIRetryInfoGuard()
+{
+  session_info_.get_retry_info_for_update().set_retry_cnt(saved_retry_cnt_);
+}
+
 ObSPIRetryCtrlGuard::~ObSPIRetryCtrlGuard()
 {
-  if (init_) {
-    session_info_.get_retry_info_for_update().set_retry_cnt(saved_retry_cnt_);
-  }
 }
 
 void ObSPIRetryCtrlGuard::test()
