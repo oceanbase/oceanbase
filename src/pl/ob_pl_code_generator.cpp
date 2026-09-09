@@ -7962,49 +7962,79 @@ int ObPLCodeGenerator::generate_loop_control(const ObPLLoopControl &control)
     LOG_WARN("failed to generate goto label", K(ret));
   } else if (OB_FAIL(generate_spi_pl_profiler_before_record(control))) {
     LOG_WARN("failed to generate spi profiler before record call", K(ret), K(control));
-  } else if (!control.get_next_label().empty()) {
-    ObLLVMBasicBlock after_control;
-
-    CHECK_COND_CONTROL;
-
-    RESTORE_LOOP_STACK;
-
-    if (OB_SUCC(ret)) {
-      ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? get_label(control.get_next_label())->exit_ : get_label(control.get_next_label())->start_;
-      if (OB_ISNULL(next.get_v())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("a loop must have valid body", K(next), K(ret));
-      } else if (OB_FAIL(generate_spi_pl_profiler_after_record(control))) {
-        LOG_WARN("failed to generate spi profiler after record call", K(ret), K(control));
-      } else if (OB_FAIL(helper_.create_br(next))) {
-        LOG_WARN("failed to create br", K(ret));
-      } else {
-        if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
-          LOG_WARN("failed to set current", K(ret));
+  } else {
+    // Insert a cancel checkpoint when EXIT/CONTINUE actually targets a loop so
+    // KILL QUERY can terminate pure-JIT infinite loops (LOOP CONTINUE /
+    // WHILE..CONTINUE / EXIT WHEN with a never-true condition). A labeled
+    // EXIT/CONTINUE may also leave a labeled BEGIN...END block which has no
+    // loop on the stack; in that case skip the checkpoint and still execute
+    // the jump logic below (preserving the original behavior).
+    LoopStack::LoopInfo *target_loop = NULL;
+    if (control.get_next_label().empty()) {
+      // An unlabeled EXIT/CONTINUE always targets the current (innermost) loop.
+      target_loop = get_current_loop();
+    } else {
+      const LabelStack::LabelInfo *label_info = get_label(control.get_next_label());
+      if (OB_NOT_NULL(label_info)) {
+        for (int64_t i = get_loop_count() - 1; OB_ISNULL(target_loop) && i >= 0; --i) {
+          if (get_loops()[i].level_ <= label_info->level_) {
+            target_loop = &get_loops()[i];
+          }
         }
       }
     }
-  } else {
-    ObLLVMBasicBlock after_control;
-
-    CHECK_COND_CONTROL;
-
+    if (OB_NOT_NULL(target_loop) && OB_NOT_NULL(target_loop->count_.get_v())) {
+      OZ (generate_early_exit(target_loop->count_,
+                              control.get_stmt_id(),
+                              control.get_block()->in_notfound(),
+                              control.get_block()->in_warning()));
+    }
     if (OB_SUCC(ret)) {
-      ObPLCodeGenerator::LoopStack::LoopInfo *loop_info = get_current_loop();
-      if (OB_ISNULL(loop_info)) {
-        ret = OB_ERR_EXIT_CONTINUE_ILLEGAL;
-        LOG_WARN("illegal EXIT/CONTINUE statement; it must appear inside a loop", K(ret));
+      if (!control.get_next_label().empty()) {
+        ObLLVMBasicBlock after_control;
+
+        CHECK_COND_CONTROL;
+
+        RESTORE_LOOP_STACK;
+
+        if (OB_SUCC(ret)) {
+          ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? get_label(control.get_next_label())->exit_ : get_label(control.get_next_label())->start_;
+          if (OB_ISNULL(next.get_v())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("a loop must have valid body", K(next), K(ret));
+          } else if (OB_FAIL(generate_spi_pl_profiler_after_record(control))) {
+            LOG_WARN("failed to generate spi profiler after record call", K(ret), K(control));
+          } else if (OB_FAIL(helper_.create_br(next))) {
+            LOG_WARN("failed to create br", K(ret));
+          } else {
+            if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
+              LOG_WARN("failed to set current", K(ret));
+            }
+          }
+        }
       } else {
-        ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? loop_info->exit_ : loop_info->start_;
-        if (OB_ISNULL(next.get_v())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("a loop must have valid body", K(ret));
-        } else if (OB_FAIL(generate_spi_adjust_error_trace(control, loop_info->level_))) {
-          LOG_WARN("failed to generate spi adjust error trace", K(ret));
-        } else if (OB_FAIL(helper_.create_br(next))) {
-          LOG_WARN("failed to create br", K(ret));
-        } else if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
-          LOG_WARN("failed to set current", K(ret));
+        ObLLVMBasicBlock after_control;
+
+        CHECK_COND_CONTROL;
+
+        if (OB_SUCC(ret)) {
+          ObPLCodeGenerator::LoopStack::LoopInfo *loop_info = get_current_loop();
+          if (OB_ISNULL(loop_info)) {
+            ret = OB_ERR_EXIT_CONTINUE_ILLEGAL;
+            LOG_WARN("illegal EXIT/CONTINUE statement; it must appear inside a loop", K(ret));
+          } else {
+            ObLLVMBasicBlock next = PL_LEAVE == control.get_type() ? loop_info->exit_ : loop_info->start_;
+            if (OB_ISNULL(next.get_v())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("a loop must have valid body", K(ret));
+            } else if (OB_FAIL(generate_spi_adjust_error_trace(control, loop_info->level_))) {
+              LOG_WARN("failed to generate spi adjust error trace", K(ret));
+            } else if (OB_FAIL(helper_.create_br(next))) {
+              LOG_WARN("failed to create br", K(ret));
+            } else if (OB_FAIL(set_current(after_control))) { //设置CURRENT, 调整INSERT POINT点
+              LOG_WARN("failed to set current", K(ret));
+            }
+          }
         }
       }
     }
