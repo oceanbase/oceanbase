@@ -2092,6 +2092,9 @@ public:
                                     ObColumnSchemaV2 *dst_schema,
                                     ObSchemaGetterGuard &schema_guard,
                                     bool &is_offline) const;
+  static bool is_oracle_value_preserving_column_widening(const ObColumnSchemaV2 &src_column,
+                                                         const ObColumnSchemaV2 &dst_column,
+                                                         const bool is_type_reduction);
   int check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
                               const ObColumnSchemaV2 &dst_schema,
                               ObSchemaGetterGuard &schema_guard,
@@ -2101,6 +2104,7 @@ public:
                                   const ObColumnSchemaV2 &dst_schema,
                                   ObSchemaGetterGuard &schema_guard,
                                   const bool is_oracle_mode,
+                                  const bool is_type_reduction,
                                   bool &is_offline) const;
   static int check_is_exactly_same_type(const ObColumnSchemaV2 &src_column,
                                         const ObColumnSchemaV2 &dst_column,
@@ -2117,13 +2121,15 @@ public:
                                   const int32_t src_col_byte_len,
                                   const int32_t dst_col_byte_len,
                                   const bool is_oracle_mode,
-                                  bool &is_offline) const;
+                                  bool &is_offline,
+                                  bool &is_type_reduction) const;
   int check_alter_column_type(const ObColumnSchemaV2 &src_column,
                               ObColumnSchemaV2 &dst_column,
                               const int32_t src_col_byte_len,
                               const int32_t dst_col_byte_len,
                               const bool is_oracle_mode,
-                              bool &is_offline) const;
+                              bool &is_offline,
+                              bool &is_type_reduction) const;
 
   int get_column_byte_length(const bool is_oracle_mode, const ObColumnSchemaV2 &col,
                              const bool use_lob_inrow_threshold, int64_t &length) const;
