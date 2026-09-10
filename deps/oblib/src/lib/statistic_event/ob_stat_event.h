@@ -368,6 +368,10 @@ STAT_EVENT_ADD_DEF(STORAGE_WRITING_THROTTLE_TIME, "storage waiting throttle time
 STAT_EVENT_ADD_DEF(IO_READ_DEVICE_TIME, "io read execute time", ObStatClassIds::STORAGE, 60094, true, true, true)
 STAT_EVENT_ADD_DEF(IO_WRITE_DEVICE_TIME, "io write execute time", ObStatClassIds::STORAGE, 60095, true, true, true)
 
+STAT_EVENT_ADD_DEF(TABLE_INSERT_ROW_COUNT, "table insert row count", ObStatClassIds::STORAGE, 60200, true, true, true)
+STAT_EVENT_ADD_DEF(TABLE_UPDATE_ROW_COUNT, "table update row count", ObStatClassIds::STORAGE, 60201, true, true, true)
+STAT_EVENT_ADD_DEF(TABLE_DELETE_ROW_COUNT, "table delete row count", ObStatClassIds::STORAGE, 60202, true, true, true)
+
 // backup & restore
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, 69000, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_BYTES, "backup io read bytes", ObStatClassIds::STORAGE, 69001, true, true, true)
