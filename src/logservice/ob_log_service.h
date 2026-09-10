@@ -226,6 +226,7 @@ public:
 
   int check_disk_space_enough(bool &is_disk_enough);
   int check_log_disk_under_pressure(bool &log_disk_under_pressure);
+  static int get_min_data_version(uint64_t &min_data_version);
 
   palf::PalfEnv *get_palf_env() { return palf_env_; }
   // TODO by yunlong: temp solution, will by removed after Reporter be added in MTL
@@ -252,6 +253,7 @@ private:
 private:
   bool is_inited_;
   bool is_running_;
+  bool is_data_version_current_;
 
   common::ObAddr self_;
   palf::PalfEnv *palf_env_;

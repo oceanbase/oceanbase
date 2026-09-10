@@ -13,6 +13,7 @@
 #define private public
 #include "logservice/palf/log_meta_info.h"            // LogPrepareMeta...
 #undef private
+#include "logservice/ob_log_service.h"                // ObLogService
 #include <gtest/gtest.h>
 
 namespace oceanbase
@@ -208,6 +209,10 @@ TEST(TestLogMetaInfos, test_log_config_meta)
     EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
         barrier_log_proposal_id, barrier_lsn, barrier_mode_pid));
     EXPECT_TRUE(log_config_meta1.is_valid());
+    EXPECT_EQ(static_cast<int64_t>(LogConfigMeta::LOG_CONFIG_META_VERSION_42), log_config_meta1.version_);
+    EXPECT_EQ(barrier_log_proposal_id, log_config_meta1.prev_log_proposal_id_);
+    EXPECT_EQ(barrier_lsn, log_config_meta1.prev_lsn_);
+    EXPECT_EQ(barrier_mode_pid, log_config_meta1.prev_mode_pid_);
 
     // Test serialzie and deserialize
     int64_t pos = 0;
@@ -429,6 +434,30 @@ TEST(TestLogMetaInfos, test_log_config_version)
   }
 }
 
+TEST(TestLogMetaInfos, test_current_data_version_cache)
+{
+  logservice::ObLogService log_service;
+  share::ObTenantBase tenant_base(1001);
+  uint64_t min_data_version = 0;
+  ObClusterVersion &cluster_version = ObClusterVersion::get_instance();
+  const uint64_t saved_cluster_version = cluster_version.get_cluster_version();
+  tenant_base.set<logservice::ObLogService*>(&log_service);
+  share::ObTenantEnv::set_tenant(&tenant_base);
+
+  cluster_version.update_cluster_version(DATA_VERSION_4_2_4_0);
+  EXPECT_EQ(OB_SUCCESS, logservice::ObLogService::get_min_data_version(min_data_version));
+  EXPECT_EQ(DATA_VERSION_4_2_4_0, min_data_version);
+  cluster_version.update_cluster_version(DATA_CURRENT_VERSION);
+  EXPECT_EQ(OB_SUCCESS, logservice::ObLogService::get_min_data_version(min_data_version));
+  EXPECT_EQ(DATA_CURRENT_VERSION, min_data_version);
+  cluster_version.update_cluster_version(DATA_VERSION_4_2_4_0);
+  EXPECT_EQ(OB_SUCCESS, logservice::ObLogService::get_min_data_version(min_data_version));
+  EXPECT_EQ(DATA_CURRENT_VERSION, min_data_version);
+
+  share::ObTenantEnv::set_tenant(NULL);
+  cluster_version.update_cluster_version(saved_cluster_version);
+}
+
 } // end of unittest
 } // end of oceanbase
 
@@ -441,4 +470,3 @@ int main(int args, char **argv)
   oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }
-

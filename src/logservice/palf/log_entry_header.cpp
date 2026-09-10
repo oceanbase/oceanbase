@@ -12,9 +12,9 @@
 
 #include "log_entry_header.h"
 #include "lib/checksum/ob_parity_check.h"   // parity_check
-#include "share/ob_cluster_version.h"       // GET_MIN_DATA_VERSION
-#include "share/rc/ob_tenant_base.h"        // MTL_ID
+#include "share/ob_cluster_version.h"       // DATA_VERSION_4_2_5_0
 #include "logservice/ob_log_base_header.h"  // ObLogBaseHeader
+#include "logservice/ob_log_service.h"      // ObLogService
 
 namespace oceanbase
 {
@@ -245,8 +245,8 @@ int16_t LogEntryHeader::get_version_() const
   int16_t version = LOG_ENTRY_HEADER_VERSION;
   int ret = OB_SUCCESS;
   uint64_t min_data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
-    PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", K(ret));
+  if (OB_FAIL(logservice::ObLogService::get_min_data_version(min_data_version))) {
+    PALF_LOG(WARN, "get_min_data_version failed", K(ret));
   } else if (min_data_version >= DATA_VERSION_4_2_5_0) {
     version = LOG_ENTRY_HEADER_VERSION2;
   }

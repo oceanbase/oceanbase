@@ -5226,8 +5226,6 @@ int PalfHandleImpl::update_palf_stat()
 int PalfHandleImpl::try_lock_config_change(int64_t lock_owner, int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -5235,14 +5233,6 @@ int PalfHandleImpl::try_lock_config_change(int64_t lock_owner, int64_t timeout_u
   } else if (OB_UNLIKELY(lock_owner <= 0 || timeout_us <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(lock_owner), K(timeout_us));
-  } else if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    ret = OB_NOT_SUPPORTED;
-    PALF_LOG(WARN, "not supported when data version is invalid", KR(ret), KPC(this),
-        K(lock_owner), K(timeout_us));
-  } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    PALF_LOG(WARN, "not supported with current data version", KR(ret), K(tenant_data_version),
-        KPC(this), K(lock_owner), K(timeout_us));
   } else {
     LogConfigChangeArgs args(lock_owner, ConfigChangeLockType::LOCK_PAXOS_MEMBER_CHANGE, TRY_LOCK_CONFIG_CHANGE);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {
@@ -5257,22 +5247,12 @@ int PalfHandleImpl::try_lock_config_change(int64_t lock_owner, int64_t timeout_u
 int PalfHandleImpl::unlock_config_change(int64_t lock_owner, int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  uint64_t tenant_data_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not init", KR(ret), KPC(this));
   } else if (OB_UNLIKELY(lock_owner <= 0 || timeout_us <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(lock_owner), K(timeout_us));
-  } else if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
-    ret = OB_NOT_SUPPORTED;
-    PALF_LOG(WARN, "not supported when data version is invalid", KR(ret), KPC(this),
-        K(lock_owner), K(timeout_us));
-  } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    PALF_LOG(WARN, "not supported with current data version", KR(ret), K(tenant_data_version),
-        KPC(this), K(lock_owner), K(timeout_us));
   } else {
     LogConfigChangeArgs args(lock_owner, ConfigChangeLockType::LOCK_NOTHING, UNLOCK_CONFIG_CHANGE);
     if (OB_FAIL(one_stage_config_change_(args, timeout_us))) {

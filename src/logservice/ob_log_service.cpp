@@ -53,6 +53,7 @@ using namespace oceanbase::common;
 ObLogService::ObLogService() :
     is_inited_(false),
     is_running_(false),
+    is_data_version_current_(false),
     self_(),
     palf_env_(NULL),
     net_keepalive_adapter_(NULL),
@@ -193,6 +194,7 @@ void ObLogService::wait()
 void ObLogService::destroy()
 {
   is_inited_ = false;
+  ATOMIC_STORE(&is_data_version_current_, false);
   self_.reset();
   apply_service_.destroy();
   replay_service_.destroy();
@@ -218,6 +220,22 @@ void ObLogService::destroy()
   alloc_mgr_ = NULL;
   locality_adapter_.destroy();
   FLOG_INFO("ObLogService is destroyed");
+}
+
+int ObLogService::get_min_data_version(uint64_t &min_data_version)
+{
+  int ret = OB_SUCCESS;
+  ObLogService *log_service = MTL(ObLogService*);
+  min_data_version = 0;
+  if (OB_NOT_NULL(log_service) && ATOMIC_LOAD(&log_service->is_data_version_current_)) {
+    min_data_version = DATA_CURRENT_VERSION;
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    CLOG_LOG(WARN, "failed to get min data version", K(ret), "tenant_id", MTL_ID());
+  } else if (OB_NOT_NULL(log_service) && DATA_CURRENT_VERSION == min_data_version) {
+    // DATA_CURRENT_VERSION is terminal during the lifetime of the current observer binary.
+    ATOMIC_STORE(&log_service->is_data_version_current_, true);
+  }
+  return ret;
 }
 
 int check_and_prepare_dir(const char *dir)
