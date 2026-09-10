@@ -5584,6 +5584,46 @@ bool ObTableSchema::is_modify_column_with_prefix_index_supported(const uint64_t 
       || data_version >= DATA_VERSION_5_0_2_0;
 }
 
+bool ObTableSchema::is_oracle_value_preserving_column_widening(
+     const ObColumnSchemaV2 &src_column,
+     const ObColumnSchemaV2 &dst_column,
+     const bool is_type_reduction)
+{
+  const ObObjMeta &src_meta = src_column.get_meta_type();
+  const ObObjMeta &dst_meta = dst_column.get_meta_type();
+  const ObAccuracy &src_accuracy = src_column.get_accuracy();
+  const ObAccuracy &dst_accuracy = dst_column.get_accuracy();
+  bool is_charset_changed = false;
+  bool is_char_len_reduced = false;
+  bool bool_ret = false;
+  if (src_meta.is_character_type()
+      && (src_column.get_charset_type() != dst_column.get_charset_type()
+          || src_column.get_collation_type() != dst_column.get_collation_type())) {
+    is_charset_changed = true;
+  }
+  if (src_meta.is_character_type()
+      && src_column.get_data_length() > dst_column.get_data_length()) {
+    is_char_len_reduced = true;
+  }
+  if (is_type_reduction
+      || is_charset_changed
+      || is_char_len_reduced
+      || src_column.get_data_type() != dst_column.get_data_type()
+      || src_meta.is_unsigned() != dst_meta.is_unsigned()) {
+    bool_ret = false;
+  } else if (src_meta.is_decimal_int()) {
+    bool_ret = (src_accuracy.get_scale() == dst_accuracy.get_scale())
+            && (get_decimalint_type(src_accuracy.get_precision())
+                == get_decimalint_type(dst_accuracy.get_precision()));
+  } else {
+    bool_ret = ob_is_number_tc(src_column.get_data_type())
+            || src_meta.is_varying_len_char_type()
+            || src_meta.is_raw()
+            || src_meta.is_urowid();
+  }
+  return bool_ret;
+}
+
 int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
                                            const ObColumnSchemaV2 &dst_schema,
                                            ObSchemaGetterGuard &schema_guard,
@@ -5665,6 +5705,7 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
                                                const ObColumnSchemaV2 &dst_column,
                                                ObSchemaGetterGuard &schema_guard,
                                                const bool is_oracle_mode,
+                                               const bool is_type_reduction,
                                                bool &is_offline) const
 {
   int ret = OB_SUCCESS;
@@ -5703,8 +5744,13 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
           is_offline = true;
         }
       }
-      if (is_column_in_foreign_key(src_column.get_column_id()) ||
-          is_column_in_check_constraint(src_column.get_column_id()) ||
+      // A check constraint or a foreign key on the column does not require offline ddl when
+      // the modification can not change the persisted value, because in that case neither the
+      // check expression nor the foreign key relationship can change its result on the rows
+      // which have already been written.
+      if ((!is_oracle_value_preserving_column_widening(src_column, dst_column, is_type_reduction)
+            && (is_column_in_foreign_key(src_column.get_column_id())
+                || is_column_in_check_constraint(src_column.get_column_id()))) ||
           src_meta.is_unsigned() != dst_meta.is_unsigned()) {
         is_offline = true;
       }
@@ -5876,7 +5922,7 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
   int ret = OB_SUCCESS;
   bool is_same = false;
   bool is_oracle_mode = false;
-  bool unused_type_reduction = false;
+  bool is_type_reduction = false;
   if (OB_ISNULL(src_column) || NULL == dst_column) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The column schema is NULL", K(ret));
@@ -5915,17 +5961,17 @@ int ObTableSchema::check_alter_column_is_offline(const ObColumnSchemaV2 *src_col
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(check_alter_column_accuracy(*src_column, *dst_column, src_col_byte_len,
-                  dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
+                  dst_col_byte_len, is_oracle_mode, is_offline, is_type_reduction))) {
         LOG_WARN("failed to check alter column accuracy", K(ret));
       } else if (OB_FAIL(check_alter_column_type(*src_column, *dst_column, src_col_byte_len,
-                         dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
+                         dst_col_byte_len, is_oracle_mode, is_offline, is_type_reduction))) {
         LOG_WARN("failed to check alter column type", K(ret));
       }
     }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_ddl_type_change_rules(*src_column, *dst_column,
-                     schema_guard, is_oracle_mode, is_offline))) {
+                     schema_guard, is_oracle_mode, is_type_reduction, is_offline))) {
       LOG_WARN("failed to check ddl type change rules", K(ret));
   } else if (OB_FAIL(check_prohibition_rules(*src_column, *dst_column,
                      schema_guard, is_oracle_mode, is_offline))) {
@@ -6026,6 +6072,7 @@ int ObTableSchema::check_column_can_be_altered_offline(
       }
     }
     if (OB_SUCC(ret)) {
+      bool unused_type_reduction = false;
       if (OB_FAIL(check_alter_column_accuracy(*src_column, *dst_column, src_col_byte_len,
                   dst_col_byte_len, is_oracle_mode, is_offline, unused_type_reduction))) {
         LOG_WARN("failed to check alter column accuracy", K(ret));
