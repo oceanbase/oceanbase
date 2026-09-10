@@ -122,7 +122,8 @@ ObBackupTabletGroupFuseCtx::ObBackupTabletGroupFuseCtx()
     fuser_(),
     extern_tablet_meta_writer_(),
     result_mgr_(),
-    report_ctx_()
+    report_ctx_(),
+    pairing_helper_()
 {
 }
 
@@ -142,6 +143,7 @@ void ObBackupTabletGroupFuseCtx::reset()
   finish_ts_ = 0;
   task_id_.reset();
   param_.reset();
+  pairing_helper_.reset();
 }
 
 void ObBackupTabletGroupFuseCtx::reuse()
@@ -165,6 +167,14 @@ int ObBackupTabletGroupFuseCtx::init()
   } else if (OB_FAIL(fuser_.init(param_.tenant_id_, param_.backup_dest_,
       param_.backup_set_desc_, param_.ls_id_, param_.turn_id_))) {
     LOG_WARN("failed to init fuser", K(ret), K_(param));
+  } else if (OB_FAIL(init_pairing_helper_(backup_set_dest))) {
+    LOG_WARN("failed to init pairing helper", K(ret), K_(param));
+  // NOTE: the extern writer must be initialized last. Its init() opens a multipart
+  // upload on the remote object storage, and nothing aborts that upload when init()
+  // fails afterwards: ObInitialBackupTabletGroupFuseTask::process() does not generate
+  // the finish dag in that case, so ObFinishBackupTabletGroupFuseTask::abort_extern_
+  // writer_() never runs, and ~ObExternTabletMetaWriter() only closes the device and
+  // the fd. Any new step has to be inserted above this one.
   } else if (OB_FAIL(extern_tablet_meta_writer_.init(backup_set_dest,
                                                      param_.ls_id_,
                                                      param_.turn_id_,
@@ -175,6 +185,35 @@ int ObBackupTabletGroupFuseCtx::init()
     LOG_WARN("failed to init extern tablet meta writer", K(ret), K_(param));
   } else {
     is_inited_ = true;
+  }
+  return ret;
+}
+
+// The tablet pairing snapshot belongs to the backup set and never changes during the
+// fuse stage, so it is read from the external file exactly once here, in the initial
+// fuse task, and then shared read-only by every tablet fuse task of this dag net.
+//
+// It must NOT be loaded per tablet fuse task: ObBackupTabletFuseDag::create_first_task()
+// is called by ObDagPrioScheduler::generate_next_dag_() while the HA_LOW prio lock is
+// held on the single tenant DagScheduler thread. Re-reading the whole tenant pairing
+// file and rebuilding the map there costs hundreds of milliseconds per tablet, which
+// throttles the whole tenant dag scheduling loop and starves other priorities.
+int ObBackupTabletGroupFuseCtx::init_pairing_helper_(const share::ObBackupDest &backup_set_dest)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtil::current_time();
+  pairing_helper_.reset(); // tolerate ctx reuse
+  if (OB_UNLIKELY(!backup_set_dest.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(pairing_helper_.init(param_.tenant_id_))) {
+    LOG_WARN("failed to init pairing helper", K(ret), K_(param));
+  } else if (OB_FAIL(pairing_helper_.load_from_tenant_file(backup_set_dest))) {
+    LOG_WARN("failed to load tenant pairing file", K(ret), K(backup_set_dest));
+  } else {
+    LOG_INFO("succeed to load tablet pairing info for tablet fuse", K_(param),
+        "pairing_count", pairing_helper_.get_pairing_count(),
+        "cost_us", ObTimeUtil::current_time() - start_ts);
   }
   return ret;
 }

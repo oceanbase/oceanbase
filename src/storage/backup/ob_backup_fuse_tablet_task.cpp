@@ -605,8 +605,7 @@ ObBackupTabletFuseTask::ObBackupTabletFuseTask()
     sql_proxy_(NULL),
     fuse_ctx_(NULL),
     group_ctx_(NULL),
-    fuse_type_(ObBackupFuseTabletType::MAX),
-    pairing_helper_()
+    fuse_type_(ObBackupFuseTabletType::MAX)
 {
 }
 
@@ -628,11 +627,11 @@ int ObBackupTabletFuseTask::init(
     fuse_ctx_ = &fuse_ctx;
     group_ctx_ = &group_ctx;
     sql_proxy_ = group_ctx.report_ctx_.sql_proxy_;
-    if (OB_FAIL(init_pairing_helper_())) {
-      LOG_WARN("failed to init pairing helper", K(ret));
-    } else {
-      is_inited_ = true;
-    }
+    // NOTE: this runs inside ObBackupTabletFuseDag::create_first_task(), which the
+    // scheduler calls while holding the HA_LOW prio lock on the single tenant
+    // DagScheduler thread. Keep it cheap: no IO and no big object construction here.
+    // The tablet pairing info is loaded once by the group ctx and shared read-only.
+    is_inited_ = true;
   }
   return ret;
 }
@@ -790,11 +789,12 @@ int ObBackupTabletFuseTask::fuse_tablet_item_(
           group_ctx_->param_.tenant_id_, fuse_item.tablet_id_, is_reorganized))) {
         LOG_WARN("failed to check tablet has reorganized", K(ret));
       } else if (is_reorganized) {
+        const ObBackupTabletPairingHelper &pairing_helper = group_ctx_->get_pairing_helper();
         fuse_type_ = ObBackupFuseTabletType::FUSE_TABLET_META_REORGANIZED;
         output_param.ha_status_.set_restore_status(ObTabletRestoreStatus::UNDEFINED);
-        if (!pairing_helper_.is_empty()) {
+        if (!pairing_helper.is_empty()) {
           ObTabletID paired_tablet_id;
-          if (OB_FAIL(pairing_helper_.get_paired_tablet_id(fuse_item.tablet_id_, paired_tablet_id))) {
+          if (OB_FAIL(pairing_helper.get_paired_tablet_id(fuse_item.tablet_id_, paired_tablet_id))) {
             if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
             } else {
@@ -895,24 +895,6 @@ int ObBackupTabletFuseTask::record_server_event_()
                           "result", result,
                           fuse_type_);
 #endif
-  }
-  return ret;
-}
-
-int ObBackupTabletFuseTask::init_pairing_helper_()
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupDest backup_set_dest;
-  if (OB_ISNULL(group_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("group ctx should not be null", K(ret));
-  } else if (OB_FAIL(share::ObBackupPathUtil::construct_backup_set_dest(
-          group_ctx_->param_.backup_dest_, group_ctx_->param_.backup_set_desc_, backup_set_dest))) {
-    LOG_WARN("failed to construct backup set dest", K(ret));
-  } else if (OB_FAIL(pairing_helper_.init(group_ctx_->param_.tenant_id_))) {
-    LOG_WARN("failed to init pairing helper", K(ret));
-  } else if (OB_FAIL(pairing_helper_.load_from_tenant_file(backup_set_dest))) {
-    LOG_WARN("failed to load tenant pairing file", K(ret));
   }
   return ret;
 }

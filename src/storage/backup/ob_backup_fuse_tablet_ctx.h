@@ -15,6 +15,7 @@
 
 #include "lib/lock/ob_mutex.h"
 #include "storage/backup/ob_backup_tablet_meta_fuser.h"
+#include "storage/backup/ob_backup_tablet_pairing_helper.h"
 #include "storage/backup/ob_backup_task.h"
 #include "storage/high_availability/ob_storage_ha_dag.h"
 
@@ -86,6 +87,13 @@ public:
   int get_result(int32_t &result);
   int check_allow_retry(bool &allow_retry);
 
+  // The tablet pairing snapshot is immutable for a backup set, so it is loaded once by
+  // init() and then shared read-only by every tablet fuse task of this dag net.
+  const backup::ObBackupTabletPairingHelper &get_pairing_helper() const { return pairing_helper_; }
+
+private:
+  int init_pairing_helper_(const share::ObBackupDest &backup_set_dest);
+
 public:
   bool is_inited_;
   int64_t start_ts_;
@@ -97,12 +105,16 @@ public:
   backup::ObExternTabletMetaWriter extern_tablet_meta_writer_;
   ObStorageHAResultMgr result_mgr_;
   ObBackupReportCtx report_ctx_;
+  // Loaded once in init(), read-only afterwards. Do NOT mutate it after init(),
+  // tablet fuse tasks of this dag net read it concurrently.
+  backup::ObBackupTabletPairingHelper pairing_helper_;
 
   TO_STRING_KV(
       K_(start_ts),
       K_(finish_ts),
       K_(task_id),
-      K_(param));
+      K_(param),
+      K_(pairing_helper));
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletGroupFuseCtx);
 };
 

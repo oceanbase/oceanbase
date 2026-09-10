@@ -89,8 +89,14 @@ public:
   TO_STRING_KV(K_(is_inited), "pairing_count", tablet_pairing_map_.size() / 2);
 
 private:
+  // Re-create the bucket array so that it can hold `entry_cnt` entries without
+  // degenerating into long chains. No-op unless the map is still empty.
+  int reserve_bucket_(const int64_t entry_cnt);
+
+private:
   static const int64_t DEFAULT_BUCKET_SIZE = 1000;
   bool is_inited_;
+  uint64_t tenant_id_;
   common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> tablet_pairing_map_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletPairingHelper);
 };

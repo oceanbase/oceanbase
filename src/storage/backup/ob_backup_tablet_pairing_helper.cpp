@@ -28,6 +28,7 @@ namespace backup
 
 ObBackupTabletPairingHelper::ObBackupTabletPairingHelper()
   : is_inited_(false),
+    tenant_id_(OB_INVALID_TENANT_ID),
     tablet_pairing_map_()
 {
 }
@@ -46,6 +47,7 @@ int ObBackupTabletPairingHelper::init(const uint64_t tenant_id)
   } else if (OB_FAIL(tablet_pairing_map_.create(DEFAULT_BUCKET_SIZE, "BkPairingMap", "BkPairingMap", tenant_id))) {
     LOG_WARN("failed to create tablet pairing map", K(ret));
   } else {
+    tenant_id_ = tenant_id;
     is_inited_ = true;
   }
   return ret;
@@ -56,7 +58,33 @@ void ObBackupTabletPairingHelper::reset()
   if (tablet_pairing_map_.created()) {
     tablet_pairing_map_.destroy();
   }
+  tenant_id_ = OB_INVALID_TENANT_ID;
   is_inited_ = false;
+}
+
+// The bucket array of ObHashMap is fixed at create time (EXTEND_RATIO is 1, so it never
+// extends itself). A map created with DEFAULT_BUCKET_SIZE degenerates into chains of
+// length entry_cnt/DEFAULT_BUCKET_SIZE once the pairing snapshot is large, which makes
+// both the bulk load O(entry_cnt^2/DEFAULT_BUCKET_SIZE) and every later lookup O(chain).
+// Size the buckets up front instead, before any entry is inserted. Best effort: if the
+// map already holds entries, keep the current bucket array as re-creating it would drop
+// them.
+int ObBackupTabletPairingHelper::reserve_bucket_(const int64_t entry_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (entry_cnt <= tablet_pairing_map_.bucket_count() || 0 != tablet_pairing_map_.size()) {
+    // the current bucket array is already large enough, or entries have been inserted
+    // (e.g. merging several LS files), keep using it
+  } else if (OB_FAIL(tablet_pairing_map_.destroy())) {
+    LOG_WARN("failed to destroy tablet pairing map", K(ret));
+  } else if (OB_FAIL(tablet_pairing_map_.create(entry_cnt, "BkPairingMap", "BkPairingMap", tenant_id_))) {
+    LOG_WARN("failed to re-create tablet pairing map", K(ret), K(entry_cnt), K_(tenant_id));
+    reset(); // the map is gone, the helper has to be re-inited before it can be used again
+  }
+  return ret;
 }
 
 int ObBackupTabletPairingHelper::add_pairing(
@@ -237,6 +265,9 @@ int ObBackupTabletPairingHelper::load_from_desc(const ObBackupTabletPairingInfoD
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(reserve_bucket_(desc.pairing_list_.count() * 2/*both directions*/))) {
+    // Bulk load: size the buckets to the snapshot before inserting any entry.
+    LOG_WARN("failed to reserve bucket", K(ret), "pairing_count", desc.pairing_list_.count());
   } else {
     // File stores one direction per pair; rebuild bidirectional map on load.
     ARRAY_FOREACH_X(desc.pairing_list_, idx, cnt, OB_SUCC(ret)) {
