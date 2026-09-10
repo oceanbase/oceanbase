@@ -1075,15 +1075,15 @@ int ObStorageHASrcProvider::advance_src_ls_checkpoint(const ObMigrationOpArg &ar
     LOG_WARN("invalid argument!", K(ret), K(arg));
   } else if (OB_FAIL(choose_source_info_.get_checkpoint_failed_source_infos(source_infos))) {
     LOG_WARN("failed to get checkpoint failed source infos", K(ret));
-  } else if (source_infos.empty()) {
-    LOG_INFO("no checkpoint failed source info, skip trigger src minor compaction", K(ret));
-  } else if (use_c_replica_policy_) {
+  } else if (!source_infos.empty() && use_c_replica_policy_) {
     if (OB_FAIL(choose_src_to_advance_checkpoint(source_infos, arg, true /* must_choose_c_replica */, chosen_src_addr))) {
       LOG_WARN("failed to choose src to advance checkpoint", K(ret), K(source_infos), K(arg));
     }
   }
 
   if (OB_FAIL(ret)) {
+  } else if (source_infos.empty()) {
+    LOG_INFO("no checkpoint failed source info, skip trigger src minor compaction", K(ret));
   } else if (!chosen_src_addr.is_valid() && use_c_replica_policy_ && !is_first_c_replica_) {
     LOG_INFO("no available c replica to advance checkpoint for non-first C replica, skip",
       K(ret), K(source_infos), K(arg));
@@ -1796,7 +1796,8 @@ int ObStorageHAChooseSrcHelper::get_available_src(const ObMigrationOpArg &arg, O
     errsim_test_(arg, src_info);
   }
 
-  if (OB_DATA_SOURCE_NOT_EXIST == ret) {
+  if (OB_DATA_SOURCE_NOT_EXIST == ret || OB_DATA_SOURCE_NOT_VALID == ret) {
+    // Advancing the checkpoint is asynchronous; preserve the source selection error for retry.
     int advance_ckpt_ret = OB_SUCCESS;
     if (OB_SUCCESS != (advance_ckpt_ret = provider_->advance_src_ls_checkpoint(arg))) {
       LOG_WARN("failed to advance src ls checkpoint", K(advance_ckpt_ret), K(arg));

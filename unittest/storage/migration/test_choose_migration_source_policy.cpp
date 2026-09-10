@@ -37,6 +37,8 @@ public:
 
   MOCK_METHOD4(post_ls_meta_info_request, int(const uint64_t, const ObStorageHASrcInfo &,
       const share::ObLSID &, obrpc::ObFetchLSMetaInfoResp &));
+  MOCK_METHOD4(advance_src_ls_checkpoint, int(const uint64_t, const ObStorageHASrcInfo &,
+      const share::ObLSID &, const share::SCN &));
 };
 
 class MockGetMemberHelper : public ObStorageHAGetMemberHelper
@@ -497,6 +499,7 @@ public:
   virtual ~TestChooseMigrationSourcePolicy();
   virtual void SetUp();
   virtual void TearDown();
+  void init_recommend_param(const ObReplicaType replica_type, ObMigrationChooseSrcHelperInitParam &param);
 private:
   static const int64_t INIT_CLUSTER_ID = 1;
   ObStorageHAChooseSrcHelper choose_src_helper_;
@@ -609,6 +612,107 @@ TEST_F(TestChooseMigrationSourcePolicy, get_available_src_with_rs_recommend)
   EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", expect_addr));
   EXPECT_EQ(expect_addr, src_info.src_addr_);
 }
+
+void TestChooseMigrationSourcePolicy::init_recommend_param(
+    const ObReplicaType replica_type, ObMigrationChooseSrcHelperInitParam &param)
+{
+  ObMigrationOpArg arg;
+  ASSERT_EQ(OB_SUCCESS, mock_migrate_arg_for_rs_recommand(arg));
+  arg.data_src_ = ObReplicaMember(arg.data_src_.get_server(), 0, replica_type, 0);
+  if (REPLICA_TYPE_COLUMNSTORE == replica_type) {
+    arg.dst_ = ObReplicaMember(arg.dst_.get_server(), 0, replica_type, 0);
+  }
+  ASSERT_EQ(OB_SUCCESS, mock_migrate_choose_helper_param(1001, ObLSID(1), SCN::min_scn(), arg, param));
+  param.policy_ = ObMigrationChooseSourcePolicy::RECOMMEND;
+  ASSERT_EQ(OB_SUCCESS, mock_leader_addr(param.info_.leader_addr_));
+  ObMember member(arg.data_src_.get_server(), 0);
+  if (REPLICA_TYPE_LOGONLY == replica_type) {
+    member.set_logonly();
+  } else if (REPLICA_TYPE_COLUMNSTORE == replica_type) {
+    member.set_columnstore();
+    param.use_c_replica_policy_ = true;
+  }
+  ASSERT_EQ(OB_SUCCESS, param.info_.member_list_.push_back(member));
+  if (REPLICA_TYPE_READONLY == replica_type || REPLICA_TYPE_COLUMNSTORE == replica_type) {
+    ASSERT_EQ(OB_SUCCESS, param.info_.learner_list_.add_learner(member));
+  }
+  ASSERT_TRUE(param.is_valid());
+}
+
+TEST_F(TestChooseMigrationSourcePolicy, recommend_advances_checkpoint_and_preserves_selection_error)
+{
+  MockLsMetaInfo ls_meta;
+  for (const ObReplicaType replica_type : {REPLICA_TYPE_FULL, REPLICA_TYPE_READONLY, REPLICA_TYPE_COLUMNSTORE}) {
+    for (const bool parent_checkpoint : {false, true}) {
+      for (const int rpc_ret : {OB_SUCCESS, OB_TIMEOUT}) {
+        SCOPED_TRACE(::testing::Message() << replica_type << ", parent=" << parent_checkpoint << ", rpc_ret=" << rpc_ret);
+        ObMigrationChooseSrcHelperInitParam param;
+        ASSERT_NO_FATAL_FAILURE(init_recommend_param(replica_type, param));
+        ObStorageHAChooseSrcHelper helper;
+        ASSERT_EQ(OB_SUCCESS, helper.init(param, &storage_rpc_, &member_helper_));
+        ASSERT_NE(nullptr, helper.provider_);
+        ObStorageHASrcProvider &provider = *helper.provider_;
+        SCN source_scn = SCN::base_scn();
+        const SCN required_scn = mock_ckpt_inc(source_scn);
+        provider.local_clog_checkpoint_scn_ = parent_checkpoint ? source_scn : required_scn;
+        provider.palf_parent_checkpoint_scn_ = parent_checkpoint ? required_scn : source_scn;
+        EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+            .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_base_checkpoint))
+            .WillOnce(Invoke(&ls_meta, &MockLsMetaInfo::post_ls_meta_info_request_max_checkpoint));
+        EXPECT_CALL(storage_rpc_, advance_src_ls_checkpoint(_, _, _, _))
+            .WillOnce(Invoke([&](const uint64_t tenant_id, const ObStorageHASrcInfo &src,
+                const ObLSID &ls_id, const SCN &scn) {
+              EXPECT_EQ(param.tenant_id_, tenant_id);
+              EXPECT_EQ(param.ls_id_, ls_id);
+              EXPECT_EQ(param.arg_.data_src_.get_server(), src.src_addr_);
+              EXPECT_EQ(required_scn, scn);
+              return rpc_ret;
+            }));
+
+        ObStorageHASrcInfo src_info;
+        EXPECT_EQ(OB_DATA_SOURCE_NOT_VALID, helper.get_available_src(param.arg_, src_info));
+        EXPECT_FALSE(src_info.src_addr_.is_valid());
+        ObArray<ObMigrationChooseSourceInfo::ChooseSourceInfo> failed_sources;
+        ASSERT_EQ(OB_SUCCESS, provider.choose_source_info_.get_checkpoint_failed_source_infos(failed_sources));
+        ASSERT_EQ(1, failed_sources.count());
+        EXPECT_EQ(parent_checkpoint ? ObMigrationSourceValidationResult::PARENT_CLOG_CHECKPOINT
+                                    : ObMigrationSourceValidationResult::CLOG_CHECKPOINT,
+            failed_sources.at(0).validation_result_);
+        EXPECT_EQ(OB_SUCCESS, helper.get_available_src(param.arg_, src_info));
+        EXPECT_EQ(param.arg_.data_src_.get_server(), src_info.src_addr_);
+        ASSERT_TRUE(::testing::Mock::VerifyAndClearExpectations(&storage_rpc_));
+      }
+    }
+  }
+}
+
+TEST_F(TestChooseMigrationSourcePolicy, recommend_skips_checkpoint_rpc_for_logonly_and_disk_error)
+{
+  for (const ObReplicaType replica_type : {REPLICA_TYPE_LOGONLY, REPLICA_TYPE_FULL}) {
+    SCOPED_TRACE(::testing::Message() << replica_type);
+    ObMigrationChooseSrcHelperInitParam param;
+    ASSERT_NO_FATAL_FAILURE(init_recommend_param(replica_type, param));
+    ObStorageHAChooseSrcHelper helper;
+    ASSERT_EQ(OB_SUCCESS, helper.init(param, &storage_rpc_, &member_helper_));
+    ASSERT_NE(nullptr, helper.provider_);
+    ObStorageHASrcProvider &provider = *helper.provider_;
+    provider.local_clog_checkpoint_scn_ = SCN::max_scn();
+    EXPECT_CALL(storage_rpc_, post_ls_meta_info_request(_, _, _, _))
+        .Times(REPLICA_TYPE_LOGONLY == replica_type ? 0 : 3)
+        .WillRepeatedly(::testing::Return(OB_DISK_ERROR));
+    EXPECT_CALL(storage_rpc_, advance_src_ls_checkpoint(_, _, _, _)).Times(0);
+
+    ObStorageHASrcInfo src_info;
+    EXPECT_EQ(OB_DATA_SOURCE_NOT_VALID, helper.get_available_src(param.arg_, src_info));
+    EXPECT_FALSE(src_info.src_addr_.is_valid());
+    ObArray<ObMigrationChooseSourceInfo::ChooseSourceInfo> failed_sources;
+    ASSERT_EQ(OB_SUCCESS, provider.choose_source_info_.get_checkpoint_failed_source_infos(failed_sources));
+    EXPECT_TRUE(failed_sources.empty());
+    EXPECT_EQ(OB_SUCCESS, provider.advance_src_ls_checkpoint(param.arg_));
+    ASSERT_TRUE(::testing::Mock::VerifyAndClearExpectations(&storage_rpc_));
+  }
+}
+
 // test idc policy
 // candidate addr: ["192.168.1.1:1234", "192.168.1.2:1234", "192.168.1.3:1234", "192.168.1.4:1234", "192.168.1.5:1234"]
 // 192.168.1.1:1234 : idc -> idc1, region -> region1, checkpoint -> OB_BASE_SCN_TS_NS, type -> F, leader

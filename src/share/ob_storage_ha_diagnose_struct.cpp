@@ -323,7 +323,9 @@ const char * ObStorageHADiagInfo::ObTransferErrorDiagMsg[static_cast<int>(share:
 const char * ObStorageHADiagInfo::get_transfer_error_diagnose_msg() const
 {
   const char *str = "";
-  if (result_msg_ < ObStorageHACostItemName::TRANSFER_START_BEGIN || result_msg_ >= ObStorageHACostItemName::MAX_NAME) {
+  if (OB_SUCCESS == result_code_) {
+    str = "SUCCESS";
+  } else if (result_msg_ < ObStorageHACostItemName::TRANSFER_START_BEGIN || result_msg_ >= ObStorageHACostItemName::MAX_NAME) {
     str = "Unstatistical errors";
   } else {
     str = ObTransferErrorDiagMsg[static_cast<int>(result_msg_)];

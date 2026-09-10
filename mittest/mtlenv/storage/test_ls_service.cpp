@@ -18,6 +18,7 @@
 #define protected public
 #define private public
 #include "src/storage/slog/ob_storage_log_item.h"
+#include "storage/ob_storage_rpc.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/test_tablet_helper.h"
 #include "deps/oblib/src/lib/ob_define.h"
@@ -366,6 +367,39 @@ int gen_create_logonly_ls_arg(const int64_t tenant_id,
     STORAGE_LOG(WARN, "failed to init arg", KR(ret), K(tenant_id), K(ls_id), K(tenant_info), K(create_scn), K(compat_mode), K(palf_base_info), K(major_merge_info));
   }
   return ret;
+}
+
+TEST_F(TestLSService, advance_checkpoint_rpc_rejects_logonly)
+{
+  const uint64_t tenant_id = MTL_ID();
+  ObLSService *ls_service = MTL(ObLSService *);
+  ASSERT_NE(nullptr, ls_service);
+  ls_service->break_point = 0;
+  for (const bool logonly : {false, true}) {
+    const ObLSID ls_id(logonly ? 202 : 201);
+    ObCreateLSArg create_arg;
+    ASSERT_EQ(OB_SUCCESS, logonly ? gen_create_logonly_ls_arg(tenant_id, ls_id, create_arg)
+                                 : gen_create_ls_arg(tenant_id, ls_id, create_arg));
+    ASSERT_EQ(OB_SUCCESS, ls_service->create_ls(create_arg));
+    ObLSHandle handle;
+    ASSERT_EQ(OB_SUCCESS, ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD));
+    ObLS *ls = handle.get_ls();
+    ASSERT_NE(nullptr, ls);
+    ASSERT_EQ(logonly, ls->is_logonly_replica());
+    ObLSMigrationHandler *handler = ls->get_ls_migration_handler();
+    ASSERT_NE(nullptr, handler);
+    const SCN previous_scn = handler->advance_checkpoint_scn_;
+
+    ObAdvanceSrcLSCheckpointP processor;
+    processor.arg_.tenant_id_ = tenant_id;
+    processor.arg_.ls_id_ = ls_id;
+    processor.arg_.recycle_scn_ = SCN::base_scn();
+    EXPECT_EQ(logonly ? OB_STATE_NOT_MATCH : OB_SUCCESS, processor.process());
+    EXPECT_EQ(logonly ? previous_scn : SCN::base_scn(), handler->advance_checkpoint_scn_);
+
+    handle.reset();
+    ASSERT_EQ(OB_SUCCESS, ls_service->remove_ls(ls_id));
+  }
 }
 
 TEST_F(TestLSService, test_remove_ls)
