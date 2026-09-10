@@ -5,6 +5,9 @@
 
 #define private public
 #include "logservice/palf/log_meta_info.h"            // LogPrepareMeta...
+#include "logservice/palf/log_entry_header.h"         // LogEntryHeader
+#include "logservice/palf/log_group_entry_header.h"   // LogGroupEntryHeader
+#include "logservice/palf/log_writer_utils.h"         // LogWriteBuf
 #undef private
 #include <gtest/gtest.h>
 
@@ -201,6 +204,10 @@ TEST(TestLogMetaInfos, test_log_config_meta)
     EXPECT_EQ(OB_SUCCESS, log_config_meta1.generate(curr_log_proposal_id, prev_config_info, curr_config_info,
         barrier_log_proposal_id, barrier_lsn, barrier_mode_pid));
     EXPECT_TRUE(log_config_meta1.is_valid());
+    EXPECT_EQ(static_cast<int64_t>(LogConfigMeta::LOG_CONFIG_META_VERSION_42), log_config_meta1.version_);
+    EXPECT_EQ(barrier_log_proposal_id, log_config_meta1.prev_log_proposal_id_);
+    EXPECT_EQ(barrier_lsn, log_config_meta1.prev_lsn_);
+    EXPECT_EQ(barrier_mode_pid, log_config_meta1.prev_mode_pid_);
 
     // Test serialzie and deserialize
     int64_t pos = 0;
@@ -506,6 +513,50 @@ TEST(TestLogMetaInfos, test_log_config_version)
     EXPECT_EQ(OB_SUCCESS, cv3.inc_update_version(2));
     EXPECT_TRUE(cv2 < cv3);
   }
+}
+
+TEST(TestLogMetaInfos, test_log_header_version)
+{
+  ObClusterVersion &cluster_version = ObClusterVersion::get_instance();
+  const uint64_t old_cluster_version = GET_MIN_CLUSTER_VERSION();
+  uint64_t old_data_version = 0;
+  const uint64_t data_versions[] = {DATA_VERSION_4_3_3_0, DATA_VERSION_4_3_0_0,
+                                  DATA_VERSION_4_3_2_0, DATA_CURRENT_VERSION};
+  const int16_t expected_versions[] = {2, 1, 1, 2};
+  const char log_data[] = "data";
+  int64_t data_checksum = 0;
+  LogWriteBuf write_buf;
+  LogEntryHeader log_entry_header;
+  LogGroupEntryHeader log_group_entry_header;
+  LogGroupEntryHeader version2_header;
+  ASSERT_EQ(OB_SUCCESS, GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, old_data_version));
+  ASSERT_EQ(OB_SUCCESS, write_buf.push_back(log_data, sizeof(log_data)));
+
+  for (int64_t i = 0; i < ARRAYSIZEOF(data_versions); ++i) {
+    cluster_version.update_data_version(data_versions[i]);
+    cluster_version.update_cluster_version(data_versions[i]);
+    log_entry_header.reset();
+    log_group_entry_header.reset();
+    EXPECT_EQ(OB_SUCCESS, log_entry_header.generate_header(log_data, sizeof(log_data), share::SCN::min_scn()));
+    EXPECT_EQ(expected_versions[i], log_entry_header.version_);
+    EXPECT_TRUE(log_entry_header.check_header_integrity());
+    EXPECT_EQ(OB_SUCCESS, log_group_entry_header.generate(true /* is_raw_write */, true /* is_padding_log */,
+        write_buf, sizeof(log_data), share::SCN::min_scn(), 1, LSN(0), 1, data_checksum));
+    log_group_entry_header.update_header_checksum();
+    EXPECT_EQ(expected_versions[i], log_group_entry_header.version_);
+    EXPECT_TRUE(log_group_entry_header.check_header_integrity());
+    EXPECT_TRUE(log_group_entry_header.is_padding_log());
+    EXPECT_TRUE(log_group_entry_header.is_raw_write());
+    EXPECT_TRUE(log_group_entry_header.check_compatibility());
+    if (0 == i) {
+      // Keep a v2 group to check recovery on older tenants.
+      version2_header = log_group_entry_header;
+    }
+    EXPECT_EQ(2 == expected_versions[i], version2_header.check_compatibility());
+  }
+
+  cluster_version.update_data_version(old_data_version);
+  cluster_version.update_cluster_version(old_cluster_version);
 }
 
 } // end of unittest
