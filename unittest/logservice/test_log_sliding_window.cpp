@@ -5,6 +5,7 @@
 
 #include "logservice/palf/log_io_task_cb_utils.h"
 #include "logservice/palf/log_quorum_policy.h"
+#include "lib/utility/ob_tracepoint.h"
 #include <gtest/gtest.h>
 #define private public
 #include "mock_logservice_container/mock_log_config_mgr.h"
@@ -217,6 +218,41 @@ TEST_F(TestLogSlidingWindow, test_to_follower_pending)
   buf_len = 2 * 1024 * 1024;
   EXPECT_EQ(OB_SUCCESS, log_sw_.submit_log(buf, buf_len, ref_scn, lsn, scn));
   EXPECT_EQ(OB_SUCCESS, log_sw_.to_follower_pending(last_lsn));
+}
+
+TEST_F(TestLogSlidingWindow, test_leader_group_buffer_capacity_is_capped)
+{
+  PalfBaseInfo base_info;
+  common::EventItem event_item;
+  common::EventItem reset_item;
+  gen_default_palf_base_info_(base_info);
+  ASSERT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_,
+        &mock_mm_, &mock_mode_mgr_, &mock_log_engine_, &palf_fs_cb_, alloc_mgr_, plugins_, base_info, true,
+        &quorum_policy_));
+  ASSERT_EQ(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE, log_sw_.group_buffer_.get_available_buffer_size());
+
+  event_item.error_code_ = OB_ERR_UNEXPECTED;
+  event_item.occur_ = 1;
+  ASSERT_EQ(OB_SUCCESS,
+      common::EventTable::set_event("ERRSIM_PALF_LEADER_SLIDING_WINDOW_SIZE_40M", event_item));
+  EXPECT_EQ(OB_SUCCESS, log_sw_.group_buffer_.to_leader());
+  EXPECT_EQ(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE, log_sw_.group_buffer_.get_available_buffer_size());
+
+  LSN reuse_lsn;
+  log_sw_.group_buffer_.get_reuse_lsn(reuse_lsn);
+  mock_state_mgr_.update_role_and_state_(LEADER, ACTIVE);
+  EXPECT_EQ(LEADER_DEFAULT_GROUP_BUFFER_SIZE, log_sw_.get_effective_group_buffer_size_());
+  EXPECT_TRUE(log_sw_.can_handle_new_log_(
+      reuse_lsn, LEADER_DEFAULT_GROUP_BUFFER_SIZE, reuse_lsn));
+  EXPECT_FALSE(log_sw_.can_handle_new_log_(
+      reuse_lsn, LEADER_DEFAULT_GROUP_BUFFER_SIZE + 1, reuse_lsn));
+
+  mock_state_mgr_.update_role_and_state_(FOLLOWER, ACTIVE);
+  EXPECT_EQ(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE, log_sw_.get_effective_group_buffer_size_());
+  EXPECT_TRUE(log_sw_.can_handle_new_log_(
+      reuse_lsn, LEADER_DEFAULT_GROUP_BUFFER_SIZE + 1, reuse_lsn));
+  EXPECT_EQ(OB_SUCCESS,
+      common::EventTable::set_event("ERRSIM_PALF_LEADER_SLIDING_WINDOW_SIZE_40M", reset_item));
 }
 
 TEST_F(TestLogSlidingWindow, test_fetch_log)

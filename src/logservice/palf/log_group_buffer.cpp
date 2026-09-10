@@ -5,6 +5,7 @@
 
 #include "log_group_buffer.h"
 #include "share/rc/ob_tenant_base.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "log_writer_utils.h"
 
 namespace oceanbase
@@ -12,6 +13,9 @@ namespace oceanbase
 using namespace share;
 namespace palf
 {
+ERRSIM_POINT_DEF(ERRSIM_PALF_LEADER_SLIDING_WINDOW_SIZE_40M,
+                 "Keep leader sliding-window group buffer at 40 MiB");
+
 LogGroupBuffer::LogGroupBuffer() :
     truncate_lock_(common::ObLatchIds::LOG_GROUP_BUFFER_SPIN_LOCK)
 {
@@ -132,6 +136,14 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
                                         const int64_t total_len,
                                         const LSN &ref_reuse_lsn) const
 {
+  return can_handle_new_log(lsn, total_len, ref_reuse_lsn, get_available_buffer_size());
+}
+
+bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
+                                        const int64_t total_len,
+                                        const LSN &ref_reuse_lsn,
+                                        const int64_t available_buffer_size) const
+{
   bool bool_ret = false;
   const LSN end_lsn = lsn + total_len;
   LSN start_lsn, reuse_lsn;
@@ -139,14 +151,15 @@ bool LogGroupBuffer::can_handle_new_log(const LSN &lsn,
   get_reuse_lsn_(reuse_lsn);
   reuse_lsn = MIN(reuse_lsn, ref_reuse_lsn);
   if (IS_NOT_INIT) {
-  } else if (!lsn.is_valid() || total_len <= 0 || !ref_reuse_lsn.is_valid()) {
-    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn));
+  } else if (!lsn.is_valid() || total_len <= 0 || !ref_reuse_lsn.is_valid() || available_buffer_size <= 0) {
+    PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "invalid arguments", K(bool_ret), K(lsn), K(total_len), K(ref_reuse_lsn),
+        K(available_buffer_size));
   } else if (lsn < start_lsn) {
     PALF_LOG_RET(WARN, OB_INVALID_ARGUMENT, "lsn is less than start_lsn", K(bool_ret), K(lsn), K_(start_lsn));
-  } else if (end_lsn > reuse_lsn + get_available_buffer_size()) {
+  } else if (end_lsn > reuse_lsn + available_buffer_size) {
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       PALF_LOG_RET(WARN, OB_EAGAIN, "end_lsn is larger than max reuse pos", K(bool_ret), K(lsn), K(end_lsn),
-          K(reuse_lsn), K_(available_buffer_size));
+          K(reuse_lsn), K(available_buffer_size));
     }
   } else {
     bool_ret = true;
@@ -338,6 +351,8 @@ int LogGroupBuffer::to_leader()
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(ERRSIM_PALF_LEADER_SLIDING_WINDOW_SIZE_40M)) {
+    ATOMIC_STORE(&available_buffer_size_, FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE);
   } else if (LEADER_DEFAULT_GROUP_BUFFER_SIZE == get_available_buffer_size()) {
     ret = OB_STATE_NOT_MATCH;
     PALF_LOG(WARN, "available_buffer_size_ is already for leader", K(ret), K_(available_buffer_size));
