@@ -3,10 +3,22 @@
 
 // Copyright (c) 2021 OceanBase
 // SPDX-License-Identifier: Apache-2.0
+#include <unistd.h>
+#include <string>
+
+#include "prometheus/gauge.h"
+#include "prometheus/registry.h"
+#include "prometheus/text_serializer.h"
+
+#ifdef ERRSIM
+#include "lib/utility/ob_tracepoint.h"
+#endif
+#include "mittest/ob_mittest_utils.h"
+
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
-#include "prometheus/gauge.h"
+
 const std::string TEST_NAME = "single_arb_server";
 
 using namespace oceanbase::common;
@@ -21,7 +33,25 @@ class TestObSimpleMutilArbServer : public ObSimpleLogClusterTestEnv
 public:
   TestObSimpleMutilArbServer() :  ObSimpleLogClusterTestEnv()
   {}
+#ifdef ERRSIM
+protected:
+  void expect_ls_metrics_disabled_(const int64_t ls_id);
+#endif
 };
+
+#ifdef ERRSIM
+void TestObSimpleMutilArbServer::expect_ls_metrics_disabled_(const int64_t ls_id)
+{
+  PalfHandleLiteGuard guard;
+  ASSERT_EQ(OB_SUCCESS, get_arb_member_guard(ls_id, guard));
+  ASSERT_TRUE(guard.is_valid());
+  EXPECT_EQ(nullptr, guard.palf_handle_lite_->election_counter_.impl_);
+  EXPECT_EQ(nullptr, guard.palf_handle_lite_->config_version_proposal_id_gauge_.impl_);
+  EXPECT_EQ(nullptr, guard.palf_handle_lite_->config_version_config_seq_gauge_.impl_);
+  EXPECT_EQ(nullptr, guard.palf_handle_lite_->mode_version_gauge_.impl_);
+  EXPECT_EQ(nullptr, guard.palf_handle_lite_->ls_has_leader_gauge_.impl_);
+}
+#endif
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 1;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 1;
@@ -39,6 +69,211 @@ bool check_dir_exist(const char *base_dir, const int64_t id)
     CLOG_LOG(WARN, "dir is not exist", K(ret), K(errno), K(dir), K(dir));
   }
   return result;
+}
+
+TEST(ObArbPrometheus, metrics_port_conflict_does_not_block_monitor_init)
+{
+  arbserver::ObArbMonitor monitor;
+  int reserved_fd = -1;
+  int occupied_fd = -1;
+  const int64_t port = get_rpc_port(reserved_fd);
+  DEFER(
+    if (0 <= occupied_fd) {
+      (void) ::close(occupied_fd);
+    }
+    if (0 <= reserved_fd) {
+      (void) ::close(reserved_fd);
+    }
+  );
+  ASSERT_GT(port, 0);
+  ASSERT_EQ(0, listen_occupy_port(port, occupied_fd));
+
+  EXPECT_EQ(OB_SUCCESS, monitor.init(port));
+  EXPECT_EQ(nullptr, monitor.exposer_.get());
+  EXPECT_FALSE(monitor.get_registry().is_valid());
+  EXPECT_EQ(OB_SUCCESS, monitor.update_system_metrics("/tmp"));
+  monitor.destroy();
+}
+
+TEST(ObArbPrometheus, disabled_registry_does_not_block_rpc_metrics)
+{
+  arbserver::ObArbMetricRegistry disabled_registry;
+  arbserver::ObArbMetricRegistry another_registry;
+  arbserver::ObArbSrvRpcXlator rpc_xlator;
+  ASSERT_EQ(OB_SUCCESS, rpc_xlator.init());
+  EXPECT_EQ(OB_SUCCESS, rpc_xlator.set_registry(disabled_registry));
+  EXPECT_EQ(OB_INIT_TWICE, rpc_xlator.set_registry(another_registry));
+  rpc_xlator.destroy();
+}
+
+TEST_F(TestObSimpleMutilArbServer, rpc_metrics_follow_registry_after_restart)
+{
+  const char *const RPC_PROCESS_METRIC_HELP =
+      "# HELP arb_rpc_process_latency_seconds ";
+  const char *const RPC_TRANSPORT_METRIC_HELP =
+      "# HELP arb_rpc_transport_latency_seconds ";
+  ObISimpleLogServer *server = get_cluster()[0];
+  ObSimpleArbServer *arb_server = nullptr;
+  prometheus::TextSerializer serializer;
+  std::string metrics_text;
+
+  SET_CASE_LOG_FILE(TEST_NAME, "rpc_metrics_follow_registry_after_restart");
+  ASSERT_NE(nullptr, server);
+  ASSERT_TRUE(server->is_arb_server());
+  arb_server = static_cast<ObSimpleArbServer *>(server);
+
+  ASSERT_TRUE(arb_server->palf_env_mgr_.get_arb_monitor()->get_registry().is_valid());
+  metrics_text = serializer.Serialize(
+      arb_server->palf_env_mgr_.get_arb_monitor()->get_registry().impl_->Collect());
+  ASSERT_NE(std::string::npos, metrics_text.find(RPC_PROCESS_METRIC_HELP));
+  ASSERT_NE(std::string::npos, metrics_text.find(RPC_TRANSPORT_METRIC_HELP));
+
+  ASSERT_EQ(OB_SUCCESS, restart_server(0));
+  ASSERT_TRUE(arb_server->palf_env_mgr_.get_arb_monitor()->get_registry().is_valid());
+  metrics_text = serializer.Serialize(
+      arb_server->palf_env_mgr_.get_arb_monitor()->get_registry().impl_->Collect());
+  EXPECT_NE(std::string::npos, metrics_text.find(RPC_PROCESS_METRIC_HELP));
+  EXPECT_NE(std::string::npos, metrics_text.find(RPC_TRANSPORT_METRIC_HELP));
+}
+
+TEST(ObArbPrometheus, disable_monitoring_releases_port)
+{
+  arbserver::ObArbMonitor monitor;
+  int reserved_fd = -1;
+  int rebound_fd = -1;
+  const int64_t port = get_rpc_port(reserved_fd);
+  DEFER(
+    if (0 <= rebound_fd) {
+      (void) ::close(rebound_fd);
+    }
+    if (0 <= reserved_fd) {
+      (void) ::close(reserved_fd);
+    }
+  );
+  ASSERT_GT(port, 0);
+  ASSERT_EQ(OB_SUCCESS, monitor.init(port));
+  ASSERT_NE(nullptr, monitor.exposer_.get());
+  monitor.disable_monitoring();
+  monitor.disable_monitoring();
+  EXPECT_EQ(nullptr, monitor.exposer_.get());
+  EXPECT_FALSE(monitor.get_registry().is_valid());
+  EXPECT_EQ(OB_SUCCESS, monitor.update_system_metrics("/tmp"));
+  EXPECT_EQ(0, listen_occupy_port(port, rebound_fd));
+  monitor.destroy();
+}
+
+#ifdef ERRSIM
+TEST_F(TestObSimpleMutilArbServer, metric_add_exception_does_not_block_ls_creation)
+{
+  const int64_t cluster_id = ObSimpleArbServer::cluster_id_;
+  const uint64_t tenant_id = ObISimpleLogServer::DEFAULT_TENANT_ID;
+  const int64_t first_ls_id = 81001;
+  const int64_t second_ls_id = 81002;
+  const palflite::PalfEnvKey env_key(cluster_id, tenant_id);
+  const std::string rolled_back_series =
+      "arb_ls_election_count{cluster_id=\"" + std::to_string(cluster_id)
+      + "\",ls_id=\"" + std::to_string(first_ls_id)
+      + "\",tenant_id=\"" + std::to_string(tenant_id) + "\"}";
+  ObISimpleLogServer *server = get_cluster()[0];
+  ObSimpleArbServer *arb_server = nullptr;
+  palflite::PalfEnvLiteMgr *palf_env_mgr = nullptr;
+  arbserver::ObArbMetricRegistry *registry = nullptr;
+  prometheus::TextSerializer serializer;
+  std::string metrics_text;
+  common::EventItem errsim_item;
+  bool is_event_set = false;
+  bool is_first_arbitration_created = false;
+  bool is_second_arbitration_created = false;
+  bool original_metric_registration_state = false;
+
+  DEFER({
+    common::EventItem clear_item;
+    if (is_event_set) {
+      EXPECT_EQ(OB_SUCCESS,
+          common::EventTable::instance().set_event(
+              "ERRSIM_ARB_GAUGE_FAMILY_ADD_EXCEPTION", clear_item));
+    }
+    if (is_second_arbitration_created) {
+      EXPECT_EQ(OB_SUCCESS, palf_env_mgr->delete_arbitration_instance(
+          env_key, arb_server->self_, second_ls_id));
+    }
+    if (is_first_arbitration_created) {
+      EXPECT_EQ(OB_SUCCESS, palf_env_mgr->delete_arbitration_instance(
+          env_key, arb_server->self_, first_ls_id));
+    }
+    if (nullptr != palf_env_mgr) {
+      ATOMIC_STORE(&palf_env_mgr->allow_ls_metric_registration_,
+                   original_metric_registration_state);
+      EXPECT_EQ(original_metric_registration_state,
+                palf_env_mgr->can_register_ls_metrics());
+    }
+  });
+
+  SET_CASE_LOG_FILE(TEST_NAME, "metric_add_exception_does_not_block_ls_creation");
+  ASSERT_NE(nullptr, server);
+  ASSERT_TRUE(server->is_arb_server());
+  arb_server = static_cast<ObSimpleArbServer *>(server);
+  palf_env_mgr = &arb_server->palf_env_mgr_;
+  original_metric_registration_state =
+      palf_env_mgr->can_register_ls_metrics();
+  ASSERT_TRUE(original_metric_registration_state);
+
+  errsim_item.error_code_ = OB_ERR_UNEXPECTED;
+  errsim_item.occur_ = 1;
+  errsim_item.trigger_freq_ = 0;
+  errsim_item.cond_ = cluster_id;
+  ASSERT_EQ(OB_SUCCESS,
+      common::EventTable::instance().set_event(
+          "ERRSIM_ARB_GAUGE_FAMILY_ADD_EXCEPTION", errsim_item));
+  is_event_set = true;
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->create_arbitration_instance(
+      env_key, arb_server->self_, first_ls_id,
+      ObTenantRole(ObTenantRole::PRIMARY_TENANT)));
+  is_first_arbitration_created = true;
+  EXPECT_FALSE(palf_env_mgr->can_register_ls_metrics());
+  expect_ls_metrics_disabled_(first_ls_id);
+
+  registry = &palf_env_mgr->get_arb_monitor()->get_registry();
+  ASSERT_TRUE(registry->is_valid());
+  ASSERT_NE(nullptr, registry->impl_.get());
+  EXPECT_NE(nullptr, palf_env_mgr->get_ls_election_count_family().impl_);
+  metrics_text = serializer.Serialize(registry->impl_->Collect());
+  EXPECT_NE(std::string::npos, metrics_text.find("# HELP arb_cluster_count "));
+  EXPECT_EQ(std::string::npos, metrics_text.find(rolled_back_series));
+
+  ASSERT_EQ(OB_SUCCESS, palf_env_mgr->create_arbitration_instance(
+      env_key, arb_server->self_, second_ls_id,
+      ObTenantRole(ObTenantRole::PRIMARY_TENANT)));
+  is_second_arbitration_created = true;
+  expect_ls_metrics_disabled_(second_ls_id);
+}
+#endif
+
+TEST_F(TestObSimpleMutilArbServer, null_palf_env_is_rejected_by_load)
+{
+  ObISimpleLogServer *server = get_cluster()[0];
+  ObSimpleArbServer *arb_server = nullptr;
+  PalfEnvLiteGuard env_guard;
+  palflite::PalfEnvLite *palf_env = nullptr;
+  palflite::PalfHandleLite palf_handle;
+  bool is_integrity = true;
+  int64_t loaded_palf_id = palf::INVALID_PALF_ID;
+
+  SET_CASE_LOG_FILE(TEST_NAME, "null_palf_env_is_rejected_by_load");
+  ASSERT_NE(nullptr, server);
+  ASSERT_TRUE(server->is_arb_server());
+  arb_server = static_cast<ObSimpleArbServer *>(server);
+  ASSERT_EQ(OB_SUCCESS, arb_server->get_palf_env_lite(
+      ObISimpleLogServer::DEFAULT_TENANT_ID, env_guard));
+  ASSERT_NE(nullptr, env_guard.palf_env_lite_);
+  palf_env = env_guard.palf_env_lite_;
+
+  EXPECT_EQ(OB_INVALID_ARGUMENT,
+      palf_handle.load(82002, palf_env->log_dir_, palf_env->log_alloc_mgr_,
+          palf_env->log_block_pool_, &palf_env->log_rpc_, &palf_env->log_io_worker_,
+          nullptr, palf_env->self_, &palf_env->election_timer_, 1,
+          arb_server->palf_env_mgr_.get_io_adapter(), is_integrity));
+  EXPECT_EQ(OB_NOT_INIT, palf_handle.get_palf_id(loaded_palf_id));
 }
 
 TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)

@@ -194,9 +194,14 @@ int ObSimpleArbServer::simple_restart(const std::string &cluster_name,
 {
   int ret = OB_SUCCESS;
   srv_network_frame_.deliver_.stop();
-  palf_env_mgr_.destroy();
-  timer_.destroy();
-  if (OB_FAIL(simple_init(cluster_name, self_, node_idx, tio_manager, nullptr, false))) {
+  if (OB_FAIL(srv_network_frame_.rpc_xlator_.reset_registry())) {
+    CLOG_LOG(WARN, "reset RPC metric registry failed", KR(ret));
+  } else {
+    palf_env_mgr_.destroy();
+    timer_.destroy();
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(simple_init(cluster_name, self_, node_idx, tio_manager, nullptr, false))) {
     CLOG_LOG(WARN, "simple_init failed", K(ret));
   } else if (OB_FAIL(srv_network_frame_.deliver_.start(srv_network_frame_.normal_rpc_qhandler_,
       srv_network_frame_.server_rpc_qhandler_))) {
