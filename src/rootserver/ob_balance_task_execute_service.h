@@ -86,7 +86,8 @@ private:
   int process_current_task_status_(const share::ObBalanceTask &task,
                                    const share::ObBalanceJob &job,
                                    ObMySQLTransaction &trans,
-                                   bool &skip_next_status);
+                                   bool &skip_next_status,
+                                   bool &need_wakeup_transfer_service);
   int cancel_current_task_status_(const share::ObBalanceTask &task,
                                   const share::ObBalanceJob &job,
                                   ObMySQLTransaction &trans,
@@ -106,7 +107,8 @@ private:
   int execute_transfer_in_trans_(const share::ObBalanceTask &task,
                                  const share::ObBalanceJob &job,
                                  ObMySQLTransaction &trans,
-                                 bool &all_part_transferred);
+                                 bool &all_part_transferred,
+                                 bool &need_wakeup_transfer_service);
   int get_and_update_merge_ls_part_list_(
       ObMySQLTransaction &trans,
       const share::ObBalanceTask &task,

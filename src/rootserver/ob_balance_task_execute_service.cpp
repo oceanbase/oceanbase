@@ -250,10 +250,12 @@ int ObBalanceTaskExecuteService::update_task_status_(
 int ObBalanceTaskExecuteService::process_current_task_status_(
     const share::ObBalanceTask &task, const share::ObBalanceJob &job,
     ObMySQLTransaction &trans,
-    bool &skip_next_status)
+    bool &skip_next_status,
+    bool &need_wakeup_transfer_service)
 {
   int ret = OB_SUCCESS;
   skip_next_status = false;
+  need_wakeup_transfer_service = false;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -275,7 +277,8 @@ int ObBalanceTaskExecuteService::process_current_task_status_(
     } else if (task.get_task_status().is_transfer()) {
       DEBUG_SYNC(BEFORE_PROCESS_BALANCE_TASK_TRANSFER);
       bool all_part_transfered = false;
-      if (OB_FAIL(execute_transfer_in_trans_(task, job, trans, all_part_transfered))) {
+      if (OB_FAIL(execute_transfer_in_trans_(task, job, trans, all_part_transfered,
+                                             need_wakeup_transfer_service))) {
         LOG_WARN("failed to execute transfer in trans", KR(ret), K(task), K(job));
       } else if (!all_part_transfered) {
         skip_next_status = true;
@@ -329,6 +332,7 @@ int ObBalanceTaskExecuteService::execute_task_(bool &task_need_process)
       ObBalanceJob job;
       task_comment_.reset();
       bool skip_next_status = false;
+      bool need_wakeup_transfer_service = false;
       common::ObMySQLTransaction trans;
       const ObBalanceTask &task = task_array_.at(i);
       const ObBalanceTaskID task_id = task.get_balance_task_id();
@@ -355,7 +359,8 @@ int ObBalanceTaskExecuteService::execute_task_(bool &task_need_process)
       } else if (task_in_trans.get_task_status().is_finish_status()) {
       } else {
         if (job.get_job_status().is_doing()) {
-          if (OB_FAIL(process_current_task_status_(task_in_trans, job, trans, skip_next_status))) {
+          if (OB_FAIL(process_current_task_status_(task_in_trans, job, trans, skip_next_status,
+                                                   need_wakeup_transfer_service))) {
             LOG_WARN("failed to process current task status", KR(ret), K(task_in_trans));
           }
         } else if (job.get_job_status().is_canceling()) {
@@ -392,6 +397,18 @@ int ObBalanceTaskExecuteService::execute_task_(bool &task_need_process)
         if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
           LOG_WARN("failed to end trans", KR(ret), K(tmp_ret));
           ret = OB_SUCC(ret) ? tmp_ret : ret;
+        }
+      }
+
+      // wake up after transaction commit so the newly generated transfer task is visible
+      if (OB_SUCC(ret) && need_wakeup_transfer_service) {
+        ObTenantTransferService *transfer_service = MTL(ObTenantTransferService *);
+        if (OB_ISNULL(transfer_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("transfer service is null after transaction committed",
+                   KR(ret), K(tenant_id_), K(task_in_trans));
+        } else {
+          transfer_service->wakeup();
         }
       }
 
@@ -786,7 +803,8 @@ int ObBalanceTaskExecuteService::wait_alter_ls_(const share::ObBalanceTask &task
 int ObBalanceTaskExecuteService::execute_transfer_in_trans_(
     const ObBalanceTask &task, const share::ObBalanceJob &job,
     ObMySQLTransaction &trans,
-    bool &all_part_transferred)
+    bool &all_part_transferred,
+    bool &need_wakeup_transfer_service)
 {
   int ret = OB_SUCCESS;
   ObTenantTransferService *transfer_service = MTL(ObTenantTransferService*);
@@ -797,6 +815,7 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(
   ObTransferPartList to_do_part_list;
   ObTransferTask transfer_task;
   all_part_transferred = false;
+  need_wakeup_transfer_service = false;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -858,7 +877,7 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(
         trans))) {
       LOG_WARN("failed to generate new transfer task", KR(ret), K(tenant_id_), K(task), K(transfer_task));
     } else {
-      transfer_service->wakeup();
+      need_wakeup_transfer_service = true;
       if (job.get_job_type().is_transfer_partition()) {
         if (OB_FAIL(try_start_transfer_partition_task_(job, transfer_task.get_part_list(),
                 transfer_task.get_task_id(), task.get_dest_ls_id(), trans))) {
@@ -1304,4 +1323,3 @@ int ObBalanceTaskExecuteService::try_start_transfer_partition_task_(
 
 }
 }
-
