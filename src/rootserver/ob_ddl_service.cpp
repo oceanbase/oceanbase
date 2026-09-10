@@ -31413,50 +31413,54 @@ int ObDDLService::retry_to_get_schema_version_(const ObRefreshSchemaStatus &sche
 }
 
 
-int ObDDLService::refresh_schema(uint64_t tenant_id, const bool inc_sequence_id, int64_t *refreshed_schema_version)
+int ObDDLService::refresh_schema(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> tenant_ids;
   ObRefreshSchemaInfo schema_info;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", K(ret));
-  } else if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
+  } else if (OB_FAIL(construct_tenant_broadcast_info(tenant_id, schema_info))) {
+    LOG_WARN("fail to construct tenant broadcast info", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(refresh_schema(schema_info))) {
+    LOG_WARN("fail to refresh schema", KR(ret), K(schema_info));
+  }
+  return ret;
+}
+
+int ObDDLService::refresh_schema(const ObRefreshSchemaInfo &schema_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = schema_info.get_tenant_id();
+  int64_t refreshed_schema_version = OB_INVALID_VERSION;
+  ObArray<uint64_t> tenant_ids;
+  if (OB_FAIL(tenant_ids.push_back(tenant_id))) {
     LOG_WARN("fail to push back tenant_id", KR(ret), K(tenant_id));
   } else if (OB_FAIL(schema_retry_to_die(tenant_id, &ObDDLService::retry_to_refresh_schema_, tenant_ids))) {
     LOG_WARN("fail to retry refresh schema", KR(ret), K(tenant_id));
   }
   bool need_stop = !ObDDLServiceLauncher::is_ddl_service_started();
   if (OB_SUCC(ret) && !need_stop) {
-    int64_t schema_version = OB_INVALID_VERSION;
-    if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(
-                       tenant_id, schema_version))) {
+    if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("fail to get tenant refreshed schema version", KR(ret), K(tenant_id));
+    } else if (OB_INVALID_VERSION != refreshed_schema_version
+               && refreshed_schema_version < schema_info.get_schema_version()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant schema version rollback", KR(ret), K(tenant_id), K(refreshed_schema_version), K(schema_info));
     } else {
-      ObSchemaService *schema_service = schema_service_->get_schema_service();
-      ObRefreshSchemaInfo schema_info;
-      schema_info.set_tenant_id(tenant_id);
-      schema_info.set_schema_version(schema_version);
+      ObArray<ObRefreshSchemaInfo> schema_infos;
       bool all_tenant_schema_refreshed = false;
-      if (OB_ISNULL(schema_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("schema_service is null", K(ret));
-      } else if (inc_sequence_id && OB_FAIL(schema_service->inc_sequence_id())) {
-        LOG_WARN("increase sequence_id failed", K(ret));
-      } else if (FALSE_IT(schema_info.set_sequence_id(schema_service->get_sequence_id()))) {
-      } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-        LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
-      } else if (OB_FAIL(schema_service_->check_all_tenant_schema_refreshed(all_tenant_schema_refreshed))) {
-        LOG_WARN("fail to check all tenant schema refreshed", KR(ret));
-      }
       // notify_refresh_schema will skip rs, so update rs sequence_id here.
       // We need to check all tenant schema refreshed, because schema refresh is driven by heartbeat after observer restart.
       // Otherwise, sequence_id will be updated here even if some tenants' schema is not refreshed,
       // and schema refresh driven by heartbeat may skip these tenants.
-      else if (all_tenant_schema_refreshed && OB_FAIL(schema_service_->set_last_refreshed_schema_info(schema_info))) {
-        LOG_WARN("fail to set last refreshed schema info", KR(ret));
-      } else if (OB_NOT_NULL(refreshed_schema_version)) {
-        *refreshed_schema_version = schema_version;
+      // A single-tenant refresh cannot cover sequence gaps or unloaded tenants.
+      if (OB_FAIL(schema_service_->check_all_tenant_schema_refreshed(all_tenant_schema_refreshed))) {
+        LOG_WARN("fail to check all tenant schema refreshed", KR(ret));
+      } else if (all_tenant_schema_refreshed && OB_FAIL(schema_infos.push_back(schema_info))) {
+        LOG_WARN("fail to push back refresh schema info", KR(ret));
+      } else if (all_tenant_schema_refreshed && OB_FAIL(schema_service_->try_update_last_refreshed_schema_info(schema_infos))) {
+        LOG_WARN("fail to update last refreshed schema info", KR(ret));
       }
     }
   }
@@ -31481,10 +31485,8 @@ int ObDDLService::construct_tenant_broadcast_info(const uint64_t tenant_id, ObRe
     if (OB_ISNULL(schema_service)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema_service is null", K(ret));
-    } else if (OB_FAIL(schema_service->inc_sequence_id())) {
-      LOG_WARN("increase sequence_id failed", K(ret));
-    } else {
-      schema_info.set_sequence_id(schema_service->get_sequence_id());
+    } else if (OB_FAIL(schema_service->inc_and_set_refresh_schema_info(schema_info))) {
+      LOG_WARN("fail to inc and set refresh schema info", KR(ret), K(schema_info));
     }
   }
   return ret;
@@ -31610,20 +31612,12 @@ int ObDDLService::notify_refresh_schema(const uint64_t tenant_id,
     }
     int tmp_ret = OB_SUCCESS;
     // for improve ddl performance, the refresh_schema() is after broadcast_schema to let observer and rs could refresh schema simultaneously
-    if (OB_TMP_FAIL(refresh_schema(tenant_id, false /* inc sequence_id */, &refreshed_schema_version))){
-      LOG_WARN("fail to refresh schema", KR(ret), K(tenant_id));
+    if (OB_TMP_FAIL(refresh_schema(schema_info))) {
+      LOG_WARN("fail to refresh schema", KR(tmp_ret), K(tenant_id));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
       tmp_ret = OB_SUCCESS;
     }
-    // the parallel ddl need a consensus schema version whitch means all observers have refreshed the same schema version.
-    // since the local refreshed schema version may larger than schema version in schema info, we need return the schema version in schema info
-    if (OB_INVALID_VERSION != refreshed_schema_version
-        && refreshed_schema_version < schema_info.get_schema_version()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema version rollback", KR(ret), K(tenant_id), K(refreshed_schema_version), K(schema_info.get_schema_version()));
-    } else {
-      refreshed_schema_version = schema_info.get_schema_version();
-    }
+    refreshed_schema_version = schema_info.get_schema_version();
     ObArray<int> return_code_array;
     // always wait all
     if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {

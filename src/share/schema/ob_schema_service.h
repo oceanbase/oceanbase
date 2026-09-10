@@ -896,10 +896,12 @@ public:
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch) = 0; // for compatible use
   virtual int init_sequence_id_by_sys_leader_epoch(const int64_t sys_leader_epoch) = 0;
-  virtual int inc_sequence_id() = 0;
   virtual ObDDLSequenceID get_sequence_id() const = 0;
 
-  virtual int set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info) = 0;
+  // Initialize the heartbeat notification without incrementing sequence_id.
+  virtual int init_refresh_schema_info() = 0;
+  // Allocate and publish a refresh event, returning its sequence in schema_info.
+  virtual int inc_and_set_refresh_schema_info(ObRefreshSchemaInfo &schema_info) = 0;
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info) = 0;
 
   virtual void set_cluster_schema_status(const ObClusterSchemaStatus &schema_status) = 0;

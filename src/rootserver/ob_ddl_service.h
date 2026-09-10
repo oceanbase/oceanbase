@@ -1000,7 +1000,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   //----End of functions for managing row level security----
 
   // refresh local schema busy wait
-  virtual int refresh_schema(const uint64_t tenant_id, const bool inc_sequence_id = true, int64_t *refreshed_schema_version = nullptr);
+  virtual int refresh_schema(const uint64_t tenant_id);
   // notify other servers to refresh schema (call switch_schema  rpc)
   // for optimize wait schema refresh & sync time after a ddl finish,
   // notify refresh schema would broadcast the last generate schema version in serial ddl
@@ -1209,6 +1209,8 @@ private:
 
   int retry_to_refresh_schema_(ObArray<uint64_t> &tenant_ids);
   int retry_to_get_schema_version_(const ObRefreshSchemaStatus &schema_status, int64_t &broadcast_schema_version);
+  // Apply an existing refresh intent without allocating another sequence.
+  int refresh_schema(const ObRefreshSchemaInfo &schema_info);
   int get_lock_argument_for_rename_(
       const uint32_t client_session_id,
       const int64_t client_session_create_ts,

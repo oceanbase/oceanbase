@@ -230,7 +230,6 @@ int ObDDLServiceLauncher::init_sequence_id_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
   } else {
-    ObRefreshSchemaInfo schema_info;
     int64_t schema_version = OB_INVALID_VERSION;
     ObSchemaService *schema_service = GCTX.root_service_->get_schema_service().get_schema_service();
     if (OB_ISNULL(schema_service)) {
@@ -262,15 +261,15 @@ int ObDDLServiceLauncher::init_sequence_id_(
         //     Although this check seams useeless, we still reserve it.
         LOG_INFO("sys tenant schema version not refreshed, do not trigger schema refresh",
                  KR(ret), K(schema_version));
-      } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-        LOG_WARN("fail to set refresh schema info", KR(ret), K(schema_info));
+      } else if (OB_FAIL(schema_service->init_refresh_schema_info())) {
+        LOG_WARN("fail to init refresh schema info", KR(ret));
       }
     } else {
       // init sequence id with new logic
       if (OB_FAIL(schema_service->init_sequence_id_by_sys_leader_epoch(proposal_id))) {
         LOG_WARN("fail to init sequence id by sys leader epoch", KR(ret), K(proposal_id));
-      } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-        LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
+      } else if (OB_FAIL(schema_service->init_refresh_schema_info())) {
+        LOG_WARN("fail to init refresh schema info", K(ret));
       }
     }
   }

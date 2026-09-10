@@ -9668,24 +9668,36 @@ int ObSchemaServiceSQLImpl::init_sequence_id_by_sys_leader_epoch(const int64_t s
   return ret;
 }
 
-int ObSchemaServiceSQLImpl::inc_sequence_id()
+int ObSchemaServiceSQLImpl::init_refresh_schema_info()
 {
   int ret = OB_SUCCESS;
   SpinWLockGuard guard(rw_lock_);
-  return sequence_id_.inc_seq_id();
+  schema_info_.reset();
+  if (OB_FAIL(schema_info_.set_sequence_id(sequence_id_))) {
+    LOG_WARN("fail to set sequence id", KR(ret), K_(sequence_id));
+  }
+  LOG_INFO("init refresh schema info", K(ret), K(schema_info_));
+  return ret;
 }
 
-int ObSchemaServiceSQLImpl::set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info)
+int ObSchemaServiceSQLImpl::inc_and_set_refresh_schema_info(ObRefreshSchemaInfo &schema_info)
 {
   int ret = OB_SUCCESS;
-  // TODO
-  // init_sequence_id、inc_sequence_id、set_refresh_schema_info to
-  // atomic update squence_id and schema_info
   SpinWLockGuard guard(rw_lock_);
-  schema_info_.set_tenant_id(schema_info.get_tenant_id());
-  schema_info_.set_schema_version(schema_info.get_schema_version());
-  schema_info_.set_sequence_id(sequence_id_);
-  LOG_INFO("set refresh schema info", K(ret), K(schema_info_));
+  // A gap makes observers refresh all tenants, including during rolling upgrades.
+  const int64_t inc_count = OB_INVALID_TENANT_ID == schema_info.get_tenant_id() ? 2 : 1;
+  for (int64_t i = 0; OB_SUCC(ret) && i < inc_count; ++i) {
+    if (OB_FAIL(sequence_id_.inc_seq_id())) {
+      LOG_WARN("fail to increase sequence id", KR(ret), K_(sequence_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    schema_info.set_sequence_id(sequence_id_);
+    if (OB_FAIL(schema_info_.assign(schema_info))) {
+      LOG_WARN("fail to assign refresh schema info", KR(ret), K(schema_info));
+    }
+  }
+  LOG_INFO("inc and set refresh schema info", K(ret), K(schema_info_));
   return ret;
 }
 

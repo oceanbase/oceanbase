@@ -149,13 +149,13 @@ public:
   /* sequence_id related */
   virtual int init_sequence_id_by_rs_epoch(const int64_t rootservice_epoch); // for compatible use
   virtual int init_sequence_id_by_sys_leader_epoch(const int64_t sys_leader_epoch);
-  virtual int inc_sequence_id();
 
   virtual ObDDLSequenceID get_sequence_id() const { SpinRLockGuard guard(rw_lock_); return sequence_id_; }
 
   virtual int get_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
   //enable refresh schema info
-  virtual int set_refresh_schema_info(const ObRefreshSchemaInfo &schema_info);
+  virtual int init_refresh_schema_info();
+  virtual int inc_and_set_refresh_schema_info(ObRefreshSchemaInfo &schema_info);
 
 #ifdef OB_BUILD_SHARED_STORAGE
   // get schema of __all_sslog_table
