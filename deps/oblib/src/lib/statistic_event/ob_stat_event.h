@@ -341,6 +341,10 @@ STAT_EVENT_ADD_DEF(MINOR_SSSTORE_READ_ROW_COUNT, "minor ssstore read row count",
 STAT_EVENT_ADD_DEF(MAJOR_SSSTORE_READ_ROW_COUNT, "major ssstore read row count", ObStatClassIds::STORAGE, 60092, true, true, true)
 STAT_EVENT_ADD_DEF(STORAGE_WRITING_THROTTLE_TIME, "storage waiting throttle time", ObStatClassIds::STORAGE, 60093, true, true, true)
 
+STAT_EVENT_ADD_DEF(TABLE_INSERT_ROW_COUNT, "table insert row count", ObStatClassIds::STORAGE, 60200, true, true, true)
+STAT_EVENT_ADD_DEF(TABLE_UPDATE_ROW_COUNT, "table update row count", ObStatClassIds::STORAGE, 60201, true, true, true)
+STAT_EVENT_ADD_DEF(TABLE_DELETE_ROW_COUNT, "table delete row count", ObStatClassIds::STORAGE, 60202, true, true, true)
+
 // backup & restore
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_COUNT, "backup io read count", ObStatClassIds::STORAGE, 69000, true, true, true)
 STAT_EVENT_ADD_DEF(BACKUP_IO_READ_BYTES, "backup io read bytes", ObStatClassIds::STORAGE, 69001, true, true, true)

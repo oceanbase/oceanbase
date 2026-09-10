@@ -2754,6 +2754,7 @@ int ObLSTabletService::insert_rows(
   int ret = OB_SUCCESS;
   NG_TRACE(S_insert_rows_begin);
   int64_t afct_num = 0;
+  bool is_data_table = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2766,6 +2767,7 @@ int ObLSTabletService::insert_rows(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(ctx), K(dml_param), K(column_ids), KP(row_iter));
   } else if (dml_param.is_direct_insert()) { // direct-insert mode
+    is_data_table = dml_param.table_param_->get_data_table().is_user_table();
     if (OB_FAIL(direct_insert_rows(dml_param.table_param_->get_data_table().get_table_id(),
                                    dml_param.direct_insert_task_id_,
                                    dml_param.ddl_task_id_,
@@ -2794,6 +2796,7 @@ int ObLSTabletService::insert_rows(
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      is_data_table = run_ctx.relative_table_.is_user_table();
       tablet_handle.reset();
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
@@ -2856,6 +2859,9 @@ int ObLSTabletService::insert_rows(
     LOG_DEBUG("succeeded to insert rows", K(ret));
     affected_rows = afct_num;
     EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
+    if (is_data_table) {
+      EVENT_ADD(TABLE_INSERT_ROW_COUNT, afct_num);
+    }
   }
   NG_TRACE(S_insert_rows_end);
 
@@ -2952,6 +2958,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
 {
   int ret = OB_SUCCESS;
   int64_t afct_num = 0;
+  bool is_data_table = false;
   ObTimeGuard timeguard(__func__, 3 * 1000 * 1000);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -2979,6 +2986,7 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      is_data_table = run_ctx.relative_table_.is_user_table();
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
         bool has_duplicate = false;
@@ -3072,6 +3080,9 @@ int ObLSTabletService::insert_rows_with_fetch_dup(
     LOG_DEBUG("succeeded to insert rows with fetch dup", K(ret));
     affected_rows = afct_num;
     EVENT_ADD(STORAGE_INSERT_ROW_COUNT, afct_num);
+    if (is_data_table) {
+      EVENT_ADD(TABLE_INSERT_ROW_COUNT, afct_num);
+    }
   }
   return ret;
 }
@@ -3150,6 +3161,9 @@ int ObLSTabletService::insert_row(
         LOG_DEBUG("succeeded to insert row", K(ret), K(row));
         affected_rows = 1;
         EVENT_INC(STORAGE_INSERT_ROW_COUNT);
+        if (data_table.is_user_table()) {
+          EVENT_INC(TABLE_INSERT_ROW_COUNT);
+        }
       }
     }
   }
@@ -3407,6 +3421,9 @@ int ObLSTabletService::update_rows(
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
       EVENT_ADD(STORAGE_UPDATE_ROW_COUNT, afct_num);
+      if (relative_table.is_user_table()) {
+        EVENT_ADD(TABLE_UPDATE_ROW_COUNT, afct_num);
+      }
     }
   }
   NG_TRACE(S_update_rows_end);
@@ -3460,6 +3477,7 @@ int ObLSTabletService::put_rows(
   NG_TRACE(S_update_rows_begin);
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   int64_t afct_num = 0;
+  bool is_data_table = false;
   ObTimeGuard timeguard(__func__, 3 * 1000 * 1000);
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -3488,6 +3506,7 @@ int ObLSTabletService::put_rows(
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      is_data_table = run_ctx.relative_table_.is_user_table();
       ObTabletHandle tmp_handle;
       SMART_VAR(ObRowsInfo, rows_info) {
         const ObRelativeTable &relative_table = run_ctx.relative_table_;
@@ -3548,6 +3567,9 @@ int ObLSTabletService::put_rows(
     LOG_DEBUG("succeeded to put rows", K(ret));
     affected_rows = afct_num;
     EVENT_ADD(STORAGE_UPDATE_ROW_COUNT, afct_num);
+    if (is_data_table) {
+      EVENT_ADD(TABLE_UPDATE_ROW_COUNT, afct_num);
+    }
   }
   NG_TRACE(S_update_row_end);
 
@@ -3567,6 +3589,7 @@ int ObLSTabletService::delete_rows(
   const ObTabletID &data_tablet_id = ctx.tablet_id_;
   ObRowReshape *row_reshape = nullptr;
   int64_t afct_num = 0;
+  bool is_data_table = false;
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -3590,6 +3613,7 @@ int ObLSTabletService::delete_rows(
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
     } else {
+      is_data_table = run_ctx.relative_table_.is_user_table();
       tablet_handle.reset();
       ObRowsInfo *rows_info = nullptr;
       ObRelativeTable &relative_table = run_ctx.relative_table_;
@@ -3675,6 +3699,9 @@ int ObLSTabletService::delete_rows(
     if (OB_SUCC(ret)) {
       affected_rows = afct_num;
       EVENT_ADD(STORAGE_DELETE_ROW_COUNT, afct_num);
+      if (is_data_table) {
+        EVENT_ADD(TABLE_DELETE_ROW_COUNT, afct_num);
+      }
     }
   }
   NG_TRACE(S_delete_rows_end);

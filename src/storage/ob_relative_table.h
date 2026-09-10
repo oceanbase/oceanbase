@@ -83,6 +83,7 @@ public:
   int get_spatial_cellid_col_id(uint64_t &column_id) const;
   int get_spatial_mbr_col_id(uint64_t &column_id) const;
   bool is_index_table() const;
+  bool is_user_table() const;
   bool is_lob_meta_table() const;
   bool is_storage_index_table() const;
   bool is_index_local_storage() const;
