@@ -44,6 +44,26 @@ bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
 bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
 
+struct WaitBarrierTimeoutGuard
+{
+  int64_t old_reconfig_timeout_;
+  int64_t old_stable_timeout_;
+
+  WaitBarrierTimeoutGuard(int64_t reconfig_timeout, int64_t stable_timeout)
+    : old_reconfig_timeout_(palf::LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION),
+      old_stable_timeout_(palf::LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG)
+  {
+    palf::LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = reconfig_timeout;
+    palf::LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG = stable_timeout;
+  }
+
+  ~WaitBarrierTimeoutGuard()
+  {
+    palf::LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = old_reconfig_timeout_;
+    palf::LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG = old_stable_timeout_;
+  }
+};
+
 TEST_F(TestObSimpleLogClusterArbMockEleService, switch_leader_during_degrading)
 {
   int ret = OB_SUCCESS;
@@ -531,13 +551,13 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_arb_degrade_probe)
     sleep(2);
     EXPECT_EQ(2, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.get_member_number());
 
-    // CASE 5. D unblock_net and unblock_pcode, upgrade E
+    // CASE 5. D unblock_net and unblock_pcode, upgrade D
     unblock_pcode(d_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
     EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(d_addr));
 
     // CASE 6. E unblock_net and unblock_pcode, upgrade E
     unblock_pcode(e_idx, ObRpcPacketCode::OB_LOG_ARB_PROBE_MSG);
-    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(d_addr));
+    EXPECT_UNTIL_EQ(false, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.degraded_learnerlist_.contains(e_addr));
 
     revert_cluster_palf_handle_guard(palf_list);
   }
@@ -559,6 +579,7 @@ TEST_F(TestObSimpleLogClusterArbMockEleService, test_add_remove_lose_logs)
   OB_LOGGER.set_log_level("TRACE");
   SET_CASE_LOG_FILE(TEST_NAME, "test_add_remove_lose_logs");
   PALF_LOG(INFO, "begin test test_add_remove_lose_logs", K(id));
+  WaitBarrierTimeoutGuard wait_barrier_timeout_guard(10 * 1000 * 1000L, 5 * 1000 * 1000L);
   {
     int64_t leader_idx = 0;
     int64_t arb_replica_idx = 0;
