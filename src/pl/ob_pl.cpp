@@ -1027,11 +1027,13 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     int64_t trans_active_ts = 0;
     (void) record_tx_id_before_begin_autonomous_session_for_deadlock_(session_info, last_trans_id, trans_active_ts);
     if (OB_SUCC(ret)) {
-      if (OB_ISNULL(saved_session_ = (sql::ObBasicSessionInfo::TransSavedValue *)(alloc_.alloc(sizeof(sql::ObBasicSessionInfo::TransSavedValue))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc saved_session", K(ret));
-      } else {
-        new (saved_session_) sql::ObBasicSessionInfo::TransSavedValue();
+      if (OB_ISNULL(saved_session_)) {
+        if (OB_ISNULL(saved_session_ = (sql::ObBasicSessionInfo::TransSavedValue *)(alloc_.alloc(sizeof(sql::ObBasicSessionInfo::TransSavedValue))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc saved_session", K(ret));
+        } else {
+          new (saved_session_) sql::ObBasicSessionInfo::TransSavedValue();
+        }
       }
       OZ (session_info.begin_autonomous_session(*saved_session_));
       OX (saved_has_implicit_savepoint_ = session_info.has_pl_implicit_savepoint());
@@ -1084,6 +1086,11 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
 
     if (need_recover_use_pl_inner_info_string) {
       session_info.set_use_pl_inner_info_string(saved_use_pl_inner_info_string_);
+    }
+
+    if (OB_NOT_NULL(saved_session_)) {
+      saved_session_->~TransSavedValue();
+      saved_session_ = nullptr;
     }
   }
 
@@ -1383,6 +1390,10 @@ void ObPLContext::destory(
   if (is_autonomous_) {
     int end_trans_ret = end_autonomous(ctx, session_info, ret == OB_TRANS_XA_BRANCH_FAIL);
     ret = OB_SUCCESS == ret ? end_trans_ret : ret;
+    // Keep TransSavedValue for the next init() on the reused ObPLContext
+    if (OB_NOT_NULL(saved_session_)) {
+      saved_session_->reset();
+    }
   }
   if (OB_NOT_NULL(pl_exec_info_)) {
     pl_exec_info_->is_used_ = false;
