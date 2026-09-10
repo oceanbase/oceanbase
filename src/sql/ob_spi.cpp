@@ -4036,18 +4036,62 @@ int ObSPIService::spi_get_cursor_info(ObPLExecCtx *ctx, int64_t index,
   return ret;
 }
 
+#ifdef OB_BUILD_ORACLE_PL
+int ObSPIService::register_tx_streaming_cursor_if_needed(ObSQLSessionInfo &session_info,
+                                                ObPLCursorInfo &cursor,
+                                                uint64_t package_id,
+                                                uint64_t routine_id,
+                                                int64_t cursor_index)
+{
+  int ret = OB_SUCCESS;
+  bool need_register = false;
+  if (!cursor.is_streaming() || cursor.is_for_update() || cursor.is_in_tx_cursor() || !session_info.enable_enhanced_cursor_validation()) {
+  } else if (cursor.is_streaming_cursor_read_uncommitted()) {
+    need_register = true;
+  } else if (lib::is_oracle_mode()) {
+    ObSPIResultSet *spi_result = cursor.get_cursor_handler();
+    ObResultSet *result_set = OB_NOT_NULL(spi_result) ? spi_result->get_result_set() : NULL;
+    ObPhysicalPlanCtx *plan_ctx = OB_NOT_NULL(result_set)
+                                  ? GET_PHY_PLAN_CTX(result_set->get_exec_context())
+                                  : NULL;
+    if (OB_NOT_NULL(plan_ctx) && plan_ctx->get_main_xa_trans_branch()) {
+      transaction::ObTxDesc *tx_desc = session_info.get_tx_desc();
+      if (OB_NOT_NULL(tx_desc) // Only dblink XA (DBLINK_TRANS). Explicit XA is XA_TRANS; skip register.
+          && transaction::ObGlobalTxType::DBLINK_TRANS == tx_desc->get_global_tx_type(session_info.get_xid())) {
+        need_register = true;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && need_register) {
+    OZ (ObPLContext::add_tx_cursor_idx_to_local_state(session_info, package_id, routine_id, cursor_index));
+    OX (cursor.set_is_in_tx_cursor(true));
+    OX (cursor.set_tx_cursor_idx(package_id, routine_id, cursor_index));
+    OX (cursor.set_tx_cursor_trans_id(session_info.get_tx_id()));
+  }
+  return ret;
+}
+#endif
+
 int ObSPIService::convert_to_unstreaming_cursor(ObPLExecCtx *ctx, ObSQLSessionInfo &session, int64_t cursor_index, int64_t tx_id, bool &converted)
 {
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
   ObObjParam cursor_var;
+  bool in_same_tx = false;
   converted = false;
   OZ (ObSPIService::spi_get_cursor_info(ctx, cursor_index, cursor, cursor_var));
-  if (OB_SUCC(ret) && OB_NOT_NULL(cursor) && cursor->get_snapshot().tx_id().get_id() == tx_id) { //in the same transaction, convert to unstreaming cursor
+  if (OB_SUCC(ret) && OB_NOT_NULL(cursor)) {
+    in_same_tx = cursor->is_in_tx_cursor()
+                 && cursor->get_tx_cursor_trans_id().is_valid()
+                 && cursor->get_tx_cursor_trans_id().get_id() == tx_id;
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(cursor) && in_same_tx) {
     if (cursor->isopen() && cursor->is_streaming()) {
       OZ (cursor->convert_to_unstreaming(session));
     }
+    //ignore convert ret
     cursor->set_is_in_tx_cursor(false);
+    cursor->set_tx_cursor_trans_id(transaction::ObTransID());
     cursor->set_tx_cursor_idx(OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_INDEX);
     converted = true;
   }
@@ -4714,15 +4758,10 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
     if (OB_SUCC(ret) && DECL_PKG != loc) {
       OZ (release_cursor_parameters(ctx, *session_info, package_id, routine_id, formal_param_idxs, cursor_param_count));
     }
-    if (OB_SUCC(ret)
-        && cursor->is_streaming()
-        && !cursor->is_for_update()
-        && cursor->is_streaming_cursor_read_uncommitted()
-        && session_info->enable_enhanced_cursor_validation()) {
-      OZ (ObPLContext::add_tx_cursor_idx_to_local_state(*session_info, package_id, routine_id, cursor_index));
-      OX (cursor->set_is_in_tx_cursor(true));
-      OX (cursor->set_tx_cursor_idx(package_id, routine_id, cursor_index));
-    }
+#ifdef OB_BUILD_ORACLE_PL
+    OZ (ObSPIService::register_tx_streaming_cursor_if_needed(*session_info, *cursor,
+                                                 package_id, routine_id, cursor_index));
+#endif
   }
   if (OB_FAIL(ret) && lib::is_mysql_mode()) {
     ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);

@@ -2032,6 +2032,9 @@ int ObPLContext::process_cursor_when_end_trans(ObSQLSessionInfo &session_info, i
           ret = (OB_SUCCESS == ret ? tmp_ret : ret);
         }
       }
+      if (OB_SUCC(ret) && state->get_tx_cursor_idx_set()->empty()) {
+        OX (state->set_has_tx_cursor(false));
+      }
     }
   }
   return ret;

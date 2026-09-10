@@ -2520,6 +2520,7 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse, bool cl
       int del_ret = ObPLContext::del_tx_cursor_idx_from_local_state(session, std::get<0>(get_tx_cursor_idx()), std::get<1>(get_tx_cursor_idx()), std::get<2>(get_tx_cursor_idx()));
       ret = (OB_SUCCESS == ret ? del_ret : ret);
       set_is_in_tx_cursor(false);
+      set_tx_cursor_trans_id(transaction::ObTransID());
     }
   } else {
     LOG_INFO("NOTICE: cursor is closed without openning", K(*this), K(ret));
