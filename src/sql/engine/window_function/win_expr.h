@@ -123,9 +123,9 @@ struct Frame
           need = true;
         }
       } else if (common::REMOVE_EXTRENUM == remove_type) {
-        // max_min index miss from calculation range
-        if (removal_info.max_min_index_ < new_frame.head_
-            || removal_info.max_min_index_ > new_frame.tail_) {
+        // No extremum exists for an all-NULL frame; NULL rows can be updated incrementally.
+        if (-1 != removal_info.max_min_index_
+            && (removal_info.max_min_index_ < new_frame.head_ || removal_info.max_min_index_ > new_frame.tail_)) {
           need = true;
         }
       }

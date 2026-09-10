@@ -2304,9 +2304,9 @@ int ObWindowFunctionVecOp::compute_wf_values(
         // so only clear evaluated flag when tiny partition optimization is disabled
         clear_evaluated_flag();
       }
-      if (0 == ++check_times % CHECK_STATUS_INTERVAL) { // check per-batch
-        if (OB_FAIL(ctx_.check_status())) { break; }
-      }
+      // A batch can repeatedly scan a large frame, so check cancellation before every batch.
+      ++check_times;
+      if (OB_FAIL(ctx_.check_status())) { break; }
       int64_t batch_size = std::min(total_size, MY_SPEC.max_batch_size_);
       if OB_SUCC(ret) {
         guard.set_batch_size(batch_size);
