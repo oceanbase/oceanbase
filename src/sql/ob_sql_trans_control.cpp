@@ -316,6 +316,8 @@ int ObSqlTransControl::implicit_end_group_commit_trans(const ObGroupCommitAggInf
         LOG_WARN("fail to end sub trans, force disconnect", K(ret), K(i), K(sub_session->get_tx_id()),
             K(need_disconnect), K(is_rollback), K(reset_trans_variable));
         sub_session->get_mysql_end_trans_cb().get_packet_sender().force_disconnect();
+        sub_session->get_mysql_end_trans_cb().get_packet_sender().finish_sql_request();
+        sub_session->get_end_trans_cb().reset_diagnostic_info();
         ret = OB_SUCCESS; // ignore the error and continue to end the other sub-transactions.
       } else {
         LOG_DEBUG("success to end sub trans", K(ret), K(i), K(is_rollback), K(sub_session->get_tx_id()));
