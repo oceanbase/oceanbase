@@ -21,11 +21,11 @@ namespace share
 // The originator broadcasts this arg to every alive observer of the tenant; each
 // observer with an is_creator_=true entry for any of the (table_id, sequence,
 // session_id) tuples performs the actual storage delete in a single inner
-// transaction; every observer removes the matching entries from the per-session
-// gtt_tablet_info_map_ so that stale caches on non-creator observers are
-// invalidated. table_ids_ carries the main table plus its index and lob aux
-// tables so that one broadcast atomically replaces the previous per-table
-// dispatch.
+// transaction. After the creator-side helper commits successfully, each
+// observer removes the matching local per-session gtt_tablet_info_map_ entries
+// by the original argument. table_ids_ carries the main table plus its index
+// and lob aux tables so that one broadcast atomically replaces the previous
+// per-table dispatch.
 class ObDropGTTV2SessionTabletArg final
 {
   OB_UNIS_VERSION(1);

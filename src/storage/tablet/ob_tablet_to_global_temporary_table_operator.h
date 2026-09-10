@@ -52,6 +52,18 @@ public:
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
     const ObIArray<common::ObTabletID> &tablet_ids);
+  // Precisely remove ObSessionTabletInfo from __all_tablet_to_global_temporary_table
+  // by its old tablet identity. If any row no longer matches, OB_ENTRY_NOT_EXIST
+  // is returned so the caller can rollback the whole delete transaction.
+  //
+  // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction
+  // @param [in] tenant_id, tenant for query
+  // @param [in] infos, ObSessionTabletInfo snapshots for removing
+  // @return OB_SUCCESS if all rows are removed, OB_ENTRY_NOT_EXIST if any row changed or disappeared
+  static int batch_remove(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<storage::ObSessionTabletInfo> &infos);
   // Get all ObSessionTabletInfos from __all_tablet_to_global_temporary_table
   //
   // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction
@@ -185,6 +197,12 @@ private:
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
     const ObIArray<common::ObTabletID> &tablet_ids,
+    const int64_t start_idx,
+    const int64_t end_idx);
+  static int inner_batch_remove_by_sql(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<storage::ObSessionTabletInfo> &infos,
     const int64_t start_idx,
     const int64_t end_idx);
   static int inner_batch_update_sequence_by_sql(

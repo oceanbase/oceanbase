@@ -226,20 +226,22 @@ private:
     }
   };
   /// @brief Remove entries whose data table id exists in @p failed_data_tb_id_set
-  ///        from @p tablet_ids_for_delete and @p table_schemas_for_delete in place.
-  /// @pre tablet_ids_for_delete.count() == table_schemas_for_delete.count()
+  ///        from delete candidate arrays in place.
+  /// @pre table_schemas_for_delete.count()
+  ///      == session_tablet_infos_for_delete.count()
   ///
   /// @param[in]     failed_data_tb_id_set       Set of data table ids whose
   ///                                            tablets should be excluded.
-  /// @param[in,out] tablet_ids_for_delete       Tablet id array to be filtered.
   /// @param[in,out] table_schemas_for_delete    Corresponding table schema array
   ///                                            to be filtered.
-  /// @return OB_SUCCESS on success, OB_INVALID_ARGUMENT if the two arrays have
-  ///         different sizes or contain invalid entries.
+  /// @param[in,out] session_tablet_infos_for_delete Corresponding session tablet info array
+  ///                                                to be filtered.
+  /// @return OB_SUCCESS on success, OB_INVALID_ARGUMENT if arrays have different
+  ///         sizes or contain invalid entries.
   static int remove_failed_tables(
       const hash::ObHashSet<uint64_t> &failed_data_tb_id_set,
-      /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
-      /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete);
+      /*inout*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
+      /*inout*/common::ObIArray<ObSessionTabletInfo> &session_tablet_infos_for_delete);
   // Gather the main GTT v2 session table id together with its local index
   // tables and lob aux tables so they can be dropped atomically in a single
   // broadcast / inner transaction. See dispatch_drop_gtt_v2_session_tablet_on_creator.
@@ -270,20 +272,22 @@ private:
   ///
   /// @param[in]  is_atomic_batch             If true, any single table failure
   ///                                            aborts the whole batch.
-  /// @param[out] tablet_ids_for_delete       Receives the tablet ids that
-  ///                                            passed validation and locking.
   /// @param[out] table_schemas_for_delete    Receives the corresponding table
   ///                                           schemas.
+  /// @param[out] session_tablet_infos_for_delete Receives the corresponding
+  ///                                             session tablet infos.
   /// @param[out] schema_missing_tablet_infos Tablets whose table schema is missing.
   /// @return OB_SUCCESS on success, or an appropriate error code on failure.
   int check_and_lock_tables(
       const bool is_atomic_batch,
       share::schema::ObSchemaGetterGuard &schema_guard,
-      /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
       /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
+      /*out*/common::ObIArray<ObSessionTabletInfo> &session_tablet_infos_for_delete,
       /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos,
       /*out*/int64_t &ignored_tablets_cnt);
-  int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
+  int delete_tablets(
+      const ObIArray<storage::ObSessionTabletInfo> &session_tablet_infos,
+      const int64_t schema_version);
   int delete_schema_missing_tablets(const ObIArray<ObSessionTabletInfo *> &tablet_infos, const int64_t schema_version);
   int build_sorted_tablet_ls_infos(
       const common::ObIArray<common::ObTabletID> &tablet_ids,

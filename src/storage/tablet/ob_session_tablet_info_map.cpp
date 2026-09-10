@@ -434,10 +434,10 @@ int ObSessionTabletInfoMap::classify_tables_for_reuse(
     common::ObIArray<common::ObTabletID> &tablets_to_bump_seq)
 {
   int ret = OB_SUCCESS;
-  // Step 1: Query inner table — single source of truth, no separate
-  // in-memory probe. The inner table carries the authoritative sequence
-  // for every (table_id, session_id), so the classification below is
-  // driven exclusively by this one batched lookup.
+  // Step 1: Query inner table rows as reuse candidates. This read is only a
+  // probe: concurrent cleanup may delete the candidate before sequence bump,
+  // and the later batch_update_sequence() will decide whether the reuse
+  // attempt really wins.
   common::ObSEArray<ObSessionTabletInfo, 4> inner_rows;
   if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_point_get_by_table_ids_and_session_id(
           trans, tenant_id, table_ids, session_id, inner_rows))) {
@@ -557,6 +557,7 @@ int ObSessionTabletInfoMap::run_reuse_path(
       ret = is_commit ? tmp_ret : ret;
     }
   }
+  DEBUG_SYNC(AFTER_REUSE_GTT_V2_UPDATE_INNER_TABLE);
   if (OB_FAIL(ret)) {
     reset_reuse_outputs(reused_tablet_ids, resolved_ls_id);
   }
@@ -608,7 +609,14 @@ int ObSessionTabletInfoMap::try_reuse_truncated_tablets(
     }
     if (is_gtt_truncate_tablet_enabled(tenant_id)) {
       if (OB_FAIL(run_reuse_path(tenant_id, table_ids, sequence, session_id, reused_tablet_ids, resolved_ls_id))) {
-        LOG_WARN("failed to run reuse path", KR(ret), K(tenant_id), K(table_ids));
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          LOG_INFO("reuse session tablet candidate disappeared, fallback to create",
+              KR(ret), K(tenant_id), K(table_ids), K(sequence), K(session_id),
+              K(reused_tablet_ids), K(resolved_ls_id));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to run reuse path", KR(ret), K(tenant_id), K(table_ids));
+        }
       }
     }
   }

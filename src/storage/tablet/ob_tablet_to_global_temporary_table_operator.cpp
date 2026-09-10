@@ -75,6 +75,31 @@ int ObTabletToGlobalTmpTableOperator::batch_remove(
   return ret;
 }
 
+int ObTabletToGlobalTmpTableOperator::batch_remove(
+    ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<storage::ObSessionTabletInfo> &infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || infos.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(infos));
+  } else {
+    int64_t start_idx = 0;
+    int64_t end_idx = MIN(MAX_BATCH_COUNT, infos.count());
+    while (OB_SUCC(ret) && start_idx < end_idx) {
+      if (OB_FAIL(inner_batch_remove_by_sql(sql_proxy, tenant_id, infos, start_idx, end_idx))) {
+        LOG_WARN("fail to inner precise batch remove by sql", KR(ret), K(tenant_id), K(infos),
+            K(start_idx), K(end_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = MIN(start_idx + MAX_BATCH_COUNT, infos.count());
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletToGlobalTmpTableOperator::batch_get_by_ls_ids(
     ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
@@ -231,6 +256,60 @@ int ObTabletToGlobalTmpTableOperator::inner_batch_remove_by_sql(
       LOG_WARN("fail to assign sql", KR(ret), K(sql));
     } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to write sql", KR(ret), K(sql), K(affected_rows), K(tablet_ids), K(start_idx), K(end_idx));
+    }
+  }
+  return ret;
+}
+
+int ObTabletToGlobalTmpTableOperator::inner_batch_remove_by_sql(
+    common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<storage::ObSessionTabletInfo> &infos,
+    const int64_t start_idx,
+    const int64_t end_idx)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(
+      OB_INVALID_TENANT_ID == tenant_id
+      || infos.empty()
+      || start_idx < 0
+      || start_idx >= end_idx
+      || end_idx > infos.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret),
+        K(tenant_id), K(infos), K(start_idx), K(end_idx));
+  } else if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE ",
+      OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME))) {
+    LOG_WARN("fail to assign sql", KR(ret));
+  } else {
+    int64_t affected_rows = 0;
+    for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
+      const storage::ObSessionTabletInfo &info = infos.at(idx);
+      if (OB_UNLIKELY(!info.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid ObSessionTabletInfo", KR(ret), K(tenant_id), K(info));
+      } else if (OB_FAIL(sql.append_fmt(
+          "%s(tablet_id = %lu AND sequence = %ld AND table_id = %lu AND session_id = %lu)",
+          start_idx == idx ? "" : " OR ",
+          info.get_tablet_id().id(),
+          info.get_sequence(),
+          info.get_table_id(),
+          info.get_session_id()))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(info));
+      }
+    }
+    const int64_t expected_rows = end_idx - start_idx;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(sql_proxy.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to write sql", KR(ret), K(sql), K(affected_rows), K(infos), K(start_idx), K(end_idx));
+    } else if (affected_rows != expected_rows) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("[TRUNCATE TABLET] precise session tablet remove affected unexpected number of rows",
+          KR(ret), K(tenant_id), K(affected_rows), K(expected_rows), K(infos), K(start_idx), K(end_idx));
+    } else {
+      LOG_TRACE("[TRUNCATE TABLET] precise remove session tablet from __all_tablet_to_global_temporary_table",
+          K(tenant_id), K(affected_rows), K(start_idx), K(end_idx));
     }
   }
   return ret;
@@ -524,11 +603,6 @@ int ObTabletToGlobalTmpTableOperator::inner_batch_get_by_table_ids_and_session_i
         K(start_idx), K(end_idx));
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
-      ObSQLClientRetryWeak sql_client_retry_weak(
-          &sql_proxy,
-          false,/*did_use_retry*/
-          tenant_id,
-          OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID);
       ObSqlString sql;
       ObSqlString table_id_list;
       for (int64_t idx = start_idx; OB_SUCC(ret) && (idx < end_idx); ++idx) {
@@ -553,13 +627,23 @@ int ObTabletToGlobalTmpTableOperator::inner_batch_get_by_table_ids_and_session_i
         LOG_WARN("fail to assign sql", KR(ret), K(sql), K(table_id_list));
       } else if (OB_FAIL(sql.append_fmt(")"))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
-      } else if (OB_FAIL(sql_client_retry_weak.read(result, tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get mysql result failed", KR(ret));
-      } else if (OB_FAIL(construct_infos(*result.get_result(), infos))) {
-        LOG_WARN("construct session tablet info failed", KR(ret), K(infos));
+      } else {
+        ObSQLClientRetryWeak sql_client_retry_weak(
+            &sql_proxy,
+            false,/*did_use_retry*/
+            tenant_id,
+            OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TID);
+        if (OB_FAIL(sql_client_retry_weak.read(result, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_ISNULL(result.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get mysql result failed", KR(ret));
+          } else if (OB_FAIL(construct_infos(*result.get_result(), infos))) {
+            LOG_WARN("construct session tablet info failed", KR(ret), K(infos));
+          }
+        }
       }
     }
   }
@@ -782,4 +866,3 @@ int ObTabletToGlobalTmpTableOperator::check_tablet_exist(
 
 } // end namespace share
 } // end namespace oceanbase
-

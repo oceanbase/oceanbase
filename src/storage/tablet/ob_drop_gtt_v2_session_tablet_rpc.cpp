@@ -8,6 +8,7 @@
 #include "storage/tablet/ob_drop_gtt_v2_session_tablet_rpc.h"
 
 #include "lib/utility/utility.h"
+#include "share/ob_debug_sync.h"
 #include "share/rc/ob_tenant_base.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sql_session_mgr.h"
@@ -284,6 +285,7 @@ static int template_handle_in_tenant(
       result.set_local_map_hit(functor.local_map_hit());
       common::ObIArray<ObSessionTabletInfo> &creator_infos = functor.get_creator_infos();
       if (!creator_infos.empty()) {
+        DEBUG_SYNC(AFTER_GET_DROP_GTT_V2_CREATOR_SESSION_TABLETS);
         const int delete_ret = template_do_delete_as_creator(arg, creator_infos);
         result.set_executed_on_creator(true);
         // delete_ret is authoritative; surface map_err only when the storage
@@ -302,14 +304,13 @@ static int template_handle_in_tenant(
       }
 
       if (OB_SUCCESS == result.get_ret()) {
-        // remove session tablets from local gtt maps only when del tablets is successful.
-        RemoveGTTV2SessionTabletFunctor local_rm_functor(arg);
         int local_rm_ret = OB_SUCCESS;
+        RemoveGTTV2SessionTabletFunctor local_rm_functor(arg);
         if (OB_SUCCESS != (local_rm_ret = session_mgr->for_each_session(local_rm_functor))) {
           LOG_WARN_RET(local_rm_ret, "failed to iterate sessions", K(arg));
         } else if (OB_SUCCESS != (local_rm_ret = local_rm_functor.get_map_err())) {
           LOG_WARN_RET(local_rm_ret, "some failure happened during "
-            "removing local session tablet cache", K(arg));
+              "removing local session tablet cache", K(arg));
         }
         result.set_ret(local_rm_ret);
       }
