@@ -275,7 +275,8 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       job_key = NULL;
       LOG_INFO("free enddate job", K(job_info));
     } else if (now < job_info.get_next_date()) {
-        next_check_date = min(job_info.get_next_date(), now + CHECK_NEW_INTERVAL);
+        next_check_date = job_info.is_mview_job() ? job_info.get_next_date()
+                                                : min(job_info.get_next_date(), now + CHECK_NEW_INTERVAL);
     } else {
       bool can_running = false;
       if (OB_FAIL(table_operator_.check_job_can_running(job_info.get_tenant_id(), alive_jobs_.size(), can_running))) {
@@ -291,14 +292,14 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
         } else if (OB_SUCCESS != (tmp = table_operator_.update_next_date(job_info.get_tenant_id(), job_info, new_next_date))){
           LOG_WARN("update next date failed", K(tmp), K(job_info));
         } else {
-          next_check_date = min(new_next_date, now + CHECK_NEW_INTERVAL);
+          next_check_date = job_info.is_mview_job() ? new_next_date : min(new_next_date, now + CHECK_NEW_INTERVAL);
         }
       } else {
         int64_t new_next_date = calc_next_date(job_info);
         if (OB_FAIL(run_job(job_info, job_key, new_next_date))) {
           LOG_WARN("failed to run job", K(ret), K(job_info), KPC(job_key));
         } else {
-          next_check_date = min(new_next_date, now + CHECK_NEW_INTERVAL);
+          next_check_date = job_info.is_mview_job() ? new_next_date : min(new_next_date, now + CHECK_NEW_INTERVAL);
           next_check_date = min(next_check_date, now + TO_TS(job_info.get_max_run_duration()));
         }
       }
