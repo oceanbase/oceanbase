@@ -5272,6 +5272,13 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
       } else {
         // both are default number
       }
+    } else if (is_oracle_mode && src_meta.is_character_type()
+               && LS_BYTE == src_column.get_length_semantics()
+               && LS_CHAR == dst_column.get_length_semantics()
+               && src_column.get_data_length() > dst_column.get_data_length()) {
+      // BYTE to CHAR may increase the byte limit while decreasing the character limit.
+      // Existing single-byte characters can exceed the new limit and need validation.
+      is_type_reduction = true;
     } else if ((!src_column.is_string_type() && !src_meta.is_integer_type() &&
               (src_accuracy.get_precision() > dst_accuracy.get_precision() ||
               src_accuracy.get_scale() > dst_accuracy.get_scale()))
