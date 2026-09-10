@@ -232,6 +232,7 @@ int ObTenantTransferService::process_init_task_(const ObTransferTaskID task_id)
   ObTimeoutCtx ctx;
   bool need_wait = false;
 
+  DEBUG_SYNC(BEFORE_TRANSFER_PROCESS_INIT_TASK);
   const int64_t start_time = ObTimeUtil::current_time();
   TTS_INFO("start to process init task", K(task_id), K(start_time));
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
