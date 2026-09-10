@@ -2141,9 +2141,9 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         ObPLSqlAuditRecord audit_record(sql::PLSql);
         ObQueryRetryCtrl retry_ctrl;
         ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, *session, ret);
-// #ifdef OB_BUILD_SPM
-//         spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
-// #endif
+#ifdef OB_BUILD_SPM
+        spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+#endif
         ObSPIExecEnvGuard env_guard(*session);
         ctx->set_saved_sql_code_info();
         if (lib::is_oracle_mode()) {
@@ -4523,9 +4523,9 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
       ObPLSqlAuditRecord audit_record(sql::PLSql);
       ObQueryRetryCtrl retry_ctrl;
       ObPLSPITraceIdGuard trace_id_guard(sql, ps_sql, session_info, ret);
-// #ifdef OB_BUILD_SPM
-//       spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
-// #endif
+#ifdef OB_BUILD_SPM
+      spi_result->get_sql_ctx().spm_ctx_.baseline_plan_hash_array_.set_allocator(ctx->allocator_);
+#endif
       ObSPIExecEnvGuard env_guard(session_info, cursor.is_ps_cursor());
       bool is_retry = false;
 
@@ -11231,7 +11231,8 @@ ObSPIRetryCtrlGuard::ObSPIRetryCtrlGuard(
 {
   uint64_t eff_tenant_id = session_info_.get_effective_tenant_id();
   if (need_reset) {
-    spi_result_.reset_member_for_retry(session_info_);
+    bool is_spm_retry = OB_SQL_RETRY_SPM == ret;
+    spi_result_.reset_member_for_retry(session_info_, is_spm_retry);
   }
   retry_ctrl_.clear_state_before_each_retry(session_info_.get_retry_info_for_update());
   int64_t refreshed_schema_version = OB_INVALID_VERSION;
@@ -11301,7 +11302,9 @@ void ObSPIRetryCtrlGuard::test()
 }
 
 ObSPIExecEnvGuard::ObSPIExecEnvGuard(ObSQLSessionInfo &session_info, bool is_ps_cursor)
-  : session_info_(session_info), is_ps_cursor_(is_ps_cursor)
+  : session_info_(session_info),
+    retry_status_bk_(session_info.get_session_retry_status()),
+    is_ps_cursor_(is_ps_cursor)
 {
   if (!is_ps_cursor_) {
     query_start_time_bk_ = session_info.get_query_start_time();
@@ -11315,6 +11318,7 @@ ObSPIExecEnvGuard::ObSPIExecEnvGuard(ObSQLSessionInfo &session_info, bool is_ps_
 ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
 {
   session_info_.get_retry_info_for_update().clear();
+  session_info_.set_session_in_retry(retry_status_bk_);
   if (!is_ps_cursor_) {
     session_info_.reset_pl_spi_query_info(query_start_time_bk_);
     session_info_.set_use_pl_inner_info_string(true);

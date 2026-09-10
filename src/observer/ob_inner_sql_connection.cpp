@@ -787,16 +787,24 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
       } else if (OB_SUCCESS != last_ret) {
         need_update_plan_stat = true;
       }
+      bool is_spm_fallback = false;
+#ifdef OB_BUILD_SPM
+      is_spm_fallback = ObSpmCacheCtx::STAT_FALLBACK_EXECUTE_PLAN == sql_ctx.spm_ctx_.spm_stat_;
+#endif
 
       if (need_update_plan_stat) {
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 false, // false mean not first update plan stat
-                                table_row_count_list);
+                                table_row_count_list,
+                                nullptr,
+                                !is_spm_fallback);
         } else if (sql_ctx.self_add_plan_) {
           plan->update_plan_stat(audit_record,
                                 true,
-                                table_row_count_list);
+                                table_row_count_list,
+                                nullptr,
+                                !is_spm_fallback);
         }
         if (OB_NOT_NULL(cursor) && cursor->is_streaming()
             && OB_NOT_NULL(cursor->get_cursor_handler())) {

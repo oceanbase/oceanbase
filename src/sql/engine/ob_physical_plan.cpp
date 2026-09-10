@@ -657,11 +657,8 @@ void ObPhysicalPlan::update_plan_expired_info(const ObAuditRecordData &record,
     }
   } else if (!info_inited && !is_evolution) {
     /* finish evolution, init use sampling infos */
-    int64_t first_exec_row_count = 0;
-    do {
-      first_exec_row_count = ATOMIC_LOAD(&(stat_.first_exec_row_count_));
-    } while (first_exec_row_count != ATOMIC_VCAS(&(stat_.first_exec_row_count_), first_exec_row_count, 0));
-    if (-1 == first_exec_row_count) {  // only one thread can init first exec infos by get sample_count
+    if (-1 == ATOMIC_VCAS(&stat_.first_exec_row_count_, -1, 0)) {
+      // only one thread can init first exec infos by get sample_count
       int64_t sample_count = ATOMIC_LOAD(&(stat_.sample_times_));
       if (sample_count <= 0) {
         sample_count = 1;
