@@ -458,8 +458,8 @@ int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state, const SCN &scn
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!ObGCHandler::is_valid_ls_gc_state(gc_state)
-             || (ObGCHandler::is_ls_offline_gc_state(gc_state) && !scn.is_valid())
-             || (!ObGCHandler::is_ls_offline_gc_state(gc_state) && scn.is_valid())) {
+             || (ObGCHandler::is_ls_offline_finished(gc_state) && !scn.is_valid())
+             || (!ObGCHandler::is_ls_offline_finished(gc_state) && scn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("gc_state invalid", K(ret), K(gc_state));
   } else {

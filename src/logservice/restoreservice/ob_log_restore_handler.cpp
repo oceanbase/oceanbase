@@ -439,6 +439,7 @@ int ObLogRestoreHandler::clean_source()
 
 ERRSIM_POINT_DEF(ERRSIM_SUBMIT_LOG_ERROR);
 ERRSIM_POINT_DEF(ERRSIM_STANDBY_ASYNC_LOG_SYNC_SCN_BEHIND);
+ERRSIM_POINT_DEF(ERRSIM_WAIT_GC_INVALID_OFFLINE_SCN);
 
 bool ObLogRestoreHandler::is_sync_mode_log_(const ObLogBaseType log_type,
                                             const ObSyncModeLogType sync_mode_log_type)
@@ -1566,9 +1567,10 @@ int ObLogRestoreHandler::get_source_max_log_info_(
       } else {
         // rpc reached source but it is not ready (e.g. leader drifting during primary->standby
         // switch). pass the error up for retry rather than falling back to the SQL path, which
-        // would block on the source's unavailable GTS. normalize OB_NOT_MASTER to
-        // OB_ENTRY_NOT_EXIST to reuse the existing upper-layer ls-gc branch.
-        ret = (OB_NOT_MASTER == tmp_ret) ? OB_ENTRY_NOT_EXIST : tmp_ret;
+        // would block on the source's unavailable GTS. Normalize a missing LS or leader
+        // to OB_ENTRY_NOT_EXIST so the upper layer checks source LS existence and local
+        // GC metadata before deciding whether the standby has received all logs.
+        ret = (OB_NOT_MASTER == tmp_ret || OB_LS_NOT_EXIST == tmp_ret) ? OB_ENTRY_NOT_EXIST : tmp_ret;
         need_sql = false;
         if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
           CLOG_LOG(INFO, "rpc get_max_log_info source not ready, retry without sql fallback",
@@ -1774,21 +1776,32 @@ int ObLogRestoreHandler::check_if_ls_gc_(bool &done)
 {
   int ret = OB_SUCCESS;
   share::SCN offline_scn;
+  LSGCState gc_state = INVALID_LS_GC_STATE;
   done = false;
   if (OB_FAIL(get_offline_scn_(offline_scn))) {
     CLOG_LOG(WARN, "get offline_scn failed", K(offline_scn), K(id_));
   } else if (offline_scn.is_valid()) {
     done = true;
     CLOG_LOG(INFO, "offline_scn is valid, ls gc", K(id_), K(offline_scn));
+  } else if (OB_FAIL(get_gc_state_(gc_state))) {
+    CLOG_LOG(WARN, "get gc_state failed", K(id_));
+  } else if (LSGCState::WAIT_GC == gc_state) {
+    done = true;
+    CLOG_LOG(WARN, "accept legacy WAIT_GC with invalid offline_scn", K(id_), K(gc_state));
   } else if (OB_FAIL(check_offline_log_(done))) {
     CLOG_LOG(WARN, "check offline_log failed", K(id_), K(offline_scn));
   } else if (!done) {
-    // if check offline_log failed, double check if offline_scn valid
+    // Double check metadata to close the race with the LS_OFFLINE -> WAIT_GC transition.
     if (OB_FAIL(get_offline_scn_(offline_scn))) {
       CLOG_LOG(WARN, "get offline_scn failed", K(offline_scn), K(id_));
     } else if (offline_scn.is_valid()) {
       done = true;
       CLOG_LOG(INFO, "offline_scn is valid, ls gc", K(id_), K(offline_scn));
+    } else if (OB_FAIL(get_gc_state_(gc_state))) {
+      CLOG_LOG(WARN, "get gc_state failed", K(id_));
+    } else if (LSGCState::WAIT_GC == gc_state) {
+      done = true;
+      CLOG_LOG(WARN, "accept legacy WAIT_GC with invalid offline_scn", K(id_), K(gc_state));
     }
   }
   return ret;
@@ -2047,6 +2060,22 @@ int ObLogRestoreHandler::get_offline_scn_(share::SCN &scn)
     CLOG_LOG(WARN, "get ls failed", K(id_));
   } else if (OB_FAIL(handle.get_ls()->get_offline_scn(scn))) {
     CLOG_LOG(WARN, "get offline_scn failed", K(id_));
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_WAIT_GC_INVALID_OFFLINE_SCN)) {
+    scn.reset();
+    CLOG_LOG(INFO, "ERRSIM force invalid offline_scn for legacy WAIT_GC", K(id_));
+  }
+  return ret;
+}
+
+int ObLogRestoreHandler::get_gc_state_(LSGCState &gc_state)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLSHandle handle;
+  if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(share::ObLSID(id_), handle, ObLSGetMod::LOG_MOD))) {
+    CLOG_LOG(WARN, "get ls failed", K(id_));
+  } else if (OB_FAIL(handle.get_ls()->get_gc_state(gc_state))) {
+    CLOG_LOG(WARN, "get gc_state failed", K(id_));
   }
   return ret;
 }

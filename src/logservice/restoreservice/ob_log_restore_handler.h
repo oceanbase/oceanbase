@@ -33,6 +33,7 @@
 #include "share/ob_define.h"
 #include "share/restore/ob_log_restore_source_mgr.h"
 #include "logservice/ob_log_handler_base.h"
+#include "logservice/ob_garbage_collector.h"
 #include "ob_remote_log_source.h"          // ObRemoteSource
 #include "ob_remote_fetch_context.h"       // ObRemoteFetchContext
 #include "logservice/transportservice/ob_log_transport_rpc_define.h"  // ObLogTransportReq
@@ -403,6 +404,7 @@ private:
       const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn);
   bool restore_to_end_unlock_() const;
   int get_offline_scn_(share::SCN &scn);
+  int get_gc_state_(LSGCState &gc_state);
   void deep_copy_source_(ObRemoteSourceGuard &guard);
   int check_if_ls_gc_(bool &done);
   int check_offline_log_(bool &done);

@@ -914,14 +914,14 @@ void ObGCHandler::try_check_and_set_wait_gc_(ObGarbageCollector::LSStatus &ls_st
   } else if (OB_FAIL(archive_service->get_ls_archive_progress(ls_id, lsn, scn, force_wait, ignore))){
     CLOG_LOG(WARN, "get_ls_archive_progress failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
   } else if (ignore) {
-    if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
-      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
+    if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC, offline_scn))) {
+      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
   } else if (scn >= offline_scn) {
-    if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
-      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
+    if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC, offline_scn))) {
+      CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
     }
     ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
     CLOG_LOG(INFO, "try_check_and_set_wait_gc_ success", K(ls_id), K(gc_state), K(offline_scn), K(scn));
@@ -951,8 +951,8 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
       CLOG_LOG(WARN, "check_if_tenant_has_been_dropped_ failed", K(tmp_ret), K(tenant_id), K(ls_id));
     } else if (is_tenant_dropping_or_dropped) {
       // The LS delay deletion mechanism will no longer take effect when the tenant is dropped.
-      if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
-        CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
+      if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC, offline_scn))) {
+        CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
       }
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "Tenant is dropped and the log stream can be removed, try_check_and_set_wait_gc_ success",
@@ -962,8 +962,8 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
          MTL_GET_TENANT_ROLE_CACHE() == share::ObTenantRole::CLONE_TENANT)) {
       // restore tenant, not need gc delay
       // for clone tenant, we can ensure no ls's changes during clone procedure, so no need to deal with gc status
-      if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
-        CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
+      if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC, offline_scn))) {
+        CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
       }
       ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
       CLOG_LOG(INFO, "Tenant role is restore, no need gc delay, try_check_and_set_wait_gc_ success",
@@ -984,8 +984,8 @@ int ObGCHandler::try_check_and_set_wait_gc_when_log_archive_is_off_(
         const int64_t current_time_us = common::ObTimeUtility::current_time();
 
         if ((current_time_us - offline_log_ts_us) >= ls_gc_delay_time) {
-          if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC))) {
-            CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(ret));
+          if (OB_FAIL(ls_->set_gc_state(LSGCState::WAIT_GC, offline_scn))) {
+            CLOG_LOG(WARN, "set_gc_state failed", K(ls_id), K(gc_state), K(offline_scn), K(ret));
           }
           ls_status = ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY;
           CLOG_LOG(INFO, "The log stream can be removed, try_check_and_set_wait_gc_ success",
@@ -1351,6 +1351,7 @@ void ObGCHandler::handle_gc_ls_dropping_(const ObGarbageCollector::LSStatus &ls_
   }
 }
 
+ERRSIM_POINT_DEF(ERRSIM_HOLD_LS_GC_WAIT_GC);
 void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
 {
   int ret = OB_SUCCESS;
@@ -1396,6 +1397,12 @@ void ObGCHandler::handle_gc_ls_offline_(ObGarbageCollector::LSStatus &ls_status)
       } else {
         CLOG_LOG(WARN, "OFFLINE_LS has not callback on_success", K(ls_id), K(gc_state));
       }
+    }
+    if (ObGarbageCollector::LSStatus::LS_NEED_DELETE_ENTRY == ls_status
+        && OB_UNLIKELY(ERRSIM_HOLD_LS_GC_WAIT_GC)) {
+      // Keep the LS status entry so errsim tests can deterministically observe WAIT_GC.
+      ls_status = ObGarbageCollector::LSStatus::LS_WAIT_OFFLINE;
+      CLOG_LOG(INFO, "ERRSIM hold ls in WAIT_GC", K(ls_id));
     }
     CLOG_LOG(INFO, "ls handle_gc_ls_offline finished", K(ls_id), K(role), K(gc_state), K(is_success));
   }
