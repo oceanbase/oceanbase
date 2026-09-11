@@ -6500,7 +6500,7 @@ struct ObCreateUserArg : public ObDDLArg
 public:
   ObCreateUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_not_exist_(false),
                       creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false),
-                      default_tablespace_name_()
+                      default_tablespace_name_(), default_tablegroup_name_()
   {}
   virtual ~ObCreateUserArg()
   {}
@@ -6516,6 +6516,7 @@ public:
   common::ObString primary_zone_; // only used in oracle mode
   bool is_create_role_;
   common::ObString default_tablespace_name_; // only used in oracle mode
+  common::ObString default_tablegroup_name_; // reserved for Oracle user tablegroups
 };
 
 struct ObDropUserArg : public ObDDLArg
