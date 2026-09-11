@@ -451,10 +451,10 @@ void ObDiagnosisManager::reuse(bool defer_reuse)
   col_names_.reset();
   missing_col_idxs_.reset();
   missing_col_offsets_.reset();
-  cur_row_offsets_.reset();
 
   if (!defer_reuse) {
     data_.reset();
+    cur_row_offsets_.reset();
     allocator_.reuse();
   }
 }
