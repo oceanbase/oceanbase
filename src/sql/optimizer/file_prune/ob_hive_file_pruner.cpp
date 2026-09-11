@@ -120,7 +120,8 @@ int ObHiveFilePruner::init(ObSqlSchemaGuard &sql_schema_guard,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(generate_column_meta_info(stmt))) {
       LOG_WARN("failed to generate column meta info", K(ret));
-    } else if (OB_FAIL(generate_partition_bound(stmt, exec_ctx, table_schema, filter_exprs))) {
+    } else if (OB_FAIL(generate_partition_bound(stmt, exec_ctx, table_schema, filter_exprs,
+                                                hive_part_bounds_))) {
       LOG_WARN("failed to generate partition bound", K(ret));
     } else if (need_all_) {
       // do nothing
@@ -146,107 +147,8 @@ int ObHiveFilePruner::init(ObSqlSchemaGuard &sql_schema_guard,
   return ret;
 }
 
-int ObHiveFilePruner::generate_partition_bound(const ObDMLStmt &stmt,
-                                               ObExecContext *exec_ctx,
-                                               const ObTableSchema *table_schema,
-                                               const ObIArray<ObRawExpr *> &filter_exprs)
-{
-  int ret = OB_SUCCESS;
-  const common::ObPartitionKeyInfo &part_key_info = table_schema->get_partition_key_info();
-  if (filter_exprs.empty() || !is_partitioned_) {
-    need_all_ = true;
-  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
-  } else {
-    ObArenaAllocator tmp_allocator("FilePrunnerTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
-    const ObDataTypeCastParams dtc_params
-        = ObBasicSessionInfo::create_dtc_params(exec_ctx->get_my_session());
-
-    ObArray<ObHivePartFieldBound *> tmp_part_field_bounds;
-    for (int64_t j = 0; OB_SUCC(ret) && j < part_key_info.get_size(); ++j) {
-      ObQueryRangeArray ranges;
-      ObHivePartFieldBound *part_field_bound
-          = OB_NEWx(ObHivePartFieldBound, &allocator_, allocator_);
-      if (OB_ISNULL(part_field_bound)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocator memory for ObPartFieldBound", K(ret));
-      } else {
-        part_field_bound->column_id_ = part_key_info.get_column(j)->column_id_;
-        ObSEArray<ColumnItem, 1> part_columns;
-        ColumnItem *column_item = nullptr;
-        tmp_allocator.reuse();
-        ObPreRangeGraph pre_range_graph(tmp_allocator);
-        bool dummy_single_ranges = false;
-        if (OB_ISNULL(column_item = stmt.get_column_item_by_id(loc_meta_.table_loc_id_,
-                                                               part_field_bound->column_id_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get null column item", K(ret), K(loc_meta_), K(part_field_bound->column_id_));
-        } else if (OB_FAIL(part_columns.push_back(*column_item))) {
-          LOG_WARN("failed to push back column item", K(ret));
-        } else if (OB_FAIL(pre_range_graph.preliminary_extract_query_range(part_columns,
-                                                                           filter_exprs,
-                                                                           exec_ctx,
-                                                                           NULL,
-                                                                           NULL,
-                                                                           false,
-                                                                           true))) {
-          LOG_WARN("failed to preliminary extract query range",
-                   K(ret),
-                   K(part_columns),
-                   K(filter_exprs));
-        } else if (OB_FAIL(pre_range_graph.get_tablet_ranges(allocator_,
-                                                             *exec_ctx,
-                                                             ranges,
-                                                             dummy_single_ranges,
-                                                             dtc_params))) {
-          LOG_WARN("failed to get tablet ranges", K(ret));
-        } else if (OB_FAIL(build_field_bound_from_ranges(ranges, *part_field_bound))) {
-          LOG_WARN("failed to build field bound from ranges", K(ret));
-        } else if (OB_FAIL(part_field_bound->range_exprs_.assign(pre_range_graph.get_range_exprs()))) {
-          LOG_WARN("failed to assign range exprs");
-        } else if (ranges.count() == 1) {
-          ObNewRange *range = ranges.at(0);
-          if (range->is_false_range()) {
-            part_field_bound->is_always_false_ = true;
-          } else if (range->is_whole_range()) {
-            part_field_bound->is_whole_range_ = true;
-          }
-        }
-      }
-      OZ(tmp_part_field_bounds.push_back(part_field_bound), K(part_field_bound));
-    }
-    OZ(hive_part_bounds_.assign(tmp_part_field_bounds));
-  }
-  return ret;
-}
-
-int ObHiveFilePruner::build_field_bound_from_ranges(ObIArray<ObNewRange *> &ranges,
-                                                    ObHivePartFieldBound &part_field_bound)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(part_field_bound.bounds_.init(ranges.count()))) {
-    LOG_WARN("failed to init fixed array", K(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-    ObFieldBound *field_bound = OB_NEWx(ObFieldBound, &allocator_);
-    if (OB_ISNULL(field_bound)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator memory for ObFieldBound", K(ret));
-    } else if (OB_ISNULL(ranges.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null range", K(ret));
-    } else if (OB_FAIL(field_bound->from_range(*ranges.at(i)))) {
-      LOG_WARN("failed to init field bound from range", K(ret));
-    } else if (OB_FAIL(part_field_bound.bounds_.push_back(field_bound))) {
-      LOG_WARN("failed to push back field bound", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObHiveFilePruner::prunner_files(ObExecContext &exec_ctx,
-                                    ObIArray<ObHiveFileDesc> &filtered_files)
+int ObHiveFilePruner::prune_files(ObExecContext &exec_ctx,
+                                  ObIArray<ObHiveFileDesc> &filtered_files)
 {
   int ret = OB_SUCCESS;
 
@@ -329,7 +231,7 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret) && !use_fast_path_) {
     bool pd_filter_ready = false;
-    ObHivePushDownFilter file_filter(exec_ctx, file_filter_spec_, &part_column_ids_);
+    ObLakePartRowPushDownFilter file_filter(exec_ctx, file_filter_spec_, &part_column_ids_);
     if (!need_all_ && OB_NOT_NULL(file_filter_spec_.pd_expr_spec_)) {
       if (OB_FAIL(file_filter.init(column_ids_, column_metas_))) {
         LOG_WARN("failed to init skip filter executor", K(ret));
@@ -358,7 +260,7 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
         LOG_WARN("part_row size should equal with partition_values",
                  K(ob_part_row),
                  K(hive_part_bounds_));
-      } else if (check_one_row_part_column(ob_part_row)) {
+      } else if (check_one_row_part_column(ob_part_row, hive_part_bounds_)) {
         bool is_filtered = false;
         if (pd_filter_ready && OB_FAIL(file_filter.filter(ob_part_row, is_filtered))) {
           LOG_WARN("failed to check file filter range", K(ret));
@@ -476,45 +378,17 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
   return ret;
 }
 
-bool ObHiveFilePruner::check_one_row_part_column(ObNewRow ob_part_row)
-{
-  bool contain = true;
-  for (int64_t i = 0; contain && i < ob_part_row.get_count(); ++i) {
-    ObObj &cell = ob_part_row.get_cell(i);
-    ObHivePartFieldBound &field_bound = *hive_part_bounds_.at(i);
-    if (field_bound.is_always_false_) {
-      contain = false;
-    } else if (!field_bound.is_whole_range_) {
-      contain = check_one_part(cell, field_bound);
-    }
-  }
-  return contain;
-}
-
-bool ObHiveFilePruner::check_one_part(ObObj &part_val, ObHivePartFieldBound &field_bounds)
+bool ObHiveFilePruner::check_one_part(const ObObj &part_val, const ObLakePartFieldBound &field_bounds)
 {
   bool contain = false;
-  ObFixedArray<ObFieldBound *, ObIAllocator> bounds = field_bounds.bounds_;
-  for (int64_t i = 0; !contain && i < bounds.count(); ++i) {
-    ObFieldBound *bound = bounds.at(i);
-    if (bound->contains_null_ && part_val.is_null()) {
-      contain = true;
-    } else if (part_val.is_null() && is_hive_default_point_bound_(*bound)) {
-      // Hive default partition string maps to NULL partition value in partition row.
-      contain = true;
-    } else if (bound->is_valid_range_) {
-      int cmp_lower = part_val.compare(bound->lower_bound_);
-      if (cmp_lower == 0 && bound->include_lower_) {
-        contain = true;
-      } else if (cmp_lower > 0) {
-        int cmp_upper = part_val.compare(bound->upper_bound_);
-        if ((cmp_upper == 0 && bound->include_upper_) || cmp_upper < 0) {
-          contain = true;
-        }
-      }
+  if (part_val.is_null()) {
+    // Hive default partition string maps to NULL partition value in partition row.
+    const ObIArray<ObFieldBound *> &bounds = field_bounds.bounds_;
+    for (int64_t i = 0; !contain && i < bounds.count(); ++i) {
+      contain = OB_NOT_NULL(bounds.at(i)) && is_hive_default_point_bound_(*bounds.at(i));
     }
   }
-  return contain;
+  return contain || ObILakeTableFilePruner::check_one_part(part_val, field_bounds);
 }
 
 bool ObHiveFilePruner::is_hive_default_partition_obj_(const ObObj &obj) const
@@ -637,7 +511,7 @@ int ObHiveFilePruner::filter_partitions_by_str_hash_(ObExecContext &exec_ctx,
   const int64_t part_col_count = hive_part_bounds_.count();
   ObSEArray<hash::ObHashSet<ObString> *, 4> col_str_sets;
   for (int64_t j = 0; OB_SUCC(ret) && j < part_col_count; ++j) {
-    ObHivePartFieldBound *fb = hive_part_bounds_.at(j);
+    ObLakePartFieldBound *fb = hive_part_bounds_.at(j);
     if (OB_ISNULL(fb)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null part field bound", K(ret), K(j));
@@ -728,119 +602,6 @@ int ObHiveFilePruner::filter_partitions_by_str_hash_(ObExecContext &exec_ctx,
   return ret;
 }
 
-ObHivePartFieldBound::ObHivePartFieldBound(common::ObIAllocator &allocator)
-    : allocator_(allocator), column_id_(OB_INVALID_ID), is_whole_range_(false),
-      is_always_false_(false), bounds_(allocator), range_exprs_(allocator)
-{
-}
-
-void ObHivePartFieldBound::reset()
-{
-  column_id_ = OB_INVALID_ID;
-  is_whole_range_ = false;
-  is_always_false_ = false;
-  for (int64_t i = 0; i < bounds_.count(); ++i) {
-    if (OB_NOT_NULL(bounds_.at(i))) {
-      allocator_.free(bounds_.at(i));
-    }
-  }
-  bounds_.reset();
-  range_exprs_.reset();
-}
-
-int ObHivePartFieldBound::assign(const ObHivePartFieldBound &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other) {
-    column_id_ = other.column_id_;
-    is_whole_range_ = other.is_whole_range_;
-    is_always_false_ = other.is_always_false_;
-    if (OB_FAIL(bounds_.assign(other.bounds_))) {
-      LOG_WARN("failed to assign field bound", K(ret));
-    } else if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
-      LOG_WARN("failed to assign range exprs");
-    }
-  }
-  return ret;
-}
-
-int ObHivePartFieldBound::deep_copy(ObHivePartFieldBound &src)
-{
-  int ret = OB_SUCCESS;
-  column_id_ = src.column_id_;
-  is_whole_range_ = src.is_whole_range_;
-  is_always_false_ = src.is_always_false_;
-  if (OB_FAIL(bounds_.init(src.bounds_.count()))) {
-    LOG_WARN("failed to init fixed array", K(ret));
-  } else if (OB_FAIL(range_exprs_.assign(src.range_exprs_))) {
-    LOG_WARN("failed to assign range exprs");
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < src.bounds_.count(); ++i) {
-    ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
-    if (OB_ISNULL(src.bounds_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null filed bound", K(ret));
-    } else if (OB_ISNULL(bound)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObFieldBound", K(ret));
-    } else if (OB_FAIL(bound->deep_copy(allocator_, *src.bounds_.at(i)))) {
-      LOG_WARN("failed to deep copy field bound", K(ret));
-    } else if (OB_FAIL(bounds_.push_back(bound))) {
-      LOG_WARN("failed to push back bound", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObHivePushDownFilter::HivePartitionFilterParamBuilder::build(const int32_t ext_tbl_col_id,
-                                                                const ObColumnMeta &column_meta,
-                                                                blocksstable::ObMinMaxFilterParam &param)
-{
-  int ret = OB_SUCCESS;
-  param.set_uncertain();
-
-  int64_t part_column_idx = -1;
-  for (int i = 0; i < part_column_ids_.count(); ++i) {
-    if (ext_tbl_col_id == normalization_column_id(part_column_ids_.at(i))) {
-      part_column_idx = i;
-      break;
-    }
-  }
-
-  if (part_column_idx == -1) {
-    // 非分区列不做过滤
-  } else if (row_.get_cell(part_column_idx).is_null()) {
-    // NULL分区保持uncertain，分区裁剪已由check_one_part完成
-  } else {
-    ObObj null_value;
-    null_value.set_int(0);
-    if (OB_FAIL(param.null_count_.from_obj_enhance(null_value))) {
-      LOG_WARN("failed to form obj enhance");
-    } else if (OB_FAIL(param.min_datum_.from_obj_enhance(row_.get_cell(part_column_idx)))) {
-      LOG_WARN("failed to form obj enhance");
-    } else if (OB_FAIL(param.max_datum_.from_obj_enhance(row_.get_cell(part_column_idx)))) {
-      LOG_WARN("failed to form obj enhance");
-    } else {
-      param.is_min_prefix_ = false;
-      param.is_max_prefix_ = false;
-    }
-  }
-  return ret;
-}
-
-int ObHivePushDownFilter::filter(ObNewRow row, bool &is_filtered)
-{
-  int ret = OB_SUCCESS;
-  HivePartitionFilterParamBuilder param_builder(row, *part_column_ids_);
-  if (OB_FAIL(apply_skipping_index_filter(ObExternalTablePushdownFilter::PushdownLevel::FILE,
-                                          param_builder,
-                                          is_filtered,
-                                          1))) {
-    LOG_WARN("fail to apply skipping index filter", K(ret));
-  }
-  return ret;
-}
-
 int ObHiveFilePruner::construct_partition_values(common::ObIAllocator &allocator,
                                                  const common::ObIArray<common::ObString> &partition_column_names,
                                                  const common::ObIArrayWrap<common::ObString> &partition_values,
@@ -900,7 +661,7 @@ int ObHiveFilePruner::get_part_id_and_range_exprs(ObIArray<uint64_t> &part_colum
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < hive_part_bounds_.count(); ++i) {
-    ObHivePartFieldBound *part_field_bound = hive_part_bounds_.at(i);
+    ObLakePartFieldBound *part_field_bound = hive_part_bounds_.at(i);
     if (OB_ISNULL(part_field_bound)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("part field bound is null");

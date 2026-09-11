@@ -34,8 +34,10 @@ int ObODPSTableMetadata::assign(const ObODPSTableMetadata &other)
   if (this != &other) {
     if (OB_FAIL(ObILakeTableMetadata::assign(other))) {
       LOG_WARN("failed to assign ObILakeTableMetadata", K(ret));
-    } else {
-      OZ(table_schema_.assign(other.table_schema_));
+    } else if (OB_FAIL(table_schema_.assign(other.table_schema_))) {
+      LOG_WARN("failed to assign table schema", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, other.format_str_, format_str_))) {
+      LOG_WARN("failed to assign format str", K(ret));
     }
   }
   return ret;

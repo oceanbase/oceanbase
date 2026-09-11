@@ -1085,6 +1085,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/ob_granule_pump.cpp
   engine/px/ob_granule_parallel_task_gen.cpp
   engine/px/ob_granule_util.cpp
+  engine/px/ob_external_table_granule_handler.cpp
   engine/px/ob_granule_fts_util.cpp
   engine/px/ob_px_admission.cpp
   engine/px/ob_px_bloom_filter.cpp
@@ -1376,6 +1377,7 @@ ob_set_subtarget(ob_sql optimizer
   optimizer/file_prune/ob_lake_table_file_map.cpp
   optimizer/file_prune/ob_lake_table_fwd.cpp
   optimizer/file_prune/ob_lake_table_optimizer_utils.cpp
+  optimizer/file_prune/ob_odps_file_pruner.cpp
   optimizer/file_prune/ob_ext_file_pruner.cpp
   optimizer/file_prune/ob_ext_predicate_json.cpp
   optimizer/ob_lake_table_partition_info.cpp

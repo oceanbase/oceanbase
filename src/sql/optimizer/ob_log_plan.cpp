@@ -1854,7 +1854,18 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_pre_range_graph(ap->pre_range_graph_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     scan->set_table_type(table_schema->get_table_type());
-    scan->set_lake_table_format(table_schema->get_lake_table_format());
+    if (table_schema->is_external_table()) {
+      // lake_table_format_ is not serialized; derive the effective format from
+      // the schema.
+      share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID;
+      if (OB_FAIL(ObSQLUtils::derive_lake_table_format(table_schema, lake_table_format))) {
+        LOG_WARN("failed to derive lake table format", K(ret));
+      } else {
+        scan->set_lake_table_format(lake_table_format);
+      }
+    } else {
+      scan->set_lake_table_format(table_schema->get_lake_table_format());
+    }
     scan->set_index_prefix(ap->index_prefix_);
     scan->set_mr_mv_scan(table_item->mr_mv_flags_);
     if (OB_FAIL(ret)) {

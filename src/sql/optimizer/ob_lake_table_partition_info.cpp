@@ -9,8 +9,11 @@
 
 #include "plugin/v2/external_table/ob_ext_table_metadata.h"
 #include "share/external_table/ob_external_table_part_info.h"
+#include "share/catalog/odps/ob_odps_catalog.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/location_cache/ob_location_service.h"
+#include "share/stat/ob_opt_stat_manager.h"
+#include "share/stat/ob_lake_table_stat.h"
 #include "share/object/ob_obj_cast.h"
 #include "share/schema/ob_iceberg_table_schema.h"
 #include "sql/das/ob_das_location_router.h"
@@ -20,6 +23,7 @@
 #include "sql/optimizer/file_prune/ob_ext_file_pruner.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "sql/optimizer/file_prune/ob_lake_table_optimizer_utils.h"
+#include "sql/optimizer/ob_optimizer_context.h"
 #include "sql/table_format/common/utils/ob_lake_table_executor.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
@@ -38,7 +42,7 @@ namespace sql
 namespace {
 struct ParallelIcebergManifestPruneTask
 {
-  ParallelIcebergManifestPruneTask(ObIcebergFilePrunner *iceberg_file_pruner,
+  ParallelIcebergManifestPruneTask(ObIcebergFilePruner *iceberg_file_pruner,
                                   ObIArray<iceberg::ManifestFile*> &all_manifest_files,
                                   ObSEArray<bool, 16> &in_bound_array,
                                   const ObString &access_info,
@@ -74,7 +78,7 @@ struct ParallelIcebergManifestPruneTask
   }
 
 private:
-  ObIcebergFilePrunner *iceberg_file_pruner_;
+  ObIcebergFilePruner *iceberg_file_pruner_;
   ObIArray<iceberg::ManifestFile*> &all_manifest_files_;
   ObSEArray<bool, 16> &in_bound_array_;
   const ObString &access_info_;
@@ -545,11 +549,57 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
                                                              const uint64_t table_id,
                                                              const uint64_t ref_table_id,
                                                              int64_t lake_table_snapshot_id,
-                                                             const ObIArray<ObRawExpr*> &filter_exprs)
+                                                             const ObIArray<ObRawExpr*> &filter_exprs,
+                                                             int64_t estimated_parallel)
 {
   int ret = OB_SUCCESS;
   ObILakeTableMetadata *lake_table_metadata = nullptr;
-  if (OB_FAIL(sql_schema_guard.get_lake_table_metadata(ref_table_id, lake_table_metadata))) {
+  // ODPS has no lake metadata; it materializes catalog metadata into the OB
+  // schema, so dispatch before the metadata fetch below.
+  // lake_table_format_ is not serialized, derive it from the schema.
+  const ObTableSchema *table_schema = nullptr;
+  share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID;
+  if (OB_FAIL(sql_schema_guard.get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null table schema", K(ret), K(ref_table_id));
+  } else if (OB_NOT_NULL(table_schema)
+             && OB_FAIL(ObSQLUtils::derive_lake_table_format(table_schema, lake_table_format))) {
+    LOG_WARN("failed to derive lake table format", K(ret), K(ref_table_id));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (share::is_odps_lake_table(lake_table_format)) {
+    // ODPS lake branch: identical call chain to hive — prune -> sample filter
+    // -> optimizer-time split fetch -> placement.
+    ObODPSFilePruner *odps_file_pruner = NULL;
+    ObSEArray<ObOptOdpsFile *, 16> odps_files;
+    ObSEArray<int64_t, 16> slot_idxs;
+    if (OB_ISNULL(odps_file_pruner = OB_NEWx(ObODPSFilePruner, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObODPSFilePruner", K(ret));
+    } else if (OB_FAIL(odps_file_pruner->init(sql_schema_guard,
+                                              stmt,
+                                              exec_ctx,
+                                              table_id,
+                                              ref_table_id,
+                                              filter_exprs))) {
+      LOG_WARN("failed to init odps file pruner", K(ret));
+    } else if (OB_FAIL(odps_file_pruner->prune_partitions(*exec_ctx, odps_files))) {
+      LOG_WARN("failed to prune odps partitions", K(ret));
+    } else if (OB_FAIL(filter_files_by_sample(stmt, table_id, odps_files))) {
+      LOG_WARN("failed to filter odps files by sample", K(ret));
+    } else if (OB_FAIL(odps_file_pruner->plan_files(*exec_ctx, stmt, odps_files, slot_idxs,
+                                                    estimated_parallel))) {
+      LOG_WARN("failed to fetch odps scan units", K(ret));
+    } else if (OB_FAIL(select_location_for_odps(exec_ctx, odps_files, slot_idxs))) {
+      LOG_WARN("failed to select location for odps", K(ret));
+    } else {
+      candi_table_loc_.set_table_location_key(odps_file_pruner->get_table_id(),
+                                              odps_file_pruner->get_ref_table_id());
+      file_pruner_ = odps_file_pruner;
+    }
+  } else if (OB_FAIL(sql_schema_guard.get_lake_table_metadata(ref_table_id, lake_table_metadata))) {
     LOG_WARN("failed to get lake table metadata", K(ref_table_id));
   } else if (OB_ISNULL(lake_table_metadata)) {
     ret = OB_ERR_UNEXPECTED;
@@ -605,11 +655,11 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       LOG_WARN("get null snapshot");
     }
 
-    ObIcebergFilePrunner *iceberg_file_pruner = NULL;
+    ObIcebergFilePruner *iceberg_file_pruner = NULL;
     if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(iceberg_file_pruner = OB_NEWx(ObIcebergFilePrunner, &allocator_, allocator_))) {
+    } else if (OB_ISNULL(iceberg_file_pruner = OB_NEWx(ObIcebergFilePruner, &allocator_, allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObIcebergFilePrunner", K(ret));
+      LOG_WARN("failed to allocate memory for ObIcebergFilePruner", K(ret));
     } else if (OB_FAIL(iceberg_file_pruner->init(&sql_schema_guard,
                                                  stmt,
                                                  exec_ctx,
@@ -739,7 +789,6 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     } else {
       candi_table_loc_.set_table_location_key(iceberg_file_pruner->get_table_id(),
                                               iceberg_file_pruner->get_ref_table_id());
-      candi_table_loc_.set_is_lake_table(true);
       file_pruner_ = iceberg_file_pruner;
     }
     if (part_key_map.created()) {
@@ -761,7 +810,7 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
                                                ref_table_id,
                                                filter_exprs))) {
       LOG_WARN("failed to init hive file prunner", K(ret));
-    } else if (OB_FAIL(hive_file_pruner->prunner_files(*exec_ctx, hive_files))) {
+    } else if (OB_FAIL(hive_file_pruner->prune_files(*exec_ctx, hive_files))) {
       LOG_WARN("failed to init hive table location", K(ret));
     } else if (OB_FAIL(filter_files_by_sample(stmt, table_id, hive_files))) {
       LOG_WARN("failed to filter hive files by sample", K(ret));
@@ -770,7 +819,6 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     } else {
       candi_table_loc_.set_table_location_key(hive_file_pruner->get_table_id(),
                                               hive_file_pruner->get_ref_table_id());
-      candi_table_loc_.set_is_lake_table(true);
       file_pruner_ = hive_file_pruner;
     }
 
@@ -802,7 +850,6 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
     } else {
       candi_table_loc_.set_table_location_key(ext_file_pruner->get_table_id(),
                                               ext_file_pruner->get_ref_table_id());
-      candi_table_loc_.set_is_lake_table(true);
       file_pruner_ = ext_file_pruner;
     }
   } else {
@@ -1156,6 +1203,88 @@ int ObLakeTablePartitionInfo::select_location_for_hive(ObExecContext *exec_ctx,
   return ret;
 }
 
+int ObLakeTablePartitionInfo::select_location_for_odps(ObExecContext *exec_ctx,
+                                                       ObIArray<ObOptOdpsFile *> &odps_files,
+                                                       ObIArray<int64_t> &slot_idxs)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 16> all_servers;
+  ObCandiTabletLocIArray &candi_tablet_locs
+      = candi_table_loc_.get_phy_part_loc_info_list_for_update();
+  candi_tablet_locs.reset();
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null");
+  } else if (OB_UNLIKELY(odps_files.empty() || odps_files.count() != slot_idxs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected odps scan units", K(ret), K(odps_files.count()), K(slot_idxs.count()));
+  } else if (OB_FAIL(GCTX.location_service_->external_table_get(
+                 exec_ctx->get_my_session()->get_effective_tenant_id(),
+                 all_servers))) {
+    LOG_WARN("fail to get external table location");
+  } else if (all_servers.empty()) {
+    // single-node fallback: one tablet loc on self carrying all the units
+    ObCandiTabletLoc *tablet_loc = nullptr;
+    if (OB_ISNULL(tablet_loc = candi_tablet_locs.alloc_place_holder())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to alloc place holder for ObCandiTabletLoc");
+    } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc, GCTX.self_addr(), 0))) {
+      LOG_WARN("failed to init tablet loc by addr");
+    } else {
+      ObIArray<ObIOptLakeTableFile *> &files = tablet_loc->get_opt_lake_table_files_for_update();
+      for (int64_t i = 0; OB_SUCC(ret) && i < odps_files.count(); ++i) {
+        if (OB_FAIL(files.push_back(odps_files.at(i)))) {
+          LOG_WARN("failed to push back odps file", K(ret));
+        }
+      }
+    }
+  } else {
+    // one candidate tablet loc per alive server, then each unit is hung on the
+    // loc of the slot the assignment heuristic picked for it (the units live in
+    // the pruner's allocator and are consumed by pointer — zero copy).
+    if (OB_FAIL(candi_tablet_locs.reserve(all_servers.count()))) {
+      LOG_WARN("failed to reserve candi tablet locs", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); ++i) {
+      ObCandiTabletLoc *tablet_loc = candi_tablet_locs.alloc_place_holder();
+      if (OB_ISNULL(tablet_loc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to alloc place holder for ObCandiTabletLoc");
+      } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc, all_servers.at(i), i + 1))) {
+        LOG_WARN("failed to init tablet loc by addr", K(ret), K(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < odps_files.count(); ++i) {
+      const int64_t slot = slot_idxs.at(i);
+      if (OB_UNLIKELY(slot < 0 || slot >= candi_tablet_locs.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected odps unit slot", K(ret), K(slot), K(candi_tablet_locs.count()));
+      } else if (OB_FAIL(candi_tablet_locs.at(slot).get_opt_lake_table_files_for_update()
+                             .push_back(odps_files.at(i)))) {
+        LOG_WARN("failed to push back odps file", K(ret), K(i), K(slot));
+      }
+    }
+    // compact away file-less locs: the lake file map lookup would miss for them
+    for (int64_t i = candi_tablet_locs.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (candi_tablet_locs.at(i).get_opt_lake_table_files().empty()
+          && OB_FAIL(candi_tablet_locs.remove(i))) {
+        LOG_WARN("failed to remove empty candi tablet loc", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret) && OB_UNLIKELY(candi_tablet_locs.empty())) {
+      // defensive fallback: never leave the location list empty
+      ObCandiTabletLoc *tablet_loc = nullptr;
+      if (OB_ISNULL(tablet_loc = candi_tablet_locs.alloc_place_holder())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to alloc place holder for ObCandiTabletLoc");
+      } else if (OB_FAIL(init_tablet_loc_by_addr(*tablet_loc, GCTX.self_addr(), 0))) {
+        LOG_WARN("failed to init tablet loc by addr");
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLakeTablePartitionInfo::get_bucket_idx(const ObLakeTablePartKey &part_key,
                                              const int64_t offset,
                                              int32_t &bucket_idx)
@@ -1460,6 +1589,271 @@ int ObLakeTablePartitionInfo::get_partition_values(ObIArray<ObString> &partition
   } else if (OB_FAIL(partition_values.assign(file_pruner_->partition_values_))) {
     LOG_WARN("failed to assign partition values", K(ret));
   }
+  return ret;
+}
+
+// CREATE EXTERNAL TABLE 形态的 ODPS 表没有 catalog/lake metadata，
+// get_catalog_table_stat 必在 metadata 查找处失败。表的全部连接信息都在
+// pruner 的 format_str_ 里：现场合成 ObODPSTableMetadata 直接回源现取。
+// 合成品只活在本次调用（不进 lake_table_metadatas_），结果也不进统计
+// 缓存/持久化（见 ObOptCatalogStatService::fetch_odps_ext_table_stat_directly）。
+static int fetch_odps_ext_table_stat_directly_(ObOptimizerContext &opt_ctx,
+                                               const ObODPSFilePruner &odps_pruner,
+                                               const uint64_t ref_table_id,
+                                               const ObIArray<ObString> &partition_values,
+                                               ObIAllocator &allocator,
+                                               ObLakeTableStat &table_stat)
+{
+  int ret = OB_SUCCESS;
+  odps::ObODPSTableMetadata *odps_meta = nullptr;
+  void *buf = nullptr;
+  sql::ObExternalFileFormat external_format;
+  common::ObArenaAllocator arena_alloc("OdpsExtStatMeta");
+  const ObTableSchema *table_schema = nullptr;
+  ObSqlSchemaGuard *schema_guard = opt_ctx.get_sql_schema_guard();
+  ObSQLSessionInfo *session = opt_ctx.get_session_info();
+  ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(session)
+      || OB_ISNULL(schema_guard->get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(schema_guard), KP(session));
+  } else if (odps_pruner.get_format_str().empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("odps format str is empty", K(ret));
+  } else if (OB_FAIL(external_format.load_from_string(odps_pruner.get_format_str(),
+                                                      arena_alloc))) {
+    LOG_WARN("failed to parse odps format str", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(ref_table_id));
+  } else if (OB_FAIL(schema_guard->get_schema_guard()->get_tenant_name_case_mode(
+                 session->get_effective_tenant_id(), case_mode))) {
+    LOG_WARN("failed to get tenant name case mode", K(ret));
+  } else {
+    const sql::ObODPSGeneralFormat &odps_format = external_format.odps_format_;
+    const ObString &ns_name = odps_format.schema_.empty() ? odps_format.project_
+                                                          : odps_format.schema_;
+    if (OB_UNLIKELY(ns_name.empty() || odps_format.table_.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("odps format str carries no table identity",
+               K(ret), K(ns_name), K(odps_format.table_));
+    } else if (OB_ISNULL(buf = allocator.alloc(sizeof(odps::ObODPSTableMetadata)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate odps table metadata", K(ret));
+    } else {
+      odps_meta = new (buf) odps::ObODPSTableMetadata(allocator);
+      // catalog_id_ 在这条路径上不参与任何缓存/持久化（全部绕过），只需避开
+      // ObOptCatalogTableStatBuilder 拒绝的 OB_INTERNAL_CATALOG_ID；
+      // 用 ref_table_id 保持自洽可辨认。
+      if (OB_FAIL(odps_meta->init(session->get_effective_tenant_id(),
+                                  ref_table_id,
+                                  table_schema->get_database_id(),
+                                  ref_table_id,
+                                  ns_name,
+                                  odps_format.table_,
+                                  case_mode))) {
+        LOG_WARN("failed to init odps table metadata", K(ret));
+      } else if (OB_FAIL(ob_write_string(allocator,
+                                         odps_pruner.get_format_str(),
+                                         odps_meta->format_str_))) {
+        LOG_WARN("failed to copy odps format str", K(ret));
+      } else if (OB_FAIL(ObOptStatManager::get_instance().get_cat_stat_service()
+                             .fetch_odps_ext_table_stat_directly(odps_meta,
+                                                                 partition_values,
+                                                                 *schema_guard,
+                                                                 allocator,
+                                                                 table_stat))) {
+        LOG_WARN("failed to fetch odps external table stat directly", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::get_table_stat(ObIAllocator &allocator,
+                                              ObOptimizerContext &opt_ctx,
+                                              ObTablePartitionInfo &partition_info,
+                                              const uint64_t ref_table_id,
+                                              const ObLakeTableFormat format,
+                                              ObIArray<ObColumnRefRawExpr *> &column_exprs,
+                                              ObLakeTableStat &table_stat,
+                                              ObIArray<ObLakeColumnStat *> &column_stats,
+                                              bool &has_valid_row_count)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObString, 16> partition_values;
+  bool is_all_partitions_selected = false;
+  ObLakeTablePartitionInfo *lake_partition_info = partition_info.is_lake_table_partition_info()
+      ? static_cast<ObLakeTablePartitionInfo *>(&partition_info) : nullptr;
+  has_valid_row_count = false;
+  if (is_hive_lake_table(format)) {
+    if (OB_ISNULL(lake_partition_info) || OB_ISNULL(lake_partition_info->get_file_pruner())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null Hive file pruner", K(ret));
+    } else if (OB_FAIL(lake_partition_info->get_partition_values(partition_values))) {
+      LOG_WARN("failed to get Hive partition values", K(ret));
+    } else {
+      is_all_partitions_selected = lake_partition_info->get_file_pruner()->all_partitions_selected();
+    }
+  } else if (is_odps_lake_table(format)) {
+    if (OB_NOT_NULL(lake_partition_info)) {
+      const ObODPSFilePruner *odps_pruner =
+          static_cast<const ObODPSFilePruner *>(lake_partition_info->get_file_pruner());
+      if (OB_ISNULL(odps_pruner)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ODPS file pruner", K(ret));
+      } else if (odps_pruner->get_planned_row_count(table_stat.total_row_count_)) {
+        // Query-local count before row filters; never scale it again or cache
+        // it as a global catalog statistic.
+        table_stat.pruned_row_count_ = table_stat.total_row_count_;
+        has_valid_row_count = true;
+        LOG_TRACE("use row count from ODPS storage plan", K(table_stat));
+      } else if (OB_FAIL(lake_partition_info->get_partition_values(partition_values))) {
+        LOG_WARN("failed to get ODPS partition values", K(ret));
+      } else if (!is_external_object_id(ref_table_id)) {
+        // CREATE EXTERNAL TABLE 形态没有 catalog 实体，catalog 统计链必在
+        // lake metadata 查找处失败：用 format_str_ 现场合成 metadata 直接
+        // 回源现取（不进缓存/持久化）。失败不致命，照旧落回 catalog 分支，
+        // 最终降级为默认估计。成功时 table_stat.last_analyzed_ > 0，
+        // 由下方共享的缩放分支接管。
+        int tmp_ret = fetch_odps_ext_table_stat_directly_(opt_ctx, *odps_pruner,
+                                                          ref_table_id, partition_values,
+                                                          allocator, table_stat);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to fetch odps external table stat directly",
+                   K(tmp_ret), K(ref_table_id));
+        }
+      }
+    } else {
+      // Preserve the schema-based fallback for callers without a lake pruner.
+      ObSqlSchemaGuard *schema_guard = opt_ctx.get_sql_schema_guard();
+      const ObTableSchema *table_schema = nullptr;
+      if (OB_ISNULL(schema_guard)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null schema guard", K(ret));
+      } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret), K(ref_table_id));
+      } else if (OB_FAIL(ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(
+                            allocator, &partition_info, table_schema, partition_values))) {
+        LOG_WARN("failed to get ODPS partition values from schema", K(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret) || has_valid_row_count) {
+  } else {
+    // ODPS 外表形态直接回源成功时 table_stat 已填好（last_analyzed_ > 0），
+    // 跳过 catalog 读取；其余形态照旧走 catalog 链路（其内部统一吞错降级）。
+    // 两者共用下面的 last_analyzed 判定与 ODPS 全局统计缩放。
+    if (table_stat.last_analyzed_ <= 0
+        && OB_FAIL(get_catalog_table_stat(allocator,
+                                          opt_ctx,
+                                          ref_table_id,
+                                          column_exprs,
+                                          partition_values,
+                                          is_all_partitions_selected,
+                                          table_stat,
+                                          column_stats))) {
+      LOG_WARN("failed to get catalog table stat", K(ret));
+    }
+    if (OB_SUCC(ret) && table_stat.last_analyzed_ > 0) {
+      has_valid_row_count = true;
+      // Hive caches partition statistics; ODPS catalog statistics are global.
+      if (is_odps_lake_table(format) && partition_values.count() > 0
+          && partition_values.count() < table_stat.part_cnt_) {
+        const double scale_ratio = static_cast<double>(partition_values.count())
+                                   / table_stat.part_cnt_;
+        if (OB_FAIL(ObLakeTableStatUtils::scale_table_stat(scale_ratio, table_stat))) {
+          LOG_WARN("failed to scale table stat", K(ret));
+        } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(
+                       table_stat.total_row_count_, scale_ratio, column_stats))) {
+          LOG_WARN("failed to scale column stats", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLakeTablePartitionInfo::get_catalog_table_stat(ObIAllocator &allocator,
+                                            ObOptimizerContext &opt_ctx,
+                                            uint64_t ref_table_id,
+                                            ObIArray<ObColumnRefRawExpr*> &column_exprs,
+                                            ObIArray<ObString> &partition_names,
+                                            const bool is_all_partitions_selected,
+                                            common::ObLakeTableStat &table_stat,
+                                            ObIArray<common::ObLakeColumnStat*> &column_stats)
+{
+  int ret = OB_SUCCESS;
+  bool table_stat_fetched = false;
+  ObSqlSchemaGuard *sql_schema_guard = NULL;
+  ObSEArray<ObString, 16> column_names;
+  LOG_TRACE("partition infos", K(partition_names));
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+    const ObColumnRefRawExpr *col_expr = column_exprs.at(i);
+    if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null col expr", K(ret));
+    } else if (OB_FAIL(column_names.push_back(col_expr->get_column_name()))) {
+      LOG_WARN("failed to push back column name", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(sql_schema_guard = opt_ctx.get_sql_schema_guard()) ||
+             OB_ISNULL(opt_ctx.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_catalog_table_stat(
+                     opt_ctx.get_session_info()->get_effective_tenant_id(),
+                     ref_table_id,
+                     partition_names,
+                     is_all_partitions_selected,
+                     *sql_schema_guard,
+                     table_stat))) {
+    LOG_WARN("failed to get catalog table stat", K(ret));
+  } else if (OB_FALSE_IT(table_stat_fetched = true)) {
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_catalog_column_stat(
+                     allocator,
+                     opt_ctx.get_session_info()->get_effective_tenant_id(),
+                     ref_table_id,
+                     column_names,
+                     partition_names,
+                     is_all_partitions_selected,
+                     *sql_schema_guard,
+                     table_stat.total_row_count_,
+                     1.0,
+                     column_stats))) {
+    LOG_WARN("failed to get catalog column stat", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    const int stat_ret = ret;
+    LOG_WARN("failed to get catalog table stat or column stat", K(stat_ret), K(table_stat_fetched));
+    ret = OB_SUCCESS;
+    for (int64_t i = 0; i < column_stats.count(); ++i) {
+      common::ObLakeColumnStat *column_stat = column_stats.at(i);
+      if (OB_NOT_NULL(column_stat)) {
+        column_stat->~ObLakeColumnStat();
+        column_stat = NULL;
+      }
+    }
+    column_stats.reuse();
+    if (!table_stat_fetched) {
+      table_stat.total_row_count_ = 0;
+      table_stat.last_analyzed_ = 0;
+    } else {
+      // Column statistics are optional for ODPS and some other lake formats.
+      // Preserve a successfully fetched table row count when only the column
+      // statistic request failed.
+      LOG_TRACE("keep catalog table stat without column stats", K(table_stat));
+    }
+  }
+
   return ret;
 }
 

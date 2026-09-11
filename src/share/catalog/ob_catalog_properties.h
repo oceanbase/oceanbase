@@ -75,6 +75,12 @@ inline bool is_hive_lake_table(const ObLakeTableFormat format)
   return ObLakeTableFormat::HIVE == format;
 }
 
+/// True iff `format` identifies an ODPS lake table.
+inline bool is_odps_lake_table(const ObLakeTableFormat format)
+{
+  return ObLakeTableFormat::ODPS == format;
+}
+
 /// Extract the plugin slot ([0, 256)) from a plugin-placeholder enum value, or
 /// INVALID_LAKE_PLUGIN_SLOT when `format` is not in the plugin range.
 inline ObPluginSlot lake_plugin_slot_of(const ObLakeTableFormat format)
@@ -94,18 +100,22 @@ inline ObLakeTableFormat lake_plugin_format_of(const ObPluginSlot slot)
              : ObLakeTableFormat::INVALID;
 }
 
-/// Catalog-backed lake formats (Iceberg / Hive / C++ plugin). ODPS is not included.
+/// Catalog-backed lake formats (Iceberg / Hive / C++ plugin) and ODPS. ODPS
+/// materializes catalog metadata into the OB schema but reads through the lake
+/// access path (ObODPSFilePruner + lake file map).
 inline bool is_lake_external_table(const ObLakeTableFormat format)
 {
   return is_iceberg_lake_table(format)
          || is_hive_lake_table(format)
-         || is_lake_plugin_table(format);
+         || is_lake_plugin_table(format)
+         || is_odps_lake_table(format);
 }
 
 /// ODPS materializes catalog metadata into OB schema (unlike Iceberg/Hive/plugin).
+/// Only INVALID (OSS / JAVA_PLUGIN style file external tables) remains here.
 inline bool is_ob_external_table(const ObLakeTableFormat format)
 {
-  return (ObLakeTableFormat::ODPS == format || ObLakeTableFormat::INVALID == format);
+  return ObLakeTableFormat::INVALID == format;
 }
 
 enum class ObURISelectionMode

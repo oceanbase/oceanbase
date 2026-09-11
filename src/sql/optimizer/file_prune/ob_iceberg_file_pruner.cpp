@@ -87,128 +87,6 @@ private:
 
 } // namespace
 
-OB_DEF_SERIALIZE(ObPartFieldBound)
-{
-  int ret = OB_SUCCESS;
-  int64_t count = bounds_.count();
-  LST_DO_CODE(OB_UNIS_ENCODE, column_id_, transform_type_, is_whole_range_, is_always_false_, count);
-  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-    if (OB_ISNULL(bounds_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null field bound");
-    } else {
-      OB_UNIS_ENCODE(*bounds_.at(i));
-    }
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObPartFieldBound)
-{
-  int64_t len = 0;
-  int64_t count = bounds_.count();
-  LST_DO_CODE(OB_UNIS_ADD_LEN, column_id_, transform_type_, is_whole_range_, is_always_false_, count);
-  for (int64_t i = 0; i < count; ++i) {
-    if (OB_NOT_NULL(bounds_.at(i))) {
-      OB_UNIS_ADD_LEN(*bounds_.at(i));
-    }
-  }
-  return len;
-}
-
-OB_DEF_DESERIALIZE(ObPartFieldBound)
-{
-  int ret = OB_SUCCESS;
-  int64_t count = 0;
-  LST_DO_CODE(OB_UNIS_DECODE, column_id_, transform_type_, is_whole_range_, is_always_false_, count);
-  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-    ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
-    if (OB_ISNULL(bound)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObFieldBound");
-    } else {
-      OB_UNIS_DECODE(*bound);
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(bounds_.push_back(bound))) {
-        LOG_WARN("failed to push back bound");
-      }
-    }
-  }
-  return ret;
-}
-
-ObPartFieldBound::ObPartFieldBound(common::ObIAllocator &allocator)
-: allocator_(allocator),
-  column_id_(OB_INVALID_ID),
-  transform_type_(iceberg::TransformType::Invalid),
-  is_whole_range_(false),
-  is_always_false_(false),
-  bounds_(allocator),
-  range_exprs_(allocator)
-{}
-
-void ObPartFieldBound::reset()
-{
-  column_id_ = OB_INVALID_ID;
-  transform_type_ = iceberg::TransformType::Invalid;
-  is_whole_range_ = false;
-  is_always_false_ = false;
-  for (int64_t i = 0; i < bounds_.count(); ++i) {
-    if (OB_NOT_NULL(bounds_.at(i))) {
-      allocator_.free(bounds_.at(i));
-    }
-  }
-  bounds_.reset();
-  range_exprs_.reset();
-}
-
-int ObPartFieldBound::assign(const ObPartFieldBound &other)
-{
-  int ret = OB_SUCCESS;
-  if (this != &other){
-    column_id_ = other.column_id_;
-    transform_type_ = other.transform_type_;
-    is_whole_range_ = other.is_whole_range_;
-    is_always_false_ = other.is_always_false_;
-    if (OB_FAIL(bounds_.assign(other.bounds_))) {
-      LOG_WARN("failed to assign field bound");
-    } else if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
-      LOG_WARN("failed to assign range exprs");
-    }
-  }
-  return ret;
-}
-
-int ObPartFieldBound::deep_copy(ObPartFieldBound &src)
-{
-  int ret = OB_SUCCESS;
-  column_id_ = src.column_id_;
-  transform_type_ = src.transform_type_;
-  is_whole_range_ = src.is_whole_range_;
-  is_always_false_ = src.is_always_false_;
-  if (OB_FAIL(bounds_.init(src.bounds_.count()))) {
-    LOG_WARN("failed to init fixed array");
-  } else if (OB_FAIL(range_exprs_.assign(src.range_exprs_))) {
-    LOG_WARN("failed to assign range exprs");
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < src.bounds_.count(); ++i) {
-    ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
-    if (OB_ISNULL(src.bounds_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null filed bound");
-    } else if (OB_ISNULL(bound)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObFieldBound");
-    } else if (OB_FAIL(bound->deep_copy(allocator_, *src.bounds_.at(i)))) {
-      LOG_WARN("failed to deep copy field bound");
-    } else if (OB_FAIL(bounds_.push_back(bound))) {
-      LOG_WARN("failed to push back bound");
-    }
-  }
-  return ret;
-}
-
 OB_DEF_SERIALIZE(ObIcebergPartBound)
 {
   int ret = OB_SUCCESS;
@@ -244,10 +122,10 @@ OB_DEF_DESERIALIZE(ObIcebergPartBound)
   int64_t count = 0;
   OB_UNIS_DECODE(count);
   for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
-    ObPartFieldBound *field_bound = OB_NEWx(ObPartFieldBound, &allocator_, allocator_);
+    ObLakePartFieldBound *field_bound = OB_NEWx(ObLakePartFieldBound, &allocator_, allocator_);
     if (OB_ISNULL(field_bound)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObPartFieldBound");
+      LOG_WARN("failed to allocate memory for ObLakePartFieldBound");
     } else {
       OB_UNIS_DECODE(*field_bound);
     }
@@ -295,7 +173,7 @@ int ObIcebergPartBound::deep_copy(ObIcebergPartBound &src)
       LOG_WARN("failed to init fixed array");
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < src.part_field_bounds_.count(); ++i) {
-      ObPartFieldBound *part_field_bound = OB_NEWx(ObPartFieldBound, &allocator_, allocator_);
+      ObLakePartFieldBound *part_field_bound = OB_NEWx(ObLakePartFieldBound, &allocator_, allocator_);
       if (OB_ISNULL(src.part_field_bounds_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null part filed bound");
@@ -312,14 +190,14 @@ int ObIcebergPartBound::deep_copy(ObIcebergPartBound &src)
   return ret;
 }
 
-ObIcebergFilePrunner::ObIcebergFilePrunner(common::ObIAllocator &allocator)
+ObIcebergFilePruner::ObIcebergFilePruner(common::ObIAllocator &allocator)
 : ObILakeTableFilePruner(allocator),
   part_column_descs_(allocator_),
   part_bound_(allocator_),
   enable_lake_table_parallel_resolving_(true)
 {}
 
-void ObIcebergFilePrunner::reset()
+void ObIcebergFilePruner::reset()
 {
   ObILakeTableFilePruner::reset();
   part_column_descs_.reset();
@@ -330,14 +208,14 @@ void ObIcebergFilePrunner::reset()
   enable_lake_table_parallel_resolving_ = true;
 }
 
-int ObIcebergFilePrunner::clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const
+int ObIcebergFilePruner::clone(common::ObIAllocator &allocator, ObILakeTableFilePruner *&pruner) const
 {
   int ret = OB_SUCCESS;
   pruner = nullptr;
-  ObIcebergFilePrunner *tmp = nullptr;
-  if (OB_ISNULL(tmp = OB_NEWx(ObIcebergFilePrunner, &allocator, allocator))) {
+  ObIcebergFilePruner *tmp = nullptr;
+  if (OB_ISNULL(tmp = OB_NEWx(ObIcebergFilePruner, &allocator, allocator))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for ObIcebergFilePrunner");
+    LOG_WARN("failed to allocate memory for ObIcebergFilePruner");
   } else if (OB_FAIL(tmp->assign(*this))) {
     LOG_WARN("failed to assign iceberg file pruner");
   } else {
@@ -346,12 +224,12 @@ int ObIcebergFilePrunner::clone(common::ObIAllocator &allocator, ObILakeTableFil
   return ret;
 }
 
-int ObIcebergFilePrunner::assign(const ObILakeTableFilePruner &o)
+int ObIcebergFilePruner::assign(const ObILakeTableFilePruner &o)
 {
   int ret = OB_SUCCESS;
   if (this != &o) {
     reset();
-    const ObIcebergFilePrunner &other = static_cast<const ObIcebergFilePrunner &>(o);
+    const ObIcebergFilePruner &other = static_cast<const ObIcebergFilePruner &>(o);
     if (OB_FAIL(ObILakeTableFilePruner::assign(o))) {
       LOG_WARN("failed to assign lake table file pruner");
     } else if (OB_FAIL(part_column_descs_.assign(other.part_column_descs_))) {
@@ -379,7 +257,7 @@ int ObIcebergFilePrunner::assign(const ObILakeTableFilePruner &o)
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObIcebergFilePrunner)
+OB_DEF_SERIALIZE(ObIcebergFilePruner)
 {
   int ret = OB_SUCCESS;
   int64_t part_bound_count = part_bound_.count();
@@ -397,7 +275,7 @@ OB_DEF_SERIALIZE(ObIcebergFilePrunner)
   return ret;
 }
 
-OB_DEF_SERIALIZE_SIZE(ObIcebergFilePrunner)
+OB_DEF_SERIALIZE_SIZE(ObIcebergFilePruner)
 {
   int64_t len = 0;
   int64_t part_bound_count = part_bound_.count();
@@ -415,7 +293,7 @@ OB_DEF_SERIALIZE_SIZE(ObIcebergFilePrunner)
   return len;
 }
 
-OB_DEF_DESERIALIZE(ObIcebergFilePrunner)
+OB_DEF_DESERIALIZE(ObIcebergFilePruner)
 {
   int ret = OB_SUCCESS;
   int64_t part_bound_count = 0;
@@ -476,7 +354,7 @@ OB_DEF_DESERIALIZE(ObIcebergFilePrunner)
 }
 
 
-int ObIcebergFilePrunner::init(ObSqlSchemaGuard *schema_guard,
+int ObIcebergFilePruner::init(ObSqlSchemaGuard *schema_guard,
                                const ObDMLStmt &stmt,
                                ObExecContext *exec_ctx,
                                const uint64_t table_id,
@@ -508,7 +386,7 @@ int ObIcebergFilePrunner::init(ObSqlSchemaGuard *schema_guard,
       LOG_WARN("failed to get lake table parallel resolve config", K(ret));
     } else if (OB_FAIL(generate_column_meta_info(stmt))) {
       LOG_WARN("failed to generate column meta info");
-    } else if (OB_FAIL(genearte_partition_bound(stmt, exec_ctx, table_schema,
+    } else if (OB_FAIL(generate_partition_bound(stmt, exec_ctx, table_schema,
                                                 partition_specs, filter_exprs))) {
       LOG_WARN("failed to generate partition bound");
     } else if (need_all_) {
@@ -522,7 +400,7 @@ int ObIcebergFilePrunner::init(ObSqlSchemaGuard *schema_guard,
   return ret;
 }
 
-int ObIcebergFilePrunner::genearte_partition_bound(const ObDMLStmt &stmt,
+int ObIcebergFilePruner::generate_partition_bound(const ObDMLStmt &stmt,
                                                    ObExecContext *exec_ctx,
                                                    const ObTableSchema *table_schema,
                                                    const ObIArray<iceberg::PartitionSpec*> &partition_specs,
@@ -557,10 +435,10 @@ int ObIcebergFilePrunner::genearte_partition_bound(const ObDMLStmt &stmt,
       for (int64_t j = 0; OB_SUCC(ret) && j < part_spec->fields.count(); ++j) {
         ObQueryRangeArray ranges;
         iceberg::PartitionField *field = part_spec->fields.at(j);
-        ObPartFieldBound *part_field_bound = OB_NEWx(ObPartFieldBound, &allocator_, allocator_);
+        ObLakePartFieldBound *part_field_bound = OB_NEWx(ObLakePartFieldBound, &allocator_, allocator_);
         if (OB_ISNULL(part_field_bound)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocator memory for ObPartFieldBound");
+          LOG_WARN("failed to allocator memory for ObLakePartFieldBound");
         } else if (OB_ISNULL(field)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null partition filed");
@@ -591,7 +469,7 @@ int ObIcebergFilePrunner::genearte_partition_bound(const ObDMLStmt &stmt,
             } else if (OB_FAIL(transform_bound_by_part_type(field->transform, *column_item,
                                                             ranges, exec_ctx, table_schema))) {
               LOG_WARN("failed to transform bound by part type");
-            } else if (OB_FAIL(build_field_bound_from_ranges(ranges, *part_field_bound))) {
+            } else if (OB_FAIL(build_field_bound_from_ranges(allocator_, ranges, *part_field_bound))) {
               LOG_WARN("failed to build field bound from ranges");
             } else if (OB_FAIL(part_field_bound->range_exprs_.assign(
                            pre_range_graph.get_range_exprs()))) {
@@ -627,7 +505,7 @@ int ObIcebergFilePrunner::genearte_partition_bound(const ObDMLStmt &stmt,
   return ret;
 }
 
-int ObIcebergFilePrunner::get_part_id_and_range_exprs(
+int ObIcebergFilePruner::get_part_id_and_range_exprs(
     ObIArray<uint64_t> &part_column_ids,
     ObIArray<ObRawExpr*> &range_exprs)
 {
@@ -642,7 +520,7 @@ int ObIcebergFilePrunner::get_part_id_and_range_exprs(
     for (int64_t field_idx = 0;
          OB_SUCC(ret) && field_idx < base_part_bound->part_field_bounds_.count();
          ++field_idx) {
-      ObPartFieldBound *candidate = base_part_bound->part_field_bounds_.at(field_idx);
+      ObLakePartFieldBound *candidate = base_part_bound->part_field_bounds_.at(field_idx);
       bool exact_in_all_specs = true;
       if (OB_ISNULL(candidate)) {
         ret = OB_ERR_UNEXPECTED;
@@ -668,7 +546,7 @@ int ObIcebergFilePrunner::get_part_id_and_range_exprs(
                OB_SUCC(ret) && !matching_identity_field
                && other_field_idx < part_bound->part_field_bounds_.count();
                ++other_field_idx) {
-            ObPartFieldBound *other = part_bound->part_field_bounds_.at(other_field_idx);
+            ObLakePartFieldBound *other = part_bound->part_field_bounds_.at(other_field_idx);
             if (OB_ISNULL(other)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("partition field bound is null", K(ret), K(spec_idx), K(other_field_idx));
@@ -702,31 +580,7 @@ int ObIcebergFilePrunner::get_part_id_and_range_exprs(
   return ret;
 }
 
-int ObIcebergFilePrunner::build_field_bound_from_ranges(ObIArray<ObNewRange*> &ranges,
-                                                       ObPartFieldBound &part_field_bound)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(part_field_bound.bounds_.init(ranges.count()))) {
-    LOG_WARN("failed to init fixed array");
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
-    ObFieldBound *field_bound = OB_NEWx(ObFieldBound, &allocator_);
-    if (OB_ISNULL(field_bound)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocator memory for ObFieldBound");
-    } else if (OB_ISNULL(ranges.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null range");
-    } else if (OB_FAIL(field_bound->from_range(*ranges.at(i)))) {
-      LOG_WARN("failed to init field bound from range");
-    } else if (OB_FAIL(part_field_bound.bounds_.push_back(field_bound))) {
-      LOG_WARN("failed to push back field bound");
-    }
-  }
-  return ret;
-}
-
-int ObIcebergFilePrunner::transform_bound_by_part_type(iceberg::Transform &transform,
+int ObIcebergFilePruner::transform_bound_by_part_type(iceberg::Transform &transform,
                                                       ColumnItem &column_item,
                                                       ObIArray<ObNewRange*> &part_bounds,
                                                       ObExecContext *exec_ctx,
@@ -777,7 +631,7 @@ int ObIcebergFilePrunner::transform_bound_by_part_type(iceberg::Transform &trans
   return ret;
 }
 
-int ObIcebergFilePrunner::transform_bucket_range(ObNewRange &range, const int64_t N)
+int ObIcebergFilePruner::transform_bucket_range(ObNewRange &range, const int64_t N)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(N <= 0)) {
@@ -893,7 +747,7 @@ int ObIcebergFilePrunner::transform_bucket_range(ObNewRange &range, const int64_
     break;                                            \
   }
 
-int ObIcebergFilePrunner::transform_truncate_range(ObNewRange &range,
+int ObIcebergFilePruner::transform_truncate_range(ObNewRange &range,
                                                    const int64_t W,
                                                    ObIAllocator &allocator)
 {
@@ -994,7 +848,7 @@ int ObIcebergFilePrunner::transform_truncate_range(ObNewRange &range,
 }
 #undef CALC_DECIMAL_INT_TRUNCATE
 
-int ObIcebergFilePrunner::transform_time_range(ObNewRange &range,
+int ObIcebergFilePruner::transform_time_range(ObNewRange &range,
                                               iceberg::TransformType type,
                                               ObSQLSessionInfo *session_info)
 {
@@ -1056,7 +910,7 @@ int ObIcebergFilePrunner::transform_time_range(ObNewRange &range,
   return ret;
 }
 
-int ObIcebergFilePrunner::from_partition_field_summary(ObIAllocator &allocator,
+int ObIcebergFilePruner::from_partition_field_summary(ObIAllocator &allocator,
                                                        ObFieldBound &field_bound,
                                                        iceberg::TransformType transform_type,
                                                        ObColumnMeta &column_meta,
@@ -1101,7 +955,7 @@ int ObIcebergFilePrunner::from_partition_field_summary(ObIAllocator &allocator,
   return ret;
 }
 
-int ObIcebergFilePrunner::obj_to_ob_time(ObObj &val,
+int ObIcebergFilePruner::obj_to_ob_time(ObObj &val,
                                            ObTime &ob_time,
                                            ObSQLSessionInfo *session_info)
 {
@@ -1134,7 +988,7 @@ int ObIcebergFilePrunner::obj_to_ob_time(ObObj &val,
   return ret;
 }
 
-int ObIcebergFilePrunner::transform_void_range(ObNewRange &range)
+int ObIcebergFilePruner::transform_void_range(ObNewRange &range)
 {
   int ret = OB_SUCCESS;
   // void transform会把所有的值转变成NULL, 相当于没有分区, 直接当做whole range处理即可.
@@ -1144,7 +998,7 @@ int ObIcebergFilePrunner::transform_void_range(ObNewRange &range)
   return ret;
 }
 
-int ObIcebergFilePrunner::prune_manifest_files(ObIArray<iceberg::ManifestFile*> &manifest_list,
+int ObIcebergFilePruner::prune_manifest_files(ObIArray<iceberg::ManifestFile*> &manifest_list,
                                                ObIArray<iceberg::ManifestFile*> &valid_manifest_list)
 {
   int ret = OB_SUCCESS;
@@ -1169,7 +1023,7 @@ int ObIcebergFilePrunner::prune_manifest_files(ObIArray<iceberg::ManifestFile*> 
   return ret;
 }
 
-int ObIcebergFilePrunner::prune_single_manifest_file(iceberg::ManifestFile *manifest_file,
+int ObIcebergFilePruner::prune_single_manifest_file(iceberg::ManifestFile *manifest_file,
                                                      bool &in_bound)
 {
   int ret = OB_SUCCESS;
@@ -1189,7 +1043,7 @@ int ObIcebergFilePrunner::prune_single_manifest_file(iceberg::ManifestFile *mani
   return ret;
 }
 
-int ObIcebergFilePrunner::prune_manifest_files_by_partition_clause(
+int ObIcebergFilePruner::prune_manifest_files_by_partition_clause(
     ObIArray<iceberg::ManifestFile*> &manifest_files,
     const ObIArray<ObString> &partition_names,
     const ObIArray<ObObj> &partition_values,
@@ -1296,7 +1150,7 @@ int ObIcebergFilePrunner::prune_manifest_files_by_partition_clause(
   return ret;
 }
 
-int ObIcebergFilePrunner::check_manifest_file_in_bound(ObIAllocator &allocator,
+int ObIcebergFilePruner::check_manifest_file_in_bound(ObIAllocator &allocator,
                                                        iceberg::ManifestFile& manifest_file,
                                                        ObIcebergPartBound& part_bound,
                                                        bool &in_bound)
@@ -1308,7 +1162,7 @@ int ObIcebergFilePrunner::check_manifest_file_in_bound(ObIAllocator &allocator,
     LOG_WARN("get unexpected filed bounds", K(part_bound), K(manifest_file));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && in_bound && i < part_bound.part_field_bounds_.count(); ++i) {
-      ObPartFieldBound *part_field_bound = part_bound.part_field_bounds_.at(i);
+      ObLakePartFieldBound *part_field_bound = part_bound.part_field_bounds_.at(i);
       iceberg::PartitionFieldSummary *part_field_summary = manifest_file.partitions.at(i);
       if (OB_ISNULL(part_field_bound) || OB_ISNULL(part_field_summary)) {
         ret = OB_ERR_UNEXPECTED;
@@ -1348,7 +1202,7 @@ int ObIcebergFilePrunner::check_manifest_file_in_bound(ObIAllocator &allocator,
   return ret;
 }
 
-int ObIcebergFilePrunner::prune_data_files(
+int ObIcebergFilePruner::prune_data_files(
     ObExecContext &exec_ctx,
     const ObIArray<iceberg::ManifestEntry *> &manifest_entries,
     ObIArray<ObIcebergFileDesc *> &file_descs)
@@ -1515,7 +1369,7 @@ int ObIcebergFilePrunner::prune_data_files(
   return ret;
 }
 
-ObIcebergPartBound* ObIcebergFilePrunner::get_part_bound_by_spec_id(int64_t spec_id)
+ObIcebergPartBound* ObIcebergFilePruner::get_part_bound_by_spec_id(int64_t spec_id)
 {
   ObIcebergPartBound *part_bound = NULL;
   for (int64_t j = 0; OB_ISNULL(part_bound) && j < part_bound_.count(); ++j) {
@@ -1526,7 +1380,7 @@ ObIcebergPartBound* ObIcebergFilePrunner::get_part_bound_by_spec_id(int64_t spec
   return part_bound;
 }
 
-int ObIcebergFilePrunner::check_manifest_entry_in_bound(iceberg::ManifestEntry& manifest_entry,
+int ObIcebergFilePruner::check_manifest_entry_in_bound(iceberg::ManifestEntry& manifest_entry,
                                                        ObIcebergPartBound& part_bound,
                                                        bool &in_bound)
 {
@@ -1537,7 +1391,7 @@ int ObIcebergFilePrunner::check_manifest_entry_in_bound(iceberg::ManifestEntry& 
     LOG_WARN("get unexpected filed bounds", K(part_bound), K(manifest_entry));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && in_bound && i < part_bound.part_field_bounds_.count(); ++i) {
-      ObPartFieldBound *part_field_bound = part_bound.part_field_bounds_.at(i);
+      ObLakePartFieldBound *part_field_bound = part_bound.part_field_bounds_.at(i);
       if (OB_ISNULL(part_field_bound)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", KP(part_field_bound));
@@ -1567,7 +1421,7 @@ int ObIcebergFilePrunner::check_manifest_entry_in_bound(iceberg::ManifestEntry& 
   return ret;
 }
 
-int ObIcebergFilePrunner::prune_manifest_entries_by_partition_clause(
+int ObIcebergFilePruner::prune_manifest_entries_by_partition_clause(
     const ObIArray<ObString> &partition_names,
     const ObIArray<ObObj> &partition_values,
     int32_t expected_spec_id,

@@ -8,6 +8,7 @@
 
 #include "lib/json_type/ob_json_parse.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 
 #include <optional>
 #include <s2/base/casts.h>
@@ -19,6 +20,8 @@ namespace oceanbase
 
 namespace sql
 {
+
+struct ObIcebergFileDesc;
 
 namespace iceberg
 {
@@ -63,6 +66,16 @@ public:
                             const ObString key,
                             const ObString value,
                             ObIArray<pair<ObString, ObString>> &map);
+
+  static int collect_iceberg_partition_values(
+                common::ObIAllocator &allocator,
+                const common::ObIArray<sql::ObIcebergFileDesc *> &file_descs,
+                common::ObIArray<common::ObString> &partition_values);
+  static int build_iceberg_partition_json_desc(
+                common::ObIAllocator &allocator,
+                const PartitionSpec &partition_spec,
+                const common::ObIArray<common::ObObj> &partition_values,
+                common::ObString &partition_desc);
 };
 
 class ObIcebergFileIOUtils

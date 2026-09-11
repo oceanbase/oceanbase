@@ -3115,14 +3115,6 @@ struct MergeKeyInfoHelper
                               ObIArray<ObColumnRefRawExpr*> &column_exprs,
                               common::ObLakeTableStat &table_stat,
                               ObIArray<common::ObLakeColumnStat*> &column_stats);
-    int get_common_lake_table_stat(ObIAllocator &allocator,
-                                   uint64_t ref_table_id,
-                                   ObIArray<ObColumnRefRawExpr*> &column_exprs,
-                                   ObIArray<ObString> &partition_names,
-                                   const bool is_all_partitions_selected,
-                                   common::ObLakeTableStat &table_stat,
-                                   ObIArray<common::ObLakeColumnStat*> &column_stats);
-    int get_lake_table_partition_values(ObIArray<ObString> &partition_names);
 
   private:
     int find_matching_cond(const ObIArray<ObRawExpr *> &join_conditions,

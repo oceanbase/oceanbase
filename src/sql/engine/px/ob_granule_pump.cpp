@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "ob_granule_pump.h"
+#include "ob_external_table_granule_handler.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "observer/ob_server_struct.h"
@@ -776,19 +777,23 @@ int ObGranulePump::init_external_odps_table_downloader(
   if (scan_ops.count() == 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty scan_ops", K(ret));
+  } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_FAIL(ObSQLUtils::is_odps_external_table(
-                 scan_ops.at(0)
-                     ->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
+                 tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
                  is_odps_external_table))) {
     LOG_WARN("failed to check is odps external table or not", K(ret));
-  } else if (!args.external_table_files_.empty() && is_odps_external_table) {
-    if (scan_ops.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid scan ops and gi task array result", K(ret),
-               K(scan_ops.count()));
-    } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null ptr", K(ret));
+  } else if (!is_odps_external_table) {
+    // not odps: nothing to init
+  } else {
+    // the lake path carries the scan units in the lake file map instead of
+    // args.external_table_files_, so it must be gated on the format here
+    const bool is_odps_lake_table =
+        tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()
+        && share::is_odps_lake_table(tsc->tsc_ctdef_.scan_ctdef_.lake_table_format_);
+    if (args.external_table_files_.empty() && !is_odps_lake_table) {
+      // nothing to init
     } else {
       int8_t unused_mode = 0;
       if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
@@ -797,13 +802,17 @@ int ObGranulePump::init_external_odps_table_downloader(
         LOG_WARN("failed to parse odps jni params from format str", K(ret));
       }
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && (!args.external_table_files_.empty() || is_odps_lake_table)) {
       if (!use_odps_jni_connector_) {
 #if defined(OB_BUILD_CPP_ODPS)
-        if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(
-                args.external_table_files_.count()))) {
+        // bucket count: one downloader per partition file, or share the pool
+        // across the parallelism workers when the file list is empty.
+        const int64_t bucket_count = args.external_table_files_.empty()
+                                         ? max(args.parallelism_, 1L)
+                                         : args.external_table_files_.count();
+        if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(bucket_count))) {
           LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret),
-                   K(args.external_table_files_.count()));
+                   K(args.external_table_files_.count()), K(args.parallelism_));
         } else {
           LOG_TRACE("succ to init odps table partition downloader", K(ret),
                     K(is_odps_downloader_inited()));
@@ -891,7 +900,7 @@ int ObGranulePump::refill_pump_with_new_gen_tasks(
               sql::ObGITaskSet::GI_RANDOM_NONE))) {
         LOG_WARN("failed to construct taskset", K(ret));
       } else if (OB_FAIL(
-                    new_taskset.set_block_order(gi_attri_flag))) {
+                    new_taskset.set_block_order(ObGranuleUtil::desc_order(gi_attri_flag)))) {
         LOG_WARN("failed to set block order", K(ret));
       } else {
         ObGITaskArray &taskset_array = task_array_item.taskset_array_;
@@ -1183,23 +1192,21 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
              ranges.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the task has an empty range", K(ret), K(ranges));
-  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()) {
-    ret = ObGranuleUtil::split_granule_for_external_table(args,
-                                                          tsc,
-                                                          ranges,
-                                                          tablets,
-                                                          taskset_tablets,
-                                                          scan_tasks,
-                                                          taskset_idxs);
-  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()) {
-    ret = ObGranuleUtil::split_granule_for_lake_table(*args.ctx_,
-                                                      args.ctx_->get_allocator(),
-                                                      ranges,
-                                                      tablets,
-                                                      partition_granule,
-                                                      taskset_tablets,
-                                                      scan_tasks,
-                                                      taskset_idxs);
+  } else if (tsc->tsc_ctdef_.scan_ctdef_.is_ob_external_table()
+             || tsc->tsc_ctdef_.scan_ctdef_.is_lake_external_table()) {
+    // external tables: polymorphic per-format granule splitting; the dispatch
+    // conditions live in ObExternalTableGranuleHandlerFactory::create
+    ObIExternalTableGranuleHandler *handler = nullptr;
+    if (OB_FAIL(ObExternalTableGranuleHandlerFactory::create(
+            args.ctx_->get_allocator(), tsc->tsc_ctdef_.scan_ctdef_, handler))) {
+      LOG_WARN("failed to create granule handler", K(ret));
+    } else if (OB_ISNULL(handler)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null granule handler", K(ret));
+    } else if (OB_FAIL(handler->split_granule(args, tsc, ranges, tablets, partition_granule,
+                                              taskset_tablets, scan_tasks, taskset_idxs))) {
+      LOG_WARN("failed to split granule for external table", K(ret));
+    }
   } else {
     ret = ObGranuleUtil::split_block_ranges(*args.ctx_,
                                             args.ctx_->get_allocator(),

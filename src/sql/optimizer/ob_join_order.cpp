@@ -22,7 +22,10 @@
 #include "sql/optimizer/ob_lake_table_partition_info.h"
 #include "share/stat/ob_lake_table_stat.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/location_cache/ob_location_service.h"
+#include "share/ob_server_struct.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/partition.h"
 #include "sql/table_format/iceberg/spec/schema.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -18670,8 +18673,7 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     LOG_TRACE("after compute table meta info", K(table_meta_info_));
   }
   if (OB_SUCC(ret)) {
-    if (table_meta_info_.lake_table_format_ != ObLakeTableFormat::ODPS &&
-        !share::is_lake_external_table(table_meta_info_.lake_table_format_)) {
+    if (!share::is_lake_external_table(table_meta_info_.lake_table_format_)) {
       if (OB_FAIL(init_est_sel_info_for_access_path(table_id,
                                                     ref_table_id,
                                                     *table_schema))) {
@@ -24841,6 +24843,9 @@ int ObJoinOrder::compute_lake_table_location_and_meta(const uint64_t table_id,
   ObArray<ObRawExpr *> correlated_filters;
   ObArray<ObRawExpr *> uncorrelated_filters;
   ObLakeTablePartitionInfo *lake_table_partition_info = nullptr;
+  int64_t estimated_parallel = ObGlobalHint::UNSET_PARALLEL;
+  int64_t candidate_server_cnt = 0;
+  ObSEArray<ObAddr, 8> server_list;
 
   if (OB_ISNULL(get_plan()) || OB_ISNULL(allocator_) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
@@ -24853,6 +24858,25 @@ int ObJoinOrder::compute_lake_table_location_and_meta(const uint64_t table_id,
   } else if (OB_ISNULL(lake_table_partition_info)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObLakeTablePartitionInfo");
+  } else if (OB_FAIL(get_explicit_dop_for_path(ref_table_id, estimated_parallel))) {
+    LOG_WARN("failed to get explicit dop for odps table", K(ret), K(table_id), K(ref_table_id));
+  } else if (ObGlobalHint::UNSET_PARALLEL == estimated_parallel && OPT_CTX.is_use_auto_dop()) {
+    if (OB_ISNULL(exec_ctx->get_my_session())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is null when estimating odps task parallel", K(ret));
+    } else if (OB_FAIL(GCTX.location_service_->external_table_get(
+            exec_ctx->get_my_session()->get_effective_tenant_id(), server_list))) {
+      LOG_WARN("failed to get external table servers for odps auto dop", K(ret));
+    } else if (server_list.empty() && OB_FAIL(server_list.push_back(GCTX.self_addr()))) {
+      LOG_WARN("failed to push back self addr for odps auto dop", K(ret));
+    } else {
+      estimated_parallel = OPT_CTX.get_parallel_degree_limit(server_list.count());
+      LOG_TRACE("estimated odps task parallel for auto dop",
+                K(estimated_parallel), K(server_list.count()));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObOptimizerUtil::extract_parameterized_correlated_filters(get_restrict_infos(),
                                                                                correlated_filters,
                                                                                uncorrelated_filters))) {
@@ -24864,7 +24888,8 @@ int ObJoinOrder::compute_lake_table_location_and_meta(const uint64_t table_id,
                                                                            table_id,
                                                                            ref_table_id,
                                                                            lake_table_snapshot_id,
-                                                                           uncorrelated_filters))) {
+                                                                           uncorrelated_filters,
+                                                                           estimated_parallel))) {
     LOG_WARN("failed to prune file and select location");
   } else {
     table_partition_info = lake_table_partition_info;
@@ -24883,7 +24908,7 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
   ObSEArray<ObLakeColumnStat*, 8> column_stats;
   ObSEArray<ObColumnRefRawExpr*, 16> column_exprs;
   ObSEArray<uint64_t, 16> column_ids;
-  ObSEArray<ObString, 16> partition_values;
+  bool has_valid_row_count = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(table_partition_info_) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
     ret = OB_INVALID_ARGUMENT;
@@ -24935,43 +24960,17 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
         table_meta_info_.table_row_count_ = table_stat.total_row_count_;
       }
     } else {
-      bool is_all_partitions_selected = false;
-      if (share::is_hive_lake_table(table_meta_info_.lake_table_format_)) {
-        ObLakeTablePartitionInfo *lake_table_partition_info =
-            static_cast<ObLakeTablePartitionInfo *>(table_partition_info_);
-        if (OB_ISNULL(lake_table_partition_info)
-            || OB_ISNULL(lake_table_partition_info->get_file_pruner())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null lake table file pruner", K(ret), KP(lake_table_partition_info));
-        } else {
-          is_all_partitions_selected =
-              lake_table_partition_info->get_file_pruner()->all_partitions_selected();
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_lake_table_partition_values(partition_values))) {
-        LOG_WARN("failed to get lake table partition values", K(ret));
-      } else if (OB_FAIL(get_common_lake_table_stat(*allocator_,
-                                                    ref_table_id,
-                                                    column_exprs,
-                                                    partition_values,
-                                                    is_all_partitions_selected,
-                                                    table_stat,
-                                                    column_stats))) {
-        LOG_WARN("failed to get common lake table stat", K(ret));
-      } else if (table_stat.last_analyzed_ > 0) {
-        if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ODPS) { // hive 实现了分区级别缓存，不再需要缩放
-          if (partition_values.count() > 0 && partition_values.count() < table_stat.part_cnt_) {
-            double scale_ratio = static_cast<double>(partition_values.count()) / table_stat.part_cnt_;
-            if (OB_FAIL(ObLakeTableStatUtils::scale_table_stat(scale_ratio, table_stat))) {
-              LOG_WARN("failed to scale table stat", K(ret));
-            } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
-                                                                        scale_ratio,
-                                                                        column_stats))) {
-              LOG_WARN("failed to scale column stats", K(ret));
-            }
-          }
-        }
+      if (OB_FAIL(ObLakeTablePartitionInfo::get_table_stat(*allocator_,
+                                             OPT_CTX,
+                                             *table_partition_info_,
+                                             ref_table_id,
+                                             table_meta_info_.lake_table_format_,
+                                             column_exprs,
+                                             table_stat,
+                                             column_stats,
+                                             has_valid_row_count))) {
+        LOG_WARN("failed to get lake table stat", K(ret));
+      } else if (has_valid_row_count) {
         table_meta_info_.table_row_count_ = table_stat.total_row_count_;
       }
     }
@@ -25016,6 +25015,15 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
         if (is_iceberg_lake_table && iceberg_record_count > 0 && table_meta_info_.table_row_count_ <= 0) {
           table_meta_info_.table_row_count_ = iceberg_record_count;
         }
+        if (!has_valid_row_count && table_stat.last_analyzed_ <= 0
+            && table_meta_info_.table_row_count_ <= 0) {
+          // Keep lake-table estimation consistent with the external-table
+          // path when neither catalog statistics nor format metadata provide
+          // a row count.
+          table_meta_info_.table_row_count_ = OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT;
+          LOG_TRACE("lake table statistics unavailable, use default row count",
+                    K(table_meta_info_.table_row_count_));
+        }
         if (is_iceberg_lake_table && total_file_size > 0 && table_meta_info_.table_row_count_ > 0) {
           table_meta_info_.average_row_size_
               = static_cast<double>(total_file_size)
@@ -25041,7 +25049,8 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
     }
   }
   if (OB_SUCC(ret)) {
-    OptTableStatType stat_type = table_stat.last_analyzed_ > 0 ?
+    OptTableStatType stat_type = table_stat.last_analyzed_ > 0
+                                  && (column_ids.empty() || !column_stats.empty()) ?
                                   OptTableStatType::OPT_TABLE_GLOBAL_STAT :
                                   OptTableStatType::DEFAULT_TABLE_STAT;
     if (OB_FAIL(get_plan()->get_basic_table_metas().add_lake_table_meta_info(
@@ -25251,12 +25260,13 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
                                                                        column_stats,
                                                                        &allocator))) {
     LOG_WARN("failed to construct table stat from iceberg");
-  } else if (OB_FAIL(ObExternalTableUtils::collect_iceberg_partition_values(
+  } else if (OB_FAIL(sql::iceberg::ObIcebergUtils::collect_iceberg_partition_values(
                                                                        allocator,
                                                                        lake_table_partition_info->get_file_descs(),
                                                                        partition_names))) {
     LOG_WARN("failed to collect iceberg partition stats keys", K(ret));
-  } else if (OB_FAIL(get_common_lake_table_stat(allocator,
+  } else if (OB_FAIL(ObLakeTablePartitionInfo::get_catalog_table_stat(allocator,
+                                                OPT_CTX,
                                                 ref_table_id,
                                                 column_exprs,
                                                 partition_names,
@@ -25265,7 +25275,7 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
                                                 common_column_stats))) {
     LOG_WARN("failed to get common lake table stat", K(ret));
   } else if (common_table_stat.total_row_count_ == 0 ||
-             common_table_stat.last_analyzed_ == 0) {
+             common_table_stat.last_analyzed_ == 0 || common_column_stats.empty()) {
     LOG_TRACE("common table stat is not valid", K(common_table_stat));
   } else if (OB_FALSE_IT(scale_ratio = table_stat.total_row_count_ / static_cast<double>(common_table_stat.total_row_count_))) {
   } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
@@ -25312,114 +25322,6 @@ int ObJoinOrder::get_plugin_table_stat(ObIAllocator &allocator,
       }
     }
     table_stat.total_row_count_ = std::max(total_row_count, (int64_t)1);
-  }
-  return ret;
-}
-
-int ObJoinOrder::get_common_lake_table_stat(ObIAllocator &allocator,
-                                            uint64_t ref_table_id,
-                                            ObIArray<ObColumnRefRawExpr*> &column_exprs,
-                                            ObIArray<ObString> &partition_names,
-                                            const bool is_all_partitions_selected,
-                                            common::ObLakeTableStat &table_stat,
-                                            ObIArray<common::ObLakeColumnStat*> &column_stats)
-{
-  int ret = OB_SUCCESS;
-  ObOptimizerContext *opt_ctx = NULL;
-  ObSqlSchemaGuard *sql_schema_guard = NULL;
-  ObSEArray<ObString, 16> column_names;
-  LOG_TRACE("partition infos", K(partition_names));
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
-    const ObColumnRefRawExpr *col_expr = column_exprs.at(i);
-    if (OB_ISNULL(col_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null col expr", K(ret));
-    } else if (OB_FAIL(column_names.push_back(col_expr->get_column_name()))) {
-      LOG_WARN("failed to push back column name", K(ret));
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(get_plan()) ||
-                       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-                       OB_ISNULL(sql_schema_guard = opt_ctx->get_sql_schema_guard()) ||
-                       OB_ISNULL(opt_ctx->get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(ObOptStatManager::get_instance().get_catalog_table_stat(
-                     opt_ctx->get_session_info()->get_effective_tenant_id(),
-                     ref_table_id,
-                     partition_names,
-                     is_all_partitions_selected,
-                     *sql_schema_guard,
-                     table_stat))) {
-    LOG_WARN("failed to get catalog table stat", K(ret));
-  } else if (OB_FAIL(ObOptStatManager::get_instance().get_catalog_column_stat(
-                     allocator,
-                     opt_ctx->get_session_info()->get_effective_tenant_id(),
-                     ref_table_id,
-                     column_names,
-                     partition_names,
-                     is_all_partitions_selected,
-                     *sql_schema_guard,
-                     table_stat.total_row_count_,
-                     1.0,
-                     column_stats))) {
-    LOG_WARN("failed to get catalog column stat", K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to get catalog table stat or column stat", K(ret));
-    ret = OB_SUCCESS;
-    table_stat.total_row_count_ = 0;
-    table_stat.last_analyzed_ = 0;
-    for (int64_t i = 0; i < column_stats.count(); ++i) {
-      common::ObLakeColumnStat *column_stat = column_stats.at(i);
-      if (OB_NOT_NULL(column_stat)) {
-        column_stat->~ObLakeColumnStat();
-        column_stat = NULL;
-      }
-    }
-    column_stats.reuse();
-  }
-
-  return ret;
-}
-
-int ObJoinOrder::get_lake_table_partition_values(ObIArray<ObString> &partition_values)
-{
-  int ret = OB_SUCCESS;
-  partition_values.reuse();
-
-  if (share::is_hive_lake_table(table_meta_info_.lake_table_format_)) {
-    ObLakeTablePartitionInfo *lake_table_partition_info = static_cast<ObLakeTablePartitionInfo*>(table_partition_info_);
-    if (OB_ISNULL(lake_table_partition_info)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null table partition info", K(ret));
-    } else if (OB_FAIL(lake_table_partition_info->get_partition_values(partition_values))) {
-      LOG_WARN("failed to get partition values", K(ret));
-    }
-  } else if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ODPS) {
-    int64_t ref_table_id = table_partition_info_->get_ref_table_id();
-    const ObTableSchema *table_schema = NULL;
-    ObSqlSchemaGuard *schema_guard = NULL;
-    if (OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is null", K(ret), K(ref_table_id));
-    } else if (OB_FAIL(ObOdpsCatalogUtils::get_partition_odps_str_from_table_schema(*allocator_,
-                                                                table_partition_info_,
-                                                                table_schema,
-                                                                partition_values))) {
-      LOG_WARN("failed to get lake table partition values", K(ret));
-    }
-  } else {
-    // For other lake table formats (ICEBERG, ODPS), use empty partition names (global stats)
-    LOG_TRACE("using global statistics for default lake table", K(table_meta_info_.lake_table_format_));
   }
   return ret;
 }

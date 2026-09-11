@@ -368,8 +368,7 @@ ObCandiTableLoc::ObCandiTableLoc(ObIAllocator &allocator)
   : table_location_key_(OB_INVALID_ID),
     ref_table_id_(OB_INVALID_ID),
     candi_tablet_locs_(allocator),
-    duplicate_type_(ObDuplicateType::NOT_DUPLICATE),
-    is_lake_table_(false)
+    duplicate_type_(ObDuplicateType::NOT_DUPLICATE)
 {
 }
 
@@ -383,7 +382,6 @@ void ObCandiTableLoc::reset()
   ref_table_id_ = OB_INVALID_ID;
   candi_tablet_locs_.reset();
   duplicate_type_ = ObDuplicateType::NOT_DUPLICATE;
-  is_lake_table_ = false;
 }
 
 int ObCandiTableLoc::assign(const ObCandiTableLoc &other)
@@ -392,7 +390,6 @@ int ObCandiTableLoc::assign(const ObCandiTableLoc &other)
   table_location_key_ = other.table_location_key_;
   ref_table_id_ = other.ref_table_id_;
   duplicate_type_ = other.duplicate_type_;
-  is_lake_table_ = other.is_lake_table_;
   if (OB_FAIL(candi_tablet_locs_.assign(other.candi_tablet_locs_))) {
     LOG_WARN("Failed to assign phy_part_loc_info_list", K(ret));
   }

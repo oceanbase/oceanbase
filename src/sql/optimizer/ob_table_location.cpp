@@ -1014,7 +1014,9 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
     LOG_WARN("table not exist", K(loc_meta_.ref_table_id_));
   } else {
     table_type_ = table_schema->get_table_type();
-    loc_meta_.is_external_table_ = table_schema->is_external_table();
+    if (OB_FAIL(ObSQLUtils::fill_table_loc_meta_lake_flags(table_schema, loc_meta_))) {
+      LOG_WARN("failed to fill table loc meta lake flags", K(ret));
+    }
     ObString file_location;
     bool is_shared_external_files_on_disk = false;
     CK (OB_NOT_NULL(schema_guard.get_schema_guard()));
@@ -1354,7 +1356,9 @@ int ObTableLocation::init(
     LOG_WARN("fail to get sys variable", K(ret));
   } else {
     table_type_ = table_schema->get_table_type();
-    loc_meta_.is_external_table_ = table_schema->is_external_table();
+    if (OB_FAIL(ObSQLUtils::fill_table_loc_meta_lake_flags(table_schema, loc_meta_))) {
+      LOG_WARN("failed to fill table loc meta lake flags", K(ret));
+    }
     ObString file_location;
     bool is_shared_external_files_on_disk = false;
     OZ(ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx->get_allocator(), file_location, &is_shared_external_files_on_disk));

@@ -24,6 +24,10 @@ class Field;
 namespace oceanbase {
 namespace sql {
 
+struct ObLakeTablePushDownFilterSpec;
+struct ObOdpsPredColumnInfo;
+struct ObExternalFileFormat;
+
 inline bool is_fixed_odps_type(const ObOdpsJniConnector::OdpsType type)
 {
   return type == ObOdpsJniConnector::OdpsType::BOOLEAN ||
@@ -254,8 +258,32 @@ public:
     return mirror_partition_column_list_;
   }
   int close_schema_scanner();
+  // Builds the obexpr<->odps column index maps directly from the projected
+  // odps column indexes (0-based) — no codegen'd das_ctdef needed, so the
+  // optimizer-time lake path (ObODPSFilePruner) can use it. The schema scanner
+  // must be open (it pulls the mirror columns).
   int init_storage_api_meta_param(
-      const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str, int64_t split_block_size);
+      const common::ObIArray<int64_t> &nonpart_col_idxs,
+      const common::ObIArray<int64_t> &part_col_idxs,
+      const ObString &part_list_str, int64_t split_block_size);
+  // Deep-copies the predicate string into the iterator so that the next
+  // init_jni_meta_scanner passes it as the storage-api pushdown_predicate.
+  int set_pushdown_predicate(const ObString &predicate);
+  // Optimizer-time pushdown predicate re-derivation for the ODPS lake path:
+  // rebuilds the pushdown filter executor from the pruner's mini-codegen'd spec
+  // (the ObLakeTablePushDownFilter::generate_pd_filter precedent), evaluates
+  // the datums and prints the storage-api predicate string with the mirror
+  // column names pulled by the schema scanner. pred_col_infos resolves the OB
+  // schema column ids carried by the white filter nodes to their pseudo columns.
+  // An empty predicate (with OB_SUCCESS) means the predicates cannot be printed
+  // at optimizer time (non-constant / non-pushdownable) — the caller then opens
+  // the session without a pushdown predicate and correctness is upheld by the
+  // OB-side TSC filter.
+  int print_optimizer_pushdown_predicate(ObExecContext &exec_ctx,
+                                         ObLakeTablePushDownFilterSpec &file_filter_spec,
+                                         const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+                                         common::ObIAllocator &alloc,
+                                         ObString &predicate);
   int prepare_data_expr(const ExprFixedArray &ext_file_column_expr);
   int prepare_partition_expr(const ExprFixedArray &ext_file_column_expr);
   int prepare_bit_vector();
@@ -274,9 +302,6 @@ public:
   int fetch_serilize_session(ObIAllocator &alloc, ObString &session_str);
   int init_empty_require_column();
   int init_part_spec(const ObString& part_spec);
-  int construct_predicate_using_white_filter(const ObDASScanCtDef &das_ctdef,
-                                             ObDASScanRtDef *das_rtdef,
-                                             ObExecContext &exec_ctx);
   int fetch_partition_row_count_via_tunnel(const ObString &part_spec, int64_t &row_count);
   int fetch_partition_row_count_via_tunnel(const ObString &part_spec, const ObString &session_id, int64_t &row_count);
   int fetch_odps_tunnel_session_id(ObIAllocator &alloc, ObString &sid);
@@ -332,10 +357,6 @@ private:
                        const std::shared_ptr<arrow::Field>& element_field,
                        ObODPSArrayHelper *array_helper);
 
-  int construct_predicate_using_white_filter(const ObDASScanCtDef &das_ctdef,
-                                             ObExecContext &exec_ctx,
-                                             sql::ObPushdownFilterExecutor &filter);
-  int init_access_exprs(const ObDASScanCtDef &das_ctdef, ObIArray<ObExpr*> &access_exprs, bool &is_valid);
   int get_mirror_column(const ObIArray<ObExpr*> &access_exprs,
                         const ObIArray<ObExpr*> &file_column_exprs,
                         const ObExpr* column_expr,
@@ -351,6 +372,19 @@ private:
                              ObSqlString &predicate,
                              bool &can_pushdown,
                              bool is_root = false);
+  // Walks the re-derived pushdown filter tree and builds the aligned
+  // access/file-column expr arrays that print_predicate_string needs: for every
+  // white filter node, access_exprs gets the node's column rt expr and
+  // file_column_exprs a pseudo-column expr shell (type_ + extra_ = 1-based odps
+  // column idx) resolved through pred_col_infos. all_mapped = false when a
+  // filtered column cannot be resolved (e.g. a hidden file-id/line-number
+  // column) — the caller then skips the predicate.
+  int collect_pred_column_exprs_(sql::ObPushdownFilterExecutor *filter,
+                                 const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+                                 common::ObIAllocator &alloc,
+                                 common::ObIArray<ObExpr *> &access_exprs,
+                                 common::ObIArray<ObExpr *> &file_column_exprs,
+                                 bool &all_mapped);
   int check_type_for_pushdown(const MirrorOdpsJniColumn &mirror_column,
                               const ObObjMeta &obj_meta,
                               ObWhiteFilterOperatorType cmp_type,
@@ -438,12 +472,41 @@ public:
   static int fetch_storage_row_count(ObSQLSessionInfo *session,
     const ObString part_spec, const ObString &properties, int64_t &row_count);
 
-  static int fetch_storage_api_split_by_byte(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
-      const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &split_count,
+  // Entry points for the optimizer-time lake path (ObODPSFilePruner): the
+  // format properties are parsed once, then the download session is opened
+  // with projected odps column indexes and an optional optimizer-time
+  // re-derived pushdown predicate (file_filter_spec is null when there is no
+  // filter).
+  static int fetch_storage_api_split_by_byte(ObExecContext &exec_ctx,
+      const common::ObIArray<int64_t> &nonpart_col_idxs,
+      const common::ObIArray<int64_t> &part_col_idxs,
+      const ObString &part_list_str, const ObString &format_properties,
+      ObLakeTablePushDownFilterSpec *file_filter_spec,
+      const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+      int64_t parallel, ObString &session_str, int64_t &split_count,
+      int64_t &total_row_count,
       ObIAllocator &range_allocator);
-  static int fetch_storage_api_split_by_row(ObExecContext &exec_ctx, const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str,
-      const ObDASScanCtDef &das_ctdef, ObDASScanRtDef *das_rtdef, int64_t parallel, ObString &session_str, int64_t &total_row_count,
+  static int fetch_storage_api_split_by_row(ObExecContext &exec_ctx,
+      const common::ObIArray<int64_t> &nonpart_col_idxs,
+      const common::ObIArray<int64_t> &part_col_idxs,
+      const ObString &part_list_str, const ObString &format_properties,
+      ObLakeTablePushDownFilterSpec *file_filter_spec,
+      const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+      int64_t parallel, ObString &session_str, int64_t &total_row_count,
       ObIAllocator &range_allocator);
+
+private:
+  // Shared core of the optimizer-time pair: opens the storage-api download
+  // session on odps_driver (schema scanner -> meta param by column indexes ->
+  // optional optimizer-time predicate -> meta scanner). The caller owns the
+  // parsed format so it can temporarily switch BYTE to ROW for statistics.
+  static int open_storage_api_session_(ObExecContext &exec_ctx,
+      const common::ObIArray<int64_t> &nonpart_col_idxs,
+      const common::ObIArray<int64_t> &part_col_idxs,
+      const ObString &part_list_str, const ObExternalFileFormat &external_odps_format,
+      ObLakeTablePushDownFilterSpec *file_filter_spec,
+      const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+      int64_t parallel, ObODPSJNITableRowIterator &odps_driver);
 
 };
 

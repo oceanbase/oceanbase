@@ -59,6 +59,16 @@ public:
                                     sql::ObSqlSchemaGuard &schema_guard,
                                     ObLakeTableStat &stat);
 
+  // ODPS CREATE EXTERNAL TABLE 形态的表级统计现取：metadata 由调用方现场合成
+  // （sql::odps::ObODPSTableMetadata::format_str_ 携带全部连接信息），
+  // 不读/不写统计缓存，不做持久化，直接从 ODPS 回源并聚合成 ObLakeTableStat。
+  int fetch_odps_ext_table_stat_directly(
+      const share::ObILakeTableMetadata *lake_table_metadata,
+      const ObIArray<ObString> &partition_values,
+      sql::ObSqlSchemaGuard &schema_guard,
+      ObIAllocator &allocator,
+      ObLakeTableStat &stat);
+
   int get_catalog_column_stat_from_cache(ObIAllocator &alloc,
                                          const ObIArray<share::ObOptCatalogColumnStat::Key> &keys,
                                          ObIArray<ObLakeColumnStat*> &column_stats,

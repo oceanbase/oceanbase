@@ -749,6 +749,8 @@ ob_set_subtarget(ob_share external_table
   external_table/ob_external_table_file_rpc_processor.cpp
   external_table/ob_external_table_file_task.cpp
   external_table/ob_external_table_utils.cpp
+  external_table/ob_odps_table_utils.cpp
+  external_table/ob_csv_table_utils.cpp
   external_table/ob_external_table_part_info.cpp
   external_table/ob_external_object_ctx.cpp
 )

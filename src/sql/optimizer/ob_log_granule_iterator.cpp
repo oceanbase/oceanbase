@@ -57,16 +57,16 @@ int ObLogGranuleIterator::get_plan_item_info(PlanText &plan_text,
 {
   int ret = OB_SUCCESS;
   bool has_first = false;
-  static const int64_t FLAG_NEED_PRINT_COUNT = 8;
+  static const int64_t FLAG_NEED_PRINT_COUNT = 9;
   static const int32_t MAX_GI_FLAG_NAME_LENGTH = 30;
   static const char gi_flag_name[FLAG_NEED_PRINT_COUNT][MAX_GI_FLAG_NAME_LENGTH] =
       { "affinitize", "partition wise", "access all", "param down",
         "force partition granule", "slave mapping",
-        "desc", "asc" };
+        "desc", "asc", "force block granule" };
   bool gi_flag[FLAG_NEED_PRINT_COUNT] =
       { affinitize(), pwj_gi(), access_all(), with_param_down(),
         force_partition_granule(), slave_mapping_granule(),
-        desc_order(), asc_order() };
+        desc_order(), asc_order(), force_block_granule() };
   if (OB_FAIL(ObLogicalOperator::get_plan_item_info(plan_text, plan_item))) {
     LOG_WARN("failed to get plan item info", K(ret));
   }
@@ -199,8 +199,9 @@ int ObLogGranuleIterator::est_cost()
 bool ObLogGranuleIterator::is_partition_gi() const
 {
   bool partition_granule = true;
-  if (is_used_by_external_table() && !is_used_by_lake_table()) {
-    // external table only support block iter
+  if (force_block_granule()) {
+    // file external tables and ODPS lake tables: scan units are not
+    // partition-aligned, only block iter is supported
     partition_granule = false;
   } else {
     partition_granule = ObGranuleUtil::is_partition_granule_flag(gi_attri_flag_) || parallel_ == 1;

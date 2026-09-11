@@ -870,6 +870,7 @@ public:
       optimizer_features_enable_version_(0),
       udf_flag_(0),
       has_dblink_(false),
+      has_odps_external_table_(false),
       injected_random_status_(false),
       ori_question_marks_count_(0),
       type_demotion_flag_(0),
@@ -922,6 +923,7 @@ public:
     root_stmt_ = NULL;
     udf_flag_ = 0;
     optimizer_features_enable_version_ = 0;
+    has_odps_external_table_ = false;
     ori_question_marks_count_ = 0;
     filter_ds_stat_cache_.reuse();
     hive_table_file_cache_.reset();
@@ -959,6 +961,10 @@ public:
   void set_has_nested_sql(bool has_nested_sql) { has_nested_sql_ = has_nested_sql; }
   bool has_dblink() const { return has_dblink_; }
   void set_has_dblink(bool v) { has_dblink_ = v; }
+  // the query references an ODPS external table (catalog ODPS or CREATE
+  // EXTERNAL TABLE TYPE=ODPS); set by the resolver when the table item is built
+  bool has_odps_external_table() const { return has_odps_external_table_; }
+  void set_has_odps_external_table(bool v) { has_odps_external_table_ = v; }
   void set_timezone_info(const common::ObTimeZoneInfo *tz_info) { tz_info_ = tz_info; }
   const common::ObTimeZoneInfo *get_timezone_info() const { return tz_info_; }
   int add_local_session_vars(ObIAllocator *alloc, const ObLocalSessionVar &local_session_var, int64_t &idx);
@@ -1046,6 +1052,7 @@ public:
     };
   };
   bool has_dblink_;
+  bool has_odps_external_table_;
   bool injected_random_status_;
   ObRandom rand_gen_;
   int64_t ori_question_marks_count_;

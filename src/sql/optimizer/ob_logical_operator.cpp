@@ -4709,11 +4709,15 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("external table do not support partition GI", K(ret));
         } else {
-          gi_op->set_used_by_external_table();
-        }
-        if (share::is_lake_external_table(
-                static_cast<ObLogTableScan *>(this)->get_lake_table_type())) {
-          gi_op->set_used_by_lake_table();
+          // Block granule is forced for file external tables (OSS /
+          // JAVA_PLUGIN) and ODPS lake tables: their scan units are not
+          // partition-aligned.
+          const share::ObLakeTableFormat lake_table_type =
+              static_cast<ObLogTableScan *>(this)->get_lake_table_type();
+          if (!share::is_lake_external_table(lake_table_type)
+              || share::is_odps_lake_table(lake_table_type)) {
+            gi_op->set_force_block_granule();
+          }
         }
       }
 

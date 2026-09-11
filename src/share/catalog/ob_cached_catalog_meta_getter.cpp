@@ -265,9 +265,12 @@ int ObCachedCatalogSchemaMgr::get_lake_table_metadata(ObIAllocator &allocator,
     } else if (OB_ISNULL(lake_table_metadata)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("lake_table_metadata is null", K(ret));
-    } else if (is_lake_external_table(lake_table_metadata->get_format_type())) {
+    } else if (is_lake_external_table(lake_table_metadata->get_format_type())
+               && !is_odps_lake_table(lake_table_metadata->get_format_type())) {
       // iceberg, hive, plugin-backed formats do not support deep copy shared ptr
-      // do not cache now
+      // do not cache now.
+      // ODPS is excluded: ObODPSTableMetadata supports deep copy and every ODPS
+      // statement must not re-run the JNI/Tunnel schema fetch.
     } else {
       ObLakeTableMetadataCacheValue tmp_cache_value(lake_table_metadata);
       OZ(lake_metadata_cache_.put(cache_key, tmp_cache_value));

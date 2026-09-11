@@ -25,32 +25,6 @@ class ObRawExpr;
 class ObSqlSchemaGuard;
 
 
-struct ObPartFieldBound
-{
-public:
-  OB_UNIS_VERSION(1);
-public:
-  ObPartFieldBound(common::ObIAllocator &allocator);
-  void reset();
-  int assign(const ObPartFieldBound &other);
-  int deep_copy(ObPartFieldBound &src);
-  TO_STRING_KV(K_(column_id), K_(transform_type), K_(is_whole_range), K_(is_always_false),
-               K_(bounds), K_(range_exprs));
-
-  common::ObIAllocator &allocator_;
-  uint64_t column_id_;
-  iceberg::TransformType transform_type_;
-  bool is_whole_range_;
-  bool is_always_false_;
-  ObFixedArray<ObFieldBound*, ObIAllocator> bounds_;
-  // Optimizer-only pointers to predicates that produced precise ranges.  They
-  // are intentionally not serialized because row-filter elimination happens
-  // while the logical plan is built, before the pruner is sent to workers.
-  ObFixedArray<ObRawExpr*, ObIAllocator> range_exprs_;
-private:
-  DISABLE_COPY_ASSIGN(ObPartFieldBound);
-};
-
 struct ObIcebergPartBound
 {
 public:
@@ -63,7 +37,7 @@ public:
   TO_STRING_KV(K_(part_field_bounds));
 
   common::ObIAllocator &allocator_;
-  ObFixedArray<ObPartFieldBound*, ObIAllocator> part_field_bounds_;
+  ObFixedArray<ObLakePartFieldBound*, ObIAllocator> part_field_bounds_;
 private:
   DISABLE_COPY_ASSIGN(ObIcebergPartBound);
 };
@@ -81,13 +55,13 @@ struct ObIcebergFileDesc
   ObArray<const iceberg::ManifestEntry *> delete_files_;
 };
 
-class ObIcebergFilePrunner : public ObILakeTableFilePruner
+class ObIcebergFilePruner : public ObILakeTableFilePruner
 {
 public:
   OB_UNIS_VERSION(1);
 public:
-  explicit ObIcebergFilePrunner(common::ObIAllocator &allocator);
-  virtual ~ObIcebergFilePrunner() { reset(); }
+  explicit ObIcebergFilePruner(common::ObIAllocator &allocator);
+  virtual ~ObIcebergFilePruner() { reset(); }
 
   void reset();
   virtual int assign(const ObILakeTableFilePruner &other);
@@ -124,13 +98,11 @@ public:
 
   static int transform_bucket_range(ObNewRange &range, const int64_t N);
 private:
-  int genearte_partition_bound(const ObDMLStmt &stmt,
+  int generate_partition_bound(const ObDMLStmt &stmt,
                                ObExecContext *exec_ctx,
                                const ObTableSchema *table_schema,
                                const ObIArray<iceberg::PartitionSpec*> &partition_specs,
                                const ObIArray<ObRawExpr*> &filter_exprs);
-  int build_field_bound_from_ranges(ObIArray<ObNewRange*> &ranges,
-                                    ObPartFieldBound &part_field_bound);
 
   int transform_bound_by_part_type(iceberg::Transform &transform,
                                    ColumnItem &column_item,
@@ -162,7 +134,7 @@ private:
                                     bool &in_bound);
 
 private:
-  DISABLE_COPY_ASSIGN(ObIcebergFilePrunner);
+  DISABLE_COPY_ASSIGN(ObIcebergFilePruner);
 public:
   TO_STRING_KV(K_(loc_meta), K_(is_partitioned), K_(need_all));
 private:

@@ -78,144 +78,6 @@ int ObExternalTableUtils::print_obj_json_escaped(ObIAllocator &allocator,
   return ret;
 }
 
-int ObExternalTableUtils::build_iceberg_partition_json_desc(
-    ObIAllocator &allocator,
-    const sql::iceberg::PartitionSpec &partition_spec,
-    const ObIArray<ObObj> &partition_values,
-    ObString &partition_desc)
-{
-  int ret = OB_SUCCESS;
-  partition_desc.reset();
-  if (OB_UNLIKELY(partition_spec.fields.count() != partition_values.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition field count does not match values",
-             K(ret), K(partition_spec.fields.count()), K(partition_values.count()));
-  } else {
-    int64_t json_buf_len = 512;
-    bool need_retry = false;
-    do {
-      need_retry = false;
-      ObSqlString json;
-      char *buf = nullptr;
-      int64_t buf_len = 0;
-      int64_t pos = 0;
-      if (OB_FAIL(json.reserve(json_buf_len))) {
-        LOG_WARN("failed to reserve iceberg partition json", K(ret), K(json_buf_len));
-      } else if (FALSE_IT(buf = json.ptr())) {
-      } else if (FALSE_IT(buf_len = json.capacity() + 1)) {
-      } else if (OB_FAIL(J_OBJ_START())) {
-        LOG_WARN("failed to start iceberg partition json", K(ret), K(partition_spec.spec_id));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("spec_id":%d)", partition_spec.spec_id))) {
-        LOG_WARN("failed to append spec_id kv", K(ret), K(partition_spec.spec_id));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < partition_spec.fields.count(); ++i) {
-          const sql::iceberg::PartitionField *field = partition_spec.fields.at(i);
-          ObString field_name;
-          ObString json_escaped_val;
-          const ObObj &obj = partition_values.at(i);
-          if (OB_ISNULL(field)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("partition field is null", K(ret), K(i));
-          } else if (FALSE_IT(field_name = field->name)) {
-          } else if (sql::iceberg::TransformType::Void == field->transform.transform_type) {
-            // Void fields are not included in the partition json description.
-          } else if (OB_FAIL(J_COMMA())) {
-            LOG_WARN("failed to append field separator", K(ret), K(i));
-          } else if (obj.is_null()) {
-            if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("%.*s":null)",
-                                        field_name.length(), field_name.ptr()))) {
-              LOG_WARN("failed to append null to json", K(ret), K(i));
-            }
-          } else if (obj.is_integer_type()) {
-            if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("%.*s":%ld)",
-                                        field_name.length(), field_name.ptr(), obj.get_int()))) {
-              LOG_WARN("failed to append integer to json", K(ret), K(i), K(obj));
-            }
-          } else {
-             if (OB_FAIL(print_obj_json_escaped(allocator, obj, json_escaped_val))) {
-              LOG_WARN("failed to print json escaped partition value", K(ret), K(i));
-            } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, R"("%.*s":"%.*s")",
-                                              field_name.length(), field_name.ptr(),
-                                              json_escaped_val.length(), json_escaped_val.ptr()))) {
-              LOG_WARN("failed to append string value to json", K(ret), K(i), K(json_escaped_val));
-            }
-          }
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(J_OBJ_END())) {
-        LOG_WARN("failed to close iceberg partition json", K(ret));
-      } else if (OB_FAIL(json.set_length(pos))) {
-        LOG_WARN("failed to set iceberg partition json length", K(ret), K(pos));
-      } else if (OB_FAIL(ob_write_string(allocator, json.string(), partition_desc, true))) {
-        LOG_WARN("failed to write iceberg partition desc", K(ret));
-      }
-
-      if (OB_SIZE_OVERFLOW == ret) {
-        ret = OB_SUCCESS;
-        json_buf_len = buf_len * 2;
-        need_retry = true;
-      }
-    } while (OB_SUCC(ret) && need_retry);
-  }
-  return ret;
-}
-
-int ObExternalTableUtils::collect_iceberg_partition_values(
-    ObIAllocator &allocator,
-    const ObIArray<sql::ObIcebergFileDesc *> &file_descs,
-    ObIArray<ObString> &partition_values)
-{
-  int ret = OB_SUCCESS;
-  common::hash::ObHashSet<sql::iceberg::PartitionKey> partition_key_set;
-  partition_values.reuse();
-  if (OB_FAIL(partition_key_set.create(std::max<int64_t>(16, file_descs.count() * 2),
-                                       "IcePartStatKey",
-                                       "IcePartStatKey"))) {
-    LOG_WARN("failed to create iceberg partition key set", K(ret), K(file_descs.count()));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_descs.count(); ++i) {
-      const sql::ObIcebergFileDesc *file_desc = file_descs.at(i);
-      const sql::iceberg::ManifestEntry *entry = nullptr;
-      sql::iceberg::PartitionKey partition_key;
-      if (OB_ISNULL(file_desc) || OB_ISNULL(entry = file_desc->entry_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected iceberg file desc", K(ret));
-      } else if (OB_FAIL(partition_key.init_from_manifest_entry(*entry))) {
-        LOG_WARN("failed to init iceberg partition key", K(ret), K(i));
-      } else {
-        const int hash_ret = partition_key_set.exist_refactored(partition_key);
-        if (OB_HASH_NOT_EXIST == hash_ret) {
-          ObString partition_desc;
-          if (partition_key.partition_values.count() == 0) { // 非分区表
-            // do nothing
-          } else if (OB_FAIL(build_iceberg_partition_json_desc(allocator,
-                                                        entry->partition_spec,
-                                                        entry->data_file.partition,
-                                                        partition_desc))) {
-            LOG_WARN("failed to build iceberg partition desc", K(ret), K(i));
-          } else if (OB_FAIL(partition_values.push_back(partition_desc))) {
-            LOG_WARN("failed to push back partition value", K(ret), K(partition_desc));
-          } else if (OB_FAIL(partition_key_set.set_refactored(partition_key))) {
-            LOG_WARN("failed to cache iceberg partition key", K(ret), K(i));
-          }
-        } else if (OB_HASH_EXIST == hash_ret) {
-          // do nothing
-        } else if (OB_SUCCESS != hash_ret) {
-          ret = hash_ret;
-          LOG_WARN("failed to lookup iceberg partition key", K(ret), K(i));
-        }
-      }
-    }
-  }
-  if (partition_key_set.created()) {
-    partition_key_set.destroy();
-  }
-  LOG_TRACE("catalog stat, collect partition values", K(ret), K(partition_values));
-  return ret;
-}
-
 int ObExternalTableUtils::adjust_string_length_for_external_table(const char *data,
                                                                   const int64_t src_length,
                                                                   const int64_t max_length,
@@ -402,21 +264,6 @@ int ObExternalTableUtils::resolve_line_number_range(const ObNewRange &range,
   return ret;
 }
 
-int ObExternalTableUtils::resolve_odps_start_step(const ObOdpsScanTask *scan_task,
-  int64_t &start,
-  int64_t &step)
-{
-  int ret = OB_SUCCESS;
-  start = scan_task->first_lineno_;
-  int64_t end = scan_task->last_lineno_;
-  if (end != INT64_MAX) {
-    step = end - start;
-  } else {
-    step = INT64_MAX;
-  }
-  return ret;
-}
-
 int ObExternalTableUtils::convert_external_table_scan_task(const ObString &file_url,
                                                            const ObString &content_digest,
                                                            const int64_t file_size,
@@ -490,6 +337,40 @@ int ObExternalTableUtils::convert_external_table_scan_task(const ObString &file_
   return ret;
 }
 
+int ObExternalTableUtils::alloc_empty_lake_table_scan_task(
+    common::ObIAllocator &allocator,
+    const share::ObLakeTableFormat lake_table_format,
+    const int64_t part_id,
+    ObIExtTblScanTask *&scan_task)
+{
+  // The dummy task's concrete type comes from the factory keyed by the lake
+  // table format (the ODPS iterators downcast to ObOdpsScanTask, so the type
+  // must be right for ODPS); for every format the dummy is short-circuited by
+  // file_url_ == dummy_file_name() before any format-specific read.
+  int ret = OB_SUCCESS;
+  scan_task = nullptr;
+  sql::ObFileScanTask *file_task = nullptr;
+  if (OB_FAIL(sql::ObFileScanTask::create_lake_table_file_by_type(
+          allocator, sql::lake_file_type_of_format(lake_table_format), file_task))) {
+    LOG_WARN("failed to create lake table file by type", K(ret), K(lake_table_format));
+  } else if (OB_ISNULL(file_task)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate empty scan task", K(ret));
+  } else if (OB_FAIL(convert_external_table_empty_task(dummy_file_name(),
+                                                       ObString(""), // content_digest
+                                                       0,            // file_size
+                                                       0,            // modify_time
+                                                       0,            // file_id
+                                                       part_id,
+                                                       allocator,
+                                                       file_task))) {
+    LOG_WARN("failed to convert external table empty task", K(ret));
+  } else {
+    scan_task = file_task;
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::convert_lake_table_scan_task(const int64_t file_id,
                                                        const uint64_t part_id,
                                                        ObFileScanTask *scan_task)
@@ -498,17 +379,8 @@ int ObExternalTableUtils::convert_lake_table_scan_task(const int64_t file_id,
   if (OB_ISNULL(scan_task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null scan task", K(ret), KP(scan_task));
-  } else if (LakeFileType::ICEBERG == scan_task->get_file_type()) {
-    scan_task->file_id_ = file_id;
-    // 新路径中的 part_id_ 是 manifest 分区信息数组的稠密下标，不能再被 tablet
-    // 分区号覆盖；旧版本仍使用 tablet 分区号解析路径分区值。
-    if (!sql::iceberg::ObIcebergUtils::is_manifest_partition_value_supported()) {
-      scan_task->part_id_ = part_id;
-    }
-  } else if (LakeFileType::HIVE == scan_task->get_file_type()) {
-    scan_task->file_id_ = file_id;
-  } else if (LakeFileType::EXT_PLUGIN == scan_task->get_file_type()) {
-    scan_task->file_id_ = file_id;
+  } else {
+    scan_task->assign_granule_identity(file_id, part_id);
   }
   return ret;
 }
@@ -556,86 +428,6 @@ int ObExternalTableUtils::make_file_scan_task(const common::ObString &file_url,
   scan_task->last_lineno_ = last_lineno;
   scan_task->file_id_ = file_id;
   scan_task->content_digest_ = content_digest;
-  return ret;
-}
-
-int ObExternalTableUtils::make_odps_scan_task(const common::ObString &file_url,
-                                              const uint64_t part_id,
-                                              const int64_t first_lineno,
-                                              const int64_t last_lineno,
-                                              const common::ObString &session_id,
-                                              const int64_t first_split_idx,
-                                              const int64_t last_split_idx,
-                                              ObOdpsScanTask &scan_task)
-{
-  int ret = OB_SUCCESS;
-  scan_task.file_url_ = file_url;
-  scan_task.part_id_ = part_id;
-  scan_task.session_id_ = session_id;
-  scan_task.first_split_idx_ = first_split_idx;
-  scan_task.last_split_idx_ = last_split_idx;
-  scan_task.first_lineno_ = first_lineno;
-  scan_task.last_lineno_ = last_lineno;
-  return ret;
-}
-
-int ObExternalTableUtils::make_parallel_parse_csv_task(const ObExternalFileInfo &file_info,
-                                                       const int64_t first_lineno,
-                                                       const int64_t last_lineno,
-                                                       const int64_t start_pos,
-                                                       const int64_t end_pos,
-                                                       const int64_t chunk_idx,
-                                                       const int64_t chunk_cnt,
-                                                       ObExtTableScanTask *scan_task)
-{
-  int ret = OB_SUCCESS;
-  scan_task->file_url_ = file_info.file_url_;
-  scan_task->file_size_ = file_info.file_size_;
-  scan_task->modification_time_ = file_info.modify_time_;
-  scan_task->file_id_ = file_info.file_id_;
-  scan_task->content_digest_ = file_info.content_digest_;
-  scan_task->first_lineno_ = first_lineno;
-  scan_task->last_lineno_ = last_lineno;
-  ObCsvParallelInfo *csv_parallel_info = scan_task->parallel_parse_csv_info_;
-  if (OB_ISNULL(csv_parallel_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parallel parse csv info is null", K(ret));
-  } else {
-    csv_parallel_info->start_pos_ = start_pos;
-    csv_parallel_info->end_pos_ = end_pos;
-    csv_parallel_info->chunk_idx_ = chunk_idx;
-    csv_parallel_info->chunk_cnt_ = chunk_cnt;
-  }
-  return ret;
-}
-
-int ObExternalTableUtils::make_parallel_parse_csv_task(const ObExtTableScanTask &original_task,
-                                                       const int64_t first_lineno,
-                                                       const int64_t last_lineno,
-                                                       const int64_t start_pos,
-                                                       const int64_t end_pos,
-                                                       const int64_t chunk_idx,
-                                                       const int64_t chunk_cnt,
-                                                       ObExtTableScanTask *scan_task)
-{
-  int ret = OB_SUCCESS;
-  scan_task->file_url_ = original_task.file_url_;
-  scan_task->file_size_ = original_task.file_size_;
-  scan_task->modification_time_ = original_task.modification_time_;
-  scan_task->file_id_ = original_task.file_id_;
-  scan_task->content_digest_ = original_task.content_digest_;
-  scan_task->first_lineno_ = first_lineno;
-  scan_task->last_lineno_ = last_lineno;
-  ObCsvParallelInfo *csv_parallel_info = scan_task->parallel_parse_csv_info_;
-  if (OB_ISNULL(csv_parallel_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parallel parse csv info is null", K(ret));
-  } else {
-    csv_parallel_info->start_pos_ = start_pos;
-    csv_parallel_info->end_pos_ = end_pos;
-    csv_parallel_info->chunk_idx_ = chunk_idx;
-    csv_parallel_info->chunk_cnt_ = chunk_cnt;
-  }
   return ret;
 }
 
@@ -705,7 +497,6 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
     LOG_WARN("failed to assign array", K(ret));
   }
   const uint64_t table_id = das_ctdef.ref_table_id_;
-  const ObString &table_format_or_properties = das_ctdef.external_file_format_str_.str_;
   if (OB_SUCC(ret)) {
     if (is_external_object_id(table_id)) {
       if (OB_FAIL(ObExternalTableFileManager::get_instance().get_mocked_external_table_files(
@@ -736,162 +527,7 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
       scan_tasks.reset();
     }
   }
-  bool is_odps_external_table = false;
-  ObODPSGeneralFormat::ApiMode odps_api_mode;
-  bool use_odps_jni_connector = true;
-  int8_t unused_mode = 0;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(ObSQLUtils::get_odps_api_mode(table_format_or_properties, is_odps_external_table, odps_api_mode))) {
-    LOG_WARN("failed to check is odps external table or not", K(ret), K(table_format_or_properties));
-  } else if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
-          table_format_or_properties, use_odps_jni_connector, unused_mode))) {
-    LOG_WARN("failed to parse odps jni params from format str", K(ret));
-  } else if (!file_urls.empty() && is_odps_external_table) {
-    const ExprFixedArray &ext_file_column_expr = das_ctdef.pd_expr_spec_.ext_file_column_exprs_;
-    if (!use_odps_jni_connector) {
-#if defined (OB_BUILD_CPP_ODPS)
-      if (odps_api_mode != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("storage api is not supported", K(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
-        const ObExternalFileInfo &external_info = file_urls.at(i);
-        ObOdpsScanTask *scan_task = NULL;
-        if (OB_ISNULL(scan_task = OB_NEWx(ObOdpsScanTask, (&allocator)))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to new a ptr", K(ret));
-        } else if (OB_FAIL(ObExternalTableUtils::make_odps_scan_task(external_info.file_url_,
-                       external_info.part_id_,
-                       0,
-                       INT64_MAX,
-                       ObString::make_string(""),
-                       0,
-                       0,
-                       *scan_task))) {
-          LOG_WARN("failed to make external table scan task", K(ret));
-        } else {
-          /*
-           * 单机单线程每个part一个scan task
-           */
-          OZ(scan_tasks.push_back(scan_task));
-        }
-      }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ODPS CPP connector is not enabled", K(ret));
-#endif
-    } else {
-#if defined (OB_BUILD_JNI_ODPS)
-      if (odps_api_mode == ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-        // tunnel api
-        for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
-          const ObExternalFileInfo &external_info = file_urls.at(i);
-          ObOdpsScanTask *scan_task = NULL;
-          if (OB_ISNULL(scan_task = OB_NEWx(ObOdpsScanTask, (&allocator)))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to new a ptr", K(ret));
-          } else if (OB_FAIL(ObExternalTableUtils::make_odps_scan_task(external_info.file_url_,
-                         external_info.part_id_,
-                         0,
-                         INT64_MAX,
-                         ObString::make_string(""),
-                         0,
-                         0,
-                         *scan_task))) {
-            LOG_WARN("failed to make external table scan task", K(ret));
-          } else {
-            /*
-             * 单机单线程每个part一个task
-             */
-            OZ(scan_tasks.push_back(scan_task));
-          }
-        }
-      } else {
-        ObSqlString part_spec_str;
-        ObString part_str;
-        int64_t part_count = file_urls.count();
-        for (int64_t i = 0; OB_SUCC(ret) && i < part_count; ++i) {
-          const ObExternalFileInfo &external_info = file_urls.at(i);
-          if (0 == external_info.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
-            // do nothing
-          } else if (OB_FAIL(part_spec_str.append(external_info.file_url_))) {
-            LOG_WARN("failed to append file url", K(ret), K(external_info.file_url_));
-          } else if (i < part_count - 1 && OB_FAIL(part_spec_str.append("#"))) {
-            LOG_WARN("failed to append comma", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ob_write_string(allocator, part_spec_str.string(), part_str, true))) {
-          LOG_WARN("failed to write string", K(ret), K(part_spec_str));
-        } else if (odps_api_mode == ObODPSGeneralFormat::ApiMode::BYTE) {
-          ObString session_str;
-          int64_t split_count = 0;
-          ObOdpsScanTask *scan_task = NULL;
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_byte(
-                         exec_ctx,
-                         ext_file_column_expr,
-                         part_str,
-                         das_ctdef,
-                         das_rtdef,
-                         1,
-                         session_str,
-                         split_count,
-                         allocator))) {
-            LOG_WARN("failed to make total task", K(ret));
-          } else if (OB_ISNULL(scan_task = OB_NEWx(ObOdpsScanTask, &allocator))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to new a ptr", K(ret));
-          } else if (OB_FAIL(ObExternalTableUtils::make_odps_scan_task(part_str,
-                         0,  // external_info.part_id_ 原来part id会存在列中可以反解出分区列的值, 现在不需要了
-                         0,
-                         INT64_MAX,
-                         session_str,
-                         0,
-                         split_count,
-                         *scan_task))) {
-            LOG_WARN("failed to make external table scan task", K(ret));
-          } else {
-            OZ(scan_tasks.push_back(scan_task));
-          }
-        } else {
-          ObString session_str;
-          int64_t total_row_count = 0;
-          ObOdpsScanTask *scan_task = NULL;
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(
-                         exec_ctx,
-                         ext_file_column_expr,
-                         part_str,
-                         das_ctdef,
-                         das_rtdef,
-                         1,
-                         session_str,
-                         total_row_count,
-                         allocator))) {
-            LOG_WARN("failed to make total task", K(ret));
-          } else if (OB_ISNULL(scan_task = OB_NEWx(ObOdpsScanTask, &allocator))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to new a ptr", K(ret));
-          } else if (OB_FAIL(ObExternalTableUtils::make_odps_scan_task(part_str,
-                         0,  // external_info.part_id_ 原来part id会存在列中可以反解出分区列的值, 现在不需要了
-                         0,
-                         total_row_count,
-                         session_str,
-                         0,
-                         0,
-                         *scan_task))) {
-            LOG_WARN("failed to make external table scan task", K(ret));
-          } else {
-            OZ(scan_tasks.push_back(scan_task));
-          }
-        }
-      }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ODPS JNI connector is not enabled", K(ret));
-#endif
-    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_ranges.count(); ++i) {
       if (OB_ISNULL(tmp_ranges.at(i))) {
@@ -928,6 +564,7 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
 }
 
 int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exec_ctx,
+                                                               const ObDASScanCtDef *scan_ctdef,
                                                                ObDASTableLoc *tab_loc,
                                                                ObDASTabletLoc *tablet_loc,
                                                                ObIAllocator &allocator,
@@ -941,20 +578,13 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exe
     LOG_WARN("get null table loc or tablet loc", KP(tab_loc), K(tablet_loc));
   } else if (OB_UNLIKELY(ranges.empty())) {
     // always false
-    ObHiveScanTask * lake_file = NULL;
-    if (OB_ISNULL(lake_file = OB_NEWx(ObHiveScanTask, (&allocator)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for ObFileScanTask");
-    } else if (OB_FAIL(ObExternalTableUtils::convert_external_table_empty_task(
-                                                          ObExternalTableUtils::dummy_file_name(),
-                                                          ObString(""), // content_digest
-                                                          0, // file_size
-                                                          0, // modify_time
-                                                          0, // file_id
-                                                          tablet_loc->partition_id_, // ref_table_id
-                                                          allocator,
-                                                          lake_file))) {
-      LOG_WARN("failed to convert external table empty task", K(ret));
+    sql::ObIExtTblScanTask *lake_file = NULL;
+    if (OB_FAIL(alloc_empty_lake_table_scan_task(allocator,
+                                                 OB_ISNULL(scan_ctdef)
+                                                     ? share::ObLakeTableFormat::INVALID
+                                                     : scan_ctdef->lake_table_format_,
+                                                 tablet_loc->partition_id_, lake_file))) {
+      LOG_WARN("failed to alloc lake empty scan task", K(ret));
     } else if (OB_FAIL(scan_tasks.push_back(lake_file))) {
       LOG_WARN("failed to push back scan task");
     }
@@ -970,23 +600,16 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exe
                                     files))) {
       LOG_WARN("failed to get refactored", K(tablet_loc->loc_meta_->table_loc_id_), K(tablet_loc->tablet_id_), KP(map), K(map->size()));
     } else if (OB_ISNULL(files)) {
-      ObHiveScanTask * lake_file = NULL;
+      sql::ObIExtTblScanTask *lake_file = NULL;
       if (OB_UNLIKELY(tab_loc->get_tablet_locs().size() != 1)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected tablets counts", K(tab_loc->get_tablet_locs()));
-      } else if (OB_ISNULL(lake_file = OB_NEWx(ObHiveScanTask, (&allocator)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for ObHiveScanTask");
-      } else if (OB_FAIL(ObExternalTableUtils::convert_external_table_empty_task(
-                                                            ObExternalTableUtils::dummy_file_name(),
-                                                            ObString(""), // content_digest
-                                                            0, // file_size
-                                                            0, // modify_time
-                                                            0, // file_id
-                                                            tablet_loc->partition_id_, // ref_table_id
-                                                            allocator,
-                                                            lake_file))) {
-        LOG_WARN("failed to convert external table empty task", K(ret));
+      } else if (OB_FAIL(alloc_empty_lake_table_scan_task(allocator,
+                                                          OB_ISNULL(scan_ctdef)
+                                                              ? share::ObLakeTableFormat::INVALID
+                                                              : scan_ctdef->lake_table_format_,
+                                                          tablet_loc->partition_id_, lake_file))) {
+        LOG_WARN("failed to alloc lake empty scan task", K(ret));
       } else if (OB_FAIL(scan_tasks.push_back(lake_file))) {
         LOG_WARN("failed to push back scan task");
       }
@@ -996,8 +619,7 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exe
         if (OB_ISNULL(scan_task)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null scan task");
-        } else if (OB_FAIL(convert_lake_table_scan_task(j, tablet_loc->partition_id_, scan_task))) {
-          LOG_WARN("failed to convert lake table scan task", K(ret));
+        } else if (FALSE_IT(scan_task->assign_granule_identity(j, tablet_loc->partition_id_))) {
         } else if (OB_FAIL(scan_tasks.push_back(scan_task))) {
           LOG_WARN("failed to push back scan task");
         }
@@ -1007,641 +629,6 @@ int ObExternalTableUtils::prepare_lake_table_single_scan_task(ObExecContext &exe
   return ret;
 }
 
-
-// dfo.get_sqcs(sqcs) sqcs 里面是dfo的地址
-int ObExternalTableUtils::assign_odps_file_to_sqcs(
-  ObDfo &dfo,
-  ObExecContext &exec_ctx,
-  ObIArray<ObPxSqcMeta> &sqcs,
-  int64_t parallel,
-  ObODPSGeneralFormat::ApiMode odps_api_mode)
-{
-  int ret = OB_SUCCESS;
-  common::ObIArray<share::ObExternalFileInfo> &files = dfo.get_external_table_files();
-  bool one_partition_per_thread = false;
-  ObSEArray<const ObTableScanSpec *, 2> scan_ops;
-  const ObTableScanSpec *scan_op = nullptr;
-  const ObOpSpec *root_op = NULL;
-  dfo.get_root(root_op);
-  if (OB_ISNULL(root_op)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
-  } else if (OB_FAIL(ObTaskSpliter::find_scan_ops(scan_ops, *root_op))) {
-    LOG_WARN("failed to find scan_ops", K(ret), KP(root_op));
-  } else if (scan_ops.count() == 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("empty scan_ops", K(ret));
-  }
-
-  int64_t split_task_count = 0;
-  int64_t table_total_row_count = 0;
-  ObString session_str;
-  ObString part_str;
-  bool use_odps_jni_connector = true;
-  int8_t odps_data_transfer_mode = 0;
-  if (OB_SUCC(ret)) {
-    const ObString &format_str = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_;
-    if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
-            format_str, use_odps_jni_connector, odps_data_transfer_mode))) {
-      LOG_WARN("failed to parse odps jni params from format str", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (!use_odps_jni_connector) {
-#if defined (OB_BUILD_CPP_ODPS)
-      if (odps_api_mode != ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("storage api is not supported", K(ret));
-      } else if (OB_FAIL(fetch_odps_all_partitions_info_for_task_assign(
-                                              dfo.get_allocator(),
-                                              scan_ops.at(0),
-                                              exec_ctx,
-                                              MTL_ID(),
-                                              files,
-                                              parallel,
-                                              one_partition_per_thread))) {
-        LOG_WARN("failed to fetch row count", K(ret));
-      }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ODPS CPP connector is not enabled", K(ret));
-#endif
-    } else {
-#if defined (OB_BUILD_JNI_ODPS)
-      if (odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-        if (OB_FAIL(fetch_odps_all_partitions_info_for_task_assign(
-                                                dfo.get_allocator(),
-                                                scan_ops.at(0),
-                                                exec_ctx,
-                                                MTL_ID(),
-                                                files,
-                                                parallel,
-                                                one_partition_per_thread))) {
-          LOG_WARN("failed to fetch row count", K(ret));
-        }
-      } else {
-        ObSqlString part_spec_str;
-        int64_t part_count = files.count();
-        int64_t dummy_part_count = 0;
-        for (int64_t i = 0; OB_SUCC(ret) && i < part_count; ++i) {
-          const ObExternalFileInfo &external_info = files.at(i);
-          if (0 == external_info.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
-            ++dummy_part_count;
-          } else if (OB_FAIL(part_spec_str.append(external_info.file_url_))){
-            LOG_WARN("failed to append file url", K(ret), K(external_info.file_url_));
-          } else if (i < part_count - 1 && OB_FAIL(part_spec_str.append("#"))) {
-            LOG_WARN("failed to append comma", K(ret));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(ob_write_string(dfo.get_allocator(), part_spec_str.string(), part_str, true))) {
-          LOG_WARN("failed to write string", K(ret), K(part_spec_str));
-        }
-        const ExprFixedArray& exprs = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_;
-        LOG_TRACE("odps need partitions", K(part_str));
-        if (OB_FAIL(ret)) {
-        } else if (dummy_part_count == part_count) {
-          // do nothing
-        } else if(odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::BYTE) {
-          if (OB_FAIL(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_byte(
-            exec_ctx,
-            exprs,
-            part_spec_str.string(),
-            scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
-            nullptr, // das_rtdef
-            parallel,
-            session_str,
-            split_task_count,
-            dfo.get_allocator()
-          ))) {
-            LOG_WARN("failed to get task count ", K(ret));
-          }
-        } else {
-          if (OB_FAIL(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(
-            exec_ctx,
-            exprs,
-            part_spec_str.string(),
-            scan_ops.at(0)->tsc_ctdef_.scan_ctdef_,
-            nullptr, // das_rtdef
-            parallel,
-            session_str,
-            table_total_row_count,
-            dfo.get_allocator()
-          ))) {
-            LOG_WARN("failed to get total row count ", K(ret));
-          }
-        }
-      }
-#else
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("ODPS JNI connector is not enabled", K(ret));
-#endif
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    /* do nothing */
-  } else {
-    if (!use_odps_jni_connector || odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
-      if (one_partition_per_thread) {
-        int64_t sqc_idx = 0;
-        int64_t sqc_count = sqcs.count();
-        for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
-          OZ (sqcs.at(sqc_idx++ % sqc_count).get_access_external_table_files().push_back(files.at(i)));
-        }
-      } else if (OB_FAIL(split_qc_for_odps_to_sqcs_by_line_tunnel_partition(dfo.get_allocator(),
-        exec_ctx,
-        scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_,
-        files, sqcs, parallel, one_partition_per_thread))) {
-        LOG_WARN("failed to split odps to sqc process", K(ret));
-      }
-    } else {
-      if (odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::BYTE) {
-        if (OB_FAIL(split_qc_for_odps_to_sqcs_storage_api_byte(
-              split_task_count, session_str, part_str, sqcs, dfo.get_allocator()))) {
-          LOG_WARN("failed to split odps to sqc process in byte mode", K(ret));
-        }
-      } else {
-        if (OB_FAIL(split_qc_for_odps_to_sqcs_storage_api_row(
-              table_total_row_count, session_str, part_str, sqcs, parallel, dfo.get_allocator()))) {
-          LOG_WARN("failed to split odps to sqc process in row mode", K(ret));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    // 作为结尾标志放给sqc, 每个sqc固定以dummy_file_name结尾
-    ObExternalFileInfo dummy_file;
-    dummy_file.file_id_ = INT64_MAX;
-    dummy_file.file_url_ = ObExternalTableUtils::dummy_file_name();
-    for (int64_t i = 0; OB_SUCC(ret) && i < sqcs.count(); ++i) {
-      if (sqcs.at(i).get_access_external_table_files().empty()) {
-        OZ(sqcs.at(i).get_access_external_table_files().push_back(dummy_file));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExternalTableUtils::fetch_odps_all_partitions_info_for_task_assign(
-                                                      ObIAllocator &allocator,
-                                                      const ObTableScanSpec *scan_op,
-                                                      ObExecContext &exec_ctx,
-                                                      uint64_t tenant_id,
-                                                      ObIArray<ObExternalFileInfo> &external_table_files,
-                                                      int64_t parallel,
-                                                      bool &one_partition_per_thread)
-{
-  int ret = OB_SUCCESS;
-  int64_t total_file_count = external_table_files.count();
-  int64_t collected_file_count = 0;
-  int64_t uncollected_file_count = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  int64_t max_parttition_count_to_collect_statistic = 10;
-  if (OB_LIKELY(tenant_config.is_valid())) {
-    max_parttition_count_to_collect_statistic = tenant_config->_max_partition_count_to_collect_statistic;
-  }
-  for (int i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
-    const share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
-    if (odps_partition.file_size_ >= 0) { // 内表收集行数, catalog表收集file_size
-      ++collected_file_count;
-    } else {
-      ++uncollected_file_count;
-    }
-  }
-
-  if (collected_file_count == total_file_count) {
-    // do nothing
-  } else if (uncollected_file_count > max_parttition_count_to_collect_statistic) {
-    one_partition_per_thread = true;
-  } else {
-    int64_t ref_table_id = scan_op->tsc_ctdef_.scan_ctdef_.ref_table_id_;
-    ObString properties = scan_op->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_;
-    common::hash::ObHashMap<ObOdpsPartitionKey, int64_t>& partition_str_to_file_size = exec_ctx.get_odps_partition_str_to_file_size();
-    if (OB_SUCC(ret)) {
-      ObSQLSessionInfo *session = NULL;
-      if (OB_ISNULL(session = exec_ctx.get_my_session())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("session is null", K(ret));
-      }
-      OZ(ObExternalTableUtils::fetch_odps_all_partitions_size(*session, properties, external_table_files,
-                                 tenant_id, ref_table_id, exec_ctx.get_allocator(), partition_str_to_file_size));
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < external_table_files.count(); ++i) {
-        share::ObExternalFileInfo &odps_partition = external_table_files.at(i);
-        if (INT64_MAX == odps_partition.file_id_ && 0 == odps_partition.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
-          // do nothing
-        } else {
-          int64_t file_size = 0;
-          OZ(partition_str_to_file_size.get_refactored(ObOdpsPartitionKey(ref_table_id, odps_partition.file_url_), file_size));
-          OX(odps_partition.file_size_ = file_size);
-        }
-
-      }
-      if (OB_FAIL(ret)) {
-        ret = OB_SUCCESS;
-        one_partition_per_thread = true;
-      }
-    }
-  }
-  return ret;
-}
-
-int ObExternalTableUtils::split_qc_for_odps_to_sqcs_storage_api_byte(int64_t split_task_count,
-    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs,
-    ObIAllocator &range_allocator)
-{
-  int ret = OB_SUCCESS;
-  int64_t sqc_count = sqcs.count();
-  int64_t start = 0;
-  if (split_task_count == 0) {
-    LOG_INFO("no task for reader", K(lbt()));
-  } else {
-    int64_t sqc_idx = 0;
-    for (int i = 0; OB_SUCC(ret) && i < split_task_count; i += 1) {
-      ObExternalFileInfo info;
-      info.file_url_ = new_file_urls;
-      info.session_id_ = session_str;
-      info.file_size_ = 1;
-      info.file_id_ = i;
-      info.part_id_ = 0;  // 由于现在partition是多个一起合成的
-      info.row_start_ = 0;
-      info.row_count_ = 0;
-      if (OB_FAIL(sqcs.at(sqc_idx).get_access_external_table_files().push_back(info))) {
-        LOG_WARN("failed to push back task info", K(ret));
-      } else {
-        sqc_idx = (sqc_idx + 1) % sqc_count;
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObExternalTableUtils::split_qc_for_odps_to_sqcs_storage_api_row(int64_t table_total_row_count,
-    const ObString& session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel,
-    ObIAllocator &range_allocator)
-{
-  int ret = OB_SUCCESS;
-  int64_t sqc_count = sqcs.count();
-  int64_t start = 0;
-  if (table_total_row_count == 0) {
-    // do nothing
-  } else {
-    int32_t task_count = parallel;
-    int64_t step = (table_total_row_count + task_count - 1) / task_count;
-    if (step < 1000) {
-      step = 1000;
-    }
-    int64_t sqc_idx = 0;
-    for (int64_t start = 0; OB_SUCC(ret) && start < table_total_row_count; start += step) {
-      if (start + step > table_total_row_count) {
-        step = table_total_row_count - start;
-      }
-      ObExternalFileInfo info;
-      info.file_url_ = new_file_urls;
-      info.session_id_ = session_str;
-      info.file_id_ = 0;
-      info.file_size_ = 0;
-      info.file_id_ = 0;
-      info.part_id_ = 0;  // for urls contain multi parts, part id has no meanings in current situation
-      info.row_start_ = start;
-      info.row_count_ = step;
-      if (OB_FAIL(sqcs.at(sqc_idx).get_access_external_table_files().push_back(info))) {
-        LOG_WARN("failed to push back task info", K(ret), K(start), K(step));
-      } else {
-        sqc_idx = (sqc_idx + 1) % sqc_count;
-      }
-    }
-  }
-
-  return ret;
-}
-
-/*
- * 优化文件分配策略说明：
- *
- * 1. 文件分块策略：
- *    - 小于50MB的文件：不分块，避免额外的文件打开成本
- *    - 大于50MB的文件：根据成本效益分析决定是否分块
- *    - 分块大小：100MB，平衡并行度和文件打开成本
- *
- * 2. 负载均衡策略：
- *    - 基于总处理时间（文件处理时间 + 文件打开成本）进行分配
- *    - 使用最小堆优先选择负载最轻的SQC
- *    - 大文件优先分配，确保负载均衡
- *
- * 3. 成本效益分析：
- *    - 文件打开成本：2秒/文件
- *    - 处理速度：10MB/s
- *    - 分块阈值：当分块成本 < 处理时间/2 时分块
- *
- * 4. 失败原因：
- *   我们设置的每个线程能处理avg_size_per_sqc太小时会发现分不下来
- * 使用示例：
- *   ObArray<int64_t> assigned_idx;
- *   int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
- *     files, assigned_idx, parallel);
- *   if (OB_SUCC(ret)) {
- *     // 根据assigned_idx将文件分配给对应的SQC
- *     for (int64_t i = 0; i < files.count(); i++) {
- *       int64_t sqc_idx = assigned_idx.at(i);
- *       sqcs.at(sqc_idx)->get_access_external_table_files().push_back(files.at(i));
- *     }
- *   }
- */
-
-int ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
-    const ObIArray<ObExternalFileInfo> &files,
-    common::ObSEArray<FileInfoWithIdx, 20> &sorted_files,
-    int64_t parallel)
-{
-  int ret = OB_SUCCESS;
-  // 常量定义：文件打开成本2秒，处理速度10MB/s
-  const int64_t FILE_OPEN_COST_MS = 2000;  // 2秒
-  const int64_t PROCESSING_SPEED_MBPS = 10; // 10MB/s
-  const int64_t MIN_FILE_SIZE_FOR_SPLIT = 60 * 1024 * 1024; // 50MB，小于此值不分块
-
-
-  // 第一步：计算总文件大小和平均每个SQC应分配的大小
-  int64_t total_file_size = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
-    if (files.at(i).file_size_ != INT64_MAX) {
-      total_file_size += files.at(i).file_size_;
-    } else {
-      ret = OB_ERROR_OUT_OF_RANGE;
-    }
-  }
-  // check total_file_size overflow
-  if (OB_SUCC(ret) && total_file_size < 0) {
-    ret = OB_ERROR_OUT_OF_RANGE;
-    LOG_WARN("total_file_size < 0", K(ret), K(total_file_size));
-  }
-
-  // 第二步：分析文件，决定是否需要分块
-  OZ(sorted_files.reserve(files.count()));
-  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); i++) {
-    FileInfoWithIdx file_info;
-    file_info.file_info_ = &(files.at(i));
-    file_info.file_idx_ = i;
-    file_info.remain_file_size_ = files.at(i).file_size_;
-    file_info.end_permyriad_ = 0;
-    // 判断文件是否需要分块
-    if (file_info.file_info_->file_size_ < MIN_FILE_SIZE_FOR_SPLIT) {
-      file_info.should_split_ = false;
-      LOG_DEBUG("odps trace file_info not split", K(file_info.file_info_->file_url_), K(file_info.file_info_->file_size_), K(file_info.should_split_));
-    } else {
-      // 计算分块的成本效益
-      int64_t split_cost = FILE_OPEN_COST_MS; // 分块需要额外打开成本
-      int64_t split_benefit = (file_info.file_info_->file_size_ * 1000) / (PROCESSING_SPEED_MBPS * 1024 * 1024);
-      // 如果分块成本小于处理时间的一半，则分块
-      file_info.should_split_ = (split_cost < split_benefit / 2);
-      LOG_DEBUG("odps trace file_info split", K(file_info.file_info_->file_url_), K(file_info.file_info_->file_size_), K(file_info.should_split_));
-    }
-    // cout << file_info.file_idx_ << " should_split_: " << file_info.should_split_ << endl;
-    OZ(sorted_files.push_back(file_info));
-  }
-  // 第三步：按文件大小升序排序（小文件优先分配）
-  struct SortByFileSize {
-    bool operator()(const FileInfoWithIdx &l, const FileInfoWithIdx &r) const {
-      return l.file_info_->file_size_ < r.file_info_->file_size_;
-    }
-  };
-  OX(lib::ob_sort(sorted_files.begin(), sorted_files.end(), SortByFileSize()));
-
-  int64_t last_k_files_count = parallel - 1; // parallel - 1 QZ
-  if (parallel * 100 < sorted_files.count()) {
-    last_k_files_count = 0;
-  }
-
-  // 在测试场景中，通过环境变量控制是否使用方差分割
-  // const char* variance_split_disable = getenv("OB_VARIANCE_SPLIT_DISABLE");
-  // if (variance_split_disable != nullptr && strcmp(variance_split_disable, "1") == 0) {
-  //   last_k_files_count = 0;
-  // }
-  for (int64_t i = 0; OB_SUCC(ret) && i < sorted_files.count(); i++) {
-    if (i < sorted_files.count() - last_k_files_count) {
-      sorted_files.at(i).should_split_ = false;
-    }
-  }
-
-  // 第四步：初始化SQC集合，设置目标大小
-  ObSEArray<SqcFileSet, 8> sqc_sets;
-  OZ(sqc_sets.prepare_allocate(parallel));
-  for (int64_t i = 0; OB_SUCC(ret) && i < parallel; i++) {
-    sqc_sets[i].sqc_idx_ = i;
-    sqc_sets[i].total_file_size_ = 0;
-    sqc_sets[i].total_file_count_ = 0;
-    sqc_sets[i].total_processing_time_ms_ = 0;
-  }
-  // 第五步：不分块的文件分配
-  int64_t should_split_file_count = 0;
-  for (int64_t i = sorted_files.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
-    FileInfoWithIdx &file_split_meta = sorted_files[i];
-    const ObExternalFileInfo *file = file_split_meta.file_info_;
-    if (!file_split_meta.should_split_) {
-      int64_t best_sqc_idx = -1;
-      int64_t min_load = INT64_MAX;
-      for (int64_t j = 0; j < parallel; j++) {
-        int64_t current_load = sqc_sets[j].total_processing_time_ms_;
-        if (current_load < min_load) {
-          min_load = current_load;
-          best_sqc_idx = j;
-        }
-      }
-      if (OB_UNLIKELY(best_sqc_idx < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Failed to find suitable SQC for file", K(file_split_meta.file_idx_));
-      } else {
-        // 小文件不分块，直接分配
-        sqc_sets[best_sqc_idx].add_file(file->file_size_, 1);
-        file_split_meta.sqc_idx_ = best_sqc_idx;
-        file_split_meta.start_permyriad_ = 0;
-        file_split_meta.end_permyriad_ = 10000;
-        file_split_meta.should_split_ = false;
-        file_split_meta.process_size_ += file->file_size_;
-        LOG_INFO("Small ODPS File assigned", K(file_split_meta.file_idx_), K(best_sqc_idx),
-                 K(file->file_size_), K(file_split_meta.should_split_));
-      }
-    } else {
-      should_split_file_count++;
-    }
-  }
-  // 第六步：分块分配
-  // 计算平均每个SQC应分配的大小，向上取整
-  int64_t avg_size_per_sqc = 0;
-  int64_t init_file_count = 0;
-  int64_t threshold = 0;
-  int64_t strict_avg_size_per_sqc = 0;
-  int64_t loose_avg_size_per_sqc = 0;
-  OX(strict_avg_size_per_sqc = total_file_size / parallel);
-  OX(loose_avg_size_per_sqc =
-         ceil(((total_file_size + parallel +
-                +should_split_file_count * PROCESSING_SPEED_MBPS * 1024 * 1024 *
-                    1.5) *
-               1.00 / parallel)));
-  OX(avg_size_per_sqc = max((int64_t)ceil(strict_avg_size_per_sqc * 1.02),
-                            (int64_t)(loose_avg_size_per_sqc)));
-  OX(init_file_count = sorted_files.count());
-  OX(threshold = init_file_count + (should_split_file_count + 1) * parallel * 2);
-  int64_t i = 0;
-  for (i = 0; OB_SUCC(ret) && i < sorted_files.count() && i < threshold; i++) {
-    FileInfoWithIdx &file_split_meta = sorted_files.at(i);
-    const ObExternalFileInfo *file = file_split_meta.file_info_;
-    if (file_split_meta.should_split_) {
-      // 跳过已经分配的文件
-      if (file_split_meta.sqc_idx_ >= 0) {
-        continue;
-      }
-      // 寻找当前最适合的SQC（优先选择未达到目标大小的，然后选择负载最轻的）
-      int64_t best_sqc_idx = -1;
-      int64_t max_file_count_load = 0;
-      int64_t min_load = INT64_MAX;
-
-      // 第一优先级：选择未达到目标大小的SQC中负载最轻的
-      for (int64_t j = 0; OB_SUCC(ret) && j < parallel; j++) {
-        int64_t current_load = sqc_sets[j].total_processing_time_ms_;
-        if (current_load < 0) {
-          ret = OB_ERR_UNEXPECTED;
-        }
-        if (OB_SUCC(ret)) {
-          if (current_load < min_load) {
-            min_load = current_load;
-            best_sqc_idx = j;
-          }
-          if (sqc_sets[j].total_file_count_ > max_file_count_load) {
-            max_file_count_load = sqc_sets[j].total_file_count_;
-          }
-        }
-      }
-      LOG_DEBUG("odps trace best_sqc_idx", K(best_sqc_idx), K(min_load), K(max_file_count_load));
-
-      if (OB_UNLIKELY(best_sqc_idx < 0)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Failed to find suitable SQC for file",
-                 K(file_split_meta.file_idx_));
-      } else {
-        // 分配文件到选中的SQC
-        // 大文件分块处理 - 分配大小为目标大小减去现有大小
-        // 计算应该分配的大小：目标大小 - 当前SQC已分配的大小
-        int64_t cur_sqc_avail_process_size = avg_size_per_sqc - sqc_sets[best_sqc_idx].total_file_size_;
-        int add_round = 0;
-        if (cur_sqc_avail_process_size <= 20 * 1024 * 1024) {
-          cur_sqc_avail_process_size = 20 * 1024 * 1024;
-        }
-        while (cur_sqc_avail_process_size <= 0 && avg_size_per_sqc < strict_avg_size_per_sqc * 2 && add_round < 5) {
-          avg_size_per_sqc = max(ceil(avg_size_per_sqc * 1.1), ceil(avg_size_per_sqc + max_file_count_load * PROCESSING_SPEED_MBPS * 1024 * 1024 * 1.25));
-          cur_sqc_avail_process_size = avg_size_per_sqc - sqc_sets[best_sqc_idx].total_file_size_;
-          ++add_round;
-          LOG_DEBUG("odps trace cur_sqc_avail_process_size", K(avg_size_per_sqc));
-        }
-
-        LOG_DEBUG("odps trace cur_sqc_avail_process_size", K(cur_sqc_avail_process_size), K(add_round),
-                  K(avg_size_per_sqc), K(strict_avg_size_per_sqc), K(best_sqc_idx));
-        if (cur_sqc_avail_process_size <= 0 && add_round >= 100) {
-          OZ(sqc_sets[best_sqc_idx].add_file(file_split_meta.remain_file_size_, 1));
-          if (OB_SUCC(ret)) {
-            file_split_meta.sqc_idx_ = best_sqc_idx;
-            file_split_meta.remain_file_size_ = 0;
-            file_split_meta.end_permyriad_ = 10000;
-            file_split_meta.process_size_ += file_split_meta.remain_file_size_;
-          }
-          if (OB_SUCC(ret) && file_split_meta.start_permyriad_ == 0) {
-            file_split_meta.should_split_ = false;
-          }
-          LOG_WARN("Large file file_size_ <= 0 fully assigned", K(file_split_meta.file_idx_),
-                   K(best_sqc_idx),
-                   K(file_split_meta.should_split_),
-                   K(file_split_meta.start_permyriad_),
-                   K(file_split_meta.end_permyriad_),
-                   K(file_split_meta.process_size_),
-                   K(file_split_meta.remain_file_size_),
-                   K(file->file_size_),
-                   K(cur_sqc_avail_process_size), K(parallel));
-        } else {
-          // 文件分到cur_sqc_avail_process_size
-          int64_t cur_sqc_process_size = std::min(cur_sqc_avail_process_size, file_split_meta.remain_file_size_);
-          int64_t file_after_cut_size = file_split_meta.remain_file_size_ - cur_sqc_process_size;
-          int64_t remain_low_limit_size = file_split_meta.remain_file_size_ * 0.2;
-          // cur_sqc_avail_process_size 过小的时候，分割文件 小于1.1倍剩余文件不额外分回来
-          if (cur_sqc_avail_process_size < file_split_meta.remain_file_size_ && file_after_cut_size > remain_low_limit_size) {
-            int permyriad = ceil((cur_sqc_process_size * 1.00 / file->file_size_) * 10000.0);  // 万分比
-            // 能放多少放多少，剩余部分重新加入队列，分配给其他SQC
-            OX(cur_sqc_process_size = file->file_size_ * permyriad / 10000);
-            OX(file_after_cut_size = file_split_meta.remain_file_size_ - cur_sqc_process_size);
-            OZ(sqc_sets[best_sqc_idx].add_file(cur_sqc_process_size, 1));
-
-
-            if (OB_SUCC(ret)) {
-              sorted_files.at(i).end_permyriad_ = sorted_files.at(i).start_permyriad_ + permyriad;
-              sorted_files.at(i).sqc_idx_ = best_sqc_idx;
-              sorted_files.at(i).process_size_ += cur_sqc_process_size;
-            }
-
-            if (sorted_files.at(i).end_permyriad_ < 10000) {
-              // 将剩余部分重新加入队列，分配给其他SQC,
-              OZ(sorted_files.push_back(FileInfoWithIdx(file_split_meta.file_info_,
-                  file_split_meta.file_idx_, // files idx
-                  -1,  // sqc_idx -1 means to be assigned
-                  file_after_cut_size, // remain_file_size
-                  true, // should_split
-                  sorted_files.at(i).end_permyriad_,  // start precent this file end percent is next file start percent
-                  10000))); // end percent this file 100
-            }
-            LOG_INFO("Large ODPS file split assigned",
-                      K(file_split_meta.file_idx_),
-                      K(file_split_meta.start_permyriad_),
-                      K(file_split_meta.end_permyriad_),
-                      K(best_sqc_idx),
-                      K(file_split_meta.process_size_),
-                      K(file_split_meta.remain_file_size_),
-                      K(file_after_cut_size),
-                      K(cur_sqc_process_size),
-                      K(file->file_size_),
-                      K(parallel));
-
-          } else {
-            // 文件可以完全分配给当前SQC
-            int64_t processing_size = file_split_meta.remain_file_size_;
-            OZ(sqc_sets[best_sqc_idx].add_file(file_split_meta.remain_file_size_, 1));
-            if (OB_SUCC(ret)) {
-              file_split_meta.sqc_idx_ = best_sqc_idx;
-              file_split_meta.remain_file_size_ = 0;
-              file_split_meta.end_permyriad_ = 10000;
-              file_split_meta.process_size_ +=
-                  processing_size;
-            }
-            if (OB_SUCC(ret) && file_split_meta.start_permyriad_ == 0) {
-              file_split_meta.should_split_ = false;
-            }
-            LOG_INFO("Large ODPS file fully assigned", K(file_split_meta.file_idx_),
-                     K(file_split_meta.start_permyriad_),
-                     K(file_split_meta.end_permyriad_), K(best_sqc_idx),
-                     K(processing_size), K(file_split_meta.remain_file_size_),
-                     K(file->file_size_), K(parallel));
-          }
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && i == threshold) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Failed to assign all files", K(ret), K(i), K(threshold));
-  }
-
-  // 第六步：输出分配结果统计
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("File assignment completed", K(files.count()), K(parallel));
-    for (int64_t i = 0; i < parallel; i++) {
-      int64_t target_size = avg_size_per_sqc;
-      LOG_TRACE("SQC assignment result", K(i), K(sqc_sets[i].total_file_size_),
-                K(sqc_sets[i].total_file_count_), K(target_size),
-                K(sqc_sets[i].total_processing_time_ms_));
-    }
-  }
-  return ret;
-}
 
 int ObExternalTableUtils::plugin_split_tasks(
     ObIAllocator &allocator,
@@ -3632,98 +2619,6 @@ int ObExternalTableUtils::generate_file_sample_indices(const int64_t total_files
   return ret;
 }
 
-bool ObExternalTableUtils::is_external_file_size_uniform(
-                             const common::ObIArray<share::ObExternalFileInfo> &external_table_files)
-{
-  // CV catches overall dispersion; max/avg catches a diluted single outlier.
-  static constexpr double FILE_SIZE_CV_THRESHOLD = 0.5;
-  static constexpr double FILE_SIZE_MAX_AVG_RATIO = 2.0;
-  bool is_uniform = true;
-  const int64_t file_cnt = external_table_files.count();
-  if (file_cnt > 1) {
-    int64_t total_size = 0;
-    int64_t max_size = 0;
-    for (int64_t i = 0; i < file_cnt; ++i) {
-      const int64_t file_size = external_table_files.at(i).file_size_;
-      total_size += file_size;
-      max_size = MAX(max_size, file_size);
-    }
-    if (total_size > 0) {
-      const double mean = static_cast<double>(total_size) / static_cast<double>(file_cnt);
-      double var_sum = 0.0;
-      for (int64_t i = 0; i < file_cnt; ++i) {
-        const double diff = static_cast<double>(external_table_files.at(i).file_size_) - mean;
-        var_sum += diff * diff;
-      }
-      const double stddev = std::sqrt(var_sum / static_cast<double>(file_cnt));
-      const double cv = stddev / mean;
-      if (cv > FILE_SIZE_CV_THRESHOLD || static_cast<double>(max_size) > mean * FILE_SIZE_MAX_AVG_RATIO) {
-        is_uniform = false;
-      }
-    }
-  }
-  return is_uniform;
-}
-
-bool ObExternalTableUtils::is_satisfied_for_parallel_parse_csv(
-                             const common::ObIArray<share::ObExternalFileInfo> &external_table_files,
-                             const ObCSVGeneralFormat &csv_format,
-                             const int64_t parallelism)
-{
-  bool basic_condition = ObCSVGeneralFormat::ObCSVCompression::NONE == csv_format.compression_algorithm_
-                         && csv_format.parallel_parse_on_single_file_
-                         && parallelism > 1;
-  bool further_condition = false;
-  if (basic_condition) {
-    ObCollationType collation_type = ObCharset::get_default_collation(csv_format.cs_type_);
-    const ObCharsetInfo *charset_info = ObCharset::get_charset(collation_type);
-    if (OB_ISNULL(charset_info)) {
-      LOG_WARN_RET(OB_INVALID_ARGUMENT, "got null ptr", K(collation_type), K(lbt()));
-    } else if (charset_info->mbmaxlen == 1) {
-      further_condition = true;
-    } else if (csv_format.line_term_str_.length() == 1
-               && csv_format.field_term_str_.length() == 1) {
-      if (csv_format.cs_type_ == CHARSET_UTF8MB4) {
-        further_condition = true;
-      } else if (csv_format.cs_type_ == CHARSET_GBK
-                 || csv_format.cs_type_ == CHARSET_GB18030
-                 || csv_format.cs_type_ == CHARSET_GB18030_2022) {
-        if ((csv_format.field_enclosed_char_ < '0' || csv_format.field_enclosed_char_ > '9')
-             && (csv_format.field_escaped_char_ < '0' || csv_format.field_escaped_char_ > '9')
-             && (csv_format.line_term_str_[0] < '0' || csv_format.line_term_str_[0] > '9')
-             && (csv_format.field_term_str_[0] < '0' || csv_format.field_term_str_[0] > '9')) {
-          further_condition = true;
-          if (csv_format.cs_type_ == CHARSET_GBK && csv_format.field_escaped_char_ == '\\') {
-            further_condition = false;
-          }
-        }
-      }
-    }
-  }
-  bool need_parallel_parse = false;
-  if (basic_condition && further_condition && external_table_files.count() > 0) {
-    const int64_t file_cnt = external_table_files.count();
-    bool has_large_file = false;
-    bool has_file_to_chunk = false;
-    for (int64_t i = 0; i < file_cnt && (!has_large_file || !has_file_to_chunk); ++i) {
-      const int64_t file_size = external_table_files.at(i).file_size_;
-      if (file_size >= csv_format.parallel_parse_file_size_threshold_) {
-        has_large_file = true;
-      }
-      if (file_size >= PARALLEL_PARSE_CSV_CHUNK_SIZE) {
-        has_file_to_chunk = true;
-      }
-    }
-    const bool is_uniform = is_external_file_size_uniform(external_table_files);
-    const bool few_files = parallelism * 2 >= file_cnt;
-    if (is_uniform) {
-      need_parallel_parse = few_files && has_large_file && has_file_to_chunk;
-    } else {
-      need_parallel_parse = has_large_file && has_file_to_chunk;
-    }
-  }
-  return need_parallel_parse;
-}
 
 bool ObCachedExternalFileInfoKey::operator==(const common::ObIKVCacheKey &other) const
 {
@@ -3895,51 +2790,6 @@ int ObCachedExternalFileInfoCollector::collect_file_modify_time(
   } else {
     modify_time = value.modify_time_;
   }
-  return ret;
-}
-
-int ObExternalTableUtils::adjust_end_pos_skip_escape(sql::ObExternalStreamFileReader &file_reader,
-                                                     const char escape,
-                                                     const int64_t start_pos,
-                                                     int64_t &end_pos)
-{
-  int ret = OB_SUCCESS;
-  const int64_t BLOCK_SIZE = 4096;
-  char buf[BLOCK_SIZE];
-  int64_t read_size = 0;
-
-  if (OB_UNLIKELY(start_pos >= end_pos)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(start_pos), K(end_pos));
-  }
-  bool found = false;
-  while (OB_SUCC(ret) && end_pos > start_pos && !found && !file_reader.eof()) {
-    int64_t read_start = MAX(start_pos, end_pos - BLOCK_SIZE);
-    int64_t read_len = end_pos - read_start;
-    file_reader.advance(read_start);
-    if (OB_FAIL(file_reader.read(buf, read_len, read_size))) {
-      LOG_WARN("failed to read file", K(ret), K(read_start), K(read_len));
-    } else if (read_size != read_len) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("read size mismatch", K(ret), K(read_size), K(read_len));
-    } else {
-      for (int64_t i = read_size - 1; !found && i >= 0; --i) {
-        if (buf[i] != escape) {
-          end_pos = read_start + i + 1;
-          found = true;
-        }
-      }
-      if (!found) {
-        end_pos = read_start;
-      }
-    }
-  }
-
-  if (OB_SUCC(ret) && !found) {
-    end_pos = start_pos;
-    LOG_TRACE("end_pos adjusted to start_pos, chunk all escape chars", K(start_pos), K(end_pos));
-  }
-
   return ret;
 }
 

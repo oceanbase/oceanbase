@@ -20,29 +20,6 @@ class ObRawExpr;
 class ObSqlSchemaGuard;
 struct HiveTableFileCache;
 
-struct ObHivePartFieldBound
-{
-public:
-  OB_UNIS_VERSION(1);
-
-public:
-  ObHivePartFieldBound(common::ObIAllocator &allocator);
-  void reset();
-  int assign(const ObHivePartFieldBound &other);
-  int deep_copy(ObHivePartFieldBound &src);
-  TO_STRING_KV(K_(column_id), K_(is_whole_range), K_(is_always_false), K_(bounds), K_(range_exprs));
-
-  common::ObIAllocator &allocator_;
-  uint64_t column_id_;
-  bool is_whole_range_;
-  bool is_always_false_;
-  ObFixedArray<ObFieldBound *, ObIAllocator> bounds_;
-  ObFixedArray<ObRawExpr*, ObIAllocator> range_exprs_;
-
-private:
-  DISABLE_COPY_ASSIGN(ObHivePartFieldBound);
-};
-
 class ObHiveFilePruner : public ObILakeTableFilePruner
 {
 public:
@@ -65,21 +42,13 @@ public:
            const uint64_t ref_table_id,
            const ObIArray<ObRawExpr *> &filter_exprs);
 
-  int prunner_files(ObExecContext &exec_ctx,
-                    ObIArray<ObHiveFileDesc> &filtered_files);
+  int prune_files(ObExecContext &exec_ctx,
+                  ObIArray<ObHiveFileDesc> &filtered_files);
   int get_part_id_and_range_exprs(ObIArray<uint64_t> &part_column_ids,
                                   ObIArray<ObRawExpr*> &range_exprs) override;
 private:
   int prune_partition_by_hms(ObExecContext &exec_ctx,
                              ObIArray<ObHiveFileDesc> &filtered_files);
-
-  int generate_partition_bound(const ObDMLStmt &stmt,
-                               ObExecContext *exec_ctx,
-                               const ObTableSchema *table_schema,
-                               const ObIArray<ObRawExpr *> &filter_exprs);
-
-  int build_field_bound_from_ranges(ObIArray<ObNewRange *> &ranges,
-                                    ObHivePartFieldBound &part_field_bound);
 
   int construct_partition_values(common::ObIAllocator &allocator,
                                  const common::ObIArray<common::ObString> &partition_column_names,
@@ -88,8 +57,11 @@ private:
 
 private:
   DISABLE_COPY_ASSIGN(ObHiveFilePruner);
-  bool check_one_row_part_column(ObNewRow ob_part_row);
-  bool check_one_part(ObObj &part_val, ObHivePartFieldBound &field_bounds);
+  // Extends the base check with the hive default partition handling: the
+  // "__HIVE_DEFAULT_PARTITION__" string maps to a NULL partition value in the
+  // partition row, so a NULL cell also matches a default-partition point bound.
+  virtual bool check_one_part(const common::ObObj &part_val,
+                              const ObLakePartFieldBound &field_bounds) override;
   bool is_hive_default_partition_obj_(const ObObj &obj) const;
   bool is_hive_default_point_bound_(const ObFieldBound &bound) const;
 
@@ -125,56 +97,9 @@ public:
 
 private:
   ObSqlSchemaGuard *sql_schema_guard_;
-  ObFixedArray<ObHivePartFieldBound *, common::ObIAllocator> hive_part_bounds_;
+  ObFixedArray<ObLakePartFieldBound *, common::ObIAllocator> hive_part_bounds_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> part_column_ids_;
   bool use_fast_path_;
-};
-
-class ObHivePushDownFilter : public ObLakeTablePushDownFilter
-{
-public:
-  ObHivePushDownFilter(ObExecContext &exec_ctx,
-                       ObLakeTablePushDownFilterSpec &file_filter_spec,
-                       common::ObFixedArray<uint64_t, common::ObIAllocator> *part_column_ids)
-      : ObLakeTablePushDownFilter(exec_ctx, file_filter_spec), part_column_ids_(part_column_ids)
-  {
-  }
-
-  virtual ~ObHivePushDownFilter()
-  {
-  }
-
-private:
-  class HivePartitionFilterParamBuilder : public MinMaxFilterParamBuilder
-  {
-  public:
-    explicit HivePartitionFilterParamBuilder(
-        ObNewRow &row,
-        common::ObFixedArray<uint64_t, common::ObIAllocator> &part_column_ids)
-        : row_(row), part_column_ids_(part_column_ids)
-    {
-    }
-    virtual ~HivePartitionFilterParamBuilder()
-    {
-    }
-    int build(const int32_t ext_tbl_col_id,
-              const ObColumnMeta &column_meta,
-              blocksstable::ObMinMaxFilterParam &param) override;
-    int next_range(const int64_t column_id, int64_t &offset, int64_t &rows)
-    {
-      return OB_NOT_SUPPORTED;
-    }
-
-  private:
-    ObNewRow &row_;
-    common::ObFixedArray<uint64_t, common::ObIAllocator> &part_column_ids_;
-  };
-
-public:
-  int filter(ObNewRow row, bool &is_filtered);
-
-private:
-  common::ObFixedArray<uint64_t, common::ObIAllocator> *part_column_ids_;
 };
 
 } // namespace sql

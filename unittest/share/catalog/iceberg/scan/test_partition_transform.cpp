@@ -35,7 +35,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     // hash value 1392991556
     start.set_int32(1);
     end.set_int32(1);
-    ASSERT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    ASSERT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(1, start.get_int32());
   }
 
@@ -44,7 +44,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     // hash value 1176478452
     start.set_date(2);
     end.set_date(2);
-    ASSERT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    ASSERT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(2, start.get_int32());
   }
 
@@ -53,7 +53,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     // hash value 2017239379
     start.set_int(34);
     end.set_int(34);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(4, start.get_int32());
   }
 
@@ -62,7 +62,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     // hash value 1066781525
     start.set_time(35);
     end.set_time(35);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(0, start.get_int32());
   }
 
@@ -71,7 +71,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     // hash value 1497025390
     start.set_datetime(36);
     end.set_datetime(36);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(0, start.get_int32());
   }
 
@@ -80,7 +80,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     // hash value 978785182
     start.set_time(37);
     end.set_time(37);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(2, start.get_int32());
   }
 
@@ -90,7 +90,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     ObString s = "iceberg";
     start.set_varchar(s);
     end.set_varchar(s);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     ASSERT_EQ(4, start.get_int32());
   }
 
@@ -106,7 +106,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     ObDecimalInt *decint = reinterpret_cast<ObDecimalInt *>(buf);
     start.set_decimal_int(buf_size, 2, decint);
     end.set_decimal_int(buf_size, 2, decint);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     EXPECT_EQ(4, start.get_int32());
   }
 
@@ -122,7 +122,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     ObDecimalInt *decint = reinterpret_cast<ObDecimalInt *>(buf);
     start.set_decimal_int(buf_size, 2, decint);
     end.set_decimal_int(buf_size, 2, decint);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     EXPECT_EQ(2, start.get_int32());
   }
 
@@ -140,7 +140,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     ObDecimalInt *decint = reinterpret_cast<ObDecimalInt *>(buf);
     start.set_decimal_int(buf_size, 2, decint);
     end.set_decimal_int(buf_size, 2, decint);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     EXPECT_EQ(1, start.get_int32());
   }
 
@@ -156,7 +156,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
     ObDecimalInt *decint = reinterpret_cast<ObDecimalInt *>(buf);
     start.set_decimal_int(buf_size, 2, decint);
     end.set_decimal_int(buf_size, 2, decint);
-    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePrunner::transform_bucket_range(range, 5));
+    EXPECT_EQ(OB_SUCCESS, sql::ObIcebergFilePruner::transform_bucket_range(range, 5));
     EXPECT_EQ(0, start.get_int32());
   }
 }
@@ -164,7 +164,7 @@ TEST_F(TestPartitionTransform, bucket_hash) {
 TEST_F(TestPartitionTransform, identity_partition_exact_filter)
 {
   ObArenaAllocator allocator;
-  sql::ObIcebergFilePrunner pruner(allocator);
+  sql::ObIcebergFilePruner pruner(allocator);
   sql::ObConstRawExpr filter_expr;
   const uint64_t column_id = 123;
 
@@ -172,8 +172,8 @@ TEST_F(TestPartitionTransform, identity_partition_exact_filter)
   for (int32_t spec_id = 0; spec_id < 2; ++spec_id) {
     sql::ObIcebergPartBound *part_bound =
         OB_NEWx(sql::ObIcebergPartBound, &allocator, allocator);
-    sql::ObPartFieldBound *field_bound =
-        OB_NEWx(sql::ObPartFieldBound, &allocator, allocator);
+    sql::ObLakePartFieldBound *field_bound =
+        OB_NEWx(sql::ObLakePartFieldBound, &allocator, allocator);
     ASSERT_NE(nullptr, part_bound);
     ASSERT_NE(nullptr, field_bound);
     ASSERT_EQ(OB_SUCCESS, part_bound->part_field_bounds_.init(1));
@@ -197,14 +197,14 @@ TEST_F(TestPartitionTransform, identity_partition_exact_filter)
 TEST_F(TestPartitionTransform, single_identity_spec_survives_pruner_copy)
 {
   ObArenaAllocator allocator;
-  sql::ObIcebergFilePrunner source_pruner(allocator);
-  sql::ObIcebergFilePrunner copied_pruner(allocator);
+  sql::ObIcebergFilePruner source_pruner(allocator);
+  sql::ObIcebergFilePruner copied_pruner(allocator);
   sql::ObConstRawExpr filter_expr;
   const uint64_t column_id = 123;
   sql::ObIcebergPartBound *part_bound =
       OB_NEWx(sql::ObIcebergPartBound, &allocator, allocator);
-  sql::ObPartFieldBound *field_bound =
-      OB_NEWx(sql::ObPartFieldBound, &allocator, allocator);
+  sql::ObLakePartFieldBound *field_bound =
+      OB_NEWx(sql::ObLakePartFieldBound, &allocator, allocator);
 
   ASSERT_NE(nullptr, part_bound);
   ASSERT_NE(nullptr, field_bound);
@@ -231,7 +231,7 @@ TEST_F(TestPartitionTransform, single_identity_spec_survives_pruner_copy)
 TEST_F(TestPartitionTransform, mixed_partition_spec_keeps_filter)
 {
   ObArenaAllocator allocator;
-  sql::ObIcebergFilePrunner pruner(allocator);
+  sql::ObIcebergFilePruner pruner(allocator);
   sql::ObConstRawExpr filter_expr;
   const uint64_t column_id = 123;
 
@@ -239,8 +239,8 @@ TEST_F(TestPartitionTransform, mixed_partition_spec_keeps_filter)
   for (int32_t spec_id = 0; spec_id < 2; ++spec_id) {
     sql::ObIcebergPartBound *part_bound =
         OB_NEWx(sql::ObIcebergPartBound, &allocator, allocator);
-    sql::ObPartFieldBound *field_bound =
-        OB_NEWx(sql::ObPartFieldBound, &allocator, allocator);
+    sql::ObLakePartFieldBound *field_bound =
+        OB_NEWx(sql::ObLakePartFieldBound, &allocator, allocator);
     ASSERT_NE(nullptr, part_bound);
     ASSERT_NE(nullptr, field_bound);
     ASSERT_EQ(OB_SUCCESS, part_bound->part_field_bounds_.init(1));
@@ -264,7 +264,7 @@ TEST_F(TestPartitionTransform, mixed_partition_spec_keeps_filter)
 TEST_F(TestPartitionTransform, different_partition_column_keeps_filter)
 {
   ObArenaAllocator allocator;
-  sql::ObIcebergFilePrunner pruner(allocator);
+  sql::ObIcebergFilePruner pruner(allocator);
   sql::ObConstRawExpr filter_expr;
   const uint64_t column_id = 123;
   const uint64_t other_column_id = 456;
@@ -272,7 +272,7 @@ TEST_F(TestPartitionTransform, different_partition_column_keeps_filter)
   ASSERT_EQ(OB_SUCCESS, pruner.part_bound_.init(2));
   for (int32_t spec_id = 0; spec_id < 2; ++spec_id) {
     sql::ObIcebergPartBound *part_bound = OB_NEWx(sql::ObIcebergPartBound, &allocator, allocator);
-    sql::ObPartFieldBound *field_bound = OB_NEWx(sql::ObPartFieldBound, &allocator, allocator);
+    sql::ObLakePartFieldBound *field_bound = OB_NEWx(sql::ObLakePartFieldBound, &allocator, allocator);
     ASSERT_NE(nullptr, part_bound);
     ASSERT_NE(nullptr, field_bound);
     ASSERT_EQ(OB_SUCCESS, part_bound->part_field_bounds_.init(1));

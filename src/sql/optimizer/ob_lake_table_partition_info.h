@@ -11,10 +11,15 @@
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
 #include "sql/optimizer/file_prune/ob_iceberg_file_pruner.h"
 #include "sql/optimizer/file_prune/ob_lake_table_fwd.h"
+#include "sql/optimizer/file_prune/ob_odps_file_pruner.h"
 #include "sql/optimizer/ob_table_partition_info.h"
 
 namespace oceanbase
 {
+namespace common {
+struct ObLakeTableStat;
+struct ObLakeColumnStat;
+}
 namespace share {
 class ObExternalTablePartInfoArray;
 namespace schema {
@@ -25,6 +30,7 @@ namespace sql
 {
 
 class ObRawExprResType;
+class ObOptimizerContext;
 
 // Map 从少量 bucket 起步并按 2 倍扩容，避免唯一分区数远小于文件数时过度预分配。
 typedef common::hash::ObHashMap<
@@ -97,7 +103,8 @@ public:
                                      const uint64_t table_id,
                                      const uint64_t ref_table_id,
                                      int64_t lake_table_snapshot_id,
-                                     const ObIArray<ObRawExpr*> &filter_exprs);
+                                     const ObIArray<ObRawExpr*> &filter_exprs,
+                                     int64_t estimated_parallel);
 
   // 为保留文件选择执行节点；bucket 表复用预先生成的稠密分区 ID。
   int select_location_for_iceberg(ObExecContext *exec_ctx,
@@ -110,10 +117,34 @@ public:
                                       share::ObExternalTablePartInfoArray &partition_infos);
 
   int select_location_for_hive(ObExecContext *exec_ctx, ObIArray<ObHiveFileDesc> &file_descs);
+  /// Pure placement for ODPS: one candidate tablet loc per alive server, then
+  /// each scan unit (produced by ObODPSFilePruner::plan_files) is hung on
+  /// the loc of its assigned slot. The units live in the pruner's allocator
+  /// (plan allocator) and are consumed by pointer — zero copy.
+  int select_location_for_odps(ObExecContext *exec_ctx,
+                               ObIArray<ObOptOdpsFile *> &odps_files,
+                               ObIArray<int64_t> &slot_idxs);
   int select_location_for_plugin(ObExecContext *exec_ctx,
                                  ObIArray<ObPluginSplitDesc *> &plugin_splits,
                                  ObExtTableDispatchMode dispatch_mode);
   int get_partition_values(ObIArray<ObString> &partition_values) const;
+  static int get_table_stat(ObIAllocator &allocator,
+                     ObOptimizerContext &opt_ctx,
+                     ObTablePartitionInfo &partition_info,
+                     const uint64_t ref_table_id,
+                     const share::ObLakeTableFormat format,
+                     ObIArray<ObColumnRefRawExpr *> &column_exprs,
+                     common::ObLakeTableStat &table_stat,
+                     ObIArray<common::ObLakeColumnStat *> &column_stats,
+                     bool &has_valid_row_count);
+  static int get_catalog_table_stat(ObIAllocator &allocator,
+                                    ObOptimizerContext &opt_ctx,
+                                    uint64_t ref_table_id,
+                                    ObIArray<ObColumnRefRawExpr *> &column_exprs,
+                                    ObIArray<ObString> &partition_names,
+                                    const bool is_all_partitions_selected,
+                                    common::ObLakeTableStat &table_stat,
+                                    ObIArray<common::ObLakeColumnStat *> &column_stats);
 private:
   // 按 (spec_id, partition tuple) 去重并生成查询内稠密分区 ID。
   int build_iceberg_part_ids(ObLakeTablePartKeyMap &part_key_map,

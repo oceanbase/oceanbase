@@ -4373,9 +4373,20 @@ int ObDMLResolver::build_mocked_external_table_item(const ObTableSchema *table_s
       if (OB_FAIL(item->alloc_ext_table_def(allocator_))) {
         LOG_WARN("failed to allocate external table def", K(ret));
       } else {
-        item->ext_table_def_->lake_table_format_ = table_schema->get_lake_table_format();
-        item->ext_table_def_->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
-        item->ext_table_def_->external_location_id_ = table_schema->get_external_location_id();
+        share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID;
+        if (OB_FAIL(ObSQLUtils::derive_lake_table_format(table_schema, lake_table_format))) {
+          LOG_WARN("failed to derive lake table format", K(ret));
+        } else {
+          item->ext_table_def_->lake_table_format_ = lake_table_format;
+          item->ext_table_def_->lake_table_snapshot_id_ = table_schema->get_lake_table_snapshot_id();
+          item->ext_table_def_->external_location_id_ = table_schema->get_external_location_id();
+          if (share::is_odps_lake_table(lake_table_format)
+              && OB_NOT_NULL(stmt->get_query_ctx())) {
+            // the ODPS lake path bakes the download session/splits into the
+            // plan at optimize time — such plans must not enter the plan cache
+            stmt->get_query_ctx()->set_has_odps_external_table(true);
+          }
+        }
       }
       item->database_name_ = session_info_->get_database_name();
       if (!alias_name.empty()) {
@@ -8661,8 +8672,19 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(const uint64_t tenant
         item->ddl_schema_version_ = tschema->get_schema_version();
         item->table_type_ = tschema->get_table_type();
         if (OB_NOT_NULL(item->ext_table_def_)) {
-          item->ext_table_def_->lake_table_format_ = tschema->get_lake_table_format();
-          item->ext_table_def_->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+          share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID;
+          if (OB_FAIL(ObSQLUtils::derive_lake_table_format(tschema, lake_table_format))) {
+            LOG_WARN("failed to derive lake table format", K(ret));
+          } else {
+            item->ext_table_def_->lake_table_format_ = lake_table_format;
+            item->ext_table_def_->lake_table_snapshot_id_ = tschema->get_lake_table_snapshot_id();
+            if (share::is_odps_lake_table(lake_table_format)
+                && OB_NOT_NULL(stmt->get_query_ctx())) {
+              // the ODPS lake path bakes the download session/splits into the
+              // plan at optimize time — such plans must not enter the plan cache
+              stmt->get_query_ctx()->set_has_odps_external_table(true);
+            }
+          }
         }
       }
     }

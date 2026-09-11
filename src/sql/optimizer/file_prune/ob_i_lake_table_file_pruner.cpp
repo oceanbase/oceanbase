@@ -9,8 +9,12 @@
 
 #include "share/rc/ob_tenant_base.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/rewrite/ob_query_range_define.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/table_format/hive/ob_hive_table_metadata.h"
 #include "sql/table_format/iceberg/ob_iceberg_utils.h"
+#include "sql/table_format/iceberg/spec/partition.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -511,6 +515,328 @@ int ObLakeTablePushDownFilter::prepare_filter_col_meta(ObIArray<uint64_t> &colum
                K(column_indexs.count()),
                K(column_metas.count()));
     }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObLakePartFieldBound)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = bounds_.count();
+  LST_DO_CODE(OB_UNIS_ENCODE, column_id_, transform_type_, is_whole_range_, is_always_false_, count);
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    if (OB_ISNULL(bounds_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null field bound");
+    } else {
+      OB_UNIS_ENCODE(*bounds_.at(i));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObLakePartFieldBound)
+{
+  int64_t len = 0;
+  int64_t count = bounds_.count();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, column_id_, transform_type_, is_whole_range_, is_always_false_, count);
+  for (int64_t i = 0; i < count; ++i) {
+    if (OB_NOT_NULL(bounds_.at(i))) {
+      OB_UNIS_ADD_LEN(*bounds_.at(i));
+    }
+  }
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObLakePartFieldBound)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+  LST_DO_CODE(OB_UNIS_DECODE, column_id_, transform_type_, is_whole_range_, is_always_false_, count);
+  for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+    ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
+    if (OB_ISNULL(bound)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObFieldBound");
+    } else {
+      OB_UNIS_DECODE(*bound);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(bounds_.push_back(bound))) {
+        LOG_WARN("failed to push back bound");
+      }
+    }
+  }
+  return ret;
+}
+
+ObLakePartFieldBound::ObLakePartFieldBound(common::ObIAllocator &allocator)
+    : allocator_(allocator),
+      column_id_(OB_INVALID_ID),
+      transform_type_(iceberg::TransformType::Invalid),
+      is_whole_range_(false),
+      is_always_false_(false),
+      bounds_(allocator),
+      range_exprs_(allocator)
+{}
+
+void ObLakePartFieldBound::reset()
+{
+  column_id_ = OB_INVALID_ID;
+  transform_type_ = iceberg::TransformType::Invalid;
+  is_whole_range_ = false;
+  is_always_false_ = false;
+  for (int64_t i = 0; i < bounds_.count(); ++i) {
+    if (OB_NOT_NULL(bounds_.at(i))) {
+      allocator_.free(bounds_.at(i));
+    }
+  }
+  bounds_.reset();
+  range_exprs_.reset();
+}
+
+int ObLakePartFieldBound::assign(const ObLakePartFieldBound &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    column_id_ = other.column_id_;
+    transform_type_ = other.transform_type_;
+    is_whole_range_ = other.is_whole_range_;
+    is_always_false_ = other.is_always_false_;
+    if (OB_FAIL(bounds_.assign(other.bounds_))) {
+      LOG_WARN("failed to assign field bound");
+    } else if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
+      LOG_WARN("failed to assign range exprs");
+    }
+  }
+  return ret;
+}
+
+int ObLakePartFieldBound::deep_copy(ObLakePartFieldBound &src)
+{
+  int ret = OB_SUCCESS;
+  column_id_ = src.column_id_;
+  transform_type_ = src.transform_type_;
+  is_whole_range_ = src.is_whole_range_;
+  is_always_false_ = src.is_always_false_;
+  if (OB_FAIL(bounds_.init(src.bounds_.count()))) {
+    LOG_WARN("failed to init fixed array");
+  } else if (OB_FAIL(range_exprs_.assign(src.range_exprs_))) {
+    LOG_WARN("failed to assign range exprs");
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.bounds_.count(); ++i) {
+    ObFieldBound *bound = OB_NEWx(ObFieldBound, &allocator_);
+    if (OB_ISNULL(src.bounds_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null filed bound");
+    } else if (OB_ISNULL(bound)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for ObFieldBound");
+    } else if (OB_FAIL(bound->deep_copy(allocator_, *src.bounds_.at(i)))) {
+      LOG_WARN("failed to deep copy field bound");
+    } else if (OB_FAIL(bounds_.push_back(bound))) {
+      LOG_WARN("failed to push back bound");
+    }
+  }
+  return ret;
+}
+
+int ObILakeTableFilePruner::generate_partition_bound(
+    const ObDMLStmt &stmt,
+    ObExecContext *exec_ctx,
+    const share::schema::ObTableSchema *table_schema,
+    const common::ObIArray<ObRawExpr *> &filter_exprs,
+    common::ObFixedArray<ObLakePartFieldBound *, common::ObIAllocator> &part_bounds)
+{
+  int ret = OB_SUCCESS;
+  const common::ObPartitionKeyInfo &part_key_info = table_schema->get_partition_key_info();
+  if (filter_exprs.empty() || !is_partitioned_) {
+    need_all_ = true;
+  } else if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(exec_ctx));
+  } else {
+    ObArenaAllocator tmp_allocator("FilePrunnerTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+    const ObDataTypeCastParams dtc_params
+        = ObBasicSessionInfo::create_dtc_params(exec_ctx->get_my_session());
+
+    ObArray<ObLakePartFieldBound *> tmp_part_field_bounds;
+    for (int64_t j = 0; OB_SUCC(ret) && j < part_key_info.get_size(); ++j) {
+      ObQueryRangeArray ranges;
+      ObLakePartFieldBound *part_field_bound
+          = OB_NEWx(ObLakePartFieldBound, &allocator_, allocator_);
+      if (OB_ISNULL(part_field_bound)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocator memory for ObLakePartFieldBound", K(ret));
+      } else {
+        part_field_bound->column_id_ = part_key_info.get_column(j)->column_id_;
+        ObSEArray<ColumnItem, 1> part_columns;
+        ColumnItem *column_item = nullptr;
+        tmp_allocator.reuse();
+        ObPreRangeGraph pre_range_graph(tmp_allocator);
+        bool dummy_single_ranges = false;
+        if (!ObOptimizerUtil::find_item(column_ids_, part_field_bound->column_id_)) {
+          // The partition column is not in the accessed column set: no pruning
+          // on this column. In practice resolve_table_partition_expr registers
+          // every partition key column of a partitioned table into the stmt
+          // (ob_dml_resolver.cpp:3881), so this is a defensive guard.
+          part_field_bound->is_whole_range_ = true;
+        } else if (OB_ISNULL(column_item = stmt.get_column_item_by_id(loc_meta_.table_loc_id_,
+                                                               part_field_bound->column_id_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null column item", K(ret), K(loc_meta_), K(part_field_bound->column_id_));
+        } else if (OB_FAIL(part_columns.push_back(*column_item))) {
+          LOG_WARN("failed to push back column item", K(ret));
+        } else if (OB_FAIL(pre_range_graph.preliminary_extract_query_range(part_columns,
+                                                                           filter_exprs,
+                                                                           exec_ctx,
+                                                                           NULL,
+                                                                           NULL,
+                                                                           false,
+                                                                           true))) {
+          LOG_WARN("failed to preliminary extract query range",
+                   K(ret),
+                   K(part_columns),
+                   K(filter_exprs));
+        } else if (OB_FAIL(pre_range_graph.get_tablet_ranges(allocator_,
+                                                             *exec_ctx,
+                                                             ranges,
+                                                             dummy_single_ranges,
+                                                             dtc_params))) {
+          LOG_WARN("failed to get tablet ranges", K(ret));
+        } else if (OB_FAIL(build_field_bound_from_ranges(allocator_, ranges, *part_field_bound))) {
+          LOG_WARN("failed to build field bound from ranges", K(ret));
+        } else if (OB_FAIL(part_field_bound->range_exprs_.assign(pre_range_graph.get_range_exprs()))) {
+          LOG_WARN("failed to assign range exprs");
+        } else if (ranges.count() == 1) {
+          ObNewRange *range = ranges.at(0);
+          if (range->is_false_range()) {
+            part_field_bound->is_always_false_ = true;
+          } else if (range->is_whole_range()) {
+            part_field_bound->is_whole_range_ = true;
+          }
+        }
+      }
+      OZ(tmp_part_field_bounds.push_back(part_field_bound), K(part_field_bound));
+    }
+    OZ(part_bounds.assign(tmp_part_field_bounds));
+  }
+  return ret;
+}
+
+int ObILakeTableFilePruner::build_field_bound_from_ranges(common::ObIAllocator &allocator,
+                                                          common::ObIArray<ObNewRange *> &ranges,
+                                                          ObLakePartFieldBound &part_field_bound)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(part_field_bound.bounds_.init(ranges.count()))) {
+    LOG_WARN("failed to init fixed array", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ranges.count(); ++i) {
+    ObFieldBound *field_bound = OB_NEWx(ObFieldBound, &allocator);
+    if (OB_ISNULL(field_bound)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocator memory for ObFieldBound", K(ret));
+    } else if (OB_ISNULL(ranges.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null range", K(ret));
+    } else if (OB_FAIL(field_bound->from_range(*ranges.at(i)))) {
+      LOG_WARN("failed to init field bound from range", K(ret));
+    } else if (OB_FAIL(part_field_bound.bounds_.push_back(field_bound))) {
+      LOG_WARN("failed to push back field bound", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObILakeTableFilePruner::check_one_row_part_column(
+    const common::ObNewRow &ob_part_row,
+    const common::ObIArray<ObLakePartFieldBound *> &part_bounds)
+{
+  bool contain = true;
+  for (int64_t i = 0; contain && i < ob_part_row.get_count(); ++i) {
+    const ObObj &cell = ob_part_row.get_cell(i);
+    ObLakePartFieldBound &field_bound = *part_bounds.at(i);
+    if (field_bound.is_always_false_) {
+      contain = false;
+    } else if (!field_bound.is_whole_range_) {
+      contain = check_one_part(cell, field_bound);
+    }
+  }
+  return contain;
+}
+
+bool ObILakeTableFilePruner::check_one_part(const common::ObObj &part_val,
+                                            const ObLakePartFieldBound &field_bounds)
+{
+  bool contain = false;
+  const ObFixedArray<ObFieldBound *, ObIAllocator> &bounds = field_bounds.bounds_;
+  for (int64_t i = 0; !contain && i < bounds.count(); ++i) {
+    ObFieldBound *bound = bounds.at(i);
+    if (bound->contains_null_ && part_val.is_null()) {
+      contain = true;
+    } else if (bound->is_valid_range_) {
+      int cmp_lower = part_val.compare(bound->lower_bound_);
+      if (cmp_lower == 0 && bound->include_lower_) {
+        contain = true;
+      } else if (cmp_lower > 0) {
+        int cmp_upper = part_val.compare(bound->upper_bound_);
+        if ((cmp_upper == 0 && bound->include_upper_) || cmp_upper < 0) {
+          contain = true;
+        }
+      }
+    }
+  }
+  return contain;
+}
+
+int ObLakePartRowPushDownFilter::PartRowFilterParamBuilder::build(
+    const int32_t ext_tbl_col_id,
+    const ObColumnMeta &column_meta,
+    blocksstable::ObMinMaxFilterParam &param)
+{
+  UNUSED(column_meta);
+  int ret = OB_SUCCESS;
+  param.set_uncertain();
+
+  int64_t part_column_idx = -1;
+  for (int i = 0; i < part_column_ids_.count(); ++i) {
+    if (ext_tbl_col_id == normalization_column_id(part_column_ids_.at(i))) {
+      part_column_idx = i;
+      break;
+    }
+  }
+
+  if (part_column_idx == -1) {
+    // 非分区列不做过滤
+  } else if (row_.get_cell(part_column_idx).is_null()) {
+    // NULL分区保持uncertain，分区裁剪已由check_one_part完成
+  } else {
+    ObObj null_value;
+    null_value.set_int(0);
+    if (OB_FAIL(param.null_count_.from_obj_enhance(null_value))) {
+      LOG_WARN("failed to form obj enhance");
+    } else if (OB_FAIL(param.min_datum_.from_obj_enhance(row_.get_cell(part_column_idx)))) {
+      LOG_WARN("failed to form obj enhance");
+    } else if (OB_FAIL(param.max_datum_.from_obj_enhance(row_.get_cell(part_column_idx)))) {
+      LOG_WARN("failed to form obj enhance");
+    } else {
+      param.is_min_prefix_ = false;
+      param.is_max_prefix_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObLakePartRowPushDownFilter::filter(ObNewRow row, bool &is_filtered)
+{
+  int ret = OB_SUCCESS;
+  PartRowFilterParamBuilder param_builder(row, *part_column_ids_);
+  if (OB_FAIL(apply_skipping_index_filter(ObExternalTablePushdownFilter::PushdownLevel::FILE,
+                                          param_builder,
+                                          is_filtered,
+                                          1))) {
+    LOG_WARN("fail to apply skipping index filter", K(ret));
   }
   return ret;
 }

@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_lake_table_fwd.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 
 using namespace oceanbase::common;
@@ -146,6 +147,8 @@ int ObIOptLakeTableFile::create_opt_lake_table_file_by_type(ObIAllocator &alloca
     file = OB_NEWx(ObOptHiveFile, &allocator);
   } else if (type == LakeFileType::EXT_PLUGIN) {
     file = OB_NEWx(ObOptPluginFile, &allocator, allocator);
+  } else if (type == LakeFileType::ODPS) {
+    file = OB_NEWx(ObOptOdpsFile, &allocator, allocator);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected file type", K(type));
@@ -250,6 +253,44 @@ void ObOptPluginFile::reset()
   reader_type_ = ObPluginReaderType::INVALID;
 }
 
+int ObOptOdpsFile::assign(const ObIOptLakeTableFile &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    const ObOptOdpsFile &odps_file = static_cast<const ObOptOdpsFile&>(other);
+    if (OB_FAIL(ObIOptLakeTableFile::assign(other))) {
+      LOG_WARN("failed to assign ObIOptLakeTableFile");
+    } else if (OB_FAIL(ob_write_string(allocator_, odps_file.file_url_, file_url_))) {
+      LOG_WARN("failed to copy odps file url", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, odps_file.session_id_, session_id_))) {
+      LOG_WARN("failed to copy odps session id", K(ret));
+    } else {
+      file_size_ = odps_file.file_size_;
+      first_split_idx_ = odps_file.first_split_idx_;
+      last_split_idx_ = odps_file.last_split_idx_;
+      row_start_ = odps_file.row_start_;
+      row_count_ = odps_file.row_count_;
+      part_id_ = odps_file.part_id_;
+      record_count_ = odps_file.record_count_;
+    }
+  }
+  return ret;
+}
+
+void ObOptOdpsFile::reset()
+{
+  ObIOptLakeTableFile::reset();
+  file_url_.reset();
+  file_size_ = 0;
+  session_id_.reset();
+  first_split_idx_ = 0;
+  last_split_idx_ = 0;
+  row_start_ = 0;
+  row_count_ = INT64_MAX;
+  part_id_ = OB_INVALID_PARTITION_ID;
+  record_count_ = 0;
+}
+
 OB_SERIALIZE_MEMBER(ObIExtTblScanTask);
 
 OB_SERIALIZE_MEMBER((ObFileScanTask, ObIExtTblScanTask), file_url_, file_size_, modification_time_);
@@ -266,6 +307,10 @@ int ObFileScanTask::create_lake_table_file_by_type(ObIAllocator &allocator,
     file = OB_NEWx(ObHiveScanTask, &allocator);
   } else if (type == LakeFileType::EXT_PLUGIN) {
     file = OB_NEWx(ObPluginScanTask, &allocator);
+  } else if (type == LakeFileType::ODPS) {
+    file = OB_NEWx(ObOdpsScanTask, &allocator);
+  } else if (type == LakeFileType::INVALID) {
+    file = OB_NEWx(ObExtTableScanTask, &allocator);
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected file type", K(type));
@@ -279,6 +324,15 @@ OB_SERIALIZE_MEMBER((ObIcebergScanTask, ObFileScanTask),
                     record_count_,
                     part_id_,
                     partition_spec_id_);
+
+void ObIcebergScanTask::assign_granule_identity(const int64_t file_id, const uint64_t part_id)
+{
+  file_id_ = file_id;
+  // Manifest 分区路径下 part_id_ 是稠密分区下标，不能被 tablet 分区号覆盖。
+  if (!iceberg::ObIcebergUtils::is_manifest_partition_value_supported()) {
+    part_id_ = part_id;
+  }
+}
 
 int ObIcebergScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
                                                     const ObIOptLakeTableFile &opt_table_file)
@@ -381,6 +435,50 @@ int ObExtTableScanTask::init_parallel_parse_csv_info(ObIAllocator &allocator)
     if (OB_ISNULL(parallel_parse_csv_info_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for ObCsvParallelInfo", K(ret));
+    }
+  }
+  return ret;
+}
+
+// NOTE: ObIExtTblScanTask serializes nothing and ObFileScanTask only serializes
+// file_url_/file_size_/modification_time_, so the ODPS row range
+// (first_lineno_/last_lineno_) and the split range must be serialized
+// explicitly here — they have to survive the PX SQC transfer.
+OB_SERIALIZE_MEMBER((ObOdpsScanTask, ObFileScanTask),
+                    part_id_,
+                    first_lineno_,
+                    last_lineno_,
+                    session_id_,
+                    first_split_idx_,
+                    last_split_idx_,
+                    record_count_);
+
+int ObOdpsScanTask::init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                                  const ObIOptLakeTableFile &opt_table_file)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!opt_table_file.is_odps_file())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected opt table file type", K(opt_table_file.get_file_type()));
+  } else {
+    const ObOptOdpsFile &opt_odps_file = static_cast<const ObOptOdpsFile&>(opt_table_file);
+    if (OB_FAIL(ob_write_string(allocator, opt_odps_file.file_url_, file_url_))) {
+      LOG_WARN("failed to write file url");
+    } else if (OB_FAIL(ob_write_string(allocator, opt_odps_file.session_id_, session_id_))) {
+      LOG_WARN("failed to write session id");
+    } else {
+      file_size_ = opt_odps_file.file_size_;
+      part_id_ = opt_odps_file.part_id_;
+      first_split_idx_ = opt_odps_file.first_split_idx_;
+      last_split_idx_ = opt_odps_file.last_split_idx_;
+      record_count_ = opt_odps_file.record_count_;
+      // The row sub-range rides on the base row interval (left-closed
+      // right-open): ObExternalTableUtils::resolve_odps_start_step, both ODPS
+      // row iterators and GIOdpsParallelTaskGen all read these two fields.
+      first_lineno_ = opt_odps_file.row_start_;
+      last_lineno_ = (INT64_MAX == opt_odps_file.row_count_)
+                         ? INT64_MAX
+                         : opt_odps_file.row_start_ + opt_odps_file.row_count_;
     }
   }
   return ret;

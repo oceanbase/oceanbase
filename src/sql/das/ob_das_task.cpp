@@ -7,6 +7,7 @@
 #include "ob_das_task.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/px/ob_px_tree_serializer_impl.ipp"
 
 namespace oceanbase
 {

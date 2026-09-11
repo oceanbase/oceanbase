@@ -2250,8 +2250,7 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
               : table_schema.get_table_id();
   loc_meta.ref_table_id_ = real_table_id;
   loc_meta.is_dup_table_ = table_schema.is_duplicate_table();
-  loc_meta.is_external_table_ = table_schema.is_external_table();
-  loc_meta.is_lake_table_ = share::is_lake_external_table(table_schema.get_lake_table_format());
+  OZ (ObSQLUtils::fill_table_loc_meta_lake_flags(&table_schema, loc_meta));
   ObString file_location;
   bool is_shared_external_files_on_disk = false;
   CK (OB_NOT_NULL(schema_guard->get_schema_guard()));

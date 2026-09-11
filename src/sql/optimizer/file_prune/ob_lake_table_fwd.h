@@ -7,6 +7,7 @@
 #define _OCEANBASE_SQL_OPTIMIZER_OB_LAKE_TABLE_FWD_H
 
 #include "common/object/ob_object.h"
+#include "share/catalog/ob_catalog_properties.h"
 #include "sql/resolver/ob_sql_array.h"
 #include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 
@@ -78,7 +79,12 @@ enum class LakeFileType
   // task JSON object, including plugin_split. Used by any plugin-backed
   // format — not a format-specific task type. Value 3 reuses the legacy PAIMON
   // enum value so previously serialized plugin scan tasks stay compatible.
-  EXT_PLUGIN = 3
+  EXT_PLUGIN = 3,
+  // ODPS (MaxCompute) lake-table scan unit: file_url_ is the partition spec
+  // (TUNNEL api) or the '#' joined partition list (STORAGE api), session_id_ is
+  // the download session, first_lineno_/last_lineno_ carry the row range and
+  // first_split_idx_/last_split_idx_ the split range (left-closed right-open).
+  ODPS = 4
 };
 
 enum class ObPluginReaderType : int8_t
@@ -88,6 +94,25 @@ enum class ObPluginReaderType : int8_t
   OB_PARQUET = 2,
   OB_ORC = 3
 };
+
+/// Map the schema-level lake table format to the scan-task file type.
+/// INVALID (non-lake file external tables) maps to INVALID, i.e.
+/// ObExtTableScanTask; plugin slots map to the generic EXT_PLUGIN task.
+inline LakeFileType lake_file_type_of_format(const share::ObLakeTableFormat format)
+{
+  LakeFileType type = LakeFileType::INVALID;
+  if (share::is_lake_plugin_table(format)) {
+    type = LakeFileType::EXT_PLUGIN;
+  } else {
+    switch (format) {
+      case share::ObLakeTableFormat::ICEBERG: type = LakeFileType::ICEBERG; break;
+      case share::ObLakeTableFormat::HIVE:    type = LakeFileType::HIVE;    break;
+      case share::ObLakeTableFormat::ODPS:    type = LakeFileType::ODPS;    break;
+      default: break;
+    }
+  }
+  return type;
+}
 
 enum class CsvTaskType{
   INVALID = 0,
@@ -110,6 +135,7 @@ public:
   bool is_iceberg_file() const { return LakeFileType::ICEBERG == type_; }
   bool is_hive_file() const { return LakeFileType::HIVE == type_; }
   bool is_ext_plugin_file() const { return LakeFileType::EXT_PLUGIN == type_; }
+  bool is_odps_file() const { return LakeFileType::ODPS == type_; }
   static int create_opt_lake_table_file_by_type(ObIAllocator &allocator, LakeFileType type, ObIOptLakeTableFile *&file);
   VIRTUAL_TO_STRING_KV(K_(type));
 public:
@@ -193,6 +219,42 @@ public:
   common::ObIAllocator &allocator_;
 };
 
+/// Optimizer-side scan unit for an ODPS (MaxCompute) lake table. Produced by
+/// ObODPSFilePruner::plan_files and handed to the executor through the
+/// lake file map (ObOdpsScanTask). file_url_ is the partition spec (TUNNEL
+/// api) or the '#' joined partition list (STORAGE api); the row sub-range is
+/// carried by row_start_/row_count_ (row_count_ == INT64_MAX means "to the
+/// end") and mapped onto ObOdpsScanTask::first_lineno_/last_lineno_ by
+/// ObOdpsScanTask::init_with_opt_lake_table_file.
+struct ObOptOdpsFile : public ObIOptLakeTableFile
+{
+public:
+  explicit ObOptOdpsFile(common::ObIAllocator &allocator)
+  : ObIOptLakeTableFile(LakeFileType::ODPS),
+    file_url_(), file_size_(0), session_id_(),
+    first_split_idx_(0), last_split_idx_(0),
+    row_start_(0), row_count_(INT64_MAX),
+    part_id_(OB_INVALID_PARTITION_ID), record_count_(0),
+    allocator_(allocator)
+  {}
+  virtual int assign(const ObIOptLakeTableFile &other) override;
+  virtual void reset() override;
+  VIRTUAL_TO_STRING_KV(K_(type), K_(file_url), K_(file_size), K_(session_id),
+                       K_(first_split_idx), K_(last_split_idx),
+                       K_(row_start), K_(row_count), K_(part_id), K_(record_count));
+
+  ObString file_url_;       // TUNNEL: partition spec; STORAGE: '#' joined partition list
+  int64_t file_size_;       // estimated bytes, used by the load balancing heuristic
+  ObString session_id_;     // download session, empty when not fetched yet
+  int64_t first_split_idx_; // STORAGE byte mode split range, left-closed right-open
+  int64_t last_split_idx_;
+  int64_t row_start_;       // STORAGE row / TUNNEL row sub-range start
+  int64_t row_count_;       // INT64_MAX means "to the end"
+  int64_t part_id_;         // schema partition id
+  int64_t record_count_;
+  common::ObIAllocator &allocator_;
+};
+
 /* structs for execution */
 
 struct ObCsvParallelInfo
@@ -262,6 +324,13 @@ public:
   virtual LakeFileType get_file_type() const { return type_; }
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) = 0;
+  /// Adapts the granule's (file_id, part_id) identity onto the task read
+  /// from the lake file map. The base implementation does nothing.
+  virtual void assign_granule_identity(const int64_t file_id, const uint64_t part_id)
+  {
+    UNUSED(file_id);
+    UNUSED(part_id);
+  }
   static int create_lake_table_file_by_type(ObIAllocator &allocator, LakeFileType type, ObFileScanTask *&file);
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
                       K_(file_id), K_(part_id), K_(content_digest), K_(record_count));
@@ -293,6 +362,7 @@ public:
   virtual ~ObIcebergScanTask() {}
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) override;
+  virtual void assign_granule_identity(const int64_t file_id, const uint64_t part_id) override;
 
   VIRTUAL_TO_STRING_KV(K_(file_url),
                        K_(type),
@@ -327,6 +397,11 @@ public:
 
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                            const ObIOptLakeTableFile &opt_table_file) override;
+  virtual void assign_granule_identity(const int64_t file_id, const uint64_t part_id) override
+  {
+    UNUSED(part_id);
+    file_id_ = file_id;
+  }
 
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
                       K_(file_id), K_(part_id), K_(content_digest), K_(record_count),
@@ -353,6 +428,11 @@ public:
   virtual ~ObPluginScanTask() {}
   virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
                                             const ObIOptLakeTableFile &opt_table_file) override;
+  virtual void assign_granule_identity(const int64_t file_id, const uint64_t part_id) override
+  {
+    UNUSED(part_id);
+    file_id_ = file_id;
+  }
 
   VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(modification_time),
                       K_(file_id), K_(part_id), K_(content_digest), K_(record_count),
@@ -391,17 +471,30 @@ private:
   int assign(const ObExtTableScanTask &other);
 };
 
-struct ObOdpsScanTask : public ObIExtTblScanTask
+struct ObOdpsScanTask : public ObFileScanTask
 {
 public:
+  OB_UNIS_VERSION_V(1);
+public:
   explicit ObOdpsScanTask()
-  : ObIExtTblScanTask(),
+  : ObFileScanTask(LakeFileType::ODPS),
     session_id_(), first_split_idx_(0), last_split_idx_(0)
   {}
   virtual ~ObOdpsScanTask() {}
+  virtual int init_with_opt_lake_table_file(ObIAllocator &allocator,
+                                            const ObIOptLakeTableFile &opt_table_file) override;
+  // only file_id_ is filled; ODPS part_id_ is the schema partition id (the CPP
+  // tunnel downloader builds its downloader by it), not the granule tablet's
+  // partition id, so it must not be overwritten here.
+  virtual void assign_granule_identity(const int64_t file_id, const uint64_t part_id) override
+  {
+    UNUSED(part_id);
+    file_id_ = file_id;
+  }
 
-  VIRTUAL_TO_STRING_KV(K_(file_url), K_(part_id), K_(session_id), K_(first_split_idx),
-                      K_(last_split_idx));
+  VIRTUAL_TO_STRING_KV(K_(file_url), K_(type), K_(file_size), K_(part_id), K_(first_lineno),
+                      K_(last_lineno), K_(session_id), K_(first_split_idx),
+                      K_(last_split_idx), K_(record_count));
 
   ObString session_id_;
   int64_t first_split_idx_;

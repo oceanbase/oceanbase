@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/external_table/ob_odps_table_utils.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/charset/ob_charset_string_helper.h"
 #include "sql/engine/connector/ob_odps_jni_reader.h"
@@ -20,6 +21,8 @@
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "sql/resolver/dml/ob_hint.h"
+#include "sql/optimizer/file_prune/ob_i_lake_table_file_pruner.h"
+#include "sql/optimizer/file_prune/ob_odps_file_pruner.h"
 
 namespace oceanbase {
 namespace sql {
@@ -337,7 +340,9 @@ int ObODPSJNITableRowIterator::init_required_mini_params(const ObSQLSessionInfo*
 }
 
 int ObODPSJNITableRowIterator::init_storage_api_meta_param(
-    const ExprFixedArray &ext_file_column_expr, const ObString &part_list_str, int64_t parallel)
+    const common::ObIArray<int64_t> &nonpart_col_idxs,
+    const common::ObIArray<int64_t> &part_col_idxs,
+    const ObString &part_list_str, int64_t parallel)
 {
   int ret = OB_SUCCESS;
   ObFastFormatInt fs_block_size(parallel);
@@ -349,12 +354,70 @@ int ObODPSJNITableRowIterator::init_storage_api_meta_param(
     LOG_WARN("failed to write c_str style for split size", K(ret));
   } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("parallel"), size_str))) {
     LOG_WARN("failed to init split block size", K(ret));
-  } else if (OB_FAIL(pull_and_prepare_column_exprs(ext_file_column_expr))) {
-    LOG_WARN("failed to pull and prepare column expr", K(ret));
-  } else if (OB_FAIL(init_all_columns_name_as_odps_params())) {
-    LOG_WARN("failed to init expected columns and related types", K(ret));
-  } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("partition_spec"), part_list_str))) {
-  } else { /* do nothing */
+  } else if (OB_FAIL(pull_data_columns())) {
+    LOG_WARN("failed to pull column info", K(ret));
+  } else if (OB_FAIL(pull_partition_columns())) {
+    LOG_WARN("failed to pull partition columns", K(ret));
+  } else {
+    // build the obexpr<->odps column index maps directly from the projected
+    // odps column indexes — the optimizer-time twin of
+    // prepare_data_expr/prepare_partition_expr (no codegen'd exprs here).
+    obexpr_odps_nonpart_col_idsmap_.reuse();
+    obexpr_odps_part_col_idsmap_.reuse();
+    sorted_column_ids_.reuse();
+    for (int64_t i = 0; OB_SUCC(ret) && i < nonpart_col_idxs.count(); ++i) {
+      const int64_t target_idx = nonpart_col_idxs.at(i);
+      if (OB_UNLIKELY(target_idx < 0 || target_idx >= mirror_nonpart_column_list_.count())) {
+        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+        LOG_WARN("unexpected odps column index", K(ret), K(target_idx),
+                 K(mirror_nonpart_column_list_.count()));
+      } else if (OB_FAIL(obexpr_odps_nonpart_col_idsmap_.push_back(ExternalPair{i, target_idx}))) {
+        LOG_WARN("failed to keep target idx of external col", K(ret), K(target_idx));
+      } else if (OB_FAIL(sorted_column_ids_.push_back(ExternalPair{i, target_idx}))) {
+        LOG_WARN("failed to keep sorted column ids", K(ret), K(target_idx));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_col_idxs.count(); ++i) {
+      const int64_t target_idx = part_col_idxs.at(i);
+      if (OB_UNLIKELY(target_idx < 0 || target_idx >= mirror_partition_column_list_.count())) {
+        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+        LOG_WARN("unexpected odps partition column index", K(ret), K(target_idx),
+                 K(mirror_partition_column_list_.count()));
+      } else if (OB_FAIL(obexpr_odps_part_col_idsmap_.push_back(ExternalPair{i, target_idx}))) {
+        LOG_WARN("failed to keep target idx of partition col", K(ret), K(target_idx));
+      } else if (OB_FAIL(sorted_column_ids_.push_back(
+                     ExternalPair{i, target_idx + mirror_nonpart_column_list_.count()}))) {
+        LOG_WARN("failed to keep sorted column ids", K(ret), K(target_idx));
+      }
+    }
+    lib::ob_sort(sorted_column_ids_.begin(), sorted_column_ids_.end(), ExternalPair::Compare());
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(init_all_columns_name_as_odps_params())) {
+      LOG_WARN("failed to init expected columns and related types", K(ret));
+    } else if (OB_FAIL(odps_params_map_.set_refactored(ObString::make_string("partition_spec"), part_list_str))) {
+    } else { /* do nothing */
+    }
+  }
+  return ret;
+}
+
+int ObODPSJNITableRowIterator::set_pushdown_predicate(const ObString &predicate)
+{
+  int ret = OB_SUCCESS;
+  if (predicate.empty()) {
+    // no predicate: keep predicate_buf_ null so init_jni_meta_scanner opens the
+    // download session without a pushdown_predicate
+  } else {
+    char *alloc_buf = static_cast<char *>(arena_alloc_.alloc(predicate.length() + 1));
+    if (OB_ISNULL(alloc_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for pushdown predicate", K(ret), K(predicate.length()));
+    } else {
+      MEMCPY(alloc_buf, predicate.ptr(), predicate.length());
+      alloc_buf[predicate.length()] = '\0';
+      predicate_buf_ = alloc_buf;
+      predicate_buf_len_ = predicate.length() + 1;
+    }
   }
   return ret;
 }
@@ -967,7 +1030,7 @@ int ObODPSJNITableRowIterator::next_task_storage_row_without_data_getter(const i
       LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
     } else {
       part_spec = odps_scan_task->file_url_;
-      if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+      if (OB_FAIL(ObOdpsTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
         LOG_WARN("failed to resolve odps start step", K(ret));
       }
     }
@@ -1183,7 +1246,7 @@ int ObODPSJNITableRowIterator::next_task_storage(const int64_t capacity)
       start_split = odps_scan_task->first_split_idx_;
       end_split = odps_scan_task->last_split_idx_;
       session_id = odps_scan_task->session_id_;
-      if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+      if (OB_FAIL(ObOdpsTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
         LOG_WARN("failed to resolve odps start step", K(ret));
       }
     }
@@ -1533,7 +1596,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel_without_data_getter(const int64_
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task,
+    } else if (OB_FAIL(ObOdpsTableUtils::resolve_odps_start_step(odps_scan_task,
                                                     start,
                                                     step))) {
       LOG_WARN("failed to resolve odps start step", K(ret));
@@ -1633,7 +1696,7 @@ int ObODPSJNITableRowIterator::next_task_tunnel(const int64_t capacity)
       part_id = odps_scan_task->part_id_;
       part_spec = odps_scan_task->file_url_;
       session_id = odps_scan_task->session_id_;
-      if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+      if (OB_FAIL(ObOdpsTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
         LOG_WARN("failed to resolve odps start step", K(ret));
       }
     }
@@ -3899,124 +3962,6 @@ int ObODPSJNITableRowIterator::OdpsArrayTypeDecoder::decode(ObEvalCtx &ctx, cons
   return ret;
 }
 
-int ObODPSJNITableRowIterator::construct_predicate_using_white_filter(const ObDASScanCtDef &das_ctdef,
-                                                                      ObDASScanRtDef *das_rtdef,
-                                                                      ObExecContext &exec_ctx)
-{
-  int ret = OB_SUCCESS;
-  if (is_oracle_mode()) {
-  } else if (das_rtdef != nullptr) {
-    sql::ObPushdownFilterExecutor *filter = das_rtdef->p_pd_expr_op_->pd_storage_filters_;
-    if (filter == nullptr) {
-      // do nothing
-    } else if (OB_FAIL(construct_predicate_using_white_filter(das_ctdef, exec_ctx, *filter))) {
-      LOG_WARN("failed to construct predicate using white filter");
-    }
-  } else {
-    ObEvalCtx eval_ctx(exec_ctx);
-    ObPushdownOperator pd_expr_op(eval_ctx, das_ctdef.pd_expr_spec_);
-    if (OB_FAIL(pd_expr_op.init_pushdown_storage_filter())) {
-      LOG_WARN("failed to init pushdown storage filter failed");
-    } else if (pd_expr_op.pd_storage_filters_ == nullptr) {
-      // do nothing
-    } else if (OB_FAIL(construct_predicate_using_white_filter(das_ctdef, exec_ctx,
-                                                              *pd_expr_op.pd_storage_filters_))) {
-      LOG_WARN("failed to construct predicate using white filter");
-    }
-  }
-  return ret;
-}
-
-int ObODPSJNITableRowIterator::construct_predicate_using_white_filter(const ObDASScanCtDef &das_ctdef,
-                                                                      ObExecContext &exec_ctx,
-                                                                      sql::ObPushdownFilterExecutor &filter)
-{
-  int ret = OB_SUCCESS;
-  bool can_pushdown = true;
-  bool is_valid = true;
-  ObSqlString predicate;
-  ObSEArray<ObExpr*, 16> access_exprs;
-  ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(exec_ctx.get_my_session());
-  print_params.cs_type_ = CS_TYPE_UTF8MB4_BIN;
-  common::ObArenaAllocator arena_alloc;
-  char *buf = nullptr;
-  int64_t default_length = 1024;
-  if (OB_FAIL(filter.init_evaluated_datums(is_valid))) {
-    LOG_WARN("failed to init evaluated datums");
-  } else if (!is_valid) {
-    // do nothing
-  } else if (OB_FAIL(init_access_exprs(das_ctdef, access_exprs, is_valid))) {
-    LOG_WARN("failed to init column exprs");
-  } else if (!is_valid) {
-    // do nothing
-  } else if (OB_ISNULL(buf = static_cast<char*>(arena_alloc.alloc(default_length)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memeory for print obj");
-  } else if (OB_FAIL(print_predicate_string(access_exprs, das_ctdef.pd_expr_spec_.ext_file_column_exprs_,
-                                            filter, print_params, arena_alloc, buf, default_length,
-                                            predicate, can_pushdown, true))) {
-    LOG_WARN("failed to check filter can pushdown");
-  } else if (can_pushdown) {
-    predicate_buf_len_ = predicate.length() + 1;
-    char *alloc_buf = static_cast<char *>(arena_alloc_.alloc(predicate_buf_len_));
-    if (OB_ISNULL(alloc_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to extend stmt buf", K(ret), K(predicate.length()));
-    } else {
-      MEMCPY(alloc_buf, predicate.ptr(), predicate.length());
-      alloc_buf[predicate.length()] = '\0';
-      predicate_buf_ = alloc_buf;
-    }
-  }
-  return ret;
-}
-
-int ObODPSJNITableRowIterator::init_access_exprs(const ObDASScanCtDef &das_ctdef,
-                                                 ObIArray<ObExpr*> &access_exprs,
-                                                 bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  is_valid = true;
-  if (OB_UNLIKELY(das_ctdef.access_column_ids_.count() != das_ctdef.pd_expr_spec_.access_exprs_.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("column ids not equal to access expr");
-  }
-  const ObIArray<ObExpr*> &ext_column_dependent_exprs = das_ctdef.pd_expr_spec_.ext_column_convert_exprs_;
-  for (int i = 0; is_valid && i < ext_column_dependent_exprs.count(); ++i) {
-    ObExpr *convert_expr = ext_column_dependent_exprs.at(i);
-    if (OB_ISNULL(convert_expr) || T_FUN_COLUMN_CONV != convert_expr->type_ ||
-        convert_expr->arg_cnt_ != 6) {
-      is_valid = false;
-    } else {
-      ObExpr *ori_expr = convert_expr->args_[4];
-      if (T_PSEUDO_EXTERNAL_FILE_COL != ori_expr->type_ &&
-          T_PSEUDO_PARTITION_LIST_COL != ori_expr->type_) {
-        is_valid = false;
-        LOG_TRACE("pushdown is disabled because dependent expr has non pseudo expr", K(ori_expr->type_));
-      }
-    }
-  }
-  for (int i = 0; OB_SUCC(ret) && is_valid && i < das_ctdef.access_column_ids_.count(); ++i) {
-    ObExpr *cur_expr = das_ctdef.pd_expr_spec_.access_exprs_.at(i);
-    if (OB_HIDDEN_LINE_NUMBER_COLUMN_ID == das_ctdef.access_column_ids_.at(i) ||
-        OB_HIDDEN_FILE_ID_COLUMN_ID == das_ctdef.access_column_ids_.at(i)) {
-      // do nothing
-    } else if (OB_FAIL(access_exprs.push_back(cur_expr))) {
-      LOG_WARN("failed to push back expr");
-    }
-  }
-  if (OB_SUCC(ret) && is_valid &&
-      access_exprs.count() != das_ctdef.pd_expr_spec_.ext_file_column_exprs_.count()) {
-    // External table may map one odps column to multiple ob column. In this sinario, we can not map
-    // an access expr to an odps column.
-    // e.g.  create external table t1 (c1 TINYINT as (external$tablecol1),
-    //                                 c2 TINYINT(1) as (external$tablecol1));
-    is_valid = false;
-    LOG_TRACE("pushdown is disabled because multiple columns map to one odps column", K(access_exprs),
-                K(das_ctdef.pd_expr_spec_.ext_file_column_exprs_));
-  }
-  return ret;
-}
 
 int ObODPSJNITableRowIterator::get_mirror_column(const ObIArray<ObExpr*> &access_exprs,
                                                  const ObIArray<ObExpr*> &file_column_exprs,
@@ -4239,6 +4184,147 @@ int ObODPSJNITableRowIterator::print_predicate_string(const ObIArray<ObExpr*> &a
   return ret;
 }
 
+int ObODPSJNITableRowIterator::collect_pred_column_exprs_(
+    sql::ObPushdownFilterExecutor *filter,
+    const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+    common::ObIAllocator &alloc,
+    common::ObIArray<ObExpr *> &access_exprs,
+    common::ObIArray<ObExpr *> &file_column_exprs,
+    bool &all_mapped)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(filter)) {
+    all_mapped = false;
+  } else if (filter->is_logic_and_node() || filter->is_logic_or_node()) {
+    sql::ObPushdownFilterExecutor **children = filter->get_childs();
+    for (uint32_t i = 0; OB_SUCC(ret) && all_mapped && i < filter->get_child_count(); ++i) {
+      if (OB_FAIL(collect_pred_column_exprs_(children[i], pred_col_infos, alloc,
+                                             access_exprs, file_column_exprs, all_mapped))) {
+        LOG_WARN("failed to collect pred column exprs from child", K(ret), K(i));
+      }
+    }
+  } else if (filter->is_filter_white_node()) {
+    sql::ObWhiteFilterExecutor &white_filter = static_cast<sql::ObWhiteFilterExecutor &>(*filter);
+    common::ObIArray<uint64_t> &col_ids = white_filter.get_col_ids();
+    const common::ObIArray<ObExpr *> *col_exprs = white_filter.get_cg_col_exprs();
+    if (OB_UNLIKELY(1 != col_ids.count()) || OB_ISNULL(col_exprs)
+        || OB_UNLIKELY(1 != col_exprs->count())) {
+      all_mapped = false;
+      LOG_TRACE("odps optimizer predicate: unexpected white filter columns",
+                K(col_ids.count()), K(col_exprs));
+    } else {
+      const ObOdpsPredColumnInfo *info = nullptr;
+      for (int64_t i = 0; i < pred_col_infos.count(); ++i) {
+        if (pred_col_infos.at(i).column_id_ == col_ids.at(0)) {
+          info = &pred_col_infos.at(i);
+          break;
+        }
+      }
+      if (OB_ISNULL(info)) {
+        // e.g. a filter on a hidden file-id/line-number column: not printable
+        all_mapped = false;
+        LOG_TRACE("odps optimizer predicate: filtered column has no odps pseudo column",
+                  K(col_ids.at(0)));
+      } else {
+        // fabricate a pseudo-column expr shell carrying only type_ + extra_
+        // (1-based odps column idx) — that is all get_mirror_column reads.
+        ObExpr *pseudo_expr = static_cast<ObExpr *>(alloc.alloc(sizeof(ObExpr)));
+        if (OB_ISNULL(pseudo_expr)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate pseudo column expr", K(ret));
+        } else {
+          pseudo_expr = new (pseudo_expr) ObExpr();
+          pseudo_expr->type_ = info->pseudo_type_;
+          pseudo_expr->extra_ = info->column_idx_;
+          if (OB_FAIL(access_exprs.push_back(col_exprs->at(0)))) {
+            LOG_WARN("failed to push back access expr", K(ret));
+          } else if (OB_FAIL(file_column_exprs.push_back(pseudo_expr))) {
+            LOG_WARN("failed to push back file column expr", K(ret));
+          }
+        }
+      }
+    }
+  } else {
+    // black/dynamic filter nodes are not printable; print_predicate_string
+    // marks them can_pushdown = false on its own, nothing to collect here.
+  }
+  return ret;
+}
+
+int ObODPSJNITableRowIterator::print_optimizer_pushdown_predicate(
+    ObExecContext &exec_ctx,
+    ObLakeTablePushDownFilterSpec &file_filter_spec,
+    const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+    common::ObIAllocator &alloc,
+    ObString &predicate)
+{
+  int ret = OB_SUCCESS;
+  predicate.reset();
+  // Rebuild the pushdown filter executor from the pruner's mini-codegen'd spec
+  // following the ObLakeTablePushDownFilter::generate_pd_filter precedent. The
+  // mirror column lists must already be pulled by the schema scanner.
+  ObTempFrameInfoCtxReplaceGuard ctx_guard(exec_ctx);
+  ObArenaAllocator arena(ObMemAttr(MTL_ID(), "OdpsOptPred"));
+  ObEvalCtx *eval_ctx = nullptr;
+  ObPushdownOperator *pd_expr_op = nullptr;
+  sql::ObPushdownFilterExecutor *filter = nullptr;
+  bool is_valid = true;
+  if (OB_ISNULL(file_filter_spec.pd_expr_spec_)) {
+    // no filter at all: empty predicate
+  } else if (OB_FAIL(file_filter_spec.expr_frame_info_.pre_alloc_exec_memory(exec_ctx, &arena))) {
+    LOG_WARN("fail to pre allocate memory", K(ret));
+  } else if (OB_ISNULL(eval_ctx = static_cast<ObEvalCtx *>(arena.alloc(sizeof(ObEvalCtx))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObEvalCtx", K(ret));
+  } else if (OB_ISNULL(pd_expr_op = static_cast<ObPushdownOperator *>(arena.alloc(sizeof(ObPushdownOperator))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObPushdownOperator", K(ret));
+  } else {
+    eval_ctx = new (eval_ctx) ObEvalCtx(exec_ctx, &arena);
+    pd_expr_op = new (pd_expr_op) ObPushdownOperator(*eval_ctx, *file_filter_spec.pd_expr_spec_);
+    if (OB_FAIL(pd_expr_op->init_pushdown_storage_filter())) {
+      LOG_WARN("failed to init pushdown storage filter", K(ret));
+    } else if (OB_ISNULL(filter = pd_expr_op->pd_storage_filters_)) {
+      // no pushdown filter: empty predicate
+    } else if (OB_FAIL(filter->init_evaluated_datums(is_valid))) {
+      LOG_WARN("failed to init evaluated datums", K(ret));
+    } else if (!is_valid) {
+      // the predicate values are not known at optimizer time (e.g. execution
+      // params): empty predicate
+    } else {
+      ObSEArray<ObExpr *, 8> access_exprs;
+      ObSEArray<ObExpr *, 8> file_column_exprs;
+      bool all_mapped = true;
+      ObObjPrintParams print_params = CREATE_OBJ_PRINT_PARAM(exec_ctx.get_my_session());
+      print_params.cs_type_ = CS_TYPE_UTF8MB4_BIN;
+      ObSqlString predicate_str;
+      char *buf = nullptr;
+      int64_t buf_len = 1024;
+      bool can_pushdown = true;
+      if (OB_FAIL(collect_pred_column_exprs_(filter, pred_col_infos, arena,
+                                             access_exprs, file_column_exprs, all_mapped))) {
+        LOG_WARN("failed to collect pred column exprs", K(ret));
+      } else if (!all_mapped) {
+        // some filtered column cannot be resolved to an odps column: empty predicate
+      } else if (OB_ISNULL(buf = static_cast<char *>(arena.alloc(buf_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for print obj", K(ret));
+      } else if (OB_FAIL(print_predicate_string(access_exprs, file_column_exprs, *filter,
+                                                print_params, arena, buf, buf_len,
+                                                predicate_str, can_pushdown, true))) {
+        LOG_WARN("failed to print predicate string", K(ret));
+      } else if (can_pushdown && predicate_str.length() > 0) {
+        if (OB_FAIL(ob_write_string(alloc, predicate_str.string(), predicate))) {
+          LOG_WARN("failed to write predicate string", K(ret));
+        } else {
+          LOG_INFO("odps optimizer-time pushdown predicate", K(predicate));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObODPSJNITableRowIterator::check_type_for_pushdown(const MirrorOdpsJniColumn &mirror_column,
                                                        const ObObjMeta &obj_meta,
                                                        ObWhiteFilterOperatorType cmp_type,
@@ -4419,6 +4505,9 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
   ObODPSJNITableRowIterator odps_driver;
   if (OB_FAIL(external_odps_format.load_from_string(properties, arena_alloc))) {
     LOG_WARN("failed to init external_odps_format", K(ret));
+  } else if (OB_FALSE_IT(external_odps_format.odps_format_.api_mode_ =
+                            ObODPSGeneralFormat::ApiMode::ROW)) {
+    // Storage statistics require ROW mode, including BYTE scans.
   } else if (OB_FAIL(odps_driver.init_empty_require_column())) {
     LOG_WARN("failed to init jni scanner", K(ret));
   } else if (OB_FAIL(odps_driver.init_part_spec(part_spec))) {
@@ -4433,87 +4522,176 @@ int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_row_count(
   return ret;
 }
 
-int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_byte(ObExecContext &exec_ctx,
-                                                               const ExprFixedArray &ext_file_column_expr,
-                                                               const ObString &part_list_str,
-                                                               const ObDASScanCtDef &das_ctdef,
-                                                               ObDASScanRtDef *das_rtdef,
-                                                               int64_t parallel,
-                                                               ObString &session_str,
-                                                               int64_t &split_count,
-                                                               ObIAllocator &range_allocator)
+// ------------------- entry points of the optimizer-time lake path -------------------
+
+int ObOdpsPartitionJNIDownloaderMgr::open_storage_api_session_(
+    ObExecContext &exec_ctx,
+    const common::ObIArray<int64_t> &nonpart_col_idxs,
+    const common::ObIArray<int64_t> &part_col_idxs,
+    const ObString &part_list_str,
+    const ObExternalFileFormat &external_odps_format,
+    ObLakeTablePushDownFilterSpec *file_filter_spec,
+    const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+    int64_t parallel,
+    ObODPSJNITableRowIterator &odps_driver)
 {
   int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_odps_format;
-  common::ObArenaAllocator arena_alloc;
-  ObString session_odps_id;
-  ObODPSJNITableRowIterator odps_driver;
-  if (OB_FAIL(external_odps_format.load_from_string(das_ctdef.external_file_format_str_.str_, arena_alloc))) {
-    LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_schema_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
+  if (OB_FAIL(odps_driver.init_jni_schema_scanner(
+          external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
     LOG_WARN("failed to init jni schema scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.init_storage_api_meta_param(ext_file_column_expr, part_list_str, parallel))) {
-    LOG_WARN("failed to init storage config");
-  } else if (OB_FAIL(odps_driver.construct_predicate_using_white_filter(das_ctdef, das_rtdef, exec_ctx))) {
-    LOG_WARN("failed to construct predicate using white filter");
-  } else if (OB_FAIL(odps_driver.close_schema_scanner())) {
-    LOG_WARN("failed to close schema scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
-    LOG_WARN("failed to init jni scanner", K(ret));
-  // } else if (OB_FAIL(odps_driver.fetch_storage_file_total_size(total_size))) {
-  //   LOG_WARN("failed to get total phy size", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_storage_split_count(split_count))) {
-    LOG_WARN("failed to get split count ", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_serilize_session(range_allocator, session_str))) {
-    LOG_WARN("failed to get session id ", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_odps_tunnel_session_id(range_allocator, session_odps_id))) {
-    LOG_WARN("failed to get session id ", K(ret));
+  } else if (OB_FAIL(odps_driver.init_storage_api_meta_param(nonpart_col_idxs, part_col_idxs,
+                                                             part_list_str, parallel))) {
+    LOG_WARN("failed to init storage config", K(ret));
   } else {
-    LOG_INFO("show storage api total task", K(parallel), K(split_count), K(session_odps_id));
-  }
-
-  return ret;
-}
-
-int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(ObExecContext &exec_ctx,
-                                                                 const ExprFixedArray &ext_file_column_expr,
-                                                                 const ObString &part_list_str,
-                                                                 const ObDASScanCtDef &das_ctdef,
-                                                                 ObDASScanRtDef *das_rtdef,
-                                                                 int64_t parallel,
-                                                                 ObString &session_str,
-                                                                 int64_t &row_count,
-                                                                 ObIAllocator &range_allocator)
-{
-  int ret = OB_SUCCESS;
-  sql::ObExternalFileFormat external_odps_format;
-  common::ObArenaAllocator arena_alloc;
-  ObString session_odps_id;
-  ObODPSJNITableRowIterator odps_driver;
-  if (OB_FAIL(external_odps_format.load_from_string(das_ctdef.external_file_format_str_.str_, arena_alloc))) {
-    LOG_WARN("failed to init external_odps_format", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_schema_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
-    LOG_WARN("failed to init jni schema scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.init_storage_api_meta_param(ext_file_column_expr, part_list_str, parallel))) {
-    LOG_WARN("failed to init storage config");
-  } else if (OB_FAIL(odps_driver.construct_predicate_using_white_filter(das_ctdef, das_rtdef, exec_ctx))) {
-    LOG_WARN("failed to construct predicate using white filter");
-  } else if (OB_FAIL(odps_driver.close_schema_scanner())) {
-    LOG_WARN("failed to close schema scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
-    LOG_WARN("failed to init jni scanner", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_storage_file_total_row_count(row_count))) {
-    LOG_WARN("failed to get total phy size", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_serilize_session(range_allocator, session_str))) {
-    LOG_WARN("failed to get session id ", K(ret));
-  } else if (OB_FAIL(odps_driver.fetch_odps_tunnel_session_id(range_allocator, session_odps_id))) {
-    LOG_WARN("failed to get session id ", K(ret));
-  } else {
-    LOG_INFO("show storage api total task", K(parallel), K(row_count), K(session_odps_id));
+    // Optimizer-time re-derived pushdown predicate. Any failure to print it
+    // only skips the pushdown — the session is then opened without a predicate
+    // and correctness is upheld by the OB-side TSC filter.
+    if (OB_NOT_NULL(file_filter_spec) && OB_NOT_NULL(file_filter_spec->pd_expr_spec_)) {
+      ObString predicate;
+      common::ObArenaAllocator pred_arena(ObMemAttr(MTL_ID(), "OdpsOptPredStr"));
+      int tmp_ret = odps_driver.print_optimizer_pushdown_predicate(
+          exec_ctx, *file_filter_spec, pred_col_infos, pred_arena, predicate);
+      if (OB_SUCCESS == tmp_ret && !predicate.empty()) {
+        tmp_ret = odps_driver.set_pushdown_predicate(predicate);
+      }
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("skip the optimizer-time pushdown predicate", K(tmp_ret));
+      }
+    }
+    if (OB_FAIL(odps_driver.close_schema_scanner())) {
+      LOG_WARN("failed to close schema scanner", K(ret));
+    } else if (OB_FAIL(odps_driver.init_jni_meta_scanner(
+                   external_odps_format.odps_format_, exec_ctx.get_my_session()))) {
+      LOG_WARN("failed to init jni scanner", K(ret));
+    }
   }
   return ret;
 }
 
+int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_byte(
+    ObExecContext &exec_ctx,
+    const common::ObIArray<int64_t> &nonpart_col_idxs,
+    const common::ObIArray<int64_t> &part_col_idxs,
+    const ObString &part_list_str,
+    const ObString &format_properties,
+    ObLakeTablePushDownFilterSpec *file_filter_spec,
+    const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+    int64_t parallel,
+    ObString &session_str,
+    int64_t &split_count,
+    int64_t &total_row_count,
+    ObIAllocator &range_allocator)
+{
+  int ret = OB_SUCCESS;
+  total_row_count = -1;
+  sql::ObExternalFileFormat external_odps_format;
+  common::ObArenaAllocator arena_alloc;
+  ObODPSJNITableRowIterator odps_driver;
+  if (OB_FAIL(external_odps_format.load_from_string(format_properties, arena_alloc))) {
+    LOG_WARN("failed to init external_odps_format", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(open_storage_api_session_(exec_ctx, nonpart_col_idxs, part_col_idxs,
+                                          part_list_str, external_odps_format,
+                                          file_filter_spec, pred_col_infos, parallel,
+                                          odps_driver))) {
+      LOG_WARN("failed to open byte storage api session", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(odps_driver.fetch_storage_split_count(split_count))) {
+      LOG_WARN("failed to get split count", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // Serialize the BYTE session before opening the temporary ROW session.
+    // The serialized session is the execution session and must come from the
+    // first storage-api branch.
+    if (OB_FAIL(odps_driver.fetch_serilize_session(range_allocator, session_str))) {
+      LOG_WARN("failed to serialize the byte storage api session", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // The serialized session no longer depends on this local driver. Release
+    // its scanner before opening the ROW statistics session.
+    int tmp_ret = odps_driver.close_schema_scanner();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("failed to close byte storage api session", K(tmp_ret));
+    }
+    odps_driver.reset();
+  }
+  if (OB_SUCC(ret)) {
+    // The serialized BYTE session is retained for split assignment and
+    // execution. Open a second session in ROW mode only for its filtered row
+    // count.
+    const ObODPSGeneralFormat::ApiMode original_api_mode =
+        external_odps_format.odps_format_.api_mode_;
+    ObODPSJNITableRowIterator row_driver;
+    int row_ret = OB_SUCCESS;
+    external_odps_format.odps_format_.api_mode_ = ObODPSGeneralFormat::ApiMode::ROW;
+    row_ret = open_storage_api_session_(exec_ctx, nonpart_col_idxs, part_col_idxs,
+                                        part_list_str, external_odps_format,
+                                        file_filter_spec, pred_col_infos, parallel, row_driver);
+    if (OB_SUCCESS == row_ret) {
+      row_ret = row_driver.fetch_storage_file_total_row_count(total_row_count);
+    }
+    external_odps_format.odps_format_.api_mode_ = original_api_mode;
+    if (OB_SUCCESS != row_ret) {
+      total_row_count = -1;
+      LOG_WARN("failed to fetch row count from row storage api session", K(row_ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // the serialized session is binary and not printable; do not log it
+    LOG_INFO("show storage api total task", K(parallel), K(split_count), K(total_row_count));
+  }
+  return ret;
+}
+
+int ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_row(
+    ObExecContext &exec_ctx,
+    const common::ObIArray<int64_t> &nonpart_col_idxs,
+    const common::ObIArray<int64_t> &part_col_idxs,
+    const ObString &part_list_str,
+    const ObString &format_properties,
+    ObLakeTablePushDownFilterSpec *file_filter_spec,
+    const common::ObIArray<ObOdpsPredColumnInfo> &pred_col_infos,
+    int64_t parallel,
+    ObString &session_str,
+    int64_t &total_row_count,
+    ObIAllocator &range_allocator)
+{
+  int ret = OB_SUCCESS;
+  sql::ObExternalFileFormat external_odps_format;
+  common::ObArenaAllocator arena_alloc;
+  ObODPSJNITableRowIterator odps_driver;
+  if (OB_FAIL(external_odps_format.load_from_string(format_properties, arena_alloc))) {
+    LOG_WARN("failed to init external_odps_format", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(open_storage_api_session_(exec_ctx, nonpart_col_idxs, part_col_idxs,
+                                          part_list_str, external_odps_format,
+                                          file_filter_spec, pred_col_infos, parallel,
+                                          odps_driver))) {
+      LOG_WARN("failed to open row storage api session", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(odps_driver.fetch_storage_file_total_row_count(total_row_count))) {
+      LOG_WARN("failed to get total row count", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(odps_driver.fetch_serilize_session(range_allocator, session_str))) {
+      LOG_WARN("failed to serialize the session", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // the serialized session is binary and not printable; do not log it
+    LOG_INFO("show storage api total task", K(parallel), K(total_row_count));
+  }
+  return ret;
+}
 
 // ================================================================================================================
 

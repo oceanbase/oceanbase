@@ -313,6 +313,11 @@ protected:
     return share::is_hive_lake_table(scan_param_->lake_table_format_);
   }
 
+  OB_INLINE bool is_odps_lake_table() const
+  {
+    return share::is_odps_lake_table(scan_param_->lake_table_format_);
+  }
+
   OB_INLINE bool is_lake_table() const
   {
     return share::is_lake_external_table(scan_param_->lake_table_format_);

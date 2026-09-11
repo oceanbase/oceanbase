@@ -590,7 +590,12 @@ int ObAccessPathEstimation::process_external_table_default_estimation(AccessPath
   } else {
     ObCostTableScanInfo &est_cost_info = path->est_cost_info_;
     const ObTableMetaInfo *meta = est_cost_info.table_meta_info_;
-    output_row_count = (OB_NOT_NULL(meta) && meta->table_row_count_ > 0)
+    // Lake-table metadata already supplies a default when statistics are
+    // unavailable, so preserve a known empty scan here.
+    output_row_count = (OB_NOT_NULL(meta)
+                       && (meta->table_row_count_ > 0
+                           || (share::is_lake_external_table(meta->lake_table_format_)
+                               && meta->table_row_count_ == 0)))
         ? static_cast<double>(meta->table_row_count_)
         : static_cast<double>(OB_EST_DEFAULT_VIRTUAL_TABLE_ROW_COUNT);
     est_cost_info.logical_query_range_row_count_ = output_row_count;

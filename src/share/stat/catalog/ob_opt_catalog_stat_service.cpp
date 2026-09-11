@@ -575,6 +575,75 @@ int ObOptCatalogStatService::generate_default_catalog_table_statistics(
   return ret;
 }
 
+int ObOptCatalogStatService::fetch_odps_ext_table_stat_directly(
+    const share::ObILakeTableMetadata *lake_table_metadata,
+    const ObIArray<ObString> &partition_values,
+    sql::ObSqlSchemaGuard &schema_guard,
+    ObIAllocator &allocator,
+    ObLakeTableStat &stat)
+{
+  int ret = OB_SUCCESS;
+  stat.reset();
+  const ObTableSchema *table_schema = nullptr;
+  ObSEArray<ObString, 16> column_names;
+  ObSEArray<share::ObOptCatalogTableStat *, 4> catalog_table_stats;
+  ObSEArray<share::ObOptCatalogColumnStat *, 4> catalog_column_stats;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("statistics service is not initialized", K(ret));
+  } else if (OB_ISNULL(lake_table_metadata)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lake table metadata is null", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(lake_table_metadata->tenant_id_,
+                                                   lake_table_metadata->table_id_,
+                                                   table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(lake_table_metadata->table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), K(lake_table_metadata->table_id_));
+  // fetch_catalog_table_statistics_from_catalog skips the whole fetch when
+  // column_names is empty, so the real column names are required even though
+  // ODPS only ever produces table-level statistics.
+  } else if (OB_FAIL(extract_column_names_from_table_schema(*table_schema, column_names))) {
+    LOG_WARN("failed to extract column names", K(ret));
+  } else if (OB_FAIL(fetch_catalog_table_statistics_from_catalog(lake_table_metadata,
+                                                                 partition_values,
+                                                                 column_names,
+                                                                 schema_guard,
+                                                                 allocator,
+                                                                 catalog_table_stats,
+                                                                 catalog_column_stats))) {
+    LOG_WARN("failed to fetch odps external table statistics from catalog", K(ret));
+  } else {
+    // Aggregate the freshly fetched stats directly: this path never touches
+    // the KV cache or the persistent stat tables (no catalog identity exists
+    // for a CREATE EXTERNAL TABLE).
+    int64_t last_analyzed = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < catalog_table_stats.count(); ++i) {
+      const share::ObOptCatalogTableStat *table_stat_ptr = catalog_table_stats.at(i);
+      if (OB_ISNULL(table_stat_ptr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("catalog table stat is null", K(ret), K(i));
+      } else {
+        stat.total_row_count_ += table_stat_ptr->get_row_count();
+        stat.data_size_ += table_stat_ptr->get_data_size();
+        stat.file_cnt_ += table_stat_ptr->get_file_num();
+        stat.part_cnt_ += table_stat_ptr->get_partition_num();
+        last_analyzed = MAX(last_analyzed, table_stat_ptr->get_last_analyzed());
+      }
+    }
+    if (OB_SUCC(ret) && !catalog_table_stats.empty()) {
+      stat.pruned_row_count_ = stat.total_row_count_;
+      // A live fetch is gathered now; the synthesized metadata carries no
+      // snapshot version, so the builder-produced last_analyzed may be 0.
+      stat.last_analyzed_ = last_analyzed > 0 ? last_analyzed : ObTimeUtility::current_time();
+      LOG_TRACE("fetched odps external table stat directly", K(stat),
+                K(lake_table_metadata->table_id_));
+    }
+  }
+  return ret;
+}
+
 int ObOptCatalogStatService::fetch_catalog_table_statistics_from_catalog(
     const share::ObILakeTableMetadata *lake_table_metadata,
     const ObIArray<ObString> &partition_values,
@@ -632,7 +701,7 @@ int ObOptCatalogStatService::fetch_catalog_table_statistics_from_catalog(
         }
       } else if (!catalog_column_stats.empty()) {
         // Both table-level and column-level statistics are present, nothing to do.
-      } else if (ObLakeTableFormat::ODPS == lake_table_metadata->get_format_type()) {
+      } else if (share::is_odps_lake_table(lake_table_metadata->get_format_type())) {
         // ODPS only exposes table-level statistics (row count / data size) and does
         // not provide per-column statistics. Keep the real table stat and backfill
         // default column stats with an empty (global) partition value, matching the
@@ -1311,7 +1380,7 @@ int ObOptCatalogStatService::fetch_catalog_table_stat_from_catalog_and_cache(
 
   const ObIArray<ObString> *partition_values_to_fetch = &key_partition_values;
   if (OB_NOT_NULL(table_schema) && table_schema->is_partitioned_table()) {
-    if (lake_table_metadata->get_format_type() == ObLakeTableFormat::ODPS
+    if (share::is_odps_lake_table(lake_table_metadata->get_format_type())
         || key_partition_values.empty()) {
       partition_values_to_fetch = &all_partition_values;
     } else {

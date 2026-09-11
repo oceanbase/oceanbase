@@ -10,6 +10,7 @@
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/engine/table/ob_external_table_pushdown_filter.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
+#include "sql/table_format/iceberg/ob_iceberg_type_fwd.h"
 #include "storage/blocksstable/index_block/ob_skip_index_filter_executor.h"
 
 namespace oceanbase
@@ -44,6 +45,39 @@ public:
   ObObj upper_bound_;
 private:
   DISABLE_COPY_ASSIGN(ObFieldBound);
+};
+
+/// Shared partition-field bound for the lake table file pruners (hive / ODPS /
+/// iceberg): one entry per partition key column, holding the query ranges of
+/// that column converted into field bounds plus the raw predicates that
+/// produced them. The iceberg pruner additionally uses transform_type_ (the
+/// partition transform of the spec field); hive and ODPS leave it at the
+/// default.
+struct ObLakePartFieldBound
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObLakePartFieldBound(common::ObIAllocator &allocator);
+  void reset();
+  int assign(const ObLakePartFieldBound &other);
+  int deep_copy(ObLakePartFieldBound &src);
+  TO_STRING_KV(K_(column_id), K_(transform_type), K_(is_whole_range), K_(is_always_false),
+               K_(bounds), K_(range_exprs));
+
+  common::ObIAllocator &allocator_;
+  uint64_t column_id_;
+  iceberg::TransformType transform_type_;
+  bool is_whole_range_;
+  bool is_always_false_;
+  ObFixedArray<ObFieldBound *, ObIAllocator> bounds_;
+  // Optimizer-only pointers to predicates that produced precise ranges.  They
+  // are intentionally not serialized because row-filter elimination happens
+  // while the logical plan is built, before the pruner is sent to workers.
+  ObFixedArray<ObRawExpr *, ObIAllocator> range_exprs_;
+
+private:
+  DISABLE_COPY_ASSIGN(ObLakePartFieldBound);
 };
 
 struct ObLakeTablePushDownFilterSpec
@@ -108,6 +142,28 @@ public:
   common::ObFixedArray<ObColumnMeta, common::ObIAllocator> column_metas_;
   ObLakeTablePushDownFilterSpec file_filter_spec_;
   common::ObFixedArray<ObString, common::ObIAllocator> partition_values_;
+
+protected:
+  // Shared partition bound machinery of the lake table pruners: extracts the
+  // per partition key column query ranges from the filters and converts them
+  // into one ObLakePartFieldBound per column (in partition key order). A
+  // partition column not referenced by the query is marked whole-range (the
+  // iceberg semantics) — the column may have no column item in the stmt (e.g.
+  // the ODPS metadata$external_partition[i] pseudo columns).
+  int generate_partition_bound(const ObDMLStmt &stmt,
+                               ObExecContext *exec_ctx,
+                               const share::schema::ObTableSchema *table_schema,
+                               const common::ObIArray<ObRawExpr *> &filter_exprs,
+                               common::ObFixedArray<ObLakePartFieldBound *, common::ObIAllocator> &part_bounds);
+  static int build_field_bound_from_ranges(common::ObIAllocator &allocator,
+                                           common::ObIArray<ObNewRange *> &ranges,
+                                           ObLakePartFieldBound &part_field_bound);
+  bool check_one_row_part_column(const common::ObNewRow &ob_part_row,
+                                 const common::ObIArray<ObLakePartFieldBound *> &part_bounds);
+  // Virtual so the hive pruner can additionally accept its default-partition
+  // string as a NULL partition value (see ObHiveFilePruner::check_one_part).
+  virtual bool check_one_part(const common::ObObj &part_val,
+                              const ObLakePartFieldBound &field_bounds);
 };
 
 struct ObTempFrameInfoCtxReplaceGuard
@@ -162,6 +218,55 @@ public:
   ObPushdownOperator *pd_expr_op_;
   sql::ObPushdownFilterExecutor *pushdown_filter_;
   common::ObArenaAllocator temp_allocator_;
+};
+
+/// Pushdown filter over a LIST partition row (min = max = the partition cell).
+/// Used by hive and ODPS: both materialize one schema partition as one list row.
+class ObLakePartRowPushDownFilter : public ObLakeTablePushDownFilter
+{
+public:
+  ObLakePartRowPushDownFilter(ObExecContext &exec_ctx,
+                              ObLakeTablePushDownFilterSpec &file_filter_spec,
+                              common::ObFixedArray<uint64_t, common::ObIAllocator> *part_column_ids)
+      : ObLakeTablePushDownFilter(exec_ctx, file_filter_spec), part_column_ids_(part_column_ids)
+  {
+  }
+
+  virtual ~ObLakePartRowPushDownFilter()
+  {
+  }
+
+private:
+  class PartRowFilterParamBuilder : public MinMaxFilterParamBuilder
+  {
+  public:
+    explicit PartRowFilterParamBuilder(
+        ObNewRow &row,
+        common::ObFixedArray<uint64_t, common::ObIAllocator> &part_column_ids)
+        : row_(row), part_column_ids_(part_column_ids)
+    {
+    }
+    virtual ~PartRowFilterParamBuilder()
+    {
+    }
+    int build(const int32_t ext_tbl_col_id,
+              const ObColumnMeta &column_meta,
+              blocksstable::ObMinMaxFilterParam &param) override;
+    int next_range(const int64_t column_id, int64_t &offset, int64_t &rows)
+    {
+      return OB_NOT_SUPPORTED;
+    }
+
+  private:
+    ObNewRow &row_;
+    common::ObFixedArray<uint64_t, common::ObIAllocator> &part_column_ids_;
+  };
+
+public:
+  int filter(ObNewRow row, bool &is_filtered);
+
+private:
+  common::ObFixedArray<uint64_t, common::ObIAllocator> *part_column_ids_;
 };
 
 } // namespace sql

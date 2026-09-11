@@ -27,6 +27,7 @@
 #include "share/ob_catalog_ext_partition_info.h"
 #include "observer/mysql/obmp_utils.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
+#include "sql/table_format/iceberg/ob_iceberg_utils.h"
 #include "sql/table_format/iceberg/spec/manifest.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "share/external_table/ob_external_table_utils.h"
@@ -144,7 +145,7 @@ int ObDbmsCatalogStatsUtils::build_iceberg_partition_info(
 
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(partition_info.iceberg_spec_id_ = partition_spec.spec_id)) {
-  } else if (OB_FAIL(ObExternalTableUtils::build_iceberg_partition_json_desc(
+  } else if (OB_FAIL(sql::iceberg::ObIcebergUtils::build_iceberg_partition_json_desc(
                          allocator,
                          partition_spec,
                          partition_values,
@@ -1137,7 +1138,7 @@ int ObDbmsCatalogStatsUtils::filter_partitions_by_freshness(
     checker = OB_NEWx(ObHMSCatalogStatsFreshnessChecker, &allocator);
   } else if (share::is_iceberg_lake_table(lake_table_format)) {
     checker = OB_NEWx(ObIcebergStatsFreshnessChecker, &allocator);
-  } else if (share::ObLakeTableFormat::ODPS == lake_table_format) {
+  } else if (share::is_odps_lake_table(lake_table_format)) {
     checker = OB_NEWx(ObOdpsCatalogStatsFreshnessChecker, &allocator);
   } else {
     ret = OB_NOT_SUPPORTED;

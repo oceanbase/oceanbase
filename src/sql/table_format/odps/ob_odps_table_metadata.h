@@ -33,6 +33,12 @@ public:
   // todo
   // 暂时偷懒
   int get_inner_table_schema(share::schema::ObTableSchema *&table_schema);
+
+  // CREATE EXTERNAL TABLE 形态的 ODPS 表没有 catalog 实体：统计路径用它现场
+  // 合成 metadata（见 ObLakeTablePartitionInfo::get_table_stat），连接信息以
+  // 该 format 串为准。catalog 形态该成员恒为空。
+  // 该成员只服务优化期统计回源，不参与 build_table_schema。
+  common::ObString format_str_;
 protected:
   int do_build_table_schema(std::optional<int32_t> schema_id,
                             std::optional<int64_t> snapshot_id,

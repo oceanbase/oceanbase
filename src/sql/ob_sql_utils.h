@@ -29,6 +29,7 @@
 #include "share/ob_compatibility_control.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
 #include "sql/resolver/dml/ob_hint.h"
+#include "share/catalog/ob_catalog_properties.h"
 
 namespace oceanbase
 {
@@ -54,6 +55,7 @@ class ObTableLocation;
 class ObQueryRange;
 class ObSqlExpression;
 class ObPhysicalPlan;
+struct ObDASTableLocMeta;
 class ObRawExprResType;
 class ObStmtHint;
 struct ObTransformerCtx;
@@ -929,6 +931,20 @@ public:
                                     bool &is_odps_external_table);
   static int is_odps_external_table(const ObString &table_format_or_properties,
                                     bool &is_odps_external_table);
+  // Derive the effective lake table format of an external table schema.
+  // Catalog-fabricated schemas carry the format in lake_table_format_ directly;
+  // CREATE EXTERNAL TABLE schemas loaded from the shared schema cache leave it
+  // INVALID (the member is not serialized), so the ODPS format is derived from
+  // the external file format string instead. The shared schema is never
+  // mutated — callers derive at the point where they build the table item /
+  // log operator / loc meta.
+  static int derive_lake_table_format(const ObTableSchema *table_schema,
+                                      share::ObLakeTableFormat &lake_table_format);
+  // Fill the is_external_table_ / is_lake_table_ flags of a DAS table loc meta
+  // from the given table schema, deriving the effective lake table format via
+  // derive_lake_table_format() (lake_table_format_ itself is not serialized).
+  static int fill_table_loc_meta_lake_flags(const ObTableSchema *table_schema,
+                                            ObDASTableLocMeta &loc_meta);
   static int check_location_constraint(const ObTableSchema &table_schema);
   static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,

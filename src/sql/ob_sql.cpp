@@ -5463,6 +5463,9 @@ int ObSql::need_add_plan(const ObPlanCacheCtx &pc_ctx,
     need_add_plan = false;
   } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_hybrid_search()) {
     need_add_plan = false;
+  } else if (result.get_exec_context().get_stmt_factory()->get_query_ctx()->has_odps_external_table()) {
+    // odps session will not outlive its query, plan should not be cached
+    need_add_plan = false;
   }
   return ret;
 }

@@ -7,6 +7,7 @@
 
 #include "ob_task.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/px/ob_px_tree_serializer_impl.ipp"
 
 using namespace oceanbase::common;
 

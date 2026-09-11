@@ -8,9 +8,11 @@
 #include "share/catalog/odps/ob_odps_catalog_utils.h"
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #include "sql/engine/table/ob_odps_jni_table_row_iter.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/table_format/odps/ob_odps_table_metadata.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/external_table/ob_odps_table_utils.h"
 #include "share/stat/catalog/ob_opt_catalog_table_stat_builder.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_table.h>
@@ -392,7 +394,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
   || OB_ISNULL(THIS_WORKER.get_session()->get_cur_exec_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table metadata", K(ret));
-  } else if (OB_UNLIKELY(ObLakeTableFormat::ODPS != table_metadata->get_format_type())) {
+  } else if (OB_UNLIKELY(!share::is_odps_lake_table(table_metadata->get_format_type()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only support odps table metadata", K(ret));
   }
@@ -419,16 +421,27 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       api_mode = sql::ObODPSGeneralFormat::ApiMode::ROW;// 这里有点特殊
     }
 
-    if (partition_values.count() == 0) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("partition values is empty", K(ret));
-    }
+    // An empty partition list is legitimate: a non-partition table (or a
+    // selection pruned to empty) regathers through the empty spec, which the
+    // driver maps onto the whole-table contract.
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(get_session_and_ctx(session, exec_ctx))) {
       LOG_WARN("failed to get session and ctx", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!odps_table_metadata->format_str_.empty()) {
+      // CREATE EXTERNAL TABLE 形态：没有 catalog properties，format 串自带
+      // 全部连接信息与 api_mode，直接解析。
+      if (OB_FAIL(ob_write_string(allocator, odps_table_metadata->format_str_, format_str))) {
+        LOG_WARN("failed to copy odps format str", K(ret));
+      } else if (OB_FAIL(external_format.load_from_string(format_str, allocator))) {
+        LOG_WARN("failed to parse odps format str", K(ret));
+      }
     } else if (OB_FAIL(get_odps_format_str_from_catalog_properties(allocator, properties_, table_metadata->namespace_name_,
                                                           table_metadata->table_name_, api_mode, format_str, external_format))) {
       LOG_WARN("failed to get odps format str from catalog properties", K(ret));
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(sql_schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(table_schema)) {
@@ -443,6 +456,11 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       if (OB_LIKELY(tenant_config.is_valid())) {
         max_parttition_count_to_collect_statistic = tenant_config->_max_partition_count_to_collect_statistic;
       }
+      // The tenant switch gates the pruner's batch collection, not this
+      // single-query regather. Keep at least one sampled partition: an empty
+      // sample window used to collapse into a bogus 0-row statistic.
+      max_parttition_count_to_collect_statistic =
+          std::max(int64_t(1), max_parttition_count_to_collect_statistic);
       ObSEArray<ObString, 5> partition_values_to_collect_statistic;
       if (partition_values.count() > max_parttition_count_to_collect_statistic) {
         // do nothing
@@ -461,7 +479,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
       if (OB_SUCC(ret)) {
         common::hash::ObHashMap<ObOdpsPartitionKey, int64_t>& partition_str_to_file_size = exec_ctx->get_odps_partition_str_to_file_size();
         // get size for odps partition
-        OZ(ObExternalTableUtils::fetch_odps_all_partitions_size(
+        OZ(ObOdpsTableUtils::fetch_odps_all_partitions_size(
             *session, format_str, partition_values_to_collect_statistic,
             tenant_id,
             ref_table_id, exec_ctx->get_allocator(),
@@ -496,6 +514,13 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
               LOG_WARN("failed to init odps driver", K(ret));
             } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_odps_partition_row_count(odps_driver, max_partition, max_row_count))) {
               LOG_WARN("failed to obtain odps partition row count and session id", K(ret));
+            } else if (max_row_count < 0) {
+              // The sampled partition does not exist (or the empty spec hit a
+              // partitioned table): any extrapolation from here is garbage.
+              // Fail the regather; the caller falls back to default
+              // estimation instead of trusting a bogus count.
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sampled odps partition has no row count", K(ret), K(max_partition), K(max_row_count));
             } else if (OB_FAIL(sql::ObOdpsPartitionDownloaderMgr::fetch_odps_partition_size(ObString::make_empty_string(), odps_driver, total_data_size))) {
               LOG_WARN("failed to fetch row count", K(ret));
             } else {
@@ -513,9 +538,12 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
               LOG_WARN("failed to init odps driver", K(ret));
             } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_row_count(odps_driver, max_partition, max_row_count))) {
               LOG_WARN("failed to obtain odps partition row count and session id", K(ret));
-            } else if (max_row_count == -1) {
-              // do nothing
-              total_data_size = 0;
+            } else if (max_row_count < 0) {
+              // The sampled partition does not exist: fail the regather
+              // instead of extrapolating a garbage (previously 0-row)
+              // statistic out of a vanished partition.
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sampled odps partition has no row count", K(ret), K(max_partition), K(max_row_count));
             } else if (OB_FAIL(sql::ObOdpsPartitionJNIDownloaderMgr::fetch_odps_partition_size(ObString::make_empty_string(), odps_driver, total_data_size))) {
               LOG_WARN("failed to fetch row count", K(ret));
             } else {
@@ -535,7 +563,11 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
             row_count = max_row_count * (total_data_size * 1.00 / max_partition_file_size);
             LOG_INFO("ODPS statistics catalog table row count estimate size", K(max_partition_file_size), K(max_row_count), K(total_data_size), K(row_count));
           } else {
-            row_count = 0;
+            // No sampled partition size: only the empty-spec (whole-table)
+            // fetch can still reach here — its row count is exact, no
+            // extrapolation.
+            row_count = max_row_count;
+            LOG_INFO("ODPS statistics whole-table exact row count", K(max_row_count), K(row_count));
           }
         }
       }
@@ -608,13 +640,147 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
   return ret;
 }
 
+// Called from ObExternalTableFileManager::get_partitions_info (via
+// ObCachedCatalogMetaGetter), which is reached through
+// ObExternalTableUtils::collect_partitions_info_with_cache. For ODPS that
+// means DBMS_CATALOG stats (ObDbmsCatalogStats), not SQL resolve: query-time
+// partition listing is ObODPSFilePruner (collect_external_file_list) and
+// does not go through this API.
+// Lists partitions through the same driver interfaces the refresh path uses
+// (collect_external_file_list). Contract mirrors the HMS catalog:
+// - non-partitioned table: append nothing (the caller pre-pushed one
+//   whole-table entry, see ObExternalTableFileManager::get_partitions_info);
+// - partitioned table: one ObCatalogExtPartitionInfo per partition where
+//   partition_ / path_ carry the RAW driver-reported spec ("pt='a',ds='b'") --
+//   kept verbatim (no rebuild) so quoting/case are preserved -- and
+//   partition_values_ are the unquoted values in part_col_names order
+//   (ObSQLUtils::extract_odps_part_spec, the same parsing used by
+//   calculate_odps_part_val_by_part_spec).
+// Stats fields (file_num_/data_size_/modify_ts_) are left at defaults: the
+// driver only reports a row count, which has no matching field here.
 int ObOdpsCatalog::fetch_partitions(ObIAllocator &allocator,
                                     const ObILakeTableMetadata *table_metadata,
                                     const ObIArray<ObString> &part_col_names,
                                     ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos)
 {
-  int ret = OB_NOT_SUPPORTED;
-  LOG_WARN("not support fetch partitions", K(ret));
+  int ret = OB_SUCCESS;
+  ObString format_str;
+  ObExternalFileFormat external_format;
+  ObSEArray<ObString, 16> part_specs; // deep copies of the driver-reported specs
+  bool is_part_table = false;
+  if (OB_ISNULL(table_metadata)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table metadata is null", K(ret));
+  } else if (OB_UNLIKELY(!share::is_odps_lake_table(table_metadata->get_format_type()))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only odps format can fetch partitions", K(ret),
+             K(table_metadata->get_format_type()));
+  } else if (OB_FAIL(get_odps_format_str_from_catalog_properties(allocator,
+                                                                 properties_,
+                                                                 table_metadata->namespace_name_,
+                                                                 table_metadata->table_name_,
+                                                                 properties_.api_mode_,
+                                                                 format_str,
+                                                                 external_format))) {
+    LOG_WARN("failed to get odps format str from catalog properties", K(ret));
+  } else if (GCONF._use_odps_jni_connector) {
+#ifdef OB_BUILD_JNI_ODPS
+    ObODPSJNITableRowIterator odps_jni_iter;
+    if (external_format.odps_format_.api_mode_ != sql::ObODPSGeneralFormat::ApiMode::TUNNEL_API) {
+      if (OB_FAIL(odps_jni_iter.init_jni_schema_scanner(external_format.odps_format_,
+                                                        THIS_WORKER.get_session()))) {
+        LOG_WARN("failed to init jni schema scanner", K(ret));
+      }
+    } else if (OB_FAIL(odps_jni_iter.init_jni_meta_scanner(external_format.odps_format_,
+                                                           THIS_WORKER.get_session()))) {
+      LOG_WARN("failed to init jni meta scanner", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(odps_jni_iter.pull_partition_info())) {
+      LOG_WARN("failed to pull partition info", K(ret));
+    } else if (FALSE_IT(is_part_table = odps_jni_iter.is_part_table())) {
+    } else if (is_part_table) {
+      ObIArray<sql::ObODPSJNITableRowIterator::OdpsJNIPartition> &partition_specs
+          = odps_jni_iter.get_partition_specs();
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_specs.count(); ++i) {
+        ObString spec;
+        // the iterator owns partition_spec_'s memory; deep copy before it dies
+        if (OB_FAIL(ob_write_string(allocator, partition_specs.at(i).partition_spec_, spec))) {
+          LOG_WARN("failed to copy odps partition spec", K(ret), K(i));
+        } else if (OB_FAIL(part_specs.push_back(spec))) {
+          LOG_WARN("failed to push back odps partition spec", K(ret), K(i));
+        }
+      }
+    }
+#else
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("jni flag not set in cmakelist", K(ret));
+#endif
+  } else {
+#ifdef OB_BUILD_CPP_ODPS
+    ObODPSTableRowIterator odps_driver;
+    if (OB_FAIL(odps_driver.init_tunnel(external_format.odps_format_))) {
+      LOG_WARN("failed to init tunnel", K(ret));
+    } else if (OB_FAIL(odps_driver.pull_partition_info())) {
+      LOG_WARN("failed to pull partition info", K(ret));
+    } else if (FALSE_IT(is_part_table = odps_driver.is_part_table())) {
+    } else if (is_part_table) {
+      ObIArray<sql::ObODPSTableRowIterator::OdpsPartition> &partition_list
+          = odps_driver.get_partition_info();
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_list.count(); ++i) {
+        ObString spec;
+        if (OB_FAIL(ob_write_string(allocator,
+                                    ObString(partition_list.at(i).name_.length(),
+                                             partition_list.at(i).name_.c_str()),
+                                    spec))) {
+          LOG_WARN("failed to copy odps partition spec", K(ret), K(i));
+        } else if (OB_FAIL(part_specs.push_back(spec))) {
+          LOG_WARN("failed to push back odps partition spec", K(ret), K(i));
+        }
+      }
+    }
+#else
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("open source mode not support odps c++ sdk", K(ret));
+#endif
+  }
+
+  if (OB_FAIL(ret) || !is_part_table) {
+    // non-partitioned: nothing to append, the caller's whole-table entry stands
+  } else if (OB_UNLIKELY(part_col_names.count() == 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("remote odps table is partitioned but no partition column is given",
+             K(ret), K(part_specs.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_specs.count(); ++i) {
+      const ObString &spec = part_specs.at(i);
+      common::ObCatalogExtPartitionInfo p_info;
+      ObSEArray<ObString, 6> part_values;
+      if (OB_FAIL(sql::ObSQLUtils::extract_odps_part_spec(spec, part_values))) {
+        LOG_WARN("failed to extract odps part spec", K(ret), K(spec));
+      } else if (OB_UNLIKELY(part_values.count() != part_col_names.count())) {
+        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+        LOG_WARN("partition value count mismatches partition columns", K(ret),
+                 K(spec), K(part_values.count()), K(part_col_names.count()));
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+                       "unexpected count of partition key between odps table and external table");
+      } else {
+        // the values are substrings of `spec`, which is already owned by
+        // `allocator`; no further copy is needed
+        p_info.partition_ = spec;
+        p_info.path_ = spec; // ODPS has no directory url; the spec is the locator
+        p_info.schema_version_ = table_metadata->lake_table_metadata_version_;
+        for (int64_t j = 0; OB_SUCC(ret) && j < part_values.count(); ++j) {
+          if (OB_FAIL(p_info.partition_values_.push_back(part_values.at(j)))) {
+            LOG_WARN("failed to push back partition value", K(ret), K(j));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(partition_infos.push_back(p_info))) {
+          LOG_WARN("failed to push back partition info", K(ret), K(i));
+        }
+      }
+    }
+  }
   return ret;
 }
 

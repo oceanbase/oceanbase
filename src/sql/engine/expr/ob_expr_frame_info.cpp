@@ -7,6 +7,7 @@
 #include "ob_expr_frame_info.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/px/ob_px_tree_serializer_impl.ipp"
 
 namespace oceanbase
 {

@@ -9,6 +9,8 @@
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/engine/px/ob_granule_iterator_op.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/external_table/ob_csv_table_utils.h"
+#include "share/external_table/ob_odps_table_utils.h"
 #include "lib/lock/ob_lock_guard.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "share/config/ob_server_config.h"
@@ -375,7 +377,7 @@ int GIOdpsParallelTaskGen::join_task_results(
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("failed to allocate ObOdpsScanTask", K(ret));
           } else {
-            if (OB_FAIL(ObExternalTableUtils::make_odps_scan_task(
+            if (OB_FAIL(ObOdpsTableUtils::make_odps_scan_task(
                 odps_original_task->file_url_,
                 odps_original_task->part_id_,
                 task_start,
@@ -422,7 +424,7 @@ int GIOdpsParallelTaskGen::join_task_results(
               LOG_WARN("failed to allocate ObOdpsScanTask", K(ret));
             } else {
               int64_t current_end = current_start + lines_to_assign;
-              if (OB_FAIL(ObExternalTableUtils::make_odps_scan_task(
+              if (OB_FAIL(ObOdpsTableUtils::make_odps_scan_task(
                   odps_original_task->file_url_,
                   odps_original_task->part_id_,
                   current_start,
@@ -525,7 +527,7 @@ int GICsvGamblingParallelTaskGen::csv_gambling_one_task_processing(
     int64_t chunk_cnt = csv_parallel_info->chunk_cnt_;
     int64_t file_id = scan_task->file_id_;
     GamblingFunctor func;
-    if (chunk_idx != 0 && OB_FAIL(share::ObExternalTableUtils::read_data_for_bound(
+    if (chunk_idx != 0 && OB_FAIL(share::ObCsvTableUtils::read_data_for_bound(
                                   external_location_, external_access_info_,
                                   external_file_format_, url, start_pos,
                                   end_pos, func))) {
@@ -664,7 +666,7 @@ int GICsvGamblingParallelTaskGen::join_task_results(
               LOG_WARN("failed to allocate scan task", K(ret));
             } else if (OB_FAIL(scan_task->init_parallel_parse_csv_info(arena_alloc_))) {
               LOG_WARN("failed to init parallel parse csv info", K(ret));
-            } else if (OB_FAIL(ObExternalTableUtils::make_parallel_parse_csv_task(*ext_task,
+            } else if (OB_FAIL(ObCsvTableUtils::make_parallel_parse_csv_task(*ext_task,
                                                                                  1, INT64_MAX,
                                                                                  start_pos, end_pos,
                                                                                  i - start_idx, end_idx - start_idx + 1,
@@ -765,7 +767,7 @@ int GICsvFullScanParallelTaskGen::csv_full_scan_one_task_processing(
     // chunk小于max_row_length_的情况下gambling阶段可能就已经做完了全量扫描，此时下发的start_pos > end_pos.
     // 所以直接跳过扫描，但仍然需要提交结果。因为full_scan join时是按idx分别获取gambling阶段和full_scan阶段的结果.
     // 两个结果的长度一致便于合并.
-    if (start_pos < end_pos && OB_FAIL(share::ObExternalTableUtils::read_data_for_bound(
+    if (start_pos < end_pos && OB_FAIL(share::ObCsvTableUtils::read_data_for_bound(
                                              external_location_, external_access_info_,
                                              external_file_format_, url, start_pos,
                                              end_pos, func))) {
@@ -897,7 +899,7 @@ int GICsvFullScanParallelTaskGen::join_task_results(
               LOG_WARN("failed to allocate scan task", K(ret));
             } else if (OB_FAIL(scan_task->init_parallel_parse_csv_info(arena_alloc_))) {
               LOG_WARN("failed to init parallel parse csv info", K(ret));
-            } else if (OB_FAIL(ObExternalTableUtils::make_parallel_parse_csv_task(*ext_task,
+            } else if (OB_FAIL(ObCsvTableUtils::make_parallel_parse_csv_task(*ext_task,
                                                                                   1, INT64_MAX,
                                                                                   start_pos, end_pos,
                                                                                   i, bounded_start_pos.count(),

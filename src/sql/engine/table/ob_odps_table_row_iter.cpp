@@ -8,6 +8,7 @@
 #include "ob_odps_table_row_iter.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "src/share/external_table/ob_external_table_utils.h"
+#include "src/share/external_table/ob_odps_table_utils.h"
 #include "src/sql/engine/expr/ob_datum_cast.h"
 #include "odps/odps_api.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
@@ -360,7 +361,7 @@ int ObODPSTableRowIterator::next_task()
     if (OB_ISNULL(odps_scan_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexcepted null ptr", K(ret), K(scan_task));
-    } else if (OB_FAIL(ObExternalTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
+    } else if (OB_FAIL(ObOdpsTableUtils::resolve_odps_start_step(odps_scan_task, start, step))) {
       LOG_WARN("failed to resolve range in external table", K(ret));
     } else if (step == 0) {
       // 原来这条路径是不会走的空分区step是INT64_MAX，现在step是0，需要处理
@@ -2035,13 +2036,26 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     for (int i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
       ObExpr *column_expr = column_exprs_.at(i);
       ObExpr *column_convert_expr = scan_param_->ext_column_dependent_exprs_->at(i);
-      OZ (column_convert_expr->eval_batch(ctx, *bit_vector_cache_, count));
-      if (OB_SUCC(ret)) {
+      if (OB_FAIL(column_convert_expr->eval_batch(ctx, *bit_vector_cache_, count))) {
+        // count_ already includes this batch; part rows are [start, end).
+        // column_convert_vector's batch_idx maps to part row = odps_part_row_start + batch_idx.
+        const int64_t odps_part_row_end = state_.start_ + state_.count_;
+        const int64_t odps_part_row_start = odps_part_row_end - count;
+        LOG_WARN("failed to column convert odps batch, exact part row = odps_part_row_start + batch_idx in column_convert_vector",
+                 K(ret), K(i), K(count), K(odps_part_row_start), K(odps_part_row_end),
+                 K(state_), K(total_count_), KPC(column_convert_expr));
+      } else {
         MEMCPY(column_expr->locate_batch_datums(ctx),
               column_convert_expr->locate_batch_datums(ctx), sizeof(ObDatum) * count);
         column_expr->set_evaluated_flag(ctx);
+        if (OB_FAIL(column_expr->init_vector(ctx, VEC_UNIFORM, count))) {
+          const int64_t odps_part_row_end = state_.start_ + state_.count_;
+          const int64_t odps_part_row_start = odps_part_row_end - count;
+          LOG_WARN("failed to init vector after column convert",
+                   K(ret), K(i), K(count), K(odps_part_row_start), K(odps_part_row_end),
+                   K(state_), K(total_count_));
+        }
       }
-      OZ(column_expr->init_vector(ctx, VEC_UNIFORM, count));
     }
   }
   OZ(calc_exprs_for_rowid(count));

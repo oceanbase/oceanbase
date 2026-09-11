@@ -196,9 +196,21 @@ int ObCatalogMetaGetter::fetch_table_statistics(
   if (OB_ISNULL(table_metadata)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (share::ObLakeTableFormat::ODPS == table_metadata->get_format_type()
+             && !static_cast<const sql::odps::ObODPSTableMetadata *>(table_metadata)
+                     ->format_str_.empty()) {
+    // CREATE EXTERNAL TABLE 形态的 ODPS 表没有 catalog schema，连接信息在
+    // metadata 的 format_str_ 里：建一个不挂 schema 的 ObOdpsCatalog 空壳，
+    // fetch_table_statistics 会直接使用 format_str_。
+    if (OB_ISNULL(catalog = OB_NEWx(ObOdpsCatalog, &allocator_, allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate odps catalog for external table", K(ret));
+    }
   } else if (OB_FAIL(
                  get_catalog(table_metadata->tenant_id_, table_metadata->catalog_id_, catalog))) {
     LOG_WARN("failed to get catalog", K(ret));
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("catalog is nullptr", K(ret));

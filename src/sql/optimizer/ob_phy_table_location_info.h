@@ -165,8 +165,6 @@ public:
                                   bool &is_same,
                                   common::ObAddr &the_server,
                                   int64_t &new_idx);
-  void set_is_lake_table(bool v) { is_lake_table_ = v; }
-  bool is_lake_table() const { return is_lake_table_; }
   TO_STRING_KV(K_(table_location_key), K_(ref_table_id), K_(candi_tablet_locs),
                K_(duplicate_type));
 
@@ -179,8 +177,6 @@ private:
   ObCandiTabletLocArray candi_tablet_locs_;
   //复制表类型, 如果是复制表且未被更改则可以在分配exg算子时挑选更合适的副本
   ObDuplicateType duplicate_type_;
-  // for lake table
-  bool is_lake_table_;
 private:
   /* functions */
   /* variables */

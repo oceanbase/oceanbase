@@ -6,6 +6,7 @@
 #define UNITTEST_DEBUG
 #define USING_LOG_PREFIX SHARE
 #include "share/external_table/ob_external_table_utils.h"
+#include "sql/optimizer/file_prune/ob_odps_file_pruner.h"
 #include <random>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -35,12 +36,12 @@ public:
 };
 
 void show(
-    common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+    common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                       20> &assigned_idx, int64_t sqc_count, int64_t total_file_size) {
   struct SortByFileIdx {
     bool
-    operator()(const oceanbase::share::ObExternalTableUtils::FileInfoWithIdx &l,
-               const oceanbase::share::ObExternalTableUtils::FileInfoWithIdx &r)
+    operator()(const oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx &l,
+               const oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx &r)
         const {
       return l.file_idx_ < r.file_idx_ || (l.file_idx_ == r.file_idx_ && l.start_permyriad_ < r.start_permyriad_); // 同一个分区编号放一起
     }
@@ -63,7 +64,7 @@ void show(
       }
       size_array.at(assigned_idx.at(i).sqc_idx_) += assigned_idx.at(i).process_size_;
       count_array.at(assigned_idx.at(i).sqc_idx_) += 1;
-      cout << "- file_size_ "    << setw(10) << assigned_idx.at(i).file_info_->file_size_ << " "
+      cout << "- file_size_ "    << setw(10) << assigned_idx.at(i).file_size_ << " "
            << " file_idx_" << assigned_idx.at(i).file_idx_ << " "
            << " start_permyriad_ " << setw(3) << assigned_idx.at(i).start_permyriad_ << " "
            << " end_permyriad_ "  << setw(3) << assigned_idx.at(i).end_permyriad_ << " "
@@ -77,7 +78,7 @@ void show(
       cout << "- should_not_split_" << assigned_idx.at(i).file_idx_ << endl;
       cout << " file_idx_ "     << assigned_idx.at(i).file_idx_ << " "
            << " process_size_ " << assigned_idx.at(i).process_size_
-           << " file_size_ "    << assigned_idx.at(i).file_info_->file_size_
+           << " file_size_ "    << assigned_idx.at(i).file_size_
            << " assign to "     << assigned_idx.at(i).sqc_idx_ << " " << endl;
       */
       size_array.at(assigned_idx.at(i).sqc_idx_) += assigned_idx.at(i).process_size_;
@@ -95,18 +96,13 @@ void show(
   cout << "total_get_size: " << total_get_size << " total_file_size: " << total_file_size << endl;
 }
 
-void show_files(ObIArray<ObExternalFileInfo> &files) {
-  common::ObSEArray<ObExternalFileInfo, 100> sorted_files;
+void show_files(ObIArray<int64_t> &files) {
+  common::ObSEArray<int64_t, 100> sorted_files;
   sorted_files.assign(files);
-  struct SortByFileSize {
-    bool operator()(const ObExternalFileInfo &l, const ObExternalFileInfo &r) const {
-      return l.file_size_ > r.file_size_;
-    }
-  };
-  lib::ob_sort(sorted_files.begin(), sorted_files.end(), SortByFileSize());
-
+  lib::ob_sort(sorted_files.begin(), sorted_files.end(),
+               [](const int64_t &l, const int64_t &r) { return l > r; });
   for (int64_t i = 0; i < sorted_files.count(); i++) {
-    cout << sorted_files.at(i).file_size_ << " ";
+    cout << sorted_files.at(i) << " ";
   }
 }
 
@@ -133,13 +129,13 @@ double calculate_stddev(const vector<int64_t> &size_array) {
 
 // 计算SQC大小数组和标准差
 double get_sqc_sizes_and_stddev(
-    common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20> &assigned_idx,
+    common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20> &assigned_idx,
     int64_t sqc_count,
     vector<int64_t> &size_array,
     int64_t &max_size) {
   struct SortByFileIdx {
-    bool operator()(const oceanbase::share::ObExternalTableUtils::FileInfoWithIdx &l,
-                    const oceanbase::share::ObExternalTableUtils::FileInfoWithIdx &r) const {
+    bool operator()(const oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx &l,
+                    const oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx &r) const {
       return l.file_idx_ < r.file_idx_ || (l.file_idx_ == r.file_idx_ && l.end_permyriad_ < r.end_permyriad_);
     }
   };
@@ -240,30 +236,27 @@ TEST_F(TestSplitTask, scenario1_variance_split_1000_partitions_sqc_variation) {
   setenv("OB_VARIANCE_SPLIT_DISABLE", "1", 1);
 
   std::poisson_distribution<int> dis(1000000000.0);
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 5; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    cout << "file.file_size_: " << file.file_size_ << endl;
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    cout << "file.file_size_: " << file_size << endl;
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
   vector<int64_t> sqc_counts = {4, 8, 16, 32, 64};
   for (int64_t sqc_count : sqc_counts) {
     {
       setenv("OB_VARIANCE_SPLIT_DISABLE", "1", 1);
 
-      common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+      common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                         20>
           assigned_idx;
 
       // 调用分配函数（此时 last_k_files_count =
       // 0，所有文件都不会被标记为不分割）
       int ret =
-          ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+          sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
               files, assigned_idx, sqc_count);
       ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -278,12 +271,12 @@ TEST_F(TestSplitTask, scenario1_variance_split_1000_partitions_sqc_variation) {
       unsetenv("OB_VARIANCE_SPLIT_DISABLE");
     }
     {
-      common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+      common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                         20>
           assigned_idx;
 
       int ret =
-          ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+          sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
               files, assigned_idx, sqc_count);
       ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -307,15 +300,12 @@ TEST_F(TestSplitTask, scenario2_variance_split_1000_partitions_sqc_variation) {
 
   // 固定分区数为1000
   const int64_t partition_count = 1000;
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < partition_count; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = power_law();
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = power_law();
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
   // SQC从4到64变化
@@ -325,12 +315,12 @@ TEST_F(TestSplitTask, scenario2_variance_split_1000_partitions_sqc_variation) {
     {
       setenv("OB_VARIANCE_SPLIT_DISABLE", "1", 1);
 
-      common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+      common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                         20>
           assigned_idx;
 
       // 调用分配函数（此时 last_k_files_count = 0，所有文件都不会被标记为不分割）
-      int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+      int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
           files, assigned_idx, sqc_count);
       ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -344,12 +334,12 @@ TEST_F(TestSplitTask, scenario2_variance_split_1000_partitions_sqc_variation) {
       unsetenv("OB_VARIANCE_SPLIT_DISABLE");
     }
     {
-      common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+      common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                         20>
           assigned_idx;
 
       int ret =
-          ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+          sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
               files, assigned_idx, sqc_count);
       ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -373,15 +363,12 @@ TEST_F(TestSplitTask, scenario3_variance_split_4_partitions_sqc_variation) {
 
   // 固定分区数为1000
   const int64_t partition_count = 4;
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < partition_count; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = power_law();
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = power_law();
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
   // SQC从4到64变化
@@ -389,12 +376,12 @@ TEST_F(TestSplitTask, scenario3_variance_split_4_partitions_sqc_variation) {
   setenv("OB_VARIANCE_SPLIT_DISABLE", "1", 1);
 
   for (int64_t sqc_count : sqc_counts) {
-    common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+    common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                       20>
         assigned_idx;
 
     // 调用分配函数（此时 last_k_files_count = 0，所有文件都不会被标记为不分割）
-    int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+    int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
         files, assigned_idx, sqc_count);
     ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -411,11 +398,11 @@ TEST_F(TestSplitTask, scenario3_variance_split_4_partitions_sqc_variation) {
   // 清除环境变量
   unsetenv("OB_VARIANCE_SPLIT_DISABLE");
   for (int64_t sqc_count : sqc_counts) {
-    common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+    common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                       20>
         assigned_idx;
 
-    int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+    int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
         files, assigned_idx, sqc_count);
     ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -447,22 +434,19 @@ TEST_F(TestSplitTask, scenario4_variance_split_few_sqc_partition_variation) {
 
 
   for (int64_t partition_count : partition_counts) {
-    common::ObSEArray<ObExternalFileInfo, 100> files;
+    common::ObSEArray<int64_t, 100> files;
     int64_t total_file_size = 0;
     for (int64_t i = 0; i < partition_count; i++) {
-      ObExternalFileInfo file;
-      file.file_id_ = i;
-      file.file_size_ = power_law();
-      file.row_count_ = 100000000;
-      total_file_size += file.file_size_;
-      files.push_back(file);
+    const int64_t file_size = power_law();
+    total_file_size += file_size;
+    files.push_back(file_size);
     }
     {
       setenv("OB_VARIANCE_SPLIT_DISABLE", "1", 1);
-      common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20> assigned_idx;
+      common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20> assigned_idx;
 
       // 调用分配函数（此时 last_k_files_count = 0，所有文件都不会被标记为不分割）
-      int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+      int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
           files, assigned_idx, sqc_count);
       ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -477,14 +461,14 @@ TEST_F(TestSplitTask, scenario4_variance_split_few_sqc_partition_variation) {
       unsetenv("OB_VARIANCE_SPLIT_DISABLE");
     }
     {
-      common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx,
+      common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx,
                         20>
           assigned_idx;
 
       // 调用分配函数（此时 last_k_files_count =
       // 0，所有文件都不会被标记为不分割）
       int ret =
-          ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+          sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
               files, assigned_idx, sqc_count);
       ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -508,23 +492,20 @@ TEST_F(TestSplitTask, scenario4_variance_split_few_sqc_partition_variation) {
 TEST_F(TestSplitTask, single_file_split_two_machine) {
   std::uniform_int_distribution<int> dis(10000000, 60 * 1024 * 1024 * 10);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
 
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 2;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -534,22 +515,19 @@ TEST_F(TestSplitTask, single_file_split_two_machine) {
 TEST_F(TestSplitTask, single_file_split_four_machine) {
   std::uniform_int_distribution<int> dis(10000000, 60 * 1024 * 1024 * 10);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 4;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -559,23 +537,20 @@ TEST_F(TestSplitTask, single_file_split_four_machine) {
 TEST_F(TestSplitTask, two_files_split_two_machine) {
   std::uniform_int_distribution<int> dis(10000000, 60 * 1024 * 1024 * 10);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   // 307924947 180461142
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 2; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 2;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
   show(assigned_idx, sqc_count, total_file_size);
@@ -586,23 +561,20 @@ TEST_F(TestSplitTask, two_files_split_8_machine) {
   std::uniform_int_distribution<int64_t> dis(10000000, 600LL * 1024 * 1024 *
 10);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   // 307924947 180461142
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 2; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 8;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
   show(assigned_idx, sqc_count, total_file_size);
@@ -611,22 +583,19 @@ TEST_F(TestSplitTask, two_files_split_8_machine) {
 TEST_F(TestSplitTask, ten_files_split) {
   std::uniform_int_distribution<int> dis(10000000, 60 * 1024 * 1024 * 10);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 10; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 2;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -637,23 +606,19 @@ TEST_F(TestSplitTask, ten_files_split) {
 TEST_F(TestSplitTask, power_law_distribution_thousand_files_split_64_machine) {
   BoundedPowerLawDistribution power_law(-1.5, 10000000000.0, 1000000.0, gen);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1000; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = power_law();
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-
-    files.push_back(file);
+    const int64_t file_size = power_law();
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 64;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -665,23 +630,19 @@ TEST_F(TestSplitTask, power_law_distribution_thousand_files_split_64_machine) {
 TEST_F(TestSplitTask, power_law_distribution_thousand_files_split_8_machine) {
   BoundedPowerLawDistribution power_law(-1.5, 10000000000.0, 1000000.0, gen);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1000; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = power_law();
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-
-    files.push_back(file);
+    const int64_t file_size = power_law();
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 8;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -693,23 +654,19 @@ TEST_F(TestSplitTask, power_law_distribution_thousand_files_split_8_machine) {
 TEST_F(TestSplitTask, power_law_distribution_8_files_split_8_machine) {
   BoundedPowerLawDistribution power_law(-1.1, 10000000000.0, 1000000.0, gen);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 8; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = power_law();
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-
-    files.push_back(file);
+    const int64_t file_size = power_law();
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 8;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -722,22 +679,19 @@ TEST_F(TestSplitTask, power_law_distribution_8_files_split_8_machine) {
 TEST_F(TestSplitTask, normal_distribution_thousand_file_64_machine) {
   std::normal_distribution<double> dis(1000000000.0, 15.0);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1000; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 64;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -750,22 +704,19 @@ TEST_F(TestSplitTask,
        thousand_files_split_64_machine_using_geometric_distribution) {
   std::geometric_distribution<int> dis(0.00000001);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1000; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 64;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -779,22 +730,19 @@ TEST_F(TestSplitTask,
        thousand_files_split_64_machine_using_poisson_distribution) {
   std::poisson_distribution<int> dis(1000000000.0);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1000; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = dis(gen);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = dis(gen);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 64;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -806,22 +754,19 @@ TEST_F(TestSplitTask,
        lineitem) {
   std::poisson_distribution<int> dis(1000000000.0);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 1; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = 1657402685;
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = 1657402685;
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 64;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 
@@ -832,29 +777,23 @@ TEST_F(TestSplitTask,
 TEST_F(TestSplitTask, x1) {
   std::poisson_distribution<int> dis(1000000000.0);
   // calc_assigned_odps_files_to_sqcs_optimized
-  common::ObSEArray<ObExternalFileInfo, 100> files;
+  common::ObSEArray<int64_t, 100> files;
   int64_t total_file_size = 0;
   for (int64_t i = 0; i < 8; i++) {
-    ObExternalFileInfo file;
-    file.file_id_ = i;
-    file.file_size_ = 11*1024*1024*(i+7);
-    file.row_count_ = 100000000;
-    total_file_size += file.file_size_;
-    files.push_back(file);
+    const int64_t file_size = 11*1024*1024*(i+7);
+    total_file_size += file_size;
+    files.push_back(file_size);
   }
 
-  ObExternalFileInfo file;
-  file.file_id_ = 101;
-  file.file_size_ = 11 * 1024 * 1024 * 80;
-  file.row_count_ = 100000000;
-  total_file_size += file.file_size_;
-  files.push_back(file);
+  const int64_t extra_file_size = 11 * 1024 * 1024 * 80;
+  total_file_size += extra_file_size;
+  files.push_back(extra_file_size);
 
-  common::ObSEArray<oceanbase::share::ObExternalTableUtils::FileInfoWithIdx, 20>
+  common::ObSEArray<oceanbase::sql::ObODPSFilePruner::FileInfoWithIdx, 20>
       assigned_idx;
 
   int64_t sqc_count = 6;
-  int ret = ObExternalTableUtils::calc_assigned_odps_files_to_sqcs_optimized(
+  int ret = sql::ObODPSFilePruner::calc_assigned_odps_files_to_sqcs_optimized(
       files, assigned_idx, sqc_count);
   ASSERT_EQ(ret, OB_SUCCESS);
 

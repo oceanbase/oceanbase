@@ -32,8 +32,6 @@ public:
   tablet_id_expr_(NULL),
   slice_id_expr_(NULL),
   repartition_ref_table_id_(OB_INVALID_ID),
-  used_by_external_table_(false),
-  used_by_lake_table_(false),
   px_rf_info_(),
   enable_adaptive_task_splitting_(false),
   controlled_tsc_(nullptr),
@@ -58,6 +56,7 @@ public:
   bool asc_order() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ASC_ORDER); }
   bool desc_order() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_DESC_ORDER); }
   bool force_partition_granule() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_FORCE_PARTITION_GRANULE); }
+  bool force_block_granule() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_FORCE_BLOCK_GRANULE); }
   bool slave_mapping_granule() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_SLAVE_MAPPING); }
   bool enable_partition_pruning() const { return ObGranuleUtil::gi_has_attri(gi_attri_flag_, GI_ENABLE_PARTITION_PRUNING); }
 
@@ -87,10 +86,7 @@ public:
                                 ObSqlPlanItem &plan_item) override;
   virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
 
-  void set_used_by_external_table() { used_by_external_table_ = true; }
-  bool is_used_by_external_table() const { return used_by_external_table_; }
-  void set_used_by_lake_table() { used_by_lake_table_ = true; }
-  bool is_used_by_lake_table() const { return used_by_lake_table_; }
+  void set_force_block_granule() { add_flag(GI_FORCE_BLOCK_GRANULE); }
   bool is_rescanable();
   void set_enable_adaptive_task_splitting(bool value) { enable_adaptive_task_splitting_ = value; }
   bool enable_adaptive_task_splitting() const { return enable_adaptive_task_splitting_; }
@@ -110,8 +106,6 @@ private:
   ObOpPseudoColumnRawExpr *tablet_id_expr_;
   ObRawExpr *slice_id_expr_; // for FTS slice_id pseudo column
   int64_t repartition_ref_table_id_;
-  bool used_by_external_table_;
-  bool used_by_lake_table_;
   ObPxRFStaticInfo px_rf_info_; // for runtime filter extract query range
   bool enable_adaptive_task_splitting_;
   ObLogicalOperator *controlled_tsc_; // only when gi is directly add above tsc.

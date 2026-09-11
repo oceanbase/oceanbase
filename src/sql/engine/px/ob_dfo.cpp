@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_dfo.h"
+#include "sql/engine/px/ob_px_tree_serializer_impl.ipp"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/exchange/ob_px_transmit_op.h"

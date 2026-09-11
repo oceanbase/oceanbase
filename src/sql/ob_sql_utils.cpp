@@ -21,6 +21,7 @@
 #include "share/resource_manager/ob_resource_manager.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
+#include "sql/das/ob_das_define.h" // ObDASTableLocMeta
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -1454,6 +1455,48 @@ int ObSQLUtils::is_odps_external_table(const ObString &table_format_or_propertie
     LOG_WARN("failed to get external table type", K(ret));
   } else {
     is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);
+  }
+  return ret;
+}
+
+int ObSQLUtils::derive_lake_table_format(const ObTableSchema *table_schema,
+                                         share::ObLakeTableFormat &lake_table_format)
+{
+  int ret = OB_SUCCESS;
+  lake_table_format = share::ObLakeTableFormat::INVALID;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (share::ObLakeTableFormat::INVALID
+             != (lake_table_format = table_schema->get_lake_table_format())) {
+    // catalog-fabricated schemas carry the format directly
+  } else if (table_schema->is_external_table()) {
+    // CREATE EXTERNAL TABLE schemas loaded from the shared schema cache leave
+    // lake_table_format_ INVALID (not serialized); derive ODPS from the
+    // external file format string. The shared schema is never mutated.
+    bool is_odps_external_table = false;
+    if (OB_FAIL(ObSQLUtils::is_odps_external_table(table_schema, is_odps_external_table))) {
+      LOG_WARN("failed to check is odps external table or not", K(ret));
+    } else if (is_odps_external_table) {
+      lake_table_format = share::ObLakeTableFormat::ODPS;
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::fill_table_loc_meta_lake_flags(const ObTableSchema *table_schema,
+                                               ObDASTableLocMeta &loc_meta)
+{
+  int ret = OB_SUCCESS;
+  share::ObLakeTableFormat lake_table_format = share::ObLakeTableFormat::INVALID;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (OB_FAIL(derive_lake_table_format(table_schema, lake_table_format))) {
+    LOG_WARN("failed to derive lake table format", K(ret));
+  } else {
+    loc_meta.is_external_table_ = table_schema->is_external_table();
+    loc_meta.is_lake_table_ = share::is_lake_external_table(lake_table_format);
   }
   return ret;
 }
