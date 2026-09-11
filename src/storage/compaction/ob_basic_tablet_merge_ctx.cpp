@@ -1139,12 +1139,23 @@ int ObBasicTabletMergeCtx::update_tablet(
     LOG_WARN("failed to create sstable", KR(ret), "dag_param", get_dag_param());
   } else if (OB_FAIL(build_update_table_store_param(sstable, param))) {
     LOG_WARN("failed to build table store param", KR(ret), K(param));
-  } else if (OB_FAIL(get_ls()->update_tablet_table_store(
-      get_tablet_id(), param, new_tablet_handle))) {
-    LOG_WARN("failed to update tablet table store", K(ret), K(param), K(new_tablet_handle));
-    CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
-    time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
+#ifdef ERRSIM
+    if (GCONF.errsim_test_tablet_id.get_value() == get_tablet_id().id()
+        && is_major_merge_type(get_merge_type())) {
+      LOG_INFO("wait before major update tablet",
+          K(get_tablet_id()), "snapshot_version", sstable->get_snapshot_version(),
+          "is_empty", sstable->is_empty());
+      DEBUG_SYNC(BEFORE_MAJOR_UPDATE_TABLET);
+    }
+#endif
+    if (OB_FAIL(get_ls()->update_tablet_table_store(
+        get_tablet_id(), param, new_tablet_handle))) {
+      LOG_WARN("failed to update tablet table store", K(ret), K(param), K(new_tablet_handle));
+      CTX_SET_DIAGNOSE_LOCATION(*this);
+    } else {
+      time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
+    }
   }
   return ret;
 }

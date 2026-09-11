@@ -31,10 +31,12 @@ class ObBatchUpdateTableStoreParam;
 // data has been logically truncated.
 //
 // Rules:
-//   - major / meta_major sstable : drop if snapshot_version < truncate_commit_version_
-//   - minor / ddl sstable        : drop if end_scn   <= truncate_commit_scn_
-//                                  keep if end_scn > truncate_commit_scn_
-//   - mds sstable                : never filtered (carries the truncate info itself)
+//   - regular major sstable : keep empty major; drop a non-empty major generated
+//                             concurrently before truncate
+//   - meta major sstable    : always drop once truncate info exists
+//   - minor / ddl sstable   : drop if end_scn <= truncate_commit_scn_;
+//                             keep if end_scn > truncate_commit_scn_
+//   - mds sstable           : never filtered (carries the truncate info itself)
 //
 // The filter is a value-semantic, lock-free helper. Constructed by the scheduler
 // layer (which already holds a non-const tablet) and passed by const reference
@@ -55,10 +57,10 @@ public:
   const share::SCN &get_truncate_commit_scn() const { return truncate_commit_scn_; }
   int64_t get_truncate_commit_version() const { return truncate_commit_version_; }
   /// Check whether the merge result sstable in @a param would be dropped by the
-  /// truncate filter. If so, return OB_NO_NEED_MERGE so the caller can skip the
-  /// table store update entirely.
+  /// truncate filter. Empty major SSTables are always kept so a logically empty
+  /// medium can still advance last_medium_scn after truncate. A stale non-empty
+  /// major is skipped and rebuilt from the truncated tablet.
   ///
-  /// @param[in] param  The merge update param whose sstable_ is checked.
   /// @retval OB_SUCCESS        The merge is needed (sstable would be kept, or
   ///                           sstable_ is NULL / no truncate data).
   /// @retval OB_NO_NEED_MERGE  The merge result would be filtered out.
@@ -66,7 +68,9 @@ public:
   /// Rebuild @a new_param from @a param by filtering out SSTables that have been
   /// logically truncated. Only applies to transfer-replace scenarios
   /// (is_transfer_replace_ == true); for non-transfer HA replace the param is
-  /// copied as-is.
+  /// copied as-is. All regular/meta major SSTables are dropped. For a FULL
+  /// replace, one empty regular major is rebuilt from the maximum snapshot of
+  /// the input regular majors.
   ///
   /// @param[in]  param      The original batch update param.
   /// @param[out] new_param  The rebuilt param with truncated SSTables removed.

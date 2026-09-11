@@ -115,7 +115,7 @@ int ObSSTableTruncateFilter::rebuild_param_for_transfer_replace(
   } else {
     // reconstruct tables array
     new_param.tables_handle_.reset();
-    bool has_major = false;
+    int64_t max_regular_major_snapshot = OB_INVALID_VERSION;
     const bool is_restore_status_full = ObTabletRestoreStatus::is_full(param.restore_status_);
 
     for (int64_t i = 0; OB_SUCC(ret) && i < param.tables_handle_.get_count(); ++i) {
@@ -124,39 +124,48 @@ int ObSSTableTruncateFilter::rebuild_param_for_transfer_replace(
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("null table in param", K(ret), K(i));
-      } else if (OB_FAIL(check_sstable_(*table, should_keep))) {
-        LOG_WARN("failed to check sstable", K(ret), KPC(table));
-      } else if (!should_keep) {
-        LOG_INFO("truncate filter dropped sstable from ha replace param",
-            "table_key", table->get_key(), KPC(this));
       } else {
-        ObTableHandleV2 table_handle;
-        if (OB_FAIL(param.tables_handle_.get_table(i, table_handle))) {
-          LOG_WARN("failed to get table handle", K(ret), K(i));
-        } else if (OB_FAIL(new_param.tables_handle_.add_table(table_handle))) {
-          LOG_WARN("failed to add table to new param", K(ret));
+        if (table->is_meta_major_sstable()) {
+          // A meta-major provides no reusable data baseline for a transaction-level
+          // temporary table, whose data is truncated when the transaction commits.
+          should_keep = false;
         } else if (table->is_major_sstable()) {
-          has_major = true;
+          max_regular_major_snapshot = MAX(
+              max_regular_major_snapshot, table->get_snapshot_version());
+          should_keep = false;
+        } else if (OB_FAIL(check_sstable_(*table, should_keep))) {
+          LOG_WARN("failed to check sstable", K(ret), KPC(table));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (!should_keep) {
+          LOG_INFO("truncate filter dropped sstable from ha replace param",
+              "table_key", table->get_key(), KPC(this));
+        } else {
+          ObTableHandleV2 table_handle;
+          if (OB_FAIL(param.tables_handle_.get_table(i, table_handle))) {
+            LOG_WARN("failed to get table handle", K(ret), K(i));
+          } else if (OB_FAIL(new_param.tables_handle_.add_table(table_handle))) {
+            LOG_WARN("failed to add table to new param", K(ret));
+          }
         }
       }
     }
     /// NOTE: In case of restore, if restore status is FULL, major sstable must be exist
     /// after replace(defensive code at @interface ObTablet::handle_transfer_replace_).
-    const int64_t snapshot_version = OB_ISNULL(param.tablet_meta_) ?
-        old_tablet.get_snapshot_version() : MAX(old_tablet.get_snapshot_version(), param.tablet_meta_->snapshot_version_);
     if (OB_FAIL(ret)) {
-    } else if (!is_restore_status_full || has_major) {
+    } else if (!is_restore_status_full) {
       // do nothing
-    } else if (OB_UNLIKELY(OB_INVALID_VERSION == snapshot_version)) {
+    } else if (OB_UNLIKELY(OB_INVALID_VERSION == max_regular_major_snapshot)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected invalid snapshot version", K(ret), K(snapshot_version));
+      LOG_WARN("no regular major snapshot available to rebuild full transfer replace param",
+          K(ret), K(param), KPC(this));
     } else if (OB_FAIL(create_empty_major_for_new_param_(
                 allocator,
                 old_tablet,
-                snapshot_version,
+                max_regular_major_snapshot,
                 new_param))) {
       LOG_WARN("failed to create empty major for new param", K(ret), K(param),
-        K(snapshot_version));
+        K(max_regular_major_snapshot));
     }
   }
 
@@ -189,8 +198,16 @@ int ObSSTableTruncateFilter::check_sstable_(const ObITable &table, bool &should_
     // noop
   } else if (table.is_mds_sstable()) {
     // mds sstable carries truncate info, never filtered
+  } else if (table.is_meta_major_sstable()) {
+    // A meta-major is only an incremental optimization over a regular major and
+    // cannot replace the regular empty major required after truncate.
+    should_keep = false;
   } else if (table.is_major_sstable()) {
-    if (table.get_snapshot_version() < truncate_commit_version_) {
+    if (table.get_snapshot_version() < truncate_commit_version_ && !table.is_empty()) {
+      // The major may have been built before truncate but reach table-store
+      // update after truncate. Skip this stale non-empty result so the same
+      // medium can be rebuilt from the truncated tablet. The rebuilt empty
+      // major must be kept to advance the medium snapshot.
       should_keep = false;
     }
   } else if (table.is_minor_sstable() || table.is_ddl_sstable()) {

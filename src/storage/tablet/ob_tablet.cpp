@@ -2249,6 +2249,7 @@ int ObTablet::build_table_store_for_truncate_(
   int ret = OB_SUCCESS;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
   const ObTabletTableStore *old_store_ptr = nullptr;
+  const ObSSTable *last_major_ptr = nullptr;
   ObTableHandleV2 empty_major_handle;
   ObSSTable *empty_major_ptr = nullptr;
 
@@ -2262,10 +2263,23 @@ int ObTablet::build_table_store_for_truncate_(
     LOG_WARN("unexpected null old table store", K(ret), K(wrapper));
   } else if (tablet_meta_.transfer_info_.has_transfer_table())  {
     LOG_INFO("tablet still has transfer table, don't create empty major", K(ret), K_(tablet_meta));
+  } else if (OB_ISNULL(last_major_ptr = static_cast<const ObSSTable *>(
+                         old_store_ptr->get_major_sstables().get_boundary_table(true/*last*/)))) {
+    if (!old_tablet.get_tablet_meta().ha_status_.is_data_status_complete()) {
+      // HA may publish an INCOMPLETE tablet with an empty table store before
+      // copy-finish installs its regular major. Truncate replay must retry
+      // instead of treating this legal intermediate state as fatal.
+      ret = OB_EAGAIN;
+      LOG_INFO("ha incomplete tablet has no major sstable, retry truncate later",
+          K(ret), K(old_tablet));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old tablet should have major sstable before truncate", K(ret), K(old_tablet));
+    }
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::create_empty_sstable(*allocator_,
                                                                       storage_schema,
                                                                       get_tablet_id(),
-                                                                      tablet_meta_.snapshot_version_,
+                                                                      last_major_ptr->get_snapshot_version(),
                                                                       empty_major_handle))) {
     LOG_WARN("failed to create empty sstable", K(ret), K(storage_schema), K(tablet_meta_));
   } else if (OB_ISNULL(empty_major_ptr = static_cast<ObSSTable *>(empty_major_handle.get_table()))) {

@@ -681,9 +681,9 @@ int TestTruncateOracleGTT::trigger_tablet_medium_merge(
     }
   }
 
-  // Step 2: wait LS weak_read_ts to pass expected_val so that medium merge
-  // picks a snapshot > truncate_commit_version (choose_scn_for_user_request
-  // uses MAX(max_reserved_snapshot, weak_read_ts_)).
+  // Step 2: wait until the reserved snapshot is synced and LS weak_read_ts
+  // passes expected_val so that medium merge picks a snapshot greater than
+  // truncate_commit_version.
   if (OB_FAIL(ret)) {
   } else if (has_expected) {
     ObLSHandle ls_handle;
@@ -692,14 +692,17 @@ int TestTruncateOracleGTT::trigger_tablet_medium_merge(
     } else {
       while (OB_SUCC(ret)) {
         const share::SCN wrs = ls_handle.get_ls()->get_ls_wrs_handler()->get_ls_weak_read_ts();
-        if (wrs.is_valid_and_not_min() && wrs.get_val_for_tx() > expected_val) {
-          LOG_AND_PRINT(INFO, "ls weak_read_ts passed expected_val", K(ret), K(key),
-            K(expected_val), "weak_read_ts", wrs.get_val_for_tx());
+        const int64_t min_reserved_snapshot = ls_handle.get_ls()->get_min_reserved_snapshot();
+        if (min_reserved_snapshot > 0
+            && wrs.is_valid_and_not_min()
+            && wrs.get_val_for_tx() > expected_val) {
+          LOG_AND_PRINT(INFO, "ls is ready to schedule medium merge", K(ret), K(key),
+            K(expected_val), "weak_read_ts", wrs.get_val_for_tx(), K(min_reserved_snapshot));
           break;
         } else if (ObTimeUtility::current_time() > abs_timeout_ts) {
           ret = OB_TIMEOUT;
-          LOG_AND_PRINT(WARN, "wait ls weak_read_ts pass expected_val timeout", K(ret), K(key),
-            K(expected_val), "weak_read_ts", wrs.get_val_for_tx());
+          LOG_AND_PRINT(WARN, "wait ls ready to schedule medium merge timeout", K(ret), K(key),
+            K(expected_val), "weak_read_ts", wrs.get_val_for_tx(), K(min_reserved_snapshot));
           break;
         }
         ::usleep(50 * 1000); // 50ms
@@ -1137,6 +1140,18 @@ TEST_F(TestTruncateOracleGTT, test_gtt_truncate_basic)
     const ObSessionTabletInfo &session_info = infos.at(0);
     const ObTabletMapKey key(session_info.ls_id_, session_info.tablet_id_);
 
+    int64_t last_major_snapshot_before_truncate = 0;
+    {
+      ObTabletHandle handle;
+      ObTablet *tablet = nullptr;
+      ASSERT_SUCC(ObTabletCreateDeleteHelper::get_tablet(key, handle));
+      ASSERT_NE(nullptr, tablet = handle.get_obj());
+      ASSERT_GT(last_major_snapshot_before_truncate = tablet->get_last_major_snapshot_version(), 0);
+      // Mini/medium progress can make tablet snapshot differ from the last persisted major.
+      // Keep the mismatch deterministic so truncate must not promote tablet snapshot to a major.
+      tablet->tablet_meta_.snapshot_version_ = last_major_snapshot_before_truncate + 1;
+      ASSERT_NE(tablet->get_snapshot_version(), tablet->get_last_major_snapshot_version());
+    }
 
     ObTabletHandle tablet_hdl_before_truncate;
     ObTablet *tablet_before_truncate = nullptr;
@@ -1198,6 +1213,7 @@ TEST_F(TestTruncateOracleGTT, test_gtt_truncate_basic)
       ASSERT_SUCC(check_tablet_mds_after_truncate(
           *tablet, nullptr /* tablet_status */, &truncate_data));
       ASSERT_EQ(truncate_data.truncate_commit_scn_, tablet->get_clog_checkpoint_scn());
+      ASSERT_EQ(last_major_snapshot_before_truncate, tablet->get_last_major_snapshot_version());
     }
 
     // insert rows with duplicate keys after truncate
@@ -1557,6 +1573,7 @@ TEST_F(TestTruncateOracleGTT, test_truncate_mds_data_gc)
       }
     })
     LOG_AND_PRINT(INFO, "truncate tablet finished", K(ret), K(session_info));
+    ob_usleep(5_ms);
     ObTabletTruncateMdsUserData data;
     // tablet truncate mds data should not be empty
     ASSERT_SUCC(get_truncate_mds_data(key, data));
@@ -1692,6 +1709,7 @@ TEST_F(TestTruncateOracleGTT, test_mds_minor_keep_multi_version_truncate_chain)
       }
     })
     ASSERT_SUCC(ret);
+    ob_usleep(5_ms);
     ObTabletTruncateMdsUserData old_data;
     ASSERT_SUCC(get_truncate_mds_data(key, old_data));
     ASSERT_FALSE(old_data.is_default());
@@ -1725,8 +1743,18 @@ TEST_F(TestTruncateOracleGTT, test_mds_minor_keep_multi_version_truncate_chain)
     })
     ASSERT_SUCC(ret);
     ObTabletTruncateMdsUserData new_data;
-    ASSERT_SUCC(get_truncate_mds_data(key, new_data));
-    ASSERT_GT(new_data.truncate_commit_scn_.get_val_for_tx(), old_data.truncate_commit_scn_.get_val_for_tx());
+    const int64_t wait_start_ts = ObTimeUtility::current_time();
+    do {
+      ASSERT_SUCC(get_truncate_mds_data(key, new_data));
+      if (new_data.truncate_commit_scn_.get_val_for_tx()
+          > old_data.truncate_commit_scn_.get_val_for_tx()) {
+        break;
+      }
+      ob_usleep(1_ms);
+    } while (ObTimeUtility::current_time() - wait_start_ts < 3_s);
+    ASSERT_GT(new_data.truncate_commit_scn_.get_val_for_tx(),
+        old_data.truncate_commit_scn_.get_val_for_tx())
+        << "timed out waiting for the second truncate MDS commit";
     ASSERT_GT(new_data.truncate_commit_version_, old_data.truncate_commit_version_ + 1);
     check_table_data(sql_proxy, table_name, {});
 
@@ -1784,7 +1812,8 @@ struct MockSSTableBuilder final
       const int64_t end_scn,
       const int64_t snapshot_version,
       blocksstable::ObSSTable &sstable,
-      blocksstable::ObSSTableMeta &meta)
+      blocksstable::ObSSTableMeta &meta,
+      const bool is_empty = false)
   {
     meta.basic_meta_.root_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
     meta.basic_meta_.latest_row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
@@ -1796,13 +1825,14 @@ struct MockSSTableBuilder final
 
     sstable.key_.table_type_ = type;
     sstable.key_.tablet_id_ = 1;
-    if (ObITable::is_major_sstable(type)) {
+    if (ObITable::is_major_sstable(type) || ObITable::is_meta_major_sstable(type)) {
       sstable.key_.version_range_.snapshot_version_ = snapshot_version;
     } else {
       sstable.key_.scn_range_.start_scn_.convert_for_gts(start_scn);
       sstable.key_.scn_range_.end_scn_.convert_for_gts(end_scn);
     }
     sstable.meta_ = &meta;
+    sstable.meta_cache_.data_macro_block_count_ = is_empty ? 0 : 1;
     sstable.valid_for_reading_ = true;
   }
 };
@@ -1821,13 +1851,28 @@ TEST_F(TestTruncateOracleGTT, test_sstable_truncate_filter_check_sstable)
 
   bool keep = true;
 
-  // major: snapshot_version < V => drop
+  // a non-empty major built concurrently before truncate should be retried
   {
     blocksstable::ObSSTable sst;
     blocksstable::ObSSTableMeta meta;
     MockSSTableBuilder::make(ObITable::MAJOR_SSTABLE, 0, 0, 99, sst, meta);
     ASSERT_SUCC(filter.check_sstable_(sst, keep));
     ASSERT_FALSE(keep);
+    ObUpdateTableStoreParam param;
+    param.sstable_ = &sst;
+    ASSERT_EQ(OB_NO_NEED_MERGE, filter.check_if_need_merge(param));
+  }
+  // empty major before truncate is still a valid medium result and must be kept
+  {
+    blocksstable::ObSSTable sst;
+    blocksstable::ObSSTableMeta meta;
+    MockSSTableBuilder::make(ObITable::MAJOR_SSTABLE, 0, 0, 99, sst, meta, true/*is_empty*/);
+    ASSERT_SUCC(filter.check_sstable_(sst, keep));
+    ASSERT_TRUE(keep);
+
+    ObUpdateTableStoreParam param;
+    param.sstable_ = &sst;
+    ASSERT_SUCC(filter.check_if_need_merge(param));
   }
   // major: snapshot_version == V => keep
   {
@@ -1845,11 +1890,32 @@ TEST_F(TestTruncateOracleGTT, test_sstable_truncate_filter_check_sstable)
     ASSERT_SUCC(filter.check_sstable_(sst, keep));
     ASSERT_TRUE(keep);
   }
-  // meta_major: drop by version
+  // meta major is always filtered once truncate info exists
   {
     blocksstable::ObSSTable sst;
     blocksstable::ObSSTableMeta meta;
     MockSSTableBuilder::make(ObITable::META_MAJOR_SSTABLE, 0, 0, 50, sst, meta);
+    ASSERT_SUCC(filter.check_sstable_(sst, keep));
+    ASSERT_FALSE(keep);
+  }
+  {
+    blocksstable::ObSSTable sst;
+    blocksstable::ObSSTableMeta meta;
+    MockSSTableBuilder::make(ObITable::META_MAJOR_SSTABLE, 0, 0, 50, sst, meta, true/*is_empty*/);
+    ASSERT_SUCC(filter.check_sstable_(sst, keep));
+    ASSERT_FALSE(keep);
+  }
+  {
+    blocksstable::ObSSTable sst;
+    blocksstable::ObSSTableMeta meta;
+    MockSSTableBuilder::make(ObITable::META_MAJOR_SSTABLE, 0, 0, 100, sst, meta, true/*is_empty*/);
+    ASSERT_SUCC(filter.check_sstable_(sst, keep));
+    ASSERT_FALSE(keep);
+  }
+  {
+    blocksstable::ObSSTable sst;
+    blocksstable::ObSSTableMeta meta;
+    MockSSTableBuilder::make(ObITable::META_MAJOR_SSTABLE, 0, 0, 150, sst, meta);
     ASSERT_SUCC(filter.check_sstable_(sst, keep));
     ASSERT_FALSE(keep);
   }
@@ -1918,6 +1984,117 @@ TEST_F(TestTruncateOracleGTT, test_sstable_truncate_filter_check_sstable)
     ASSERT_SUCC(noop_filter.check_sstable_(sst, keep));
     ASSERT_TRUE(keep);
   }
+}
+
+TEST_F(TestTruncateOracleGTT, test_sstable_truncate_filter_rebuild_transfer_param_snapshot)
+{
+  BEGIN_TEST_CASE
+  const char *table_name = "test_filter_transfer_snapshot";
+  uint64_t table_id = 0;
+  ObSingleMySQLConnectionPool conn_pool;
+  ObMySQLProxy sql_proxy;
+  gen_sql_proxy(conn_pool, sql_proxy);
+  ASSERT_SUCC(create_gtt_table(sql_proxy, table_name, table_id, tenant_id_));
+
+  vector<DatumRow> rows{{1, "row1"}};
+  IN_TRANS_SCOPE(&sql_proxy, {
+    if (OB_FAIL(insert_to(trans, table_name, rows))) {
+      LOG_AND_PRINT(WARN, "failed to insert rows", K(ret));
+    }
+  })
+  ASSERT_SUCC(ret);
+
+  ObSArray<ObSessionTabletInfo> infos;
+  ASSERT_SUCC(get_session_infos(table_id, infos));
+  ASSERT_EQ(1, infos.size());
+  const ObTabletMapKey key(infos.at(0).ls_id_, infos.at(0).tablet_id_);
+  ObTabletHandle tablet_handle;
+  ObTablet *tablet = nullptr;
+  ASSERT_SUCC(ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle));
+  ASSERT_NE(nullptr, tablet = tablet_handle.get_obj());
+
+  share::SCN truncate_scn;
+  ASSERT_SUCC(truncate_scn.convert_for_tx(400));
+  ObSSTableTruncateFilter filter;
+  ASSERT_SUCC(filter.init(truncate_scn, 300));
+
+  ObArenaAllocator allocator(ObMemAttr(tenant_id_, "TruncFilterTest"));
+  blocksstable::ObSSTable regular_major1;
+  blocksstable::ObSSTableMeta regular_meta1;
+  MockSSTableBuilder::make(
+      ObITable::MAJOR_SSTABLE, 0, 0, 100, regular_major1, regular_meta1, true/*is_empty*/);
+  regular_major1.key_.tablet_id_ = key.tablet_id_;
+
+  blocksstable::ObSSTable regular_major2;
+  blocksstable::ObSSTableMeta regular_meta2;
+  MockSSTableBuilder::make(
+      ObITable::MAJOR_SSTABLE, 0, 0, 350, regular_major2, regular_meta2);
+  regular_major2.key_.tablet_id_ = key.tablet_id_;
+
+  blocksstable::ObSSTable meta_major;
+  blocksstable::ObSSTableMeta meta_major_meta;
+  MockSSTableBuilder::make(
+      ObITable::META_MAJOR_SSTABLE, 0, 0, 400, meta_major, meta_major_meta, true/*is_empty*/);
+  meta_major.key_.tablet_id_ = key.tablet_id_;
+
+  ObTableHandleV2 regular_major_handle1;
+  ObTableHandleV2 regular_major_handle2;
+  ObTableHandleV2 meta_major_handle;
+  ASSERT_SUCC(regular_major_handle1.set_sstable_with_tablet(&regular_major1));
+  ASSERT_SUCC(regular_major_handle2.set_sstable_with_tablet(&regular_major2));
+  ASSERT_SUCC(meta_major_handle.set_sstable_with_tablet(&meta_major));
+
+  ObBatchUpdateTableStoreParam param;
+  param.rebuild_seq_ = 0;
+  param.is_transfer_replace_ = true;
+  param.restore_status_ = ObTabletRestoreStatus::FULL;
+  param.release_mds_scn_.set_min();
+  param.reorg_scn_.set_min();
+  ASSERT_SUCC(param.tables_handle_.add_table(regular_major_handle1));
+  ASSERT_SUCC(param.tables_handle_.add_table(regular_major_handle2));
+  ASSERT_SUCC(param.tables_handle_.add_table(meta_major_handle));
+  ASSERT_TRUE(param.is_valid());
+
+  // Transfer replace drops all regular/meta majors, then rebuilds one empty
+  // regular major from the maximum input regular-major snapshot. The newer
+  // meta-major snapshot must not affect the rebuilt regular-major snapshot.
+  const int64_t original_tablet_snapshot = tablet->tablet_meta_.snapshot_version_;
+  tablet->tablet_meta_.snapshot_version_ = 300;
+  ObBatchUpdateTableStoreParam new_param;
+  const int rebuild_ret = filter.rebuild_param_for_transfer_replace(
+      allocator, *tablet, param, new_param);
+  tablet->tablet_meta_.snapshot_version_ = original_tablet_snapshot;
+  ASSERT_EQ(OB_SUCCESS, rebuild_ret);
+  ASSERT_EQ(1, new_param.tables_handle_.get_count());
+  ObITable *rebuilt_major = new_param.tables_handle_.get_table(0);
+  ASSERT_NE(nullptr, rebuilt_major);
+  ASSERT_TRUE(rebuilt_major->is_major_sstable());
+  ASSERT_FALSE(rebuilt_major->is_meta_major_sstable());
+  ASSERT_TRUE(rebuilt_major->is_empty());
+  ASSERT_EQ(350, rebuilt_major->get_snapshot_version());
+
+  // A FULL transfer replace param without any regular major is unexpected.
+  ObBatchUpdateTableStoreParam meta_only_param;
+  meta_only_param.rebuild_seq_ = 0;
+  meta_only_param.is_transfer_replace_ = true;
+  meta_only_param.restore_status_ = ObTabletRestoreStatus::FULL;
+  meta_only_param.release_mds_scn_.set_min();
+  meta_only_param.reorg_scn_.set_min();
+  ASSERT_SUCC(meta_only_param.tables_handle_.add_table(meta_major_handle));
+  ASSERT_TRUE(meta_only_param.is_valid());
+  ObBatchUpdateTableStoreParam meta_only_new_param;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, filter.rebuild_param_for_transfer_replace(
+      allocator, *tablet, meta_only_param, meta_only_new_param));
+
+  conn_pool.close_all_connection();
+  meta_only_new_param.reset();
+  meta_only_param.reset();
+  new_param.reset();
+  param.reset();
+  meta_major_handle.reset();
+  regular_major_handle2.reset();
+  regular_major_handle1.reset();
+  tablet_handle.reset();
 }
 
 } // end namespace storage

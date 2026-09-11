@@ -198,7 +198,7 @@ static int template_dispatch_drop_gtt_v2_session_tablet_on_creator(
           }
         } else if (OB_ISNULL(res)) {
           // A successful RPC without a result cannot confirm creator execution.
-          LOG_WARN("drop gtt v2 session tablet rpc result is null", K(dest_addr), K(arg));
+          LOG_WARN("drop gtt v2 session tablet rpc result is null", K(dest_addr), K(arg)); // by design: defer to rpc_err
           if (OB_SUCCESS == rpc_err) {
             rpc_err = OB_ERR_UNEXPECTED;
           }
@@ -1517,6 +1517,8 @@ int ObSessionTabletDeleteHelper::mds_remove_tablet(
 int ObSessionTabletTruncateHelper::do_work()
 {
   int ret = OB_SUCCESS;
+
+  DEBUG_SYNC(BEFORE_TRUNCATE_TABLET_DO_WORK);
 
   if (OB_UNLIKELY(!tablet_info_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
