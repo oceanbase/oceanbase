@@ -338,6 +338,34 @@ bool LogSlidingWindow::leader_can_submit_larger_log_(const int64_t log_id) const
   return bool_ret;
 }
 
+int64_t LogSlidingWindow::get_effective_group_buffer_size_() const
+{
+  int64_t available_buffer_size = group_buffer_.get_available_buffer_size();
+  if (state_mgr_->is_leader_active()
+      && OB_UNLIKELY(available_buffer_size > LEADER_DEFAULT_GROUP_BUFFER_SIZE)) {
+    available_buffer_size = LEADER_DEFAULT_GROUP_BUFFER_SIZE;
+  }
+  return available_buffer_size;
+}
+
+bool LogSlidingWindow::can_handle_new_log_(const LSN &lsn,
+                                           const int64_t total_len,
+                                           const LSN &ref_reuse_lsn) const
+{
+  bool bool_ret = group_buffer_.can_handle_new_log(lsn, total_len, ref_reuse_lsn);
+  if (bool_ret) {
+    const int64_t available_buffer_size = group_buffer_.get_available_buffer_size();
+    const int64_t effective_buffer_size = get_effective_group_buffer_size_();
+    if (OB_UNLIKELY(effective_buffer_size != available_buffer_size)) {
+      // Some role-transition failures may leave an active leader with a 40 MiB physical buffer,
+      // so recheck against the effective 32 MiB leader capacity in this exceptional state.
+      bool_ret = group_buffer_.can_handle_new_log(
+          lsn, total_len, ref_reuse_lsn, effective_buffer_size);
+    }
+  }
+  return bool_ret;
+}
+
 bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size, LSN &lsn_upper_bound)
 {
   // Check whether leader can submit new log.
@@ -350,7 +378,7 @@ bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size, 
   // calculate lsn_upper_bound
   LSN buffer_reuse_lsn;
   (void) group_buffer_.get_reuse_lsn(buffer_reuse_lsn);
-  const int64_t group_buffer_size = group_buffer_.get_available_buffer_size();
+  const int64_t group_buffer_size = get_effective_group_buffer_size_();
   LSN reuse_base_lsn = MIN(curr_committed_end_lsn, buffer_reuse_lsn);
   lsn_upper_bound = reuse_base_lsn + group_buffer_size;
 
@@ -358,7 +386,7 @@ bool LogSlidingWindow::leader_can_submit_new_log_(const int64_t valid_log_size, 
     PALF_LOG_RET(WARN, tmp_ret, "get_curr_end_lsn failed", K(tmp_ret), K_(palf_id), K_(self), K(valid_log_size));
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
   //     group_buffer被uncommitted log填满而无法滑出
-  } else if (!group_buffer_.can_handle_new_log(curr_end_lsn, valid_log_size, curr_committed_end_lsn)) {
+  } else if (!can_handle_new_log_(curr_end_lsn, valid_log_size, curr_committed_end_lsn)) {
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
           K(valid_log_size), K(curr_end_lsn), K(curr_committed_end_lsn),
@@ -379,7 +407,7 @@ bool LogSlidingWindow::leader_can_submit_group_log_(const LSN &lsn, const int64_
   get_committed_end_lsn_(curr_committed_end_lsn);
   // NB: 采用committed_lsn作为可复用起点的下界，避免写盘立即复用group_buffer导致follower的
   //     group_buffer被uncommitted log填满而无法滑出
-  if (!group_buffer_.can_handle_new_log(lsn, group_log_size, curr_committed_end_lsn)) {
+  if (!can_handle_new_log_(lsn, group_log_size, curr_committed_end_lsn)) {
     if (REACH_TIME_INTERVAL(1000 * 1000)) {
       PALF_LOG_RET(WARN, OB_ERR_UNEXPECTED, "group_buffer_ cannot handle new log now", K(tmp_ret), K_(palf_id), K_(self),
           K(lsn), K(group_log_size), K(curr_committed_end_lsn),
@@ -583,7 +611,7 @@ int LogSlidingWindow::wait_group_buffer_ready_(const LSN &lsn, const int64_t dat
   int64_t wait_times = 0;
   LSN curr_committed_end_lsn;
   get_committed_end_lsn_(curr_committed_end_lsn);
-  while (false == group_buffer_.can_handle_new_log(lsn, data_len, curr_committed_end_lsn)) {
+  while (false == can_handle_new_log_(lsn, data_len, curr_committed_end_lsn)) {
     // 要填充的终点超过了buffer可复用的范围
     // 需要重试直到可复用终点推大
     static const int64_t MAX_SLEEP_US = 100;

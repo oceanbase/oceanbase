@@ -56,6 +56,10 @@ public:
   bool can_handle_new_log(const LSN &lsn,
                           const int64_t total_len,
                           const LSN &ref_reuse_lsn) const;
+  bool can_handle_new_log(const LSN &lsn,
+                          const int64_t total_len,
+                          const LSN &ref_reuse_lsn,
+                          const int64_t available_buffer_size) const;
   int check_log_buf_wrapped(const LSN &lsn, const int64_t log_len, bool &is_buf_wrapped) const;
   int64_t get_available_buffer_size() const;
   int64_t get_reserved_buffer_size() const;
