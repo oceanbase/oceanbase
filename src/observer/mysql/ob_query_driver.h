@@ -22,6 +22,7 @@ struct ObSqlCtx;
 class ObSQLSessionInfo;
 class ObExecContext;
 class ObResultSet;
+class ObRARowStore;
 }
 
 
@@ -64,6 +65,16 @@ public:
                                     bool has_more_result,
                                     bool &can_retry,
                                     int64_t fetch_limit  = common::OB_INVALID_COUNT);
+  // send buffered rows (already fetched into a row store, e.g. dbms_sql unstreaming
+  // cursor row_store) to the client in the same way as response_query_result.
+  // fields: column definitions; row_store: buffered rows; start_row: first row to send
+  // (usually spi_cursor->cur_); has_more_result: whether more result sets follow.
+  int response_buffered_rows(const common::ColumnsFieldIArray &fields,
+                             sql::ObRARowStore &row_store,
+                             int64_t start_row,
+                             bool has_more_result,
+                             sql::ObExecContext *exec_ctx = NULL,
+                             bool is_packed = false);
   virtual int send_eof_packet(bool has_more_result);
   virtual int seal_eof_packet(bool has_more_result, obmysql::OMPKEOF& eofp);
   ObIMPPacketSender& get_packet_sender() { return sender_; }
@@ -71,7 +82,8 @@ public:
                                     bool has_more_result = false,
                                     bool need_set_ps_out = false,
                                     bool ps_cursor_execute = false,
-                                    sql::ObResultSet *result = NULL);
+                                    sql::ObResultSet *result = NULL,
+                                    bool is_cursor_result = false);
   int convert_string_value_charset(common::ObObj& value, sql::ObResultSet &result,
                                    ObCharsetType charset_type, ObCharsetType nchar,
                                    common::ObIAllocator *alloc = NULL);

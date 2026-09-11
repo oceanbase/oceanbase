@@ -3433,7 +3433,9 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObPsCu
   } else if (OB_FAIL(drv.response_query_header(*fields,
                                                false,
                                                false,
-                                               true))) {
+                                               true,
+                                               NULL,
+                                               true /*is_cursor_result*/))) {
     LOG_WARN("fail to get autocommit", K(ret));
   }
   return ret;

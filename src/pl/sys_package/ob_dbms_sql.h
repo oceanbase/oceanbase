@@ -14,6 +14,11 @@ namespace oceanbase
 namespace sql
 {
 class ObExecContext;
+class ObSQLSessionInfo;
+}
+namespace observer
+{
+class ObQueryDriver;
 }
 namespace pl
 {
@@ -336,6 +341,9 @@ public:
   static int last_error_position(ObPLExecCtx &ctx,
                               ParamStore &params,
                               ObObj &result);
+  static int return_result(ObPLExecCtx &ctx,
+                           ParamStore &params,
+                           ObObj &result);
 
 private:
   static int do_execute(ObPLExecCtx &ctx,
@@ -351,6 +359,11 @@ private:
   static int get_cursor(ObPLExecCtx &ctx,
                         ParamStore &params,
                         ObDbmsCursorInfo *&cursor);
+  static int send_cursor_result_set(ObPLExecCtx &ctx,
+                                    sql::ObSQLSessionInfo &session,
+                                    observer::ObQueryDriver &query_driver,
+                                    pl::ObPLCursorInfo &cursor,
+                                    const common::ColumnsFieldArray *fields);
   static int check_stmt_need_to_be_executed_when_parsing(ObDbmsCursorInfo &cursor, bool &flag);
 
   enum DescribeType {

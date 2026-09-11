@@ -10,6 +10,8 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/engine/expr/ob_expr_pl_associative_index.h"
+#include "observer/mysql/ob_query_driver.h"
+#include "sql/engine/basic/ob_ra_row_store.h"
 
 namespace oceanbase
 {
@@ -1861,6 +1863,155 @@ int ObPLDbmsSql::to_refcursor(ObPLExecCtx &ctx, ParamStore &params, ObObj &resul
     OX (params.at(0).set_null());
   }
 
+  return ret;
+}
+
+int ObPLDbmsSql::send_cursor_result_set(ObPLExecCtx &ctx,
+                                        sql::ObSQLSessionInfo &session,
+                                        observer::ObQueryDriver &query_driver,
+                                        pl::ObPLCursorInfo &cursor,
+                                        const common::ColumnsFieldArray *fields)
+{
+  int ret = OB_SUCCESS;
+  if (cursor.is_streaming()) {
+    sql::ObSPIResultSet *handler = cursor.get_cursor_handler();
+    sql::ObResultSet *rs = NULL;
+    CK (OB_NOT_NULL(handler));
+    OX (rs = handler->get_result_set());
+    CK (OB_NOT_NULL(rs));
+    if (OB_SUCC(ret)) {
+      bool can_retry = false;
+      // has_more_result=true: the final OK packet of the top-level statement
+      // terminates the multi-result sequence (see response_query_result).
+      OZ (query_driver.response_query_result(*rs,
+                                             session.is_ps_protocol(),
+                                             true /*has_more_result*/,
+                                             can_retry));
+      OZ (query_driver.send_eof_packet(true /*has_more_result*/));
+      OZ (query_driver.get_packet_sender().flush_buffer(false));
+    }
+  } else {
+    // unstreaming cursor: all rows are buffered in the spi cursor row store.
+    // send them to the client reusing the query driver's buffered-row send path.
+    sql::ObSPICursor *spi_cursor = cursor.get_spi_cursor();
+    CK (OB_NOT_NULL(spi_cursor));
+    if (OB_SUCC(ret)) {
+      const common::ColumnsFieldIArray *send_fields = fields;
+      if (OB_ISNULL(send_fields)) {
+        send_fields = &spi_cursor->fields_;
+      }
+      CK (OB_NOT_NULL(send_fields));
+      bool has_more = true;
+      OZ (query_driver.response_buffered_rows(*send_fields,
+                                              spi_cursor->row_store_,
+                                              spi_cursor->cur_,
+                                              has_more,
+                                              ctx.exec_ctx_,
+                                              cursor.is_packed()));
+      OZ (query_driver.send_eof_packet(has_more));
+      OZ (query_driver.get_packet_sender().flush_buffer(false));
+    }
+  }
+  return ret;
+}
+
+int ObPLDbmsSql::return_result(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(result);
+  sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
+  ObSQLSessionInfo *session = NULL;
+  observer::ObQueryDriver *query_driver = NULL;
+
+  CK (OB_NOT_NULL(exec_ctx));
+  OX (session = exec_ctx->get_my_session());
+  CK (OB_NOT_NULL(session));
+  if (OB_SUCC(ret) && (params.count() < 1 || params.count() > 2)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument count for dbms_sql.return_result", K(ret), K(params.count()));
+  }
+
+  // query driver must be available (top-level PL statement execution)
+  if (OB_SUCC(ret) && OB_ISNULL(query_driver = session->get_pl_query_sender())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no pl query sender available for return_result", K(ret));
+  }
+
+  // to_client => FALSE is not supported for either overload (Oracle keeps the
+  // result client-side in that case, which OB does not implement yet).
+  if (OB_SUCC(ret) && 2 == params.count()
+      && !params.at(1).is_null() && !params.at(1).get_bool()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "DBMS_SQL.RETURN_RESULT with to_client => FALSE");
+    LOG_WARN("return_result with to_client false not supported", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (params.at(0).is_ext()
+        && (params.at(0).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE
+            || params.at(0).get_meta().get_extend_type() == PL_CURSOR_TYPE)) {
+      // overload: RETURN_RESULT(rc IN OUT SYS_REFCURSOR, to_client IN BOOLEAN DEFAULT TRUE)
+      if (OB_SUCC(ret)) {
+        pl::ObPLCursorInfo *ref_cursor = reinterpret_cast<pl::ObPLCursorInfo *>(params.at(0).get_ext());
+        if (OB_ISNULL(ref_cursor)) {
+          ret = OB_ERR_INVALID_CURSOR;
+          LOG_WARN("ref cursor is null for return_result", K(ret));
+        } else if (!ref_cursor->isopen()) {
+          ret = OB_ERR_INVALID_CURSOR;
+          LOG_WARN("ref cursor not open for return_result", K(ret));
+        } else {
+          // Close the shared result, but leave the shell owned by its PL references.
+          // As in spi_cursor_close, preserve the ID of a registered cursor (including
+          // TO_REFCURSOR results) so session cleanup can erase it by the original key.
+          // Note: close is best-effort on send failure as well, so that the spi
+          // cursor row_store (possibly carrying temporary conversion buffers) is
+          // released and no dangling cell pointers remain for later access.
+          const bool is_server_cursor = ref_cursor->is_server_cursor() || ref_cursor->is_session_cursor();
+          if (OB_FAIL(send_cursor_result_set(ctx, *session, *query_driver, *ref_cursor, NULL))) {
+            LOG_WARN("fail to send ref cursor result set", K(ret));
+          }
+          int close_ret = ref_cursor->close(*session, is_server_cursor);
+          if (OB_UNLIKELY(OB_SUCCESS != close_ret)) {
+            LOG_WARN("fail to close returned ref cursor", K(ret), K(close_ret));
+          }
+          if (OB_SUCCESS == ret) {
+            ret = close_ret;
+          }
+        }
+      }
+    } else {
+      // overload: RETURN_RESULT(cursor_number IN OUT INTEGER, to_client IN BOOLEAN DEFAULT TRUE)
+      ObDbmsCursorInfo *cursor = NULL;
+      OZ (get_cursor(ctx, params, cursor));
+      CK (OB_NOT_NULL(cursor));
+
+      // validate: must be an executed select statement whose result has not been fully fetched
+      if (OB_SUCC(ret) && (cursor->get_sql_stmt().empty()
+                           || !ObStmt::is_select_stmt(cursor->get_stmt_type())
+                           || !cursor->isopen()
+                           || (cursor->get_fetched() && !cursor->get_fetched_with_row()))) {
+        ret = OB_ERR_INVALID_CURSOR;
+        LOG_WARN("invalid dbms_sql cursor for return_result", K(ret),
+                 K(cursor->get_sql_stmt().empty()), K(cursor->get_stmt_type()), K(cursor->isopen()));
+      }
+      OZ (send_cursor_result_set(ctx, *session, *query_driver, *cursor, &cursor->get_field_columns()));
+      // OPEN_CURSOR registered this shell in the session map. Close the result
+      // without resetting its ID; CLOSE_CURSOR or session teardown owns removal.
+      // Best-effort close on send failure as well, so the spi cursor row_store
+      // (possibly carrying temporary conversion buffers) is released and no
+      // dangling cell pointers remain for later access.
+      // Guard cursor against NULL (e.g. get_cursor failed) before dereferencing.
+      if (OB_NOT_NULL(cursor)) {
+        int close_ret = cursor->close(*session, true /*is_cursor_reuse*/);
+        if (OB_UNLIKELY(OB_SUCCESS != close_ret)) {
+          LOG_WARN("fail to close returned dbms cursor", K(ret), K(close_ret));
+        }
+        if (OB_SUCCESS == ret) {
+          ret = close_ret;
+        }
+      }
+    }
+  }
   return ret;
 }
 

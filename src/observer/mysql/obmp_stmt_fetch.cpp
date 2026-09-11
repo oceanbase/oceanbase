@@ -307,7 +307,10 @@ int ObMPStmtFetch::response_query_header(ObSQLSessionInfo &session,
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(drv.response_query_header(*fields,
                                                has_ok_packet(),
-                                               false))) {
+                                               false,
+                                               false,
+                                               NULL,
+                                               true /*is_cursor_result*/))) {
     LOG_WARN("fail to get autocommit", K(ret));
   }
   return ret;

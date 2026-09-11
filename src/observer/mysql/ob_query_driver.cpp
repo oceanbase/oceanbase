@@ -14,6 +14,7 @@
 #include "rpc/obmysql/packet/ompk_eof.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
+#include "sql/engine/basic/ob_ra_row_store.h"
 
 namespace oceanbase
 {
@@ -42,7 +43,8 @@ int ObQueryDriver::response_query_header(ObResultSet &result,
                                              has_more_result,
                                              need_set_ps_out_flag,
                                              false,
-                                             &result))) {
+                                             &result,
+                                             false /*is_cursor_result*/))) {
       LOG_WARN("response query head fail. ", K(ret));
     }
   }
@@ -56,7 +58,8 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
                                          bool has_more_result,
                                          bool need_set_ps_out_flag,
                                          bool ps_cursor_execute,
-                                         ObResultSet *result)
+                                         ObResultSet *result,
+                                         bool is_cursor_result)
 {
   int ret = OB_SUCCESS;
   bool ac = true;
@@ -133,8 +136,12 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
     flags.status_flags_.OB_SERVER_STATUS_AUTOCOMMIT = (ac ? 1 : 0);
     flags.status_flags_.OB_SERVER_MORE_RESULTS_EXISTS = has_more_result;
     flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = need_set_ps_out_flag ? 1 : 0;
-    // NULL == result 说明是老协议 ps cursor execute 回包，或者fetch 协议回包， cursor_exit = true
-    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = NULL == result ? 1 : 0;
+    // The cursor-exists status flag is only meaningful for result headers of the
+    // PS cursor execute/fetch protocol (returned rows are fetched later by the
+    // client). A complete buffered result set must not set this flag. The flag is
+    // now driven by an explicit is_cursor_result parameter instead of the old
+    // implicit "result == NULL" convention.
+    flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = is_cursor_result ? 1 : 0;
     if (!session_.is_obproxy_mode()) {
       // in java client or others, use slow query bit to indicate partition hit or not
       flags.status_flags_.OB_SERVER_QUERY_WAS_SLOW = !session_.partition_hit().get_bool();
@@ -342,6 +349,124 @@ int ObQueryDriver::send_eof_packet(bool has_more_result)
     LOG_WARN("failed to seal eof packet", K(ret), K(has_more_result));
   } else if (OB_FAIL(sender_.response_packet(eofp, &session_))) {
     LOG_WARN("response packet fail", K(ret), K(has_more_result));
+  }
+  return ret;
+}
+
+int ObQueryDriver::response_buffered_rows(const common::ColumnsFieldIArray &fields,
+                                          sql::ObRARowStore &row_store,
+                                          int64_t start_row,
+                                          bool has_more_result,
+                                          sql::ObExecContext *exec_ctx,
+                                          bool is_packed)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_num = 0;
+  int64_t row_count = row_store.get_row_cnt();
+  ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  MYSQL_PROTOCOL_TYPE protocol_type = session_.is_ps_protocol()
+      ? MYSQL_PROTOCOL_TYPE::BINARY : MYSQL_PROTOCOL_TYPE::TEXT;
+  ObCharsetType charset_type = CHARSET_INVALID;
+  ObCharsetType nchar = CHARSET_INVALID;
+  const ObNewRow *row = NULL;
+  int64_t limit_count = INT64_MAX;
+
+  if (lib::is_mysql_mode()) {
+    if (OB_FAIL(session_.get_sql_select_limit(limit_count))) {
+      LOG_WARN("failed to get sytem variable sql_select_limit", K(ret));
+    }
+  } else { // lib::is_oracle_mode()
+    if (OB_FAIL(session_.get_oracle_sql_select_limit(limit_count))) {
+      LOG_WARN("failed to get sytem variable _oracle_sql_select_limit", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(session_.get_ncharacter_set_connection(nchar))) {
+      LOG_WARN("get ncharacter set connection failed", K(ret));
+    } else if (OB_FAIL(session_.get_character_set_results(charset_type))) {
+      LOG_WARN("fail to get result charset", K(ret));
+    } else if (fields.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no field columns for buffered result", K(ret), K(fields.count()));
+    } else if (OB_FAIL(response_query_header(fields, has_more_result, false,
+                                             false /*ps_cursor_execute*/,
+                                             NULL,
+                                             false /*is_cursor_result*/))) {
+      LOG_WARN("fail to response query header", K(ret));
+    }
+  }
+
+  for (int64_t i = start_row; OB_SUCC(ret) && i < row_count && row_num < limit_count; ++i) {
+    if (OB_FAIL(row_store.get_row(i, row))) {
+      LOG_WARN("fail to get buffered row", K(ret), K(i), K(row_count));
+    } else if (OB_ISNULL(row)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("buffered row is null", K(ret), K(i));
+    } else {
+      ObNewRow *mutable_row = const_cast<ObNewRow *>(row);
+      if (!is_packed) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < mutable_row->get_count(); ++j) {
+          ObObj &value = mutable_row->get_cell(j);
+          // Use a per-cell local target charset so an NCHAR/NVARCHAR2 value does
+          // not pollute the result-set-level charset_type for later columns/rows.
+          ObCharsetType target_charset = charset_type;
+          if (lib::is_oracle_mode()
+              && (value.is_nchar() || value.is_nvarchar2())
+              && nchar != CHARSET_INVALID && nchar != CHARSET_BINARY) {
+            target_charset = nchar;
+          }
+          if (ob_is_string_tc(value.get_type())
+              && CS_TYPE_INVALID != value.get_collation_type()) {
+            ObCollationType from_collation = value.get_collation_type();
+            ObCollationType to_collation = ObCharset::get_default_collation(target_charset);
+            if (from_collation != to_collation) {
+              OZ (value.convert_string_value_charset(target_charset, allocator));
+            }
+          } else if (value.is_clob_locator()
+                     && OB_FAIL(convert_lob_value_charset(value, target_charset, allocator))) {
+            LOG_WARN("convert lob value charset failed", K(ret));
+          } else if (ob_is_text_tc(value.get_type())
+                     && OB_FAIL(convert_text_value_charset(value, target_charset, allocator,
+                                                           &session_))) {
+            LOG_WARN("convert text value charset failed", K(ret));
+          }
+          if (OB_SUCC(ret)
+              && (value.is_lob() || value.is_lob_locator() || value.is_json()
+                  || value.is_geometry() || value.is_roaringbitmap())
+              && OB_FAIL(process_lob_locator_results(value, false /*is_use_lob_locator*/,
+                                                     false /*is_support_outrow_locator_v2*/,
+                                                     &allocator, &session_))) {
+            LOG_WARN("convert lob locator to longtext failed", K(ret));
+          }
+          if (OB_SUCC(ret)
+              && (value.is_user_defined_sql_type() || value.is_collection_sql_type()
+                  || value.is_geometry())
+              && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value, &allocator,
+                                                                  &session_, exec_ctx,
+                                                                  session_.is_ps_protocol(),
+                                                                  &fields, ctx_.schema_guard_))) {
+            LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        const ObDataTypeCastParams dtc_params =
+            ObBasicSessionInfo::create_dtc_params(&session_);
+        ObSMRow sm(protocol_type, *row, dtc_params, session_, &fields,
+                   ctx_.schema_guard_, session_.get_effective_tenant_id());
+        sm.set_packed(is_packed);
+        OMPKRow rp(sm);
+        rp.set_is_packed(is_packed);
+        if (OB_FAIL(sender_.response_packet(rp, &session_))) {
+          LOG_WARN("response packet fail", K(ret), K(i));
+        } else {
+          ++row_num;
+          if (0 == row_num % RESET_CONVERT_CHARSET_ALLOCATOR_EVERY_X_ROWS) {
+            allocator.reset();
+          }
+        }
+      }
+    }
   }
   return ret;
 }
