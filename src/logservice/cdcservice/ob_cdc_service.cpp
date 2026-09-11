@@ -493,7 +493,7 @@ int ObCdcService::fetch_raw_log(const obrpc::ObCdcFetchRawLogReq &req,
       ctx->record_rpc_stat(queue_time, process_time, read_log_time, read_log_size);
     }
 
-    EXTLOG_LOG(INFO, "ObCdcService fetch_raw_log", K(ret), K(req), K(resp), K(send_ts), K(recv_ts));
+    EXTLOG_LOG(TRACE, "ObCdcService fetch_raw_log", K(ret), K(req), K(resp), K(send_ts), K(recv_ts));
   }
 
   if (OB_NOT_NULL(ctx)) {
