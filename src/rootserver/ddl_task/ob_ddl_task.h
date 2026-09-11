@@ -782,6 +782,13 @@ public:
   uint64_t get_target_object_id() const { return target_object_id_; }
   int64_t get_task_status() const { return task_status_; }
   int64_t get_snapshot_version() const { return snapshot_version_; }
+  // The returned snapshot version is used to match sessions executing task inner SQL.
+  // COMPLETE refresh SQL does not contain the snapshot version, so omit this match condition.
+  int64_t get_inner_sql_match_snapshot_version() const
+  {
+    return share::ObDDLType::DDL_MVIEW_COMPLETE_REFRESH == task_type_
+           ? OB_INVALID_VERSION : snapshot_version_;
+  }
   int get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_str);
   int64_t get_ret_code() const { return ret_code_; }
   int64_t get_task_id() const { return task_id_; }

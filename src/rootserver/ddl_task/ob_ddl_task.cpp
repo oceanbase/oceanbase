@@ -1298,7 +1298,8 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
 
     if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_ || !is_tenant_status_normal) {
       (void)ObDDLTaskRecordOperator::kill_task_inner_sql(*GCTX.sql_proxy_,
-          trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addrs_); // ignore return code
+          trace_id_, dst_tenant_id_, task_id_, get_inner_sql_match_snapshot_version(),
+          sql_exec_addrs_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
     }
   }
@@ -4804,102 +4805,32 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
     const ObIArray<common::ObAddr> &sql_exec_addrs)
 {
   int ret = OB_SUCCESS;
-  char ip_str[common::OB_IP_STR_BUFF];
+  ObSEArray<uint64_t, 4> session_ids;
 
   if (OB_UNLIKELY(!proxy.is_inited() || trace_id.is_invalid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(proxy.is_inited()), K(trace_id));
   } else {
     LOG_INFO("start ddl kill inner sql session", K(ret), K(trace_id));
-    ObSqlString sql_string;
-    for (int64_t i = 0; i < sql_exec_addrs.count() && OB_SUCC(ret); i++) {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        sqlclient::ObMySQLResult *result = NULL;
-        char trace_id_str[64] = { 0 };
-        char spec_charater = '%';
-        const char *trace_id_like = nullptr;
-        if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get trace id string failed", K(ret), K(trace_id), K(tenant_id));
-        } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get trace id string failed", K(ret), K(trace_id_str));
-        } else if (!sql_exec_addrs.at(i).is_valid()) {
-          if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
-              " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
-              " and id != connection_id()",
-              OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-              spec_charater,
-              trace_id_like,
-              tenant_id,
-              spec_charater,
-              spec_charater,
-              task_id,
-              spec_charater,
-              spec_charater,
-              spec_charater,
-              snapshot_version,
-              spec_charater))) {
-            LOG_WARN("assign sql string failed", K(ret));
-          }
+    for (int64_t i = 0; OB_SUCC(ret) && i < sql_exec_addrs.count(); ++i) {
+      LOG_INFO("kill session inner sql", K(task_id), K(sql_exec_addrs.at(i)));
+      if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
+        LOG_WARN("ddl sim failure: slow inner sql", K(ret), K(tenant_id), K(task_id));
+      } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, KILL_TASK_BY_INNER_SQL_FAILED))) {
+        LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
+      } else if (OB_FAIL(ObDDLUtil::get_task_inner_sql_session_ids(trace_id,
+                                                                  tenant_id,
+                                                                  task_id,
+                                                                  snapshot_version,
+                                                                  sql_exec_addrs.at(i),
+                                                                  session_ids))) {
+        LOG_WARN("get task inner sql session ids failed", KR(ret), K(trace_id), K(task_id), K(sql_exec_addrs.at(i)));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < session_ids.count(); ++j) {
+        if (OB_FAIL(kill_inner_sql(proxy, tenant_id, session_ids.at(j)))) {
+          LOG_WARN("fail to kill session", K(ret), K(session_ids.at(j)), K(trace_id));
         } else {
-          if (!sql_exec_addrs.at(i).ip_to_string(ip_str, sizeof(ip_str))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("ip to string failed", K(ret), K(sql_exec_addrs.at(i)));
-          } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
-              " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
-              " and id != connection_id()",
-              OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-              spec_charater,
-              trace_id_like,
-              tenant_id,
-              ip_str,
-              sql_exec_addrs.at(i).get_port(),
-              spec_charater,
-              spec_charater,
-              task_id,
-              spec_charater,
-              spec_charater,
-              spec_charater,
-              snapshot_version,
-              spec_charater))) {
-            LOG_WARN("assign sql string failed", K(ret));
-          }
-        }
-        LOG_INFO("kill session inner sql", K(sql_string), K(task_id), K(sql_exec_addrs.at(i)));
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, TASK_STATUS_OPERATOR_SLOW))) {
-          LOG_WARN("ddl sim failure: slow inner sql", K(ret), K(tenant_id), K(task_id));
-        } else if (OB_FAIL(DDL_SIM(tenant_id, task_id, KILL_TASK_BY_INNER_SQL_FAILED))) {
-          LOG_WARN("ddl sim failure", K(ret), K(tenant_id), K(task_id));
-        } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addrs.at(i)))) { // default use OB_SYS_TENANT_ID
-          LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
-        } else if (OB_ISNULL((result = res.get_result()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("fail to get sql result", K(ret), KP(result));
-        } else {
-          uint64_t session_id = 0;
-          while (OB_SUCC(ret)) {
-            if (OB_FAIL(result->next())) {
-              if (OB_ITER_END == ret) {
-                ret = OB_SUCCESS;
-                break;
-              } else {
-                LOG_WARN("fail to get next row", K(ret));
-              }
-            } else {
-              EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
-              if (OB_SUCC(ret)) {
-                if (OB_FAIL(kill_inner_sql(proxy, tenant_id, session_id))){
-                  LOG_WARN("fail to kill session", K(ret), K(session_id), K(trace_id));
-                } else {
-                  LOG_WARN("succ to kill session", K(ret), K(session_id), K(trace_id));
-                }
-              }
-            }
-          }
+          LOG_WARN("succ to kill session", K(ret), K(session_ids.at(j)), K(trace_id));
         }
       }
     }

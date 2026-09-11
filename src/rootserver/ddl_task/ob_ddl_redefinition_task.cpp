@@ -3344,7 +3344,7 @@ int ObDDLRedefinitionTask::reap_old_replica_build_task(bool &need_exec_new_inner
       need_exec_new_inner_sql = true;
     } else if (OB_FAIL(ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(tenant_id_, dest_table_id,
         task_id_, old_execution_id, invalid_addr, trace_id_,
-        table_schema->get_schema_version(), snapshot_version_, need_exec_new_inner_sql))) {
+        get_inner_sql_match_snapshot_version(), need_exec_new_inner_sql))) {
       if (OB_EAGAIN != ret) {
         LOG_WARN("failed to check and wait old complement task", K(ret));
       }

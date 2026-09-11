@@ -1484,6 +1484,12 @@ public:
   static int check_tenant_status_normal(
       ObISQLClient *proxy,
       const uint64_t check_tenant_id);
+  static int get_task_inner_sql_session_ids(const common::ObCurTraceId::TraceId &trace_id,
+                                            const uint64_t tenant_id,
+                                            const int64_t task_id,
+                                            const int64_t snapshot_version,
+                                            const common::ObAddr &sql_exec_addr,
+                                            common::ObIArray<uint64_t> &session_ids);
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
@@ -1885,8 +1891,7 @@ public:
       const int64_t execution_id,
       const common::ObAddr &inner_sql_exec_addr,
       const common::ObCurTraceId::TraceId &trace_id,
-      const int64_t schema_version,
-      const int64_t scn,
+      const int64_t snapshot_version,
       bool &need_exec_new_inner_sql);
   static int check_finish_report_checksum(
       const uint64_t tenant_id,
@@ -1910,14 +1915,6 @@ private:
       const int64_t execution_id,
       const uint64_t ddl_task_id,
       bool &is_all_sstable_build_finished);
-
-  static int check_task_inner_sql_session_status(
-      const common::ObAddr &inner_sql_exec_addr,
-      const common::ObCurTraceId::TraceId &trace_id,
-      const uint64_t tenant_id,
-      const int64_t task_id,
-      const int64_t scn,
-      bool &is_old_task_session_exist);
 
   static int do_check_tablets_merge_status(
       const uint64_t tenant_id,

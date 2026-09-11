@@ -5075,6 +5075,103 @@ int ObDDLUtil::check_tenant_status_normal(
   return ret;
 }
 
+int ObDDLUtil::get_task_inner_sql_session_ids(const common::ObCurTraceId::TraceId &trace_id,
+                                              const uint64_t tenant_id,
+                                              const int64_t task_id,
+                                              const int64_t snapshot_version,
+                                              const common::ObAddr &sql_exec_addr,
+                                              common::ObIArray<uint64_t> &session_ids)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  char ip_str[common::OB_IP_STR_BUFF] = { 0 };
+  char trace_id_str[64] = { 0 };
+  const char like_wildcard = '%';
+  const char *trace_id_like = NULL;
+  ObSqlString addr_filter_condition;
+  ObSqlString info_like_pattern;
+  ObSqlString sql_string;
+  session_ids.reset();
+  if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(trace_id), K(sql_exec_addr));
+  } else if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get trace id string failed", KR(ret), K(trace_id));
+  } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get trace id string failed", KR(ret), K(trace_id_str));
+  } else if (OB_UNLIKELY(sql_exec_addr.is_valid()
+                         && !sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ip to string failed", KR(ret), K(sql_exec_addr));
+  } else if (sql_exec_addr.is_valid()
+             && OB_FAIL(addr_filter_condition.assign_fmt(" and svr_ip = \"%s\" and svr_port = %d",
+                                                         ip_str, sql_exec_addr.get_port()))) {
+    LOG_WARN("assign session filter condition failed", KR(ret), K(sql_exec_addr));
+  } else if (OB_FAIL(info_like_pattern.assign_fmt("%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c",
+                                                  like_wildcard,
+                                                  like_wildcard,
+                                                  task_id,
+                                                  like_wildcard,
+                                                  like_wildcard,
+                                                  like_wildcard))) {
+    LOG_WARN("append session filter condition failed", KR(ret));
+  } else if (OB_INVALID_VERSION != snapshot_version
+             && OB_FAIL(info_like_pattern.append_fmt("%ld%c", snapshot_version, like_wildcard))) {
+    LOG_WARN("append snapshot version filter condition failed", KR(ret), K(snapshot_version));
+  } else if (OB_FAIL(sql_string.assign_fmt(
+                         "SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
+                         "and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
+                         "%.*s and info like \"%.*s\" and id != connection_id()",
+                         OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
+                         like_wildcard,
+                         trace_id_like,
+                         tenant_id,
+                         static_cast<int>(addr_filter_condition.length()),
+                         addr_filter_condition.ptr(),
+                         static_cast<int>(info_like_pattern.length()),
+                         info_like_pattern.ptr()))) {
+    LOG_WARN("assign sql string failed", KR(ret));
+  } else {
+    LOG_INFO("get task session inner sql", K(sql_string), K(task_id), K(sql_exec_addr));
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      bool is_iter_end = false;
+      if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) {
+        LOG_INFO("get task inner sql session ids", K(sql_string), K(task_id), K(sql_exec_addr));
+      }
+      if (OB_FAIL(sql_proxy->read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &sql_exec_addr))) {
+        LOG_WARN("query task inner sql session ids failed", KR(ret), K(sql_string));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", KR(ret), KP(result));
+      }
+      while (OB_SUCC(ret) && !is_iter_end) {
+        uint64_t session_id = 0;
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            is_iter_end = true;
+          } else {
+            LOG_WARN("fail to get next row", KR(ret));
+          }
+        } else {
+          EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(session_ids.push_back(session_id))) {
+            LOG_WARN("fail to push back session id", KR(ret), K(session_id));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::check_schema_version_refreshed(
     const uint64_t tenant_id,
     const int64_t target_schema_version)
@@ -6575,113 +6672,6 @@ int ObDDLDiagnoseInfo::print_vec_task_info(ObDDLTaskStatInfo &stat_info, int64_t
 
 /******************           ObCheckTabletDataComplementOp         *************/
 
-int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(
-    const common::ObAddr &inner_sql_exec_addr,
-    const common::ObCurTraceId::TraceId &trace_id,
-    const uint64_t tenant_id,
-    const int64_t task_id,
-    const int64_t scn,
-    bool &is_old_task_session_exist)
-{
-  int ret = OB_SUCCESS;
-  is_old_task_session_exist = false;
-  char ip_str[common::OB_IP_STR_BUFF];
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || trace_id.is_invalid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(trace_id), K(inner_sql_exec_addr));
-  } else {
-    ret = OB_SUCCESS;
-    common::ObMySQLProxy &proxy = *GCTX.sql_proxy_;
-    ObSqlString sql_string;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      sqlclient::ObMySQLResult *result = NULL;
-      char trace_id_str[64] = { 0 };
-      char charater = '%';
-      const char *trace_id_like = nullptr;
-      if (OB_UNLIKELY(0 > trace_id.to_string(trace_id_str, sizeof(trace_id_str)))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get trace id string failed", K(ret), K(trace_id));
-      } else if (OB_ISNULL(trace_id_like = ObString(trace_id_str).find('-'))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get trace id string failed", K(ret), K(trace_id_str));
-      } else if (!inner_sql_exec_addr.is_valid()) {
-        if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
-              " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
-              " and id != connection_id()",
-            OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-            charater,
-            trace_id_like,
-            tenant_id,
-            charater,
-            charater,
-            task_id,
-            charater,
-            charater,
-            charater,
-            scn,
-            charater ))) {
-          LOG_WARN("assign sql string failed", K(ret));
-        }
-      } else {
-        if (!inner_sql_exec_addr.ip_to_string(ip_str, sizeof(ip_str))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("ip to string failed", K(ret), K(inner_sql_exec_addr));
-        } else if (OB_FAIL(sql_string.assign_fmt(" SELECT id as session_id FROM %s WHERE trace_id like \"%c%s\" "
-              " and tenant = (select tenant_name from __all_tenant where tenant_id = %lu) "
-              " and svr_ip = \"%s\" and svr_port = %d and info like \"%cINSERT%c('ddl_task_id', %ld)%cINTO%cSELECT%c%ld%c\""
-              " and id != connection_id()",
-            OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
-            charater,
-            trace_id_like,
-            tenant_id,
-            ip_str,
-            inner_sql_exec_addr.get_port(),
-            charater,
-            charater,
-            task_id,
-            charater,
-            charater,
-            charater,
-            scn,
-            charater ))) {
-          LOG_WARN("assign sql string failed", K(ret));
-        }
-      }
-      if (REACH_TIME_INTERVAL(10L * 1000L * 1000L)) { // every 10s
-        LOG_INFO("check task inner sql string", K(sql_string));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(proxy.read(res, OB_SYS_TENANT_ID, sql_string.ptr(), &inner_sql_exec_addr))) {
-        LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
-      } else if (OB_ISNULL((result = res.get_result()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get sql result", K(ret), KP(result));
-      } else {
-        uint64_t session_id = 0;
-        while (OB_SUCC(ret)) {
-          if (OB_FAIL(result->next())) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              break;
-            } else {
-              LOG_WARN("fail to get next row", K(ret));
-            }
-          } else {
-            is_old_task_session_exist =  true;
-            EXTRACT_UINT_FIELD_MYSQL(*result, "session_id", session_id, uint64_t);
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObCheckTabletDataComplementOp::update_replica_merge_status(
     const ObTabletID &tablet_id,
     const bool merge_status,
@@ -7193,28 +7183,32 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
     const int64_t execution_id,
     const common::ObAddr &inner_sql_exec_addr,
     const common::ObCurTraceId::TraceId &trace_id,
-    const int64_t schema_version,
-    const int64_t scn,
+    const int64_t snapshot_version,
     bool &need_exec_new_inner_sql)
 {
   int ret = OB_SUCCESS;
   need_exec_new_inner_sql = true; // default need execute new inner sql
-  bool is_old_task_session_exist = true;
+  bool is_old_task_session_exist = false;
   bool is_dst_checksums_all_report = false;
+  ObSEArray<uint64_t, 4> session_ids;
 
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to check and wait complement task", K(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(DDL_SIM(tenant_id, ddl_task_id, CHECK_OLD_COMPLEMENT_TASK_FAILED))) {
     LOG_WARN("ddl sim failure: check old complement task failed", K(ret), K(tenant_id), K(ddl_task_id));
+  } else if (OB_FAIL(ObDDLUtil::get_task_inner_sql_session_ids(trace_id,
+                                                               tenant_id,
+                                                               ddl_task_id,
+                                                               snapshot_version,
+                                                               inner_sql_exec_addr,
+                                                               session_ids))) {
+    LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
+  } else if (!session_ids.empty()) {
+    is_old_task_session_exist = true;
+    ret = OB_EAGAIN;
   } else {
-    if (OB_FAIL(check_task_inner_sql_session_status(inner_sql_exec_addr, trace_id, tenant_id, ddl_task_id, scn, is_old_task_session_exist))) {
-      LOG_WARN("fail check task inner sql session status", K(ret), K(trace_id), K(inner_sql_exec_addr));
-    } else if (is_old_task_session_exist) {
-      ret = OB_EAGAIN;
-    } else {
-      LOG_INFO("old inner sql session is not exist.", K(ret));
-    }
+    LOG_INFO("old inner sql session is not exist.", K(ret));
 
     // After old session exits, the rule of retry is specified as follows
     //
