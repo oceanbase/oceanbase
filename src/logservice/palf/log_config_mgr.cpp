@@ -25,6 +25,9 @@ namespace oceanbase
 using namespace common;
 namespace palf
 {
+int64_t LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = 2 * 1000 * 1000L;
+int64_t LogConfigMgr::MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG = 1 * 1000 * 1000L;
+
 LogConfigMgr::LogConfigMgr()
     : log_ms_meta_(),
       alive_paxos_memberlist_(),

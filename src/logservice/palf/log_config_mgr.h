@@ -547,8 +547,8 @@ private:
   typedef common::ObSpinLockGuard SpinLockGuard;
   typedef common::ObFunction<bool(const LogLearner &)> LogLearnerCond;
   typedef common::ObFunction<int(const LogLearner &)> LogLearnerAction;
-  static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION = 2 * 1000 * 1000;
-  static constexpr int64_t MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG = 1 * 1000 * 1000;
+  static int64_t MAX_WAIT_BARRIER_TIME_US_FOR_RECONFIGURATION;
+  static int64_t MAX_WAIT_BARRIER_TIME_US_FOR_STABLE_LOG;
 private:
   int set_initial_config_info_(const LogConfigInfoV2 &config_info,
                                const int64_t proposal_id,
