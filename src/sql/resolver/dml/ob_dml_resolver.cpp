@@ -10414,6 +10414,8 @@ bool ObDMLResolver::is_need_add_additional_function(const ObRawExpr *expr)
   bool bret = false;
   if (OB_ISNULL(expr)) {
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument to check whether to add additional function", K(expr));
+  } else if (expr->has_flag(IS_PL_SQL_TRANSPILED)) {
+    bret = true;
   } else if (T_FUN_COLUMN_CONV == expr->get_expr_type()) {
     bret = false;
   } else {

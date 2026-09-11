@@ -20567,6 +20567,7 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
       bool eligible = false;
       const ObPLReturnStmt *return_stmt = nullptr;
       ObRawExpr *tmp_expr = nullptr;
+      ObPLDependencyTable transpiled_deps;
 
       if (OB_FAIL(router.simple_resolve(ast))) {
         LOG_WARN("failed to simple_resolve", K(ret));
@@ -20584,10 +20585,34 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
       } else if (OB_ISNULL(tmp_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL returned expr", K(ret), K(ast), KPC(return_stmt->get_ret_expr()), KPC(tmp_expr));
+      } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
+                                                                 expr_factory_,
+                                                                 udf_expr->get_result_type().get_type(),
+                                                                 udf_expr->get_result_type().get_collation_type(),
+                                                                 udf_expr->get_result_type().get_accuracy().get_accuracy(),
+                                                                 true,
+                                                                 nullptr,
+                                                                 nullptr,
+                                                                 tmp_expr,
+                                                                 true))) {
+        LOG_WARN("failed to convert transpiled expr to udf result type",
+                 K(ret), KPC(tmp_expr), K(udf_expr->get_result_type()));
+      } else if (OB_ISNULL(tmp_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected NULL converted expr", K(ret), KPC(tmp_expr), K(udf_expr->get_result_type()));
       } else if (OB_FAIL(tmp_expr->add_flag(CNT_PL_UDF))) {
         LOG_WARN("failed to add flag CNT_PL_UDF", K(ret), K(ast), K(tmp_expr));
       } else if (OB_FAIL(tmp_expr->add_flag(IS_PL_SQL_TRANSPILED))) {
         LOG_WARN("failed to add flag IS_PL_SQL_TRANSPILED", K(ret), K(ast), K(tmp_expr));
+      } else if (OB_FAIL(udf_expr->get_schema_object_version(resolve_ctx_.schema_guard_,
+                                                              transpiled_deps))) {
+        LOG_WARN("failed to get sql transpiler udf dependencies", K(ret), KPC(udf_expr));
+      } else if (OB_FAIL(ObPLDependencyUtil::add_dependency_objects(&transpiled_deps,
+                                                                    ast.get_dependency_table()))) {
+        LOG_WARN("failed to collect sql transpiler AST dependencies", K(ret), K(ast));
+      } else if (OB_FAIL(ObPLDependencyUtil::add_dependency_objects(&mock_ast.get_dependency_table(),
+                                                                    transpiled_deps))) {
+        LOG_WARN("failed to add sql transpiler dependencies to caller", K(ret), K(transpiled_deps));
       } else if (OB_FAIL(get_resolve_ctx().pl_sql_transpiled_exprs_.push_back(udf_expr))) {
         LOG_WARN("failed to push back pl sql transpiled expr", K(ret), K(ast), K(udf_expr));
       } else {
@@ -20665,7 +20690,7 @@ int ObPLResolver::sql_transpiler_substitute(const ObPLFunctionAST &ast,
         const_expr->set_obj_param(const_expr->get_value());
       }
 
-      if (OB_NOT_NULL(tmp_expr) && lib::is_mysql_mode()) {
+      if (OB_NOT_NULL(tmp_expr)) {
         const ObDataType *type = symbol.get_type().get_data_type();
 
         if (OB_ISNULL(type)) {
