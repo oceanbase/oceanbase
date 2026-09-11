@@ -879,7 +879,11 @@ int ObTenant::init(const ObTenantMeta &meta)
     const int64_t data_disk_size = tenant_meta_.unit_.config_.data_disk_size();
     const int64_t actual_data_disk_size = tenant_meta_.unit_.actual_data_disk_size_;
     constexpr static int64_t MINI_MEM_UPPER = 1L<<30; // 1G
-    update_mini_mode(memory_size <= MINI_MEM_UPPER);
+    int64_t extra_memory = 0;
+    if (is_sys_tenant(id_) && !tenant_meta_.super_block_.is_hidden_) {
+      extra_memory = GMEMCONF.get_extra_memory();
+    }
+    update_mini_mode(extra_memory + memory_size <= MINI_MEM_UPPER);
 
     if (!is_virtual_tenant_id(id_)) {
       if (OB_FAIL(create_tenant_module())) {
