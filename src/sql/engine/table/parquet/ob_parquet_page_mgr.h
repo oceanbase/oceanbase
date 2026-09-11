@@ -18,14 +18,6 @@ class ObExternalFileAccess;
 class ObExternalDataPageCache;
 class CacheOptions;
 
-// 标记该 Page 是 project 还是 eager 列的 page，还是既是 project 也是 eager。
-enum class ObParquetPageType
-{
-  PROJECT = 0,
-  EAGER,
-  PROJECT_EAGER,
-};
-
 enum class ObParquetPageStatus
 {
   UNLOADED = 0,
@@ -51,11 +43,10 @@ public:
     return offset_ + length_;
   }
 
-  TO_STRING_KV(K(offset_), K(length_), K(type_), K(status_))
+  TO_STRING_KV(K(offset_), K(length_), K(status_))
 
   int64_t offset_;
   int64_t length_;
-  ObParquetPageType type_;
   ObParquetPageStatus status_;
 };
 
@@ -93,7 +84,7 @@ public:
   int open(const ObExternalFileUrlInfo &file_url_info);
   int reset();
   int clear_all_pages();
-  int init_with_new_row_group(const ObIArray<std::tuple<int64_t, int64_t, ObParquetPageType>> &selected_pages);
+  int init_with_new_row_group(const ObIArray<std::pair<int64_t, int64_t>> &selected_pages);
   int try_to_prefetch_by_offset(int64_t page_offset);
   int cache_page_by_offset(int64_t page_offset,
                            bool is_decompressed,
@@ -101,8 +92,8 @@ public:
   int cache_page_by_idx(int64_t page_idx,
                         bool is_decompressed,
                         const std::shared_ptr<arrow::Buffer> &page_buffer);
-  int release_page_by_offset(int64_t page_offset, std::optional<bool> is_eager_access);
-  int release_page_by_idx(int64_t page_idx, std::optional<bool> is_eager_access);
+  int release_page_by_offset(int64_t page_offset);
+  int release_page_by_idx(int64_t page_idx);
   int read_page(int64_t page_offset,
                 std::shared_ptr<arrow::Buffer> &page_buffer,
                 bool &has_mem_cached,
@@ -131,7 +122,6 @@ private:
                       const int64_t hold_size_limit,
                       const int64_t range_size_limit,
                       ObIArray<CoalescedReadRange> &result) const;
-  int decide_need_to_release_page_(const ObParquetPage &page, std::optional<bool> is_eager_access, bool &need_release_page) const;
   ObExternalDataPageCacheKey create_page_cache_key_(int64_t page_offset) const;
 
   ObFixedArray<ObParquetPage, ObIAllocator> pages_;
@@ -174,9 +164,9 @@ struct PageMgrReleasePageFunctor
 {
   ObParquetPageMgr *mgr;
 
-  int operator()(int64_t page_offset, std::optional<bool> is_eager_access) const
+  int operator()(int64_t page_offset, std::optional<bool> /* access_stage */) const
   {
-    return mgr->release_page_by_offset(page_offset, is_eager_access);
+    return mgr->release_page_by_offset(page_offset);
   }
 };
 

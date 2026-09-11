@@ -67,8 +67,17 @@ static int compact_selected_rows_impl(const ObBitmap &selection,
     LOG_WARN("invalid arguments for compacting selected rows",
              K(ret), K(row_count), "selection_size", selection.size(), KP(rows));
   } else {
-    for (int64_t src_idx = 0; src_idx < row_count; ++src_idx) {
-      if (selection[src_idx]) {
+    static const int64_t ROW_ID_BATCH_SIZE = 256;
+    int32_t row_ids[ROW_ID_BATCH_SIZE];
+    int64_t from = 0;
+    while (OB_SUCC(ret) && from < row_count) {
+      int64_t selected_count = 0;
+      if (OB_FAIL(
+              selection.get_row_ids(row_ids, selected_count, from, row_count, ROW_ID_BATCH_SIZE))) {
+        LOG_WARN("failed to get selected row ids", K(ret), K(from), K(row_count));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < selected_count; ++i) {
+        const int64_t src_idx = row_ids[i];
         if (compacted_count != src_idx) {
           rows[compacted_count] = rows[src_idx];
         }

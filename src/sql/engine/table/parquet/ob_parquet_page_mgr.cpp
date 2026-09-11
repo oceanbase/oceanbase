@@ -88,7 +88,7 @@ int ObParquetPageMgr::clear_all_pages()
   // release each page
   // 循环条件里面不能加 OB_SUCC(ret)，要确保每一个 page 都被正确释放
   for (int64_t i = 0; i < pages_.count(); i++) {
-    if (OB_FAIL(release_page_by_idx(i, std::nullopt))) {
+    if (OB_FAIL(release_page_by_idx(i))) {
       LOG_WARN("failed to release page by idx", K(i));
     }
   }
@@ -99,7 +99,7 @@ int ObParquetPageMgr::clear_all_pages()
 }
 
 int ObParquetPageMgr::init_with_new_row_group(
-    const ObIArray<std::tuple<int64_t, int64_t, ObParquetPageType>> &selected_pages)
+    const ObIArray<std::pair<int64_t, int64_t>> &selected_pages)
 {
   int ret = OB_SUCCESS;
   // 清除上一个 row group hold 的 pages
@@ -113,9 +113,9 @@ int ObParquetPageMgr::init_with_new_row_group(
   // 按照 Page ReadRange 的 offset 从小到大排序
   ObSortedVector<ObParquetPage> sorted_vector;
   for (int64_t i = 0; OB_SUCC(ret) && i < selected_pages.count(); i++) {
-    const std::tuple<int64_t, int64_t, ObParquetPageType> &page = selected_pages.at(i);
+    const std::pair<int64_t, int64_t> &page = selected_pages.at(i);
     if (OB_FAIL(sorted_vector.push_back(
-            {std::get<0>(page), std::get<1>(page), std::get<2>(page), ObParquetPageStatus::UNLOADED}))) {
+            {page.first, page.second, ObParquetPageStatus::UNLOADED}))) {
       LOG_WARN("failed to push back page range");
     }
   }
@@ -187,21 +187,19 @@ int ObParquetPageMgr::cache_page_by_idx(int64_t page_idx,
   return ret;
 }
 
-int ObParquetPageMgr::release_page_by_offset(int64_t page_offset,
-                                             std::optional<bool> is_eager_access)
+int ObParquetPageMgr::release_page_by_offset(int64_t page_offset)
 {
   int ret = OB_SUCCESS;
   int64_t page_idx = -1;
   if (OB_FAIL(find_page_idx_(page_offset, page_idx))) {
     LOG_WARN("failed to find page idx", K(page_offset), K(page_idx));
-  } else if (OB_FAIL(release_page_by_idx(page_idx, is_eager_access))) {
+  } else if (OB_FAIL(release_page_by_idx(page_idx))) {
     LOG_WARN("failed to release page idx", K(page_idx));
   }
   return ret;
 }
 
-// 如果 is_eager_access 没有被设置，则无条件释放指定 page
-int ObParquetPageMgr::release_page_by_idx(int64_t page_idx, std::optional<bool> is_eager_access)
+int ObParquetPageMgr::release_page_by_idx(int64_t page_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(page_idx < 0 || page_idx >= pages_.count())) {
@@ -216,13 +214,8 @@ int ObParquetPageMgr::release_page_by_idx(int64_t page_idx, std::optional<bool> 
       LOG_WARN("page is unloaded, but page buffer existed, illegal state", K(page_idx));
     }
   } else if (pages_[page_idx].status_ == ObParquetPageStatus::LOADED) {
-    bool need_release_page = false;
     ObParquetPageBufferBase *page_buffer = page_buffers_[page_idx];
-    if (OB_FAIL(decide_need_to_release_page_(pages_[page_idx], is_eager_access, need_release_page))) {
-      LOG_WARN("failed to decide_need_to_release_page", K(page_idx));
-    } else if (!need_release_page) {
-      // do nothing, do not need to release page
-    } else if (OB_ISNULL(page_buffer)) {
+    if (OB_ISNULL(page_buffer)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("page is loaded but page buffer is NULL, illegal state", K(page_idx));
     } else {
@@ -251,10 +244,8 @@ int ObParquetPageMgr::release_page_by_idx(int64_t page_idx, std::optional<bool> 
         LOG_WARN("unreachable code");
       }
     }
-    if (need_release_page) {
-      pages_[page_idx].status_ = ObParquetPageStatus::RELEASED;
-      page_buffers_[page_idx] = NULL;
-    }
+    pages_[page_idx].status_ = ObParquetPageStatus::RELEASED;
+    page_buffers_[page_idx] = NULL;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unreachable code");
@@ -666,52 +657,6 @@ int ObParquetPageMgr::coalesce_pages_(const ObIArray<int64_t> &unloaded_page_ind
     }
   }
 
-  return ret;
-}
-
-// 如果 is_eager_access 没有被设置，则无条件释放指定 page
-int ObParquetPageMgr::decide_need_to_release_page_(const ObParquetPage &page,
-                                                   std::optional<bool> is_eager_access,
-                                                   bool &need_release_page) const
-{
-  int ret = OB_SUCCESS;
-  if (!is_eager_access.has_value()) {
-    need_release_page = true;
-  } else {
-    const bool eager_access = is_eager_access.value();
-    switch (page.type_) {
-      case ObParquetPageType::EAGER: {
-        if (eager_access) {
-          need_release_page = true;
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected", K(eager_access), K(page));
-        }
-        break;
-      }
-      case ObParquetPageType::PROJECT: {
-        if (eager_access) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected", K(eager_access), K(page));
-        } else {
-          need_release_page = true;
-        }
-        break;
-      }
-      case ObParquetPageType::PROJECT_EAGER: {
-        if (eager_access) {
-          need_release_page = false;
-        } else {
-          need_release_page = true;
-        }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unreachable code");
-      }
-    }
-  }
   return ret;
 }
 

@@ -738,7 +738,6 @@ int ObParquetDictFilterPushdown::need_decode_dict_column(
     ObPushdownFilterExecutor *filter_executor,
     const common::ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids,
     const common::ObIArray<bool> &is_dup_project,
-    bool is_eager_calc,
     const common::ObIArray<bool> &column_need_conv,
     bool &need_decode)
 {
@@ -1168,7 +1167,6 @@ int ObParquetDictFilterPushdown::decode_filtered_rows_to_exprs(
     ObEvalCtx &eval_ctx,
     const common::ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids,
     const common::ObIArray<bool> &is_dup_project,
-    bool is_eager_calc,
     const common::ObIArray<bool> &column_need_conv)
 {
   int ret = OB_SUCCESS;
@@ -1188,7 +1186,6 @@ int ObParquetDictFilterPushdown::decode_filtered_rows_to_exprs(
                                           filter_executor,
                                           mapping_column_ids,
                                           is_dup_project,
-                                          is_eager_calc,
                                           column_need_conv,
                                           need_decode))) {
         LOG_WARN("fail to check need decode dict column", K(ret), K(col_idx));

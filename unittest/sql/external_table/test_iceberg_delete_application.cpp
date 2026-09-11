@@ -25,7 +25,8 @@ public:
 
 TEST(TestIcebergDeleteApplication, compact_fragmented_physical_line_numbers)
 {
-  const int64_t row_count = 128;
+  // Keep more than one compact_selected_rows_impl row-id batch selected.
+  const int64_t row_count = 1024;
   ObArenaAllocator allocator(ObModIds::TEST);
   ObBitmap selection(allocator);
   ASSERT_EQ(OB_SUCCESS, selection.init(row_count, false));

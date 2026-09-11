@@ -116,7 +116,6 @@ public:
       ObPushdownFilterExecutor *filter_executor,
       const common::ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids,
       const common::ObIArray<bool> &is_dup_project,
-      bool is_eager_calc,
       const common::ObIArray<bool> &column_need_conv,
       bool &need_decode);
 
@@ -125,7 +124,6 @@ public:
       ObEvalCtx &eval_ctx,
       const common::ObIArray<std::pair<uint64_t, uint64_t>> &mapping_column_ids,
       const common::ObIArray<bool> &is_dup_project,
-      bool is_eager_calc,
       const common::ObIArray<bool> &column_need_conv);
 
   bool has_dict_columns() const

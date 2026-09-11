@@ -45,18 +45,19 @@ TEST(TestParquetLazyRanges, FlushReadRangeBeforePositionDeleteGap)
   ASSERT_EQ(OB_SUCCESS, filter_result->set(1));
 
   ObParquetTableRowIterator iter;
-  ASSERT_EQ(OB_SUCCESS, iter.rg_skip_ranges_.push_back(0));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_read_ranges_.push_back(1));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_skip_ranges_.push_back(1));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_read_ranges_.push_back(1));
+  ObParquetTableRowIterator::BatchReadState batch(allocator);
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_skip_ranges().push_back(0));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_read_ranges().push_back(1));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_skip_ranges().push_back(1));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_read_ranges().push_back(1));
 
-  ASSERT_EQ(OB_SUCCESS, iter.fill_lazy_ranges(filter));
-  ASSERT_EQ(2, iter.lazy_skip_ranges_.count());
-  ASSERT_EQ(2, iter.lazy_read_ranges_.count());
-  EXPECT_EQ(0, iter.lazy_skip_ranges_.at(0));
-  EXPECT_EQ(1, iter.lazy_read_ranges_.at(0));
-  EXPECT_EQ(1, iter.lazy_skip_ranges_.at(1));
-  EXPECT_EQ(1, iter.lazy_read_ranges_.at(1));
+  ASSERT_EQ(OB_SUCCESS, iter.fill_selected_source_ranges(batch, *filter_result));
+  ASSERT_EQ(2, batch.lazy_plan_.skip_ranges().count());
+  ASSERT_EQ(2, batch.lazy_plan_.read_ranges().count());
+  EXPECT_EQ(0, batch.lazy_plan_.skip_ranges().at(0));
+  EXPECT_EQ(1, batch.lazy_plan_.read_ranges().at(0));
+  EXPECT_EQ(1, batch.lazy_plan_.skip_ranges().at(1));
+  EXPECT_EQ(1, batch.lazy_plan_.read_ranges().at(1));
 }
 
 TEST(TestParquetLazyRanges, PreserveFilterSkipsAcrossDeleteGaps)
@@ -72,22 +73,46 @@ TEST(TestParquetLazyRanges, PreserveFilterSkipsAcrossDeleteGaps)
   ASSERT_EQ(OB_SUCCESS, filter_result->set(4));
 
   ObParquetTableRowIterator iter;
-  ASSERT_EQ(OB_SUCCESS, iter.rg_skip_ranges_.push_back(0));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_read_ranges_.push_back(2));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_skip_ranges_.push_back(2));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_read_ranges_.push_back(2));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_skip_ranges_.push_back(1));
-  ASSERT_EQ(OB_SUCCESS, iter.rg_read_ranges_.push_back(1));
+  ObParquetTableRowIterator::BatchReadState batch(allocator);
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_skip_ranges().push_back(0));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_read_ranges().push_back(2));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_skip_ranges().push_back(2));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_read_ranges().push_back(2));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_skip_ranges().push_back(1));
+  ASSERT_EQ(OB_SUCCESS, batch.source_plan_.mutable_read_ranges().push_back(1));
 
-  ASSERT_EQ(OB_SUCCESS, iter.fill_lazy_ranges(filter));
-  ASSERT_EQ(3, iter.lazy_skip_ranges_.count());
-  ASSERT_EQ(3, iter.lazy_read_ranges_.count());
-  EXPECT_EQ(0, iter.lazy_skip_ranges_.at(0));
-  EXPECT_EQ(2, iter.lazy_read_ranges_.at(0));
-  EXPECT_EQ(2, iter.lazy_skip_ranges_.at(1));
-  EXPECT_EQ(1, iter.lazy_read_ranges_.at(1));
-  EXPECT_EQ(2, iter.lazy_skip_ranges_.at(2));
-  EXPECT_EQ(1, iter.lazy_read_ranges_.at(2));
+  ASSERT_EQ(OB_SUCCESS, iter.fill_selected_source_ranges(batch, *filter_result));
+  ASSERT_EQ(3, batch.lazy_plan_.skip_ranges().count());
+  ASSERT_EQ(3, batch.lazy_plan_.read_ranges().count());
+  EXPECT_EQ(0, batch.lazy_plan_.skip_ranges().at(0));
+  EXPECT_EQ(2, batch.lazy_plan_.read_ranges().at(0));
+  EXPECT_EQ(2, batch.lazy_plan_.skip_ranges().at(1));
+  EXPECT_EQ(1, batch.lazy_plan_.read_ranges().at(1));
+  EXPECT_EQ(2, batch.lazy_plan_.skip_ranges().at(2));
+  EXPECT_EQ(1, batch.lazy_plan_.read_ranges().at(2));
+}
+
+TEST(TestParquetLazyRanges, DynamicModeFollowsCumulativeSelectivity)
+{
+  ObParquetTableRowIterator iter;
+  iter.mode_ = FilterCalcMode::DYNAMIC_EAGER_CALC;
+  iter.stat_.projected_eager_cnt_ = 100;
+  iter.stat_.projected_lazy_cnt_ = 67;
+
+  iter.dynamic_switch_calc_mode();
+  EXPECT_EQ(FilterCalcMode::DYNAMIC_LAZY_CALC, iter.mode_);
+
+  // Model another row group whose low pass rate lowers the cumulative ratio to 50%.
+  iter.stat_.projected_eager_cnt_ = 200;
+  iter.stat_.projected_lazy_cnt_ = 100;
+  iter.dynamic_switch_calc_mode();
+  EXPECT_EQ(FilterCalcMode::DYNAMIC_EAGER_CALC, iter.mode_);
+
+  iter.mode_ = FilterCalcMode::FORCE_LAZY_CALC;
+  iter.stat_.projected_eager_cnt_ = 300;
+  iter.stat_.projected_lazy_cnt_ = 10;
+  iter.dynamic_switch_calc_mode();
+  EXPECT_EQ(FilterCalcMode::FORCE_LAZY_CALC, iter.mode_);
 }
 
 } // namespace unittest
