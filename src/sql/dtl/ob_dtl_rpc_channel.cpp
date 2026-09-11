@@ -806,6 +806,7 @@ int ObDtlRpcChannel::batch_flush_server_group()
       } else if (OB_FAIL(DTL.get_rpc_proxy()
                           .to(dest)
                           .group_id(share::OBCG_DTL)
+                          .compressed(compressor_type_)
                           .by(group->tenant_id_)
                           .timeout(timeout_us)
                           .ap_send_batch_message(batch_args, &cb))) {
