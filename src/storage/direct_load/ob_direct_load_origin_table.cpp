@@ -359,7 +359,7 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
   const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
   const ObTransID &tx_id = origin_table_->get_meta().tx_id_;
   const ObTxSEQ &tx_seq = origin_table_->get_meta().tx_seq_;
-  const int64_t snapshot_version = origin_table_->get_meta().snapshot_version_;
+  const share::SCN snapshot_version = share::SCN::max_scn();
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
                          true /*optimize*/,
@@ -374,15 +374,12 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
   }
   trans_version_range.multi_version_start_ = 0;
   trans_version_range.base_version_ = 0;
-  trans_version_range.snapshot_version_ = snapshot_version;
-  share::SCN snapshot_scn;
-  if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
-    LOG_WARN("fail to convert scn", KR(ret));
-  } else if (OB_FAIL(store_ctx_.init_for_read(origin_table_->get_meta().ls_id_,
-                                              tablet_id,
-                                              INT64_MAX,
-                                              -1,
-                                              snapshot_scn))) {
+  trans_version_range.snapshot_version_ = snapshot_version.get_val_for_tx();
+  if (OB_FAIL(store_ctx_.init_for_read(origin_table_->get_meta().ls_id_,
+                                       tablet_id,
+                                       INT64_MAX,
+                                       -1,
+                                       snapshot_version))) {
     LOG_WARN("fail to init for read", KR(ret));
   } else if (OB_FAIL(table_access_ctx_.init(query_flag,
                                             store_ctx_,
