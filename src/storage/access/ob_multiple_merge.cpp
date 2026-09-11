@@ -57,6 +57,7 @@ ObMultipleMerge::ObMultipleMerge()
       iter_del_row_(false),
       read_memtable_only_(false),
       is_unprojected_row_valid_(false),
+      need_scan_di_base_(false),
       get_table_param_(nullptr),
       block_row_store_(nullptr),
       group_by_cell_(nullptr),
@@ -616,7 +617,6 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
              K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
   } else {
     bool need_init_exprs_uniform_header = true;
-    bool need_scan_di_base = use_di_merge_scan();
     ObVectorStore *vector_store = reinterpret_cast<ObVectorStore *>(block_row_store_);
     int64_t batch_size = min(capacity, access_param_->get_op()->get_batch_size());
     vector_store->reuse_capacity(batch_size);
@@ -672,7 +672,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                          K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC(vector_store), KPC_(access_param));
               } else {
                 if (OB_ITER_END == ret) {
-                  need_scan_di_base = false;
+                  need_scan_di_base_ = false;
                 }
                 ret = OB_SUCCESS;
                 scan_state_ = ScanState::SINGLE_ROW;
@@ -690,7 +690,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
                 vector_store->set_end();
                 scan_state_ = ScanState::BATCH;
                 break;
-              } else if (need_scan_di_base) {
+              } else if (need_scan_di_base_) {
                 // iter end
                 vector_store->set_end();
                 scan_state_ = ScanState::DI_BASE;
@@ -709,7 +709,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
             } else {
               is_unprojected_row_valid_ = true;
               if (unprojected_row_.is_di_delete()) {
-                if (need_scan_di_base) {
+                if (need_scan_di_base_) {
                   scan_state_ = ScanState::DI_BASE;
                   if (OB_FAIL(prepare_di_base_blockscan(false, &unprojected_row_))) {
                     LOG_WARN("Fail to prepare di base blockscan", K(ret), K_(is_unprojected_row_valid),
@@ -818,7 +818,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
     }
     reuse_lob_locator();
     bool need_init_expr_header = true;
-    bool need_scan_di_base = use_di_merge_scan();
     while (OB_SUCC(ret) && !batch_row_store->is_end()) {
       // clear evaluated flag for every row
       // all rows will be touched in this loop
@@ -877,7 +876,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                          K(tables_.count()), K(iters_.count()), K(di_base_iters_.count()), KPC_(access_param));
               } else {
                 if (OB_ITER_END == ret) {
-                  need_scan_di_base = false;
+                  need_scan_di_base_ = false;
                 }
                 ret = OB_SUCCESS;
                 need_init_expr_header = true;
@@ -897,7 +896,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
                 need_init_expr_header = true;
                 break;
               } else {
-                if (need_scan_di_base) {
+                if (need_scan_di_base_) {
                   scan_state_ = ScanState::DI_BASE;
                   need_init_expr_header = true;
                   if (OB_FAIL(prepare_di_base_blockscan(true))) {
@@ -911,7 +910,7 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
             } else {
               is_unprojected_row_valid_ = true;
               if (unprojected_row_.is_di_delete()) {
-                if (need_scan_di_base) {
+                if (need_scan_di_base_) {
                   need_init_expr_header = true;
                   scan_state_ = ScanState::DI_BASE;
                   if (OB_FAIL(prepare_di_base_blockscan(false, &unprojected_row_))) {
@@ -1136,6 +1135,7 @@ void ObMultipleMerge::reuse()
   lob_reader_.reuse();
   scan_state_ = ScanState::NONE;
   is_unprojected_row_valid_ = false;
+  need_scan_di_base_ = false;
   curr_scan_index_ = 0;
   di_base_curr_scan_index_ = 0;
   curr_rowkey_.reset();
@@ -1192,6 +1192,7 @@ void ObMultipleMerge::inner_reset()
   scan_state_ = ScanState::NONE;
   iter_del_row_ = false;
   is_unprojected_row_valid_ = false;
+  need_scan_di_base_ = false;
   curr_scan_index_ = 0;
   di_base_curr_scan_index_ = 0;
   major_table_version_ = 0;
