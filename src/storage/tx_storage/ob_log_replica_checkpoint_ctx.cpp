@@ -112,8 +112,9 @@ int ObLogReplicaCheckpointCtx::cal_logonly_replica_checkpoint_(const bool log_di
   // point at pure_readable_scn. But pure_readable_scn can not promoted when
   // majority of F-replicas are down, thus making clog can not be recycled
   // In this case, we can set clog strict recycle mode to false.
-  // When clog recycle mode is not strict, we set clog recycle point at sync_scn
-  // sync_scn can promoted when majority of F-replicas are down
+  // When clog recycle mode is not strict, we set clog recycle point at end_scn
+  // end_scn can promoted when majority of F-replicas are down.
+  // sync_scn will hung when 2F of 4F1L are down.
   if (OB_ISNULL(tenant_info_loader) || OB_ISNULL(log_handler)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant_info_loader is null or log handler is null",
@@ -121,10 +122,8 @@ int ObLogReplicaCheckpointCtx::cal_logonly_replica_checkpoint_(const bool log_di
   } else if (OB_FAIL(log_handler->get_end_scn(local_end_scn_))) {
     LOG_WARN("fail to get local end scn", KR(ret), K(ls_id));
   } else if (!is_strict_clog_recycle_mode_) {
-    // not strict recycle mode, recycle clog based on sync_scn
-    if (OB_FAIL(tenant_info_loader->get_sync_scn(target_checkpoint_scn_))) {
-      LOG_WARN("fail to get tenant sync scn", KR(ret));
-    }
+    // not strict recycle mode, recycle clog based on end_scn
+    target_checkpoint_scn_ = local_end_scn_;
   } else {
     // is strict recycle mode, recycle clog based on pure_readable_scn
     if (OB_FAIL(tenant_info_loader->get_pure_readable_scn(pure_readable_scn_))) {
