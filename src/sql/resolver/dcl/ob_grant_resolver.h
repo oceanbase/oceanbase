@@ -147,6 +147,7 @@ public:
                                                     share::ObRawPrivArray &sys_priv_array);
   
 private:
+  int check_grant_user_name_length(const common::ObString &user_name);
   int build_table_priv_arary_for_all(
       ObGrantStmt *grant_stmt,
       share::ObRawObjPrivArray &table_priv_array,

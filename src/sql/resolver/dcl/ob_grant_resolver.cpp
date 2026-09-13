@@ -25,6 +25,26 @@ ObGrantResolver::~ObGrantResolver()
 {
 }
 
+int ObGrantResolver::check_grant_user_name_length(const ObString &user_name)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_user_name_len = OB_MAX_USER_NAME_LENGTH;
+  if (lib::is_mysql_mode()) {
+    bool use_32_limit = false;
+    if (OB_FAIL(params_.session_info_->check_feature_enable(
+            ObCompatFeatureType::MYSQL_USERNAME_LENGTH_32, use_32_limit))) {
+      LOG_WARN("failed to check username length compat feature", K(ret));
+    } else if (use_32_limit) {
+      max_user_name_len = OB_MAX_USERNAME_LENGTH;
+    }
+  }
+  if (OB_SUCC(ret) && user_name.length() > max_user_name_len) {
+    ret = OB_WRONG_USER_NAME_LENGTH;
+    LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), max_user_name_len);
+  }
+  return ret;
+}
+
 int ObGrantResolver::resolve_grantee_clause(
     const ParseNode *grantee_clause,
     ObSQLSessionInfo *session_info,
@@ -1164,9 +1184,8 @@ int ObGrantResolver::resolve_grant_obj_privileges(
           }
         }
         if (OB_SUCC(ret)) {
-          if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
-            ret = OB_WRONG_USER_NAME_LENGTH;
-            LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
+          if (OB_FAIL(check_grant_user_name_length(user_name))) {
+            LOG_WARN("invalid grant user name length", K(ret));
           } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
             params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
             LOG_WARN("failed to check data version for auth plugin", K(ret));
@@ -1537,9 +1556,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                 }
               }
               if (OB_SUCC(ret)) {
-                if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
-                  ret = OB_WRONG_USER_NAME_LENGTH;
-                  LOG_USER_ERROR(OB_WRONG_USER_NAME_LENGTH, user_name.length(), user_name.ptr(), OB_MAX_USER_NAME_LENGTH);
+                if (OB_FAIL(check_grant_user_name_length(user_name))) {
+                  LOG_WARN("invalid grant user name length", K(ret));
                 } else if (OB_FAIL(ObEncryptedHelper::check_data_version_for_auth_plugin(plugin,
                   params_.session_info_->get_effective_tenant_id(), is_plugin_supported))) {
                   LOG_WARN("failed to check data version for auth plugin", K(ret));
