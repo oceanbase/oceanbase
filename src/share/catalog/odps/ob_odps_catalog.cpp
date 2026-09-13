@@ -572,7 +572,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
               THIS_WORKER.get_session(), part_str, format_str, part_sum_row_count));
           LOG_INFO("fetch storage row count", K(part_sum_row_count));
           if (OB_SUCC(ret)) {
-            OX(total_partition_count = part_sum_row_count / part_count * table_schema->get_partition_num());
+            OX(row_count = part_sum_row_count / part_count * table_schema->get_partition_num());
             OX(total_partition_count = table_schema->get_partition_num());
           }
         #else
