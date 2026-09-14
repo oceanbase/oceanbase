@@ -7,7 +7,6 @@
 #define OCEANBASE_OBSERVER_MYSQL_OBMP_QUIT_H_
 
 #include "observer/mysql/obmp_base.h"
-#include "sql/engine/dml/ob_trigger_handler.h"
 
 namespace oceanbase
 {
@@ -42,9 +41,6 @@ int ObMPQuit::process()
   } else {
     // set NORMAL_QUIT state.
     session->set_disconnect_state(NORMAL_QUIT);
-    if (OB_FAIL(TriggerHandle::set_logoff_mark(*session))) {
-      LOG_WARN("set logon mark failed", K(ret));
-    }
   }
   if (NULL != session) {
     revert_session(session);

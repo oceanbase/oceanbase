@@ -26,6 +26,7 @@ public:
   virtual ~ObSqlSockHandler() {}
   int init(rpc::frame::ObReqDeliver* deliver);
   virtual int on_readable(void* sess) override;
+  virtual int on_disconnect_readable(void *sess, bool &quit_delivered) override;
   virtual void on_close(void* sess, int err) override;
   virtual int on_connect(void* sess, int fd) override;
   virtual void on_flushed(void* sess) override;

@@ -1078,7 +1078,16 @@ public:
   void set_disconnect_state(ObDisconnectState dis_state)
   {
     LockGuard lock_guard(thread_data_mutex_);
-    thread_data_.dis_state_ = dis_state;
+    // Keep a processed COM_QUIT until reset, just as the former LOGOFF mark did.
+    // KILL still cancels the request through the independent SQL session state.
+    if (NORMAL_QUIT != thread_data_.dis_state_) {
+      thread_data_.dis_state_ = dis_state;
+    }
+  }
+  bool is_normal_quit()
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    return NORMAL_QUIT == thread_data_.dis_state_;
   }
   int set_session_state(ObSQLSessionState state);
   void set_session_state_for_trigger(ObSQLSessionState state);

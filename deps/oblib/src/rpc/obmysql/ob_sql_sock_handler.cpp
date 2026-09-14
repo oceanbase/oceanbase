@@ -125,5 +125,45 @@ int ObSqlSockHandler::on_readable(void* udata)
   return ret;
 }
 
+int ObSqlSockHandler::on_disconnect_readable(void *udata, bool &quit_delivered)
+{
+  int ret = OB_SUCCESS;
+  quit_delivered = false;
+  ObSqlSockSession *sess = static_cast<ObSqlSockSession *>(udata);
+  rpc::ObPacket *pkt = nullptr;
+  rpc::ObRequest *sql_req = nullptr;
+  if (OB_ISNULL(sess)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("disconnect probe has no socket session", K(ret));
+  } else if (!sess->conn_.is_in_authed_phase()
+             || !sess->conn_.is_sess_alloc_ || sess->conn_.is_sess_free_) {
+    // Only authenticated connections with a live SQL session can deliver QUIT.
+  } else {
+    if (OB_FAIL(sock_processor_.decode_sql_packet(sess->pool_, *sess, nullptr, pkt))) {
+      LOG_WARN("decode disconnect packet failed", K(ret), K(sess->sql_session_id_));
+    } else if (OB_ISNULL(pkt)) {
+      // A partial packet cannot authorize LOGOFF.
+    } else if (COM_QUIT != static_cast<ObMySQLRawPacket *>(pkt)->get_cmd()
+               || 1 != static_cast<ObMySQLRawPacket *>(pkt)->get_clen()) {
+      // Never execute a regular request merely because it arrived with FIN.
+    } else if (sess->has_error()) {
+      ret = OB_IO_ERROR;
+    } else if (OB_ISNULL(deliver_)) {
+      ret = OB_NOT_INIT;
+    } else if (OB_FAIL(sock_processor_.build_sql_req(*sess, pkt, sql_req))) {
+      LOG_WARN("build disconnect request failed", K(ret), K(sess->sql_session_id_));
+    } else {
+      sess->set_last_decode_succ_and_deliver_time(ObClockGenerator::getClock());
+      if (OB_FAIL(deliver_->deliver(*sql_req))) {
+        LOG_WARN("deliver disconnect request failed", K(ret), K(sess->sql_session_id_));
+      } else {
+        quit_delivered = true;
+      }
+    }
+  }
+  // Do not revert here: a rejected packet must not enter normal on_readable().
+  return ret;
+}
+
 }; // end namespace obmysql
 }; // end namespace oceanbase

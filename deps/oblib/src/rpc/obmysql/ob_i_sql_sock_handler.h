@@ -14,6 +14,9 @@ public:
   ObISqlSockHandler() {}
   virtual ~ObISqlSockHandler() {}
   virtual int on_readable(void* sess) = 0;
+  // A successful handoff keeps the socket alive until the QUIT worker finishes.
+  // Otherwise the caller must release its read ownership and close the socket.
+  virtual int on_disconnect_readable(void *sess, bool &quit_delivered) = 0;
   virtual void on_close(void* sess, int err) = 0;
   virtual void on_flushed(void* sess) = 0;
   virtual int on_connect(void* sess, int fd) = 0;

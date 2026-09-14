@@ -81,7 +81,6 @@ public:
   static int free_trigger_param_memory(ObTrigDMLRtDef &trig_rtdef, bool keep_composite_attr = true);
   static int calc_system_trigger_logoff(ObSQLSessionInfo &session);
   static int calc_system_trigger_logon(ObSQLSessionInfo &session);
-  static int set_logoff_mark(ObSQLSessionInfo &session);
   inline static uint64_t get_when_condition_routine_id()
   {
     return ROUTINE_IDX_CALC_WHEN;
@@ -230,7 +229,6 @@ private:
   static const int64_t ROW_POINT_PARAM_OFFSET = 0;
   static const int64_t ROW_POINT_PARAM_COUNT = 2;
   static const int64_t ROW_POINT_PARAM_COUNT_MYSQL = 2;
-  static constexpr const char *const OB_LOGOFF_TRIGGER_MARK = "__ob_logon_logoff_trigger_mark__";
 };
 
 

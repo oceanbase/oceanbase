@@ -82,6 +82,8 @@ struct ReadyFlag
     return pending == 0;
   }
   int32_t get_pending_flag() const { return ATOMIC_LOAD(&pending_); }
+  bool try_acquire_idle() { return ATOMIC_BCAS(&pending_, 0, 1); }
+  void cancel_handle() { (void)ATOMIC_BCAS(&pending_, 1, 0); }
   int32_t pending_ CACHE_ALIGNED;
 };
 
@@ -475,6 +477,8 @@ public:
   int32_t get_pending_flag() const { return ready_flag_.get_pending_flag(); }
   void set_writable() { write_cond_.signal(); }
   bool set_readable() { return ready_flag_.set_ready(); }
+  bool try_acquire_idle() { return ready_flag_.try_acquire_idle(); }
+  void cancel_handle() { ready_flag_.cancel_handle(); }
   bool end_handle() { return ready_flag_.end_handle(!read_buffer_.clear_EAGAIN()); }
   int get_fd() { return fd_; }
   void disable_may_handling_flag() { ATOMIC_STORE(&may_handling_, false); }
@@ -997,7 +1001,21 @@ private:
   }
   void handle_sock_event(ObSqlSock* s, uint32_t mask) {
     if (OB_UNLIKELY((EPOLLERR & mask) || (EPOLLHUP & mask) || (EPOLLRDHUP & mask))) {
-      if (s->set_error(EIO)) {
+      bool quit_delivered = false;
+      if ((EPOLLIN & mask) && (EPOLLRDHUP & mask)
+          && !(EPOLLERR & mask) && !(EPOLLHUP & mask)
+          && !s->has_error() && !s->need_shutdown() && s->try_acquire_idle()) {
+        int ret = handler_.on_disconnect_readable(s->sess_, quit_delivered);
+        if (OB_SUCCESS != ret || !quit_delivered) {
+          quit_delivered = false;
+          s->cancel_handle();
+          s->disable_may_handling_flag();
+        }
+      }
+      if (quit_delivered) {
+        // Follow normal dispatch: the worker closes, or later events use the
+        // existing pending-request protection before destroying the session.
+      } else if (s->set_error(EIO)) {
         LOG_WARN_RET(OB_SUCCESS, "socket closed, it maybe disconnected by the client or by observer actively", K(mask), K(*s));
         prepare_destroy(s);
       } else {

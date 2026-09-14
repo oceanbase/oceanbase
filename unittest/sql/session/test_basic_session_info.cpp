@@ -101,6 +101,59 @@ TEST(test_basic_session_info, fetch_request_info)
   ASSERT_EQ(query_start_time, session_info.get_current_request_start_time());
 }
 
+TEST(test_basic_session_info, normal_quit_disconnect_reason)
+{
+  ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
+
+  EXPECT_FALSE(session_info.is_normal_quit());
+  EXPECT_EQ(CLIENT_FORCE_DISCONNECT, session_info.get_disconnect_state());
+
+  session_info.set_disconnect_state(SERVER_FORCE_DISCONNECT);
+  EXPECT_FALSE(session_info.is_normal_quit());
+  EXPECT_EQ(SERVER_FORCE_DISCONNECT, session_info.get_disconnect_state());
+
+  session_info.set_disconnect_state(NORMAL_QUIT);
+  EXPECT_TRUE(session_info.is_normal_quit());
+  session_info.set_disconnect_state(SERVER_FORCE_DISCONNECT);
+  EXPECT_TRUE(session_info.is_normal_quit());
+  EXPECT_EQ(NORMAL_QUIT, session_info.get_disconnect_state());
+
+  // KILL must not discard a QUIT already accepted before LOGOFF is evaluated.
+  session_info.set_disconnect_state(NORMAL_KILL_SESSION);
+  EXPECT_TRUE(session_info.is_normal_quit());
+  EXPECT_EQ(NORMAL_QUIT, session_info.get_disconnect_state());
+
+  // Other server-initiated closes retain their existing classification.
+  ObBasicSessionInfo other_session(OB_SERVER_TENANT_ID);
+  other_session.set_disconnect_state(NORMAL_KILL_SESSION);
+  EXPECT_EQ(NORMAL_KILL_SESSION, other_session.get_disconnect_state());
+  other_session.set_disconnect_state(SERVER_FORCE_DISCONNECT);
+  EXPECT_FALSE(other_session.is_normal_quit());
+  EXPECT_EQ(SERVER_FORCE_DISCONNECT, other_session.get_disconnect_state());
+
+  session_info.set_disconnect_state(SERVER_FORCE_DISCONNECT);
+  EXPECT_TRUE(session_info.is_normal_quit());
+}
+
+TEST(test_basic_session_info, reset_normal_quit_disconnect_reason)
+{
+  const bool skip_sys_var[] = {false, true};
+  for (int64_t i = 0; i < 2; ++i) {
+    ObBasicSessionInfo session_info(OB_SERVER_TENANT_ID);
+    session_info.set_disconnect_state(NORMAL_QUIT);
+    EXPECT_TRUE(session_info.is_normal_quit());
+
+    // Neither a fresh session nor a reused cached session inherits the previous QUIT.
+    session_info.reset(skip_sys_var[i]);
+    EXPECT_FALSE(session_info.is_normal_quit());
+    EXPECT_EQ(CLIENT_FORCE_DISCONNECT, session_info.get_disconnect_state());
+
+    session_info.set_disconnect_state(SERVER_FORCE_DISCONNECT);
+    EXPECT_FALSE(session_info.is_normal_quit());
+    EXPECT_EQ(SERVER_FORCE_DISCONNECT, session_info.get_disconnect_state());
+  }
+}
+
 TEST(test_basic_session_info, load_variables)
 {
   int ret = OB_SUCCESS;

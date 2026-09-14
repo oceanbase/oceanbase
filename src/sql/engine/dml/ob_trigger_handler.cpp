@@ -1452,17 +1452,17 @@ int TriggerHandle::calc_system_trigger_logoff(ObSQLSessionInfo &session)
       && !session.is_inner()
       && session.is_user_session()) {
     bool is_enable = false;
+    const int64_t old_timeout_ts = THIS_WORKER.get_timeout_ts();
+    int64_t query_timeout = 0;
+    OZ (session.get_query_timeout(query_timeout));
+    OX (THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + query_timeout));
     OZ (is_enabled_system_trigger(is_enable));
     if (OB_SUCC(ret) && is_enable) {
       ObSchemaGetterGuard schema_guard;
       bool do_trigger = false;
-      int64_t query_timeout = 0;
-      int64_t old_timeout_ts = THIS_WORKER.get_timeout_ts();
       const observer::ObGlobalContext &gctx = GCTX;
-      OZ (session.get_query_timeout(query_timeout));
       CK (OB_NOT_NULL(gctx.schema_service_));
       OZ (gctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
-      OX (THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + query_timeout));
       OZ (check_trigger_execution(session, schema_guard, SYS_TRIGGER_LOGOFF, do_trigger));
       if (OB_SUCC(ret) && do_trigger) {
         int64_t pl_block_timeout = 0;
@@ -1476,8 +1476,8 @@ int TriggerHandle::calc_system_trigger_logoff(ObSQLSessionInfo &session)
           ret = OB_SUCCESS;
         }
       }
-      THIS_WORKER.set_timeout_ts(old_timeout_ts);
     }
+    THIS_WORKER.set_timeout_ts(old_timeout_ts);
   }
   return ret;
 }
@@ -1610,22 +1610,6 @@ int TriggerHandle::check_longon_trigger_privilege(ObSQLSessionInfo &session,
   return ret;
 }
 
-int TriggerHandle::set_logoff_mark(ObSQLSessionInfo &session)
-{
-  int ret = OB_SUCCESS;
-  if (session.is_oracle_compatible()) {
-    bool is_enable = false;
-    OZ (is_enabled_system_trigger(is_enable));
-    if (OB_SUCC(ret) && is_enable) {
-      ObSessionVariable log_mark;
-      log_mark.value_.set_uint32(session.get_server_sid());
-      log_mark.meta_.set_meta(log_mark.value_.meta_);
-      OZ (session.replace_user_variable(OB_LOGOFF_TRIGGER_MARK, log_mark));
-    }
-  }
-  return ret;
-}
-
 int TriggerHandle::check_trigger_execution(ObSQLSessionInfo &session,
                                            ObSchemaGetterGuard &schema_guard,
                                            SystemTriggerEvent trigger_event,
@@ -1652,14 +1636,12 @@ int TriggerHandle::check_trigger_execution(ObSQLSessionInfo &session,
   CHECK_HAS_ENABLED_TRIGGER(session.get_user_id());
   CHECK_HAS_ENABLED_TRIGGER(OB_ORA_SYS_USER_ID);
   if (OB_FAIL(ret)) {
+  } else if (SYS_TRIGGER_LOGOFF == trigger_event) {
+    // Both direct and proxy sessions require a processed COM_QUIT for LOGOFF.
+    do_trigger = need_fire && session.is_normal_quit();
   } else if (session.get_proxy_sessid() == ObBasicSessionInfo::VALID_PROXY_SESSID) {
     // obclient direct connection
     do_trigger = need_fire;
-  } else if (need_fire && SYS_TRIGGER_LOGOFF == trigger_event) {
-    const ObObj *log_mark = session.get_user_variable_value(OB_LOGOFF_TRIGGER_MARK);
-    if (log_mark != NULL && log_mark->get_uint32() == session.get_server_sid()) {
-      do_trigger = true;
-    }
   } else if (need_fire && SYS_TRIGGER_LOGON == trigger_event) {
     ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
     ObSqlString sql;
