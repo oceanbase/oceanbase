@@ -11,6 +11,7 @@
 | SemiInfo | 112 |
 | PartExprItem | 32 |
 | CheckConstraintItem | 96 |
+| ObDMLSequenceInfo | 16 |
 | SelectItem | 1568 |
 | ObSelectIntoItem | 224 |
 | ObGroupbyExpr | 40 |
