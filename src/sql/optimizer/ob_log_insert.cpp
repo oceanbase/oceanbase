@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_log_insert.h"
 #include "sql/optimizer/ob_log_table_scan.h"
+#include "sql/resolver/expr/ob_raw_expr_util.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -161,6 +162,8 @@ int ObLogInsert::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
                                           false;
   uint64_t data_version = 0;
 
+  ObSEArray<ObRawExpr *, 4> gen_col_exprs;
+  ObSEArray<ObRawExpr *, 4> dependant_exprs;
   if (OB_ISNULL(get_stmt()) ||
       OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -180,6 +183,10 @@ int ObLogInsert::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
                                                                 all_exprs,
                                                                 true))) {
     LOG_WARN("failed to add table columns to ctx", K(ret));
+  } else if (OB_FAIL(get_gen_col_replace_exprs(gen_col_exprs, dependant_exprs))) {
+    LOG_WARN("failed to collect generated column exprs", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(dependant_exprs, all_exprs))) {
+    LOG_WARN("failed to extract generated column dependant exprs", K(ret));
   }
   if (OB_SUCC(ret) && get_stmt()->is_insert_stmt()) {
     ObRawExpr *meta_expr = static_cast<const ObInsertStmt*>(get_stmt())

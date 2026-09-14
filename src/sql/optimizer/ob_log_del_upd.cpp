@@ -1320,6 +1320,34 @@ const common::ObIArray<ObColumnRefRawExpr *>* ObLogDelUpd::get_table_columns() c
   return ret;
 }
 
+int ObLogDelUpd::get_gen_col_replace_exprs(ObIArray<ObRawExpr *> &from_exprs,
+                                           ObIArray<ObRawExpr *> &to_exprs) const
+{
+  int ret = OB_SUCCESS;
+  const common::ObIArray<ObColumnRefRawExpr *> *table_columns = get_table_columns();
+  if (OB_NOT_NULL(table_columns)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_columns->count(); ++i) {
+      ObColumnRefRawExpr *expr = table_columns->at(i);
+      ObRawExpr *dependant_expr = NULL;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column expr is null", K(ret), K(i));
+      } else if (expr->is_virtual_generated_column()
+                 && OB_ISNULL(dependant_expr = expr->get_dependant_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("generated column dependant expr is null", K(ret), K(i));
+      } else if (OB_NOT_NULL(dependant_expr)) {
+        if (OB_FAIL(from_exprs.push_back(expr))) {
+          LOG_WARN("failed to append generated column expr", K(ret));
+        } else if (OB_FAIL(to_exprs.push_back(dependant_expr))) {
+          LOG_WARN("failed to append generated column dependant expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLogDelUpd::generate_old_rowid_expr(IndexDMLInfo &table_dml_info)
 {
   int ret = OB_SUCCESS;
