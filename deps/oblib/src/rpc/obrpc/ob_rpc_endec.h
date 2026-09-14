@@ -19,6 +19,7 @@
 #include "lib/compress/ob_compressor_pool.h"
 #include "lib/ash/ob_active_session_guard.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
+#include "lib/trace/ob_trace.h"
 
 extern "C" {
 void* pn_send_alloc(uint64_t gtid, int64_t sz);
@@ -36,22 +37,149 @@ int fill_extra_payload(ObRpcPacket& pkt, char* buf, int64_t len, int64_t &pos);
 int init_packet(ObRpcProxy& proxy, ObRpcPacket& pkt, ObRpcPacketCode pcode, const ObRpcOpts &opts,
                 const bool unneed_response);
 common::ObCompressorType get_proxy_compressor_type(ObRpcProxy& proxy);
-template <typename T>
-    int rpc_encode_req(
-      ObRpcProxy& proxy,
-      uint64_t gtid,
-      ObRpcPacketCode pcode,
-      const T& args,
-      const ObRpcOpts& opts,
-      char*& req,
-      int64_t& req_sz,
-      bool unneed_resp,
-      bool is_next = false,
-      bool is_last = false,
-      int64_t session_id = 0
-    )
+class ObRpcPreparedBody;
+ObRpcPreparedBody *get_proxy_reusable_body(ObRpcProxy &proxy);
+uint64_t get_proxy_tenant_id(ObRpcProxy &proxy);
+int rpc_encode_prepared_req(ObRpcProxy &proxy, uint64_t gtid, ObRpcPacketCode pcode,
+                            const ObRpcOpts &opts, const ObRpcPreparedBody &body,
+                            bool unneed_resp, char *&req, int64_t &req_sz);
+
+// One logical request, one synchronous fan-out. Each transport owns its own copy
+// of this body; the object must not be shared between threads or different args.
+class ObRpcPreparedBody
 {
-  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
+public:
+  ObRpcPreparedBody();
+  ~ObRpcPreparedBody();
+
+  // Prepare once for identical args in this fan-out. A non-success return asks
+  // the caller to use its original encoding path. nullptr selects the pool's compressor.
+  template <typename T>
+  int prepare(const T &args, ObRpcPacketCode pcode, uint64_t tenant_id,
+              common::ObCompressorType compressor_type,
+              common::ObCompressor *compressor = nullptr);
+
+  bool matches(ObRpcPacketCode pcode, uint64_t tenant_id,
+               common::ObCompressorType compressor_type) const;
+  const char *get_data() const { return data_; }
+  int64_t get_size() const { return size_; }
+  int64_t get_original_size() const { return original_size_; }
+  int64_t get_payload_size() const { return payload_size_; }
+  bool is_compressed() const { return compressed_; }
+  // Copy into caller-owned storage and a fresh packet; no ownership is transferred.
+  int fill_packet(ObRpcPacket &pkt, char *dst, int64_t capacity) const;
+  // These existing counters describe packets/bytes, not compressor invocations.
+  void record_packet_stat(bool count_original_on_fallback = true) const;
+
+private:
+  enum State { EMPTY, READY, BYPASS };
+  int finish_prepare(const ObRpcPacket &metadata, common::ObCompressor *compressor);
+  void release_buffer();
+  State state_;         // EMPTY: unprepared; READY: reusable; BYPASS: use original encoding.
+  char *data_;          // Owned serialized request body, optionally compressed.
+  int64_t size_;        // Body bytes copied into each outgoing packet.
+  int64_t original_size_; // Serialized body size before compression.
+  int64_t payload_size_;  // Original easy payload estimate plus compression overflow, for statistics.
+  // Request metadata checked before reusing the prepared body.
+  ObRpcPacketCode pcode_;
+  uint64_t tenant_id_;
+  common::ObCompressorType compressor_type_;
+  bool compressed_;     // Whether data_ contains compressed bytes.
+  // Extra-payload flags copied to each outgoing packet.
+  bool has_context_;
+  bool disable_debugsync_;
+  bool has_trace_info_;
+  DISALLOW_COPY_AND_ASSIGN(ObRpcPreparedBody);
+};
+
+template <typename T>
+int ObRpcPreparedBody::prepare(const T &args, ObRpcPacketCode pcode,
+                              uint64_t tenant_id, common::ObCompressorType compressor_type,
+                              common::ObCompressor *compressor)
+{
+  int ret = common::OB_SUCCESS;
+  if (OBTRACE->is_inited()) {
+    // Trace extra payload can change between destinations; preserve old semantics.
+    state_ = BYPASS;
+    ret = common::OB_NOT_SUPPORTED;
+  } else if (READY == state_) {
+    ret = matches(pcode, tenant_id, compressor_type)
+        ? common::OB_SUCCESS
+        : common::OB_STATE_NOT_MATCH;
+    if (OB_SUCC(ret) && original_size_ > get_max_rpc_packet_size()) {
+      ret = common::OB_RPC_PACKET_TOO_LONG;
+    }
+  } else if (BYPASS == state_) {
+    ret = common::OB_NOT_SUPPORTED;
+  } else {
+    // Attempt preparation only once, including allocation/serialization failures.
+    state_ = BYPASS;
+    if (!common::ObCompressorPool::need_common_compress(compressor_type)) {
+      ret = common::OB_NOT_SUPPORTED;
+    } else {
+      int64_t args_size = 0;
+      int64_t extra_size = 0;
+      int64_t limit = 0;
+#ifdef ENABLE_SERIALIZATION_CHECK
+      lib::begin_record_serialization();
+#endif
+      args_size = common::serialization::encoded_length(args);
+#ifdef ENABLE_SERIALIZATION_CHECK
+      lib::finish_record_serialization();
+#endif
+      extra_size = calc_extra_payload_size();
+      limit = get_max_rpc_packet_size();
+      if (args_size < 0 || extra_size < 0 || args_size > limit || extra_size > limit - args_size) {
+        ret = common::OB_RPC_PACKET_TOO_LONG;
+      } else if ((original_size_ = args_size + extra_size) <= 0 || original_size_ > INT32_MAX) {
+        ret = common::OB_INVALID_ARGUMENT;
+      } else if (OB_ISNULL(data_ = static_cast<char *>(
+                   common::ob_malloc(original_size_, common::ObModIds::OB_RPC)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+      } else {
+        int64_t pos = 0;
+        ObRpcPacket metadata;
+        payload_size_ = original_size_;
+        pcode_ = pcode;
+        tenant_id_ = tenant_id;
+        compressor_type_ = compressor_type;
+        if (OB_FAIL(common::serialization::encode(data_, original_size_, pos, args))) {
+          // Keep the error for cleanup and let the caller encode without reuse.
+        } else if (pos < 0 || pos > args_size) {
+#ifdef ENABLE_SERIALIZATION_CHECK
+          lib::begin_check_serialization();
+          common::serialization::encoded_length(args);
+          lib::finish_check_serialization();
+#endif
+          ret = common::OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(fill_extra_payload(metadata, data_, original_size_, pos))) {
+          // Keep the error for cleanup and let the caller encode without reuse.
+        } else if (pos < 0 || pos > original_size_) {
+          ret = common::OB_ERR_UNEXPECTED;
+        } else {
+          // encoded_length may be an upper bound; never compress allocation slack.
+          original_size_ = pos;
+          if (OB_FAIL(finish_prepare(metadata, compressor))) {
+            // Preparation stays bypassed after an allocation/compressor setup failure.
+          } else {
+            state_ = READY;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+        RPC_OBRPC_LOG(DEBUG, "prepare reusable rpc body failed, use original encoding", K(ret), K(pcode));
+        release_buffer();
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename T>
+int rpc_encode_unprepared_req(ObRpcProxy &proxy, uint64_t gtid, ObRpcPacketCode pcode,
+                              const T &args, const ObRpcOpts &opts, char *&req, int64_t &req_sz,
+                              bool unneed_resp, bool is_next, bool is_last, int64_t session_id)
+{
   int ret = common::OB_SUCCESS;
   ObRpcPacket pkt;
   const int64_t header_sz = pkt.get_header_size();
@@ -160,6 +288,47 @@ template <typename T>
   }
   if (OB_FAIL(ret) && NULL != header_buf) {
     pn_send_free(header_buf);
+  }
+  return ret;
+}
+
+template <typename T>
+    int rpc_encode_req(
+      ObRpcProxy& proxy,
+      uint64_t gtid,
+      ObRpcPacketCode pcode,
+      const T& args,
+      const ObRpcOpts& opts,
+      char*& req,
+      int64_t& req_sz,
+      bool unneed_resp,
+      bool is_next = false,
+      bool is_last = false,
+      int64_t session_id = 0
+    )
+{
+  int ret = common::OB_SUCCESS;
+  bool use_prepared = false;
+  ObRpcPreparedBody *body = nullptr;
+  ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
+  body = get_proxy_reusable_body(proxy);
+  // This branch is opt-in for ordinary PALF fan-out, never stream continuation.
+  if (OB_NOT_NULL(body) && !is_next && !is_last && 0 == session_id) {
+    int tmp_ret = common::OB_SUCCESS;
+    tmp_ret = body->prepare(args, pcode, get_proxy_tenant_id(proxy),
+                           get_proxy_compressor_type(proxy));
+    if (common::OB_SUCCESS != tmp_ret) {
+      // Preparation failure only disables reuse; preserve ret for the original path.
+    } else {
+      use_prepared = true;
+    }
+  }
+  if (use_prepared) {
+    // Once prepared encoding starts, its error is returned without an original-path retry.
+    ret = rpc_encode_prepared_req(proxy, gtid, pcode, opts, *body, unneed_resp, req, req_sz);
+  } else {
+    ret = rpc_encode_unprepared_req(proxy, gtid, pcode, args, opts, req, req_sz,
+                                    unneed_resp, is_next, is_last, session_id);
   }
   return ret;
 }

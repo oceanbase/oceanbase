@@ -20,6 +20,7 @@
 #include "log_rpc_macros.h"                        // MACROS...
 #include "log_rpc_packet.h"                        // LogRpcPacketImpl
 #include "log_rpc_proxy.h"                         // LogRpcProxyV2
+#include "rpc/obrpc/ob_rpc_endec.h"                // ObRpcPreparedBody
 #include "share/resource_manager/ob_cgroup_ctrl.h"
 #include "share/rpc/ob_batch_rpc.h"
 
@@ -83,7 +84,8 @@ public:
                                     !std::is_same<ReqType, LogBatchPushResp>::value), bool>::type=true>
   int post_request(const common::ObAddr &server,
                    const int64_t palf_id,
-                   const ReqType &req)
+                   const ReqType &req,
+                   obrpc::ObRpcPreparedBody *prepared_body = nullptr)
   {
     int ret = common::OB_SUCCESS;
     if (IS_NOT_INIT) {
@@ -94,7 +96,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
     } else {
       LogRpcPacketImpl<ReqType> packet(self_, palf_id, req);
-      ret = rpc_proxy_.post_packet(server, packet, tenant_id_, options_);
+      ret = rpc_proxy_.post_packet(server, packet, tenant_id_, options_, prepared_body);
       PALF_LOG(TRACE, "post_packet finished", K(ret), K(server), K(tenant_id_));
     }
     return ret;
