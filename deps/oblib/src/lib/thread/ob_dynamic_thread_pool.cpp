@@ -474,7 +474,7 @@ void ObSimpleDynamicThreadPool::try_inc_thread_count(int64_t cnt)
     if (cnt > 0 && cur_thread_count < max_thread_cnt_) {
       // increase thread count
       new_thread_count = min(cur_thread_count + cnt, max_thread_cnt_);
-    } else if (cnt < 0 && cur_thread_count > min_thread_cnt_) {
+    } else if (cnt < 0 && cur_thread_count > min_thread_cnt_ && max_thread_cnt_ > 2) {
       // decrease thread count
       new_thread_count = max(cur_thread_count + cnt, min_thread_cnt_);
     }
