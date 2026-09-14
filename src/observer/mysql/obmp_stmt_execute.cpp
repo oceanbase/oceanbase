@@ -3804,7 +3804,7 @@ int ObMPStmtExecute::response_query_header(ObSQLSessionInfo &session, pl::ObPsCu
         stmt_id_, cursor.get_dep_table_versions()) : true;
 
     drv.set_need_send_meta(need_send_meta);
-    if (OB_FAIL(drv.response_query_header(*fields, false, false, true))) {
+    if (OB_FAIL(drv.response_query_header(*fields, false, false, true, NULL, true/*is_cursor_result*/))) {
       LOG_WARN("fail to response query header", K(ret));
     } else if (enable_meta_response_opt && need_send_meta) {
       int tmp_mark_ret = session.mark_ps_result_meta_sent(
