@@ -167,5 +167,19 @@ select 'abcde';
 select '0x10';
 select '0810';
 
+# Bug 2026082900118655875: describe untyped NULL result columns in Oracle mode.
+# Keep the default MySQL connection as the unchanged-type control.
+select NULL col from dual;
+select NULL col from dual where 1=0;
+
+# The existing case uses MySQL syntax; check Oracle metadata on a separate connection.
+connect (conn_null_meta_oracle,$OBMYSQL_MS0,SYS@oracle,,SYS,$OBMYSQL_PORT);
+connection conn_null_meta_oracle;
+select NULL col from dual;
+select NULL col from dual where 1=0;
+select cast(NULL as NUMBER) col from dual;
+select cast(NULL as VARCHAR2(10)) col from dual;
+connection default;
+disconnect conn_null_meta_oracle;
 
 --disable_metadata

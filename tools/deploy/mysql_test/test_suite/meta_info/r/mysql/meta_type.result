@@ -484,3 +484,31 @@ Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is
 def					0810	253	16	4	N	1	0	45
 0810
 0810
+select NULL col from dual;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					col	6	0	0	Y	32896	0	63
+col
+NULL
+select NULL col from dual where 1=0;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					col	6	0	0	Y	32896	0	63
+col
+select NULL col from dual;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					COL	253	0	0	Y	128	0	63
+COL
+NULL
+select NULL col from dual where 1=0;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					COL	253	0	0	Y	128	0	63
+COL
+select cast(NULL as NUMBER) col from dual;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					COL	246	149	0	Y	32896	0	63
+COL
+NULL
+select cast(NULL as VARCHAR2(10)) col from dual;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					COL	253	10	0	Y	128	255	46
+COL
+NULL

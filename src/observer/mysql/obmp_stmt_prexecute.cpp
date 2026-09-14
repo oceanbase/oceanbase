@@ -1509,6 +1509,7 @@ int ObMPStmtPrexecute::send_column_packet(ObSQLSessionInfo &session,
       if (OB_FAIL(ObMySQLResultSet::to_mysql_field(ob_field, field))) {
         // do nothing
       } else {
+        ObMySQLResultSet::replace_oracle_null_type(ob_field, field);
         ObMySQLResultSet::replace_lob_type(session, ob_field, field);
       }
       if (OB_SUCC(ret)) {

@@ -204,6 +204,18 @@ void ObMySQLResultSet::switch_ps(ObPrecision &pre, ObScale &scale, EMySQLFieldTy
 
 }
 
+void ObMySQLResultSet::replace_oracle_null_type(const ObField &field,
+                                               ObMySQLField &mfield)
+{
+  // Normalize the wire type of untyped NULL column descriptors in Oracle mode.
+  // Keep the source field and all other protocol attributes unchanged.
+  if (lib::is_oracle_mode()
+      && ObNullType == field.type_.get_type()
+      && MYSQL_TYPE_NULL == mfield.type_) {
+    mfield.type_ = MYSQL_TYPE_VAR_STRING;
+  }
+}
+
 int ObMySQLResultSet::next_field(ObMySQLField &obmf)
 {
   int ret = OB_SUCCESS;
@@ -220,6 +232,7 @@ int ObMySQLResultSet::next_field(ObMySQLField &obmf)
       if (OB_FAIL(to_mysql_field(field, obmf))) {
         // do nothing
       } else {
+        replace_oracle_null_type(field, obmf);
         replace_lob_type(get_session(), field, obmf);
       }
     }
