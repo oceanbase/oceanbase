@@ -515,7 +515,7 @@ public:
   }
   OB_INLINE static bool is_cg_sstable(const int64_t schema_rowkey_cnt, const int64_t schema_column_count)
   {
-    return ObCGReadInfo::CG_COL_CNT == schema_rowkey_cnt && ObCGReadInfo::CG_ROWKEY_COL_CNT == schema_column_count;
+    return ObCGReadInfo::CG_ROWKEY_COL_CNT == schema_rowkey_cnt && ObCGReadInfo::CG_COL_CNT == schema_column_count;
   }
   static uint64_t get_local_max_cg_cnt()
   {
