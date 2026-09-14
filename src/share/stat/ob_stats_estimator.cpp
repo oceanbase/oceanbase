@@ -727,14 +727,16 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
         if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
           num_not_null = static_cast<int64_t>(num_not_null * 100 / sample_value_);
           num_null = static_cast<int64_t>(num_null * 100 / sample_value_);
-          if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
-            num_distinct = std::min(num_not_null, total_row_cnt);
-          } else if (ndv_scale_algo == NDV_SCALE_ALGO_LINEAR && is_block_sample_) {
+          if (ndv_scale_algo == NDV_SCALE_ALGO_LINEAR && is_block_sample_) {
             num_distinct = static_cast<int64_t>(num_distinct * 100 / sample_value_);
             num_distinct = std::min(num_distinct, total_row_cnt);
-          } else {
+          } else if (ndv_scale_algo != NDV_SCALE_ALGO_UNIQUE) {
             num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
           }
+        }
+        if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
+          // Refine unique columns for both sampled and full collection.
+          num_distinct = std::max<int64_t>(0, total_row_cnt - std::max<int64_t>(0, num_null));
         }
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());

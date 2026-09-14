@@ -767,12 +767,10 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         }
         if (OB_SUCC(ret)) {
           int64_t num_distinct = 0;
-          if (ndv_eval.get() != 0) {
-            if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
-              num_distinct = std::min(not_null_eval.get(), total_row_cnt);
-            } else {
-              num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
-            }
+          if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
+            num_distinct = std::max<int64_t>(0, total_row_cnt - std::max<int64_t>(0, null_eval.get()));
+          } else if (ndv_eval.get() != 0) {
+            num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
           }
           col_stat->set_table_id(param.column_params_.at(i).need_basic_stat() ? param.table_id_ : OB_INVALID_ID);
           col_stat->set_partition_id(partition_id);
