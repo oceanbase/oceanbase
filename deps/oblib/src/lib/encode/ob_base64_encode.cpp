@@ -153,7 +153,8 @@ int ObBase64Encoder::encode(const uint8_t *input, const int64_t input_len,
 
 int ObBase64Encoder::decode(const char *input, const int64_t input_len,
                             uint8_t *output, const int64_t output_len,
-                            int64_t &pos, bool skip_spaces)
+                            int64_t &pos, bool skip_spaces,
+                            bool oracle_mode)
 {
   int ret = OB_SUCCESS;
   bool all_skipped = false;
@@ -164,7 +165,7 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len,
   } else if (skip_spaces) {
     all_skipped = true;
     for (int64_t i = 0; all_skipped && i < input_len; ++i) {
-      if (!ObBase64Encoder::my_base64_decoder_skip_spaces(input[i])) {
+      if (!ObBase64Encoder::my_base64_decoder_skip_spaces(input[i], oracle_mode)) {
         all_skipped = false;
       }
     }
@@ -191,7 +192,7 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len,
     int64_t skipped_spaces = 0;
     for(; OB_SUCC(ret) && iter_input < (input + input_len) && '=' != *iter_input; iter_input++) {
       if (OB_UNLIKELY(!is_base64_char(*iter_input))) {
-        if (skip_spaces && my_base64_decoder_skip_spaces(*iter_input)) {
+        if (skip_spaces && my_base64_decoder_skip_spaces(*iter_input, oracle_mode)) {
           ++skipped_spaces;
         } else {
           ret = OB_INVALID_ARGUMENT;
@@ -219,14 +220,14 @@ int ObBase64Encoder::decode(const char *input, const int64_t input_len,
     int64_t cur_valid_len = iter_input - input - skipped_spaces;
     for (const char *iter = iter_input; OB_SUCC(ret) && iter < input + input_len; iter++) {
       // all the rest chars must be '='
-      if (skip_spaces && my_base64_decoder_skip_spaces(*iter)) {
+      if (skip_spaces && my_base64_decoder_skip_spaces(*iter, oracle_mode)) {
         skipped_spaces++;
       } else if (OB_UNLIKELY('=' != *iter)) {
         ret = OB_INVALID_ARGUMENT;
       }
     }// end for
     if (OB_FAIL(ret)) {
-    } else if (!skip_spaces) {
+    } else if (!skip_spaces || oracle_mode) {
       if (OB_UNLIKELY((cur_idx + 3 <= input_len))) {
         // only last char or last two chars can be '='
         ret = OB_INVALID_ARGUMENT;

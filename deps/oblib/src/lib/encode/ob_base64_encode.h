@@ -47,13 +47,17 @@ public:
     return (buf_size / 4) * 3;
   }
 
-  static inline bool my_base64_decoder_skip_spaces(char c)
+  static inline bool my_base64_decoder_skip_spaces(char c, bool oracle_mode = false)
   {
+    bool ret = true;
+    if (oracle_mode) {
+      ret = (c == '\n' || c == '\r');
+    }
     if (FROM_BASE64_TABLE[(uint8_t) c] != -2) {
-      return false;
+      ret = false;
     }
 
-    return true;
+    return ret;
   }
 
   static int encode(const uint8_t* input, const int64_t input_len,
@@ -62,7 +66,8 @@ public:
 
   static int decode(const char* input, const int64_t input_len,
                     uint8_t* output, const int64_t output_len,
-                    int64_t &pos, bool skip_spaces = false);
+                    int64_t &pos, bool skip_spaces = false,
+                    bool oracle_mode = false);
 };
 } // end namespace common
 } // end namespace oceanbase
