@@ -85,4 +85,7 @@ DEF_COMPAT_CONTROL_FEATURE(MYSQL_USERNAME_LENGTH_32,
     "Limit MySQL CREATE USER username to 32 characters, same as MySQL 8.0 behavior",
     MOCK_CLUSTER_VERSION_4_3_5_6, CLUSTER_VERSION_4_4_0_0,
     CLUSTER_VERSION_4_4_2_2)
+DEF_COMPAT_CONTROL_FEATURE(MYSQL_USER_HOST_MATCH_PRIORITY,
+    "Select the most specific matching host for MySQL accounts",
+    CLUSTER_VERSION_4_4_2_4)
 #endif
