@@ -1338,27 +1338,14 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
         if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
-        } else if (!is_ps_protocol) {
-          ObSqlUDT sql_udt;
-          sql_udt.set_udt_meta(udt_meta);
-          ObString res_str;
-          if (OB_FAIL(sql::ObSqlUdtUtils::convert_sql_udt_to_string(value, allocator, exec_context,
-                                                                    sql_udt, res_str))) {
-            LOG_WARN("failed to convert udt to string", K(ret), K(subschema_id));
-          } else {
-            value.set_udt_value(res_str.ptr(), res_str.length());
-          }
+        } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE
+                   || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE
+                   || udt_meta.pl_type_ == pl::PL_NESTED_TABLE_TYPE) {
+          // Keep common SQL UDT in serialized form here. MySQL row encoding will
+          // temporarily cast it to PL extend only when writing the cell.
         } else {
-          ObString udt_data = value.get_string();
-          ObObj result;
-          if (OB_FAIL(ObSqlUdtUtils::cast_sql_record_to_pl_record(exec_context,
-                                                                  result,
-                                                                  udt_data,
-                                                                  udt_meta))) {
-            LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
-          } else {
-            value = result;
-          }
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported to get udt meta", K(ret), K(udt_meta.udt_id_));
         }
       }
     }

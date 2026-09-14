@@ -32,6 +32,9 @@
 #include "observer/ob_server.h"
 #include "pl/external_routine/ob_java_udf.h"
 #include "observer/mysql/obmp_utils.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "share/object/ob_obj_cast.h"
+#include "share/ob_cluster_version.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2061,8 +2064,6 @@ int ObPL::execute(ObExecContext &ctx,
   int64_t execute_start = rdtsc();
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
-  bool udf_from_sql = routine.is_function() && is_called_from_sql;
-  bool is_return_complex_type = routine.is_function() && routine.get_ret_type().is_composite_type();
   ObPLASHGuard guard(routine.get_package_id(), routine.get_routine_id(), routine.get_function_name());
   ObIAllocator *top_pl_sym_allocator = nullptr;
   ObPLContext *pl_ctx = ctx.get_pl_stack_ctx();
@@ -2078,7 +2079,7 @@ int ObPL::execute(ObExecContext &ctx,
   CK (OB_NOT_NULL(top_pl_sym_allocator));
   if (OB_SUCC(ret)) {
     ObPLExecState pl(top_pl_sym_allocator,
-                     is_return_complex_type ? nullptr : &allocator,
+                     &allocator,
                      pl_ctx,
                      pl_ctx->get_allocator(),
                      ctx,
@@ -2095,7 +2096,6 @@ int ObPL::execute(ObExecContext &ctx,
     OZ (pl.init(params, is_anonymous));
     OZ (pl.execute(is_first_execute));
     pl.try_clear_complex_obj();
-    OZ (pl.deep_copy_result_if_need(allocator));
     pl.final(ret);
     if (OB_SUCC(ret)) {
       // process out arguments
@@ -2217,9 +2217,18 @@ int ObPL::execute(ObExecContext &ctx,
       }
     }
     // process function return value
-    if (OB_SUCC(ret) && local_result.is_valid_type()) {
-      CK (OB_NOT_NULL(result));
-      OX (*result = local_result);
+    if (local_result.is_valid_type()) {
+      if (OB_SUCC(ret)) {
+        CK (OB_NOT_NULL(result));
+        OX (*result = local_result);
+      }
+      if (OB_FAIL(ret)
+          && local_result.is_pl_extend()) {
+        int tmp_ret = ObUserDefinedType::destruct_obj(local_result, ctx.get_my_session());
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to destruct local result object", K(ret), K(tmp_ret));
+        }
+      }
     }
 
     if(OB_SUCC(ret) && !is_oracle_mode
@@ -3853,45 +3862,6 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value, bool set_va
   return ret;
 }
 
-int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
-{
-  int ret = OB_SUCCESS;
-  //all composite need to be deep copied and recorded.
-  ObObj new_obj;
-  if (func_.get_ret_type().is_composite_type() && result_.is_ext()) {
-    CK (OB_NOT_NULL(ctx_.exec_ctx_));
-    if (OB_SUCC(ret)) {
-      ObIAllocator *alloc = &ctx_.exec_ctx_->get_allocator();
-      ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
-      // we will destroy this obj in pl final interface
-      if (OB_NOT_NULL(session) &&
-         OB_NOT_NULL(session->get_pl_top_context())) {
-        pl::ObPLExecCtx *parent_exec_ctx = nullptr;
-        ObPLTopContext *pl_top_context = session->get_pl_top_context();
-        ObIArray<ObPLExecState *> *exec_stack = nullptr;
-        CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
-        if (OB_SUCC(ret) && exec_stack->count() > 1 &&
-            OB_NOT_NULL(exec_stack->at(exec_stack->count() - 2))) {
-          parent_exec_ctx = &exec_stack->at(exec_stack->count() - 2)->get_exec_ctx();
-          alloc = parent_exec_ctx->get_top_expr_allocator();
-        }
-      }
-      OZ (ObUserDefinedType::deep_copy_obj(*alloc, result_, new_obj));
-      ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
-      if (OB_SUCC(ret)) {
-        sql::ObPLComplexTypeMgr *pl_complex_type_mgr = ctx_.exec_ctx_->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr();
-        OZ (pl_complex_type_mgr->complex_type_objects_.push_back(new_obj));
-        if (OB_FAIL(ret)) {
-          ObUserDefinedType::destruct_obj(new_obj, ctx_.exec_ctx_->get_my_session());
-        } else {
-          result_ = new_obj;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObPLExecState::add_pl_exec_time(int64_t pl_exec_time, bool is_called_from_sql)
 {
   int ret = OB_SUCCESS;
@@ -4379,6 +4349,7 @@ int ObPLExecState::final(int ret)
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("failed to destruct pl object", K(tmp_ret));
     }
+    result_.set_null();
   }
 
 #ifdef OB_BUILD_ORACLE_PL

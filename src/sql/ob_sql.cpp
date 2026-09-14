@@ -361,7 +361,7 @@ int ObSql::fill_result_set(ObResultSet &result_set,
               LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
             } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
               LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
-            } else if(ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+            } else if(ObObjUDTUtil::ob_is_sys_sql_udt(udt_meta.udt_id_)) {
               field.type_.set_subschema_id(subschema_id);
               if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
                 LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
@@ -728,13 +728,16 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         }
       }
 
-      if (OB_SUCC(ret) && expr->get_result_type().is_ext()) {
+      if (OB_SUCC(ret) && (expr->get_result_type().is_ext() || expr->get_result_type().is_user_defined_sql_type())) {
 #ifdef OB_BUILD_ORACLE_PL
         // error code compiltable with oracle
         if (pl::ObPlJsonUtil::is_pl_jsontype(expr->get_result_type().get_udt_id())) {
           ret = OB_ERR_PL_JSONTYPE_USAGE;
         }
 #endif
+      }
+
+      if (OB_SUCC(ret) && expr->get_result_type().is_ext()) {
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (expr->is_query_ref_expr() && static_cast<ObQueryRefRawExpr*>(expr)->is_cursor()) {
@@ -833,7 +836,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             field.accuracy_.set_accuracy(T_OBJ_SDO_GEOMETRY);
           }
           if (expr->get_result_type().is_collection_sql_type()
-              && !ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
+              && !ObObjUDTUtil::ob_is_sys_sql_udt(udt_id)) {
             // array type
             field.type_.set_subschema_id(subschema_id);
             field.charsetnr_ = CS_TYPE_UTF8MB4_BIN;
@@ -849,13 +852,29 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             } else if (udt_id != udt_meta.udt_id_) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("udt id mismarch", K(ret), K(udt_id), K(udt_meta.udt_id_));
+            } else {
+              field.accuracy_.set_accuracy(udt_meta.udt_id_);
             }
             field.type_.set_subschema_id(tmp_subschema_id);
-            field.charsetnr_ = CS_TYPE_BINARY;
             field.length_ = OB_MAX_LONGTEXT_LENGTH;
+            if (udt_meta.udt_id_ == T_OBJ_XML) {
+              field.charsetnr_ = CS_TYPE_BINARY;
+            } else if (ObCharset::is_valid_collation(collation_type)) {
+              field.charsetnr_ = static_cast<uint16_t>(collation_type);
+            } else {
+              field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
+            }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
                 LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
+              } else if (T_OBJ_XML != udt_meta.udt_id_
+                         && NULL == context->secondary_namespace_ // pl resolve
+                         && NULL == context->session_info_->get_pl_context()) {
+                if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
+                                                          udt_meta.udt_id_,
+                                                          composite_field_name))) {
+                  LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
+                }
               }
             }
           } else {
@@ -1625,6 +1644,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
     context.exec_type_ = PLSql;
     context.is_prepare_protocol_ = true;
     context.is_prepare_stage_ = true;
+    context.disable_sql_udt_deduce_in_pl_ = true;
 
     if (OB_FAIL(ob_write_string(allocator, sess.get_current_query_string(), cur_query))) {
       LOG_WARN("failed to write string", K(ret));
@@ -5230,6 +5250,8 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(pc_ctx.exec_ctx_.init_physical_plan_ctx(*phy_plan))) {
         LOG_WARN("fail init exec context", K(ret), K(phy_plan->get_stmt_type()));
+      } else if (OB_FAIL(pctx->adjust_param_subschema_by_plan(pc_ctx.sql_ctx_.schema_guard_))) {
+        LOG_WARN("fail to adjust param subschema by plan", K(ret));
       } else if (OB_FAIL(DAS_CTX(pc_ctx.exec_ctx_).init(*phy_plan, pc_ctx.exec_ctx_))) {
         LOG_WARN("init das context failed", K(ret));
       } else if (OB_FAIL(pctx->set_autoinc_params(phy_plan->get_autoinc_params()))) {

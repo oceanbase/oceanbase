@@ -6,6 +6,7 @@
 #include "obsm_utils.h"
 
 #include "pl/ob_pl_stmt.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_sdo_geometry.h"
 #endif
@@ -239,8 +240,9 @@ int ObSMUtils::cell_str(
                    !field->type_.is_collection_sql_type()) { // sql udt will cast to extend in ps mode
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "field type is not ObExtended", K(ret));
-        } else if (field->type_.is_user_defined_sql_type() || field->type_.is_collection_sql_type()
-                   || (field->type_.get_type() == ObExtendType && field->accuracy_.get_accuracy() == T_OBJ_SDO_GEOMETRY)) {
+        } else if (BINARY == type &&
+                   (field->type_.is_user_defined_sql_type() || field->type_.is_collection_sql_type()
+                     || (field->type_.get_type() == ObExtendType && field->accuracy_.get_accuracy() == T_OBJ_SDO_GEOMETRY))) {
           const uint64_t udt_id = field->accuracy_.get_accuracy();
           const uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
           if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
@@ -255,6 +257,11 @@ int ObSMUtils::cell_str(
             OB_LOG(WARN, "user type is null", K(ret));
           } else if (OB_FAIL(user_type->serialize(*schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
             OB_LOG(WARN, "failed to serialize", K(ret));
+          }
+        } else if (TEXT == type && field->type_.is_user_defined_sql_type()) {
+          if (OB_FAIL(extend_cell_str(buf, len, src, type, pos,
+                                  dtc_params, field, session, schema_guard, tenant_id))) {
+            OB_LOG(WARN, "extend type cell string fail.", K(ret));
           }
         } else if (field->type_owner_.empty() || field->type_name_.empty()) {
           if (0 == field->type_name_.case_compare("SYS_REFCURSOR")) {
@@ -340,7 +347,7 @@ int ObSMUtils::cell_str(
               }
               if (OB_FAIL(ret)){
               } else if (OB_FAIL(nested_type->serialize(
-                                  *schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
+                                  *schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos, false))) {
                 OB_LOG(WARN, "failed to serialize anonymous collection", K(ret));
               } else {
                 OB_LOG(DEBUG, "success to serialize anonymous collection", K(ret));
@@ -416,12 +423,22 @@ int ObSMUtils::cell_str(
       case ObUserDefinedSQLTC: {
         if (obj.get_udt_subschema_id() == 0) { // xml
           ret = ObMySQLUtil::sql_utd_cell_str(MTL_ID(), buf, len, obj.get_string(), pos);
-        } else if (type == MYSQL_PROTOCOL_TYPE::TEXT) { // common sql udt text protocal
-          ret = ObMySQLUtil::varchar_cell_str(buf, len, obj.get_string(), is_oracle_raw, pos);
-        } else {
-          // ToDo: sql udt binary protocal (result should be the same as extend type)
-          ret = OB_NOT_IMPLEMENT;
-          OB_LOG(WARN, "UDTSQLType binary protocal not implemented", K(ret));
+        } else { //common sql udt
+          ObArenaAllocator allocator;
+          ObObj pl_obj;
+          if (OB_FAIL(ObSMUtils::sql_udt_pl_extend(allocator, obj, pl_obj))) {
+            OB_LOG(WARN, "failed to cast sql udt to pl extend", K(ret), K(obj.get_udt_subschema_id()));
+          } else if (OB_FAIL(ObSMUtils::cell_str(buf, len, pl_obj, type, pos, cell_idx, bitmap,
+                                                 dtc_params, field, session, schema_guard, tenant_id))) {
+            OB_LOG(WARN, "failed to serialize sql udt as pl extend", K(ret), K(obj.get_udt_subschema_id()));
+          }
+          int tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_obj, nullptr);
+          if (OB_SUCCESS != tmp_ret) {
+            OB_LOG(WARN, "failed to destruct tmp pl extend", K(tmp_ret), K(ret), K(pl_obj));
+            if (OB_SUCCESS == ret) {
+              ret = tmp_ret;
+            }
+          }
         }
         break;
       }
@@ -662,6 +679,41 @@ int ObSMUtils::get_ob_type(ObObjType &ob_type, EMySQLFieldType mysql_type, const
       _OB_LOG(WARN, "unsupport MySQL type %d", mysql_type);
       ret = OB_OBJ_TYPE_ERROR;
   }
+  return ret;
+}
+
+int ObSMUtils::sql_udt_pl_extend(ObIAllocator &allocator,
+                                 const ObObj &sql_udt_obj,
+                                 ObObj &pl_obj)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
+  UNUSED(allocator);
+  UNUSED(sql_udt_obj);
+  UNUSED(pl_obj);
+  ret = OB_NOT_SUPPORTED;
+  OB_LOG(WARN, "not support", K(ret));
+#else
+  if (sql_udt_obj.is_null()) {
+    pl_obj.set_null();
+  } else {
+    int64_t pos = 0;
+    ObString udt_data = sql_udt_obj.get_string();
+    ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&lob_allocator,
+                                                               ObLongTextType,
+                                                               CS_TYPE_BINARY,
+                                                               true,
+                                                               udt_data))) {
+      OB_LOG(WARN, "fail to get real sql udt data", K(ret));
+    } else if (udt_data.empty()) {
+      pl_obj.set_null();
+    } else if (OB_FAIL(pl::ObUserDefinedType::do_deserialize_obj(
+                   allocator, pl_obj, udt_data.ptr(), udt_data.length(), pos, false))) {
+      OB_LOG(WARN, "failed to deserialize sql udt object", K(ret), K(sql_udt_obj));
+    }
+  }
+#endif
   return ret;
 }
 

@@ -2262,7 +2262,7 @@ public:
             collation_database_ == other.collation_database_ &&
             plsql_optimize_level_ == other.plsql_optimize_level_ &&
             ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_ &&
-            max_execution_time_ == other.max_execution_time_;
+            max_execution_time_ == other.max_execution_time_ &&
             json_float_full_precision_ == other.json_float_full_precision_ &&
             enable_pl_composite_as_sql_udt_ == other.enable_pl_composite_as_sql_udt_;
       bool equal2 = true;

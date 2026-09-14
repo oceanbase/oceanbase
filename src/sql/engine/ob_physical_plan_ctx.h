@@ -562,6 +562,7 @@ public:
   int build_subschema_by_fields(const ColumnsFieldIArray *fields,
                                 share::schema::ObSchemaGetterGuard *schema_guard);
   int build_subschema_ctx_by_param_store(share::schema::ObSchemaGetterGuard *schema_guard);
+  int adjust_param_subschema_by_plan(share::schema::ObSchemaGetterGuard *schema_guard);
   ObSubSchemaCtx &get_subschema_ctx() { return subschema_ctx_; }
   inline int set_subschema_ctx(ObSubSchemaCtx &subschema_ctx) {
     return subschema_ctx_.assgin(subschema_ctx);
@@ -609,6 +610,7 @@ public:
   int set_lake_table_metadata(const share::ObILakeTableMetadata* lake_table_metadata);
 private:
   int init_param_store_after_deserialize();
+  int restore_pl_extend_in_param_store();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
   int extend_param_frame(const int64_t old_size);
   int reserve_param_frame(const int64_t capacity);

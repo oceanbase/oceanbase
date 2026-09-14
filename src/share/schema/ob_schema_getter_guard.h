@@ -73,6 +73,7 @@ class ObUDTTypeInfo;
 class ObUDF;
 class ObUserInfo;
 class SchemaName;
+
 struct ObNeedPriv;
 struct ObSessionPrivInfo;
 struct ObStmtNeedPrivs;

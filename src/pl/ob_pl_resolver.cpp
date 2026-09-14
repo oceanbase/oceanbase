@@ -23,6 +23,7 @@
 #include "pl/ob_pl_dependency_util.h"
 #include "pl/ob_pl_stmt.h"
 #include "sql/ob_sql_utils.h"
+#include "sql/engine/ob_exec_context.h"
 namespace oceanbase
 {
 using namespace common;
@@ -6623,6 +6624,9 @@ static int add_implicit_cast_for_in_param(ObRawExpr *&expr)
 int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &into_expr_type)
 {
   int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = resolve_ctx_.session_info_.get_cur_exec_ctx();
+  ObSqlCtx *sql_ctx = OB_ISNULL(exec_ctx) ? NULL : exec_ctx->get_sql_ctx();
+  const bool old_disable_sql_udt_deduce_in_pl = OB_NOT_NULL(sql_ctx) && sql_ctx->disable_sql_udt_deduce_in_pl_;
   CK (OB_NOT_NULL(value_expr));
   CK (OB_NOT_NULL(current_block_));
   OZ (replace_seq_expr_recursively(value_expr, &current_block_->get_namespace()));
@@ -6633,7 +6637,11 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
   bool transformed = false;
   OZ (ObTransformPreProcess::transform_expr(expr_factory_,
                                             resolve_ctx_.session_info_, value_expr, transformed));
-  OZ (formalize_expr(*value_expr));
+  // Keep disable_sql_udt_deduce_in_pl_ through all subsequent formalize paths
+  if (OB_SUCC(ret) && OB_NOT_NULL(sql_ctx)) {
+    sql_ctx->disable_sql_udt_deduce_in_pl_ = true;
+  }
+  OZ(formalize_expr(*value_expr));
   if (OB_SUCC(ret) && OB_NOT_NULL(value_expr) && into_expr_type.is_obj_type()) {
     // The basic type need check whether to add a column convert expr
     bool need_cast = false;
@@ -6663,6 +6671,9 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
                                         value_expr));
       OZ (formalize_expr(*value_expr));
     }
+  }
+  if (OB_NOT_NULL(sql_ctx)) {
+    sql_ctx->disable_sql_udt_deduce_in_pl_ = old_disable_sql_udt_deduce_in_pl;
   }
   return ret;
 }
@@ -13436,7 +13447,8 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
         bool is_legal = true;
         uint64_t actual_udt_id = OB_INVALID_ID;
         if (val_expr->get_result_type().is_null()) {
-        } else if (val_expr->get_result_type().is_ext()) {
+        } else if (val_expr->get_result_type().is_ext()
+                   || val_expr->get_result_type().is_user_defined_sql_type()) {
           if (val_expr->is_obj_access_expr()) {
             ObPLDataType actually_type;
             const ObObjAccessRawExpr *obj_access = NULL;
@@ -13504,7 +13516,8 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
         bool is_legal = true;
         uint64_t actual_udt_id = OB_INVALID_ID;
         if (child->get_result_type().is_null()) {
-        } else if (child->get_result_type().is_ext()) {
+        } else if (child->get_result_type().is_ext()
+                   || child->get_result_type().is_user_defined_sql_type()) {
           if (child->is_obj_access_expr()) {
             ObPLDataType actually_type;
             const ObObjAccessRawExpr *obj_access = NULL;
@@ -13798,7 +13811,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
-    if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr->get_result_type().get_udt_id())) {
+    if (!ObObjUDTUtil::ob_is_sys_sql_udt(expr->get_result_type().get_udt_id())) {
       OZ (formalize_expr(*expr)); // bugfix: 53193337, need get real type in that case
     }
     OZ (ObTransformPreProcess::transform_expr(expr_factory_,
@@ -16578,7 +16591,7 @@ int ObPLResolver::resolve_sys_func_access(ObObjAccessIdent &access_ident,
         LOG_WARN("deduce type failed for sys func ident", K(ret));
       }
     }
-    uint64_t udt_id = 0;
+    uint64_t udt_id = OB_INVALID_ID;
     if (OB_FAIL(ret)) {
     } else if (access_ident.sys_func_expr_->get_result_type().is_user_defined_sql_type()) {
       uint16_t subschema_id = access_ident.sys_func_expr_->get_result_type().get_subschema_id();
@@ -16634,6 +16647,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
   ObPLExternalNS::ExternalType type = static_cast<ObPLExternalNS::ExternalType>(access_ident.access_index_);
   ObPLDataType pl_data_type;
   int64_t cnt = access_idxs.count();
+  bool resolved_as_sql_udt_root = false;
 
   if (!is_routine) {
     OZ (check_is_udt_routine(access_ident, ns, access_idxs, is_routine));
@@ -16700,30 +16714,67 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
           CK (OB_NOT_NULL(local_var = sym_tbl->get_symbol(var_idx)));
           OX (pl_data_type = local_var->get_type());
           if (OB_FAIL(ret)) {
-          } else if (resolve_ctx_.is_sql_scope_ && OB_ISNULL(get_params().secondary_namespace_)) {
-            //sql scope, use :1.c0, resolve as IS_UDF_NS for check whether contain batch stmt parameter
-            ObConstRawExpr *var_expr = NULL;
-            ObObjParam val;
-            ObRawExprResType res_type;
-            OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, var_expr));
-            CK (OB_NOT_NULL(var_expr));
-            if (OB_SUCC(ret)) {
-              val.set_unknown(var_idx);
-              val.set_param_meta();
-              var_expr->set_value(val);
-              res_type.set_type(pl_data_type.get_obj_type());
-              res_type.set_collation_type(pl_data_type.get_charset());
-              res_type.set_collation_level(CS_LEVEL_IMPLICIT);
-              if (pl_data_type.get_obj_type() == ObExtendType) {
-                res_type.set_udt_id(pl_data_type.get_user_type_id());
-              }
-              var_expr->set_result_type(res_type);
-              var_index = reinterpret_cast<int64_t>(var_expr);
-              type = ObPLExternalNS::UDF_NS;
-            }
           } else {
-            OX (type = ObPLExternalNS::LOCAL_VAR);
-            OX (var_index = var_idx);
+            const ObDataType *pl_bind_data_type = pl_data_type.is_obj_type() ? pl_data_type.get_data_type() : NULL;
+            const uint64_t sql_udt_id = (OB_NOT_NULL(pl_bind_data_type) && pl_bind_data_type->get_meta_type().is_common_user_defined_sql_type()) ? pl_bind_data_type->get_accuracy().get_accuracy() : OB_INVALID_ID;
+            const bool is_sql_udt_bind = (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_4_2_3
+                && OB_INVALID_ID != sql_udt_id
+                && ObPLDataType::is_schema_udt(&resolve_ctx_.schema_guard_, sql_udt_id));
+            if (is_sql_udt_bind) {
+              // SQL UDT bind param (:a.c0): align with udt column path via resolve_sys_func_access.
+              ObConstRawExpr *var_expr = NULL;
+              ObObjParam val;
+              ObRawExprResType res_type;
+              OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, var_expr));
+              CK (OB_NOT_NULL(var_expr));
+              if (OB_SUCC(ret)) {
+                val.set_unknown(var_idx);
+                val.set_param_meta();
+                var_expr->set_value(val);
+                uint16_t subschema_id = ObInvalidSqlType;
+                ObExecContext *exec_ctx = resolve_ctx_.session_info_.get_cur_exec_ctx();
+                if (OB_ISNULL(exec_ctx)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("exec ctx is null when resolve sql udt bind access", K(ret), K(var_idx));
+                } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(sql_udt_id, subschema_id))) {
+                  LOG_WARN("failed to get subschema id for sql udt bind access", K(ret), K(sql_udt_id), K(var_idx));
+                } else if (subschema_id == ObMaxSystemUDTSqlType) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("invalid subschema id for sql udt bind access", K(ret), K(sql_udt_id), K(var_idx));
+                } else {
+                  res_type.set_sql_udt(subschema_id);
+                  res_type.set_udt_id(sql_udt_id);
+                  var_expr->set_result_type(res_type);
+                  OX (access_ident.sys_func_expr_ = var_expr);
+                  OZ (resolve_sys_func_access(access_ident, access_idxs, session_info, ns));
+                  OX (resolved_as_sql_udt_root = true);
+                }
+              }
+            } else if (resolve_ctx_.is_sql_scope_ && OB_ISNULL(get_params().secondary_namespace_)) {
+              //sql scope, use :1.c0, resolve as IS_UDF_NS for check whether contain batch stmt parameter
+              ObConstRawExpr *var_expr = NULL;
+              ObObjParam val;
+              ObRawExprResType res_type;
+              OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, var_expr));
+              CK (OB_NOT_NULL(var_expr));
+              if (OB_SUCC(ret)) {
+                val.set_unknown(var_idx);
+                val.set_param_meta();
+                var_expr->set_value(val);
+                res_type.set_type(pl_data_type.get_obj_type());
+                res_type.set_collation_type(pl_data_type.get_charset());
+                res_type.set_collation_level(CS_LEVEL_IMPLICIT);
+                if (pl_data_type.get_obj_type() == ObExtendType) {
+                  res_type.set_udt_id(pl_data_type.get_user_type_id());
+                }
+                var_expr->set_result_type(res_type);
+                var_index = reinterpret_cast<int64_t>(var_expr);
+                type = ObPLExternalNS::UDF_NS;
+              }
+            } else {
+              OX (type = ObPLExternalNS::LOCAL_VAR);
+              OX (var_index = var_idx);
+            }
           }
         }
       } else {
@@ -16745,6 +16796,8 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     }
 
     if (OB_FAIL(ret)) {
+    } else if (resolved_as_sql_udt_root) {
+      // access_idxs already filled by resolve_sys_func_access, same as udt column root.
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
       OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),

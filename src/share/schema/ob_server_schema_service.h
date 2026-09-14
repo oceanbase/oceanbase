@@ -1091,7 +1091,8 @@ public:
       return new_tenant_keys_.size() > 0
              || alter_tenant_keys_.size() > 0
              || new_table_keys_.size() > 0
-             || new_database_keys_.size() > 0;
+             || new_database_keys_.size() > 0
+             || new_udt_keys_.size() > 0;
     }
   };
 
@@ -1194,7 +1195,8 @@ public:
       common::ObIAllocator &allocator,
       common::ObIArray<const ObTenantSchema *> &tenant_schemas,
       common::ObIArray<const ObDatabaseSchema *> &database_schemas,
-      common::ObIArray<const ObTableSchema *> &table_schemas);
+      common::ObIArray<const ObTableSchema *> &table_schemas,
+      common::ObIArray<const ObUDTTypeInfo *> &udt_schemas);
   virtual int check_schema_slot_available(const uint64_t tenant_id) = 0;
 
 protected:
@@ -1526,7 +1528,8 @@ protected:
       const AllSchemaKeys &schema_keys,
       common::ObIArray<const ObTenantSchema *> &tenant_schemas,
       common::ObIArray<const ObDatabaseSchema *> &database_schemas,
-      common::ObIArray<const ObTableSchema *> &table_schemas);
+      common::ObIArray<const ObTableSchema *> &table_schemas,
+      common::ObIArray<const ObUDTTypeInfo *> &udt_schemas);
   int fetch_increment_tenant_schemas_for_data_dict_(
       common::ObMySQLTransaction &trans,
       common::ObIAllocator &allocator,
@@ -1544,6 +1547,12 @@ protected:
       const uint64_t tenant_id,
       const AllSchemaKeys &schema_keys,
       common::ObIArray<const ObTableSchema *> &table_schemas);
+  int fetch_increment_udt_schemas_for_data_dict_(
+      common::ObMySQLTransaction &trans,
+      common::ObIAllocator &allocator,
+      const uint64_t tenant_id,
+      const AllSchemaKeys &schema_keys,
+      common::ObIArray<const ObUDTTypeInfo *> &udt_schemas);
 protected:
   // core table count
   const static int64_t MIN_TABLE_COUNT = 1;

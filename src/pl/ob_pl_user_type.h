@@ -130,7 +130,14 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int serialize(SCHEMA_PROVIDER &schema_provider,
+                const sql::ObSQLSessionInfo &session,
+                const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
+                char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -155,6 +162,7 @@ public:
   static int alloc_for_second_level_composite(ObObj &src, ObIAllocator &allocator);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
+  static int do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, const char* buf, const int64_t len, int64_t& pos, bool is_nested);
   static int64_t get_serialize_obj_size(const ObObj &obj);
 
   static int generate_init_composite(ObPLCodeGenerator &generator,
@@ -171,10 +179,20 @@ public:
                                         const pl::ObPLStmt *stmt);
 
   int text_protocol_prefix_info_for_each_item(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const uint64_t tenant_id,
                                               const ObPLDataType &type,
                                               char *buf,
                                               const int64_t len,
-                                              int64_t &pos) const;
+                                              int64_t &pos,
+                                              const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int text_protocol_prefix_info_for_each_item(SCHEMA_PROVIDER &schema_provider,
+                                              const uint64_t tenant_id,
+                                              const ObPLDataType &type,
+                                              char *buf,
+                                              const int64_t len,
+                                              int64_t &pos,
+                                              const bool full_format = false) const;
   int text_protocol_suffix_info_for_each_item(const ObPLDataType &type,
                                               char *buf,
                                               const int64_t len,
@@ -246,7 +264,14 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int serialize(SCHEMA_PROVIDER &schema_provider,
+                const sql::ObSQLSessionInfo &session,
+                const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
+                char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                           common::ObIAllocator &allocator,
                           sql::ObSQLSessionInfo *session,
@@ -521,7 +546,14 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int serialize(SCHEMA_PROVIDER &schema_provider,
+                const sql::ObSQLSessionInfo &session,
+                const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
+                char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -685,7 +717,14 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int serialize(SCHEMA_PROVIDER &schema_provider,
+                const sql::ObSQLSessionInfo &session,
+                const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
+                char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -760,7 +799,8 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -888,6 +928,8 @@ struct ObPlCompiteWrite
   int64_t value_addr_;
 };
 
+#define OB_PL_COMPOSITE_SERIALIZE_VERSION_V1 1
+
 class ObPLComposite
 {
 public:
@@ -935,6 +977,46 @@ public:
   int deserialize(const char* buf, const int64_t len, int64_t &pos);
   void print() const;
   static bool obj_is_null(ObObj* obj);
+  static int64_t get_obj_serialize_size_for_offset(const ObObj &obj,
+                                                   bool *has_serialized_complex_null = nullptr);
+  static int calc_obj_offset_array_len(const ObObj *data,
+                                       const int64_t count,
+                                       int64_t &offset_array_len,
+                                       int64_t *data_serialize_size = nullptr,
+                                       bool *has_serialized_complex_null = nullptr);
+  static inline int64_t member_null_bitmap_bytes(const int64_t elem_cnt)
+  {
+    return (elem_cnt <= 0) ? 0 : ((elem_cnt + 7) / 8);
+  }
+  static inline void member_null_bitmap_zero(char *buf, const int64_t bytes)
+  {
+    if (OB_NOT_NULL(buf) && bytes > 0) {
+      MEMSET(buf, 0, static_cast<size_t>(bytes));
+    }
+  }
+  static inline void member_null_bitmap_mark_null(char *buf, const int64_t bytes, const int64_t member_idx)
+  {
+    if (member_idx >= 0 && OB_NOT_NULL(buf) && bytes > 0) {
+      const int64_t by = member_idx >> 3;
+      const int64_t bi = member_idx & 7;
+      if (by < bytes) {
+        buf[by] = static_cast<char>(static_cast<uint8_t>(buf[by])
+                                    | (static_cast<uint8_t>(1) << bi));
+      }
+    }
+  }
+  static inline bool member_null_bitmap_at(const char *buf, const int64_t bytes, const int64_t member_idx)
+  {
+    bool is_null = false;
+    if (member_idx >= 0 && OB_NOT_NULL(buf) && bytes > 0) {
+      const int64_t by = member_idx >> 3;
+      const int64_t bi = member_idx & 7;
+      if (by < bytes) {
+        is_null = (0 != (static_cast<uint8_t>(buf[by]) & (static_cast<uint8_t>(1) << bi)));
+      }
+    }
+    return is_null;
+  }
   static uint32_t allocator_offset_bits() { return offsetof(ObPLComposite, allocator_) * 8; }
 
   TO_STRING_KV(K_(type), K_(id), K_(is_null));
@@ -999,6 +1081,11 @@ public:
   inline bool is_inited() const { return count_ != OB_INVALID_COUNT && data_ != nullptr; }
   void print() const;
 
+  /*serialize functions*/
+  int get_serialize_size(int64_t &size);
+  int serialize(char* buf, const int64_t len, int64_t& pos);
+  int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t len, int64_t &pos);
+
   TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
@@ -1042,9 +1129,9 @@ public:
   }
   inline bool is_composite_type() const { return meta_.is_ext(); }
 
-  int64_t get_serialize_size() const;
-  int serialize(char *buf, int64_t len, int64_t &pos) const;
-  int deserialize(const char* buf, const int64_t len, int64_t &pos);
+  int64_t get_serialize_size(bool full_format = false) const;
+  int serialize(char *buf, int64_t len, int64_t &pos, bool full_format = false) const;
+  int deserialize(const char* buf, const int64_t len, int64_t &pos, bool full_format = false);
 
   TO_STRING_KV(K_(meta), K_(type), K_(not_null), K_(field_cnt));
 

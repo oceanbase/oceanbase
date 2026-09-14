@@ -86,7 +86,8 @@ int ObResolverUtils::get_all_function_table_column_names(const TableItem &table_
   CK (OB_LIKELY(table_item.is_function_table()));
   CK (OB_NOT_NULL(table_expr = table_item.function_table_expr_));
 
-  if (OB_SUCC(ret) && table_expr->get_result_type().is_ext()) {
+  if (OB_SUCC(ret) && (table_expr->get_result_type().is_ext()
+                       || table_expr->get_result_type().is_user_defined_sql_type())) {
     CK (table_expr->get_udt_id() != OB_INVALID_ID);
 
     CK (OB_NOT_NULL(params.schema_checker_));
@@ -3923,7 +3924,7 @@ int ObResolverUtils::check_partition_range_value_result_type(const ObPartitionFu
 bool ObResolverUtils::is_expr_can_be_used_in_table_function(const ObRawExpr &expr)
 {
   bool bret = false;
-  if (expr.get_result_type().is_ext()) {
+  if (expr.get_result_type().is_ext() || expr.get_result_type().is_user_defined_sql_type()) {
     // for UDF
     bret = true;
   } else if (T_FUN_SYS_GENERATOR == expr.get_expr_type()) {

@@ -500,7 +500,8 @@ int ObSQLUtils::calc_simple_expr_without_row(
     ObObj &result,
     const ParamStore *params,
     ObIAllocator &allocator,
-    bool force_copy_extend_type)
+    bool force_copy_extend_type,
+    ObExecContext *exec_ctx)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory expr_factory(allocator);
@@ -515,7 +516,7 @@ int ObSQLUtils::calc_simple_expr_without_row(
     if (OB_FAIL(calc_const_expr(raw_expr, params, result, need_check))) {
       SQL_LOG(WARN, "failed to calc const expr", KPC(raw_expr), K(ret));
     } else { /*do nothing*/ }
-  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params, NULL, force_copy_extend_type))) {
+  } else if (OB_FAIL(calc_const_expr(session, *raw_expr, result, allocator, *params, exec_ctx, force_copy_extend_type))) {
     SQL_LOG(WARN, "Get const_expr value error", KPC(raw_expr), K(ret));
   }
 

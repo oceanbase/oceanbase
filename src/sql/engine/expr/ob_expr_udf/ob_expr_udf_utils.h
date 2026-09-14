@@ -73,12 +73,16 @@ public:
   int process_in_params(const pl::ObPLParamArray &objs_stack,
                                       int64_t param_num,
                                       const ObIArray<ObExprResType> &params_type,
-                                      pl::ObPLParamArray& iparams);
+                                      pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
+                                      ObIArray<ObObj> &deep_in_objs);
   static
   int process_return_value(ObObj &result,
                                          ObObj &tmp_result,
                                          ObEvalCtx &eval_ctx,
                                          ObExprUDFCtx &udf_ctx,
+                                         const common::ObObjMeta &result_meta,
                                          ObExprUDFEnvGuard &guard);
   static
   int process_in_params(const pl::ObPLParamArray &objs_stack,
@@ -86,8 +90,9 @@ public:
                                       const ObIArray<ObUDFParamDesc> &params_desc,
                                       const ObIArray<ObExprResType> &params_type,
                                       pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
                                       ObIAllocator &allocator,
-                                      ObIArray<ObObj> *deep_in_objs = nullptr);
+                                      ObIArray<ObObj> &deep_in_objs);
   static
   int process_out_params(ObExprUDFCtx &udf_ctx, ObEvalCtx &eval_ctx);
   static

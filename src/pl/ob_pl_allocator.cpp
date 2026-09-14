@@ -44,7 +44,7 @@ int ObPLAllocator1::init(ObIAllocator *alloc)
         CK (OB_NOT_NULL(arena_allocator));
         OX (memattr_ = arena_allocator->get_arena().get_page_allocator().get_attr());
       }
-      OX (new (allocator_)ObLiteFIFOAllocator(MTL_ID()));
+      OX (new (allocator_)ObLiteFIFOAllocator(memattr_.tenant_id_));
       OX (static_cast<ObLiteFIFOAllocator *>(allocator_)->init(nullptr, BLOCK_SIZE, memattr_));
       OX (use_malloc_ = (-EVENT_CALL(EventTable::EN_PL_MEMORY_ALLOCA_SWITCH)) > 0);
       OX (need_destroy_allocator_ = true);

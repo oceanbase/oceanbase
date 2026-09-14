@@ -11095,18 +11095,8 @@ static int cast_to_udt_not_support(const ObObjType expect_type, ObObjCastParams 
                                    const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
   int ret = OB_SUCCESS;
-
-  if (out.is_xml_sql_type()) {
-    // only allow cast basic types to invalid CAST to a type that is not a nested table or VARRAY
-    ret = OB_ERR_INVALID_CAST_UDT;
-    LOG_WARN_RET(ret, "invalid CAST to a type that is not a nested table or VARRAY");
-  } else {
-    // other udts
-    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
-    // currently other types to udt not supported
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
-  }
+  ret = OB_ERR_INVALID_CAST_UDT;
+  LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
   return ret;
 }
 
@@ -11158,13 +11148,14 @@ static int sql_udt_pl_extend(const ObObjType expect_type, ObObjCastParams &param
                                                                       subschema_id,
                                                                       udt_meta))) {
         LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
-      } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE) {
-        ObString udt_data = in.get_string();
-        if (OB_FAIL(sql::ObSqlUdtUtils::cast_sql_record_to_pl_record(params.exec_ctx_,
-                                                                     out,
-                                                                     udt_data,
-                                                                     udt_meta))) {
-          LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
+      } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE
+                 || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE
+                 || udt_meta.pl_type_ == pl::PL_NESTED_TABLE_TYPE) {
+        if (OB_FAIL(sql::ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(params.exec_ctx_,
+                                                                             out,
+                                                                             in,
+                                                                             udt_meta))) {
+          LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(udt_meta.udt_id_));
         }
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -11300,8 +11291,9 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
         } else {
           udt_id = pl_src->get_id();
         }
-      } else if (pl::PL_VARRAY_TYPE == in.get_meta().get_extend_type()) {
-        pl::ObPLVArray *pl_src = reinterpret_cast<pl::ObPLVArray*>(in.get_ext());
+      } else if (pl::PL_VARRAY_TYPE == in.get_meta().get_extend_type()
+                 || pl::PL_NESTED_TABLE_TYPE == in.get_meta().get_extend_type()) {
+        pl::ObPLCollection *pl_src = reinterpret_cast<pl::ObPLCollection*>(in.get_ext());
         if (OB_ISNULL(pl_src)) {
           ret = OB_ERR_NULL_VALUE;
           LOG_WARN("failed to get pl data type info", K(ret), K(in));
@@ -11317,6 +11309,9 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         out.set_null();
+      } else if (OB_ISNULL(params.exec_ctx_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec ctx is null", K(ret));
       } else if (OB_FAIL(params.exec_ctx_->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
         LOG_WARN("Failed to get subshcema_meta_info", K(ret), K(udt_id));
       } else if (OB_FAIL(sql::ObSqlUdtUtils::get_sqludt_meta_by_subschema_id(params.exec_ctx_,
@@ -11327,23 +11322,29 @@ static int pl_extend_sql_udt(const ObObjType expect_type, ObObjCastParams &param
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("inconsistent datatypes", K(ret), K(in), K(subschema_id), K(udt_meta.udt_id_));
       } else if (FALSE_IT(sql_udt.set_udt_meta(udt_meta))) {
-      } else if (sql_udt.get_udt_meta().pl_type_ == pl::PL_VARRAY_TYPE) { // single varray
-        if (OB_FAIL(sql::ObSqlUdtUtils::cast_pl_varray_to_sql_varray(*params.allocator_v2_, res_str, in))) {
-          LOG_WARN("convert pl record to sql record failed", K(ret), K(subschema_id), K(udt_meta.udt_id_));
+      } else if (sql_udt.get_udt_meta().pl_type_ == pl::PL_VARRAY_TYPE
+                 || sql_udt.get_udt_meta().pl_type_ == pl::PL_NESTED_TABLE_TYPE) { // single collection
+        if (OB_FAIL(sql::ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(*params.allocator_v2_, params.exec_ctx_, res_str, in, udt_meta))) {
+          LOG_WARN("convert pl collection to sql udt failed", K(ret), K(subschema_id), K(udt_meta.udt_id_));
+        } else if (res_str.empty()) {
+          out.set_null();
         } else {
           out.set_sql_udt(res_str.ptr(), static_cast<int32_t>(res_str.length()), subschema_id);
+          out.set_has_lob_header();
         }
       } else { // record
-        if (OB_FAIL(sql::ObSqlUdtUtils::cast_pl_record_to_sql_record(*params.allocator_v2_,
-                                                                      *params.allocator_v2_,
+        if (OB_FAIL(sql::ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(*params.allocator_v2_,
                                                                       params.exec_ctx_,
                                                                       res_str,
-                                                                      sql_udt,
-                                                                      in))) {
+                                                                      in,
+                                                                      udt_meta))) {
           LOG_WARN("convert pl record to sql record failed",
                   K(ret), K(subschema_id), K(udt_meta.udt_id_));
+        } else if (res_str.empty()) {
+          out.set_null();
         } else {
           out.set_sql_udt(res_str.ptr(), static_cast<int32_t>(res_str.length()), subschema_id);
+          out.set_has_lob_header();
         }
       }
     }
@@ -14578,7 +14579,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*lob*/
     cast_udt_to_other_not_support,/*json*/
     cast_udt_to_other_not_support,/*geometry*/
-    cast_udt_to_other_not_support,/*udt*/
+    cast_identity,/*udt*/
     cast_udt_to_other_not_support,/*decimal int*/
     cast_udt_to_other_not_support,/*collection*/
     cast_not_expected,/*mysql date*/
@@ -15581,7 +15582,7 @@ ObObjCastFunc OBJ_CAST_ORACLE_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_udt_to_other_not_support,/*lob*/
     cast_udt_to_other_not_support,/*json*/
     cast_udt_to_other_not_support,/*geometry*/
-    cast_udt_to_other_not_support,/*udt*/
+    cast_identity,/*udt*/
     cast_udt_to_other_not_support,/*decimal int*/
     cast_udt_to_other_not_support,/*collection*/
     cast_not_expected,/*mysql date*/

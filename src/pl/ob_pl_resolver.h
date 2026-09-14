@@ -260,7 +260,7 @@ public:
     item_type_(T_MAX),
     fast_check_status_times_(0)
     {
-      expr_factory_.set_is_called_sql(false);
+      expr_factory_.set_is_called_sql(is_sql_scope_);
       params_.param_list_ = param_list;
       params_.tg_timing_event_ = tg_timing_event;
     }

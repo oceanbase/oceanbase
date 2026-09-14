@@ -974,6 +974,11 @@ int ObPhysicalPlanCtx::deserialize(const char *buf, const int64_t data_len, int6
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(restore_pl_extend_in_param_store())) {
+        LOG_WARN("failed to restore pl extend in param store", K(ret));
+      }
+    }
     OB_UNIS_DECODE(foreign_key_checks_);
     OB_UNIS_DECODE(unsed_worker_count_since_222rel_);
     OB_UNIS_DECODE(tenant_schema_version_);
@@ -1079,13 +1084,14 @@ int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, Ob
 {
   int ret = OB_SUCCESS;
   ObSubSchemaValue value;
+  bool is_subschema_inited_in_plan = true;
   if (subschema_id == ObMaxSystemUDTSqlType || subschema_id >= UINT_MAX16) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid subschema id", K(ret), K(subschema_id));
   } else if (OB_NOT_NULL(phy_plan_)) { // physical plan exist, use subschema ctx on phy plan
     if (!phy_plan_->get_subschema_ctx().is_inited()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("plan with empty subschema mapping", K(ret), K(phy_plan_->get_subschema_ctx()));
+      LOG_INFO("plan with empty subschema mapping", K(lbt()), K(phy_plan_->get_subschema_ctx()));
+      is_subschema_inited_in_plan = false;
     } else if (OB_FAIL(phy_plan_->get_subschema_ctx().get_subschema(subschema_id, value))) {
       if (OB_HASH_NOT_EXIST != ret) {
         LOG_WARN("failed to get subschema by subschema id", K(ret), K(subschema_id));
@@ -1095,17 +1101,21 @@ int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, Ob
     } else {
       udt_meta = *(reinterpret_cast<ObSqlUDTMeta *>(value.value_));
     }
-  } else if (!subschema_ctx_.is_inited()) { // no phy plan
-    ret = OB_ISNULL(phy_plan_) ? OB_NOT_INIT : OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid subschema id", K(ret), K(subschema_id), K(lbt()));
-  } else {
-    if (OB_FAIL(subschema_ctx_.get_subschema(subschema_id, value))) {
-      LOG_WARN("failed to get subschema", K(ret), K(subschema_id));
-    } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid subschema type", K(ret), K(value));
-    } else { // Notice: shallow copy
-      udt_meta = *(reinterpret_cast<ObSqlUDTMeta *>(value.value_));
+  }
+  if (OB_SUCC(ret)
+      && (OB_ISNULL(phy_plan_) || !is_subschema_inited_in_plan)) {
+    if (!subschema_ctx_.is_inited()) {
+      ret = OB_ISNULL(phy_plan_) ? OB_NOT_INIT : OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid subschema id", K(ret), K(subschema_id), K(lbt()));
+    } else {
+      if (OB_FAIL(subschema_ctx_.get_subschema(subschema_id, value))) {
+        LOG_WARN("failed to get subschema", K(ret), K(subschema_id));
+      } else if (value.type_ >= OB_SUBSCHEMA_MAX_TYPE) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid subschema type", K(ret), K(value));
+      } else { // Notice: shallow copy
+        udt_meta = *(reinterpret_cast<ObSqlUDTMeta *>(value.value_));
+      }
     }
   }
   return ret;
@@ -1191,13 +1201,14 @@ int ObPhysicalPlanCtx::get_subschema_id_by_udt_id(uint64_t udt_type_id,
   int ret = OB_SUCCESS;
   uint16_t temp_subschema_id = ObMaxSystemUDTSqlType;
   bool found = false;
+  bool is_subschema_inited_in_plan = true;
   if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_type_id)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("find udt id in query ctx failed", K(ret), K(udt_type_id));
   } else if (OB_NOT_NULL(phy_plan_)) { // physical plan exist, use subschema ctx on phy plan
     if (!phy_plan_->get_subschema_ctx().is_inited()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("plan with empty subschema mapping", K(ret), K(phy_plan_->get_subschema_ctx()));
+      LOG_INFO("plan with empty subschema mapping", K(phy_plan_->get_subschema_ctx()));
+      is_subschema_inited_in_plan = false;
     } else if (OB_FAIL(phy_plan_->get_subschema_ctx().get_subschema_id(udt_type_id,
                                                                        OB_SUBSCHEMA_UDT_TYPE,
                                                                        temp_subschema_id))) {
@@ -1209,52 +1220,54 @@ int ObPhysicalPlanCtx::get_subschema_id_by_udt_id(uint64_t udt_type_id,
     } else {
       subschema_id = temp_subschema_id;
     }
-  // no phy plan
-  } else if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
-    LOG_WARN("subschema ctx init failed", K(ret), K(udt_type_id));
-  } else if (OB_FAIL(subschema_ctx_.get_subschema_id(udt_type_id,
-                                                     OB_SUBSCHEMA_UDT_TYPE,
-                                                     temp_subschema_id))) {
-    if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("failed to get subschema id by udt_id", K(ret), K(udt_type_id));
-    } else { // build new meta
-      ret = OB_SUCCESS;
-      uint16 new_subschema_id = ObMaxSystemUDTSqlType;
-      ObSqlUDTMeta *udt_meta = NULL;
-      ObSubSchemaValue value;
-      if (OB_ISNULL(schema_guard)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("No schema gurad to generate udt_meta", K(ret), K(udt_type_id));
-      } else if (FALSE_IT(udt_meta = reinterpret_cast<ObSqlUDTMeta *>(allocator_.alloc(sizeof(ObSqlUDTMeta))))) {
-      } else if (OB_ISNULL(udt_meta)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc udt meta", K(ret), K(udt_type_id), K(sizeof(ObSqlUDTMeta)));
-      } else if (FALSE_IT(MEMSET(udt_meta, 0, sizeof(ObSqlUDTMeta)))) {
-      } else if (OB_FAIL(ObSqlUdtMetaUtils::generate_udt_meta_from_schema(schema_guard,
-                                                                          &subschema_ctx_,
-                                                                          allocator_,
-                                                                          get_tenant_id(),
-                                                                          udt_type_id,
-                                                                          *udt_meta))) {
-        LOG_WARN("generate udt_meta failed", K(ret), K(get_tenant_id()), K(udt_type_id));
-      } else if (OB_FAIL(subschema_ctx_.get_subschema_id_from_fields(udt_type_id, new_subschema_id))) {
-        LOG_WARN("failed to get subschema id from result fields", K(ret), K(get_tenant_id()), K(udt_type_id));
-      } else if (new_subschema_id == ObInvalidSqlType // not get from fields, generate new
-                 && OB_FAIL(subschema_ctx_.get_new_subschema_id(new_subschema_id))) {
-        LOG_WARN("failed to get new subschema id", K(ret), K(get_tenant_id()), K(udt_type_id));
-      } else {
-        value.type_ = OB_SUBSCHEMA_UDT_TYPE;
-        value.signature_ = udt_type_id;
-        value.value_ = static_cast<void *>(udt_meta);
-        if (OB_FAIL(subschema_ctx_.set_subschema(new_subschema_id, value))) {
-          LOG_WARN("failed to set new subschema", K(ret), K(new_subschema_id), K(udt_type_id), K(value));
+  }
+  if (OB_SUCC(ret) && (OB_ISNULL(phy_plan_) || !is_subschema_inited_in_plan)) {
+    if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
+      LOG_WARN("subschema ctx init failed", K(ret), K(udt_type_id));
+    } else if (OB_FAIL(subschema_ctx_.get_subschema_id(udt_type_id,
+                                                       OB_SUBSCHEMA_UDT_TYPE,
+                                                       temp_subschema_id))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("failed to get subschema id by udt_id", K(ret), K(udt_type_id));
+      } else { // build new meta
+        ret = OB_SUCCESS;
+        uint16 new_subschema_id = ObMaxSystemUDTSqlType;
+        ObSqlUDTMeta *udt_meta = NULL;
+        ObSubSchemaValue value;
+        if (OB_ISNULL(schema_guard)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("No schema gurad to generate udt_meta", K(ret), K(udt_type_id));
+        } else if (FALSE_IT(udt_meta = reinterpret_cast<ObSqlUDTMeta *>(allocator_.alloc(sizeof(ObSqlUDTMeta))))) {
+        } else if (OB_ISNULL(udt_meta)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc udt meta", K(ret), K(udt_type_id), K(sizeof(ObSqlUDTMeta)));
+        } else if (FALSE_IT(MEMSET(udt_meta, 0, sizeof(ObSqlUDTMeta)))) {
+        } else if (OB_FAIL(ObSqlUdtMetaUtils::generate_udt_meta_from_schema(schema_guard,
+                                                                            &subschema_ctx_,
+                                                                            allocator_,
+                                                                            get_tenant_id(),
+                                                                            udt_type_id,
+                                                                            *udt_meta))) {
+          LOG_WARN("generate udt_meta failed", K(ret), K(get_tenant_id()), K(udt_type_id));
+        } else if (OB_FAIL(subschema_ctx_.get_subschema_id_from_fields(udt_type_id, new_subschema_id))) {
+          LOG_WARN("failed to get subschema id from result fields", K(ret), K(get_tenant_id()), K(udt_type_id));
+        } else if (new_subschema_id == ObInvalidSqlType // not get from fields, generate new
+                   && OB_FAIL(subschema_ctx_.get_new_subschema_id(new_subschema_id))) {
+          LOG_WARN("failed to get new subschema id", K(ret), K(get_tenant_id()), K(udt_type_id));
         } else {
-          subschema_id = new_subschema_id;
+          value.type_ = OB_SUBSCHEMA_UDT_TYPE;
+          value.signature_ = udt_type_id;
+          value.value_ = static_cast<void *>(udt_meta);
+          if (OB_FAIL(subschema_ctx_.set_subschema(new_subschema_id, value))) {
+            LOG_WARN("failed to set new subschema", K(ret), K(new_subschema_id), K(udt_type_id), K(value));
+          } else {
+            subschema_id = new_subschema_id;
+          }
         }
       }
+    } else { // success
+      subschema_id = temp_subschema_id;
     }
-  } else { // success
-    subschema_id = temp_subschema_id;
   }
   return ret;
 }
@@ -1439,6 +1452,8 @@ int ObPhysicalPlanCtx::build_subschema_by_fields(const ColumnsFieldIArray *field
     LOG_WARN("subschema ctx init failed", K(ret));
   } else {
     subschema_ctx_.set_fields(fields);
+    // reserve subschema ids from fields, avoid nested type get_new_subschema_id and top level field id collision
+    subschema_ctx_.reserve_subschema_ids_from_fields();
 
     for (uint32_t i = 0; OB_SUCC(ret) && i < fields->count(); i++) {
       if (fields->at(i).type_.is_user_defined_sql_type()
@@ -1470,7 +1485,7 @@ int ObPhysicalPlanCtx::build_subschema_ctx_by_param_store(share::schema::ObSchem
     ObObjParam &param = param_store->at(i);
     if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
       uint64_t udt_id = param.get_accuracy().get_accuracy();
-      uint16_t subschema_id = 0;
+      uint16_t subschema_id = ObInvalidSqlType;
       if (!ob_is_reserved_udt_id(udt_id)) { // is not reserved subschema id
         if (!subschema_ctx_.is_inited() && OB_FAIL(subschema_ctx_.init())) {
           LOG_WARN("subschema ctx init failed", K(ret));
@@ -1478,6 +1493,27 @@ int ObPhysicalPlanCtx::build_subschema_ctx_by_param_store(share::schema::ObSchem
           LOG_WARN("failed to get subschema id", K(ret), K(param), K(udt_id));
         } else if (subschema_id == ObMaxSystemUDTSqlType) {
           LOG_WARN("failed to get subschema id", K(ret), K(param), K(udt_id));
+        } else {
+          param.set_subschema_id(subschema_id);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::adjust_param_subschema_by_plan(share::schema::ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  ParamStore &param_store = get_param_store_for_update();
+  for (uint32_t i = 0; OB_SUCC(ret) && i < param_store.count(); i++) {
+    ObObjParam &param = param_store.at(i);
+    if (param.is_user_defined_sql_type() || param.is_collection_sql_type()) {
+      uint64_t udt_id = param.get_accuracy().get_accuracy();
+      if (!ob_is_reserved_udt_id(udt_id)) {
+        uint16_t subschema_id = ObInvalidSqlType;
+        if (OB_FAIL(get_subschema_id_by_udt_id(udt_id, subschema_id, schema_guard))) {
+          LOG_WARN("failed to adjust param subschema id", K(ret), K(udt_id), K(i));
         } else {
           param.set_subschema_id(subschema_id);
         }
@@ -1498,6 +1534,38 @@ int ObPhysicalPlanCtx::get_local_session_vars(int64_t local_var_array_id, const 
     LOG_WARN("index out of array range", K(ret), K(local_var_array_id), K(all_local_session_vars_.count()));
   } else {
     local_vars = &all_local_session_vars_.at(local_var_array_id);
+  }
+  return ret;
+}
+
+int ObPhysicalPlanCtx::restore_pl_extend_in_param_store()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(exec_ctx_)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); ++i) {
+      ObObjParam &obj_param = param_store_.at(i);
+      if (obj_param.is_pl_extend() && obj_param.get_ext() != 0) {
+        const int64_t val_len = obj_param.get_val_len();
+        if (OB_UNLIKELY(val_len <= 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pl extend buffer length", K(ret), K(i), K(val_len), K(obj_param));
+        } else {
+          int64_t pos = 0;
+          if (OB_FAIL(pl::ObUserDefinedType::do_deserialize_obj(const_cast<sql::ObExecContext *>(exec_ctx_)->get_allocator(),
+                                                                obj_param,
+                                                                reinterpret_cast<char *>(obj_param.get_ext()),
+                                                                val_len,
+                                                                pos,
+                                                                true))) {
+            LOG_WARN("failed to deserialize obj param", K(ret), K(i), K(obj_param));
+          } else if (OB_FAIL(ObSqlUdtUtils::add_pl_record_to_pl_ctx(
+                  const_cast<sql::ObExecContext *>(exec_ctx_), obj_param))) {
+            LOG_WARN("failed to add pl record to pl ctx", K(ret), K(i), K(obj_param));
+            (void)pl::ObUserDefinedType::destruct_obj(obj_param, nullptr);
+          }
+        }
+      }
+    }
   }
   return ret;
 }

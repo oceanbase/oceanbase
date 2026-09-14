@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.ipp"
 #include "src/pl/ob_pl_resolver.h"
 
 using namespace oceanbase::common;
@@ -995,21 +996,21 @@ int ObSqlUdtUtils::cast_pl_record_to_sql_record(common::ObIAllocator &tmp_alloca
   return ret;
 }
 
-int ObSqlUdtUtils::build_empty_record(sql::ObExecContext *exec_ctx, ObObj &result, uint64_t udt_id)
+int ObSqlUdtUtils::build_empty_complex_obj(sql::ObExecContext *exec_ctx, ObObj &result, uint64_t udt_id, common::ObIAllocator &allocator, bool need_new_allocator)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
   ret = OB_NOT_SUPPORTED;
   LOG_WARN("not support", K(ret));
 #else
-  if (OB_ISNULL(exec_ctx)) {
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(exec_ctx->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("need execute ctx to get subschema map on phyplan ctx", K(ret), K(udt_id));
   }
   ObSQLSessionInfo *session = exec_ctx->get_my_session();
-  ObIAllocator &alloc = exec_ctx->get_allocator();
+  ObArenaAllocator tmp_alloc("PlTempAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
-  pl::ObPLResolveCtx resolve_ctx(alloc,
+  pl::ObPLResolveCtx resolve_ctx(tmp_alloc,
                                  *session,
                                  *(exec_ctx->get_sql_ctx()->schema_guard_),
                                  package_guard,
@@ -1023,17 +1024,23 @@ int ObSqlUdtUtils::build_empty_record(sql::ObExecContext *exec_ctx, ObObj &resul
     ns = session->get_pl_top_context()->get_current_ctx();
   }
   if (OB_SUCC(ret)) {
-    ObObj new_composite;
+    ObObjParam new_composite;
     int64_t ptr = 0;
     int64_t init_size = OB_INVALID_SIZE;
-    ObArenaAllocator tmp_alloc;
     const pl::ObUserDefinedType *user_type = NULL;
     OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
     CK (OB_NOT_NULL(user_type));
-    OZ (user_type->newx(alloc, ns, ptr));
-    OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
-    OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
-    OX (result = new_composite);
+    OX (new_composite.set_null());
+    if (OB_FAIL(ret)) {
+    } else if (need_new_allocator) {
+      OZ(ns->init_complex_obj(allocator, tmp_alloc, *user_type, new_composite, true, true));
+      OX (result = new_composite);
+    } else {
+      OZ (user_type->newx(allocator, ns, ptr));
+      OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
+      OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
+      OX (result = new_composite);
+    }
   }
 #endif
   return ret;
@@ -1189,7 +1196,7 @@ int ObSqlUdtUtils::cast_sql_udt_attributes_to_pl_record(sql::ObExecContext *exec
           }
         } else if (sub_udt_meta.pl_type_ == pl::PL_RECORD_TYPE) {
           if (is_udt_null) {
-            if (OB_FAIL(build_empty_record(exec_ctx, obj, sub_udt_meta.udt_id_))) {
+            if (OB_FAIL(build_empty_complex_obj(exec_ctx, obj, sub_udt_meta.udt_id_, allocator, false))) {
               LOG_WARN("failed to create empty nested udt record", K(ret));
             } else {
               pl::ObPLRecord *child_null_record = reinterpret_cast<pl::ObPLRecord *>(obj.get_ext());
@@ -1337,7 +1344,7 @@ int ObSqlUdtMetaUtils::get_udt_meta_attr_info(ObSchemaGetterGuard *schema_guard,
       } else {
         uint64_t udt_id = udt_attr->get_type_attr_id();
         const ObUDTTypeInfo *attr_udt_info = NULL;
-        if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, attr_udt_info))) {
+        if (OB_FAIL(schema_guard->get_udt_info(pl::get_tenant_id_by_object_id(udt_id), udt_id, attr_udt_info))) {
           // pl::get_tenant_id_by_object_id
           LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_id));
         } else if (OB_ISNULL(attr_udt_info) ) { // try system udt
@@ -1352,7 +1359,7 @@ int ObSqlUdtMetaUtils::get_udt_meta_attr_info(ObSchemaGetterGuard *schema_guard,
                    K(ret), K(tenant_id), K(parent_udt_info->get_type_id()), K(udt_id));
         } else if (attr_udt_info->is_object_type()) {
           nested_udt_number++;
-        } else if (attr_udt_info->is_varray()) { // varray is special to other udts, it is a basic type in sql
+        } else if (attr_udt_info->is_collection()) { // collection is special to other udts, it is a basic type in sql
           if (OB_FAIL(leaf_attr_meta.push_back(udt_attr))) {
             LOG_WARN("failed to push back leaf attr pointer", K(i), K(count), K(leaf_attr_meta.count()));
           }
@@ -1398,14 +1405,14 @@ int ObSqlUdtMetaUtils::fill_udt_meta_attr_info(ObSchemaGetterGuard *schema_guard
         if (OB_ISNULL(schema_guard)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("null schema guard", K(ret));
-        } else if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, attr_udt_info))) {
+        } else if (OB_FAIL(schema_guard->get_udt_info(pl::get_tenant_id_by_object_id(udt_id), udt_id, attr_udt_info))) {
           LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_id));
         } else if (OB_ISNULL(attr_udt_info) ) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("udt info not found", K(ret), K(tenant_id), K(udt_id));
         } else if (attr_udt_info->is_object_type()) {
           udt_attr_meta->type_info_.set_type(ObUserDefinedSQLType);
-        } else if (attr_udt_info->is_varray()) {
+        } else if (attr_udt_info->is_collection()) {
           udt_attr_meta->type_info_.set_type(ObCollectionSQLType);
         } else {
           ret = OB_NOT_SUPPORTED;
@@ -1416,7 +1423,7 @@ int ObSqlUdtMetaUtils::fill_udt_meta_attr_info(ObSchemaGetterGuard *schema_guard
         if (OB_FAIL(ret)) {
         } else if (is_leaf
                    && udt_attr->get_type_attr_id() > ObMaxType
-                   && !attr_udt_info->is_varray()) {
+                   && !attr_udt_info->is_collection()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected non-leaf attrs", K(ret), K(*udt_attr), K(i), K(src.count()));
         } else if (OB_ISNULL(subschema_ctx)) {
@@ -1505,9 +1512,7 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
   uint32_t varray_capacity = 0;
   ObString type_name;
 
-  if (is_inner_pl_object_id(udt_id)) {
-    tenant_id = OB_SYS_TENANT_ID;
-  }
+  tenant_id = pl::get_tenant_id_by_object_id(udt_id);
   if (OB_ISNULL(schema_guard)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null schema guard", K(ret));
@@ -1515,7 +1520,8 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
     // pl::get_tenant_id_by_object_id
     LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_id));
   } else if (OB_ISNULL(root_udt_info) ) { // try system udt
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_OBJECT_NAME_NOT_EXIST;
+    LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "UDT");
     LOG_WARN("udt info not found", K(ret), K(tenant_id), K(udt_id));
   } else if (root_udt_info->get_type_name().empty()) { // copy name
     ret = OB_ERR_UNEXPECTED;
@@ -1525,7 +1531,7 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
   } else {
     udt_meta.set_name(type_name);
     udt_meta.udt_id_ = udt_id;
-    if (root_udt_info->is_object_type()) {
+    if (root_udt_info->is_object_type() && !root_udt_info->is_opaque()) {
       pl_type = static_cast<int32_t>(pl::PL_RECORD_TYPE);
       child_attrs_cnt = root_udt_info->get_attributes();
     } else if (root_udt_info->is_varray()) {
@@ -1534,6 +1540,12 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
         varray_capacity = root_udt_info->get_coll_info()->get_upper_bound();
       }
       child_attrs_cnt = 1;
+    } else if (root_udt_info->is_nested_table()) {
+      pl_type = static_cast<int32_t>(pl::PL_NESTED_TABLE_TYPE);
+      child_attrs_cnt = 1;
+    } else if (root_udt_info->is_opaque()) {
+      pl_type = static_cast<int32_t>(pl::PL_OPAQUE_TYPE);
+      child_attrs_cnt = 0;
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported udt type", K(ret), K(*root_udt_info));
@@ -1565,10 +1577,10 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory for child attrs failed",
                    K(ret), K(child_attrs_cnt), K(child_attrs_size));
-        } else if (root_udt_info->is_varray()) {
+        } else if (root_udt_info->is_collection()) {
           if (child_attrs_cnt != 1) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("error child attribute count for varray", K(ret), K(child_attrs_cnt));
+            LOG_WARN("error child attribute count for collection", K(ret), K(child_attrs_cnt));
           } else {
             ObObjType elem_type = static_cast<ObObjType>(root_udt_info->get_coll_info()->get_elem_type_id());
             ObCollationType coll_type = static_cast<const ObCollationType>(
@@ -1579,6 +1591,11 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
             child_attrs_meta->type_info_.set_collation_type(coll_type);
             child_attrs_meta->type_info_.set_scale(static_cast<ObScale>(root_udt_info->get_coll_info()->get_scale()));
             udt_meta.child_attrs_meta_ = child_attrs_meta;
+          }
+        } else if (root_udt_info->is_opaque()) {
+          if (udt_id != T_OBJ_XML) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("unsupported opaque type", K(ret), K(*root_udt_info));
           }
         } else if (OB_FAIL(fill_udt_meta_attr_info(schema_guard,
                                                    subschema_ctx,
@@ -1618,6 +1635,152 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
 #endif
   return ret;
 }
+
+int ObSqlUdtUtils::add_pl_record_to_pl_ctx(sql::ObExecContext *exec_ctx, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObPLComplexTypeMgr *pl_complex_type_mgr = NULL;
+  CK (OB_NOT_NULL(exec_ctx));
+  CK (OB_NOT_NULL(pl_complex_type_mgr = exec_ctx->get_pl_complex_type_lazy_mgr().get_pl_complex_type_mgr()));
+  OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
+  return ret;
+}
+
+int ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(common::ObIAllocator &res_allocator,
+                                                        sql::ObExecContext *exec_ctx,
+                                                        ObString &res,
+                                                        const ObObj &root_obj,
+                                                        ObSqlUDTMeta &udt_meta)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(exec_ctx);
+  UNUSED(udt_meta);
+#ifndef OB_BUILD_ORACLE_PL
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support", K(ret));
+#else
+  bool is_null = false;
+  if (OB_FAIL(pl::ObPLDataType::obj_is_null(const_cast<ObObj &>(root_obj), is_null))) {
+    LOG_WARN("failed to check if obj is null", K(ret), K(root_obj));
+  } else if (is_null) {
+    res.reset();
+  } else {
+    int64_t total_len = pl::ObUserDefinedType::get_serialize_obj_size(root_obj);
+    ObTextStringResult blob_res(ObLongTextType, true, &res_allocator);
+    char *buf = NULL;
+    int64_t buf_len = 0;
+    int64_t buf_pos = 0;
+    if (OB_FAIL(blob_res.init(total_len))) {
+      LOG_WARN("failed to alloc temp lob", K(ret), K(total_len));
+    } else if (OB_FAIL(blob_res.get_reserved_buffer(buf, buf_len))) {
+      LOG_WARN("failed to reserve temp lob buffer", K(ret), K(total_len));
+    } else if (total_len != buf_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get reserve len is invalid", K(ret), K(total_len), K(buf_len));
+    } else if (OB_FAIL(pl::ObUserDefinedType::serialize_obj(root_obj, buf, buf_len, buf_pos))) {
+      LOG_WARN("failed to serialize pl extend", K(ret), K(root_obj));
+    } else if (OB_FAIL(blob_res.lseek(buf_pos, 0))) {
+      LOG_WARN("temp lob lseek failed", K(ret), K(blob_res), K(buf_pos));
+    } else {
+      blob_res.get_result_buffer(res);
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(sql::ObExecContext *exec_ctx,
+                                                         ObObj &result,
+                                                         const ObObj &udt_obj,
+                                                         ObSqlUDTMeta &udt_meta,
+                                                         common::ObIAllocator *tmp_alloc)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support", K(ret));
+#else
+  if (OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("need execute ctx to get subschema map on phyplan ctx", K(ret), K(udt_meta));
+  } else {
+    ObIAllocator &alloc = (OB_NOT_NULL(tmp_alloc)) ? *tmp_alloc : exec_ctx->get_allocator();
+    if (udt_obj.is_null()) {
+      if (OB_FAIL(build_empty_complex_obj(exec_ctx, result, udt_meta.udt_id_, alloc, true))) {
+        LOG_WARN("failed to build empty complex object", K(ret), K(udt_meta.udt_id_));
+      }
+    } else {
+      int64_t pos = 0;
+      ObString udt_data = udt_obj.get_string();
+      ObArenaAllocator lob_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(&lob_allocator,
+                                                            ObLongTextType,
+                                                            CS_TYPE_BINARY,
+                                                            true, udt_data))) {
+        LOG_WARN("fail to get real string data", K(ret));
+      } else if (udt_data.empty()) {
+        if(OB_FAIL(build_empty_complex_obj(exec_ctx, result, udt_meta.udt_id_, alloc, true))) {
+          LOG_WARN("failed to build empty complex object", K(ret), K(udt_meta.udt_id_));
+        }
+      } else if (OB_FAIL(pl::ObUserDefinedType::do_deserialize_obj(alloc, result, udt_data.ptr(), udt_data.length(), pos, false))) {
+        LOG_WARN("failed to deserialize udt object", K(ret), K(udt_obj));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_ISNULL(tmp_alloc)) {
+    if (OB_FAIL(add_pl_record_to_pl_ctx(exec_ctx, result))) {
+      LOG_WARN("failed to add pl record to pl ctx", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    int tmp_ret = pl::ObUserDefinedType::destruct_obj(result, nullptr);
+    LOG_WARN("failed to collect pl collection allocator, try to free memory", K(ret), K(tmp_ret));
+  }
+#endif
+  return ret;
+}
+
+int ObSqlUdtUtils::build_qualified_udt_name(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObUDTTypeInfo &udt_info,
+    common::ObIAllocator &allocator,
+    common::ObString &qualified_name)
+{
+  return build_qualified_udt_name<share::schema::ObSchemaGetterGuard>(
+      schema_guard, udt_info, allocator, qualified_name);
+}
+
+int ObSqlUdtUtils::serialize_pl_extend_to_string(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const sql::ObSQLSessionInfo &session,
+    const common::ObTimeZoneInfo *tz_info,
+    const pl::ObUserDefinedType *user_type,
+    const common::ObString &root_qualified_name,
+    common::ObObj &pl_obj,
+    common::ObIAllocator &res_allocator,
+    common::ObString &res_str)
+{
+  return serialize_pl_extend_to_string<share::schema::ObSchemaGetterGuard>(
+      schema_guard, session, tz_info, user_type, root_qualified_name,
+      pl_obj, res_allocator, res_str);
+}
+
+int ObSqlUdtUtils::convert_sql_udt_to_string(
+    common::ObIAllocator &res_allocator,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const sql::ObSQLSessionInfo &session,
+    const common::ObTimeZoneInfo *tz_info,
+    const uint64_t udt_id,
+    const common::ObObj &sql_udt_obj,
+    common::ObString &res_str,
+    const bool has_lob_header)
+{
+  return convert_sql_udt_to_string<share::schema::ObSchemaGetterGuard>(
+      res_allocator, schema_guard, session, tz_info, udt_id, sql_udt_obj,
+      res_str, has_lob_header);
+}
+
 
 }
 }

@@ -574,7 +574,13 @@ public:
   int get_field_count(const ObPLINS& ns, int64_t &count) const;
 
   int serialize(share::schema::ObSchemaGetterGuard &schema_guard, const sql::ObSQLSessionInfo &session, const common::ObTimeZoneInfo *tz_info,
-                obmysql::MYSQL_PROTOCOL_TYPE type, char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                obmysql::MYSQL_PROTOCOL_TYPE type, char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
+  template <typename SCHEMA_PROVIDER>
+  int serialize(SCHEMA_PROVIDER &schema_provider, const sql::ObSQLSessionInfo &session,
+                const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
+                char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   int deserialize(share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator, sql::ObSQLSessionInfo *session,
                   const common::ObCharsetType charset, const common::ObCollationType cs_type,
                   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,
@@ -599,7 +605,8 @@ public:
                                   sql::ObSQLSessionInfo &session_info,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps,
+                                  const bool specify_schema = false);
 #ifdef OB_BUILD_ORACLE_PL
   static int get_pkg_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,
@@ -645,6 +652,7 @@ public:
 
   static int obj_is_null(ObObj &obj, bool &is_null);
   static int datum_is_null(ObDatum* param, bool is_udt_type, bool &is_null);
+  static bool is_schema_udt(share::schema::ObSchemaGetterGuard *schema_guard, uint64_t udt_id);
 
   DECLARE_TO_STRING;
 

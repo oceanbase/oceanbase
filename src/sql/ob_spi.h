@@ -683,6 +683,7 @@ public:
                                       common::ObIAllocator &allocator,
                                       ObObjParam *param,
                                       ParamStore *&exec_params,
+                                      int64_t stmt_type,
                                       bool is_forall = false);
   static int prepare_forall_batch_params(ObSPIResultSet &spi_result,
                                          ParamStore *&exec_params,
@@ -692,14 +693,16 @@ public:
                                         common::ObIAllocator &allocator,
                                         int64_t exec_param_cnt,
                                         ObObjParam **params,
-                                        ParamStore *&exec_params);
+                                        ParamStore *&exec_params,
+                                        int64_t stmt_type);
 
   static int prepare_dbms_sql_params(pl::ObPLExecCtx *ctx,
                                     ObSPIResultSet &spi_result,
                                     common::ObIAllocator &allocator,
                                     int64_t exec_param_cnt,
                                     ParamStore *params,
-                                    ParamStore *&exec_params);
+                                    ParamStore *&exec_params,
+                                    int64_t stmt_type);
 
   static int convert_ext_null_params(ParamStore &params, ObSQLSessionInfo *session);
 
@@ -945,7 +948,8 @@ public:
                                     const pl::ObPLINS *ns,
                                     ObIAllocator &allocator,
                                     pl::ObPLAssocArray &assoc_array,
-                                    int64_t n);
+                                    int64_t n,
+                                    bool extend_mode = true);
 #endif
   static int spi_get_package_allocator(pl::ObPLExecCtx *ctx, uint64_t package_id, ObIAllocator *&allocator);
 
@@ -1121,6 +1125,8 @@ public:
   static int fill_ps_cursor(ObSQLSessionInfo &session,
                             pl::ObPsCursorInfo &ps_cursor,
                             int64_t pre_store_size = 0);
+  static int fill_exec_ctx_subschema_from_cursor(ObExecContext &exec_ctx,
+                                                ObSPICursor &cursor);
   static int close_ps_cursor_result_set(ObSQLSessionInfo &session,
                                         int64_t cursor_id);
 

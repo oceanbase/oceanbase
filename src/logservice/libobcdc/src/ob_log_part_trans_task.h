@@ -186,6 +186,9 @@ struct ColValue
   bool is_geometry() const { return value_.is_geometry(); }
   bool is_roaringbitmap() const { return value_.is_roaringbitmap(); }
   bool is_collection() const { return value_.is_collection_sql_type(); }
+  bool is_user_defined_sql_type() const { return value_.is_user_defined_sql_type(); }
+  bool is_xml_sql_type() const { return value_.is_xml_sql_type(); }
+  bool is_common_user_defined_sql_type() const { return value_.is_common_user_defined_sql_type(); }
   common::ObObjType get_obj_type() const { return value_.get_type(); }
 
   int add_child(ColValue *child) {return children_.add(child);}
@@ -213,6 +216,7 @@ public:
   void reset();
   // Parse the column data
   // If obj2str_helper is empty, do not convert obj to string
+  // schema_version: DML global_schema_version used for sql udt obj2str
   virtual int parse_cols(
       ObObj2strHelper *obj2str_helper = NULL,
       const uint64_t tenant_id = OB_INVALID_TENANT_ID,
@@ -220,7 +224,8 @@ public:
       const TableSchemaInfo *tb_schema_info = NULL,
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
-      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL) = 0;
+      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL,
+      const int64_t schema_version = common::OB_INVALID_VERSION) = 0;
   // Parse the column data based on ObTableSchema
   virtual int parse_cols( const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info) = 0;
   virtual int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log) = 0;
@@ -258,7 +263,8 @@ protected:
       const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info,
       const bool is_macroblock_row,
       ColValueList &cols,
-      const bool is_mow_table_insert);
+      const bool is_mow_table_insert,
+      const int64_t schema_version);
   int parse_outrow_lob_column_(
       const bool is_parse_new_col,
       const blocksstable::ObDmlRowFlag &dml_flag,
@@ -272,7 +278,8 @@ protected:
       const uint64_t table_id,
       const TableSchemaInfo *tb_schema_info,
       const ObTimeZoneInfoWrap *tz_info_wrap,
-      const bool enable_output_hidden_primary_key);
+      const bool enable_output_hidden_primary_key,
+      const int64_t schema_version);
   int deep_copy_encoded_column_value_(blocksstable::ObStorageDatum &datum);
   // 1. get column_id and column_schema_info for user table;
   // 2. get column_id for all_ddl_operation_table
@@ -293,7 +300,8 @@ protected:
       const ObObj2strHelper *obj2str_helper,
       const ObTimeZoneInfoWrap *tz_info_wrap,
       ColValueList &cols,
-      ObCDCUdtValueMap *udt_value_map);
+      ObCDCUdtValueMap *udt_value_map,
+      const int64_t schema_version);
   int set_obj_propertie_(
       const uint64_t column_id,
       const int64_t column_idx_for_datum_row,
@@ -356,6 +364,7 @@ public:
   void reset();
   // Parse the column data
   // If obj2str_helper is empty, do not convert obj to string
+  // schema_version: DML global_schema_version used for sql udt obj2str
   int parse_cols(
       ObObj2strHelper *obj2str_helper = NULL,
       const uint64_t tenant_id = OB_INVALID_TENANT_ID,
@@ -363,7 +372,8 @@ public:
       const TableSchemaInfo *tb_schema_info = NULL,
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
-      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
+      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL,
+      const int64_t schema_version = common::OB_INVALID_VERSION);
   // Parse the column data based on ObTableSchema
   int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
   int parse_ext_info_log(ObLobId &lob_id, ObString &ext_info_log);
@@ -425,6 +435,7 @@ public:
 
   // Parse the column data
   // If obj2str_helper is empty, do not convert obj to string
+  // schema_version: DML global_schema_version used for sql udt obj2str
   int parse_cols(
       ObObj2strHelper *obj2str_helper = NULL,
       const uint64_t tenant_id = OB_INVALID_TENANT_ID,
@@ -432,7 +443,8 @@ public:
       const TableSchemaInfo *tb_schema_info = NULL,
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
-      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
+      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL,
+      const int64_t schema_version = common::OB_INVALID_VERSION);
 
   // Parse the column data based on ObTableSchema
   int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
@@ -539,6 +551,7 @@ public:
   // For the JSON or GIS(outrow storage)
   // The JSON/GIS data column size is over 4K and is outrow storage, reusing the basic capabilities of LOB.
   // So we need to call the obj2str API to get the final message format when the complete data is retrieved.
+  // Uses DML global_schema_version for sql udt obj2str.
   int parse_col(
       const uint64_t tenant_id,
       const uint64_t column_id,
@@ -1235,6 +1248,7 @@ public:
   DictTenantArray &get_dict_tenant_array() { return multi_data_source_info_.get_dict_tenant_array(); }
   DictDatabaseArray &get_dict_database_array() { return multi_data_source_info_.get_dict_database_array(); }
   DictTableArray &get_dict_table_array() { return multi_data_source_info_.get_dict_table_array(); }
+  DictUdtArray &get_dict_udt_array() { return multi_data_source_info_.get_dict_udt_array(); }
   // get tenant_schema_info with MultiDataSourceInfo in DDL. get from baseline data_dict if ddl
   // doesn't contains tenant_meta for specifed tenant, otherwise use tenant_meta in inc_data_dict.
   // NOTICE: ONLY AVALIABLE FOR DDL_TRANS.

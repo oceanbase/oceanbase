@@ -10,6 +10,9 @@
 #include "pl/ob_pl_stmt.h"
 #include "ob_udf_result_cache.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "share/object/ob_obj_cast.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -550,18 +553,24 @@ int ObExprUDFUtils::process_in_params(ObExprUDFCtx &udf_ctx, ObIArray<ObObj> &de
   int ret = OB_SUCCESS;
   if (udf_ctx.get_arg_count() > 0) {
     if (udf_ctx.get_info()->is_called_in_sql_) {
+      CK (OB_NOT_NULL(udf_ctx.get_exec_ctx()));
       OZ (process_in_params(udf_ctx.get_obj_stack(),
                             udf_ctx.get_arg_count(),
                             udf_ctx.get_info()->params_type_,
-                            udf_ctx.get_param_store()));
+                            udf_ctx.get_param_store(),
+                            *udf_ctx.get_exec_ctx(),
+                            udf_ctx.get_allocator(),
+                            deep_in_objs));
     } else {
+      CK (OB_NOT_NULL(udf_ctx.get_exec_ctx()));
       OZ (process_in_params(udf_ctx.get_obj_stack(),
                             udf_ctx.get_arg_count(),
                             udf_ctx.get_info()->params_desc_,
                             udf_ctx.get_info()->params_type_,
                             udf_ctx.get_param_store(),
+                            *udf_ctx.get_exec_ctx(),
                             udf_ctx.get_allocator(),
-                            &deep_in_objs));
+                            deep_in_objs));
     }
     if (udf_ctx.get_info()->is_udt_cons_) {
       pl::ObPLUDTNS ns(*(udf_ctx.get_exec_ctx()->get_sql_ctx()->schema_guard_));
@@ -584,7 +593,10 @@ int ObExprUDFUtils::process_in_params(ObExprUDFCtx &udf_ctx, ObIArray<ObObj> &de
 int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
                                       int64_t param_num,
                                       const ObIArray<ObExprResType> &params_type,
-                                      pl::ObPLParamArray& iparams)
+                                      pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
+                                      ObIAllocator &allocator,
+                                      ObIArray<ObObj> &deep_in_objs)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
@@ -595,7 +607,22 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
       param.set_is_pl_mock_default_param(true);
     } else {
       if (ObExtendType == params_type.at(i).get_type()) {
-        if (!objs_stack.at(i).is_null()) {
+        if (objs_stack.at(i).is_common_user_defined_sql_type()) {
+          ObObj pl_obj;
+          ObSqlUDTMeta udt_meta;
+          uint16_t subschema_id = objs_stack.at(i).get_meta().get_subschema_id();
+          if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+            LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+          } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+                         &exec_ctx, pl_obj, objs_stack.at(i), udt_meta, &allocator))) {
+            LOG_WARN("failed to convert sql udt to pl extend for UDF param", K(ret), K(i));
+          }
+          if (OB_SUCC(ret)) {
+            param.set_extend(pl_obj.get_ext(), pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());
+            param.set_param_meta();
+            OZ (deep_in_objs.push_back(pl_obj));
+          }
+        } else if (!objs_stack.at(i).is_null()) {
           param.set_extend(objs_stack.at(i).get_ext(), objs_stack.at(i).get_meta().get_extend_type(), objs_stack.at(i).get_val_len());
           param.set_param_meta();
         } else {
@@ -616,38 +643,78 @@ int ObExprUDFUtils::process_return_value(ObObj &result,
                                          ObObj &tmp_result,
                                          ObEvalCtx &eval_ctx,
                                          ObExprUDFCtx &udf_ctx,
+                                         const ObObjMeta &result_meta,
                                          ObExprUDFEnvGuard &guard)
 {
   int ret = OB_SUCCESS;
-  if (udf_ctx.get_info()->is_called_in_sql_) { // Call In SQL
-    int64_t cur_obj_count = guard.get_cur_obj_count();
-    if (tmp_result.is_pl_extend()
-        && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) { // memory of ref cursor on session, do not copy it.
+  const bool is_called_in_sql = udf_ctx.get_info()->is_called_in_sql_;
+  const bool is_complex_result = tmp_result.is_pl_extend()
+                                 && tmp_result.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE;
+  if (is_called_in_sql) {
+    if (is_complex_result && result_meta.is_common_user_defined_sql_type()) {
+      ObSQLSessionInfo *session = eval_ctx.exec_ctx_.get_my_session();
+      CK (OB_NOT_NULL(session));
+      if (OB_SUCC(ret)) {
+        const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
+        ObCastCtx cast_ctx(&udf_ctx.get_allocator(), &dtc_params, CM_NONE,
+                           ObCharset::get_system_collation());
+        ObObj cast_out;
+        cast_ctx.exec_ctx_ = &eval_ctx.exec_ctx_;
+        OX (cast_out.set_subschema_id(result_meta.get_subschema_id()));
+        OZ (ObObjCaster::to_type(ObUserDefinedSQLType, cast_ctx, tmp_result, cast_out));
+        if (OB_SUCC(ret)) {
+          eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(guard.get_cur_obj_count());
+          OX (result = cast_out);
+        }
+      }
       int tmp_ret = OB_SUCCESS;
-      ObIAllocator *alloc = nullptr;
+      if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+            tmp_result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+        LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+      tmp_result.set_null();
+    } else if (is_complex_result) {
+      int tmp_ret = OB_SUCCESS;
       ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
       OZ (eval_ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
-      OX (alloc = &pl_complex_type_mgr->alloc_);
-      OZ (pl::ObUserDefinedType::deep_copy_obj(*alloc, tmp_result, result, true));
+      OZ (pl::ObUserDefinedType::deep_copy_obj(pl_complex_type_mgr->alloc_, tmp_result, result, true));
       if (OB_SUCC(ret)) {
-        eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(cur_obj_count);
+        eval_ctx.exec_ctx_.get_pl_complex_type_lazy_mgr().reset_obj_range_to_end(guard.get_cur_obj_count());
         OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
         if (OB_FAIL(ret)) {
-          if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+          if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+                result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
             LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
           }
         }
       }
-      if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(tmp_result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+      if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+            tmp_result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
         LOG_WARN("failed to destruct tmp result object", K(ret), K(tmp_ret));
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
+      tmp_result.set_null();
     } else {
-      // Basic result & RefCursor, shadow copy result. What if failed with pl.execute for RefCursor?
+      // Basic result & RefCursor, shadow copy result.
       result = tmp_result;
     }
   } else { // Call IN PL, shadow copy result.
     result = tmp_result;
+    if (is_complex_result) {
+      ObPLComplexTypeMgr *pl_complex_type_mgr = nullptr;
+      OZ (eval_ctx.get_pl_complex_type_mgr(pl_complex_type_mgr));
+      OZ (pl_complex_type_mgr->complex_type_objects_.push_back(result));
+      if (OB_FAIL(ret)) {
+        int tmp_ret = OB_SUCCESS;
+        if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(
+              result, eval_ctx.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+          LOG_WARN("failed to destruct result object", K(ret), K(tmp_ret));
+        }
+        result.set_null();
+      }
+      tmp_result.set_null();
+    }
   }
   return ret;
 }
@@ -703,8 +770,9 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
                                       const ObIArray<ObUDFParamDesc> &params_desc,
                                       const ObIArray<ObExprResType> &params_type,
                                       pl::ObPLParamArray& iparams,
+                                      ObExecContext &exec_ctx,
                                       ObIAllocator &allocator,
-                                      ObIArray<ObObj> *deep_in_objs)
+                                      ObIArray<ObObj> &deep_in_objs)
 {
   int ret = OB_SUCCESS;
   CK (param_num == params_desc.count());
@@ -715,14 +783,26 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
       // default value, mock a max obj to tell pl engine here need replace to default value.
       param.set_is_pl_mock_default_param(true);
     } else if (!params_desc.at(i).is_out()) { // in parameter
-      if (ObExtendType == params_type.at(i).get_type()) {
+      if (objs_stack.at(i).is_common_user_defined_sql_type()) {
+        ObObj pl_obj;
+        ObSqlUDTMeta udt_meta;
+        uint16_t subschema_id = objs_stack.at(i).get_meta().get_subschema_id();
+        if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+          LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
+        } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(
+                       &exec_ctx, pl_obj, objs_stack.at(i), udt_meta, &allocator))) {
+          LOG_WARN("failed to convert sql udt to pl extend for UDF param", K(ret), K(i));
+        } else {
+          param.set_extend(pl_obj.get_ext(), pl_obj.get_meta().get_extend_type(), pl_obj.get_val_len());
+          param.set_param_meta();
+          OZ (deep_in_objs.push_back(pl_obj));
+        }
+      } else if (ObExtendType == params_type.at(i).get_type()) {
         bool need_copy = false;
         OZ (need_deep_copy_in_parameter(objs_stack, param_num, params_desc, params_type, objs_stack.at(i), need_copy));
         if (need_copy) {
           OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, objs_stack.at(i), param, true));
-          if (OB_NOT_NULL(deep_in_objs)) {
-            OZ (deep_in_objs->push_back(param));
-          }
+          OZ (deep_in_objs.push_back(param));
         } else {
           if (!objs_stack.at(i).is_null()) {
             param.set_extend(objs_stack.at(i).get_ext(), objs_stack.at(i).get_meta().get_extend_type(), objs_stack.at(i).get_val_len());
@@ -751,9 +831,7 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
         if (params_type.at(i).get_type() == ObExtendType) {
           if (params_desc.at(i).is_obj_access_pure_out()) {
             OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, value, param));
-            if (OB_NOT_NULL(deep_in_objs)) {
-              OZ (deep_in_objs->push_back(param));
-            }
+            OZ (deep_in_objs.push_back(param));
           } else {
             param.set_extend(value.get_ext(), value.get_meta().get_extend_type(), value.get_val_len());
             param.set_param_meta();
@@ -771,7 +849,9 @@ int ObExprUDFUtils::process_in_params(const pl::ObPLParamArray &objs_stack,
         }
       }
     }
-    if (OB_SUCC(ret) && params_type.at(i).get_type() == ObExtendType) {
+    if (OB_SUCC(ret)
+        && (params_type.at(i).get_type() == ObExtendType
+            || params_type.at(i).is_user_defined_sql_type())) {
       param.set_udt_id(params_type.at(i).get_udt_id());
     }
     OZ (iparams.push_back(param));
@@ -1202,7 +1282,7 @@ int ObExprUDFUtils::ob_adjust_lob_obj(const ObObj &origin_obj,
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(out_obj));
-  if (!is_lob_storage(origin_obj.get_type())) { // null & nop is not lob
+  if (!is_lob_storage(origin_obj.get_type()) || obj_meta.is_xml_sql_type()) { // null & nop & xmltype is not lob
   } else if (origin_obj.has_lob_header() != obj_meta.has_lob_header()) {
     if (origin_obj.has_lob_header()) { // obj_meta does not have lob header, get data only
       // can avoid allocator if no persist lobs call this function,
