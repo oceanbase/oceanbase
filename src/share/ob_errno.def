@@ -1768,6 +1768,7 @@ DEFINE_ERROR_DEP(OB_TRANS_STMT_TIMEOUT, -6212, 4012, "25000", "Statement timeout
 DEFINE_ORACLE_ERROR_DEP(OB_TRANS_CTX_NOT_EXIST, -6213, 6002, "HY000", "Transaction context does not exist", 24761, "transaction rolled back: transaction context does not exist");
 DEFINE_ORACLE_ERROR(OB_PARTITION_IS_FROZEN, -6214, 6002, "25000", "Partition is frozen", 24761, "transaction rolled back: partition is frozen");
 DEFINE_ERROR(OB_PARTITION_IS_NOT_FROZEN, -6215, -1, "HY000", "Partition is not frozen");
+DEFINE_ERROR(OB_DAS_CTDEF_REBUILD_MISS, -6216, -1, "HY000", "DAS ScanCtDef table param rebuild schema unavailable");
 DEFINE_ERROR(OB_TRANS_INVALID_LOG_TYPE, -6219, -1, "HY000", "Transaction invalid log type");
 DEFINE_ERROR(OB_TRANS_SQL_SEQUENCE_ILLEGAL, -6220, -1, "HY000", "SQL sequence illegal");
 DEFINE_ERROR(OB_TRANS_CANNOT_BE_KILLED, -6221, -1, "HY000", "Transaction context cannot be killed");

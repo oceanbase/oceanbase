@@ -802,6 +802,7 @@ public:
   bool is_packed_;
   bool has_instead_of_trigger_; // mask if has instead of trigger on view
   uint64_t min_cluster_version_; // record min cluster version in code gen
+  int64_t serialize_compact_opt_flags_ = 0; // Compatibility placeholder for compact serialization.
   bool need_record_plan_info_;
   bool enable_append_; // for APPEND hint
   uint64_t append_table_id_;

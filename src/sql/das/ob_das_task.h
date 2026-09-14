@@ -311,7 +311,8 @@ protected:
       /*the first 16 bits are static flags*/
       uint16_t can_part_retry_   : 1;
       uint16_t global_lookup_generated_task_ : 1;// FARM COMPAT WHITELIST
-      uint16_t flag_reserved_    : 14;// FARM COMPAT WHITELIST
+      uint16_t force_inline_ctdef_ : 1;          // Compatibility placeholder for compact ctdef resend.
+      uint16_t flag_reserved_ : 13;              // FARM COMPAT WHITELIST
       /*the last 16 bits are status masks*/
       uint16_t task_started_     : 1;
       uint16_t in_part_retry_    : 1;
