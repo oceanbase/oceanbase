@@ -165,6 +165,8 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
   int64_t pos = 0;
   if (OB_FAIL(pkt.decode(resp_buf, resp_sz))) {
     RPC_OBRPC_LOG(WARN, "decode packet fail", KP(resp_buf), K(resp_sz), K(pos));
+  } else if (OB_FAIL(pkt.verify_checksum())) {
+    RPC_OBRPC_LOG(ERROR, "verify response packet checksum fail", K(ret), K(pkt));
   } else {
     UNIS_VERSION_GUARD(pkt.get_unis_version());
     const char* payload = pkt.get_cdata();
