@@ -35,6 +35,7 @@ ObMVProvider::~ObMVProvider()
     stmt_factory_ = NULL;
   }
   if (NULL != expr_factory_) {
+    expr_factory_->destory();
     expr_factory_->~ObRawExprFactory();
     expr_factory_ = NULL;
   }
