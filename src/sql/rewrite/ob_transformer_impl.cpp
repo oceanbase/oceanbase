@@ -736,6 +736,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(disable_list, CONST_PROPAGATE);
       ObTransformRule::add_trans_type(disable_list, SELECT_EXPR_PULLUP);
       ObTransformRule::add_trans_type(disable_list, LATE_MATERIALIZATION);
+      ObTransformRule::add_trans_type(disable_list, DISTINCT_AGGREGATE);
     }
     if (func.contain_enum_set_values_) {
       uint64_t enum_set_enable_list = 0;
