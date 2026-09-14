@@ -5536,11 +5536,6 @@ bool ObTableSchema::is_oracle_value_preserving_column_widening(
     bool_ret = ob_is_number_tc(src_column.get_data_type())
             || src_meta.is_varying_len_char_type()
             || src_meta.is_raw()
-            || src_meta.is_timestamp_nano()
-            || src_meta.is_timestamp_tz()
-            || src_meta.is_timestamp_ltz()
-            || src_meta.is_interval_ym()
-            || src_meta.is_interval_ds()
             || src_meta.is_urowid();
   }
   return bool_ret;
