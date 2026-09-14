@@ -413,10 +413,13 @@ public:
       int64_t &pos);
 
   int fetch_tablet_autoinc_seq_cache(
+      const ObLSSwitchChecker &ls_switch_checker,
       const uint64_t cache_size,
       share::ObTabletAutoincInterval &result);
 
-  int update_tablet_autoinc_seq(const uint64_t autoinc_seq);
+  int update_tablet_autoinc_seq(
+      const ObLSSwitchChecker &ls_switch_checker,
+      const uint64_t autoinc_seq);
   static int get_kept_multi_version_start(
       ObLS &ls,
       const ObTablet &tablet,

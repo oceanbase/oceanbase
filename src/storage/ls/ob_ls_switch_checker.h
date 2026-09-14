@@ -23,13 +23,17 @@ class ObLS;
 class ObLSSwitchChecker
 {
 public:
-  ObLSSwitchChecker() : ls_(nullptr), record_switch_epoch_(UINT64_MAX) {}
+  ObLSSwitchChecker()
+    : ls_(nullptr), record_switch_epoch_(UINT64_MAX), is_legacy_online_(false) {}
   int check_online(ObLS *ls);
   int check_ls_switch_state(ObLS *ls, bool &online_state);
+  int check_ls_switch_state_with_legacy_epoch(ObLS *ls, bool &online_state);
   int double_check_epoch() const;
+  int double_check_epoch_with_legacy_epoch() const;
 private:
   ObLS *ls_;
   uint64_t record_switch_epoch_;
+  bool is_legacy_online_;
 };
 
 }

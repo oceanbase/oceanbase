@@ -19,6 +19,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/ob_tablet_autoincrement_param.h"
 #include "share/scn.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 
 using namespace oceanbase::share;
@@ -134,6 +135,8 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
       ObTabletAutoincInterval autoinc_interval;
       const ObTabletID &tablet_id = arg.tablet_id_;
       int64_t proposal_id = -1;
+      ObLSSwitchChecker ls_switch_checker;
+      bool is_online = false;
       ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
       if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls_id, role, proposal_id))) {
         LOG_WARN("get palf role failed", K(ret));
@@ -142,10 +145,21 @@ int ObTabletAutoincSeqRpcHandler::fetch_tablet_autoinc_seq_cache(
         LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_switch_checker.check_ls_switch_state_with_legacy_epoch(
+          ls_handle.get_ls(), is_online))) {
+        LOG_WARN("check ls online state failed", K(ret), K(ls_id));
+      } else if (OB_UNLIKELY(!is_online)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not online", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
       } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(tablet_id, tablet_handle, THIS_WORKER.is_timeout_ts_valid() ? THIS_WORKER.get_timeout_remain() : obrpc::ObRpcProxy::MAX_RPC_TIMEOUT))) {
         LOG_WARN("failed to get tablet", KR(ret), K(arg));
       } else if (OB_FAIL(tablet_handle.get_obj()->fetch_tablet_autoinc_seq_cache(
-          arg.cache_size_, autoinc_interval))) {
+          ls_switch_checker, arg.cache_size_, autoinc_interval))) {
         LOG_WARN("failed to fetch tablet autoinc seq on tablet", K(ret), K(tablet_id));
       } else {
         res.cache_interval_ = autoinc_interval;
@@ -173,6 +187,11 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
       share::ObLSID ls_id = arg.ls_id_;
       ObRole role = common::INVALID_ROLE;
       int64_t proposal_id = -1;
+      ObLSSwitchChecker ls_switch_checker;
+      bool is_online = false;
+      const bool is_primary_tenant = MTL_TENANT_ROLE_CACHE_IS_PRIMARY_OR_INVALID();
+      share::SCN readable_scn;
+      share::SCN current_replay_scn;
       if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls_id, role, proposal_id))) {
         LOG_WARN("get palf role failed", K(ret));
       } else if (!is_strong_leader(role)) {
@@ -180,6 +199,30 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
         LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_switch_checker.check_ls_switch_state_with_legacy_epoch(
+          ls_handle.get_ls(), is_online))) {
+        LOG_WARN("check ls online state failed", K(ret), K(ls_id));
+      } else if (OB_UNLIKELY(!is_online)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not online", K(ret), K(ls_id));
+      } else if (is_primary_tenant) {
+        if (OB_FAIL(ls_handle.get_ls()->get_ls_role(role))) {
+          LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+        } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+          ret = OB_NOT_MASTER;
+          LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_), K(role));
+        }
+      } else { // for recover table, which will get tablet seq from a standby tenant
+        if (OB_FAIL(ObStorageHAUtils::get_readable_scn_with_retry(readable_scn))) {
+          LOG_WARN("failed to get readable scn", K(ret), K(tenant_id));
+        } else if (OB_FAIL(ls_handle.get_ls()->get_max_decided_scn(current_replay_scn))) {
+          LOG_WARN("failed to get current replay scn", K(ret), K(tenant_id), K(ls_id));
+        } else if (OB_UNLIKELY(current_replay_scn < readable_scn)) {
+          ret = OB_NOT_MASTER;
+          LOG_WARN("standby tenant not readable", K(ret), K(current_replay_scn), K(readable_scn), K(tenant_id), K(ls_id));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(res.autoinc_params_.reserve(arg.src_tablet_ids_.count()))) {
         LOG_WARN("failed to reserve autoinc param", K(ret));
       } else {
@@ -198,6 +241,11 @@ int ObTabletAutoincSeqRpcHandler::batch_get_tablet_autoinc_seq(
             ObTabletAutoincSeq autoinc_seq;
             if (OB_TMP_FAIL(tablet_handle.get_obj()->get_autoinc_seq(autoinc_seq, allocator))) {
               LOG_WARN("fail to get latest autoinc seq", K(ret));
+            } else if (OB_TMP_FAIL(ls_switch_checker.double_check_epoch_with_legacy_epoch())) {
+              LOG_WARN("ls double check epoch failed", K(ret), K(ls_id), K(is_online));
+              if (OB_VERSION_NOT_MATCH == tmp_ret) {
+                tmp_ret = OB_NOT_MASTER;
+              }
             } else if (OB_TMP_FAIL(autoinc_seq.get_autoinc_seq_value(autoinc_param.autoinc_seq_))) {
               LOG_WARN("failed to get autoinc seq value", K(tmp_ret));
             }
@@ -234,6 +282,8 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
       share::ObLSID ls_id = arg.ls_id_;
       ObRole role = common::INVALID_ROLE;
       int64_t proposal_id = -1;
+      ObLSSwitchChecker ls_switch_checker;
+      bool is_online = false;
       if (OB_FAIL(MTL(logservice::ObLogService*)->get_palf_role(ls_id, role, proposal_id))) {
         LOG_WARN("get palf role failed", K(ret));
       } else if (!is_strong_leader(role)) {
@@ -241,6 +291,17 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
         LOG_WARN("follwer received FetchTabletsSeq rpc", K(ret), K(ls_id));
       } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::OBSERVER_MOD, ObLSAccessAttr::DISABLE_LOGONLY))) {
         LOG_WARN("get ls failed", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_switch_checker.check_ls_switch_state_with_legacy_epoch(
+          ls_handle.get_ls(), is_online))) {
+        LOG_WARN("check ls online state failed", K(ret), K(ls_id));
+      } else if (OB_UNLIKELY(!is_online)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not online", K(ret), K(ls_id));
+      } else if (OB_FAIL(ls_handle.get_ls()->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg.ls_id_));
+      } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+        ret = OB_NOT_MASTER;
+        LOG_WARN("ls not leader", K(ret), K(MTL_ID()), K(arg.ls_id_));
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < res.autoinc_params_.count(); i++) {
           int tmp_ret = OB_SUCCESS;
@@ -249,7 +310,7 @@ int ObTabletAutoincSeqRpcHandler::batch_set_tablet_autoinc_seq(
           ObBucketHashWLockGuard lock_guard(bucket_lock_, autoinc_param.dest_tablet_id_.hash());
           if (OB_TMP_FAIL(ls_handle.get_ls()->get_tablet(autoinc_param.dest_tablet_id_, tablet_handle))) {
             LOG_WARN("failed to get tablet", K(tmp_ret), K(autoinc_param));
-          } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(autoinc_param.autoinc_seq_))) {
+          } else if (OB_TMP_FAIL(tablet_handle.get_obj()->update_tablet_autoinc_seq(ls_switch_checker, autoinc_param.autoinc_seq_))) {
             LOG_WARN("failed to update tablet autoinc seq", K(tmp_ret), K(autoinc_param));
           }
           autoinc_param.ret_code_ = tmp_ret;

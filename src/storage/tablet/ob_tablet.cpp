@@ -4016,6 +4016,7 @@ int ObTablet::get_ha_sstable_size(int64_t &data_size)
 }
 
 int ObTablet::fetch_tablet_autoinc_seq_cache(
+    const ObLSSwitchChecker &ls_switch_checker,
     const uint64_t cache_size,
     share::ObTabletAutoincInterval &result)
 {
@@ -4043,6 +4044,11 @@ int ObTablet::fetch_tablet_autoinc_seq_cache(
   } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet autoinc not committed", K(ret), K(autoinc_seq), K(trans_stat), K(writer));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch_with_legacy_epoch())) {
+    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
   } else if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret), K(autoinc_seq));
   } else {
@@ -4219,7 +4225,9 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   return ret;
 }
 
-int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq)
+int ObTablet::update_tablet_autoinc_seq(
+    const ObLSSwitchChecker &ls_switch_checker,
+    const uint64_t autoinc_seq)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UpdAutoincSeq"));
@@ -4246,6 +4254,11 @@ int ObTablet::update_tablet_autoinc_seq(const uint64_t autoinc_seq)
   } else if (OB_UNLIKELY(trans_stat != mds::TwoPhaseCommitState::ON_COMMIT)) {
     ret = OB_EAGAIN;
     LOG_WARN("tablet autoinc not committed", K(ret), K(curr_autoinc_seq), K(trans_stat), K(writer));
+  } else if (OB_FAIL(ls_switch_checker.double_check_epoch_with_legacy_epoch())) {
+    LOG_WARN("double check failed", K(ret), K(tablet_meta_.tablet_id_));
+    if (OB_VERSION_NOT_MATCH == ret) {
+      ret = OB_NOT_MASTER;
+    }
   } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_auto_inc_seqvalue))) {
     LOG_WARN("failed to get autoinc seq value", K(ret));
   } else if (autoinc_seq > curr_auto_inc_seqvalue) {
