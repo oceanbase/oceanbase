@@ -4,6 +4,7 @@
  */
 
 #include "unittest/sql/engine/op_tests/ob_op_test_kit.h"
+#include "sql/engine/window_function/win_expr.h"
 // Note: ob_op_test_datahub.h excluded due to macro conflicts with #define private public
 // Only include when testing datahub-dependent operators (Window Function with single_part_parallel)
 // #include "unittest/sql/engine/op_tests/ob_op_test_datahub.h"
@@ -25,7 +26,112 @@ namespace sql
  */
 class WindowFunctionOpTest : public OpTestKit {};
 
+TEST_F(WindowFunctionOpTest, NullExtremumFrameRestart)
+{
+  aggregate::RemovalInfo removal_info;
+  winfunc::Frame previous;
+  int64_t restarts = 0;
+  for (int64_t tail = 1; tail <= 1000; ++tail) {
+    winfunc::Frame current;
+    current.head_ = 0;
+    current.tail_ = tail;
+    restarts += winfunc::Frame::need_restart_aggr(true, previous, current, removal_info, common::REMOVE_EXTRENUM);
+    previous = current;
+  }
+  // An all-NULL growing partition only needs its initial aggregation.
+  EXPECT_EQ(1, restarts);
+  winfunc::Frame sliding = previous;
+  sliding.head_ = 1;
+  sliding.tail_ = 1001;
+  EXPECT_FALSE(winfunc::Frame::need_restart_aggr(true, previous, sliding, removal_info, common::REMOVE_EXTRENUM));
+  EXPECT_TRUE(winfunc::Frame::need_restart_aggr(false, previous, sliding, removal_info, common::REMOVE_EXTRENUM));
+  removal_info.max_min_index_ = 0;
+  EXPECT_TRUE(winfunc::Frame::need_restart_aggr(true, previous, sliding, removal_info, common::REMOVE_EXTRENUM));
+  removal_info.max_min_index_ = 500;
+  EXPECT_FALSE(winfunc::Frame::need_restart_aggr(true, previous, sliding, removal_info, common::REMOVE_EXTRENUM));
+}
+
+TEST_F(WindowFunctionOpTest, MinMaxNullTransitions)
+{
+  auto result =
+    window_function_test()
+      .table("t", "id int, val int")
+      .select("id, min(val) over (order by id rows between unbounded preceding and current row),"
+              "max(val) over (order by id rows between unbounded preceding and current row),"
+              "min(val) over (order by id rows between 1 preceding and current row),"
+              "max(val) over (order by id rows between 1 preceding and current row)")
+      .with_sorted_data({{1, NULL_VAL}, {2, NULL_VAL}, {3, 5}, {4, NULL_VAL}, {5, NULL_VAL}, {6, 2}, {7, 2}}, "id ASC")
+      .run(engine_);
+  EXPECT_TRUE(result.verify_ordered({{1, NULL_VAL, NULL_VAL, NULL_VAL, NULL_VAL},
+                                     {2, NULL_VAL, NULL_VAL, NULL_VAL, NULL_VAL},
+                                     {3, 5, 5, 5, 5},
+                                     {4, 5, 5, 5, 5},
+                                     {5, 5, 5, NULL_VAL, NULL_VAL},
+                                     {6, 2, 5, 2, 2},
+                                     {7, 2, 5, 2, 2}}));
+}
+
 // ============================================================================
+// Large partitions must exercise the operator, not just the frame decision helper.
+TEST_F(WindowFunctionOpTest, LargeAllNullMinMax)
+{
+  const int64_t row_count = 1000000;
+  auto result = window_function_test()
+                  .table("t", "id int, val int")
+                  .select("id, min(val) over (order by id rows between unbounded preceding and current row),"
+                          "max(val) over (order by id rows between current row and unbounded following),"
+                          "min(val) over (order by id rows between 1024 preceding and current row),"
+                          "count(val) over (order by id rows between unbounded preceding and current row)")
+                  .with_data_generator(
+                    row_count, [](int64_t i) -> TestValue { return i; }, [](int64_t) -> TestValue { return NULL_VAL; })
+                  .with_batch_size(256)
+                  .run(engine_);
+  ASSERT_EQ(row_count, result.row_count());
+  EXPECT_TRUE(result.verify_column(0, row_count, [](int64_t i) -> TestValue { return i; }));
+  for (int64_t column = 1; column <= 3; ++column) {
+    EXPECT_TRUE(result.verify_column(column, row_count, [](int64_t) -> TestValue { return NULL_VAL; }));
+  }
+  EXPECT_TRUE(result.verify_column(4, row_count, [](int64_t) -> TestValue { return 0; }));
+}
+
+TEST_F(WindowFunctionOpTest, LargeMinMaxNullTransitionsRescan)
+{
+  const int64_t partition_size = 100003;
+  const int64_t row_count = 2 * partition_size;
+  auto result = window_function_test()
+                  .table("t", "grp int, id int, val int")
+                  .select("grp, id,"
+                          "min(val) over (partition by grp order by id rows unbounded preceding),"
+                          "max(val) over (partition by grp order by id rows unbounded preceding),"
+                          "min(val) over (partition by grp order by id rows between 1 preceding and current row),"
+                          "max(val) over (partition by grp order by id rows between 1 preceding and current row)")
+                  .with_data_generator(
+                    row_count, [=](int64_t i) -> TestValue { return i / partition_size; },
+                    [=](int64_t i) -> TestValue { return i % partition_size; },
+                    [=](int64_t i) -> TestValue {
+                      const int64_t index = i % partition_size;
+                      return index == 50000 ? TestValue(7) : index == partition_size - 1 ? TestValue(3) : NULL_VAL;
+                    })
+                  .with_batch_size(256)
+                  .with_rescan_times(2)
+                  .run(engine_);
+  ASSERT_EQ(row_count, result.row_count());
+  EXPECT_TRUE(result.verify_column(0, row_count, [=](int64_t i) -> TestValue { return i / partition_size; }));
+  EXPECT_TRUE(result.verify_column(1, row_count, [=](int64_t i) -> TestValue { return i % partition_size; }));
+  EXPECT_TRUE(result.verify_column(2, row_count, [=](int64_t i) -> TestValue {
+    const int64_t index = i % partition_size;
+    return index < 50000 ? NULL_VAL : index == partition_size - 1 ? TestValue(3) : TestValue(7);
+  }));
+  EXPECT_TRUE(result.verify_column(
+    3, row_count, [=](int64_t i) -> TestValue { return i % partition_size < 50000 ? NULL_VAL : TestValue(7); }));
+  for (int64_t column = 4; column <= 5; ++column) {
+    EXPECT_TRUE(result.verify_column(column, row_count, [=](int64_t i) -> TestValue {
+      const int64_t index = i % partition_size;
+      return index == 50000 || index == 50001 ? TestValue(7) : index == partition_size - 1 ? TestValue(3) : NULL_VAL;
+    }));
+  }
+}
+
 // Normal Tests (4 tests)
 // ============================================================================
 
