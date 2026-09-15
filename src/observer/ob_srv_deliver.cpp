@@ -540,6 +540,8 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
   const bool is_stream = pkt.is_stream();
   const uint64_t tenant_id = pkt.get_tenant_id();
   const uint64_t group_id = pkt.get_group_id();
+  const uint64_t diag_tenant_id = OB_GET_GTS_REQUEST == pkt.get_pcode() ? OB_SYS_TENANT_ID : tenant_id;  // for diagnostic info;
+  const uint64_t diag_group_id = OB_GET_GTS_REQUEST == pkt.get_pcode() ? share::OBCG_DEFAULT : group_id;  // for diagnostic info;
 
   if (stop_
       || SS_STOPPING == GCTX.status_
@@ -595,7 +597,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
   } else if (NULL != queue) {
     SERVER_LOG(DEBUG, "deliver packet", K(queue));
     if (need_update_stat) {
-      ObTenantDiagnosticInfoSummaryGuard guard(tenant_id, group_id);
+      ObTenantDiagnosticInfoSummaryGuard guard(diag_tenant_id, diag_group_id);
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES,
                 pkt.get_encoded_size() + OB_NET_HEADER_LENGTH);
@@ -643,7 +645,7 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
         di->inner_begin_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, 0, pkt.get_pcode(), pkt.get_request_level(), 0);
       }
     }
-    ObTenantDiagnosticInfoSummaryGuard guard(tenant_id, group_id);
+    ObTenantDiagnosticInfoSummaryGuard guard(diag_tenant_id, diag_group_id);
     if (need_update_stat) {
       EVENT_INC(RPC_PACKET_IN);
       EVENT_ADD(RPC_PACKET_IN_BYTES,
