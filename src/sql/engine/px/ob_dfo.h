@@ -1034,6 +1034,8 @@ public:
     memstore_read_row_count_ = other.memstore_read_row_count_;
     ssstore_read_row_count_ = other.ssstore_read_row_count_;
     px_worker_execute_start_schema_version_ = other.px_worker_execute_start_schema_version_;
+    px_worker_prepare_cost_ = other.px_worker_prepare_cost_;
+    dispatch_task_cost_ = other.dispatch_task_cost_;
     return *this;
   }
 public:

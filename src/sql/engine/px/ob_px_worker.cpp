@@ -347,6 +347,7 @@ int ObPxThreadWorker::exit()
 int ObPxLocalWorker::run(ObPxRpcInitTaskArgs &task_arg)
 {
   int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtil::current_time_ns();
   ObDIActionGuard action_guard("FastDFO");
   ObPxSqcHandler *h = task_arg.get_sqc_handler();
   if (OB_ISNULL(h)) {
@@ -357,6 +358,10 @@ int ObPxLocalWorker::run(ObPxRpcInitTaskArgs &task_arg)
   {
     FLTSpanGuard(px_task);
     ObPxTaskProcess task_proc(gctx_, task_arg);
+    task_arg.sqc_task_ptr_->dispatch_task_cost_ =
+        start_time - h->get_sqc_metrics().dispatch_tasks_ts_;
+    task_arg.sqc_task_ptr_->px_worker_prepare_cost_ =
+        ObTimeUtil::current_time_ns() - start_time;
     ret = task_proc.process();
   }
 
