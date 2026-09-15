@@ -465,7 +465,8 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
         if (coord_info_.enable_px_batch_rescan()) {
           OZ(sqc.set_rescan_batch_params(coord_info_.batch_rescan_ctl_->params_));
         }
-        if (timeout_us <= 0) {
+        if (OB_FAIL(ret)) {
+        } else if (timeout_us <= 0) {
           ret = OB_TIMEOUT;
           LOG_WARN("dispatch sqc timeout", K(ret));
         } else if (OB_FAIL(args.sqc_.assign(sqc))) {
