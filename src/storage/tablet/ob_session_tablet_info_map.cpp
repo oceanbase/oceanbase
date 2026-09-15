@@ -14,6 +14,7 @@ namespace oceanbase
 {
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_GTT_V2_WAIT_BEFORE_ADD_SESSION_TABLET);
 
 int ObSessionTabletInfo::init(const common::ObTabletID &tablet_id, const share::ObLSID &ls_id, const uint64_t table_id,
   const int64_t sequence, const uint64_t session_id, const int64_t transfer_seq)
@@ -105,46 +106,57 @@ int ObSessionTabletInfoMap::add_session_tablet(
     LOG_WARN("temporary table access is not supported in standby tenant", KR(ret), K(table_ids), K(sequence), K(session_id));
   } else if (OB_FAIL(create_helper.set_table_ids(table_ids))) {
     LOG_WARN("failed to set table ids", KR(ret), K(table_ids));
-  } else if (OB_FAIL(create_helper.do_work())) {
-    if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-      ret = OB_SUCCESS;
-      // table_ids and exist_table_ids may be different, so we need to get the exist_table_ids from create_helper.
-      const common::ObIArray<uint64_t> &exist_table_ids = create_helper.get_table_ids();
+  } else {
+#ifdef ERRSIM
+    const int64_t wait_table_id =
+        -static_cast<int64_t>(OB_E(EN_GTT_V2_WAIT_BEFORE_ADD_SESSION_TABLET) OB_SUCCESS);
+    if (wait_table_id > 0 && static_cast<uint64_t>(wait_table_id) == table_ids.at(0)) {
+      LOG_INFO("errsim wait before adding gtt v2 session tablet",
+          K(wait_table_id), K(table_ids), K(sequence), K(session_id));
+      DEBUG_SYNC(GTT_V2_BEFORE_ADD_SESSION_TABLET);
+    }
+#endif
+    if (OB_FAIL(create_helper.do_work())) {
+      if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+        ret = OB_SUCCESS;
+        // table_ids and exist_table_ids may be different, so we need to get the exist_table_ids from create_helper.
+        const common::ObIArray<uint64_t> &exist_table_ids = create_helper.get_table_ids();
+        lib::ObMutexGuard guard(mutex_);
+        ARRAY_FOREACH(exist_table_ids, idx) {
+          const uint64_t table_id = exist_table_ids.at(idx);
+          tablet_info.reset();
+          if (OB_FAIL(inner_get_session_tablet(table_id, sequence, session_id, tablet_info))) {
+            LOG_WARN("failed to inner get session tablet", KR(ret), K(table_id), K(sequence), K(session_id));
+          } else {
+            LOG_INFO("session tablet already exists, skip create", KR(ret), K(table_id), K(sequence), K(session_id));
+          }
+        }
+      } else {
+        LOG_WARN("failed to create session tablet", KR(ret), K(table_ids));
+      }
+    } else if (OB_UNLIKELY(create_helper.get_tablet_ids().count() < table_ids.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", KR(ret), K(create_helper.get_tablet_ids().count()), K(table_ids.count()));
+    } else {
+      const common::ObIArray<common::ObTabletID> &tablet_ids = create_helper.get_tablet_ids();
+      const common::ObIArray<uint64_t> &create_table_ids = create_helper.get_table_ids();
+      const share::ObLSID &ls_id = create_helper.get_ls_id();
       lib::ObMutexGuard guard(mutex_);
-      ARRAY_FOREACH(exist_table_ids, idx) {
-        const uint64_t table_id = exist_table_ids.at(idx);
+      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+        const uint64_t table_id = create_table_ids.at(i);
+        const common::ObTabletID &tablet_id = tablet_ids.at(i);
         tablet_info.reset();
-        if (OB_FAIL(inner_get_session_tablet(table_id, sequence, session_id, tablet_info))) {
-          LOG_WARN("failed to inner get session tablet", KR(ret), K(table_id), K(sequence), K(session_id));
-        } else {
-          LOG_INFO("session tablet already exists, skip create", KR(ret), K(table_id), K(sequence), K(session_id));
+        // The tablet has been newly created, so it must be inserted into tablet_infos_.
+        if (OB_FAIL(tablet_info.init(tablet_id, ls_id, table_id, sequence, session_id, 0/*transfer_seq*/))) {
+          LOG_WARN("failed to init session tablet info", KR(ret), K(create_table_ids.at(i)));
+        } else if (FALSE_IT(tablet_info.is_creator_ = true)) {
+        } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
+          LOG_WARN("failed to push back", KR(ret), K(tablet_info));
         }
       }
-    } else {
-      LOG_WARN("failed to create session tablet", KR(ret), K(table_ids));
-    }
-  } else if (OB_UNLIKELY(create_helper.get_tablet_ids().count() < table_ids.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error", KR(ret), K(create_helper.get_tablet_ids().count()), K(table_ids.count()));
-  } else {
-    const common::ObIArray<common::ObTabletID> &tablet_ids = create_helper.get_tablet_ids();
-    const common::ObIArray<uint64_t> &create_table_ids = create_helper.get_table_ids();
-    const share::ObLSID &ls_id = create_helper.get_ls_id();
-    lib::ObMutexGuard guard(mutex_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
-      const uint64_t table_id = create_table_ids.at(i);
-      const common::ObTabletID &tablet_id = tablet_ids.at(i);
-      tablet_info.reset();
-      // The tablet has been newly created, so it must be inserted into tablet_infos_.
-      if (OB_FAIL(tablet_info.init(tablet_id, ls_id, table_id, sequence, session_id, 0/*transfer_seq*/))) {
-        LOG_WARN("failed to init session tablet info", KR(ret), K(create_table_ids.at(i)));
-      } else if (FALSE_IT(tablet_info.is_creator_ = true)) {
-      } else if (OB_FAIL(tablet_infos_.push_back(tablet_info))) {
-        LOG_WARN("failed to push back", KR(ret), K(tablet_info));
+      if (OB_SUCC(ret)) {
+        FLOG_INFO("session tablet added", KR(ret), K(table_ids), K(create_table_ids), K(sequence), K(session_id), K(tablet_ids), K(tablet_infos_));
       }
-    }
-    if (OB_SUCC(ret)) {
-      FLOG_INFO("session tablet added", KR(ret), K(table_ids), K(create_table_ids), K(sequence), K(session_id), K(tablet_ids), K(tablet_infos_));
     }
   }
   return ret;
@@ -222,6 +234,110 @@ int ObSessionTabletInfoMap::remove_session_tablet(const uint64_t table_id)
       LOG_WARN("failed to remove", KR(ret), K(table_id));
     }
     FLOG_INFO("session tablet removed", KR(ret), K(table_id), K(i), K(tablet_infos_));
+  }
+  return ret;
+}
+
+int ObSessionTabletInfoMap::try_remove_session_tablet(
+    const uint64_t table_id,
+    const int64_t sequence,
+    bool &removed)
+{
+  int ret = OB_SUCCESS;
+  removed = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id) || OB_UNLIKELY(INT64_MAX == sequence)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(table_id), K(sequence));
+  } else {
+    lib::ObMutexGuard guard(mutex_);
+    for (int64_t i = tablet_infos_.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      if (tablet_infos_.at(i).table_id_ == table_id
+          && tablet_infos_.at(i).sequence_ == sequence) {
+        if (OB_FAIL(tablet_infos_.remove(i))) {
+          LOG_WARN("failed to remove session tablet", KR(ret), K(table_id), K(sequence), K(i));
+        } else {
+          removed = true;
+        }
+      }
+    }
+    FLOG_INFO("try remove session tablets by sequence", KR(ret), K(table_id),
+        K(sequence), K(removed), K(tablet_infos_));
+  }
+  return ret;
+}
+
+int ObSessionTabletInfoMap::try_remove_session_tablet(
+    const uint64_t table_id,
+    const common::ObTabletID &tablet_id,
+    bool &removed)
+{
+  int ret = OB_SUCCESS;
+  removed = false;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id) || OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(table_id), K(tablet_id));
+  } else {
+    lib::ObMutexGuard guard(mutex_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_infos_.count(); ++i) {
+      if (tablet_infos_.at(i).table_id_ == table_id
+          && tablet_infos_.at(i).tablet_id_ == tablet_id) {
+        if (OB_FAIL(tablet_infos_.remove(i))) {
+          LOG_WARN("failed to remove session tablet", KR(ret), K(table_id), K(tablet_id), K(i));
+        } else {
+          removed = true;
+        }
+        break;
+      }
+    }
+    FLOG_INFO("try remove session tablet by tablet id", KR(ret), K(table_id),
+        K(tablet_id), K(removed), K(tablet_infos_));
+  }
+  return ret;
+}
+
+int ObSessionTabletInfoMap::try_remove_stale_session_tablet_on_location_error(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const common::ObTabletID &tablet_id,
+    bool &removed)
+{
+  int ret = OB_SUCCESS;
+  bool local_hit = false;
+  bool tablet_exist = false;
+  removed = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)
+      || OB_UNLIKELY(OB_INVALID_ID == table_id)
+      || OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id), K(tablet_id));
+  } else {
+    {
+      lib::ObMutexGuard guard(mutex_);
+      for (int64_t i = 0; !local_hit && i < tablet_infos_.count(); ++i) {
+        const ObSessionTabletInfo &tablet_info = tablet_infos_.at(i);
+        local_hit = (tablet_info.table_id_ == table_id && tablet_info.tablet_id_ == tablet_id);
+      }
+    }
+    if (!local_hit) {
+      LOG_INFO("session tablet does not hit local map, skip stale entry removal",
+          K(tenant_id), K(table_id), K(tablet_id));
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::check_tablet_exist(
+                   *GCTX.sql_proxy_, tenant_id, table_id, tablet_id, tablet_exist))) {
+      LOG_WARN("failed to check session tablet exist in inner table",
+          KR(ret), K(tenant_id), K(table_id), K(tablet_id));
+    } else if (tablet_exist) {
+      LOG_INFO("session tablet still exists in inner table, skip stale entry removal",
+          K(tenant_id), K(table_id), K(tablet_id));
+    } else if (OB_FAIL(try_remove_session_tablet(table_id, tablet_id, removed))) {
+      LOG_WARN("failed to remove stale session tablet from local map",
+          KR(ret), K(tenant_id), K(table_id), K(tablet_id));
+    } else {
+      LOG_INFO("finished removing stale session tablet from local map",
+          K(tenant_id), K(table_id), K(tablet_id), K(removed));
+    }
   }
   return ret;
 }

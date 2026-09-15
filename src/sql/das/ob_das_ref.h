@@ -287,6 +287,10 @@ private:
   int wait_all_executing_tasks();
   int process_remote_task_resp();
   bool check_rcode_can_retry(int ret);
+  // A stale GTT v2 tablet may still hit the location cache and produce a DAS task, then fail
+  // when storage accesses the deleted tablet. Before task-level retry, verify and remove stale
+  // entries for the task tablet and its related tablets, and keep the original task error for retry.
+  int try_remove_stale_gtt_session_tablets_(ObIDASTaskOp &failed_task);
   int cancel_all_async_callbacks();
 private:
   typedef common::ObObjNode<ObIDASTaskOp*> DasOpNode;

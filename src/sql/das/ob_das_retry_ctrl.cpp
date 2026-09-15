@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_retry_ctrl.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 
 namespace oceanbase {
@@ -62,10 +63,10 @@ void ObDASRetryCtrl::tablet_location_retry_proc(ObDASRef &das_ref,
     } else if (!is_orcl_tmp_table_v2 && OB_FAIL(table_schema->check_if_tablet_exists(tablet_loc->tablet_id_, tablet_exist))) {
       LOG_WARN("failed to check if tablet exists", K(ret), K(tablet_loc), K(ref_table_id));
     } else if (!tablet_exist) {
-      // partition could be dropped or table could be truncated, in this case we return OB_SCHEMA_EAGAIN and
-      // attempt statement-level retry
+      // The partition may have been dropped or the table truncated.
       task_op.set_errcode(OB_SCHEMA_EAGAIN);
-      LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated", K(tablet_loc), K(ref_table_id));
+      LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated",
+          K(tablet_loc), K(ref_table_id), K(is_orcl_tmp_table_v2));
     } else {
       loc_router.force_refresh_location_cache(true, task_op.get_errcode());
       need_retry = true;

@@ -16,15 +16,10 @@ namespace oceanbase
 namespace share
 {
 
-// RPC argument used by truncate / session-cleanup of Oracle GTT v2 session tablets.
-// The originator broadcasts this arg to every alive observer of the tenant; each
-// observer with an is_creator_=true entry for any of the (table_id, sequence,
-// session_id) tuples performs the actual storage delete in a single inner
-// transaction; every observer removes the matching entries from the per-session
-// gtt_tablet_info_map_ so that stale caches on non-creator observers are
-// invalidated. table_ids_ carries the main table plus its index and lob aux
-// tables so that one broadcast atomically replaces the previous per-table
-// dispatch.
+// RPC argument used to clean Oracle GTT v2 session tablets. During rolling
+// upgrade it keeps the legacy creator-side storage delete. After upgrade the
+// durable delete is completed by the originator and this RPC only invalidates
+// matching entries in each observer's per-session gtt_tablet_info_map_.
 class ObDropGTTV2SessionTabletArg final
 {
   OB_UNIS_VERSION(1);
@@ -60,10 +55,8 @@ public:
   uint64_t session_id_;
 };
 
-// RPC result. local_map_hit_ is true if this observer found at least one
-// matching entry in some session's gtt_tablet_info_map_ (regardless of creator
-// status); the originator uses this together with executed_on_creator_ to
-// distinguish a clean no-op from the stale-cache-without-creator scenario.
+// RPC result. executed_on_creator_ is used by the legacy upgrade path, while
+// local_map_hit_ reports whether this observer removed a matching map entry.
 class ObDropGTTV2SessionTabletRes final
 {
   OB_UNIS_VERSION(1);

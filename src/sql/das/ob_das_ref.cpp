@@ -6,8 +6,12 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_ref.h"
 #include "sql/das/ob_data_access_service.h"
+#include "sql/das/ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_rpc_processor.h"
+#include "sql/das/ob_das_scan_op.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "storage/tablet/ob_session_tablet_info_map.h"
 
 namespace oceanbase
 {
@@ -352,12 +356,93 @@ int ObDASRef::retry_all_fail_tasks(common::ObIArray<ObIDASTaskOp *> &failed_task
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < failed_tasks.count(); i++) {
     ObIDASTaskOp *failed_task = failed_tasks.at(i);
-    if (!GCONF._enable_partition_level_retry || !failed_task->can_part_retry()) {
-      ret = failed_task->errcode_;
-      LOG_WARN("can't do task level retry", K(ret), KPC(failed_task));
-    } else if (OB_FAIL(MTL(ObDataAccessService *)->retry_das_task(*this, *failed_tasks.at(i)))) {
-      LOG_WARN("Failed to retry das task", K(ret));
+    if (OB_ISNULL(failed_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed task is null", KR(ret), K(i), K(failed_tasks));
+    } else {
+      // execute result should not affect das task retry
+      const int tmp_ret = try_remove_stale_gtt_session_tablets_(*failed_task);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN_RET(tmp_ret, "failed to remove stale gtt session tablets", KPC(failed_task));
+      }
+      if (!GCONF._enable_partition_level_retry || !failed_task->can_part_retry()) {
+        ret = failed_task->errcode_;
+        LOG_WARN("can't do task level retry", K(ret), KPC(failed_task));
+      } else if (OB_FAIL(MTL(ObDataAccessService *)->retry_das_task(*this, *failed_task))) {
+        LOG_WARN("Failed to retry das task", K(ret));
+      }
     }
+  }
+  return ret;
+}
+
+int ObDASRef::try_remove_stale_gtt_session_tablets_(ObIDASTaskOp &failed_task)
+{
+  int ret = OB_SUCCESS;
+  bool removed = false;
+  ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", KR(ret), K(failed_task));
+  } else if (!session->get_has_temp_table_flag()
+             || session->get_gtt_tablet_info_map().is_empty()) {
+    // No GTT v2 session tablet entry exists in the local map, skip the failed task check.
+  } else if (!DAS_CTX(get_exec_ctx()).get_location_router().is_refresh_location_error(
+                 failed_task.get_errcode())) {
+    // Ignore errors unrelated to tablet location.
+  } else {
+    const ObDASTabletLoc *tablet_loc = failed_task.get_tablet_loc();
+    bool tmp_removed = false;
+    if (OB_ISNULL(tablet_loc) || OB_ISNULL(tablet_loc->loc_meta_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", KR(ret), KP(tablet_loc));
+    } else if (OB_FAIL(session->get_gtt_tablet_info_map().
+                           try_remove_stale_session_tablet_on_location_error(
+                               MTL_ID(), failed_task.get_ref_table_id(),
+                               tablet_loc->tablet_id_, tmp_removed))) {
+      LOG_WARN("failed to remove stale gtt session tablet from local map",
+          KR(ret), K(failed_task.get_ref_table_id()), KPC(tablet_loc));
+    } else if (FALSE_IT(removed |= tmp_removed)) {
+    } else if (IS_DAS_DML_OP(failed_task)
+               || DAS_OP_TABLE_SCAN == failed_task.get_type()) {
+      DASCtDefFixedArray &related_ctdefs = failed_task.get_related_ctdefs();
+      ObTabletIDFixedArray &related_tablet_ids = failed_task.get_related_tablet_ids();
+      if (OB_UNLIKELY(related_ctdefs.count() != related_tablet_ids.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected related tablet count", KR(ret), K(related_ctdefs), K(related_tablet_ids));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs.count(); ++i) {
+        const ObDASBaseCtDef *related_ctdef = related_ctdefs.at(i);
+        uint64_t related_table_id = OB_INVALID_ID;
+        tmp_removed = false;
+        if (OB_ISNULL(related_ctdef)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("related ctdef is null", KR(ret), K(i), K(related_ctdefs), K(related_tablet_ids));
+        } else {
+          if (IS_DAS_DML_OP(failed_task)) {
+            related_table_id = static_cast<const ObDASDMLBaseCtDef *>(related_ctdef)->index_tid_;
+          } else if (DAS_OP_TABLE_SCAN == related_ctdef->op_type_) {
+            related_table_id = static_cast<const ObDASScanCtDef *>(related_ctdef)->ref_table_id_;
+          }
+          if (OB_INVALID_ID == related_table_id) {
+            // Ignore related operations that do not access a table tablet.
+          } else if (OB_FAIL(session->get_gtt_tablet_info_map().
+                                 try_remove_stale_session_tablet_on_location_error(
+                                     MTL_ID(), related_table_id,
+                                     related_tablet_ids.at(i), tmp_removed))) {
+            LOG_WARN("failed to remove stale related gtt session tablet from local map",
+                KR(ret), K(i), K(related_table_id), K(related_tablet_ids.at(i)));
+          } else if (tmp_removed) {
+            removed = true;
+            LOG_INFO("try remove stale related gtt session tablet from local map",
+                K(i), K(related_table_id), K(related_tablet_ids.at(i)), K(tmp_removed));
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && removed) {
+    LOG_INFO("removed stale gtt session tablets", K(failed_task));
   }
   return ret;
 }

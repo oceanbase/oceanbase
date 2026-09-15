@@ -6,7 +6,9 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_context.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "observer/ob_server.h"
+#include "storage/tablet/ob_session_tablet_info_map.h"
 namespace oceanbase
 {
 using namespace common;
@@ -218,7 +220,17 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
     } else if (OB_FAIL(location_router_.get_tablet_loc(*table_loc.loc_meta_,
                                                        tablet_id,
                                                        *tablet_loc))) {
-      LOG_WARN("nonblock get tablet location failed", K(ret), KPC(table_loc.loc_meta_), K(tablet_id));
+      if (!location_router_.is_refresh_location_error(ret)) {
+        LOG_WARN("nonblock get tablet location failed", K(ret), KPC(table_loc.loc_meta_), K(tablet_id));
+      } else {
+        const int tmp_ret = try_remove_stale_gtt_session_tablet_on_location_error_(
+            *table_loc.loc_meta_, tablet_id);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN_RET(tmp_ret, "failed to remove stale gtt session tablet on location error",
+              KR(ret), KPC(table_loc.loc_meta_), K(tablet_id));
+        }
+        LOG_WARN("nonblock get tablet location failed", K(ret), KPC(table_loc.loc_meta_), K(tablet_id));
+      }
     } else if (OB_FAIL(table_loc.add_tablet_loc(tablet_loc))) {
       LOG_WARN("store tablet location info failed", K(ret));
     } else {
@@ -233,6 +245,28 @@ int ObDASCtx::extended_tablet_loc(ObDASTableLoc &table_loc,
     if (OB_SUCC(ret) && need_check_server_ && OB_FAIL(check_same_server(tablet_loc))) {
       LOG_WARN("check same server failed", KR(ret));
     }
+  }
+  return ret;
+}
+
+int ObDASCtx::try_remove_stale_gtt_session_tablet_on_location_error_(
+    const ObDASTableLocMeta &loc_meta,
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = nullptr;
+  bool removed = false;
+  if (OB_ISNULL(sql_ctx_) || OB_ISNULL(session_info = sql_ctx_->session_info_)) {
+    LOG_INFO("session info is null, skip stale gtt session tablet removal",
+        KP(sql_ctx_), KP(session_info), K(loc_meta), K(tablet_id), K(common::lbt()));
+  } else if (OB_FAIL(session_info->get_gtt_tablet_info_map().
+                         try_remove_stale_session_tablet_on_location_error(
+                             MTL_ID(), loc_meta.ref_table_id_, tablet_id, removed))) {
+    LOG_WARN("failed to remove stale session tablet from local map",
+        KR(ret), K(loc_meta), K(tablet_id));
+  } else if (removed) {
+    LOG_INFO("removed stale gtt session tablet on location error",
+        K(loc_meta), K(tablet_id));
   }
   return ret;
 }

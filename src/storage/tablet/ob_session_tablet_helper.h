@@ -81,6 +81,7 @@ private:
     const int64_t tablet_cnt,
     share::schema::ObMultiVersionSchemaService &schema_service,
     common::ObIArray<common::ObTabletID> &tablet_ids);
+  int precheck_can_create_tablet(const share::schema::ObTableSchema &table_schema);
   int choose_log_stream(
     share::schema::ObMultiVersionSchemaService &schema_service,
     share::schema::ObLatestSchemaGuard &schema_guard,
@@ -200,11 +201,24 @@ private:
       /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
       /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete);
   // Gather the main GTT v2 session table id together with its local index
-  // tables and lob aux tables so they can be dropped atomically in a single
-  // broadcast / inner transaction. See dispatch_drop_gtt_v2_session_tablet_on_creator.
+  // tables and lob aux tables so they can be dropped atomically.
   static int collect_oracle_temp_table_v2_related_ids(
       const share::schema::ObTableSchema &table_schema,
       common::ObIArray<uint64_t> &table_ids);
+  // Delete all related session tablets in one transaction, then invalidate
+  // their entries in each observer's local session map. The local observer is
+  // handled directly in dispatch_drop_gtt_v2_session_tablet without RPC.
+  static int delete_session_tablets_and_clear_maps(
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      const int64_t sequence,
+      const uint64_t session_id);
+  static int check_session_tablets_deleted(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const common::ObIArray<uint64_t> &table_ids,
+      const int64_t sequence,
+      const uint64_t session_id);
 private:
   int lock_table_for_delete(
       const ObTableSchema &table_schema,
@@ -333,7 +347,7 @@ private:
 /// inner transaction. @p table_ids should carry the main table along with its
 /// index and lob aux tables so the broadcast is atomic per truncate.
 /// See ob_drop_gtt_v2_session_tablet_rpc.
-int dispatch_drop_gtt_v2_session_tablet_on_creator(
+int dispatch_drop_gtt_v2_session_tablet(
     const uint64_t tenant_id,
     const common::ObIArray<uint64_t> &table_ids,
     const int64_t sequence,

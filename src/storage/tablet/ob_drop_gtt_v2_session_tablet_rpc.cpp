@@ -24,6 +24,8 @@ using namespace obrpc;
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_GTT_V2_SKIP_SESSION_TABLET_MAP_REMOVE);
+
 namespace
 {
 
@@ -115,6 +117,61 @@ private:
   bool local_map_hit_;
   common::ObSEArray<ObSessionTabletInfo,
                     ObDropGTTV2SessionTabletArg::DEFAULT_TABLE_ID_COUNT> creator_infos_;
+};
+
+class RemoveGTTV2SessionTabletMapFunctor
+{
+public:
+  explicit RemoveGTTV2SessionTabletMapFunctor(const ObDropGTTV2SessionTabletArg &arg)
+    : arg_(arg), map_err_(OB_SUCCESS), local_map_hit_(false)
+  {}
+  bool operator()(sql::ObSQLSessionMgr::Key /*key*/, sql::ObSQLSessionInfo *sess_info)
+  {
+    if (OB_NOT_NULL(sess_info)
+        && sess_info->get_effective_tenant_id() == arg_.get_tenant_id()
+        && sess_info->get_sessid_for_table() == arg_.get_session_id()) {
+      const common::ObIArray<uint64_t> &table_ids = arg_.get_table_ids();
+      for (int64_t i = 0; i < table_ids.count(); ++i) {
+        const uint64_t table_id = table_ids.at(i);
+        bool removed = false;
+        bool skip_remove = false;
+#ifdef ERRSIM
+        const int64_t errsim_ret =
+            static_cast<int64_t>(OB_E(EN_GTT_V2_SKIP_SESSION_TABLET_MAP_REMOVE) OB_SUCCESS);
+        // error_code = 1 skips all table ids in this drop request, allowing
+        // errsim tests to retain both the data and index entries atomically.
+        if (OB_UNLIKELY(-1 == errsim_ret
+                        || errsim_ret == -static_cast<int64_t>(table_id))) {
+          skip_remove = true;
+          LOG_INFO("errsim skip gtt v2 session tablet local map removal",
+              K_(arg), K(table_id), K(errsim_ret), KP(sess_info));
+        }
+#endif
+        if (skip_remove) {
+          local_map_hit_ = true;
+        } else {
+          const int tmp_ret = sess_info->get_gtt_tablet_info_map().try_remove_session_tablet(
+              table_id, arg_.get_sequence(), removed);
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN_RET(tmp_ret, "failed to remove session tablet from local map",
+                K_(arg), K(table_id), KP(sess_info));
+            if (OB_SUCCESS == map_err_) {
+              map_err_ = tmp_ret;
+            }
+          } else if (removed) {
+            local_map_hit_ = true;
+          }
+        }
+      }
+    }
+    return true;
+  }
+  int get_map_err() const { return map_err_; }
+  bool local_map_hit() const { return local_map_hit_; }
+private:
+  const ObDropGTTV2SessionTabletArg &arg_;
+  int map_err_;
+  bool local_map_hit_;
 };
 
 } // anonymous namespace
@@ -227,6 +284,33 @@ int ObRpcDropGTTV2SessionTabletP::handle_in_tenant(
   return ret;
 }
 
+int ObRpcDropGTTV2SessionTabletP::remove_map_in_tenant(
+    const ObDropGTTV2SessionTabletArg &arg,
+    ObDropGTTV2SessionTabletRes &result)
+{
+  int ret = OB_SUCCESS;
+  sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
+  result.set_executed_on_creator(false);
+  result.set_local_map_hit(false);
+  result.set_ret(OB_SUCCESS);
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
+  } else if (OB_ISNULL(session_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session mgr is null", KR(ret), K(arg));
+  } else {
+    RemoveGTTV2SessionTabletMapFunctor functor(arg);
+    if (OB_FAIL(session_mgr->for_each_session(functor))) {
+      LOG_WARN("fail to iterate sessions", KR(ret), K(arg));
+    } else {
+      result.set_ret(functor.get_map_err());
+      result.set_local_map_hit(functor.local_map_hit());
+    }
+  }
+  return ret;
+}
+
 int ObRpcDropGTTV2SessionTabletP::process()
 {
   int ret = OB_SUCCESS;
@@ -239,8 +323,12 @@ int ObRpcDropGTTV2SessionTabletP::process()
     share::ObTenantSwitchGuard guard = share::_make_tenant_switch_guard();
     if (OB_FAIL(guard.switch_to(arg.get_tenant_id()))) {
       LOG_WARN("fail to switch tenant for drop gtt v2 session tablet rpc", KR(ret), K(arg));
-    } else if (OB_FAIL(handle_in_tenant(arg, res))) {
-      LOG_WARN("fail to handle drop gtt v2 session tablet in tenant", KR(ret), K(arg));
+    } else if (GCONF.in_upgrade_mode()) {
+      if (OB_FAIL(handle_in_tenant(arg, res))) {
+        LOG_WARN("fail to handle legacy drop gtt v2 session tablet in tenant", KR(ret), K(arg));
+      }
+    } else if (OB_FAIL(remove_map_in_tenant(arg, res))) {
+      LOG_WARN("fail to remove gtt v2 session tablet from local map", KR(ret), K(arg));
     }
   }
   return ret;

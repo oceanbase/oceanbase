@@ -28,6 +28,8 @@ protected:
 public:
   static int handle_in_tenant(const share::ObDropGTTV2SessionTabletArg &arg,
                               share::ObDropGTTV2SessionTabletRes &result);
+  static int remove_map_in_tenant(const share::ObDropGTTV2SessionTabletArg &arg,
+                                  share::ObDropGTTV2SessionTabletRes &result);
 private:
   static int do_delete_as_creator(const share::ObDropGTTV2SessionTabletArg &arg,
                                   common::ObIArray<ObSessionTabletInfo> &creator_tablet_infos);
