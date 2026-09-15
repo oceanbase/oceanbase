@@ -1643,7 +1643,14 @@ int ObJoinOrder::check_opt_rule_use_das(const AccessPath &path,
   need_prune_for_dop = false;
   IndexInfoEntry *index_info_entry = NULL;
   int64_t explicit_dop = ObGlobalHint::UNSET_PARALLEL;
-  if (is_rescan) {
+  int64_t force_threshold = OPT_CTX.get_force_das_scan_row_count_threshold();
+  if (OB_FAIL(get_explicit_dop_for_path(path.index_id_, explicit_dop))) {
+    LOG_WARN("failed to get explicit dop", K(ret));
+  } else if (force_threshold > 0 && explicit_dop == ObGlobalHint::DEFAULT_PARALLEL &&
+             path.get_logical_query_range_row_count() <= static_cast<double>(force_threshold) &&
+             !path.is_local()) {
+    create_das_path = true;
+  } else if (is_rescan) {
     if (!is_expanded_realtime_major_refresh_mview()) {
       create_das_path = true;
       create_basic_path = (table_meta_info_.is_broadcast_table_
@@ -1662,8 +1669,6 @@ int ObJoinOrder::check_opt_rule_use_das(const AccessPath &path,
     LOG_WARN("failed to check use das by false startup filter", K(ret));
   } else if (create_das_path) {
     /* do nothing */
-  } else if (OB_FAIL(get_explicit_dop_for_path(path.index_id_, explicit_dop))) {
-    LOG_WARN("failed to get explicit dop", K(ret));
   } else if (explicit_dop > 1) {
     // Explicit parallel hint or table dop > 1 forces basic path
     create_basic_path = true;

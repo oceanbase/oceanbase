@@ -326,7 +326,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     udf_cost_factor_(1.0),
     udf_selectivity_(0.005),
     idp_reduction_threshold_(5000),
-    slave_mapping_id_gen_(0)
+    slave_mapping_id_gen_(0),
+    force_das_scan_row_count_threshold_(0)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -857,6 +858,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool need_retry_plan() const { return need_retry_plan_; }
   inline void set_need_retry_plan(bool need_retry) { need_retry_plan_ = need_retry; }
   inline int64_t generate_slave_mapping_id() { return ++slave_mapping_id_gen_; }
+  inline int64_t get_force_das_scan_row_count_threshold() const { return force_das_scan_row_count_threshold_; }
+  inline void set_force_das_scan_row_count_threshold(int64_t threshold) { force_das_scan_row_count_threshold_ = threshold; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -1001,6 +1004,7 @@ private:
   double udf_selectivity_;
   uint64_t idp_reduction_threshold_;
   int64_t slave_mapping_id_gen_; // generate slave mapping id, start from 1
+  int64_t force_das_scan_row_count_threshold_;
 };
 }
 }

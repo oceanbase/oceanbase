@@ -855,6 +855,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_px_ordered_coord = GCONF._enable_px_ordered_coord;
   int64_t das_batch_rescan_flag = tenant_config.is_valid() ? tenant_config->_enable_das_batch_rescan_flag : 0;
   bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
+  int64_t force_das_scan_row_count_threshold = tenant_config.is_valid() ? tenant_config->_force_das_scan_row_count_threshold : 0;
   bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
   bool enable_vec_batch_accum = tenant_config.is_valid() && tenant_config->_enable_vec_batch_accum;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
@@ -936,6 +937,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get opt param enable px ordered coord", K(ret));
   } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::DAS_BATCH_RESCAN_FLAG, das_batch_rescan_flag))) {
     LOG_WARN("failed to get das batch rescan flag", K(ret));
+  } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::FORCE_DAS_SCAN_ROW_COUNT_THRESHOLD, force_das_scan_row_count_threshold))) {
+    LOG_WARN("failed to get force das scan row count threshold", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
     LOG_WARN("failed to get opt param enable index merge", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::VEC_BATCH_ACCUM_ENABLED, enable_vec_batch_accum))) {
@@ -976,6 +979,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     }
     ctx_.set_enable_px_ordered_coord(enable_px_ordered_coord);
     ctx_.set_enable_distributed_das_scan(enable_distributed_das_scan);
+    ctx_.set_force_das_scan_row_count_threshold(force_das_scan_row_count_threshold);
 
     ctx_.set_enable_partial_group_by_pushdown(ctx_.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_1)
                                               && is_partial_group_by_pushdown_enabled

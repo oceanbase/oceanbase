@@ -3458,3 +3458,8 @@ DEF_BOOL(enable_ps_meta_response_optimize, OB_TENANT_PARAMETER, "False",
         "it will return the result set's meta information only during the first execution of a PS statement."
         "Default: False.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_force_das_scan_row_count_threshold, OB_TENANT_PARAMETER, "0", "[0,)",
+        "When the estimated scan row count of a table is less than this threshold,"
+        "the optimizer will force data scanning through DAS. Range:[0, +∞]",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

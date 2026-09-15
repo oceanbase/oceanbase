@@ -1123,7 +1123,8 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       break;
     }
     case LOOKUP_BATCH_RPC_FLAG:
-    case DAS_BATCH_RESCAN_FLAG: {
+    case DAS_BATCH_RESCAN_FLAG:
+    case FORCE_DAS_SCAN_ROW_COUNT_THRESHOLD: {
       is_valid = val.is_int() && 0 <= val.get_int();
       break;
     }
