@@ -1646,16 +1646,20 @@ int ObPXServerAddrUtil::set_sqcs_accessed_location(
 // used to fast lookup from phy partition id to partition order(index)
 // for a range partition, the greater the range, the greater the partition_index
 // for a hash partition, the index means nothing
-int ObPXServerAddrUtil::build_tablet_idx_map(ObTaskExecutorCtx &task_exec_ctx,
+int ObPXServerAddrUtil::build_tablet_idx_map(ObExecContext &exec_ctx,
                                               int64_t tenant_id,
                                               uint64_t ref_table_id,
-                                              ObTabletIdxMap &idx_map,
+                                              ObTabletIdxMap *&idx_map,
                                               int64_t &local_tenant_version_latest)
 {
   int ret = OB_SUCCESS;
   share::schema::ObSchemaGetterGuard schema_guard;
   const share::schema::ObTableSchema *table_schema = NULL;
+  ObTaskExecutorCtx &task_exec_ctx = exec_ctx.get_task_exec_ctx();
+  idx_map = nullptr;
   if (OB_ISNULL(task_exec_ctx.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", K(ret), K(tenant_id), K(ref_table_id));
   } else if (OB_FAIL(task_exec_ctx.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema))) {
@@ -1663,7 +1667,7 @@ int ObPXServerAddrUtil::build_tablet_idx_map(ObTaskExecutorCtx &task_exec_ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("fail get schema", K(ref_table_id), K(ret));
-  } else if (OB_FAIL(build_tablet_idx_map(table_schema, idx_map))) {
+  } else if (OB_FAIL(build_tablet_idx_map(exec_ctx, table_schema, idx_map))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
   } else {
     int tmp_ret = schema_guard.get_schema_version(tenant_id, local_tenant_version_latest);
@@ -1708,7 +1712,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(
   int ret = OB_SUCCESS;
   dst_locations.reset();
   if (src_locations.size() > 1) {
-    ObTabletIdxMap tablet_order_map;
+    ObTabletIdxMap *tablet_order_map = nullptr;
     int64_t local_tenant_version_latest = 0;
     if (OB_FAIL(dst_locations.reserve(src_locations.size()))) {
       LOG_WARN("fail reserve locations", K(ret), K(src_locations.size()));
@@ -1716,7 +1720,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(
     // no actual partition define, can't traverse
     // table schema for partition info
     } else if (!is_virtual_table(ref_table_id) &&
-        OB_FAIL(build_tablet_idx_map(exec_ctx.get_task_exec_ctx(),
+        OB_FAIL(build_tablet_idx_map(exec_ctx,
                                      GET_MY_SESSION(exec_ctx)->get_effective_tenant_id(),
                                      ref_table_id, tablet_order_map,
                                      local_tenant_version_latest))) {
@@ -1732,7 +1736,7 @@ int ObPXServerAddrUtil::reorder_all_partitions(
         if (!is_virtual_table(ref_table_id)) {
           lib::ob_sort(&dst_locations.at(0),
                     &dst_locations.at(0) + dst_locations.count(),
-                    ObPXTabletOrderIndexCmp(asc, &tablet_order_map));
+                    ObPXTabletOrderIndexCmp(asc, tablet_order_map));
         }
       } catch (OB_BASE_EXCEPTION &except) {
         if (OB_HASH_NOT_EXIST == (ret = except.get_errno())) {
@@ -1744,16 +1748,16 @@ int ObPXServerAddrUtil::reorder_all_partitions(
       if (OB_FAIL(ret)) {
         int tmp_ret = OB_SUCCESS;
         ObArray<int64_t> tablet_ids;
-        if (OB_TMP_FAIL(tablet_ids.reserve(tablet_order_map.size()))) {
+        if (OB_TMP_FAIL(tablet_ids.reserve(tablet_order_map->size()))) {
           LOG_WARN("reserve failed", K(tmp_ret));
         } else {
-          ObTabletIdxMap::iterator iter = tablet_order_map.begin();
-          for (; iter != tablet_order_map.end(); iter++) {
+          ObTabletIdxMap::iterator iter = tablet_order_map->begin();
+          for (; iter != tablet_order_map->end(); iter++) {
             tablet_ids.push_back(iter->first);
           }
         }
         LOG_WARN("fail to sort locations", K(ret), K(local_tenant_version_latest),
-                 K(tablet_order_map.size()), K(tablet_ids));
+                 K(tablet_order_map->size()), K(tablet_ids));
       } else if (OB_NOT_NULL(group_pwj_map = exec_ctx.get_group_pwj_map())) {
         GroupPWJTabletIdInfo group_pwj_tablet_id_info;
         TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
@@ -1983,15 +1987,36 @@ int ObPxOperatorVisitor::visit(ObExecContext &ctx, const ObOpSpec &root, ApplyFu
 }
 
 int ObPXServerAddrUtil::build_tablet_idx_map(
+      ObExecContext &exec_ctx,
       const share::schema::ObTableSchema *table_schema,
-      ObTabletIdxMap &idx_map)
+      ObTabletIdxMap *&idx_map)
 {
   int ret = OB_SUCCESS;
   int64_t tablet_idx = 0;
+  ObTabletIdxMap *cached_idx_map = nullptr;
+  ObTabletIdxMap *new_idx_map = nullptr;
+  ObTableIdToTabletIdxMap &cache = exec_ctx.get_tablet_idx_map_cache();
+  ObSQLSessionInfo *session = exec_ctx.get_my_session();
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  idx_map = nullptr;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is null", K(ret));
-  } else if (OB_FAIL(idx_map.create(table_schema->get_all_part_num(), "TabletOrderIdx"))) {
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (FALSE_IT(tenant_id = session->get_effective_tenant_id())) {
+  } else if (!cache.created() && OB_FAIL(cache.create(8, ObMemAttr(tenant_id, "TblTabletIdxMap")))) {
+    LOG_WARN("fail to create tablet idx map cache", K(ret));
+  } else if (OB_SUCC(cache.get_refactored(table_schema->get_table_id(), cached_idx_map))) {
+    idx_map = cached_idx_map;
+  } else if (OB_HASH_NOT_EXIST != ret) {
+    LOG_WARN("fail to get tablet idx map", K(ret), KPC(table_schema));
+  } else if (FALSE_IT(ret = OB_SUCCESS)) {
+  } else if (OB_ISNULL(new_idx_map = OB_NEWx(ObTabletIdxMap, &exec_ctx.get_allocator()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate tablet idx map", K(ret), KPC(table_schema));
+  } else if (OB_FAIL(new_idx_map->create(table_schema->get_all_part_num(), ObMemAttr(tenant_id, "TabletOrderIdx")))) {
     LOG_WARN("fail create index map", K(ret), "cnt", table_schema->get_all_part_num());
   } else if (is_virtual_table(table_schema->get_table_id())) {
     // In observer 4.2, the table schema of a distributed virtual table will show all_part_num as 1,
@@ -2001,7 +2026,7 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
     // Hence, if we seek with part_id=2, the idx_map will return -4201 (OB_HASH_NOT_EXIST)
     // will return -4201(OB_HASH_NOT_EXIST). In such cases, we can directly obtain the value that equals part_id + 1.
     for (int i = 0; OB_SUCC(ret) && i < table_schema->get_all_part_num(); ++i) {
-      if (OB_FAIL(idx_map.set_refactored(i + 1, tablet_idx++))) {
+      if (OB_FAIL(new_idx_map->set_refactored(i + 1, tablet_idx++))) {
         LOG_WARN("fail set value to hashmap", K(ret));
       }
     }
@@ -2016,11 +2041,24 @@ int ObPXServerAddrUtil::build_tablet_idx_map(
           ret = OB_SUCCESS;
           break;
         }
-      } else if (OB_FAIL(idx_map.set_refactored(info.tablet_id_.id(), tablet_idx++))) {
+      } else if (OB_FAIL(new_idx_map->set_refactored(info.tablet_id_.id(), tablet_idx++))) {
         LOG_WARN("fail set value to hashmap", K(ret));
       }
       LOG_DEBUG("table item info", K(info));
     } while (OB_SUCC(ret));
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(new_idx_map) &&
+      OB_FAIL(cache.set_refactored(table_schema->get_table_id(), new_idx_map))) {
+    LOG_WARN("fail to cache tablet idx map", K(ret), KPC(table_schema));
+  } else if (OB_SUCC(ret) && OB_NOT_NULL(new_idx_map)) {
+    idx_map = new_idx_map;
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(idx_map)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet idx map is null after build", K(ret));
+  } else if (OB_FAIL(ret) && OB_NOT_NULL(new_idx_map)) {
+    (void)new_idx_map->destroy();
+    OB_DELETEx(ObTabletIdxMap, &exec_ctx.get_allocator(), new_idx_map);
   }
   return ret;
 }
@@ -3331,7 +3369,7 @@ int ObPxEstimateSizeUtil::prepare_px_tablets_info(ObExecContext &ctx,
   int64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
   int64_t ref_table_id = scan_op->get_loc_ref_table_id();
   const ObTableSchema *table_schema = nullptr;
-  ObTabletIdxMap idx_map;
+  ObTabletIdxMap *idx_map = nullptr;
   if (OB_FAIL(px_tablets_info.reserve(px_tablets_info.count() + locations.size()))) {
     LOG_WARN("failed to prepare allocate");
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, ref_table_id, table_schema))) {
@@ -3343,9 +3381,9 @@ int ObPxEstimateSizeUtil::prepare_px_tablets_info(ObExecContext &ctx,
     // not support for oracle temporary table
     is_opt_stat_valid = false;
     LOG_INFO("not support for oracle temporary table", K(ref_table_id));
-  } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, idx_map))) {
+  } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(ctx, table_schema, idx_map))) {
     LOG_WARN("fail to build tablet idx map");
-  } else if (OB_FAIL(fill_px_tablets_info_with_stat(ctx, scan_op, locations, idx_map,
+  } else if (OB_FAIL(fill_px_tablets_info_with_stat(ctx, scan_op, locations, *idx_map,
                                                     px_tablets_info, is_opt_stat_valid))) {
     LOG_WARN("failed to fill px tablets info");
   }
@@ -4553,7 +4591,7 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
   } else {
     share::schema::ObSchemaGetterGuard schema_guard;
     const share::schema::ObTableSchema *table_schema = NULL;
-    ObTabletIdxMap idx_map;
+    ObTabletIdxMap *idx_map = nullptr;
     common::ObIArray<int64_t> &prefix_task_counts =
       dfo_ch_total_infos->at(0).receive_exec_server_.prefix_task_counts_;
     if (prefix_task_counts.count() != sqcs.count()) {
@@ -4591,13 +4629,13 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("table schema is null", K(ret), K(table_id));
-          } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, idx_map))) {
+          } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(ctx, table_schema, idx_map))) {
             LOG_WARN("fail to build tablet idx map", K(ret));
           }
         }
         if (OB_FAIL(ret)) {
           // pass
-        } else if (OB_FAIL(idx_map.get_refactored(location.tablet_id_.id(), tablet_idx))) {
+        } else if (OB_FAIL(idx_map->get_refactored(location.tablet_id_.id(), tablet_idx))) {
           ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
           LOG_WARN("fail to get tablet idx", K(ret));
         } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(location.tablet_id_.id(),

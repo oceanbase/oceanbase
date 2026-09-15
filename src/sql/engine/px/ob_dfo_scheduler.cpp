@@ -391,6 +391,7 @@ int ObSerialDfoScheduler::try_schedule_next_dfo(ObExecContext &ctx)
   } else if (OB_FAIL(do_schedule_dfo(ctx, *dfo))) {
     LOG_WARN("fail to do schedule dfo", K(ret));
   }
+  ctx.reset_tablet_idx_map_cache();
   return ret;
 }
 
@@ -1383,6 +1384,7 @@ int ObParallelDfoScheduler::try_schedule_next_dfo(ObExecContext &ctx)
                   used_worker_cnt, parent.get_used_worker_count());
     }
   }
+  ctx.reset_tablet_idx_map_cache();
   return ret;
 }
 

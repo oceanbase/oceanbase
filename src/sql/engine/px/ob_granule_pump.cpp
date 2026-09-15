@@ -961,20 +961,6 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
 void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
-  if (table_id_to_tablet_idx_map_.created() && OB_NOT_NULL(table_id_to_tablet_idx_map_allocator_)) {
-    for (ObTableIdToTabletIdxMap::iterator it = table_id_to_tablet_idx_map_.begin();
-         it != table_id_to_tablet_idx_map_.end(); ++it) {
-      if (nullptr != it->second) {
-        (void)it->second->destroy();
-        table_id_to_tablet_idx_map_allocator_->free(it->second);
-        it->second = nullptr;
-      }
-    }
-  }
-  if (table_id_to_tablet_idx_map_.created()) {
-    (void)table_id_to_tablet_idx_map_.destroy();
-  }
-  table_id_to_tablet_idx_map_allocator_ = nullptr;
   if (tablet_id_to_tablets_info_idx_map_.created()) {
     (void)tablet_id_to_tablets_info_idx_map_.destroy();
   }
@@ -997,87 +983,6 @@ void ObGranulePump::destroy()
   }
   use_odps_jni_connector_ = false;
   pump_args_.reset();
-}
-
-int ObGranulePump::get_or_build_tablet_idx_map(uint64_t table_id,
-                                               ObExecContext &ctx,
-                                               const ObTabletIdxMap *&idx_map)
-{
-  int ret = OB_SUCCESS;
-  idx_map = nullptr;
-  if (OB_UNLIKELY(!table_id_to_tablet_idx_map_.created())) {
-    if (OB_FAIL(table_id_to_tablet_idx_map_.create(TABLE_TABLET_IDX_MAP_HASH_BUCKET_NUM, "TblTabletIdxMap"))) {
-      LOG_WARN("fail to create table tablet idx map", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else {
-    ObTabletIdxMap *new_idx_map_ptr = nullptr;
-    if (OB_FAIL(table_id_to_tablet_idx_map_.get_refactored(table_id, new_idx_map_ptr))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
-        ObSchemaGetterGuard *schema_guard = nullptr;
-        const ObTableSchema *table_schema = nullptr;
-        if (OB_ISNULL(table_id_to_tablet_idx_map_allocator_)) {
-          table_id_to_tablet_idx_map_allocator_ = &ctx.get_allocator();
-        }
-        share::schema::ObSchemaGetterGuard local_schema_guard;
-        if (OB_ISNULL(session)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("session is null", K(ret), K(table_id));
-        } else if (OB_ISNULL(ctx.get_sql_ctx())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("sql ctx is null", K(ret));
-        } else if (OB_NOT_NULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
-          // do nothing
-        } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(),
-                                                                         local_schema_guard))) {
-          LOG_WARN("fail to get schema guard", K(ret));
-        } else {
-          schema_guard = &local_schema_guard;
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                          table_id,
-                                                          table_schema))) {
-          LOG_WARN("failed to get table schema", K(ret), K(table_id));
-        } else if (OB_ISNULL(table_schema)) {
-          ret = OB_SCHEMA_ERROR;
-          LOG_WARN("table schema is null", K(ret), K(table_id));
-        } else if (OB_ISNULL(table_id_to_tablet_idx_map_allocator_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("table tablet idx map allocator is null", K(ret), K(table_id));
-        } else {
-          void *buf = table_id_to_tablet_idx_map_allocator_->alloc(sizeof(ObTabletIdxMap));
-          if (OB_ISNULL(buf)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to alloc ObTabletIdxMap", K(ret), K(table_id));
-          } else {
-            new_idx_map_ptr = new (buf) ObTabletIdxMap();
-            if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, *new_idx_map_ptr))) {
-              LOG_WARN("fail to build tablet idx map", K(ret), K(table_id));
-              (void)new_idx_map_ptr->destroy();
-              new_idx_map_ptr->~ObTabletIdxMap();
-              table_id_to_tablet_idx_map_allocator_->free(new_idx_map_ptr);
-            } else if (OB_FAIL(table_id_to_tablet_idx_map_.set_refactored(table_id, new_idx_map_ptr))) {
-              LOG_WARN("fail to set refactored table tablet idx map", K(ret), K(table_id));
-              (void)new_idx_map_ptr->destroy();
-              new_idx_map_ptr->~ObTabletIdxMap();
-              table_id_to_tablet_idx_map_allocator_->free(new_idx_map_ptr);
-            } else {
-              idx_map = new_idx_map_ptr;
-            }
-          }
-        }
-      } else {
-        LOG_WARN("unexpected error", K(ret), K(table_id));
-      }
-    } else {
-      idx_map = new_idx_map_ptr;
-    }
-  }
-  return ret;
 }
 
 int ObGranulePump::get_or_build_tablet_id_px_tablets_info_idx_map(ObIArray<ObPxTabletInfo> &tablets_info,
@@ -1613,10 +1518,12 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
                                                       ObGranulePump *pump)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  share::schema::ObSchemaGetterGuard local_schema_guard;
   const ObTableSchema *table_schema = NULL;
   ObSQLSessionInfo *my_session = NULL;
   ObPxTabletInfo partition_row_info;
-  const ObTabletIdxMap *idx_map = nullptr;
+  ObTabletIdxMap *idx_map = nullptr;
   bool qc_order_gi_tasks = false;
   bool partition_random_affinitize = true;
   if (OB_ISNULL(my_session = GET_MY_SESSION(ctx)) || OB_ISNULL(ctx.get_sqc_handler())) {
@@ -1650,8 +1557,43 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
         int64_t tablet_idx = -1;
         uint64_t cur_table_id = tablet_loc.loc_meta_->ref_table_id_;
         if (OB_INVALID_ID == table_id || cur_table_id != table_id) {
-          if (OB_FAIL(pump->get_or_build_tablet_idx_map(cur_table_id, ctx, idx_map))) {
-            LOG_WARN("fail to get or build tablet idx map", K(ret), K(cur_table_id));
+          idx_map = nullptr;
+          ObTableIdToTabletIdxMap &idx_map_cache = ctx.get_tablet_idx_map_cache();
+          if (idx_map_cache.created()) {
+            if (OB_FAIL(idx_map_cache.get_refactored(cur_table_id, idx_map))) {
+              if (OB_HASH_NOT_EXIST == ret) {
+                ret = OB_SUCCESS;
+              } else {
+                LOG_WARN("fail to get tablet idx map from exec context cache", K(ret), K(cur_table_id));
+              }
+            } else {
+              table_id = cur_table_id;
+            }
+          }
+          if (OB_FAIL(ret) || OB_NOT_NULL(idx_map)) {
+          } else if (OB_ISNULL(schema_guard)) {
+            if (OB_ISNULL(ctx.get_sql_ctx())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sql ctx is null", K(ret));
+            } else if (OB_NOT_NULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+              // do nothing
+            } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(my_session->get_effective_tenant_id(),
+                                                                             local_schema_guard))) {
+              LOG_WARN("fail to get schema guard", K(ret));
+            } else {
+              schema_guard = &local_schema_guard;
+            }
+          }
+          if (OB_FAIL(ret) || OB_NOT_NULL(idx_map)) {
+          } else if (OB_FAIL(schema_guard->get_table_schema(my_session->get_effective_tenant_id(),
+                                                            cur_table_id,
+                                                            table_schema))) {
+            LOG_WARN("failed to get table schema", K(ret), K(cur_table_id));
+          } else if (OB_ISNULL(table_schema)) {
+            ret = OB_SCHEMA_ERROR;
+            LOG_WARN("table schema is null", K(ret), K(cur_table_id));
+          } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(ctx, table_schema, idx_map))) {
+            LOG_WARN("fail to build tablet idx map", K(ret), K(cur_table_id));
           } else if (OB_ISNULL(idx_map)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("idx_map is null", K(ret));

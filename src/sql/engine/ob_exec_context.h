@@ -99,6 +99,8 @@ class ObOpInput;
 class ObSql;
 struct ObEvalCtx;
 typedef  common::ObArray<const common::ObIArray<int64_t> *> ObRowIdListArray;
+typedef  common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdxMap;
+typedef  common::hash::ObHashMap<uint64_t, ObTabletIdxMap *, common::hash::NoPthreadDefendMode> ObTableIdToTabletIdxMap;
 struct ColumnContent;
 typedef common::ObFixedArray<ColumnContent, common::ObIAllocator> ColContentFixedArray;
 // Physical operator kit: operator specification, operator, operator input
@@ -374,6 +376,8 @@ public:
   void set_sql_ctx(ObSqlCtx *ctx) { sql_ctx_ = ctx; das_ctx_.set_sql_ctx(ctx); }
   ObSqlCtx *get_sql_ctx() { return sql_ctx_; }
   const ObSqlCtx *get_sql_ctx() const { return sql_ctx_; }
+  ObTableIdToTabletIdxMap &get_tablet_idx_map_cache() { return tablet_idx_map_cache_; }
+  void reset_tablet_idx_map_cache() { destroy_tablet_idx_map_cache(); }
   pl::ObPLContext *get_pl_stack_ctx() { return pl_stack_ctx_; }
   inline bool use_remote_sql() const
   {
@@ -616,6 +620,7 @@ public:
 
 private:
   pl::ObPLPackageGuard* get_package_guard();
+  void destroy_tablet_idx_map_cache();
   int build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCtx *&temp_expr_ctx);
   int set_phy_op_ctx_ptr(uint64_t index, void *phy_op);
   int check_extra_status();
@@ -807,6 +812,7 @@ protected:
   bool force_local_plan_;
   ObDiagnosisManager diagnosis_manager_;
   common::ObArenaAllocator deterministic_udf_cache_allocator_;
+  ObTableIdToTabletIdxMap tablet_idx_map_cache_;
 
   void *external_url_resource_cache_;
   void *external_py_url_resource_cache_;

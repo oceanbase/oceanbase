@@ -96,6 +96,10 @@ int ObPxSubCoord::pre_process()
     }
   }
 
+  if (OB_NOT_NULL(sqc_arg_.exec_ctx_)
+      && sqc_arg_.sqc_.get_rescan_batch_params().get_count() < 1) {
+    sqc_arg_.exec_ctx_->reset_tablet_idx_map_cache();
+  }
   return ret;
 }
 

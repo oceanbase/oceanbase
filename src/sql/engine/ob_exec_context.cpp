@@ -134,6 +134,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     force_local_plan_(false),
     diagnosis_manager_(),
     deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    tablet_idx_map_cache_(),
     external_url_resource_cache_(nullptr),
     external_py_url_resource_cache_(nullptr),
     external_py_sch_resource_cache_(nullptr),
@@ -148,6 +149,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
 
 ObExecContext::~ObExecContext()
 {
+  destroy_tablet_idx_map_cache();
   row_id_list_array_.reset();
   destroy_eval_allocator();
   reset_op_ctx();
@@ -300,6 +302,7 @@ void ObExecContext::reset_op_ctx()
 
 void ObExecContext::reset_op_env()
 {
+  destroy_tablet_idx_map_cache();
   reset_op_ctx();
   op_kit_store_.reset();
   phy_op_size_ = 0;
@@ -315,6 +318,20 @@ void ObExecContext::reset_op_env()
     udf_ctx_mgr_->reset();
   }
   deterministic_udf_cache_allocator_.reset();
+}
+
+void ObExecContext::destroy_tablet_idx_map_cache()
+{
+  if (tablet_idx_map_cache_.created()) {
+    for (ObTableIdToTabletIdxMap::iterator iter = tablet_idx_map_cache_.begin();
+         iter != tablet_idx_map_cache_.end(); ++iter) {
+      if (OB_NOT_NULL(iter->second)) {
+        (void)iter->second->destroy();
+        OB_DELETEx(ObTabletIdxMap, &allocator_, iter->second);
+      }
+    }
+    (void)tablet_idx_map_cache_.destroy();
+  }
 }
 int ObExecContext::init_phy_op(const uint64_t phy_op_size)
 {

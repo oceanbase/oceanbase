@@ -221,8 +221,9 @@ public:
                                       const common::ObIArray<double> &sqc_partition_count,
                                       common::ObIArray<int64_t> &results);
   static int build_tablet_idx_map(
+      ObExecContext &exec_ctx,
       const share::schema::ObTableSchema *table_schema,
-      ObTabletIdxMap &idx_map);
+      ObTabletIdxMap *&idx_map);
   static int find_dml_ops(common::ObIArray<const ObTableModifySpec *> &insert_ops,
                           const ObOpSpec &op);
   static int get_external_table_loc(
@@ -277,10 +278,10 @@ private:
 
   static int check_partition_wise_location_valid(DASTabletLocIArray &tsc_locations);
   static int build_tablet_idx_map(
-      ObTaskExecutorCtx &task_exec_ctx,
+      ObExecContext &exec_ctx,
       int64_t tenant_id,
       uint64_t ref_table_id,
-      ObTabletIdxMap &idx_map,
+      ObTabletIdxMap *&idx_map,
       int64_t &local_tenant_version_latest);
   static int reorder_all_partitions(
       int64_t location_key, int64_t ref_table_id, const DASTabletLocList &src_locations,
