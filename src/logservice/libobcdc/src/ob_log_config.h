@@ -143,6 +143,8 @@ public:
   T_DEF_BOOL(enable_batch_write, OB_CLUSTER_PARAMETER, 0, "0:disabled (single write), 1:enabled (batch write)");
   DEF_INT(instance_num, OB_CLUSTER_PARAMETER, "1", "[1,]", "store instance number");
   DEF_INT(instance_index, OB_CLUSTER_PARAMETER, "0", "[0,]", "store instance index, start from 0");
+  DEF_STR(instance_hash_mode, OB_CLUSTER_PARAMETER, "LS",
+      "instance sharding mode (case-insensitive): LS, TABLE or TABLET");
   DEF_INT(part_trans_task_prealloc_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
       "part trans task pre-alloc count");
   DEF_INT(part_trans_task_active_count_upper_bound, OB_CLUSTER_PARAMETER, "0", "[0,]",

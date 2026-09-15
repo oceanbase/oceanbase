@@ -31,6 +31,7 @@
 
 #include "ob_log_common.h"
 #include "ob_log_config.h"                // ObLogConfig
+#include "ob_log_instance_hash_mode.h"    // InstanceHashMode
 #include "ob_log_utils.h"                 // ob_cdc_malloc
 #include "ob_log_meta_manager.h"          // ObLogMetaManager
 #include "ob_log_sql_server_provider.h"   // ObLogSQLServerProvider (for cluster sync mode)
@@ -170,6 +171,7 @@ ObLogInstance::ObLogInstance() :
     br_index_in_trans_(0),
     part_trans_task_count_(0),
     trans_task_pool_alloc_(),
+    instance_hash_mode_(INVALID_INSTANCE_HASH_MODE),
     start_tstamp_ns_(0),
     sys_start_schema_version_(OB_INVALID_VERSION),
     is_schema_split_mode_(true),
@@ -844,11 +846,23 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   const bool enable_direct_load_inc = (1 == TCONF.enable_direct_load_inc);
   const bool is_mock_fail_on_init = (0 != TCONF.test_mode_on && 0 != TCONF.test_mode_init_fail);
+  const char *instance_hash_mode_str = TCONF.instance_hash_mode.str();
+  const InstanceHashMode instance_hash_mode = parse_instance_hash_mode(instance_hash_mode_str);
 
-  if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
+  if (OB_UNLIKELY(! is_instance_hash_mode_valid(instance_hash_mode))) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("instance hash mode is invalid, expected LS, TABLE or TABLET", KR(ret),
+        K(instance_hash_mode_str));
+  } else if (OB_UNLIKELY(TCONF.instance_index >= TCONF.instance_num)) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("instance index must be less than instance number", KR(ret),
+        "instance_index", static_cast<int64_t>(TCONF.instance_index),
+        "instance_num", static_cast<int64_t>(TCONF.instance_num));
+  } else if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
     LOG_ERROR("working_mode is not valid", KR(ret), K(working_mode_str), "working_mode", print_working_mode(working_mode));
   } else {
+    instance_hash_mode_ = instance_hash_mode;
     working_mode_ = working_mode;
 
     LOG_INFO("set working mode", K(working_mode_str), K(working_mode_), "working_mode", print_working_mode(working_mode_));
@@ -1617,6 +1631,7 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
     sys_start_schema_version_ = OB_INVALID_VERSION;
     is_schema_split_mode_ = true;
     enable_filter_sys_tenant_ = false;
+    instance_hash_mode_ = INVALID_INSTANCE_HASH_MODE;
     working_mode_ = WorkingMode::UNKNOWN_MODE;
     refresh_mode_ = RefreshMode::UNKNOWN_REFRSH_MODE;
     fetching_mode_ = ClientFetchingMode::FETCHING_MODE_UNKNOWN;

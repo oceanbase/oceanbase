@@ -14,6 +14,7 @@
 #define OCEANBASE_LOG_LS_MGR_H_
 
 #include "lib/lock/ob_thread_cond.h"            // ObThreadCond
+#include "ob_log_instance_hash_mode.h"          // InstanceHashMode
 #include "ob_log_ls_callback.h"                 // LSCBArray
 #include "ob_log_ls_info.h"                     // LSInfoMap
 
@@ -145,6 +146,7 @@ private:
 
   bool              is_inited_;
   uint64_t          tenant_id_;
+  InstanceHashMode  instance_hash_mode_;
   LSInfoMap         *map_;
 
   LSCBArray         *ls_add_cb_array_;

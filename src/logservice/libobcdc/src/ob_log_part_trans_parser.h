@@ -17,6 +17,7 @@
 
 #include "lib/utility/ob_macro_utils.h"
 #include "ob_log_all_ddl_operation_schema_info.h" // ObLogAllDdlOperationSchemaInfo
+#include "ob_log_instance_hash_mode.h"         // InstanceHashMode
 #include "ob_log_tenant.h"              // ObLogTenant
 #include <stdint.h>
 
@@ -105,6 +106,24 @@ private:
       int64_t &cur_pos,
       memtable::MutatorType &mutator_type,
       common::ObTabletID &tablet_id);
+  // Skip a non-owner row based on its serialized size only.
+  int skip_memtable_mutator_row_(
+      const char *buf,
+      const int64_t buf_len,
+      int64_t &pos);
+  int handle_mutator_row_log_(
+      ObLogTenant *tenant,
+      const common::ObTabletID &tablet_id,
+      const RedoLogMetaNode &redo_log_node,
+      const bool is_build_baseline,
+      const int64_t begin_pos,
+      int64_t &pos,
+      ObLogEntryTask &redo_log_entry_task,
+      PartTransTask &part_trans_task,
+      common::ObTabletID &cached_tablet_id,
+      ObCDCTableInfo &cached_table_info,
+      uint64_t &row_index_in_redo,
+      volatile bool &stop_flag);
   // deserialize table lock and move forward cur_pos
   int filter_mutator_table_lock_(const char *buf, const int64_t buf_len, int64_t &cur_pos);
   int get_table_info_of_tablet_(
@@ -112,20 +131,7 @@ private:
       const PartTransTask &part_trans_task,
       const ObTabletID &tablet_id,
       ObCDCTableInfo &table_info);
-  // 1. Non-PG partitions do not filter row data for now. TODO: Turn on later
-  // 2. For PG partitions, filter out non-whitelisted and common index data based on TableIDCache filtering
-  // 3. Do not filter DDL partition data to avoid transaction data and DDL data dependency
-  int filter_row_data_(
-      ObLogTenant *tenant,
-      const char *redo_data,
-      const int64_t redo_data_len,
-      const int64_t cur_pos,
-      const ObCDCTableInfo &table_info,
-      PartTransTask &task,
-      bool &need_filter,
-      int32_t &row_size,
-      volatile bool &stop_flag);
-  // DDL data/non-PG partitioned data all need to be deserialized in whole rows, no filtering
+  // LS operation transactions do not require tenant-based row filtering.
   bool should_not_filter_row_(PartTransTask &task);
 
   int parse_ddl_stmts_(
@@ -146,6 +152,15 @@ private:
       MutatorRow &row,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &part_trans_task);
+  int parse_mutator_row_stmts_(
+      const bool is_build_baseline,
+      const ObTabletID &tablet_id,
+      const ObCDCTableInfo &table_info,
+      MemtableMutatorRow &row,
+      ObLogEntryTask &redo_log_entry_task,
+      PartTransTask &part_trans_task,
+      const uint64_t row_index_in_redo,
+      volatile bool &stop_flag);
   const transaction::ObTxSEQ get_row_seq_(PartTransTask &task, MutatorRow &row) const;
   int alloc_memtable_mutator_row_(
       PartTransTask &part_trans_task,
@@ -155,18 +170,13 @@ private:
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
       MemtableMutatorRow *&row);
-  int parse_memtable_mutator_row_(
-      ObLogTenant *tenant,
-      const ObTabletID &tablet_id,
+  int deserialize_memtable_mutator_row_(
       const char *redo_data,
       const int64_t redo_data_len,
-      const bool is_build_baseline,
       int64_t &pos,
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MemtableMutatorRow *&row,
-      ObCDCTableInfo &table_info,
-      bool &is_ignored);
+      MemtableMutatorRow *&row);
   int alloc_macroblock_mutator_row_(
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
@@ -180,22 +190,37 @@ private:
       ObLogEntryTask &redo_log_entry_task,
       MacroBlockMutatorRow *&row);
   int parse_macroblock_mutator_row_(
-      ObLogTenant *tenant,
-      const ObTabletID &tablet_id,
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
       MacroBlockMutatorRow *&row,
-      ObCDCTableInfo &table_info,
+      const ObCDCTableInfo &table_info,
       bool &is_ignored);
-  int check_row_need_ignore_(
+  bool is_dml_served_by_instance_(
+      const ObTabletID &tablet_id,
+      const ObCDCTableInfo &table_info) const;
+  int check_direct_load_inc_need_filter_(
+      ObLogTenant *tenant,
+      PartTransTask &part_trans_task,
+      const ObTabletID &tablet_id,
+      ObCDCTableInfo &table_info,
+      bool &need_filter);
+  int check_mutator_row_need_filter_(
+      const bool is_build_baseline,
+      const bool need_filter_by_instance,
+      ObLogTenant *tenant,
+      PartTransTask &part_trans_task,
+      const ObTabletID &tablet_id,
+      ObTabletID &cached_tablet_id,
+      ObCDCTableInfo &cached_table_info,
+      ObCDCTableInfo &table_info,
+      bool &need_filter);
+  int check_row_need_filter_by_table_(
       const bool is_build_baseline,
       ObLogTenant *tenant,
       PartTransTask &part_trans_task,
-      ObLogEntryTask &redo_log_entry_task,
-      MutatorRow &row,
       const ObTabletID &tablet_id,
       ObCDCTableInfo &table_info,
-      bool &is_ignored);
+      bool &need_filter);
   int handle_mutator_ext_info_log_(
       ObLogTenant *tenant,
       const ObTabletID &tablet_id,
@@ -223,6 +248,9 @@ private:
   // The cluster ID of this cluster
   // Set as the unique ID of the DDL
   int64_t           cluster_id_;
+  InstanceHashMode  instance_hash_mode_;
+  int64_t           instance_num_;
+  int64_t           instance_index_;
 
   // Stat for White Black List
   int64_t           total_log_size_;

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX OBLOG
 #include "ob_log_ls_mgr.h"
+#include "ob_log_instance.h"                          // TCTX
 #include "ob_log_tenant.h"                            // ObLogTenant
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [LSMgr] " fmt, ##args)
@@ -57,16 +58,23 @@ int ObLogLSMgr::init(const uint64_t tenant_id,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBCDC_PART_MGR_SCHEMA_VERSION_WAIT))) {
+  const InstanceHashMode instance_hash_mode = TCTX.get_instance_hash_mode();
+
+  if (OB_UNLIKELY(! is_instance_hash_mode_valid(instance_hash_mode))) {
+    ret = OB_INVALID_CONFIG;
+    LOG_ERROR("invalid instance hash mode from instance context", KR(ret), K(instance_hash_mode));
+  } else if (OB_FAIL(schema_cond_.init(common::ObWaitEventIds::OBCDC_PART_MGR_SCHEMA_VERSION_WAIT))) {
     LOG_ERROR("schema_cond_ init fail", KR(ret));
   } else {
     tenant_id_ = tenant_id;
+    instance_hash_mode_ = instance_hash_mode;
     map_ = &map;
     ls_add_cb_array_ = &ls_add_cb_array;
     ls_rc_cb_array_ = &ls_rc_cb_array;
 
     is_inited_ = true;
-    LOG_INFO("init LSMgr succ", K(tenant_id), K(start_schema_version));
+    LOG_INFO("init LSMgr succ", K(tenant_id), K(start_schema_version),
+        "instance_hash_mode", print_instance_hash_mode(instance_hash_mode_));
   }
 
   return ret;
@@ -76,6 +84,7 @@ void ObLogLSMgr::reset()
 {
   is_inited_ = false;
   tenant_id_ = OB_INVALID_ID;
+  instance_hash_mode_ = INVALID_INSTANCE_HASH_MODE;
   map_ = NULL;
   ls_add_cb_array_ = NULL;
   ls_rc_cb_array_ = NULL;
@@ -277,6 +286,9 @@ bool ObLogLSMgr::is_ls_served_(
   }
   // SYS LS must serve
   else if (tls_id.get_ls_id().is_sys_ls()) {
+    bool_ret = true;
+  } else if (INSTANCE_HASH_BY_LS != instance_hash_mode_) {
+    // TABLE/TABLET modes need all user LS so that every instance can route DML locally.
     bool_ret = true;
   } else {
     uint64_t hash_v = 0;

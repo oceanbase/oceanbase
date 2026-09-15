@@ -33,6 +33,7 @@
 #include "ob_log_hbase_mode.h"                            // ObLogHbaseUtil
 #include "ob_log_mysql_proxy.h"                           // ObLogMysqlProxy
 #include "ob_log_work_mode.h"                             // WorkingMode
+#include "ob_log_instance_hash_mode.h"                    // InstanceHashMode
 #include "ob_log_meta_data_refresh_mode.h"                // RefreshMode
 #include "ob_cdc_lob_aux_meta_storager.h"                 // ObCDCLobAuxMetaStorager
 #include "ob_cdc_update_split_merge_storager.h"           // ObCDCUpdateSplitMergeStorager
@@ -202,6 +203,7 @@ public:
     return is_data_dict_refresh_mode(refresh_mode_) && is_direct_fetching_mode(fetching_mode_);
   }
   OB_INLINE const RefreshMode& get_refresh_mode() const { return refresh_mode_; }
+  OB_INLINE InstanceHashMode get_instance_hash_mode() const { return instance_hash_mode_; }
   OB_INLINE bool is_tenant_sync_mode() const { return is_tenant_sync_mode_; }
   OB_INLINE common::ObMySQLProxy& get_sql_proxy()
   {
@@ -400,6 +402,9 @@ private:
 
   // Partitioned Task Pool allocator
   common::ObConcurrentFIFOAllocator trans_task_pool_alloc_;
+
+  // Parsed once during initialization and exposed read-only through TCTX.
+  InstanceHashMode          instance_hash_mode_;
 
   // External global exposure of variables via TCTX
 public:

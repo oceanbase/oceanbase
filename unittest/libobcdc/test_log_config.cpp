@@ -56,6 +56,7 @@ public:
   int64_t formatter_thread_num;
   int64_t instance_num;
   int64_t instance_index;
+  const char *instance_hash_mode;
   const char *log_level;
   const char *cluster_url;
   const char *cluster_user;
@@ -87,6 +88,7 @@ void TestLogConfig::SetUp()
   ADD_CONFIG_INT(formatter_thread_num, 300);
   ADD_CONFIG_INT(instance_num, 1);
   ADD_CONFIG_INT(instance_index, 0);
+  ADD_CONFIG_STR(instance_hash_mode, "TABLE");
   ADD_CONFIG_INT(sql_conn_timeout_us, 13000000000);
   ADD_CONFIG_INT(sql_query_timeout_us, 12000000000);
 
@@ -133,6 +135,7 @@ TEST_F(TestLogConfig, load_from_buffer)
   EXPECT_EQ(dml_parser_thread_num, config->dml_parser_thread_num);
   EXPECT_EQ(sequencer_thread_num, config->sequencer_thread_num);
   EXPECT_EQ(formatter_thread_num, config->formatter_thread_num);
+  EXPECT_EQ(0, strcmp(instance_hash_mode, config->instance_hash_mode.str()));
   EXPECT_EQ(0, strcmp(cluster_url, config->cluster_url.str()));
   EXPECT_EQ(0, strcmp(log_level, config->log_level.str()));
   EXPECT_EQ(0, strcmp(cluster_user, config->cluster_user.str()));
@@ -161,6 +164,7 @@ TEST_F(TestLogConfig, load_from_map)
   EXPECT_EQ(dml_parser_thread_num, config->dml_parser_thread_num);
   EXPECT_EQ(sequencer_thread_num, config->sequencer_thread_num);
   EXPECT_EQ(formatter_thread_num, config->formatter_thread_num);
+  EXPECT_EQ(0, strcmp(instance_hash_mode, config->instance_hash_mode.str()));
   EXPECT_EQ(0, strcmp(cluster_url, config->cluster_url.str()));
   EXPECT_EQ(0, strcmp(log_level, config->log_level.str()));
   EXPECT_EQ(0, strcmp(cluster_user, config->cluster_user.str()));
