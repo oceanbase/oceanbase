@@ -8632,7 +8632,11 @@ state	longtext	NO		NULL
 position	longtext	NO		NULL	
 user_data	longtext	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mds_node_stat;
-ERROR 0A000: Not supported feature or function
+IF(count(*) >= 0, 1, 0)
+1
+Warnings:
+Warning	5245	some tasks are skipped, skipped server addr is 'SERVER', the orginal error code is -4007
+Warning	5245	some tasks are skipped, skipped server addr is 'SERVER', the orginal error code is -4007
 "oceanbase.__all_virtual_mds_node_stat runs in single server"
 ERROR 0A000: Not supported feature or function
 desc oceanbase.__all_virtual_mds_event_history;
