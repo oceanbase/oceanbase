@@ -1,4 +1,4 @@
-// owner: zjf225077
+// owner: zhaoyongheng.zyh
 // owner group: clog
 
 // Copyright (c) 2021 OceanBase  cxf262476, 2021-10-18 - add interface of logstream
