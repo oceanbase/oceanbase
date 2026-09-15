@@ -18,6 +18,7 @@ enum ObFeedbackProxyInfoType
 {
   IS_LOCK_SESSION = 0,
   IS_TEMPORARY_TABLE_SESSION = 1,
+  IS_OWNER_AFFINE_SESSION = 2, // Indicates whether the session holds owner-affine PL state that cannot be synchronized
   FEEDBACK_PROXY_MAX_TYPE
 };
 

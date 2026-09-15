@@ -237,6 +237,7 @@ enum SessionSyncInfoType {
   SESSION_SYNC_ERROR_SYS_VAR = 10, // for error scene need sync sysvar info
   SESSION_SYNC_QUERY_INFO = 11, // for query level session info
   SESSION_SYNC_TRANS_GTT_V2_SEQUENCE = 12, // for trans gtt v2 sequence
+  SESSION_SYNC_SESSION_OWNER_AFFINE_INFO = 13, // for session owner affine info
   SESSION_SYNC_MAX_TYPE,
 };
 
@@ -446,6 +447,27 @@ public:
                                 int64_t last_sess_length) override;
   virtual int display_sess_info(ObSQLSessionInfo &sess, const char* current_sess_buf,
                                 int64_t current_sess_length, const char* last_sess_buf, int64_t last_sess_length) override;
+};
+
+class ObSessionAffineOwnerEncoder final : public ObSessInfoEncoder
+{
+public:
+  ObSessionAffineOwnerEncoder() : ObSessInfoEncoder() {}
+  virtual ~ObSessionAffineOwnerEncoder() {}
+  virtual int serialize(ObSQLSessionInfo &sess, char *buf,
+                        const int64_t length, int64_t &pos) override;
+  virtual int deserialize(ObSQLSessionInfo &sess, const char *buf,
+                          const int64_t data_len, int64_t &pos) override;
+  virtual int get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const override;
+  virtual int fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                              const int64_t buf_len, int64_t &pos) override;
+  virtual int get_fetch_sess_info_size(ObSQLSessionInfo &sess, int64_t &size) override;
+  virtual int compare_sess_info(ObSQLSessionInfo &sess,
+                                const char *current_sess_buf, int64_t current_sess_length,
+                                const char *last_sess_buf, int64_t last_sess_length) override;
+  virtual int display_sess_info(ObSQLSessionInfo &sess,
+                                const char *current_sess_buf, int64_t current_sess_length,
+                                const char *last_sess_buf, int64_t last_sess_length) override;
 };
 
 #define DEF_SESSION_TXN_ENCODER(CLS)                                    \
@@ -2198,6 +2220,7 @@ private:
                             &error_sync_sys_var_encoder_,
                             &query_info_encoder_,
                             &trans_gtt_v2_sequence_encoder_,
+                            &session_affine_owner_encoder_,
                             };
   ObSysVarEncoder sys_var_encoder_;
   //ObUserVarEncoder usr_var_encoder_;
@@ -2213,6 +2236,7 @@ private:
   ObErrorSyncSysVarEncoder error_sync_sys_var_encoder_;
   ObQueryInfoEncoder query_info_encoder_;
   ObTransGttV2SequenceEncoder trans_gtt_v2_sequence_encoder_;
+  ObSessionAffineOwnerEncoder session_affine_owner_encoder_;
 public:
   void post_sync_session_info();
   void prep_txn_free_route_baseline(bool reset_audit = true);

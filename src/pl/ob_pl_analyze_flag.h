@@ -36,7 +36,12 @@ union ObPLAnalyzeFlag {
     uint64_t is_external_state_ : 1;
     uint64_t is_has_auto_trans_ : 1;  // only for system trigger, has PRAGMA_AUTONOMOUS_TRANSACTION
     uint64_t has_continue_handler_ : 1;
-    uint64_t reserved_ : 53;
+    uint64_t analyzed_ : 1;
+    uint64_t may_access_unsync_package_var_ : 1;
+    uint64_t may_access_sync_package_var_ : 1;
+    uint64_t has_temporary_table_access_ : 1;
+    uint64_t has_start_transaction_stmt_ : 1;
+    uint64_t reserved_ : 48;
   };
 
   ObPLAnalyzeFlag() : flag_(0) {}

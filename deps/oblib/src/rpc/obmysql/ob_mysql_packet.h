@@ -216,7 +216,10 @@ union ObProxyCapabilityFlags
     uint64_t OB_CAP_MAX_EXECUTION_TIME:                1;
     // for proxy one way sync extra info (database isolation)
     uint64_t OB_CAP_PROXY_EXTRA_INFO_ONE_WAY_SYNC:     1;
-    uint64_t OB_CAP_RESERVED_NOT_USE:                 38;
+    // PL package owner state synchronization.  This is bit 27, matching
+    // ObProxy's OB_CAP_ROUTE_BOUND_SESSION_SYNC_SHIFT.
+    uint64_t OB_CAP_ROUTE_PL_BOUND_SESSION_SYNC:         1;
+    uint64_t OB_CAP_RESERVED_NOT_USE:                 36;
   } cap_flags_;
 };
 

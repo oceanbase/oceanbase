@@ -2109,8 +2109,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4681,8 +4681,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9771,8 +9771,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_AI_REMOTE_SERVICE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11133, AI REMOTE SERVICE ERROR: %.*s"
 #define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
 #define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
-#define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11135, request should be rerouted to bound session"
-#define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11135, request should be rerouted to bound session"
+#define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__ORA_USER_ERROR_MSG "ORA-11135: request should be rerouted to bound session"
+#define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__OBE_USER_ERROR_MSG "OBE-11135: request should be rerouted to bound session"
 #define OB_CDC_STREAM_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_ALREADY_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12001, CDC stream '%.*s' not found"
@@ -9823,10 +9823,10 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
 extern int g_all_ob_errnos[2568];
 

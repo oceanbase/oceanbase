@@ -5270,6 +5270,78 @@ int ObTransGttV2SequenceEncoder::display_sess_info(ObSQLSessionInfo &sess, const
   return ret;
 }
 
+int ObSessionAffineOwnerEncoder::serialize(ObSQLSessionInfo &sess, char *buf,
+                                           const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t holder = 0;
+  OB_UNIS_ENCODE(holder);
+  return ret;
+}
+
+int ObSessionAffineOwnerEncoder::deserialize(ObSQLSessionInfo &sess, const char *buf,
+                                             const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  int64_t holder = 0;
+  OB_UNIS_DECODE(holder);
+  return ret;
+}
+
+int ObSessionAffineOwnerEncoder::get_serialize_size(ObSQLSessionInfo &sess, int64_t &length) const
+{
+  int ret = OB_SUCCESS;
+  int64_t holder = 0;
+  length = serialization::encoded_length(holder);
+  return ret;
+}
+
+int ObSessionAffineOwnerEncoder::fetch_sess_info(ObSQLSessionInfo &sess, char *buf,
+                                                 const int64_t length, int64_t &pos)
+{
+  return serialize(sess, buf, length, pos);
+}
+
+int ObSessionAffineOwnerEncoder::get_fetch_sess_info_size(ObSQLSessionInfo &sess, int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  int64_t holder = 0;
+  size = serialization::encoded_length(holder);
+  return ret;
+}
+
+int ObSessionAffineOwnerEncoder::compare_sess_info(ObSQLSessionInfo &sess,
+                                                   const char *current_sess_buf,
+                                                   int64_t current_sess_length,
+                                                   const char *last_sess_buf,
+                                                   int64_t last_sess_length)
+{
+  UNUSED(sess);
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  UNUSED(last_sess_buf);
+  UNUSED(last_sess_length);
+  int ret = OB_SUCCESS;
+
+  return ret;
+}
+
+int ObSessionAffineOwnerEncoder::display_sess_info(ObSQLSessionInfo &sess,
+                                                   const char *current_sess_buf,
+                                                   int64_t current_sess_length,
+                                                   const char *last_sess_buf,
+                                                   int64_t last_sess_length)
+{
+  UNUSED(sess);
+  UNUSED(current_sess_buf);
+  UNUSED(current_sess_length);
+  UNUSED(last_sess_buf);
+  UNUSED(last_sess_length);
+  int ret = OB_SUCCESS;
+
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObInnerContextMap)
 {
   int ret = OB_SUCCESS;
