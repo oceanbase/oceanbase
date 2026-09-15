@@ -114,8 +114,9 @@ int ElectionAcceptor::start()
   ObAddr last_record_lease_owner;
   bool last_record_lease_valid_state = false;
   int ret = OB_SUCCESS;
+  // Lease状态检查周期为续约周期的一半，最大不超过250ms
   return p_election_->timer_->schedule_task_repeat(time_window_task_handle_,
-                                                   250_ms,
+                                                   CALCULATE_RENEW_LEASE_INTERVAL() / 2,
                                                    [this,
                                                     last_record_lease_owner,
                                                     last_record_lease_valid_state]() mutable {

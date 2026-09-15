@@ -427,6 +427,7 @@ _display_mysql_version
 _display_non_session_cursor
 _dop_of_collect_external_table_statistics
 _dtl_batch_flush_buffer_fill_pct
+_election_max_message_delay
 _enable_active_txn_transfer
 _enable_adaptive_auto_dop
 _enable_adaptive_compaction
