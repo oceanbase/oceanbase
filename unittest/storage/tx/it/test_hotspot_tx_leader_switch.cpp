@@ -897,6 +897,168 @@ TEST_F(ObTestHotspotTxLeaderSwitch,
   n1->wait_all_msg_consumed();
 }
 
+// ============================================================================
+// Regression test: replay ctx must not pass hotspot admission after leader switch.
+//
+// Root cause: after parallel redo replay (since 4.2.4), redo_lsns_ is not
+// maintained and redo_flush_status_ stays NORMAL_START. A replayed transaction
+// that has already written redo passes the old admission check
+// (redo_lsns_.count() == 0 && NORMAL_START) and is erroneously aggregated as
+// a hotspot secondary, causing the primary to stall in PRIMARY_COLLECTING.
+//
+// Fix: add prev_record_lsn_.is_valid() to the admission check. After graceful
+// leader switch, submit_redo_active_info_log_() always submits a RecordLog
+// before ActiveInfoLog when redo_lsns_ is non-empty, so prev_record_lsn_ is
+// guaranteed to be set on the new leader after replay.
+//
+// Test flow:
+//   1. n1 (leader): create a tx, write redo, flush redo.
+//      Do NOT start aggregation (otherwise graceful switch would wait/fail).
+//   2. Graceful switch: n1 -> follower. ActiveInfoLog persisted.
+//   3. n2 (new leader): replay all logs, switch_to_leader.
+//   4. On n2: try to use the replayed tx as hotspot secondary.
+//      hotspot_legality_validation_() must reject it.
+// ============================================================================
+TEST_F(ObTestHotspotTxLeaderSwitch,
+       replay_ctx_rejected_by_hotspot_admission_after_leader_switch)
+{
+  ObTxNode::reset_localtion_adapter();
+  auto n1 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
+  auto n2 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.2", 8888), bus_);
+  DEFER(delete(n1));
+  DEFER(delete(n2));
+  ASSERT_EQ(OB_SUCCESS, n1->start());
+  n2->set_as_follower_replica(*n1);
+  ASSERT_EQ(OB_SUCCESS, n2->start());
+
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 1000 * 1000 * 1000;
+
+  // ---- Phase 1: n1 (old leader) creates a tx and writes redo ----
+  // Do NOT start hotspot aggregation -- if aggregation is active,
+  // graceful switch will wait/fail (wait_for_primary_aggregation_gracefully_).
+  ObTxDescGuard tx_guard = n1->get_tx_guard();
+  ObTxDesc &tx = tx_guard.get_tx_desc();
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+
+  ObTxReadSnapshot snapshot;
+  ASSERT_EQ(OB_SUCCESS,
+            n1->get_read_snapshot(tx, tx_param.isolation_, n1->ts_after_ms(100), snapshot));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100, 200));
+  const ObTransID tx_id = tx.tx_id_;
+
+  ObLSTxCtxMgr *ls_tx_ctx_mgr1 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr1));
+
+  // Flush redo to ensure logs are persisted.
+  // after_submit_log_() will push LSN to redo_lsns_.
+  ObTransID fail_tx_id;
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr1->traverse_tx_to_submit_redo_log(fail_tx_id, UINT32_MAX));
+  n1->wait_all_msg_consumed();
+  n1->wait_all_redolog_applied();
+
+  // Record state before switch
+  {
+    ObPartTransCtx *ctx = nullptr;
+    ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr1->get_tx_ctx(tx_id, false, ctx));
+    ASSERT_TRUE(ctx != nullptr);
+    TRANS_LOG(INFO, "[test] n1 tx ctx before switch",
+              K(tx_id),
+              "redo_lsns_count", ctx->exec_info_.redo_lsns_.count(),
+              "prev_record_lsn", ctx->exec_info_.prev_record_lsn_,
+              "redo_flush_status", to_cstr(ctx->redo_flush_status_));
+    // redo_lsns_ should be non-empty after redo flush
+    ASSERT_GT(ctx->exec_info_.redo_lsns_.count(), 0);
+    ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr1->revert_tx_ctx(ctx));
+  }
+
+  // ---- Phase 2: Graceful switch n1 -> follower ----
+  // Since no aggregation is active, this should succeed.
+  // submit_redo_active_info_log_() will submit a RecordLog first
+  // (because redo_lsns_ is non-empty), then ActiveInfoLog.
+  // After RecordLog: redo_lsns_ cleared, prev_record_lsn_ set.
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr1->switch_to_follower_gracefully());
+  ASSERT_FALSE(ls_tx_ctx_mgr1->is_master());
+
+  // ---- Phase 3: n2 replays and becomes leader ----
+  ReplayLogEntryFunctor replay_new_leader(n2);
+  ASSERT_EQ(OB_SUCCESS, n2->fake_tx_log_adapter_->replay_all(replay_new_leader));
+
+  ObLSTxCtxMgr *ls_tx_ctx_mgr2 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, n2->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n2->ls_id_, ls_tx_ctx_mgr2));
+  ObTxNode::get_location_adapter_().update_localtion(n2->ls_id_, n2->addr_);
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr2->switch_to_leader());
+  n2->wait_all_redolog_applied();
+  ASSERT_TRUE(ls_tx_ctx_mgr2->is_master());
+
+  // ---- Phase 4: Verify replay ctx is rejected by hotspot admission ----
+  // Wait for tx ctx to appear on n2
+  ObPartTransCtx *n2_ctx = nullptr;
+  for (int i = 0; i < 300; i++) {
+    int get_ret = ls_tx_ctx_mgr2->get_tx_ctx_directly_from_hash_map(tx_id, n2_ctx);
+    if (OB_SUCCESS == get_ret && n2_ctx != nullptr) {
+      break;
+    }
+    n2->wait_all_msg_consumed();
+    n2->wait_all_redolog_applied();
+    usleep(1000);
+  }
+  ASSERT_TRUE(n2_ctx != nullptr) << "tx ctx should exist on new leader after replay";
+
+  // Verify replay ctx state and admission check
+  int validation_ret = OB_SUCCESS;
+  {
+    CtxLockGuard guard(n2_ctx->lock_);
+    TRANS_LOG(INFO, "[test] n2 tx ctx after replay",
+              K(tx_id),
+              "redo_lsns_count", n2_ctx->exec_info_.redo_lsns_.count(),
+              "prev_record_lsn", n2_ctx->exec_info_.prev_record_lsn_,
+              "redo_flush_status", to_cstr(n2_ctx->redo_flush_status_),
+              "ctx_source", n2_ctx->ctx_source_);
+
+    // Precondition assertions: this ctx must present exactly the state the old
+    // admission predicate saw (NORMAL_START + empty redo_lsns_), so a regression
+    // of the fix would deterministically re-admit it.
+    ASSERT_EQ(TxRedoFlushStatus::NORMAL_START, n2_ctx->redo_flush_status_);
+    ASSERT_EQ(0, n2_ctx->exec_info_.redo_lsns_.count());
+    ASSERT_EQ(OB_SUCCESS, n2_ctx->check_status_());
+
+    // After graceful switch, RecordLog was submitted before ActiveInfoLog,
+    // so prev_record_lsn_ is valid after replay even though redo_lsns_ is
+    // empty (parallel replay does not maintain it).
+    ASSERT_TRUE(n2_ctx->exec_info_.prev_record_lsn_.is_valid())
+        << "prev_record_lsn_ must be set after replaying the switch RecordLog";
+
+    // Call hotspot_legality_validation_() -- must reject this ctx.
+    // Before fix: passes (redo_lsns_ empty, NORMAL_START) -> wrong!
+    // After fix: rejected by the prev_record_lsn_.is_valid() predicate.
+    validation_ret = n2_ctx->hotspot_legality_validation_(false /*is_primary*/);
+    TRANS_LOG(INFO, "[test] hotspot_legality_validation_ result",
+              K(tx_id), K(validation_ret),
+              "redo_flush_status", to_cstr(n2_ctx->redo_flush_status_));
+  }
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr2->revert_tx_ctx(n2_ctx));
+
+  // Must be rejected specifically by the new redo-history predicate.
+  ASSERT_EQ(OB_TX_NOT_SUPPORT_AGGREGATION, validation_ret)
+      << "replay ctx with redo history must be rejected by the "
+      << "prev_record_lsn_ admission predicate, got ret=" << validation_ret;
+
+  // ---- Cleanup ----
+  // Drain in-flight async callbacks. The replayed ctx is not force-aborted
+  // here; it is released when the tx guard and tx node are destroyed during
+  // test teardown.
+  for (int i = 0; i < 300; i++) {
+    n2->wait_all_msg_consumed();
+    n2->wait_all_redolog_applied();
+    usleep(1000);
+  }
+
+  ASSERT_EQ(OB_SUCCESS, tx_guard.release());
+  ASSERT_EQ(OB_SUCCESS, n2->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr2));
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr1));
+}
+
 } // namespace oceanbase
 
 int main(int argc, char **argv)
