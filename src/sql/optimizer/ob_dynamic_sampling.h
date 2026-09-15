@@ -45,6 +45,7 @@ struct ObDSSessionSavedData
     tx_desc_(NULL),
     is_sess_in_retry_(false),
     last_query_retry_err_(OB_SUCCESS),
+    retry_cnt_(0),
     session_query_timeout_(0),
     route_to_column_replica_(false)
   {}
@@ -57,6 +58,7 @@ struct ObDSSessionSavedData
     tx_desc_ = NULL;
     is_sess_in_retry_ = false;
     last_query_retry_err_ = OB_SUCCESS;
+    retry_cnt_ = 0;
     session_query_timeout_ = 0;
     route_to_column_replica_ = false;
   }
@@ -67,6 +69,7 @@ struct ObDSSessionSavedData
                K(tx_desc_),
                K(is_sess_in_retry_),
                K(last_query_retry_err_),
+               K(retry_cnt_),
                K(session_query_timeout_),
                K(route_to_column_replica_));
 
@@ -76,6 +79,7 @@ struct ObDSSessionSavedData
   transaction::ObTxDesc *tx_desc_;
   bool is_sess_in_retry_;
   int last_query_retry_err_;
+  int64_t retry_cnt_;
   int64_t session_query_timeout_;
   bool route_to_column_replica_;
 

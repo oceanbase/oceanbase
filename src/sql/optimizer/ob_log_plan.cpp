@@ -751,7 +751,15 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
   ObSEArray<ObCandiTableLoc*, 8> other_phy_tbl_loc_info_list;
   bool is_weak = true;
   ObRoutePolicyType other_route_policy = INVALID_POLICY;
-
+  ObSQLSessionInfo *session = exec_ctx.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", K(ret), K(session));
+  } else if (session->is_in_transaction() &&
+             OB_NOT_NULL(session->get_tx_desc()) &&
+             !session->get_tx_desc()->is_clean()) {
+    is_weak = false;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < tbl_loc_list.count(); i++) {
     const ObTableLocation *table_location = tbl_loc_list.at(i);
     ObCandiTableLoc *phy_tbl_loc_info = nullptr;

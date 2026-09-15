@@ -1199,6 +1199,8 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       saved_data.is_sess_in_retry_ = session->get_is_in_retry();
       saved_data.last_query_retry_err_ = session->get_retry_info().get_last_query_retry_err();
+      saved_data.retry_cnt_ = session->get_retry_info().get_retry_cnt();
+      session->get_retry_info_for_update().set_retry_cnt(0);
       saved_data.nested_count_ = session->get_nested_count();
       saved_data.route_to_column_replica_ = session->get_route_to_column_replica();
       IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), saved_data.is_no_backslash_escapes_);
@@ -1239,6 +1241,8 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
   } else if (OB_FALSE_IT(session->set_session_in_retry(saved_data.is_sess_in_retry_, saved_data.last_query_retry_err_))) {
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+    session->get_retry_info_for_update().set_last_query_retry_err(saved_data.last_query_retry_err_);
+    session->get_retry_info_for_update().set_retry_cnt(saved_data.retry_cnt_);
     session->set_nested_count(saved_data.nested_count_);
     session->set_route_to_column_replica(saved_data.route_to_column_replica_);
     if (saved_data.is_no_backslash_escapes_) {
