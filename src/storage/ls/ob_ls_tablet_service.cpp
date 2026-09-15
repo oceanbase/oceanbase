@@ -6901,7 +6901,10 @@ int ObLSTabletService::estimate_block_count_and_row_count_for_split_extra(
   int64_t tmp_tablet_memtable_row_cnt = 0;
   ObArray<int64_t> tmp_tablet_cg_macro_cnt_arr;
   ObArray<int64_t> tmp_tablet_cg_micro_cnt_arr;
-  if (OB_FAIL(inner_get_read_tables(
+  if (OB_UNLIKELY(split_cnt <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid split count", K(ret), K(tablet_id), K(split_cnt));
+  } else if (OB_FAIL(inner_get_read_tables(
       tablet_id,
       timeout_us,
       INT64_MAX,

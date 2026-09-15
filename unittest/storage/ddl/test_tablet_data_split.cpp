@@ -18,6 +18,7 @@
 #define protected public
 
 #include "storage/ddl/ob_tablet_split_task.h"
+#include "storage/ls/ob_ls_tablet_service.h"
 
 namespace oceanbase
 {
@@ -314,6 +315,50 @@ TEST_F(TestDataSplit, test_convert_rowkey_to_range)
   }
   STORAGE_LOG(INFO, "TestDataSplit::test_convert_rowkey_to_range", K(ret), "parallel_datum_rowkey_list", split_arg.parallel_datum_rowkey_list_, 
       K(datum_ranges_array));
+}
+
+TEST_F(TestDataSplit, test_estimate_split_extra_invalid_split_count)
+{
+  ObLSTabletService tablet_service;
+  const int64_t split_counts[] = {0, -1, 1, 2};
+  const int expected_rets[] = {OB_INVALID_ARGUMENT, OB_INVALID_ARGUMENT, OB_NOT_INIT, OB_NOT_INIT};
+  for (int64_t i = 0; i < ARRAYSIZEOF(split_counts); i++) {
+    SCOPED_TRACE(split_counts[i]);
+    int64_t macro_block_count = 11;
+    int64_t micro_block_count = 22;
+    int64_t sstable_row_count = 33;
+    int64_t memtable_row_count = 44;
+    ObArray<int64_t> cg_macro_cnt_arr;
+    ObArray<int64_t> cg_micro_cnt_arr;
+    ASSERT_EQ(OB_SUCCESS, cg_macro_cnt_arr.push_back(55));
+    ASSERT_EQ(OB_SUCCESS, cg_macro_cnt_arr.push_back(66));
+    ASSERT_EQ(OB_SUCCESS, cg_micro_cnt_arr.push_back(77));
+    ASSERT_EQ(OB_SUCCESS, cg_micro_cnt_arr.push_back(88));
+
+    // Invalid counts must be rejected before reading tables; positive counts reach the uninitialized service.
+    ASSERT_EQ(expected_rets[i], tablet_service.estimate_block_count_and_row_count_for_split_extra(
+        TEST_TABLET_ID,
+        split_counts[i],
+        ObMDSGetTabletMode::READ_ALL_COMMITED,
+        1000000,
+        1,
+        macro_block_count,
+        micro_block_count,
+        sstable_row_count,
+        memtable_row_count,
+        cg_macro_cnt_arr,
+        cg_micro_cnt_arr));
+    ASSERT_EQ(11, macro_block_count);
+    ASSERT_EQ(22, micro_block_count);
+    ASSERT_EQ(33, sstable_row_count);
+    ASSERT_EQ(44, memtable_row_count);
+    ASSERT_EQ(2, cg_macro_cnt_arr.count());
+    ASSERT_EQ(55, cg_macro_cnt_arr.at(0));
+    ASSERT_EQ(66, cg_macro_cnt_arr.at(1));
+    ASSERT_EQ(2, cg_micro_cnt_arr.count());
+    ASSERT_EQ(77, cg_micro_cnt_arr.at(0));
+    ASSERT_EQ(88, cg_micro_cnt_arr.at(1));
+  }
 }
 
 } //unittest

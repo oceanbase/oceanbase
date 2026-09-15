@@ -173,7 +173,7 @@ int ObMdsScanParamHelper::build_key_range(
     LOG_WARN("fail to alloc memory", K(ret));
   } else {
     ObObj *start_obj = new (buf) ObObj[MDS_SSTABLE_ROWKEY_CNT]();
-    ObObj *end_obj = new (buf + sizeof(ObObj) * MDS_SSTABLE_ROWKEY_CNT) ObObj();
+    ObObj *end_obj = new (buf + sizeof(ObObj) * MDS_SSTABLE_ROWKEY_CNT) ObObj[MDS_SSTABLE_ROWKEY_CNT]();
     start_obj[0].set_tinyint(mds_unit_id);
     start_obj[1].set_min_value();
     end_obj[0].set_tinyint(mds_unit_id);
