@@ -57,6 +57,12 @@ inline int ObExprSpace::calc_result_type1(
               static_cast<const ObConstRawExpr*>(child_raw_expr->get_param_expr(0));
     if (child_raw_expr->get_param_expr(0)->get_result_type().is_null()) {
       res_type = ObVarcharType;
+    } else if (const_expr->get_value().is_unknown() || const_expr->get_param().is_unknown()) {
+      // the const expr may be a pl variable or prepared parameter whose value is an
+      // unknown placeholder during compilation, it cannot be evaluated as a literal.
+      // fallback to the non-literal branch to keep the result type stable across
+      // multiple type inferences
+      res_type = ObLongTextType;
     } else if (OB_FAIL(calc_result_type(type_ctx, const_expr->get_param(), res_type))) {
       LOG_WARN("calc_result_type fail", K(ret), K(type1), K(type_ctx));
     }
