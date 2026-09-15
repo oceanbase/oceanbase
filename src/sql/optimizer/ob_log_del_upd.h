@@ -289,6 +289,8 @@ public:
   bool is_gi_above() const override { return gi_charged_; }
   const ObRawExpr *get_stmt_id_expr() const { return stmt_id_expr_; }
   const common::ObIArray<ObColumnRefRawExpr*> *get_table_columns() const;
+  int get_gen_col_replace_exprs(ObIArray<ObRawExpr *> &from_exprs,
+                                ObIArray<ObRawExpr *> &to_exprs) const;
   inline void set_table_partition_info(ObTablePartitionInfo *table_partition_info)
   {
     table_partition_info_ = table_partition_info;

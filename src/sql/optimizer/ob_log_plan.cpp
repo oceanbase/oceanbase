@@ -11869,20 +11869,16 @@ int ObLogPlan::generate_tsc_replace_exprs_pair(ObLogTableScan *op)
 int ObLogPlan::generate_ins_replace_exprs_pair(ObLogDelUpd *op)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 4> from_exprs;
+  ObSEArray<ObRawExpr *, 4> to_exprs;
   if (OB_ISNULL(op)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid op", K(ret));
-  } else if (NULL != op->get_table_columns()) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < op->get_table_columns()->count(); ++i) {
-      ObColumnRefRawExpr *expr = op->get_table_columns()->at(i);
-      if (expr->is_virtual_generated_column()) {
-        ObRawExpr *dependant_expr = static_cast<ObColumnRefRawExpr *>(
-                                    expr)->get_dependant_expr();
-        if (OB_FAIL(gen_col_replacer_.add_replace_expr(expr, dependant_expr))) {
-          LOG_WARN("failed to push back generate replace pair", K(ret));
-        }
-      }
-    }
+  } else if (OB_FAIL(op->get_gen_col_replace_exprs(from_exprs, to_exprs))) {
+    LOG_WARN("failed to collect generated column replace exprs", K(ret));
+  } else if (0 < from_exprs.count()
+             && OB_FAIL(gen_col_replacer_.add_replace_exprs(from_exprs, to_exprs))) {
+    LOG_WARN("failed to add generated column replace exprs", K(ret));
   }
   return ret;
 }
