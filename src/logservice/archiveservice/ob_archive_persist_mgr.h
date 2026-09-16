@@ -147,6 +147,12 @@ private:
   int clear_stale_ls_();
 
   bool state_in_archive_(const share::ObArchiveRoundState &state) const;
+  int get_ls_archive_progress_info_(const ObLSID &id,
+      const ArchiveKey &key,
+      ObLSArchivePersistInfo &info,
+      bool &is_madatory,
+      bool &record_exist);
+
   int load_ls_archive_progress_(const ObLSID &id,
       const ArchiveKey &key,
       ObLSArchivePersistInfo &info,
