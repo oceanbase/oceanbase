@@ -33,15 +33,20 @@ public:
     }
   }
 
-  void set_record_for_finish_plan(const int64_t receive_ts, const int64_t elapsed_t)
+  bool set_record_for_finish_plan(const int64_t receive_ts, const int64_t elapsed_t)
   {
     bool find = false;
+    bool ret = false;
     for (int i = 0; !find && i < RECORDS_SIZE; ++i) {
       if (receive_ts == receive_ts_[i]) {
-        elapsed_t_[i] = elapsed_t;
+        if (0 == elapsed_t_[i]) {
+          elapsed_t_[i] = elapsed_t;
+          ret = true;
+        }
         find = true;
       }
     }
+    return ret;
   }
 
   void reset()

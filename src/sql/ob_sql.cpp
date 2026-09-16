@@ -3217,11 +3217,11 @@ OB_NOINLINE int ObSql::handle_large_query(int tmp_ret,
       }
     }
 #ifdef OB_BUILD_SPM
-    if (OB_SUCC(ret) && !is_large_query) {
-      result.get_session().reset_spm_select_plan_type();
-    } else if (OB_EAGAIN == ret || is_large_query) {
+    if (OB_EAGAIN == ret) {
       ObSpmCacheCtx& spm_ctx = exec_ctx.get_sql_ctx()->spm_ctx_;
       result.get_session().set_spm_select_plan_type(spm_ctx.select_plan_type_);
+    } else {
+      result.get_session().reset_spm_select_plan_type();
     }
 #endif
   }

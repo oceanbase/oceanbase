@@ -602,19 +602,20 @@ void ObPhysicalPlan::update_evolution_stat(const ObAuditRecordData &record,
                                            const int64_t cpu_time,
                                            const int64_t elapsed_time)
 {
-  if (ATOMIC_LOAD(&stat_.is_evolution_)) {
-    ATOMIC_INC(&(stat_.evolution_stat_.executions_));
-    if (!record.is_streaming_cursor_record()) {
-      update_evolution_stat_time(cpu_time >= 0 ? cpu_time : record.get_executor_time(),
-                                 elapsed_time >= 0 ? elapsed_time : record.get_elapsed_time(),
-                                 record.exec_timestamp_.executor_end_ts_);
-    }
+  if (ATOMIC_LOAD(&stat_.is_evolution_) && !record.is_streaming_cursor_record()) {
+    int64_t elapsed_time_value = elapsed_time > 0 ? elapsed_time : record.get_elapsed_time();
+    int64_t cpu_time_value = cpu_time > 0 ? cpu_time : record.exec_timestamp_.executor_t_;
     ObEvoRecordsGuard guard;
     stat_.get_evo_records(guard);
     if (NULL != guard.get_evo_records()) {
-      guard.get_evo_records()->set_record_for_finish_plan(
-          record.exec_timestamp_.receive_ts_,
-          elapsed_time >= 0 ? elapsed_time : record.get_elapsed_time());
+      bool record_set = guard.get_evo_records()->set_record_for_finish_plan(record.exec_timestamp_.receive_ts_, elapsed_time_value);
+      if (record_set) {
+        ATOMIC_INC(&(stat_.evolution_stat_.executions_));
+        update_evolution_stat_time(cpu_time_value, elapsed_time_value, record.exec_timestamp_.executor_end_ts_);
+      }
+    } else {
+      ATOMIC_INC(&(stat_.evolution_stat_.executions_));
+      update_evolution_stat_time(cpu_time_value, elapsed_time_value, record.exec_timestamp_.executor_end_ts_);
     }
   }
 }
