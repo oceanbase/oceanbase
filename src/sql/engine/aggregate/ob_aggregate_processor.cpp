@@ -236,7 +236,9 @@ int64_t ObAggrInfo::to_string(char *buf, const int64_t buf_len) const
 int ObAggrInfo::assign(const ObAggrInfo &rhs)
 {
   int ret = OB_SUCCESS;
-  set_allocator(rhs.alloc_);
+  if (OB_ISNULL(alloc_)) {
+    set_allocator(rhs.alloc_);
+  }
   expr_ = rhs.expr_;
   real_aggr_type_ = rhs.real_aggr_type_;
   has_distinct_ = rhs.has_distinct_;
