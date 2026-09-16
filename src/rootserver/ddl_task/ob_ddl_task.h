@@ -864,10 +864,10 @@ public:
   int64_t get_consensus_schema_version() { return consensus_schema_version_; }
   bool get_is_no_logging() const { return is_no_logging_; }
   int64_t get_target_cg_cnt() const { return target_cg_cnt_; }
-  // RS epoch gating for status refresh
+  // Check cancellation in memory every time; refresh status on cancellation or RS epoch changes.
   void set_rs_epoch_snapshot(const int64_t epoch) { rs_epoch_snapshot_ = epoch; }
   int64_t get_rs_epoch_snapshot() const { return rs_epoch_snapshot_; }
-  int check_and_refresh_status_if_rs_epoch_changed();
+  int check_and_refresh_status();
   #ifdef ERRSIM
   int check_errsim_error();
   #endif

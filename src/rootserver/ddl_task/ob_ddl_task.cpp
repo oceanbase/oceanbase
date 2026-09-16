@@ -1206,11 +1206,15 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
   if (!is_partition_split_recovery_table_redefinition(task_type_) && OB_TMP_FAIL(check_ddl_task_is_cancel(trace_id_, is_cancel))) {
     LOG_WARN("check ddl task is cancel failed", K(tmp_ret), K(task_id_), K(parent_task_id_), K_(trace_id));
   }
-  if (is_cancel) {
+  if (SUCCESS == old_status) {
+    // A late cancellation must not undo a DDL that has already succeeded.
+    real_new_status = old_status;
+    real_ret_code = OB_SUCCESS;
+  } else if (is_cancel) {
     real_ret_code = (OB_SUCCESS == ret_code || error_need_retry) ? OB_CANCELED : ret_code;
     FLOG_INFO("ddl task is cancelled", K(task_type_), K(task_id_), K(parent_task_id_), K(object_id_),
         K(target_object_id_), K(ret_code), K(error_need_retry), K(real_ret_code));
-  } else if (SUCCESS == old_status || error_need_retry) {
+  } else if (error_need_retry) {
     LOG_INFO("error code found, but execute again", K(task_id_), K(parent_task_id_),
         K(ret_code), K(ret_code_), K(old_status), K(new_status), K(err_code_occurence_cnt_));
     real_new_status = old_status;
@@ -1315,14 +1319,21 @@ int ObDDLTask::refresh_status()
   return ret;
 }
 
-int ObDDLTask::check_and_refresh_status_if_rs_epoch_changed()
+int ObDDLTask::check_and_refresh_status()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  bool is_cancel = false;
+  // Cancellation is an in-memory check and must not be gated by the RS epoch.
+  if (!is_partition_split_recovery_table_redefinition(task_type_)
+      && OB_TMP_FAIL(check_ddl_task_is_cancel(trace_id_, is_cancel))) {
+    LOG_WARN("check ddl task is cancel failed", K(tmp_ret), K(task_id_), K(parent_task_id_), K_(trace_id));
+  }
   rootserver::ObDDLScheduler *sched = MTL(rootserver::ObDDLScheduler*);
   const int64_t current_epoch = (nullptr == sched) ? rs_epoch_snapshot_ : sched->get_rs_epoch();
-  if (rs_epoch_snapshot_ != current_epoch) {
+  if (is_cancel || rs_epoch_snapshot_ != current_epoch) {
     if (OB_FAIL(refresh_status())) {
-      LOG_WARN("refresh status on rs epoch change failed", K(ret), K(rs_epoch_snapshot_), K(current_epoch));
+      LOG_WARN("refresh status failed", K(ret), K(is_cancel), K(rs_epoch_snapshot_), K(current_epoch));
     } else {
       rs_epoch_snapshot_ = current_epoch;
     }
