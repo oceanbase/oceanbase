@@ -2875,7 +2875,7 @@ int ObPLResolver::resolve_extern_type_info(bool is_row_type,
       OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
       OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_TAB);
     }
-  } else { // dbname.table.col%type or table.col%type, dbname.pack.var%type, pack.var%type
+  } else { // dbname.table.col%type or table.col%type, dbname.pack.var%type, pack.var%type, var%type
     if (access_idents.count() <= 3 && access_idents.count() >= 2) {
       if (OB_FAIL(ret)) {
       } else if (3 == access_idents.count()) {
@@ -2887,6 +2887,10 @@ int ObPLResolver::resolve_extern_type_info(bool is_row_type,
       OX (extern_type_info->type_name_ = access_idents.at(access_idents.count() - 1).access_name_);
       OX (extern_type_info->type_subname_ = access_idents.at(access_idents.count() - 2).access_name_);
       OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_PKGVAR_OR_TABCOL);
+    } else if (1 == access_idents.count()) {
+      OZ (session_info.get_database_id(extern_type_info->type_owner_));
+      OX (extern_type_info->type_name_ = access_idents.at(0).access_name_);
+      OX (extern_type_info->flag_ = ObParamExternType::SP_EXTERN_LOCAL_VAR);
     }
   }
   return ret;

@@ -306,25 +306,44 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
     OZ (collect_ref_obj_info(table->get_table_id(), table->get_schema_version(),
                              ObDependencyTableType::DEPENDENCY_TABLE));
   } else if (ObObjAccessIdx::is_package_variable(access_idxs)) {
-    CK (2 == access_idxs.count() || 3 == access_idxs.count()); // pkg.var or db.pkg.var
+    // Align with ObPLResolver::resolve_extern_type_info:
+    // locate IS_PKG then append remaining members so pkg.var.member.member
+    // is stored as ".var.member.member" with type_subname = package name.
+    int64_t first_pkg_var_idx = 0;
+    ObSqlString type_name_str;
     OX (routine_param.set_param_type(ObExtendType));
     OX (routine_param.set_pkg_var_type());
-    OX (routine_param.set_type_name(access_idxs.at(access_idxs.count() - 1).var_name_));
-    OX (routine_param.set_type_subname(access_idxs.at(access_idxs.count() - 2).var_name_));
+    CK (!access_idxs.empty());
     if (OB_FAIL(ret)) {
-    } else if (3 == access_idxs.count()) {
-      if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(1).var_index_)) {
-        OX (routine_param.set_type_owner(OB_SYS_DATABASE_ID));
-      } else {
-        OX (routine_param.set_type_owner(access_idxs.at(0).var_index_));
-      }
-    } else if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(access_idxs.at(0).var_index_)) { // 系统包中的var
-      OX (routine_param.set_type_owner(OB_SYS_DATABASE_ID));
+    } else if (ObObjAccessIdx::IS_PKG == access_idxs.at(0).access_type_) { // var
+      first_pkg_var_idx = 0;
+    } else if (access_idxs.count() > 1
+               && ObObjAccessIdx::IS_PKG == access_idxs.at(1).access_type_) { // pkg.var
+      first_pkg_var_idx = 1;
+    } else if (access_idxs.count() > 2
+               && ObObjAccessIdx::IS_PKG == access_idxs.at(2).access_type_) { // db.pkg.var
+      first_pkg_var_idx = 2;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid package variable access path", K(ret), K(access_idxs));
     }
     if (OB_SUCC(ret)) {
-      const int64_t package_id = access_idxs.at(access_idxs.count() - 2).var_index_;
-      const ObPackageInfo* package_info = nullptr;
-      ObSchemaGetterGuard* schema_guard = nullptr;
+      for (int64_t i = first_pkg_var_idx; OB_SUCC(ret) && i < access_idxs.count(); ++i) {
+        // pkg.var save var, pkg.var.member save .var.member
+        OZ (type_name_str.append_fmt((first_pkg_var_idx == access_idxs.count() - 1 ? "%.*s" : ".%.*s"),
+                                     access_idxs.at(i).var_name_.length(),
+                                     access_idxs.at(i).var_name_.ptr()));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      uint64_t package_id = OB_INVALID_ID;
+      uint64_t var_idx = OB_INVALID_ID;
+      ObString type_name;
+      const ObPackageInfo *package_info = nullptr;
+      ObSchemaGetterGuard *schema_guard = nullptr;
+      OZ (ob_write_string(*params_.allocator_, type_name_str.string(), type_name));
+      OX (routine_param.set_type_name(type_name));
+      OZ (ObObjAccessIdx::get_package_id(access_idxs, package_id, var_idx));
       CK (OB_NOT_NULL(params_.schema_checker_));
       OX (schema_guard = schema_checker_->get_schema_guard());
       CK (OB_NOT_NULL(schema_guard));
@@ -332,6 +351,14 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
                                          package_id, package_info),
           package_id);
       CK (OB_NOT_NULL(package_info));
+      OX (routine_param.set_type_subname(package_info->get_package_name()));
+      if (OB_SUCC(ret)) {
+        if (OB_SYS_TENANT_ID == get_tenant_id_by_object_id(package_id)) {
+          OX (routine_param.set_type_owner(OB_SYS_DATABASE_ID));
+        } else {
+          OX (routine_param.set_type_owner(package_info->get_database_id()));
+        }
+      }
       OZ (collect_ref_obj_info(package_id, package_info->get_schema_version(),
                                ObDependencyTableType::DEPENDENCY_PACKAGE));
     }
@@ -491,6 +518,7 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
         // maybe dependent object not exist yet!
         LOG_WARN("failed to transform from iparam", K(ret));
         if (ObPLResolver::is_object_not_exist_error(ret)) {
+          const int orig_ret = ret;
           ret = OB_SUCCESS;
           ObArray<ObObjAccessIdent> obj_access_idents;
           ObPLExternTypeInfo extern_type_info;
@@ -511,8 +539,9 @@ int ObCreateRoutineResolver::resolve_param_type(const ParseNode *type_node,
           OX (routine_param.set_extern_type_flag(
                               static_cast<ObParamExternType>(extern_type_info.flag_)));
           if (OB_SUCC(ret)) {
-            LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_TYPE,
-                           extern_type_info.type_name_.length(), extern_type_info.type_name_.ptr());
+            LOG_USER_WARN(OB_ERR_SP_UNDECLARED_VAR,
+                          extern_type_info.type_name_.length(), extern_type_info.type_name_.ptr());
+            ObPL::insert_error_msg(orig_ret);
           }
         }
       } else {
