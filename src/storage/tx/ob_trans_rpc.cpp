@@ -99,6 +99,9 @@ void ObTransRpcResult::init(const int status, const int64_t timestamp)
   send_timestamp_ = timestamp;
 }
 
+ERRSIM_POINT_DEF(EN_TX_ROLLBACK_SP_RPC_PRECHECK_FAIL,
+                 "Fail Rollback-SP RPC before the handler initializes its result");
+
 #define TX_Process(name, handle_func)                                   \
 int ObTx##name##P::process()                                            \
 {                                                                       \
@@ -109,7 +112,10 @@ int ObTx##name##P::process()                                            \
   const int64_t run_ts = get_run_timestamp();                           \
   transaction::ObTransService *txs  = nullptr;                          \
   uint64_t tenant_id = rpc_pkt_->get_tenant_id();                       \
-  if (tenant_id != MTL_ID()) {                                          \
+  if (rpc_pkt_->get_pcode() == OB_TX_ROLLBACK_SAVEPOINT &&              \
+      OB_FAIL(EVENT_CALL(EN_TX_ROLLBACK_SP_RPC_PRECHECK_FAIL))) {       \
+    TRANS_LOG(INFO, "inject rollback RPC failure", K(ret));             \
+  } else if (tenant_id != MTL_ID()) {                                   \
     ret = OB_ERR_UNEXPECTED;                                            \
   }                                                                     \
   if (OB_FAIL(ret)) {                                                   \

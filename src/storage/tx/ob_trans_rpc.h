@@ -65,7 +65,11 @@ struct ObTxRpcRollbackSPResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTxRpcRollbackSPResult(): ignore_(false) {}
+  // Require transaction rollback until the handler sets the response status.
+  ObTxRpcRollbackSPResult()
+    : status_(OB_TRANS_NEED_ROLLBACK), send_timestamp_(0), born_epoch_(-1), addr_(),
+      ignore_(false), downstream_parts_(), output_transfer_epoch_(0)
+  {}
   int status_;
   int64_t send_timestamp_;
   int64_t born_epoch_;

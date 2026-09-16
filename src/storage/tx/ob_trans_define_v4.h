@@ -263,6 +263,7 @@ struct ObTxPart
   bool operator==(const ObTxPart &rhs) const { return id_ == rhs.id_ && addr_ == rhs.addr_; }
   bool operator!=(const ObTxPart &rhs) const { return !operator==(rhs); }
   bool is_clean() const { return flag_.is_clean(); }
+  bool need_rollback_to_savepoint(const ObTxSEQ &savepoint_no) const { return last_scn_ > savepoint_no && !is_clean(); }
   bool is_without_valid_write() const { return !first_scn_.is_valid() || last_scn_ < first_scn_; }
   bool is_without_ctx() const { return is_without_ctx(epoch_); }
   bool is_dup_ls() const { return flag_.is_dup_ls(); }
@@ -489,6 +490,7 @@ public:
   bool is_incomplete() const { return incomplete_; }
   int add_touched_ls(const share::ObLSID ls);
   int add_touched_ls(const ObIArray<share::ObLSID> &ls_list);
+  int add_uncertain_part(const share::ObLSID ls_id);
   const share::ObLSArray &get_touched_ls() const { return touched_ls_list_; }
   int merge_result(const ObTxExecResult &r);
   int assign(const ObTxExecResult &r);

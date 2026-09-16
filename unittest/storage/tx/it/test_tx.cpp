@@ -15,6 +15,11 @@
 #define protected public
 #define USING_LOG_PREFIX TRANS
 #include "tx_node.h"
+#include "sql/engine/dml/ob_table_insert_up_op.h"
+#include "sql/das/ob_das_insert_op.h"
+#include "sql/engine/px/exchange/ob_px_fifo_coord_op.h"
+#include "sql/ob_sql_trans_control.h"
+#include "storage/tx/ob_trans_rpc.h"
 #include "../mock_utils/async_util.h"
 #include "test_tx_dsl.h"
 
@@ -2504,6 +2509,326 @@ TEST_F(ObTestTx, rollback_with_branch_savepoint)
   ROLLBACK_TX(n1, tx);
 }
 
+
+TEST_F(ObTestTx, rollback_response_failure_reaches_waiter)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 10 * 1000 * 1000;
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  DEFER(n1->rollback_tx(tx));
+  const auto original_state = tx.state_;
+  DEFER(tx.state_ = original_state);
+  tx.state_ = ObTxDesc::State::ROLLBACK_SAVEPOINT;
+
+  // Register a pending rollback without executing storage writes.
+  const int64_t request_id = n1->txs_.fetch_rollback_sp_sequence_();
+  const ObCommonID msg_id(request_id);
+  ObTxRollbackParts parts;
+  ASSERT_EQ(OB_SUCCESS, parts.push_back(ObTxExecPart(n1->ls_id_, 1, 0)));
+  DEFER(tx.brpc_mask_set_.reset());
+  ASSERT_EQ(OB_SUCCESS, tx.brpc_mask_set_.init(msg_id, parts));
+  ObRollbackSPMsgGuard *msg_guard = ObRollbackSPMsgGuardAlloc::alloc_value();
+  ASSERT_NE(nullptr, msg_guard);
+  new (msg_guard) ObRollbackSPMsgGuard(msg_id, tx, n1->txs_.tx_desc_mgr_);
+  bool registered = false;
+  DEFER(if (registered) {
+          n1->txs_.rollback_sp_msg_mgr_.del(msg_id, msg_guard);
+        } else {
+          ObRollbackSPMsgGuardAlloc::free_value(msg_guard);
+        });
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.rollback_sp_msg_mgr_.insert(msg_id, msg_guard));
+  registered = true;
+
+  ObTxRollbackSPMsg request;
+  request.sender_ = SCHEDULER_LS;
+  request.receiver_ = n1->ls_id_;
+  request.epoch_ = 1;
+  request.tx_id_ = tx.get_tx_id();
+  request.tenant_id_ = tx.get_tenant_id();
+  request.request_id_ = request_id;
+  request.flag_ = 0;
+  obrpc::ObTxRPCCB<obrpc::OB_TX_ROLLBACK_SAVEPOINT> callback;
+  ASSERT_EQ(OB_SUCCESS, callback.init());
+  callback.set_args(request);
+  callback.dst_ = n1->addr_;
+  callback.rcode_.rcode_ = OB_SUCCESS;
+
+  // Model a successful transport whose handler left the response unfilled.
+  obrpc::ObTxRpcRollbackSPResult response;
+  char buffer[1024];
+  int64_t pos = 0;
+  ASSERT_LE(response.get_serialize_size(), static_cast<int64_t>(sizeof(buffer)));
+  ASSERT_EQ(OB_SUCCESS, response.serialize(buffer, sizeof(buffer), pos));
+  int64_t decode_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, callback.result_.deserialize(buffer, pos, decode_pos));
+  ASSERT_EQ(pos, decode_pos);
+  tx.rpc_cond_.reset();
+  ASSERT_EQ(OB_SUCCESS, callback.process());
+  int rpc_ret = OB_SUCCESS;
+  ASSERT_EQ(OB_SUCCESS, tx.rpc_cond_.wait(50_ms, rpc_ret));
+  EXPECT_EQ(OB_TRANS_NEED_ROLLBACK, rpc_ret);
+  EXPECT_FALSE(tx.brpc_mask_set_.is_all_mask());
+
+  // A transport error takes precedence over a successful response status.
+  callback.rcode_.rcode_ = OB_ERR_UNEXPECTED;
+  callback.result_.status_ = OB_SUCCESS;
+  tx.rpc_cond_.reset();
+  ASSERT_EQ(OB_SUCCESS, callback.process());
+  rpc_ret = OB_SUCCESS;
+  ASSERT_EQ(OB_SUCCESS, tx.rpc_cond_.wait(50_ms, rpc_ret));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, rpc_ret);
+  EXPECT_FALSE(tx.brpc_mask_set_.is_all_mask());
+
+  // A response explicitly filled by the handler can complete the rollback.
+  callback.rcode_.rcode_ = OB_SUCCESS;
+  callback.result_.born_epoch_ = 1;
+  callback.result_.addr_ = n1->addr_;
+  tx.rpc_cond_.reset();
+  ASSERT_EQ(OB_SUCCESS, callback.process());
+  rpc_ret = OB_ERR_UNEXPECTED;
+  ASSERT_EQ(OB_SUCCESS, tx.rpc_cond_.wait(50_ms, rpc_ret));
+  EXPECT_EQ(OB_SUCCESS, rpc_ret);
+  EXPECT_TRUE(tx.brpc_mask_set_.is_all_mask());
+}
+
+TEST_F(ObTestTx, das_task_preserves_nonzero_write_branch)
+{
+  using sql::ObIDASTaskOp;
+  ObArenaAllocator allocator;
+  sql::ObDASInsertOp sender(allocator);
+  sql::ObDASInsertOp receiver(allocator);
+  sql::ObDASRemoteInfo remote_info;
+  sql::ObDASRemoteInfo *old_remote_info = sql::ObDASRemoteInfo::get_remote_info();
+  DEFER(sql::ObDASRemoteInfo::get_remote_info() = old_remote_info);
+  sql::ObDASRemoteInfo::get_remote_info() = &remote_info;
+  sender.set_type(sql::DAS_OP_TABLE_INSERT);
+  sender.set_tenant_id(1001);
+  sender.set_task_id(1);
+  sender.set_ls_id(ObLSID(1001));
+  sender.set_tablet_id(ObTabletID(2001));
+  sender.set_write_branch_id(200);
+  ASSERT_EQ(0, receiver.get_write_branch_id());
+
+  // The base task payload carries the write branch used by remote DAS tasks.
+  char buffer[4096];
+  int64_t pos = 0;
+  ASSERT_LE(sender.ObIDASTaskOp::get_serialize_size(), static_cast<int64_t>(sizeof(buffer)));
+  ASSERT_EQ(OB_SUCCESS, sender.ObIDASTaskOp::serialize(buffer, sizeof(buffer), pos));
+  int64_t decode_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, receiver.ObIDASTaskOp::deserialize(buffer, pos, decode_pos));
+  EXPECT_EQ(pos, decode_pos);
+  EXPECT_EQ(sender.get_write_branch_id(), receiver.get_write_branch_id());
+  EXPECT_EQ(sender.get_ls_id(), receiver.get_ls_id());
+  EXPECT_EQ(sender.get_tablet_id(), receiver.get_tablet_id());
+}
+
+TEST_F(ObTestTx, insert_up_rollback_preserves_invalid_part_error)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, statement_sp);
+  using InsertUp = sql::ObTableInsertUpOp;
+  ObSEArray<InsertUp::ObTryInsertPart, 4> expected;
+  ObTxExecResult result;
+  ASSERT_EQ(OB_SUCCESS, expected.push_back(InsertUp::ObTryInsertPart()));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, InsertUp::check_rollback_participants(tx, statement_sp, expected, result));
+  EXPECT_TRUE(result.parts_.empty());
+}
+
+TEST_F(ObTestTx, rollback_checked_in_insert_up)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 10 * 1000 * 1000;
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, statement_sp);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 1, 111));
+  using InsertUp = sql::ObTableInsertUpOp;
+  ObSEArray<InsertUp::ObTryInsertPart, 4> expected;
+  ObTxExecResult result;
+
+  CREATE_BRANCH_SAVEPOINT(n1, tx, 200, branch_sp);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 2, 222, 200));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 3, 333, 100));
+  ASSERT_EQ(OB_SUCCESS, expected.push_back(InsertUp::ObTryInsertPart(n1->ls_id_, 200)));
+  ASSERT_EQ(OB_SUCCESS, InsertUp::check_rollback_participants(tx, branch_sp, expected, result));
+  ASSERT_TRUE(result.parts_.empty());
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, branch_sp, 2000 * 1000));
+  int64_t value = 0;
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 2, value));
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 1, value));
+  ASSERT_EQ(111, value);
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 3, value));
+  ASSERT_EQ(333, value);
+
+  CREATE_BRANCH_SAVEPOINT(n1, tx, 0, global_sp);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 4, 444));
+  expected.reuse();
+  ASSERT_EQ(OB_SUCCESS, expected.push_back(InsertUp::ObTryInsertPart(n1->ls_id_, 0)));
+  ASSERT_EQ(OB_SUCCESS, InsertUp::check_rollback_participants(tx, global_sp, expected, result));
+  ASSERT_TRUE(result.parts_.empty());
+  ASSERT_EQ(OB_SUCCESS, ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, global_sp, 2000 * 1000));
+  ASSERT_EQ(OB_ENTRY_NOT_EXIST, n1->read(tx, 4, value));
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 1, value));
+  ASSERT_EQ(111, value);
+  ASSERT_EQ(OB_SUCCESS, n1->read(tx, 3, value));
+  ASSERT_EQ(333, value);
+  ROLLBACK_TX(n1, tx);
+}
+
+static int init_insert_up_end_stmt_context(sql::ObExecContext &ctx,
+                                           sql::ObSQLSessionInfo &session,
+                                           sql::ObPhysicalPlan &plan,
+                                           ObTxDesc &tx,
+                                           const ObTxSEQ statement_sp)
+{
+  int ret = OB_SUCCESS;
+  session.tenant_id_ = tx.get_tenant_id();
+  session.effective_tenant_id_ = tx.get_tenant_id();
+  session.set_inner_session(); // No client/deadlock-detector setup is needed by these tests.
+  session.get_tx_desc() = &tx;
+  OZ(session.set_start_stmt());
+  ctx.set_my_session(&session);
+  ctx.get_das_ctx().set_savepoint(statement_sp);
+  OZ(ctx.create_physical_plan_ctx());
+  plan.set_stmt_type(stmt::T_INSERT);
+  if (OB_SUCC(ret)) {
+    ctx.get_physical_plan_ctx()->set_phy_plan(&plan);
+    ctx.set_errcode(OB_TRANS_NEED_ROLLBACK);
+  }
+  return ret;
+}
+
+TEST_F(ObTestTx, insert_up_rollback_rejects_null_session)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, statement_sp);
+  ObArenaAllocator allocator;
+  sql::ObPhysicalPlan plan;
+  sql::ObSQLSessionInfo session(tx.get_tenant_id());
+  DEFER(session.get_tx_desc() = nullptr);
+  sql::ObExecContext ctx(allocator);
+  ASSERT_EQ(OB_SUCCESS, init_insert_up_end_stmt_context(ctx, session, plan, tx, statement_sp));
+  sql::ObTableInsertUpSpec spec(allocator, PHY_INSERT_ON_DUP);
+  sql::ObTableInsertUpOp op(ctx, spec, nullptr);
+  DEFER(ctx.set_my_session(&session));
+  ctx.set_my_session(nullptr);
+  EXPECT_EQ(OB_ERR_UNEXPECTED, op.rollback_savepoint(statement_sp));
+  EXPECT_FALSE(tx.flags_.PARTS_INCOMPLETE_);
+}
+
+TEST_F(ObTestTx, insert_up_check_aborts_explicit_transaction_on_statement_rollback)
+{
+  START_TWO_TX_NODE(n1, n2);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 10 * 1000 * 1000;
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 1, 111));
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, statement_sp);
+  ASSERT_EQ(OB_SUCCESS, n1->write(tx, 2, 222));
+
+  ObArenaAllocator allocator;
+  sql::ObPhysicalPlan plan;
+  sql::ObSQLSessionInfo session(tx.get_tenant_id());
+  DEFER(session.get_tx_desc() = nullptr);
+  sql::ObExecContext ctx(allocator);
+  ASSERT_EQ(OB_SUCCESS, init_insert_up_end_stmt_context(ctx, session, plan, tx, statement_sp));
+  ASSERT_TRUE(session.has_explicit_start_trans());
+  sql::ObTableInsertUpSpec spec(allocator, PHY_INSERT_ON_DUP);
+  sql::ObTableInsertUpOp op(ctx, spec, nullptr);
+  sql::ObDASInsertOp task(allocator);
+  task.set_type(sql::DAS_OP_TABLE_INSERT);
+  task.set_ls_id(n2->ls_id_); // An expected participant absent from the descriptor.
+  task.set_task_status(sql::ObDasTaskStatus::FINISHED);
+  ASSERT_EQ(OB_SUCCESS, op.dml_rtctx_.das_ref_.add_batched_task(&task));
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, op.rollback_savepoint(statement_sp));
+  ASSERT_FALSE(ctx.get_trans_result().is_incomplete());
+  ASSERT_TRUE(tx.flags_.PARTS_INCOMPLETE_);
+  ASSERT_EQ(ObTxDesc::State::ACTIVE, tx.state_);
+  ASSERT_EQ(2, tx.parts_.count());
+  ASSERT_EQ(n2->ls_id_, tx.parts_.at(1).id_);
+  ASSERT_EQ(static_cast<int64_t>(ObTxPart::EPOCH_UNKNOWN), tx.parts_.at(1).epoch_);
+  ASSERT_FALSE(tx.parts_.at(1).addr_.is_valid());
+
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, sql::ObSqlTransControl::end_stmt(ctx, true, false));
+  ASSERT_EQ(ObTxDesc::State::ABORTED, tx.state_);
+  const int commit_ret = COMMIT_TX(n1, tx, 50000);
+  EXPECT_EQ(OB_TRANS_ROLLBACKED, commit_ret);
+}
+
+TEST_F(ObTestTx, px_incomplete_result_aborts_explicit_transaction_on_statement_rollback)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 10 * 1000 * 1000;
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, statement_sp);
+  ASSERT_EQ(ObTxDesc::State::ACTIVE, tx.state_);
+
+  ObArenaAllocator allocator;
+  sql::ObPhysicalPlan plan;
+  sql::ObSQLSessionInfo session(tx.get_tenant_id());
+  DEFER(session.get_tx_desc() = nullptr);
+  sql::ObExecContext ctx(allocator);
+  ASSERT_EQ(OB_SUCCESS, init_insert_up_end_stmt_context(ctx, session, plan, tx, statement_sp));
+  sql::ObPxFifoCoordSpec spec(allocator, PHY_PX_FIFO_COORD);
+  sql::ObPxFifoCoordOp coord(ctx, spec, nullptr);
+  sql::ObDfo dfo(allocator);
+  sql::ObPxSqcMeta sqc;
+  sql::ObPxFinishSqcResultMsg packet;
+  packet.rc_ = OB_TRANS_NEED_ROLLBACK;
+  packet.get_trans_result().set_incomplete();
+  ASSERT_EQ(OB_SUCCESS, packet.get_trans_result().add_uncertain_part(n1->ls_id_));
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, coord.msg_proc_.process_sqc_finish_msg_once(ctx, packet, &sqc, &dfo));
+  ASSERT_EQ(ObTxDesc::State::ACTIVE, tx.state_);
+  ASSERT_FALSE(ctx.get_trans_result().is_incomplete());
+  ASSERT_TRUE(tx.flags_.PARTS_INCOMPLETE_);
+  ASSERT_EQ(1, tx.parts_.count());
+  EXPECT_EQ(n1->ls_id_, tx.parts_.at(0).id_);
+  EXPECT_EQ(static_cast<int64_t>(ObTxPart::EPOCH_UNKNOWN), tx.parts_.at(0).epoch_);
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, sql::ObSqlTransControl::end_stmt(ctx, true, false));
+  EXPECT_EQ(ObTxDesc::State::ABORTED, tx.state_);
+  const int commit_ret = COMMIT_TX(n1, tx, 50000);
+  EXPECT_EQ(OB_TRANS_ROLLBACKED, commit_ret);
+}
+
+TEST_F(ObTestTx, px_termination_preserves_incomplete_participants_for_statement_rollback)
+{
+  START_ONE_TX_NODE(n1);
+  PREPARE_TX(n1, tx);
+  PREPARE_TX_PARAM(tx_param);
+  tx_param.timeout_us_ = 10 * 1000 * 1000;
+  ASSERT_EQ(OB_SUCCESS, n1->start_tx(tx, tx_param));
+  CREATE_IMPLICIT_SAVEPOINT(n1, tx, tx_param, statement_sp);
+  ObArenaAllocator allocator;
+  sql::ObPhysicalPlan plan;
+  sql::ObSQLSessionInfo session(tx.get_tenant_id());
+  DEFER(session.get_tx_desc() = nullptr);
+  sql::ObExecContext ctx(allocator);
+  ASSERT_EQ(OB_SUCCESS, init_insert_up_end_stmt_context(ctx, session, plan, tx, statement_sp));
+  ctx.set_errcode(OB_ERR_UNEXPECTED);
+  sql::ObPxFifoCoordSpec spec(allocator, PHY_PX_FIFO_COORD);
+  sql::ObPxFifoCoordOp coord(ctx, spec, nullptr);
+  sql::ObPxTerminateMsgProc proc(coord.coord_info_, coord.listener_);
+  sql::ObPxFinishSqcResultMsg packet;
+  packet.rc_ = OB_TRANS_NEED_ROLLBACK;
+  packet.get_trans_result().set_incomplete();
+  // No registered DFO: verify the marker survives even when later cleanup fails.
+  EXPECT_NE(OB_SUCCESS, proc.on_sqc_finish_msg(ctx, packet));
+  ASSERT_FALSE(ctx.get_trans_result().is_incomplete());
+  ASSERT_TRUE(tx.flags_.PARTS_INCOMPLETE_);
+  ASSERT_EQ(OB_TRANS_NEED_ROLLBACK, sql::ObSqlTransControl::end_stmt(ctx, true, false));
+  EXPECT_EQ(ObTxDesc::State::ABORTED, tx.state_);
+  const int commit_ret = COMMIT_TX(n1, tx, 50000);
+  EXPECT_EQ(OB_TRANS_ROLLBACKED, commit_ret);
+}
 
 #define TEST_MARK_ABORT_AND_COMMIT(FLG)                         \
   TEST_F(ObTestTx, commit_tx_sanity_check_flag_ ## FLG)         \

@@ -123,6 +123,26 @@ public:
   }
 
 protected:
+  struct ObTryInsertPart
+  {
+  public:
+    ObTryInsertPart() : ls_id_(), branch_id_(0) {}
+    ObTryInsertPart(const share::ObLSID &ls_id, const int16_t branch_id)
+      : ls_id_(ls_id), branch_id_(branch_id) {}
+    bool operator==(const ObTryInsertPart &other) const
+    { return ls_id_ == other.ls_id_ && branch_id_ == other.branch_id_; }
+
+    TO_STRING_KV(K_(ls_id), K_(branch_id));
+
+    share::ObLSID ls_id_;
+    int16_t branch_id_;
+  };
+
+  int collect_try_insert_parts(common::ObIArray<ObTryInsertPart> &parts);
+  static int check_rollback_participants(transaction::ObTxDesc &tx_desc,
+                                       const transaction::ObTxSEQ &savepoint_no,
+                                       const common::ObIArray<ObTryInsertPart> &expected_parts,
+                                       transaction::ObTxExecResult &result);
 
   // 物化所有要被replace into的行到replace_row_store_
   int load_batch_insert_up_rows(bool &is_iter_end, int64_t &insert_rows);
