@@ -22,12 +22,14 @@ class ObDDLIndependentDag;
 class ObDDLDagThreadPool : public share::ObThreadPool
 {
 public:
-  ObDDLDagThreadPool() : is_inited_(false), ddl_dag_(nullptr), session_info_(nullptr) {}
+  ObDDLDagThreadPool() : is_inited_(false), start_succeeded_(false), ddl_dag_(nullptr), session_info_(nullptr) {}
   int init(const int64_t thread_count, ObDDLIndependentDag *ddl_dag, sql::ObSQLSessionInfo *session_info);
+  virtual int start() override;
   virtual void run1() override;
 
 private:
   bool is_inited_;
+  bool start_succeeded_;
   ObDDLIndependentDag *ddl_dag_;
   sql::ObSQLSessionInfo *session_info_;
 };

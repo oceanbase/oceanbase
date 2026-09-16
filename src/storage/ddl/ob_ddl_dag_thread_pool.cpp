@@ -35,6 +35,25 @@ int ObDDLDagThreadPool::init(const int64_t thread_count, ObDDLIndependentDag *dd
   return ret;
 }
 
+int ObDDLDagThreadPool::start()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (ATOMIC_LOAD(&start_succeeded_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ddl dag thread pool already started", K(ret));
+  } else if (OB_FAIL(ObThreadPool::start())) {
+    // Partial startup has been rolled back before recording the original error.
+    ddl_dag_->simply_set_stop(ret);
+    LOG_WARN("start ddl dag thread pool failed", K(ret));
+  } else {
+    ATOMIC_STORE(&start_succeeded_, true);
+  }
+  return ret;
+}
+
 void ObDDLDagThreadPool::run1()
 {
   int ret = OB_SUCCESS;
@@ -51,7 +70,14 @@ void ObDDLDagThreadPool::run1()
     THIS_WORKER.set_compatibility_mode(ddl_dag_->get_compat_mode());
 
     FLOG_INFO("ddl dag thread start", "thread_idx", get_thread_idx(), KPC(ddl_dag_));
-    IGNORE_RETURN ddl_dag_->process();
+    // Threads::start() stops and joins already started threads on failure. Do not
+    // enter the DAG until all threads have started, as the DAG has its own stop state.
+    while (!has_set_stop() && !ATOMIC_LOAD(&start_succeeded_)) {
+      ob_usleep(1000);
+    }
+    if (!has_set_stop()) {
+      IGNORE_RETURN ddl_dag_->process();
+    }
     FLOG_INFO("ddl dag thread stop", "thread_idx", get_thread_idx(), KPC(ddl_dag_));
   }
 }
