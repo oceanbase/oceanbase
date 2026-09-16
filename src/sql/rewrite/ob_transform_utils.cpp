@@ -4406,7 +4406,8 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
                                                         const ObIArray<ObRawExpr*> &exprs,
                                                         const ObIArray<ObRawExpr*> &conditions,
                                                         bool is_strict,
-                                                        bool &is_unique)
+                                                        bool &is_unique,
+                                                        const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   ObSEArray<TableItem *, 1> table_items;
@@ -4416,7 +4417,8 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
   } else if (OB_FAIL(table_items.push_back(table))) {
     LOG_WARN("failed to push back tableitem", K(ret));
   } else if (OB_FAIL(check_exprs_unique_on_table_items(stmt, session_info, schema_checker,
-                                    table_items, exprs, conditions, is_strict, is_unique))) {
+                                    table_items, exprs, conditions, is_strict, is_unique,
+                                    extra_flags))) {
     LOG_WARN("failed to check exprs unique on table items", K(ret));
   }
   return ret;
@@ -4429,7 +4431,8 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
                                                         const ObIArray<ObRawExpr*> &exprs,
                                                         const ObIArray<ObRawExpr*> &conditions,
                                                         bool is_strict,
-                                                        bool &is_unique)
+                                                        bool &is_unique,
+                                                        const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session_info)) {
@@ -4450,7 +4453,8 @@ int ObTransformUtils::check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
     UniqueCheckInfo res_info;
     ObRelIds all_tables;
     ObSEArray<ObRawExpr*, 1> dummy_conds;
-    if (OB_FAIL(compute_tables_property(stmt, check_helper, table_items, conditions, res_info))) {
+    if (OB_FAIL(compute_tables_property(stmt, check_helper, table_items, conditions,
+                                        res_info, extra_flags))) {
       LOG_WARN("failed to compute tables property", K(ret));
     } else if (OB_FAIL(get_rel_ids_from_tables(stmt, table_items, all_tables))) {
       LOG_WARN("failed to add members", K(ret));
@@ -4615,7 +4619,7 @@ int ObTransformUtils::compute_stmt_property(const ObSelectStmt *stmt,
   } else if (stmt->is_set_stmt()) {
     ret = compute_set_stmt_property(stmt, check_helper, res_info, extra_flags);
   } else if (!stmt->is_hierarchical_query()
-             && OB_FAIL(compute_path_property(stmt, check_helper, res_info))) {
+             && OB_FAIL(compute_path_property(stmt, check_helper, res_info, extra_flags))) {
     LOG_WARN("failed to compute path property", K(ret));
   } else {
     //add const exprs / unique fd
@@ -4695,11 +4699,11 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
     LOG_WARN("failed to get select exprs", K(ret));
   } else if ((ObSelectStmt::EXCEPT == set_type || ObSelectStmt::INTERSECT == set_type) &&
              OB_FAIL(SMART_CALL(compute_stmt_property(stmt->get_set_query(0), check_helper,
-                                                      res_info)))) {
+                                                      res_info, extra_flags & FLAGS_IGNORE_FILTERS)))) {
     LOG_WARN("failed to compute left stmt property", K(ret));
   } else if (ObSelectStmt::INTERSECT == set_type &&
              OB_FAIL(SMART_CALL(compute_stmt_property(stmt->get_set_query(1), check_helper,
-                                                      right_info)))) {
+                                                      right_info, extra_flags & FLAGS_IGNORE_FILTERS)))) {
     LOG_WARN("failed to compute right stmt property", K(ret));
   } else if (!ignore_distinct && stmt->is_set_distinct() &&
              OB_FAIL(fd_factory->create_expr_fd_item(unique_fd, true, select_exprs,
@@ -4902,14 +4906,16 @@ void ObTransformUtils::UniqueCheckInfo::reset()
 
 int ObTransformUtils::compute_path_property(const ObDMLStmt *stmt,
                                             UniqueCheckHelper &check_helper,
-                                            UniqueCheckInfo &res_info)
+                                            UniqueCheckInfo &res_info,
+                                            const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
+  const bool ignore_filters = (extra_flags & FLAGS_IGNORE_FILTERS) == FLAGS_IGNORE_FILTERS;
   ObSEArray<ObRawExpr *, 8> cond_exprs;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(cond_exprs.assign(stmt->get_condition_exprs()))) {
+  } else if (!ignore_filters && OB_FAIL(cond_exprs.assign(stmt->get_condition_exprs()))) {
     LOG_WARN("failed to assign exprs", K(ret));
   } else {
 
@@ -4935,7 +4941,8 @@ int ObTransformUtils::compute_path_property(const ObDMLStmt *stmt,
         LOG_WARN("unexpected from item", K(ret), K(from_item));
       } else if (OB_FAIL(stmt->get_table_rel_ids(*table, rel_ids))) {
         LOG_WARN("failed to get table relids", K(ret));
-      } else if (OB_FAIL(compute_table_property(stmt, check_helper, table, cond_exprs, right_info))) {
+      } else if (OB_FAIL(compute_table_property(stmt, check_helper, table, cond_exprs,
+                                                right_info, extra_flags))) {
         LOG_WARN("failed to compute table property", K(ret));
       } else if (first_table) {
         first_table = false;
@@ -4956,7 +4963,7 @@ int ObTransformUtils::compute_path_property(const ObDMLStmt *stmt,
       if (OB_ISNULL(semi_infos.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else if (semi_infos.at(i)->is_anti_join()) {
+      } else if (ignore_filters || semi_infos.at(i)->is_anti_join()) {
         /* do nothing */
       } else if (OB_FAIL(append(semi_conditions, semi_infos.at(i)->semi_conditions_))) {
         LOG_WARN("failed to append conditions", K(ret));
@@ -4997,7 +5004,8 @@ int ObTransformUtils::compute_tables_property(const ObDMLStmt *stmt,
                                               UniqueCheckHelper &check_helper,
                                               const ObIArray<TableItem*> &table_items,
                                               const ObIArray<ObRawExpr*> &conditions,
-                                              UniqueCheckInfo &res_info)
+                                              UniqueCheckInfo &res_info,
+                                              const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> cond_exprs;
@@ -5018,7 +5026,8 @@ int ObTransformUtils::compute_tables_property(const ObDMLStmt *stmt,
     } else if (OB_ISNULL(table = table_items.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected from item", K(ret));
-    } else if (OB_FAIL(compute_table_property(stmt, check_helper, table, cond_exprs, right_info))) {
+    } else if (OB_FAIL(compute_table_property(stmt, check_helper, table, cond_exprs,
+                                              right_info, extra_flags))) {
       LOG_WARN("failed to compute table property", K(ret));
     } else if (first_table) {
       first_table = false;
@@ -5066,7 +5075,8 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
                                              UniqueCheckHelper &check_helper,
                                              const TableItem *table,
                                              ObIArray<ObRawExpr*> &cond_exprs,
-                                             UniqueCheckInfo &res_info)
+                                             UniqueCheckInfo &res_info,
+                                             const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   const JoinedTable *joined_table = NULL;
@@ -5079,7 +5089,8 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
     LOG_WARN("failed to compute basic table property", K(ret));
   } else if ((table->is_generated_table() || table->is_temp_table())
              && OB_FAIL(SMART_CALL(compute_generate_table_property(stmt, check_helper, table,
-                                                                   cond_exprs, res_info)))) {
+                                                                   cond_exprs, res_info,
+                                                                   extra_flags)))) {
     LOG_WARN("failed to compute generate table property", K(ret));
   } else if (!table->is_joined_table()) {
     ObSqlBitSet<> rel_ids;
@@ -5091,10 +5102,10 @@ int ObTransformUtils::compute_table_property(const ObDMLStmt *stmt,
   } else if (FALSE_IT(joined_table = static_cast<const JoinedTable *>(table))) {
   } else if (joined_table->is_inner_join()) {
     ret = SMART_CALL(compute_inner_join_property(stmt, check_helper, joined_table,
-                                                 cond_exprs, res_info));
+                                                 cond_exprs, res_info, extra_flags));
   } else if (IS_OUTER_JOIN(joined_table->joined_type_)) {
     ret = SMART_CALL(compute_outer_join_property(stmt, check_helper, joined_table,
-                                                 cond_exprs, res_info));
+                                                 cond_exprs, res_info, extra_flags));
   } else { // 改写阶段joined table 不存在 CONNECT_BY_JOIN 等
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected joined type", K(ret), K(*table));
@@ -5238,7 +5249,8 @@ int ObTransformUtils::compute_generate_table_property(const ObDMLStmt *stmt,
                                                       UniqueCheckHelper &check_helper,
                                                       const TableItem *table,
                                                       ObIArray<ObRawExpr*> &cond_exprs,
-                                                      UniqueCheckInfo &res_info)
+                                                      UniqueCheckInfo &res_info,
+                                                      const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   UniqueCheckInfo child_info;
@@ -5255,7 +5267,7 @@ int ObTransformUtils::compute_generate_table_property(const ObDMLStmt *stmt,
               OB_ISNULL(ref_query = table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected table", K(ret), K(*table));
-  } else if (OB_FAIL(SMART_CALL(compute_stmt_property(ref_query, check_helper, child_info)))) {
+  } else if (OB_FAIL(SMART_CALL(compute_stmt_property(ref_query, check_helper, child_info, extra_flags & FLAGS_IGNORE_FILTERS)))) {
     LOG_WARN("failed to compute stmt property", K(ret));
   } else if (OB_FAIL(stmt->get_table_rel_ids(*table, table_set))
              || OB_FAIL(res_info.table_set_.add_members(table_set))) {
@@ -5321,7 +5333,8 @@ int ObTransformUtils::compute_inner_join_property(const ObDMLStmt *stmt,
                                                   UniqueCheckHelper &check_helper,
                                                   const JoinedTable *table,
                                                   ObIArray<ObRawExpr*> &cond_exprs,
-                                                  UniqueCheckInfo &res_info)
+                                                  UniqueCheckInfo &res_info,
+                                                  const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   const TableItem *left_table = NULL;
@@ -5336,10 +5349,10 @@ int ObTransformUtils::compute_inner_join_property(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected inner join table", K(ret), K(*table));
   } else if (OB_FAIL(compute_table_property(stmt, check_helper, left_table,
-                                            cond_exprs, left_info))) {
+                                            cond_exprs, left_info, extra_flags))) {
     LOG_WARN("failed to compute inner join left table property", K(ret));
   } else if (OB_FAIL(compute_table_property(stmt, check_helper, right_table,
-                                            cond_exprs, right_info))) {
+                                            cond_exprs, right_info, extra_flags))) {
     LOG_WARN("failed to compute inner join right table property", K(ret));
   } else if (OB_FAIL(compute_inner_join_property(stmt, check_helper, left_info, right_info,
                                                  table->get_join_conditions(), cond_exprs,
@@ -5434,7 +5447,8 @@ int ObTransformUtils::compute_outer_join_property(const ObDMLStmt *stmt,
                                                   UniqueCheckHelper &check_helper,
                                                   const JoinedTable *table,
                                                   ObIArray<ObRawExpr*> &cond_exprs,
-                                                  UniqueCheckInfo &res_info)
+                                                  UniqueCheckInfo &res_info,
+                                                  const uint64_t extra_flags)
 {
   int ret = OB_SUCCESS;
   const TableItem *left_table = NULL;
@@ -5460,10 +5474,10 @@ int ObTransformUtils::compute_outer_join_property(const ObDMLStmt *stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected inner join table", K(ret), K(*table));
   } else if (OB_FAIL(compute_table_property(stmt, check_helper, left_table,
-                                            dummy_conds, left_info))) {
+                                            dummy_conds, left_info, extra_flags))) {
     LOG_WARN("failed to compute inner join left table property", K(ret));
   } else if (OB_FAIL(compute_table_property(stmt, check_helper, right_table,
-                                            dummy_conds, right_info))) {
+                                            dummy_conds, right_info, extra_flags))) {
     LOG_WARN("failed to compute inner join right table property", K(ret));
   } else {
     ObSEArray<ObRawExpr*, 4> left_join_exprs;

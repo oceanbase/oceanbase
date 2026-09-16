@@ -34,6 +34,7 @@ enum CheckStmtUniqueFlags {
   FLAGS_DEFAULT          = 0,      //nothing
   FLAGS_IGNORE_DISTINCT  = 1 << 0, //for distinct
   FLAGS_IGNORE_GROUP     = 1 << 1, //for group by
+  FLAGS_IGNORE_FILTERS   = 1 << 2, //for filter conditions
 };
 
 enum NULLABLE_SCOPE {
@@ -801,6 +802,7 @@ public:
    * @param conditions from items的连接条件
    * @param is_strict 是否考虑空值
    * @param is_unique 是否有唯一性
+   * @param extra_flags 控制唯一性相关属性计算方式的标志位
    */
   static int check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
                                                ObSQLSessionInfo *session_info,
@@ -809,7 +811,8 @@ public:
                                                const ObIArray<ObRawExpr*> &exprs,
                                                const ObIArray<ObRawExpr*> &conditions,
                                                bool is_strict,
-                                               bool &is_unique);
+                                               bool &is_unique,
+                                               const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int check_exprs_unique_on_table_items(const ObDMLStmt *stmt,
                                                ObSQLSessionInfo *session_info,
@@ -818,7 +821,8 @@ public:
                                                const ObIArray<ObRawExpr*> &exprs,
                                                const ObIArray<ObRawExpr*> &conditions,
                                                bool is_strict,
-                                               bool &is_unique);
+                                               bool &is_unique,
+                                               const uint64_t extra_flags = FLAGS_DEFAULT);
 
   /**
    * @brief check_stmt_unique
@@ -869,19 +873,22 @@ public:
 
   static int compute_path_property(const ObDMLStmt *stmt,
                                    UniqueCheckHelper &check_helper,
-                                   UniqueCheckInfo &res_info);
+                                   UniqueCheckInfo &res_info,
+                                   const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int compute_tables_property(const ObDMLStmt *stmt,
                                      UniqueCheckHelper &check_helper,
                                      const ObIArray<TableItem*> &table_items,
                                      const ObIArray<ObRawExpr*> &conditions,
-                                     UniqueCheckInfo &res_info);
+                                     UniqueCheckInfo &res_info,
+                                     const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int compute_table_property(const ObDMLStmt *stmt,
                                     UniqueCheckHelper &check_helper,
                                     const TableItem *table,
                                     ObIArray<ObRawExpr*> &cond_exprs,
-                                    UniqueCheckInfo &res_info);
+                                    UniqueCheckInfo &res_info,
+                                    const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int compute_basic_table_property(const ObDMLStmt *stmt,
                                           UniqueCheckHelper &check_helper,
@@ -898,13 +905,15 @@ public:
                                              UniqueCheckHelper &check_helper,
                                              const TableItem *table,
                                              ObIArray<ObRawExpr*> &cond_exprs,
-                                             UniqueCheckInfo &res_info);
+                                             UniqueCheckInfo &res_info,
+                                             const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int compute_inner_join_property(const ObDMLStmt *stmt,
                                          UniqueCheckHelper &check_helper,
                                          const JoinedTable *table,
                                          ObIArray<ObRawExpr*> &cond_exprs,
-                                         UniqueCheckInfo &res_info);
+                                         UniqueCheckInfo &res_info,
+                                         const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int compute_inner_join_property(const ObDMLStmt *stmt,
                                          UniqueCheckHelper &check_helper,
@@ -918,7 +927,8 @@ public:
                                          UniqueCheckHelper &check_helper,
                                          const JoinedTable *table,
                                          ObIArray<ObRawExpr*> &cond_exprs,
-                                         UniqueCheckInfo &res_info);
+                                         UniqueCheckInfo &res_info,
+                                         const uint64_t extra_flags = FLAGS_DEFAULT);
 
   static int get_equal_set_conditions(ObRawExprFactory &expr_factory,
                                       ObSQLSessionInfo *session_info,

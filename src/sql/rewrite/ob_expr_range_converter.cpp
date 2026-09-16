@@ -50,6 +50,8 @@ int ObExprRangeConverter::convert_expr_to_range_node(const ObRawExpr *expr,
                                                      bool &is_precise)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 4> table_ids;
+  const uint64_t expected_table_id = ctx_.is_search_index()? ctx_.search_index_range_ctx_->expr_table_id(): ctx_.table_id_;
   range_node = nullptr;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -57,6 +59,14 @@ int ObExprRangeConverter::convert_expr_to_range_node(const ObRawExpr *expr,
   } else if (expr->is_const_expr()) {
     if(OB_FAIL(convert_const_expr(expr, range_node))) {
       LOG_WARN("failed to convert const expr");
+    }
+  } else if (OB_FAIL(ObRawExprUtils::extract_table_ids(expr, table_ids))) {
+    LOG_WARN("failed to extract table id", K(ret));
+  } else if (1 != table_ids.count() || table_ids.at(0) != expected_table_id) {
+    ctx_.cur_is_precise_ = false;
+    LOG_TRACE("expr contains other table id, treat it as always true", K(table_ids), K(expected_table_id), K(ctx_.table_id_));
+    if(OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+      LOG_WARN("failed to generate always true node", KPC(expr));
     }
   } else if (T_OP_LIKE == expr->get_expr_type()) {
     if(OB_FAIL(convert_like_expr(expr, expr_depth, range_node))) {

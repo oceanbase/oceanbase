@@ -379,6 +379,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     force_no_link_ = force_no_link;
     constraints_expr_factory_ = constraints_expr_factory;
     ignore_fake_const_udf_ = ignore_fake_const_udf;
+    table_id_ = pre_range_graph->get_table_id();
     if (OB_NOT_NULL(index_schema) &&
         index_schema->is_unique_index() &&
         index_schema->get_index_column_num() > 0) {
@@ -2015,6 +2016,7 @@ int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
   } else {
     int64_t column_idx = -1;
     const uint64_t column_id = column_item.column_id_;
+    expr_table_id_ = column_item.table_id_;
     if (OB_FAIL(base_table_schema->get_store_column_idx(column_id, column_idx))) {
       LOG_WARN("failed to get store column idx", K(ret), K(column_id));
     } else {

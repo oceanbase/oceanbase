@@ -427,7 +427,6 @@ private:
 
   int eliminate_semi_join_self_key(ObDMLStmt *stmt,
                                    SemiInfo *semi_info,
-                                   ObIArray<ObRawExpr*> &conds,
                                    bool &trans_happened,
                                    bool &has_removed_semi_info,
                                    ObIArray<ObSEArray<TableItem *, 4>> &trans_tables);
@@ -482,14 +481,12 @@ private:
    */
   int check_transform_validity_semi_self_key(ObDMLStmt *stmt,
                                              SemiInfo *semi_info,
-                                             ObIArray<ObRawExpr*> &candi_conds,
                                              TableItem *&source_table,
                                              TableItem *&right_table,
                                              ObStmtMapInfo &stmt_map_info);
 
   int check_transform_validity_semi_self_key(ObDMLStmt *stmt,
                                              SemiInfo *semi_info,
-                                             ObIArray<ObRawExpr*> &candi_conds,
                                              ObIArray<TableItem*> &left_tables,
                                              ObIArray<TableItem*> &right_tables,
                                              ObIArray<ObStmtMapInfo> &stmt_map_infos,

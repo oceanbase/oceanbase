@@ -248,7 +248,7 @@ struct ObSearchIndexRangeCtx
 {
 public:
   ObSearchIndexRangeCtx() :
-    column_meta_(), column_idx_(OB_INVALID_INDEX), need_constraint_(false), path_prefix_(),
+    column_meta_(), expr_table_id_(OB_INVALID_ID), column_idx_(OB_INVALID_INDEX), need_constraint_(false), path_prefix_(),
     array_type_path_(), pick_type_(T_NULL), json_filter_(nullptr), cons_encode_type_(0)
   {}
 
@@ -259,6 +259,7 @@ public:
            common::ObIAllocator &allocator);
   bool is_range_key(const uint64_t column_id) const { return column_id == column_meta_.column_id_; }
   uint64_t column_id() const { return column_meta_.column_id_; }
+  uint64_t expr_table_id() const { return expr_table_id_; }
   ObRangeColumnMeta *column_meta() { return &column_meta_; }
   inline bool has_pick() const { return pick_type_ != T_NULL; }
   inline ObItemType get_pick_type() const { return pick_type_; }
@@ -266,11 +267,12 @@ public:
   const share::ObSearchIndexConfigFilter *get_json_filter() const { return json_filter_; }
   uint8_t get_cons_encode_type() const { return cons_encode_type_; }
 
-  TO_STRING_KV(K_(column_meta), K_(column_idx), K_(path_prefix), K_(array_type_path), K_(pick_type),
+  TO_STRING_KV(K_(column_meta), K_(expr_table_id), K_(column_idx), K_(path_prefix), K_(array_type_path), K_(pick_type),
                KP_(json_filter), K_(cons_encode_type));
 
   // selected column info
   ObRangeColumnMeta column_meta_;  // column meta used to extract search index range.
+  uint64_t expr_table_id_;          // table id of the expr in search index table.
   int64_t column_idx_;             // column index in search index table.
   bool need_constraint_;           // constraint to check string length
   ObString path_prefix_;           // current literal path string (JSON path).
@@ -307,7 +309,8 @@ struct ObQueryRangeCtx
       unique_index_column_num_(-1),
       constraints_expr_factory_(nullptr),
       ignore_fake_const_udf_(false),
-      search_index_range_ctx_(nullptr) {}
+      search_index_range_ctx_(nullptr),
+      table_id_(OB_INVALID_ID) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -360,6 +363,7 @@ struct ObQueryRangeCtx
   ObRawExprFactory *constraints_expr_factory_;
   bool ignore_fake_const_udf_;
   ObSearchIndexRangeCtx *search_index_range_ctx_;
+  uint64_t table_id_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
