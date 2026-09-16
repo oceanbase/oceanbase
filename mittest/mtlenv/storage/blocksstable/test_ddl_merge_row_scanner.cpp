@@ -11,6 +11,7 @@
 #include "storage/access/ob_sstable_row_scanner.h"
 #include "ob_index_block_data_prepare.h"
 #include "storage/column_store/ob_co_sstable_row_scanner.h"
+#include "storage/test_schema_prepare.h"
 
 namespace oceanbase
 {
@@ -44,6 +45,8 @@ public:
       const int64_t hit_mode);
   void test_border(const bool is_reverse_scan);
   void test_basic(const bool is_reverse_scan);
+  void prepare_empty_co_read_tables();
+  void commit_ddl_complete();
 
 protected:
   enum CacheHitMode
@@ -59,6 +62,9 @@ private:
   ObDatumRow end_row_;
   ObSSTable *ddl_sstable_ptr_array_[1];
   ObFixedArray<int32_t, ObIAllocator> out_cols_project_;
+  ObDDLKV kv_;
+  ObDDLKV *kv_ptr_ = nullptr;
+  ObTabletTableStore store_;
 };
 
 TestDDLMergeRowScanner::TestDDLMergeRowScanner()
@@ -115,6 +121,11 @@ void TestDDLMergeRowScanner::SetUp()
 
 void TestDDLMergeRowScanner::TearDown()
 {
+  store_.reset();
+  // The empty-CO tests borrow ddl_memtable_ from the fixture.
+  kv_.get_ddl_memtables().reset();
+  kv_.reset();
+  destroy_query_param();
   tablet_handle_.get_obj()->table_store_addr_.get_ptr()->ddl_sstables_.reset();
   tablet_handle_.get_obj()->ddl_kv_count_ = 0;
   tablet_handle_.get_obj()->ddl_kvs_ = nullptr;
@@ -537,6 +548,123 @@ TEST_F(TestDDLMergeRowScanner, test_random_scan)
     test_full_case(range, start, end, is_reverse_scan, i);
   }
   destroy_query_param();
+}
+
+void TestDDLMergeRowScanner::prepare_empty_co_read_tables()
+{
+  ObTablet &tablet = *tablet_handle_.get_obj();
+  // Reuse the existing full-data SSTable and rebuild only the DDL read view.
+  tablet.table_store_addr_.get_ptr()->ddl_sstables_.reset();
+  unittest::TestSchemaPrepare::add_all_and_each_column_group(allocator_, table_schema_);
+  ASSERT_TRUE(tablet.storage_schema_addr_.is_memory_object());
+  ObStorageSchema *schema = tablet.storage_schema_addr_.get_ptr();
+  ASSERT_NE(nullptr, schema);
+  ObIAllocator *schema_allocator = schema->allocator_;
+  schema->reset();
+  ASSERT_EQ(OB_SUCCESS, schema->init(*schema_allocator, table_schema_, lib::Worker::CompatMode::MYSQL));
+  int32_t base_cg_idx = -1;
+  ASSERT_EQ(OB_SUCCESS, schema->get_base_rowkey_column_group_index(base_cg_idx));
+
+  // Keep a normal SSTable as the expected result and expose its macro blocks via a CO DDL KV.
+  sstable_.key_.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE;
+  sstable_.key_.column_group_idx_ = base_cg_idx;
+  prepare_ddl_memtable();
+  sstable_.key_.table_type_ = ObITable::MAJOR_SSTABLE;
+  ASSERT_EQ(ObITable::DDL_MEM_CO_SSTABLE, ddl_memtable_.get_key().table_type_);
+  ASSERT_EQ(OB_SUCCESS, kv_.init(ObLSID(ls_id_), ObTabletID(tablet_id_),
+      ddl_memtable_.meta_->get_ddl_scn(), SNAPSHOT_VERSION, ddl_memtable_.meta_->get_ddl_scn(), DATA_CURRENT_VERSION));
+  ASSERT_EQ(OB_SUCCESS, kv_.get_ddl_memtables().push_back(&ddl_memtable_));
+  ASSERT_EQ(OB_SUCCESS, kv_.freeze(SCN::plus(kv_.get_ddl_start_scn(), 1)));
+  ASSERT_EQ(OB_SUCCESS, kv_.prepare_sstable(false /* no pending macro writes in this fixture */));
+  kv_ptr_ = &kv_;
+  tablet.ddl_kvs_ = &kv_ptr_;
+  tablet.ddl_kv_count_ = 1;
+  ObArray<ObDDLKV *> kvs;
+  ASSERT_EQ(OB_SUCCESS, kvs.push_back(&kv_));
+  store_.is_inited_ = true;
+  ASSERT_EQ(OB_SUCCESS, store_.ddl_mem_sstables_.init(allocator_, kvs));
+  tablet.tablet_meta_.multi_version_start_ = SNAPSHOT_VERSION;
+  ASSERT_TRUE(store_.major_tables_.empty());
+  ASSERT_TRUE(store_.ddl_sstables_.empty());
+}
+
+void TestDDLMergeRowScanner::commit_ddl_complete()
+{
+  ObTablet &tablet = *tablet_handle_.get_obj();
+  ObStorageSchema *schema = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tablet.load_storage_schema(allocator_, schema));
+  ObTabletDDLCompleteMdsUserData data;
+  data.has_complete_ = true;
+  data.direct_load_type_ = ObDirectLoadType::SN_IDEM_DIRECT_LOAD_DDL;
+  data.snapshot_version_ = SNAPSHOT_VERSION;
+  data.data_format_version_ = DATA_CURRENT_VERSION;
+  data.table_key_ = sstable_.get_key();
+  data.start_scn_ = kv_.get_ddl_start_scn();
+  ASSERT_EQ(OB_SUCCESS, data.set_storage_schema(*schema, allocator_));
+  ObTabletObjLoadHelper::free(allocator_, schema);
+  mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(123)));
+  ASSERT_EQ(OB_SUCCESS, tablet.set_ddl_complete(ObTabletDDLCompleteMdsUserDataKey(), data, ctx, 0));
+  const SCN commit_scn = SCN::plus(SCN::min_scn(), 100);
+  ctx.single_log_commit(commit_scn, commit_scn);
+}
+
+TEST_F(TestDDLMergeRowScanner, read_nonempty_ddl_kv)
+{
+  prepare_empty_co_read_tables();
+  ASSERT_FALSE(HasFatalFailure());
+  commit_ddl_complete();
+  ObTablet &tablet = *tablet_handle_.get_obj();
+  ObTableStoreIterator tables;
+  ASSERT_EQ(OB_SUCCESS, store_.calculate_read_tables(SNAPSHOT_VERSION, tablet, tables, false, false));
+  ASSERT_EQ(1, tables.count());
+  ObITable *table = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tables.get_next(table));
+  ASSERT_NE(nullptr, table);
+  ASSERT_EQ(ObITable::DDL_MERGE_CO_SSTABLE, table->get_key().table_type_);
+  ASSERT_TRUE(static_cast<ObSSTable *>(table)->is_empty());
+  ASSERT_FALSE(table->no_data_to_read());
+
+  prepare_query_param(false);
+  ObDatumRange range;
+  range.set_whole_range();
+  ObSSTableRowScanner<> expected;
+  ObCOSSTableRowScanner actual;
+  ASSERT_EQ(OB_SUCCESS, expected.init(iter_param_, context_, &sstable_, &range));
+  ASSERT_EQ(OB_SUCCESS, actual.init(iter_param_, context_, table, &range));
+  const ObDatumRow *expected_row = nullptr;
+  const ObDatumRow *actual_row = nullptr;
+  for (int64_t i = 0; i < row_cnt_; ++i) {
+    ASSERT_EQ(OB_SUCCESS, expected.inner_get_next_row(expected_row));
+    ASSERT_EQ(OB_SUCCESS, actual.inner_get_next_row(actual_row));
+    ASSERT_TRUE(*expected_row == *actual_row) << "row " << i;
+  }
+  ASSERT_EQ(OB_ITER_END, expected.inner_get_next_row(expected_row));
+  ASSERT_EQ(OB_ITER_END, actual.inner_get_next_row(actual_row));
+  actual.reset();
+  expected.reset();
+  iter_param_.out_cols_project_ = nullptr;
+  destroy_query_param();
+}
+
+TEST_F(TestDDLMergeRowScanner, reject_unready_and_old_snapshots)
+{
+  prepare_empty_co_read_tables();
+  ASSERT_FALSE(HasFatalFailure());
+  ObTablet &tablet = *tablet_handle_.get_obj();
+  ObTableStoreIterator tables;
+  ASSERT_EQ(OB_REPLICA_NOT_READABLE,
+      store_.calculate_read_tables(SNAPSHOT_VERSION, tablet, tables, false, false));
+  commit_ddl_complete();
+  tables.reset();
+  ASSERT_EQ(OB_SNAPSHOT_DISCARDED,
+      store_.calculate_read_tables(SNAPSHOT_VERSION - 1, tablet, tables, false, false));
+  tables.reset();
+  ASSERT_EQ(OB_SUCCESS,
+      store_.calculate_read_tables(SNAPSHOT_VERSION + 1, tablet, tables, false, false));
+  tablet.tablet_meta_.multi_version_start_ = SNAPSHOT_VERSION + 1;
+  tables.reset();
+  ASSERT_EQ(OB_SNAPSHOT_DISCARDED,
+      store_.calculate_read_tables(SNAPSHOT_VERSION, tablet, tables, false, false));
 }
 
 }

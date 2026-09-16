@@ -796,6 +796,8 @@ int ObTabletTableStore::calculate_ddl_read_tables(
       } else if (OB_FAIL(iterator.add_ddl_co_table(ddl_tmp_handle, ddl_tmp_sstable->handle_.get_table()))) {
         LOG_WARN("add ddl empty co sstable failed", K(ret));
       } else {
+        // Use the actual CO read entry, whose lifetime is held by the iterator.
+        base_table = static_cast<ObSSTable *>(ddl_tmp_sstable->handle_.get_table());
         LOG_INFO("add ddl empty co sstable", KP(ddl_tmp_sstable), K(tablet.get_tablet_id()), K(ddl_complete_data.snapshot_version_));
       }
       if (OB_NOT_NULL(ddl_tmp_sstable)) {
