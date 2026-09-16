@@ -2511,6 +2511,19 @@ int ObOpBatchRowWrapper::get_next_batch(const int64_t max_row_cnt, const ObBatch
       } else {
         brs_.end_ = true;
         ret = OB_SUCCESS;
+
+        if (need_init_vector_ && brs_.size_ > 0) {
+          for (int i = 0; OB_SUCC(ret) && i < output.count(); ++i) {
+            ObExpr *expr = output.at(i);
+            const VectorFormat expr_fmt = expr->get_format(eval_ctx_);
+            if (expr_fmt != VEC_UNIFORM && expr_fmt != VEC_UNIFORM_CONST
+                && OB_FAIL(expr->init_vector(
+                      eval_ctx_, expr->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST, 1))) {
+              LOG_WARN("failed to init vector after scalar child iter end", K(ret), K(i));
+            }
+          }
+        }
+
         LOG_DEBUG("iter end", K(brs_));
       }
     } else {
