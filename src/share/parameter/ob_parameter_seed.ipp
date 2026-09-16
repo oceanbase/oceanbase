@@ -2569,6 +2569,9 @@ DEF_STR_WITH_CHECKER(_iut_stat_collection_type, OB_TENANT_PARAMETER, "SAMPLED",
 DEF_INT(optimizer_index_cost_adj, OB_TENANT_PARAMETER, "0", "[0,100]",
         "adjust costing of index scan",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_DBL(_optimizer_index_cost_fuzz_ratio, OB_TENANT_PARAMETER, "1.01", "[1,]",
+        "fuzzy cost comparison ignores negligible differences.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(enable_rpc_authentication_bypass, OB_CLUSTER_PARAMETER, "True",
         "specifies whether allow OMS service to connect "
         "cluster and provide service when rpc authentication is turned on.",

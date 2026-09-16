@@ -220,8 +220,9 @@ public:
   void set_is_multivalue_index(const bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
   bool is_force_direction() const { return force_direction_; }
   void set_force_direction(bool force) { force_direction_ = force; }
-  TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
-               K_(is_fulltext_index), K_(is_multivalue_index), K_(is_search_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
+  TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back),
+               K_(is_index_global), K_(is_fulltext_index), K_(is_multivalue_index),
+               K_(is_search_index), K_(range_info), K_(ordering_info), K_(interesting_order_info),
                K_(interesting_order_prefix_count));
 private:
   uint64_t index_id_;

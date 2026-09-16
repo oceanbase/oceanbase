@@ -723,13 +723,19 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     // As a result, the final output order of the data may not match the original index table output order.
     // Therefore, it's necessary to add an additional sort operator at the upper level.
     path->ordering_.reset();
+    path->interesting_order_info_=0;
+    path->interesting_order_prefix_count_=0;
   } else if (path->is_hybrid_search_path()) {
     // Hybrid search final output results is ordered by relavent score instead of rowkey.
     path->ordering_.reset();
+    path->interesting_order_info_=0;
+    path->interesting_order_prefix_count_=0;
   } else if (share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
     // Oracle agent tabel may has different collation between schema and real table.
     // Hence we should not use the ordering from oracle agent table.
     path->ordering_.reset();
+    path->interesting_order_info_=0;
+    path->interesting_order_prefix_count_=0;
   } else if (path->use_das_ &&
              !path->ordering_.empty()) {
     const ObTableSchema *table_schema = nullptr;
@@ -747,6 +753,8 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
         path->is_local_order_by_das_ = true;
       } else {
         path->ordering_.reset();
+        path->interesting_order_info_=0;
+        path->interesting_order_prefix_count_=0;
       }
     }
   } else if (path->ordering_.empty() || is_at_most_one_row_ || !path->strong_sharding_->is_distributed()) {
@@ -2205,6 +2213,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.is_rescan_ = helper.is_inner_path_ || get_plan()->get_is_rescan_subplan();
     ap->range_prefix_count_ = index_info_entry->get_range_info().get_range_prefix_count();
     ap->interesting_order_info_ = index_info_entry->get_interesting_order_info();
+    ap->interesting_order_prefix_count_ = index_info_entry->get_interesting_order_prefix_count();
     ap->for_update_ = table_item->for_update_;
     ap->use_skip_scan_ = use_skip_scan;
     ap->index_prefix_ = index_info_entry->get_range_info().get_index_prefix();
@@ -9123,8 +9132,30 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
     int64_t left_dominated_count = 0;
     int64_t right_dominated_count = 0;
     int64_t uncompareable_count = 0;
-    // check dominate relationship for cost
-    if (fabs(first_path.cost_ - second_path.cost_) < OB_DOUBLE_EPSINON) {
+    const double index_cost_fuzz_ratio = OPT_CTX.get_index_cost_fuzz_ratio();
+    // record the number of cost slightly dominated
+    // -1: left cost is slightly better; 1: right cost is slightly better; 0: cost is equal
+    int64_t cost_slightly_dominated = 0;
+
+    if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
+      if (index_cost_fuzz_ratio * first_path.cost_ < second_path.cost_) {
+        left_dominated_count++;
+        OPT_TRACE("left path is cheaper");
+      } else if (index_cost_fuzz_ratio * second_path.cost_ < first_path.cost_) {
+        right_dominated_count++;
+        OPT_TRACE("right path is cheaper");
+      } else {
+        // fuzzily equal
+        OPT_TRACE("the cost of the two paths is fuzzily equal");
+        if (first_path.cost_ < second_path.cost_) {
+          cost_slightly_dominated = -1;
+        } else if (first_path.cost_ > second_path.cost_) {
+          cost_slightly_dominated = 1;
+        } else {
+          cost_slightly_dominated = 0;
+        }
+      }
+    } else if (fabs(first_path.cost_ - second_path.cost_) < OB_DOUBLE_EPSINON) {
       // do nothing
       OPT_TRACE("the cost of the two paths is equal");
     } else if (first_path.cost_ < second_path.cost_) {
@@ -9214,33 +9245,46 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
     // check dominate relationship for ordering info
     if (OB_FAIL(ret) || relation == DominateRelation::OBJ_UNCOMPARABLE) {
       //do nothing
-    } else if (OB_FAIL(ObOptimizerUtil::compute_ordering_relationship(first_path.has_interesting_order(),
-                                                                      second_path.has_interesting_order(),
-                                                                      first_path.ordering_,
-                                                                      second_path.ordering_,
-                                                                      get_output_equal_sets(),
-                                                                      get_output_const_exprs(),
-                                                                      temp_relation))) {
+    } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
+      if (OB_FAIL(ObOptimizerUtil::compute_interest_ordering_relationship(
+          first_path,
+          second_path,
+          get_output_equal_sets(),
+          get_output_const_exprs(),
+          temp_relation))) {
+        LOG_WARN("failed to compute ordering relationship", K(ret));
+      }
+    } else if (OB_FAIL(ObOptimizerUtil::compute_ordering_relationship(
+        first_path.has_interesting_order(),
+        second_path.has_interesting_order(),
+        first_path.ordering_,
+        second_path.ordering_,
+        get_output_equal_sets(),
+        get_output_const_exprs(),
+        temp_relation))) {
       LOG_WARN("failed to compute ordering relationship", K(ret));
-    } else if (temp_relation == DominateRelation::OBJ_EQUAL) {
-      /*do nothing*/
-      OPT_TRACE("the interesting order of the two paths is equal");
-    } else if (temp_relation == DominateRelation::OBJ_LEFT_DOMINATE) {
-      left_dominated_count++;
-      OPT_TRACE("left path dominate right path because of interesting order");
-      if (right_dominated_count > 0) {
+    }
+    if (OB_SUCC(ret) && DominateRelation::OBJ_UNCOMPARABLE != relation) {
+      if (DominateRelation::OBJ_EQUAL == temp_relation) {
+        /*do nothing*/
+        OPT_TRACE("the interesting order of the two paths is equal");
+      } else if (DominateRelation::OBJ_LEFT_DOMINATE == temp_relation) {
+        left_dominated_count++;
+        OPT_TRACE("left path dominate right path because of interesting order");
+        if (right_dominated_count > 0) {
+          relation = DominateRelation::OBJ_UNCOMPARABLE;
+        }
+      } else if (DominateRelation::OBJ_RIGHT_DOMINATE == temp_relation) {
+        OPT_TRACE("right path dominate left path because of interesting order");
+        right_dominated_count++;
+        if (left_dominated_count > 0) {
+          relation = DominateRelation::OBJ_UNCOMPARABLE;
+        }
+      } else {
+        OPT_TRACE("interesting order can not compare");
+        uncompareable_count++;
         relation = DominateRelation::OBJ_UNCOMPARABLE;
       }
-    } else if (temp_relation == DominateRelation::OBJ_RIGHT_DOMINATE) {
-      OPT_TRACE("right path dominate left path because of interesting order");
-      right_dominated_count++;
-      if (left_dominated_count > 0) {
-        relation = DominateRelation::OBJ_UNCOMPARABLE;
-      }
-    } else {
-      OPT_TRACE("interesting order can not compare");
-      uncompareable_count++;
-      relation = DominateRelation::OBJ_UNCOMPARABLE;
     }
 
     // relation is EQUAL now, check index column count when both not index back
@@ -9260,6 +9304,21 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
         ++right_dominated_count;
       } else {
         // do nothing
+      }
+    }
+
+    if (OB_SUCC(ret) &&
+        OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2) &&
+        left_dominated_count == 0 && right_dominated_count == 0 && uncompareable_count == 0) {
+      if (cost_slightly_dominated < 0) {
+        ++left_dominated_count;
+        OPT_TRACE("left path is slightly cheaper");
+      } else if (cost_slightly_dominated > 0) {
+        ++right_dominated_count;
+        OPT_TRACE("right path is slightly cheaper");
+      } else {
+        // do nothing
+        OPT_TRACE("the cost of the two paths is equal");
       }
     }
 
@@ -9544,6 +9603,7 @@ void oceanbase::sql::Path::reuse()
   is_range_order_ = false;
   ordering_.reuse();
   interesting_order_info_ = OrderingFlag::NOT_MATCH;
+  interesting_order_prefix_count_ = 0;
   filter_.reuse();
   cost_ = 0.0;
   op_cost_ = 0.0;
@@ -9607,6 +9667,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   is_valid_inner_path_ = other.is_valid_inner_path_;
   path_number_ = other.path_number_;
   interesting_order_info_ = other.interesting_order_info_;
+  interesting_order_prefix_count_ = other.interesting_order_prefix_count_;
   inherit_sharding_index_ = other.inherit_sharding_index_;
 
   if (OB_FAIL(ordering_.assign(other.ordering_))) {

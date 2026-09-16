@@ -864,6 +864,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool nested_loop_join_enabled = tenant_config.is_valid() && tenant_config->_nested_loop_join_enabled;
   bool enable_adj_index_cost = false;
   int64_t optimizer_index_cost_adj = 0;
+  double index_cost_fuzz_ratio = tenant_config.is_valid() ? tenant_config->_optimizer_index_cost_fuzz_ratio : 1.01;
   bool is_skip_scan_enable = session.is_index_skip_scan_enabled();
   bool is_partial_group_by_pushdown_enabled = true;
   bool is_partial_limit_pushdown_enabled = true;
@@ -992,6 +993,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_has_cursor_expression(has_cursor_expr);
     ctx_.set_das_keep_order_enabled(GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0 ? false : das_keep_order_enabled);
     ctx_.set_optimizer_index_cost_adj(optimizer_index_cost_adj);
+    ctx_.set_index_cost_fuzz_ratio(index_cost_fuzz_ratio);
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
     ctx_.set_rtf_creator_max_row_count(rtf_creator_max_row_count);

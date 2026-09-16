@@ -287,6 +287,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     das_keep_order_enabled_(true),
     generate_random_plan_(false),
     optimizer_index_cost_adj_(0),
+    index_cost_fuzz_ratio_(1.01),
     is_skip_scan_enabled_(false),
     enable_better_inlist_costing_(false),
     correlation_type_(ObEstCorrelationType::MAX),
@@ -804,6 +805,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_generate_random_plan(bool rand_plan) { generate_random_plan_ = rand_plan; }
   inline int64_t get_optimizer_index_cost_adj() const { return optimizer_index_cost_adj_; }
   inline void set_optimizer_index_cost_adj(int64_t v) { optimizer_index_cost_adj_ = v; }
+  inline double get_index_cost_fuzz_ratio() const { return index_cost_fuzz_ratio_; }
+  inline void set_index_cost_fuzz_ratio(double v) { index_cost_fuzz_ratio_ = v; }
   inline double get_udf_cost_factor() const { return udf_cost_factor_; }
   inline void set_udf_cost_factor(double v) { udf_cost_factor_ = v; }
   inline double get_udf_selectivity() const { return udf_selectivity_; }
@@ -992,6 +995,7 @@ private:
 
   bool generate_random_plan_;
   int64_t optimizer_index_cost_adj_;
+  double index_cost_fuzz_ratio_;
   bool is_skip_scan_enabled_;
   bool enable_better_inlist_costing_;
   ObEstCorrelationType correlation_type_;

@@ -228,16 +228,16 @@ create table t8 (c1 BINARY(99) ,c2 INTEGER(127) ,c3 VARBINARY(71) ,c4 BINARY(65)
 insert into t8 values('cdxLVdvvJjcoHFBECqXKkRGoMXYgNsTpJRrqYaluQdfEeB00000',0,'RetSgyIigYXIPgBXBsmZHQZQPLWcGoELCf00000','wD00000',0,0,0,0,0.0000000000000000000000000,'ieLhJAFmNCq00000',0,'DcKPncNvJjyYcNJKFmVUVhqvgUlLfINbycifYNHjzqALoLfn00000',0,0,0,0.000000000000000,0,'MojimRsQZuotWXMuvSQVDSdCmOaloSXNLRTxMYYXaxGbtuk00000',0);
 explain ((select c6 from t8 where c6 < 1000) except (select c6 from t8 where c6 > -1000) order by c6 limit 1000) union all (select  t8_alias1.c10 from t8 t8_alias1 limit 1);
 Query Plan
-=============================================================
-|ID|OPERATOR                |NAME     |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------
-|0 |UNION ALL               |         |2       |7           |
-|1 |├─TOP-N SORT            |         |1       |5           |
-|2 |│ └─HASH EXCEPT DISTINCT|         |1       |5           |
-|3 |│   ├─TABLE FULL SCAN   |t8       |1       |3           |
-|4 |│   └─TABLE FULL SCAN   |t8       |1       |3           |
-|5 |└─TABLE FULL SCAN       |t8_alias1|1       |3           |
-=============================================================
+==============================================================
+|ID|OPERATOR                |NAME      |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------
+|0 |UNION ALL               |          |2       |7           |
+|1 |├─TOP-N SORT            |          |1       |5           |
+|2 |│ └─HASH EXCEPT DISTINCT|          |1       |5           |
+|3 |│   ├─TABLE FULL SCAN   |t8(i_OkcN)|1       |3           |
+|4 |│   └─TABLE FULL SCAN   |t8(i_OkcN)|1       |3           |
+|5 |└─TABLE FULL SCAN       |t8_alias1 |1       |3           |
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([UNION([1])]), filter(nil), rowset=16
@@ -247,11 +247,11 @@ Outputs & filters:
   3 - output([t8.c6]), filter([t8.c6 < 1000]), rowset=16
       access([t8.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
+      range_key([t8.c19], [t8.c7], [t8.c6]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   4 - output([t8.c6]), filter([t8.c6 > -1000]), rowset=16
       access([t8.c6]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t8.c7], [t8.c6]), range(MIN,MIN ; MAX,MAX)always true
+      range_key([t8.c19], [t8.c7], [t8.c6]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
   5 - output([t8_alias1.c10]), filter(nil), rowset=16
       access([t8_alias1.c10]), partitions(p0)
       limit(1), offset(nil), is_index_back=false, is_global_index=false, 

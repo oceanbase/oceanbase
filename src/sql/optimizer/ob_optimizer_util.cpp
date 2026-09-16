@@ -8646,6 +8646,56 @@ bool ObOptimizerUtil::has_hierarchical_expr(const ObRawExpr &expr)
          expr.has_flag(CNT_CONNECT_BY_ISCYCLE);
 }
 
+int ObOptimizerUtil::compute_interest_ordering_relationship(const Path &first_path,
+                                                            const Path &second_path,
+                                                            const EqualSets &equal_sets,
+                                                            const ObIArray<ObRawExpr *> &condition_exprs,
+                                                            DominateRelation &relation)
+{
+  int ret = OB_SUCCESS;
+  const int64_t left_interesting_prefix_count = first_path.get_interesting_order_prefix_count();
+  const int64_t right_interesting_prefix_count = second_path.get_interesting_order_prefix_count();
+  const ObIArray<OrderItem> &left_ordering = first_path.get_ordering();
+  const ObIArray<OrderItem> &right_ordering = second_path.get_ordering();
+  ObSEArray<OrderItem, 4> left_interesting_ordering;
+  ObSEArray<OrderItem, 4> right_interesting_ordering;
+  if (first_path.get_interesting_order_info() == second_path.get_interesting_order_info()
+      && 0 < left_interesting_prefix_count
+      && left_interesting_prefix_count <= left_ordering.count()
+      && 0 < right_interesting_prefix_count
+      && right_interesting_prefix_count <= right_ordering.count()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < left_interesting_prefix_count; ++i) {
+      if (OB_FAIL(left_interesting_ordering.push_back(left_ordering.at(i)))) {
+        LOG_WARN("failed to add left interesting order item", K(ret), K(i));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < right_interesting_prefix_count; ++i) {
+      if (OB_FAIL(right_interesting_ordering.push_back(right_ordering.at(i)))) {
+        LOG_WARN("failed to add right interesting order item", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret)
+        && OB_FAIL(compute_ordering_relationship(true,
+                                                 true,
+                                                 left_interesting_ordering,
+                                                 right_interesting_ordering,
+                                                 equal_sets,
+                                                 condition_exprs,
+                                                 relation))) {
+      LOG_WARN("failed to compute interesting ordering relationship", K(ret));
+    }
+  } else if (OB_FAIL(compute_ordering_relationship(first_path.get_interesting_order_info() > 0,
+                                                   second_path.get_interesting_order_info() > 0,
+                                                   left_ordering,
+                                                   right_ordering,
+                                                   equal_sets,
+                                                   condition_exprs,
+                                                   relation))) {
+    LOG_WARN("failed to compute full ordering relationship", K(ret));
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::compute_ordering_relationship(const bool left_is_interesting,
                                                    const bool right_is_interesting,
                                                    const ObIArray<OrderItem> &left_ordering,
