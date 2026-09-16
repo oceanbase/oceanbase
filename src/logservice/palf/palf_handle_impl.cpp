@@ -3495,6 +3495,8 @@ int PalfHandleImpl::handle_committed_info(const common::ObAddr &server,
     PALF_LOG(WARN, "try_update_proposal_id_ failed", K(ret), KPC(this), K(server), K(msg_proposal_id));
   } else {
     RLockGuard guard(lock_);
+    LogLearnerList children_list;
+    int tmp_ret = OB_SUCCESS;
     if (false == check_can_be_used()) {
       ret = OB_STATE_NOT_MATCH;
     } else if (!state_mgr_.can_handle_committed_info(msg_proposal_id)) {
@@ -3507,6 +3509,11 @@ int PalfHandleImpl::handle_committed_info(const common::ObAddr &server,
       }
     } else if (OB_FAIL(sw_.handle_committed_info(server, prev_log_id, prev_log_proposal_id, committed_end_lsn))) {
       PALF_LOG(WARN, "handle_committed_info failed", K(ret), KPC(this), K(server), K(msg_proposal_id),
+          K(prev_log_id), K(prev_log_proposal_id), K(committed_end_lsn));
+    } else if (OB_TMP_FAIL(config_mgr_.get_log_sync_children_list(children_list))) {
+      PALF_LOG(WARN, "get_log_sync_children_list failed", K(tmp_ret), KPC(this), K(server), K(msg_proposal_id));
+    } else if (children_list.is_valid() && OB_TMP_FAIL(log_engine_.submit_committed_info_req(children_list, msg_proposal_id, prev_log_id, prev_log_proposal_id, committed_end_lsn))) {
+      PALF_LOG(WARN, "submit_committed_info_req failed", K(tmp_ret), KPC(this), K(server), K(msg_proposal_id),
           K(prev_log_id), K(prev_log_proposal_id), K(committed_end_lsn));
     } else {
       PALF_LOG(TRACE, "handle_committed_info success", K(ret), KPC(this), K(server), K(msg_proposal_id),
