@@ -508,10 +508,12 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
   int64_t invalid_conds_count = 0;
   int64_t other_conds_count = 0;
   const ObQueryHint *query_hint = stmt.get_stmt_hint().query_hint_;
+  ObSQLSessionInfo *session_info = NULL;
 
-  if (OB_ISNULL(root_stmt) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(root_stmt) || OB_ISNULL(ctx_) ||
+      OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(root_stmt));
+    LOG_WARN("unexpected null", K(ret), K(root_stmt), K(ctx_), K(session_info));
   } else if (OB_ISNULL(query_hint)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(query_hint));
@@ -571,7 +573,8 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
     LOG_TRACE("semi conditions are all left filters, will not add distinct, will add limit 1");
   } else if (OB_FAIL(stmt.check_from_dup_insensitive(is_non_sens_dup_vals))) {
     LOG_WARN("failed to check from scope duplicate insensitive", K(ret));
-  } else if (is_non_sens_dup_vals) {
+  } else if (is_non_sens_dup_vals &&
+             !session_info->get_ddl_info().is_mview_fast_refresh()) {
     if (OB_FAIL(non_sens_dul_vals_need_check_cost(stmt, semi_info, need_check_cost))) {
       LOG_WARN("failed to check need check cost ", K(ret));
     } else {
