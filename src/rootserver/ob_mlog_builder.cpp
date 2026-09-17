@@ -969,6 +969,9 @@ int ObMLogBuilder::set_table_options(
     mlog_schema.set_tablespace_id(create_mlog_arg.mlog_schema_.get_tablespace_id());
     mlog_schema.set_comment(create_mlog_arg.mlog_schema_.get_comment());
     mlog_schema.set_lob_inrow_threshold(create_mlog_arg.mlog_schema_.get_lob_inrow_threshold());
+    mlog_schema.set_define_user_id(OB_INVALID_ID != create_mlog_arg.mlog_schema_.get_define_user_id()
+                                  ? create_mlog_arg.mlog_schema_.get_define_user_id()
+                                  : base_table_schema.get_define_user_id());
   }
   return ret;
 }

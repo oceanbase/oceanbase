@@ -344,7 +344,7 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
 int ObMViewSchedJobUtils::create_mlog_scheduler_job(
     common::ObISQLClient &trans,
     const uint64_t tenant_id,
-    const uint64_t mview_id,
+    const uint64_t mlog_id,
     const common::ObString &db_name,
     const common::ObString &table_name,
     const common::ObObj &start_date,
@@ -360,19 +360,27 @@ int ObMViewSchedJobUtils::create_mlog_scheduler_job(
   int64_t job_id = OB_INVALID_ID;
   ObString job_action;
   ObString purge_job;
+  ObString job_owner;
+  uint64_t job_owner_id = OB_INVALID_ID;
   if (OB_FAIL(generate_job_id(tenant_id, job_id))) {
     LOG_WARN("failed to generate mview job id", KR(ret));
   } else if (OB_FAIL(generate_job_name(allocator, job_id, job_prefix, purge_job))) {
     LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_prefix));
   } else if (OB_FAIL(generate_job_action(allocator, mlog_purge_func, db_name, table_name, job_action))) {
     LOG_WARN("failed to generate mview job action", KR(ret));
-  } else if (OB_FAIL(add_scheduler_job(trans, tenant_id, job_id, purge_job, job_action, start_date,
-                                       repeat_interval, exec_env, NULL, OB_INVALID_ID,
-                                       preserved_max_run_duration_sec))) {
-    LOG_WARN("failed to add mview scheduler job", KR(ret), K(purge_job), K(job_action),
-             K(start_date), K(repeat_interval));
-  } else {
-    job_name = purge_job;
+  } else if (OB_FAIL(get_owner_name_from_table_id_(trans, tenant_id, mlog_id,
+                                                   allocator, job_owner, job_owner_id))) {
+    LOG_WARN("failed to get owner from mlog table, use default owner", KR(ret), K(mlog_id));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(add_scheduler_job(trans, tenant_id, job_id, purge_job, job_action, start_date,
+                                  repeat_interval, exec_env, &job_owner, job_owner_id,
+                                  preserved_max_run_duration_sec))) {
+      LOG_WARN("failed to add mview scheduler job", KR(ret), K(purge_job), K(job_action),
+               K(start_date), K(repeat_interval));
+    } else {
+      job_name = purge_job;
+    }
   }
   return ret;
 }
