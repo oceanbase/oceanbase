@@ -1,3 +1,5 @@
+// owner: anli.hx
+// owner group: log
 /**
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
@@ -57,6 +59,13 @@ int configure_archive_dest(ObSimpleArchive &test, const bool is_mandatory)
     ARCHIVE_LOG(WARN, "configure log archive dest failed", K(ret), K(sql));
   }
   return ret;
+}
+
+int configure_archive_lag_target(ObSimpleArchive &test)
+{
+  int64_t affected_rows = 0;
+  common::ObMySQLProxy &sql_proxy = test.get_curr_simple_server().get_sql_proxy2();
+  return sql_proxy.write("alter system set archive_lag_target = '0ms'", affected_rows);
 }
 
 int enable_archive(ObSimpleArchive &test)
@@ -307,6 +316,8 @@ protected:
     int ret = OB_SUCCESS;
     if (OB_FAIL(configure_archive_dest(*this, is_mandatory))) {
       ARCHIVE_LOG(WARN, "configure archive dest failed", K(ret), K(is_mandatory));
+    } else if (OB_FAIL(configure_archive_lag_target(*this))) {
+      ARCHIVE_LOG(WARN, "configure archive lag target failed", K(ret), K(is_mandatory));
     } else if (OB_FAIL(enable_archive_dest(*this))) {
       ARCHIVE_LOG(WARN, "enable archive dest failed", K(ret), K(is_mandatory));
     } else if (OB_FAIL(enable_archive(*this))) {
