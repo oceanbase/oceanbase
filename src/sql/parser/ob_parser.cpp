@@ -968,10 +968,25 @@ int ObParser::parse_sql(const ObString &stmt,
 {
   int ret = OB_SUCCESS;
   ObSQLParser sql_parser(*(ObIAllocator*)(parse_result.malloc_pool_), sql_mode_);
+  const ParseResult initial_parse_result = parse_result;
   ObString stmt_str = stmt;
   if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {
     // if is multi_values_parser opt not need retry
-    if (lib::is_mysql_mode() && !parse_result.is_multi_values_parser_) {
+    if (OB_PARSER_ERR_NO_MEMORY == ret) {
+      // no retry for OOM
+    } else if (lib::is_mysql_mode() && !parse_result.is_multi_values_parser_) {
+      // restore result to initial state
+      // sensitive data flags should be retained before retry because the SQL would not be flagged as sensitive
+      // in retry if sensitive data is wrapped in executable comments.
+      const bool contain_sensitive_data = parse_result.contain_sensitive_data_;
+      const bool may_contain_sensitive_data = parse_result.may_contain_sensitive_data_;
+      parse_result = initial_parse_result;
+      parse_result.contain_sensitive_data_ |= contain_sensitive_data;
+      parse_result.may_contain_sensitive_data_ |= may_contain_sensitive_data;
+      if (OB_NOT_NULL(parse_result.no_param_sql_) && parse_result.no_param_sql_buf_len_ > 0) {
+        parse_result.no_param_sql_[0] = '\0';
+      }
+      // Retry syntax errors with MySQL executable comments disabled.
       parse_result.enable_compatible_comment_ = false;
       parse_result.mysql_compatible_comment_ = false;
       if (OB_FAIL(sql_parser.parse(stmt.ptr(), stmt.length(), parse_result))) {

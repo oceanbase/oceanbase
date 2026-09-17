@@ -58,7 +58,6 @@ int sql_parser_preprocess_fullwidth_symbols(ParseResult *parse_result,
         *full_width_sym_converter = static_cast<void *>(converter);
         ObString converted_sql;
         if (OB_FAIL(converter->convert(input_sql_str, converted_sql))) {
-          ret = OB_PARSER_ERR_PARSE_SQL;
           LOG_WARN("failed to preprocess fullwidth symbols in parser base", K(ret), K(input_len));
         } else if (converter->has_conversions()) {
           *processed_sql = converted_sql.ptr();
