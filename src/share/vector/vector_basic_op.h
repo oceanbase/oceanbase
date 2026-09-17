@@ -13,6 +13,7 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "common/object/ob_obj_compare.h"
 #include "share/vector/type_traits.h"
+#include "share/vector/ob_vector_define.h"
 #include <cstring>
 
 namespace oceanbase
@@ -1330,7 +1331,8 @@ struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_STRING>
 
 #ifndef HashFuncTypeForTcFlag
 #define HashFuncTypeForTcFlag
-HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc) ;
+HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc,
+                                   ObVecHashAlgo algo);
 NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc);
 #endif // HashFuncTypeForTcFlag
 } // end namespace common

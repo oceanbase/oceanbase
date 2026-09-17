@@ -9,160 +9,176 @@ namespace oceanbase
 {
 namespace common
 {
-HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc)
+template <typename HashMethod>
+static HashFuncTypeForTc get_hashfunc_by_tc_impl(VecValueTypeClass tc)
 {
-  HashFuncTypeForTc res_func;
+  HashFuncTypeForTc res_func = nullptr;
   switch (tc) {
   case (VEC_TC_NULL) : {
-    res_func = VecTCHashCalc<VEC_TC_NULL, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_NULL, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_INTEGER) : {
-    res_func = VecTCHashCalc<VEC_TC_INTEGER, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_INTEGER, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_UINTEGER) : {
-    res_func = VecTCHashCalc<VEC_TC_UINTEGER, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_UINTEGER, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_FLOAT) : {
-    res_func = VecTCHashCalc<VEC_TC_FLOAT, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_FLOAT, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DOUBLE) : {
-    res_func = VecTCHashCalc<VEC_TC_DOUBLE, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DOUBLE, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_FIXED_DOUBLE) : {
-    res_func = VecTCHashCalc<VEC_TC_FIXED_DOUBLE, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_FIXED_DOUBLE, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_NUMBER) : {
-    res_func = VecTCHashCalc<VEC_TC_NUMBER, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_NUMBER, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DATETIME) : {
-    res_func = VecTCHashCalc<VEC_TC_DATETIME, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DATETIME, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DATE) : {
-    res_func = VecTCHashCalc<VEC_TC_DATE, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DATE, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_TIME) : {
-    res_func = VecTCHashCalc<VEC_TC_TIME, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_TIME, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_YEAR) : {
-    res_func = VecTCHashCalc<VEC_TC_YEAR, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_YEAR, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_EXTEND) : {
-    res_func = VecTCHashCalc<VEC_TC_EXTEND, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_EXTEND, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_UNKNOWN) : {
-    res_func = VecTCHashCalc<VEC_TC_UNKNOWN, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_UNKNOWN, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_STRING) : {
-    res_func = VecTCHashCalc<VEC_TC_STRING, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_STRING, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_BIT) : {
-    res_func = VecTCHashCalc<VEC_TC_BIT, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_BIT, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_ENUM_SET) : {
-    res_func = VecTCHashCalc<VEC_TC_ENUM_SET, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_ENUM_SET, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_ENUM_SET_INNER) : {
-    res_func = VecTCHashCalc<VEC_TC_ENUM_SET_INNER, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_ENUM_SET_INNER, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_TIMESTAMP_TZ) : {  // ObTimestampTZTyp)
-    res_func = VecTCHashCalc<VEC_TC_TIMESTAMP_TZ, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_TIMESTAMP_TZ, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_TIMESTAMP_TINY) : {
-    res_func = VecTCHashCalc<VEC_TC_TIMESTAMP_TINY, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_TIMESTAMP_TINY, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_RAW) : {
-    res_func = VecTCHashCalc<VEC_TC_RAW, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_RAW, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_INTERVAL_YM) : {
-    res_func = VecTCHashCalc<VEC_TC_INTERVAL_YM, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_INTERVAL_YM, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_INTERVAL_DS) : {
-    res_func = VecTCHashCalc<VEC_TC_INTERVAL_DS, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_INTERVAL_DS, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_ROWID) : {
-    res_func = VecTCHashCalc<VEC_TC_ROWID, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_ROWID, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_LOB) : {
-    res_func = VecTCHashCalc<VEC_TC_LOB, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_LOB, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_JSON) : {
-    res_func = VecTCHashCalc<VEC_TC_JSON, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_JSON, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_GEO) : {
-    res_func = VecTCHashCalc<VEC_TC_GEO, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_GEO, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_UDT) : {
-    res_func = VecTCHashCalc<VEC_TC_UDT, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_UDT, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DEC_INT32) : {
-    res_func = VecTCHashCalc<VEC_TC_DEC_INT32, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DEC_INT32, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DEC_INT64) : {
-    res_func = VecTCHashCalc<VEC_TC_DEC_INT64, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DEC_INT64, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DEC_INT128) : {
-    res_func = VecTCHashCalc<VEC_TC_DEC_INT128, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DEC_INT128, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DEC_INT256) : {
-    res_func = VecTCHashCalc<VEC_TC_DEC_INT256, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DEC_INT256, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_DEC_INT512) : {
-    res_func = VecTCHashCalc<VEC_TC_DEC_INT512, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_DEC_INT512, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_COLLECTION) : {
-    res_func = VecTCHashCalc<VEC_TC_COLLECTION, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_COLLECTION, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_MYSQL_DATETIME) : {
-    res_func = VecTCHashCalc<VEC_TC_MYSQL_DATETIME, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_MYSQL_DATETIME, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_MYSQL_DATE) : {
-    res_func = VecTCHashCalc<VEC_TC_MYSQL_DATE, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_MYSQL_DATE, HashMethod, true>::hash;
     break;
   }
   case (VEC_TC_ROARINGBITMAP) : {
-    res_func = VecTCHashCalc<VEC_TC_ROARINGBITMAP, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<VEC_TC_ROARINGBITMAP, HashMethod, true>::hash;
     break;
   }
   case (MAX_VEC_TC) : {
-    res_func = VecTCHashCalc<MAX_VEC_TC, ObMurmurHash, true>::hash;
+    res_func = VecTCHashCalc<MAX_VEC_TC, HashMethod, true>::hash;
     break;
   }
   }
   return res_func;
+}
+
+HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc, ObVecHashAlgo algo)
+{
+  HashFuncTypeForTc hash_func = nullptr;
+  switch (algo) {
+    case VEC_HASH_ALGO_CRC:
+      hash_func = get_hashfunc_by_tc_impl<ObCrcHash>(tc);
+      break;
+    case VEC_HASH_ALGO_MURMUR:
+    default:
+      hash_func = get_hashfunc_by_tc_impl<ObMurmurHash>(tc);
+      break;
+  }
+  return hash_func;
 }
 
 NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc)

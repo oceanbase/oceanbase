@@ -286,7 +286,7 @@ int ObHashGroupByVecOp::inner_open()
             if (OB_ISNULL(null_hash_func = get_null_hashfunc_by_tc(l_tc))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null_hash_func", K(null_hash_func), K(l_tc), K(i), K(ret));
-            } else if (OB_ISNULL(hash_func = get_hashfunc_by_tc(l_tc))) {
+            } else if (OB_ISNULL(hash_func = get_hashfunc_by_tc(l_tc, all_groupby_exprs_.at(i)->get_vec_hash_algo()))) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected hash_func", K(hash_func), K(l_tc), K(i), K(ret));
             } else {

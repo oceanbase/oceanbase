@@ -127,7 +127,7 @@ public:
    *   - Set est_group_cnt_ via set_est_group_cnt()
    *   - Set by_pass_enabled_ if enable_bypass() was called
    */
-  ObOpSpec *create_spec(common::ObIAllocator &alloc, MockDataSourceSpec *child_spec,
+  virtual ObOpSpec *create_spec(common::ObIAllocator &alloc, MockDataSourceSpec *child_spec,
                          const ExprFixedArray &output_exprs,
                          ObExpr *limit_expr, ObExpr *offset_expr, bool use_rich_format)
   {
@@ -240,7 +240,7 @@ public:
   /**
    * @brief Create ObHashGroupByVecOp (2.0) or ObHashGroupByOp (1.0) based on spec type.
    */
-  ObOperator *create_op(ObExecContext &ctx, ObOpSpec &spec, ObOperator *child_op)
+  virtual ObOperator *create_op(ObExecContext &ctx, ObOpSpec &spec, ObOperator *child_op)
   {
     if (spec.type_ == PHY_VEC_HASH_GROUP_BY) {
       return default_create_op<ObHashGroupByVecOp>(ctx, spec, child_op);
