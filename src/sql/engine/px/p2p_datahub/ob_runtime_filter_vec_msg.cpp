@@ -1223,7 +1223,7 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
       && OB_UNLIKELY(need_null_cmp_flags_.count() != expr_array.count())) {
     if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_5_0_2_0
         || (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_5_0_0_0
-         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_4)) {
+         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null compare flags count", K(ret), K(need_null_cmp_flags_.count()),
                K(expr_array.count()), K(GET_MIN_CLUSTER_VERSION()));
