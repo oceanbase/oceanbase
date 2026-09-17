@@ -3883,6 +3883,7 @@ int ObDbmsStats::init_column_stat_params(ObIAllocator &allocator,
               column_params.at(k - 1).set_is_index_column();
               if (index_schema->is_unique_index() && 1 == index_schema->get_index_column_num()) {
                 column_params.at(k - 1).set_is_unique_column();
+                column_params.at(k - 1).ndv_scale_algo_ = NDV_SCALE_ALGO_UNIQUE;
               }
             }
           }

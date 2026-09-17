@@ -764,11 +764,11 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         }
         if (OB_SUCC(ret)) {
           int64_t num_distinct = 0;
-          if (ndv_eval.get() != 0) {
+          if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
+            num_distinct = std::max<int64_t>(0, total_row_cnt - std::max<int64_t>(0, null_eval.get()));
+          } else if (ndv_eval.get() != 0) {
             if (is_lob_column) {
               num_distinct = ObOptSelectivity::scale_distinct(not_null_eval.get(), lob_inrow_count_eval.get(), ndv_eval.get());
-            } else if (ndv_scale_algo == NDV_SCALE_ALGO_UNIQUE) {
-              num_distinct = std::min(not_null_eval.get(), total_row_cnt);
             } else {
               num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, sample_size, ndv_eval.get());
             }
