@@ -4527,11 +4527,18 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
                 Then DFC server blocks the DTL channel, dead lock happends.
             */
             ObLogWindowFunction *wf = static_cast<ObLogWindowFunction*>(child);
-            if (wf->is_participator()
-                && OB_FAIL(need_alloc_material_for_push_down_wf(*child, need_alloc))) {
-              LOG_WARN("check need allocate material failed", K(ret));
-            } else if (need_alloc) {
-              OZ (child->allocate_material(0));
+            if (wf->is_range_dist_parallel()) {
+              if (OB_FAIL(need_alloc_material_for_range_dist_wf(*child, need_alloc))) {
+                LOG_WARN("check need allocate material failed", K(ret));
+              } else if (need_alloc) {
+                OZ (allocate_material(i));
+              }
+            } else if (wf->is_participator()) {
+              if (OB_FAIL(need_alloc_material_for_push_down_wf(*child, need_alloc))) {
+                LOG_WARN("check need allocate material failed", K(ret));
+              } else if (need_alloc) {
+                OZ (child->allocate_material(0));
+              }
             }
           }
         }
@@ -6784,6 +6791,94 @@ int ObLogicalOperator::need_alloc_material_for_shared_hj(ObLogicalOperator &curr
     }
     if (OB_SUCC(ret) && !end_traverse) {
       OZ (need_alloc_material_for_shared_hj(*parent, need_alloc));
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::need_alloc_material_for_range_dist_wf(
+    ObLogicalOperator &curr_op, bool &need_alloc)
+{
+  int ret = OB_SUCCESS;
+  need_alloc = false;
+  // Allocate output material for this plan shape:
+  //
+  //        NLJ
+  //       /   \
+  //   RANGE   EXCHANGE
+  //     WF
+  //
+  // RANGE WF may output an intermediate partition before DataHub sync reaches
+  // EOF. Then worker A can be pulled to the NLJ right branch and wait for the
+  // EXCHANGE channel-ready, while worker B waits for A's RANGE WF DataHub piece.
+  ObLogicalOperator *child = &curr_op;
+  ObLogicalOperator *parent = curr_op.get_parent();
+  bool end_traverse = false;
+  while (OB_SUCC(ret) && !need_alloc && !end_traverse && OB_NOT_NULL(parent)) {
+    bool found_child = false;
+    int64_t child_idx = OB_INVALID_INDEX;
+    for (int64_t i = 0; OB_SUCC(ret) && !found_child && i < parent->get_num_of_child(); ++i) {
+      if (OB_ISNULL(parent->get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected got nullptr child", K(ret), K(i));
+      } else if (parent->get_child(i) == child) {
+        found_child = true;
+        child_idx = i;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!found_child) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to find child from parent", K(ret), KPC(child), KPC(parent));
+      } else if (parent->is_block_input(child_idx)) {
+        end_traverse = true;
+      } else if (LOG_JOIN == parent->get_type()) {
+        ObLogJoin *join = static_cast<ObLogJoin *>(parent);
+        bool right_has_exchange = false;
+        if (NESTED_LOOP_JOIN != join->get_join_algo()
+            || first_child != child_idx
+            || join->get_num_of_child() < 2) {
+          end_traverse = true;
+        } else if (OB_ISNULL(join->get_child(second_child))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null right child", K(ret), KPC(join));
+        } else if (OB_FAIL(SMART_CALL(check_has_exchange(
+                   *join->get_child(second_child), right_has_exchange)))) {
+          LOG_WARN("check has exchange failed", K(ret), KPC(join));
+        } else {
+          need_alloc = right_has_exchange;
+          end_traverse = true;
+        }
+      } else if (1 < parent->get_num_of_child()) {
+        end_traverse = true;
+      } else {
+        child = parent;
+        parent = child->get_parent();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogicalOperator::check_has_exchange(
+    ObLogicalOperator &curr_op, bool &has_exchange)
+{
+  int ret = OB_SUCCESS;
+  int64_t child_num = curr_op.get_num_of_child();
+  has_exchange = false;
+  if (LOG_EXCHANGE == curr_op.type_) {
+    has_exchange = true;
+  } else if (0 == child_num) { // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_exchange && i < child_num; ++i) {
+      if (OB_ISNULL(curr_op.get_child(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected got nullptr child", K(ret), K(i));
+      } else if (OB_FAIL(SMART_CALL(check_has_exchange(
+                     *curr_op.get_child(i), has_exchange)))) {
+        LOG_WARN("check has exchange failed",
+                 K(ret), K(curr_op), K(i), KPC(curr_op.get_child(i)));
+      }
     }
   }
   return ret;

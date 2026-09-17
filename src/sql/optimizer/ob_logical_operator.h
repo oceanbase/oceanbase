@@ -1965,6 +1965,8 @@ private:
   int add_op_exprs(ObRawExpr* expr);
   // alloc mat for sync in output
   int need_alloc_material_for_shared_hj(ObLogicalOperator &curr_op, bool &need_alloc);
+  int need_alloc_material_for_range_dist_wf(ObLogicalOperator &curr_op, bool &need_alloc);
+  int check_has_exchange(ObLogicalOperator &curr_op, bool &has_exchange);
   // alloc mat for sync in intput
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
