@@ -166,6 +166,14 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           dir = ImplicitCastDirection::IC_NO_CAST;
           break;
         }
+        case T_OP_COLL_PRED: {
+          // Collection predicates are not scalar comparisons; skip oracle implicit cast.
+          // MEMBER [OF]: element vs collection (scalar/EXT vs EXT; composite element is EXT vs EXT)
+          // SUBMULTISET [OF]: collection vs collection (EXT vs EXT)
+          // IS [NOT] A SET / IS [NOT] EMPTY: unary, parser duplicates the collection as both children
+          dir = ImplicitCastDirection::IC_NO_CAST;
+          break;
+        }
         case T_OP_LIKE: {
           /* for non-string data type: select c1||c2 from tab; => cast(c1 as varchar)||cast(c2 as varchar) */
           bool cast_left = true;
