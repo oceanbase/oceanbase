@@ -975,11 +975,114 @@ int ObTableInsertUpOp::get_next_row_from_child()
   return ret;
 }
 
+int ObTableInsertUpOp::collect_try_insert_parts(ObIArray<ObTryInsertPart> &parts)
+{
+  int ret = OB_SUCCESS;
+  DASTaskIter iter = dml_rtctx_.das_ref_.begin_task_iter();
+  while (OB_SUCC(ret) && !iter.is_end()) {
+    const ObIDASTaskOp *task = *iter;
+    if (OB_ISNULL(task) ||
+        task->get_type() != DAS_OP_TABLE_INSERT ||
+        task->get_task_status() != ObDasTaskStatus::FINISHED ||
+        !task->get_ls_id().is_valid()) {
+      ret = OB_TRANS_NEED_ROLLBACK;
+      LOG_WARN("try insert task is not complete", K(ret), KPC(task));
+    } else if (OB_FAIL(add_var_to_array_no_dup(parts, ObTryInsertPart(task->get_ls_id(), task->get_write_branch_id())))) {
+      LOG_WARN("collect try insert participant failed", K(ret), KPC(task));
+    }
+    ++ iter;
+  }
+  return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_INSERT_UP_ROLLBACK_CHECK_FAIL,
+                 "Fail the INSERT_UP rollback check for the matching session");
+
+int ObTableInsertUpOp::check_rollback_participants(transaction::ObTxDesc &tx_desc,
+                                                 const transaction::ObTxSEQ &savepoint_no,
+                                                 const ObIArray<ObTryInsertPart> &expected_parts,
+                                                 transaction::ObTxExecResult &result)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObTxPartList parts;
+  result.reset();
+  if (!savepoint_no.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(tx_desc.get_parts_copy(parts))) {
+    LOG_WARN("get transaction participants failed", K(ret));
+  } else if (expected_parts.empty()) {
+    // A confirmed conflict must have a nonempty set of try-insert participants.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expected parts is empty, can't happen", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < expected_parts.count(); ++i) {
+    const ObTryInsertPart &expected = expected_parts.at(i);
+    bool found = false;
+    bool covered = false;
+    if (OB_UNLIKELY(!expected.ls_id_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expected ls id is invalid", K(ret));
+    } else {
+      for (int64_t j = 0; !covered && j < parts.count(); ++j) {
+        const transaction::ObTxPart &part = parts.at(j);
+        if (part.id_ == expected.ls_id_) {
+          found = true;
+          covered = expected.branch_id_ == savepoint_no.get_branch() &&
+                    part.need_rollback_to_savepoint(savepoint_no);
+        }
+      }
+
+      if (OB_UNLIKELY(!covered)) {
+        result.set_incomplete();
+        // Only supplement LSs absent from the snapshot; preserve existing metadata.
+        if (!found && OB_FAIL(result.add_uncertain_part(expected.ls_id_))) {
+          LOG_WARN("collect missing try insert participant failed", K(ret), K(expected));
+        }
+      }
+    }
+  }
+
+  if (result.is_incomplete()) {
+    ret = OB_SUCC(ret) ? OB_TRANS_NEED_ROLLBACK : ret;
+    LOG_ERROR("rollback does not cover try insert participants", K(ret), K(result),
+              K(savepoint_no), K(expected_parts), K(parts), K(tx_desc));
+  }
+
+  if (OB_SUCC(ret) &&
+      OB_FAIL(EVENT_CALL(ERRSIM_INSERT_UP_ROLLBACK_CHECK_FAIL, tx_desc.get_session_id()))) {
+    LOG_WARN("inject insert up rollback check failure", K(ret), K(savepoint_no), K(tx_desc));
+  }
+  return ret;
+}
+
 int ObTableInsertUpOp::rollback_savepoint(const transaction::ObTxSEQ &savepoint_no)
 {
   int ret = OB_SUCCESS;
+  ObSEArray<ObTryInsertPart, 4> expected_parts;
+  transaction::ObTxExecResult result;
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  transaction::ObTxDesc *tx_desc = nullptr;
   NG_TRACE_TIMES(2, insertup_start_rollback);
-  if (OB_FAIL(ObSqlTransControl::rollback_savepoint(ctx_, savepoint_no))) {
+
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(tx_desc = session->get_tx_desc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transaction descriptor is null", K(ret));
+  } else if (OB_UNLIKELY(!tx_desc->get_tx_id().is_valid())) {
+    ret = OB_TRANS_INVALID_STATE;
+    LOG_WARN("transaction ID is invalid", K(ret), KPC(tx_desc));
+  } else if (OB_FAIL(collect_try_insert_parts(expected_parts)) ||
+             OB_FAIL(check_rollback_participants(*tx_desc, savepoint_no, expected_parts, result))) {
+    // Mark the transaction incomplete so outer rollback can abort it.
+    // Include missing LSs so they can also receive the abort request.
+    // PX passes this result to the QC. Preserve the original error.
+    result.set_incomplete();
+    int tmp_ret = tx_desc->add_exec_info(result);
+    LOG_WARN("insert up rollback check failed, transaction result is incomplete", K(ret), K(tmp_ret), K(result), KPC(tx_desc));
+  } else if (OB_FAIL(ObSqlTransControl::rollback_savepoint(ctx_, savepoint_no))) {
     LOG_WARN("fail to rollback to save_point", K(ret), K(savepoint_no));
   }
   return ret;
@@ -1014,12 +1117,11 @@ int ObTableInsertUpOp::do_insert_up()
     if (OB_FAIL(ret) || !check_is_duplicated()) {
     } else if (OB_FAIL(fetch_conflict_rowkey(insert_up_row_store_.get_row_cnt()))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
-    } else if (OB_FAIL(reset_das_env())) {
-      // 这里需要reuse das 相关信息
-      LOG_WARN("fail to reset das env", K(ret));
     } else if (OB_FAIL(rollback_savepoint(savepoint_no))) {
-      // 本次插入存在冲突, 回滚到save_point
+      // Roll back try-insert writes after detecting duplicate keys.
       LOG_WARN("fail to rollback to save_point", K(ret));
+    } else if (OB_FAIL(reset_das_env())) {
+      LOG_WARN("fail to reset das env", K(ret));
     } else if (OB_FAIL(conflict_checker_.do_lookup_and_build_base_map(insert_up_row_store_.get_row_cnt()))) {
       LOG_WARN("fail to build conflict map", K(ret));
     } else if (OB_FAIL(do_insert_up_cache())) {

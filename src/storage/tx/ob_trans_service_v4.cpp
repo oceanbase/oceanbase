@@ -941,8 +941,7 @@ int ObTransService::find_parts_after_sp_(ObTxDesc &tx,
 {
   int ret = OB_SUCCESS;
   ARRAY_FOREACH(tx.parts_, i) {
-    if (tx.parts_.at(i).last_scn_ > scn &&
-        !tx.parts_.at(i).is_clean()) {
+    if (tx.parts_.at(i).need_rollback_to_savepoint(scn)) {
       if (OB_FAIL(parts.push_back(tx.parts_.at(i)))) {
         TRANS_LOG(WARN, "push back participant failed", K(ret));
       }

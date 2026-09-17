@@ -1513,6 +1513,34 @@ void ObTxExecResult::reset()
   allocator_.reset();
 }
 
+int ObTxExecResult::add_uncertain_part(const share::ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    // Deduplicate by LS ID, independent of the participant's cached address.
+    for (int64_t i = 0; !found && i < parts_.count(); ++i) {
+      found = parts_.at(i).id_ == ls_id;
+    }
+    if (!found) {
+      ObTxPart part;
+      part.id_ = ls_id;
+      part.epoch_ = ObTxPart::EPOCH_UNKNOWN;
+      part.first_scn_ = ObTxSEQ::MAX_VAL();
+      part.last_scn_ = ObTxSEQ::MAX_VAL();
+      ret = parts_.push_back(part);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    incomplete_ = true;
+    TRANS_LOG(WARN, "add uncertain participant failed", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
 int ObTxExecResult::add_touched_ls(const share::ObLSID ls)
 {
   int ret = OB_SUCCESS;
