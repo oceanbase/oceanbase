@@ -334,11 +334,11 @@ private:
              const orc::ColumnVectorBatch *batch,
              const orc::Type *col_type,
              ObEvalCtx &eval_ctx,
-             const bool is_hive_lake_table);
+             const share::ObLakeTableFormat lake_format);
     int init(ObExpr *file_col_expr,
              const ObColumnDefaultValue *col_def,
              ObEvalCtx &eval_ctx,
-             const bool is_hive_lake_table);
+             const share::ObLakeTableFormat lake_format);
     int init_partition_value(ObExpr *file_col_expr,
                              const common::ObObj *partition_value);
     void reset()
@@ -350,7 +350,7 @@ private:
       load_func_ = nullptr;
       col_def_ = nullptr;
       partition_value_ = nullptr;
-      is_hive_lake_table_ = false;
+      lake_format_ = share::ObLakeTableFormat::INVALID;
     }
 
     bool has_load_func() const { return load_func_ != nullptr; }
@@ -414,7 +414,7 @@ private:
     const ObColumnDefaultValue *col_def_;
     const common::ObObj *partition_value_;
     LOAD_FUNC load_func_;
-    bool is_hive_lake_table_;
+    share::ObLakeTableFormat lake_format_;
   };
 
   // wrapper struct of orc row reader and batch

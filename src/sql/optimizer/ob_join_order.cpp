@@ -25309,6 +25309,9 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
   ObLakeTableStat common_table_stat;
   ObSEArray<ObLakeColumnStat*, 8> common_column_stats;
   ObSEArray<ObString, 1> partition_names;
+  ObLakeTableStat global_common_table_stat;
+  ObSEArray<ObLakeColumnStat*, 8> global_common_column_stats;
+  ObSEArray<ObString, 1> global_partition_names;
   double scale_ratio = 1.0;
   if (OB_ISNULL(lake_table_partition_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -25327,25 +25330,60 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
                                                                        partition_names))) {
     LOG_WARN("failed to collect iceberg partition stats keys", K(ret));
   } else if (OB_FAIL(ObLakeTablePartitionInfo::get_catalog_table_stat(allocator,
-                                                OPT_CTX,
-                                                ref_table_id,
-                                                column_exprs,
-                                                partition_names,
-                                                false,
-                                                common_table_stat,
-                                                common_column_stats))) {
+                                                                      OPT_CTX,
+                                                                      ref_table_id,
+                                                                      column_exprs,
+                                                                      partition_names,
+                                                                      false,
+                                                                      common_table_stat,
+                                                                      common_column_stats))) {
     LOG_WARN("failed to get common lake table stat", K(ret));
-  } else if (common_table_stat.total_row_count_ == 0 ||
-             common_table_stat.last_analyzed_ == 0 || common_column_stats.empty()) {
-    LOG_TRACE("common table stat is not valid", K(common_table_stat));
-  } else if (OB_FALSE_IT(scale_ratio = table_stat.total_row_count_ / static_cast<double>(common_table_stat.total_row_count_))) {
-  } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
-                                                              scale_ratio,
-                                                              common_column_stats))) {
-    LOG_WARN("failed to scale column stats", K(ret));
-  } else if (OB_FAIL(ObLakeTableStatUtils::merge_iceberg_column_stats(common_column_stats,
-                                                                      column_stats))) {
-    LOG_WARN("failed to merge iceberg column stats", K(ret));
+  } else if ((common_table_stat.total_row_count_ == 0 || common_table_stat.last_analyzed_ == 0
+              || common_column_stats.empty())
+             && !partition_names.empty()
+             && OB_FAIL(
+                 ObLakeTablePartitionInfo::get_catalog_table_stat(allocator,
+                                                                  OPT_CTX,
+                                                                  ref_table_id,
+                                                                  column_exprs,
+                                                                  global_partition_names,
+                                                                  false,
+                                                                  global_common_table_stat,
+                                                                  global_common_column_stats))) {
+    LOG_WARN("failed to get iceberg global table stat", K(ret));
+  } else {
+    const bool use_global_common_stat
+        = (common_table_stat.total_row_count_ == 0 || common_table_stat.last_analyzed_ == 0
+           || common_column_stats.empty())
+          && global_common_table_stat.total_row_count_ > 0
+          && global_common_table_stat.last_analyzed_ > 0 && !global_common_column_stats.empty();
+    ObLakeTableStat &effective_common_table_stat
+        = use_global_common_stat ? global_common_table_stat : common_table_stat;
+    ObSEArray<ObLakeColumnStat *, 8> &effective_common_column_stats
+        = use_global_common_stat ? global_common_column_stats : common_column_stats;
+    if (use_global_common_stat) {
+      LOG_TRACE("use iceberg global stat as partition stat fallback",
+                K(partition_names.count()),
+                K(global_common_table_stat));
+    }
+    if (effective_common_table_stat.total_row_count_ == 0
+        || effective_common_table_stat.last_analyzed_ == 0
+        || effective_common_column_stats.empty()) {
+      LOG_TRACE("common table stat is not valid",
+                K(common_table_stat),
+                K(global_common_table_stat));
+    } else if (OB_FALSE_IT(scale_ratio
+                           = table_stat.total_row_count_
+                             / static_cast<double>(effective_common_table_stat.total_row_count_))) {
+    } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
+                                                                scale_ratio,
+                                                                effective_common_column_stats))) {
+      LOG_WARN("failed to scale column stats", K(ret));
+    } else if (OB_FAIL(
+                   ObLakeTableStatUtils::merge_iceberg_column_stats(effective_common_column_stats,
+                                                                    column_stats))) {
+      LOG_WARN("failed to merge iceberg column stats", K(ret));
+    }
   }
   return ret;
 }

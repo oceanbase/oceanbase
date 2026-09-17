@@ -147,7 +147,8 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
                                                        bool has_null,
                                                        const int16_t *def_levels,
                                                        int16_t max_def_level,
-                                                       const ObExpr *file_col_expr)
+                                                       const ObExpr *file_col_expr,
+                                                       bool skip_len_check)
 {
   int ret = OB_SUCCESS;
 
@@ -216,7 +217,8 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
               if (OB_UNLIKELY(is_oracle_mode && 0 == src_dict[i].len)) {
                 nulls->set(i);
                 has_null = true;
-              } else if (OB_UNLIKELY(src_dict[i].len > max_length
+              } else if (OB_UNLIKELY(!skip_len_check
+                                     && src_dict[i].len > max_length
                                      && (is_byte_length
                                          || ObCharset::strlen_char(
                                                 CS_TYPE_UTF8MB4_BIN,

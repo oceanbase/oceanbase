@@ -347,7 +347,10 @@ int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const
   } else if (type == nullptr) {
     // Init data loader for a column absent from the current file.
     if (OB_FAIL(reader.data_loaders_.at(i)
-                    .init(column_expr, default_value, eval_ctx, is_hive_lake_table()))) {
+                    .init(column_expr,
+                          default_value,
+                          eval_ctx,
+                          scan_param_->lake_table_format_))) {
       LOG_WARN("fail to init data loader", K(ret), K(i));
     } else {
       CK (reader.data_loaders_.at(i).has_load_func());
@@ -359,7 +362,11 @@ int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const
       dynamic_cast<const orc::StructVectorBatch *>(reader.orc_batch_.get()), orc_col_id, batch))) {
     LOG_WARN("fail to get data column batch", K(ret), K(i));
   } else if (OB_FAIL(reader.data_loaders_.at(i)
-                         .init(column_expr, batch, type, eval_ctx, is_hive_lake_table()))) {
+                         .init(column_expr,
+                               batch,
+                               type,
+                               eval_ctx,
+                               scan_param_->lake_table_format_))) {
     LOG_WARN("fail to init data loader", K(ret), K(i));
   } else if (!reader.data_loaders_.at(i).has_load_func()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -2506,7 +2513,7 @@ int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
                                             const orc::ColumnVectorBatch *batch,
                                             const orc::Type *col_type,
                                             ObEvalCtx &eval_ctx,
-                                            const bool is_hive_lake_table)
+                                            const share::ObLakeTableFormat lake_format)
 {
   int ret = OB_SUCCESS;
   ObCollectionTypeBase *collection_type = nullptr;
@@ -2524,7 +2531,7 @@ int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
     batch_ = batch;
     col_type_ = col_type;
     col_def_ = nullptr;
-    is_hive_lake_table_ = is_hive_lake_table;
+    lake_format_ = lake_format;
     load_func_ = select_load_function(file_col_expr->datum_meta_, *col_type);
   }
   return ret;
@@ -2533,7 +2540,7 @@ int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
 int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
                                             const ObColumnDefaultValue *col_def,
                                             ObEvalCtx &eval_ctx,
-                                            const bool is_hive_lake_table)
+                                            const share::ObLakeTableFormat lake_format)
 {
   int ret = OB_SUCCESS;
   ObCollectionTypeBase *collection_type = nullptr;
@@ -2549,7 +2556,7 @@ int ObOrcTableRowIterator::DataLoader::init(ObExpr *file_col_expr,
     file_col_expr_ = file_col_expr;
     collection_type_ = collection_type;
     col_def_ = col_def;
-    is_hive_lake_table_ = is_hive_lake_table;
+    lake_format_ = lake_format;
     load_func_ = &DataLoader::load_default;
   }
   return ret;
@@ -3146,6 +3153,7 @@ int ObOrcTableRowIterator::DataLoader::load_string_col(ObEvalCtx &eval_ctx)
       const bool is_byte_length = is_oracle_byte_length(
         is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
       const int64_t max_length = file_col_expr_->max_length_;
+      const bool skip_len_check = share::is_iceberg_lake_table(lake_format_);
       const orc::StringVectorBatch *string_batch =
         dynamic_cast<const orc::StringVectorBatch *>(batch_);
       CK (OB_NOT_NULL(string_batch));
@@ -3164,13 +3172,13 @@ int ObOrcTableRowIterator::DataLoader::load_string_col(ObEvalCtx &eval_ctx)
             if (length == 0 && is_oracle_mode) {
             text_vec->set_null(i);
             } else if (OB_UNLIKELY(
-                           length > max_length
+                           !skip_len_check && length > max_length
                            && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
                                data,
                                length,
                                max_length,
                                is_byte_length,
-                               is_hive_lake_table_,
+                               share::is_hive_lake_table(lake_format_),
                                adjusted_len)))) {
             LOG_WARN("data too long", K(ret), K(length), K(max_length));
             } else {
@@ -3189,13 +3197,13 @@ int ObOrcTableRowIterator::DataLoader::load_string_col(ObEvalCtx &eval_ctx)
           if (length == 0 && is_oracle_mode) {
             text_vec->set_null(i);
           } else if (OB_UNLIKELY(
-                         length > max_length
+                         !skip_len_check && length > max_length
                          && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
                              data,
                              length,
                              max_length,
                              is_byte_length,
-                             is_hive_lake_table_,
+                             share::is_hive_lake_table(lake_format_),
                              adjusted_len)))) {
             LOG_WARN("data too long", K(ret), K(length), K(max_length));
           } else {
@@ -3245,7 +3253,7 @@ int ObOrcTableRowIterator::DataLoader::load_lob_col(ObEvalCtx &eval_ctx)
                                length,
                                max_length,
                                is_byte_length,
-                               is_hive_lake_table_,
+                               share::is_hive_lake_table(lake_format_),
                                adjusted_len)))) {
             LOG_WARN("data too long", K(ret), K(length), K(max_length));
             } else if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
@@ -3273,7 +3281,7 @@ int ObOrcTableRowIterator::DataLoader::load_lob_col(ObEvalCtx &eval_ctx)
                              length,
                              max_length,
                              is_byte_length,
-                             is_hive_lake_table_,
+                             share::is_hive_lake_table(lake_format_),
                              adjusted_len)))) {
             LOG_WARN("data too long", K(ret), K(length), K(max_length));
           } else if (OB_FAIL(
@@ -3314,7 +3322,7 @@ int ObOrcTableRowIterator::DataLoader::load_timestamp_vec(ObEvalCtx &eval_ctx)
         if (not_null == 1) {
           int64_t adjusted_value = orc_timestamp_to_ob_timestamp(
               timestamp_batch->data[i], timestamp_batch->nanoseconds[i], adjust_us);
-          if (is_hive_lake_table_) {
+          if (share::is_hive_lake_table(lake_format_)) {
             adjusted_value = convert_hive_year_zero_to_ob_timestamp(adjusted_value);
           }
           if (ObTimestampType == file_col_expr_->datum_meta_.type_) {
@@ -3795,7 +3803,8 @@ int ObOrcTableRowIterator::DataLoader::set_values_for_varchar_array(
           const char *data = string_batch->data[j];
           if (string_batch->hasNulls && string_batch->notNull.data()[j] == 0) {
             nulls[j] = 1;
-          } else if (OB_UNLIKELY(length > max_accuracy_len
+          } else if (OB_UNLIKELY(!share::is_iceberg_lake_table(lake_format_)
+                          && length > max_accuracy_len
                           && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, length)
                                > max_accuracy_len)) {
             ret = OB_ERR_DATA_TOO_LONG;

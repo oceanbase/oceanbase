@@ -717,7 +717,6 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
         break;
       }
       case ObVarcharType: {
-        // fixed/uuid
         std::optional<ObString> value;
         if (OB_FAIL(AvroUtils::decode_binary(allocator, avro_node, decoder, value))) {
           LOG_WARN("failed to decode binary", K(ret));
@@ -725,7 +724,12 @@ int DataFile::read_partition_value_from_avro(ObIAllocator &allocator,
           obj.set_null();
         } else {
           ObString bytes = value.value();
-          OX(obj.set_varbinary(bytes));
+          if (ObCollationType::CS_TYPE_BINARY == column_schema->get_collation_type()) {
+            OX(obj.set_varbinary(bytes));
+          } else {
+            OX(obj.set_varchar(bytes));
+            OX(obj.set_collation_type(column_schema->get_collation_type()));
+          }
         }
         break;
       }

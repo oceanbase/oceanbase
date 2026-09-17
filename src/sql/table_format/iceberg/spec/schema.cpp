@@ -266,12 +266,15 @@ int Schema::set_column_schema_type_by_type_str(const ObString type_str,
       LOG_WARN("failed to setup timestamp tz ns");
     }
   } else if (0 == type_str.case_compare(TYPE_STRING)) {
+    int64_t varchar_len
+        = lib::is_oracle_mode() ? OB_MAX_ORACLE_VARCHAR_LENGTH : OB_MAX_MYSQL_VARCHAR_LENGTH;
     if (OB_FAIL(
-            ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),
-                                                            ObCharsetType::CHARSET_UTF8MB4,
-                                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                                            column_schema))) {
-      LOG_WARN("failed to setup string");
+            ObExternalTableColumnSchemaHelper::setup_varchar(lib::is_oracle_mode(),
+                                                             varchar_len,
+                                                             ObCharsetType::CHARSET_UTF8MB4,
+                                                             ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                                                             column_schema))) {
+      LOG_WARN("failed to setup varchar");
     }
   } else if (0 == type_str.case_compare(TYPE_BINARY)) {
     if (OB_FAIL(ObExternalTableColumnSchemaHelper::setup_string(lib::is_oracle_mode(),

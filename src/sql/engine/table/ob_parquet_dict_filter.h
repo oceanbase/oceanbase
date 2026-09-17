@@ -95,7 +95,8 @@ public:
                             bool has_null,
                             const int16_t *def_levels,
                             int16_t max_def_level,
-                            const ObExpr *file_col_expr);
+                            const ObExpr *file_col_expr,
+                            bool skip_len_check);
 
   int apply_single_column_dict_filters(
       ObPushdownFilterExecutor *curr_filter,

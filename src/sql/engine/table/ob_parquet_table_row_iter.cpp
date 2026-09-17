@@ -1786,7 +1786,7 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
                               fixed_length,
                               max_length,
                               is_byte_length,
-                              is_hive_lake_table_,
+                              share::is_hive_lake_table(lake_format_),
                               adjusted_len)))) {
             LOG_WARN("data too long", K(max_length), K(fixed_length), K(is_byte_length), K(ret));
           } else if (ob_is_large_text(file_col_expr_->datum_meta_.type_)) {
@@ -1848,6 +1848,7 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
       const bool is_byte_length
           = is_oracle_byte_length(is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
       const int64_t max_length = file_col_expr_->max_length_;
+      const bool skip_len_check = share::is_iceberg_lake_table(lake_format_);
       const bool is_large_text = ob_is_large_text(file_col_expr_->datum_meta_.type_);
       const int64_t row_offset = row_offset_;
       int16_t *def_levels = def_levels_buf_.get_data();
@@ -1864,13 +1865,13 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
         for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
           parquet::ByteArray &cur_v = values_data[i];
           int64_t adjusted_len = cur_v.len;
-          if (OB_UNLIKELY(cur_v.len > max_length
+          if (OB_UNLIKELY(!skip_len_check && cur_v.len > max_length
                           && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
                               pointer_cast<const char *>(cur_v.ptr),
                               cur_v.len,
                               max_length,
                               is_byte_length,
-                              is_hive_lake_table_,
+                              share::is_hive_lake_table(lake_format_),
                               adjusted_len)))) {
             LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
           } else {
@@ -1892,13 +1893,13 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
                 int64_t adjusted_len = cur_v.len;
 
                 if (OB_UNLIKELY(
-                        cur_v.len > max_length
+                        !skip_len_check && cur_v.len > max_length
                         && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
                             pointer_cast<const char *>(cur_v.ptr),
                             cur_v.len,
                             max_length,
                             is_byte_length,
-                            is_hive_lake_table_,
+                            share::is_hive_lake_table(lake_format_),
                             adjusted_len)))) {
                   LOG_WARN("data too long", K(max_length), K(cur_v.len), K(is_byte_length), K(ret));
                 } else if (OB_UNLIKELY(is_large_text)) {
@@ -1952,6 +1953,7 @@ int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
   const bool is_byte_length
       = is_oracle_byte_length(is_oracle_mode, file_col_expr_->datum_meta_.length_semantics_);
   const int64_t max_length = file_col_expr_->max_length_;
+  const bool skip_len_check = share::is_iceberg_lake_table(lake_format_);
   const bool is_large_text = ob_is_large_text(file_col_expr_->datum_meta_.type_);
 
   if (OB_SUCC(ret)) {
@@ -1978,7 +1980,8 @@ int ObParquetTableRowIterator::DataLoader::load_string_col_dict()
                                                              has_null,
                                                              def_levels_buf_.get_data(),
                                                              max_def_level,
-                                                             file_col_expr_))) {
+                                                             file_col_expr_,
+                                                             skip_len_check))) {
       LOG_WARN("fail to save dict column data", K(ret), K(col_idx_));
     } else {
       LOG_DEBUG("dict column data saved", K(col_idx_), K(dict_len), K(row_count_));
@@ -2706,7 +2709,8 @@ int ObParquetTableRowIterator::DataLoader::set_data_attr_vector_payload_for_varc
         for (int j = start; OB_SUCC(ret) && j < start + count; j++) {
           int64_t value_str_length = raw_offsets[j + 1] - raw_offsets[j];
           offsets[j] = raw_offsets[j + 1] - cur_offset;
-          if (OB_UNLIKELY(value_str_length > max_accuracy_len
+          if (OB_UNLIKELY(!share::is_iceberg_lake_table(lake_format_)
+                          && value_str_length > max_accuracy_len
                           && ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
                               pointer_cast<const char *>(values + raw_offsets[j]),
                               value_str_length) > max_accuracy_len)) {
@@ -4003,7 +4007,7 @@ int ObParquetTableRowIterator::read_columns(const ObIArray<uint64_t> &column_ids
                               first_batch,
                               dict_filter_pushdown_,
                               need_decode,
-                              is_hive_lake_table());
+                              scan_param_->lake_table_format_);
             OZ(loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
             if (OB_SUCC(ret)
                 && OB_UNLIKELY(temp_row_count <= 0 || temp_row_count > requested_batch_size)) {
@@ -6466,7 +6470,7 @@ int ObParquetTableRowIterator::project_single_column_block_sample(int64_t &read_
             first_batch,
             dict_filter_pushdown_,
             true /* need_decode */,
-            is_hive_lake_table());
+            scan_param_->lake_table_format_);
         MEMSET(def_levels_buf_.get_data(), 0,
                sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
         MEMSET(rep_levels_buf_.get_data(), 0,

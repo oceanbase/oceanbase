@@ -196,15 +196,17 @@ int Conversions::convert_statistics_binary_to_ob_obj(
         break;
       }
       case ObVarcharType: {
-        // 现在只有 iceberg fixed/uuid 类型会使用 varchar 类型
         ObString tmp;
-        if (!collation_type.has_value() || ObCollationType::CS_TYPE_BINARY != collation_type.value()) {
+        if (!collation_type.has_value()) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("collation_type must be binary", K(ret));
+          LOG_WARN("collation_type must not be null", K(ret));
         } else if (OB_FAIL(ob_write_string(allocator, binary, tmp))) {
           LOG_WARN("failed to copy string", K(tmp), K(ret));
-        } else {
+        } else if (ObCollationType::CS_TYPE_BINARY == collation_type.value()) {
           ob_obj.set_varbinary(tmp);
+        } else {
+          ob_obj.set_varchar(tmp);
+          ob_obj.set_collation_type(collation_type.value());
         }
         break;
       }
