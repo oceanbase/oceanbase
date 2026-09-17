@@ -29,6 +29,7 @@
 #include "logservice/palf/log_sync_mode_mgr.h"
 #include "logservice/transportservice/ob_log_standby_ack_service.h"
 #include "logservice/transportservice/ob_log_standby_transport_worker.h"
+#include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "share/rc/ob_tenant_base.h"
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
@@ -48,6 +49,8 @@ ERRSIM_POINT_DEF(EN_SEMI_SYNC_RPC_LOST);
 // ERRSIM: delay only after the semi-sync early-ACK gate is hit. Used to verify
 // that paths with semi-sync disabled do not enter the early-ACK branch.
 ERRSIM_POINT_DEF(ERRSIM_DELAY_SEMI_SYNC_EARLY_ACK);
+
+const int64_t STANDBY_TRANSPORT_PROCESS_RPC_10MS = 10_ms;
 
 // Semi-sync early ACK gate: double-AND check.
 //   cfg_on = TENANT_CONF(enable_standby_semi_sync), read per RPC
@@ -253,6 +256,7 @@ static void fill_transport_resp_(const ObLogTransportReq &req,
 int ObLogStandbyTransportP::process()
 {
   int ret = OB_SUCCESS;
+  const int64_t begin_time_us = ObTimeUtility::current_monotonic_time();
   const ObLogTransportReq &req = arg_;
   const int64_t cluster_id = GCONF.cluster_id;
   const uint64_t tenant_id = MTL_ID();
@@ -279,6 +283,14 @@ int ObLogStandbyTransportP::process()
   }
 
   fill_transport_resp_(req, cluster_id, tenant_id, ret, ack_lsn, ack_scn, result_);
+  const int64_t cost_time_us = ObTimeUtility::current_monotonic_time() - begin_time_us;
+  if (OB_NOT_NULL(transport_worker)) {
+    transport_worker->record_rpc_process_latency(cost_time_us);
+    transport_worker->print_rpc_process_latency_metric();
+  }
+  if (cost_time_us > STANDBY_TRANSPORT_PROCESS_RPC_10MS) {
+    CLOG_LOG(WARN, "standby transport rpc process cost too much time", KR(result_.ret_code_), K(cost_time_us), K(req), K(result_));
+  }
   return OB_SUCCESS;
 }
 

@@ -27,6 +27,10 @@ namespace oceanbase
 namespace logservice
 {
 
+const int64_t STANDBY_TRANSPORT_WORKER_RPC_100US = 100;
+const int64_t STANDBY_TRANSPORT_WORKER_RPC_10MS = 10_ms;
+const int64_t STANDBY_TRANSPORT_WORKER_RPC_METRIC_PRINT_INTERVAL_US = 1_s;
+
 ObLogStandbyTransportWorker::ObLogStandbyTransportWorker() :
   is_inited_(false),
   stop_flag_(false),
@@ -36,7 +40,11 @@ ObLogStandbyTransportWorker::ObLogStandbyTransportWorker() :
   log_service_(nullptr),
   cond_(ObCond::SPIN_WAIT_NUM, common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
   not_init_warn_time_us_(common::OB_INVALID_TIMESTAMP),
-  running_info_print_time_us_(common::OB_INVALID_TIMESTAMP)
+  running_info_print_time_us_(common::OB_INVALID_TIMESTAMP),
+  standby_transport_rpc_lt_100us_count_(0),
+  standby_transport_rpc_ge_100us_le_10ms_count_(0),
+  standby_transport_rpc_gt_10ms_count_(0),
+  standby_transport_rpc_metric_print_time_us_(common::OB_INVALID_TIMESTAMP)
 {}
 
 ObLogStandbyTransportWorker::~ObLogStandbyTransportWorker()
@@ -66,6 +74,10 @@ int ObLogStandbyTransportWorker::init(const uint64_t tenant_id,
     ATOMIC_STORE(&stop_flag_, false);
     not_init_warn_time_us_ = 0;
     running_info_print_time_us_ = 0;
+    ATOMIC_STORE(&standby_transport_rpc_lt_100us_count_, 0);
+    ATOMIC_STORE(&standby_transport_rpc_ge_100us_le_10ms_count_, 0);
+    ATOMIC_STORE(&standby_transport_rpc_gt_10ms_count_, 0);
+    ATOMIC_STORE(&standby_transport_rpc_metric_print_time_us_, 0);
     is_inited_ = true;
     CLOG_LOG(INFO, "ObLogStandbyTransportWorker init success", K(tenant_id), K(tg_id_));
   }
@@ -89,6 +101,10 @@ void ObLogStandbyTransportWorker::destroy()
     log_service_ = nullptr;
     not_init_warn_time_us_ = common::OB_INVALID_TIMESTAMP;
     running_info_print_time_us_ = common::OB_INVALID_TIMESTAMP;
+    ATOMIC_STORE(&standby_transport_rpc_lt_100us_count_, 0);
+    ATOMIC_STORE(&standby_transport_rpc_ge_100us_le_10ms_count_, 0);
+    ATOMIC_STORE(&standby_transport_rpc_gt_10ms_count_, 0);
+    ATOMIC_STORE(&standby_transport_rpc_metric_print_time_us_, common::OB_INVALID_TIMESTAMP);
     is_inited_ = false;
   }
   CLOG_LOG(INFO, "ObLogStandbyTransportWorker destroy success");
@@ -130,6 +146,44 @@ void ObLogStandbyTransportWorker::wait()
 void ObLogStandbyTransportWorker::signal()
 {
   cond_.signal();
+}
+
+void ObLogStandbyTransportWorker::record_rpc_process_latency(const int64_t cost_time_us)
+{
+  if (cost_time_us < STANDBY_TRANSPORT_WORKER_RPC_100US) {
+    ATOMIC_AAF(&standby_transport_rpc_lt_100us_count_, 1);
+  } else if (cost_time_us <= STANDBY_TRANSPORT_WORKER_RPC_10MS) {
+    ATOMIC_AAF(&standby_transport_rpc_ge_100us_le_10ms_count_, 1);
+  } else {
+    ATOMIC_AAF(&standby_transport_rpc_gt_10ms_count_, 1);
+  }
+}
+
+bool ObLogStandbyTransportWorker::reach_rpc_process_metric_print_interval_()
+{
+  bool bool_ret = false;
+  const int64_t cur_time = common::ObClockGenerator::getClock();
+  const int64_t old_time = ATOMIC_LOAD(&standby_transport_rpc_metric_print_time_us_);
+  if (OB_UNLIKELY(STANDBY_TRANSPORT_WORKER_RPC_METRIC_PRINT_INTERVAL_US + old_time < cur_time)
+      && old_time == ATOMIC_CAS(&standby_transport_rpc_metric_print_time_us_, old_time, cur_time)) {
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+void ObLogStandbyTransportWorker::print_rpc_process_latency_metric()
+{
+  if (reach_rpc_process_metric_print_interval_()) {
+    const int64_t rpc_lt_100us_count = ATOMIC_TAS(&standby_transport_rpc_lt_100us_count_, 0);
+    const int64_t rpc_ge_100us_le_10ms_count =
+        ATOMIC_TAS(&standby_transport_rpc_ge_100us_le_10ms_count_, 0);
+    const int64_t rpc_gt_10ms_count = ATOMIC_TAS(&standby_transport_rpc_gt_10ms_count_, 0);
+    const int64_t rpc_total_count =
+        rpc_lt_100us_count + rpc_ge_100us_le_10ms_count + rpc_gt_10ms_count;
+    CLOG_LOG(INFO, "ObLogStandbyTransportP rpc process latency metric",
+        K_(tenant_id), K(rpc_total_count), K(rpc_lt_100us_count), K(rpc_ge_100us_le_10ms_count),
+        K(rpc_gt_10ms_count), K(STANDBY_TRANSPORT_WORKER_RPC_METRIC_PRINT_INTERVAL_US));
+  }
 }
 
 int ObLogStandbyTransportWorker::submit_transport_task(const ObLogTransportReq &req)

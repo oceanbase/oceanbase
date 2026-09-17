@@ -56,10 +56,13 @@ public:
 
   // 检查是否需要停止接收日志（failover时）
   bool need_stop() const { return ATOMIC_LOAD(&stop_flag_); }
+  void record_rpc_process_latency(const int64_t cost_time_us);
+  void print_rpc_process_latency_metric();
 
 private:
   void run1() override;
   void do_thread_task_();
+  bool reach_rpc_process_metric_print_interval_();
 
 private:
   bool is_inited_;
@@ -71,6 +74,10 @@ private:
   common::ObCond cond_;
   int64_t not_init_warn_time_us_;
   int64_t running_info_print_time_us_;
+  int64_t standby_transport_rpc_lt_100us_count_;
+  int64_t standby_transport_rpc_ge_100us_le_10ms_count_;
+  int64_t standby_transport_rpc_gt_10ms_count_;
+  int64_t standby_transport_rpc_metric_print_time_us_;
 
   static const int64_t THREAD_RUN_INTERVAL = 10 * 1000L;  // 10ms
 
