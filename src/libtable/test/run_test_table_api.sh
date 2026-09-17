@@ -56,7 +56,9 @@ mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_multi_batc
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists large_scan_query_async_test; create table if not exists large_scan_query_async_test (C1 bigint primary key, C2 bigint, C3 varchar(100));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_with_index_test; create table if not exists query_async_with_index_test (C1 bigint, C2 bigint, C3 bigint, primary key(C1, C2), KEY idx_c2 (C2), KEY idx_c3 (C3), KEY idx_c2c3(C2, C3));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_multi_task_test; create table if not exists query_async_multi_task_test (C1 bigint primary key, C2 bigint, C3 varchar(100));" $db
-mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_with_filter; create table if not exists query_with_filter (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
+mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_with_filter; \
+  create table if not exists query_with_filter \
+  (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0, C5 float default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_and_mutate; create table if not exists query_and_mutate (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists atomic_batch_ops; create table if not exists atomic_batch_ops (C1 bigint, C2 varchar(128), C3 varbinary(1024) default null, C4 bigint not null default -1, primary key(C1), UNIQUE KEY idx_c2c4 (C2, C4));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists auto_increment_defensive_test; create table if not exists auto_increment_defensive_test (C1 bigint AUTO_INCREMENT primary key) PARTITION BY KEY(C1) PARTITIONS 16;" $db
@@ -120,7 +122,9 @@ mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_multi_batc
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists large_scan_query_async_test; create table if not exists large_scan_query_async_test (C1 bigint primary key, C2 bigint, C3 varchar(100));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_with_index_test; create table if not exists query_async_with_index_test (C1 bigint, C2 bigint, C3 bigint, primary key(C1, C2), KEY idx_c2 (C2), KEY idx_c3 (C3), KEY idx_c2c3(C2, C3));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_async_multi_task_test; create table if not exists query_async_multi_task_test (C1 bigint primary key, C2 bigint, C3 varchar(100));" $db
-mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_with_filter; create table if not exists query_with_filter (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
+mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_with_filter; \
+  create table if not exists query_with_filter \
+  (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0, C5 float default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists query_and_mutate; create table if not exists query_and_mutate (C1 bigint primary key, C2 bigint, C3 varchar(100), C4 double default 0);" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists atomic_batch_ops; create table if not exists atomic_batch_ops (C1 bigint, C2 varchar(128), C3 varbinary(1024) default null, C4 bigint not null default -1, primary key(C1), UNIQUE KEY idx_c2c4 (C2, C4));" $db
 mysql -h $HOST -P $PORT -u $user -e "drop table if exists obkv_datetime_test; create table if not exists obkv_datetime_test (C1 bigint, C2 datetime(6), primary key(C1), KEY idx_c2 (C2));" $db

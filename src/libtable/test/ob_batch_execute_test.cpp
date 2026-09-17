@@ -9778,7 +9778,9 @@ TEST_F(TestBatchExecute, query_async_multi_task)
   }
 }
 
-// create table if not exists query_with_filter (C1 bigint primary key, C2 bigint default null, C3 varchar(100) default null, C4 double default 0);
+// create table if not exists query_with_filter
+// (C1 bigint primary key, C2 bigint default null, C3 varchar(100) default null,
+//  C4 double default 0, C5 float default 0);
 TEST_F(TestBatchExecute, table_query_with_filter)
 {
   // setup
@@ -9796,6 +9798,7 @@ TEST_F(TestBatchExecute, table_query_with_filter)
   ObString s1 = ObString::make_string("hello c++");
   ObString s2 = ObString::make_string("hello java");
   ObString C4 = ObString::make_string("C4");
+  ObString C5 = ObString::make_string("C5");
   //prepare data
   const int64_t batch_size = 100;
   for (int64_t i = 1; i <= batch_size; ++i) {
@@ -9807,6 +9810,8 @@ TEST_F(TestBatchExecute, table_query_with_filter)
     ASSERT_EQ(OB_SUCCESS, entity->set_property(C2, value));
     value.set_double(1.0 * i);
     ASSERT_EQ(OB_SUCCESS, entity->set_property(C4, value));
+    value.set_float(0.5f * static_cast<float>(i));
+    ASSERT_EQ(OB_SUCCESS, entity->set_property(C5, value));
     if (i % 2 == 0) {
       value.set_varchar(s1);
     } else {
@@ -10018,12 +10023,10 @@ TEST_F(TestBatchExecute, table_query_with_filter)
     // fprintf(stderr, "query ret=%d\n", ret);
   } // end case 6
   {
-    // case 7: bad filter case, data type error
-    fprintf(stderr, "case 7: data type bad case, filter_string=TableCompareFilter(=, 'C4:50')\n");
+    // case 7: filter DOUBLE column
+    fprintf(stderr, "case 7: filter_string=TableCompareFilter(=, 'C4:50')\n");
     query.reset();
     ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
-    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C2));
-    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C3));
     ASSERT_EQ(OB_SUCCESS, query.add_select_column(C4));
     ObObj pk_objs_start;
     pk_objs_start.set_int(40);
@@ -10037,10 +10040,50 @@ TEST_F(TestBatchExecute, table_query_with_filter)
     ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
     ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
     ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C4:50')")));
-    int ret = the_table->execute_query(query, iter);
-    ASSERT_NE(OB_SUCCESS, ret);
-    // fprintf(stderr, "query ret=%d\n", ret);
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      ++result_cnt;
+      ObObj v1, v4;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C4, v4));
+      ASSERT_EQ(50, v1.get_int());
+      ASSERT_DOUBLE_EQ(50.0, v4.get_double());
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(1, result_cnt);
   } // end case 7
+  {
+    // case 7-1: filter FLOAT column
+    fprintf(stderr, "case 7-1: filter_string=TableCompareFilter(=, 'C5:25')\n");
+    query.reset();
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C1));
+    ASSERT_EQ(OB_SUCCESS, query.add_select_column(C5));
+    ObObj pk_objs_start;
+    pk_objs_start.set_int(40);
+    ObObj pk_objs_end;
+    pk_objs_end.set_int(55);
+    ObNewRange range;
+    range.start_key_.assign(&pk_objs_start, 1);
+    range.end_key_.assign(&pk_objs_end, 1);
+    range.border_flag_.set_inclusive_start();
+    range.border_flag_.set_inclusive_end();
+    ASSERT_EQ(OB_SUCCESS, query.add_scan_range(range));
+    ASSERT_EQ(OB_SUCCESS, query.set_scan_index(ObString::make_string("primary")));
+    ASSERT_EQ(OB_SUCCESS, query.set_filter(ObString::make_string("TableCompareFilter(=, 'C5:25')")));
+    ASSERT_EQ(OB_SUCCESS, the_table->execute_query(query, iter));
+    int64_t result_cnt = 0;
+    while (OB_SUCC(iter->get_next_entity(result_entity))) {
+      ++result_cnt;
+      ObObj v1, v5;
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C1, v1));
+      ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C5, v5));
+      ASSERT_EQ(50, v1.get_int());
+      ASSERT_FLOAT_EQ(25.0f, v5.get_float());
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    ASSERT_EQ(1, result_cnt);
+  } // end case 7-1
   {
     // case 8: more than one `:` in filter string
     // fprintf(stderr, "case 8: more than one `:` in filter string, filter_string=TableCompareFilter(=, 'C3:hello:c++')\n");

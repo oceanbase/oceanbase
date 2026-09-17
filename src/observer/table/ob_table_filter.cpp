@@ -12,6 +12,11 @@
 #define USING_LOG_PREFIX SERVER
 #include "ob_table_filter.h"
 
+#include <cmath>
+
+#include "lib/allocator/ob_allocator.h"
+#include "share/object/ob_obj_cast.h"
+
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::table::hfilter;
@@ -33,6 +38,112 @@ inline bool ObTableComparator::is_numeric(const ObString &value)
     ret = value.is_numeric();
   }
 
+  return ret;
+}
+
+int ObTableComparator::validate_real_comparator(const ObString &number_text) const
+{
+  int ret = OB_SUCCESS;
+  const char *ptr = number_text.ptr();
+  const int64_t length = number_text.length();
+  int64_t pos = 0;
+  bool has_digit = false;
+
+  // Enforce a decimal-only protocol grammar before ObObjCaster. The accepted
+  // form is [+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)? and the
+  // caller has already removed leading and trailing whitespace. This guard
+  // deliberately rejects non-finite and hexadecimal forms even if a lower
+  // level conversion routine happens to accept them.
+  if (0 == length || OB_ISNULL(ptr)) {
+    ret = OB_ERR_DOUBLE_TRUNCATED;
+  } else {
+    if ('+' == ptr[pos] || '-' == ptr[pos]) {
+      ++pos;
+    }
+    while (pos < length && '0' <= ptr[pos] && '9' >= ptr[pos]) {
+      has_digit = true;
+      ++pos;
+    }
+    if (pos < length && '.' == ptr[pos]) {
+      ++pos;
+      while (pos < length && '0' <= ptr[pos] && '9' >= ptr[pos]) {
+        has_digit = true;
+        ++pos;
+      }
+    }
+    if (!has_digit) {
+      ret = OB_ERR_DOUBLE_TRUNCATED;
+    } else if (pos < length && ('e' == ptr[pos] || 'E' == ptr[pos])) {
+      bool has_exponent_digit = false;
+      ++pos;
+      if (pos < length && ('+' == ptr[pos] || '-' == ptr[pos])) {
+        ++pos;
+      }
+      while (pos < length && '0' <= ptr[pos] && '9' >= ptr[pos]) {
+        has_exponent_digit = true;
+        ++pos;
+      }
+      if (!has_exponent_digit) {
+        ret = OB_ERR_DOUBLE_TRUNCATED;
+      }
+    }
+    if (OB_SUCC(ret) && pos != length) {
+      ret = OB_ERR_DOUBLE_TRUNCATED;
+    }
+  }
+
+  return ret;
+}
+
+int ObTableComparator::build_real_comparator(const ObObjType column_type, const ObScale column_scale)
+{
+  int ret = OB_SUCCESS;
+  const ObString number_text = comparator_value_.trim();
+  const bool cache_hit = is_real_comparator_valid_
+                         && nullptr != allocator_
+                         && real_comparator_text_ == number_text
+                         && real_comparator_type_ == column_type
+                         && real_comparator_scale_ == column_scale;
+  if (!cache_hit) {
+    ObObj source_obj;
+    ObObj converted_comparator;
+    ObCastCtx cast_ctx;
+    is_real_comparator_valid_ = false;
+    cast_ctx.cast_mode_ |= CM_EXPLICIT_CAST;
+    if (OB_FAIL(validate_real_comparator(number_text))) {
+      LOG_WARN("invalid real comparator value", K(ret), K_(comparator_value));
+    } else {
+      source_obj.set_varchar(number_text);
+      source_obj.set_collation_type(ObCharset::get_system_collation());
+      if (OB_FAIL(ObObjCaster::to_type(column_type, cast_ctx, source_obj, converted_comparator))) {
+        LOG_WARN("failed to cast real comparator to column type",
+                 K(ret), K_(comparator_value), K(column_type), K(column_scale));
+      } else {
+        const bool is_finite = ob_is_float_tc(column_type)
+                                 ? std::isfinite(converted_comparator.get_float())
+                                 : std::isfinite(converted_comparator.get_double());
+        if (!is_finite) {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("real comparator value must be finite",
+                   K(ret), K_(comparator_value), K(column_type));
+        }
+      }
+    }
+    if (OB_SUCC(ret)
+        && nullptr != allocator_
+        && real_comparator_text_ != number_text) {
+      if (OB_FAIL(ob_write_string(*allocator_, number_text, real_comparator_text_))) {
+        LOG_WARN("failed to cache real comparator text", K(ret), K(number_text));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      converted_comparator.set_scale(column_scale);
+      real_comparator_ = converted_comparator;
+      real_comparator_type_ = column_type;
+      real_comparator_scale_ = column_scale;
+      is_real_comparator_valid_ = true;
+    }
+  }
   return ret;
 }
 
@@ -107,6 +218,13 @@ int ObTableComparator::compare_to(const ObIArray<ObString> &select_columns,
                       (src_v > dest_v ? 1 : -1);
           }
         }
+      } else if (ob_is_float_tc(column_type) || ob_is_double_tc(column_type)) {
+        // support float, float unsigned, double and double unsigned
+        if (OB_FAIL(build_real_comparator(column_type, cell.get_scale()))) {
+          LOG_WARN("failed to build real comparator", K(ret), K(column_type), K(cell.get_scale()));
+        } else if (OB_FAIL(real_comparator_.compare(cell, cmp_ret))) {
+          LOG_WARN("failed to compare real objects", K(ret), K_(real_comparator), K(cell));
+        }
       } else if (ob_is_string_tc(column_type)) {
         // support varchar, char, varbinary, binary
         ObObj compare_obj;
@@ -120,8 +238,12 @@ int ObTableComparator::compare_to(const ObIArray<ObString> &select_columns,
       } else {
         // not support others
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "only for double, int and string, other column type");
-        LOG_WARN("do not support other column type, only for int, string", K(ret), K(column_type));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "TableCompareFilter only supports int, uint, float, float unsigned, "
+                       "double, double unsigned and string column types");
+        LOG_WARN("unsupported TableCompareFilter column type; supported types are int, uint, float, "
+                 "float unsigned, double, double unsigned and string",
+                 K(ret), K(column_type));
       }
     } else {
       LOG_WARN("comparator does not find column", K(ret), K_(column_name), K(select_columns));
@@ -255,7 +377,7 @@ int ObTableFilterParser::create_comparator(const SimpleString &bytes, hfilter::C
     ObString cmp_column(len1, bytes.str_);
     ObString cmp_value(bytes.len_-len1-1, p+1);
 
-    comparator = OB_NEWx(ObTableComparator, allocator_, cmp_column, cmp_value);
+    comparator = OB_NEWx(ObTableComparator, allocator_, cmp_column, cmp_value, allocator_);
     if (NULL == comparator) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("no memory for ObTableComparator", K(ret));

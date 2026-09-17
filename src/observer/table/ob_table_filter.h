@@ -20,24 +20,36 @@
 #include "lib/string/ob_string.h"
 #include "ob_table_aggregation.h"
 #include "lib/utility/ob_print_utils.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase {
 
 namespace common
 {
 class ObArenaAllocator;
+class ObIAllocator;
 class ObNewRow;
 } // end namespace common
 
 namespace table
 {
 
+// The real comparator cache is mutable request-local state. An instance must
+// not be shared by concurrent request threads.
 class ObTableComparator : public hfilter::Comparable
 {
 public:
-  ObTableComparator(const ObString &column_name, const ObString &comparator_value)
+  ObTableComparator(const ObString &column_name,
+                    const ObString &comparator_value,
+                    common::ObIAllocator *allocator = nullptr)
       :Comparable(comparator_value),
-       column_name_(column_name)
+       column_name_(column_name),
+       allocator_(allocator),
+       real_comparator_(),
+       real_comparator_text_(),
+       real_comparator_type_(common::ObMaxType),
+       real_comparator_scale_(common::SCALE_UNKNOWN_YET),
+       is_real_comparator_valid_(false)
   {}
   virtual ~ObTableComparator() {}
 
@@ -53,8 +65,16 @@ public:
   VIRTUAL_TO_STRING_KV("comprable", "ObTableComparator");
 private:
   ObString column_name_;
+  common::ObIAllocator *allocator_;
+  common::ObObj real_comparator_;
+  common::ObString real_comparator_text_;
+  common::ObObjType real_comparator_type_;
+  common::ObScale real_comparator_scale_;
+  bool is_real_comparator_valid_;
 private:
   bool is_numeric(const ObString &value);
+  int validate_real_comparator(const common::ObString &number_text) const;
+  int build_real_comparator(common::ObObjType column_type, common::ObScale column_scale);
   DISALLOW_COPY_AND_ASSIGN(ObTableComparator);
 };
 
