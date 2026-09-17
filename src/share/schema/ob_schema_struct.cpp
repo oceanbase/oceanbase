@@ -1174,6 +1174,11 @@ int ObSysVariableSchema::load_default_system_variable(bool is_sys_tenant)
     sysvar.reset();
     if (is_sys_tenant && ObCharset::case_insensitive_equal(ObSysVariables::get_name(i), OB_SV_LOWER_CASE_TABLE_NAMES)) {
       value = ObString::make_string("2");
+    } else if (is_sys_tenant
+               && ObCharset::case_insensitive_equal(
+                   ObSysVariables::get_name(i), OB_SV_SQL_WORK_AREA_PERCENTAGE)) {
+      // This schema is cached before bootstrap persists the sys tenant's variables.
+      value = ObString::make_string("30");
     } else {
       value = ObSysVariables::get_value(i);
     }

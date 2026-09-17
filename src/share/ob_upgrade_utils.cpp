@@ -2463,5 +2463,94 @@ int ObUpgradeFor4421Processor::finish_upgrade_for_sync_standby_status_()
 
 /* =========== 4421 upgrade processor end ============= */
 
+/* =========== 4423 upgrade processor start ============= */
+int ObUpgradeFor4423Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_sys_tenant_work_area_percentage_())) {
+    LOG_WARN("fail to set sys tenant work area percentage", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4423Processor::post_upgrade_for_sys_tenant_work_area_percentage_()
+{
+  static constexpr int64_t SYS_TENANT_COMPATIBLE_WORK_AREA_PERCENTAGE = 80;
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  bool is_initial_value = false;
+  ObSqlString sql;
+  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), K_(tenant_id));
+  } else if (!is_sys_tenant(tenant_id_)) {
+    LOG_INFO("not sys tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(check_sys_tenant_work_area_percentage_is_initial_value_(is_initial_value))) {
+    LOG_WARN("fail to check whether sys tenant work area percentage is initial value", KR(ret));
+  } else if (!is_initial_value) {
+    LOG_INFO("sys tenant work area percentage is not initial value, skip compatibility adjustment");
+  } else if (OB_FAIL(sql.assign_fmt("SET GLOBAL ob_sql_work_area_percentage = %ld",
+                                    SYS_TENANT_COMPATIBLE_WORK_AREA_PERCENTAGE))) {
+    LOG_WARN("fail to construct sys tenant work area percentage sql", KR(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to set sys tenant work area percentage", KR(ret), K_(tenant_id), K(sql));
+  } else {
+    LOG_INFO("succeed to set sys tenant work area percentage",
+             K_(tenant_id), K(SYS_TENANT_COMPATIBLE_WORK_AREA_PERCENTAGE));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4423Processor::check_sys_tenant_work_area_percentage_is_initial_value_(
+    bool &is_initial_value)
+{
+  static constexpr int64_t SYS_TENANT_OLD_DEFAULT_WORK_AREA_PERCENTAGE = 5;
+  int ret = OB_SUCCESS;
+  int64_t initial_value_state = 0;
+  ObSqlString sql;
+  is_initial_value = false;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = nullptr;
+    if (OB_ISNULL(sql_proxy_) || !is_sys_tenant(tenant_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), K_(tenant_id));
+    } else if (OB_FAIL(sql.assign_fmt(
+        "SELECT CASE WHEN COUNT(*) = 0 THEN -1 "
+        "WHEN COUNT(*) = 1 AND MIN(value) = '%ld' THEN 1 "
+        "ELSE 0 END AS initial_value_state "
+        "FROM (SELECT value FROM %s WHERE tenant_id = 0 AND zone = '' "
+        "AND name = 'ob_sql_work_area_percentage' AND is_deleted = 0 LIMIT 2) AS variable_history",
+        SYS_TENANT_OLD_DEFAULT_WORK_AREA_PERCENTAGE,
+        OB_ALL_SYS_VARIABLE_HISTORY_TNAME))) {
+      LOG_WARN("fail to construct sys tenant work area percentage query", KR(ret));
+    } else if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
+      LOG_WARN("fail to query sys tenant work area percentage history",
+               KR(ret), K_(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get sys tenant work area percentage query result", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("failed to get sys tenant work area percentage query row", KR(ret));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "initial_value_state", initial_value_state, int64_t);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to extract sys tenant work area percentage query result", KR(ret));
+      } else if (OB_UNLIKELY(initial_value_state < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected empty sys tenant work area percentage history",
+                 KR(ret), K(initial_value_state));
+      } else {
+        is_initial_value = 1 == initial_value_state;
+        LOG_INFO("checked whether sys tenant work area percentage is initial value",
+                 K(is_initial_value), K(initial_value_state));
+      }
+    }
+  }
+  return ret;
+}
+/* =========== 4423 upgrade processor end ============= */
+
 } // end share
 } // end oceanbase

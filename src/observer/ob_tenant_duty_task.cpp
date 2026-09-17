@@ -46,7 +46,7 @@ void ObTenantDutyTask::update_all_tenants()
   GCTX.omt_->get_tenant_ids(ids);
 
   for (int64_t i = 0; i < ids.size(); i++) {
-    if (ids[i] <= OB_USER_TENANT_ID) {
+    if (is_virtual_tenant_id(ids[i])) {
       continue;
     } else {
       if (OB_FAIL(update_tenant_wa_percentage(ids[i]))) {
@@ -194,7 +194,7 @@ void ObTenantSqlMemoryTimerTask::runTimerTask()
   GCTX.omt_->get_tenant_ids(ids);
   // Each tenant must calculate the global bound size regularly, so the failure of one tenant should not affect other tenants, so there is no judgment OB_SUCC(ret) to end
   for (int64_t i = 0; i < ids.size(); i++) {
-    if (ids[i] <= OB_MAX_RESERVED_TENANT_ID) {
+    if (is_virtual_tenant_id(ids[i])) {
       continue;
     } else {
       MTL_SWITCH(ids[i]) {
