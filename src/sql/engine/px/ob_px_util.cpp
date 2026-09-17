@@ -38,13 +38,6 @@ using namespace oceanbase::sql;
 using namespace oceanbase::sql::dtl;
 using namespace oceanbase::share;
 
-#define CASE_IGNORE_ERR_HELPER(ERR_CODE)                        \
-case ERR_CODE: {                                                \
-  should_ignore = true;                                         \
-  LOG_USER_WARN(OB_IGNORE_ERR_ACCESS_VIRTUAL_TABLE, ERR_CODE);  \
-  break;                                                        \
-}                                                               \
-
 OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_, *mview_ids_, *last_refresh_scns_);
 
 ObBaseOrderMap::~ObBaseOrderMap()
@@ -5473,28 +5466,6 @@ int ObExtraServerAliveCheck::do_check() const
   }
   LOG_DEBUG("server alive do check", K(ret), K(qc_addr_), K(cluster_id_), K(dfo_mgr_));
   return ret;
-}
-
-bool ObVirtualTableErrorWhitelist::should_ignore_vtable_error(int error_code)
-{
-  bool should_ignore = false;
-  switch (error_code) {
-    CASE_IGNORE_ERR_HELPER(OB_ALLOCATE_MEMORY_FAILED)
-    CASE_IGNORE_ERR_HELPER(OB_RPC_CONNECT_ERROR)
-    CASE_IGNORE_ERR_HELPER(OB_RPC_SEND_ERROR)
-    CASE_IGNORE_ERR_HELPER(OB_RPC_POST_ERROR)
-    CASE_IGNORE_ERR_HELPER(OB_TENANT_NOT_IN_SERVER)
-    CASE_IGNORE_ERR_HELPER(OB_SIZE_OVERFLOW)
-    default: {
-      if (is_schema_error(error_code)) {
-        should_ignore = true;
-        const int ret = error_code;
-        LOG_WARN("ignore schema error", KR(ret));
-      }
-      break;
-    }
-  }
-  return should_ignore;
 }
 
 bool ObPxCheckAlive::is_in_blacklist(const common::ObAddr &addr, int64_t server_start_time)

@@ -830,12 +830,6 @@ private:
   int64_t query_start_time_;
 };
 
-class ObVirtualTableErrorWhitelist
-{
-public:
-  static bool should_ignore_vtable_error(int error_code);
-};
-
 class ObPxCheckAlive
 {
 public:
