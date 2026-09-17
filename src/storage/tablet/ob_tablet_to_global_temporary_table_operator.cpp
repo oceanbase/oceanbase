@@ -677,23 +677,62 @@ int ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
   return ret;
 }
 
+int ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
+    ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<common::ObTableID> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id,
+    ObIArray<storage::ObSessionTabletInfo> &infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || table_ids.empty()
+                  || INT64_MAX == sequence
+                  || OB_INVALID_ID == session_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_ids), K(sequence), K(session_id));
+  } else {
+    infos.reset();
+    infos.reserve(table_ids.count());
+    int64_t start_idx = 0;
+    int64_t end_idx = MIN(MAX_BATCH_COUNT, table_ids.count());
+    while (OB_SUCC(ret) && start_idx < end_idx) {
+      if (OB_FAIL(inner_batch_get_by_sql(sql_proxy, tenant_id, table_ids, start_idx, end_idx,
+                                        infos, sequence, session_id))) {
+        LOG_WARN("fail to inner batch get by sql", KR(ret), K(tenant_id), K(table_ids),
+            K(sequence), K(session_id), K(start_idx), K(end_idx));
+      } else {
+        start_idx = end_idx;
+        end_idx = MIN(start_idx + MAX_BATCH_COUNT, table_ids.count());
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTabletToGlobalTmpTableOperator::inner_batch_get_by_sql(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,
     const ObIArray<common::ObTableID> &table_ids,
     const int64_t start_idx,
     const int64_t end_idx,
-    ObIArray<storage::ObSessionTabletInfo> &infos)
+    ObIArray<storage::ObSessionTabletInfo> &infos,
+    const int64_t sequence,
+    const uint64_t session_id)
 {
   int ret = OB_SUCCESS;
   const char *query_column_str = "*";
+  const bool filter_by_session = INT64_MAX != sequence && OB_INVALID_ID != session_id;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
       || table_ids.empty()
       || start_idx < 0
       || start_idx >= end_idx
-      || end_idx > table_ids.count())) {
+      || end_idx > table_ids.count()
+      || ((INT64_MAX == sequence) ^ (OB_INVALID_ID == session_id)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_ids), K(infos), K(start_idx), K(end_idx));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_ids), K(infos),
+        K(sequence), K(session_id), K(start_idx), K(end_idx));
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       ObSQLClientRetryWeak sql_client_retry_weak(
@@ -722,9 +761,16 @@ int ObTabletToGlobalTmpTableOperator::inner_batch_get_by_sql(
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
       } else if (OB_FAIL(sql.append(table_id_list.string()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql), K(table_id_list));
+      } else if (OB_FAIL(sql.append(")"))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(sql));
+      } else if (!filter_by_session) {
+        // do nothing
+      } else if (OB_FAIL(sql.append_fmt(
+              " AND sequence = %ld AND session_id = %lu",
+              sequence, session_id))) {
+        LOG_WARN("fail to assign sql", KR(ret), K(sql), K(sequence), K(session_id));
       }
-
-      if (FAILEDx(sql.append_fmt(") ORDER BY tablet_id ASC"))) {
+      if (FAILEDx(sql.append(" ORDER BY tablet_id ASC"))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
       } else if (OB_FAIL(sql_client_retry_weak.read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
@@ -834,15 +880,17 @@ int ObTabletToGlobalTmpTableOperator::check_tablet_exist(
 {
   int ret = OB_SUCCESS;
   exist = false;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || table_id == OB_INVALID_ID || !tablet_id.is_valid())) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
+                  || OB_INVALID_ID == table_id
+                  || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(table_id), K(tablet_id));
   } else {
     SMART_VAR(ObISQLClient::ReadResult, result) {
       ObSqlString sql;
       if (FAILEDx(sql.append_fmt(
-        "SELECT 1 FROM %s WHERE table_id = %lu AND tablet_id = %lu",
-        OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME, table_id, tablet_id.id()))) {
+              "SELECT 1 FROM %s WHERE table_id = %lu AND tablet_id = %lu",
+              OB_ALL_TABLET_TO_GLOBAL_TEMPORARY_TABLE_TNAME, table_id, tablet_id.id()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
       } else if (OB_FAIL(sql_proxy.read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));

@@ -194,8 +194,22 @@ public:
       const common::ObIArray<common::ObTabletID> &updated_tablet_ids,
       const int64_t old_sequence,
       const int64_t new_sequence);
+  // Remove all entries matching the specified table ID and sequence.
+  int try_remove_session_tablet(
+      const uint64_t table_id,
+      const int64_t sequence,
+      bool &removed);
+  int try_remove_stale_session_tablet_on_location_error(
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const common::ObTabletID &tablet_id,
+      bool &removed);
   void reset() { tablet_infos_.reset(); }
-  bool is_empty() const { return tablet_infos_.count() == 0; }
+  bool is_empty()
+  {
+    lib::ObMutexGuard guard(mutex_);
+    return tablet_infos_.count() == 0;
+  }
   int get_table_ids_by_session_id_and_sequence(
       const uint64_t session_id,
       const int64_t sequence,
@@ -212,6 +226,12 @@ public:
   TO_STRING_KV(K_(tablet_infos));
 private:
   const static int64_t MAX_SESSION_TABLET_COUNT = 64;
+  // Remove only the entry matching both table ID and tablet ID. This prevents stale-entry
+  // recovery from removing a newly recreated tablet of the same table.
+  int try_remove_session_tablet(
+      const uint64_t table_id,
+      const common::ObTabletID &tablet_id,
+      bool &removed);
   int inner_get_session_tablet(
       const uint64_t table_id,
       const int64_t sequence,

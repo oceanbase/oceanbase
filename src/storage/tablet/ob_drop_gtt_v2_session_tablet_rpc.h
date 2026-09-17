@@ -25,6 +25,9 @@ public:
   static int handle_in_tenant(
     const share::ObBatchDropGTTV2SessionTabletArg &arg,
     share::ObDropGTTV2SessionTabletRes &result);
+  static int remove_map_in_tenant(
+    const share::ObDropGTTV2SessionTabletArg &arg,
+    share::ObDropGTTV2SessionTabletRes &result);
 };
 
 class ObRpcDropGTTV2SessionTabletP : public obrpc::ObRpcProcessor<

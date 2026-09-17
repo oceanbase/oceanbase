@@ -161,6 +161,14 @@ public:
     const uint64_t tenant_id,
     const ObIArray<common::ObTableID> &table_ids,
     ObIArray<storage::ObSessionTabletInfo> &infos);
+  // Get ObSessionTabletInfos of the specified session and sequence by table IDs.
+  static int batch_get_by_table_ids(
+    ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const ObIArray<common::ObTableID> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id,
+    ObIArray<storage::ObSessionTabletInfo> &infos);
   // Get ObSessionTabletInfo from __all_tablet_to_global_temporary_table by table_id
   //
   // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction
@@ -218,7 +226,9 @@ private:
     const ObIArray<common::ObTableID> &table_ids,
     const int64_t start_idx,
     const int64_t end_idx,
-    ObIArray<storage::ObSessionTabletInfo> &infos);
+    ObIArray<storage::ObSessionTabletInfo> &infos,
+    const int64_t sequence = INT64_MAX,
+    const uint64_t session_id = OB_INVALID_ID);
   static int inner_batch_get_by_table_ids_and_session_id_sql(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,

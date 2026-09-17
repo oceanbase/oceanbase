@@ -660,6 +660,42 @@ int ObSessionTabletCreateHelper::fetch_tablet_id(
   return ret;
 }
 
+int ObSessionTabletCreateHelper::precheck_can_create_tablet(
+    const share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (table_schema.is_oracle_tmp_table_v2_index_table()) {
+    const uint64_t data_table_id = table_schema.get_data_table_id();
+    const ObSessionTabletInfoKey data_table_key(data_table_id, sequence_, session_id_);
+    ObSessionTabletInfo data_table_info;
+    bool removed = false;
+    if (OB_FAIL(session_tablet_map_.get_session_tablet(data_table_key, data_table_info))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // The data tablet has not been created. choose_log_stream() will add the data table and
+        // the index table to the same create batch.
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get data session tablet before creating index tablet",
+            KR(ret), K(data_table_key), K(table_schema));
+      }
+    } else {
+      /// Check whether the data tablet has a stale entry(@c removed returns true).
+      /// If so, give up creating the index tablet to avoid creating the data tablet
+      /// and its index tablet in different LSs.
+      if (OB_FAIL(session_tablet_map_.try_remove_stale_session_tablet_on_location_error(
+              tenant_id_, data_table_id, data_table_info.get_tablet_id(), removed))) {
+        LOG_WARN("failed to check stale data session tablet before creating index tablet",
+            KR(ret), K(data_table_key), K(data_table_info), K(table_schema));
+      } else if (removed) {
+        ret = OB_SCHEMA_EAGAIN;
+        LOG_INFO("removed stale data tablet before creating gtt v2 index tablet",
+            KR(ret), K(data_table_key), K(data_table_info), K(table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSessionTabletCreateHelper::choose_log_stream(
     share::schema::ObMultiVersionSchemaService &schema_service,
     share::schema::ObLatestSchemaGuard &lastest_schema_guard,
@@ -681,6 +717,12 @@ int ObSessionTabletCreateHelper::choose_log_stream(
       const share::schema::ObTableSchema *data_table_schema = nullptr;
       const ObSessionTabletInfoKey data_table_key(data_table_id, sequence_, session_id_);
       if (OB_SUCC(session_tablet_map_.get_session_tablet(data_table_key, data_table_info))) {
+        // The LS in the local session map may be stale after transfer. Use the latest mapping
+        // from the inner table when choosing the LS for the index tablet.
+        if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::point_get(
+                trans_, tenant_id_, data_table_id, sequence_, session_id_, data_table_info))) {
+          LOG_WARN("failed to get latest data session tablet info", KR(ret), K(data_table_key));
+        }
       } else if (OB_ENTRY_NOT_EXIST != ret) {
         LOG_WARN("failed to get data table info", KR(ret), K(data_table_key));
       } else if (OB_FAIL(lastest_schema_guard.get_table_schema(data_table_id, data_table_schema))) {
@@ -771,6 +813,8 @@ int ObSessionTabletCreateHelper::generate_tablet_create_arg(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("generate_tablet_create_arg called with nothing to create",
         KR(ret), K(table_ids_), K(tablet_ids_));
+  } else if (OB_FAIL(precheck_can_create_tablet(*table_schema))) {
+    LOG_WARN("failed to precheck can create session tablet", KR(ret), KPC(table_schema));
   // Reuse path may have pinned ls_id_ already; only choose if still unset.
   } else if (!ls_id_.is_valid()
              && OB_FAIL(choose_log_stream(schema_service, schema_guard, *table_schema, tablegroup_schema, ls_id_))) {
@@ -821,9 +865,6 @@ int ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
     const uint64_t tenant_id,
     const uint64_t table_id)
 {
-  // Drop the main tablet plus its index / lob aux tablets in one cross-observer broadcast. The dispatch
-  // helper has the creator observer delete every is_creator_ entry inside a single inner transaction, so
-  // truncate is atomic without needing an outer trans here. See dispatch_drop_gtt_v2_session_tablet_on_creator.
   int ret = OB_SUCCESS;
   int64_t sequence = INT64_MAX;
   const uint64_t session_id = session_info.get_sessid_for_table();
@@ -837,9 +878,9 @@ int ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
     LOG_WARN("invalid args", K(ret), K(tenant_id));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     LOG_WARN("failed to get tenant data version", KR(ret), K(tenant_id));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
+  } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("GCTX.schema_service_ is null", K(ret));
+    LOG_WARN("global service is null", K(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
@@ -857,17 +898,84 @@ int ObSessionTabletDeleteHelper::delete_session_tablets_by_table_id(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not oracle tmp table v2", K(ret), K(tenant_id), K(table_id), KPC(table_schema));
   }
-  if (FAILEDx(dispatch_drop_gtt_v2_session_tablet_on_creator(
-        tenant_data_version,
-        tenant_id,
-        related_table_ids,
-        sequence,
-        session_id))) {
-    LOG_WARN("fail to dispatch drop gtt v2 session tablet", KR(ret), K(tenant_id), K(table_id), K(sequence),
-        K(session_id), K(related_table_ids));
+  if (OB_FAIL(ret)) {
+  } else if (GCONF.in_upgrade_mode()) {
+    // Keep the legacy creator-side delete while old and new observers may coexist.
+    // Double-check all related internal-table mappings after the RPC because the
+    // legacy creator-side delete may be split across observers.
+    if (OB_FAIL(dispatch_drop_gtt_v2_session_tablet_on_creator(
+            tenant_data_version, tenant_id, related_table_ids, sequence, session_id))) {
+      LOG_WARN("fail to dispatch legacy drop gtt v2 session tablet", KR(ret), K(tenant_id), K(table_id),
+          K(sequence), K(session_id), K(related_table_ids));
+    } else if (OB_FAIL(check_session_tablets_deleted(
+                   *GCTX.sql_proxy_, tenant_id, related_table_ids, sequence, session_id))) {
+      LOG_WARN("legacy drop left session tablet mappings", KR(ret), K(tenant_id), K(table_id),
+          K(sequence), K(session_id), K(related_table_ids));
+    }
+  } else if (OB_FAIL(delete_session_tablets_and_clear_maps(
+                 tenant_id, related_table_ids, sequence, session_id))) {
+    LOG_WARN("failed to delete session tablets and clear local maps", KR(ret), K(tenant_id),
+        K(table_id), K(sequence), K(session_id), K(related_table_ids));
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::delete_session_tablets_and_clear_maps(
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSessionTabletInfo, 4> session_tablet_infos;
+  ObSEArray<ObSessionTabletInfo *, 4> session_tablet_info_ptrs;
+  common::ObMySQLTransaction trans;
+  if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+    LOG_WARN("failed to start transaction", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(
+                 trans, tenant_id, table_ids, sequence, session_id, session_tablet_infos))) {
+    LOG_WARN("failed to batch get session tablet mappings", KR(ret), K(tenant_id),
+        K(table_ids), K(sequence), K(session_id));
   } else {
-    LOG_INFO("succeed to drop gtt v2 session tablet via dispatch", K(tenant_id), K(table_id), K(sequence),
-        K(session_id), K(related_table_ids));
+    ARRAY_FOREACH_X(session_tablet_infos, idx, cnt, OB_SUCC(ret)) {
+      ObSessionTabletInfo &tablet_info = session_tablet_infos.at(idx);
+      if (OB_UNLIKELY(!is_contain(table_ids, tablet_info.get_table_id())
+                      || tablet_info.get_sequence() != sequence
+                      || tablet_info.get_session_id() != session_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected session tablet mapping", KR(ret), K(tablet_info),
+            K(table_ids), K(sequence), K(session_id));
+      } else if (FALSE_IT(tablet_info.is_creator_ = true)) {
+      }
+    }
+    ARRAY_FOREACH_X(session_tablet_infos, idx, cnt, OB_SUCC(ret)) {
+      if (OB_FAIL(session_tablet_info_ptrs.push_back(&session_tablet_infos.at(idx)))) {
+        LOG_WARN("failed to save session tablet mapping pointer", KR(ret), K(idx));
+      }
+    }
+    if (OB_SUCC(ret) && !session_tablet_info_ptrs.empty()) {
+      ObSessionTabletDeleteHelper delete_helper(tenant_id, session_tablet_info_ptrs, trans);
+      if (OB_FAIL(delete_helper.do_work())) {
+        LOG_WARN("failed to delete related session tablets atomically", KR(ret), K(tenant_id),
+            K(sequence), K(session_id), K(session_tablet_info_ptrs));
+      }
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    const bool is_commit = OB_SUCCESS == ret;
+    if (OB_TMP_FAIL(trans.end(is_commit))) {
+      LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret), K(is_commit), K(tenant_id));
+      ret = is_commit ? tmp_ret : ret;
+    }
+  }
+  if (FAILEDx(storage::dispatch_drop_gtt_v2_session_tablet(
+          tenant_id, table_ids, sequence, session_id))) {
+    LOG_WARN("fail to remove session tablet entries from local maps", KR(ret), K(tenant_id),
+        K(sequence), K(session_id), K(table_ids));
+  } else {
+    FLOG_INFO("succeed to delete session tablets and clear maps", K(ret),
+      K(tenant_id), K(sequence), K(session_id), K(table_ids));
   }
   return ret;
 }
@@ -938,15 +1046,15 @@ int ObSessionTabletDeleteHelper::inner_cleanup_inactive_session_tablets(
   } else if (OB_FAIL(collect_oracle_temp_table_v2_related_ids(table_schema, related_table_ids))) {
     LOG_WARN("failed to collect related table ids for gtt v2 truncate", KR(ret), K(tenant_id), K(related_table_ids));
   } else if (OB_FAIL(dispatch_batch_drop_gtt_v2_session_tablet_on_creator(
-              tenant_data_version,
-              tenant_id,
-              true/*exclude_active_session_trx_tablet*/,
-              related_table_ids))) {
-    LOG_WARN("fail to dispatch drop gtt v2 session tablet", KR(ret), K(tenant_id), K(related_table_ids),
-      K(related_table_ids));
+                 tenant_data_version,
+                 tenant_id,
+                 true/*exclude_active_session_trx_tablet*/,
+                 related_table_ids))) {
+    LOG_WARN("fail to dispatch drop gtt v2 session tablet", KR(ret), K(tenant_id),
+        K(tenant_data_version), K(related_table_ids));
   } else {
-    LOG_INFO("succeed to cleanup inactive trx session tablet via dispatch", K(tenant_id), K(related_table_ids),
-      K(related_table_ids));
+    LOG_INFO("succeed to cleanup inactive trx session tablets via dispatch", K(tenant_id),
+        K(tenant_data_version), K(related_table_ids));
   }
   return ret;
 }
@@ -1304,6 +1412,33 @@ int ObSessionTabletDeleteHelper::collect_oracle_temp_table_v2_related_ids(
       } else if (OB_FAIL(table_ids.push_back(aux_lob_piece_tid))) {
         LOG_WARN("failed to push back aux lob piece tid", KR(ret), K(aux_lob_piece_tid));
       }
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::check_session_tablets_deleted(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH_X(table_ids, idx, cnt, OB_SUCC(ret)) {
+    ObSessionTabletInfo tablet_info;
+    const int tmp_ret = share::ObTabletToGlobalTmpTableOperator::point_get(
+        sql_client, tenant_id, table_ids.at(idx), sequence, session_id, tablet_info);
+    if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+      // The expected state after a successful session tablet drop.
+    } else if (OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
+      LOG_WARN("failed to verify session tablet mapping", KR(ret), K(tenant_id),
+          "table_id", table_ids.at(idx), K(sequence), K(session_id));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session tablet mapping still exists after drop", KR(ret), K(tenant_id),
+          K(tablet_info), K(sequence), K(session_id));
     }
   }
   return ret;
@@ -2250,6 +2385,208 @@ int ObSessionTabletGCHelper::group_by_session_and_seq(
     }
   }
 
+  return ret;
+}
+
+int dispatch_drop_gtt_v2_session_tablet(
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id)
+{
+  int ret = OB_SUCCESS;
+  share::ObDropGTTV2SessionTabletArg arg;
+  uint64_t tenant_data_version = 0;
+  const bool use_legacy_drop = GCONF.in_upgrade_mode();
+  if (OB_UNLIKELY(table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table ids must not be empty", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(tenant_id, table_ids, sequence, session_id))) {
+    LOG_WARN("failed to init drop gtt v2 session tablet arg", KR(ret), K(tenant_id), K(table_ids),
+             K(sequence), K(session_id));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid drop gtt v2 session tablet arg", KR(ret), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("failed to get tenant data version", KR(ret), K(tenant_id));
+  } else if (tenant_data_version < DATA_VERSION_4_4_2_2) {
+    // The single-tablet drop RPC is available from 4.4.2.2. During a rolling
+    // upgrade window peers older than that do
+    // not handle the new PCODE; broadcasting would surface unknown-PCODE
+    // failures on those peers. Fall back to a local-only invalidation that
+    // matches the pre-broadcast behavior: clean up the originator's session
+    // map and (if the creator entry lives locally) execute the storage
+    // delete. The cross-observer fix kicks in once every observer is upgraded.
+    share::ObDropGTTV2SessionTabletRes local_res;
+    const int tmp_ret = use_legacy_drop
+        ? ObDropGTTV2SessionTabletUtil::handle_in_tenant(arg, local_res)
+        : ObDropGTTV2SessionTabletUtil::remove_map_in_tenant(arg, local_res);
+    if (OB_SUCCESS != tmp_ret) {
+      ret = tmp_ret;
+      LOG_WARN("failed to handle local gtt v2 session tablet during compat window",
+               KR(ret), K(tenant_data_version), K(arg), K(use_legacy_drop));
+    } else if (OB_SUCCESS != local_res.get_ret()) {
+      ret = local_res.get_ret();
+      LOG_WARN("local gtt v2 session tablet operation failed during compat window",
+               KR(ret), K(tenant_data_version), K(arg), K(use_legacy_drop));
+    } else {
+      LOG_INFO("ran local gtt v2 session tablet operation during compat window",
+               K(tenant_data_version), K(arg), K(local_res), K(use_legacy_drop));
+    }
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("global proxy is null", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.srv_rpc_proxy_));
+  } else {
+    common::ObArray<common::ObAddr> server_array;
+    share::ObUnitTableOperator ut_operator;
+    if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init unit table operator", KR(ret));
+    } else if (OB_FAIL(ut_operator.get_alive_servers_by_tenant(tenant_id, server_array))) {
+      LOG_WARN("failed to get alive servers by tenant", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(server_array.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no alive server found for tenant", KR(ret), K(tenant_id));
+    } else {
+      rootserver::ObDropGTTV2SessionTabletProxy proxy(
+          *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::drop_gtt_v2_session_tablet);
+      // Bound the RPC by the worker's remaining time; if the worker is already
+      // very close to timing out, fall back to GCONF.rpc_timeout so the RPC has
+      // a sane minimum window instead of being issued with 0/negative timeout.
+      const int64_t worker_remain = THIS_WORKER.get_timeout_remain();
+      const int64_t default_timeout = GCONF.rpc_timeout.get_value();
+      const int64_t rpc_timeout = worker_remain > 0 ? MIN(default_timeout, worker_remain) : default_timeout;
+      // Dispatch to every alive server except self. The local observer handles
+      // its session map directly so the origin session does not depend on RPC
+      // scheduling. proxy.call() failures here mean the
+      // request could not even be queued (e.g. unreachable address); those
+      // destinations will NOT appear in proxy.get_dests() / proxy.get_results()
+      // afterwards, so result iteration cannot observe them — we track the
+      // first such failure in dispatch_err for the post-loop accounting.
+      int dispatch_err = OB_SUCCESS;
+      share::ObDropGTTV2SessionTabletRes local_res;
+      bool local_res_valid = false;
+      ARRAY_FOREACH_X(server_array, idx, cnt, true) {
+        const common::ObAddr &dest = server_array.at(idx);
+        if (dest == GCTX.self_addr()) {
+          local_res_valid = true;
+          const int local_handle_ret = use_legacy_drop
+              ? ObDropGTTV2SessionTabletUtil::handle_in_tenant(arg, local_res)
+              : ObDropGTTV2SessionTabletUtil::remove_map_in_tenant(arg, local_res);
+          if (OB_SUCCESS != local_handle_ret) {
+            LOG_WARN_RET(local_handle_ret, "failed to handle local gtt v2 session tablet",
+                         K(dest), K(arg), K(use_legacy_drop));
+            if (OB_SUCCESS == dispatch_err) {
+              dispatch_err = local_handle_ret;
+            }
+          } else if (OB_SUCCESS != local_res.get_ret()) {
+            LOG_WARN_RET(local_res.get_ret(), "local gtt v2 session tablet operation failed",
+                         K(dest), K(arg), K(local_res), K(use_legacy_drop));
+            if (OB_SUCCESS == dispatch_err) {
+              dispatch_err = local_res.get_ret();
+            }
+          } else {
+            LOG_INFO("handled local gtt v2 session tablet", K(dest), K(arg),
+                K(local_res), K(use_legacy_drop));
+          }
+        } else {
+          const int local_call_ret = proxy.call(dest, rpc_timeout, tenant_id, arg);
+          if (OB_SUCCESS != local_call_ret) {
+            LOG_WARN_RET(local_call_ret, "failed to dispatch drop gtt v2 session tablet rpc",
+                         K(dest), K(rpc_timeout), K(arg));
+            if (OB_SUCCESS == dispatch_err) {
+              dispatch_err = local_call_ret;
+            }
+          }
+        }
+      }
+      int tmp_ret = OB_SUCCESS;
+      common::ObArray<int> return_code_array;
+      if (proxy.get_dests().empty()) {
+        // do nothing
+      } else if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+        LOG_WARN("failed to wait all drop gtt v2 session tablet rpcs", KR(tmp_ret), K(arg));
+        ret = tmp_ret;
+      } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("drop gtt v2 session tablet rpc return count mismatch", KR(ret),
+                 "return_cnt", return_code_array.count(),
+                 "dest_cnt", proxy.get_dests().count());
+      }
+      bool creator_executed = false;
+      bool any_local_map_hit = false;
+      int creator_ret = OB_SUCCESS;
+      int map_ret = dispatch_err;
+      if (local_res_valid) {
+        if (local_res.is_local_map_hit()) {
+          any_local_map_hit = true;
+        }
+        if (OB_SUCCESS == map_ret && OB_SUCCESS != local_res.get_ret()) {
+          map_ret = local_res.get_ret();
+        }
+        if (local_res.is_executed_on_creator()) {
+          creator_executed = true;
+          creator_ret = OB_SUCCESS == creator_ret ? local_res.get_ret() : creator_ret;
+        }
+      }
+      // Iterate over every result (don't bail on the first peer error), but
+      // propagate the first dispatch / peer / local-map failure to the caller.
+      ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+        const share::ObDropGTTV2SessionTabletRes *res = proxy.get_results().at(idx);
+        const common::ObAddr &dest_addr = proxy.get_dests().at(idx);
+        const int peer_ret = return_code_array.at(idx);
+        if (OB_SUCCESS != peer_ret) {
+          LOG_WARN("drop gtt v2 session tablet rpc failed on peer; cache on that peer may be stale",
+                   K(peer_ret), K(dest_addr), K(arg));
+          if (OB_SUCCESS == map_ret) {
+            map_ret = peer_ret;
+          }
+        } else if (OB_ISNULL(res)) {
+          LOG_WARN("drop gtt v2 session tablet rpc result is null", K(dest_addr), K(arg));
+          if (OB_SUCCESS == map_ret) {
+            map_ret = OB_ERR_UNEXPECTED;
+          }
+        } else {
+          if (res->is_local_map_hit()) {
+            any_local_map_hit = true;
+          }
+          if (OB_SUCCESS == map_ret && OB_SUCCESS != res->get_ret()) {
+            map_ret = res->get_ret();
+          }
+          if (res->is_executed_on_creator()) {
+            creator_executed = true;
+            creator_ret = OB_SUCCESS == creator_ret ? res->get_ret() : creator_ret;
+            if (OB_SUCCESS != creator_ret) {
+              LOG_WARN("creator failed to delete session tablets", K(creator_ret), K(dest_addr), K(arg));
+            } else {
+              LOG_INFO("creator finished session tablet drop", K(dest_addr), K(arg));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (!use_legacy_drop) {
+          ret = map_ret;
+          if (OB_SUCC(ret)) {
+            LOG_INFO("finished removing gtt v2 session tablet entries from local maps",
+                K(arg), K(any_local_map_hit));
+          }
+        } else if (creator_executed) {
+          ret = creator_ret;
+        } else if (any_local_map_hit) {
+          // Some observer holds a stale entry for this (session, table) tuple but no observer
+          // claims is_creator_=true. This typically means the creator session terminated before
+          // truncate fired and its session-close path has already dropped the storage tablet;
+          // the functor has invalidated the lingering caches. Log loudly so we can catch
+          // unexpected leaks via observability.
+          LOG_WARN("no creator observer found while stale entries exist; "
+                   "creator session likely terminated, relying on session-close cleanup",
+                   K(arg), K(dispatch_err));
+        } else {
+          LOG_INFO("no observer holds the session tablet entry, drop is a no-op",
+                   K(arg), K(dispatch_err));
+        }
+      }
+    }
+  }
   return ret;
 }
 
