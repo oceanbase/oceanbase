@@ -16,6 +16,7 @@
 #include "rootserver/ob_root_service.h"
 #include "storage/ddl/ob_ddl_lock.h"
 #include "share/ob_index_builder_util.h"
+#include "sql/resolver/ddl/ob_create_mlog_resolver.h"
 
 namespace oceanbase
 {
@@ -482,6 +483,8 @@ int ObMLogBuilder::create_or_replace_mlog(share::schema::ObSchemaGetterGuard &sc
   }
 
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCreateMLogResolver::check_can_create_mlog(*base_table_schema))) {
+    LOG_WARN("failed to check can create mlog", KR(ret), K(*base_table_schema));
   } else {
     bool is_create_mlog = false;
     if (!create_mlog_arg.replace_if_exists_) {

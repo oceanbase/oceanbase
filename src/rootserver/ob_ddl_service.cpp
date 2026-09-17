@@ -18145,7 +18145,7 @@ int ObDDLService::get_and_check_table_schema(
       K(ret), K(alter_table_arg), K(is_db_in_recyclebin));
     } else if (orig_table_schema->is_materialized_view()) {
       bool allow_alter_mview = false;
-      if (alter_table_arg.is_alter_indexs_) {
+      if (alter_table_arg.is_only_alter_index()) {
         bool is_alter_pk = false;
         for (int64_t i = 0; OB_SUCC(ret) && (i < alter_table_arg.index_arg_list_.count()); ++i) {
           const ObIndexArg *index_arg = alter_table_arg.index_arg_list_.at(i);
