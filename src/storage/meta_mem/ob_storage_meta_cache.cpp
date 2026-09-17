@@ -442,10 +442,15 @@ ObStorageMetaHandle::~ObStorageMetaHandle()
 int ObStorageMetaHandle::get_value(const ObStorageMetaValue *&value)
 {
   int ret = OB_SUCCESS;
+  value = nullptr;
   if (!io_handle_.is_empty() && OB_FAIL(wait())) { /*wait if not hit cache*/
     LOG_WARN("fail to wait", K(ret), KPC(this));
-  } else {
-    value = cache_handle_.get_cache_value()->value_;
+  } else if (OB_UNLIKELY(!cache_handle_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cache handle is invalid", K(ret), KPC(this));
+  } else if (OB_ISNULL(value = cache_handle_.get_cache_value()->value_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("meta value is null", K(ret), KPC(this));
   }
   return ret;
 }

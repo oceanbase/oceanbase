@@ -7,6 +7,7 @@
 #define OCEANBASE_LIB_STORAGE_IO_DEFINE
 
 #include "common/storage/ob_io_device.h"
+#include "lib/atomic/ob_atomic.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/container/ob_heap.h"
@@ -771,7 +772,10 @@ public:
   bool is_valid() const;
   OB_INLINE bool is_finished() const
   {
-    return (nullptr != result_ && result_->is_finished_);
+    // Acquire is required: finish() writes ret_code_ before publishing
+    // is_finished_, so a plain load may observe finished together with a
+    // stale ret_code_ on weak memory order platforms.
+    return (nullptr != result_ && ATOMIC_LOAD_ACQ(&result_->is_finished_));
   }
   bool is_limit_net_bandwidth_req() const
   {
