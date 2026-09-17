@@ -86,12 +86,14 @@ public:
   static const int64_t GC_EMPTY_TABLET_SHELL_INTERVAL;
   static const int64_t GLOBAL_EMPTY_CHECK_INTERVAL_TIMES;
   ObEmptyShellTask(ObTabletGCService &tablet_gc_service)
-    : tablet_gc_service_(tablet_gc_service)
+    : tablet_gc_service_(tablet_gc_service),
+      times_(0)
   {}
   virtual ~ObEmptyShellTask() {}
   virtual void runTimerTask();
 private:
   ObTabletGCService &tablet_gc_service_;
+  int64_t times_;
 };
 
 } // checkpoint
