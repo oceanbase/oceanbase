@@ -1863,12 +1863,14 @@ int ObPLResolver::resolve_declare_record_type(const ParseNode *type_node,
                   OZ (is_parameterized_empty_string(default_node,
                                           is_parameterized_empty));
                   if (OB_SUCC(ret) &&
-                      ((T_CHAR == default_node->type_ && 0 == default_node->str_len_)
+                      (((T_CHAR == default_node->type_ || T_NCHAR == default_node->type_)
+                        && 0 == default_node->str_len_)
                         || is_parameterized_empty)
                       && OB_NOT_NULL(data_type.get_data_type())
                       && (ObCharType == data_type.get_data_type()->get_obj_type()
                           || ObNCharType == data_type.get_data_type()->get_obj_type())) {
                     default_node->type_ = T_CHAR;
+                    default_node->value_ = 0;
                     default_node->str_len_ = 1;
                     default_node->str_value_ = " ";
                     default_node->raw_text_ = "' '";
@@ -4034,13 +4036,15 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
         OZ (is_parameterized_empty_string(default_node->children_[0],
                                           is_parameterized_empty));
         if (OB_SUCC(ret)
-            && ((T_CHAR == default_node->children_[0]->type_
+            && (((T_CHAR == default_node->children_[0]->type_
+                  || T_NCHAR == default_node->children_[0]->type_)
                  && 0 == default_node->children_[0]->str_len_)
                 || is_parameterized_empty)
             && OB_NOT_NULL(data_type.get_data_type())
             && (ObCharType == data_type.get_data_type()->get_obj_type()
                 || ObNCharType == data_type.get_data_type()->get_obj_type())) {
           default_node->children_[0]->type_ = T_CHAR;
+          default_node->children_[0]->value_ = 0;
           default_node->children_[0]->str_len_ = 1;
           default_node->children_[0]->str_value_ = " ";
           default_node->children_[0]->raw_text_ = "' '";
@@ -4605,7 +4609,8 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                 }
                 OZ (is_parameterized_empty_string(value_node->children_[0], is_parameterized_empty));
                 if (OB_SUCC(ret)
-                    && ((T_CHAR == value_node->children_[0]->type_
+                    && (((T_CHAR == value_node->children_[0]->type_
+                          || T_NCHAR == value_node->children_[0]->type_)
                          && 0 == value_node->children_[0]->str_len_)
                         || is_parameterized_empty)
                     && OB_NOT_NULL(expected_type)
@@ -4617,6 +4622,7 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
                   // NULL. Keep ordinary assignment consistent with declaration
                   // initialization, including types derived through %TYPE.
                   value_node->children_[0]->type_ = T_CHAR;
+                  value_node->children_[0]->value_ = 0;
                   value_node->children_[0]->str_len_ = 1;
                   value_node->children_[0]->str_value_ = " ";
                   value_node->children_[0]->raw_text_ = "' '";
