@@ -671,13 +671,6 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
             di->end_wait_event(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
           }
           callback->handin();
-        } else {
-          if (OB_NOT_NULL(tx_ptr)) {
-            int64_t commit_ts = tx_ptr->get_commit_start_time();
-            if (commit_ts > 0) {
-              audit_record.exec_timestamp_.executor_end_ts_ = commit_ts;
-            }
-          }
         }
       }
     } else {

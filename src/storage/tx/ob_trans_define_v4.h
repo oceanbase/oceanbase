@@ -999,6 +999,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   bool is_all_parts_clean() const;
   bool is_all_parts_without_valid_write() const;
   int64_t get_commit_start_time() const { return commit_ts_; }
+  int64_t get_trans_finish_time() const { return finish_ts_; }
   int64_t get_trans_commit_time() const { return finish_ts_ - commit_ts_; }
 };
 

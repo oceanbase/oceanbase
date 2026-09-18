@@ -5314,7 +5314,28 @@ void ObSQLUtils::fixup_async_audit_record(ObSQLSessionInfo &session, const int c
           ObMySQLRequestRecord *record = static_cast<ObMySQLRequestRecord*> (rec);
           if (need_fixup_commit_time) {
             record->data_.exec_timestamp_.commit_t_ = tx_commit_t;  // fixup async commit time
-            record->data_.exec_timestamp_.elapsed_t_ += tx_commit_t;  // adding async commit time to elapsed_time
+            const int64_t executor_end_ts = record->data_.exec_timestamp_.executor_end_ts_;
+            const int64_t tx_finish_ts = tx_ptr->get_trans_finish_time();
+            static const int64_t MAX_ASYNC_COMMIT_ELAPSED_US = 3600L * 1000000; // 1h
+            if (OB_UNLIKELY(executor_end_ts <= 0 || tx_finish_ts <= 0)) {
+              LOG_INFO("invalid timestamp when fixup async commit elapsed",
+                       K(executor_end_ts), K(tx_finish_ts));
+            } else if (OB_UNLIKELY(tx_finish_ts < executor_end_ts)) {
+              LOG_INFO("tx_finish_ts is less than executor_end_ts when fixup async commit elapsed",
+                       K(tx_finish_ts), K(executor_end_ts));
+            } else {
+              int64_t async_elapsed = tx_finish_ts - executor_end_ts;
+              if (OB_UNLIKELY(async_elapsed < 0)) {
+                LOG_INFO("elapsed time is negative when fixup async commit elapsed",
+                         K(async_elapsed), K(tx_finish_ts), K(executor_end_ts));
+                async_elapsed = 0;
+              } else if (OB_UNLIKELY(async_elapsed > MAX_ASYNC_COMMIT_ELAPSED_US)) {
+                LOG_INFO("elapsed time is too large when fixup async commit elapsed",
+                         K(async_elapsed), K(tx_finish_ts), K(executor_end_ts));
+              } else {
+                record->data_.exec_timestamp_.elapsed_t_ += async_elapsed;
+              }
+            }
           }
           // only overwrite when SQL phase succeeded, keep the existing SQL error otherwise
           if (need_fixup_ret_code && REQUEST_SUCC == record->data_.status_) {
