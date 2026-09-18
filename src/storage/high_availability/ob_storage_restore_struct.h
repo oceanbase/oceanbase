@@ -94,6 +94,9 @@ struct ObTabletRestoreAction
   static bool need_restore_inc_major_ddl_sstable(const ACTION &action);
   static bool need_restore_inc_major_sstable(const ACTION &action);
   static bool need_restore_major_sstable(const ACTION &action);
+  // whether the restore action needs sstables of this table type;
+  // returns OB_ERR_UNEXPECTED for table types that never appear in the copy table key array
+  static int need_restore_sstable(const ACTION &action, const ObITable::TableType table_type, bool &need_restore);
   static bool need_verify_table_store(const ACTION &action);
   static bool disallow_remote_table_exist(const ACTION &action);
   static bool is_restore_status_match(
