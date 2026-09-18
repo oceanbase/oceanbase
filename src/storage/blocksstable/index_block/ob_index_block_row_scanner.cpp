@@ -730,6 +730,8 @@ int ObRAWIndexBlockRowIterator::find_rowkeys_belong_to_same_idx_row(ObMicroIndex
         is_decided = true;
         break;
       } else if (cmp_ret == 0) {
+        storage::ObRowsInfo *mutable_rows_info = const_cast<storage::ObRowsInfo *>(rows_info);
+        mutable_rows_info->set_row_overlapped(rowkey_begin_idx);
         idx_block_row.rowkey_end_idx_ = rowkey_begin_idx + 1;
         is_decided = true;
         break;
@@ -1356,6 +1358,8 @@ int ObTFMIndexBlockRowIterator::find_rowkeys_belong_to_same_idx_row(ObMicroIndex
         is_decided = true;
         break;
       } else if (cmp_ret == 0) {
+        storage::ObRowsInfo *mutable_rows_info = const_cast<storage::ObRowsInfo *>(rows_info);
+        mutable_rows_info->set_row_overlapped(rowkey_begin_idx);
         idx_block_row.rowkey_end_idx_ = rowkey_begin_idx + 1;
         is_decided = true;
         break;

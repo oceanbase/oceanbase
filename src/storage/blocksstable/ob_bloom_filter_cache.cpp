@@ -706,12 +706,16 @@ int ObBloomFilterCache::may_contain(
             is_contain = true;
             EVENT_INC(ObStatEventIds::BLOOM_FILTER_PASSES);
           } else {
-            if (!my_rows_info->is_row_bf_checked(i)) {
+            // A border rowkey can belong to two adjacent index-row ranges. If the first
+            // range has no usable BF, the old bf_checked scheme (e28d279f) leaves it
+            // unmarked; a negative BF from the second range may then mark it nonexistent
+            // before the first range's data block is consumed. The overlap mark avoids
+            // depending on BF availability.
+            if (!my_rows_info->is_row_overlapped(i)) {
               my_rows_info->set_row_non_existent(i);
             }
             EVENT_INC(ObStatEventIds::BLOOM_FILTER_FILTS);
           }
-          my_rows_info->set_row_bf_checked(i);
         }
       }
     }
@@ -850,7 +854,6 @@ int ObBloomFilterCache::inc_empty_read(
       // do nothing
     } else if (cur_cnt > bf_cache_miss_count_threshold_) {
       if (ls_id.is_valid() && sstable_key.is_valid() && (nullptr != read_handle) && read_handle->has_macro_block_bf_) {
-        bool need_load = false;
         const ObDatumRowkey *rowkey = nullptr;
         if (OB_UNLIKELY(!read_handle->is_valid())) {
           ret = OB_INVALID_ARGUMENT;
@@ -864,13 +867,11 @@ int ObBloomFilterCache::inc_empty_read(
         } else if (OB_ISNULL(rowkey)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected rowkey", K(ret), KP(rowkey), KPC(read_handle));
-        } else if (cell->check_waiting()) {
-          // bf is on the way, do nothing
         } else if (OB_FAIL(MTL(storage::ObTenantMetaMemMgr *)
                         ->schedule_load_bloomfilter(sstable_key, ls_id, macro_id, *rowkey))) {
           LOG_WARN("fail to schedule load bf", K(ret), K(sstable_key), K(macro_id));
         } else {
-          cell->set_waiting();
+          cell->reset();
         }
       } else {
         if (OB_FAIL(MTL(compaction::ObTenantTabletScheduler *)
