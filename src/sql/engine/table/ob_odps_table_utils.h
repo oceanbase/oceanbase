@@ -57,6 +57,46 @@ struct ObODPSArrayHelper {
 
 class ObODPSTableUtils {
 public:
+  // Build a shadow cast expr for file-column exprs which have no args_: it is a full copy of
+  // the column expr (frame fields included, so result-memory helpers keep working) with
+  // args_[0] pointing at a shared static input carrying the source type/collation.
+  // Only for the direct cast helper calls, never for eval(). Do not modify the scan expr.
+  static void prepare_cast_expr(const ObExpr &column_expr, const ObObjType in_type,
+                                const ObCollationType in_cs_type, ObExpr &cast_expr)
+  {
+    struct CastInput {
+      CastInput(ObObjType t, ObCollationType cs)
+      {
+        expr_.datum_meta_.type_ = t;
+        expr_.datum_meta_.cs_type_ = cs;
+        expr_.obj_meta_.set_type(t);
+        expr_.obj_meta_.set_collation_type(cs);
+        args_[0] = &expr_;
+      }
+      ObExpr expr_;
+      ObExpr *args_[1];
+    };
+    // Shared, initialized once and read-only afterwards. ObExpr::args_ is not const-qualified.
+    static CastInput varchar_utf8(ObVarcharType, CS_TYPE_UTF8MB4_BIN);
+    static CastInput varchar_binary(ObVarcharType, CS_TYPE_BINARY);
+    static CastInput char_utf8(ObCharType, CS_TYPE_UTF8MB4_BIN);
+    cast_expr = column_expr;
+    if (ObVarcharType == in_type && CS_TYPE_BINARY == in_cs_type) {
+      cast_expr.args_ = varchar_binary.args_;
+    } else if (ObCharType == in_type && CS_TYPE_UTF8MB4_BIN == in_cs_type) {
+      cast_expr.args_ = char_utf8.args_;
+    } else {
+      OB_ASSERT(ObVarcharType == in_type && CS_TYPE_UTF8MB4_BIN == in_cs_type);
+      cast_expr.args_ = varchar_utf8.args_;
+    }
+    cast_expr.arg_cnt_ = 1;
+  }
+
+  static void prepare_numeric_cast_expr(const ObExpr &column_expr, ObExpr &cast_expr)
+  {
+    prepare_cast_expr(column_expr, ObVarcharType, CS_TYPE_UTF8MB4_BIN, cast_expr);
+  }
+
   static int create_array_helper(ObExecContext &exec_ctx,
                                  ObIAllocator &allocator,
                                  const ObExpr &cur_expr,

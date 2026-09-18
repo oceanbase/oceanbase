@@ -28,9 +28,35 @@ struct ObUserLoggingCtx;
 class ObDataTypeCastUtil
 {
 public:
+  /**
+   * Equivalent to:  CAST(varchar AS decimalint)      e.g. CAST(varchar(100) AS decimal(10,2))
+   * Expect:
+   *   expr                  arg_cnt_ == 1; datum_meta_.precision_/scale_ = target
+   *                         precision/scale (precision must map to DECIMAL_INT_32..512);
+   *                         in type taken from args_[0]->datum_meta_.type_
+   *                         (ObHexStringType special-cased).
+   * Solution:
+   *   for a bare file-column expr (T_PSEUDO_EXTERNAL_FILE_COL, arg_cnt_ == 0,
+   *   no args_), build the shadow expr with
+   *   ObODPSTableUtils::prepare_cast_expr() first - passing it directly
+   *   crashes on args_[0].
+   */
   static int common_string_decimalint_wrap(const ObExpr &expr, const ObString &in_str,
                                           const ObUserLoggingCtx *user_logging_ctx,
                                           ObDecimalIntBuilder &res_val);
+  /**
+   * Equivalent to:  CAST(varchar AS number)
+   * Expect:
+   *   expr                  arg_cnt_ == 1; datum_meta_.type_ = ObNumberType/
+   *                         ObUNumberType (UNumber adds a negative check);
+   *                         in type taken from args_[0] (ObHexStringType
+   *                         special-cased).
+   * Solution:
+   *   for a bare file-column expr (T_PSEUDO_EXTERNAL_FILE_COL, arg_cnt_ == 0,
+   *   no args_), build the shadow expr with
+   *   ObODPSTableUtils::prepare_cast_expr() first - passing it directly
+   *   crashes on args_[0].
+   */
   static int common_string_number_wrap(const ObExpr &expr,
                                       const ObString &in_str,
                                       const ObUserLoggingCtx *user_logging_ctx,
@@ -68,41 +94,43 @@ public:
                                      const ObString &type_str,
                                      const ObString &input,
                                      const ObCastMode cast_mode);
-};
-
-class ObOdpsDataTypeCastUtil : public ObDataTypeCastUtil
-{
-public:
-  static int common_int_number_wrap(const ObExpr &expr,
-                                    int64_t in_val,
-                                    ObIAllocator &alloc,
-                                    number::ObNumber &nmb);
-  static int common_string_decimalint_wrap(const ObExpr &expr, const ObString &in_str,
-                                          const ObUserLoggingCtx *user_logging_ctx,
-                                          ObDecimalIntBuilder &res_val);
-  static int common_string_string_wrap(const ObExpr &expr,
-                                      const ObObjType in_type,
-                                      const ObCollationType in_cs_type,
-                                      const ObObjType out_type,
-                                      const ObCollationType out_cs_type,
-                                      const ObString &in_str,
-                                      ObEvalCtx &ctx,
-                                      ObDatum &res_datum,
-                                      bool& has_set_res);
-  static int common_string_text_wrap(const ObExpr &expr,
-                                    const ObString &in_str,
-                                    ObEvalCtx &ctx,
-                                    const ObLobLocatorV2 *lob_locator,
-                                    ObDatum &res_datum,
-                                    const ObObjType &in_type,
-                                    const ObCollationType &in_cs_type);
-  static int common_check_convert_string(const ObExpr &expr,
-                                        ObEvalCtx &ctx,
-                                        const ObString &in_str,
-                                        ObObjType in_type,
-                                        ObCollationType in_cs_type,
-                                        ObDatum &res_datum,
-                                        bool &has_set_res);
+  /**
+   * Equivalent to:  CAST(varchar AS char/varchar)   e.g. CAST(varchar(100) AS char(10))
+   * Expect:
+   *   expr                  arg_cnt_ == 1; args_[0]->datum_meta_ = source string
+   *                         type/collation; datum_meta_/obj_meta_ = target type/
+   *                         collation with a valid result frame (get_str_res_mem).
+   *   in_type/in_cs_type    == args_[0]->datum_meta_.type_ / .cs_type_
+   *   out_type/out_cs_type  == expr.datum_meta_.type_ / .cs_type_
+   * Note: returns OB_ERR_UNEXPECTED for identical non-binary charsets - set the
+   *       datum directly in that case.
+   * Solution:
+   *   for a bare file-column expr (T_PSEUDO_EXTERNAL_FILE_COL, arg_cnt_ == 0,
+   *   no args_), build the shadow expr with
+   *   ObODPSTableUtils::prepare_cast_expr() first - passing it directly
+   *   crashes on args_[0].
+   */
+  static int common_string_string(const ObExpr &expr, const ObObjType in_type,
+                                  const ObCollationType in_cs_type, const ObObjType out_type,
+                                  const ObCollationType out_cs_type, const ObString &in_str,
+                                  ObEvalCtx &ctx, ObDatum &res_datum, bool &has_set_res);
+  /**
+   * Equivalent to:  CAST(varchar AS text)            e.g. CAST(varchar(100) AS text)
+   * Expect:
+   *   expr                  arg_cnt_ == 1; datum_meta_.type_ is a text type
+   *                         (ObTinyTextType..ObLongTextType, debug-asserted);
+   *                         obj_meta_.has_lob_header() drives lob-header packing;
+   *                         valid result frame required.
+   *   in_type/in_cs_type    taken from args_[0]->datum_meta_ directly.
+   * Solution:
+   *   for a bare file-column expr (T_PSEUDO_EXTERNAL_FILE_COL, arg_cnt_ == 0,
+   *   no args_), build the shadow expr with
+   *   ObODPSTableUtils::prepare_cast_expr() first - passing it directly
+   *   crashes on args_[0].
+   */
+  static int common_string_text(const ObExpr &expr, const ObString &in_str,
+                                ObEvalCtx &ctx, const ObLobLocatorV2 *lob_locator,
+                                ObDatum &res_datum);
 };
 
 template <typename IN_TYPE, typename OUT_TYPE>

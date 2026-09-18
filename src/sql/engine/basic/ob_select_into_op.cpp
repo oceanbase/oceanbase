@@ -2944,7 +2944,7 @@ int vectorize_fill_double(arrow::ArrayBuilder *builder, const ObBatchRows &brs, 
 }
 
 template<typename ArrowBuilderType>
-int vectorize_fill_decimal(arrow::ArrayBuilder *builder, const ObBatchRows &brs, ObIVector &expr_vector, int &act_cnt, ObDatumMeta &datum_meta) {
+int vectorize_fill_decimal(arrow::ArrayBuilder *builder, const ObBatchRows &brs, ObIVector &expr_vector, int &act_cnt, ObDatumMeta &datum_meta, ObIAllocator &alloc) {
   int ret = OB_SUCCESS;
   act_cnt = 0;
   ArrowBuilderType *builder_ref = dynamic_cast<ArrowBuilderType*>(builder);
@@ -2966,11 +2966,24 @@ int vectorize_fill_decimal(arrow::ArrayBuilder *builder, const ObBatchRows &brs,
             LOG_WARN("fail to append null", K(ret));
           }
         } else {
-          const ObDecimalInt *value = expr_vector.get_decimal_int(i);
+          const ObDecimalInt *value = nullptr;
+          ObDecimalInt *decint = nullptr;
+          if (ObNumberType == datum_meta.get_type()) {
+            const number::ObNumber nmb(expr_vector.get_number(i));
+            if (OB_FAIL(wide::from_number_to_decimal_fixed_length(nmb, alloc, datum_meta.scale_,
+                                                                  ob_int_bytes, decint))) {
+              LOG_WARN("failed to convert number to decimal int", K(ret));
+            } else {
+              value = decint;
+            }
+          } else {
+            value = expr_vector.get_decimal_int(i);
+          }
           int64_t int_bytes = ArrowBuilderType::ValueType::kByteWidth;
           uint8_t buf[ArrowBuilderType::ValueType::kByteWidth];
           uint8_t* buffer = (uint8_t *)value;
-          if (ob_int_bytes > int_bytes) {
+          if (OB_FAIL(ret)) {
+          } else if (ob_int_bytes > int_bytes) {
             ret = OB_ERR_TYPE_MISMATCH;
             LOG_WARN("failed to convert value to decimal", K(ob_int_bytes), K(int_bytes));
           } else {
@@ -3177,11 +3190,11 @@ int ObSelectIntoOp::into_odps_jni_batch_one_col(int64_t col_idx, ObOdpsJniConnec
       break;
     case ObOdpsJniConnector::OdpsType::DECIMAL:
       if (arrow_field.type()->id() == arrow::Type::DECIMAL || arrow_field.type()->id() == arrow::Type::DECIMAL128) {
-        if (OB_FAIL(vectorize_fill_decimal<arrow::Decimal128Builder>(builder, brs, expr_vector, act_cnt, meta))) {
+        if (OB_FAIL(vectorize_fill_decimal<arrow::Decimal128Builder>(builder, brs, expr_vector, act_cnt, meta, alloc))) {
           LOG_WARN("fail to vectorize decimal", K(ret));
         }
       } else if (arrow_field.type()->id() == arrow::Type::DECIMAL256) {
-        if (OB_FAIL(vectorize_fill_decimal<arrow::Decimal256Builder>(builder, brs, expr_vector, act_cnt, meta))) {
+        if (OB_FAIL(vectorize_fill_decimal<arrow::Decimal256Builder>(builder, brs, expr_vector, act_cnt, meta, alloc))) {
           LOG_WARN("fail to vectorize decimal", K(ret));
         }
       }
@@ -3903,11 +3916,23 @@ int ObSelectIntoOp::decimal_to_string(const ObDatum &datum,
   if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(OB_CAST_TO_VARCHAR_MAX_LENGTH)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
-  } else if (OB_FAIL(wide::to_string(datum.get_decimal_int(), datum.get_int_bytes(), datum_meta.scale_,
-                                     buf, OB_CAST_TO_VARCHAR_MAX_LENGTH, pos))) {
-    LOG_WARN("failed to get string", K(ret));
+  } else if (ObDecimalIntType == datum_meta.get_type()) {
+    if (OB_FAIL(wide::to_string(datum.get_decimal_int(), datum.get_int_bytes(), datum_meta.scale_,
+                                buf, OB_CAST_TO_VARCHAR_MAX_LENGTH, pos))) {
+      LOG_WARN("failed to get string", K(ret));
+    } else {
+      res.assign(buf, pos);
+    }
+  } else if (ObNumberType == datum_meta.get_type()) {
+    const number::ObNumber nmb(datum.get_number());
+    if (OB_FAIL(nmb.format(buf, OB_CAST_TO_VARCHAR_MAX_LENGTH, pos, datum_meta.scale_))) {
+      LOG_WARN("failed to format number", K(ret));
+    } else {
+      res.assign(buf, pos);
+    }
   } else {
-    res.assign(buf, pos);
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected decimal type", K(ret), K(datum_meta.get_type()));
   }
   return ret;
 }

@@ -7,7 +7,9 @@
 #define OCEANBASE_SQL_ENGINE_BASIC_OB_ARROW_DATA_LOADER_H_
 
 #include <apache-arrow/arrow/api.h>
+#include "lib/charset/ob_charset.h"
 #include "lib/utility/ob_print_utils.h"
+#include "sql/engine/expr/ob_expr.h"
 
 namespace oceanbase
 {
@@ -89,6 +91,12 @@ private:
       int (*)(ObExpr *expr, ObEvalCtx &eval_ctx, const common::ObString &in_str,
               common::ObDatum &datum);
   DatumSetter datum_setter_ = nullptr;
+  // Text setters convert through common_string_text, which reads the source type from
+  // args_[0]; file-column exprs have no args, so keep a shadow cast expr per column.
+  bool setter_needs_cast_expr_ = false;
+  bool cast_expr_ready_ = false;
+  common::ObCollationType in_cs_type_ = common::CS_TYPE_INVALID;
+  ObExpr cast_expr_;
 };
 
 template <typename ArrowType>

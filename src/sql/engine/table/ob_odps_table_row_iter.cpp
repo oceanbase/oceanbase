@@ -1418,7 +1418,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       int64_t in_val = *v;
                       ObNumStackOnceAlloc tmp_alloc;
                       number::ObNumber nmb;
-                      OZ(ObOdpsDataTypeCastUtil::common_int_number_wrap(expr, in_val, tmp_alloc, nmb), in_val);
+                      OZ(nmb.from(in_val, tmp_alloc), in_val);
                       if (OB_FAIL(ret)) {
                         LOG_WARN("failed to cast int to number", K(ret), K(row_idx), K(column_idx));
                       }
@@ -1498,7 +1498,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       int64_t in_val = *v;
                       ObNumStackOnceAlloc tmp_alloc;
                       number::ObNumber nmb;
-                      OZ(ObOdpsDataTypeCastUtil::common_int_number_wrap(expr, in_val, tmp_alloc, nmb), in_val);
+                      OZ(nmb.from(in_val, tmp_alloc), in_val);
                       if (OB_FAIL(ret)) {
                         LOG_WARN("failed to cast int to number", K(ret), K(row_idx), K(column_idx));
                       }
@@ -1584,6 +1584,8 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
               }
               case apsara::odps::sdk::ODPS_DECIMAL:
               {
+                ObExpr cast_expr;
+                ObODPSTableUtils::prepare_numeric_cast_expr(expr, cast_expr);
                 if (ObDecimalIntType == type) {
                   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
                   batch_info_guard.set_batch_idx(0);
@@ -1596,7 +1598,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                     } else {
                       ObString in_str(len, v);
                       ObDecimalIntBuilder res_val;
-                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_decimalint_wrap(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(),
+                      if (OB_FAIL(ObDataTypeCastUtil::common_string_decimalint_wrap(cast_expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(),
                                                           res_val))) {
                         LOG_WARN("cast string to decimal int failed", K(ret), K(row_idx), K(column_idx));
                       } else {
@@ -1617,7 +1619,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObString in_str(len, v);
                       number::ObNumber nmb;
                       ObNumStackOnceAlloc tmp_alloc;
-                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                      if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(cast_expr, in_str,
                           ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
                         LOG_WARN("cast string to number failed", K(ret), K(row_idx), K(column_idx));
                       } else {
@@ -1652,9 +1654,13 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                       if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                         datums[row_idx].set_string(in_str);
-                      } else if (OB_FAIL(oceanbase::sql::ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
+                      } else {
+                        ObExpr cast_expr;
+                        ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                        if (OB_FAIL(oceanbase::sql::ObDataTypeCastUtil::common_string_string(cast_expr, in_type, in_cs_type, out_type,
                                               out_cs_type, in_str, ctx, datums[row_idx], has_set_res))) {
                         LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
+                      }
                       }
                     }
                   }
@@ -1685,9 +1691,13 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                       if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                         datums[row_idx].set_string(in_str);
-                      } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
+                      } else {
+                        ObExpr cast_expr;
+                        ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                        if (OB_FAIL(ObDataTypeCastUtil::common_string_string(cast_expr, in_type, in_cs_type, out_type,
                                               out_cs_type, in_str, ctx, datums[row_idx], has_set_res))) {
                         LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
+                      }
                       }
                     }
                   }
@@ -1729,9 +1739,13 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                       if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                         datums[row_idx].set_string(in_str);
-                      } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
+                      } else {
+                        ObExpr cast_expr;
+                        ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                        if (OB_FAIL(ObDataTypeCastUtil::common_string_string(cast_expr, in_type, in_cs_type, out_type,
                                               out_cs_type, in_str, ctx, datums[row_idx], has_set_res))) {
                         LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
+                      }
                       }
                     }
                   }
@@ -1739,6 +1753,10 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                           ObTextType == type ||
                           ObLongTextType == type ||
                           ObMediumTextType == type) {
+                  ObExpr cast_expr;
+                  ObODPSTableUtils::prepare_cast_expr(expr, ObVarcharType,
+                      apsara::odps::sdk::ODPS_STRING == odps_type ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY,
+                      cast_expr);
                   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
                   batch_info_guard.set_batch_idx(0);
                   for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < returned_row_cnt; ++row_idx) {
@@ -1761,7 +1779,7 @@ int ObODPSTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
                       ObString in_str(len, v);
                       ObObjType in_type = ObVarcharType;
                       ObCollationType in_cs_type = apsara::odps::sdk::ODPS_STRING == odps_type ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
-                      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(expr, in_str, ctx, NULL, datums[row_idx], in_type, in_cs_type))) {
+                      if (OB_FAIL(ObDataTypeCastUtil::common_string_text(cast_expr, in_str, ctx, NULL, datums[row_idx]))) {
                         LOG_WARN("cast string to text failed", K(ret), K(row_idx), K(column_idx));
                       }
                     }
@@ -2240,7 +2258,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   int64_t in_val = *v;
                   ObNumStackOnceAlloc tmp_alloc;
                   number::ObNumber nmb;
-                  OZ(ObOdpsDataTypeCastUtil::common_int_number_wrap(expr, in_val, tmp_alloc, nmb), in_val);
+                  OZ(nmb.from(in_val, tmp_alloc), in_val);
                   if (OB_FAIL(ret)) {
                     LOG_WARN("failed to cast int to number", K(ret), K(column_idx));
                   }
@@ -2308,7 +2326,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   int64_t in_val = *v;
                   ObNumStackOnceAlloc tmp_alloc;
                   number::ObNumber nmb;
-                  OZ(ObOdpsDataTypeCastUtil::common_int_number_wrap(expr, in_val, tmp_alloc, nmb), in_val);
+                  OZ(nmb.from(in_val, tmp_alloc), in_val);
                   if (OB_FAIL(ret)) {
                     LOG_WARN("failed to cast int to number", K(ret), K(column_idx));
                   }
@@ -2384,6 +2402,8 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
             }
             case apsara::odps::sdk::ODPS_DECIMAL:
             {
+              ObExpr cast_expr;
+              ObODPSTableUtils::prepare_numeric_cast_expr(expr, cast_expr);
               if (ObDecimalIntType == type) {
                   uint32_t len;
                   const char* v = record_->GetDecimalValue(target_idx, len);
@@ -2392,7 +2412,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   } else {
                     ObString in_str(len, v);
                     ObDecimalIntBuilder res_val;
-                    if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_decimalint_wrap(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), res_val))) {
+                    if (OB_FAIL(ObDataTypeCastUtil::common_string_decimalint_wrap(cast_expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), res_val))) {
                       LOG_WARN("cast string to decimal int failed", K(ret), K(column_idx));
                     } else {
                       datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -2407,7 +2427,7 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObString in_str(len, v);
                   number::ObNumber nmb;
                   ObNumStackOnceAlloc tmp_alloc;
-                  if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str,
+                  if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(cast_expr, in_str,
                       ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
                     LOG_WARN("cast string to number failed", K(ret), K(column_idx));
                   } else {
@@ -2437,9 +2457,13 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                   if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                     datum.set_string(in_str);
-                  } else if (OB_FAIL(oceanbase::sql::ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
+                  } else {
+                    ObExpr cast_expr;
+                    ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                    if (OB_FAIL(oceanbase::sql::ObDataTypeCastUtil::common_string_string(cast_expr, in_type, in_cs_type, out_type,
                                           out_cs_type, in_str, ctx, datum, has_set_res))) {
                     LOG_WARN("cast string to string failed", K(ret),  K(column_idx));
+                  }
                   }
                 }
               } else {
@@ -2465,9 +2489,13 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                   if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                     datum.set_string(in_str);
-                  } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
+                  } else {
+                    ObExpr cast_expr;
+                    ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                    if (OB_FAIL(ObDataTypeCastUtil::common_string_string(cast_expr, in_type, in_cs_type, out_type,
                                           out_cs_type, in_str, ctx, datum, has_set_res))) {
                     LOG_WARN("cast string to string failed", K(ret), K(column_idx));
+                  }
                   }
                 }
               } else {
@@ -2504,9 +2532,13 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObCharsetType out_charset = common::ObCharset::charset_type_by_coll(out_cs_type);
                   if (CHARSET_UTF8MB4 == out_charset || CHARSET_BINARY == out_charset) {
                     datum.set_string(in_str);
-                  } else if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
+                  } else {
+                    ObExpr cast_expr;
+                    ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                    if (OB_FAIL(ObDataTypeCastUtil::common_string_string(cast_expr, in_type, in_cs_type, out_type,
                                           out_cs_type, in_str, ctx, datum, has_set_res))) {
                     LOG_WARN("cast string to string failed", K(ret), K(column_idx));
+                  }
                   }
                 }
               } else if (ObTinyTextType == type ||
@@ -2531,7 +2563,9 @@ int ObODPSTableRowIterator::inner_get_next_row(bool &need_retry)
                   ObString in_str(len, v);
                   ObObjType in_type = ObVarcharType; // lcqlog todo ObHexStringType ?
                   ObCollationType in_cs_type = apsara::odps::sdk::ODPS_STRING == odps_type ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_BINARY;
-                  if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(expr, in_str, ctx, NULL, datum, in_type, in_cs_type))) {
+                  ObExpr cast_expr;
+                  ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                  if (OB_FAIL(ObDataTypeCastUtil::common_string_text(cast_expr, in_str, ctx, NULL, datum))) {
                     LOG_WARN("cast string to text failed", K(ret), K(column_idx));
                   }
                 }

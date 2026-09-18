@@ -2396,6 +2396,10 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
   int ret = OB_SUCCESS;
   ObDatum *datums = expr.locate_batch_datums(ctx);
   ObObjType type = expr.obj_meta_.get_type();
+  ObExpr cast_expr;
+  if (ObNumberType == type) {
+    ObODPSTableUtils::prepare_numeric_cast_expr(expr, cast_expr);
+  }
 
   if (OB_FAIL(expr.init_vector_for_write(ctx, VEC_UNIFORM, num_rows))) {
     LOG_WARN("failed to init expr vector", K(ret), K(expr));
@@ -2498,11 +2502,13 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           batch_info_guard.set_batch_idx(row_idx);
 
           if (!d_array->IsNull(row_idx)) {
-            const char *v = reinterpret_cast<const char *>(d_array->GetValue(row_idx));
-            ObString in_str(v);
+            const auto &dec_type = std::static_pointer_cast<arrow::Decimal128Type>(field->type());
+            const arrow::Decimal128 dec_val(reinterpret_cast<const uint8_t *>(d_array->GetValue(row_idx)));
+            const std::string dec_str = dec_val.ToString(dec_type->scale());
+            ObString in_str(static_cast<ObString::obstr_size_t>(dec_str.length()), dec_str.data());
             number::ObNumber nmb;
             ObNumStackOnceAlloc tmp_alloc;
-            if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(),tmp_alloc, nmb))) {
+            if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(cast_expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
               LOG_WARN("cast string to number failed", K(ret), K(row_idx), K(column_idx));
             } else {
               datums[row_idx].set_number(nmb);
@@ -2539,11 +2545,13 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
           batch_info_guard.set_batch_idx(row_idx);
 
           if (!d_array->IsNull(row_idx)) {
-            const char *v = reinterpret_cast<const char *>(d_array->GetValue(row_idx));
-            ObString in_str(v);
+            const auto &dec_type = std::static_pointer_cast<arrow::Decimal256Type>(field->type());
+            const arrow::Decimal256 dec_val(reinterpret_cast<const uint8_t *>(d_array->GetValue(row_idx)));
+            const std::string dec_str = dec_val.ToString(dec_type->scale());
+            ObString in_str(static_cast<ObString::obstr_size_t>(dec_str.length()), dec_str.data());
             number::ObNumber nmb;
             ObNumStackOnceAlloc tmp_alloc;
-            if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
+            if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(cast_expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
               LOG_WARN("cast string to number failed", K(ret), K(row_idx), K(column_idx));
             } else {
               datums[row_idx].set_number(nmb);
@@ -2622,8 +2630,10 @@ int ObODPSJNITableRowIterator::fill_column_arrow(ObEvalCtx &ctx, const ObExpr &e
                   if (!ob_is_text_tc(type)) {
                     datums[row_idx].set_string(in_str);
                   } else {
-                    if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(expr, in_str,
-                                  ctx, NULL, datums[row_idx], in_type, in_cs_type))) {
+                    ObExpr cast_expr;
+                    ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                    if (OB_FAIL(ObDataTypeCastUtil::common_string_text(cast_expr, in_str,
+                                  ctx, NULL, datums[row_idx]))) {
                       LOG_WARN("cast string to string failed", K(ret), K(row_idx), K(column_idx));
                     }
                   }
@@ -3283,6 +3293,10 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
   int ret = OB_SUCCESS;
   const OdpsType odps_type = odps_column_.type_;
   int32_t type_size = odps_column_.type_size_;
+  ObExpr cast_expr;
+  if (ObNumberType == type_) {
+    ObODPSTableUtils::prepare_numeric_cast_expr(expr, cast_expr);
+  }
   if (OB_FAIL(ObODPSJNITableRowIterator::OdpsDecoder::decode(ctx, expr, offset, size))) {
     LOG_WARN("failed to decode");
   } else if (odps_type == OdpsType::BOOLEAN) {
@@ -3593,11 +3607,21 @@ int ObODPSJNITableRowIterator::OdpsFixedTypeDecoder::decode(ObEvalCtx &ctx, cons
           // Note: the type size is needed to get offset of decimal value and
           // decimal value could be decimal32, decimal64, decimal128
           char *v = reinterpret_cast<char *>(column_addr_ + 1L * type_size * row_idx);
-          ObString in_str(v);
+          char dec_buf[128];
+          int64_t dec_pos = 0;
+          ObString in_str;
+          if (OB_FAIL(wide::to_string(reinterpret_cast<const ObDecimalInt *>(v), type_size,
+                                      static_cast<int16_t>(odps_column_.scale_),
+                                      dec_buf, sizeof(dec_buf), dec_pos))) {
+            LOG_WARN("failed to convert decimal to string", K(ret), K(row_idx), K(type_size));
+          } else {
+            in_str.assign_ptr(dec_buf, static_cast<ObString::obstr_size_t>(dec_pos));
+          }
           number::ObNumber nmb;
           ObNumStackOnceAlloc tmp_alloc;
-          if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_number_wrap(
-                  expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObDataTypeCastUtil::common_string_number_wrap(
+                  cast_expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), tmp_alloc, nmb))) {
             LOG_WARN("cast string to number failed", K(ret), K(row_idx));
           } else {
             datums_[row_idx].set_number(nmb);
@@ -3840,9 +3864,10 @@ int ObODPSJNITableRowIterator::OdpsVarietyTypeDecoder::decode(ObEvalCtx &ctx, co
                   if (!ob_is_text_tc(type_)) {
                     datums_[row_idx].set_string(in_str);
                   } else {
-                    if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_text_wrap(
-                          expr, in_str, ctx, NULL, datums_[row_idx], in_type,
-                          in_cs_type))) {
+                    ObExpr cast_expr;
+                    ObODPSTableUtils::prepare_cast_expr(expr, in_type, in_cs_type, cast_expr);
+                    if (OB_FAIL(ObDataTypeCastUtil::common_string_text(
+                          cast_expr, in_str, ctx, NULL, datums_[row_idx]))) {
                       LOG_WARN("cast string to text failed", K(ret), K(row_idx));
                     }
                   }
