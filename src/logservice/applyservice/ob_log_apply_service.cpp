@@ -665,10 +665,15 @@ int ObApplyStatus::switch_sync_mode(const int64_t new_proposal_id, const palf::S
     CLOG_LOG(WARN, "invalid proposal id", K(ret), K(new_proposal_id), KPC(this));
   } else {
     ATOMIC_STORE(&proposal_id_, new_proposal_id);
+    // Downgrade must wake callback queues after updating the cached sync mode.
+    // A queue waiting for standby ACK may already be idle; disable_sync_()
+    // alone does not reschedule it, and no new LSN/ACK is guaranteed.
     if (sync_mode == palf::SyncMode::SYNC) {
       ATOMIC_STORE(&is_sync_mode_, true);
     } else if (OB_FAIL(disable_sync_())) {
       CLOG_LOG(ERROR, "disable_sync_ failed", KPC(this), K(ret));
+    } else if (OB_FAIL(submit_task_to_apply_service_(submit_task_))) {
+      CLOG_LOG(ERROR, "submit_task_to_apply_service_ failed", KPC(this), K(ret));
     }
     CLOG_LOG(INFO, "apply status switch_sync_mode success", K(ret), KPC(this), K(new_proposal_id), K(sync_mode));
   }

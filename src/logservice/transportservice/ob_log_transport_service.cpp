@@ -1077,7 +1077,7 @@ bool LogTransportStatus::is_sync_mode_enabled() const
     ipalf::SyncMode sync_mode = ipalf::SyncMode::INVALID_SYNC_MODE;
     int ret = palf_handle_->get_sync_mode(sync_mode);
     if (OB_SUCC(ret)) {
-      is_sync = (sync_mode == ipalf::SyncMode::SYNC);
+      is_sync = (sync_mode != ipalf::SyncMode::PRE_ASYNC && sync_mode != ipalf::SyncMode::ASYNC);
     } else {
       CLOG_LOG(WARN, "failed to get sync mode from palf", K(ret), K_(ls_id));
     }
@@ -1611,20 +1611,19 @@ int LogTransportStatus::is_standby_sync_done(const palf::LSN &end_lsn, bool &is_
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status is not inited", K(ret));
-  } else if (!is_enabled()) {
+  } else if (!is_sync_mode_enabled()) {
+    // Cached transport enablement can lag behind PALF and must not bypass SYNC.
     is_done = true;
-    CLOG_LOG(INFO, "transport is not enabled", K(is_done));
+    CLOG_LOG(INFO, "PALF sync mode is disabled, no need to wait for standby", K(ls_id_), K(is_done));
   } else if (ATOMIC_LOAD(&is_ls_gc_state_)) {
     is_done = true;
     CLOG_LOG(INFO, "ls is in gc_state, no need to check", K(ls_id_), K(is_done), K_(is_enabled));
   } else {
-    // 只有在 SYNC 模式下才需要检查备库同步状态
-    // 如果 sync_mode 不是 SYNC，直接返回 is_done = true，不需要等待备库位点
     RLockGuard guard(lock_);
     palf::LSN standby_lsn = palf::LSN(ATOMIC_LOAD(&standby_committed_end_lsn_.val_));
     is_done = (standby_lsn.is_valid() && standby_lsn >= end_lsn);
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
-      CLOG_LOG(INFO, "is_standby_sync_done (SYNC mode)", K(ls_id_), K(is_done), K(end_lsn), K(standby_lsn), K_(is_enabled));
+      CLOG_LOG(INFO, "is_standby_sync_done", K(ls_id_), K(is_done), K(end_lsn), K(standby_lsn), K_(is_enabled));
     }
   }
   return ret;
