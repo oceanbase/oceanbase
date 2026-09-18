@@ -106,6 +106,7 @@ public:
   }
 
 private:
+  static void refresh_temp_table_feedback_state_(sql::ObSQLSessionInfo &sess);
   static int64_t get_serialize_size_(sql::ObSQLSessionInfo &sess);
   static int serialize_(sql::ObSQLSessionInfo &sess, char *buf, int64_t len, int64_t &pos);
   template <typename T>
@@ -151,7 +152,6 @@ private:
 
 private:
   static ObIsLockSessionInfo is_lock_session;
-  static ObIsTemporaryTableSessionInfo is_temporary_table_session;
 };
 }  // namespace observer
 }  // namespace oceanbase

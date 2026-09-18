@@ -345,6 +345,12 @@ int ObSessionTabletInfoMap::try_remove_session_tablet(
   return ret;
 }
 
+bool ObSessionTabletInfoMap::has_session_tablet()
+{
+  lib::ObMutexGuard guard(mutex_);
+  return !tablet_infos_.empty();
+}
+
 int ObSessionTabletInfoMap::update_session_tablet_sequence_without_lock(
   const uint64_t table_id,
   const ObTabletID &tablet_id,

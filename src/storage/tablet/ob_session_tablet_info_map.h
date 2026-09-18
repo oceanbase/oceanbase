@@ -189,6 +189,7 @@ public:
       ObSessionTabletInfo &session_tablet_info);
   int remove_session_tablet(const uint64_t table_id);
   int remove_session_tablet(const ObSessionTabletInfoKey &session_tablet_info_key);
+  bool has_session_tablet();
   int batch_update_tablet_sequences(
       const uint64_t session_id,
       const common::ObIArray<common::ObTabletID> &updated_tablet_ids,

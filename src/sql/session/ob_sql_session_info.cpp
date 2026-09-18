@@ -1021,7 +1021,7 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
       gen_gtt_trans_scope_unique_id();
       update_trans_gtt_v2_sequence();
       if (gtt_session_scope_ids_.count() == 0) {
-        if (FAILEDx(set_session_temp_table_used(*this, false, false))) {
+        if (FAILEDx(set_session_temp_table_used(false))) {
           LOG_WARN("fail to set session temp table unused", K(ret));
         }
       }
