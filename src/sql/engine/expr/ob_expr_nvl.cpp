@@ -398,23 +398,38 @@ int ObExprNvlUtil::calc_nvl_expr(const ObExpr &expr, ObEvalCtx &ctx,
   ObDatum *arg1 = NULL;
   bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
   bool v = false;
-
-  if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1))) {
-    LOG_WARN("eval args failed", K(ret));
-  } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
-    LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
-  } else if (!v) {
-    res_datum.set_datum(*arg0);
+  const bool is_implicit_cast = (1 == expr.extra_);
+  if (is_implicit_cast) {
+    if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1))) {
+      LOG_WARN("eval args failed", K(ret));
+    } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+      LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+    } else if (!v) {
+      res_datum.set_datum(*arg0);
+    } else {
+      res_datum.set_datum(*arg1);
+    }
   } else {
-    res_datum.set_datum(*arg1);
+    if (OB_FAIL(expr.args_[0]->eval(ctx, arg0))) {
+      LOG_WARN("eval arg0 failed", K(ret));
+    } else if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+      LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+    } else if (!v) {
+      res_datum.set_datum(*arg0);
+    } else if (OB_FAIL(expr.args_[1]->eval(ctx, arg1))) {
+      LOG_WARN("eval arg1 failed", K(ret));
+    } else {
+      res_datum.set_datum(*arg1);
+    }
   }
   return ret;
 }
 
 int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
-                                      ObEvalCtx &ctx,
-                                      const ObBitVector &skip,
-                                      const int64_t batch_size) {
+                                       ObEvalCtx &ctx,
+                                       const ObBitVector &skip,
+                                       const int64_t batch_size)
+{
   LOG_DEBUG("eval nvl batch mode", K(batch_size));
   int ret = OB_SUCCESS;
   ObDatum* results = expr.locate_batch_datums(ctx);
@@ -423,22 +438,61 @@ int ObExprNvlUtil::calc_nvl_expr_batch(const ObExpr &expr,
   ObDatumVector args1;
   bool is_udt_type = lib::is_oracle_mode() && expr.obj_meta_.is_ext();
   bool v = false;
-  if (OB_FAIL(expr.eval_batch_param_value(ctx, skip, batch_size, args0,
-                                          args1))) {
-    LOG_WARN("eval batch args failed", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
-      if (skip.at(i) || eval_flags.at(i)) {
-        continue;
+  const bool is_implicit_cast = (1 == expr.extra_);
+  if (is_implicit_cast) {
+    if (OB_FAIL(expr.eval_batch_param_value(ctx, skip, batch_size, args0, args1))) {
+      LOG_WARN("eval batch args failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+        if (skip.at(i) || eval_flags.at(i)) {
+          continue;
+        }
+        ObDatum *arg0 = args0.at(i);
+        ObDatum *arg1 = args1.at(i);
+        if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+          LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+        } else if (!v) {
+          results[i].set_datum(*arg0);
+        } else {
+          results[i].set_datum(*arg1);
+        }
       }
-      ObDatum *arg0 = args0.at(i);
-      ObDatum *arg1 = args1.at(i);
-      if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
-        LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
-      } else if (!v) {
-        results[i].set_datum(*arg0);
+    }
+  } else {
+    ObBitVector &my_skip = expr.get_pvt_skip(ctx);
+    my_skip.bit_calculate(skip, eval_flags, batch_size,
+                          [](uint64_t l, uint64_t r) { return l | r; });
+    int64_t skip_cnt = my_skip.accumulate_bit_cnt(batch_size);
+    if (skip_cnt < batch_size) {
+      if (OB_FAIL(expr.args_[0]->eval_batch(ctx, my_skip, batch_size))) {
+        LOG_WARN("eval args0 failed", K(ret));
       } else {
-        results[i].set_datum(*arg1);
+        args0 = expr.args_[0]->locate_expr_datumvector(ctx);
+        for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+          if (my_skip.at(i)) {
+            continue;
+          }
+          ObDatum *arg0 = args0.at(i);
+          if (OB_FAIL(pl::ObPLDataType::datum_is_null(arg0, is_udt_type, v))) {
+            LOG_WARN("failed to check datum null", K(ret), K(arg0), K(is_udt_type));
+          } else if (!v) {
+            results[i].set_datum(*arg0);
+            my_skip.set(i);
+            ++skip_cnt;
+          }
+        }
+      }
+      if (OB_SUCC(ret) && skip_cnt < batch_size) {
+        if (OB_FAIL(expr.args_[1]->eval_batch(ctx, my_skip, batch_size))) {
+          LOG_WARN("eval arg1 failed", K(ret));
+        } else {
+          args1 = expr.args_[1]->locate_expr_datumvector(ctx);
+          for (int64_t i = 0; i < batch_size; ++i) {
+            if (!my_skip.at(i)) {
+              results[i].set_datum(*args1.at(i));
+            }
+          }
+        }
       }
     }
   }
@@ -485,9 +539,19 @@ int ObExprOracleNvl::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
-  UNUSED(raw_expr);
-  rt_expr.eval_func_ = ObExprNvlUtil::calc_nvl_expr;
-  rt_expr.eval_batch_func_ = ObExprNvlUtil::calc_nvl_expr_batch;
+  const ObRawExpr *arg1 = NULL;
+  if (OB_UNLIKELY(2 != raw_expr.get_param_count())
+      || OB_ISNULL(arg1 = raw_expr.get_param_expr(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid oracle nvl arguments", K(ret), K(raw_expr.get_param_count()), KP(arg1));
+  } else {
+    const bool is_implicit_cast = T_FUN_SYS_CAST == arg1->get_expr_type()
+                                  && arg1->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
+                                  && CM_IS_IMPLICIT_CAST(arg1->get_cast_mode());
+    rt_expr.extra_ = is_implicit_cast ? 1 : 0;
+    rt_expr.eval_func_ = ObExprNvlUtil::calc_nvl_expr;
+    rt_expr.eval_batch_func_ = ObExprNvlUtil::calc_nvl_expr_batch;
+  }
   return ret;
 }
 
