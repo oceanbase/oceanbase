@@ -451,8 +451,6 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 0, 1)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(5, 0, 0, 0)
 
-DEF_SIMPLE_UPGRARD_PROCESSER(5, 0, 2, 0)
-
 class ObUpgradeFor5010Processor : public ObBaseUpgradeProcessor
 {
 public:
@@ -464,6 +462,20 @@ public:
 private:
   int post_upgrade_for_schema_history_recycle_();
   int post_upgrade_for_inspection_jobs_();
+};
+
+class ObUpgradeFor5020Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor5020Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor5020Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int check_sys_tenant_work_area_percentage_is_initial_value_(
+      bool &is_initial_value);
+  int post_upgrade_for_sys_tenant_work_area_percentage_();
 };
 
 /* =========== special upgrade processor end   ============= */

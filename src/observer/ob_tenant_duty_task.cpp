@@ -7,6 +7,7 @@
 #include "ob_tenant_duty_task.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 #include "observer/omt/ob_tenant.h"
+#include "share/ob_cluster_version.h"
 
 using namespace oceanbase::common;
 
@@ -15,6 +16,26 @@ using namespace share;
 using namespace share::schema;
 using namespace sql;
 namespace observer {
+
+static int check_tenant_work_area_memory_management_enabled(
+    const uint64_t tenant_id,
+    bool &is_enabled)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  is_enabled = !is_sys_tenant(tenant_id);
+  // The sys tenant starts using work-area memory management in 5.0.2. During a
+  // rolling upgrade, keep the legacy behavior until the 5.0.2 upgrade
+  // processor has adjusted the legacy percentage and the data version advances.
+  if (is_sys_tenant(tenant_id)) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id));
+    } else {
+      is_enabled = data_version >= DATA_VERSION_5_0_2_0;
+    }
+  }
+  return ret;
+}
 
 ObTenantDutyTask::ObTenantDutyTask()
   : allocator_(ObModIds::OB_DUTY_TASK)
@@ -39,29 +60,37 @@ void ObTenantDutyTask::update_all_tenants()
   GCTX.omt_->get_tenant_ids(ids);
 
   for (int64_t i = 0; i < ids.size(); i++) {
-    if (ids[i] <= OB_USER_TENANT_ID) {
+    bool work_area_memory_management_enabled = false;
+    if (is_virtual_tenant_id(ids[i])) {
       continue;
-    } else {
-      if (OB_FAIL(update_tenant_wa_percentage(ids[i]))) {
-        LOG_WARN("update tenant work area memory fail", K(ret));
+    }
+    if (OB_FAIL(check_tenant_work_area_memory_management_enabled(
+        ids[i], work_area_memory_management_enabled))) {
+      LOG_WARN("failed to check whether tenant work area memory management is enabled",
+               K(ret), K(ids[i]));
+      // Ignore this error code since successive operations
+      // shouldn't relay on it.
+      ret = OB_SUCCESS;
+    } else if (work_area_memory_management_enabled
+               && OB_FAIL(update_tenant_wa_percentage(ids[i]))) {
+      LOG_WARN("update tenant work area memory fail", K(ret));
+      // Ignore this error code since successive operations
+      // shouldn't relay on it.
+      ret = OB_SUCCESS;
+    }
+    if (OB_FAIL(update_tenant_sql_throttle(ids[i]))) {
+      LOG_WARN("update tenant sql throttle fail", K(ret));
         // Ignore this error code since successive operations
-        // shouldn't relay on it.
-        ret = OB_SUCCESS;
-      }
-      if (OB_FAIL(update_tenant_sql_throttle(ids[i]))) {
-        LOG_WARN("update tenant sql throttle fail", K(ret));
-         // Ignore this error code since successive operations
-        // shouldn't relay on it.
-        ret = OB_SUCCESS;
-      }
-      if (OB_FAIL(update_tenant_ctx_memory_throttle(ids[i]))) {
-        LOG_WARN("update tenant ctx throttle fail", K(ret));
-        ret = OB_SUCCESS;
-      }
-      if (OB_FAIL(update_tenant_rpc_percentage(ids[i]))) {
-        LOG_WARN("update tenant rpc percentage fail", K(ret));
-        ret = OB_SUCCESS;
-      }
+      // shouldn't relay on it.
+      ret = OB_SUCCESS;
+    }
+    if (OB_FAIL(update_tenant_ctx_memory_throttle(ids[i]))) {
+      LOG_WARN("update tenant ctx throttle fail", K(ret));
+      ret = OB_SUCCESS;
+    }
+    if (OB_FAIL(update_tenant_rpc_percentage(ids[i]))) {
+      LOG_WARN("update tenant rpc percentage fail", K(ret));
+      ret = OB_SUCCESS;
     }
   }
 }
@@ -187,16 +216,24 @@ void ObTenantSqlMemoryTimerTask::runTimerTask()
   GCTX.omt_->get_tenant_ids(ids);
   // Each tenant must calculate the global bound size regularly, so the failure of one tenant should not affect other tenants, so there is no judgment OB_SUCC(ret) to end
   for (int64_t i = 0; i < ids.size(); i++) {
-    if (ids[i] <= OB_MAX_RESERVED_TENANT_ID) {
+    bool work_area_memory_management_enabled = false;
+    if (is_virtual_tenant_id(ids[i])) {
       continue;
-    } else {
-      MTL_SWITCH(ids[i]) {
-        ObTenantSqlMemoryManager *sql_mem_mgr = MTL(ObTenantSqlMemoryManager*);
-        if (OB_UNLIKELY(nullptr == sql_mem_mgr)) {
-          LOG_WARN("sql memory manager is null", K(ids[i]));
-        } else if (OB_FAIL(sql_mem_mgr->calculate_global_bound_size())) {
-          LOG_WARN("failed to calculate global bound size", K(ret), K(ids[i]));
-        }
+    } else if (OB_FAIL(check_tenant_work_area_memory_management_enabled(
+        ids[i], work_area_memory_management_enabled))) {
+      LOG_WARN("failed to check whether tenant work area memory management is enabled",
+               K(ret), K(ids[i]));
+      ret = OB_SUCCESS;
+      continue;
+    } else if (!work_area_memory_management_enabled) {
+      continue;
+    }
+    MTL_SWITCH(ids[i]) {
+      ObTenantSqlMemoryManager *sql_mem_mgr = MTL(ObTenantSqlMemoryManager*);
+      if (OB_UNLIKELY(nullptr == sql_mem_mgr)) {
+        LOG_WARN("sql memory manager is null", K(ids[i]));
+      } else if (OB_FAIL(sql_mem_mgr->calculate_global_bound_size())) {
+        LOG_WARN("failed to calculate global bound size", K(ret), K(ids[i]));
       }
     }
   }

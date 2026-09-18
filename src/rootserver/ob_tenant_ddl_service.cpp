@@ -93,6 +93,7 @@ namespace rootserver
 {
 
 static constexpr const char *MYSQL_USER_TENANT_DEFAULT_OPEN_CURSORS = "500";
+static constexpr int64_t SYS_TENANT_DEFAULT_WORK_AREA_PERCENTAGE = 30;
 
 int ObTenantDDLService::check_inner_stat()
 {
@@ -4352,6 +4353,9 @@ int ObTenantDDLService::update_special_tenant_sys_var(
       if (is_sys_tenant(tenant_id)) {
         VAR_INT_TO_STRING(val_buf, sys_variable_schema.get_name_case_mode());
         SET_TENANT_VARIABLE(SYS_VAR_LOWER_CASE_TABLE_NAMES, val_buf);
+
+        VAR_INT_TO_STRING(val_buf, SYS_TENANT_DEFAULT_WORK_AREA_PERCENTAGE);
+        SET_TENANT_VARIABLE(SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE, val_buf);
 
         OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", OB_SYS_HOST_NAME));
         SET_TENANT_VARIABLE(SYS_VAR_OB_TCP_INVITED_NODES, val_buf);

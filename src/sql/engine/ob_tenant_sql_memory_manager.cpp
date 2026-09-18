@@ -302,14 +302,11 @@ int ObTenantSqlMemoryManager::mtl_new(ObTenantSqlMemoryManager *&sql_mem_mgr)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
-  // 系统租户不创建
-  if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
-    sql_mem_mgr = OB_NEW(ObTenantSqlMemoryManager,
-                         ObMemAttr(tenant_id, "SqlMemMgr"), tenant_id);
-    if (nullptr == sql_mem_mgr) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc tenant sql memory manager", K(ret));
-    }
+  sql_mem_mgr = OB_NEW(ObTenantSqlMemoryManager,
+                        ObMemAttr(tenant_id, "SqlMemMgr"), tenant_id);
+  if (nullptr == sql_mem_mgr) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc tenant sql memory manager", K(ret));
   }
   return ret;
 }
@@ -319,117 +316,114 @@ int ObTenantSqlMemoryManager::mtl_init(ObTenantSqlMemoryManager *&sql_mem_mgr)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = MTL_ID();
-  // 系统租户不init
-  if (OB_MAX_RESERVED_TENANT_ID < tenant_id) {
-    if (OB_FAIL(sql_mem_mgr->allocator_.init(
-              lib::ObMallocAllocator::get_instance(),
-              OB_MALLOC_NORMAL_BLOCK_SIZE,
-              ObMemAttr(tenant_id, "SqlMemMgr")))) {
-      LOG_WARN("failed to init fifo allocator", K(ret));
+  if (OB_FAIL(sql_mem_mgr->allocator_.init(
+            lib::ObMallocAllocator::get_instance(),
+            OB_MALLOC_NORMAL_BLOCK_SIZE,
+            ObMemAttr(tenant_id, "SqlMemMgr")))) {
+    LOG_WARN("failed to init fifo allocator", K(ret));
+  } else {
+    int64_t work_area_interval_size = sizeof(ObSqlWorkAreaInterval) * INTERVAL_NUM;
+    sql_mem_mgr->wa_intervals_ = reinterpret_cast<ObSqlWorkAreaInterval*>(
+                                  sql_mem_mgr->allocator_.alloc(work_area_interval_size));
+    sql_mem_mgr->profile_lists_ = reinterpret_cast<ObSqlMemoryList*>(
+                              sql_mem_mgr->allocator_.alloc(sizeof(ObSqlMemoryList) * HASH_CNT));
+    if (nullptr == sql_mem_mgr->wa_intervals_) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc work area interval", K(ret));
+    } else if (nullptr == sql_mem_mgr->profile_lists_) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc profile list", K(ret));
     } else {
-      int64_t work_area_interval_size = sizeof(ObSqlWorkAreaInterval) * INTERVAL_NUM;
-      sql_mem_mgr->wa_intervals_ = reinterpret_cast<ObSqlWorkAreaInterval*>(
-                                    sql_mem_mgr->allocator_.alloc(work_area_interval_size));
-      sql_mem_mgr->profile_lists_ = reinterpret_cast<ObSqlMemoryList*>(
-                                sql_mem_mgr->allocator_.alloc(sizeof(ObSqlMemoryList) * HASH_CNT));
-      if (nullptr == sql_mem_mgr->wa_intervals_) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc work area interval", K(ret));
-      } else if (nullptr == sql_mem_mgr->profile_lists_) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc profile list", K(ret));
+      sql_mem_mgr->tenant_id_ = tenant_id;
+      // 1M
+      int64_t total_size = 0;
+      int64_t pre_total_size = total_size;
+      for (int64_t i = 0; i < INTERVAL_NUM && OB_SUCC(ret); ++i) {
+        if (i < LESS_THAN_100M_CNT) {
+          // 1M
+          total_size += LESS_THAN_100M_INTERVAL_SIZE;
+        } else if (i < LESS_THAN_500M_CNT) {
+          // 2M
+          total_size += LESS_THAN_500M_INTERVAL_SIZE;
+        } else if (i < LESS_THAN_1G_CNT) {
+          // 5M
+          total_size += LESS_THAN_1G_INTERVAL_SIZE;
+        } else if (i < LESS_THAN_5G_CNT) {
+          // 10M
+          total_size += LESS_THAN_5G_INTERVAL_SIZE;
+        } else if (i < LESS_THAN_10G_CNT) {
+          // 50M
+          total_size += LESS_THAN_10G_INTERVAL_SIZE;
+        } else if (i < LESS_THAN_100G_CNT) {
+          // 900M
+          total_size += LESS_THAN_100G_INTERVAL_SIZE;
+        } else if (i < LESS_THAN_1T_CNT) {
+          // 9000M
+          total_size += LESS_THAN_1T_INTERVAL_SIZE;
+        }
+        void *buf = static_cast<void *>(&sql_mem_mgr->wa_intervals_[i]);
+        ObSqlWorkAreaInterval *wa_interval = new (buf) ObSqlWorkAreaInterval(i, total_size);
+        ObWorkareaHistogram workarea_hist(pre_total_size, total_size);
+        if (OB_FAIL(sql_mem_mgr->workarea_histograms_.push_back(workarea_hist))) {
+          LOG_WARN("failed to push back workarea histogram", K(ret), K(i));
+        }
+        UNUSED(wa_interval);
+        pre_total_size = total_size;
+      }
+      if (MAX_INTERVAL_SIZE != total_size) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("unexpect size", K(total_size));
       } else {
-        sql_mem_mgr->tenant_id_ = tenant_id;
-        // 1M
-        int64_t total_size = 0;
-        int64_t pre_total_size = total_size;
-        for (int64_t i = 0; i < INTERVAL_NUM && OB_SUCC(ret); ++i) {
-          if (i < LESS_THAN_100M_CNT) {
-            // 1M
-            total_size += LESS_THAN_100M_INTERVAL_SIZE;
-          } else if (i < LESS_THAN_500M_CNT) {
-            // 2M
-            total_size += LESS_THAN_500M_INTERVAL_SIZE;
-          } else if (i < LESS_THAN_1G_CNT) {
-            // 5M
-            total_size += LESS_THAN_1G_INTERVAL_SIZE;
-          } else if (i < LESS_THAN_5G_CNT) {
-            // 10M
-            total_size += LESS_THAN_5G_INTERVAL_SIZE;
-          } else if (i < LESS_THAN_10G_CNT) {
-            // 50M
-            total_size += LESS_THAN_10G_INTERVAL_SIZE;
-          } else if (i < LESS_THAN_100G_CNT) {
-            // 900M
-            total_size += LESS_THAN_100G_INTERVAL_SIZE;
-          } else if (i < LESS_THAN_1T_CNT) {
-            // 9000M
-            total_size += LESS_THAN_1T_INTERVAL_SIZE;
-          }
-          void *buf = static_cast<void *>(&sql_mem_mgr->wa_intervals_[i]);
-          ObSqlWorkAreaInterval *wa_interval = new (buf) ObSqlWorkAreaInterval(i, total_size);
-          ObWorkareaHistogram workarea_hist(pre_total_size, total_size);
-          if (OB_FAIL(sql_mem_mgr->workarea_histograms_.push_back(workarea_hist))) {
-            LOG_WARN("failed to push back workarea histogram", K(ret), K(i));
-          }
-          UNUSED(wa_interval);
-          pre_total_size = total_size;
+        sql_mem_mgr->min_bound_size_ = MIN_GLOBAL_BOUND_SIZE;
+      }
+      if (OB_SUCC(ret)) {
+        char *buf = reinterpret_cast<char*>(sql_mem_mgr->profile_lists_);
+        for (int64_t i = 0; i < HASH_CNT; ++i) {
+          ObSqlMemoryList *list = new (buf) ObSqlMemoryList(i);
+          list->get_profile_list().reset();
+          buf += sizeof(ObSqlMemoryList);
         }
-        if (MAX_INTERVAL_SIZE != total_size) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("unexpect size", K(total_size));
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(sql_mem_mgr->wa_ht_.create(MAX_WORKAREA_STAT_CNT,
+            "SqlMemMgr",
+            "SqlMemMgr",
+            tenant_id))) {
+          LOG_WARN("failed to create hashmap", K(ret));
+        } else if (OB_FAIL(sql_mem_mgr->workarea_stats_.prepare_allocate(
+            MAX_WORKAREA_STAT_CNT))) {
+          LOG_WARN("failed to prepare element", K(ret));
         } else {
-          sql_mem_mgr->min_bound_size_ = MIN_GLOBAL_BOUND_SIZE;
-        }
-        if (OB_SUCC(ret)) {
-          char *buf = reinterpret_cast<char*>(sql_mem_mgr->profile_lists_);
-          for (int64_t i = 0; i < HASH_CNT; ++i) {
-            ObSqlMemoryList *list = new (buf) ObSqlMemoryList(i);
-            list->get_profile_list().reset();
-            buf += sizeof(ObSqlMemoryList);
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(sql_mem_mgr->wa_ht_.create(MAX_WORKAREA_STAT_CNT,
-              "SqlMemMgr",
-              "SqlMemMgr",
-              tenant_id))) {
-            LOG_WARN("failed to create hashmap", K(ret));
-          } else if (OB_FAIL(sql_mem_mgr->workarea_stats_.prepare_allocate(
-              MAX_WORKAREA_STAT_CNT))) {
-            LOG_WARN("failed to prepare element", K(ret));
-          } else {
-            for (int64_t i = 0; i < MAX_WORKAREA_STAT_CNT; ++i) {
-              ObSqlWorkAreaStat &wa_stat = sql_mem_mgr->workarea_stats_.at(i);
-              wa_stat.set_seqno(i);
-            }
+          for (int64_t i = 0; i < MAX_WORKAREA_STAT_CNT; ++i) {
+            ObSqlWorkAreaStat &wa_stat = sql_mem_mgr->workarea_stats_.at(i);
+            wa_stat.set_seqno(i);
           }
         }
       }
-      if (OB_FAIL(ret)) {
-        if (nullptr != sql_mem_mgr) {
-          if (nullptr != sql_mem_mgr->wa_intervals_) {
-            sql_mem_mgr->allocator_.free(sql_mem_mgr->wa_intervals_);
-            sql_mem_mgr->wa_intervals_ = nullptr;
-          }
-          if (nullptr != sql_mem_mgr->profile_lists_) {
-            sql_mem_mgr->allocator_.free(sql_mem_mgr->profile_lists_);
-            sql_mem_mgr->profile_lists_ = nullptr;
-          }
-          sql_mem_mgr->wa_ht_.destroy();
-          sql_mem_mgr->workarea_stats_.reset();
-          sql_mem_mgr->workarea_histograms_.reset();
-        }
-      }
-      LOG_INFO("init sql memory manager", K(work_area_interval_size), K(tenant_id), K(ret));
     }
     if (OB_FAIL(ret)) {
       if (nullptr != sql_mem_mgr) {
-        sql_mem_mgr->allocator_.reset();
-        common::ob_delete(sql_mem_mgr);
+        if (nullptr != sql_mem_mgr->wa_intervals_) {
+          sql_mem_mgr->allocator_.free(sql_mem_mgr->wa_intervals_);
+          sql_mem_mgr->wa_intervals_ = nullptr;
+        }
+        if (nullptr != sql_mem_mgr->profile_lists_) {
+          sql_mem_mgr->allocator_.free(sql_mem_mgr->profile_lists_);
+          sql_mem_mgr->profile_lists_ = nullptr;
+        }
+        sql_mem_mgr->wa_ht_.destroy();
+        sql_mem_mgr->workarea_stats_.reset();
+        sql_mem_mgr->workarea_histograms_.reset();
       }
-      sql_mem_mgr = nullptr;
     }
+    LOG_INFO("init sql memory manager", K(work_area_interval_size), K(tenant_id), K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (nullptr != sql_mem_mgr) {
+      sql_mem_mgr->allocator_.reset();
+      common::ob_delete(sql_mem_mgr);
+    }
+    sql_mem_mgr = nullptr;
   }
   return ret;
 }
