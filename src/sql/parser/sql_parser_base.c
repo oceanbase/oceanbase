@@ -78,6 +78,7 @@ int parse_init(ParseResult *p)
 {
   int ret = 0;  // can not include C++ file "ob_define.h"
   static __thread char error_msg[MAX_ERROR_MSG] = {'\0'};
+  error_msg[0] = '\0';
   p->error_msg_ = error_msg;
   if (OB_UNLIKELY(NULL == p || NULL == p->malloc_pool_)) {
     ret = OB_PARSER_ERR_UNEXPECTED;
