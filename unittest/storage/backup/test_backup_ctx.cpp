@@ -78,7 +78,7 @@ protected:
 };
 
 TestBackupCtx::TestBackupCtx()
-    : TestDataFilePrepare(&getter, "TestBackupTmpFile"),
+    : TestDataFilePrepare(&getter, "TestBackupCtx"),
       tenant_base_(500),
       job_desc_(),
       backup_dest_(),
