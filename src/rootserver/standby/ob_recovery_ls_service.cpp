@@ -217,8 +217,7 @@ void ObRecoveryLSService::do_work()
         }
       }//end thread1
       LOG_INFO("[LS_RECOVERY] finish one round", KR(ret), K(idle_time_us),
-               K(start_scn), K(thread_idx), K(tenant_info), K_(restore_status),
-               K_(cached_restore_source));
+               K(start_scn), K(thread_idx), K(tenant_info), K_(restore_status));
       idle(idle_time_us);
       ret = OB_SUCCESS;
     }//end while
@@ -2507,6 +2506,9 @@ int ObRecoveryLSService::refresh_restore_source_()
         LOG_WARN("failed to deep copy restore source item", KR(ret), K(item));
       } else {
         last_refresh_restore_source_ts_ = now;
+        if (REACH_TIME_INTERVAL(1_s)) {
+          LOG_INFO("[LS_RECOVERY] cached restore source updated", KR(ret), "delay", cached_restore_source_.recover_delay_us_);
+        }
       }
     }
   }
