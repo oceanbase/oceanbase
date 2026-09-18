@@ -2981,6 +2981,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                     ObIArray<ObRawExpr *> &restrict_infos,
                                     bool use_unique_index,
                                     bool ignore_order_dim,
+                                    bool ignore_sharding_info_dim,
                                     bool ignore_index_back_dim)
 {
   int ret = OB_SUCCESS;
@@ -3071,7 +3072,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                    OB_FAIL(index_dim.add_unique_range_dim(range_cnt,
                                                           *allocator_))) {
           LOG_WARN("add query range dimension failed", K(ret));
-        } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3)
+        } else if (!ignore_sharding_info_dim
+                  && OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3)
                   && OB_FAIL(index_dim.add_sharding_info_dim(index_info_entry->get_sharding_info(),
                                                              is_get && 1 == range_cnt,
                                                              index_info_entry->is_index_global(),
@@ -3130,6 +3132,11 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
   ObSEArray<uint64_t, 4> valid_unique_index_ids;
   ObSEArray<uint64_t, 4> candidate_index_ids;
   bool use_unique_index = false;
+  bool ignore_sharding_info_dim = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    ignore_sharding_info_dim = !tenant_config->_enable_skyline_pruning_sharding_info;
+  }
   OPT_TRACE_TITLE("BEGIN SKYLINE INDEX PRUNNING");
   if (OB_FAIL(try_prune_non_unique_index(table_id,
                                          index_info_cache,
@@ -3162,6 +3169,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
                                             restrict_infos,
                                             use_unique_index,
                                             use_unique_index, /*ignore interesting order*/
+                                            ignore_sharding_info_dim,
                                             ignore_index_back_dim))) {
         LOG_WARN("Failed to cal dimension info", K(ret), "index_id", candidate_index_ids, K(i));
       } else if (stmt->has_vec_approx()) {

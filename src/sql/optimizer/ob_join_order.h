@@ -1625,6 +1625,7 @@ struct MergeKeyInfoHelper
                            ObIArray<ObRawExpr *> &restrict_infos,
                            bool use_unique_index,
                            bool ignore_order_dim,
+                           bool ignore_sharding_info_dim,
                            bool ignore_index_back_dim = false);
     int is_vector_inv_index_tid(const uint64_t index_table_id, bool& is_vec_tid);
 

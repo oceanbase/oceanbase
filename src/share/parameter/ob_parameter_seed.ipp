@@ -1830,6 +1830,11 @@ DEF_BOOL(_enable_nlj_spf_use_rich_format, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_index_merge, OB_TENANT_PARAMETER, "False",
          "enable index merge optimization",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_skyline_pruning_sharding_info, OB_TENANT_PARAMETER, "True",
+         "Specifies whether the optimizer considers data distribution when pruning candidate indexes. "
+         "The default value is True. When set to False, the optimizer prunes candidate indexes "
+         "based only on the other comparison criteria.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
          "enable distributed DAS scan",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
