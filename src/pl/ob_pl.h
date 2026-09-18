@@ -1455,7 +1455,9 @@ private:
       uint64_t is_inner_mock_ : 1;
       uint64_t is_system_trigger_ : 1;
       uint64_t saved_use_pl_inner_info_string_ : 1;
-      uint64_t reserved_ : 46;
+      uint64_t is_ddl_trigger_ : 1;
+      uint64_t is_ddl_trigger_batch_final_ : 1;
+      uint64_t reserved_ : 44;
     };
   };
 };
