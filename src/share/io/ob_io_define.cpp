@@ -2053,7 +2053,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
     LOG_WARN("The IOHandle has not been inited, ", K(ret));
   } else if (OB_FAIL(result_->ret_code_.io_ret_)) {
     LOG_WARN("IO error, ", K(ret), K(*result_));
-  } else if (result_->is_finished_) {
+  } else if (ATOMIC_LOAD_ACQ(&result_->is_finished_)) {
     // do nothing
   } else if (0 == wait_timeout_ms) {
     ret = OB_EAGAIN;
@@ -2075,7 +2075,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
           LOG_WARN("fail to wait result condition due to spurious wakeup", K(ret), K(wait_ms), K(*result_));
         }
       }
-    } else if (result_->is_finished_) {
+    } else if (ATOMIC_LOAD_ACQ(&result_->is_finished_)) {
       // do nothing
     } else {
       ret = OB_TIMEOUT;
@@ -2122,7 +2122,7 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
 
 void ObIOHandle::estimate()
 {
-  if (OB_NOT_NULL(result_) && result_->is_finished_ && !ATOMIC_CAS(&result_->has_estimated_, false, true)) {
+  if (OB_NOT_NULL(result_) && ATOMIC_LOAD_ACQ(&result_->is_finished_) && !ATOMIC_CAS(&result_->has_estimated_, false, true)) {
     const int64_t result_delay = get_io_interval(result_->time_log_.end_ts_, result_->time_log_.begin_ts_);
     if (result_->flag_.is_read()) {
       EVENT_INC(ObStatEventIds::IO_READ_COUNT);
@@ -2155,7 +2155,7 @@ int ObIOHandle::get_fs_errno(int &io_errno) const
 const char *ObIOHandle::get_buffer()
 {
   const char *buf = nullptr;
-  if (OB_NOT_NULL(result_) && result_->is_finished_) {
+  if (OB_NOT_NULL(result_) && ATOMIC_LOAD_ACQ(&result_->is_finished_)) {
     if (nullptr != result_->io_callback_) {
       buf = result_->io_callback_->get_data();
     } else {
