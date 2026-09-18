@@ -142,16 +142,14 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(const float factor, share::ObTr
         // Remove the appropriate proportion of partitions from the balance group
         //
         // expected remove count should be computed by factor of total count.
-        // It should be ceil()
+        // It should be ceil(), to make expected remove count >= 1.
         const int64_t total_count = *total_count_ptr;
         const int64_t expected_remove_count = ceil(factor * total_count);
         const int64_t avail_count = bg_info->get_part_group_count();
 
-        // left count after remove should be greater than remove count
-        const int64_t left_count_lower_bound = expected_remove_count;
-        const int64_t can_remove_count_upper_bound = avail_count - left_count_lower_bound;
-
-        const int64_t remove_count = std::min(can_remove_count_upper_bound, expected_remove_count);
+        // Actual remove count should be less than avail count,
+        // to make sure bg_info remained part count >= 1 after transfer out.
+        const int64_t remove_count = std::min(avail_count - 1, expected_remove_count);
 
         int64_t removed_part_count = 0;
         int64_t removed_data_size = 0;

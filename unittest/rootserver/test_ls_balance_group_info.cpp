@@ -213,11 +213,10 @@ TEST(TestLSBalanceGroupInfo, split_ls_repeated_transfer_avoids_oversized_part_gr
   EXPECT_TRUE(contains_table(second_round, 1005));
   EXPECT_FALSE(contains_table(second_round, 1009));
 
-  // The original PG count remains nine, so the third round must leave three
-  // PGs in place and transfer nothing.
+  // The third round must leave one PG in place and transfer the remaining two.
   ObTransferPartList third_round;
   ASSERT_EQ(OB_SUCCESS, ls_bg_info.transfer_out_by_factor(0.3f, third_round));
-  EXPECT_EQ(0, third_round.count());
+  EXPECT_EQ(2, third_round.count());
 }
 
 TEST(TestLSBalanceGroupInfo, keep_historical_selection_when_size_is_balanced)
