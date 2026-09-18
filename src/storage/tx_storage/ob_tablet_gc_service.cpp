@@ -141,7 +141,7 @@ void ObTabletGCService::destroy()
 void ObTabletGCService::ObTabletChangeTask::runTimerTask()
 {
   STORAGE_LOG(INFO, "====== [tabletchange] timer task ======", K(GC_CHECK_INTERVAL));
-  RLOCAL_STATIC(int64_t, times) = 0;
+  int64_t &times = times_;
   times = (times + 1) % GLOBAL_GC_CHECK_INTERVAL_TIMES;
   int ret = OB_SUCCESS;
   ObLSIterator *iter = NULL;

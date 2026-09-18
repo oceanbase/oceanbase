@@ -182,13 +182,15 @@ private:
   {
   public:
     ObTabletChangeTask(ObTabletGCService &tablet_gc_service)
-      : tablet_gc_service_(tablet_gc_service)
+      : tablet_gc_service_(tablet_gc_service),
+        times_(0)
     {}
     virtual ~ObTabletChangeTask() {}
 
     virtual void runTimerTask();
   private:
     ObTabletGCService &tablet_gc_service_;
+    int64_t times_;
   };
 
   common::ObTimer timer_for_tablet_change_;

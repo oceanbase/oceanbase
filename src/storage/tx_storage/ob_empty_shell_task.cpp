@@ -39,7 +39,7 @@ void ObEmptyShellTask::runTimerTask()
   common::ObSharedGuard<ObLSIterator> guard;
   ObLSService *ls_svr = MTL(ObLSService*);
   bool skip_empty_shell_task = false;
-  RLOCAL_STATIC(int64_t, times) = 0;
+  int64_t &times = times_;
   times = (times + 1) % GLOBAL_EMPTY_CHECK_INTERVAL_TIMES;
 
   skip_empty_shell_task = (OB_SUCCESS != (OB_E(EventTable::EN_TABLET_EMPTY_SHELL_TASK_FAILED) OB_SUCCESS));
@@ -332,7 +332,6 @@ int ObTabletEmptyShellHandler::check_tablet_from_aborted_tx_(const ObTablet &tab
     STORAGE_LOG(WARN, "failed to get mds table rec scn", K(ret), K(ls_id), K(tablet_id));
   } else if (rec_scn.is_max()) {
     can_become_shell = false;
-    need_retry = false;
     STORAGE_LOG(INFO, "mds table rec scn is MAX, redo log has NOT been written, should delete tablet instantly",
         K(ret), K(ls_id), K(tablet_id), K(rec_scn));
   } else if (OB_FAIL(get_readable_scn(readable_scn))) {

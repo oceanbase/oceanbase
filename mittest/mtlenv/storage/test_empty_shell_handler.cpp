@@ -179,10 +179,18 @@ TEST_F(TestEmptyShellHandler, create_tx_abort_without_abort_scn)
   ret = handler->check_tablet_from_aborted_tx_(*tablet, can_become_shell, need_retry);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(!can_become_shell);
+  ASSERT_FALSE(need_retry);
   share::SCN rec_scn(share::SCN::base_scn());
   ret = tablet->get_mds_table_rec_scn(rec_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(rec_scn.is_max());
+
+  // Simulate a retry requested by an earlier tablet in the same LS scan.
+  need_retry = true;
+  ret = handler->check_tablet_from_aborted_tx_(*tablet, can_become_shell, need_retry);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_FALSE(can_become_shell);
+  ASSERT_TRUE(need_retry);
 }
 
 TEST_F(TestEmptyShellHandler, create_tx_abort_with_abort_scn)
