@@ -211,6 +211,7 @@ int ObCreateMLogResolver::fill_session_info_into_arg(
   create_mlog_arg.nls_date_format_ = session.get_local_nls_date_format();
   create_mlog_arg.nls_timestamp_format_ = session.get_local_nls_timestamp_format();
   create_mlog_arg.nls_timestamp_tz_format_ = session.get_local_nls_timestamp_tz_format();
+  create_mlog_arg.mlog_schema_.set_define_user_id(session.get_priv_user_id());
 
   char buf[OB_MAX_PROC_ENV_LENGTH];
   int64_t pos = 0;

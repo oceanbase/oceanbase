@@ -20,6 +20,13 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_time_utils.h"
+#include "sql/engine/ob_exec_context.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
+#include "sql/resolver/ob_schema_checker.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_table_schema.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
 
 namespace oceanbase
 {
@@ -812,11 +819,163 @@ int ObDBMSSchedJobUtils::get_dbms_sched_job_info(common::ObISQLClient &sql_clien
   return ret;  
 }
 
-int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
-                                                   const ObDBMSSchedJobInfo &job_info)
+int ObDBMSSchedJobUtils::get_table_id_by_job_name(ObISQLClient &sql_client,
+                                                  const uint64_t tenant_id,
+                                                  const char *inner_table_name,
+                                                  const char *id_col_name,
+                                                  const char *job_col_name,
+                                                  const ObString &job_name,
+                                                  uint64_t &table_id)
 {
   int ret = OB_SUCCESS;
-  bool is_oracle_tenant =  lib::is_oracle_mode();
+  table_id = OB_INVALID_ID;
+  ObSqlString sql;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    char hex_job_name[2 * OB_MAX_SCHEDULER_JOB_NAME_LENGTH + 1];
+    if (OB_ISNULL(inner_table_name) || OB_ISNULL(id_col_name) || OB_ISNULL(job_col_name)
+        || job_name.empty() || job_name.length() > OB_MAX_SCHEDULER_JOB_NAME_LENGTH) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name),
+               KP(inner_table_name), KP(id_col_name), KP(job_col_name));
+    } else if (OB_FAIL(to_hex_cstr(job_name.ptr(), job_name.length(),
+                                   hex_job_name, sizeof(hex_job_name)))) {
+      LOG_WARN("failed to hex job name", KR(ret), K(job_name));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "SELECT %s FROM %s.%s WHERE tenant_id = 0 AND %s = unhex('%s') LIMIT 1",
+                   id_col_name, OB_SYS_DATABASE_NAME, inner_table_name, job_col_name,
+                   hex_job_name))) {
+      LOG_WARN("failed to assign sql", KR(ret), K(job_name));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("failed to lookup table id by job name", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get next row", KR(ret), K(job_name));
+      }
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, id_col_name, table_id, uint64_t);
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::get_mview_job_related_table(ObISQLClient &sql_client,
+                                                     ObSchemaGetterGuard &schema_guard,
+                                                     const uint64_t tenant_id,
+                                                     const ObString &job_name,
+                                                     const ObTableSchema *&table_schema,
+                                                     ObString &db_name,
+                                                     ObString &table_name)
+{
+  int ret = OB_SUCCESS;
+  uint64_t table_id = OB_INVALID_ID;
+  const ObTableSchema *tmp_schema = NULL;
+  const ObDatabaseSchema *database_schema = NULL;
+  table_schema = NULL;
+  db_name.reset();
+  table_name.reset();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
+  } else if (job_name.prefix_match(ObMViewInfo::MVIEW_REFRESH_JOB_PREFIX)) {
+    if (OB_FAIL(get_table_id_by_job_name(sql_client, tenant_id, OB_ALL_MVIEW_TNAME,
+                                         "mview_id", "refresh_job", job_name, table_id))) {
+      LOG_WARN("failed to get mview id by refresh job", KR(ret), K(job_name));
+    }
+  } else if (job_name.prefix_match(ObMLogInfo::MLOG_PURGE_JOB_PREFIX)) {
+    if (OB_FAIL(get_table_id_by_job_name(sql_client, tenant_id, OB_ALL_MLOG_TNAME,
+                                         "mlog_id", "purge_job", job_name, table_id))) {
+      LOG_WARN("failed to get mlog id by purge job", KR(ret), K(job_name));
+    }
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_INVALID_ID == table_id) {
+    ret = OB_ENTRY_NOT_EXIST;
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, tmp_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(tmp_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is null", KR(ret), K(tenant_id), K(table_id));
+  } else if (tmp_schema->is_mlog_table()
+             && OB_FAIL(schema_guard.get_table_schema(tenant_id, tmp_schema->get_data_table_id(), tmp_schema))) {
+    LOG_WARN("failed to get mlog data table schema", KR(ret), K(table_id));
+  } else if (OB_ISNULL(tmp_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("mlog data table schema is null", KR(ret), K(table_id));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, tmp_schema->get_database_id(), database_schema))) {
+    LOG_WARN("failed to get database schema", KR(ret), K(tenant_id),
+             "database_id", tmp_schema->get_database_id());
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null", KR(ret), "database_id", tmp_schema->get_database_id());
+  } else {
+    db_name = database_schema->get_database_name_str();
+    table_name = tmp_schema->get_table_name_str();
+    table_schema = tmp_schema;
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::check_mview_job_alter_priv_mysql(ObExecContext &ctx,
+                                                          const ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = job_info.tenant_id_;
+  ObSQLSessionInfo *session = ctx.get_my_session();
+  ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
+  ObString db_name;
+  ObString table_name;
+  const ObTableSchema *table_schema = NULL;
+  ObSessionPrivInfo session_priv;
+  ObStmtNeedPrivs stmt_need_privs(ctx.get_allocator());
+  ObSchemaChecker schema_checker;
+  if (OB_ISNULL(session) || OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KR(ret), KP(session), KP(GCTX.sql_proxy_), KP(schema_guard));
+  } else if (OB_FAIL(get_mview_job_related_table(*GCTX.sql_proxy_, *schema_guard, tenant_id,
+                                                 job_info.job_name_, table_schema, db_name, table_name))) {
+    LOG_WARN("failed to get mview job related table", KR(ret), K(job_info.job_name_));
+    if (OB_ENTRY_NOT_EXIST == ret || OB_TABLE_NOT_EXIST == ret) {
+      // The related MV/MLOG may have been dropped or be absent from this schema snapshot; fall back to global ALTER.
+      ret = OB_SUCCESS;
+      table_schema = NULL;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(schema_checker.init(*schema_guard, session->get_server_sid()))) {
+    LOG_WARN("failed to init schema checker", KR(ret));
+  } else {
+    const ObPrivLevel priv_level = OB_NOT_NULL(table_schema) ? OB_PRIV_TABLE_LEVEL : OB_PRIV_USER_LEVEL;
+    ObNeedPriv need_priv(db_name, table_name, priv_level, OB_PRIV_ALTER, false);
+    if (OB_FAIL(session->get_session_priv_info(session_priv))) {
+      LOG_WARN("failed to get session privilege info", KR(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+      LOG_WARN("failed to init statement privileges", KR(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+      LOG_WARN("failed to add alter privilege", KR(ret));
+    } else if (OB_FAIL(schema_checker.check_priv(session_priv, session->get_enable_role_array(), stmt_need_privs))) {
+      LOG_WARN("failed to check alter privilege", KR(ret), K(tenant_id), K(db_name), K(table_name));
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
+                                                   const ObDBMSSchedJobInfo &job_info,
+                                                   ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  bool need_check_alter_priv = false;
+  const bool is_oracle_tenant = (NULL != ctx.get_my_session())
+      ? ctx.get_my_session()->is_oracle_compatible()
+      : lib::is_oracle_mode();
   if (OB_ISNULL(user_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("user info is NULL", KR(ret));
@@ -824,8 +983,11 @@ int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
     // do nothing
   } else if (job_info.user_id_ != OB_INVALID_ID) { //如果 job 有 user_id 优先使用
     if (job_info.user_id_ != user_info->get_user_id()) {
-      ret = OB_ERR_NO_PRIVILEGE;
-      LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+      need_check_alter_priv = !is_oracle_tenant && job_info.is_mview_job();
+      if (!need_check_alter_priv) {
+        ret = OB_ERR_NO_PRIVILEGE;
+        LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+      }
     }
   } else if (is_oracle_tenant) {
     if (0 != job_info.powner_.case_compare(user_info->get_user_name())) { // job 的 owner 和 输入的 user 不一致
@@ -836,8 +998,11 @@ int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
     if (0 != job_info.powner_.case_compare(user_info->get_user_name())) { // job 保存的 owner 可能是 root@% or root (旧)
       const char *c = job_info.powner_.reverse_find('@');
       if (OB_ISNULL(c)) {
-        ret = OB_ERR_NO_PRIVILEGE;
-        LOG_WARN("mysql check job owner failed", KR(ret), K(user_info), K(job_info.user_id_));
+        need_check_alter_priv = job_info.is_mview_job();
+        if (!need_check_alter_priv) {
+          ret = OB_ERR_NO_PRIVILEGE;
+          LOG_WARN("mysql check job owner failed", KR(ret), K(user_info), K(job_info.user_id_));
+        }
       } else {
         ObString user = job_info.powner_;
         ObString user_name;
@@ -845,13 +1010,21 @@ int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
         user_name = user.split_on(c);
         host_name = user;
         if (0 != user_name.case_compare(user_info->get_user_name()) || 0 != host_name.case_compare(user_info->get_host_name())) {
-          ret = OB_ERR_NO_PRIVILEGE;
-          LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+          need_check_alter_priv = job_info.is_mview_job();
+          if (!need_check_alter_priv) {
+            ret = OB_ERR_NO_PRIVILEGE;
+            LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+          }
         }
       }
     }
   }
 
+  if (OB_SUCC(ret) && 
+      need_check_alter_priv && 
+      OB_FAIL(check_mview_job_alter_priv_mysql(ctx, job_info))) {
+    LOG_WARN("failed to check mview job alter privilege", KR(ret), K(job_info.job_name_));
+  }
   return ret;
 }
 

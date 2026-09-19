@@ -408,7 +408,7 @@ int ObDBMSScheduler::job_priv_check_impl(sql::ObExecContext &ctx, ObString &job_
   } else if (OB_ISNULL(user_info)) {
     ret = OB_USER_NOT_EXIST;
     LOG_WARN("user not exist", KR(ret), K(tenant_id), K(ctx.get_my_session()->get_user_id()));
-  } else if (OB_FAIL(ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info))) {
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info, ctx))) {
     ret = OB_SP_RAISE_APPLICATION_ERROR;
     ObString err_info("current user does not have permission.");
     LOG_ORACLE_USER_ERROR(OB_SP_RAISE_APPLICATION_ERROR, 23421L, err_info.length(), err_info.ptr());

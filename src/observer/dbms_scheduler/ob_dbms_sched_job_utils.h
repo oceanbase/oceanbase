@@ -50,6 +50,7 @@ class ObMySQLResult;
 namespace sql
 {
 class ObExecEnv;
+class ObExecContext;
 class ObSQLSessionInfo;
 class ObFreeSessionCtx;
 }
@@ -59,6 +60,7 @@ namespace schema
 {
 class ObSchemaGetterGuard;
 class ObUserInfo;
+class ObTableSchema;
 }
 }
 
@@ -509,7 +511,8 @@ public:
    * @retval OB_ERR_NO_PRIVILEGE 传入用户没有权限
    */
   static int check_dbms_sched_job_priv(const share::schema::ObUserInfo *user_info,
-                                       const ObDBMSSchedJobInfo &job_info);
+                                       const ObDBMSSchedJobInfo &job_info,
+                                       sql::ObExecContext &ctx);
   /**
    * @brief  计算 job 保存的时间表达式得到下一次执行的时间
    * @param [in] job_info  - job 信息
@@ -523,6 +526,23 @@ public:
   static int job_class_check_impl(int64_t tenant_id, const ObString &job_class_name);
   static int get_max_failures_value(int64_t tenant_id, const ObString &src_str, int64_t &value);
   static int reserve_user_with_minimun_id(ObIArray<const share::schema::ObUserInfo *> &user_infos); //TO DO 连雨 delete
+private:
+  static int get_table_id_by_job_name(common::ObISQLClient &sql_client,
+                                      const uint64_t tenant_id,
+                                      const char *inner_table_name,
+                                      const char *id_col_name,
+                                      const char *job_col_name,
+                                      const common::ObString &job_name,
+                                      uint64_t &table_id);
+  static int get_mview_job_related_table(common::ObISQLClient &sql_client,
+                                         share::schema::ObSchemaGetterGuard &schema_guard,
+                                         const uint64_t tenant_id,
+                                         const common::ObString &job_name,
+                                         const share::schema::ObTableSchema *&table_schema,
+                                         common::ObString &db_name,
+                                         common::ObString &table_name);
+  static int check_mview_job_alter_priv_mysql(sql::ObExecContext &ctx,
+                                              const ObDBMSSchedJobInfo &job_info);
 };
 }
 }
