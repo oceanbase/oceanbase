@@ -111,6 +111,7 @@ ObDDLDagMonitorMgr::ObDDLDagMonitorMgr()
       memory_limit_(DEFAULT_ALLOCATOR_SIZE),
       rwlock_(common::ObLatchIds::DDL_DAG_MONITOR_LOCK),
       node_map_(),
+      execution_id_(0),
       clean_timer_(),
       clean_task_(*this),
       clean_interval_us_(DEFAULT_CLEAN_INTERVAL_US)
@@ -183,23 +184,21 @@ int ObDDLDagMonitorMgr::register_node(const void *dag_ptr,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(dag_ptr), K(trace_id));
   } else {
-    NodeKey key(dag_ptr, trace_id);
     SpinWLockGuard guard(rwlock_);
-    // If already exists, return it (idempotent register).
-    if (OB_FAIL(node_map_.get_refactored(key, node))) {
-      if (OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("get node from map failed", K(ret), K(key));
-      } else {
-        // Best-effort: clean expired nodes when reaching max count.
-        if (node_map_.size() >= max_node_count_) {
-          int tmp_ret = clean_nodes_unlock(CLEAN_EXPIRED_NODE);
-          if (OB_SUCCESS != tmp_ret) {
-            LOG_WARN("clean expired nodes failed before register", K(tmp_ret), K_(max_node_count));
-          }
+    if (OB_UNLIKELY(UINT64_MAX == execution_id_)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("monitor execution id exhausted", K(ret), K_(execution_id));
+    } else {
+      const NodeKey key(dag_ptr, trace_id, ++execution_id_);
+      // Best-effort: clean expired nodes when reaching max count.
+      if (node_map_.size() >= max_node_count_) {
+        int tmp_ret = clean_nodes_unlock(CLEAN_EXPIRED_NODE);
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("clean expired nodes failed before register", K(tmp_ret), K_(max_node_count));
         }
-        if (OB_FAIL(inner_create_node(key, node))) {
-          LOG_WARN("create node failed", K(ret), K(key));
-        }
+      }
+      if (OB_FAIL(inner_create_node(key, node))) {
+        LOG_WARN("create node failed", K(ret), K(key));
       }
     }
   }

@@ -76,7 +76,7 @@ protected:
   int ret_code_;
 };
 
-// A monitor node is bound to one independent DAG execution (dag_ptr, trace_id).
+// A monitor node is bound to one independent DAG execution (dag_ptr, trace_id, execution_id).
 // It owns multiple monitor infos, each representing one monitored DAG task.
 class ObDDLDagMonitorNode
 {
@@ -86,17 +86,19 @@ public:
   public:
     Key();
     Key(const void *dag_ptr,
-        const common::ObCurTraceId::TraceId &trace_id);
+        const common::ObCurTraceId::TraceId &trace_id,
+        const uint64_t execution_id);
 
     bool is_valid() const;
     bool operator==(const Key &other) const;
     uint64_t hash() const;
     int hash(uint64_t &hash_val) const;
-    TO_STRING_KV(K_(dag_ptr), K_(trace_id));
+    TO_STRING_KV(K_(dag_ptr), K_(trace_id), K_(execution_id));
 
   public:
     uint64_t dag_ptr_;
     common::ObCurTraceId::TraceId trace_id_;
+    uint64_t execution_id_;
   };
 
   explicit ObDDLDagMonitorNode(common::ObIAllocator *allocator);

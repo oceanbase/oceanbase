@@ -108,26 +108,30 @@ int ObDDLDagMonitorInfo::convert_to_monitor_entry(ObDDLDagMonitorEntry &entry) c
 
 ObDDLDagMonitorNode::Key::Key()
   : dag_ptr_(0),
-    trace_id_()
+    trace_id_(),
+    execution_id_(0)
 {
 }
 
 ObDDLDagMonitorNode::Key::Key(const void *dag_ptr,
-                                      const ObCurTraceId::TraceId &trace_id)
+                                      const ObCurTraceId::TraceId &trace_id,
+                                      const uint64_t execution_id)
   : dag_ptr_(reinterpret_cast<uint64_t>(dag_ptr)),
-    trace_id_(trace_id)
+    trace_id_(trace_id),
+    execution_id_(execution_id)
 {
 }
 
 bool ObDDLDagMonitorNode::Key::is_valid() const
 {
-  return dag_ptr_ != 0 && trace_id_.is_valid();
+  return dag_ptr_ != 0 && trace_id_.is_valid() && execution_id_ != 0;
 }
 
 bool ObDDLDagMonitorNode::Key::operator==(const Key &other) const
 {
   return dag_ptr_ == other.dag_ptr_
-      && trace_id_ == other.trace_id_;
+      && trace_id_ == other.trace_id_
+      && execution_id_ == other.execution_id_;
 }
 
 uint64_t ObDDLDagMonitorNode::Key::hash() const
@@ -135,6 +139,7 @@ uint64_t ObDDLDagMonitorNode::Key::hash() const
   uint64_t hash_val = 0;
   hash_val = common::murmurhash(&dag_ptr_, sizeof(dag_ptr_), hash_val);
   hash_val = common::murmurhash(&trace_id_, sizeof(trace_id_), hash_val);
+  hash_val = common::murmurhash(&execution_id_, sizeof(execution_id_), hash_val);
   return hash_val;
 }
 

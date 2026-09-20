@@ -124,7 +124,9 @@ private:
   int64_t ttl_us_;
   int64_t memory_limit_;
   mutable common::SpinRWLock rwlock_;
+  // use array instead, no need to use key get node currently
   NodeMap node_map_;
+  uint64_t execution_id_; // Protected by rwlock_; never reset or allowed to wrap.
   common::ObTimer clean_timer_;
   CleanTimerTask clean_task_;
   int64_t clean_interval_us_;
