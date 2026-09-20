@@ -934,6 +934,9 @@ int ObDbmsStatsExecutor::set_table_stats(ObExecContext &ctx,
   ObArenaAllocator alloc("ObSetTableStats", OB_MALLOC_NORMAL_BLOCK_SIZE, param.table_param_.tenant_id_);
   ObOptTableStat table_stat;
   ObOptStatManager &mgr = ObOptStatManager::get_instance();
+  ObMySQLTransaction trans;
+  ObSEArray<int64_t, 1> part_ids;
+  ObSEArray<ObOptTableStat *, 1> table_stats;
   int64_t partition_id = param.table_param_.global_part_id_;
   ObOptTableStat::Key key(param.table_param_.tenant_id_, param.table_param_.table_id_, partition_id);
   StatLevel stat_level = TABLE_LEVEL;
@@ -947,21 +950,27 @@ int ObDbmsStatsExecutor::set_table_stats(ObExecContext &ctx,
     stat_level = PARTITION_LEVEL;
     stattype = param.table_param_.part_infos_.at(0).part_stattype_;
   }
-  if (OB_FAIL(mgr.get_table_stat(param.table_param_.tenant_id_, key, table_stat))) {
-    LOG_WARN("failed to get table stat", K(ret));
+  table_stat.set_table_id(key.table_id_);
+  table_stat.set_partition_id(key.partition_id_);
+  if (OB_FAIL(part_ids.push_back(key.partition_id_))) {
+    LOG_WARN("failed to push back partition id", KR(ret), K(key));
+  } else if (OB_FAIL(table_stats.push_back(&table_stat))) {
+    LOG_WARN("failed to push back table stat", KR(ret), K(key));
+  } else if (OB_FAIL(trans.start(ctx.get_sql_proxy(), param.table_param_.tenant_id_))) {
+    LOG_WARN("fail to start transaction", KR(ret));
+  } else if (OB_FAIL(mgr.get_stat_sql_service().batch_fetch_table_stats(param.table_param_.tenant_id_,
+                                                                        key.table_id_,
+                                                                        part_ids,
+                                                                        table_stats,
+                                                                        trans.get_connection()))) {
+    LOG_WARN("failed to fetch table stat", KR(ret), K(key));
   } else {//reset infos
-    table_stat.set_table_id(key.table_id_);
-    table_stat.set_partition_id(key.partition_id_);
     table_stat.set_object_type(stat_level);
     table_stat.set_stattype_locked(stattype);
     table_stat.set_last_analyzed(0);
   }
   if (OB_SUCC(ret)) {
-    ObMySQLTransaction trans;
-    //begin trans
-    if (OB_FAIL(trans.start(ctx.get_sql_proxy(), param.table_param_.tenant_id_))) {
-      LOG_WARN("fail to start transaction", K(ret));
-    } else if (OB_FAIL(do_set_table_stats(param, &table_stat))) {
+    if (OB_FAIL(do_set_table_stats(param, &table_stat))) {
       LOG_WARN("failed to do set table stats", K(ret));
       ////before update, we need record history stats.
     } else if (!param.table_param_.is_temp_table_ &&
@@ -975,6 +984,8 @@ int ObDbmsStatsExecutor::set_table_stats(ObExecContext &ctx,
     } else {
       LOG_TRACE("end set table stats", K(param), K(table_stat));
     }
+  }
+  if (trans.is_started()) {
     if (OB_SUCC(ret)) {
       if (OB_FAIL(trans.end(true))) {
         LOG_WARN("fail to commit transaction", K(ret));

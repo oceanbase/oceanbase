@@ -136,13 +136,15 @@ int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
     char *buf = NULL;
     int32_t buf_len = 50;//double类型一般15～16位，加上字符长度16左右，因此数组长度为50足够用
     int64_t real_len = -1;
+    const bool use_fixed_seed =
+        OB_SUCCESS != (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS);
     if (OB_ISNULL(buf = static_cast<char *>(alloc.alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), K(buf), K(buf_len));
     } else if (!block_sample) {
-      real_len = sprintf(buf, "SAMPLE (%lf)", est_percent);
+      real_len = sprintf(buf, use_fixed_seed ? "SAMPLE (%lf) SEED (0)" : "SAMPLE (%lf)", est_percent);
     } else {
-      real_len = sprintf(buf, "SAMPLE BLOCK (%lf)", est_percent);
+      real_len = sprintf(buf, use_fixed_seed ? "SAMPLE BLOCK (%lf) SEED (0)" : "SAMPLE BLOCK (%lf)", est_percent);
       is_block_sample_ = true;
     }
     if (OB_SUCC(ret)) {
