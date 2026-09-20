@@ -7,6 +7,7 @@
 #include "ob_rpc_endec.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "rpc/obrpc/ob_rpc_net_handler.h"
+#include "lib/trace/ob_trace.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -14,6 +15,169 @@ namespace oceanbase
 {
 namespace obrpc
 {
+ObRpcPreparedBody *get_proxy_reusable_body(ObRpcProxy &proxy)
+{
+  return proxy.get_reusable_body();
+}
+
+uint64_t get_proxy_tenant_id(ObRpcProxy &proxy)
+{
+  return proxy.get_tenant();
+}
+
+ObRpcPreparedBody::ObRpcPreparedBody()
+    : state_(EMPTY), data_(nullptr), size_(0), original_size_(0), payload_size_(0),
+      pcode_(OB_INVALID_RPC_CODE), tenant_id_(OB_INVALID_TENANT_ID),
+      compressor_type_(INVALID_COMPRESSOR), compressed_(false),
+      has_context_(false), disable_debugsync_(false), has_trace_info_(false)
+{
+}
+
+ObRpcPreparedBody::~ObRpcPreparedBody()
+{
+  release_buffer();
+}
+
+void ObRpcPreparedBody::release_buffer()
+{
+  if (OB_NOT_NULL(data_)) {
+    ob_free(data_);
+    data_ = nullptr;
+  }
+  size_ = 0;
+  original_size_ = 0;
+  payload_size_ = 0;
+}
+
+bool ObRpcPreparedBody::matches(ObRpcPacketCode pcode, uint64_t tenant_id,
+                                ObCompressorType compressor_type) const
+{
+  return READY == state_ && pcode_ == pcode && tenant_id_ == tenant_id
+      && compressor_type_ == compressor_type;
+}
+
+int ObRpcPreparedBody::finish_prepare(const ObRpcPacket &metadata, ObCompressor *compressor)
+{
+  int ret = OB_SUCCESS;
+  int64_t overflow_size = 0;
+  char *compressed_buf = nullptr;
+  if (OB_ISNULL(compressor)
+      && OB_FAIL(ObCompressorPool::get_instance().get_compressor(compressor_type_, compressor))) {
+    // Preserve setup failure; prepare() releases the body and disables reuse.
+  } else if (OB_ISNULL(compressor) || original_size_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(compressor->get_max_overflow_size(payload_size_, overflow_size))) {
+    // Preserve setup failure; prepare() releases the body and disables reuse.
+  } else if (overflow_size < 0 || overflow_size > INT64_MAX - payload_size_
+      || overflow_size > get_max_rpc_packet_size() - payload_size_) {
+    ret = OB_SIZE_OVERFLOW;
+  } else if (OB_ISNULL(compressed_buf = static_cast<char *>(
+               ob_malloc(payload_size_ + overflow_size, ObModIds::OB_RPC)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    int64_t compressed_size = 0;
+    payload_size_ += overflow_size;
+    const int compress_ret = compressor->compress(data_, original_size_, compressed_buf,
+                                                  payload_size_, compressed_size);
+    size_ = original_size_;
+    if (OB_SUCCESS == compress_ret && compressed_size > 0 && compressed_size < original_size_) {
+      ob_free(data_);
+      data_ = compressed_buf;
+      compressed_buf = nullptr;
+      size_ = compressed_size;
+      compressed_ = true;
+    } else if (OB_SUCCESS != compress_ret) {
+      // Preserve the serialized original body, including on all later cache hits.
+      LOG_DEBUG("compress reusable rpc body failed, use original body", K(compress_ret), K_(pcode));
+    }
+    has_context_ = metadata.has_context();
+    disable_debugsync_ = metadata.has_disable_debugsync();
+    has_trace_info_ = metadata.has_trace_info();
+  }
+  if (OB_NOT_NULL(compressed_buf)) {
+    ob_free(compressed_buf);
+    compressed_buf = nullptr;
+  }
+  return ret;
+}
+
+int ObRpcPreparedBody::fill_packet(ObRpcPacket &pkt, char *dst, int64_t capacity) const
+{
+  int ret = OB_SUCCESS;
+  if (READY != state_ || OB_ISNULL(dst) || capacity < size_ || OB_ISNULL(data_)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    MEMCPY(dst, data_, size_);
+    pkt.set_content(dst, size_);
+    pkt.set_compressor_type(compressed_ ? compressor_type_ : INVALID_COMPRESSOR);
+    pkt.set_original_len(compressed_ ? static_cast<int32_t>(original_size_) : 0);
+    // The caller supplies a fresh packet. These flags are independent.
+    if (has_context_) {
+      pkt.set_has_context();
+    }
+    if (disable_debugsync_) {
+      pkt.set_disable_debugsync();
+    }
+    if (has_trace_info_) {
+      pkt.set_has_trace_info();
+    }
+  }
+  return ret;
+}
+
+void ObRpcPreparedBody::record_packet_stat(bool count_original_on_fallback) const
+{
+  EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
+  EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, original_size_);
+  if (compressed_) {
+    EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
+  }
+  // PNIO historically does not add this counter for uncompressed fallback;
+  // easy does. Preserve each backend's existing packet/byte accounting.
+  if (compressed_ || count_original_on_fallback) {
+    EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, size_);
+  }
+}
+
+int rpc_encode_prepared_req(ObRpcProxy &proxy, uint64_t gtid, ObRpcPacketCode pcode,
+                            const ObRpcOpts &opts, const ObRpcPreparedBody &body,
+                            bool unneed_resp, char *&req, int64_t &req_sz)
+{
+  int ret = OB_SUCCESS;
+  ObRpcPacket pkt;
+  const int64_t header_size = pkt.get_header_size();
+  char *buf = nullptr;
+  req = nullptr;
+  req_sz = 0;
+  if (!body.matches(pcode, proxy.get_tenant(), proxy.get_compressor_type())) {
+    ret = OB_STATE_NOT_MATCH;
+  } else if (body.get_size() > get_max_rpc_packet_size()
+      || body.get_size() > INT64_MAX - header_size) {
+    ret = OB_RPC_PACKET_TOO_LONG;
+  } else if (OB_ISNULL(buf = static_cast<char *>(
+               pn_send_alloc(gtid, header_size + body.get_size())))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(body.fill_packet(pkt, buf + header_size, body.get_size()))) {
+    // Keep the error; the destination-specific send allocation is freed below.
+  } else {
+    int64_t pos = 0;
+    body.record_packet_stat(false /* count_original_on_fallback */);
+    if (OB_FAIL(init_packet(proxy, pkt, pcode, opts, unneed_resp))) {
+      // Keep the error; do not retry the original encoding path after preparation.
+    } else if (OB_FAIL(pkt.encode_header(buf, header_size, pos))) {
+      // Keep the error; the destination-specific send allocation is freed below.
+    } else {
+      req = buf;
+      req_sz = header_size + body.get_size();
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+    pn_send_free(buf);
+    buf = nullptr;
+  }
+  return ret;
+}
+
 int64_t calc_extra_payload_size()
 {
   int64_t payload = 0;

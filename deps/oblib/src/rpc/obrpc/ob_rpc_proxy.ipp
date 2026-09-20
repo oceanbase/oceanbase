@@ -617,16 +617,35 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
   POC_RPC_INTERCEPT(post, dst_, pcodeStruct::PCODE, args, cb, opts);
 
   ObReqTransport::Request req;
+  ObRpcPreparedBody *prepared_body = nullptr;
   int64_t pos = 0;
-  const int64_t original_len = calc_payload_size(common::serialization::encoded_length(args));
-  int64_t payload = original_len;
+  int64_t original_len = 0;
+  int64_t payload = 0;
   int64_t max_overflow_size = 0;
-
-  bool need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type_);
+  bool need_compressed = false;
   char *serialize_buf = NULL;
   common::ObCompressor *compressor = NULL;
   bool use_context = false;
   bool has_trace_info = false;
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(reusable_body_)) {
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
+    if (OB_TMP_FAIL(reusable_body_->prepare(args, pcodeStruct::PCODE,
+        tenant_id_, compressor_type_))) {
+      // Reuse is optional: preserve ret and fall back to the original encoding path.
+    } else {
+      prepared_body = reusable_body_;
+    }
+  }
+  if (OB_NOT_NULL(prepared_body)) {
+    original_len = prepared_body->get_original_size();
+    payload = prepared_body->get_size();
+  } else {
+    original_len = calc_payload_size(common::serialization::encoded_length(args));
+    payload = original_len;
+    need_compressed = ObCompressorPool::get_instance().need_common_compress(compressor_type_);
+  }
+
   if (OB_SUCC(ret) && need_compressed) {
     ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
     int64_t tmp_pos = 0;
@@ -704,42 +723,50 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
   if (OB_SUCC(ret)) {
     req.s_->is_trace_time = is_trace_time_ ? 1 : 0;
     req.s_->max_process_handler_time = max_process_handler_time_;
-    if (need_compressed) {
-      EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
-      EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, original_len);
-      int64_t dst_data_size = 0;
-      if (OB_SUCCESS != (tmp_ret = compressor->compress(serialize_buf, original_len, req.buf(), payload,
-              dst_data_size))) {
-        RPC_OBRPC_LOG(WARN, "compress failed", K(ret));
-        need_compressed = false;
-        EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
-      } else if (dst_data_size >= original_len) {
-        need_compressed = false;
-        EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
+    if (OB_NOT_NULL(prepared_body)) {
+      if (OB_FAIL(prepared_body->fill_packet(*req.pkt(), req.buf(), req.buf_len()))) {
+        RPC_OBRPC_LOG(WARN, "copy reusable rpc body failed", K(ret));
       } else {
-        req.pkt_->set_content(req.buf(), dst_data_size);
-        req.pkt_->set_compressor_type(compressor_type_);
-        req.pkt_->set_original_len(static_cast<int32_t>(original_len));
-
-        EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
-        EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
+        prepared_body->record_packet_stat();
       }
-    }
+    } else {
+      if (need_compressed) {
+        EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
+        EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, original_len);
+        int64_t dst_data_size = 0;
+        if (OB_SUCCESS != (tmp_ret = compressor->compress(serialize_buf, original_len, req.buf(), payload,
+                dst_data_size))) {
+          RPC_OBRPC_LOG(WARN, "compress failed", K(ret));
+          need_compressed = false;
+          EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
+        } else if (dst_data_size >= original_len) {
+          need_compressed = false;
+          EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
+        } else {
+          req.pkt_->set_content(req.buf(), dst_data_size);
+          req.pkt_->set_compressor_type(compressor_type_);
+          req.pkt_->set_original_len(static_cast<int32_t>(original_len));
 
-    if (!need_compressed) {
-      ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
-      if (OB_FAIL(common::serialization::encode(req.buf(), payload, pos, args))) {
-        RPC_OBRPC_LOG(WARN, "serialize argument fail", K(ret));
-      } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
-        RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
-      } else {
-        /*
-         * When compress mode is enabled here, payload value is (original_len + max_overflow_size).
-         * If the data length after data compressed is not leass than original_len, we do not
-         * use compression for this RPC packet, and the packet size should be original_len.
-         * So we do set_content with pos, instead of payload.
-         */
-        req.pkt_->set_content(req.buf(), pos);
+          EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
+          EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
+        }
+      }
+
+      if (!need_compressed) {
+        ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
+        if (OB_FAIL(common::serialization::encode(req.buf(), payload, pos, args))) {
+          RPC_OBRPC_LOG(WARN, "serialize argument fail", K(ret));
+        } else if (OB_FAIL(fill_extra_payload(req, payload, pos))) {
+          RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos), K(payload));
+        } else {
+          /*
+           * When compress mode is enabled here, payload value is (original_len + max_overflow_size).
+           * If the data length after data compressed is not leass than original_len, we do not
+           * use compression for this RPC packet, and the packet size should be original_len.
+           * So we do set_content with pos, instead of payload.
+           */
+          req.pkt_->set_content(req.buf(), pos);
+        }
       }
     }
     timeguard.click();
@@ -758,7 +785,7 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
       newcb->set_tenant_id(tenant_id_);
       newcb->set_timeout(timeout_);
       newcb->set_send_ts(start_ts);
-      newcb->set_payload(payload);
+      newcb->set_payload(OB_NOT_NULL(prepared_body) ? prepared_body->get_payload_size() : payload);
     }
     req.set_async();
     if (OB_FAIL(init_pkt(req.pkt(), pcodeStruct::PCODE, opts, NULL == cb))) {

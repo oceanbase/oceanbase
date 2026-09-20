@@ -28,6 +28,7 @@ namespace oceanbase
 namespace obrpc
 {
 class Handle;
+class ObRpcPreparedBody;
 class ObRpcProxy
 {
 public:
@@ -114,7 +115,7 @@ public:
         src_cluster_id_(common::OB_INVALID_CLUSTER_ID),
         dst_cluster_id_(common::OB_INVALID_CLUSTER_ID), init_(false),
         active_(true), is_trace_time_(false), do_ratelimit_(false),
-        do_detect_session_killed_(false), is_bg_flow_(0), rcode_() {}
+        do_detect_session_killed_(false), is_bg_flow_(0), rcode_(), reusable_body_(nullptr) {}
   virtual ~ObRpcProxy() = default;
 
   int init(const rpc::frame::ObReqTransport *transport,
@@ -142,6 +143,8 @@ public:
   void set_server(const common::ObAddr &dst) { dst_ = dst; }
   const common::ObAddr &get_server() const { return dst_; }
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
+  void set_reusable_body(ObRpcPreparedBody *body) { reusable_body_ = body; }
+  ObRpcPreparedBody *get_reusable_body() const { return reusable_body_; }
   void set_dst_cluster(int64_t dst_cluster_id) { dst_cluster_id_ = dst_cluster_id; }
   void set_transport_impl(int transport_impl) { transport_impl_ = transport_impl; }
   void set_result_code(const ObRpcResultCode &retcode) {
@@ -261,6 +264,8 @@ protected:
   bool do_detect_session_killed_;
   int8_t is_bg_flow_;
   ObRpcResultCode rcode_;
+  // Borrowed only during one synchronous fan-out; never retained by a request/callback.
+  ObRpcPreparedBody *reusable_body_;
 };
 
 class ObRpcProxy::PCodeGuard

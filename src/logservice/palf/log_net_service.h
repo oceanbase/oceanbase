@@ -274,7 +274,8 @@ public:
 public:
   template <class ReqType>
   int post_request_to_server_(const common::ObAddr &server,
-                              const ReqType &req);
+                              const ReqType &req,
+                              obrpc::ObRpcPreparedBody *prepared_body = nullptr);
   template <class ReqType, class List = common::ObMemberList>
   int post_request_to_member_list_(const List &member_list,
                                    const ReqType &req);
@@ -292,10 +293,17 @@ private:
 template <class ReqType>
 int LogNetService::post_request_to_server_(
     const common::ObAddr &server,
-    const ReqType &req)
+    const ReqType &req,
+    obrpc::ObRpcPreparedBody *prepared_body)
 {
   int ret = common::OB_SUCCESS;
-  if (OB_FAIL(log_rpc_->post_request(server, palf_id_, req))) {
+  if constexpr (std::is_same<ReqType, LogBatchPushReq>::value
+      || std::is_same<ReqType, LogBatchPushResp>::value) {
+    ret = log_rpc_->post_request(server, palf_id_, req);
+  } else {
+    ret = log_rpc_->post_request(server, palf_id_, req, prepared_body);
+  }
+  if (OB_FAIL(ret)) {
     PALF_LOG(WARN, "LogRpc post_request failed", K(ret), K(palf_id_), K(req), K(server));
   } else {
     PALF_LOG(TRACE, "post_request_to_server_ success", K(ret), K(server), K(palf_id_), K(req));
@@ -314,11 +322,19 @@ int LogNetService::post_request_to_member_list_(
   if (!req.is_valid() || !member_list.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else {
+    const bool is_batch_rpc = std::is_same<ReqType, LogBatchPushReq>::value
+        || std::is_same<ReqType, LogBatchPushResp>::value;
+    // The prepared body is shared only within this fan-out.
+    obrpc::ObRpcPreparedBody prepared_body;
+    obrpc::ObRpcPreparedBody *reusable_body = nullptr;
+    if (!is_batch_rpc && member_number > 1) {
+      reusable_body = &prepared_body;
+    }
     for (int64_t i = 0; i < member_number; i++) {
       if (OB_FAIL(member_list.get_server_by_index(i, server))) {
         PALF_LOG(WARN, "ObMemberList get_server_by_index failed", K(ret),
             K(server), K(palf_id_), K(req));
-      } else if (OB_FAIL(post_request_to_server_(server, req))) {
+      } else if (OB_FAIL(post_request_to_server_(server, req, reusable_body))) {
         // PALF_LOG(WARN, "post_request_to_server_ failed", K(ret),
         //     K(server), K(palf_id_), K(server));
       } else {
