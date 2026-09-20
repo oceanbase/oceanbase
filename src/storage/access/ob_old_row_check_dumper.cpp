@@ -100,6 +100,8 @@ int ObOldRowCheckDumper::dump_diag_tables()
     if (OB_FAIL(table_iter.get_next(table))) {
       if (OB_ITER_END != ret) {
         STORAGE_LOG(WARN, "failed to get next tables", K(ret));
+      } else {
+        ret = OB_SUCCESS;
       }
       break;
     } else if (OB_ISNULL(table)) {
