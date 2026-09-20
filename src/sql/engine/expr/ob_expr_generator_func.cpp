@@ -30,6 +30,13 @@ int ObExprGeneratorFunc::calc_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   limit.set_calc_type(ObIntType);
   type.set_int();
+  // set a known accuracy: the default-constructed accuracy keeps
+  // PRECISION_UNKNOWN_YET, which breaks decimal_int arithmetic type
+  // deduction for the COLUMN_VALUE of table(generator()), e.g.
+  // select column_value + 1 from table(generator(3)) reports -4016
+  // in oracle mode (see ObExprAdd::calc_result_type2).
+  type.set_scale(0);
+  type.set_precision(ObAccuracy::MAX_ACCURACY2[lib::is_oracle_mode()][ObIntType].get_precision());
   return ret;
 }
 
