@@ -599,7 +599,8 @@ int ObLSArchiveTask::ArchiveDest::init(const LSN &max_no_limit_lsn,
         K(tmp_tuple), K(piece), K(file_id), K(file_offset), KPC(this));
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(file_id_ref_set_.create(BUCKET_NUM, "LSArcTask", "LSArcTask"))) {
+  if (OB_SUCC(ret) && !file_id_ref_set_.created()
+      && OB_FAIL(file_id_ref_set_.create(BUCKET_NUM, "LSArcTask", "LSArcTask"))) {
     ARCHIVE_LOG(WARN, "failed to create file_id_ref_set_", K(ret), K(piece), K(file_id), K(file_offset), KPC(this));
   }
 
