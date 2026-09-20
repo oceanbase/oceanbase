@@ -16,6 +16,31 @@ using namespace common;
 namespace sql
 {
 
+static int check_contains_user_variable(const ObRawExpr *expr, bool &contains_user_variable)
+{
+  int ret = OB_SUCCESS;
+  bool is_stack_overflow = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
+    LOG_WARN("failed to check stack overflow", K(ret));
+  } else if (is_stack_overflow) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too deep recursive", K(ret));
+  } else if (T_OP_GET_USER_VAR == expr->get_expr_type()) {
+    contains_user_variable = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !contains_user_variable && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_contains_user_variable(expr->get_param_expr(i),
+                                                         contains_user_variable)))) {
+        LOG_WARN("failed to check child expr for user variable", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 bool ObRawExprTypeDemotion::type_can_demote(const ObExprResType &from, const ObExprResType &to,
                                             const bool is_range)
 {
@@ -361,9 +386,15 @@ int ObRawExprTypeDemotion::try_demote_constant_type(const ObColumnRefRawExpr &co
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *demote_cast_expr = NULL;
   ObExecContext *exec_ctx = NULL;
+  bool contains_user_variable = false;
   if (!expr_can_demote(const_value, column_ref, is_range_cmp)) {
     // The expr type or the result type of the expr does not satisfy the condition of type demotion,
     // skip to process the exprs
+  } else if (OB_FAIL(check_contains_user_variable(&const_value, contains_user_variable))) {
+    LOG_WARN("failed to check expr for user variable", K(ret));
+  } else if (contains_user_variable) {
+    // Later assignments or UDFs can make user-variable reads dynamic. Skip demotion of the
+    // enclosing expression before creating casts or range placement constraints.
   } else if (OB_ISNULL(exec_ctx = const_cast<ObExecContext *>(session_->get_cur_exec_ctx()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null argument", K(ret));
