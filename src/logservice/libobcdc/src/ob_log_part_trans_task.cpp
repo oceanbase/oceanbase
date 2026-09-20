@@ -2938,6 +2938,9 @@ PartTransTask::PartTransTask() :
     output_br_count_by_turn_(0),
     pending_lob_format_count_(0),
     tic_update_infos_(),
+    mview_mappings_(4 * sizeof(ObLogMViewInfo)),
+    mview_containers_(4 * sizeof(ObLogMViewContainerInfo)),
+    mview_tic_updates_(4 * sizeof(ObLogMViewTICInfo)),
     total_pushed_redo_log_size_(0),
     has_redo_persisted_to_storage_(false),
     working_mode_(WorkingMode::UNKNOWN_MODE),
@@ -3081,6 +3084,9 @@ void PartTransTask::reset()
   output_br_count_by_turn_ = 0;
   pending_lob_format_count_ = 0;
   tic_update_infos_.reset();
+  mview_mappings_.reset();
+  mview_containers_.reset();
+  mview_tic_updates_.reset();
   total_pushed_redo_log_size_ = 0;
   has_redo_persisted_to_storage_ = false;
   working_mode_ = WorkingMode::UNKNOWN_MODE;

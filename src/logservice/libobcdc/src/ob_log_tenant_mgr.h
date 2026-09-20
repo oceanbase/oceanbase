@@ -462,6 +462,7 @@ private:
 
   bool                enable_oracle_mode_match_case_sensitive_;
   bool                enable_white_black_list_;
+  bool                enable_output_mv_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTenantMgr);
 };

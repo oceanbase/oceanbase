@@ -16,6 +16,7 @@
 #define OCEANBASE_LIBOBCDC_OB_LOG_PART_MGR_H_
 
 #include "lib/lock/ob_thread_cond.h"            // ObThreadCond
+#include "lib/hash/ob_hashmap.h"
 #include "share/schema/ob_schema_struct.h"      // PartitionStatus
 #include "logservice/data_dictionary/ob_data_dict_struct.h"  // ObDictTableMeta
 #include "ob_log_table_id_cache.h"              // GIndexCache, TableIDCache
@@ -276,6 +277,14 @@ public:
   virtual int delete_table_id_from_cache(const uint64_t table_id) = 0;
   virtual int delete_db_from_cache(const uint64_t database_id) = 0;
   virtual int apply_exchange_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info) = 0;
+  virtual bool is_mview_output_enabled() const = 0;
+  virtual int prepare_mview_create(PartTransTask &task, const int64_t schema_version,
+      const int64_t timeout) = 0;
+  virtual int apply_mview_updates(PartTransTask &task) = 0;
+  virtual bool has_mview_mapping(const uint64_t table_id) const = 0;
+  virtual int remove_mview_mapping(const uint64_t table_id) = 0;
+  virtual int get_mview_name(const uint64_t table_id, common::ObIAllocator &allocator,
+      common::ObString &name) const = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -295,7 +304,8 @@ public:
       const int64_t start_schema_version,
       const bool enable_oracle_mode_match_case_sensitive,
       const bool enable_white_black_list,
-      GIndexCache &gi_cache);
+      GIndexCache &gi_cache,
+      const bool enable_output_mv = false);
   void reset();
   int64_t get_schema_version() const { return ATOMIC_LOAD(&cur_schema_version_); }
 
@@ -401,8 +411,35 @@ public:
   virtual int delete_table_id_from_cache(const uint64_t table_id);
   virtual int delete_db_from_cache(const uint64_t database_id);
   virtual int apply_exchange_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info);
+  bool is_mview_output_enabled() const override { return enable_output_mv_; }
+  int prepare_mview_create(PartTransTask &task, const int64_t schema_version,
+      const int64_t timeout) override;
+  int apply_mview_updates(PartTransTask &task) override;
+  bool has_mview_mapping(const uint64_t table_id) const override;
+  int remove_mview_mapping(const uint64_t table_id) override;
+  int get_mview_name(const uint64_t table_id, common::ObIAllocator &allocator,
+      common::ObString &name) const override;
 
 private:
+  typedef common::hash::ObHashMap<uint64_t, ObLogMViewInfo *,
+      common::hash::LatchReadWriteDefendMode> MViewMap;
+  template<class TABLE_SCHEMA, class SCHEMA_GUARD>
+  int collect_mview_schema_(const TABLE_SCHEMA &schema, SCHEMA_GUARD &schema_guard,
+      const int64_t timeout, common::ObIAllocator &allocator,
+      common::ObIArray<ObLogMViewInfo> &mappings,
+      common::ObIArray<ObLogMViewContainerInfo> &containers);
+  int build_mview_mappings_(const common::ObIArray<ObLogMViewInfo> &mappings,
+      const common::ObIArray<ObLogMViewContainerInfo> &containers);
+  int insert_mview_mapping_(const ObLogMViewInfo &mapping);
+  int copy_mview_mapping_(const uint64_t table_id, common::ObIAllocator &allocator,
+      ObLogMViewInfo &mapping) const;
+  int match_mview_table_(const uint64_t container_table_id, const char *tenant_name,
+      const char *database_name, const char *table_name, bool &chosen);
+  int prepare_mview_tic_(const uint64_t table_id, const uint64_t container_table_id,
+      const uint64_t database_id, const char *tenant_name, const char *database_name,
+      const char *table_name, common::ObIAllocator &allocator,
+      common::ObIArray<ObLogMViewTICInfo> &updates);
+  int apply_mview_tic_(const common::ObIArray<ObLogMViewTICInfo> &updates);
   template<class TableMeta>
   int insert_tablet_table_info_(
       TableMeta &table_meta,
@@ -583,15 +620,20 @@ private:
       const char *&db_name);
   int add_user_table_info_(ObLogSchemaGuard &schema_guard,
       const ObSimpleTableSchemaV2 *table_schema,
-      const int64_t timeout);
+      const int64_t timeout,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObLogMViewTICInfo> &mview_tic_updates);
   int add_user_table_info_(ObDictTenantInfo *tenant_info,
       const datadict::ObDictTableMeta *table_meta,
-      const int64_t timeout);
+      const int64_t timeout,
+      common::ObIAllocator &allocator,
+      common::ObIArray<ObLogMViewTICInfo> &mview_tic_updates);
   // is_user_table is for filtering not user defined table.
   // chosen is for filtering user defined table which is not in white list.
   // NOTICE: It is not enough to have chosen without is_user_able. Because outer layer will set
   // different tic update info according to chosen such as rename_table and alter_table. If there
   // is no is_user_table, outer layer will not ignore user undefined table.
+  // For MV containers, return the container ID and let the caller decide when to match.
   int table_match_(const uint64_t table_id,
       const int64_t schema_version,
       const char *&tenant_name,
@@ -600,7 +642,8 @@ private:
       bool &is_user_table,
       bool &chosen,
       uint64_t &database_id,
-      const int64_t timeout);
+      const int64_t timeout,
+      uint64_t &mview_container_id);
   int table_match_(ObLogSchemaGuard &schema_guard,
       const ObSimpleTableSchemaV2 *table_schema,
       const char *&tenant_name,
@@ -609,7 +652,8 @@ private:
       bool &is_user_table,
       bool &chosen,
       uint64_t &database_id,
-      int64_t timeout);
+      int64_t timeout,
+      uint64_t &mview_container_id);
   int table_match_(ObDictTenantInfo *tenant_info,
       const datadict::ObDictTableMeta *table_meta,
       const char *&tenant_name,
@@ -618,7 +662,8 @@ private:
       bool &is_user_table,
       bool &chosen,
       uint64_t &database_id,
-      const int64_t timeout);
+      const int64_t timeout,
+      uint64_t &mview_container_id);
   int matching_based_table_matcher_(const char *tenant_name,
       const char *database_name,
       const char *table_name,
@@ -636,7 +681,8 @@ private:
       const char *&table_name,
       uint64_t &database_id,
       bool &is_user_table,
-      const int64_t timeout);
+      const int64_t timeout,
+      uint64_t &mview_container_id);
   // For optimization, table_match is not required in drop_table scenario
   int get_schema_info_of_table_id_(const uint64_t table_id,
       const int64_t schema_version,
@@ -656,7 +702,8 @@ private:
       const char *&table_name,
       uint64_t &database_id,
       bool &is_user_table,
-      const int64_t timeout);
+      const int64_t timeout,
+      uint64_t &mview_container_id);
   int get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
       const datadict::ObDictTableMeta *table_meta,
       const char *&tenant_name,
@@ -664,7 +711,8 @@ private:
       const char *&table_name,
       uint64_t &database_id,
       bool &is_user_table,
-      const int64_t timeout);
+      const int64_t timeout,
+      uint64_t &mview_container_id);
   int inner_get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard,
       const ObSimpleTableSchemaV2 *table_schema,
       const char *&tenant_name,
@@ -696,6 +744,8 @@ private:
   GIndexCache        *global_normal_index_table_cache_; // global normal index cache
   TabletToTableInfo  tablet_to_table_info_; // TabletID->TableID
   TableIDCache       table_id_cache_;
+  MViewMap          mv_container_map_;
+  bool              mview_map_ready_;
 
   int64_t            cur_schema_version_ CACHE_ALIGNED;
 
@@ -703,6 +753,7 @@ private:
   bool               enable_oracle_mode_match_case_sensitive_;
   bool               enable_check_schema_version_;
   bool               enable_white_black_list_;
+  bool               enable_output_mv_;
   int                fnmatch_flags_;
 
   // Conditional

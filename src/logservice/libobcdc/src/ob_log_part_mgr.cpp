@@ -16,6 +16,7 @@
 
 
 #include "ob_log_part_mgr.h"
+#include "common/data_buffer.h"
 #include "lib/container/ob_se_array.h"                 // ObSEArray
 #include "share/schema/ob_schema_struct.h"            // USER_TABLE
 #include "share/inner_table/ob_inner_table_schema.h"  // OB_ALL_DDL_OPERATION_TID
@@ -70,7 +71,8 @@ using namespace share::schema;
 
 namespace libobcdc
 {
-ObLogPartMgr::ObLogPartMgr(ObLogTenant &tenant) : host_(tenant), table_id_cache_()
+ObLogPartMgr::ObLogPartMgr(ObLogTenant &tenant)
+    : host_(tenant), table_id_cache_(), mv_container_map_(), mview_map_ready_(false)
 {
   reset();
 }
@@ -84,7 +86,8 @@ int ObLogPartMgr::init(const uint64_t tenant_id,
     const int64_t start_schema_version,
     const bool enable_oracle_mode_match_case_sensitive,
     const bool enable_white_black_list,
-    GIndexCache &gi_cache)
+    GIndexCache &gi_cache,
+    const bool enable_output_mv)
 {
   int ret = OB_SUCCESS;
 
@@ -98,6 +101,8 @@ int ObLogPartMgr::init(const uint64_t tenant_id,
     LOG_ERROR("init tablet_to_table_info fail", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_id_cache_.init(ObModIds::OB_LOG_TABLE_ID_CACHE))) {
     LOG_ERROR("table id cache init fail", KR(ret));
+  } else if (OB_FAIL(mv_container_map_.create(1024, "CDCMView"))) {
+    LOG_ERROR("initialize materialized view map failed", KR(ret));
   } else {
     tenant_id_ = tenant_id;
     global_normal_index_table_cache_ = &gi_cache;
@@ -105,6 +110,7 @@ int ObLogPartMgr::init(const uint64_t tenant_id,
     enable_oracle_mode_match_case_sensitive_ = enable_oracle_mode_match_case_sensitive;
     enable_check_schema_version_ = false;
     enable_white_black_list_ = enable_white_black_list;
+    enable_output_mv_ = enable_output_mv;
     if (host_.get_compat_mode() == lib::Worker::CompatMode::ORACLE
         && enable_oracle_mode_match_case_sensitive_) {
       fnmatch_flags_ = FNM_NOESCAPE;
@@ -125,10 +131,23 @@ void ObLogPartMgr::reset()
   global_normal_index_table_cache_ = NULL;
   tablet_to_table_info_.destroy();
   table_id_cache_.destroy();
+  if (mv_container_map_.created()) {
+    for (MViewMap::iterator iter = mv_container_map_.begin(); iter != mv_container_map_.end(); ++iter) {
+      ObLogMViewInfo *mapping = iter->second;
+      if (nullptr != mapping) {
+        mapping->~ObLogMViewInfo();
+        ob_free(mapping);
+        mapping = nullptr;
+      }
+    }
+    mv_container_map_.destroy();
+  }
+  ATOMIC_STORE(&mview_map_ready_, false);
   cur_schema_version_ = OB_INVALID_VERSION;
   enable_oracle_mode_match_case_sensitive_ = false;
   enable_check_schema_version_ = false;
   enable_white_black_list_ = true;
+  enable_output_mv_ = false;
   fnmatch_flags_ = FNM_CASEFOLD;
   schema_cond_.destroy();
 }
@@ -136,6 +155,10 @@ void ObLogPartMgr::reset()
 int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator mview_allocator(ObModIds::OB_LOG_TEMP_MEMORY);
+  ObArray<ObLogMViewInfo> mview_mappings;
+  ObArray<ObLogMViewContainerInfo> mview_containers;
+  ObArray<ObLogMViewTICInfo> mview_tic_updates;
   int64_t start_ts = ObClockGenerator::getClock();
   IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
   ObLogSchemaGuard schema_guard;
@@ -204,8 +227,14 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
         }
       }
 
-      if (OB_SUCC(ret) && enable_white_black_list_ && OB_FAIL(add_user_table_info_(schema_guard,
-          table_schema, timeout))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(collect_mview_schema_(*table_schema, schema_guard, timeout, mview_allocator,
+          mview_mappings, mview_containers))) {
+        LOG_ERROR("collect baseline materialized view schema failed", KR(ret));
+      } else if ((enable_white_black_list_ || !enable_output_mv_)
+          && OB_FAIL(add_user_table_info_(schema_guard,
+          table_schema, timeout, mview_allocator, mview_tic_updates))) {
         if (OB_TIMEOUT != ret) {
           LOG_ERROR("add_user_table_info failed", KR(ret), K_(tenant_id), KPC(table_schema));
         }
@@ -213,6 +242,16 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
         if (OB_TIMEOUT != ret) {
           LOG_WARN("add_hbase_table fail", KR(ret));
         }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(build_mview_mappings_(mview_mappings, mview_containers))) {
+        LOG_ERROR("build baseline materialized view mappings failed", KR(ret));
+      } else if (OB_FAIL(apply_mview_tic_(mview_tic_updates))) {
+        LOG_ERROR("apply baseline materialized view table matching failed", KR(ret));
+      } else {
+        ATOMIC_STORE(&mview_map_ready_, true);
       }
     }
 
@@ -231,8 +270,12 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(
     const int64_t timeout)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator mview_allocator(ObModIds::OB_LOG_TEMP_MEMORY);
+  ObArray<ObLogMViewInfo> mview_mappings;
+  ObArray<ObLogMViewContainerInfo> mview_containers;
+  ObArray<ObLogMViewTICInfo> mview_tic_updates;
   int64_t start_ts = ObClockGenerator::getClock();
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_)) {
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id_) || OB_ISNULL(tenant_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K_(tenant_id));
   } else {
@@ -251,8 +294,14 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(
         }
       }
 
-      if (OB_SUCC(ret) && enable_white_black_list_ && OB_FAIL(add_user_table_info_(tenant_info,
-          table_meta, timeout))) {
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (OB_FAIL(collect_mview_schema_(*table_meta, *tenant_info, timeout, mview_allocator,
+          mview_mappings, mview_containers))) {
+        LOG_ERROR("collect baseline materialized view schema failed", KR(ret));
+      } else if ((enable_white_black_list_ || !enable_output_mv_)
+          && OB_FAIL(add_user_table_info_(tenant_info,
+          table_meta, timeout, mview_allocator, mview_tic_updates))) {
         if (OB_TIMEOUT != ret) {
           LOG_ERROR("add_user_table_info failed", KR(ret), K_(tenant_id), KPC(table_meta));
         }
@@ -263,10 +312,386 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(build_mview_mappings_(mview_mappings, mview_containers))) {
+        LOG_ERROR("build baseline materialized view mappings failed", KR(ret));
+      } else if (OB_FAIL(apply_mview_tic_(mview_tic_updates))) {
+        LOG_ERROR("apply baseline materialized view table matching failed", KR(ret));
+      } else {
+        ATOMIC_STORE(&mview_map_ready_, true);
+      }
+    }
+
     int64_t execute_ts = ObClockGenerator::getClock() - start_ts;
     ISTAT("[ADD_ALL_USER_TABLES_AND_TABLES_INFO]", KR(ret), K_(tenant_id), K_(cur_schema_version),
         K_(tablet_to_table_info), "TableSchemaCount", table_metas.count(),
         "AddTableCount", table_id_cache_.count(), K(execute_ts));
+  }
+  return ret;
+}
+
+template<class TABLE_SCHEMA, class SCHEMA_GUARD>
+int ObLogPartMgr::collect_mview_schema_(const TABLE_SCHEMA &schema,
+    SCHEMA_GUARD &schema_guard, const int64_t timeout,
+    ObIAllocator &allocator, ObIArray<ObLogMViewInfo> &mappings,
+    ObIArray<ObLogMViewContainerInfo> &containers)
+{
+  int ret = OB_SUCCESS;
+  const TABLE_SCHEMA *related_schema = nullptr;
+  if (schema.is_materialized_view()) {
+    ObLogMViewInfo mapping;
+    mapping.container_table_id_ = schema.get_data_table_id();
+    mapping.mview_id_ = schema.get_table_id();
+    mapping.mapping_state_ = ObLogMViewInfo::MAPPED;
+    if (OB_INVALID_ID == mapping.container_table_id_ || 0 == mapping.container_table_id_
+        || OB_INVALID_ID == mapping.mview_id_ || 0 == mapping.mview_id_
+        || schema.get_table_name_str().empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid materialized view schema", KR(ret), K(schema));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, mapping.container_table_id_,
+        related_schema, timeout))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("get materialized view container schema failed", KR(ret), K(mapping));
+      }
+    } else if (nullptr == related_schema || !related_schema->is_user_table()
+        || !related_schema->is_mv_container_table()) {
+    } else if (OB_FAIL(ob_write_string(allocator, schema.get_table_name_str(), mapping.mview_name_, true))) {
+      LOG_ERROR("copy materialized view name failed", KR(ret));
+    } else if (OB_FAIL(mappings.push_back(mapping))) {
+      LOG_ERROR("collect materialized view mapping failed", KR(ret), K(mapping));
+    }
+  } else if (schema.is_user_table() && schema.is_mv_container_table()) {
+    ObLogMViewContainerInfo container;
+    container.container_table_id_ = schema.get_table_id();
+    if (schema.is_user_hidden_table()) {
+      container.association_table_id_ = schema.get_association_table_id();
+      if (container.has_association()) {
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, container.association_table_id_,
+            related_schema, timeout))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_ERROR("get hidden materialized view origin schema failed", KR(ret), K(container));
+          }
+        } else if (nullptr != related_schema && related_schema->is_user_hidden_table()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("the origin of a hidden materialized view container cannot be hidden",
+              KR(ret), K(container), KPC(related_schema));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(containers.push_back(container))) {
+      LOG_ERROR("collect materialized view container failed", KR(ret), K(container));
+    }
+  }
+  return ret;
+}
+
+int ObLogPartMgr::copy_mview_mapping_(const uint64_t table_id, ObIAllocator &allocator,
+    ObLogMViewInfo &mapping) const
+{
+  struct CopyMapping
+  {
+    CopyMapping(ObIAllocator &allocator, ObLogMViewInfo &mapping)
+        : allocator_(allocator), mapping_(mapping), ret_(OB_SUCCESS) {}
+    void operator()(const hash::HashMapPair<uint64_t, ObLogMViewInfo *> &entry)
+    {
+      int &ret = ret_;
+      const ObLogMViewInfo *cached = entry.second;
+      if (OB_ISNULL(cached)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else {
+        mapping_ = *cached;
+        mapping_.mview_name_.reset();
+        if (OB_FAIL(ob_write_string(allocator_, cached->mview_name_, mapping_.mview_name_, true))) {
+          LOG_ERROR("copy cached materialized view name failed", KR(ret), "table_id", entry.first);
+        }
+      }
+    }
+    ObIAllocator &allocator_;
+    ObLogMViewInfo &mapping_;
+    int ret_;
+  };
+  int ret = OB_SUCCESS;
+  CopyMapping copy_mapping(allocator, mapping);
+  if (OB_FAIL(const_cast<MViewMap &>(mv_container_map_).read_atomic(table_id, copy_mapping))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+    }
+  } else {
+    ret = copy_mapping.ret_;
+  }
+  return ret;
+}
+
+int ObLogPartMgr::get_mview_name(const uint64_t table_id, ObIAllocator &allocator,
+    ObString &name) const
+{
+  int ret = OB_SUCCESS;
+  ObLogMViewInfo mapping;
+  name.reset();
+  if (!ATOMIC_LOAD(&mview_map_ready_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(copy_mview_mapping_(table_id, allocator, mapping))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_ERR_UNEXPECTED;
+    }
+    LOG_ERROR("materialized view mapping is not ready", KR(ret), K(table_id));
+  } else if (mapping.is_mapped()) {
+    name = mapping.mview_name_;
+  }
+  return ret;
+}
+
+bool ObLogPartMgr::has_mview_mapping(const uint64_t table_id) const
+{
+  ObLogMViewInfo *mapping = nullptr;
+  return OB_SUCCESS == mv_container_map_.get_refactored(table_id, mapping);
+}
+
+int ObLogPartMgr::insert_mview_mapping_(const ObLogMViewInfo &mapping)
+{
+  struct CheckMapping
+  {
+    explicit CheckMapping(const ObLogMViewInfo &mapping)
+        : mapping_(mapping), exists_(false), ret_(OB_SUCCESS) {}
+    void operator()(const hash::HashMapPair<uint64_t, ObLogMViewInfo *> &entry)
+    {
+      int &ret = ret_;
+      const ObLogMViewInfo *cached = entry.second;
+      exists_ = true;
+      if (OB_ISNULL(cached) || cached->mview_id_ != mapping_.mview_id_
+          || cached->mapping_state_ != mapping_.mapping_state_
+          || cached->mview_name_ != mapping_.mview_name_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("conflicting materialized view container mapping", KR(ret), K_(mapping), KPC(cached));
+      }
+    }
+    const ObLogMViewInfo &mapping_;
+    bool exists_;
+    int ret_;
+  };
+  int ret = OB_SUCCESS;
+  ObLogMViewInfo *cached = nullptr;
+  CheckMapping check_mapping(mapping);
+  if (OB_INVALID_ID == mapping.container_table_id_ || 0 == mapping.container_table_id_
+      || (mapping.is_mapped()
+          && (mapping.mview_name_.empty() || OB_INVALID_ID == mapping.mview_id_ || 0 == mapping.mview_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_SUCCESS == (ret = mv_container_map_.read_atomic(mapping.container_table_id_, check_mapping))) {
+    ret = check_mapping.ret_;
+  } else if (OB_HASH_NOT_EXIST == ret) {
+    ret = OB_SUCCESS;
+    const int64_t name_length = mapping.mview_name_.length();
+    void *buf = ob_malloc(sizeof(ObLogMViewInfo) + name_length + 1, ObModIds::OB_LOG_TEMP_MEMORY);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      cached = new (buf) ObLogMViewInfo();
+      *cached = mapping;
+      char *name = reinterpret_cast<char *>(cached + 1);
+      if (name_length > 0) {
+        MEMCPY(name, mapping.mview_name_.ptr(), name_length);
+      }
+      name[name_length] = '\0';
+      cached->mview_name_.assign_ptr(name, name_length);
+      ret = mv_container_map_.set_or_update(mapping.container_table_id_, cached, check_mapping);
+      if (OB_SUCC(ret)) {
+        ret = check_mapping.ret_;
+      }
+      if (OB_SUCCESS != ret || check_mapping.exists_) {
+        cached->~ObLogMViewInfo();
+        ob_free(cached);
+        cached = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPartMgr::remove_mview_mapping(const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObLogMViewInfo *mapping = nullptr;
+  if (OB_FAIL(mv_container_map_.erase_refactored(table_id, &mapping))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_NOT_NULL(mapping)) {
+    mapping->~ObLogMViewInfo();
+    ob_free(mapping);
+    mapping = nullptr;
+  }
+  return ret;
+}
+
+int ObLogPartMgr::build_mview_mappings_(const ObIArray<ObLogMViewInfo> &mappings,
+    const ObIArray<ObLogMViewContainerInfo> &containers)
+{
+  int ret = OB_SUCCESS;
+  char name_buf[OB_MAX_TABLE_NAME_BINARY_LENGTH + 1];
+  ObDataBuffer allocator(name_buf, sizeof(name_buf));
+  ObLogMViewInfo mapping;
+  // Container existence was checked against the corresponding schema while collecting.
+  for (int64_t i = 0; OB_SUCC(ret) && i < mappings.count(); ++i) {
+    if (OB_FAIL(insert_mview_mapping_(mappings.at(i)))) {
+      LOG_ERROR("publish materialized view mapping failed", KR(ret), K(mappings.at(i)));
+    }
+  }
+  // All direct mappings are ready; resolve hidden containers and compatibility entries.
+  for (int64_t i = 0; OB_SUCC(ret) && i < containers.count(); ++i) {
+    const ObLogMViewContainerInfo &container = containers.at(i);
+    if (!has_mview_mapping(container.container_table_id_)) {
+      mapping.reset();
+      allocator.get_position() = 0;
+      if (container.has_association()) {
+        if (OB_FAIL(copy_mview_mapping_(container.association_table_id_, allocator, mapping))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_ERROR("get hidden materialized view origin mapping failed", KR(ret), K(container));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        mapping.container_table_id_ = container.container_table_id_;
+        if (OB_FAIL(insert_mview_mapping_(mapping))) {
+          LOG_ERROR("publish materialized view container mapping failed", KR(ret), K(mapping));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPartMgr::prepare_mview_create(PartTransTask &task,
+    const int64_t schema_version, const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_LOG_TEMP_MEMORY);
+  ObArray<ObLogMViewInfo> &mappings = task.get_mview_mappings();
+  ObArray<ObLogMViewContainerInfo> &containers = task.get_mview_containers();
+  mappings.reuse();
+  containers.reuse();
+  for (IStmtTask *stmt = task.get_stmt_list().head_; OB_SUCC(ret) && nullptr != stmt; stmt = stmt->get_next()) {
+    if (!stmt->is_ddl_stmt()) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      const DdlStmtTask &ddl_stmt = *static_cast<DdlStmtTask *>(stmt);
+      const ObSchemaOperationType op_type = static_cast<ObSchemaOperationType>(ddl_stmt.get_operation_type());
+      if ((OB_DDL_CREATE_VIEW != op_type && OB_DDL_CREATE_TABLE != op_type)
+          || is_inner_object_id(ddl_stmt.get_op_table_id())) {
+      } else if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+        ObLogSchemaGuard schema_guard;
+        const ObSimpleTableSchemaV2 *schema = nullptr;
+        if (OB_FAIL(get_schema_guard_and_table_schema_(ddl_stmt.get_op_table_id(), schema_version,
+            timeout, schema_guard, schema))) {
+          LOG_ERROR("get created schema for materialized view mapping failed", KR(ret), K(ddl_stmt));
+        } else if (OB_ISNULL(schema)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(collect_mview_schema_(*schema, schema_guard, timeout, allocator, mappings, containers))) {
+          LOG_ERROR("prepare online materialized view mapping failed", KR(ret), K(ddl_stmt));
+        }
+      } else {
+        ObDictTenantInfoGuard guard;
+        ObDictTenantInfo *tenant_info = nullptr;
+        datadict::ObDictTableMeta *schema = nullptr;
+        if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id_, guard))) {
+          LOG_ERROR("get dictionary tenant failed", KR(ret));
+        } else if (OB_ISNULL(tenant_info = guard.get_tenant_info())) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_ENTRY_NOT_EXIST == (ret = tenant_info->get_table_meta(ddl_stmt.get_op_table_id(), schema))
+            && OB_DDL_CREATE_VIEW == op_type) {
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(ret)) {
+          LOG_ERROR("get created dictionary schema failed", KR(ret), K(ddl_stmt));
+        } else if (OB_ISNULL(schema)) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(collect_mview_schema_(*schema, *tenant_info, timeout, allocator, mappings, containers))) {
+          LOG_ERROR("prepare dictionary materialized view mapping failed", KR(ret), K(ddl_stmt));
+        }
+      }
+    }
+  }
+  // A schema timeout retries the batch; retain names in the task allocator only after all lookups succeed.
+  ObString retained_name;
+  for (int64_t i = 0; OB_SUCC(ret) && i < mappings.count(); ++i) {
+    ObLogMViewInfo &mapping = mappings.at(i);
+    if (OB_FAIL(ob_write_string(task.get_allocator(), mapping.mview_name_, retained_name, true))) {
+      LOG_ERROR("retain prepared materialized view name failed", KR(ret), K(mapping));
+    } else {
+      mapping.mview_name_ = retained_name;
+    }
+  }
+  if (OB_SUCCESS != ret) {
+    mappings.reuse();
+    containers.reuse();
+  }
+  return ret;
+}
+
+int ObLogPartMgr::match_mview_table_(const uint64_t container_table_id,
+    const char *tenant_name, const char *database_name, const char *table_name, bool &chosen)
+{
+  int ret = OB_SUCCESS;
+  char name_buf[OB_MAX_TABLE_NAME_BINARY_LENGTH + 1];
+  ObDataBuffer allocator(name_buf, sizeof(name_buf));
+  ObLogMViewInfo mapping;
+  chosen = false;
+  if (!enable_output_mv_) {
+  } else if (OB_FAIL(copy_mview_mapping_(container_table_id, allocator, mapping))) {
+    LOG_ERROR("materialized view mapping missing during table matching", KR(ret), K(container_table_id));
+  } else if (OB_FAIL(matching_based_table_matcher_(tenant_name, database_name,
+      mapping.is_mapped() ? mapping.mview_name_.ptr() : table_name, chosen))) {
+    LOG_ERROR("match materialized view name failed", KR(ret), K(mapping));
+  }
+  return ret;
+}
+
+int ObLogPartMgr::prepare_mview_tic_(const uint64_t table_id, const uint64_t container_table_id,
+    const uint64_t database_id, const char *tenant_name, const char *database_name,
+    const char *table_name, ObIAllocator &allocator, ObIArray<ObLogMViewTICInfo> &updates)
+{
+  int ret = OB_SUCCESS;
+  ObLogMViewTICInfo update;
+  update.table_id_ = table_id;
+  update.container_table_id_ = container_table_id;
+  update.database_id_ = database_id;
+  if (!enable_output_mv_) {
+  } else if (OB_FAIL(ob_write_string(allocator, ObString(tenant_name), update.tenant_name_, true))
+      || OB_FAIL(ob_write_string(allocator, ObString(database_name), update.database_name_, true))
+      || OB_FAIL(ob_write_string(allocator, ObString(table_name), update.table_name_, true))
+      || OB_FAIL(updates.push_back(update))) {
+    LOG_ERROR("prepare materialized view table matching failed", KR(ret), K(table_id), K(container_table_id));
+  }
+  return ret;
+}
+
+int ObLogPartMgr::apply_mview_tic_(const ObIArray<ObLogMViewTICInfo> &updates)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < updates.count(); ++i) {
+    const ObLogMViewTICInfo &update = updates.at(i);
+    bool chosen = false;
+    if (OB_FAIL(match_mview_table_(update.container_table_id_, update.tenant_name_.ptr(),
+        update.database_name_.ptr(), update.table_name_.ptr(), chosen))) {
+      LOG_ERROR("match pending materialized view failed", KR(ret), K(update));
+    } else if (chosen && OB_FAIL(insert_table_id_into_cache(update.table_id_, update.database_id_))) {
+      LOG_ERROR("add materialized view physical table to TIC failed", KR(ret), K(update));
+    }
+  }
+  return ret;
+}
+
+int ObLogPartMgr::apply_mview_updates(PartTransTask &task)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(build_mview_mappings_(task.get_mview_mappings(), task.get_mview_containers()))) {
+    LOG_ERROR("build created materialized view mappings failed", KR(ret));
+  } else if (OB_FAIL(apply_mview_tic_(task.get_mview_tic_updates()))) {
+    LOG_ERROR("apply materialized view table matching failed", KR(ret));
   }
   return ret;
 }
@@ -415,11 +840,28 @@ int ObLogPartMgr::add_table(const uint64_t table_id,
   const char *table_name = nullptr;
   bool is_user_table = false;
   bool chosen = false;
+  uint64_t mview_container_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   if (OB_FAIL(table_match_(table_id, new_schema_version, tenant_name, database_name, table_name,
-      is_user_table, chosen, database_id, timeout))) {
+      is_user_table, chosen, database_id, timeout, mview_container_id))) {
     LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
   } else if (!is_user_table) {
+  } else if (OB_INVALID_ID != mview_container_id) {
+    PartTransTask &task = ddl_stmt.get_host();
+    ObSEArray<uint64_t, 2> aux_table_ids;
+    if (enable_output_mv_ && table_id == mview_container_id
+        && OB_FAIL(collect_lob_aux_tic_table_ids_(table_id, new_schema_version, timeout, aux_table_ids))) {
+      LOG_ERROR("collect materialized view LOB tables failed", KR(ret), K(table_id));
+    } else if (OB_FAIL(prepare_mview_tic_(table_id, mview_container_id, database_id,
+        tenant_name, database_name, table_name, task.get_allocator(), task.get_mview_tic_updates()))) {
+      LOG_ERROR("prepare created materialized view matching failed", KR(ret), K(table_id));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_ids.count(); ++i) {
+      if (OB_FAIL(prepare_mview_tic_(aux_table_ids.at(i), mview_container_id, database_id,
+          tenant_name, database_name, table_name, task.get_allocator(), task.get_mview_tic_updates()))) {
+        LOG_ERROR("prepare materialized view LOB table matching failed", KR(ret), K(table_id));
+      }
+    }
   } else if (!chosen) {
     ISTAT("table is not chosen", K(new_schema_version), K(table_id), K(tenant_name),
         K(database_name), K(table_name));
@@ -814,11 +1256,12 @@ int ObLogPartMgr::alter_table(const uint64_t table_id,
   const char *table_name = nullptr;
   bool is_user_table = false;
   bool chosen = false;
+  uint64_t mview_container_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   if (OB_FAIL(table_match_(table_id, new_schema_version, tenant_name, database_name,
-      table_name, is_user_table, chosen, database_id, timeout))) {
+      table_name, is_user_table, chosen, database_id, timeout, mview_container_id))) {
     LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
-  } else if (!is_user_table) {
+  } else if (!is_user_table || OB_INVALID_ID != mview_container_id) {
   } else {
     const TICUpdateInfo::TICUpdateReason update_reason = chosen
         ? TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD
@@ -931,11 +1374,15 @@ int ObLogPartMgr::rename_table(const uint64_t table_id,
   const char *table_name = nullptr;
   bool is_user_table = false;
   bool chosen = false;
+  uint64_t mview_container_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   if (OB_FAIL(table_match_(table_id, new_schema_version, tenant_name, database_name,
-      table_name, is_user_table, chosen, database_id, timeout))) {
+      table_name, is_user_table, chosen, database_id, timeout, mview_container_id))) {
     LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
   } else if (!is_user_table) {
+  } else if (OB_INVALID_ID != mview_container_id
+      && OB_FAIL(match_mview_table_(mview_container_id, tenant_name, database_name, table_name, chosen))) {
+    LOG_ERROR("match materialized view failed", KR(ret), K(mview_container_id));
   } else {
     const TICUpdateInfo::TICUpdateReason update_reason = chosen
         ? TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD
@@ -1098,11 +1545,15 @@ int ObLogPartMgr::recover_table_end(const uint64_t table_id,
   const char *table_name = nullptr;
   bool is_user_table = false;
   bool chosen = false;
+  uint64_t mview_container_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   if (OB_FAIL(table_match_(table_id, new_schema_version, tenant_name, database_name,
-      table_name, is_user_table, chosen, database_id, timeout))) {
+      table_name, is_user_table, chosen, database_id, timeout, mview_container_id))) {
     LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
   } else if (!is_user_table) {
+  } else if (OB_INVALID_ID != mview_container_id
+      && OB_FAIL(match_mview_table_(mview_container_id, tenant_name, database_name, table_name, chosen))) {
+    LOG_ERROR("match materialized view failed", KR(ret), K(mview_container_id));
   } else if (!chosen) {
     ISTAT("table is not chosen", K(new_schema_version), K(table_id), K(tenant_name),
         K(database_name), K(table_name));
@@ -1504,7 +1955,7 @@ int ObLogPartMgr::is_exist_table_id_cache(const uint64_t table_id,
     bool &is_exist)
 {
   int ret = OB_SUCCESS;
-  if (!enable_white_black_list_) {
+  if (!enable_white_black_list_ && enable_output_mv_) {
     is_exist = true;
   } else {
     const bool is_global_normal_index = false;
@@ -1889,7 +2340,9 @@ int ObLogPartMgr::get_schema_guard_and_schemas_(const uint64_t table_id,
 
 int ObLogPartMgr::add_user_table_info_(ObLogSchemaGuard &schema_guard,
     const ObSimpleTableSchemaV2 *table_schema,
-    const int64_t timeout)
+    const int64_t timeout,
+    ObIAllocator &allocator,
+    ObIArray<ObLogMViewTICInfo> &mview_tic_updates)
 {
   int ret = OB_SUCCESS;
   // add all user tables info
@@ -1898,15 +2351,21 @@ int ObLogPartMgr::add_user_table_info_(ObLogSchemaGuard &schema_guard,
   const char *table_name = nullptr;
   bool is_user_table = false;
   bool chosen = false;
+  uint64_t mview_container_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table_schema is NULL", KR(ret), K_(tenant_id), K_(cur_schema_version));
   } else if (OB_FAIL(table_match_(schema_guard, table_schema, tenant_name, database_name,
-      table_name, is_user_table, chosen, database_id, timeout))) {
+      table_name, is_user_table, chosen, database_id, timeout, mview_container_id))) {
     LOG_ERROR("table_match_ failed", KR(ret), K_(tenant_id), K(tenant_name),
         K(database_name), K(table_name));
   } else if (!is_user_table) {
+  } else if (OB_INVALID_ID != mview_container_id) {
+    if (OB_FAIL(prepare_mview_tic_(table_schema->get_table_id(), mview_container_id, database_id,
+        tenant_name, database_name, table_name, allocator, mview_tic_updates))) {
+      LOG_ERROR("prepare baseline materialized view matching failed", KR(ret));
+    }
   } else if (!chosen) {
     ISTAT("table is not chosen", K_(tenant_id), K(tenant_name), K(database_name),
         K(table_name));
@@ -1926,7 +2385,9 @@ int ObLogPartMgr::add_user_table_info_(ObLogSchemaGuard &schema_guard,
 
 int ObLogPartMgr::add_user_table_info_(ObDictTenantInfo *tenant_info,
     const datadict::ObDictTableMeta *table_meta,
-    const int64_t timeout)
+    const int64_t timeout,
+    ObIAllocator &allocator,
+    ObIArray<ObLogMViewTICInfo> &mview_tic_updates)
 {
   int ret = OB_SUCCESS;
   // add all user tables info
@@ -1935,15 +2396,21 @@ int ObLogPartMgr::add_user_table_info_(ObDictTenantInfo *tenant_info,
   const char *table_name = nullptr;
   bool is_user_table = false;
   bool chosen = false;
+  uint64_t mview_container_id = OB_INVALID_ID;
   uint64_t database_id = OB_INVALID_ID;
   if (OB_ISNULL(table_meta)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table_schema is NULL", KR(ret), K_(tenant_id), K_(cur_schema_version));
   } else if (OB_FAIL(table_match_(tenant_info, table_meta, tenant_name, database_name,
-      table_name, is_user_table, chosen, database_id, timeout))) {
+      table_name, is_user_table, chosen, database_id, timeout, mview_container_id))) {
     LOG_ERROR("table_match_ failed", KR(ret), K_(tenant_id), K(tenant_name),
         K(database_name), K(table_name));
   } else if (!is_user_table) {
+  } else if (OB_INVALID_ID != mview_container_id) {
+    if (OB_FAIL(prepare_mview_tic_(table_meta->get_table_id(), mview_container_id, database_id,
+        tenant_name, database_name, table_name, allocator, mview_tic_updates))) {
+      LOG_ERROR("prepare baseline materialized view matching failed", KR(ret));
+    }
   } else if (!chosen) {
     ISTAT("table is not chosen", K_(tenant_id), K(tenant_name), K(database_name),
         K(table_name));
@@ -2381,17 +2848,24 @@ int ObLogPartMgr::table_match_(const uint64_t table_id,
     bool &is_user_table,
     bool &chosen,
     uint64_t &database_id,
-    const int64_t timeout)
+    const int64_t timeout,
+    uint64_t &mview_container_id)
 {
   int ret = OB_SUCCESS;
+  chosen = false;
+  mview_container_id = OB_INVALID_ID;
   if (OB_FAIL(get_table_info_of_table_id_(table_id, schema_version,
-      tenant_name, database_name, table_name, database_id, is_user_table, timeout))) {
+      tenant_name, database_name, table_name, database_id, is_user_table, timeout, mview_container_id))) {
     if (OB_TIMEOUT != ret) {
       LOG_ERROR("get_table_info_of_table_id_ failed", KR(ret), K(schema_version), K(table_id));
     }
   } else if (!is_user_table) {
     LOG_INFO("table is not user defined", K(schema_version), K(table_id), K(tenant_name),
         K(database_name), K(table_name), K(chosen));
+  } else if (OB_INVALID_ID != mview_container_id) {
+    //对于物化视图类型，我们必须要延后匹配，因为物化视图采集的table id是容器表，但是配置的物化视图table id
+    //依赖mv_container_map_做一个映射，这个映射是先收集信息，然后在sequencer当中应用的，所以只能先收集信息
+    //然后等sequencer当中应用完成后才能确定是否匹配
   } else if (OB_FAIL(matching_based_table_matcher_(tenant_name, database_name, table_name, chosen))) {
     LOG_ERROR("matching_based_table_matcher_ failed", KR(ret), K(schema_version), K(table_id),
         K(tenant_name), K(database_name), K(table_name));
@@ -2410,17 +2884,21 @@ int ObLogPartMgr::table_match_(ObLogSchemaGuard &schema_guard,
     bool &is_user_table,
     bool &chosen,
     uint64_t &database_id,
-    const int64_t timeout)
+    const int64_t timeout,
+    uint64_t &mview_container_id)
 {
   int ret = OB_SUCCESS;
+  chosen = false;
+  mview_container_id = OB_INVALID_ID;
   if (OB_FAIL(get_table_info_of_table_schema_(schema_guard, table_schema,
-      tenant_name, database_name, table_name, database_id, is_user_table, timeout))) {
+      tenant_name, database_name, table_name, database_id, is_user_table, timeout, mview_container_id))) {
     if (OB_TIMEOUT != ret) {
       LOG_ERROR("get_table_info_of_table_schema failed", KR(ret));
     }
   } else if (!is_user_table) {
     LOG_INFO("table is not user defined", K(tenant_name), K(database_name), K(table_name),
         K(chosen));
+  } else if (OB_INVALID_ID != mview_container_id) {
   } else if (OB_FAIL(matching_based_table_matcher_(tenant_name, database_name, table_name, chosen))) {
     LOG_ERROR("matching_based_table_matcher_ failed", KR(ret), K(tenant_name), K(database_name), K(table_name));
   } else {
@@ -2438,17 +2916,21 @@ int ObLogPartMgr::table_match_(ObDictTenantInfo *tenant_info,
     bool &is_user_table,
     bool &chosen,
     uint64_t &database_id,
-    const int64_t timeout)
+    const int64_t timeout,
+    uint64_t &mview_container_id)
 {
   int ret = OB_SUCCESS;
+  chosen = false;
+  mview_container_id = OB_INVALID_ID;
   if (OB_FAIL(get_table_info_of_table_meta_(tenant_info, table_meta, tenant_name,
-      database_name, table_name, database_id, is_user_table, timeout))) {
+      database_name, table_name, database_id, is_user_table, timeout, mview_container_id))) {
     if (OB_TIMEOUT != ret) {
       LOG_ERROR("get_table_info_of_table_meta failed", KR(ret));
     }
   } else if (!is_user_table) {
     LOG_INFO("table is not user defined", K(tenant_name), K(database_name), K(table_name),
         K(chosen));
+  } else if (OB_INVALID_ID != mview_container_id) {
   } else if (OB_FAIL(matching_based_table_matcher_(tenant_name, database_name, table_name, chosen))) {
     LOG_ERROR("matching_based_table_matcher_ failed", KR(ret), K(tenant_name), K(database_name),
         K(table_name));
@@ -2466,7 +2948,9 @@ int ObLogPartMgr::matching_based_table_matcher_(const char *tenant_name,
 {
   int ret = OB_SUCCESS;
   IObLogTableMatcher *tb_matcher = TCTX.tb_matcher_;
-  if (OB_ISNULL(tb_matcher)) {
+  if (!enable_white_black_list_) {
+    chosen = true;
+  } else if (OB_ISNULL(tb_matcher)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tb_matcher is NULL", KR(ret), K(tb_matcher));
   } else if (OB_FAIL(tb_matcher->table_match(tenant_name, database_name, table_name, chosen,
@@ -2516,7 +3000,8 @@ int ObLogPartMgr::get_table_info_of_table_id_(const uint64_t table_id,
     const char *&table_name,
     uint64_t &database_id,
     bool &is_user_table,
-    const int64_t timeout)
+    const int64_t timeout,
+    uint64_t &mview_container_id)
 {
   int ret = OB_SUCCESS;
   if (is_online_refresh_mode(TCTX.refresh_mode_)) {
@@ -2529,7 +3014,7 @@ int ObLogPartMgr::get_table_info_of_table_id_(const uint64_t table_id,
         LOG_ERROR("get schema_guard and table_schema failed", KR(ret), K(table_id), K(schema_version));
       }
     } else if (OB_FAIL(get_table_info_of_table_schema_(schema_guard, table_schema,
-        tenant_name, database_name, table_name, database_id, is_user_table, timeout))) {
+        tenant_name, database_name, table_name, database_id, is_user_table, timeout, mview_container_id))) {
       if (OB_TIMEOUT != ret) {
         LOG_ERROR("get table info from table_schema failed", KR(ret), K(schema_version));
       }
@@ -2546,7 +3031,7 @@ int ObLogPartMgr::get_table_info_of_table_id_(const uint64_t table_id,
     } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
       LOG_ERROR("tenant_info get table_meta failed", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(get_table_info_of_table_meta_(tenant_info, table_meta,
-        tenant_name, database_name, table_name, database_id, is_user_table, timeout))) {
+        tenant_name, database_name, table_name, database_id, is_user_table, timeout, mview_container_id))) {
       if (OB_TIMEOUT != ret) {
         LOG_ERROR("get table info from table_meta failed", KR(ret), K(schema_version));
       }
@@ -2676,7 +3161,8 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
     const char *&table_name,
     uint64_t &database_id,
     bool &is_user_table,
-    const int64_t timeout)
+    const int64_t timeout,
+    uint64_t &mview_container_id)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = OB_INVALID_ID;
@@ -2698,6 +3184,8 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   } else if (table_schema->is_ddl_table_ignored_to_sync_cdc()) {
     is_ddl_ignored_table = true;
     LOG_INFO("table is ddl ignored table, ignore it", K(table_id), KPC(table_schema));
+  } else if (table_schema->is_user_table() && table_schema->is_mv_container_table()) {
+    final_table_schema = table_schema;
   } else if (table_schema->is_user_hidden_table()) {
     const ObSimpleTableSchemaV2 *origin_table_schema = nullptr;
     if (OB_FAIL(try_get_offline_ddl_origin_table_schema_(*table_schema, schema_guard,
@@ -2746,6 +3234,8 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("the primary table of lob_aux table can't be another lob_aux table",
           KR(ret), KPC(primary_table_schema));
+    } else if (primary_table_schema->is_mv_container_table()) {
+      final_table_schema = primary_table_schema;
     } else if (primary_table_schema->is_user_hidden_table()) {
       const ObSimpleTableSchemaV2 *origin_table_schema = nullptr;
       if (OB_FAIL(try_get_offline_ddl_origin_table_schema_(*primary_table_schema, schema_guard,
@@ -2776,6 +3266,9 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
         LOG_ERROR("inner get table info failed", KR(ret), KPC(final_table_schema));
       }
     } else {
+      if (final_table_schema->is_user_table() && final_table_schema->is_mv_container_table()) {
+        mview_container_id = final_table_schema->get_table_id();
+      }
       LOG_INFO("get table info of table_schema finished", KR(ret), K(table_id), K(tenant_name),
           K(database_name), K(table_name), K(database_id), K(is_user_table));
     }
@@ -2790,7 +3283,8 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
     const char *&table_name,
     uint64_t &database_id,
     bool &is_user_table,
-    const int64_t timeout)
+    const int64_t timeout,
+    uint64_t &mview_container_id)
 {
   int ret = OB_SUCCESS;
   uint64_t table_id = OB_INVALID_ID;
@@ -2815,6 +3309,8 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   } else if (table_meta->is_ddl_table_ignored_to_sync_cdc()) {
     is_ddl_ignored_table = true;
     LOG_INFO("table is ddl ignored table, ignore it", K(table_id), KPC(table_meta));
+  } else if (table_meta->is_user_table() && table_meta->is_mv_container_table()) {
+    final_table_meta = table_meta;
   } else if (table_meta->is_user_hidden_table()) {
     datadict::ObDictTableMeta *origin_table_meta = nullptr;
     if (OB_FAIL(try_get_offline_ddl_origin_table_meta_(*table_meta, tenant_info,
@@ -2856,6 +3352,8 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("the primary table of lob_aux table can't be another lob_aux table",
           KR(ret), KPC(primary_table_meta));
+    } else if (primary_table_meta->is_mv_container_table()) {
+      final_table_meta = primary_table_meta;
     } else if (primary_table_meta->is_user_hidden_table()) {
       datadict::ObDictTableMeta *origin_table_meta = nullptr;
       if (OB_FAIL(try_get_offline_ddl_origin_table_meta_(*primary_table_meta, tenant_info,
@@ -2882,6 +3380,9 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
         LOG_ERROR("inner get table info failed", KR(ret), KPC(final_table_meta));
       }
     } else {
+      if (final_table_meta->is_user_table() && final_table_meta->is_mv_container_table()) {
+        mview_container_id = final_table_meta->get_table_id();
+      }
       LOG_INFO("get table info of table_meta success", K(table_id), K(tenant_name),
           K(database_name), K(table_name), K(database_id), K(is_user_table));
     }

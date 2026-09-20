@@ -50,7 +50,8 @@ ObLogTenantMgr::ObLogTenantMgr() :
     tenant_id_set_(),
     ls_getter_(),
     enable_oracle_mode_match_case_sensitive_(false),
-    enable_white_black_list_(true)
+    enable_white_black_list_(true),
+    enable_output_mv_(false)
 {
 }
 
@@ -88,6 +89,7 @@ int ObLogTenantMgr::init(
     refresh_mode_ = refresh_mode;
     enable_oracle_mode_match_case_sensitive_ = enable_oracle_mode_match_case_sensitive;
     enable_white_black_list_ = enable_white_black_list;
+    enable_output_mv_ = TCONF.enable_output_mv;
 
     LOG_INFO("ObLogTenantMgr init succ", K(enable_oracle_mode_match_case_sensitive_),
         K(enable_white_black_list_),
@@ -117,6 +119,7 @@ void ObLogTenantMgr::destroy()
     ls_getter_.destroy();
     enable_oracle_mode_match_case_sensitive_ = false;
     enable_white_black_list_ = true;
+    enable_output_mv_ = false;
 
     LOG_INFO("ObLogTenantMgr destroy succ");
   }

@@ -340,10 +340,23 @@ int ObLogDDLProcessor::handle_tenant_ddl_task_(
           K(old_schema_version));
     }
   } else {
+    bool skip_ddl_task = false;
+    if (need_update_tic) {
+      RETRY_FUNC(stop_flag, tenant.get_part_mgr(), prepare_mview_create, task, new_schema_version, DATA_OP_TIMEOUT);
+      if (OB_TENANT_HAS_BEEN_DROPPED == ret) {
+        LOG_WARN("prepare materialized view creation failed, tenant may be dropped, ignore",
+            KR(ret), K(ddl_tenant_id), K(task), K(new_schema_version));
+        mark_all_binlog_records_invalid_(task);
+        skip_ddl_task = true;
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(ret)) {
+        LOG_ERROR("prepare materialized view creation failed", KR(ret), K(task));
+      }
+    }
     // Iterate through each statement of the DDL
     IStmtTask *stmt_task = task.get_stmt_list().head_;
     bool only_filter_by_tenant = true;
-    while (NULL != stmt_task && OB_SUCCESS == ret) {
+    while (!skip_ddl_task && NULL != stmt_task && OB_SUCCESS == ret) {
       bool stmt_is_chosen = false;
       DdlStmtTask *ddl_stmt = dynamic_cast<DdlStmtTask *>(stmt_task);
 
@@ -359,7 +372,8 @@ int ObLogDDLProcessor::handle_tenant_ddl_task_(
         mark_stmt_binlog_record_invalid_(*ddl_stmt);
       } else {
         // statements are not filtered, processing DDL statements
-        if ((enable_white_black_list_ || TCONF.enable_hbase_mode) && need_update_tic && OB_FAIL(handle_ddl_stmt_update_tic_(tenant, task,
+        if ((enable_white_black_list_ || TCONF.enable_hbase_mode
+            || !tenant.get_part_mgr().is_mview_output_enabled()) && need_update_tic && OB_FAIL(handle_ddl_stmt_update_tic_(tenant, task,
             *ddl_stmt, old_schema_version, new_schema_version, stop_flag))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("handle_ddl_stmt_update_tic_ fail", KR(ret), K(tenant), K(task), K(ddl_stmt),

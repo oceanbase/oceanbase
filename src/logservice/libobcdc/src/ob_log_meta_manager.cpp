@@ -16,6 +16,7 @@
 
 #include "ob_log_meta_manager.h"
 
+#include "common/data_buffer.h"
 #include "lib/atomic/ob_atomic.h"                 // ATOMIC_*
 #include "observer/mysql/obsm_utils.h"            // ObSMUtils
 #include "rpc/obmysql/ob_mysql_global.h"          // obmysql
@@ -25,6 +26,8 @@
 #include "ob_log_schema_getter.h"                 // ObLogSchemaGuard, DBSchemaInfo, TenantSchemaInfo
 #include "ob_log_adapt_string.h"                  // ObLogAdaptString
 #include "ob_log_config.h"                        // TCONF
+#include "ob_log_instance.h"
+#include "ob_log_tenant.h"
 #include "ob_log_schema_cache_info.h"             // TableSchemaInfo
 #include "ob_log_timezone_info_getter.h"          // IObCDCTimeZoneInfoGetter
 
@@ -757,6 +760,27 @@ int ObLogMetaManager::dec_meta_ref_(MetaType *meta, int64_t &ref_cnt)
 // @retval OB_SUCCESS                   success
 // @retval OB_TENANT_HAS_BEEN_DROPPED   tenant has been dropped
 // #retval other error code             fail
+int ObLogMetaManager::set_mview_table_name_(const uint64_t tenant_id, const uint64_t table_id,
+    const char *container_table_name, ITableMeta &table_meta)
+{
+  int ret = OB_SUCCESS;
+  ObLogTenantGuard guard;
+  ObLogTenant *tenant = nullptr;
+  char name_buf[OB_MAX_TABLE_NAME_BINARY_LENGTH + 1];
+  ObDataBuffer allocator(name_buf, sizeof(name_buf));
+  ObString name;
+  if (OB_FAIL(TCTX.get_tenant_guard(tenant_id, guard))) {
+    LOG_ERROR("get tenant for materialized view output failed", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(tenant = guard.get_tenant())) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(tenant->get_part_mgr().get_mview_name(table_id, allocator, name))) {
+    LOG_ERROR("read materialized view output name failed", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    table_meta.setName(name.empty() ? container_table_name : name.ptr());
+  }
+  return ret;
+}
+
 template<class SCHEMA_GUARD, class TABLE_SCHEMA>
 int ObLogMetaManager::build_table_meta_(
     const TABLE_SCHEMA *table_schema,
@@ -795,7 +819,14 @@ int ObLogMetaManager::build_table_meta_(
             K(global_schema_version));
       }
     } else {
-      tmp_table_meta->setName(table_schema->get_table_name());
+      if (table_schema->is_user_table() && table_schema->is_mv_container_table()) {
+        if (OB_FAIL(set_mview_table_name_(table_schema->get_tenant_id(), table_schema->get_table_id(),
+            table_schema->get_table_name(), *tmp_table_meta))) {
+          LOG_ERROR("set materialized view output name failed", KR(ret), KPC(table_schema));
+        }
+      } else {
+        tmp_table_meta->setName(table_schema->get_table_name());
+      }
       tmp_table_meta->setDBMeta(NULL);  // NOTE: default to NULL
       // The encoding of DB is set to empty, because there is currently an ambiguity, it can be either database or tenant
       // to avoid ambiguity, it is set to empty here

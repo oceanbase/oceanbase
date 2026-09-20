@@ -60,6 +60,7 @@ bool ObLogSequencer::g_print_participant_not_serve_info = ObLogConfig::default_p
 
 ObLogSequencer::ObLogSequencer()
   : inited_(false),
+    enable_data_dict_runtime_drop_(ObLogConfig::default_enable_data_dict_runtime_drop),
     round_value_(0),
     heartbeat_round_value_(0),
     trans_ctx_mgr_(NULL),
@@ -97,6 +98,7 @@ void ObLogSequencer::configure(const ObLogConfig &config)
   bool print_participant_not_serve_info = config.print_participant_not_serve_info;
 
   ATOMIC_STORE(&g_print_participant_not_serve_info, print_participant_not_serve_info);
+  ATOMIC_STORE(&enable_data_dict_runtime_drop_, static_cast<bool>(config.enable_data_dict_runtime_drop));
 
   LOG_INFO("[CONFIG]", K(print_participant_not_serve_info));
 }
@@ -147,6 +149,7 @@ int ObLogSequencer::init(
     dml_part_trans_task_count_ = 0;
     hb_part_trans_task_count_ = 0;
     queue_part_trans_task_count_ = 0;
+    configure(TCONF);
     LOG_INFO("init sequencer succ", K(thread_num), K(queue_size));
     inited_ = true;
   }
@@ -1009,13 +1012,37 @@ int ObLogSequencer::handle_multi_data_source_info_(
   int ret = OB_SUCCESS;
   const bool is_using_data_dict = is_data_dict_refresh_mode(TCTX.refresh_mode_);
   PartTransTask *part_trans_task = trans_ctx.get_participant_objs();
+  PartTransTask *sys_ls_task = nullptr;
   IObLogPartMgr &part_mgr = tenant.get_part_mgr();
+  const bool enable_dict_drop_for_trans = ATOMIC_LOAD(&enable_data_dict_runtime_drop_);
+  bool formatter_done = false;
+  bool parser_done = false;
+  bool need_drop_barrier = false;
+  for (PartTransTask *task = part_trans_task; nullptr != task; task = task->next_task()) {
+    if (task->is_sys_ls_part_trans()
+        && task->get_local_schema_version() > tenant.get_start_schema_version()
+        && ((is_using_data_dict && enable_dict_drop_for_trans && has_dict_drop_op_(*task))
+            || needs_mview_drop_barrier_(*task, part_mgr))) {
+      need_drop_barrier = true;
+      break;
+    }
+  }
+  if (need_drop_barrier) {
+    if (OB_FAIL(wait_until_formatter_done_(stop_flag))) {
+      LOG_ERROR("wait before physical table reclamation failed", KR(ret));
+    } else {
+      formatter_done = true;
+      parser_done = true;
+    }
+  }
 
   while (OB_SUCC(ret) && OB_NOT_NULL(part_trans_task) && ! stop_flag) {
     if (! part_trans_task->is_sys_ls_part_trans()) {
       // USER_LS part_trans_task in DIST_DDL_TRANS won't into dispatcher, set_ref_cnt to 1 to
       // recycle the part_trans_task.
       part_trans_task->set_ref_cnt(1);
+    } else {
+      sys_ls_task = part_trans_task;
     }
     if (part_trans_task->get_multi_data_source_info().has_tablet_change_op()) {
       const CDCTabletChangeInfoArray &tablet_change_info_arr =
@@ -1075,7 +1102,8 @@ int ObLogSequencer::handle_multi_data_source_info_(
       ObLogDDLProcessor *ddl_processor = TCTX.ddl_processor_;
       LOG_DEBUG("handle_ddl_trans and mds for data_dict mode begin", KPC(part_trans_task));
 
-      if (part_trans_task->get_multi_data_source_info().is_empty_dict_info()) {
+      const bool need_dict_meta_removal = enable_dict_drop_for_trans && has_dict_drop_op_(*part_trans_task);
+      if (part_trans_task->get_multi_data_source_info().is_empty_dict_info() && !need_dict_meta_removal) {
         ObCStringHelper helper;
         _LOG_INFO("[IS_NOT_BARRIER] [EMPTY_DICT] tls_id=%s trans_id=%s is_sp=%d",
             helper.convert(part_trans_task->get_tls_id()),
@@ -1096,10 +1124,13 @@ int ObLogSequencer::handle_multi_data_source_info_(
               ObSchemaOperation::type_str(op_type), op_type);
         } else {
           // Barrier transaction: should wait all task in dml_parser/reader/Formatter done.
-          if (OB_FAIL(wait_until_formatter_done_(stop_flag))) {
+          if (!formatter_done && OB_FAIL(wait_until_formatter_done_(stop_flag))) {
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("wait_until_formatter_done_ failed", KR(ret), KPC(part_trans_task));
             }
+          } else {
+            formatter_done = true;
+            parser_done = true;
           } // wait_until_formatter_done_
         }
       }
@@ -1142,27 +1173,121 @@ int ObLogSequencer::handle_multi_data_source_info_(
       }
     }
 
-    if (OB_SUCC(ret) && part_trans_task->is_sys_ls_part_trans() && part_trans_task->need_update_table_id_cache()) {
-      if (OB_FAIL(wait_until_parser_done_("update_table_id_cache_op", stop_flag))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
-        }
-      } else if (OB_FAIL(update_table_id_cache_(part_mgr, part_trans_task))) {
-        LOG_ERROR("update table_id_cache failed", KR(ret), KPC(part_trans_task));
-      } else {
-        LOG_INFO("update table_id_cache success", KPC(part_trans_task));
-      }
-    }
-
     if (OB_SUCC(ret)) {
       part_trans_task = part_trans_task->next_task();
     }
   } // end while
 
+  if (OB_SUCC(ret) && nullptr != sys_ls_task && !stop_flag
+      && sys_ls_task->get_local_schema_version() > tenant.get_start_schema_version()) {
+    const bool has_drop = has_dict_drop_op_(*sys_ls_task);
+    const bool need_update = sys_ls_task->need_update_table_id_cache()
+        || sys_ls_task->need_update_mview_cache() || has_drop;
+    if (need_update) {
+      if (!parser_done) {
+        if (OB_FAIL(wait_until_parser_done_("update_table_state", stop_flag))) {
+          LOG_ERROR("wait before table state publication failed", KR(ret));
+        } else {
+          parser_done = true;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(part_mgr.apply_mview_updates(*sys_ls_task))) {
+        LOG_ERROR("publish materialized view state failed", KR(ret), KPC(sys_ls_task));
+      } else if (OB_FAIL(update_table_id_cache_(part_mgr, sys_ls_task))) {
+        LOG_ERROR("update table_id_cache failed", KR(ret), KPC(sys_ls_task));
+      } else if (OB_FAIL(recycle_ddl_table_state_(*sys_ls_task, part_mgr))) {
+        LOG_ERROR("recycle dropped physical table state failed", KR(ret), KPC(sys_ls_task));
+      } else if (is_using_data_dict && enable_dict_drop_for_trans && has_drop && !stop_flag) {
+        // Keep raw dictionary metadata until every participant and derived-state update has succeeded.
+        ObDictTenantInfoGuard guard;
+        ObDictTenantInfo *tenant_info = nullptr;
+        if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant.get_tenant_id(), guard))) {
+          LOG_ERROR("get dictionary tenant for runtime DROP failed", KR(ret));
+        } else if (OB_ISNULL(tenant_info = guard.get_tenant_info())) {
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(remove_dict_table_metas_(*sys_ls_task, *tenant_info))) {
+          LOG_ERROR("remove runtime DROP metadata failed", KR(ret), KPC(sys_ls_task));
+        }
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && stop_flag) {
     ret = OB_IN_STOP_STATE;
   }
 
+  return ret;
+}
+
+bool ObLogSequencer::has_dict_drop_op_(const PartTransTask &task) const
+{
+  bool has_drop = false;
+  for (IStmtTask *stmt = task.get_stmt_list().head_; nullptr != stmt; stmt = stmt->get_next()) {
+    if (stmt->is_ddl_stmt()) {
+      const DdlStmtTask &ddl_stmt = *static_cast<DdlStmtTask *>(stmt);
+      if (ddl_stmt.is_physical_table_drop()) {
+        has_drop = true;
+        break;
+      }
+    }
+  }
+  return has_drop;
+}
+
+bool ObLogSequencer::needs_mview_drop_barrier_(const PartTransTask &task, IObLogPartMgr &part_mgr) const
+{
+  bool need_barrier = false;
+  for (IStmtTask *stmt = task.get_stmt_list().head_; nullptr != stmt; stmt = stmt->get_next()) {
+    if (stmt->is_ddl_stmt()) {
+      const DdlStmtTask &ddl_stmt = *static_cast<DdlStmtTask *>(stmt);
+      if (OB_DDL_DROP_TABLE == ddl_stmt.get_operation_type()
+          && part_mgr.has_mview_mapping(ddl_stmt.get_op_table_id())) {
+        need_barrier = true;
+        break;
+      }
+    }
+  }
+  return need_barrier;
+}
+
+int ObLogSequencer::recycle_ddl_table_state_(PartTransTask &task, IObLogPartMgr &part_mgr)
+{
+  int ret = OB_SUCCESS;
+  for (IStmtTask *stmt = task.get_stmt_list().head_; OB_SUCC(ret) && nullptr != stmt; stmt = stmt->get_next()) {
+    if (!stmt->is_ddl_stmt()) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      const DdlStmtTask &ddl_stmt = *static_cast<DdlStmtTask *>(stmt);
+      const ObSchemaOperationType op_type = static_cast<ObSchemaOperationType>(ddl_stmt.get_operation_type());
+      const uint64_t table_id = ddl_stmt.get_op_table_id();
+      if (ddl_stmt.is_physical_table_drop()) {
+        if (OB_FAIL(part_mgr.delete_table_id_from_cache(table_id))) {
+          LOG_ERROR("remove dropped physical table from TIC failed", KR(ret), K(table_id));
+        } else if (OB_DDL_DROP_TABLE == op_type && OB_FAIL(part_mgr.remove_mview_mapping(table_id))) {
+          LOG_ERROR("remove dropped materialized view container mapping failed", KR(ret), K(table_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogSequencer::remove_dict_table_metas_(const PartTransTask &task, ObDictTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  for (IStmtTask *stmt = task.get_stmt_list().head_; OB_SUCC(ret) && nullptr != stmt; stmt = stmt->get_next()) {
+    if (!stmt->is_ddl_stmt()) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      const DdlStmtTask &ddl_stmt = *static_cast<DdlStmtTask *>(stmt);
+      if (ddl_stmt.is_physical_table_drop()) {
+        if (OB_FAIL(tenant_info.remove_table_meta(ddl_stmt.get_op_table_id()))) {
+          LOG_ERROR("remove dropped dictionary table metadata failed", KR(ret), K(ddl_stmt));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -1422,6 +1547,7 @@ int ObLogSequencer::need_acquire_new_schema_(const PartTransTask &task, bool &ne
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt));
       } else if (OB_DDL_CREATE_TABLE == ddl_stmt->get_operation_type()
+          || OB_DDL_CREATE_VIEW == ddl_stmt->get_operation_type()
           || OB_DDL_ALTER_TABLE == ddl_stmt->get_operation_type()
           || OB_DDL_TABLE_RENAME == ddl_stmt->get_operation_type()
           || OB_DDL_RECOVER_TABLE_END == ddl_stmt->get_operation_type()) {

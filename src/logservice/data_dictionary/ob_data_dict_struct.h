@@ -431,6 +431,9 @@ public:
   OB_INLINE uint64_t get_aux_lob_piece_tid() const { return aux_lob_piece_tid_; }
   OB_INLINE bool is_in_recyclebin() const { return common::OB_RECYCLEBIN_SCHEMA_ID == database_id_; }
   OB_INLINE bool is_user_table() const { return share::schema::ObTableType::USER_TABLE == table_type_; }
+  OB_INLINE bool is_materialized_view() const { return share::schema::ObTableType::MATERIALIZED_VIEW == table_type_; }
+  OB_INLINE bool is_mv_container_table() const
+  { return share::schema::IS_MV_CONTAINER_TABLE == table_mode_.mv_container_table_flag_; }
   OB_INLINE bool is_sys_table() const { return share::schema::ObTableType::SYSTEM_TABLE == table_type_; }
   OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
   OB_INLINE bool is_tmp_table() const

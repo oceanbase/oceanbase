@@ -205,9 +205,14 @@ private:
   void do_trans_stat_(const uint64_t tenant_id);
   int need_acquire_new_schema_(const PartTransTask &task, bool &need_new_schema);
   int update_table_id_cache_(IObLogPartMgr &part_mgr, const PartTransTask *task);
+  bool has_dict_drop_op_(const PartTransTask &task) const;
+  bool needs_mview_drop_barrier_(const PartTransTask &task, IObLogPartMgr &part_mgr) const;
+  int recycle_ddl_table_state_(PartTransTask &task, IObLogPartMgr &part_mgr);
+  int remove_dict_table_metas_(const PartTransTask &task, ObDictTenantInfo &tenant_info);
 
 private:
   bool                      inited_;
+  bool                      enable_data_dict_runtime_drop_;
   uint64_t                  round_value_;
   uint64_t                  heartbeat_round_value_;
 

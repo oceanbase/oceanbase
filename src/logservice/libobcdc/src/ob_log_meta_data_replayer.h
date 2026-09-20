@@ -89,11 +89,6 @@ private:
       PartTransTask &part_trans_task,
       ReplayInfoStat &replay_info_stat);
 
-  bool need_remove_by_op_type_(const ObSchemaOperationType op_type)
-  {
-    return OB_DDL_DROP_TABLE == op_type || OB_DDL_DROP_INDEX == op_type || OB_DDL_DROP_GLOBAL_INDEX == op_type;
-  }
-
 private:
   bool is_inited_;
   volatile bool stop_flag_;

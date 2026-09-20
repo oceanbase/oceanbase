@@ -618,6 +618,10 @@ public:
 
   // Whether to open white black list
   T_DEF_BOOL(enable_white_black_list, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
+  T_DEF_BOOL(enable_output_mv, OB_CLUSTER_PARAMETER, 0,
+      "output materialized view container records with materialized view names; restart required");
+  T_DEF_BOOL(enable_data_dict_runtime_drop, OB_CLUSTER_PARAMETER, 1,
+      "remove original table metadata after runtime DROP in data dictionary mode; dynamically effective");
 
   // The point in time when the sql server used for querying in SYSTABLE HELPER changes, i.e., the periodic rotation of the sql server
   T_DEF_INT_INFT(sql_server_change_interval_sec, OB_CLUSTER_PARAMETER, 60, 1,

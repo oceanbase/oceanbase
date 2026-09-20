@@ -963,8 +963,9 @@ public:
   { return FILLED == (enum ObViewColumnFilledFlag)table_mode_.view_column_filled_flag_; }
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
   { table_mode_.view_column_filled_flag_ = flag; }
-  inline bool mv_container_table() const
+  inline bool is_mv_container_table() const
   { return IS_MV_CONTAINER_TABLE == (enum ObMVContainerTableFlag)table_mode_.mv_container_table_flag_; }
+  inline bool mv_container_table() const { return is_mv_container_table(); }
   inline void set_mv_container_table(const ObMVContainerTableFlag flag)
   { table_mode_.mv_container_table_flag_ = flag; }
   inline bool mv_available() const

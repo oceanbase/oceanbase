@@ -43,6 +43,7 @@
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
 #include "ob_log_safe_arena.h"
 #include "ob_log_tic_update_info.h"                 // TICUpdateInfo
+#include "ob_log_mview_info.h"
 
 namespace oceanbase
 {
@@ -711,6 +712,12 @@ public:
   // get ddl str
   const ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
   int64_t get_operation_type() const { return ddl_operation_type_; }
+  bool is_physical_table_drop() const
+  {
+    return share::schema::OB_DDL_DROP_TABLE == ddl_operation_type_
+        || share::schema::OB_DDL_DROP_INDEX == ddl_operation_type_
+        || share::schema::OB_DDL_DROP_GLOBAL_INDEX == ddl_operation_type_;
+  }
   uint64_t get_op_table_id() const { return ddl_op_table_id_; }
   uint64_t get_op_tenant_id() const { return ddl_op_tenant_id_; }
   uint64_t get_op_database_id() const { return ddl_op_database_id_; }
@@ -1343,6 +1350,13 @@ public:
   {
     return !tic_update_infos_.empty();
   }
+  ObArray<ObLogMViewInfo> &get_mview_mappings() { return mview_mappings_; }
+  ObArray<ObLogMViewContainerInfo> &get_mview_containers() { return mview_containers_; }
+  ObArray<ObLogMViewTICInfo> &get_mview_tic_updates() { return mview_tic_updates_; }
+  bool need_update_mview_cache() const
+  {
+    return !mview_mappings_.empty() || !mview_containers_.empty() || !mview_tic_updates_.empty();
+  }
   void set_unserved() { set_unserved_(); }
 
   TO_STRING_KV(
@@ -1534,6 +1548,9 @@ private:
   int64_t                 pending_lob_format_count_;  // >0 when merger is waiting for LobAuxMeta, signals dispatcher to grant extra budget
 
   ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
+  ObArray<ObLogMViewInfo> mview_mappings_;
+  ObArray<ObLogMViewContainerInfo> mview_containers_;
+  ObArray<ObLogMViewTICInfo> mview_tic_updates_;
 
   /// Sum of buf_len of each successful push_redo_log / push_direct_load_inc_log (excluding duplicate redo).
   int64_t                 total_pushed_redo_log_size_;

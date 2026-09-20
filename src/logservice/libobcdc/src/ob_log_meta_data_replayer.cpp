@@ -282,9 +282,8 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
                 LOG_ERROR("invalid DDL statement", KR(ret), KPC(stmt_task), K(ddl_stmt),
                     "trans_id", part_trans_task.get_trans_id());
               } else {
-                const ObSchemaOperationType op_type = (ObSchemaOperationType) ddl_stmt->get_operation_type();
                 const uint64_t op_table_id = ddl_stmt->get_op_table_id();
-                if (need_remove_by_op_type_(op_type)) {
+                if (ddl_stmt->is_physical_table_drop()) {
                   if (OB_FAIL(tenant_info.remove_table_meta(op_table_id))) {
                     LOG_ERROR("ddl stmt is DROP_TABLE or DROP_INDEX and remove table meta failed", KR(ret),
                         K(op_table_id), KPC(ddl_stmt), "trans_id", part_trans_task.get_trans_id());

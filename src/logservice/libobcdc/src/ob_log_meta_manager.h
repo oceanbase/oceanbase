@@ -345,6 +345,8 @@ private:
       const DBSchemaInfo &db_schema_info,
       const TenantSchemaInfo &tenant_schema_info,
       IDBMeta *&db_meta);
+  int set_mview_table_name_(const uint64_t tenant_id, const uint64_t table_id,
+      const char *container_table_name, ITableMeta &table_meta);
   int get_usr_def_col_from_table_schema_(
       const share::schema::ObTableSchema &schema,
       ObIArray<uint64_t> &usr_def_col);

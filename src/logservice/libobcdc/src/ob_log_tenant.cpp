@@ -117,7 +117,8 @@ int ObLogTenant::init(
   } else if (OB_FAIL(part_mgr_.init(tenant_id, start_schema_version,
       tenant_mgr.enable_oracle_mode_match_case_sensitive_,
       tenant_mgr.enable_white_black_list_,
-      tenant_mgr.gindex_cache_))) {
+      tenant_mgr.gindex_cache_,
+      tenant_mgr.enable_output_mv_))) {
     LOG_ERROR("part_mgr_ init fail", KR(ret), K(tenant_id), K(start_schema_version));
   } else if (OB_FAIL(databuff_printf(tenant_name_, sizeof(tenant_name_), pos, "%s", tenant_name))) {
     LOG_ERROR("print tenant name fail", KR(ret), K(pos), K(tenant_id), K(tenant_name));
