@@ -222,7 +222,8 @@ private:
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
-  int remove_ls_from_map_(const share::ObLSID &ls_id);
+  // The caller holds an LS handle until removal and cache invalidation finish.
+  int remove_ls_from_map_(ObLS &ls);
   void remove_ls_(ObLS *ls, const bool remove_from_disk);
   int safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk);
   int restore_update_ls_(const ObLSMetaPackage &meta_package);

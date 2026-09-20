@@ -70,6 +70,36 @@ int ObLSHandle::set_ls(const ObLSMap &ls_map, ObLS &ls, const ObLSGetMod &mod)
   return ret;
 }
 
+int ObLSHandle::copy_from(const ObLSHandle &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other || is_valid() || !other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KPC(this), K(other));
+  } else if (OB_FAIL(other.ls_->get_ref_mgr().inc(other.mod_))) {
+    // A deleted LS can reject new references even while other keeps it alive.
+    LOG_WARN("ls inc ref fail", K(ret), KPC(this), K(other));
+  } else {
+    ls_map_ = other.ls_map_;
+    ls_ = other.ls_;
+    mod_ = other.mod_;
+  }
+  return ret;
+}
+
+void ObLSHandle::swap(ObLSHandle &other)
+{
+  const ObLSMap *ls_map = ls_map_;
+  ObLS *ls = ls_;
+  const ObLSGetMod mod = mod_;
+  ls_map_ = other.ls_map_;
+  ls_ = other.ls_;
+  mod_ = other.mod_;
+  other.ls_map_ = ls_map;
+  other.ls_ = ls;
+  other.mod_ = mod;
+}
+
 void ObLSHandle::reset()
 {
   if (OB_NOT_NULL(ls_map_) && OB_NOT_NULL(ls_)) {

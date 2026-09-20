@@ -26,6 +26,7 @@ namespace transaction
 {
 void ObIDService::reset()
 {
+  clear_ls_cache_();
   service_type_ = INVALID_ID_SERVICE_TYPE;
   pre_allocated_range_ = 0;
   last_id_ = MIN_LAST_ID;
@@ -35,7 +36,6 @@ void ObIDService::reset()
   rec_log_ts_.set_max();
   latest_log_ts_.reset();
   submit_log_ts_ = OB_INVALID_TIMESTAMP;
-  ls_ = NULL;
   is_flushing_ = false;
 }
 
@@ -64,42 +64,92 @@ int ObIDService::submit_log_with_lock_(const int64_t last_id, const int64_t limi
   return ret;
 }
 
-int ObIDService::check_and_fill_ls()
+int ObIDService::acquire_ls_handle(ObLSHandle &handle)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ls_)) {
-    ObLSService *ls_svr =  MTL(ObLSService *);
-    ObLSHandle handle;
-    ObLS *ls = nullptr;
-    ObLSID ls_id = get_target_ls_id_();
-    if (!ObIDService::is_working_service(service_type_, MTL_ID())) {
-      ret = OB_NOT_IN_SERVICE;
-      TRANS_LOG(WARN, "id service is not working", K(ret), K(service_type_));
-    } else if (OB_ISNULL(ls_svr)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "log stream service is NULL", K(ret));
-    } else if (OB_FAIL(ls_svr->get_ls(ls_id, handle, ObLSGetMod::TRANS_MOD))) {
-      TRANS_LOG(WARN, "get id service log stream failed");
-    } else if (OB_ISNULL(ls = handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(WARN, "id service log stream not exist");
-    } else {
-      ls_ = ls;
-      TRANS_LOG(INFO, "ls set success");
+  if (OB_UNLIKELY(handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "ls handle is not empty", K(ret), K(service_type_), K(handle));
+  } else {
+    bool cache_hit = false;
+    {
+      RLockGuard guard(ls_cache_lock_);
+      if (cached_ls_handle_.is_valid()) {
+        cache_hit = true;
+        ret = handle.copy_from(cached_ls_handle_);
+      }
+    }
+    if (!cache_hit) {
+      // Keep lookup and publication under the same lock as invalidation, so a
+      // lookup started before map removal cannot republish a retired LS.
+      WLockGuard guard(ls_cache_lock_);
+      if (!cached_ls_handle_.is_valid()) {
+        ObLSService *ls_svr = MTL(ObLSService *);
+        const ObLSID ls_id = get_target_ls_id_();
+        if (!is_working_service(service_type_, MTL_ID())) {
+          ret = OB_NOT_IN_SERVICE;
+          TRANS_LOG(WARN, "id service is not working", K(ret), K(service_type_), K(ls_id));
+        } else if (OB_ISNULL(ls_svr)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "log stream service is NULL", K(ret), K(service_type_), K(ls_id));
+        } else if (OB_FAIL(ls_svr->get_ls(ls_id, cached_ls_handle_, ObLSGetMod::TRANS_MOD))) {
+          TRANS_LOG(WARN, "get id service log stream failed", K(ret), K(service_type_), K(ls_id));
+        } else if (OB_UNLIKELY(!cached_ls_handle_.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "id service log stream not exist", K(ret), K(service_type_), K(ls_id));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ret = handle.copy_from(cached_ls_handle_);
+      }
     }
   }
   return ret;
 }
 
-void ObIDService::reset_ls()
+void ObIDService::invalidate_ls_caches(ObLS *expected_ls)
 {
-  WLockGuard guard(rwlock_);
-  ls_ = NULL;
+  for (int64_t service_type = 0; service_type < MAX_SERVICE_TYPE; ++service_type) {
+#ifndef OB_BUILD_SHARED_STORAGE
+    if (is_id_service_for_sslog(service_type)) {
+      continue;
+    }
+#endif
+    int ret = OB_SUCCESS;
+    ObIDService *service = nullptr;
+    if (OB_FAIL(get_id_service(service_type, service))) {
+      TRANS_LOG(WARN, "get id service fail", K(ret), K(service_type));
+    } else if (nullptr != service) {
+      service->invalidate_ls(expected_ls);
+    }
+  }
+}
+
+void ObIDService::invalidate_ls(ObLS *expected_ls)
+{
+  ObLSHandle retired;
+  {
+    WLockGuard guard(ls_cache_lock_);
+    if (nullptr != expected_ls && cached_ls_handle_.get_ls() == expected_ls) {
+      cached_ls_handle_.swap(retired);
+    }
+  }
+  // Releasing the last reference may reenter this service from ObLS::destroy.
+}
+
+void ObIDService::clear_ls_cache_()
+{
+  ObLSHandle retired;
+  {
+    WLockGuard guard(ls_cache_lock_);
+    cached_ls_handle_.swap(retired);
+  }
 }
 
 int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   if (is_logging_) {
     ret = OB_EAGAIN;
     if (EXECUTE_COUNT_PER_SEC(20)) {
@@ -121,8 +171,8 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
     if (EXECUTE_COUNT_PER_SEC(10)) {
       TRANS_LOG(INFO, "no log required", K(limited_id), K(ATOMIC_LOAD(&limited_id_)));
     }
-  } else if (OB_FAIL(check_and_fill_ls())) {
-    TRANS_LOG(WARN, "ls set fail", K(ret));
+  } else if (OB_FAIL(acquire_ls_handle(ls_handle))) {
+    TRANS_LOG(WARN, "acquire ls failed", K(ret));
   } else {
     ObPresistIDLog ls_log(last_id, limited_id);
     palf::LSN lsn;
@@ -141,8 +191,9 @@ int ObIDService::submit_log_(const int64_t last_id, const int64_t limited_id)
       TRANS_LOG(WARN, "serialize ls log error", KR(ret), K(cb_));
     } else {
       cb_.set_srv_type(service_type_);
-      if (OB_FAIL(ls_->get_log_handler()->append(cb_.get_log_buf(), cb_.get_log_pos(), base_scn,
-                                                 false, false/*allow_compression*/, &cb_, lsn, log_ts))) {
+      if (OB_FAIL(ls_handle.get_ls()->get_log_handler()->append(
+          cb_.get_log_buf(), cb_.get_log_pos(), base_scn,
+          false, false/*allow_compression*/, &cb_, lsn, log_ts))) {
         cb_.reset();
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           TRANS_LOG(WARN, "submit ls log failed", KR(ret), K(service_type_));
@@ -240,21 +291,22 @@ int ObIDService::handle_replay_result(const int64_t last_id, const int64_t limit
 int ObIDService::update_ls_id_meta(const bool write_slog)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
 
-  if (OB_FAIL(check_and_fill_ls())) {
-    TRANS_LOG(WARN, "ls set fail", K(ret));
+  if (OB_FAIL(acquire_ls_handle(ls_handle))) {
+    TRANS_LOG(WARN, "acquire ls failed", K(ret));
   } else if (write_slog) {
-    if (OB_FAIL(ls_->update_id_meta(service_type_,
-                                    ATOMIC_LOAD(&limited_id_),
-                                    latest_log_ts_.atomic_load(),
-                                    true /* write slog */))) {
-      TRANS_LOG(WARN, "update id meta failed", K(ret), KPC(ls_));
+    if (OB_FAIL(ls_handle.get_ls()->update_id_meta(service_type_,
+                                                 ATOMIC_LOAD(&limited_id_),
+                                                 latest_log_ts_.atomic_load(),
+                                                 true /* write slog */))) {
+      TRANS_LOG(WARN, "update id meta failed", K(ret), K(ls_handle));
     }
   } else {
-    ret = ls_->update_id_meta(service_type_,
-                              ATOMIC_LOAD(&limited_id_),
-                              latest_log_ts_.atomic_load(),
-                              false /* not write slog */);
+    ret = ls_handle.get_ls()->update_id_meta(service_type_,
+                                            ATOMIC_LOAD(&limited_id_),
+                                            latest_log_ts_.atomic_load(),
+                                            false /* not write slog */);
   }
 
   if (OB_FAIL(ret)) {
@@ -271,26 +323,27 @@ int ObIDService::flush_ls_id_meta_for_ss_(
   int ret = OB_SUCCESS;
   const bool write_slog = true;
 #ifdef OB_BUILD_SHARED_STORAGE
-  if (OB_FAIL(check_and_fill_ls())) {
-    TRANS_LOG(WARN, "ls set fail", K(ret));
+  ObLSHandle ls_handle;
+  if (OB_FAIL(acquire_ls_handle(ls_handle))) {
+    TRANS_LOG(WARN, "acquire ls failed", K(ret));
   } else {
     // STEP 1, flush meta into sslog
     SYNC_UPLOAD_INC_META_WITH_RET(SSIncMetaUploadType::ID_SERVICE_UPLOAD_TYPE,
                                   ret,
                                   ls_id_meta,
                                   (*(MTL(ObSSMetaService *))),
-                                  ls_->get_ls_id(),
+                                  ls_handle.get_ls()->get_ls_id(),
                                   service_type_,
                                   limited_id,
                                   latest_log_ts);
     // STEP 2, flush meta into slog
     if (OB_FAIL(ret)) {
       TRANS_LOG(WARN, "update ls id meta failed", K(ret), K(service_type_));
-    } else if (OB_FAIL(ls_->update_id_meta(service_type_,
-                                           limited_id,
-                                           latest_log_ts,
-                                           write_slog))) {
-      TRANS_LOG(WARN, "update id meta failed", K(ret), KPC(ls_));
+    } else if (OB_FAIL(ls_handle.get_ls()->update_id_meta(service_type_,
+                                                        limited_id,
+                                                        latest_log_ts,
+                                                        write_slog))) {
+      TRANS_LOG(WARN, "update id meta failed", K(ret), K(ls_handle));
     } else {
       // do nothing
     }
@@ -413,12 +466,13 @@ int ObIDService::update_ls_id_meta_for_flush(
 int ObIDService::check_leader(bool &leader)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   common::ObRole role = common::ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
 
-  if (OB_FAIL(check_and_fill_ls())) {
-    TRANS_LOG(WARN, "ls set fail", K(ret));
-  } else if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
+  if (OB_FAIL(acquire_ls_handle(ls_handle))) {
+    TRANS_LOG(WARN, "acquire ls failed", K(ret));
+  } else if (OB_FAIL(ls_handle.get_ls()->get_log_handler()->get_role(role, proposal_id))) {
     TRANS_LOG(WARN, "get ls role fail", K(ret));
   } else if (common::ObRole::LEADER == role) {
     leader = true;

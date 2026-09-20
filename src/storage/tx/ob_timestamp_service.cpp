@@ -234,12 +234,13 @@ int ObTimestampService::resume_leader()
 int ObTimestampService::switch_to_leader()
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
 
-  if (OB_FAIL(check_and_fill_ls())) {
+  if (OB_FAIL(acquire_ls_handle(ls_handle))) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
   } else {
     SCN version;
-    if (OB_FAIL(ls_->get_log_handler()->get_max_scn(version))) {
+    if (OB_FAIL(ls_handle.get_ls()->get_log_handler()->get_max_scn(version))) {
       TRANS_LOG(WARN, "get max ts fail", K(ret));
     } else {
       int64_t version_val = version.is_valid() ? version.get_val_for_gts() : -1;
@@ -270,10 +271,11 @@ int ObTimestampService::switch_to_leader()
 void ObTimestampService::get_virtual_info(int64_t &ts_value, common::ObRole &role, int64_t &proposal_id)
 {
   int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ts_value = last_id_;
-  if (OB_FAIL(check_and_fill_ls())) {
+  if (OB_FAIL(acquire_ls_handle(ls_handle))) {
     TRANS_LOG(WARN, "ls set fail", K(ret));
-  } else if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
+  } else if (OB_FAIL(ls_handle.get_ls()->get_log_handler()->get_role(role, proposal_id))) {
     TRANS_LOG(WARN, "get ls role fail", K(ret));
   }
   TRANS_LOG(INFO, "gts get virtual info", K(ret), K_(last_id), K(ts_value), K(role), K(proposal_id));

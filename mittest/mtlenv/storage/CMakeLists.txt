@@ -5,6 +5,7 @@ endfunction()
 
 storage_unittest(test_tenant_module_env)
 storage_unittest(test_ls_service test_ls_service.cpp)
+storage_unittest(test_id_service_ls_lifetime test_id_service_ls_lifetime.cpp)
 #if(OB_BUILD_SHARED_STORAGE)
 #  storage_unittest(test_ls_service_ss test_ls_service_ss.cpp)
 #endif()
