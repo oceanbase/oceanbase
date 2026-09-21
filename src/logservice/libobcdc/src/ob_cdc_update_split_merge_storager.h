@@ -20,6 +20,8 @@
 #ifndef OCEANBASE_LIBOBCDC_UPDATE_SPLIT_MERGE_STORAGER_H_
 #define OCEANBASE_LIBOBCDC_UPDATE_SPLIT_MERGE_STORAGER_H_
 
+#include "lib/allocator/ob_allocator.h"
+#include "lib/string/ob_string.h"
 #include "share/ob_ls_id.h"         // ObLSID
 #include "storage/tx/ob_tx_log.h"    // ObTransID
 
@@ -32,6 +34,9 @@ struct UpdateSplitMergeStatInfo;
 
 struct UpdateSplitMergeKey
 {
+  // Four signed 64-bit integers, three separators and a trailing terminator.
+  static const int64_t MAX_KEY_BUF_LEN = 128;
+
   UpdateSplitMergeKey() :
     tenant_id_(common::OB_INVALID_TENANT_ID),
     commit_version_(0),
@@ -88,7 +93,8 @@ struct UpdateSplitMergeKey
       && trace_id_raw_ == other.trace_id_raw_;
   }
 
-  int get_key(std::string &key) const;
+  // The returned key borrows buf, which must remain valid until storage consumes it.
+  int get_key(char *buf, const int64_t buf_len, common::ObString &key) const;
 
   TO_STRING_KV(K_(tenant_id), K_(commit_version), K_(trans_id), K_(ls_id), K_(trace_id_raw));
 
@@ -109,7 +115,10 @@ public:
   int init(IObStoreService *store_service, UpdateSplitMergeStatInfo &stat);
   void destroy();
 
+  // Consume data synchronously; no reference to the caller's buffer is retained.
   int put(const UpdateSplitMergeKey &key, const char *data, const int64_t data_len);
+  // Copy bytes into allocator, which must outlive the returned buffer.
+  // On failure, data is null and data_len is zero.
   int get(ObIAllocator &allocator, const UpdateSplitMergeKey &key, const char *&data, int64_t &data_len);
   int del(const UpdateSplitMergeKey &key);
 

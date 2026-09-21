@@ -13,6 +13,11 @@
 #define USING_LOG_PREFIX OBLOG_SORTER
 
 #include "ob_cdc_update_split_merge_payload.h"
+#include "lib/container/ob_se_array.h"
+#ifdef OB_USE_DRCMSG
+#include <drcmsg/MD.h>
+#include <drcmsg/MsgWrapper.h>
+#endif
 
 using namespace oceanbase::common;
 
@@ -21,66 +26,141 @@ namespace oceanbase
 namespace libobcdc
 {
 
-OB_SERIALIZE_MEMBER(MergeOldColValue, data_, origin_);
-
-OB_SERIALIZE_MEMBER(MergeOldColsPayload, old_cols_);
-
-int MergeOldColsPayload::init_from_delete(IBinlogRecord &del_data, ObIAllocator &allocator)
+int serialize_merge_delete_br(
+    IBinlogRecord &del_data,
+    const char *&data,
+    int64_t &data_len)
 {
   int ret = OB_SUCCESS;
-  unsigned int old_col_count = 0;
-  binlogBuf *old_cols = del_data.oldCols(old_col_count);
-  old_cols_.reuse();
+  data = nullptr;
+  data_len = 0;
+#ifdef OB_USE_DRCMSG
+  static thread_local DrcMsgBuf message_buf;
+#else
+  static thread_local LogMsgBuf message_buf;
+#endif
+  size_t serialized_len = 0;
+  const char *serialized_data = nullptr;
 
-  if (OB_UNLIKELY(old_col_count > 0 && OB_ISNULL(old_cols))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("old cols array is null", KR(ret), K(old_col_count));
-  }
-
-  for (unsigned int i = 0; OB_SUCC(ret) && i < old_col_count; ++i) {
-    ObString old_col;
-    const int64_t old_col_len = static_cast<int64_t>(old_cols[i].buf_used_size);
-    char *old_col_buf = nullptr;
-    if (OB_UNLIKELY(old_col_len < 0)) {
-      ret = OB_INVALID_DATA;
-      LOG_ERROR("invalid old column length", KR(ret), K(i), K(old_col_len));
-    } else if (OB_UNLIKELY(old_col_len > 0 && OB_ISNULL(old_cols[i].buf))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("old column buffer is null", KR(ret), K(i), K(old_col_len), K(old_cols[i].m_origin));
-    } else if (old_col_len > 0) {
-      old_col_buf = static_cast<char *>(allocator.alloc(old_col_len));
-      if (OB_ISNULL(old_col_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_ERROR("alloc old column payload buffer failed", KR(ret), K(i), K(old_col_len));
-      } else {
-        MEMCPY(old_col_buf, old_cols[i].buf, old_col_len);
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      old_col.assign_ptr(old_col_buf, old_col_len);
-      if (OB_FAIL(old_cols_.push_back(MergeOldColValue(old_col, static_cast<uint8_t>(old_cols[i].m_origin))))) {
-        LOG_ERROR("push back old column payload failed", KR(ret), K(i), K(old_col), K(old_cols[i].m_origin));
-      }
-    }
+  if (OB_UNLIKELY(EDELETE != del_data.recordType()) || OB_ISNULL(del_data.getTableMeta())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid delete br for merge serialization", KR(ret), "record_type", del_data.recordType());
+  } else if (OB_ISNULL(serialized_data = del_data.toString(&serialized_len, &message_buf))
+      || OB_UNLIKELY(0 == serialized_len || serialized_len > INT64_MAX)) {
+    ret = OB_SERIALIZE_ERROR;
+    LOG_ERROR("serialize merge delete br failed", KR(ret), KP(serialized_data), K(serialized_len));
+  } else {
+    data = serialized_data;
+    data_len = static_cast<int64_t>(serialized_len);
   }
 
   return ret;
 }
 
-int MergeOldColsPayload::apply_to_insert(IBinlogRecord &ins_data) const
+int apply_serialized_merge_delete_br(
+    const char *data,
+    const int64_t data_len,
+    ObIAllocator &allocator,
+    IBinlogRecord &ins_data)
 {
   int ret = OB_SUCCESS;
+  int br_ret = 0;
+  ObLogSerilizedBR del_br;
+  IBinlogRecord *del_data = del_br.get_data();
+  IStrArray *old_cols = nullptr;
+  const uint8_t *origins = nullptr;
+  size_t origin_count = 0;
+  unsigned int existing_old_count = 0;
+  ins_data.oldCols(existing_old_count);
+  ITableMeta *table_meta = ins_data.getTableMeta();
+  ObSEArray<ObString, 2> old_values;
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < old_cols_.count(); ++i) {
-    const MergeOldColValue &old_col = old_cols_.at(i);
-    if (OB_FAIL(ins_data.putOld(old_col.data_.ptr(),
-            static_cast<int>(old_col.data_.length()),
-            static_cast<VALUE_ORIGIN>(old_col.origin_)))) {
-      LOG_ERROR("put old column from payload failed", KR(ret), K(i), K(old_col));
+  if (OB_ISNULL(data) || OB_UNLIKELY(data_len <= 0) || OB_ISNULL(table_meta)
+      || OB_UNLIKELY(EINSERT != ins_data.recordType() || 0 != existing_old_count)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument for merge delete br", KR(ret), KP(data), K(data_len),
+        KP(table_meta), K(existing_old_count), "record_type", ins_data.recordType());
+  } else if (OB_ISNULL(del_data)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("create parsed merge delete br failed", KR(ret));
+  } else if (0 != (br_ret = del_data->parse(data, data_len)) || !del_data->parsedOK()) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_ERROR("parse merge delete br failed", KR(ret), K(br_ret), K(data_len));
+  } else if (OB_UNLIKELY(EDELETE != del_data->recordType())
+      || OB_ISNULL(old_cols = del_data->parsedOldCols())) {
+    ret = OB_INVALID_DATA;
+    LOG_ERROR("invalid persisted merge delete br", KR(ret), "record_type", del_data->recordType(), KP(old_cols));
+  } else {
+    const int64_t column_count = table_meta->getColCount();
+    origins = del_data->parsedOldValueOrigins(origin_count);
+    if (OB_UNLIKELY(column_count <= 0 || old_cols->size() != column_count || origin_count != column_count)
+        || OB_ISNULL(origins)) {
+      ret = OB_INVALID_DATA;
+      LOG_ERROR("merge delete columns or origins do not match insert", KR(ret), K(column_count),
+          "old_col_count", old_cols->size(), K(origin_count), KP(origins));
+    }
+
+    // putOld() retains the pointer. Copy values before destroying the parsed BR,
+    // and finish all fallible preparation before appending any old columns.
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+      const char *value = nullptr;
+      size_t value_len = 0;
+      ObString old_value;
+      if (0 != (br_ret = old_cols->elementAt(static_cast<int>(i), value, value_len))) {
+        ret = OB_INVALID_DATA;
+        LOG_ERROR("get parsed merge old column failed", KR(ret), K(br_ret), K(i));
+      } else if (OB_UNLIKELY(origins[i] > static_cast<uint8_t>(PADDING))) {
+        ret = OB_INVALID_DATA;
+        LOG_ERROR("invalid merge old column origin", KR(ret), K(i), K(origins[i]));
+      } else if (OB_ISNULL(value)) {
+        if (OB_UNLIKELY(0 != value_len)) {
+          ret = OB_INVALID_DATA;
+          LOG_ERROR("invalid null merge old column length", KR(ret), K(i), K(value_len));
+        }
+      } else if (OB_UNLIKELY(0 == value_len || value_len - 1 > INT32_MAX || '\0' != value[value_len - 1])) {
+        ret = OB_INVALID_DATA;
+        LOG_ERROR("invalid parsed merge old column length or terminator", KR(ret), K(i), K(value_len));
+      } else {
+        char *buf = static_cast<char *>(allocator.alloc(value_len));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc merge old column failed", KR(ret), K(i), K(value_len));
+        } else {
+          MEMCPY(buf, value, value_len);
+          // The BR wire format includes a terminator for every non-NULL value,
+          // including empty strings. putOld() expects the length without it.
+          old_value.assign_ptr(buf, static_cast<int32_t>(value_len - 1));
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(old_values.push_back(old_value))) {
+        LOG_ERROR("save merge old column failed", KR(ret), K(i));
+        if (OB_NOT_NULL(old_value.ptr())) {
+          allocator.free(old_value.ptr());
+        }
+      }
     }
   }
 
+  for (int64_t i = 0; OB_SUCC(ret) && i < old_values.count(); ++i) {
+    const ObString &value = old_values.at(i);
+    if (0 != (br_ret = ins_data.putOld(value.ptr(), value.length(), static_cast<VALUE_ORIGIN>(origins[i])))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("put parsed merge old column failed", KR(ret), K(br_ret), K(i));
+      ins_data.clearOld();
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    for (int64_t i = 0; i < old_values.count(); ++i) {
+      if (OB_NOT_NULL(old_values.at(i).ptr())) {
+        allocator.free(old_values.at(i).ptr());
+      }
+    }
+  }
+  if (OB_NOT_NULL(old_cols)) {
+    delete old_cols;
+    old_cols = nullptr;
+  }
   return ret;
 }
 

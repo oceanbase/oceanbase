@@ -17,6 +17,7 @@
 #include "ob_cdc_update_split_merge_storager.h"
 #include "ob_log_resource_collector.h"
 #include "ob_log_instance.h"
+#include "lib/allocator/page_arena.h"
 #include "lib/oblog/ob_log.h"
 
 using namespace oceanbase::common;
@@ -31,68 +32,6 @@ namespace
 
 static const int64_t MAX_UNMATCHED_DELETE_LOG_COUNT = 5;
 static const int64_t UNMATCHED_KEY_BUF_LEN = 256;
-
-int build_delete_old_cols_payload_(
-    ObLogBR &del_br,
-    ObIAllocator &allocator,
-    MergeOldColsPayload &payload)
-{
-  int ret = OB_SUCCESS;
-  IBinlogRecord *del_data = del_br.get_data();
-
-  if (OB_ISNULL(del_data)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("delete br data is null", KR(ret), K(del_br));
-  } else if (OB_FAIL(payload.init_from_delete(*del_data, allocator))) {
-    LOG_ERROR("init merge old cols payload from delete failed", KR(ret), K(del_br));
-  }
-
-  return ret;
-}
-
-int serialize_merge_old_cols_payload_(
-    const MergeOldColsPayload &payload,
-    ObIAllocator &allocator,
-    const char *&data,
-    int64_t &data_len)
-{
-  int ret = OB_SUCCESS;
-  data = nullptr;
-  data_len = 0;
-
-  const int64_t payload_len = payload.get_serialize_size();
-  char *buf = static_cast<char *>(allocator.alloc(payload_len));
-  int64_t pos = 0;
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("alloc merge old cols payload buffer failed", KR(ret), K(payload_len));
-  } else if (OB_FAIL(payload.serialize(buf, payload_len, pos))) {
-    LOG_ERROR("serialize merge old cols payload failed", KR(ret), K(payload_len), K(pos), K(payload));
-  } else {
-    data = buf;
-    data_len = pos;
-  }
-
-  return ret;
-}
-
-int deserialize_merge_old_cols_payload_(
-    const char *data,
-    const int64_t data_len,
-    MergeOldColsPayload &payload)
-{
-  int ret = OB_SUCCESS;
-  int64_t pos = 0;
-
-  if (OB_ISNULL(data) || OB_UNLIKELY(data_len <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid merge old cols payload", KR(ret), KP(data), K(data_len));
-  } else if (OB_FAIL(payload.deserialize(data, data_len, pos))) {
-    LOG_ERROR("deserialize merge old cols payload failed", KR(ret), K(data_len), K(pos));
-  }
-
-  return ret;
-}
 
 void build_unmatched_key_summary_(
     UpdateSplitMergeMap &merge_map,
@@ -235,16 +174,12 @@ int ObCDCUpdateSplitMergeCache::put(const int64_t trace_id, DmlStmtTask *del_stm
     ObLogBR *del_br = del_stmt->get_binlog_record();
     const char *data = nullptr;
     int64_t data_len = 0;
-    ObIAllocator &allocator = del_stmt->get_host().get_allocator();
-    MergeOldColsPayload payload;
 
-    if (OB_ISNULL(del_br)) {
+    if (OB_ISNULL(del_br) || OB_ISNULL(del_br->get_data())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("delete br is null", KR(ret), K(trace_id), KPC(del_stmt));
-    } else if (OB_FAIL(build_delete_old_cols_payload_(*del_br, allocator, payload))) {
-      LOG_ERROR("build delete old cols payload failed", KR(ret), K(trace_id), KPC(del_stmt));
-    } else if (OB_FAIL(serialize_merge_old_cols_payload_(payload, allocator, data, data_len))) {
-      LOG_ERROR("serialize merge old cols payload failed", KR(ret), K(trace_id), KPC(del_stmt));
+      LOG_ERROR("delete br or data is null", KR(ret), K(trace_id), KPC(del_stmt));
+    } else if (OB_FAIL(serialize_merge_delete_br(*del_br->get_data(), data, data_len))) {
+      LOG_ERROR("serialize merge delete br failed", KR(ret), K(trace_id), KPC(del_stmt));
     } else {
       UpdateSplitMergeKey key(
           host.get_tenant_id(),
@@ -252,7 +187,9 @@ int ObCDCUpdateSplitMergeCache::put(const int64_t trace_id, DmlStmtTask *del_stm
           host.get_trans_id(),
           host.get_ls_id(),
           trace_id);
-      if (OB_FAIL(storager_->put(key, data, static_cast<int64_t>(data_len)))) {
+      // put() consumes the borrowed bytes synchronously, before this thread
+      // serializes another record or the DELETE BR is recycled below.
+      if (OB_FAIL(storager_->put(key, data, data_len))) {
         LOG_ERROR("storager put failed", KR(ret), K(key));
       } else if (OB_FAIL(resource_collector_->revert(EDELETE, del_br))) {
         LOG_ERROR("revert offloaded delete br failed", KR(ret), K(trace_id));
@@ -399,18 +336,18 @@ int ObCDCUpdateSplitMergeCache::merge_offloaded_(
   // diverges from DELETE's due to upstream changes).
   const UpdateSplitMergeKey &key = entry.offload_key_;
   UNUSED(trace_id);
+  ObArenaAllocator read_allocator("CDCMergeRead");
   const char *data = nullptr;
   int64_t data_len = 0;
   ObIAllocator &allocator = part_trans.get_allocator();
 
-  if (OB_FAIL(storager_->get(allocator, key, data, data_len))) {
+  if (OB_FAIL(storager_->get(read_allocator, key, data, data_len))) {
     LOG_ERROR("storager get failed", KR(ret), K(key));
   } else {
-    MergeOldColsPayload payload;
-    if (OB_FAIL(deserialize_merge_old_cols_payload_(data, data_len, payload))) {
-      LOG_ERROR("deserialize merge old cols payload failed", KR(ret), K(key), K(data_len));
-    } else if (OB_FAIL(payload.apply_to_insert(*ins_data))) {
-      LOG_ERROR("apply merge old cols payload to insert failed", KR(ret), K(key), K(payload));
+    // The local allocator owns the parse input; only the recovered old columns
+    // need to survive in the transaction allocator after this call.
+    if (OB_FAIL(apply_serialized_merge_delete_br(data, data_len, allocator, *ins_data))) {
+      LOG_ERROR("apply serialized merge delete br to insert failed", KR(ret), K(key), K(data_len));
     } else {
       LOG_DEBUG("[MERGE] offloaded merge succ", K(key), K(data_len));
     }

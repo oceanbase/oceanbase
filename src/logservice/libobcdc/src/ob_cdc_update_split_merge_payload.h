@@ -14,8 +14,6 @@
 #define OCEANBASE_LIBOBCDC_UPDATE_SPLIT_MERGE_PAYLOAD_H_
 
 #include "lib/allocator/ob_allocator.h"
-#include "lib/container/ob_se_array.h"
-#include "lib/utility/ob_unify_serialize.h"
 #include "ob_log_binlog_record.h"
 
 namespace oceanbase
@@ -23,32 +21,22 @@ namespace oceanbase
 namespace libobcdc
 {
 
-struct MergeOldColValue
-{
-  OB_UNIS_VERSION(1);
-public:
-  MergeOldColValue() : data_(), origin_(static_cast<uint8_t>(REDO)) {}
-  MergeOldColValue(const common::ObString &data, const uint8_t origin) : data_(data), origin_(origin) {}
+// Serialize the complete DELETE with the BR library. The returned bytes borrow
+// the thread-local message buffer and must be consumed synchronously before the
+// next call on this thread or destruction of the DELETE BR. Do not free them.
+int serialize_merge_delete_br(
+    IBinlogRecord &del_data,
+    const char *&data,
+    int64_t &data_len);
 
-  TO_STRING_KV(K_(data), K_(origin));
-
-  common::ObString data_;
-  uint8_t origin_;
-};
-
-struct MergeOldColsPayload
-{
-  OB_UNIS_VERSION(1);
-public:
-  MergeOldColsPayload() : old_cols_() {}
-
-  int init_from_delete(IBinlogRecord &del_data, common::ObIAllocator &allocator);
-  int apply_to_insert(IBinlogRecord &ins_data) const;
-
-  TO_STRING_KV(K_(old_cols));
-
-  common::ObSEArray<MergeOldColValue, 2> old_cols_;
-};
+// Parse a persisted DELETE and append its old columns to the INSERT. Values are
+// copied into allocator, which must outlive the INSERT BR. Validate and prepare
+// every column before changing the INSERT; preserve NULL, empty strings and origins.
+int apply_serialized_merge_delete_br(
+    const char *data,
+    const int64_t data_len,
+    common::ObIAllocator &allocator,
+    IBinlogRecord &ins_data);
 
 } // namespace libobcdc
 } // namespace oceanbase
