@@ -1206,11 +1206,12 @@ int ObTriggerResolver::resolve_base_object(ObCreateTriggerArg &tg_arg,
         LOG_WARN("table schema is null", KP(table_schema), K(ret));
       } else {
         // oracle mode, 前面设置的base_object_database_可能不正确,此处兜底
-        tg_arg.base_object_name_ = object_name;
+        // The executor refreshes/releases the schema guard between RPCs, so own both names.
+        OZ (ob_write_string(*allocator_, object_name, tg_arg.base_object_name_));
         object_db_id = table_schema->get_database_id();
         OZ (schema_checker_->get_database_schema(tenant_id, object_db_id, object_db_schema));
         CK (OB_NOT_NULL(object_db_schema));
-        OX (tg_arg.base_object_database_ = object_db_schema->get_database_name());
+        OZ (ob_write_string(*allocator_, object_db_schema->get_database_name(), tg_arg.base_object_database_));
       }
     } else {
       ret = OB_TABLE_NOT_EXIST;
