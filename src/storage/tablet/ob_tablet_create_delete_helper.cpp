@@ -892,28 +892,28 @@ int ObTabletCreateDeleteHelper::inner_create_empty_co_sstable(
 bool ObTabletCreateDeleteHelper::is_pure_data_tablets(const ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() == 1 && is_contain(tablet_ids, data_tablet_id);
 }
 
 bool ObTabletCreateDeleteHelper::is_mixed_tablets(const ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() > 1 && is_contain(tablet_ids, data_tablet_id);
 }
 
 bool ObTabletCreateDeleteHelper::is_pure_aux_tablets(const ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && !info.is_create_bind_hidden_tablets_;
 }
 
 bool ObTabletCreateDeleteHelper::is_pure_hidden_tablets(const ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
 }
 

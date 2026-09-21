@@ -4757,13 +4757,13 @@ public:
   int64_t get_tablet_count() const { return tablet_ids_.count(); }
   DECLARE_TO_STRING;
 
-  common::ObSArray<common::ObTabletID> tablet_ids_;
+  common::ObSEArray<common::ObTabletID, 4> tablet_ids_;
   common::ObTabletID data_tablet_id_; // or orig tablet id if is create hidden tablets
   //the index of table_schemas_ in ObBatchCreateTabletArg
-  common::ObSArray<int64_t> table_schema_index_;
+  common::ObSEArray<int64_t, 4> table_schema_index_;
   lib::Worker::CompatMode compat_mode_;
   bool is_create_bind_hidden_tablets_;
-  ObSArray<int64_t> create_commit_versions_;
+  common::ObSEArray<int64_t, 4> create_commit_versions_;
   bool has_cs_replica_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateTabletInfo);
