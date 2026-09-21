@@ -1001,6 +1001,15 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   bool is_weak = true;
+  ObSQLSessionInfo *session = exec_ctx.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected NULL", KR(ret), K(session));
+  } else if (session->is_in_transaction() &&
+             OB_NOT_NULL(session->get_tx_desc()) &&
+             !session->get_tx_desc()->is_clean()) {
+    is_weak = false;
+  }
   for (int64_t i = 0; OB_SUCC(ret) && is_weak && i < tbl_loc_list.count(); i++) {
     bool is_weak_read = false;
     const ObTableLocation *table_location = tbl_loc_list.at(i);
