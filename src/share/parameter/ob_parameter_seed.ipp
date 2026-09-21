@@ -1310,6 +1310,11 @@ DEF_TIME(_c_replica_strong_read_local_max_wait_time, OB_TENANT_PARAMETER, "500ms
         "Defines the maximum local wait time for Column-only Replica when serving follower strong "
         "consistency reads",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_log_cb_pool_min_count, OB_TENANT_PARAMETER, "0", "[0,)",
+        "Control the minimum number of log cb pools for each log stream leader. "
+        "0 means no minimum limit. "
+        "Range: [0, not limited pool count",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_minor_compaction_amplification_factor, OB_TENANT_PARAMETER, "0", "[0,100]",
         "thre L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
