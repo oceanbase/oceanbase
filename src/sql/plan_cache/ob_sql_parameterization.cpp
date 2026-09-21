@@ -2296,6 +2296,20 @@ int ObSqlParameterization::mark_tree(TransformTreeCtx &ctx, ParseNode *tree ,Sql
             }
           }
         }
+      } else if (0 == func_name.case_compare("TIME")
+                 && 1 == node[1]->num_child_) {
+        const int64_t ARGS_NUMBER_ONE = 1;
+        bool mark_arr[ARGS_NUMBER_ONE] = {1};
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_ONE, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark TIME arg", K(ret));
+        }
+      } else if (0 == func_name.case_compare("TIMEDIFF")
+                 && 2 == node[1]->num_child_) {
+        const int64_t ARGS_NUMBER_TWO = 2;
+        bool mark_arr[ARGS_NUMBER_TWO] = {1, 1};
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark TIMEDIFF args", K(ret));
+        }
       } else if (0 == func_name.case_compare("USERENV")
           && (1 == node[1]->num_child_)) {
         // USERENV函数的返回类型是由参数的具体值来决定，如果参数化后，无法拿到具体值，所以暂时不进行参数化

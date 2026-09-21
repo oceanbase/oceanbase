@@ -64,9 +64,11 @@ inline int ObExprMakeTime::calc_result_type3(ObExprResType &type,
   UNUSED(type_ctx);
   int ret = common::OB_SUCCESS;
   type.set_type(common::ObTimeType);
-  // According to Mysql User Manual(from 5.x to 8.0), the return value is TIME type with scale 6.
-  // https://dev.mysql.com/doc/refman/8.0/en/time.html 
-  type.set_scale(common::MAX_SCALE_FOR_TEMPORAL);
+  common::ObScale scale = type3.get_scale();
+  if (scale < 0 || scale > common::MAX_SCALE_FOR_TEMPORAL) {
+    scale = common::MAX_SCALE_FOR_TEMPORAL;
+  }
+  type.set_scale(scale);
   type1.set_calc_type(common::ObInt32Type);
   type2.set_calc_type(common::ObInt32Type);
   type3.set_calc_type(common::ObNumberType);

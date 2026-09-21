@@ -145,6 +145,10 @@ public:
   virtual common::ObCastMode get_cast_mode() const override { return CM_NULL_ON_WARN; }
   static int calc_time(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
   static int calc_time_vector(const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const EvalBound &bound);
+  static int deduce_time_scale(const ObExprResType &type,
+                               common::ObExprTypeCtx &type_ctx,
+                               const int64_t param_idx,
+                               common::ObScale &scale);
 private :
   //disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprTime);

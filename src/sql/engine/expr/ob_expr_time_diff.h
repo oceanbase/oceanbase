@@ -9,6 +9,7 @@
 #include "lib/ob_name_def.h"
 #include "share/object/ob_obj_cast.h"
 #include "sql/engine/expr/ob_expr_operator.h"
+#include "sql/engine/expr/ob_expr_time.h"
 
 namespace oceanbase
 {
@@ -69,29 +70,27 @@ inline int ObExprTimeDiff::calc_result_type2(ObExprResType &type,
   // literal fsp and add plan-cache constraints to avoid wrong scale reuse,
   // so we won’t keep MySQL compatibility here.
   int ret = common::OB_SUCCESS;
-  common::ObScale scale = static_cast<common::ObScale>(common::max(left.get_scale(), right.get_scale()));
-  if (scale < 0) {
-    scale = common::MAX_SCALE_FOR_TEMPORAL;
+  common::ObScale left_scale = common::SCALE_UNKNOWN_YET;
+  common::ObScale right_scale = common::SCALE_UNKNOWN_YET;
+  if (OB_FAIL(ObExprTime::deduce_time_scale(left, type_ctx, 0, left_scale))) {
+    SQL_ENG_LOG(WARN, "failed to deduce left TIME scale", K(ret));
+  } else if (OB_FAIL(ObExprTime::deduce_time_scale(right, type_ctx, 1, right_scale))) {
+    SQL_ENG_LOG(WARN, "failed to deduce right TIME scale", K(ret));
+  } else {
+    common::ObScale scale = common::max(left_scale, right_scale);
+    if (ob_is_enumset_tc(left.get_type())) {
+      left.set_calc_type(common::ObVarcharType);
+      scale = common::MAX_SCALE_FOR_TEMPORAL;
+    } else if (ob_is_real_type(left.get_type())) {
+      left.set_calc_type(common::ObNumberType);
+    }
+    if (ob_is_enumset_tc(right.get_type())) {
+      right.set_calc_type(common::ObVarcharType);
+      scale = common::MAX_SCALE_FOR_TEMPORAL;
+    }
+    type.set_time();
+    type.set_scale(scale);
   }
-
-  if (scale > common::MAX_SCALE_FOR_TEMPORAL) {
-    scale = common::MAX_SCALE_FOR_TEMPORAL;
-  }
-
-  if (ob_is_enumset_tc(left.get_type())) {
-    left.set_calc_type(common::ObVarcharType);
-    scale = common::MAX_SCALE_FOR_TEMPORAL;
-  } else if (ob_is_real_type(left.get_type())) {
-    left.set_calc_type(common::ObNumberType);
-  }
-  if (ob_is_enumset_tc(right.get_type())) {
-    right.set_calc_type(common::ObVarcharType);
-    scale = common::MAX_SCALE_FOR_TEMPORAL;
-  }
-  type.set_time();
-  type.set_scale(scale);
-
-  UNUSED(type_ctx);
   return ret;
 }
 } //sql

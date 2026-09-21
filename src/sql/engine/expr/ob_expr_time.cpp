@@ -5,9 +5,12 @@
 
 #define USING_LOG_PREFIX  SQL_ENG
 #include "ob_expr_time.h"
+#include "sql/ob_sql_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_day_of_func.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
+#include "lib/oblog/ob_warning_buffer.h"
 #include "lib/locale/ob_locale_type.h"
 #include "common/ob_target_specific.h"
 using namespace oceanbase::common;
@@ -26,6 +29,98 @@ ObExprTime::~ObExprTime()
 {
 }
 
+int ObExprTime::deduce_time_scale(const ObExprResType &type,
+                                  ObExprTypeCtx &type_ctx,
+                                  const int64_t param_idx,
+                                  ObScale &scale)
+{
+  int ret = OB_SUCCESS;
+  scale = static_cast<ObScale>(MIN(type.get_scale(), MAX_SCALE_FOR_TEMPORAL));
+  ObString time_str;
+  bool has_time_str = false;
+  ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_RES_TYPE);
+  ObObj value;
+  if (type.is_literal() && type.is_string_type() && !type.get_param().is_null()) {
+    time_str = type.get_param().get_string();
+    has_time_str = true;
+  } else {
+    if (SCALE_UNKNOWN_YET == scale) {
+      scale = type.is_temporal_type() ? 0 : MAX_SCALE_FOR_TEMPORAL;
+    }
+    if (!type.is_literal() && type.is_string_type()) {
+      ObRawExpr *parent_expr = type_ctx.get_raw_expr();
+      const ObRawExpr *arg_expr = NULL;
+      ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(type_ctx.get_session());
+      if (OB_NOT_NULL(parent_expr)
+          && 0 <= param_idx
+          && param_idx < parent_expr->get_param_count()) {
+        arg_expr = parent_expr->get_param_expr(param_idx);
+      }
+      if (OB_ISNULL(session)
+          || OB_ISNULL(arg_expr)
+          || !arg_expr->is_static_scalar_const_expr()
+          || !arg_expr->is_deterministic()
+          || arg_expr->has_flag(CNT_STATIC_PARAM)
+          || arg_expr->has_flag(CNT_CUR_TIME)
+          || arg_expr->has_flag(CNT_PL_UDF)
+          || arg_expr->cnt_not_calculable_expr()) {
+        // Keep the default scale when constant-value inference is unsafe.
+      } else {
+        ParamStore empty_params;
+        int eval_ret = OB_SUCCESS;
+        {
+          ObWarningBufferIgnoreScope ignore_speculative_warnings(false);
+          eval_ret = ObSQLUtils::calc_simple_expr_without_row(session,
+                                                              arg_expr,
+                                                              value,
+                                                              &empty_params,
+                                                              tmp_allocator);
+        }
+        if (OB_SUCCESS == eval_ret) {
+          if (!value.is_null() && value.is_string_type()) {
+            time_str = value.get_string();
+            has_time_str = true;
+          }
+        } else if (OB_ALLOCATE_MEMORY_FAILED == eval_ret
+                   || OB_EXCEED_QUERY_MEM_LIMIT == eval_ret
+                   || OB_SIZE_OVERFLOW == eval_ret
+                   || is_timeout_err(eval_ret)
+                   || OB_CANCELED == eval_ret
+                   || OB_SESSION_KILLED == eval_ret
+                   || OB_ERR_QUERY_INTERRUPTED == eval_ret
+                   || OB_ERR_SESSION_INTERRUPTED == eval_ret) {
+          ret = eval_ret;
+          LOG_WARN("failed to evaluate constant TIME argument", K(ret));
+        } else {
+          // Unsupported or semantically invalid speculative evaluation must not reject valid SQL.
+          LOG_TRACE("failed to infer TIME scale from constant expression", K(eval_ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && has_time_str) {
+    ObTime ob_time(DT_TYPE_TIME);
+    ObTimeConverter::ObTimeDigits parsed_digits[DATETIME_PART_CNT];
+    int16_t parsed_scale = MAX_SCALE_FOR_TEMPORAL;
+    const int parse_ret = ObTimeConverter::str_to_ob_time_without_date(time_str,
+                                                                       ob_time,
+                                                                       &parsed_scale,
+                                                                       false,
+                                                                       parsed_digits);
+    if (OB_SUCCESS == parse_ret || OB_ERR_TRUNCATED_WRONG_VALUE == parse_ret) {
+      const ObTimeConverter::ObTimeDigits &usec_digits = parsed_digits[DT_USEC];
+      if (NULL != usec_digits.ptr_) {
+        // A timezone hour may occupy DT_USEC when the datetime has no fractional part.
+        parsed_scale = usec_digits.ptr_ > time_str.ptr() && '.' == *(usec_digits.ptr_ - 1)
+                     ? static_cast<int16_t>(MIN(usec_digits.len_, MAX_SCALE_FOR_TEMPORAL))
+                     : 0;
+      }
+      scale = parsed_scale;
+    }
+  }
+  return ret;
+}
+
 int ObExprTime::calc_result_type1(ObExprResType &type,
                                   ObExprResType &type1,
                                   ObExprTypeCtx &type_ctx) const
@@ -36,14 +131,13 @@ int ObExprTime::calc_result_type1(ObExprResType &type,
   type1.set_calc_type(ObTimeType);
   type.set_type(ObTimeType);
   //deduce scale now.
-  int16_t scale1 = MIN(type1.get_scale(), MAX_SCALE_FOR_TEMPORAL);
-  int16_t scale = (SCALE_UNKNOWN_YET == scale1)
-                  ? (type1.is_temporal_type()
-                     ? 0
-                     : MAX_SCALE_FOR_TEMPORAL)
-                  : scale1;
-  type.set_scale(scale);
-  type1.set_calc_scale(scale);
+  ObScale scale = SCALE_UNKNOWN_YET;
+  if (OB_FAIL(deduce_time_scale(type1, type_ctx, 0, scale))) {
+    LOG_WARN("failed to deduce TIME scale", K(ret));
+  } else {
+    type.set_scale(scale);
+    type1.set_calc_scale(scale);
+  }
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_NULL_ON_WARN);
   return ret;
 }
