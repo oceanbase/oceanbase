@@ -15,6 +15,7 @@
 #include "observer/table_load/resource/ob_table_load_resource_manager.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/omt/ob_tenant.h"
+#include "share/ob_all_server_tracer.h"
 
 namespace oceanbase
 {
@@ -373,40 +374,19 @@ int ObTableLoadResourceManager::gen_update_arg(ObDirectLoadResourceUpdateArg &up
   const ObSysVarSchema *var_schema = NULL;
   ObTenant *tenant = nullptr;
   uint64_t tenant_id = MTL_ID();
-  ObSqlString sql;
+  ObArray<share::ObServerInfoInTable> server_infos;
+  ObZone empty_zone;
+  server_infos.set_tenant_id(tenant_id);
 
-  SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
-    common::sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql.assign_fmt("select svr_ip, svr_port from %s where status = 'ACTIVE'", OB_ALL_SERVER_TNAME))) {
-      LOG_WARN("failed to assign sql", KR(ret));
-    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql_proxy is null", KR(ret), K(GCTX.sql_proxy_));
-    } else if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
-      LOG_WARN("execute sql failed", KR(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is null", KR(ret));
-    } else {
-      while (OB_SUCC(result->next())) {
-        ObString svr_ip;
-        int32_t svr_port = -1;
-        ObAddr addr;
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "svr_ip", svr_ip);
-        EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int32_t);
-        if (OB_SUCC(ret)) {
-          if (false == addr.set_ip_addr(svr_ip, svr_port)) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("failed to set_ip_addr", KR(ret), K(svr_ip), K(svr_port));
-          } else if (OB_FAIL(update_arg.addrs_.push_back(addr))) {
-            LOG_WARN("failed to push back obj", KR(ret));
-          }
-        }
-      }
-      if (OB_FAIL(ret) && OB_ITER_END != ret) {
-        LOG_WARN("read dependency info failed", KR(ret));
-      } else {
-        ret = OB_SUCCESS;
+  if (!SVR_TRACER.has_build()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("server tracer has not built", KR(ret));
+  } else if (OB_FAIL(SVR_TRACER.get_active_servers_info(empty_zone, server_infos))) {
+    LOG_WARN("fail to get active servers info", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_infos.count(); ++i) {
+      if (OB_FAIL(update_arg.addrs_.push_back(server_infos.at(i).get_server()))) {
+        LOG_WARN("failed to push back obj", KR(ret));
       }
     }
   }
