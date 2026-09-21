@@ -17,7 +17,6 @@ namespace oceanbase
 namespace storage
 {
 
-class ObITableReadInfo;
 class ObRowsInfo;
 class ObRowKeysInfo;
 class ObSSTableReadHandle;
@@ -28,7 +27,6 @@ namespace blocksstable
 {
 
 class ObDataMacroBlockMeta;
-class ObSSTable;
 
 struct ObBloomFilterLoadKey
 {
@@ -101,6 +99,17 @@ public:
     common::ObIAllocator * allocator_;
   };
 
+  struct ValuePairCmpFunc
+  {
+  public:
+    explicit ValuePairCmpFunc(const blocksstable::ObStorageDatumUtils & datum_utils) : datum_utils_(&datum_utils) {}
+    ~ValuePairCmpFunc() {}
+    bool operator () (const ValuePair & lhs, const ValuePair & rhs);
+
+  public:
+    const blocksstable::ObStorageDatumUtils * datum_utils_;
+  };
+
 public:
   ObBloomFilterLoadTaskQueue();
   ~ObBloomFilterLoadTaskQueue();
@@ -146,17 +155,11 @@ public:
 
 private:
   using ValuePair = ObBloomFilterLoadTaskQueue::ValuePair;
-  using MacroRowkeyMap = common::hash::ObHashMap<MacroBlockId, const ObDatumRowkey *,
-                                               common::hash::NoPthreadDefendMode>;
   const int64_t MACRO_BF_GET_LOAD_THRESHOLD = 10;
 
 private:
-  int do_load(const ObBloomFilterLoadKey &key, ObArray<ValuePair> &array);
-  int do_multi_load(const ObBloomFilterLoadKey &key, const MacroRowkeyMap &macro_rowkeys,
-                   const ObDatumRange &range, const ObSSTable &sstable,
-                   const storage::ObITableReadInfo &rowkey_read_info);
-  int do_multi_get(const ObBloomFilterLoadKey &key, const MacroRowkeyMap &macro_rowkeys,
-                  const ObSSTable &sstable, const storage::ObITableReadInfo &rowkey_read_info);
+  int do_multi_load(const ObBloomFilterLoadKey &key, ObArray<ValuePair> &array);
+  int do_multi_get(const ObBloomFilterLoadKey &key, ObArray<ValuePair> &array);
   int load_macro_block_bloom_filter(const ObDataMacroBlockMeta &macro_meta);
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlockBloomFilterLoadTG);
 

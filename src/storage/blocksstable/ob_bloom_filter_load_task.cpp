@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 
+#include "lib/utility/ob_sort.h"
 #include "share/rc/ob_tenant_base.h"
 #include "storage/blocksstable/ob_bloom_filter_load_task.h"
 #include "storage/blocksstable/ob_macro_block_meta.h"
@@ -101,6 +102,16 @@ int ObBloomFilterLoadTaskQueue::ValuePair::recycle_rowkey()
     rowkey_ = nullptr;
   }
   return ret;
+}
+
+bool ObBloomFilterLoadTaskQueue::ValuePairCmpFunc::operator () (const ValuePair &lhs, const ValuePair &rhs)
+{
+  int ret = OB_SUCCESS;
+  int cmp_ret = 0;
+  if (OB_FAIL(lhs.rowkey_->compare(*rhs.rowkey_, *datum_utils_, cmp_ret))) {
+    LOG_WARN("fail to compare rowkey in ValuePairCmpFunc", K(ret), K(lhs), K(rhs), KPC(datum_utils_));
+  }
+  return cmp_ret < 0;
 }
 
 ObBloomFilterLoadTaskQueue::ObBloomFilterLoadTaskQueue()
@@ -382,8 +393,14 @@ void ObMacroBlockBloomFilterLoadTG::run1()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected array", K(ret), KP(array), K(key));
       } else {
-        if (OB_FAIL(do_load(key, *array))) {
-          LOG_WARN("fail to load bloom filters", K(ret), K(key), KPC(array));
+        if (array->count() >= MACRO_BF_GET_LOAD_THRESHOLD) {
+          if (OB_FAIL(do_multi_load(key, *array))) {
+            LOG_WARN("fail to do multi load", K(ret), K(key), KPC(array));
+          }
+        } else {
+          if (OB_FAIL(do_multi_get(key, *array))) {
+            LOG_WARN("fail to do multi get", K(ret), K(key), KPC(array));
+          }
         }
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(load_task_queue_.recycle_array(array))) {
@@ -435,8 +452,8 @@ int ObMacroBlockBloomFilterLoadTG::load_macro_block_bloom_filter(const ObDataMac
   return ret;
 }
 
-int ObMacroBlockBloomFilterLoadTG::do_load(const ObBloomFilterLoadKey &key,
-                                         ObArray<ValuePair> &array)
+int ObMacroBlockBloomFilterLoadTG::do_multi_get(const ObBloomFilterLoadKey &key,
+                                                ObArray<ValuePair> &array)
 {
   int ret = OB_SUCCESS;
   const common::ObTabletID tablet_id = key.table_key_.get_tablet_id();
@@ -445,199 +462,211 @@ int ObMacroBlockBloomFilterLoadTG::do_load(const ObBloomFilterLoadKey &key,
   ObTabletHandle tablet_handle;
   ObTableHandleV2 sstable_handle;
   ObSSTable * sstable = nullptr;
-  MacroRowkeyMap macro_rowkeys;
-  const ObDatumRowkey *begin_key = nullptr;
-  const ObDatumRowkey *end_key = nullptr;
-  int64_t macro_count = 0;
 
   if (OB_UNLIKELY(array_count <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to do multi load, unexpected empty array", K(ret), K(key), K(array_count), K(array));
-  } else if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet(WashTabletPriority::WTP_LOW, tablet_map_key, tablet_handle))) {
-    if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
-      LOG_WARN("fail to get tablet", K(ret), K(key));
-    }
-  } else if (OB_FAIL(tablet_handle.get_obj()->get_table(key.table_key_, sstable_handle))) {
-    LOG_WARN("fail to get table", K(ret), K(key));
-  } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("fail to get sstable", K(ret), K(key));
-    }
-  } else if (OB_FAIL(macro_rowkeys.create(array_count, "BFLoadMap", "BFLoadMap", MTL_ID()))) {
-    LOG_WARN("fail to create load batch map", K(ret), K(key));
   } else {
-    const ObITableReadInfo &rowkey_read_info = tablet_handle.get_obj()->get_rowkey_read_info();
-    const ObStorageDatumUtils &datum_utils = rowkey_read_info.get_datum_utils();
-    // The map borrows rowkeys from array, which run1 recycles after this call.
-    // Preserve the full request range and the first rowkey for each macro.
-    for (int64_t i = 0; OB_SUCC(ret) && i < array_count; ++i) {
-      ValuePair &pair = array.at(i);
-      int cmp_ret = 0;
-      if (OB_UNLIKELY(!pair.is_valid())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid load request", K(ret), K(key), K(pair));
-      } else {
-        if (nullptr == begin_key) {
-          begin_key = end_key = pair.rowkey_;
-        } else if (OB_FAIL(pair.rowkey_->compare(*begin_key, datum_utils, cmp_ret))) {
-          LOG_WARN("fail to compare load range start", K(ret), K(key), K(pair));
-        } else if (cmp_ret < 0) {
-          begin_key = pair.rowkey_;
-        } else if (OB_FAIL(pair.rowkey_->compare(*end_key, datum_utils, cmp_ret))) {
-          LOG_WARN("fail to compare load range end", K(ret), K(key), K(pair));
-        } else if (cmp_ret > 0) {
-          end_key = pair.rowkey_;
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(macro_rowkeys.set_refactored(pair.macro_id_, pair.rowkey_, 0 /* overwrite */))) {
-            if (OB_HASH_EXIST == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              LOG_WARN("fail to add macro to load batch", K(ret), K(key), K(pair));
-            }
-          }
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      macro_count = macro_rowkeys.size();
-      if (macro_count < MACRO_BF_GET_LOAD_THRESHOLD) {
-        ret = do_multi_get(key, macro_rowkeys, *sstable, rowkey_read_info);
-      } else {
-        ObDatumRange range;
-        range.set_start_key(*begin_key);
-        range.set_end_key(*end_key);
-        range.set_left_closed();
-        range.set_right_closed();
-        ret = do_multi_load(key, macro_rowkeys, range, *sstable, rowkey_read_info);
-      }
-    }
-  }
-  if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret) {
-    ret = OB_SUCCESS;
-  }
-  return ret;
-}
+    const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
+    int64_t load_cnt = 0;
+    int64_t duplicate_cnt = 0;
 
-int ObMacroBlockBloomFilterLoadTG::do_multi_get(const ObBloomFilterLoadKey &key,
-                                              const MacroRowkeyMap &macro_rowkeys,
-                                              const ObSSTable &sstable,
-                                              const ObITableReadInfo &rowkey_read_info)
-{
-  int ret = OB_SUCCESS;
-  const int64_t empty_read_prefix = rowkey_read_info.get_rowkey_count()
-      - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */;
-  const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
-  int64_t load_cnt = 0;
-  int64_t duplicate_cnt = 0;
-  SMART_VAR(ObSSTableSecMetaIterator, sec_meta_iter) {
-    for (MacroRowkeyMap::const_iterator iter = macro_rowkeys.begin(); OB_SUCC(ret) && iter != macro_rowkeys.end(); ++iter) {
-      sec_meta_iter.reset();
-      const MacroBlockId &macro_id = iter->first;
-      const ObBloomFilterCacheKey bfc_key(MTL_ID(), macro_id, empty_read_prefix);
-      bool need_load = false;
-      if (OB_FAIL(ObStorageCacheSuite::get_instance().get_bf_cache().check_need_load(bfc_key, need_load))) {
-        LOG_WARN("fail to check need load", K(ret), K(key), K(bfc_key));
-      } else if (!need_load) {
-        // do nothing.
-        duplicate_cnt++;
+    SMART_VAR(ObSSTableSecMetaIterator, sec_meta_iter) {
+      int64_t empty_read_prefix_tmp = 0;
+      // Fetch tablet and sstable.
+      if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet(WashTabletPriority::WTP_LOW, tablet_map_key, tablet_handle))) {
+        if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
+          LOG_WARN("fail to get tablet", K(ret), K(key));
+        }
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_table(key.table_key_, sstable_handle))) {
+        LOG_WARN("fail to get table", K(ret), K(key));
+      } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to get sstable", K(ret), K(key));
+        }
       } else {
-        ObDataMacroBlockMeta macro_meta;
-        ObDatumRange range;
-        range.set_start_key(*iter->second);
-        range.set_end_key(*iter->second);
-        range.set_left_closed();
-        range.set_right_closed();
-        if (OB_FAIL(sec_meta_iter.open(range,
-                                       blocksstable::DATA_BLOCK_META,
-                                       sstable,
-                                       rowkey_read_info,
-                                       allocator_))) {
-          LOG_WARN("fail to open sec meta iter", K(ret));
+        empty_read_prefix_tmp = tablet_handle.get_obj()->get_rowkey_read_info().get_rowkey_count()
+            - storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() /* mvcc col */;
+      }
+
+      const int64_t empty_read_prefix = empty_read_prefix_tmp;
+      for (int64_t curr_idx = 0; OB_SUCC(ret) && curr_idx < array_count; ++curr_idx) {
+        sec_meta_iter.reset();
+        const ValuePair &curr_pair = array.at(curr_idx);
+        const ObBloomFilterCacheKey bfc_key(MTL_ID(), curr_pair.macro_id_, empty_read_prefix);
+        const uint64_t key_hash = bfc_key.hash();
+        bool need_load = false;
+        if (OB_FAIL(ObStorageCacheSuite::get_instance().get_bf_cache().check_need_load(bfc_key, need_load))) {
+          LOG_WARN("fail to check need load", K(ret), K(bfc_key), K(empty_read_prefix), K(curr_pair));
+        } else if (!need_load) {
+          // do nothing.
+          duplicate_cnt++;
         } else {
-          while (OB_SUCC(ret)) {
-            macro_meta.reset();
-            if (OB_FAIL(sec_meta_iter.get_next(macro_meta))) {
-              if (OB_ITER_END == ret) {
-                LOG_WARN("fail to find target macro block", K(ret), K(key), K(macro_id), K(range));
-              } else {
-                LOG_WARN("fail to get next", K(ret), K(key), K(macro_id));
-              }
-            } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("fail to load macro block bloom filter, invalid macro meta", K(ret), K(macro_meta), K(key));
-            } else if (macro_id == macro_meta.get_macro_id()) {
-              if (OB_FAIL(load_macro_block_bloom_filter(macro_meta))) {
-                LOG_ERROR("fail to load macro block bloom filter", K(ret), K(macro_meta), K(key));
-                ret = OB_SUCCESS; // Continue load other bloom filter.
-              } else {
-                load_cnt++;
-              }
-              break;
+          ObDataMacroBlockMeta macro_meta;
+          ObDatumRange range;
+          range.set_start_key(*(curr_pair.rowkey_));
+          range.set_end_key(*(curr_pair.rowkey_));
+          range.set_left_closed();
+          range.set_right_closed();
+          if (OB_FAIL(sec_meta_iter.open(range,
+                                         blocksstable::DATA_BLOCK_META,
+                                         *sstable,
+                                         tablet_handle.get_obj()->get_rowkey_read_info(),
+                                         allocator_))) {
+            LOG_WARN("fail to open sec meta iter", K(ret));
+          } else if (OB_FAIL(sec_meta_iter.get_next(macro_meta))) {
+            if (OB_UNLIKELY(OB_ITER_END != ret)) {
+              LOG_WARN("fail to get next", K(ret), K(key), K(curr_pair));
             }
+          } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to load macro block bloom filter, invalid macro meta",
+                     K(ret), K(macro_meta), K(key), K(curr_pair));
           }
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-          }
-        }
-      }
-    }
-  }
-  const int64_t end_ts = common::ObTimeUtility::fast_current_time();
-  const int64_t total_cost = end_ts - begin_ts;
-  LOG_DEBUG("finish once multi load",
-    K(ret), K(key.table_key_), "macro_count", macro_rowkeys.size(), K(duplicate_cnt), K(load_cnt), K(total_cost));
-  return ret;
-}
-
-int ObMacroBlockBloomFilterLoadTG::do_multi_load(const ObBloomFilterLoadKey &key,
-                                               const MacroRowkeyMap &macro_rowkeys,
-                                               const ObDatumRange &range,
-                                               const ObSSTable &sstable,
-                                               const ObITableReadInfo &rowkey_read_info)
-{
-  int ret = OB_SUCCESS;
-  const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
-  int64_t load_cnt = 0;
-  int64_t meta_tree_iter_cnt = 0;
-  const int64_t macro_count = macro_rowkeys.size();
-  SMART_VAR(ObSSTableSecMetaIterator, sec_meta_iter) {
-    if (OB_FAIL(sec_meta_iter.open(range,
-                                   blocksstable::DATA_BLOCK_META,
-                                   sstable,
-                                   rowkey_read_info,
-                                   allocator_))) {
-      LOG_WARN("fail to open sec meta iter", K(ret));
-    }
-    while (OB_SUCC(ret)) {
-      ObDataMacroBlockMeta macro_meta;
-      if (OB_FAIL(sec_meta_iter.get_next(macro_meta))) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("fail to get next", K(ret), K(key), K(range));
-        }
-      } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to load macro block bloom filter, invalid macro meta", K(ret), K(macro_meta), K(key));
-      } else {
-        meta_tree_iter_cnt++;
-        if (nullptr != macro_rowkeys.get(macro_meta.get_macro_id())) {
-          if (OB_FAIL(load_macro_block_bloom_filter(macro_meta))) {
-            LOG_ERROR("fail to load macro block bloom filter", K(ret), K(macro_meta), K(key));
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(load_macro_block_bloom_filter(macro_meta))) {
+            LOG_ERROR("fail to load macro block bloom filter", K(ret), K(macro_meta), K(key), K(curr_pair));
             ret = OB_SUCCESS; // Continue load other bloom filter.
           } else {
             load_cnt++;
           }
         }
       }
+      if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret || OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+    const int64_t end_ts = common::ObTimeUtility::fast_current_time();
+    const int64_t total_cost = end_ts - begin_ts;
+    LOG_DEBUG("finish once multi load",
+      K(ret), K(key.table_key_), K(array_count), K(duplicate_cnt), K(load_cnt), K(total_cost));
+  }
+
+  return ret;
+}
+
+int ObMacroBlockBloomFilterLoadTG::do_multi_load(const ObBloomFilterLoadKey &key,
+                                                 ObArray<ValuePair> &array)
+{
+  int ret = OB_SUCCESS;
+  const common::ObTabletID tablet_id = key.table_key_.get_tablet_id();
+  const ObTabletMapKey tablet_map_key(key.ls_id_, tablet_id);
+  const int64_t array_count = array.count();
+  ObTabletHandle tablet_handle;
+  ObTableHandleV2 sstable_handle;
+  ObSSTable * sstable = nullptr;
+
+  if (OB_UNLIKELY(array_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to do multi load, unexpected empty array", K(ret), K(key), K(array_count), K(array));
+  } else {
+    SMART_VAR(ObSSTableSecMetaIterator, sec_meta_iter) {
+      const int64_t begin_ts = common::ObTimeUtility::fast_current_time();
+      // Fetch tablet and sstable.
+      if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet(WashTabletPriority::WTP_LOW, tablet_map_key, tablet_handle))) {
+        if (OB_ENTRY_NOT_EXIST != ret && OB_ITEM_NOT_SETTED != ret) {
+          LOG_WARN("fail to get tablet", K(ret), K(key));
+        }
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_table(key.table_key_, sstable_handle))) {
+        LOG_WARN("fail to get table", K(ret), K(key));
+      } else if (OB_FAIL(sstable_handle.get_sstable(sstable))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to get sstable", K(ret), K(key));
+        }
+      }
+
+      // Sort macro id by rowkey.
+      const ObITableReadInfo *rowkey_read_info;
+      ObDatumRange range;
+      if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(rowkey_read_info = &(tablet_handle.get_obj()->get_rowkey_read_info()))) {
+      } else {
+        ObBloomFilterLoadTaskQueue::ValuePairCmpFunc func(rowkey_read_info->get_datum_utils());
+        lib::ob_sort(array.begin(), array.end(), func);
+        range.set_start_key(*(array.at(0).rowkey_));
+        range.set_end_key(*(array.at(array_count - 1).rowkey_));
+        range.set_left_closed();
+        range.set_right_closed();
+      }
+
+      // Prepare sec meta iterator.
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(sec_meta_iter.open(range,
+                                            blocksstable::DATA_BLOCK_META,
+                                            *sstable,
+                                            tablet_handle.get_obj()->get_rowkey_read_info(),
+                                            allocator_))) {
+        LOG_WARN("fail to open sec meta iter", K(ret));
+      } else {
+        // Load macro block bloom filter in while loop.
+        int64_t curr_idx = 0;
+        int64_t prev_idx = 0;
+
+        int64_t load_cnt = 0;
+        int64_t meta_tree_iter_cnt = 0;
+        int64_t duplicate_cnt = 0;
+
+        while (OB_SUCC(ret) && curr_idx < array_count) {
+          const ValuePair &curr_pair = array.at(curr_idx);
+          const ValuePair &prev_pair = array.at(prev_idx);
+          if (curr_idx > prev_idx && curr_pair.macro_id_ == prev_pair.macro_id_) {
+            // Skip duplicate macro block.
+            curr_idx++;
+            duplicate_cnt++;
+          } else {
+            // Iterate meta tree to find target macro meta.
+            int cmp_ret = 0;
+            ObDataMacroBlockMeta macro_meta;
+            do {
+              cmp_ret = 0;
+              macro_meta.reset();
+              if (OB_FAIL(sec_meta_iter.get_next(macro_meta))) {
+                if (OB_UNLIKELY(OB_ITER_END != ret)) {
+                  LOG_WARN("fail to get next", K(ret), K(key), K(curr_pair));
+                }
+              } else if (OB_UNLIKELY(!macro_meta.is_valid())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("fail to load macro block bloom filter, invalid macro meta",
+                         K(ret), K(macro_meta), K(key), K(curr_pair));
+              } else if (OB_FAIL(curr_pair.rowkey_->compare(macro_meta.end_key_,
+                                                            rowkey_read_info->get_datum_utils(),
+                                                            cmp_ret))) {
+                LOG_WARN("fail to compare rowkey", K(ret), K(curr_pair), K(macro_meta));
+              } else {
+                meta_tree_iter_cnt++;
+              }
+            } while (OB_SUCC(ret) && cmp_ret > 0 /* current pair endkey > macro meta endkey */);
+
+            // Try to load macro block bloom filter.
+            if (OB_FAIL(ret)) {
+            } else if (OB_UNLIKELY(curr_pair.macro_id_ != macro_meta.get_macro_id())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to find target macro block", K(ret), K(curr_pair), K(macro_meta), K(key));
+              ret = OB_SUCCESS; // Continue load other bloom filter.
+            } else if (OB_FAIL(load_macro_block_bloom_filter(macro_meta))) {
+              LOG_ERROR("fail to load macro block bloom filter", K(ret), K(macro_meta), K(key), K(curr_pair));
+              ret = OB_SUCCESS; // Continue load other bloom filter.
+            } else {
+              load_cnt++;
+            }
+
+            // Update prev macro id.
+            prev_idx = curr_idx;
+            curr_idx++;
+          }
+        }
+        const int64_t end_ts = common::ObTimeUtility::fast_current_time();
+        const int64_t total_cost = end_ts - begin_ts;
+        LOG_DEBUG("finish once multi load",
+                  K(ret), K(key.table_key_), K(array_count), K(duplicate_cnt), K(load_cnt), K(meta_tree_iter_cnt), K(total_cost));
+      }
+
+      if (OB_ENTRY_NOT_EXIST == ret || OB_ITEM_NOT_SETTED == ret || OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
     }
   }
-  if (OB_ITER_END == ret) {
-    ret = OB_SUCCESS;
-  }
-  const int64_t end_ts = common::ObTimeUtility::fast_current_time();
-  const int64_t total_cost = end_ts - begin_ts;
-  LOG_DEBUG("finish once multi load",
-    K(ret), K(key.table_key_), K(macro_count), K(load_cnt), K(meta_tree_iter_cnt), K(total_cost));
+
   return ret;
 }
 
