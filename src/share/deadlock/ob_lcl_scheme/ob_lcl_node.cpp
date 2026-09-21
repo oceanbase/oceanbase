@@ -817,6 +817,7 @@ int ObLCLNode::broadcast_with_lock_(const uint64_t event_id, ObDeadLockCollectIn
   }
   CLICK();
   for (int64_t idx = 0; idx < block_list_copy.count() && OB_SUCC(ret); ++idx) {
+    const int64_t before_cnt = msg.get_collected_info().count();
     msg.set_dest_key(block_list_copy.at(idx).get_user_key());
     if (OB_FAIL(append_report_info_to_msg_with_lock_(block_list_copy.at(idx),
                                                      event_id,
@@ -825,6 +826,19 @@ int ObLCLNode::broadcast_with_lock_(const uint64_t event_id, ObDeadLockCollectIn
     } else if (CLICK() && OB_FAIL(MTL(ObDeadLockDetectorMgr*)->get_rpc().
                post_collect_info_message(block_list_copy.at(idx).get_addr(), msg))) {
       DETECT_LOG_(WARN, "send collect info message failed", KR(ret), K(msg));
+    } else {
+      // when block_list has multiple entries, each downstream should only see
+      // the upstream collected info plus this node's own info for that specific edge.
+      // pop_back undoes the append so the next iteration starts from a clean state.
+      if (block_list_copy.count() > 1) {
+        if (msg.get_collected_info().count() == before_cnt + 1) {
+          msg.pop_back();
+        } else if (msg.get_collected_info().count() != before_cnt) {
+          ret = OB_ERR_UNEXPECTED;
+          DETECT_LOG_(WARN, "unexpected msg count after append", KR(ret), K(before_cnt),
+                      "after_cnt", msg.get_collected_info().count(), K(msg));
+        }
+      }
     }
   }
   return ret;

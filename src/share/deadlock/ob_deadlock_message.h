@@ -28,6 +28,7 @@ public:
   int set_args(const UserBinaryKey &dest_key,
                const common::ObSArray<ObDetectorInnerReportInfo> &collected_info);
   int append(const ObDetectorInnerReportInfo &info);
+  void pop_back() { collected_info_.pop_back(); }
   bool is_valid() const;
   const UserBinaryKey &get_dest_key() const;
   const common::ObSArray<ObDetectorInnerReportInfo> &get_collected_info() const;

@@ -174,7 +174,15 @@ private:
   int check_and_record_cycle_hash_(const uint64_t hash);
   void get_trans_history_sql_from_audit_(const ObDeadLockCollectInfoMessage &collect_info_msg);
   bool is_trans_detector_(const ObDetectorInnerReportInfo &info, ObStringHolder &sess_id, ObStringHolder &trans_id);
-
+  int get_trans_sql_history_from_audit_(const uint64_t query_tenant_id,
+                                       const ObStringHolder &trans_id,
+                                       const common::ObAddr &exec_addr,
+                                       ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history);
+  int pick_and_translate_hold_sql_(const ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history,
+                                   const transaction::ObTxSEQ &hold_seq,
+                                   const common::ObString &wait_sql_to_exclude,
+                                   ObStringHolder &holding_sql_request_time,
+                                   ObStringHolder &holding_sql);
   int get_sql_history_(const uint64_t query_tenant_id,
                        const ObStringHolder &trans_id,
                        ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history,

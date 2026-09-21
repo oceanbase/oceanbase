@@ -17,6 +17,7 @@
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_table_access_helper.h"
 #include "storage/tx/ob_trans_deadlock_adapter.h"
+#include "lib/utility/ob_fast_convert.h"
 
 namespace oceanbase
 {
@@ -797,6 +798,8 @@ void ObDeadLockDetectorMgr::get_trans_history_sql_from_audit_(const ObDeadLockCo
   if (collected_info_array.empty() || collected_info_array.count() == 1) {
     DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array), K(collect_info_msg));
   } else {
+    transaction::ObTransID last_trans_id;
+    ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> trans_sql_history;
     for (int64_t idx = 0; idx < collected_info_array.count(); ++idx) {
       const ObDetectorInnerReportInfo &collected_info = collected_info_array[idx];
       ObDetectorUserReportInfo &user_report_info = const_cast<ObDetectorUserReportInfo &>(collected_info.get_user_report_info());
@@ -820,15 +823,32 @@ void ObDeadLockDetectorMgr::get_trans_history_sql_from_audit_(const ObDeadLockCo
         }
         ObString wait_sql_to_exclude;
         (void)get_wait_sql_from_report_info_(user_report_info, wait_sql_to_exclude);
-        ObSEArray<ObAddr, 8> audit_exec_addrs;
-        collect_cycle_audit_exec_addrs_(collected_info_array, idx, audit_exec_addrs);
+        bool atoi_valid = false;
+        transaction::ObTransID cur_trans_id(ObFastAtoi<int64_t>::atoi(
+            trans_id.get_ob_string().ptr(),
+            trans_id.get_ob_string().ptr() + trans_id.get_ob_string().length(),
+            atoi_valid));
+        if (OB_UNLIKELY(!atoi_valid || !cur_trans_id.is_valid())) {
+          tmp_ret = OB_ERR_UNEXPECTED;
+          DETECT_LOG(WARN, "fail to parse trans_id", KR(tmp_ret), K(trans_id), K(cur_trans_id), K(atoi_valid), K(idx), K(collected_info));
+          continue;
+        }
+        if (cur_trans_id != last_trans_id) {
+          trans_sql_history.reset();
+          if (OB_TMP_FAIL(get_trans_sql_history_from_audit_(collected_info.get_tenant_id(), trans_id,
+                                                            collected_info.get_addr(), trans_sql_history))) {
+            DETECT_LOG(WARN, "get trans sql history failed", KR(tmp_ret), K(trans_id), K(collected_info), K(idx));
+            continue;
+          }
+          last_trans_id = cur_trans_id;
+        }
         ObStringHolder holding_sql;
         ObStringHolder hold_sql_request_time;
         ObSharedGuard<char> holding_sql_guard;
         ObSharedGuard<char> hold_sql_request_time_guard;
-        if (OB_SUCCESS != (tmp_ret = get_holding_sql(trans_id, holding_seq, hold_sql_request_time, holding_sql,
-                                                     collected_info.get_tenant_id(), wait_sql_to_exclude, &audit_exec_addrs))) {
-          DETECT_LOG(WARN, "fail to get holding sql", KR(tmp_ret), K(collected_info), K(collect_info_msg), K(holding_seq), K(idx));
+        if (OB_TMP_FAIL(pick_and_translate_hold_sql_(trans_sql_history, holding_seq, wait_sql_to_exclude,
+                                                     hold_sql_request_time, holding_sql))) {
+          DETECT_LOG(WARN, "fail to pick hold sql", KR(tmp_ret), K(collected_info), K(collect_info_msg), K(holding_seq), K(idx));
         } else if (OB_SUCCESS != (tmp_ret = convert_string_holder_to_shared_guard_(holding_sql, holding_sql_guard))) {
           DETECT_LOG(WARN, "failed to convert string holder to shared guard", KR(tmp_ret), K(holding_sql));
         } else if (OB_SUCCESS != (tmp_ret = convert_string_holder_to_shared_guard_(hold_sql_request_time, hold_sql_request_time_guard))) {
@@ -958,6 +978,65 @@ int ObDeadLockDetectorMgr::get_sql_history_(const uint64_t query_tenant_id,
   return ret;
 }
 
+int ObDeadLockDetectorMgr::get_trans_sql_history_from_audit_(
+    const uint64_t query_tenant_id,
+    const ObStringHolder &trans_id,
+    const common::ObAddr &exec_addr,
+    ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = (OB_INVALID_ID == query_tenant_id) ? MTL_ID() : query_tenant_id;
+  if (OB_UNLIKELY(!exec_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    DETECT_LOG(WARN, "invalid exec_addr", KR(ret), K(tenant_id), K(trans_id), K(exec_addr));
+  } else if (OB_FAIL(get_sql_history_(tenant_id, trans_id, sql_history, &exec_addr))) {
+    DETECT_LOG(WARN, "fail to get sql history from audit", KR(ret), K(tenant_id), K(trans_id), K(exec_addr));
+  } else {
+    DETECT_LOG(INFO, "get trans sql history from audit done", KR(ret), K(tenant_id), K(trans_id), K(exec_addr),
+               "sql_history_cnt", sql_history.count());
+  }
+  return ret;
+}
+
+int ObDeadLockDetectorMgr::pick_and_translate_hold_sql_(
+    const ObIArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> &sql_history,
+    const transaction::ObTxSEQ &hold_seq,
+    const ObString &wait_sql_to_exclude,
+    ObStringHolder &holding_sql_request_time,
+    ObStringHolder &holding_sql)
+{
+  #define PRINT_WRAPPER KR(ret), K(hold_seq), K(wait_sql_to_exclude), K(holding_sql_request_time), K(holding_sql)
+  int ret = OB_SUCCESS;
+  char *sql_translate_buffer = nullptr;
+  constexpr int64_t BUFFER_SIZE = 1_MB;
+  if (sql_history.count() <= 0) {
+    ret = OB_ENTRY_NOT_EXIST;
+    DETECT_LOG(WARN, "no sql audit history for hold_sql", PRINT_WRAPPER);
+  } else if (OB_FAIL(pick_hold_sql_from_merged_history_(sql_history, hold_seq, wait_sql_to_exclude,
+                                                        holding_sql_request_time, holding_sql))) {
+    DETECT_LOG(WARN, "fail to pick hold sql from history", PRINT_WRAPPER);
+  } else if (OB_ISNULL(sql_translate_buffer = (char *)mtl_malloc(BUFFER_SIZE, "DETECT.sql"))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    DETECT_LOG(WARN, "fail to alloc heap memory", PRINT_WRAPPER);
+  } else {
+    transaction::ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(
+        holding_sql.get_ob_string().ptr(),
+        holding_sql.get_ob_string().length(),
+        sql_translate_buffer,
+        BUFFER_SIZE);
+    if (OB_FAIL(holding_sql.assign(ObString(sql_translate_buffer)))) {
+      DETECT_LOG(WARN, "failed to translate sql", PRINT_WRAPPER);
+    } else {
+      DETECT_LOG(INFO, "pick and translate hold sql done", PRINT_WRAPPER);
+    }
+  }
+  if (OB_NOT_NULL(sql_translate_buffer)) {
+    mtl_free(sql_translate_buffer);
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 int ObDeadLockDetectorMgr::get_holding_sql(const ObStringHolder &trans_id,
                                            const transaction::ObTxSEQ &hold_seq,
                                            ObStringHolder &holding_sql_request_time,
@@ -966,66 +1045,34 @@ int ObDeadLockDetectorMgr::get_holding_sql(const ObStringHolder &trans_id,
                                            const ObString &wait_sql_to_exclude,
                                            const ObIArray<ObAddr> *audit_exec_addrs)
 {
-  #define PRINT_WRAPPER KR(ret), K(trans_id), K(hold_seq), K(query_tenant_id), K(wait_sql_to_exclude), KPC(audit_exec_addrs), K(holding_sql_request_time), K(holding_sql)
   int ret = OB_SUCCESS;
-  char *sql_translate_buffer = nullptr;
-  constexpr int64_t BUFFER_SIZE = 1_MB;
-  const uint64_t tenant_id = (OB_INVALID_ID == query_tenant_id) ? MTL_ID() : query_tenant_id;
-  ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> merged_sql_history;
+  int tmp_ret = OB_SUCCESS;
+  ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> sql_history;
   if (OB_NOT_NULL(audit_exec_addrs) && audit_exec_addrs->count() > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < audit_exec_addrs->count(); ++i) {
-      const ObAddr &audit_addr = audit_exec_addrs->at(i);
       ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> part_sql_history;
-      const ObAddr *audit_addr_ptr = audit_addr.is_valid() ? &audit_addr : nullptr;
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(get_sql_history_(tenant_id, trans_id, part_sql_history, audit_addr_ptr))) {
-        DETECT_LOG(WARN, "get sql history from one audit addr failed", KR(tmp_ret), K(trans_id), K(audit_addr));
+      if (OB_TMP_FAIL(get_trans_sql_history_from_audit_(query_tenant_id, trans_id,
+                                                        audit_exec_addrs->at(i), part_sql_history))) {
+        DETECT_LOG(WARN, "get sql history from one audit addr failed", KR(tmp_ret), K(trans_id), K(audit_exec_addrs->at(i)));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < part_sql_history.count(); ++j) {
-          if (OB_FAIL(merged_sql_history.push_back(part_sql_history.at(j)))) {
-            DETECT_LOG(WARN, "merge sql audit history failed", KR(ret), K(trans_id), K(audit_addr));
-            break;
+          if (OB_FAIL(sql_history.push_back(part_sql_history.at(j)))) {
+            DETECT_LOG(WARN, "merge sql audit history failed", KR(ret), K(trans_id));
           }
         }
       }
     }
   } else {
-    // Fallback: cluster-wide audit scan (tenant_id + transaction_id), same as base when no svr filter.
-    if (OB_FAIL(get_sql_history_(tenant_id, trans_id, merged_sql_history, nullptr))) {
-      DETECT_LOG(WARN, "fail to get sql history", KR(ret), K(tenant_id), K(trans_id));
+    if (OB_FAIL(get_sql_history_(query_tenant_id, trans_id, sql_history, nullptr))) {
+      DETECT_LOG(WARN, "fail to get sql history", KR(ret), K(trans_id));
     }
   }
   if (OB_FAIL(ret)) {
-  } else {
-    if (merged_sql_history.count() <= 0) {
-      ret = OB_ENTRY_NOT_EXIST;
-      DETECT_LOG(WARN, "no sql audit history for hold_sql", PRINT_WRAPPER);
-    } else if (OB_FAIL(pick_hold_sql_from_merged_history_(merged_sql_history, hold_seq, wait_sql_to_exclude,
-                                                          holding_sql_request_time, holding_sql))) {
-      DETECT_LOG(WARN, "fail to pick hold sql from merged audit", PRINT_WRAPPER);
-    } else if (OB_ISNULL(sql_translate_buffer = (char *)mtl_malloc(BUFFER_SIZE, "DETECT.sql"))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      DETECT_LOG(WARN, "fail to alloc heap memory", PRINT_WRAPPER);
-    } else {
-      transaction::ObTransDeadlockDetectorAdapter::copy_str_and_translate_apostrophe(
-          holding_sql.get_ob_string().ptr(),
-          holding_sql.get_ob_string().length(),
-          sql_translate_buffer,
-          BUFFER_SIZE);
-      if (OB_FAIL(holding_sql.assign(ObString(sql_translate_buffer)))) {
-        DETECT_LOG(WARN, "failed to translate sql", PRINT_WRAPPER);
-      } else {
-        DETECT_LOG(INFO, "get holding sql from merged audit", PRINT_WRAPPER, K(holding_sql),
-                   "merged_row_cnt", merged_sql_history.count());
-      }
-    }
-  }
-  // release dynamic buffer
-  if (OB_NOT_NULL(sql_translate_buffer)) {
-    mtl_free(sql_translate_buffer);
+  } else if (OB_FAIL(pick_and_translate_hold_sql_(sql_history, hold_seq, wait_sql_to_exclude,
+                                                   holding_sql_request_time, holding_sql))) {
+    DETECT_LOG(WARN, "fail to pick hold sql", KR(ret), K(trans_id), K(hold_seq));
   }
   return ret;
-  #undef PRINT_WRAPPER
 }
 
 int ObDeadLockDetectorMgr::convert_string_holder_to_shared_guard_(const ObStringHolder &holder,
