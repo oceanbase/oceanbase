@@ -936,7 +936,7 @@ static constexpr ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* ObJsonType     */
     ObMaxType,         /* ObGeometryType */
     ObMaxType,         /* ObUserDefinedSQLType */
-    ObDecimalIntType,     /* ObDecimalIntType  */
+    ObNumberType,        /* ObDecimalIntType  */
     ObMaxType,         /*  ObCollectionSQLType*/
     ObNumberType,         /* ObMySQLDateType */
     ObNumberType,         /* ObMySQLDateTimeType */
@@ -2944,7 +2944,7 @@ static constexpr ObObjType RELATIONAL_RESULT_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,     /* DoubleType  */
     ObDoubleType,     /* UFloatType  */
     ObDoubleType,     /* UDoubleType  */
-    ObDecimalIntType,     /* NumberType  */
+    ObNumberType,        /* NumberType  */
     ObDecimalIntType,     /* UNumberType  */
     ObDecimalIntType,     /* DateTimeType  */
     ObDecimalIntType,     /* TimestampType  */
