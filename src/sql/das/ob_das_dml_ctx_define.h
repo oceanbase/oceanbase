@@ -57,7 +57,9 @@ public:
                        K_(is_main_table_in_fts_ddl),
                        K_(tz_info),
                        K_(table_param),
-                       K_(encrypt_meta));
+                       K_(encrypt_meta),
+                       K_(has_mvi_rowkey_overlap),
+                       K_(use_schema_mvi_rowkey_policy));
   uint64_t table_id_;
   uint64_t index_tid_;
   int64_t schema_version_;
@@ -93,7 +95,10 @@ public:
       uint64_t not_need_build_vec_index_tablet_infos_ : 1;
       uint64_t enable_update_split_trace_id_    : 1;
       uint64_t is_compaction_ttl_table_         : 1;  // compaction ttl table
-      uint64_t reserved_                        : 43; //add new flag before reserved_
+      uint64_t has_mvi_rowkey_overlap_          : 1;
+      // Old CtDefs leave this bit zero and must retain the positional rowkey policy.
+      uint64_t use_schema_mvi_rowkey_policy_    : 1;
+      uint64_t reserved_                        : 41; //add new flag before reserved_
       uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };

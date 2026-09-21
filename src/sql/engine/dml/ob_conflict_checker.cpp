@@ -31,7 +31,9 @@ OB_SERIALIZE_MEMBER(ObRowkeyCstCtdef,
                     constraint_name_,
                     rowkey_expr_,
                     calc_exprs_,
-                    rowkey_accuracys_);
+                    rowkey_accuracys_,
+                    multivalue_array_expr_,
+                    multivalue_key_idx_);
 
 OB_DEF_SERIALIZE(ObConflictCheckerCtdef)
 {

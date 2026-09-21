@@ -45,18 +45,25 @@ public:
     :  constraint_name_(),
        rowkey_expr_(alloc),
        calc_exprs_(alloc),
-       rowkey_accuracys_(alloc)
+       rowkey_accuracys_(alloc),
+       multivalue_array_expr_(NULL),
+       multivalue_key_idx_(common::OB_INVALID_INDEX)
   {
   }
   virtual ~ObRowkeyCstCtdef() = default;
   TO_STRING_KV(K_(constraint_name),
                K_(rowkey_expr),
                K_(rowkey_accuracys),
-               K_(calc_exprs));
+               K_(calc_exprs),
+               KPC_(multivalue_array_expr),
+               K_(multivalue_key_idx));
   ObString constraint_name_;  // 冲突时打印表名用
   ExprFixedArray rowkey_expr_; // 索引表的主键
   ExprFixedArray calc_exprs_; // 计算逐渐信息依赖的表达式
   AccuracyFixedArray rowkey_accuracys_;
+  // Appended fields must remain at the end for cross-version plan compatibility.
+  ObExpr *multivalue_array_expr_; // Canonical MVI buddy payload column.
+  int64_t multivalue_key_idx_;    // MVI key position in rowkey_expr_.
 };
 
 enum ObNewRowSource
