@@ -1870,10 +1870,8 @@ int ObTablet::inner_read_mds_info_array(ObArenaAllocator &allocator,
   int64_t replay_seq = -1;
   int64_t newest_commit_version = 0;
 
-  if (OB_UNLIKELY(INT64_MAX == read_version_range.snapshot_version_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument for version range", KR(ret), K(read_version_range));
-  } else {
+  // Offline direct load: INT64_MAX == read_version_range.snapshot_version_
+  {
     SpinRLockGuard guard(mds_cache_lock_);
     if (mds_info_cache.is_valid()) {
       if (read_version_range.base_version_ >= last_major_snapshot
