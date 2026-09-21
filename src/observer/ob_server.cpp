@@ -3866,7 +3866,9 @@ int ObServer::init_server_in_arb_mode()
   ObIOConfig io_config;
   io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
   const double io_memory_ratio = 0.2;
-  if (OB_FAIL(net_work_farme.init(arb_opts, &palf_env_mgr))) {
+  if (OB_FAIL(palf::election::load_election_config())) {
+    LOG_ERROR("load election config in arbitration mode failed", KR(ret));
+  } else if (OB_FAIL(net_work_farme.init(arb_opts, &palf_env_mgr))) {
     LOG_ERROR("init ObArbSrvNetworkFrame failed", K(ret), K(arb_opts));
   } else if (OB_FAIL(ObIOManager::get_instance().init(GMEMCONF.get_server_memory_limit() * io_memory_ratio))) {
     LOG_ERROR("init io manager fail", K(ret));

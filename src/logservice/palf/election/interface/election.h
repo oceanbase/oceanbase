@@ -103,6 +103,7 @@ inline int64_t get_monotonic_ts()
 
 extern int64_t INIT_TS;
 extern ObOccamTimer GLOBAL_REPORT_TIMER;// used to report election event to inner table
+int load_election_config();
 
 inline int GLOBAL_INIT_ELECTION_MODULE(const int64_t queue_size_square_of_2 = 10)
 {
@@ -112,7 +113,9 @@ inline int GLOBAL_INIT_ELECTION_MODULE(const int64_t queue_size_square_of_2 = 10
     if (ATOMIC_LOAD(&INIT_TS) <= 0) {
       ATOMIC_STORE(&INIT_TS, get_monotonic_ts());
     }
-    if (OB_FAIL(GLOBAL_REPORT_TIMER.init_and_start(1, 10_ms, "GEleTimer", queue_size_square_of_2))) {
+    if (OB_FAIL(load_election_config())) {
+      ELECT_LOG(WARN, "load election config failed", KR(ret));
+    } else if (OB_FAIL(GLOBAL_REPORT_TIMER.init_and_start(1, 10_ms, "GEleTimer", queue_size_square_of_2))) {
       ELECT_LOG(ERROR, "int global report timer failed", KR(ret));
     } else {
       ELECT_LOG(INFO, "election module global init success");

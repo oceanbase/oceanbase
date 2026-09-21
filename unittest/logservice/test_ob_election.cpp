@@ -17,6 +17,7 @@
 #define UNITTEST
 #include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
 #include "mock_logservice_container/mock_election_user.h"
+#include "share/config/ob_server_config.h"
 
 using namespace oceanbase::obrpc;
 using namespace std;
@@ -67,11 +68,73 @@ void reset_global_status()
   stop_to_be_follower_count = 0;
 }
 
+class TestElectionConfig : public ::testing::Test {
+public:
+  void SetUp() override
+  {
+    original_config_ = GCONF._election_max_message_delay.str();
+    original_max_tst_ = MAX_TST;
+  }
+
+  void TearDown() override
+  {
+    EXPECT_TRUE(GCONF._election_max_message_delay.set_value(original_config_.c_str()));
+    MAX_TST = original_max_tst_;
+  }
+
+  void check_valid_config(const char *config_value,
+                          const int64_t expected_max_tst,
+                          const int64_t expected_renew_lease_interval,
+                          const int64_t expected_time_window_span,
+                          const int64_t expected_max_elect_cost_time,
+                          const int64_t expected_lease_interval,
+                          const int64_t expected_trigger_elect_watermark)
+  {
+    ASSERT_TRUE(GCONF._election_max_message_delay.set_value(config_value));
+    ASSERT_TRUE(GCONF._election_max_message_delay.check());
+    ASSERT_EQ(OB_SUCCESS, load_election_config());
+    EXPECT_EQ(expected_max_tst, MAX_TST);
+    EXPECT_EQ(expected_renew_lease_interval, CALCULATE_RENEW_LEASE_INTERVAL());
+    EXPECT_EQ(expected_time_window_span, CALCULATE_TIME_WINDOW_SPAN_TS());
+    EXPECT_EQ(expected_max_elect_cost_time, CALCULATE_MAX_ELECT_COST_TIME());
+    EXPECT_EQ(expected_lease_interval, CALCULATE_LEASE_INTERVAL());
+    EXPECT_EQ(expected_trigger_elect_watermark, CALCULATE_TRIGGER_ELECT_WATER_MARK());
+  }
+
+private:
+  std::string original_config_;
+  int64_t original_max_tst_;
+};
+
+TEST_F(TestElectionConfig, load_valid_config_and_derive_timing)
+{
+  check_valid_config("100ms", 100_ms, 50_ms, 200_ms, 1_s, 400_ms, 100_ms);
+  check_valid_config("1s", 1_s, 500_ms, 2_s, 10_s, 4_s, 1_s);
+  check_valid_config("2500ms", 2500_ms, 500_ms, 5_s, 25_s, 10_s, 1_s);
+}
+
+TEST_F(TestElectionConfig, invalid_config_falls_back_to_default)
+{
+  MAX_TST = 1_s;
+  ASSERT_TRUE(GCONF._election_max_message_delay.set_value("99ms"));
+  ASSERT_FALSE(GCONF._election_max_message_delay.check());
+  ASSERT_EQ(OB_SUCCESS, load_election_config());
+  EXPECT_EQ(1_s, MAX_TST);
+
+  MAX_TST = 1_s;
+  ASSERT_TRUE(GCONF._election_max_message_delay.set_value("2501ms"));
+  ASSERT_FALSE(GCONF._election_max_message_delay.check());
+  ASSERT_EQ(OB_SUCCESS, load_election_config());
+  EXPECT_EQ(1_s, MAX_TST);
+}
+
 class TestElection : public ::testing::Test {
 public:
   TestElection() {}
   ~TestElection() {}
   virtual void SetUp() {
+    original_config_ = GCONF._election_max_message_delay.str();
+    original_max_tst_ = MAX_TST;
     MAX_TST = 750_ms;
     share::ObTenantSwitchGuard guard;
     guard.switch_to(OB_SYS_TENANT_ID);
@@ -82,7 +145,17 @@ public:
     thread_pool.init_and_start(5);
     timer.init_and_start(thread_pool, 1_ms, "timer");
   }
-  virtual void TearDown() { timer.~ObOccamTimer(); thread_pool.~ObOccamThreadPool(); }
+  virtual void TearDown()
+  {
+    timer.~ObOccamTimer();
+    thread_pool.~ObOccamThreadPool();
+    EXPECT_TRUE(GCONF._election_max_message_delay.set_value(original_config_.c_str()));
+    MAX_TST = original_max_tst_;
+  }
+
+private:
+  std::string original_config_;
+  int64_t original_max_tst_;
 };
 
 template <typename TAKEOVER_OP>
@@ -667,6 +740,72 @@ TEST_F(TestElection, temporarily_downgrade_protocol_priority) {
   ASSERT_EQ(change_leader_to_be_leader_count, 2);
   ASSERT_EQ(change_leader_to_be_follower_count, 2);
   ASSERT_EQ(stop_to_be_follower_count, 1);
+}
+
+TEST_F(TestElection, min_message_delay_three_replica_failover)
+{
+  ASSERT_TRUE(GCONF._election_max_message_delay.set_value("100ms"));
+  ASSERT_TRUE(GCONF._election_max_message_delay.check());
+  ASSERT_EQ(OB_SUCCESS, load_election_config());
+  ASSERT_EQ(100_ms, MAX_TST);
+
+  auto election_list = create_election_group(3, {0, 0, 0}, [](){});
+  auto wait_for_count = [](const std::atomic_int &counter,
+                           const int expected,
+                           const int64_t timeout_us) {
+    const int64_t start_ts = get_monotonic_ts();
+    while (counter.load() < expected
+           && get_monotonic_ts() - start_ts < timeout_us) {
+      this_thread::sleep_for(chrono::milliseconds(10));
+    }
+    return counter.load() >= expected;
+  };
+
+  EXPECT_TRUE(wait_for_count(leader_takeover_times, 1, 5_s));
+  ElectionImpl *leader = nullptr;
+  for (auto *election : election_list) {
+    ObRole role = ObRole::INVALID_ROLE;
+    int64_t epoch = 0;
+    if (OB_SUCCESS == election->get_role(role, epoch) && ObRole::LEADER == role) {
+      leader = election;
+      break;
+    }
+  }
+  EXPECT_NE(nullptr, leader);
+
+  if (nullptr != leader) {
+    for (auto *election : election_list) {
+      if (leader != election) {
+        GlobalNetService.disconnect_two_side(leader, election);
+      }
+    }
+    EXPECT_TRUE(wait_for_count(leader_takeover_times, 2, 5_s));
+    // The new leader takeover and the old leader lease expiration are asynchronous.
+    // Wait for the old leader to finish revoking before stopping the election group.
+    EXPECT_TRUE(wait_for_count(lease_expired_to_be_follower_count, 1, 5_s));
+  }
+
+  for (auto iter = election_list.rbegin(); iter != election_list.rend(); ++iter) {
+    (*iter)->stop();
+  }
+  GlobalNetService.clear();
+  // Stop the mock network timer and worker pool before deleting receivers.
+  TIMER.destroy();
+  for (auto *election : election_list) {
+    delete election;
+  }
+  // Restore the global mock network for subsequent tests and repeated runs.
+  // Match main()'s initial setup: do not retain its stack tenant in global mock threads.
+  auto *saved_tenant_ctx = MTL_CTX();
+  share::ObTenantEnv::set_tenant(nullptr);
+  MockNetService::init();
+  share::ObTenantEnv::set_tenant(saved_tenant_ctx);
+
+  EXPECT_EQ(2, leader_takeover_times.load());
+  EXPECT_EQ(2, leader_revoke_times.load());
+  EXPECT_EQ(2, devote_to_be_leader_count.load());
+  EXPECT_EQ(1, lease_expired_to_be_follower_count.load());
+  EXPECT_EQ(1, stop_to_be_follower_count.load());
 }
 
 }
