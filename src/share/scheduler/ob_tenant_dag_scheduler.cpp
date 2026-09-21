@@ -1999,7 +1999,8 @@ void ObTenantDagWorker::run1()
         ret = OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "scheduler is null", K(ret), KPC(cur_task));
       } else if (OB_FAIL(scheduler->finish_task_and_try_pick_next(cur_task, *this, task_error_code, next_task))) {
-        COMMON_LOG(WARN, "failed to finish task and try pick next", K(ret), KPC(cur_task));
+        // The current task may have been freed even when finishing it fails.
+        COMMON_LOG(WARN, "failed to finish task and try pick next", K(ret), KP(cur_task));
       } else if (OB_NOT_NULL(next_task)) {
         set_task(next_task);
         status_ = DWS_RUNNABLE;
@@ -5170,7 +5171,8 @@ int ObTenantDagScheduler::finish_task_and_try_pick_next(
 
     if (OB_NOT_NULL(cur_task)) {
       if (OB_FAIL(deal_with_finish_task(cur_task, worker, task_error_code))) {
-        COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(cur_task), KPC(dag));
+        // Finishing the task may also free its dag; only log their addresses here.
+        COMMON_LOG(WARN, "failed to finish task", K(ret), KP(cur_task), KP(dag));
       }
     } else if (OB_NOT_NULL(next_task)) {
       if (OB_FAIL(schedule_next_task_directly_(next_task, worker, priority, dag_type))) {
@@ -5227,7 +5229,7 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask *&task, ObTenantDagWorke
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid dag", K(ret), K(*dag));
   } else if (OB_FAIL(prio_sche_[dag->get_priority()].deal_with_finish_task(task, dag, worker, error_code))) {
-    COMMON_LOG(WARN, "fail to finish task", K(ret), KPC(dag));
+    COMMON_LOG(WARN, "fail to finish task", K(ret), KP(dag));
   } else {
     return_worker_to_pool_(worker);
   }

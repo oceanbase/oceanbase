@@ -1355,6 +1355,7 @@ public:
   // self-schedule is enabled, try to pick the next ready task of the same dag so the
   // worker can keep running it (returned via next_task). The worker only drives its own
   // status machine; all scheduling decisions live here.
+  // cur_task and its dag may be freed even on failure; callers must not dereference them afterwards.
   int finish_task_and_try_pick_next(ObITask *cur_task,
                                     ObTenantDagWorker &worker,
                                     int task_error_code,
