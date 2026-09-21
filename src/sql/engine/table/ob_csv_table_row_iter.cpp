@@ -454,7 +454,6 @@ int ObCSVTableRowIterator::open_next_file()
       OZ (prefetch_mgr_.open(*file_url_info, cache_options, state_.bounded_start_pos_, state_.bounded_end_pos_));
     } else {
       OZ(file_reader_.open(url_.ptr()));
-      state_.is_scan_full_file_ = true;
       if (OB_SUCC(ret) && state_.bounded_end_pos_ != INT64_MAX) {
         file_reader_.advance(state_.bounded_start_pos_);
       }
