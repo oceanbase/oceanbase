@@ -95,6 +95,7 @@ public:
   static int to_mysql_field(const ObField &field, ObMySQLField &mfield);
   static int to_new_result_field(const ObField &field, ObMySQLField &mfield);
   static int to_oracle_field(const ObField &field, ObMySQLField &mfield);
+  static void replace_oracle_null_type(const ObField &field, ObMySQLField &mfield);
   static void switch_ps(ObPrecision &pre, ObScale &scale, EMySQLFieldType type);
 
 private:

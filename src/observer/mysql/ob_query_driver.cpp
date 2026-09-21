@@ -126,6 +126,7 @@ int ObQueryDriver::response_query_header(const ColumnsFieldIArray &fields,
           }
         }
         if (OB_SUCC(ret)) {
+          ObMySQLResultSet::replace_oracle_null_type(ob_field, field);
           ObMySQLResultSet::replace_lob_type(session_, ob_field, field);
           if (NULL != result && result->get_is_com_filed_list()) {
             field.default_value_ = static_cast<EMySQLFieldType>(ob_field.default_value_.get_ext());
