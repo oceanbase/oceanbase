@@ -12284,6 +12284,7 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
   is_multi_part_dml = false;
   is_result_local = false;
   ObShardingInfo *source_sharding = NULL;
+  const ObTableLocation *table_location = NULL;
   if (OB_UNLIKELY(index_dml_infos.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index dml info is empty", K(ret));
@@ -12306,13 +12307,18 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
                                                              index_dml_infos.at(0)->loc_table_id_,
                                                              is_multi_part_dml,
                                                              is_result_local,
-                                                             source_sharding))) {
+                                                             source_sharding,
+                                                             &table_location))) {
     LOG_WARN("failed to check whether location need multi-partition dml", K(ret));
   } else if (!is_multi_part_dml && stmt.is_select_stmt() && stmt.has_for_update()) {
-    if (OB_FAIL(check_for_update_need_multi_partition_dml(stmt,
+    if (OB_ISNULL(table_location)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(table_location));
+    } else if (OB_FAIL(check_for_update_need_multi_partition_dml(stmt,
                                                           index_dml_infos,
                                                           top,
                                                           source_sharding,
+                                                          *table_location,
                                                           is_multi_part_dml))) {
       LOG_WARN("failed to check for update partitioned table", K(ret));
     }
@@ -12370,6 +12376,7 @@ int ObLogPlan::check_for_update_need_multi_partition_dml(const ObDMLStmt &stmt,
                                                   const ObIArray<IndexDMLInfo *> &index_dml_infos,
                                                   ObLogicalOperator &top,
                                                   ObShardingInfo *source_sharding,
+                                                  const ObTableLocation &table_location,
                                                   bool &is_multi_part_dml)
 {
   int ret = OB_SUCCESS;
@@ -12395,27 +12402,29 @@ int ObLogPlan::check_for_update_need_multi_partition_dml(const ObDMLStmt &stmt,
     } else if (table_schema->is_global_index_table()) {
       is_multi_part_dml = true;
     } else if (!table_schema->is_partitioned_table()) {
-      // non-partitioned table skip const partition key check
+      // Non-partitioned tables do not require partition pruning.
     } else if (OB_ISNULL(source_sharding)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(source_sharding));
+    } else if (source_sharding->is_distributed()) {
+      is_multi_part_dml = true;
+    } else if (!table_location.is_partition_range_precise_get()) {
+      is_multi_part_dml = true;
     } else {
       const ObIArray<ObRawExpr *> &const_exprs = top.get_output_const_exprs();
       const ObIArray<ObRawExpr *> &part_keys = source_sharding->get_partition_keys();
       const ObIArray<ObRawExpr *> &subpart_keys = source_sharding->get_sub_partition_keys();
       for (int64_t i = 0; OB_SUCC(ret) && !is_multi_part_dml && i < part_keys.count(); ++i) {
-       ObRawExpr *key = part_keys.at(i);
-        bool is_const = false;
+        ObRawExpr *key = part_keys.at(i);
         if (OB_ISNULL(key)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(key));
-       } else if (!is_contain(const_exprs, key)) {
-         is_multi_part_dml = true;
-       }
+        } else if (!is_contain(const_exprs, key)) {
+          is_multi_part_dml = true;
+        }
       }
       for (int64_t i = 0; OB_SUCC(ret) && !is_multi_part_dml && i < subpart_keys.count(); ++i) {
-       ObRawExpr *key = subpart_keys.at(i);
-        bool is_const = false;
+        ObRawExpr *key = subpart_keys.at(i);
         if (OB_ISNULL(key)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(key));
@@ -12435,7 +12444,8 @@ int ObLogPlan::check_location_need_multi_partition_dml(ObLogicalOperator &top,
                                                        uint64_t table_id,
                                                        bool &is_multi_part_dml,
                                                        bool &is_result_local,
-                                                       ObShardingInfo *&source_sharding)
+                                                       ObShardingInfo *&source_sharding,
+                                                       const ObTableLocation **table_location)
 {
   int ret = OB_SUCCESS;
   source_sharding = NULL;
@@ -12443,6 +12453,9 @@ int ObLogPlan::check_location_need_multi_partition_dml(ObLogicalOperator &top,
   ObTableLocationType source_loc_type = OB_TBL_LOCATION_UNINITIALIZED;
   is_multi_part_dml = false;
   is_result_local = false;
+  if (NULL != table_location) {
+    *table_location = NULL;
+  }
   if (OB_FAIL(get_source_table_info(top,
                                     table_id,
                                     source_sharding,
@@ -12477,6 +12490,9 @@ int ObLogPlan::check_location_need_multi_partition_dml(ObLogicalOperator &top,
     }
   }
   if (OB_SUCC(ret)) {
+    if (NULL != table_location && NULL != source_table_part) {
+      *table_location = &source_table_part->get_table_location();
+    }
     LOG_TRACE("succeed to check location need multi-partition update", K(table_id), K(is_multi_part_dml),
         K(is_result_local));
   }

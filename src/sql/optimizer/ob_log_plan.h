@@ -436,12 +436,14 @@ public:
                                          const ObIArray<IndexDMLInfo *> &index_dml_infos,
                                          ObLogicalOperator &top,
                                          ObShardingInfo *source_sharding,
+                                         const ObTableLocation &table_location,
                                          bool &is_multi_part_dml);
   int check_location_need_multi_partition_dml(ObLogicalOperator &top,
                                               uint64_t table_id,
                                               bool &is_multi_part_dml,
                                               bool &is_result_local,
-                                              ObShardingInfo *&source_sharding);
+                                              ObShardingInfo *&source_sharding,
+                                              const ObTableLocation **table_location = NULL);
 
   int check_if_use_hybrid_hash_distribution(ObOptimizerContext &optimizer_ctx,
                                             const ObDMLStmt *stmt,

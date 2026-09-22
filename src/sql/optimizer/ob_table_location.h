@@ -785,6 +785,19 @@ public:
            (part_level_ == share::schema::PARTITION_LEVEL_TWO && (subpart_get_all_ || part_get_all_ || !is_part_range_get_ || !is_subpart_range_get_));
   }
 
+  // Returns whether every partition level has a precise-get range.
+  // Non-partitioned tables return false because they have no partition range.
+  inline bool is_partition_range_precise_get() const
+  {
+    bool is_precise_get = false;
+    if (part_level_ == share::schema::PARTITION_LEVEL_ONE) {
+      is_precise_get = is_part_range_get_;
+    } else if (part_level_ == share::schema::PARTITION_LEVEL_TWO) {
+      is_precise_get = is_part_range_get_ && is_subpart_range_get_;
+    }
+    return is_precise_get;
+  }
+
   void set_has_dynamic_exec_param(bool flag) {  has_dynamic_exec_param_ = flag; }
   bool get_has_dynamic_exec_param() const {  return has_dynamic_exec_param_; }
 
