@@ -2051,6 +2051,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprArrayDims::eval_array_dims_vector,                       /* 335 */
   NULL, // ObExprArrayUpper::eval_array_upper_vector,                     /* 336 */
   NULL, // ObExprArrayLower::eval_array_lower_vector,                     /* 337 */
+  NULL, // ObExprGeneratorFunc::eval_next_value_vector                    /* 338 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
