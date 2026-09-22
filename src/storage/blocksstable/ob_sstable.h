@@ -90,7 +90,8 @@ public:
       uint32_t version_                   : 8;
       uint32_t has_multi_version_row_     : 1;
       uint32_t status_                    : 2;
-      uint32_t reserved_                  : 21;
+      uint32_t is_embedded_sstable_       : 1;
+      uint32_t reserved_                  : 20;
     };
   };
   int32_t data_macro_block_count_;
@@ -402,12 +403,12 @@ protected:
     StatusForSerialize()
       : with_fixed_struct_(0),
         with_meta_(0),
+        with_full_meta_data_(0),
         reserved_(0),
         compat_magic_(COMPAT_MAGIC) {}
     OB_INLINE void reset() { new (this) StatusForSerialize(); }
     OB_INLINE bool with_fixed_struct() { return 1 == with_fixed_struct_; }
     OB_INLINE bool with_meta() { return 1 == with_meta_; }
-
     OB_INLINE void set_with_fixed_struct() { with_fixed_struct_ = 1; }
     OB_INLINE void set_with_meta() { with_meta_ = 1; }
     static const int8_t COMPAT_MAGIC = 0x55;
@@ -418,8 +419,8 @@ protected:
       {
         uint16_t with_fixed_struct_:1;
         uint16_t with_meta_:1;
-
-        uint16_t reserved_:6;
+        uint16_t with_full_meta_data_:1;
+        uint16_t reserved_:5;
         uint16_t compat_magic_:8;
       };
     };
