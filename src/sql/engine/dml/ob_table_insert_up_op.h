@@ -225,7 +225,7 @@ protected:
 
   int init_insert_up_rtdef();
 
-  int deal_hint_part_selection(ObObjectID partition_id);
+  int deal_hint_part_selection(const ObDMLBaseCtDef &dml_ctdef, ObObjectID partition_id);
   virtual int check_need_exec_single_row() override;
   virtual ObDasParallelType check_das_parallel_type() override;
 

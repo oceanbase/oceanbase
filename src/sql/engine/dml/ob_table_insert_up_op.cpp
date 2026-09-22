@@ -1019,7 +1019,7 @@ int ObTableInsertUpOp::calc_update_multi_tablet_id(const ObUpdCtDef &upd_ctdef,
   ObDatum *partition_id_datum = NULL;
   if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(&part_id_expr, eval_ctx_, partition_id, tablet_id))) {
     LOG_WARN("calc part and tablet id by expr failed", K(ret));
-  } else if (OB_FAIL(deal_hint_part_selection(partition_id))) {
+  } else if (OB_FAIL(deal_hint_part_selection(upd_ctdef, partition_id))) {
     LOG_WARN("Partition not match", K(ret));
   }
   return ret;
@@ -1080,16 +1080,30 @@ int ObTableInsertUpOp::calc_upd_new_row_tablet_loc(const ObUpdCtDef &upd_ctdef,
   return ret;
 }
 
-int ObTableInsertUpOp::deal_hint_part_selection(ObObjectID partition_id)
+int ObTableInsertUpOp::deal_hint_part_selection(const ObDMLBaseCtDef &dml_ctdef,
+                                                 ObObjectID partition_id)
 {
   int ret = OB_SUCCESS;
-  const ObInsertUpCtDef &insert_up_ctdef = *(MY_SPEC.insert_up_ctdefs_.at(0));
-  const ObInsCtDef *ins_ctdef = insert_up_ctdef.ins_ctdef_;
-  if (!ins_ctdef->multi_ctdef_->hint_part_ids_.empty()
-      && !has_exist_in_array(ins_ctdef->multi_ctdef_->hint_part_ids_, partition_id)) {
-    ret = OB_PARTITION_NOT_MATCH;
-    LOG_WARN("Partition not match", K(ret),
-              K(partition_id), K(ins_ctdef->multi_ctdef_->hint_part_ids_));
+  // Explicit partition selection only restricts the base table, not its global indexes.
+  if (dml_ctdef.is_primary_index_) {
+    const int64_t ctdef_count = MY_SPEC.insert_up_ctdefs_.count();
+    const ObInsertUpCtDef *insert_up_ctdef = nullptr;
+    const ObInsCtDef *ins_ctdef = nullptr;
+    const ObMultiInsCtDef *multi_ctdef = nullptr;
+
+    if (OB_UNLIKELY(ctdef_count <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid insert up ctdef count", K(ret), K(ctdef_count));
+    } else if (OB_ISNULL(insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0)) ||
+               OB_ISNULL(ins_ctdef = insert_up_ctdef->ins_ctdef_) ||
+               OB_ISNULL(multi_ctdef = ins_ctdef->multi_ctdef_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ctdef", K(ret), KP(insert_up_ctdef), KP(ins_ctdef), KP(multi_ctdef));
+    } else if (!multi_ctdef->hint_part_ids_.empty()
+               && !has_exist_in_array(multi_ctdef->hint_part_ids_, partition_id)) {
+      ret = OB_PARTITION_NOT_MATCH;
+      LOG_WARN("Partition not match", K(ret), K(partition_id), K(multi_ctdef->hint_part_ids_));
+    }
   }
   return ret;
 }
@@ -1107,7 +1121,7 @@ int ObTableInsertUpOp::calc_insert_tablet_loc(const ObInsCtDef &ins_ctdef,
       ObDASTableLoc &table_loc = *ins_rtdef.das_rtdef_.table_loc_;
       if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr, eval_ctx_, partition_id, tablet_id))) {
         LOG_WARN("calc part and tablet id by expr failed", K(ret));
-      } else if (OB_FAIL(deal_hint_part_selection(partition_id))) {
+      } else if (OB_FAIL(deal_hint_part_selection(ins_ctdef, partition_id))) {
         LOG_WARN("Partition not match", K(ret));
       } else if (OB_FAIL(DAS_CTX(ctx_).extended_tablet_loc(table_loc, tablet_id, tablet_loc))) {
         LOG_WARN("extended tablet loc failed", K(ret));
@@ -1570,7 +1584,7 @@ int ObTableInsertUpOp::build_index_table_check_exist_task()
         LOG_WARN("calc_part_id_expr_ is null", K(ret));
       } else if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(part_id_expr, eval_ctx_, partition_id, tablet_id))) {
         LOG_WARN("fail to calc part id", K(ret), KPC(part_id_expr));
-      } else if (OB_FAIL(deal_hint_part_selection(partition_id))) {
+      } else if (OB_FAIL(deal_hint_part_selection(ins_ctdef, partition_id))) {
         LOG_WARN("partition not match", K(ret));
       } else if (OB_FAIL(ctx_.get_das_ctx().extended_tablet_loc(*das_index_scan_rtdef_->table_loc_, tablet_id, primary_tablet_loc))) {
         LOG_WARN("extended tablet loc failed", K(ret));
