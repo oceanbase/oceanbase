@@ -557,6 +557,7 @@ _enable_semantic_index
 _enable_separate_spf_for_select_items
 _enable_seq_wrap_around_flush_cache
 _enable_skip_index
+_enable_skyline_pruning_sharding_info
 _enable_spf_batch_rescan
 _enable_sql_audit_filter_pushdown
 _enable_sql_audit_query_sql

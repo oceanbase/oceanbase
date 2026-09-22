@@ -1869,6 +1869,11 @@ DEF_INT(_index_merge_threshold_for_multivalue, OB_TENANT_PARAMETER, "100", "[0,1
 DEF_BOOL(_enable_index_merge_intersect_bitmap, OB_TENANT_PARAMETER, "True",
          "enable bitmap optimization for index merge intersect",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_skyline_pruning_sharding_info, OB_TENANT_PARAMETER, "True",
+         "Specifies whether the optimizer considers data distribution when pruning candidate indexes. "
+         "The default value is True. When set to False, the optimizer prunes candidate indexes "
+         "based only on the other comparison criteria.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
          "enable distributed DAS scan",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
