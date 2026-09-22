@@ -354,7 +354,8 @@ private:
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
   static const int32_t TM_TABLE_ORGANIZATION_MODE_OFFSET = 30;
   static const int32_t TM_TABLE_ORGANIZATION_MODE_BITS = 1;
-  static const int32_t TM_RESERVED = 1;
+  static const int32_t TM_VIEW_COLUMN_LIST_SPECIFIED_OFFSET = 31;
+  static const int32_t TM_VIEW_COLUMN_LIST_SPECIFIED_BITS = 1;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -371,6 +372,7 @@ private:
   static const uint32_t MV_ON_QUERY_COMPUTATION_MASK = (1U << TM_MV_ON_QUERY_COMPUTATION_BITS) - 1;
   static const uint32_t DDL_IGNORE_SYNC_CDC_MASK = (1U << TM_DDL_IGNORE_SYNC_CDC_BITS) - 1;
   static const uint32_t TABLE_ORGANIZATION_MODE_MASK = (1U << TM_TABLE_ORGANIZATION_MODE_BITS) - 1;
+  static const uint32_t VIEW_COLUMN_LIST_SPECIFIED_MASK = (1U << TM_VIEW_COLUMN_LIST_SPECIFIED_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -476,7 +478,7 @@ public:
       uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
       // heap_organization_mode_ will indicate whether the table is index organized(0) or heap organized(1)
       uint32_t table_organization_mode_: TM_TABLE_ORGANIZATION_MODE_BITS;
-      uint32_t reserved_ : TM_RESERVED;
+      uint32_t view_column_list_specified_flag_ : TM_VIEW_COLUMN_LIST_SPECIFIED_BITS;
     };
   };
 };
