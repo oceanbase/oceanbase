@@ -1454,7 +1454,9 @@ TEST_F(TestObSimpleLogClusterConfigChange, one_f_to_two_f_catch_up)
     {"idle", 0, 0, 0, false, false, OB_SUCCESS},
     {"low_rate_write", 0, 0, 100 * 1000, false, true, OB_SUCCESS},
     {"high_rate_write", 0, 0, 10 * 1000, false, true, OB_SUCCESS},
-    {"large_gap_with_write", 80, 512 * KB, 100 * 1000, false, true, OB_SUCCESS},
+    // A large-gap learner may catch up fast enough to pass the progress check before
+    // another pre-sync attempt, so this scenario does not require observing pre-sync.
+    {"large_gap_with_write", 80, 512 * KB, 100 * 1000, false, false, OB_SUCCESS},
     {"unreachable_target", 1, KB, 0, true, false, OB_TIMEOUT},
   };
 
