@@ -137,7 +137,7 @@ private:
         || ObRowStoreType::DUMMY_ROW_STORE == latest_row_store_type_;
   }
 public:
-  TO_STRING_KV(K_(version), K_(length), K(row_count_), K(occupy_size_), K(original_size_),
+  TO_STRING_KV(K_(version), K_(length), K(row_count_), K(occupy_size_), K(reused_occupy_size_), K(original_size_),
       K(data_checksum_), K(index_type_), K(rowkey_column_count_), K(column_cnt_),
       K(data_macro_block_count_), K(data_micro_block_count_), K(use_old_macro_block_count_),
       K(index_macro_block_count_), K(sstable_format_version_), K(schema_version_),
@@ -244,6 +244,7 @@ public:
     return static_cast<ObSSTableStatus>(basic_meta_.status_);
   }
   OB_INLINE int64_t get_occupy_size() const { return basic_meta_.occupy_size_; }
+  OB_INLINE int64_t get_reused_occupy_size() const { return basic_meta_.reused_occupy_size_; }
   OB_INLINE int64_t get_row_count() const { return basic_meta_.row_count_; }
   OB_INLINE const compaction::ObMetaUncommitTxInfo& get_uncommit_tx_info() const { return uncommit_tx_info_; }
   OB_INLINE int64_t get_end_row_id(const bool is_ddl_merge_empty_sstable) const { return is_ddl_merge_empty_sstable ? INT64_MAX : basic_meta_.row_count_ - 1; }

@@ -85,6 +85,7 @@ void ObSSTableMetaCache::reset()
   contain_uncommitted_row_ = false;
   rec_scn_.reset();
   has_hidden_rowkey_cg_ = false;
+  reused_occupy_size_ = 0;
 }
 
 int ObSSTableMetaCache::init(
@@ -107,6 +108,7 @@ int ObSSTableMetaCache::init(
     total_use_old_macro_block_count_ = (int32_t) meta->get_total_use_old_macro_block_count();
     row_count_ = meta->get_row_count();
     occupy_size_ = meta->get_occupy_size();
+    reused_occupy_size_ = max(0, meta->get_reused_occupy_size());
     max_merged_trans_version_ = meta->get_max_merged_trans_version();
     min_merged_trans_version_ = meta->get_min_merged_trans_version();
     data_checksum_ = meta->get_data_checksum();

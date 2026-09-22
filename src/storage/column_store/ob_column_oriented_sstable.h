@@ -58,6 +58,7 @@ public:
   OB_INLINE void reset() { MEMSET(this, 0, sizeof(ObCOSSTableMeta)); }
   OB_INLINE bool is_valid() const { return column_group_cnt_ > 0; }
   OB_INLINE uint64_t get_total_macro_block_count() const { return data_macro_block_cnt_ + index_macro_block_cnt_; }
+  OB_INLINE uint64_t get_total_use_old_macro_block_count() const { return use_old_macro_block_cnt_; }
 
   int64_t get_serialize_size() const;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -133,6 +134,7 @@ public:
       common::ObArenaAllocator &allocator,
       const int64_t upper_trans_version) override;
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
+  int get_cs_reused_occupy_size(int64_t &reused_occupy_size) const;
   bool has_hidden_rowkey_cg() const;
   int64_t get_column_group_count(const bool include_hidden_cg) const;
   OB_INLINE bool is_all_cg_base() const override final { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
@@ -148,7 +150,7 @@ public:
       const uint32_t cg_idx,
       ObSSTableWrapper &cg_wrapper) const;
   virtual int get_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &cg_wrapper) const;
-  virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers, const bool include_hiden_cg = true) const;
+  virtual int get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers, bool include_hidden_cg = true) const;
 
   virtual int64_t get_serialize_size(const uint64_t data_version) const override;
   virtual int serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const override;

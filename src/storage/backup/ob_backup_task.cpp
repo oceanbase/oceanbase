@@ -3130,8 +3130,8 @@ int ObLSBackupDataTask::do_backup_single_macro_block_data_(ObMultiMacroBlockBack
       LOG_WARN("failed to get backup physical id", K(ret), K_(backup_data_type), K(macro_index));
     } else if (OB_FAIL(prepare_index_block_rebuilder_if_need_(backup_item, &task_id_))) {
       LOG_WARN("failed to prepare index block rebuilder if need", K(ret));
-    } else if (OB_FAIL(append_macro_row_to_rebuilder_(backup_item, buffer_reader, physical_id))) {
-      LOG_WARN("failed to append macro row to rebuilder", K(ret), K(backup_item));
+    } else if (OB_FAIL(append_macro_row_to_rebuilder_(backup_item, buffer_reader, physical_id, need_reuse_for_mv))) {
+      LOG_WARN("failed to append macro row to rebuilder", K(ret), K(backup_item), K(need_reuse_for_mv));
     } else if (OB_FAIL(update_logic_id_to_macro_index_(tablet_id, table_key, logic_id, macro_index))) {
       LOG_WARN("failed to update logic id to macro index", K(ret), K(logic_id), K(table_key), K(macro_index));
     } else if (OB_FAIL(close_index_block_rebuilder_if_need_(backup_item))) {
@@ -3894,7 +3894,8 @@ int ObLSBackupDataTask::prepare_index_block_rebuilder_if_need_(
 }
 
 int ObLSBackupDataTask::append_macro_row_to_rebuilder_(const ObBackupProviderItem &item,
-    const blocksstable::ObBufferReader &buffer_reader, const ObBackupDeviceMacroBlockId &physical_id)
+    const blocksstable::ObBufferReader &buffer_reader, const ObBackupDeviceMacroBlockId &physical_id,
+    const bool is_reused_macro_block)
 {
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
@@ -3911,10 +3912,11 @@ int ObLSBackupDataTask::append_macro_row_to_rebuilder_(const ObBackupProviderIte
   } else if (OB_FAIL(rebuilder->append_macro_row(buffer_reader.data(),
                                                  buffer_reader.length(),
                                                  macro_block_id,
-                                                 absolute_row_offset))) {
-    LOG_WARN("failed to append macro row", K(ret), K(buffer_reader), K(macro_block_id));
+                                                 absolute_row_offset,
+                                                 is_reused_macro_block))) {
+    LOG_WARN("failed to append macro row", K(ret), K(buffer_reader), K(macro_block_id), K(is_reused_macro_block));
   } else {
-    LOG_DEBUG("append macro row to rebuilder", K(item), K(physical_id));
+    LOG_DEBUG("append macro row to rebuilder", K(item), K(physical_id), K(is_reused_macro_block));
   }
   return ret;
 }

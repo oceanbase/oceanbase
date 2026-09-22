@@ -28,7 +28,7 @@ ObIndexBlockInfo::ObIndexBlockInfo()
       block_write_ctx_(nullptr), next_level_rows_list_(nullptr),
       agg_info_(nullptr), micro_block_cnt_(0), row_count_(0),
       state_(ObMacroMetaStorageState::INVALID_STORAGE_STATE), is_meta_(false),
-      need_rewrite_(false)
+      need_rewrite_(false), occupy_size_(0)
 {
 }
 
@@ -63,6 +63,7 @@ void ObIndexBlockInfo::reset()
   state_ = ObMacroMetaStorageState::INVALID_STORAGE_STATE;
   is_meta_ = false;
   need_rewrite_ = false;
+  occupy_size_ = 0;
 }
 
 
@@ -415,10 +416,12 @@ int ObBaseIndexBlockDumper::close_to_disk(ObIndexBlockInfo& index_block_info)
 {
   int ret = OB_SUCCESS;
   ObMicroBlockDesc micro_block_desc;
+  int64_t occupy_size_before_close = 0;
   if (OB_UNLIKELY(0 == meta_micro_writer_->get_row_count())) {
     STORAGE_LOG(DEBUG, "build empty index block", K(ret));
   } else if (OB_FAIL(build_and_append_block())) {
     STORAGE_LOG(WARN, "failed to build and append macro meta block", K(ret));
+  } else if (FALSE_IT(occupy_size_before_close = meta_macro_writer_->get_merge_block_info().occupy_size_)) {
   } else if (OB_FAIL(meta_macro_writer_->close())) {
     STORAGE_LOG(WARN, "failed to close meta macro writer", K(ret));
   } else if (OB_FAIL(meta_macro_writer_->get_macro_block_write_ctx().deep_copy(
@@ -432,6 +435,8 @@ int ObBaseIndexBlockDumper::close_to_disk(ObIndexBlockInfo& index_block_info)
     index_block_info.state_ = ObMacroMetaStorageState::IN_DISK;
     index_block_info.row_count_ = row_count_;
     index_block_info.micro_block_cnt_ = micro_block_cnt_;
+    index_block_info.occupy_size_ = index_block_info.need_rewrite_ ? occupy_size_before_close
+        : meta_macro_writer_->get_merge_block_info().occupy_size_;
   }
   return ret;
 }

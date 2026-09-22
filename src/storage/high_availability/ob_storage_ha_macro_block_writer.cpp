@@ -219,7 +219,13 @@ int ObStorageHAMacroBlockWriter::process(
         } else if (OB_FAIL(index_block_rebuilder_->append_macro_row(*read_data.macro_meta_))) {
           STORAGE_LOG(WARN, "failed to append macro row", K(ret), KPC(read_data.macro_meta_));
         } else {
-          copied_ctx.increment_old_block_count();
+          // A meta-row copy can also keep a backup macro reference as-is. Only
+          // local macro ids represent target-side macro block reuse.
+          if (macro_id.is_local_id()) {
+            copied_ctx.increment_old_block_count();
+            copied_ctx.add_reused_occupy_size(
+                read_data.macro_meta_->val_.occupy_size_ + read_data.macro_meta_->val_.block_size_);
+          }
           ++reuse_count;
         }
       } else if (read_data.is_macro_data()) {

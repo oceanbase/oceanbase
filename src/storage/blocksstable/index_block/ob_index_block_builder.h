@@ -262,7 +262,7 @@ public:
                K_(data_blocks_cnt), K_(micro_block_cnt), K_(data_column_cnt),
                K_(data_column_checksums), K_(row_count),
                K_(max_merged_trans_version), K_(min_merged_trans_version), K_(contain_uncommitted_row),
-               K_(occupy_size), K_(original_size), K_(data_checksum),
+               K_(occupy_size), K_(reused_occupy_size), K_(original_size), K_(data_checksum),
                K_(use_old_macro_block_count), K_(compressor_type),
                K_(root_row_store_type), K_(nested_offset), K_(nested_size), K_(is_small_sstable),
                K_(table_backup_flag), K_(root_macro_seq), K_(encrypt_id),
@@ -285,6 +285,7 @@ public:
   ObSSTableMetaSkipIndex sstable_skip_index_; // the lifetime is the same as root_desc_
   bool contain_uncommitted_row_;
   int64_t occupy_size_;
+  int64_t reused_occupy_size_;
   int64_t original_size_;
   int64_t data_checksum_;
   int64_t use_old_macro_block_count_;
@@ -524,7 +525,8 @@ public:
       const char *buf,
       const int64_t size,
       const MacroBlockId &macro_id,
-      const int64_t absolute_row_offset/*not used set -1*/);
+      const int64_t absolute_row_offset/*not used set -1*/,
+      const bool is_reused_macro_block = false);
   int append_macro_row(const ObDataMacroBlockMeta &macro_meta);
   int append_macro_row(
       const ObDataMacroBlockMeta &macro_meta,
@@ -541,6 +543,7 @@ public:
       ObDataMacroBlockMeta *&macro_meta);
   int get_tablet_private_transfer_epoch(int32_t &tablet_private_transfer_epoch) const;
   int set_block_info(const ObBlockInfo &block_info);
+  int add_reused_macro_block_info(const ObMacroBlocksWriteCtx &copied_ctx);
   OB_INLINE const ObSSTableIndexBuilder *get_sstable_index_builder() const { return sstable_builder_; }
 
 private:
@@ -557,7 +560,8 @@ private:
   int check_and_get_abs_offset(const ObDataMacroBlockMeta &macro_meta, const int64_t absolute_row_offset, int64_t &abs_offset);
   int inner_append_macro_row(
       const ObDataMacroBlockMeta &macro_meta,
-      const int64_t absolute_row_offset/* not used: -1*/);
+      const int64_t absolute_row_offset/* not used: -1*/,
+      const bool is_reused_macro_block = false);
   int collect_data_blocks_info(const ObDataMacroBlockMeta &macro_meta);
   inline bool is_valid() const;
   int add_macro_block_meta(const ObDataMacroBlockMeta &macro_meta, const int64_t absolute_row_offset);

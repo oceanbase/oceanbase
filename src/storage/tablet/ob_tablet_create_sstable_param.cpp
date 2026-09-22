@@ -54,6 +54,7 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     full_column_cnt_(-1),
     data_checksum_(0),
     occupy_size_(-1),
+    reused_occupy_size_(INT64_MIN),
     original_size_(-1),
     max_merged_trans_version_(0),
     ddl_scn_(),
@@ -119,6 +120,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && rowkey_column_cnt_ >= 0
                && column_cnt_ >= 0
                && occupy_size_ >= 0
+               && reused_occupy_size_ >= -1 && reused_occupy_size_ <= occupy_size_
                && ddl_scn_.is_valid()
                && filled_tx_scn_.is_valid()
                && tx_data_recycle_scn_.is_valid()
@@ -184,6 +186,7 @@ int ObTabletCreateSSTableParam::inner_init_with_merge_res(const blocksstable::Ob
   row_count_ = res.row_count_;
   data_checksum_ = res.data_checksum_;
   occupy_size_ = res.occupy_size_;
+  reused_occupy_size_ = res.reused_occupy_size_;
   original_size_ = res.original_size_;
   contain_uncommitted_row_ = res.contain_uncommitted_row_;
   compressor_type_ = res.compressor_type_;
@@ -266,6 +269,7 @@ int ObTabletCreateSSTableParam::init_for_empty_major_sstable(const ObTabletID &t
     use_old_macro_block_count_ = 0;
     data_checksum_ = 0;
     occupy_size_ = 0;
+    reused_occupy_size_ = 0;
     ddl_scn_.set_min();
     filled_tx_scn_.set_min();
     tx_data_recycle_scn_.set_min();
@@ -384,6 +388,7 @@ int ObTabletCreateSSTableParam::init_for_split_empty_minor_sstable(const ObTable
   row_count_ = 0;
   data_checksum_ = 0;
   occupy_size_ = 0;
+  reused_occupy_size_ = 0;
   ddl_scn_.set_min();
   filled_tx_scn_ = end_scn;
   tx_data_recycle_scn_.set_min();
@@ -462,6 +467,7 @@ int ObTabletCreateSSTableParam::init_for_transfer_empty_mini_minor_sstable(const
     column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
     data_checksum_ = 0;
     occupy_size_ = 0;
+    reused_occupy_size_ = 0;
     ddl_scn_.set_min();
     filled_tx_scn_ = end_scn;
     tx_data_recycle_scn_.set_min();
@@ -994,6 +1000,7 @@ int ObTabletCreateSSTableParam::init_for_ddl_mem(const ObITable::TableKey &table
     data_blocks_cnt_ = 0;
     micro_block_cnt_ = 0;
     occupy_size_ = 0;
+    reused_occupy_size_ = 0;
     original_size_ = 0;
     progressive_merge_round_ = 0;
     progressive_merge_step_ = 0;
@@ -1410,6 +1417,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   column_cnt_ = sstable_param.basic_meta_.column_cnt_;
   data_checksum_ = sstable_param.basic_meta_.data_checksum_;
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
+  reused_occupy_size_ = sstable_param.basic_meta_.reused_occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
   sstable_skip_index_.reset();
@@ -1506,6 +1514,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
   column_cnt_ = sstable_param.basic_meta_.column_cnt_;
   data_checksum_ = sstable_param.basic_meta_.data_checksum_;
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
+  reused_occupy_size_ = sstable_param.basic_meta_.reused_occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   max_merged_trans_version_ = sstable_param.basic_meta_.max_merged_trans_version_;
   sstable_skip_index_.reset();
@@ -1674,6 +1683,7 @@ int ObTabletCreateSSTableParam::init_for_inc_major_ddl_aggregate(
     full_column_cnt_ = column_cnt;
     data_checksum_ = 0;
     occupy_size_ = 0;
+    reused_occupy_size_ = 0;
     original_size_ = 0;
     max_merged_trans_version_ = basic_meta.max_merged_trans_version_;
     ddl_scn_ = base_sstable.get_start_scn();
@@ -1765,6 +1775,7 @@ int ObTabletCreateSSTableParam::inner_init_with_shared_sstable(
   row_count_ = sstable_param.basic_meta_.row_count_;
   data_checksum_ = sstable_param.basic_meta_.data_checksum_;
   occupy_size_ = sstable_param.basic_meta_.occupy_size_;
+  reused_occupy_size_ = sstable_param.basic_meta_.reused_occupy_size_;
   original_size_ = sstable_param.basic_meta_.original_size_;
   contain_uncommitted_row_ = sstable_param.basic_meta_.contain_uncommitted_row_;
   compressor_type_ = sstable_param.basic_meta_.compressor_type_;

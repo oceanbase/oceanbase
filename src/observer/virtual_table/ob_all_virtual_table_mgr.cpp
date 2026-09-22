@@ -380,11 +380,19 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           break;
         }
         case ORIGINAL_SIZE: {
-          cur_row_.cells_[i].set_int(0);
+          int64_t original_size = 0;
+          if (table->is_sstable()) {
+            original_size = sst_meta_hdl.get_sstable_meta().get_basic_meta().original_size_;
+          }
+          cur_row_.cells_[i].set_int(original_size);
           break;
         }
         case REUSED_OCCUPY_SIZE: {
-          cur_row_.cells_[i].set_int(0);
+          int64_t reused_occupy_size = 0;
+          if (table->is_sstable()) {
+            reused_occupy_size = static_cast<ObSSTable *>(table)->get_reused_occupy_size();
+          }
+          cur_row_.cells_[i].set_int(reused_occupy_size);
           break;
         }
         default:

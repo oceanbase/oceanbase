@@ -598,7 +598,7 @@ int ObServerRandomPartitionScheduler::check_and_fetch_tablet_split_info(const st
       ret = OB_SUCCESS;
     }
   } else if (real_random_part_size != OB_INVALID_SIZE) {
-    used_disk_space = OB_MAX(tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_, used_disk_space);
+    used_disk_space = OB_MAX(tablet->get_tablet_meta().space_usage_.all_sstable_required_size_, used_disk_space);
     need_random_part = used_disk_space > real_random_part_size;
     if (OB_SUCC(ret) && need_random_part) {
       ObTabletCreateDeleteMdsUserData user_data;

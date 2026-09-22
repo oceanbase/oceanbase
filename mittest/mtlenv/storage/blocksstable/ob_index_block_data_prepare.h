@@ -582,6 +582,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
   param.column_cnt_= column_cnt;
   param.data_checksum_ = res.data_checksum_;
   param.occupy_size_ = res.occupy_size_;
+  param.reused_occupy_size_ = res.reused_occupy_size_;
   param.original_size_ = res.original_size_;
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;
@@ -710,6 +711,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_co_sstable(const int64
   param.column_cnt_= column_cnt;
   param.data_checksum_ = res.data_checksum_;
   param.occupy_size_ = res.occupy_size_;
+  param.reused_occupy_size_ = res.reused_occupy_size_;
   param.original_size_ = res.original_size_;
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;
@@ -1412,6 +1414,7 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   param.column_cnt_= column_cnt;
   param.data_checksum_ = res.data_checksum_;
   param.occupy_size_ = res.occupy_size_;
+  param.reused_occupy_size_ = res.reused_occupy_size_;
   param.original_size_ = res.original_size_;
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;

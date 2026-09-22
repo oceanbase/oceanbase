@@ -1180,7 +1180,7 @@ private:
   int get_tablet_fast_iter_attr_(ObTabletFastIterAttr &iter_attr) const;
   int get_tablet_accelerate_info_(ObStartupTabletAccelerateInfo &accelerate_info) const;
   int calc_space_usage_(
-      int64_t &all_sstable_data_required_size, int64_t &all_sstable_data_occupy_size,
+      int64_t &all_sstable_required_size, int64_t &all_sstable_occupy_size,
       int64_t &tablet_meta_size, int64_t &ss_public_sstable_occupy_size, int64_t &backup_bytes) const;
   int start_direct_load_task_for_idem(ObLSHandle &ls_handle);
   int start_direct_load_task_for_compat(ObLSHandle &ls_handle);

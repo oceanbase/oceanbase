@@ -2370,6 +2370,8 @@ int ObMacroBlockWriter::flush_reuse_macro_block(const ObDataMacroBlockMeta &macr
     LOG_WARN("failed to add macro block meta", K(ret), K(macro_id));
   } else {
     block_write_ctx_.increment_old_block_count();
+    block_write_ctx_.add_reused_occupy_size(
+        macro_meta.val_.occupy_size_ + macro_meta.val_.block_size_);
     FLOG_INFO("Async reuse macro block", K(macro_meta.end_key_), "macro_block_id", macro_id, K(is_normal_cg), K(macro_meta), K(table_cg_idx));
   }
   return ret;

@@ -83,7 +83,7 @@ public:
   int64_t rowkey_count_;
   int64_t column_count_;
   int64_t micro_block_count_;
-  int64_t occupy_size_;   // size of whole macro block (including headers)
+  int64_t occupy_size_;   // includes only header and data micro blocks.
   int64_t data_size_; // sum of size of micro blocks (after encoding)
   int64_t data_zsize_;    // sum of size of compressed/encrypted micro blocks
   int64_t original_size_; // sum of size of original micro blocks

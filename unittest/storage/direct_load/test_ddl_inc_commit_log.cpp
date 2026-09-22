@@ -107,6 +107,7 @@ public:
     param.use_old_macro_block_count_ = 0;
     param.data_checksum_ = 12345;
     param.occupy_size_ = 1024;
+    param.reused_occupy_size_ = 0;
     param.ddl_scn_.set_min();
     param.filled_tx_scn_.set_min();
     param.tx_data_recycle_scn_.set_min();
@@ -166,6 +167,7 @@ public:
     param.use_old_macro_block_count_ = 0;
     param.data_checksum_ = 12345;
     param.occupy_size_ = 1024;
+    param.reused_occupy_size_ = 0;
     param.ddl_scn_.set_min();
     param.filled_tx_scn_.set_min();
     param.tx_data_recycle_scn_.set_min();
@@ -226,6 +228,7 @@ public:
     param.use_old_macro_block_count_ = 0;
     param.data_checksum_ = 12345;
     param.occupy_size_ = 1024;
+    param.reused_occupy_size_ = 0;
     param.ddl_scn_.set_min();
     param.filled_tx_scn_.set_min();
     param.tx_data_recycle_scn_.set_min();
@@ -282,6 +285,7 @@ public:
       cg_param.use_old_macro_block_count_ = param.use_old_macro_block_count_;
       cg_param.data_checksum_ = param.data_checksum_;
       cg_param.occupy_size_ = param.occupy_size_;
+      cg_param.reused_occupy_size_ = param.reused_occupy_size_;
       cg_param.ddl_scn_ = param.ddl_scn_;
       cg_param.filled_tx_scn_ = param.filled_tx_scn_;
       cg_param.tx_data_recycle_scn_ = param.tx_data_recycle_scn_;

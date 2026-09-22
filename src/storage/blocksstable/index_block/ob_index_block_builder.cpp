@@ -232,6 +232,7 @@ ObSSTableMergeRes::ObSSTableMergeRes()
     sstable_skip_index_(),
     contain_uncommitted_row_(false),
     occupy_size_(0),
+    reused_occupy_size_(0),
     original_size_(0),
     data_checksum_(0),
     use_old_macro_block_count_(0),
@@ -289,6 +290,7 @@ void ObSSTableMergeRes::reset()
   sstable_skip_index_.reset();
   contain_uncommitted_row_ = false;
   occupy_size_ = 0;
+  reused_occupy_size_ = 0;
   original_size_ = 0;
   data_checksum_ = 0;
   use_old_macro_block_count_ = 0;
@@ -312,6 +314,9 @@ bool ObSSTableMergeRes::is_valid() const
       && data_blocks_cnt_ >= 0
       && micro_block_cnt_ >= 0
       && data_column_cnt_ > 0
+      && occupy_size_ >= 0
+      && reused_occupy_size_ >= 0
+      && reused_occupy_size_ <= occupy_size_
       && nested_offset_ >= 0
       && nested_size_ >= 0
       && table_backup_flag_.is_valid()
@@ -354,6 +359,7 @@ int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
     contain_uncommitted_row_ = src.contain_uncommitted_row_;
     table_backup_flag_ = src.table_backup_flag_;
     occupy_size_ = src.occupy_size_;
+    reused_occupy_size_ = src.reused_occupy_size_;
     original_size_ = src.original_size_;
     data_checksum_ = src.data_checksum_;
     use_old_macro_block_count_ = src.use_old_macro_block_count_;
@@ -1015,6 +1021,7 @@ int ObSSTableIndexBuilder::merge_index_tree(
   } else {
     macro_seq = macro_writer_.get_last_macro_seq();
     res.index_blocks_cnt_ += macro_writer_.get_macro_block_write_ctx().macro_block_list_.count();
+    res.occupy_size_ += macro_writer_.get_merge_block_info().occupy_size_;
     res.root_desc_ = tree_info.root_desc_;
     res.row_count_ = tree_info.row_count_;
     res.max_merged_trans_version_ = tree_info.max_merged_trans_version_;
@@ -1126,6 +1133,7 @@ int ObSSTableIndexBuilder::merge_index_tree_from_meta_block(ObSSTableMergeRes &r
           STORAGE_LOG(WARN, "fail to get macro ids of data blocks", K(ret));
         } else {
           res.use_old_macro_block_count_ += write_ctx->use_old_macro_block_count_;
+          res.reused_occupy_size_ += write_ctx->reused_occupy_size_;
         }
       }
     }
@@ -1194,6 +1202,7 @@ int ObSSTableIndexBuilder::merge_index_tree_from_all_mem_index_block(ObSSTableMe
           STORAGE_LOG(WARN, "fail to collect data info from root", K(ret), KPC(roots_[i]), K(res));
         } else {
           res.use_old_macro_block_count_ += write_ctx->use_old_macro_block_count_;
+          res.reused_occupy_size_ += write_ctx->reused_occupy_size_;
         }
       }
     }
@@ -1228,6 +1237,14 @@ int ObSSTableIndexBuilder::merge_index_tree_from_index_row(ObSSTableMergeRes &re
               K(j), KPC(index_block_info.next_level_rows_list_->at(j)), KPC(roots_.at(i)));
         }
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(index_block_info.block_write_ctx_->get_macro_id_array(res.other_block_ids_))) {
+        STORAGE_LOG(WARN, "fail to get macro ids of index blocks", K(ret), K(index_block_info));
+      } else {
+        res.index_blocks_cnt_ += index_block_info.block_write_ctx_->macro_block_list_.count();
+        res.occupy_size_ += index_block_info.occupy_size_;
+      }
     }
 
     if (OB_SUCC(ret)) {
@@ -1237,6 +1254,7 @@ int ObSSTableIndexBuilder::merge_index_tree_from_index_row(ObSSTableMergeRes &re
         STORAGE_LOG(WARN, "fail to collect data info from root", K(ret), KPC(roots_[i]), K(res));
       } else {
         res.use_old_macro_block_count_ += write_ctx->use_old_macro_block_count_;
+        res.reused_occupy_size_ += write_ctx->reused_occupy_size_;
       }
     }
   }
@@ -1402,6 +1420,7 @@ int ObSSTableIndexBuilder::build_meta_tree_from_meta_block(ObSSTableMergeRes &re
         STORAGE_LOG(WARN, "fail to get macro ids of meta index blocks", K(ret));
       } else {
         res.index_blocks_cnt_ += roots_[i]->meta_block_info_.block_write_ctx_->macro_block_list_.count();
+        res.occupy_size_ += roots_[i]->meta_block_info_.occupy_size_;
       }
     }
   }
@@ -1440,6 +1459,7 @@ int ObSSTableIndexBuilder::build_meta_tree_from_backup_meta_block(ObSSTableMerge
         STORAGE_LOG(WARN, "fail to get macro ids of meta index blocks", K(ret));
       } else {
         res.index_blocks_cnt_ += roots_[i]->meta_block_info_.block_write_ctx_->macro_block_list_.count();
+        res.occupy_size_ += roots_[i]->meta_block_info_.occupy_size_;
       }
     }
   }
@@ -1524,6 +1544,7 @@ int ObSSTableIndexBuilder::build_meta_tree(
   } else {
     macro_seq = macro_writer_.get_last_macro_seq();
     res.index_blocks_cnt_ += macro_writer_.get_macro_block_write_ctx().macro_block_list_.count();
+    res.occupy_size_ += macro_writer_.get_merge_block_info().occupy_size_;
     builder.reset();
     row_allocator_.reset();
   }
@@ -1537,7 +1558,7 @@ int ObSSTableIndexBuilder::collect_data_blocks_info(const ObDataMacroBlockMeta &
   if (OB_FAIL(accumulate_macro_column_checksum(macro_meta, res))) {
     STORAGE_LOG(WARN, "fail to accumulate macro column checksum", K(ret), K(macro_meta));
   } else {
-    res.occupy_size_ += macro_meta.val_.occupy_size_;
+    res.occupy_size_ += macro_meta.val_.occupy_size_ + macro_meta.val_.block_size_;
     res.original_size_ += macro_meta.val_.original_size_;
     res.micro_block_cnt_ += macro_meta.val_.micro_block_count_;
     res.data_checksum_ = ob_crc64_sse42(res.data_checksum_,
@@ -4316,6 +4337,24 @@ int ObIndexBlockRebuilder::set_block_info(const ObBlockInfo &block_info)
   return ret;
 }
 
+int ObIndexBlockRebuilder::add_reused_macro_block_info(const ObMacroBlocksWriteCtx &copied_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "rebuilder not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(copied_ctx.use_old_macro_block_count_ < 0 || copied_ctx.reused_occupy_size_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid reused macro block info", K(ret), K(copied_ctx.use_old_macro_block_count_),
+                K(copied_ctx.reused_occupy_size_));
+  } else {
+    lib::ObMutexGuard guard(mutex_);
+    data_write_ctx_.use_old_macro_block_count_ += copied_ctx.use_old_macro_block_count_;
+    data_write_ctx_.reused_occupy_size_ += copied_ctx.reused_occupy_size_;
+  }
+  return ret;
+}
+
 int ObIndexBlockRebuilder::inner_get_macro_meta(
     const char *buf, const int64_t size, const MacroBlockId &macro_id,
     common::ObIAllocator &allocator, ObDataMacroBlockMeta *&macro_meta,
@@ -4415,7 +4454,8 @@ int ObIndexBlockRebuilder::append_macro_row(
     const char *buf,
     const int64_t size,
     const MacroBlockId &macro_id,
-    const int64_t absolute_row_offset)
+    const int64_t absolute_row_offset,
+    const bool is_reused_macro_block)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -4433,9 +4473,9 @@ int ObIndexBlockRebuilder::append_macro_row(
   } else if (OB_UNLIKELY(!macro_meta->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid macro meta", K(ret), KPC(macro_meta));
-  } else if (OB_FAIL(inner_append_macro_row(*macro_meta, absolute_row_offset))) {
+  } else if (OB_FAIL(inner_append_macro_row(*macro_meta, absolute_row_offset, is_reused_macro_block))) {
     STORAGE_LOG(WARN, "fail to append macro meta", K(ret),
-        K(absolute_row_offset), K(macro_id), KPC(macro_meta));
+        K(absolute_row_offset), K(is_reused_macro_block), K(macro_id), KPC(macro_meta));
   } else {
     index_tree_root_ctx_->meta_block_offset_ =
         macro_header.fixed_header_.meta_block_offset_;
@@ -4567,7 +4607,8 @@ int ObIndexBlockRebuilder::append_macro_row(
 
 int ObIndexBlockRebuilder::inner_append_macro_row(
     const ObDataMacroBlockMeta &macro_meta,
-    const int64_t absolute_row_offset)
+    const int64_t absolute_row_offset,
+    const bool is_reused_macro_block)
 {
   int ret = OB_SUCCESS;
   int64_t abs_offset = -1;
@@ -4586,6 +4627,11 @@ int ObIndexBlockRebuilder::inner_append_macro_row(
     } else if (index_tree_root_ctx_->use_absolute_offset() && OB_FAIL(index_tree_root_ctx_->add_absolute_row_offset(abs_offset))) {
       STORAGE_LOG(WARN, "failed to add abs row offset", K(ret), K(abs_offset));
     } else {
+      if (is_reused_macro_block) {
+        data_write_ctx_.increment_old_block_count();
+        data_write_ctx_.add_reused_occupy_size(
+            macro_meta.val_.occupy_size_ + macro_meta.val_.block_size_);
+      }
       STORAGE_LOG(DEBUG, "append macro meta with absolute offset",
           K(abs_offset), K(absolute_row_offset), K(macro_meta));
     }
@@ -4616,7 +4662,7 @@ int ObIndexBlockRebuilder::collect_data_blocks_info(const ObDataMacroBlockMeta &
       data_blocks_info.data_column_checksums_.at(i) += meta.val_.row_count_
        * index_store_desc_->get_col_default_checksum_array().at(i);
     }
-    data_blocks_info.occupy_size_ += meta.val_.occupy_size_;
+    data_blocks_info.occupy_size_ += meta.val_.occupy_size_ + meta.val_.block_size_;
     data_blocks_info.original_size_ += meta.val_.original_size_;
     data_blocks_info.micro_block_cnt_ += meta.val_.micro_block_count_;
     data_blocks_info.meta_data_checksums_.push_back(meta.val_.data_checksum_);

@@ -695,18 +695,19 @@ int ObTabletPersister::calc_tablet_space_usage_(
 
   int64_t ss_public_sstable_occupy_size = 0;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(new_tablet_hdl.get_obj()->calc_sstable_occupy_size(space_usage.all_sstable_data_occupy_size_,
+  } else if (OB_FAIL(new_tablet_hdl.get_obj()->calc_sstable_occupy_size(space_usage.all_sstable_occupy_size_,
                                                                         ss_public_sstable_occupy_size,
                                                                         pure_backup_sstable_size))) {
     LOG_WARN("failed to calc tablet occupy_size", K(ret), KPC(new_tablet_hdl.get_obj()));
   } else {
     if (GCTX.is_shared_storage_mode()) {
-      space_usage.all_sstable_data_required_size_ = space_usage.all_sstable_data_occupy_size_;
+      space_usage.all_sstable_required_size_ = space_usage.all_sstable_occupy_size_;
       // TODO @zs475329, all_sstable_meta_size_ should be the sum of all the sstable.meta_occupy_size_ (Both SS and SN)
       space_usage.all_sstable_meta_size_ = block_info_set.meta_block_info_set_.size() * 16 * 1024; // 16KB;
     } else {
-      space_usage.all_sstable_data_required_size_ = block_info_set.data_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE;
-      space_usage.all_sstable_meta_size_ = block_info_set.meta_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE;
+      space_usage.all_sstable_required_size_ = (block_info_set.data_block_info_set_.size()
+          + block_info_set.meta_block_info_set_.size()) * DEFAULT_MACRO_BLOCK_SIZE;
+      space_usage.all_sstable_meta_size_ = 0;
     }
     space_usage.backup_bytes_ = backup_block_size + pure_backup_sstable_size;
     space_usage.tablet_clustered_sstable_data_size_ = clustered_sstable_size;

@@ -214,6 +214,8 @@ int ObPhysicalCopyTask::fetch_macro_block_(
       LOG_WARN("failed to get macro block writer", K(ret), K(copy_table_key_));
     } else if (OB_FAIL(writer->process(copied_ctx, *copy_ctx_->ha_dag_->get_ha_dag_net_ctx()))) {
       LOG_WARN("failed to process writer", K(ret), K(copy_table_key_));
+    } else if (OB_FAIL(index_block_rebuilder.add_reused_macro_block_info(copied_ctx))) {
+      LOG_WARN("failed to add reused macro block info", K(ret), K(copied_ctx));
     } else if (copy_macro_range_id_info_->range_info_.macro_block_count_ != copied_ctx.get_macro_block_count()) {
       ret = OB_ERR_SYS;
       LOG_ERROR("list count not match", K(ret), K(copy_table_key_), KPC(copy_macro_range_id_info_),

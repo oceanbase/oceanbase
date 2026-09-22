@@ -645,7 +645,8 @@ private:
       ObIndexBlockRebuilder *&index_block_rebuilder);
   int prepare_index_block_rebuilder_if_need_(const ObBackupProviderItem &item, const int64_t *task_idx);
   int append_macro_row_to_rebuilder_(const ObBackupProviderItem &item,
-      const blocksstable::ObBufferReader &buffer_reader, const ObBackupDeviceMacroBlockId &physical_id);
+      const blocksstable::ObBufferReader &buffer_reader, const ObBackupDeviceMacroBlockId &physical_id,
+      const bool is_reused_macro_block);
   int close_index_block_rebuilder_if_need_(const ObBackupProviderItem &item);
   int convert_macro_block_id_(const ObBackupDeviceMacroBlockId &physical_id, MacroBlockId &macro_id);
   int remove_sstable_index_builder_(const common::ObTabletID &tablet_id);

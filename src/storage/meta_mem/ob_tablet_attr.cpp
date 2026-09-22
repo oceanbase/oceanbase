@@ -31,8 +31,8 @@ OB_SERIALIZE_MEMBER(ObTabletFastIterAttr, v_);
 ObTabletAttr::ObTabletAttr()
   : iter_attr_(),
     ha_status_(0),
-    all_sstable_data_occupy_size_(0),
-    all_sstable_data_required_size_(0),
+    all_sstable_occupy_size_(0),
+    all_sstable_required_size_(0),
     tablet_meta_size_(0),
     ss_public_sstable_occupy_size_(0),
     backup_bytes_(0),
@@ -51,8 +51,8 @@ ObTabletAttr::ObTabletAttr()
 OB_SERIALIZE_MEMBER(ObTabletAttr,
                     iter_attr_,
                     ha_status_,
-                    all_sstable_data_occupy_size_,
-                    all_sstable_data_required_size_,
+                    all_sstable_occupy_size_,  // FARM COMPAT WHITELIST FOR all_sstable_data_occupy_size_
+                    all_sstable_required_size_,  // FARM COMPAT WHITELIST FOR all_sstable_data_required_size_
                     tablet_meta_size_,
                     ss_public_sstable_occupy_size_,
                     backup_bytes_,

@@ -206,6 +206,7 @@ public:
       K_(column_checksums),
       K_(data_checksum),
       K_(occupy_size),
+      K_(reused_occupy_size),
       K_(original_size),
       K_(max_merged_trans_version),
       K_(ddl_scn),
@@ -274,6 +275,7 @@ public:
   common::ObSEArray<int64_t, common::OB_ROW_DEFAULT_COLUMNS_COUNT> column_checksums_;
   int64_t data_checksum_;
   int64_t occupy_size_;
+  int64_t reused_occupy_size_;
   int64_t original_size_;
   int64_t max_merged_trans_version_;
   share::SCN ddl_scn_; // saved into sstable meta

@@ -13,7 +13,8 @@ namespace blocksstable
 {
 ObMacroBlocksWriteCtx::ObMacroBlocksWriteCtx()
   : macro_block_list_(),
-    use_old_macro_block_count_(0)
+    use_old_macro_block_count_(0),
+    reused_occupy_size_(0)
 {
 }
 
@@ -36,6 +37,7 @@ void ObMacroBlocksWriteCtx::clear()
 
   macro_block_list_.reset();
   use_old_macro_block_count_ = 0;
+  reused_occupy_size_ = 0;
 }
 
 void ObMacroBlocksWriteCtx::reset()
@@ -52,6 +54,7 @@ int ObMacroBlocksWriteCtx::set(ObMacroBlocksWriteCtx &src)
     LOG_WARN("not empty, cannot transfer new macro blocks", K(ret), K(*this));
   } else {
     use_old_macro_block_count_ = src.use_old_macro_block_count_;
+    reused_occupy_size_ = src.reused_occupy_size_;
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < src.macro_block_list_.count(); ++i) {

@@ -58,8 +58,8 @@ public:
   {
     iter_attr_.reset();
     ha_status_ = 0;
-    all_sstable_data_occupy_size_ = 0;
-    all_sstable_data_required_size_ = 0;
+    all_sstable_occupy_size_ = 0;
+    all_sstable_required_size_ = 0;
     tablet_meta_size_ = 0;
     ss_public_sstable_occupy_size_ = 0;
     backup_bytes_ = 0;
@@ -87,8 +87,8 @@ public:
   }
   TO_STRING_KV(K_(iter_attr),
                K_(ha_status),
-               K_(all_sstable_data_occupy_size),
-               K_(all_sstable_data_required_size),
+               K_(all_sstable_occupy_size),
+               K_(all_sstable_required_size),
                K_(tablet_meta_size),
                K_(ss_public_sstable_occupy_size),
                K_(backup_bytes),
@@ -106,12 +106,12 @@ public:
   // --------------------------------------------------------
   ObTabletFastIterAttr iter_attr_;
   int64_t ha_status_;
-  // all sstable data occupy_size, include major sstable
+  // all sstable occupy_size, include major sstable
   // <data_block real_size> + <small_sstable_nest_size (in share_nothing)>
-  int64_t all_sstable_data_occupy_size_;
-  // all sstable data requred_size, data_block_count * 2MB, include major sstable
-  int64_t all_sstable_data_required_size_;
-  // meta_size in shared_nothing, meta_block_count * 2MB
+  int64_t all_sstable_occupy_size_;
+  // all sstable required_size, including data/meta blocks and nested small sstable data
+  int64_t all_sstable_required_size_;
+  // tablet metadata size; old persisted values may also include legacy sstable meta size
   int64_t tablet_meta_size_;
   // major sstable data occupy_size
   // which is same as major_sstable_required_size_;
@@ -155,8 +155,8 @@ public:
   bool has_transfer_table() const { return attr_.has_transfer_table(); }
   bool is_empty_shell() const { return attr_.is_empty_shell(); }
   bool has_nested_table() const { return attr_.has_nested_table(); }
-  int64_t get_required_size() const { return attr_.all_sstable_data_required_size_; }
-  int64_t get_occupy_size() const { return attr_.all_sstable_data_occupy_size_; }
+  int64_t get_required_size() const { return attr_.all_sstable_required_size_; }
+  int64_t get_occupy_size() const { return attr_.all_sstable_occupy_size_; }
   uint64_t get_tablet_meta_size() const { return attr_.tablet_meta_size_; }
   int64_t get_ss_public_sstable_occupy_size() const { return attr_.ss_public_sstable_occupy_size_; }
   int64_t get_backup_size() const { return attr_.backup_bytes_; }

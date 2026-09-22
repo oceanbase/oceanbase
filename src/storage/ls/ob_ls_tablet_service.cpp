@@ -8584,7 +8584,7 @@ int ObLSTabletService::ha_get_tablet_without_memtables(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(key));
   } else if (tablet->get_memtable_count() > 0
-      || tablet->get_tablet_meta().space_usage_.all_sstable_data_required_size_ > DEEP_COPY_TABLET_SIZE_THRESHOLD) {
+      || tablet->get_tablet_meta().space_usage_.all_sstable_required_size_ > DEEP_COPY_TABLET_SIZE_THRESHOLD) {
     // has memtables, or is large enough that pinning the cached object is not worthwhile;
     // fall back to the deep-copy-and-strip path
     handle.reset();

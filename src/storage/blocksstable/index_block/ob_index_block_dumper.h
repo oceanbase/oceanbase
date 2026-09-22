@@ -62,7 +62,7 @@ public:
            micro_block_cnt_ == 0 && row_count_ == 0 &&
            state_ == ObMacroMetaStorageState::INVALID_STORAGE_STATE &&
            need_rewrite_ == false && next_level_rows_list_ == nullptr &&
-           agg_info_ == nullptr;
+           agg_info_ == nullptr && occupy_size_ == 0;
   }
   OB_INLINE bool in_disk() const
   {
@@ -105,10 +105,11 @@ public:
   ObMacroMetaStorageState state_;
   bool is_meta_;  // true : meta_tree_info, false : index_tree_info
   bool need_rewrite_; // reorganize disk space usage for meta blocks
+  int64_t occupy_size_;
   TO_STRING_KV(K_(is_meta), K_(state), K_(need_rewrite), K_(row_count),
                K_(micro_block_cnt), KPC_(macro_meta_list),
                KPC_(micro_block_desc), KPC_(agg_info), KPC_(block_write_ctx),
-               KP_(next_level_rows_list));
+               KP_(next_level_rows_list), K_(occupy_size));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexBlockInfo);

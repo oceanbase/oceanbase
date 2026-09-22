@@ -80,7 +80,7 @@ public:
   int deserialize_for_compat(const bool has_multi_version_row, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size(const int64_t data_version) const;
   TO_STRING_KV(K_(version), K_(has_multi_version_row), K_(status), K_(data_macro_block_count), K_(nested_size), K_(nested_offset),
-        K_(total_macro_block_count), K_(total_use_old_macro_block_count), K_(row_count), K_(occupy_size), K_(data_checksum),
+        K_(total_macro_block_count), K_(total_use_old_macro_block_count), K_(row_count), K_(occupy_size), K_(reused_occupy_size), K_(data_checksum),
         K_(max_merged_trans_version), K_(min_merged_trans_version), K_(upper_trans_version), K_(filled_tx_scn), K_(contain_uncommitted_row),
         K_(has_hidden_rowkey_cg));
 public:
@@ -281,6 +281,7 @@ public:
     }
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, row_count);
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, occupy_size);
+  GET_SSTABLE_META_DEFINE_FUNC(int64_t, reused_occupy_size);
   VIRTUAL_GET_SSTABLE_META_DEFINE_FUNC(int64_t, data_checksum); // virtual for COSSTable
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, total_macro_block_count);
   GET_SSTABLE_META_DEFINE_FUNC(int64_t, total_use_old_macro_block_count);

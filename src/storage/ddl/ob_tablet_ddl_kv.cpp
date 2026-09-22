@@ -1218,7 +1218,7 @@ int ObDDLMemtable::insert_block_meta_tree(const ObDDLMacroHandle &macro_handle, 
     meta_->get_basic_meta().max_merged_trans_version_ = max(meta_->get_basic_meta().max_merged_trans_version_, meta_val.max_merged_trans_version_);
     meta_->get_basic_meta().row_count_ += meta_val.row_count_;
     meta_->get_basic_meta().data_checksum_ = ob_crc64_sse42(meta_->get_basic_meta().data_checksum_, &meta_val.data_checksum_, sizeof(meta_val.data_checksum_));
-    meta_->get_basic_meta().occupy_size_ += meta_val.occupy_size_;
+    meta_->get_basic_meta().occupy_size_ += meta_val.occupy_size_ + meta_val.block_size_;
     meta_->get_basic_meta().original_size_ += meta_val.original_size_;
     if (OB_FAIL(meta_cache_.init(meta_))) {
       LOG_WARN("failed to init meta cache", K(ret), KPC(meta_));

@@ -157,6 +157,7 @@ int TestTableStore::mock_sstable(
   param.use_old_macro_block_count_ = 0;
   param.data_checksum_ = 0;
   param.occupy_size_ = 0;
+  param.reused_occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_ = key.scn_range_.end_scn_;
   param.tx_data_recycle_scn_.set_min();

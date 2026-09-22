@@ -435,6 +435,42 @@ int64_t ObCOSSTableV2::get_column_group_count(const bool include_hidden_cg) cons
        : cs_meta_.column_group_cnt_ - 1;
 }
 
+int ObCOSSTableV2::get_cs_reused_occupy_size(int64_t &reused_occupy_size) const
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMetaHandle meta_handle;
+  reused_occupy_size = 0;
+
+  if (OB_UNLIKELY(!is_cs_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("co sstable has not inited", K(ret), KPC(this));
+  } else {
+    reused_occupy_size = ObSSTable::get_reused_occupy_size();
+    if (is_cgs_empty_co_) {
+      // The base CO is the only physical sstable.
+    } else if (OB_FAIL(get_meta(meta_handle))) {
+      LOG_WARN("failed to get co meta handle", K(ret), KPC(this));
+    } else {
+      const ObSSTableArray &cg_sstables = meta_handle.get_sstable_meta().get_cg_sstables();
+      const ObSSTableArray &hidden_cg_sstable = meta_handle.get_sstable_meta().get_hidden_rowkey_sstable();
+      const int64_t normal_cg_cnt = cg_sstables.count();
+      const int64_t total_cg_cnt = normal_cg_cnt + hidden_cg_sstable.count();
+      for (int64_t i = 0; OB_SUCC(ret) && i < total_cg_cnt; ++i) {
+        const ObSSTable *cg_sstable = i < normal_cg_cnt
+                                   ? cg_sstables.at(i)
+                                   : hidden_cg_sstable.at(i - normal_cg_cnt);
+        if (OB_ISNULL(cg_sstable)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null cg sstable", K(ret), K(i), K(cg_sstables), K(hidden_cg_sstable));
+        } else {
+          reused_occupy_size += cg_sstable->get_reused_occupy_size();
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int64_t ObCOSSTableV2::get_serialize_size(const uint64_t data_version) const
 {
   int64_t len = 0;
@@ -734,7 +770,7 @@ int ObCOSSTableV2::get_cg_sstable(
 /*
  * Returning ObITable* is no longer safe due to the load demand of CG sstable.
  */
-int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers, const bool include_hiden_cg) const
+int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrappers, const bool include_hidden_cg) const
 {
   int ret = OB_SUCCESS;
   ObSSTableMetaHandle meta_handle;
@@ -760,7 +796,7 @@ int ObCOSSTableV2::get_all_tables(common::ObIArray<ObSSTableWrapper> &table_wrap
       }
     }
 
-    if (OB_SUCC(ret) && has_hidden_rowkey_cg() && include_hiden_cg) {
+    if (OB_SUCC(ret) && has_hidden_rowkey_cg() && include_hidden_cg) {
       ObSSTableWrapper cg_wrapper;
       if (OB_FAIL(get_cg_sstable(HIDDEN_ROWKEY_COLUMN_GROUP_IDX, cg_wrapper))) {
         LOG_WARN("failed to get cg sstable", K(ret), K(HIDDEN_ROWKEY_COLUMN_GROUP_IDX));

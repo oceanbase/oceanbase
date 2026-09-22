@@ -27,13 +27,15 @@ public:
   int add_macro_block_id(const blocksstable::MacroBlockId &macro_block_id);
   int pop_macro_block_id(blocksstable::MacroBlockId &macro_block_id);
   OB_INLINE void increment_old_block_count() { ++use_old_macro_block_count_; }
+  OB_INLINE void add_reused_occupy_size(const int64_t occupy_size) { reused_occupy_size_ += occupy_size; }
   OB_INLINE int64_t get_macro_block_count() const { return macro_block_list_.count(); }
   OB_INLINE bool is_empty() const { return macro_block_list_.empty(); }
   OB_INLINE common::ObIArray<blocksstable::MacroBlockId> &get_macro_block_list() { return macro_block_list_; }
-  TO_STRING_KV(K(macro_block_list_.count()), K_(use_old_macro_block_count));
+  TO_STRING_KV(K(macro_block_list_.count()), K_(use_old_macro_block_count), K_(reused_occupy_size));
 public:
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_READ_BLOCK_NUM> macro_block_list_;
   int64_t use_old_macro_block_count_;
+  int64_t reused_occupy_size_;
   DISALLOW_COPY_AND_ASSIGN(ObMacroBlocksWriteCtx);
 };
 

@@ -76,18 +76,20 @@ bool ObSSTableBasicMeta::operator!=(const ObSSTableBasicMeta &other) const
 bool ObSSTableBasicMeta::operator==(const ObSSTableBasicMeta &other) const
 {
   return use_old_macro_block_count_ == other.use_old_macro_block_count_
+      && reused_occupy_size_ == other.reused_occupy_size_
       && upper_trans_version_ == other.upper_trans_version_
       && check_basic_meta_equality(other);
 }
 
 bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &other) const
 {
-  // don't need to compare upper_trans_version and use_old_macro_block_count_
+  // don't need to compare upper_trans_version and use_old_macro_block_count_/reused_occupy_size_
   // 1. meta's upper_trans_version may be different from sstable shell's
-  // 2. defragmentation changes use_old_macro_block_count_
+  // 2. defragmentation changes use_old_macro_block_count_/reused_occupy_size_
   // 3. we can not check length_ & version_ for upgrade compatible scenario
   return row_count_ == other.row_count_
-      && occupy_size_ == other.occupy_size_
+      && ((-1 == reused_occupy_size_) != (-1 == other.reused_occupy_size_)
+          || occupy_size_ == other.occupy_size_)
       && original_size_ == other.original_size_
       && data_checksum_ == other.data_checksum_
       && index_type_ == other.index_type_
@@ -130,6 +132,7 @@ bool ObSSTableBasicMeta::is_valid() const
   bool ret = SSTABLE_BASIC_META_VERSION == version_
            && row_count_ >= 0
            && occupy_size_ >= 0
+           && reused_occupy_size_ >= -1 && reused_occupy_size_ <= occupy_size_
            && original_size_ >= 0
            && data_checksum_ >= 0
            && rowkey_column_count_ >= 0
@@ -166,6 +169,7 @@ void ObSSTableBasicMeta::reset()
   length_ = 0;
   row_count_ = 0;
   occupy_size_ = 0;
+  reused_occupy_size_ = 0;
   original_size_ = 0;
   data_checksum_ = 0;
   index_type_ = ObIndexType::INDEX_TYPE_IS_NOT;
@@ -670,6 +674,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.status_ = SSTABLE_INIT;
     basic_meta_.row_count_ = param.row_count_;
     basic_meta_.occupy_size_ = param.occupy_size_;
+    basic_meta_.reused_occupy_size_ = param.reused_occupy_size_;
     basic_meta_.original_size_ = param.original_size_;
     basic_meta_.data_checksum_ = param.data_checksum_;
     basic_meta_.index_type_ = param.index_type_;
@@ -1261,6 +1266,7 @@ int ObMigrationSSTableParam::get_merge_res(blocksstable::ObSSTableMergeRes &res)
   res.max_merged_trans_version_ = basic_meta_.max_merged_trans_version_;
   res.contain_uncommitted_row_ = basic_meta_.contain_uncommitted_row_;
   res.occupy_size_ = basic_meta_.occupy_size_;
+  res.reused_occupy_size_ = max(0, basic_meta_.reused_occupy_size_);
   res.original_size_ = basic_meta_.original_size_;
   res.data_checksum_ = basic_meta_.data_checksum_;
   res.use_old_macro_block_count_ = basic_meta_.use_old_macro_block_count_;
@@ -1565,7 +1571,8 @@ int ObSSTableMetaChecker::check_sstable_basic_meta(
   } else if (new_sstable_basic_meta.row_count_ != old_sstable_basic_meta.row_count_) {
     ret = OB_INVALID_DATA;
     LOG_WARN("row_count_ not match", K(ret), K(old_sstable_basic_meta), K(new_sstable_basic_meta));
-  } else if (new_sstable_basic_meta.occupy_size_ != old_sstable_basic_meta.occupy_size_) {
+  } else if ((-1 == old_sstable_basic_meta.reused_occupy_size_) == (-1 == new_sstable_basic_meta.reused_occupy_size_)
+      && new_sstable_basic_meta.occupy_size_ != old_sstable_basic_meta.occupy_size_) {
     ret = OB_INVALID_DATA;
     LOG_WARN("occupy_size_ not match", K(ret), K(old_sstable_basic_meta), K(new_sstable_basic_meta));
   } else if (new_sstable_basic_meta.data_checksum_ != old_sstable_basic_meta.data_checksum_) {

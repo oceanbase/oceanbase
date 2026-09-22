@@ -27,7 +27,6 @@ namespace storage
 {
 class ObTablet;
 struct ObUpdateTabletPointerParam;
-class ObSSUpdateTabletLog;
 struct ObCreateTenantPrepareLog : public ObIBaseStorageLogEntry
 {
 public:

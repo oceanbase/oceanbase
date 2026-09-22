@@ -29,14 +29,14 @@ int ObTabletSpaceUsage::serialize(char *buf, const int64_t buf_len, int64_t &pos
     LOG_WARN("fail to serialize length", K(ret), K(buf_len), K(new_pos), K(length));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, tablet_clustered_sstable_data_size_))) { // compat : shared_data_size_
     LOG_WARN("fail to serialize tablet_clustered_sstable_data_size_", K(ret), K(buf_len), K(new_pos), K(length), K(tablet_clustered_sstable_data_size_));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, all_sstable_data_required_size_))) { // compat : data_size_
-    LOG_WARN("fail to serialize all_sstable_data_required_size_", K(ret), K(buf_len), K(new_pos), K(length), K(all_sstable_data_required_size_));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, all_sstable_required_size_))) { // compat : data_size_
+    LOG_WARN("fail to serialize all_sstable_required_size_", K(ret), K(buf_len), K(new_pos), K(length), K(all_sstable_required_size_));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, tablet_clustered_meta_size_))) { // compat : shared_meta_size_
     LOG_WARN("fail to serialize tablet_clustered_meta_size_", K(ret), K(buf_len), K(new_pos), K(length), K(tablet_clustered_meta_size_));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, all_sstable_meta_size_))) { // compat : meta_size_
     LOG_WARN("fail to serialize all_sstable_meta_size_", K(ret), K(buf_len), K(new_pos), K(length), K(all_sstable_meta_size_));
-  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, all_sstable_data_occupy_size_))) { // compat : occupy_bytes_
-    LOG_WARN("fail to serialize all_sstable_data_occupy_size_", K(ret), K(buf_len), K(new_pos), K(length), K(all_sstable_data_occupy_size_));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, all_sstable_occupy_size_))) { // compat : occupy_bytes_
+    LOG_WARN("fail to serialize all_sstable_occupy_size_", K(ret), K(buf_len), K(new_pos), K(length), K(all_sstable_occupy_size_));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, backup_bytes_))) { // backup_bytes_
     LOG_WARN("fail to serialize quick_restore_size_", K(ret), K(buf_len), K(new_pos), K(length), K(backup_bytes_));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, ss_public_sstable_occupy_size_))) {
@@ -72,14 +72,14 @@ int ObTabletSpaceUsage::deserialize(const char *buf, const int64_t data_len, int
     LOG_WARN("buffer is not enough", K(ret), K(data_len), K(pos), K(length));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &tablet_clustered_sstable_data_size_))) {  // compat : shared_data_size_
     LOG_WARN("fail to deserialize tablet_clustered_sstable_data_size_", K(ret), K(data_len), K(new_pos), K(length));
-  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &all_sstable_data_required_size_))) { // compat : data_size_
-    LOG_WARN("fail to deserialize all_sstable_data_required_size_", K(ret), K(data_len), K(new_pos), K(length));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &all_sstable_required_size_))) { // compat : data_size_
+    LOG_WARN("fail to deserialize all_sstable_required_size_", K(ret), K(data_len), K(new_pos), K(length));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &tablet_clustered_meta_size_))) {  // compat : shared_meta_size_
     LOG_WARN("fail to deserialize tablet_clustered_meta_size_", K(ret), K(data_len), K(new_pos), K(length));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &all_sstable_meta_size_))) {  // compat : meta_size_
     LOG_WARN("fail to deserialize all_sstable_meta_size_", K(ret), K(data_len), K(new_pos), K(length));
-  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &all_sstable_data_occupy_size_))) { // compat : occupy_bytes_
-    LOG_WARN("fail to deserialize all_sstable_data_occupy_size_", K(ret), K(data_len), K(new_pos), K(length));
+  } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &all_sstable_occupy_size_))) { // compat : occupy_bytes_
+    LOG_WARN("fail to deserialize all_sstable_occupy_size_", K(ret), K(data_len), K(new_pos), K(length));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &backup_bytes_))) {  // backup_bytes_
     LOG_WARN("fail to serialize backup_bytes_", K(ret), K(data_len), K(new_pos), K(length));
   } else if (new_pos - pos < length && OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &ss_public_sstable_occupy_size_))) {
@@ -101,8 +101,8 @@ int32_t ObTabletSpaceUsage::get_serialize_size() const
   int32_t len = 0;
   len += serialization::encoded_length_i32(TABLET_SPACE_USAGE_INFO_VERSION);
   len += serialization::encoded_length_i32(len);
-  len += serialization::encoded_length_i64(all_sstable_data_occupy_size_);
-  len += serialization::encoded_length_i64(all_sstable_data_required_size_);
+  len += serialization::encoded_length_i64(all_sstable_occupy_size_);
+  len += serialization::encoded_length_i64(all_sstable_required_size_);
   len += serialization::encoded_length_i64(all_sstable_meta_size_);
   len += serialization::encoded_length_i64(ss_public_sstable_occupy_size_);
   len += serialization::encoded_length_i64(tablet_clustered_meta_size_);

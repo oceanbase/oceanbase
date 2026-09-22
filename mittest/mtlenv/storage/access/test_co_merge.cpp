@@ -100,6 +100,7 @@ void close_builder_and_prepare_sstable(
   param.column_cnt_ = res.data_column_cnt_;
   param.data_checksum_ = res.data_checksum_;
   param.occupy_size_ = res.occupy_size_;
+  param.reused_occupy_size_ = res.reused_occupy_size_;
   param.original_size_ = res.original_size_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.max_merged_trans_version_ = res.max_merged_trans_version_;

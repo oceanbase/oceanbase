@@ -264,6 +264,8 @@ struct ObSSTableMergeHistory : public ObIDiagnoseInfo
   void reset();
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
   void update_block_info(const ObMergeBlockInfo &block_info, const bool without_row_cnt);
+  // Overwrite provisional writer statistics with the final SSTable occupy size before publication.
+  void set_final_occupy_size(const int64_t occupy_size);
   void update_block_info_with_sstable_block_info(
       const ObMergeBlockInfo &block_info,
       const bool without_row_cnt,

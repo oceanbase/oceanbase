@@ -447,6 +447,12 @@ void ObSSTableMergeHistory::update_block_info(
   running_info_.merge_finish_time_ = ObTimeUtility::fast_current_time();
 }
 
+void ObSSTableMergeHistory::set_final_occupy_size(const int64_t occupy_size)
+{
+  lib::ObMutexGuard guard(lock_);
+  block_info_.occupy_size_ = occupy_size;
+}
+
 void ObSSTableMergeHistory::update_block_info_with_sstable_block_info(
   const ObMergeBlockInfo &block_info,
   const bool without_row_cnt,

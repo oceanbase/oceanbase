@@ -247,6 +247,7 @@ void TestTenantMetaMemMgr::prepare_create_sstable_param()
   param_.column_cnt_ = table_schema_.get_column_count() + multi_version_col_cnt;
   param_.data_checksum_ = 0;
   param_.occupy_size_ = 0;
+  param_.reused_occupy_size_ = 0;
   param_.ddl_scn_.set_min();
   param_.filled_tx_scn_.set_min();
   param_.rec_scn_.set_min();
@@ -1171,6 +1172,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   param.column_cnt_ = table_schema.get_column_count() + multi_version_col_cnt;
   param.data_checksum_ = 0;
   param.occupy_size_ = 0;
+  param.reused_occupy_size_ = 0;
   param.ddl_scn_.set_min();
   param.filled_tx_scn_.set_min();
   param.rec_scn_.set_min();

@@ -1060,8 +1060,8 @@ int ObTablet::get_ss_update_tablet_log(
     update_log.tablet_serialize_size_ = tablet_serialize_size;
     if (OB_FAIL(get_tablet_fast_iter_attr_(update_log.ss_tablet_attr_.iter_attr_))) {
       LOG_WARN("failed to get fast iter attr", K(ret), KPC(this));
-    } else if (OB_FAIL(calc_space_usage_(update_log.ss_tablet_attr_.all_sstable_data_required_size_,
-        update_log.ss_tablet_attr_.all_sstable_data_occupy_size_, update_log.ss_tablet_attr_.tablet_meta_size_,
+    } else if (OB_FAIL(calc_space_usage_(update_log.ss_tablet_attr_.all_sstable_required_size_,
+        update_log.ss_tablet_attr_.all_sstable_occupy_size_, update_log.ss_tablet_attr_.tablet_meta_size_,
         update_log.ss_tablet_attr_.ss_public_sstable_occupy_size_, update_log.ss_tablet_attr_.backup_bytes_))) {
       LOG_WARN("failed to calc space usage", K(ret), KPC(this));
     } else if (OB_FAIL(get_tablet_accelerate_info_(update_log.accelerate_info_))) {
@@ -6722,6 +6722,7 @@ int ObTablet::build_migration_sstable_param(
     basic_meta.column_cnt_ = res.data_column_cnt_;
     basic_meta.data_checksum_ = res.data_checksum_;
     basic_meta.occupy_size_ = res.occupy_size_;
+    basic_meta.reused_occupy_size_ = res.reused_occupy_size_;
     basic_meta.original_size_ = res.original_size_;
     basic_meta.max_merged_trans_version_ = sstable.is_inc_major_ddl_dump_sstable() ?
                                               sstable_meta.get_basic_meta().max_merged_trans_version_
@@ -7565,12 +7566,18 @@ int ObTablet::get_tablet_report_info_by_sstable(
       LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
     } else if (table->is_co_sstable()) {
       const ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-      required_size += co_sstable->get_cs_meta().occupy_size_;
+      required_size +=
+          (co_sstable->get_cs_meta().get_total_macro_block_count()
+              - (0 == i ? 0 : co_sstable->get_cs_meta().get_total_use_old_macro_block_count()))
+          * OB_DEFAULT_MACRO_BLOCK_SIZE;
     } else if (table->is_small_sstable()) {
       // small sstable, get nested size.
       required_size += table->get_macro_read_size();
     } else {
-      required_size += table->get_occupy_size();
+      required_size +=
+          (table->get_total_macro_block_count()
+              - (0 == i ? 0 : table->get_total_use_old_macro_block_count()))
+          * OB_DEFAULT_MACRO_BLOCK_SIZE;
     }
   }
   if (FAILEDx(tablet_replica.init(
@@ -8062,7 +8069,7 @@ int ObTablet::calc_tablet_attr(ObTabletAttr &attr) const
   attr.reset();
   if (OB_FAIL(get_tablet_fast_iter_attr_(attr.iter_attr_))) {
     LOG_WARN("failed to get tablet fast iter attr", K(ret), KPC(this));
-  } else if (OB_FAIL(calc_space_usage_(attr.all_sstable_data_required_size_, attr.all_sstable_data_occupy_size_,
+  } else if (OB_FAIL(calc_space_usage_(attr.all_sstable_required_size_, attr.all_sstable_occupy_size_,
       attr.tablet_meta_size_, attr.ss_public_sstable_occupy_size_, attr.backup_bytes_))) {
     LOG_WARN("failed to calc space usage", K(ret), KPC(this));
   } else if (OB_ISNULL(tablet_ptr = pointer_hdl_.get_tablet_pointer())) {
@@ -8161,13 +8168,13 @@ int ObTablet::get_tablet_accelerate_info_(ObStartupTabletAccelerateInfo &acceler
 }
 
 int ObTablet::calc_space_usage_(
-    int64_t &all_sstable_data_required_size, int64_t &all_sstable_data_occupy_size,
+    int64_t &all_sstable_required_size, int64_t &all_sstable_occupy_size,
     int64_t &tablet_meta_size, int64_t &ss_public_sstable_occupy_size, int64_t &backup_bytes) const
 {
   int ret = OB_SUCCESS;
   // calc space_usage
-  all_sstable_data_required_size = tablet_meta_.space_usage_.all_sstable_data_required_size_ + tablet_meta_.space_usage_.tablet_clustered_sstable_data_size_;
-  all_sstable_data_occupy_size = tablet_meta_.space_usage_.all_sstable_data_occupy_size_;
+  all_sstable_required_size = tablet_meta_.space_usage_.all_sstable_required_size_ + tablet_meta_.space_usage_.tablet_clustered_sstable_data_size_;
+  all_sstable_occupy_size = tablet_meta_.space_usage_.all_sstable_occupy_size_;
   tablet_meta_size = tablet_meta_.space_usage_.all_sstable_meta_size_ + tablet_meta_.space_usage_.tablet_clustered_meta_size_;
   ss_public_sstable_occupy_size = tablet_meta_.space_usage_.ss_public_sstable_occupy_size_;
   backup_bytes = tablet_meta_.space_usage_.backup_bytes_;
@@ -9211,7 +9218,9 @@ int ObTablet::init_aggregated_info(
     ALLOC_AND_INIT(allocator, macro_info_addr_, info_set, linked_writer);
   }
   if (OB_SUCC(ret)) {
-    tablet_meta_.space_usage_.all_sstable_data_required_size_ = macro_info_addr_.ptr_->data_block_info_arr_.cnt_ * DEFAULT_MACRO_BLOCK_SIZE;
+    tablet_meta_.space_usage_.all_sstable_required_size_ = (macro_info_addr_.ptr_->data_block_info_arr_.cnt_
+        + macro_info_addr_.ptr_->meta_block_info_arr_.cnt_) * DEFAULT_MACRO_BLOCK_SIZE;
+    tablet_meta_.space_usage_.all_sstable_meta_size_ = 0;
     tablet_meta_.space_usage_.tablet_clustered_sstable_data_size_ = macro_info_addr_.ptr_->shared_data_block_info_arr_.cnt_ * DEFAULT_MACRO_BLOCK_SIZE;
     tablet_meta_.space_usage_.tablet_clustered_meta_size_ = shared_meta_size;
   }

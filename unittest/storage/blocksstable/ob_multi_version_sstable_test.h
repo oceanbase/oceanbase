@@ -609,6 +609,7 @@ void ObMultiVersionSSTableTest::prepare_data_end(
   param.column_cnt_= column_cnt;
   param.data_checksum_ = 0;
   param.occupy_size_ = 0;
+  param.reused_occupy_size_ = 0;
   param.original_size_ = 0;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.encrypt_id_ = 0;

@@ -1238,6 +1238,12 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   (void)generator_window_decision_log_info(static_info);
 
   if (OB_NOT_NULL(sstable)) {
+    // ObSSTable::get_occupy_size() only covers the base CG for a CO SSTable.
+    const int64_t final_occupy_size = sstable->is_co_sstable()
+        ? static_cast<int64_t>(
+            static_cast<const ObCOSSTableV2 *>(sstable)->get_cs_meta().occupy_size_)
+        : sstable->get_occupy_size();
+    merge_history.set_final_occupy_size(final_occupy_size);
     (void)generate_macro_id_list(block_info.macro_id_list_, sizeof(block_info.macro_id_list_), sstable);
   }
 
