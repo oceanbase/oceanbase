@@ -719,7 +719,7 @@ private:
         SQL_LOG(WARN, "wide::to_number failed", K(ret));
       }
     } else if (std::is_same<T, uint64_t>::value) {
-      if (OB_FAIL(wide::to_number(static_cast<uint64_t>(v), in_scale, alloc, res_nmb))) {
+      if (OB_FAIL(wide::to_number(static_cast<int128_t>(v), in_scale, alloc, res_nmb))) {
         SQL_LOG(WARN, "wide::to_number failed", K(ret));
       }
     }

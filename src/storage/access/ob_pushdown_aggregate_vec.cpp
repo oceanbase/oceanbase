@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_pushdown_aggregate_vec.h"
+#include "share/aggregate/util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
@@ -1195,6 +1196,25 @@ int ObSumAggCellVec::eval(
   return ret;
 }
 
+template <typename ResultType>
+static int merge_sum_skip_index_result(
+    RuntimeContext &agg_ctx,
+    const int32_t agg_idx,
+    AggrRowPtr row,
+    const ObDatum &datum)
+{
+  char *agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_idx, row);
+  // The result cell is initialized to zero. Raw rows may also have a pending
+  // TmpStore value, which the original aggregate will collect separately.
+  int ret = aggregate::add_values(*reinterpret_cast<const ResultType *>(datum.ptr_),
+                                 *reinterpret_cast<const ResultType *>(agg_cell),
+                                 agg_cell, agg_ctx.get_cell_len(agg_idx, agg_cell));
+  if (OB_SUCC(ret)) {
+    agg_ctx.locate_notnulls_bitmap(agg_idx, agg_cell).set(agg_idx);
+  }
+  return ret;
+}
+
 int ObSumAggCellVec::eval_index_info(
     const blocksstable::ObMicroIndexInfo &index_info,
     const bool is_cg,
@@ -1248,8 +1268,35 @@ int ObSumAggCellVec::eval_index_info(
     if (OB_UNLIKELY(eval_datum->is_null())){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected skip index datum is null", K(ret), K(index_info));
-    } else if (OB_FAIL(eval(*eval_datum, 1/*row_count*/, agg_row_idx, 1/*agg_batch_size*/))) {
-      LOG_WARN("Failed to eval skip index datum", K(ret), K_(skip_index_datum), K(agg_row_idx));
+    } else {
+      // A partial SUM has the result type, not the original column's type.
+      // Feeding it to add_one_row() can truncate it before overflow detection.
+      const VecValueTypeClass res_tc = get_agg_expr()->get_vec_value_tc();
+#define MERGE_SUM_SKIP_INDEX_CASE(tc)                                                                     \
+      case tc: {                                                                                          \
+        ret = merge_sum_skip_index_result<RTCType<tc>>(basic_info_.agg_ctx_, agg_idx_, row, *eval_datum); \
+        break;                                                                                            \
+      }
+      switch (res_tc) {
+        MERGE_SUM_SKIP_INDEX_CASE(VEC_TC_DEC_INT32)
+        MERGE_SUM_SKIP_INDEX_CASE(VEC_TC_DEC_INT64)
+        MERGE_SUM_SKIP_INDEX_CASE(VEC_TC_DEC_INT128)
+        MERGE_SUM_SKIP_INDEX_CASE(VEC_TC_DEC_INT256)
+        MERGE_SUM_SKIP_INDEX_CASE(VEC_TC_DEC_INT512)
+        case VEC_TC_NUMBER: {
+          ret = merge_sum_skip_index_result<number::ObCompactNumber>(
+              basic_info_.agg_ctx_, agg_idx_, row, *eval_datum);
+          break;
+        }
+        default: {
+          ret = eval(*eval_datum, 1/*row_count*/, agg_row_idx, 1/*agg_batch_size*/);
+          break;
+        }
+      }
+#undef MERGE_SUM_SKIP_INDEX_CASE
+      if (OB_FAIL(ret)) {
+        LOG_WARN("Failed to merge skip index sum", K(ret), K_(skip_index_datum), K(agg_row_idx));
+      }
     }
   }
   LOG_DEBUG("[PD_AGGREGATE] aggregate index info", K(ret), KPC(eval_datum), K(is_cg), K(agg_row_idx), KPC(this));
