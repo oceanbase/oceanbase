@@ -1509,10 +1509,14 @@ int ObMediumCompactionScheduleFunc::check_tablet_checksum(
 
 int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
     const ObReplicaCkmArray &checksum_items,
-    const bool is_medium_checker)
+    const bool is_medium_checker,
+    const ObIArray<ObTabletCheckInfo> *check_infos)
 {
   int ret = OB_SUCCESS;
-  if (checksum_items.empty()) {
+  if (OB_UNLIKELY(is_medium_checker && OB_ISNULL(check_infos))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(is_medium_checker), KP(check_infos));
+  } else if (checksum_items.empty()) {
   } else  {
     int tmp_ret = OB_SUCCESS;
     int check_ret = OB_SUCCESS;
@@ -1539,16 +1543,29 @@ int ObMediumCompactionScheduleFunc::check_replica_checksum_items(
         if (is_medium_checker && OB_SUCCESS == check_ret) {
           ObLSHandle ls_handle;
           ObTabletHandle unused_handle;
-          if (OB_TMP_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE)))) {
+          int64_t check_medium_scn = 0;
+          // Checksum rows may already belong to a newer round, so use the checker work item's SCN as the clear token.
+          for (int64_t i = 0; i < check_infos->count(); ++i) {
+            const ObTabletCheckInfo &check_info = check_infos->at(i);
+            if (tablet_id == check_info.get_tablet_id() && ls_id == check_info.get_ls_id()) {
+              check_medium_scn = check_info.get_medium_scn();
+              break;
+            }
+          }
+          if (OB_UNLIKELY(check_medium_scn <= 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to find medium check info", K(ret), K(tablet_id), K(ls_id), KPC(check_infos));
+          } else if (OB_TMP_FAIL((MTL(storage::ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE)))) {
             if (OB_LS_NOT_EXIST == tmp_ret) {
               LOG_TRACE("ls not exist", K(tmp_ret), K(ls_id));
             } else {
               LOG_WARN("failed to get ls", K(tmp_ret), K(ls_id));
             }
-          } else if (OB_TMP_FAIL(ls_handle.get_ls()->update_medium_compaction_info(tablet_id, unused_handle))) {
-            LOG_WARN("failed to update medium compaction info", K(tmp_ret), K(ls_id), K(tablet_id));
+          } else if (OB_TMP_FAIL(ls_handle.get_ls()->update_medium_compaction_info(
+              tablet_id, check_medium_scn, unused_handle))) {
+            LOG_WARN("failed to update medium compaction info", K(tmp_ret), K(ls_id), K(tablet_id), K(check_medium_scn));
           } else {
-            FLOG_INFO("finish check medium compaction info", K(tmp_ret), K(ls_id), K(tablet_id));
+            FLOG_INFO("finish check medium compaction info", K(tmp_ret), K(ls_id), K(tablet_id), K(check_medium_scn));
           }
         }
 
@@ -1605,7 +1622,8 @@ int ObMediumCompactionScheduleFunc::batch_check_medium_finish(
           MTL_ID(), finish_tablet_ls_infos, checksum_items))) {
         LOG_WARN("failed to get tablet checksum", K(ret));
       } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::SEARCH_CHECKSUM))) {
-      } else if (OB_FAIL(check_replica_checksum_items(checksum_items, true /*is_medium_checker*/))) {
+      } else if (OB_FAIL(check_replica_checksum_items(
+          checksum_items, true /*is_medium_checker*/, &finish_tablet_ls_infos))) {
         LOG_WARN("fail to check replica checksum items for medium checker", K(ret));
       } else if (FALSE_IT(time_guard.click(ObCompactionScheduleTimeGuard::CHECK_CHECKSUM))) {
       }
