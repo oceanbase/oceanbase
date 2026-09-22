@@ -123,9 +123,13 @@ void ProtectedStackAllocator::dealloc(void *ptr)
     abort_unless(header->check_magic());
     char *base = (char *)header->base_;
     const ssize_t ps = page_size();
+    char *protect_start = (char *)header + sizeof(ObStackHeader);
+    const ssize_t protect_size = (base + header->size_ - protect_start) / ps * ps;
+    // JVM may leave guard pages inside the user stack after detaching the thread.
+    // Restore all full pages owned by this allocation before returning it to ob_malloc.
     if (header->has_guarded_page_
-        && 0 != mprotect((char *)header + sizeof(ObStackHeader), ps, PROT_READ | PROT_WRITE)) {
-      LOG_WARN_RET(OB_ERR_SYS, "mprotect failed", K(errno), K(header), K(ps));
+        && 0 != mprotect(protect_start, protect_size, PROT_READ | PROT_WRITE)) {
+      LOG_WARN_RET(OB_ERR_SYS, "mprotect failed", K(errno), KP(protect_start), K(protect_size));
     } else {
       const uint64_t tenant_id = header->tenant_id_;
       const ssize_t size = header->size_;
