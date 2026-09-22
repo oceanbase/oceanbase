@@ -81,6 +81,7 @@ public:
   // lock all by default.
   // WARNING: make sure ls is not null.
   ObLSLockGuard(ObLS *ls, const bool rdlock = false);
+  ObLSLockGuard(ObLS *ls, const bool rdlock, const int64_t abs_timeout_us);
   ~ObLSLockGuard();
 
   void unlock(int64_t target);

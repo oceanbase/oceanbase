@@ -329,6 +329,10 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
   int ret = OB_SUCCESS;
   int64_t cg_pos = -1;
 
+  // Transfer ownership before validation so free_iter_param also cleans up failures.
+  cg_param.output_exprs_ = output_exprs;
+  cg_param.aggregate_exprs_ = agg_exprs;
+  cg_param.out_cols_project_ = out_cols_project;
   if (OB_UNLIKELY(!row_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument", K(ret), K(row_param));
@@ -359,13 +363,10 @@ int ObCGIterParamPool::generate_for_column_store(const ObTableIterParam &row_par
       cg_param.cg_idx_ = cg_idx;
       cg_param.tablet_handle_ = row_param.tablet_handle_;
       cg_param.cg_col_param_ = column_params->at(cg_pos);
-      cg_param.out_cols_project_ = out_cols_project;
       cg_param.agg_cols_project_ = nullptr;
       cg_param.pushdown_filter_ = nullptr;
       cg_param.op_ = row_param.op_;
       cg_param.sstable_index_filter_ = nullptr;
-      cg_param.output_exprs_ = output_exprs;
-      cg_param.aggregate_exprs_ = agg_exprs;
       cg_param.output_sel_mask_ = nullptr;
       cg_param.is_multi_version_minor_merge_ = row_param.is_multi_version_minor_merge_;
       cg_param.need_scn_ = row_param.need_scn_;

@@ -233,7 +233,7 @@ int ObCompactionBuffer::expand(const int64_t size)
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), K(size), K(buffer_size_), K(capacity_));
   } else {
-    int64_t expand_size = buffer_size_ * 2;
+    int64_t expand_size = MAX(buffer_size_ * 2, MIN_BUFFER_SIZE);
     while (expand_size < size) {
       expand_size <<= 1;
     }

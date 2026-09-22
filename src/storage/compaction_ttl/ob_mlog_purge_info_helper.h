@@ -14,7 +14,7 @@ using MlogPurgeScnMap = common::hash::ObHashMap<int64_t, int64_t>; // mlog id ->
 class ObTenantMlogPurgeScnMapCache final
 {
 public:
-  static constexpr int64_t MIN_REFRESH_INTERVAL_US = 30 * 1000 * 1000L; // 30s
+  static constexpr int64_t MIN_REFRESH_INTERVAL_NS = 30 * 1000 * 1000 * 1000L; // 30s, same unit as read_snapshot
   ObTenantMlogPurgeScnMapCache()
     : map_(),
       read_snapshot_(-1)

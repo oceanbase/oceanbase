@@ -44,7 +44,6 @@ int ObTTLFilterInfoMdsHelper::on_register(
   ObTTLFilterInfoArg arg;
   int64_t pos = 0;
   ObLSHandle ls_handle;
-  ObTabletHandle tablet_handle;
   mds::MdsCtx &user_ctx = static_cast<mds::MdsCtx &>(ctx);
 
   if (OB_UNLIKELY(nullptr == buf || len <= 0)) {
@@ -62,10 +61,11 @@ int ObTTLFilterInfoMdsHelper::on_register(
       if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->set_ttl_filter_info(
               arg.tablet_id_array_.at(i), arg, user_ctx, 0 /*lock_timeout_us*/))) {
         LOG_WARN("failed to get tablet", K(ret), K(arg.ls_id_), K(arg.tablet_id_array_.at(i)));
-      } else {
-        LOG_INFO("[COMPACTION TTL] on_register for ObTTLFilterInfoArg", K(ret), K(arg), K(user_ctx.get_writer()));
       }
     } // for
+    if (OB_SUCC(ret)) {
+      LOG_INFO("[COMPACTION TTL] on_register for ObTTLFilterInfoArg", K(ret), K(arg), K(user_ctx.get_writer()));
+    }
   }
   return ret;
 }
@@ -97,10 +97,11 @@ int ObTTLFilterInfoMdsHelper::on_replay(
         LOG_WARN("failed to init reply executor", K(ret), K(arg), K(ctx), K(scn));
       } else if (OB_FAIL(executor.execute(scn, arg.ls_id_, tablet_id))) {
         LOG_WARN("failed to executor", K(ret), K(arg), K(ctx), K(scn));
-      } else {
-        LOG_INFO("[COMPACTION TTL] on_replay for ObTTLFilterInfoArg", K(ret), K(arg), K(tablet_id));
       }
     } // for
+    if (OB_SUCC(ret)) {
+      LOG_INFO("[COMPACTION TTL] on_replay for ObTTLFilterInfoArg", K(ret), K(arg), K(scn));
+    }
   }
   return ret;
 }

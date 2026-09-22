@@ -34,7 +34,7 @@ struct ObMigrationTabletParam;
 class ObIHADagNetCtx;
 class ObIStorageHAMacroBlockWriter;
 
-// Static operations used by ObBatchSSTableCopyTask:
+// Shared index initialization for SSTable copy tasks and batch copy operations:
 //
 //   copy one sstable = copy a group of macro ranges (+ index_builder finalize)
 //   copy one macro   = atomic leaf
@@ -44,9 +44,9 @@ class ObIStorageHAMacroBlockWriter;
 // CG SSTables; copy_one_sstable in turn loops over their prefetched macro
 // ranges.
 //
-// Scope / limitations (shared-nothing migration only). Restore-specific
-// readers/branches are intentionally absent: is_leader_restore is always false and
-//     restore_action is always RESTORE_NONE here.
+// The batch copy pipeline supports shared-nothing migration only. Restore-specific
+// readers are absent from that pipeline. Shared index initialization also supports
+// the legacy task's restore actions.
 // ObPhysicalCopyCtx carries the current HA service context used by readers.
 //
 // Macro ranges are prefetched by ObStorageHACopySSTableInfoMgr and owned by the
@@ -89,7 +89,6 @@ public:
       common::ObArenaAllocator &allocator,
       ObTableHandleV2 &out_table_handle);
 
-private:
   // Pick mode + build desc + init the supplied ObSSTableIndexBuilder.
   // Pre-condition: caller already verified is_sstable_should_rebuild_index()
   // and owns out_builder's lifetime.
@@ -103,6 +102,7 @@ private:
       const ObTablet *cached_dest_tablet, // caller-cached tablet; null -> fetch
       blocksstable::ObSSTableIndexBuilder &out_builder);
 
+private:
   // Copy one macro range. Migration-only leaf. Skeleton: init
   // ObIndexBlockRebuilder + ObCopyMacroBlockObReader + ObStorageHALocalMacroBlockWriter,
   // drive writer.process via run_macro_range_writer_pipeline, then close
@@ -144,8 +144,7 @@ private:
   ObSSTableCopyOps() = delete;
   ~ObSSTableCopyOps() = delete;
 
-  // Mirror of ObSSTableCopyFinishTask::get_merge_type_. mds sstable maps to
-  // MDS_MINI_MERGE; everything else to MAJOR/MINOR_MERGE per table_key.
+  // Map persistent SSTable types to their index construction merge type.
   static int get_merge_type_(
       const blocksstable::ObMigrationSSTableParam &sstable_param,
       compaction::ObMergeType &merge_type);

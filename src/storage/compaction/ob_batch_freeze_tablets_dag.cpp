@@ -3,6 +3,7 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/ls/ob_ls.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
@@ -105,52 +106,87 @@ int ObBatchFreezeTabletsTask::inner_process()
 
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
+  ObFreezer *freezer = nullptr;
   int64_t weak_read_ts = 0;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(param.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(param));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null ls", K(ret), K(param));
+  } else if (OB_ISNULL(freezer = ls->get_freezer())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null freezer", K(ret), K(param));
   } else {
     weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
   }
 
   const int64_t start_idx = get_start_idx();
   const int64_t end_idx = MIN(param.tablet_info_array_.count(), get_end_idx());
+  ObSEArray<ObTabletID, ObBatchFreezeTabletsParam::DEFAULT_BATCH_SIZE> tablet_ids;
+  ObSEArray<int64_t, ObBatchFreezeTabletsParam::DEFAULT_BATCH_SIZE> tablet_idxs;
   for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; ++i) {
     const ObTabletSchedulePair &cur_pair = param.tablet_info_array_.at(i);
-    ObTabletHandle tablet_handle;
-    ObTablet *tablet = nullptr;
-    // just try tablet freeze for one second
-    const int64_t max_retry_time_us = 1LL * 1000LL * 1000LL/* 1 second */;
-
     if (OB_UNLIKELY(!cur_pair.is_valid())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN_RET(tmp_ret, "get invalid tablet pair", K(cur_pair));
     } else if (cur_pair.schedule_merge_scn_ > weak_read_ts) {
       // no need to force freeze
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(param.ls_id_,
-                                                                 cur_pair.tablet_id_,
-                                                                 true/*is_sync*/,
-                                                                 max_retry_time_us,
-                                                                 true,/*need_rewrite_meta*/
-                                                                 ObFreezeSourceFlag::MAJOR_FREEZE))) {
-      LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
-      ++cnt_.failure_cnt_;
-    } else if (FALSE_IT(++cnt_.success_cnt_)) {
-    } else if (OB_TMP_FAIL(schedule_tablet_major_after_freeze(*ls, cur_pair))) {
-      if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
-        LOG_WARN_RET(tmp_ret, "failed to schedule medium merge dag", K(param), K(cur_pair));
+    } else if (OB_FAIL(tablet_ids.push_back(cur_pair.tablet_id_))) {
+      LOG_WARN("failed to push tablet id", K(ret), K(cur_pair));
+    } else if (OB_FAIL(tablet_idxs.push_back(i))) {
+      LOG_WARN("failed to push tablet index", K(ret), K(i));
+    }
+  }
+
+  if (OB_SUCC(ret) && !tablet_ids.empty()) {
+    ObSEArray<ObTableHandleV2, ObBatchFreezeTabletsParam::DEFAULT_BATCH_SIZE> frozen_memtable_handles;
+    ObSEArray<ObTabletID, ObBatchFreezeTabletsParam::DEFAULT_BATCH_SIZE> freeze_failed_tablets;
+    {
+      const int64_t abs_timeout_ts = ObClockGenerator::getClock() + 1_s;
+      ObLSLockGuard lock_ls(ls, true /*rdlock*/, abs_timeout_ts);
+      if (!lock_ls.locked()) {
+        tmp_ret = OB_TIMEOUT;
+        LOG_WARN_RET(tmp_ret, "lock ls timed out", K(param), K(abs_timeout_ts));
+      } else if (OB_UNLIKELY(ls->is_offline())) {
+        tmp_ret = OB_LS_OFFLINE;
+        LOG_WARN_RET(tmp_ret, "ls has offlined", K(param));
+      } else if (OB_TMP_FAIL(freezer->tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_ids,
+                                                 true /*need_rewrite_meta*/, frozen_memtable_handles,
+                                                 freeze_failed_tablets))) {
+        LOG_WARN_RET(tmp_ret, "failed to batch freeze tablets", K(param), K(tablet_ids), K(freeze_failed_tablets));
       }
     }
-
-    if (FAILEDx(share::dag_yield())) {
-      LOG_WARN("failed to dag yield", K(ret));
+    const bool all_tablets_failed = OB_SUCCESS != tmp_ret && freeze_failed_tablets.empty();
+    // Even on partial failure, finish all started freezes outside the LS lock.
+    if (!frozen_memtable_handles.empty()
+        && OB_TMP_FAIL(freezer->wait_tablet_freeze_finish(frozen_memtable_handles, freeze_failed_tablets))) {
+      LOG_WARN_RET(tmp_ret, "failed to wait tablet freeze finish", K(param), K(freeze_failed_tablets));
     }
-    if (REACH_THREAD_TIME_INTERVAL(5_s)) {
-      weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx();
+    for (int64_t i = 0; i < tablet_idxs.count(); ++i) {
+      const ObTabletSchedulePair &cur_pair = param.tablet_info_array_.at(tablet_idxs.at(i));
+      if (all_tablets_failed || is_contain(freeze_failed_tablets, cur_pair.tablet_id_)) {
+        ++cnt_.failure_cnt_;
+      } else {
+        ++cnt_.success_cnt_;
+      }
     }
-  } // end for
+    if (cnt_.success_cnt_ > 0) {
+      MTL(ObTenantFreezer *)->record_freezer_source_event(param.ls_id_, ObFreezeSourceFlag::MAJOR_FREEZE);
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_idxs.count(); ++i) {
+      const ObTabletSchedulePair &cur_pair = param.tablet_info_array_.at(tablet_idxs.at(i));
+      if (all_tablets_failed || is_contain(freeze_failed_tablets, cur_pair.tablet_id_)) {
+        // Failed tablets will be retried by the tablet scheduler.
+      } else if (OB_TMP_FAIL(schedule_tablet_major_after_freeze(*ls, cur_pair))) {
+        if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
+          LOG_WARN_RET(tmp_ret, "failed to schedule medium merge dag", K(param), K(cur_pair));
+        }
+      }
+      if (FAILEDx(share::dag_yield())) {
+        LOG_WARN("failed to dag yield", K(ret));
+      }
+    }
+  }
 
   cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
   FLOG_INFO("batch freeze tablets finished", KR(ret), K_(cnt), K_(schedule_major_dag_cnt), K(cost_ts),

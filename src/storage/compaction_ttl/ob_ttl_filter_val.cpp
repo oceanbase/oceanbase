@@ -3,6 +3,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/compaction_ttl/ob_ttl_filter_val.h"
+#include "lib/container/ob_se_array_iterator.h"
+#include "lib/utility/ob_sort.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info_array.h"
 
 namespace oceanbase
@@ -24,17 +26,10 @@ int ObTTLFilterVal::init(
       LOG_WARN("failed to push back filter pair", K(ret), KPC(ttl_filter_info));
     }
   } // for
-  if (OB_SUCC(ret)) {
-    // Sort the array manually to avoid template instantiation issues
-    for (int64_t i = 0; i < filter_pairs_.count() - 1; ++i) {
-      for (int64_t j = i + 1; j < filter_pairs_.count(); ++j) {
-        if (filter_pairs_.at(j).col_idx_ < filter_pairs_.at(i).col_idx_) {
-          TTLFilterPair temp = filter_pairs_.at(i);
-          filter_pairs_.at(i) = filter_pairs_.at(j);
-          filter_pairs_.at(j) = temp;
-        }
-      }
-    }
+  if (OB_SUCC(ret) && filter_pairs_.count() > 1) {
+    lib::ob_sort(filter_pairs_.begin(), filter_pairs_.end(), [](const TTLFilterPair &lhs, const TTLFilterPair &rhs) {
+      return lhs.col_idx_ < rhs.col_idx_;
+    });
   }
   return ret;
 }

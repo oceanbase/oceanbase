@@ -49,7 +49,7 @@ int ObSSTableCopyOps::get_merge_type_(
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (table_key.is_ddl_dump_sstable()) {
     merge_type = ObMergeType::MAJOR_MERGE;
-  } else if (table_key.is_inc_major_ddl_sstable()) {
+  } else if (table_key.is_inc_major_ddl_dump_sstable()) {
     merge_type = ObMergeType::MAJOR_MERGE;
   } else if (table_key.is_mds_sstable()) {
     merge_type = ObMergeType::MDS_MINI_MERGE;
@@ -90,10 +90,7 @@ int ObSSTableCopyOps::get_space_optimization_mode_(
 }
 
 // ---------------------------------------------------------------------------
-// prepare_data_store_desc -- adapted from
-// ObSSTableCopyFinishTask::prepare_data_store_desc_; src_tablet_meta + ls are
-// now explicit params, while preserving the current private-transfer-epoch
-// and mocked column-group schema rules.
+// Shared data store descriptor construction for legacy and batch SSTable copy.
 // ---------------------------------------------------------------------------
 
 int ObSSTableCopyOps::prepare_data_store_desc_(

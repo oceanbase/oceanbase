@@ -187,6 +187,11 @@ ObLSLockGuard::ObLSLockGuard(ObLS *ls, const bool rdlock)
   start_ts_ = ObTimeUtility::current_time();
 }
 
+ObLSLockGuard::ObLSLockGuard(ObLS *ls, const bool rdlock, const int64_t abs_timeout_us)
+  : ObLSLockGuard(ls, ls->lock_, rdlock ? LSLOCKALL : 0, rdlock ? 0 : LSLOCKALL, abs_timeout_us)
+{
+}
+
 ObLSLockGuard::~ObLSLockGuard()
 {
   lock_.unlock(mark_);

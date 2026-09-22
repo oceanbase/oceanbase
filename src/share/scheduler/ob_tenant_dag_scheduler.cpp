@@ -2250,7 +2250,8 @@ void ObTenantDagWorker::run1()
       cur_task = task_;
       task_ = NULL;
       if (OB_FAIL(MTL(ObTenantDagScheduler*)->deal_with_finish_task(cur_task, *this, ret/*task error_code*/))) {
-        COMMON_LOG(WARN, "failed to finish task", K(ret), KPC(cur_task));
+        // The current task may have been freed even when finishing it fails.
+        COMMON_LOG(WARN, "failed to finish task", K(ret), KP(cur_task));
       }
       ObCurTraceId::reset();
       lib::set_thread_name("DAG");
@@ -5392,7 +5393,7 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask *&task, ObTenantDagWorke
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(ERROR, "invalid dag", K(ret), K(*dag));
   } else if (OB_FAIL(prio_sche_[dag->get_priority()].deal_with_finish_task(task, dag, worker, error_code))) {
-    COMMON_LOG(WARN, "fail to finish task", K(ret), KPC(dag));
+    COMMON_LOG(WARN, "fail to finish task", K(ret), KP(dag));
   } else {
     ObThreadCondGuard guard(scheduler_sync_);
     if (OB_SUCC(guard.get_ret())) {
@@ -5400,7 +5401,7 @@ int ObTenantDagScheduler::deal_with_finish_task(ObITask *&task, ObTenantDagWorke
       free_workers_.add_last(&worker);
       worker.set_task(NULL);
       if (OB_FAIL(scheduler_sync_.signal())) {
-        COMMON_LOG(WARN, "Failed to signal", K(ret), KPC(dag));
+        COMMON_LOG(WARN, "Failed to signal", K(ret), KP(dag));
       }
     }
   }

@@ -193,10 +193,16 @@ public:
     update_mem_monitor();
   }
 
+  template <typename = T>
+  void reuse()
+  {
+    allocator_.reuse();
+    update_mem_monitor();
+  }
+
   DELEGATE_WITH_RET(allocator_, alloc_aligned, void*);
   DELEGATE_WITH_RET(allocator_, realloc, void*);
   DELEGATE_WITHOUT_RET(allocator_, reset_remain_one_page);
-  DELEGATE_WITHOUT_RET(allocator_, reuse);
   DELEGATE_WITHOUT_RET(allocator_, set_label);
   DELEGATE_WITHOUT_RET(allocator_, set_tenant_id);
   DELEGATE_WITH_RET(allocator_, set_tracer, bool);
@@ -243,16 +249,28 @@ public:
   virtual void *alloc(const int64_t sz) override
   {
     ObSpinLockGuard guard(lock_);
-    return allocator_.alloc(sz);
+    return ObLocalArena::alloc(sz);
   }
   virtual void* alloc(const int64_t size, const ObMemAttr &attr) override
   {
     ObSpinLockGuard guard(lock_);
-    return allocator_.alloc(size, attr);
+    return ObLocalArena::alloc(size, attr);
   }
-  DELEGATE_WITH_SPIN_LOCK(allocator_, lock_, clear, void);
-  DELEGATE_WITH_SPIN_LOCK(allocator_, lock_, reuse, void);
-  DELEGATE_WITH_SPIN_LOCK(allocator_, lock_, reset, void);
+  void clear()
+  {
+    ObSpinLockGuard guard(lock_);
+    ObLocalArena::clear();
+  }
+  virtual void reuse() override
+  {
+    ObSpinLockGuard guard(lock_);
+    ObLocalArena::reuse();
+  }
+  virtual void reset() override
+  {
+    ObSpinLockGuard guard(lock_);
+    ObLocalArena::reset();
+  }
 private:
   common::ObSpinLock lock_;
 };

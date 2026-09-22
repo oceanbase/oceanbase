@@ -118,6 +118,63 @@ TEST_F(TestCompactionMemCtx, monitor_arena_test)
 }
 
 
+TEST_F(TestCompactionMemCtx, monitor_safe_arena_test)
+{
+  ObArenaAllocator inner_arena;
+  ObCompactionMemoryContext mem_ctx(inner_arena);
+  {
+    ObLocalSafeArena arena("TestSafeArena");
+    arena.bind_mem_ctx(mem_ctx);
+    ASSERT_NE(nullptr, arena.alloc(128));
+    EXPECT_GT(mem_ctx.mem_monitor_.get_hold_mem(), 0);
+    EXPECT_EQ(arena.total(), mem_ctx.mem_monitor_.get_hold_mem());
+    mem_ctx.mem_click();
+    EXPECT_GE(mem_ctx.get_total_mem_peak(), arena.total());
+
+    arena.reuse();
+    EXPECT_EQ(arena.total(), mem_ctx.mem_monitor_.get_hold_mem());
+    arena.clear();
+    EXPECT_EQ(0, mem_ctx.mem_monitor_.get_hold_mem());
+
+    ObMemAttr attr(MTL_ID(), "TestSafeArena");
+    ASSERT_NE(nullptr, arena.alloc(16384, attr));
+    EXPECT_EQ(arena.total(), mem_ctx.mem_monitor_.get_hold_mem());
+    const int64_t hold_before_reuse = arena.total();
+    arena.reuse();
+    EXPECT_LT(arena.total(), hold_before_reuse);
+    EXPECT_EQ(arena.total(), mem_ctx.mem_monitor_.get_hold_mem());
+    ASSERT_NE(nullptr, arena.alloc(16384, attr));
+    arena.reset();
+    EXPECT_EQ(0, mem_ctx.mem_monitor_.get_hold_mem());
+
+    ASSERT_NE(nullptr, arena.alloc(128));
+  }
+  EXPECT_EQ(0, mem_ctx.mem_monitor_.get_hold_mem());
+}
+
+TEST_F(TestCompactionMemCtx, buffer_zero_reserve_test)
+{
+  ObCompactionBuffer buffer;
+  ASSERT_EQ(OB_SUCCESS, buffer.init(1024, 0));
+  ASSERT_EQ(0, buffer.size());
+  const char value = 'x';
+  ASSERT_EQ(OB_SUCCESS, buffer.write(&value, 1));
+  EXPECT_EQ(value, buffer.data()[0]);
+  ASSERT_EQ(OB_SUCCESS, buffer.write_nop(1023, true));
+  EXPECT_EQ(1024, buffer.length());
+  EXPECT_EQ(OB_BUF_NOT_ENOUGH, buffer.write(&value, 1));
+
+  buffer.reset();
+  ASSERT_EQ(OB_SUCCESS, buffer.init(10000, 0));
+  ASSERT_EQ(OB_SUCCESS, buffer.write(&value, 1));
+  ASSERT_EQ(OB_SUCCESS, buffer.write_nop(8192, true));
+  EXPECT_EQ(value, buffer.data()[0]);
+  EXPECT_EQ(8193, buffer.length());
+  ASSERT_EQ(OB_SUCCESS, buffer.write_nop(1807, true));
+  EXPECT_EQ(10000, buffer.length());
+  EXPECT_EQ(OB_BUF_NOT_ENOUGH, buffer.write_nop(1));
+}
+
 TEST_F(TestCompactionMemCtx, mem_ctx_test)
 {
   ObArenaAllocator inner_arena;

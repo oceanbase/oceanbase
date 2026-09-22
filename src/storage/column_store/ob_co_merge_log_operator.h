@@ -30,7 +30,7 @@ public:
   int close();
   TO_STRING_KV(K_(is_inited), K_(cg_count));
 private:
-  int init_buffer_writer(ObCOMergeLogBufferWriter *&buffer_writer, ObCOMergeLogFile &file, ObCOMergeProjector *projector);
+  int init_buffer_writer(ObCOMergeLogBufferWriter *&buffer_writer, ObCOMergeLogFile &file, ObCOMergeProjector *&projector);
   int init_row_buffer_writers(const ObStorageSchema &schema);
   int inner_log_write(const ObMergeLog &log);
   int inner_row_write(const int64_t idx, const blocksstable::ObDatumRow &full_row);

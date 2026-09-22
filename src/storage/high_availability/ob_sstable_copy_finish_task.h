@@ -222,19 +222,9 @@ private:
       const ObPhysicalCopyTaskInitParam &init_param,
       int64_t &cluster_version);
   int prepare_sstable_index_builder_(
-      const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const ObMigrationSSTableParam *sstable_param,
       const int64_t cluster_version);
-  int prepare_data_store_desc_(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      const ObMigrationSSTableParam *sstable_param,
-      const int64_t cluster_version,
-      ObWholeDataStoreDesc &desc);
-  int get_merge_type_(
-      const ObMigrationSSTableParam *sstable_param,
-      compaction::ObMergeType &merge_type);
   int create_sstable_();
   int create_empty_sstable_();
   int build_create_empty_sstable_param_(
@@ -256,9 +246,6 @@ private:
       ObTabletCreateSSTableParam &param);
   int alloc_and_init_sstable_creator_(ObCopiedSSTableCreatorImpl *&sstable_creator);
   void free_sstable_creator_(ObCopiedSSTableCreatorImpl *&sstable_creator);
-  int get_space_optimization_mode_(
-      const ObMigrationSSTableParam *sstable_param,
-      ObSSTableIndexBuilder::ObSpaceOptimizationMode &mode);
   static int build_latest_major_sstable_reuse_info_(
       const ObPhysicalCopyCtx &copy_ctx,
       const ObMigrationSSTableParam &sstable_param,

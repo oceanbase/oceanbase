@@ -142,6 +142,10 @@ void ObTransferService::run1()
       if (tenant_config.is_valid()) {
         wait_time_ms = tenant_config->_transfer_service_wakeup_interval / 1000;
       }
+      if (OB_FAIL(ret)) {
+        // A failed handler may not have reached the task's wakeup path.
+        wait_time_ms = MIN(wait_time_ms, 1_s / 1000);
+      }
       ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
     }
@@ -193,10 +197,13 @@ int ObTransferService::scheduler_transfer_handler_()
   } else {
     LOG_INFO("start do transfer handler", K(ls_id_array_));
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array_.count(); ++i) {
+    for (int64_t i = 0; i < ls_id_array_.count(); ++i) {
       const share::ObLSID &ls_id = ls_id_array_.at(i);
       if (OB_SUCCESS != (tmp_ret = do_transfer_handler_(ls_id))) {
-        //The purpose of using tmp_ret here is to not block the scheduling of other ls afterward
+        // Keep scheduling other LSs, but preserve the error for a short retry.
+        if (OB_SUCC(ret)) {
+          ret = tmp_ret;
+        }
         LOG_WARN("failed to do ha handler", K(tmp_ret), K(ls_id));
       }
     }

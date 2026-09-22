@@ -58,7 +58,6 @@ int ObTTLFilter::init(ObTablet &tablet,
                           ttl_filter_info_mgr_))) {
     LOG_WARN("Fail to init ttl filter", KR(ret), K(tablet), K(read_version_range));
   } else {
-    schema_rowkey_cnt_ = tablet.get_rowkey_read_info().get_schema_rowkey_count();
     is_inited_ = true;
   }
 
@@ -78,7 +77,6 @@ void ObTTLFilter::reuse()
 
   filter_col_idx_array_.reset();
   filter_val_.reset();
-  schema_rowkey_cnt_ = -1;
 }
 
 int ObTTLFilter::switch_info(ObTablet &tablet,
@@ -108,8 +106,6 @@ int ObTTLFilter::switch_info(ObTablet &tablet,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(build_filter_helper_arrays(ttl_filter_info_array_))) {
     LOG_WARN("Fail to build filter helper arrays", KR(ret));
-  } else {
-    schema_rowkey_cnt_ = tablet.get_rowkey_read_info().get_schema_rowkey_count();
   }
 
   return ret;
@@ -139,7 +135,6 @@ int ObTTLFilter::init(const int64_t schema_rowkey_cnt,
   } else if (OB_FAIL(build_filter_helper_arrays(ttl_filter_info_array_))) {
     LOG_WARN("Fail to build filter col idx array", KR(ret));
   } else {
-    schema_rowkey_cnt_ = schema_rowkey_cnt;
     is_inited_ = true;
   }
 

@@ -6,7 +6,9 @@
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include <gmock/gmock.h>
 
-#include "storage/column_store/ob_co_merge_log.h"
+#define private public
+#include "storage/column_store/ob_co_merge_log_operator.h"
+#undef private
 
 namespace oceanbase
 {
@@ -37,6 +39,65 @@ public:
     return alloc_overflow_buffer(size);
   }
 };
+
+class WriterFailureAllocator : public ObIAllocator
+{
+public:
+  void *alloc(const int64_t size) override
+  {
+    return allocations_left_-- > 0 ? arena_.alloc(size) : nullptr;
+  }
+  void *alloc(const int64_t size, const ObMemAttr &attr) override { return alloc(size); }
+  void free(void *ptr) override
+  {
+    if (ptr == projector_) {
+      ++projector_free_count_;
+    }
+    arena_.free(ptr);
+  }
+  ObArenaAllocator arena_;
+  int64_t allocations_left_ = INT64_MAX;
+  void *projector_ = nullptr;
+  int64_t projector_free_count_ = 0;
+};
+
+TEST(TestMergeLog, writer_initialization_projector_ownership)
+{
+  // Cover writer allocation failure, buffer allocation failure, and successful ownership transfer.
+  for (int64_t allowed_allocations = 0; allowed_allocations <= 2; ++allowed_allocations) {
+    WriterFailureAllocator allocator;
+    ObCOMergeProjector *projector = OB_NEWx(ObCOMergeProjector, &allocator);
+    ASSERT_NE(nullptr, projector);
+    allocator.projector_ = projector;
+    allocator.allocations_left_ = allowed_allocations;
+    ObCOMergeLogFile file;
+    file.block_size_ = 65536;
+    ObCOMergeLogFileWriter writer;
+    writer.allocator_ = &allocator;
+    ObCOMergeLogBufferWriter *buffer_writer = nullptr;
+    const int expected_ret = allowed_allocations < 2 ? OB_ALLOCATE_MEMORY_FAILED : OB_SUCCESS;
+    EXPECT_EQ(expected_ret, writer.init_buffer_writer(buffer_writer, file, projector));
+    if (allowed_allocations < 2) {
+      EXPECT_EQ(nullptr, buffer_writer);
+    } else {
+      ASSERT_NE(nullptr, buffer_writer);
+      writer.log_buffer_writer_ = buffer_writer;
+    }
+    if (0 == allowed_allocations) {
+      ASSERT_NE(nullptr, projector);
+      EXPECT_EQ(0, allocator.projector_free_count_);
+      projector->~ObCOMergeProjector();
+      allocator.free(projector);
+    } else {
+      EXPECT_EQ(nullptr, projector);
+    }
+    EXPECT_EQ(allowed_allocations < 2 ? 1 : 0, allocator.projector_free_count_);
+    writer.reset();
+    EXPECT_EQ(1, allocator.projector_free_count_);
+    writer.reset();
+    EXPECT_EQ(1, allocator.projector_free_count_);
+  }
+}
 
 TEST(TestMergeLog, state_and_classification)
 {

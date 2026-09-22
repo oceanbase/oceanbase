@@ -559,15 +559,15 @@ int ObCOSSTableRowsFilter::push_cg_iter(
     if (OB_FAIL(construct_cg_iter_params(filter, iter_params))) {
       LOG_WARN("Failed to construct cg scan param", K(ret));
     } else if (1 == iter_params.count()) {
-      ObICGIterator *cg_scanner = nullptr;
-      if (OB_FAIL(co_sstable_->cg_scan(*iter_params.at(0), *access_ctx_, cg_scanner, false, false))) {
+      if (OB_FAIL(co_sstable_->cg_scan(*iter_params.at(0), *access_ctx_, cg_iter, false, false))) {
         LOG_WARN("Failed to cg scan", K(ret));
-      } else if (ObICGIterator::OB_CG_SCANNER == cg_scanner->get_type() &&
+      } else if (OB_ISNULL(cg_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null cg scanner", K(ret));
+      } else if (ObICGIterator::OB_CG_SCANNER == cg_iter->get_type() &&
                  iter_params.at(0)->enable_base_skip_index() &&
-                 OB_FAIL(reinterpret_cast<ObCGScanner *>(cg_scanner)->build_index_filter(*filter))) {
+                 OB_FAIL(static_cast<ObCGScanner *>(cg_iter)->build_index_filter(*filter))) {
         LOG_WARN("Failed to construct skip filter", K(ret), KPC(filter));
-      } else {
-        cg_iter = cg_scanner;
       }
     } else if (OB_ISNULL(cg_iter = OB_NEWx(ObCGTileScanner, access_ctx_->stmt_allocator_))) {
       ret = common::OB_ALLOCATE_MEMORY_FAILED;

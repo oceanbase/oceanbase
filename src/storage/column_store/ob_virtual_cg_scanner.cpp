@@ -222,6 +222,7 @@ int ObVirtualCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
         agg_cells->~ObCGAggCells();
         access_ctx.stmt_allocator_->free(agg_cells);
         agg_cells = nullptr;
+        agg_group_ = nullptr;
       }
     } else {
       agg_group_ = agg_cells;
@@ -349,6 +350,7 @@ int ObDefaultCGScanner::init_agg_group(const ObTableIterParam &iter_param, ObTab
         agg_cells->~ObCGAggCells();
         access_ctx.stmt_allocator_->free(agg_cells);
         agg_cells = nullptr;
+        agg_group_ = nullptr;
       }
     } else {
       agg_group_ = agg_cells;

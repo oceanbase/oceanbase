@@ -20,6 +20,7 @@ int ObCOMergeLogFileWriter::init(ObIAllocator &allocator, ObBasicTabletMergeCtx 
   ObCOTabletMergeCtx &co_ctx = static_cast<ObCOTabletMergeCtx &>(ctx);
   ObCOMergeLogFileMgr *mgr = nullptr;
   ObCOMergeLogFile *log_file = nullptr;
+  ObCOMergeProjector *projector = nullptr;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -41,7 +42,7 @@ int ObCOMergeLogFileWriter::init(ObIAllocator &allocator, ObBasicTabletMergeCtx 
   } else if (FALSE_IT(MEMSET(row_buffer_writers_, 0, sizeof(ObCOMergeLogBufferWriter *) * cg_count_))) {
   } else if (OB_FAIL(mgr_->get_log_file(log_file))) {
     LOG_WARN("failed to get log file", K(ret));
-  } else if (OB_FAIL(init_buffer_writer(log_buffer_writer_, *log_file, nullptr/*projector*/))) {
+  } else if (OB_FAIL(init_buffer_writer(log_buffer_writer_, *log_file, projector))) {
     LOG_WARN("failed to init log buffer writer", K(ret));
   } else if (OB_FAIL(init_row_buffer_writers(*ctx.get_schema()))) {
     LOG_WARN("failed to init row buffer writers", K(ret));
@@ -128,7 +129,7 @@ int ObCOMergeLogFileWriter::init_row_buffer_writers(const ObStorageSchema &schem
 int ObCOMergeLogFileWriter::init_buffer_writer(
     ObCOMergeLogBufferWriter *&buffer_writer,
     ObCOMergeLogFile &file,
-    ObCOMergeProjector *projector)
+    ObCOMergeProjector *&projector)
 {
   int ret = OB_SUCCESS;
   buffer_writer = nullptr;
@@ -136,6 +137,7 @@ int ObCOMergeLogFileWriter::init_buffer_writer(
       projector, file, *allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to new ObCOMergeLogBufferWriter", K(ret));
+  } else if (FALSE_IT(projector = nullptr)) { // The buffer writer now owns the projector.
   } else if (OB_FAIL(buffer_writer->init())) {
     LOG_WARN("failed to init ObCOMergeLogBufferWriter", K(ret));
   }

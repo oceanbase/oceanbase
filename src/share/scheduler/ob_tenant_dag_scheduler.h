@@ -1531,6 +1531,7 @@ public:
   int check_dag_net_exist(
       const ObDagId &dag_id, bool &exist, const int64_t abs_timeout_us);
   int cancel_dag_net(const ObDagId &dag_id);
+  // task and its dag may be freed even on failure; callers must not dereference them afterwards.
   int deal_with_finish_task(ObITask *&task, ObTenantDagWorker &worker, int error_code);
   bool try_switch(ObTenantDagWorker &worker);
   int dispatch_task(ObITask &task, ObTenantDagWorker *&ret_worker, const int64_t priority);

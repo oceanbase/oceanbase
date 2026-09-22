@@ -57,7 +57,6 @@ public:
         single_or_executor_(nullptr),
         ttl_filter_node_(nullptr),
         ttl_filter_executor_(nullptr),
-        schema_rowkey_cnt_(-1),
         filter_val_(),
         is_inited_(false)
   {
@@ -165,7 +164,6 @@ private:
   sql::ObTTLAndFilterNode *ttl_filter_node_;
   sql::ObTTLAndFilterExecutor *ttl_filter_executor_;
 
-  int64_t schema_rowkey_cnt_;
 
   ObSEArray<int64_t, 1> filter_col_idx_array_;
   ObTTLFilterVal filter_val_;

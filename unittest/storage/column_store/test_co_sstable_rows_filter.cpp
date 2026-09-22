@@ -5,11 +5,14 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include <gmock/gmock.h>
+#include <set>
 
 #define private public
 #define protected public
 
 #include "storage/access/ob_vector_store.h"
+#include "storage/access/ob_aggregated_store.h"
+#include "storage/column_store/ob_virtual_cg_scanner.h"
 #include "storage/column_store/ob_cg_scanner.h"
 #include "storage/column_store/ob_cg_tile_scanner.h"
 #include "storage/column_store/ob_co_sstable_rows_filter.h"
@@ -23,6 +26,57 @@ using namespace blocksstable;
 
 namespace unittest
 {
+class CGParamTrackingAllocator : public ObIAllocator
+{
+public:
+  void *alloc(const int64_t size) override
+  {
+    void *ptr = allocations_left_-- > 0 ? arena_.alloc(size) : nullptr;
+    if (nullptr != ptr) {
+      live_allocations_.insert(ptr);
+    }
+    return ptr;
+  }
+  void *alloc(const int64_t size, const ObMemAttr &attr) override { return alloc(size); }
+  void free(void *ptr) override
+  {
+    if (nullptr != ptr) {
+      EXPECT_EQ(1, live_allocations_.erase(ptr));
+      arena_.free(ptr);
+    }
+  }
+  ObArenaAllocator arena_;
+  std::set<void *> live_allocations_;
+  int64_t allocations_left_ = INT64_MAX;
+};
+
+class CleanupTestCGScanner : public ObCGScanner
+{
+public:
+  explicit CleanupTestCGScanner(int64_t &destruct_count) : destruct_count_(destruct_count) {}
+  ~CleanupTestCGScanner() override { ++destruct_count_; }
+  int init(const ObTableIterParam &param, ObTableAccessContext &context, ObSSTableWrapper &wrapper) override
+  {
+    iter_param_ = &param;
+    access_ctx_ = &context;
+    return OB_SUCCESS;
+  }
+  int64_t &destruct_count_;
+};
+
+class CleanupTestCOSSTable : public ObCOSSTableV2
+{
+public:
+  CleanupTestCOSSTable()
+  {
+    valid_for_cs_reading_ = true;
+    base_type_ = ObCOSSTableBaseType::ALL_CG_TYPE;
+    key_.column_group_idx_ = 0;
+    cs_meta_.column_group_cnt_ = 2;
+  }
+  int fetch_cg_sstable(const uint32_t cg_idx, ObSSTableWrapper &wrapper) const override { return OB_SUCCESS; }
+};
+
 class MockObCOSSTableRowsFilter : public ObCOSSTableRowsFilter
 {
 public:
@@ -160,6 +214,146 @@ public:
   ObBitVector *skip_bit_;
   MockObCOSSTableRowsFilter co_filter_;
 };
+
+TEST_F(TestCOSSTableRowsFilter, skip_index_failure_destroys_scanner)
+{
+  init_all();
+  init_single_white_filter();
+  CGParamTrackingAllocator failing_allocator;
+  ObStoreCtx store_ctx;
+  ObCGIterParamPool param_pool(allocator_);
+  int64_t destruct_count = 0;
+  ObStoreRowIterPool<ObICGIterator> iter_pool(allocator_);
+  CleanupTestCOSSTable sstable;
+  ObCOSSTableRowsFilter rows_filter;
+  rows_filter.iter_param_ = &iter_param_;
+  rows_filter.access_ctx_ = &context_;
+  rows_filter.co_sstable_ = &sstable;
+  rows_filter.allocator_ = &allocator_;
+  context_.store_ctx_ = &store_ctx;
+  context_.allocator_ = &failing_allocator;
+  context_.cg_param_pool_ = &param_pool;
+  context_.cg_iter_pool_ = &iter_pool;
+
+  // Cache a parameter and scanner so the only failing allocation is the skip index filter.
+  ObTableIterParam *cg_param = OB_NEWx(ObTableIterParam, &allocator_);
+  ASSERT_NE(nullptr, cg_param);
+  ExprFixedArray *exprs = OB_NEWx(ExprFixedArray, &allocator_, allocator_);
+  ASSERT_NE(nullptr, exprs);
+  ASSERT_EQ(OB_SUCCESS, exprs->init(0));
+  cg_param->cg_idx_ = 1;
+  cg_param->output_exprs_ = exprs;
+  cg_param->pd_storage_flag_.set_enable_base_skip_index(true);
+  ASSERT_EQ(OB_SUCCESS, param_pool.put_iter_param(cg_param));
+  CleanupTestCGScanner *scanner = OB_NEWx(CleanupTestCGScanner, &allocator_, destruct_count);
+  ASSERT_NE(nullptr, scanner);
+  iter_pool.return_cg_iter(scanner, 1);
+  ASSERT_EQ(1, iter_pool.table_iters_array_.count());
+  iter_pool.table_iters_array_.at(0)->type_info_ = &typeid(ObCGScanner);
+  failing_allocator.allocations_left_ = 0;
+
+  EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, rows_filter.push_cg_iter(filter_));
+  EXPECT_EQ(1, destruct_count);
+  EXPECT_EQ(0, rows_filter.filter_iters_.count());
+  EXPECT_EQ(0, rows_filter.iter_filter_node_.count());
+  rows_filter.reset();
+  iter_pool.reset();
+  EXPECT_EQ(1, destruct_count);
+  context_.store_ctx_ = nullptr;
+  context_.allocator_ = nullptr;
+  context_.cg_param_pool_ = nullptr;
+  context_.cg_iter_pool_ = nullptr;
+  reset_filter();
+}
+
+TEST_F(TestCOSSTableRowsFilter, cg_param_failure_cleanup)
+{
+  init_iter_param();
+  ASSERT_EQ(OB_SUCCESS, read_info_.cols_param_.init(1, allocator_));
+  ASSERT_EQ(OB_SUCCESS, read_info_.cols_param_.push_back(nullptr));
+  ObSEArray<ObExpr *, 1> exprs;
+  ObExpr expr;
+  ASSERT_EQ(OB_SUCCESS, exprs.push_back(&expr));
+  ObSEArray<ObTableReadInfo *, 1> cg_read_infos;
+  ASSERT_EQ(OB_SUCCESS, cg_read_infos.push_back(nullptr));
+  iter_param_.cg_read_infos_ = &cg_read_infos;
+
+  // Reject a missing CG list, an unknown CG, or a null read info after ownership transfer.
+  for (int64_t failure_case = 0; failure_case < 3; ++failure_case) {
+    if (1 == failure_case) {
+      ASSERT_EQ(OB_SUCCESS, read_info_.cg_idxs_.init(1, allocator_));
+      ASSERT_EQ(OB_SUCCESS, read_info_.cg_idxs_.push_back(1));
+    }
+    const int32_t cg_idx = 2 == failure_case ? 1 : 2;
+    for (int64_t aggregate = 0; aggregate < 2; ++aggregate) {
+      // Also fail each allocation leading up to parameter validation.
+      for (int64_t allowed_allocations = 0; allowed_allocations <= 8; ++allowed_allocations) {
+        CGParamTrackingAllocator allocator;
+        ObCGIterParamPool pool(allocator);
+        allocator.allocations_left_ = allowed_allocations;
+        ObTableIterParam *cg_param = nullptr;
+        const int ret = pool.get_iter_param(cg_idx, iter_param_, exprs, cg_param, aggregate ? &exprs : nullptr);
+        EXPECT_TRUE(OB_ERR_UNEXPECTED == ret || OB_ALLOCATE_MEMORY_FAILED == ret);
+        if (8 == allowed_allocations) {
+          EXPECT_EQ(OB_ERR_UNEXPECTED, ret);
+        }
+        EXPECT_EQ(nullptr, cg_param);
+        EXPECT_EQ(0, pool.iter_params_.count());
+        EXPECT_TRUE(allocator.live_allocations_.empty());
+        pool.reset();
+        EXPECT_TRUE(allocator.live_allocations_.empty());
+      }
+    }
+  }
+  cg_read_infos.at(0) = &read_info_;
+  for (int64_t aggregate = 0; aggregate < 2; ++aggregate) {
+    CGParamTrackingAllocator allocator;
+    ObCGIterParamPool pool(allocator);
+    ObTableIterParam *cg_param = nullptr;
+    ASSERT_EQ(OB_SUCCESS, pool.get_iter_param(1, iter_param_, exprs, cg_param, aggregate ? &exprs : nullptr));
+    ASSERT_NE(nullptr, cg_param);
+    EXPECT_EQ(&expr, cg_param->output_exprs_->at(0));
+    EXPECT_EQ(&read_info_, cg_param->read_info_);
+    EXPECT_FALSE(allocator.live_allocations_.empty());
+    pool.reset();
+    EXPECT_TRUE(allocator.live_allocations_.empty());
+  }
+  iter_param_.cg_read_infos_ = nullptr;
+}
+
+TEST_F(TestCOSSTableRowsFilter, reused_aggregate_group_failure)
+{
+  init_vector_store();
+  ObAggregatedStore agg_store(64, *eval_ctx_, context_);
+  context_.stmt_allocator_ = &allocator_;
+  context_.block_row_store_ = &agg_store;
+  ExprFixedArray exprs(allocator_);
+  ObExpr expr;
+  ASSERT_EQ(OB_SUCCESS, exprs.init(1));
+  ASSERT_EQ(OB_SUCCESS, exprs.push_back(&expr));
+  iter_param_.aggregate_exprs_ = &exprs;
+  iter_param_.pd_storage_flag_.set_aggregate_pushdown(true);
+  iter_param_.plan_enable_rich_format_ = false;
+
+  // An existing group is reused, then get_agg_cell fails on the uninitialized store.
+  ObVirtualCGScanner virtual_scanner;
+  virtual_scanner.access_ctx_ = &context_;
+  virtual_scanner.agg_group_ = OB_NEWx(ObCGAggCells, &allocator_);
+  ASSERT_NE(nullptr, virtual_scanner.agg_group_);
+  EXPECT_EQ(OB_NOT_INIT, virtual_scanner.init_agg_group(iter_param_, context_));
+  ASSERT_EQ(nullptr, virtual_scanner.agg_group_);
+  virtual_scanner.reset();
+
+  ObDefaultCGScanner default_scanner;
+  default_scanner.stmt_allocator_ = &allocator_;
+  default_scanner.agg_group_ = OB_NEWx(ObCGAggCells, &allocator_);
+  ASSERT_NE(nullptr, default_scanner.agg_group_);
+  EXPECT_EQ(OB_NOT_INIT, default_scanner.init_agg_group(iter_param_, context_));
+  ASSERT_EQ(nullptr, default_scanner.agg_group_);
+  default_scanner.reset();
+  context_.block_row_store_ = nullptr;
+  iter_param_.aggregate_exprs_ = nullptr;
+}
 
 void TestCOSSTableRowsFilter::init_vector_store()
 {

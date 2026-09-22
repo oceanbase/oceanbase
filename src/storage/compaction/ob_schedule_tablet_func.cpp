@@ -494,7 +494,7 @@ int ObScheduleTabletFunc::try_refresh_mlog_purge_scn_cache(const int64_t &read_s
 {
   int ret = OB_SUCCESS;
   if ((read_snapshot - mlog_purge_scn_cache_.get_read_snapshot()
-              >= ObTenantMlogPurgeScnMapCache::MIN_REFRESH_INTERVAL_US)
+              >= ObTenantMlogPurgeScnMapCache::MIN_REFRESH_INTERVAL_NS)
       && OB_FAIL(mlog_purge_scn_cache_.refresh_or_init(read_snapshot))) {
     LOG_WARN("failed to refresh mlog purge scn cache", KR(ret), K(read_snapshot));
   }
