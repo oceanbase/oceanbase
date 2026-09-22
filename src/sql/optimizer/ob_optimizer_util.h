@@ -1425,8 +1425,8 @@ public:
                                                  const ObIArray<ObRawExpr*> &restrict_infos,
                                                  bool &can_pushdown);
 
-  static int compute_interest_ordering_relationship(const Path &first_path,
-                                                    const Path &second_path,
+  static int compute_interest_ordering_relationship(const AccessPath &first_path,
+                                                    const AccessPath &second_path,
                                                     const EqualSets &equal_sets,
                                                     const ObIArray<ObRawExpr *> &condition_exprs,
                                                     DominateRelation &relation);

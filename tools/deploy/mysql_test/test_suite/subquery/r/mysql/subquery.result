@@ -579,31 +579,31 @@ Query Plan
 |ID|OPERATOR           |NAME|EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------
 |0 |MERGE JOIN         |    |2       |8           |
-|1 |├─TABLE FULL SCAN  |t2  |2       |3           |
+|1 |├─TABLE FULL SCAN  |t3  |2       |3           |
 |2 |└─MERGE JOIN       |    |2       |5           |
-|3 |  ├─TABLE FULL SCAN|t3  |2       |3           |
-|4 |  └─TABLE FULL SCAN|t1  |2       |3           |
+|3 |  ├─TABLE FULL SCAN|t1  |2       |3           |
+|4 |  └─TABLE FULL SCAN|t2  |2       |3           |
 ===================================================
 Outputs & filters:
 -------------------------------------
   0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-      equal_conds([t2.c1 = t1.c1]), other_conds(nil)
-      merge_directions([ASC])
-  1 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
-      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([t2.c1]), range(MIN ; MAX)always true
-  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       equal_conds([t3.c1 = t1.c1]), other_conds(nil)
       merge_directions([ASC])
-  3 - output([t3.c1]), filter(nil), rowset=16
+  1 - output([t3.c1]), filter(nil), rowset=16
       access([t3.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t3.c1]), range(MIN ; MAX)always true
-  4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+  2 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      equal_conds([t2.c1 = t1.c1]), other_conds(nil)
+      merge_directions([ASC])
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
       access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.c1]), range(MIN ; MAX)always true
+  4 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t2.c1]), range(MIN ; MAX)always true
 explain select * from (select c1+1 as a1 from t1 where t1.c2 = 2) a, t2 where a.a1 = t2.c2 or t2.c1 = ANY(select c3 from t3 where t3.c1 > a.a1);
 Query Plan
 =======================================================

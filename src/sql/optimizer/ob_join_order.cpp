@@ -724,18 +724,18 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     // Therefore, it's necessary to add an additional sort operator at the upper level.
     path->ordering_.reset();
     path->interesting_order_info_=0;
-    path->interesting_order_prefix_count_=0;
+    path->set_interesting_order_prefix_count(0);
   } else if (path->is_hybrid_search_path()) {
     // Hybrid search final output results is ordered by relavent score instead of rowkey.
     path->ordering_.reset();
     path->interesting_order_info_=0;
-    path->interesting_order_prefix_count_=0;
+    path->set_interesting_order_prefix_count(0);
   } else if (share::is_oracle_mapping_real_virtual_table(path->ref_table_id_)) {
     // Oracle agent tabel may has different collation between schema and real table.
     // Hence we should not use the ordering from oracle agent table.
     path->ordering_.reset();
     path->interesting_order_info_=0;
-    path->interesting_order_prefix_count_=0;
+    path->set_interesting_order_prefix_count(0);
   } else if (path->use_das_ &&
              !path->ordering_.empty()) {
     const ObTableSchema *table_schema = nullptr;
@@ -754,7 +754,7 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
       } else {
         path->ordering_.reset();
         path->interesting_order_info_=0;
-        path->interesting_order_prefix_count_=0;
+        path->set_interesting_order_prefix_count(0);
       }
     }
   } else if (path->ordering_.empty() || is_at_most_one_row_ || !path->strong_sharding_->is_distributed()) {
@@ -2213,7 +2213,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.is_rescan_ = helper.is_inner_path_ || get_plan()->get_is_rescan_subplan();
     ap->range_prefix_count_ = index_info_entry->get_range_info().get_range_prefix_count();
     ap->interesting_order_info_ = index_info_entry->get_interesting_order_info();
-    ap->interesting_order_prefix_count_ = index_info_entry->get_interesting_order_prefix_count();
+    ap->set_interesting_order_prefix_count(index_info_entry->get_interesting_order_prefix_count());
     ap->for_update_ = table_item->for_update_;
     ap->use_skip_scan_ = use_skip_scan;
     ap->index_prefix_ = index_info_entry->get_range_info().get_index_prefix();
@@ -9145,7 +9145,8 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
     // -1: left cost is slightly better; 1: right cost is slightly better; 0: cost is equal
     int64_t cost_slightly_dominated = 0;
 
-    if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
+    if (first_path.is_access_path() && second_path.is_access_path() &&
+        OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
       if (index_cost_fuzz_ratio * first_path.cost_ < second_path.cost_) {
         left_dominated_count++;
         OPT_TRACE("left path is cheaper");
@@ -9155,12 +9156,13 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
       } else {
         // fuzzily equal
         OPT_TRACE("the cost of the two paths is fuzzily equal");
-        if (first_path.cost_ < second_path.cost_) {
-          cost_slightly_dominated = -1;
-        } else if (first_path.cost_ > second_path.cost_) {
-          cost_slightly_dominated = 1;
-        } else {
+        if (fabs(first_path.cost_ - second_path.cost_) < OB_DOUBLE_EPSINON) {
+          // do nothing
           cost_slightly_dominated = 0;
+        } else if (first_path.cost_ < second_path.cost_) {
+          cost_slightly_dominated = -1;
+        } else {
+          cost_slightly_dominated = 1;
         }
       }
     } else if (fabs(first_path.cost_ - second_path.cost_) < OB_DOUBLE_EPSINON) {
@@ -9253,10 +9255,11 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
     // check dominate relationship for ordering info
     if (OB_FAIL(ret) || relation == DominateRelation::OBJ_UNCOMPARABLE) {
       //do nothing
-    } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
+    } else if (first_path.is_access_path() && second_path.is_access_path() &&
+               OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2)) {
       if (OB_FAIL(ObOptimizerUtil::compute_interest_ordering_relationship(
-          first_path,
-          second_path,
+          static_cast<const AccessPath &>(first_path),
+          static_cast<const AccessPath &>(second_path),
           get_output_equal_sets(),
           get_output_const_exprs(),
           temp_relation))) {
@@ -9317,6 +9320,7 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
 
     if (OB_SUCC(ret) &&
         OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_5_0_2) &&
+        first_path.is_access_path() && second_path.is_access_path() &&
         left_dominated_count == 0 && right_dominated_count == 0 && uncompareable_count == 0) {
       if (cost_slightly_dominated < 0) {
         ++left_dominated_count;
@@ -9611,7 +9615,6 @@ void oceanbase::sql::Path::reuse()
   is_range_order_ = false;
   ordering_.reuse();
   interesting_order_info_ = OrderingFlag::NOT_MATCH;
-  interesting_order_prefix_count_ = 0;
   filter_.reuse();
   cost_ = 0.0;
   op_cost_ = 0.0;
@@ -9675,7 +9678,6 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   is_valid_inner_path_ = other.is_valid_inner_path_;
   path_number_ = other.path_number_;
   interesting_order_info_ = other.interesting_order_info_;
-  interesting_order_prefix_count_ = other.interesting_order_prefix_count_;
   inherit_sharding_index_ = other.inherit_sharding_index_;
 
   if (OB_FAIL(ordering_.assign(other.ordering_))) {
@@ -9881,6 +9883,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   is_hash_index_ = other.is_hash_index_;
   sample_info_ = other.sample_info_;
   range_prefix_count_ = other.range_prefix_count_;
+  interesting_order_prefix_count_ = other.interesting_order_prefix_count_;
   table_opt_info_ = other.table_opt_info_;
   for_update_ = other.for_update_;
   use_skip_scan_ = other.use_skip_scan_;

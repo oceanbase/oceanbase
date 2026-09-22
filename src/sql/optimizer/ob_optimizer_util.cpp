@@ -8646,8 +8646,8 @@ bool ObOptimizerUtil::has_hierarchical_expr(const ObRawExpr &expr)
          expr.has_flag(CNT_CONNECT_BY_ISCYCLE);
 }
 
-int ObOptimizerUtil::compute_interest_ordering_relationship(const Path &first_path,
-                                                            const Path &second_path,
+int ObOptimizerUtil::compute_interest_ordering_relationship(const AccessPath &first_path,
+                                                            const AccessPath &second_path,
                                                             const EqualSets &equal_sets,
                                                             const ObIArray<ObRawExpr *> &condition_exprs,
                                                             DominateRelation &relation)

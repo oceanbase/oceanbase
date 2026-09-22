@@ -405,7 +405,6 @@ class Path
         is_range_order_(false),
         ordering_(allocator),
         interesting_order_info_(OrderingFlag::NOT_MATCH),
-        interesting_order_prefix_count_(0),
         filter_(allocator),
         cost_(0.0),
         op_cost_(0.0),
@@ -458,8 +457,6 @@ class Path
     inline common::ObIArray<ObAddr> &get_server_list() { return server_list_; }
     inline int64_t get_interesting_order_info() const { return interesting_order_info_; }
     inline void set_interesting_order_info(int64_t info) { interesting_order_info_ = info; }
-    inline int64_t get_interesting_order_prefix_count() const { return interesting_order_prefix_count_; }
-    inline void set_interesting_order_prefix_count(int64_t count) { interesting_order_prefix_count_ = count; }
     inline void add_interesting_order_flag(OrderingFlag flag) { interesting_order_info_ |= flag; }
     inline void add_interesting_order_flag(int64_t flags) { interesting_order_info_ |= flags; }
     inline void clear_interesting_order_flag(OrderingFlag flag){ interesting_order_info_ &= ~flag; }
@@ -560,7 +557,6 @@ class Path
     TO_STRING_KV(K_(is_local_order),
                  K_(ordering),
                  K_(interesting_order_info),
-                 K_(interesting_order_prefix_count),
                  K_(cost),
                  K_(op_cost),
                  K_(is_inner_path),
@@ -587,7 +583,6 @@ class Path
     bool is_range_order_;
     ObSqlArray<OrderItem> ordering_;//Path的输出序，不一定来自于Stmt上的expr
     int64_t interesting_order_info_;  // 记录path的序在stmt中的哪些地方用到 e.g. join, group by, order by
-    int64_t interesting_order_prefix_count_;
     ObSqlArray<ObRawExpr*> filter_;//基类的过滤条件：对于scan和subquery是scan_filter_，对于join是join_qual_
     double cost_;
     double op_cost_;
@@ -676,12 +671,15 @@ class Path
         can_batch_rescan_(false),
         can_das_dynamic_part_pruning_(-1),
         is_ordered_by_pk_(false),
-        search_data_index_id_(OB_INVALID_ID)
+        search_data_index_id_(OB_INVALID_ID),
+        interesting_order_prefix_count_(0)
     {
     }
     virtual ~AccessPath() {
     }
     int assign(const AccessPath &other, common::ObIAllocator *allocator);
+    inline int64_t get_interesting_order_prefix_count() const { return interesting_order_prefix_count_; }
+    inline void set_interesting_order_prefix_count(int64_t count) { interesting_order_prefix_count_ = count; }
     uint64_t get_table_id() const { return table_id_; }
     void set_table_id(uint64_t table_id) { table_id_ = table_id; }
     uint64_t get_ref_table_id() const { return ref_table_id_; }
@@ -815,6 +813,7 @@ class Path
                  K_(est_cost_info),
                  K_(sample_info),
                  K_(range_prefix_count),
+                 K_(interesting_order_prefix_count),
                  K_(domain_idx_info),
                  K_(for_update),
                  K_(use_das),
@@ -856,6 +855,7 @@ class Path
     bool is_ordered_by_pk_; // indicate whether result from index table scan is ordered by primary key
     uint64_t search_data_index_id_; // data index id for search index path
   private:
+    int64_t interesting_order_prefix_count_;
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
 
