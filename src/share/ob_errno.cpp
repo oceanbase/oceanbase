@@ -35646,6 +35646,34 @@ static const _error _error_OB_ERR_NEED_REROUTE_TO_BOUND_SESSION = {
       .ob_str_error          = "OBE-11135: request should be rerouted to bound session",
       .ob_str_user_error     = "OBE-11135: request should be rerouted to bound session"
 };
+static const _error _error_OB_ERR_UNRESOLVED_TABLE_LOCK = {
+      .error_name            = "OB_ERR_UNRESOLVED_TABLE_LOCK",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_UNRESOLVED_TABLE_LOCK,
+      .sqlstate              = "HY000",
+      .str_error             = "Unresolved table name in locking clause",
+      .str_user_error        = "Unresolved table name %.*s in locking clause.",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -11136, Unresolved table name in locking clause",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -11136, Unresolved table name %.*s in locking clause.",
+      .ob_str_error          = "OBE-00600: internal error code, arguments: -11136, Unresolved table name in locking clause",
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -11136, Unresolved table name %.*s in locking clause."
+};
+static const _error _error_OB_ERR_DUPLICATE_TABLE_LOCK = {
+      .error_name            = "OB_ERR_DUPLICATE_TABLE_LOCK",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_DUPLICATE_TABLE_LOCK,
+      .sqlstate              = "HY000",
+      .str_error             = "Table appears in multiple locking clauses",
+      .str_user_error        = "Table %.*s appears in multiple locking clauses.",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -11137, Table appears in multiple locking clauses",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -11137, Table %.*s appears in multiple locking clauses.",
+      .ob_str_error          = "OBE-00600: internal error code, arguments: -11137, Table appears in multiple locking clauses",
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -11137, Table %.*s appears in multiple locking clauses."
+};
 static const _error _error_OB_CDC_STREAM_ALREADY_EXISTS = {
       .error_name            = "OB_CDC_STREAM_ALREADY_EXISTS",
       .error_cause           = "Internal Error",
@@ -38547,6 +38575,8 @@ struct ObStrErrorInit
     _errors[-OB_AI_REMOTE_SERVICE_ERROR] = &_error_OB_AI_REMOTE_SERVICE_ERROR;
     _errors[-OB_NOT_SUPPORTED_FOR_PARALLEL_DDL] = &_error_OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
     _errors[-OB_ERR_NEED_REROUTE_TO_BOUND_SESSION] = &_error_OB_ERR_NEED_REROUTE_TO_BOUND_SESSION;
+    _errors[-OB_ERR_UNRESOLVED_TABLE_LOCK] = &_error_OB_ERR_UNRESOLVED_TABLE_LOCK;
+    _errors[-OB_ERR_DUPLICATE_TABLE_LOCK] = &_error_OB_ERR_DUPLICATE_TABLE_LOCK;
     _errors[-OB_CDC_STREAM_ALREADY_EXISTS] = &_error_OB_CDC_STREAM_ALREADY_EXISTS;
     _errors[-OB_CDC_STREAM_NOT_FOUND] = &_error_OB_CDC_STREAM_NOT_FOUND;
     _errors[-OB_CDC_STREAM_STATE_NOT_MATCH] = &_error_OB_CDC_STREAM_STATE_NOT_MATCH;
@@ -38606,7 +38636,7 @@ namespace oceanbase
 {
 namespace common
 {
-int g_all_ob_errnos[2568] = {
+int g_all_ob_errnos[2570] = {
   0,      -4000,  -4001,  -4002,  -4003,  -4004,  -4005,  -4006,  -4007,  -4008,  -4009,  -4010,  -4011,  -4012,
   -4013,  -4014,  -4015,  -4016,  -4017,  -4018,  -4019,  -4020,  -4021,  -4022,  -4023,  -4024,  -4025,  -4026,
   -4027,  -4028,  -4029,  -4030,  -4031,  -4032,  -4033,  -4034,  -4035,  -4036,  -4037,  -4038,  -4039,  -4041,
@@ -38788,7 +38818,8 @@ int g_all_ob_errnos[2568] = {
   -11085, -11086, -11087, -11088, -11089, -11090, -11091, -11092, -11093, -11094, -11095, -11096, -11097, -11098,
   -11099, -11100, -11101, -11102, -11103, -11104, -11105, -11106, -11107, -11108, -11109, -11110, -11111, -11112,
   -11113, -11114, -11115, -11116, -11117, -11118, -11119, -11120, -11121, -11122, -11123, -11124, -11125, -11126,
-  -11127, -11128, -11129, -11130, -11131, -11132, -11133, -11134, -11135, -12000, -12001, -12002, -12003, -12004,
+  -11127, -11128, -11129, -11130, -11131, -11132, -11133, -11134, -11135,
+  -11136, -11137, -12000, -12001, -12002, -12003, -12004,
   -12005, -12006, -12007, -12008, -12009, -12010, -12011, -12012, -12013, -12014, -12015, -12016, -12017, -20000,
   -21000, -22998, -30926, -32491, -38104, -38105};
 const char *ob_error_name(const int err)

@@ -3113,6 +3113,7 @@ T_FUN_SYS_SEARCH_INDEX_INNER_PATH = 1943,
   T_BYTE_ORDER_MARK = 4995,
   T_PSEUDO_METADATA_ROW_METADATA = 4996,
   T_ALTER_USER_DEFAULT_TABLEGROUP = 4997, // placeholder for Oracle user tablegroups
+  T_FOR_UPDATE_LIST = 4998, // placeholder for MySQL locking clause lists
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

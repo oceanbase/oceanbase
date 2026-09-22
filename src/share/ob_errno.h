@@ -2102,6 +2102,8 @@ constexpr int OB_SRF_NOT_ALLOWED = -11132;
 constexpr int OB_AI_REMOTE_SERVICE_ERROR = -11133;
 constexpr int OB_NOT_SUPPORTED_FOR_PARALLEL_DDL = -11134;
 constexpr int OB_ERR_NEED_REROUTE_TO_BOUND_SESSION = -11135;
+constexpr int OB_ERR_UNRESOLVED_TABLE_LOCK = -11136;
+constexpr int OB_ERR_DUPLICATE_TABLE_LOCK = -11137;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4656,6 +4658,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_AI_REMOTE_SERVICE_ERROR__USER_ERROR_MSG "AI REMOTE SERVICE ERROR: %.*s"
 #define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__USER_ERROR_MSG "Operation not supported in parallel DDL path"
 #define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__USER_ERROR_MSG "request should be rerouted to bound session"
+#define OB_ERR_UNRESOLVED_TABLE_LOCK__USER_ERROR_MSG "Unresolved table name %.*s in locking clause."
+#define OB_ERR_DUPLICATE_TABLE_LOCK__USER_ERROR_MSG "Table %.*s appears in multiple locking clauses."
 #define OB_CDC_STREAM_ALREADY_EXISTS__USER_ERROR_MSG "CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_NOT_FOUND__USER_ERROR_MSG "CDC stream '%.*s' not found"
 #define OB_CDC_STREAM_STATE_NOT_MATCH__USER_ERROR_MSG "CDC stream '%.*s' state not match"
@@ -9773,6 +9777,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
 #define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__ORA_USER_ERROR_MSG "ORA-11135: request should be rerouted to bound session"
 #define OB_ERR_NEED_REROUTE_TO_BOUND_SESSION__OBE_USER_ERROR_MSG "OBE-11135: request should be rerouted to bound session"
+#define OB_ERR_UNRESOLVED_TABLE_LOCK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11136, Unresolved table name %.*s in locking clause."
+#define OB_ERR_UNRESOLVED_TABLE_LOCK__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11136, Unresolved table name %.*s in locking clause."
+#define OB_ERR_DUPLICATE_TABLE_LOCK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11137, Table %.*s appears in multiple locking clauses."
+#define OB_ERR_DUPLICATE_TABLE_LOCK__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11137, Table %.*s appears in multiple locking clauses."
 #define OB_CDC_STREAM_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_ALREADY_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12001, CDC stream '%.*s' not found"
@@ -9828,7 +9836,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2568];
+extern int g_all_ob_errnos[2570];
 
 const char *ob_error_name(const int oberr);
 const char *ob_error_cause(const int oberr);

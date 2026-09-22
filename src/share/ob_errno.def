@@ -2994,6 +2994,8 @@ DEFINE_ERROR_EXT(OB_SRF_NOT_ALLOWED, -11132, -1, "HY000", "set-returning functio
 DEFINE_ERROR_EXT(OB_AI_REMOTE_SERVICE_ERROR, -11133, -1, "HY000", "AI REMOTE SERVICE ERROR", "AI REMOTE SERVICE ERROR: %.*s");
 DEFINE_ERROR(OB_NOT_SUPPORTED_FOR_PARALLEL_DDL, -11134, -1, "HY000", "Operation not supported in parallel DDL path");
 DEFINE_ORACLE_ERROR(OB_ERR_NEED_REROUTE_TO_BOUND_SESSION, -11135, 11135, "HY000", "request should be rerouted to bound session", 11135, "request should be rerouted to bound session");
+DEFINE_ERROR_EXT(OB_ERR_UNRESOLVED_TABLE_LOCK, -11136, ER_UNRESOLVED_TABLE_LOCK, "HY000", "Unresolved table name in locking clause", "Unresolved table name %.*s in locking clause.");
+DEFINE_ERROR_EXT(OB_ERR_DUPLICATE_TABLE_LOCK, -11137, ER_DUPLICATE_TABLE_LOCK, "HY000", "Table appears in multiple locking clauses", "Table %.*s appears in multiple locking clauses.");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
