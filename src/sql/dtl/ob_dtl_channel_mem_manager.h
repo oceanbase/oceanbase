@@ -68,6 +68,7 @@ private:
   int get_memstore_limit_percentage_();
   void real_free(ObDtlLinkedBuffer *buf);
 private:
+  static constexpr int64_t MIN_QUEUE_CAPACITY = 128;
   uint64_t tenant_id_;
   int64_t size_per_buffer_;
   int64_t seqno_;

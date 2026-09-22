@@ -25,12 +25,15 @@ int ObDtlChannelMemManager::init(int64_t max_reserve_count)
 {
   int ret = OB_SUCCESS;
   ObMemAttr attr(tenant_id_, "SqlDtlBuf");
+
+  // If the queue capacity is too small, it may result in significant CPU wait times in high-concurrency scenarios.
+  const int64_t queue_capacity = std::max(MIN_QUEUE_CAPACITY, max_reserve_count);
   if (OB_FAIL(allocator_.init(
                 lib::ObMallocAllocator::get_instance(),
                 OB_MALLOC_NORMAL_BLOCK_SIZE,
                 attr))) {
     LOG_WARN("failed to init fifo allocator", K(ret));
-  } else if (OB_FAIL(free_queue_.init(max_reserve_count, "SqlDtlQueue", tenant_id_))) {
+  } else if (OB_FAIL(free_queue_.init(queue_capacity, "SqlDtlQueue", tenant_id_))) {
     LOG_WARN("failed to init channel memory manager", K(ret));
   } else {
     allocator_.set_label("SqlDtlBuf");
