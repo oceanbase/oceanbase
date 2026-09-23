@@ -10228,29 +10228,10 @@ int ObRootService::broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret), KP_(schema_service));
   } else {
-    ObRefreshSchemaInfo schema_info;
-    ObSchemaService *schema_service = schema_service_->get_schema_service();
-    if (OB_INVALID_TENANT_ID != arg.tenant_id_) {
-      // tenant_id is valid, just refresh specify tenant's schema.
-      schema_info.set_tenant_id(arg.tenant_id_);
-      schema_info.set_schema_version(arg.schema_version_);
-    } else {
-      // tenant_id =  OB_INVALID_TENANT_ID, indicates refresh all tenants's schema;
-      if (OB_FAIL(schema_service->inc_sequence_id())) {
-        LOG_WARN("increase sequence_id failed", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(schema_service->inc_sequence_id())) {
-      LOG_WARN("increase sequence_id failed", K(ret));
-    } else if (OB_FAIL(schema_service->set_refresh_schema_info(schema_info))) {
-      LOG_WARN("fail to set refresh schema info", K(ret), K(schema_info));
-    }
     // if switchover to primary tenant, we should clear ddl epoch in RS
     // if not clear ddl epoch in RS, we could loss some DDL changes under
     // previous primary_tenant in another cluster
-    if (OB_FAIL(ret)) {
-    } else if (arg.need_clear_ddl_epoch()) {
+    if (arg.need_clear_ddl_epoch()) {
       // only switchover need clear ddl epoch by broadcast schema
       // tenant id should be valid under this case
       if (OB_UNLIKELY(!is_valid_tenant_id(arg.tenant_id_))) {
@@ -10258,6 +10239,15 @@ int ObRootService::broadcast_schema(const obrpc::ObBroadcastSchemaArg &arg)
         LOG_WARN("tenant id should be valid if need_clear_ddl_epoch", KR(ret), K(arg));
       } else {
         schema_service_->get_ddl_epoch_mgr().remove_ddl_epoch(arg.tenant_id_);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObSchemaService *schema_service = schema_service_->get_schema_service();
+      ObRefreshSchemaInfo schema_info;
+      schema_info.set_tenant_id(arg.tenant_id_);
+      schema_info.set_schema_version(arg.schema_version_);
+      if (OB_FAIL(schema_service->inc_and_set_refresh_schema_info(schema_info))) {
+        LOG_WARN("fail to inc and set refresh schema info", KR(ret), K(schema_info));
       }
     }
   }
@@ -11779,6 +11769,8 @@ int ObRootService::get_refreshed_schema_versions(obrpc::ObGetRefreshedSchemaVers
   int ret = OB_SUCCESS;
   res.refreshed_schema_versions_.reset();
   ObArray<uint64_t> tenant_ids;
+  ObRefreshSchemaInfo refresh_schema_info;
+  ObRefreshSchemaInfo last_refreshed_schema_info;
 
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -11786,6 +11778,16 @@ int ObRootService::get_refreshed_schema_versions(obrpc::ObGetRefreshedSchemaVers
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service_ is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_refresh_schema_info(refresh_schema_info))) {
+    LOG_WARN("get refresh schema info failed", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_last_refreshed_schema_info(last_refreshed_schema_info))) {
+    LOG_WARN("get last refreshed schema info failed", KR(ret));
+  } else if (ObDDLSequenceID::EQUAL_TO != refresh_schema_info.get_sequence_id().compare_to_other_id(
+                                            last_refreshed_schema_info.get_sequence_id())) {
+    // Only matching sequences allow observers to use RS versions to cover sequence gaps.
+    ret = OB_EAGAIN;
+    LOG_WARN("published and refreshed schema sequences do not match", KR(ret),
+             K(refresh_schema_info), K(last_refreshed_schema_info));
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get tenant ids failed", KR(ret));
   } else {
