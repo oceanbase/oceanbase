@@ -2431,7 +2431,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                         index_scan_column_group_infos,
                                                         used_column_ids,
                                                         filter_compare,
-                                                        false))) {
+                                                        true))) {
       LOG_WARN("failed to init column store est info with filter", K(ret));
     }
     else if (OB_FAIL(init_column_store_est_info_with_filter(table_id,
@@ -2441,7 +2441,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                             index_scan_column_group_infos,
                                                             used_column_ids,
                                                             filter_compare,
-                                                            false))) {
+                                                            true))) {
       LOG_WARN("failed to init column store est info with filter", K(ret));
     }
     //add column group with postfix filters
@@ -2452,7 +2452,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                             index_scan_column_group_infos,
                                                             used_column_ids,
                                                             filter_compare,
-                                                            true))) {
+                                                            false))) {
       LOG_WARN("failed to init column store est info with filter", K(ret));
     }
     //add column group with index back filters
@@ -2463,7 +2463,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                             index_back_column_group_infos,
                                                             used_column_ids,
                                                             filter_compare,
-                                                            true))) {
+                                                            false))) {
       LOG_WARN("failed to init column store est info with filter", K(ret));
     }
     //add other column group
@@ -2490,7 +2490,7 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
                                                         ObIArray<ObCostColumnGroupInfo> &column_group_infos,
                                                         ObSqlBitSet<> &used_column_ids,
                                                         FilterCompare &filter_compare,
-                                                        const bool use_filter_sel)
+                                                        const bool is_range_filter)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> filter_columns;
@@ -2574,9 +2574,12 @@ int ObJoinOrder::init_column_store_est_info_with_filter(const uint64_t table_id,
     if (OB_FAIL(ret) || filter_columns.empty()) {
     } else if (max_pos < 0 || max_pos >= column_group_infos.count()) {
       //table filter with index column group
+    } else if (is_range_filter) {
+      // Range predicates only initialize column groups and skip information.
+      // Query ranges already account for them; do not charge per-row qual cost.
     } else if (OB_FAIL(column_group_infos.at(max_pos).filters_.push_back(filter))) {
       LOG_WARN("failed to push back filter", K(ret));
-    } else if (use_filter_sel) {
+    } else {
       column_group_infos.at(max_pos).filter_sel_ *= filter_compare.get_selectivity(filter);
     }
   }

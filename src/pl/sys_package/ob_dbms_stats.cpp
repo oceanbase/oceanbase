@@ -4791,7 +4791,7 @@ int ObDbmsStats::parse_set_table_stat_options(ObExecContext &ctx,
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_cachehit));
   } else if (!nummacroblks.is_null() && OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(param.nummacroblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_nummacroblks));
-  } else if (!nummicroblks.is_null() && OB_FAIL(num_nummacroblks.extract_valid_int64_with_trunc(param.nummicroblks_))) {
+  } else if (!nummicroblks.is_null() && OB_FAIL(num_nummicroblks.extract_valid_int64_with_trunc(param.nummicroblks_))) {
     LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(nummicroblks));
   } else {/*do nothing*/}
   return ret;

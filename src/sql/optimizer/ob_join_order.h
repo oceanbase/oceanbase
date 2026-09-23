@@ -2232,7 +2232,7 @@ struct MergeKeyInfoHelper
                                                     ObIArray<ObCostColumnGroupInfo> &column_group_infos,
                                                     ObSqlBitSet<> &used_column_ids,
                                                     FilterCompare &filter_compare,
-                                                    const bool use_filter_sel);
+                                                    const bool is_range_filter);
 
     int init_column_store_est_info_with_other_column(const uint64_t table_id,
                                                     ObCostTableScanInfo &est_cost_info,
