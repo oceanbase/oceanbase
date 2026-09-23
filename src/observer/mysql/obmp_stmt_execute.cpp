@@ -2974,10 +2974,16 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
         if (OB_SUCC(ret)) {
           if (MYSQL_TYPE_NEWDECIMAL == type) {
             number::ObNumber nb;
-            if (OB_FAIL(nb.from(str.ptr(), length, allocator))) {
+            ObPrecision precision = PRECISION_UNKNOWN_YET;
+            ObScale scale = SCALE_UNKNOWN_YET;
+            if (OB_FAIL(nb.from(str.ptr(), length, allocator, &precision, &scale))) {
               LOG_WARN("decode varchar param to number failed", K(ret), K(str));
             } else {
               param.set_number(nb);
+              if (lib::is_mysql_mode()) {
+                // set_param_meta() copies this scale to ObObjParam::accuracy_ before type deduction.
+                param.set_scale(scale);
+              }
             }
           } else if (MYSQL_TYPE_OB_NUMBER_FLOAT == type) {
             number::ObNumber nb;
