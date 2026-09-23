@@ -11336,13 +11336,13 @@ bool ObBatchCreateTabletArg::is_valid() const
   if (is_inited() && tablets_.count() > 0 && (create_tablet_schemas_.count() > 0 || table_schemas_.count() > 0)) {
     for (int64_t i = 0; valid && i < tablets_.count(); ++i) {
       const ObCreateTabletInfo &info = tablets_[i];
-      const common::ObSArray<int64_t> &table_schema_index = info.table_schema_index_;
+      const common::ObIArray<int64_t> &table_schema_index = info.table_schema_index_;
       if (!info.is_valid()) {
         valid = false;
       }
 
       for (int64_t j = 0; valid && j < table_schema_index.count(); ++j) {
-        const int64_t index = table_schema_index[j];
+        const int64_t index = table_schema_index.at(j);
         if (index < 0 || (index >= create_tablet_schemas_.count() && index >= table_schemas_.count())) {
           valid = false;
         }

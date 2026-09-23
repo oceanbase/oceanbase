@@ -404,28 +404,28 @@ int ObTabletCreateMdsHelper::get_table_schema_index(
 bool ObTabletCreateMdsHelper::is_pure_data_tablets(const obrpc::ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() == 1 && is_contain(tablet_ids, data_tablet_id) && !info.is_create_bind_hidden_tablets_;
 }
 
 bool ObTabletCreateMdsHelper::is_mixed_tablets(const obrpc::ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && is_contain(tablet_ids, data_tablet_id) && !info.is_create_bind_hidden_tablets_;
 }
 
 bool ObTabletCreateMdsHelper::is_pure_aux_tablets(const obrpc::ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && !info.is_create_bind_hidden_tablets_;
 }
 
 bool ObTabletCreateMdsHelper::is_bind_hidden_tablets(const obrpc::ObCreateTabletInfo &info)
 {
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   return tablet_ids.count() >= 1 && !is_contain(tablet_ids, data_tablet_id) && info.is_create_bind_hidden_tablets_;
 }
 
@@ -742,7 +742,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObIArray<int64_t> &create_commit_versions = info.create_commit_versions_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
@@ -769,7 +769,7 @@ int ObTabletCreateMdsHelper::build_mixed_tablets(
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
     MDS_TG(5_ms);
     exist = false;
-    const ObTabletID &tablet_id = tablet_ids[i];
+    const ObTabletID &tablet_id = tablet_ids.at(i);
     const int64_t create_commit_version = i < create_commit_versions.count() ? create_commit_versions.at(i)
                                                                              : ObTransVersion::INVALID_TRANS_VERSION;
     const ObCreateTabletSchema *create_tablet_schema = nullptr;
@@ -852,7 +852,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &data_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObIArray<int64_t> &create_commit_versions = info.create_commit_versions_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
@@ -876,7 +876,7 @@ int ObTabletCreateMdsHelper::build_pure_aux_tablets(
   for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
     MDS_TG(5_ms);
     exist = false;
-    const ObTabletID &tablet_id = tablet_ids[i];
+    const ObTabletID &tablet_id = tablet_ids.at(i);
     const int64_t create_commit_version = i < create_commit_versions.count() ? create_commit_versions.at(i)
                                                                              : ObTransVersion::INVALID_TRANS_VERSION;
     const ObCreateTabletSchema *create_tablet_schema = nullptr;
@@ -937,7 +937,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = arg.id_;
   const ObTabletID &orig_tablet_id = info.data_tablet_id_;
-  const ObSArray<ObTabletID> &tablet_ids = info.tablet_ids_;
+  const ObIArray<ObTabletID> &tablet_ids = info.tablet_ids_;
   const ObIArray<int64_t> &create_commit_versions = info.create_commit_versions_;
   const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas = arg.create_tablet_schemas_;
   const lib::Worker::CompatMode &compat_mode = info.compat_mode_;
@@ -966,7 +966,7 @@ int ObTabletCreateMdsHelper::build_bind_hidden_tablets(
     exist = false;
     lob_meta_tablet_id.reset();
     lob_piece_tablet_id.reset();
-    const ObTabletID &tablet_id = tablet_ids[i];
+    const ObTabletID &tablet_id = tablet_ids.at(i);
     const int64_t create_commit_version = i < create_commit_versions.count() ? create_commit_versions.at(i)
                                                                              : ObTransVersion::INVALID_TRANS_VERSION;
     const ObCreateTabletSchema *create_tablet_schema = nullptr;

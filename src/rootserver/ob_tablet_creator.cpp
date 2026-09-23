@@ -159,7 +159,7 @@ int ObBatchCreateTabletHelper::add_arg_to_batch_arg(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is invalid", KR(ret), K(tablet_arg));
   } else {
-    ObArray<int64_t> index_array;
+    ObSEArray<int64_t, 4> index_array;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_arg.table_schemas_.count(); ++i) {
       const share::schema::ObTableSchema *table_schema = tablet_arg.table_schemas_.at(i);
       const uint64_t tenant_data_version = tablet_arg.tenant_data_version_;
@@ -365,6 +365,10 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
     } else {
       LOG_INFO("new log stream", "ls_key", arg.ls_key_);
     }
+    if (OB_FAIL(ret) && OB_NOT_NULL(batch_arg)) {
+      batch_arg->~ObBatchCreateTabletHelper();
+      batch_arg = nullptr;
+    }
   } else {
     LOG_WARN("failed to get batch arg", KR(ret), K(arg));
   }
@@ -385,6 +389,10 @@ int ObTabletCreator::add_create_tablet_arg(const ObTabletCreatorArg &arg)
       LOG_WARN("fail to set refactored", KR(ret), K(arg));
     } else {
       batch_arg = new_arg;
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(new_arg)) {
+      new_arg->~ObBatchCreateTabletHelper();
+      new_arg = nullptr;
     }
   }
 

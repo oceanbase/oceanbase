@@ -182,8 +182,8 @@ int ObCDCTabletChangeInfo::parse_create_tablet_op_(
 
     for (int64_t create_tablet_idx = 0; OB_SUCC(ret) && create_tablet_idx < tablets_info.count(); create_tablet_idx++) {
       const obrpc::ObCreateTabletInfo &ob_create_tablet_info = tablets_info.at(create_tablet_idx);
-      const common::ObSArray<common::ObTabletID> &tablet_ids = ob_create_tablet_info.tablet_ids_;
-      const common::ObSArray<int64_t> &tb_schema_index_arr = ob_create_tablet_info.table_schema_index_;
+      const common::ObIArray<common::ObTabletID> &tablet_ids = ob_create_tablet_info.tablet_ids_;
+      const common::ObIArray<int64_t> &tb_schema_index_arr = ob_create_tablet_info.table_schema_index_;
 
       for (int64_t tablet_id_idx = 0; OB_SUCC(ret) && tablet_id_idx < tablet_ids.count(); tablet_id_idx++) {
         const common::ObTabletID &tablet_id = tablet_ids.at(tablet_id_idx);
