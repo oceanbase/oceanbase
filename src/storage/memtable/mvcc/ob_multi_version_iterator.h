@@ -66,7 +66,7 @@ public:
   bool is_multi_version_iter_end() const;
   bool is_trans_node_iter_null() const;
   bool is_compact_iter_end() const;
-  int init_multi_version_iter();
+  int init_multi_version_iter(const bool is_delete_insert = false);
   void set_merge_scn(const share::SCN merge_scn) { merge_scn_ = merge_scn; }
   share::SCN get_merge_scn() const { return merge_scn_; }
   void print_cur_status();
@@ -118,6 +118,7 @@ private:
   share::SCN cur_trans_version_;
   bool is_node_compacted_;
   bool has_multi_commit_trans_;
+  bool is_delete_insert_;
   share::SCN merge_scn_;
   ObMemtableTruncateFilter truncate_filter_;
 };

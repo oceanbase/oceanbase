@@ -18,9 +18,21 @@
 #include "storage/memtable/mvcc/ob_multi_version_iterator.h"
 #include "storage/memtable/ob_memtable_iterator.h"
 #include "storage/tx_table/ob_tx_table.h"
+#include "storage/blocksstable/ob_row_writer.h"
+#include "storage/compaction/ob_partition_merge_iter.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+// These iterator tests do not start a tenant or its version manager.
+int ObReadInfoStruct::init_compat_version()
+{
+  compat_version_ = READ_INFO_VERSION_V6;
+  return OB_SUCCESS;
+}
+}
+
 namespace unittest
 {
 using namespace oceanbase::common;
@@ -522,6 +534,399 @@ TEST_F(TestMultiVersionTruncateFilter,
                 history_cursor,
                 ObMultiVersionValueIterator::DumpIterPhase::MULTI_VERSION_ROW));
   EXPECT_EQ(&history, history_cursor);
+}
+
+class TestMiniRowMergeIterator : public compaction::ObPartitionMinorRowMergeIter
+{
+public:
+  TestMiniRowMergeIterator(ObIAllocator &allocator, ObMemtableMultiVersionScanIterator &scan)
+    : ObPartitionMinorRowMergeIter(allocator), scan_(scan)
+  {}
+
+  ~TestMiniRowMergeIterator() override { row_iter_ = nullptr; }
+
+  void prepare(const ObVersionRange &range, const bool delete_insert, const bool ha_complete)
+  {
+    access_context_.trans_version_range_ = range;
+    schema_rowkey_column_cnt_ = 1;
+    is_delete_insert_merge_ = delete_insert;
+    is_ha_compeleted_ = ha_complete;
+    row_iter_ = &scan_;
+    ASSERT_EQ(OB_SUCCESS, row_queue_.init(4));
+    ASSERT_EQ(OB_SUCCESS, tmp_compaction_row_.init(allocator_, 4));
+    for (int64_t i = 0; i < blocksstable::ObRowQueue::QI_MAX; ++i) {
+      void *buffer = allocator_.alloc(sizeof(storage::ObNopPos));
+      ASSERT_NE(nullptr, buffer);
+      nop_pos_[i] = new (buffer) storage::ObNopPos();
+      ASSERT_EQ(OB_SUCCESS, nop_pos_[i]->init(allocator_, 4));
+    }
+    is_inited_ = true;
+  }
+
+protected:
+  int inner_next(const bool open_macro) override
+  {
+    UNUSED(open_macro);
+    return ObMemtableMultiVersionScanIterator::SCAN_END == scan_.scan_state_
+        ? OB_ITER_END : scan_.inner_get_next_row(curr_row_);
+  }
+
+private:
+  ObMemtableMultiVersionScanIterator &scan_;
+};
+
+class TestDeleteInsertMiniScan : public testing::Test
+{
+protected:
+  struct RowImage
+  {
+    blocksstable::ObDmlFlag dml_;
+    int64_t value_;
+    int64_t version_;
+    bool shadow_;
+    bool last_;
+    TO_STRING_KV(K_(dml), K_(value), K_(version), K_(shadow), K_(last));
+  };
+
+  void SetUp() override
+  {
+    ObSEArray<ObColDesc, 4> columns;
+    ObSEArray<int32_t, 4> indexes;
+    const uint64_t ids[] = {OB_APP_MIN_COLUMN_ID, OB_HIDDEN_TRANS_VERSION_COLUMN_ID,
+        OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID, OB_APP_MIN_COLUMN_ID + 1};
+    const int32_t storage_indexes[] = {0, OB_INVALID_INDEX, OB_INVALID_INDEX, 1};
+    for (int64_t i = 0; i < 4; ++i) {
+      ObColDesc column;
+      column.col_id_ = ids[i];
+      column.col_type_.set_int();
+      ASSERT_EQ(OB_SUCCESS, columns.push_back(column));
+      ASSERT_EQ(OB_SUCCESS, indexes.push_back(storage_indexes[i]));
+    }
+    ASSERT_EQ(OB_SUCCESS, read_info_.init(allocator_, 2, 1, false, columns, &indexes));
+    ASSERT_EQ(OB_SUCCESS, input_row_.init(allocator_, 2));
+  }
+
+  // Append in commit/SQL order, just as a real MemTable's MVCC chain is built.
+  void append(const blocksstable::ObDmlFlag dml, const int64_t value, const int64_t version)
+  {
+    const int64_t buffer_size = 4096;
+    void *buffer = allocator_.alloc(sizeof(ObMvccTransNode) + sizeof(ObMemtableDataHeader) + buffer_size);
+    ASSERT_NE(nullptr, buffer);
+    ObMvccTransNode *node = new (buffer) ObMvccTransNode();
+    ObMemtableDataHeader *data = new (node->buf_) ObMemtableDataHeader(dml, 0);
+    input_row_.row_flag_.set_flag(dml);
+    input_row_.storage_datums_[0].set_int(103639);
+    input_row_.storage_datums_[1].set_int(value);
+    blocksstable::ObRowWriter writer;
+    ASSERT_EQ(OB_SUCCESS, writer.write(1, input_row_, nullptr, nullptr,
+        data->buf_, buffer_size, data->buf_len_));
+    TruncateNodeBuilder::build(*node, NDT_NORMAL, TruncateNodeBuilder::COMMITTED, version, version);
+    node->prev_ = mvcc_row_.list_head_;
+    if (nullptr != node->prev_) {
+      node->prev_->next_ = node;
+    } else {
+      mvcc_row_.first_dml_flag_ = dml;
+    }
+    mvcc_row_.list_head_ = node;
+  }
+
+  void scan(const int64_t base_version, const int64_t multi_version_start,
+      const bool delete_insert = true, const int64_t truncate_version = 0,
+      const bool merge_old_rows = false, const bool ha_complete = true)
+  {
+    output_.reuse();
+    ObMvccAccessCtx mvcc_context;
+    if (truncate_version > 0) {
+      mvcc_context.set_truncate_filter(truncate_version, make_scn(truncate_version));
+    }
+    storage::ObTableAccessContext context;
+    context.trans_version_range_.base_version_ = base_version;
+    context.trans_version_range_.multi_version_start_ = multi_version_start;
+    context.trans_version_range_.snapshot_version_ = 2000;
+    ObObj pk;
+    pk.set_int(103639);
+    ObStoreRowkey rowkey(&pk, 1);
+    ObMemtableKey key(&rowkey);
+    ObMultiVersionValueIterator value_iter;
+    ASSERT_EQ(OB_SUCCESS, value_iter.init(&mvcc_context, context.trans_version_range_, &key, &mvcc_row_));
+    ObMemtableMultiVersionScanIterator scan_iter;
+    scan_iter.context_ = &context;
+    scan_iter.read_info_ = &read_info_;
+    scan_iter.key_ = &key;
+    scan_iter.value_iter_ = &value_iter;
+    scan_iter.enable_delete_insert_ = delete_insert;
+    scan_iter.trans_version_col_idx_ = 1;
+    scan_iter.sql_sequence_col_idx_ = 2;
+    ASSERT_EQ(OB_SUCCESS, scan_iter.row_.init(allocator_, 4));
+    ASSERT_EQ(OB_SUCCESS, scan_iter.bitmap_.init(4, read_info_.get_rowkey_count()));
+    scan_iter.is_inited_ = true;
+    ASSERT_EQ(OB_SUCCESS, scan_iter.switch_to_committed_scan_state());
+    TestMiniRowMergeIterator merge_iter(allocator_, scan_iter);
+    if (merge_old_rows) {
+      merge_iter.prepare(context.trans_version_range_, delete_insert, ha_complete);
+      ASSERT_TRUE(merge_iter.is_inited_);
+    }
+    while (true) {
+      ASSERT_LT(output_.count(), 32);
+      const blocksstable::ObDatumRow *row = nullptr;
+      if (merge_old_rows) {
+        const int ret = merge_iter.next();
+        if (OB_ITER_END == ret) {
+          break;
+        }
+        ASSERT_EQ(OB_SUCCESS, ret);
+        row = merge_iter.get_curr_row();
+      } else if (ObMemtableMultiVersionScanIterator::SCAN_END == scan_iter.scan_state_) {
+        break;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, scan_iter.inner_get_next_row(row));
+      }
+      ASSERT_NE(nullptr, row);
+      EXPECT_EQ(103639, row->storage_datums_[0].get_int());
+      if (!merge_old_rows) {
+        EXPECT_EQ(output_.empty(), row->mvcc_row_flag_.is_first_multi_version_row());
+      }
+      const RowImage image = {row->row_flag_.get_dml_flag(), row->storage_datums_[3].get_int(),
+          -row->storage_datums_[1].get_int(), row->mvcc_row_flag_.is_shadow_row(),
+          row->mvcc_row_flag_.is_last_multi_version_row()};
+      ASSERT_EQ(OB_SUCCESS, output_.push_back(image));
+    }
+    for (int64_t i = 0; i < output_.count(); ++i) {
+      EXPECT_EQ(i == output_.count() - 1, output_.at(i).last_);
+    }
+  }
+
+  void expect_row(const int64_t index, const blocksstable::ObDmlFlag dml,
+      const int64_t value, const int64_t version)
+  {
+    ASSERT_LT(index, output_.count());
+    EXPECT_EQ(dml, output_.at(index).dml_);
+    EXPECT_EQ(value, output_.at(index).value_);
+    EXPECT_EQ(version, output_.at(index).version_);
+    EXPECT_FALSE(output_.at(index).shadow_);
+  }
+
+  void append_issue_updates()
+  {
+    append(blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
+    append(blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+    append(blocksstable::ObDmlFlag::DF_DELETE, 209, 350);
+    append(blocksstable::ObDmlFlag::DF_INSERT, 99, 350);
+    append(blocksstable::ObDmlFlag::DF_DELETE, 99, 400);
+    append(blocksstable::ObDmlFlag::DF_INSERT, -10, 400);
+  }
+
+  ObArenaAllocator allocator_;
+  storage::ObTableReadInfo read_info_;
+  blocksstable::ObDatumRow input_row_;
+  ObMvccRow mvcc_row_;
+  ObSEArray<RowImage, 16> output_;
+};
+
+TEST_F(TestDeleteInsertMiniScan, preserves_oldest_delete_when_mvs_reaches_latest_commit)
+{
+  append_issue_updates();
+  const int64_t starts[] = {200, 250, 350, 400, 1000};
+  for (const int64_t start : starts) {
+    SCOPED_TRACE(start);
+    scan(200, start);
+    ASSERT_EQ(7, output_.count());
+    EXPECT_TRUE(output_.at(0).shadow_);
+    expect_row(1, blocksstable::ObDmlFlag::DF_INSERT, -10, 400);
+    expect_row(2, blocksstable::ObDmlFlag::DF_DELETE, 99, 400);
+    expect_row(3, blocksstable::ObDmlFlag::DF_INSERT, 99, 350);
+    expect_row(4, blocksstable::ObDmlFlag::DF_DELETE, 209, 350);
+    expect_row(5, blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+    expect_row(6, blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
+  }
+}
+
+TEST_F(TestDeleteInsertMiniScan, zero_base_keeps_delete_images)
+{
+  append_issue_updates();
+  scan(0, 1000);
+  ASSERT_EQ(7, output_.count());
+  expect_row(6, blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
+}
+
+TEST_F(TestDeleteInsertMiniScan, mini_recycles_to_latest_insert_and_earliest_delete_above_base)
+{
+  append_issue_updates();
+  const int64_t bases[] = {200, 250, 300, 350, 400};
+  const int64_t old_values[] = {-10, 209, 209, 99};
+  const int64_t old_versions[] = {250, 350, 350, 400};
+  for (int64_t i = 0; i < ARRAYSIZEOF(bases); ++i) {
+    SCOPED_TRACE(bases[i]);
+    scan(bases[i], 1000, true, 0, true /*merge_old_rows*/);
+    ASSERT_EQ(bases[i] == 400 ? 1 : 2, output_.count());
+    expect_row(0, blocksstable::ObDmlFlag::DF_INSERT, -10, 400);
+    if (bases[i] < 400) {
+      expect_row(1, blocksstable::ObDmlFlag::DF_DELETE, old_values[i], old_versions[i]);
+    }
+  }
+}
+
+TEST_F(TestDeleteInsertMiniScan, mini_without_base_does_not_recycle_history)
+{
+  append_issue_updates();
+  scan(0, 1000, true, 0, true /*merge_old_rows*/);
+  ASSERT_EQ(7, output_.count());
+  expect_row(6, blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
+}
+
+TEST_F(TestDeleteInsertMiniScan, mini_preserves_delete_endpoints_from_different_transactions)
+{
+  append_issue_updates();
+  append(blocksstable::ObDmlFlag::DF_DELETE, -10, 500);
+  scan(200, 1000, true, 0, true /*merge_old_rows*/);
+  ASSERT_EQ(2, output_.count());
+  expect_row(0, blocksstable::ObDmlFlag::DF_DELETE, -10, 500);
+  expect_row(1, blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
+}
+
+TEST_F(TestDeleteInsertMiniScan, single_transaction_final_delete_uses_original_image)
+{
+  append(blocksstable::ObDmlFlag::DF_DELETE, -10, 400);
+  append(blocksstable::ObDmlFlag::DF_INSERT, 209, 400);
+  append(blocksstable::ObDmlFlag::DF_DELETE, 209, 400);
+  scan(200, 1000, true, 0, true /*merge_old_rows*/);
+  ASSERT_EQ(1, output_.count());
+  expect_row(0, blocksstable::ObDmlFlag::DF_DELETE, -10, 400);
+}
+
+TEST_F(TestDeleteInsertMiniScan, compacts_updates_within_one_transaction)
+{
+  append(blocksstable::ObDmlFlag::DF_DELETE, -10, 400);
+  append(blocksstable::ObDmlFlag::DF_INSERT, 209, 400);
+  append(blocksstable::ObDmlFlag::DF_DELETE, 209, 400);
+  append(blocksstable::ObDmlFlag::DF_INSERT, 99, 400);
+  scan(200, 1000);
+  ASSERT_EQ(2, output_.count());
+  expect_row(0, blocksstable::ObDmlFlag::DF_INSERT, 99, 400);
+  expect_row(1, blocksstable::ObDmlFlag::DF_DELETE, -10, 400);
+}
+
+TEST_F(TestDeleteInsertMiniScan, truncate_does_not_resurrect_old_delete)
+{
+  append_issue_updates();
+  scan(200, 1000, true, 300);
+  ASSERT_EQ(5, output_.count());
+  expect_row(4, blocksstable::ObDmlFlag::DF_DELETE, 209, 350);
+}
+
+TEST_F(TestDeleteInsertMiniScan, ordinary_table_still_compacts_at_mvs)
+{
+  append(blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+  append(blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+  append(blocksstable::ObDmlFlag::DF_UPDATE, -10, 400);
+  scan(200, 1000, false);
+  ASSERT_EQ(1, output_.count());
+  expect_row(0, blocksstable::ObDmlFlag::DF_INSERT, -10, 400);
+}
+
+TEST_F(TestDeleteInsertMiniScan, ordinary_table_retains_versions_above_mvs)
+{
+  append(blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+  append(blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+  append(blocksstable::ObDmlFlag::DF_UPDATE, -10, 400);
+  const int64_t starts[] = {200, 250, 350, 400, 1000};
+  const int64_t counts[] = {4, 4, 3, 1, 1};
+  for (int64_t i = 0; i < ARRAYSIZEOF(starts); ++i) {
+    SCOPED_TRACE(starts[i]);
+    scan(200, starts[i], false);
+    ASSERT_EQ(counts[i], output_.count());
+    if (starts[i] < 400) {
+      EXPECT_TRUE(output_.at(0).shadow_);
+      expect_row(1, blocksstable::ObDmlFlag::DF_UPDATE, -10, 400);
+      expect_row(2, blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+      if (starts[i] < 350) {
+        expect_row(3, blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+      }
+    } else {
+      expect_row(0, blocksstable::ObDmlFlag::DF_INSERT, -10, 400);
+    }
+  }
+}
+
+TEST_F(TestDeleteInsertMiniScan, ordinary_table_compact_marker_uses_mvs_with_and_without_truncate)
+{
+  append(blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+  append(blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+  append(blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+  mvcc_row_.list_head_->type_ = NDT_COMPACT;
+  append(blocksstable::ObDmlFlag::DF_UPDATE, -10, 400);
+  const int64_t truncate_versions[] = {0, 200};
+  for (const int64_t truncate_version : truncate_versions) {
+    SCOPED_TRACE(truncate_version);
+    // The marker at 350 must be skipped when it is above MVS.
+    scan(200, 300, false, truncate_version);
+    ASSERT_EQ(4, output_.count());
+    expect_row(1, blocksstable::ObDmlFlag::DF_UPDATE, -10, 400);
+    expect_row(2, blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+    expect_row(3, blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+    // At MVS the marker supplies the compacted tail and closes the history.
+    scan(200, 350, false, truncate_version);
+    ASSERT_EQ(3, output_.count());
+    expect_row(2, blocksstable::ObDmlFlag::DF_UPDATE, 99, 350);
+  }
+}
+
+TEST_F(TestDeleteInsertMiniScan, value_iterator_reuse_does_not_leak_delete_insert_mode)
+{
+  append_issue_updates();
+  ObMvccAccessCtx context;
+  ObVersionRange range;
+  range.base_version_ = 200;
+  range.multi_version_start_ = 1000;
+  range.snapshot_version_ = 2000;
+  ObMultiVersionValueIterator iter;
+  for (int64_t i = 0; i < 2; ++i) {
+    ASSERT_EQ(OB_SUCCESS, iter.init(&context, range, nullptr, &mvcc_row_));
+    ASSERT_EQ(OB_SUCCESS, iter.init_multi_version_iter(true));
+    const void *node = nullptr;
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_multi_version_node(node));
+    EXPECT_EQ(mvcc_row_.list_head_, node);
+    // Re-init after a partially consumed DI row, with implicit and explicit reset.
+    if (0 == i) {
+      iter.reset();
+    }
+    ASSERT_EQ(OB_SUCCESS, iter.init(&context, range, nullptr, &mvcc_row_));
+    ASSERT_EQ(OB_SUCCESS, iter.init_multi_version_iter());
+    EXPECT_EQ(OB_ITER_END, iter.get_next_multi_version_node(node));
+    EXPECT_EQ(nullptr, node);
+    ASSERT_EQ(OB_SUCCESS, iter.get_next_node_for_compact(node));
+    EXPECT_EQ(mvcc_row_.list_head_, node);
+  }
+}
+
+TEST_F(TestDeleteInsertMiniScan, mini_preserves_new_versions_and_recycles_only_tail_at_mvs)
+{
+  append_issue_updates();
+  scan(200, 350, true, 0, true /*merge_old_rows*/);
+  ASSERT_EQ(5, output_.count());
+  EXPECT_TRUE(output_.at(0).shadow_);
+  expect_row(1, blocksstable::ObDmlFlag::DF_INSERT, -10, 400);
+  expect_row(2, blocksstable::ObDmlFlag::DF_DELETE, 99, 400);
+  expect_row(3, blocksstable::ObDmlFlag::DF_INSERT, 99, 350);
+  expect_row(4, blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
+}
+
+TEST_F(TestDeleteInsertMiniScan, mini_insert_delete_reinsert_does_not_create_base_delete)
+{
+  append(blocksstable::ObDmlFlag::DF_INSERT, 209, 250);
+  append(blocksstable::ObDmlFlag::DF_DELETE, 209, 350);
+  append(blocksstable::ObDmlFlag::DF_INSERT, 99, 400);
+  scan(200, 1000, true, 0, true /*merge_old_rows*/);
+  ASSERT_EQ(1, output_.count());
+  expect_row(0, blocksstable::ObDmlFlag::DF_INSERT, 99, 400);
+}
+
+TEST_F(TestDeleteInsertMiniScan, mini_incomplete_ha_does_not_recycle_di_history)
+{
+  append_issue_updates();
+  scan(200, 1000, true, 0, true /*merge_old_rows*/, false /*ha_complete*/);
+  ASSERT_EQ(7, output_.count());
+  expect_row(6, blocksstable::ObDmlFlag::DF_DELETE, -10, 250);
 }
 
 TEST_F(TestMultiVersionTruncateFilter, uncommitted_output_closes_truncated_tail)

@@ -858,7 +858,7 @@ int ObMemtableMultiVersionScanIterator::switch_to_committed_scan_state()
   int ret = OB_SUCCESS;
   if (!value_iter_->is_compact_iter_end()) { // iter compacted not finish
     scan_state_ = SCAN_COMPACT_ROW;
-    if (OB_FAIL(value_iter_->init_multi_version_iter())) {
+    if (OB_FAIL(value_iter_->init_multi_version_iter(enable_delete_insert_))) {
       LOG_WARN("Fail to init multi version iter", K(ret), K_(scan_state), KPC_(value_iter));
     } else if (value_iter_->is_compact_iter_end()) {
       // The truncate filter may remove the whole committed tail during init.
@@ -1177,6 +1177,8 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
   int64_t trans_version = INT64_MIN;
   int64_t compare_trans_version = INT64_MAX;
   const ObVersionRange &version_range = context_->trans_version_range_;
+  const int64_t compact_version = enable_delete_insert_
+      ? version_range.base_version_ : version_range.multi_version_start_;
   const ObMemtableDataHeader *mtd = NULL;
   const ObRowHeader *row_header = nullptr;
   if (OB_ISNULL(value_iter_)) {
@@ -1231,7 +1233,9 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
       if (bitmap_.is_empty() || row.row_flag_.is_delete()) {
         row.set_compacted_multi_version_row();
       }
-      if (trans_version > version_range.multi_version_start_
+      // Preserve each DI transaction above base_version. MINI's row merge
+      // iterator needs these images to retain the earliest DELETE above base.
+      if (trans_version > compact_version
           && value_iter_->is_cur_multi_version_row_end()) {
         // TODO: @dengzhi.ldz return empty when first row is insert and last row is delete
         break;

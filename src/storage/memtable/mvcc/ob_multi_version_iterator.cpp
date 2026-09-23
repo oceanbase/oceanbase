@@ -38,6 +38,7 @@ ObMultiVersionValueIterator::ObMultiVersionValueIterator()
       cur_trans_version_(SCN::min_scn()),
       is_node_compacted_(false),
       has_multi_commit_trans_(false),
+      is_delete_insert_(false),
       merge_scn_(SCN::max_scn()),
       truncate_filter_()
 {
@@ -94,7 +95,8 @@ int ObMultiVersionValueIterator::normalize_dump_iter_(
         }
       } else if (DumpIterPhase::MULTI_VERSION_ROW == phase
           && NDT_COMPACT == iter->type_
-          && iter->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
+          && iter->trans_version_.get_val_for_tx() > (is_delete_insert_
+              ? version_range_.base_version_ : version_range_.multi_version_start_)) {
         iter = iter->prev_;
         if (OB_ISNULL(iter)) {
           ret = OB_ERR_UNEXPECTED;
@@ -109,10 +111,15 @@ int ObMultiVersionValueIterator::normalize_dump_iter_(
   return ret;
 }
 
-int ObMultiVersionValueIterator::init_multi_version_iter()
+int ObMultiVersionValueIterator::init_multi_version_iter(const bool is_delete_insert)
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *iter = nullptr;
+  is_delete_insert_ = is_delete_insert;
+  // DI rows above the base snapshot must keep their delete images, even if
+  // multi_version_start has already passed every committed transaction.
+  const int64_t compact_version = is_delete_insert_
+      ? version_range_.base_version_ : version_range_.multi_version_start_;
   has_multi_commit_trans_ = false;
   multi_version_iter_ = nullptr;
 
@@ -132,9 +139,8 @@ int ObMultiVersionValueIterator::init_multi_version_iter()
       cur_trans_version_ = SCN::min_scn();
     } else if (OB_FAIL(cur_trans_version_.convert_for_tx(max_committed_trans_version_))) {
       TRANS_LOG(ERROR, "failed to convert scn", K(ret), K_(max_committed_trans_version));
-    } else if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
-      //如果多版本的开始版本大于等于当前以提交的最大版本
-      //则只迭代出所有trans node compact结果
+    } else if (max_committed_trans_version_ <= compact_version) {
+      // The selected compact boundary is reached by every committed node.
     } else if (OB_FAIL(normalize_dump_iter_(iter, DumpIterPhase::MULTI_VERSION_ROW))) {
       TRANS_LOG(WARN, "failed to normalize multi version iter", K(ret), KPC(iter));
     } else {
@@ -449,13 +455,15 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
     ret = OB_ITER_END;
   } else {
     const SCN cur_trans_version = multi_version_iter_->trans_version_;
+    const int64_t compact_version = is_delete_insert_
+        ? version_range_.base_version_ : version_range_.multi_version_start_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
       if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
-        if (multi_version_iter_->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() > compact_version) {
           // ignore compact node
           is_compacted = true;
-        } else { // multi_version_iter_->trans_version_ <= multi_version_start
+        } else { // multi_version_iter_->trans_version_ <= compact_version
           is_node_compacted_ = true;
           record_node = multi_version_iter_;
           multi_version_iter_ = NULL;
@@ -466,7 +474,7 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
         // advanced inside this loop. Old compact nodes are terminated by
         // normalize_dump_iter_().
       } else { // not compacted node
-        if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() <= compact_version) {
           is_node_compacted_ = true;
         }
         record_node = multi_version_iter_;
@@ -547,6 +555,7 @@ void ObMultiVersionValueIterator::reset()
   cur_trans_version_ = SCN::min_scn();
   is_node_compacted_ = false;
   has_multi_commit_trans_ = false;
+  is_delete_insert_ = false;
   ctx_ = NULL;
   version_range_.reset();
   truncate_filter_.reset();
