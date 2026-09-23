@@ -266,6 +266,12 @@ int ObSessionTabletInfoMap::try_remove_session_tablet(
   return ret;
 }
 
+bool ObSessionTabletInfoMap::has_session_tablet()
+{
+  lib::ObMutexGuard guard(mutex_);
+  return !tablet_infos_.empty();
+}
+
 int ObSessionTabletInfoMap::try_remove_session_tablet(
     const uint64_t table_id,
     const common::ObTabletID &tablet_id,

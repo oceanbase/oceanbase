@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL
 
 #include "observer/mysql/ob_feedback_proxy_utils.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
@@ -14,7 +15,30 @@ using namespace common;
 namespace observer
 {
 ObIsLockSessionInfo ObFeedbackProxyUtils::is_lock_session(ObFeedbackProxyInfoType::IS_LOCK_SESSION, '1');
-ObIsTemporaryTableSessionInfo ObFeedbackProxyUtils::is_temporary_table_session(ObFeedbackProxyInfoType::IS_TEMPORARY_TABLE_SESSION, '1');
+
+void ObFeedbackProxyUtils::refresh_temp_table_feedback_state_(sql::ObSQLSessionInfo &sess)
+{
+  // Mark a session when it tracks a GTT session tablet and is eligible for
+  // non-forced routing. Refresh the flag after statement execution and only
+  // feedback when the effective value changes.
+  const uint64_t data_version = sess.get_min_data_version_of_init_sess();
+  if ((data_version >= MOCK_DATA_VERSION_4_4_2_1 && data_version < DATA_VERSION_4_5_0_0)
+      || data_version >= DATA_VERSION_4_6_1_0) {
+    const bool is_used = sess.get_gtt_tablet_info_map().has_session_tablet();
+    // Keep a marked session sticky while any session tablet remains. Changes to
+    // the routing configuration only affect sessions that are not marked.
+    bool flag = is_used && sess.is_temporary_table_session();
+    if (is_used && !flag) {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(sess.get_effective_tenant_id()));
+      const bool need_strong_routing = tenant_config.is_valid()
+          ? !tenant_config->_enable_gtt_non_forced_routing
+          : true;
+      const bool strong_routing = INVALID_SESSID != sess.get_client_sid() ? need_strong_routing : true;
+      flag = is_used && !strong_routing;
+    }
+    sess.mark_session_temp_table_used(flag);
+  }
+}
 
 int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &allocator,
                                                      ObIArray<obmysql::Obp20Encoder *> *extra_info_ecds,
@@ -27,6 +51,7 @@ int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &alloc
   void *ecd_buf = nullptr;
   obmysql::Obp20FeedbackProxyInfoEncoder *fb_proxy_info_ecd = nullptr;
 
+  refresh_temp_table_feedback_state_(sess);
   if (sess.is_need_send_feedback_proxy_info()) {
     len = get_serialize_size_(sess);
     LOG_DEBUG("begin to feedback proxy info", K(sess.get_server_sid()), K(len));
@@ -73,6 +98,8 @@ int ObFeedbackProxyUtils::append_feedback_proxy_info(common::ObIAllocator &alloc
 int64_t ObFeedbackProxyUtils::get_serialize_size_(sql::ObSQLSessionInfo &sess)
 {
   int64_t size = 0;
+  const ObIsTemporaryTableSessionInfo is_temporary_table_session(
+      ObFeedbackProxyInfoType::IS_TEMPORARY_TABLE_SESSION, '1');
   size += is_lock_session.get_serialize_size();
   size += is_temporary_table_session.get_serialize_size();
   // add other information here...
@@ -90,11 +117,9 @@ int ObFeedbackProxyUtils::serialize_(sql::ObSQLSessionInfo &sess, char *buf, int
   if (OB_FAIL(is_lock_session.serialize(buf, len, pos))) {
     LOG_WARN("serialize is_lock_session failed", K(ret), K(is_lock_session));
   }
-  if (!sess.is_temporary_table_session()) {
-    is_temporary_table_session.set_value('0');
-  } else {
-    is_temporary_table_session.set_value('1');
-  }
+  const ObIsTemporaryTableSessionInfo is_temporary_table_session(
+      ObFeedbackProxyInfoType::IS_TEMPORARY_TABLE_SESSION,
+      sess.is_temporary_table_session() ? '1' : '0');
   if (FAILEDx(is_temporary_table_session.serialize(buf, len, pos))) {
     LOG_WARN("serialize is_temporary_table_session failed", K(ret), K(is_temporary_table_session));
   }

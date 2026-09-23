@@ -167,6 +167,7 @@ public:
       const ObSessionTabletInfoKey &session_tablet_info_key,
       ObSessionTabletInfo &session_tablet_info);
   int remove_session_tablet(const uint64_t table_id);
+  bool has_session_tablet();
   // Remove all entries matching the specified table ID and sequence.
   int try_remove_session_tablet(
       const uint64_t table_id,
