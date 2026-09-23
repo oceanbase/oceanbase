@@ -1554,6 +1554,11 @@ private:
                                       const int64_t *formal_param_idxs,
                                       int64_t cursor_param_count);
 
+#ifdef OB_BUILD_ORACLE_PL
+  static int materialize_oci_dblink_cursor_if_needed(ObSQLSessionInfo &session,
+                                                    pl::ObPLCursorInfo &cursor);
+#endif
+
   static int streaming_cursor_open(pl::ObPLExecCtx *ctx,
                                    pl::ObPLCursorInfo &cursor,
                                    ObSQLSessionInfo &session_info,

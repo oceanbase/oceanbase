@@ -3029,6 +3029,13 @@ int ObPLCursorInfo::convert_to_unstreaming(ObSQLSessionInfo &session)
     OZ (session.get_tmp_table_size(size));
     OZ (prepare_spi_cursor(spi_cursor, session.get_effective_tenant_id(), size, false, &session));
     OZ (spi_cursor->init_row_desc(*(spi_result->get_result_set())));
+#ifdef OB_BUILD_ORACLE_PL
+    if (!is_dbms_sql_cursor()) {
+      // Buffered REF CURSOR consumers need column metadata after the result closes.
+      OZ (ObDbmsInfo::deep_copy_field_columns(*get_allocator(),
+          spi_result->get_result_set()->get_field_columns(), spi_cursor->fields_));
+    }
+#endif
     if (OB_SUCC(ret) && fetched_with_row_ && current_row_.is_valid()) { //when convert to unstreaming cursor, spi_result will be released, so keep current_row_ in row_store's first row
       OZ (ObSPIService::fill_cursor_row(spi_cursor, current_row_));
       OX (need_set_current_row = true);

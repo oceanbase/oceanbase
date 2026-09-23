@@ -30,6 +30,7 @@
 #include "sql/plan_cache/ob_ps_cache.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/dblink/ob_pl_dblink_util.h"
+#include "sql/engine/dml/ob_link_op.h"
 #include "pl/ob_pl_profiler.h"
 #include "pl/ob_pl_call_stack_trace.h"
 #include "pl/sys_package/ob_json_pl_utils.h"
@@ -4037,6 +4038,67 @@ int ObSPIService::spi_get_cursor_info(ObPLExecCtx *ctx, int64_t index,
 }
 
 #ifdef OB_BUILD_ORACLE_PL
+int ObSPIService::materialize_oci_dblink_cursor_if_needed(ObSQLSessionInfo &session,
+                                                        ObPLCursorInfo &cursor)
+{
+  int ret = OB_SUCCESS;
+  ObTxDesc *tx_desc = session.get_tx_desc();
+  if (lib::is_oracle_mode() && cursor.isopen() && cursor.is_streaming()
+      && !cursor.is_for_update() && OB_NOT_NULL(tx_desc)
+      && ObGlobalTxType::DBLINK_TRANS == tx_desc->get_global_tx_type(session.get_xid())) {
+    ObSPIResultSet *spi_result = cursor.get_cursor_handler();
+    ObResultSet *result_set = OB_NOT_NULL(spi_result) ? spi_result->get_result_set() : NULL;
+    ObPhysicalPlanCtx *plan_ctx = OB_NOT_NULL(result_set)
+                                 ? GET_PHY_PLAN_CTX(result_set->get_exec_context()) : NULL;
+    CK (OB_NOT_NULL(plan_ctx));
+    if (OB_SUCC(ret) && plan_ctx->get_main_xa_trans_branch()) {
+      const ObPhysicalPlan *plan = result_set->get_physical_plan();
+      ObSchemaGetterGuard *schema_guard = spi_result->get_sql_ctx().schema_guard_;
+      ObSEArray<const ObOpSpec *, 4> link_specs;
+      bool has_oci_link = false;
+      CK (OB_NOT_NULL(plan), OB_NOT_NULL(schema_guard));
+      CK (OB_NOT_NULL(plan->get_root_op_spec()));
+      // dblink_xa_prepare() has already consumed plan_ctx's dblink IDs at OPEN.
+      OZ (ObOpSpec::find_target_specs(*plan->get_root_op_spec(),
+          [](const ObOpSpec &spec) { return PHY_LINK_SCAN == spec.get_type(); }, link_specs));
+      for (int64_t i = 0; OB_SUCC(ret) && !has_oci_link && i < link_specs.count(); ++i) {
+        const ObLinkSpec &link_spec = static_cast<const ObLinkSpec &>(*link_specs.at(i));
+        const ObDbLinkSchema *dblink_schema = NULL;
+        if (!link_spec.is_reverse_link_) {
+          OZ (schema_guard->get_dblink_schema(session.get_effective_tenant_id(),
+                                             link_spec.dblink_id_, dblink_schema));
+          CK (OB_NOT_NULL(dblink_schema));
+          OX (has_oci_link = DBLINK_DRV_OCI == dblink_schema->get_driver_proto());
+        }
+      }
+      if (OB_SUCC(ret) && has_oci_link) {
+        if (cursor.is_dbms_sql_cursor()) {
+          // DESCRIBE_COLUMNS must outlive the streaming result released below.
+          ObDbmsCursorInfo &dbms_cursor = static_cast<ObDbmsCursorInfo &>(cursor);
+          OZ (ObDbmsInfo::deep_copy_field_columns(
+              dbms_cursor.get_dbms_entity()->get_arena_allocator(),
+              result_set->get_field_columns(), dbms_cursor.get_field_columns()));
+        }
+        // The XA connection has one OCI statement. Drain this cursor before OPEN
+        // returns so another cursor or savepoint command can use that statement.
+        // Reuse cursor conversion and the existing result/connection cleanup paths.
+        OZ (cursor.convert_to_unstreaming(session));
+      }
+    }
+    if (OB_FAIL(ret) && cursor.isopen()) {
+      // Do not expose a cursor after detection or materialization fails.
+      // Keep the DBMS_SQL handle and parsed statement until CLOSE_CURSOR.
+      int close_ret = cursor.is_dbms_sql_cursor()
+                      ? cursor.ObPLCursorInfo::close(session, true)
+                      : cursor.close(session, cursor.is_server_cursor() || cursor.is_session_cursor());
+      if (OB_SUCCESS != close_ret) {
+        LOG_WARN("failed to close OCI dblink cursor after materialization error", K(ret), K(close_ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSPIService::register_tx_streaming_cursor_if_needed(ObSQLSessionInfo &session_info,
                                                 ObPLCursorInfo &cursor,
                                                 uint64_t package_id,
@@ -4735,6 +4797,9 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                                 is_server_cursor,
                                 for_update,
                                 has_hidden_rowid));
+#ifdef OB_BUILD_ORACLE_PL
+      OZ (materialize_oci_dblink_cursor_if_needed(*session_info, *cursor));
+#endif
     } else { //MySQL Cursor/Updated Cursor/Server Cursor(REF_CURSOR, PACKAGE CURSOR), unstreaming cursor
       OZ (unstreaming_cursor_open(ctx,
                                   *cursor,
@@ -4817,6 +4882,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                               for_update,
                               hidden_rowid,
                               true /*is_dbms_cursor*/));
+#ifdef OB_BUILD_ORACLE_PL
+    OZ (materialize_oci_dblink_cursor_if_needed(*session, cursor));
+#endif
   } else { // unstreaming branch
     OZ (unstreaming_cursor_open(ctx,
                                 cursor,
