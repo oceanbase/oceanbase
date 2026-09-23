@@ -6623,6 +6623,7 @@ this_exec_addr	varchar(46)	YES		NULL
 this_exec_trace_id	varchar(64)	YES		NULL	
 job_config	longtext	YES		NULL	
 this_exec_sess_id	bigint(20) unsigned	YES		NULL	
+allow_runs_in_restricted_mode	tinyint(4)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_job;
 IF(count(*) >= 0, 1, 0)
 1

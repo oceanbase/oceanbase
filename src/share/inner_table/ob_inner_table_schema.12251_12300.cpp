@@ -4491,6 +4491,25 @@ int ObInnerTableSchema::all_virtual_tenant_scheduler_job_schema(ObTableSchema &t
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj allow_runs_in_restricted_mode_default;
+    allow_runs_in_restricted_mode_default.set_tinyint(0);
+    ADD_COLUMN_SCHEMA_T("allow_runs_in_restricted_mode", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTinyIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      1, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      allow_runs_in_restricted_mode_default,
+      allow_runs_in_restricted_mode_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
