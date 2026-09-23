@@ -299,20 +299,33 @@ int ObLSMap::get_ls(const share::ObLSID &ls_id,
     LOG_WARN("ObLSMap not init", K(ret), K(ls_id));
   } else {
     pos = ls_id.hash() % BUCKETS_CNT;
-    ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
-    ls = ls_buckets_[pos];
-    while (OB_NOT_NULL(ls)) {
-      if (ls->get_ls_id() == ls_id) {
-        break;
+    ObLSHandle new_handle;
+    bool found = false;
+    {
+      ObQSyncLockReadGuard bucket_guard(buckets_lock_[pos]);
+      ls = ls_buckets_[pos];
+      while (OB_NOT_NULL(ls)) {
+        if (ls->get_ls_id() == ls_id) {
+          break;
+        } else {
+          ls = static_cast<ObLS *>(ls->next_);
+        }
+      }
+
+      if (OB_ISNULL(ls)) {
+        ret = OB_LS_NOT_EXIST;
       } else {
-        ls = static_cast<ObLS *>(ls->next_);
+        found = true;
+        if (OB_FAIL(new_handle.set_ls(*this, *ls, mod))) {
+          LOG_WARN("get_ls fail", K(ret), K(ls_id));
+        }
       }
     }
-
-    if (OB_ISNULL(ls)) {
-      ret = OB_LS_NOT_EXIST;
-    } else if (OB_FAIL(handle.set_ls(*this, *ls, mod))) {
-      LOG_WARN("get_ls fail", K(ret), K(ls_id));
+    if (found) {
+      // Keep the old handle on lookup failure, but clear it on acquisition
+      // failure as set_ls did. Release it outside the bucket lock: destroying
+      // its LS may acquire IDService cache locks.
+      handle.swap(new_handle);
     }
   }
   return ret;

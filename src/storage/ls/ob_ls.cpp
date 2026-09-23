@@ -877,10 +877,10 @@ void ObLS::destroy()
   }
   if (ObReplicaTypeCheck::is_log_replica(ls_meta_.get_replica_type())) {
     if (ls_meta_.ls_id_ == IDS_LS) {
-      MTL(transaction::ObTransIDService *)->reset_ls();
-      MTL(transaction::ObTimestampService *)->reset_ls();
-      MTL(sql::ObDASIDService *)->reset_ls();
-      MTL(observer::ObTableSessIDService *)->reset_ls();
+      MTL(transaction::ObTransIDService *)->invalidate_ls(this);
+      MTL(transaction::ObTimestampService *)->invalidate_ls(this);
+      MTL(sql::ObDASIDService *)->invalidate_ls(this);
+      MTL(observer::ObTableSessIDService *)->invalidate_ls(this);
     }
     tx_table_.destroy();
     lock_table_.destroy();
@@ -1184,9 +1184,7 @@ int ObLS::register_common_service()
 #ifdef OB_BUILD_SHARED_STORAGE
     if (SSLOG_LS == ls_id) {
       // for sslog gts service and unique id servcie
-      MTL(ObSSLogGTSService *)->set_ls(this);
       REGISTER_TO_LOGSERVICE(SSLOG_GTS_LOG_BASE_TYPE, MTL(ObSSLogGTSService *));
-      MTL(ObSSLogUIDService *)->set_ls(this);
       REGISTER_TO_LOGSERVICE(SSLOG_UID_LOG_BASE_TYPE, MTL(ObSSLogUIDService *));
       // register for ckpt
       REGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
@@ -1373,27 +1371,27 @@ void ObLS::unregister_common_service_()
       UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_GTS, MTL(ObSSLogGTSService *));
       UNREGISTER_SS_INC_META_CKPT(SSIncMetaType::SSLOG_UID, MTL(ObSSLogUIDService *));
       // for sslog gts service and unique id service
-      MTL(ObSSLogGTSService *)->reset_ls();
+      MTL(ObSSLogGTSService *)->invalidate_ls(this);
       UNREGISTER_FROM_LOGSERVICE(SSLOG_GTS_LOG_BASE_TYPE, MTL(ObSSLogGTSService *));
-      MTL(ObSSLogUIDService *)->reset_ls();
+      MTL(ObSSLogUIDService *)->invalidate_ls(this);
       UNREGISTER_FROM_LOGSERVICE(SSLOG_UID_LOG_BASE_TYPE, MTL(ObSSLogUIDService *));
     } else {
-      MTL(ObTimestampService *)->reset_ls();
+      MTL(ObTimestampService *)->invalidate_ls(this);
       UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
-      MTL(ObTransIDService *)->reset_ls();
+      MTL(ObTransIDService *)->invalidate_ls(this);
       UNREGISTER_FROM_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
     }
 #endif
   } else if (ls_meta_.ls_id_ == IDS_LS) {
-    MTL(ObTimestampService *)->reset_ls();
+    MTL(ObTimestampService *)->invalidate_ls(this);
     UNREGISTER_FROM_LOGSERVICE(TIMESTAMP_LOG_BASE_TYPE, MTL(ObTimestampService *));
-    MTL(ObTransIDService *)->reset_ls();
+    MTL(ObTransIDService *)->invalidate_ls(this);
     UNREGISTER_FROM_LOGSERVICE(TRANS_ID_LOG_BASE_TYPE, MTL(ObTransIDService *));
   }
   if (ls_meta_.ls_id_ == IDS_LS) {
     // temporary fix of
-    MTL(sql::ObDASIDService *)->reset_ls();
-    MTL(observer::ObTableSessIDService*)->reset_ls();
+    MTL(sql::ObDASIDService *)->invalidate_ls(this);
+    MTL(observer::ObTableSessIDService*)->invalidate_ls(this);
     UNREGISTER_FROM_LOGSERVICE(TABLE_SESS_ID_LOG_BASE_TYPE, MTL(observer::ObTableSessIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {
@@ -1419,7 +1417,7 @@ void ObLS::unregister_common_service_()
 void ObLS::unregister_sys_service_()
 {
   if (ls_meta_.ls_id_ == IDS_LS) {
-    MTL(sql::ObDASIDService *)->reset_ls();
+    MTL(sql::ObDASIDService *)->invalidate_ls(this);
     UNREGISTER_FROM_LOGSERVICE(DAS_ID_LOG_BASE_TYPE, MTL(sql::ObDASIDService *));
 #ifdef OB_BUILD_SHARED_STORAGE
     if (GCTX.is_shared_storage_mode()) {

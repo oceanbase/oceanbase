@@ -19,7 +19,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
-#include "storage/tx/ob_trans_service.h"
+#include "storage/tx/ob_id_service.h"
 
 namespace oceanbase
 {
@@ -482,15 +482,21 @@ int ObLSService::add_ls_to_map_(ObLS *ls)
   return ret;
 }
 
-int ObLSService::remove_ls_from_map_(const share::ObLSID &ls_id)
+int ObLSService::remove_ls_from_map_(ObLS &ls)
 {
   int ret = OB_SUCCESS;
+  const ObLSID ls_id = ls.get_ls_id();
   if (OB_FAIL(ls_map_.del_ls(ls_id)) &&
       OB_LS_NOT_EXIST != ret) {
     LOG_ERROR("delete ls from map failed", K(ret), K(ls_id));
   }
   if (OB_LS_NOT_EXIST == ret) {
     ret = OB_SUCCESS;
+  }
+  if (OB_SUCC(ret)) {
+    // The bucket lock has been released. No lookup can republish this LS after
+    // invalidation; release cached references before safe_to_destroy checks.
+    transaction::ObIDService::invalidate_ls_caches(&ls);
   }
   return ret;
 }
@@ -1226,7 +1232,7 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
       }
     }
     if (success_step < 4 && OB_SUCC(ret)) {
-      if (OB_FAIL(remove_ls_from_map_(ls_id))) {
+      if (OB_FAIL(remove_ls_from_map_(*ls))) {
         LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
       } else {
         success_step = 4;
@@ -1418,11 +1424,18 @@ void ObLSService::del_ls_after_create_ls_failed_(ObLSCreateState& in_ls_create_s
     do {
       need_retry = false;
       tmp_ret = OB_SUCCESS;
-      if (ls_create_state >= ObLSCreateState::CREATE_STATE_FINISH) {
+      // Keep the published LS alive across map removal and cache invalidation,
+      // including rollback before CREATE_STATE_FINISH. Acquire only once.
+      if (ls_create_state >= ObLSCreateState::CREATE_STATE_ADDED_TO_MAP
+          && !handle.is_valid()) {
         if (OB_TMP_FAIL(handle.set_ls(ls_map_, *ls, ObLSGetMod::TXSTORAGE_MOD))) {
           need_retry = true;
           LOG_WARN("get ls handle failed", K(tmp_ret), KPC(ls));
-        } else if (OB_TMP_FAIL(safe_remove_ls_(handle, remove_from_disk))) {
+        }
+      }
+      if (OB_TMP_FAIL(tmp_ret)) {
+      } else if (ls_create_state >= ObLSCreateState::CREATE_STATE_FINISH) {
+        if (OB_TMP_FAIL(safe_remove_ls_(handle, remove_from_disk))) {
           need_retry = true;
           LOG_WARN("safe remove ls failed", K(tmp_ret));
         }
@@ -1458,7 +1471,7 @@ void ObLSService::del_ls_after_create_ls_failed_(ObLSCreateState& in_ls_create_s
         }
         if (OB_TMP_FAIL(tmp_ret)) {
         } else if (ls_create_state >= ObLSCreateState::CREATE_STATE_ADDED_TO_MAP) {
-          if (OB_TMP_FAIL(remove_ls_from_map_(ls->get_ls_id()))) {
+          if (OB_TMP_FAIL(remove_ls_from_map_(*ls))) {
             need_retry = true;
             LOG_ERROR_RET(tmp_ret, "remove ls from map failed", K(tmp_ret));
           } else {
@@ -1840,4 +1853,3 @@ int ObLSService::check_sslog_ls_exist()
 
 } // storage
 } // oceanbase
-

@@ -5,6 +5,7 @@ endfunction()
 
 storage_unittest(test_tenant_module_env)
 storage_unittest(test_ls_service test_ls_service.cpp)
+storage_unittest(test_id_service_ls_lifetime test_id_service_ls_lifetime.cpp)
 storage_dml_unittest(test_write_tablet_slog test_write_tablet_slog.cpp)
 storage_dml_unittest(test_table_scan_pure_data_table)
 storage_dml_unittest(test_tenant_meta_mem_mgr test_tenant_meta_mem_mgr.cpp)

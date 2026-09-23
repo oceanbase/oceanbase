@@ -32,6 +32,10 @@ public:
   ObLSHandle &operator=(const ObLSHandle &other);
   ~ObLSHandle();
   int set_ls(const ObLSMap &ls_map, ObLS &ls, const ObLSGetMod &mod);
+  // Copy into an empty handle. The caller must protect other against reset.
+  int copy_from(const ObLSHandle &other);
+  // Transfer ownership without changing references or leak-checker nodes.
+  void swap(ObLSHandle &other);
   void reset();
   bool is_valid() const;
   ObLS *get_ls() { return ls_; }

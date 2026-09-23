@@ -15,6 +15,7 @@
 
 #include "share/ob_ls_id.h"
 #include "storage/slog/ob_storage_log_struct.h"
+#include "storage/tx_storage/ob_ls_handle.h"
 #include "logservice/ob_append_callback.h"
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
@@ -89,7 +90,11 @@ class ObIDService :
     public logservice::ObICheckpointSubHandler,
     public logservice::ObIRoleChangeSubHandler {
 public:
-  ObIDService() : rwlock_(ObLatchIds::ID_SOURCE_LOCK), log_interval_(100 * 1000) { reset(); }
+  ObIDService()
+    : rwlock_(ObLatchIds::ID_SOURCE_LOCK),
+      log_interval_(100 * 1000),
+      ls_cache_lock_(ObLatchIds::ID_SERVICE_LS_CACHE_LOCK)
+  { reset(); }
   virtual ~ObIDService() {}
   void destroy() { reset(); }
   void reset();
@@ -147,8 +152,11 @@ public:
   int switch_to_leader() { return OB_SUCCESS; }
 
   int check_leader(bool &leader);
-  int check_and_fill_ls();
-  void reset_ls();
+  // Invalidate all ID service LS caches in the current tenant.
+  // The caller must keep expected_ls alive throughout invalidation.
+  static void invalidate_ls_caches(storage::ObLS *expected_ls);
+  // The caller must keep expected_ls alive throughout invalidation.
+  void invalidate_ls(storage::ObLS *expected_ls);
   void update_limited_id(const int64_t limited_id, const share::SCN latest_log_ts);
   int update_ls_id_meta(const bool write_slog);
 
@@ -161,6 +169,7 @@ public:
 
 protected:
   share::ObLSID get_target_ls_id_() const;
+  int acquire_ls_handle(storage::ObLSHandle &handle);
 
 protected:
   typedef common::SpinWLockGuard  WLockGuard;
@@ -189,11 +198,15 @@ protected:
   // current time when submit log
   int64_t submit_log_ts_;
   mutable common::SpinRWLock rwlock_;
-  ObLS *ls_;
   ObPresistIDLogCb cb_;
   common::ObAddr self_;
   common::ObTimeInterval log_interval_;
   bool is_flushing_;
+private:
+  // Only called during construction or after the service has drained callers.
+  void clear_ls_cache_();
+  common::SpinRWLock ls_cache_lock_;
+  storage::ObLSHandle cached_ls_handle_;
 };
 
 class ObIDMeta

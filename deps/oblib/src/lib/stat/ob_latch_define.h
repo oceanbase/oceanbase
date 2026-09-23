@@ -999,7 +999,8 @@ LATCH_DEF(SANDBOX_LOCK, 966, "ob_sandbox and sandbox manager lock", LATCH_FIFO, 
 LATCH_DEF(MVIEW_TASK_QUEUE_LOCK, 969, "mview task queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(MVIEW_PENDING_TASK_INSPECTION_LOCK, 970, "mview pending task inspection lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_ARB_MONITOR_LOCK, 971, "ob arb monitor lock", LATCH_READ_PREFER, 2000, 0, true)
-LATCH_DEF(LATCH_END, 972, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(ID_SERVICE_LS_CACHE_LOCK, 977, "ID service LS cache lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 978, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
