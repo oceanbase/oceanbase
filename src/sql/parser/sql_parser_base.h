@@ -217,6 +217,7 @@ do {                                                                            
   do {                                                                  \
     malloc_terminal_node(node, malloc_pool, T_IDENT);                   \
     dup_expr_string(node, result, word_start, word_end);                \
+    node->sql_str_off_ = word_start - 1;                                \
     setup_token_pos_info(node, word_start - 1, word_end - word_start + 1);  \
   } while (0)
 

@@ -21,6 +21,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_outline_binding_rule.h"
 #include "sql/resolver/ob_resolver.h"
+#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/ob_schema_checker.h"
 #include "sql/resolver/ob_stmt.h"
 #include "sql/resolver/dml/ob_dml_stmt.h"
@@ -139,6 +140,9 @@ int ObOutlineTemplateMatcher::collect_table_names_dfs(
   } else if (is_hint_subtree_root(node)) {
     // Ignore hint-only subtrees. They may contain relation-like parse nodes,
     // but they are not real FROM/JOIN slots and must not affect ast_position.
+  } else if (T_FOR_UPDATE_LIST == node->type_) {
+    // OF names refer to existing FROM slots, not additional fixed MAP items.
+    // Signature collection preserves their query-block FROM positions.
   } else if (T_RELATION_FACTOR == node->type_) {
     // Leaf: extract db_name and table_name
     const ParseNode *db_node = node->num_child_ > 0 ? node->children_[0] : NULL;
@@ -215,6 +219,7 @@ struct ObSigReplaceSpan
 {
   int64_t off_;
   int64_t len_;
+  // OF target replacements also carry a FROM position and are owned by the signature allocator.
   common::ObString rep_;  // "*" (db slot / table slot with db present) or "*.*" (bare table slot)
   TO_STRING_KV(K_(off), K_(len), K_(rep));
 };
@@ -228,7 +233,7 @@ static bool identifier_raw_span(const ObString &sql, const ParseNode *ident,
   bool ok = false;
   off = 0;
   len = 0;
-  if (OB_ISNULL(ident) || OB_ISNULL(ident->str_value_) || ident->str_len_ <= 0) {
+  if (OB_ISNULL(sql.ptr()) || OB_ISNULL(ident) || OB_ISNULL(ident->str_value_) || ident->str_len_ <= 0) {
     // nothing
   } else {
     const char *buf = sql.ptr();
@@ -240,15 +245,21 @@ static bool identifier_raw_span(const ObString &sql, const ParseNode *ident,
       // sql_str_off_ may point at the backtick or one past it depending on the
       // lexer rule; probe both.
       int64_t start = a;
-      if (buf[a] != '`' && a > 0 && buf[a - 1] == '`') {
+      // MySQL quoted identifiers point past the opening quote; double quotes require ANSI_QUOTES.
+      const bool mysql_quoted = !lib::is_oracle_mode() && ident->is_input_quoted_;
+      const char quote = mysql_quoted && a > 0 && buf[a - 1] == '"' ? '"' : '`';
+
+      if (a > 0 && buf[a - 1] == quote && (buf[a] != quote || mysql_quoted)) {
         start = a - 1;
       }
-      if (buf[start] == '`') {
+
+      if (buf[start] == quote) {
         int64_t i = start + 1;
         bool closed = false;
+
         while (i < total && !closed) {
-          if (buf[i] == '`') {
-            if (i + 1 < total && buf[i + 1] == '`') {
+          if (buf[i] == quote) {
+            if (i + 1 < total && buf[i + 1] == quote) {
               i += 2;  // escaped `` inside a quoted identifier
             } else {
               closed = true;
@@ -257,6 +268,7 @@ static bool identifier_raw_span(const ObString &sql, const ParseNode *ident,
             i += 1;
           }
         }
+
         if (closed) {
           off = start;
           len = i - start + 1;
@@ -305,6 +317,232 @@ static int add_ident_span(const ObString &sql, const ParseNode *ident,
   return ret;
 }
 
+struct ObOutlineLockingTable
+{
+  ObString database_name_;
+  ObString object_name_;
+  TO_STRING_KV(K_(database_name), K_(object_name));
+};
+
+static ObString locking_identifier(const ParseNode *node)
+{
+  ObString name;
+
+  if (nullptr != node && T_IDENT == node->type_ && nullptr != node->str_value_) {
+    name.assign_ptr(node->str_value_, node->str_len_);
+  }
+
+  return name;
+}
+
+static int collect_locking_tables(const ParseNode *from_node,
+                                 ObSQLSessionInfo &session,
+                                 ObSchemaGetterGuard *schema_guard,
+                                 ObIArray<ObOutlineLockingTable> &tables)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uintptr_t, 16> worklist;
+  int64_t visited = 0;
+  const int64_t MAX_VISIT = 1 << 20;
+
+  if (nullptr != from_node && OB_FAIL(worklist.push_back(reinterpret_cast<uintptr_t>(from_node)))) {
+    LOG_WARN("failed to add FROM node", K(ret));
+  }
+
+  while (OB_SUCC(ret) && !worklist.empty()) {
+    uintptr_t raw_node = 0;
+
+    if (OB_FAIL(worklist.pop_back(raw_node))) {
+      LOG_WARN("failed to pop FROM node", K(ret));
+    } else {
+      const ParseNode *node = reinterpret_cast<const ParseNode *>(raw_node);
+
+      if (++visited > MAX_VISIT || OB_ISNULL(node) ||
+          (node->num_child_ > 0 && OB_ISNULL(node->children_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid FROM tree for locking clause", K(ret), K(visited), K(node));
+      } else if (T_JOINED_TABLE == node->type_) {
+        if (node->num_child_ < 3 || OB_ISNULL(node->children_[0]) ||
+            OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid joined table node", K(ret));
+        } else {
+          const bool right_join = T_JOIN_RIGHT == node->children_[0]->type_;
+          const ParseNode *first = node->children_[right_join ? 2 : 1];
+          const ParseNode *second = node->children_[right_join ? 1 : 2];
+
+          // Match the resolver's RIGHT JOIN order without entering ON expressions.
+          if (OB_FAIL(worklist.push_back(reinterpret_cast<uintptr_t>(second)))) {
+            LOG_WARN("failed to add second join operand", K(ret));
+          } else if (OB_FAIL(worklist.push_back(reinterpret_cast<uintptr_t>(first)))) {
+            LOG_WARN("failed to add first join operand", K(ret));
+          }
+        }
+      } else if (T_FROM_LIST == node->type_ || T_TABLE_REFERENCES == node->type_ || T_LINK_NODE == node->type_) {
+        for (int64_t i = node->num_child_ - 1; OB_SUCC(ret) && i >= 0; --i) {
+          if (nullptr != node->children_[i] &&
+              OB_FAIL(worklist.push_back(reinterpret_cast<uintptr_t>(node->children_[i])))) {
+            LOG_WARN("failed to add FROM item", K(ret));
+          }
+        }
+      } else {
+        ObOutlineLockingTable table;
+        const ParseNode *relation = node;
+
+        if ((T_ALIAS == node->type_ || T_ORG == node->type_) && node->num_child_ > 0) {
+          relation = node->children_[0];
+          if (T_ALIAS == node->type_ && node->num_child_ > 1) {
+            table.object_name_ = locking_identifier(node->children_[1]);
+          }
+        }
+
+        if (nullptr != relation && T_RELATION_FACTOR == relation->type_ &&
+            relation->num_child_ >= 2 && nullptr != relation->children_) {
+          table.database_name_ = locking_identifier(relation->children_[0]);
+          if (table.database_name_.empty()) {
+            const ParseNode *dblink = relation->num_child_ > 2 ? relation->children_[2] : nullptr;
+
+            if (nullptr == dblink) {
+              table.database_name_ = session.get_database_name();
+            } else if (T_DBLINK_NAME != dblink->type_ || dblink->num_child_ != 2 ||
+                       OB_ISNULL(dblink->children_) || OB_ISNULL(dblink->children_[0]) ||
+                       OB_ISNULL(dblink->children_[0]->str_value_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid DBLink context for locking table", K(ret));
+            } else {
+              const ParseNode *name_node = dblink->children_[0];
+              const ObString dblink_name(name_node->str_len_, name_node->str_value_);
+              const ObDbLinkSchema *dblink_schema = nullptr;
+
+              if (OB_FAIL(schema_guard->get_dblink_schema(session.get_effective_tenant_id(),
+                                                          dblink_name, dblink_schema))) {
+                LOG_WARN("failed to get DBLink schema for locking table", K(ret), K(dblink_name));
+              } else if (OB_ISNULL(dblink_schema)) {
+                ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
+                LOG_WARN("DBLink schema is missing for locking table", K(ret), K(dblink_name));
+              } else {
+                table.database_name_ = dblink_schema->get_database_name();
+              }
+            }
+          }
+
+          if (OB_SUCC(ret) && table.object_name_.empty()) {
+            table.object_name_ = locking_identifier(relation->children_[1]);
+          }
+        }
+
+        // Derived tables occupy one FROM position; their inner query is a separate namespace.
+        if (OB_SUCC(ret) && OB_FAIL(tables.push_back(table))) {
+          LOG_WARN("failed to add locking table reference", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+static int add_locking_target_spans(const ObString &sql,
+                                   const ParseNode &select_node,
+                                   ObSQLSessionInfo *session,
+                                   ObIAllocator &allocator,
+                                   ObIArray<ObSigReplaceSpan> &spans,
+                                   ObSchemaGetterGuard *schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *clauses = select_node.children_[PARSE_SELECT_FOR_UPD];
+  ObSEArray<ObOutlineLockingTable, 16> tables;
+  bool collected_tables = false;
+
+  if (OB_ISNULL(clauses) || T_FOR_UPDATE_LIST != clauses->type_ || OB_ISNULL(clauses->children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid locking clause list for template signature", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < clauses->num_child_; ++i) {
+    const ParseNode *clause = clauses->children_[i];
+    const ParseNode *of_node = NULL;
+
+    if (OB_ISNULL(clause) || T_FOR_UPDATE != clause->type_ ||
+        clause->num_child_ != 2 || OB_ISNULL(clause->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid locking clause for template signature", K(ret));
+    } else if (NULL == (of_node = clause->children_[0])) {
+      // A default-scope clause has no identifier spans.
+    } else if (T_TABLE_LIST != of_node->type_ || OB_ISNULL(of_node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid locking table list for template signature", K(ret));
+    } else {
+      if (!collected_tables) {
+        if (OB_FAIL(collect_locking_tables(select_node.children_[PARSE_SELECT_FROM],
+                                          *session, schema_guard, tables))) {
+          LOG_WARN("failed to collect current query block tables", K(ret));
+        } else {
+          collected_tables = true;
+        }
+      }
+
+      for (int64_t j = 0; OB_SUCC(ret) && j < of_node->num_child_; ++j) {
+        const ParseNode *target = of_node->children_[j];
+
+        if (OB_ISNULL(target) || T_RELATION_FACTOR != target->type_ ||
+            target->num_child_ < 2 || OB_ISNULL(target->children_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid locking target for template signature", K(ret));
+        } else {
+          const ObString database_name = locking_identifier(target->children_[0]);
+          const ObString object_name = locking_identifier(target->children_[1]);
+          int64_t position = -1;
+
+          if (object_name.empty()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("empty locking target for template signature", K(ret));
+          }
+
+          for (int64_t k = 0; OB_SUCC(ret) && position < 0 && k < tables.count(); ++k) {
+            const ObOutlineLockingTable &table = tables.at(k);
+            bool matches = true;
+
+            if (!database_name.empty() &&
+                OB_FAIL(ObResolverUtils::name_case_cmp(session, database_name, table.database_name_,
+                                                     OB_TABLE_NAME_CLASS, matches))) {
+              LOG_WARN("failed to compare locking database names", K(ret));
+            } else if (matches &&
+                       OB_FAIL(ObResolverUtils::name_case_cmp(session, object_name, table.object_name_,
+                                                            OB_TABLE_NAME_CLASS, matches))) {
+              LOG_WARN("failed to compare locking object names", K(ret));
+            } else if (matches) {
+              position = k;
+            }
+          }
+
+          if (OB_SUCC(ret)) {
+            ObSqlString replacement;
+            ObString owned_replacement;
+
+            if (position < 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unresolved locking target for template signature", K(ret), K(database_name), K(object_name));
+            } else if (OB_FAIL(replacement.assign_fmt(database_name.empty() ? "`*`.`__ob_lock_%ld`" : "`__ob_lock_%ld`",
+                                                     position + 1))) {
+              LOG_WARN("failed to format locking target position", K(ret));
+            } else if (OB_FAIL(ob_write_string(allocator, replacement.string(), owned_replacement))) {
+              LOG_WARN("failed to copy locking target replacement", K(ret));
+            } else if (!database_name.empty() &&
+                       OB_FAIL(add_ident_span(sql, target->children_[0], ObString::make_string("`*`"), spans))) {
+              LOG_WARN("failed to add locking database span", K(ret));
+            } else if (OB_FAIL(add_ident_span(sql, target->children_[1], owned_replacement, spans))) {
+              LOG_WARN("failed to add locking table span", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 // Collect SQL text spans to wildcard for template signature generation, in a
 // single DFS. Every relation-factor table (including CTE references) normalizes
 // to `*`.`*`, and every column-ref table/db qualifier is wildcarded too. No name
@@ -312,9 +550,13 @@ static int add_ident_span(const ObString &sql, const ParseNode *ident,
 // qualifier, so both CREATE and MATCH transform identically (byte-symmetric), and
 // the FROM-clause position guard (ast_position) does the real physical-table
 // disambiguation at match time. The column name itself is never touched.
+// MySQL OF targets retain their query-block FROM positions to distinguish lock scopes.
 static int collect_wildcard_spans_dfs(const ObString &sql,
                                       const ParseNode *node,
-                                      ObIArray<ObSigReplaceSpan> &spans)
+                                      ObSQLSessionInfo *session,
+                                      ObIAllocator &allocator,
+                                      ObIArray<ObSigReplaceSpan> &spans,
+                                      ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   // Keep wildcarded SQL parseable by quoting the identifiers with the mode's
@@ -361,6 +603,8 @@ static int collect_wildcard_spans_dfs(const ObString &sql,
         // skip null child
       } else if (is_hint_subtree_root(cur)) {
         // ignore hint-only subtrees
+      } else if (T_FOR_UPDATE_LIST == cur->type_) {
+        // OF spans are normalized to FROM positions by their owning SELECT.
       } else if (T_RELATION_FACTOR == cur->type_) {
         const ParseNode *db_node = cur->num_child_ > 0 ? cur->children_[0] : NULL;
         const ParseNode *tbl_node = cur->num_child_ > 1 ? cur->children_[1] : NULL;
@@ -398,6 +642,12 @@ static int collect_wildcard_spans_dfs(const ObString &sql,
         }
         // column child (children_[2]) is never wildcarded; do not push it
       } else {
+        if (T_SELECT == cur->type_ && !is_oracle && cur->num_child_ > PARSE_SELECT_FOR_UPD &&
+            nullptr != cur->children_ && nullptr != cur->children_[PARSE_SELECT_FOR_UPD] &&
+            OB_FAIL(add_locking_target_spans(sql, *cur, session, allocator, spans, schema_guard))) {
+          LOG_WARN("failed to add locking target spans", K(ret));
+        }
+
         // push children in reverse so they are visited left-to-right (cosmetic;
         // order does not affect the signature because spans are sorted by offset)
         for (int64_t i = cur->num_child_ - 1; OB_SUCC(ret) && i >= 0; --i) {
@@ -471,17 +721,22 @@ int ObOutlineTemplateMatcher::generate_template_signature_from_parse_tree(
     ObSQLSessionInfo *session,
     ObIAllocator &allocator,
     bool need_format,
-    ObString &template_signature)
+    ObString &template_signature,
+    ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
+
   template_signature.reset();
-  if (OB_ISNULL(stmt_node) || OB_ISNULL(session) || sql_text.empty()) {
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("schema guard is required for parse-tree signature", K(ret));
+  } else if (OB_ISNULL(stmt_node) || OB_ISNULL(session) || sql_text.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null param for parse-tree signature", K(ret), KP(stmt_node), KP(session),
              K(sql_text.length()));
   } else {
     ObSEArray<ObSigReplaceSpan, 16> spans;
-    if (OB_FAIL(collect_wildcard_spans_dfs(sql_text, stmt_node, spans))) {
+    if (OB_FAIL(collect_wildcard_spans_dfs(sql_text, stmt_node, session, allocator, spans, schema_guard))) {
       LOG_WARN("failed to collect wildcard spans", K(ret));
     } else if (OB_FAIL(apply_spans_and_get_key(sql_text, spans, session, allocator,
                                                need_format, template_signature))) {
@@ -501,7 +756,8 @@ static int generate_signature_from_parse_result(const ParseResult *parse_result,
                                                 ObSQLSessionInfo *session,
                                                 ObIAllocator &allocator,
                                                 bool need_format,
-                                                ObString &template_signature)
+                                                ObString &template_signature,
+                                                ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   template_signature.reset();
@@ -514,7 +770,7 @@ static int generate_signature_from_parse_result(const ParseResult *parse_result,
                       parse_result->input_sql_);
     ret = ObOutlineTemplateMatcher::generate_template_signature_from_parse_tree(
         sql_text, parse_result->result_tree_->children_[0], session,
-        allocator, need_format, template_signature);
+        allocator, need_format, template_signature, schema_guard);
   }
   return ret;
 }
@@ -947,7 +1203,7 @@ int ObOutlineTemplateMatcher::try_gen_template_signature(
   ObSqlCtx &sql_ctx = pc_ctx.sql_ctx_;
   ObSQLSessionInfo *session = sql_ctx.session_info_;
   ParseResult *parse_result = sql_ctx.outline_match_parse_result_;
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(sql_ctx.schema_guard_)) {
     // missing context: leave signature empty
   } else if (session->is_real_inner_session()) {
     // skip background inner SQL (e.g. WR snapshots); use is_real_inner_session()
@@ -962,7 +1218,7 @@ int ObOutlineTemplateMatcher::try_gen_template_signature(
     ObString template_signature;
     if (OB_SUCCESS == generate_signature_from_parse_result(
             parse_result, session, pc_ctx.allocator_, false/*need_format*/,
-            template_signature)
+            template_signature, sql_ctx.schema_guard_)
         && !template_signature.empty()) {
       pc_ctx.outline_match_template_signature_ = template_signature;
     }
@@ -1006,7 +1262,7 @@ int ObOutlineTemplateMatcher::try_match_template_outline(
       // Generate template signature via parse-tree text surgery (no resolve).
       ObString template_signature;
       int ast_ret = generate_signature_from_parse_result(
-          parse_result, session, pc_ctx.allocator_, false/*need_format*/, template_signature);
+          parse_result, session, pc_ctx.allocator_, false/*need_format*/, template_signature, schema_guard);
       LOG_DEBUG("[OUTLINE] generated template signature", K(ast_ret), K(template_signature));
       if (OB_SUCCESS == ast_ret) {
         pc_ctx.outline_match_template_signature_ = template_signature;

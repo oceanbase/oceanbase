@@ -102,6 +102,9 @@ public:
    * become wildcards, aliases are preserved), then fast-parameterizes via
    * get_outline_key. Shared by creation and matching phases so signatures are
    * byte-symmetric. stmt_node's identifier offsets MUST be relative to sql_text.
+   * MySQL OF targets normalize to their current query block's FROM positions,
+   * preserving which table each locking clause references across table patterns.
+   * schema_guard must be non-null to resolve the default database of DBLink FROM items.
    */
   static int generate_template_signature_from_parse_tree(
       const common::ObString &sql_text,
@@ -109,7 +112,8 @@ public:
       ObSQLSessionInfo *session,
       common::ObIAllocator &allocator,
       bool need_format,
-      common::ObString &template_signature);
+      common::ObString &template_signature,
+      share::schema::ObSchemaGetterGuard *schema_guard);
 
   /**
    * Generic AST DFS: traverse the statement parse tree, collect real
@@ -118,6 +122,7 @@ public:
    * Works for any statement type (SELECT/UPDATE/DELETE/INSERT/MERGE).
    * Both creation and matching phases call this function to ensure
    * symmetric table ordering.
+   * MySQL locking-clause subtrees also refer to existing FROM tables and are skipped.
    */
   static int collect_table_names_dfs(
       const ParseNode *node,

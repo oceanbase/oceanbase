@@ -779,19 +779,98 @@ int ObSelectStmtPrinter::print_for_update()
         }
       }
     }
-  } else {
-    const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt*>(stmt_);
-    if (select_stmt->get_table_size() > 0) {
-      const TableItem *table_item = select_stmt->get_table_item(0);
-      if (OB_ISNULL(table_item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table item is NULL", K(ret));
-      } else if (table_item->for_update_) {
-        DATA_PRINTF(" for update");
-        if (OB_SUCC(ret) && table_item->for_update_wait_us_ > 0) {
-          DATA_PRINTF(" wait %lld", table_item->for_update_wait_us_ / 1000000LL);
+  } else if (OB_FAIL(print_for_update_mysql())) {
+    LOG_WARN("failed to print mysql locking clauses", K(ret));
+  }
+
+  return ret;
+}
+
+int ObSelectStmtPrinter::print_for_update_mysql()
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(stmt_);
+  ObSEArray<const TableItem *, 4> lock_tables;
+  bool covers_default_scope = true;
+  bool same_wait_option = true;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+    const TableItem *table = select_stmt->get_table_item(i);
+
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i));
+    } else if (table->for_update_) {
+      if (!table->is_basic_table()) {
+        covers_default_scope = false;
+      }
+
+      if (!lock_tables.empty() &&
+          (table->for_update_wait_us_ != lock_tables.at(0)->for_update_wait_us_ ||
+           table->skip_locked_ != lock_tables.at(0)->skip_locked_)) {
+        same_wait_option = false;
+      }
+
+      if (OB_FAIL(lock_tables.push_back(table))) {
+        LOG_WARN("failed to add locking table", K(ret));
+      }
+    } else if (table->is_basic_table() || table->is_link_table()) {
+      covers_default_scope = false;
+    }
+  }
+
+  const bool need_of = !covers_default_scope || !same_wait_option;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < lock_tables.count(); ++i) {
+    const TableItem *group_table = lock_tables.at(i);
+    bool printed = false;
+
+    for (int64_t j = 0; !printed && j < i; ++j) {
+      printed = group_table->for_update_wait_us_ == lock_tables.at(j)->for_update_wait_us_ &&
+                group_table->skip_locked_ == lock_tables.at(j)->skip_locked_;
+    }
+
+    if (!printed) {
+      DATA_PRINTF(" for update");
+      if (need_of) {
+        bool first_table = true;
+
+        DATA_PRINTF(" of ");
+        for (int64_t j = i; OB_SUCC(ret) && j < lock_tables.count(); ++j) {
+          const TableItem *table_item = lock_tables.at(j);
+
+          if (group_table->for_update_wait_us_ == table_item->for_update_wait_us_ &&
+              group_table->skip_locked_ == table_item->skip_locked_) {
+            if (!first_table) {
+              DATA_PRINTF(", ");
+            }
+
+            // Equal aliases in different databases still need a qualifier.
+            if (!table_item->database_name_.empty()) {
+              PRINT_IDENT_WITH_QUOT(table_item->database_name_);
+              DATA_PRINTF(".");
+            }
+
+            PRINT_IDENT_WITH_QUOT(table_item->get_object_name());
+            first_table = false;
+          }
         }
-      } else { /*do nothing*/ }
+      }
+
+      if (group_table->skip_locked_) {
+        DATA_PRINTF(" skip locked");
+      } else if (0 == group_table->for_update_wait_us_) {
+        DATA_PRINTF(" nowait");
+      } else if (group_table->for_update_wait_us_ > 0) {
+        const int64_t seconds = group_table->for_update_wait_us_ / 1000000;
+        const int64_t microseconds = group_table->for_update_wait_us_ % 1000000;
+
+        if (0 == microseconds) {
+          DATA_PRINTF(" wait %ld", seconds);
+        } else {
+          DATA_PRINTF(" wait %ld.%06ld", seconds, microseconds);
+        }
+      }
     }
   }
 

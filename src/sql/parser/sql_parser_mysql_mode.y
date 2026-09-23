@@ -435,6 +435,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> with_select with_clause with_list common_table_expr opt_column_alias_name_list alias_name_list column_alias_name
 %type <node> opt_where opt_hint_value opt_groupby opt_rollup opt_order_by order_by opt_having groupby_clause order_by_opt_null
 %type <node> opt_limit_clause limit_expr opt_lock_type opt_for_update opt_for_update_wait opt_lock_in_share_mode
+%type <node> locking_clause_list locking_clause opt_for_update_of locking_table_list locking_table
 %type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id sort_list_opt_null sort_key_opt_null opt_asc_desc_null grouping_sets_clause grouping_sets_list grouping_sets rollup_clause cube_clause gs_group_by_expr gs_group_by_expr_list
 %type <node> opt_query_expression_option_list query_expression_option_list query_expression_option opt_distinct opt_distinct_or_all opt_separator projection
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
@@ -12193,7 +12194,25 @@ select_clause opt_lock_type
 opt_lock_type:
 /* EMPTY */
 { $$ = NULL; }
-| opt_for_update
+| locking_clause_list
+{
+  merge_nodes($$, result, T_FOR_UPDATE_LIST, $1);
+}
+;
+
+locking_clause_list:
+locking_clause
+{
+  $$ = $1;
+}
+| locking_clause_list locking_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+locking_clause:
+opt_for_update
 {
   $$ = $1;
 }
@@ -14147,17 +14166,71 @@ opt_limit_clause:
 ;
 
 opt_for_update:
-FOR UPDATE opt_for_update_wait
+FOR UPDATE opt_for_update_of opt_for_update_wait
 {
-  $$ = $3;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FOR_UPDATE, 2, $3, $4);
+}
+| FOR SHARE opt_for_update_of opt_for_update_wait
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FOR_UPDATE, 2, $3, $4);
+}
+;
+
+opt_for_update_of:
+/* EMPTY */
+{ $$ = NULL; }
+| OF locking_table_list
+{
+  merge_nodes($$, result, T_TABLE_LIST, $2);
+}
+;
+
+locking_table_list:
+locking_table
+{
+  $$ = $1;
+}
+| locking_table_list ',' locking_table
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+locking_table:
+relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, NULL, $1);
+  dup_node_string($1, $$, result->malloc_pool_);
+}
+| relation_name '.' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, $3);
+  dup_node_string($3, $$, result->malloc_pool_);
+}
+| relation_name '.' mysql_reserved_keyword
+{
+  ParseNode *table_name = NULL;
+  get_non_reserved_node(table_name, result->malloc_pool_, @3.first_column, @3.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, table_name);
+  dup_node_string(table_name, $$, result->malloc_pool_);
+}
+| id_dot_id
+{
+  ParseNode *db_name = $1->children_[0];
+  ParseNode *table_name = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, db_name, table_name);
+  dup_node_string(table_name, $$, result->malloc_pool_);
 }
 ;
 
 opt_lock_in_share_mode:
 LOCK_ IN SHARE MODE
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_SFU_INT);
-  $$->value_ = -1;
+  ParseNode *wait_node = NULL;
+  malloc_terminal_node(wait_node, result->malloc_pool_, T_SFU_INT);
+  wait_node->value_ = -1;
+  wait_node->is_hidden_const_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FOR_UPDATE, 2, NULL, wait_node);
 }
 ;
 

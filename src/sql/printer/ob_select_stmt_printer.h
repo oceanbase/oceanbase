@@ -76,6 +76,7 @@ private:
   int print_having();
   int print_order_by();
   int print_for_update();
+  int print_for_update_mysql();
 
   ///////cte related functions
   int print_rollup_items(const common::ObIArray<ObRollupItem> &rollup_items);

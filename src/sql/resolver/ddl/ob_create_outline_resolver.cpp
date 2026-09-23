@@ -877,6 +877,8 @@ int ObCreateOutlineResolver::expand_fixed_mappings(
 int ObCreateOutlineResolver::generate_template_signature(ObCreateOutlineStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = nullptr == schema_checker_ ? nullptr : schema_checker_->get_schema_guard();
+
   if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid context for template signature generation",
@@ -905,7 +907,7 @@ int ObCreateOutlineResolver::generate_template_signature(ObCreateOutlineStmt &st
         LOG_WARN("invalid parse result for outline sql", K(ret), K(outline_sql));
       } else if (OB_FAIL(ObOutlineTemplateMatcher::generate_template_signature_from_parse_tree(
                      outline_sql, parse_result.result_tree_->children_[0], session_info_,
-                     stmt.get_stmt_allocator(), false/*need_format*/, sig))) {
+                     stmt.get_stmt_allocator(), false/*need_format*/, sig, schema_guard))) {
         LOG_WARN("failed to generate template signature from parse tree", K(ret));
       } else if (sig.empty()) {
         ret = OB_ERR_UNEXPECTED;

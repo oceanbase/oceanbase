@@ -1641,21 +1641,115 @@ int ObSelectResolver::resolve_for_update_clause(const ParseNode *node)
 int ObSelectResolver::resolve_for_update_clause_mysql(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
-  ObSelectStmt *select_stmt = NULL;
-  int64_t wait_us = -1;
-  bool skip_locked = false;
-  if (OB_ISNULL(select_stmt = get_select_stmt())) {
+  ObSelectStmt *stmt = get_select_stmt();
+  ObSEArray<TableItem *, 4> lock_tables;
+
+  if (OB_ISNULL(stmt) || OB_ISNULL(node.children_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to get select stmt", K(ret));
-  } else if (T_SFU_INT != node.type_ && T_SFU_DECIMAL != node.type_ && T_SKIP_LOCKED != node.type_) {
+    LOG_WARN("select stmt or locking clauses is null", K(ret), K(stmt));
+  } else if (T_FOR_UPDATE_LIST != node.type_ || node.num_child_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("for update wait info is wrong", K(ret));
+    LOG_WARN("invalid locking clause list", K(ret), K(node.type_), K(node.num_child_));
+  } else if (stmt->has_vec_approx()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "FOR UPDATE with APPROXIMATE vector search is");
+    LOG_WARN("FOR UPDATE is not supported with APPROXIMATE vector search", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+    const ParseNode *clause = node.children_[i];
+    const ParseNode *of_node = NULL;
+    int64_t wait_us = -1;
+    bool skip_locked = false;
+    ObSEArray<TableItem *, 4> clause_tables;
+
+    if (OB_ISNULL(clause) || OB_ISNULL(clause->children_) ||
+        T_FOR_UPDATE != clause->type_ || clause->num_child_ != 2 ||
+        OB_ISNULL(clause->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid locking clause", K(ret), K(clause));
+    } else if (OB_FAIL(resolve_for_update_wait_mysql(*clause->children_[1], wait_us, skip_locked))) {
+      LOG_WARN("failed to resolve locking wait option", K(ret));
+    } else if (NULL == (of_node = clause->children_[0])) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < stmt->get_table_size(); ++j) {
+        TableItem *table = stmt->get_table_item(j);
+
+        if (OB_ISNULL(table)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table item is null", K(ret), K(j));
+        } else if (table->is_basic_table()) {
+          if (OB_FAIL(clause_tables.push_back(table))) {
+            LOG_WARN("failed to add locking table", K(ret));
+          }
+        } else if (table->is_link_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "SELECT FOR UPDATE on a DBLink is");
+          LOG_WARN("mysql dblink does not support select for update", K(ret));
+        }
+      }
+    } else if (T_TABLE_LIST != of_node->type_ || of_node->num_child_ <= 0 ||
+               OB_ISNULL(of_node->children_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid locking table list", K(ret), K(of_node->type_), K(of_node->num_child_));
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < of_node->num_child_; ++j) {
+        const ParseNode *table_node = of_node->children_[j];
+        TableItem *table = NULL;
+
+        if (OB_ISNULL(table_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("locking table node is null", K(ret), K(j));
+        } else if (OB_FAIL(resolve_for_update_table_mysql(*table_node, table))) {
+          LOG_WARN("failed to resolve locking table", K(ret));
+        } else if (OB_FAIL(clause_tables.push_back(table))) {
+          LOG_WARN("failed to add locking table", K(ret));
+        }
+      }
+    }
+
+    for (int64_t j = 0; OB_SUCC(ret) && j < clause_tables.count(); ++j) {
+      TableItem *table = clause_tables.at(j);
+      bool duplicate = false;
+
+      for (int64_t k = 0; !duplicate && k < lock_tables.count(); ++k) {
+        duplicate = lock_tables.at(k)->table_id_ == table->table_id_;
+      }
+
+      if (duplicate) {
+        const ObString &table_name = table->get_table_name();
+
+        ret = OB_ERR_DUPLICATE_TABLE_LOCK;
+        LOG_USER_ERROR(OB_ERR_DUPLICATE_TABLE_LOCK, LEN_AND_PTR(table_name));
+        LOG_WARN("table appears in multiple locking clauses", K(ret), K(table_name));
+      } else if (OB_FAIL(lock_tables.push_back(table))) {
+        LOG_WARN("failed to add locking table", K(ret));
+      } else {
+        table->for_update_ = true;
+        table->for_update_wait_us_ = wait_us;
+        table->skip_locked_ = skip_locked;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObSelectResolver::resolve_for_update_wait_mysql(const ParseNode &node, int64_t &wait_us, bool &skip_locked)
+{
+  int ret = OB_SUCCESS;
+
+  wait_us = -1;
+  skip_locked = false;
+
+  if (T_SFU_INT != node.type_ && T_SFU_DECIMAL != node.type_ && T_SKIP_LOCKED != node.type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("for update wait info is wrong", K(ret), K(node.type_));
   } else if (T_SFU_INT == node.type_) {
     wait_us = node.value_ < 0 ? -1 : node.value_ * 1000000LL;
   } else if (T_SFU_DECIMAL == node.type_) {
     ObString time_str(node.str_len_, node.str_value_);
-    if (OB_FAIL(ObTimeUtility2::str_to_time(
-                  time_str, wait_us, ObTimeUtility2::DIGTS_SENSITIVE))) {
+
+    if (OB_FAIL(ObTimeUtility2::str_to_time(time_str, wait_us, ObTimeUtility2::DIGTS_SENSITIVE))) {
       LOG_WARN("str to time failed", K(ret));
     }
   } else if (T_SKIP_LOCKED == node.type_) {
@@ -1663,34 +1757,107 @@ int ObSelectResolver::resolve_for_update_clause_mysql(const ParseNode &node)
     skip_locked = true;
     wait_us = 0;
   }
-  if (OB_SUCC(ret) && OB_FAIL(set_for_update_mysql(*select_stmt, wait_us, skip_locked))) {
-    LOG_WARN("failed to set for update", K(ret));
-  }
+
   return ret;
 }
 
-int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked)
+int ObSelectResolver::resolve_for_update_table_mysql(const ParseNode &node, TableItem *&table_item)
 {
   int ret = OB_SUCCESS;
-  TableItem *table_item = NULL;
-  if (stmt.has_vec_approx()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "FOR UPDATE with APPROXIMATE vector search is");
-    LOG_WARN("FOR UPDATE is not supported with APPROXIMATE vector search", K(ret));
-  }
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < stmt.get_table_size(); ++idx) {
-    if (OB_ISNULL(table_item = stmt.get_table_item(idx))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Table item is NULL", K(ret));
-    } else if (table_item->is_basic_table()) {
-      table_item->for_update_ = true;
-      table_item->for_update_wait_us_ = wait_us;
-      table_item->skip_locked_ = skip_locked;
-    } else if (table_item->is_link_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("mysql dblink not support select for update", K(ret));
+  ObSelectStmt *stmt = get_select_stmt();
+  ObString database_name;
+  ObString table_name;
+
+  table_item = NULL;
+
+  if (OB_ISNULL(stmt) || OB_ISNULL(session_info_) || OB_ISNULL(node.children_) ||
+      T_RELATION_FACTOR != node.type_ || node.num_child_ != 2 || OB_ISNULL(node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid locking table node", K(ret), K(node.type_), K(node.num_child_));
+  } else {
+    table_name.assign_ptr(node.children_[1]->str_value_, node.children_[1]->str_len_);
+    if (NULL != node.children_[0]) {
+      database_name.assign_ptr(node.children_[0]->str_value_, node.children_[0]->str_len_);
     }
   }
+
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == table_item && i < stmt->get_from_item_size(); ++i) {
+    TableItem *candidate = stmt->get_table_item(stmt->get_from_item(i));
+
+    if (OB_ISNULL(candidate)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i));
+    } else if (OB_FAIL(find_for_update_table_mysql(*candidate, database_name, table_name, table_item))) {
+      LOG_WARN("failed to find locking table", K(ret), K(database_name), K(table_name));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (NULL == table_item) {
+      ObSqlString qualified_name;
+
+      if (!database_name.empty() &&
+          OB_FAIL(qualified_name.append_fmt("%.*s.", LEN_AND_PTR(database_name)))) {
+        LOG_WARN("failed to append database name", K(ret));
+      } else if (OB_FAIL(qualified_name.append(table_name))) {
+        LOG_WARN("failed to append table name", K(ret));
+      } else {
+        ret = OB_ERR_UNRESOLVED_TABLE_LOCK;
+        LOG_USER_ERROR(OB_ERR_UNRESOLVED_TABLE_LOCK, LEN_AND_PTR(qualified_name));
+        LOG_WARN("unresolved table name in locking clause", K(ret), K(qualified_name));
+      }
+    } else if (!table_item->is_basic_table() || table_item->is_view_table_ ||
+               TableItem::NOT_CTE != table_item->cte_type_ || is_virtual_table(table_item->ref_id_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "FOR UPDATE OF on this table type is");
+      LOG_WARN("unsupported locking table", K(ret), KPC(table_item));
+    }
+  }
+
+  return ret;
+}
+
+int ObSelectResolver::find_for_update_table_mysql(TableItem &candidate,
+                                                const ObString &database_name,
+                                                const ObString &table_name,
+                                                TableItem *&table_item)
+{
+  int ret = OB_SUCCESS;
+
+  if (candidate.is_joined_table()) {
+    JoinedTable &joined_table = static_cast<JoinedTable &>(candidate);
+    // MySQL resolves RIGHT JOIN as LEFT JOIN with its operands swapped.
+    // Use the join tree so LATERAL's table insertion order cannot change OF binding.
+    TableItem *first = joined_table.is_right_join() ? joined_table.right_table_ : joined_table.left_table_;
+    TableItem *second = joined_table.is_right_join() ? joined_table.left_table_ : joined_table.right_table_;
+
+    if (OB_ISNULL(first) || OB_ISNULL(second)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("joined table child is null", K(ret), K(first), K(second));
+    } else if (OB_FAIL(SMART_CALL(find_for_update_table_mysql(*first, database_name, table_name, table_item)))) {
+      LOG_WARN("failed to find locking table in first join operand", K(ret));
+    } else if (NULL == table_item &&
+               OB_FAIL(SMART_CALL(find_for_update_table_mysql(*second, database_name, table_name, table_item)))) {
+      LOG_WARN("failed to find locking table in second join operand", K(ret));
+    }
+  } else {
+    bool matches = true;
+    const ObString &candidate_database_name =
+        candidate.is_link_table() ? candidate.link_database_name_ : candidate.database_name_;
+
+    if (!database_name.empty() &&
+        OB_FAIL(ObResolverUtils::name_case_cmp(session_info_, database_name, candidate_database_name,
+                                             OB_TABLE_NAME_CLASS, matches))) {
+      LOG_WARN("failed to compare database names", K(ret), K(database_name));
+    } else if (matches &&
+               OB_FAIL(ObResolverUtils::name_case_cmp(session_info_, table_name, candidate.get_object_name(),
+                                                    OB_TABLE_NAME_CLASS, matches))) {
+      LOG_WARN("failed to compare table names", K(ret), K(table_name));
+    } else if (matches) {
+      table_item = &candidate;
+    }
+  }
+
   return ret;
 }
 
