@@ -794,6 +794,19 @@ DEF_INT(_log_writer_parallelism, OB_TENANT_PARAMETER, "3",
        "the number of parallel log writer threads that can be used to write redo log entries to disk. ",
        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 
+
+DEF_TIME(_election_max_message_delay, OB_CLUSTER_PARAMETER, "1s",
+        "[100ms, 2500ms]",
+        "max one-way message delay assumption for the election module. "
+        "All election timing parameters are derived from it: "
+        "lease interval = 4 times this value, voting time window = 2 times, "
+        "max election cost time = 10 times, renew lease interval = min(0.5 times, 500ms), "
+        "trigger election watermark = min(this value, 1s). "
+        "It takes effect only after the server restarts. All servers in the cluster "
+        "must keep the same value, otherwise election liveness may degrade. "
+        "Range: [100ms, 2500ms]",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
 DEF_TIME(_ls_gc_wait_readonly_tx_time, OB_TENANT_PARAMETER, "24h",
         "[0s,)",
         "The maximum waiting time for residual read-only transaction before executing log stream garbage collecting。The default value is 24h. Range: [0s,  +∞)."
@@ -1822,8 +1835,9 @@ DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
     "The default value is 10. Range: [2,10000]. ",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[3s,]",
-        "The timeout before automatically degrading when arbitration member exists. Range: [3s,+∞]",
+DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[1s,]",
+        "The timeout before automatically degrading when arbitration member exists. Range: [1s,+∞]. "
+        "Values from [1s,3s) are not recommended for non-POC scenarios",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_ignore_system_memory_over_limit_error, OB_CLUSTER_PARAMETER, "False",
          "When the hold of observer tenant is over the system_memory, print ERROR with False, or WARN with True",
