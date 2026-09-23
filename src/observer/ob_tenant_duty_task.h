@@ -13,6 +13,7 @@
 #ifndef OB_TENANT_DUTY_TASK_H
 #define OB_TENANT_DUTY_TASK_H
 #include <stdint.h>
+#include "lib/atomic/ob_atomic.h"
 #include "lib/task/ob_timer.h"
 #include "lib/allocator/page_arena.h"
 #include "common/object/ob_object.h"
@@ -28,9 +29,14 @@ class ObTenantDutyTask
 public:
   int schedule(int tg_id);
   ObTenantDutyTask();
+  bool is_sys_tenant_work_area_percentage_checked() const
+  {
+    return ATOMIC_LOAD(&sys_tenant_work_area_percentage_checked_);
+  }
 private:
   void runTimerTask() override;
   void update_all_tenants();
+  int adjust_sys_tenant_work_area_percentage_(bool &is_check_finished);
 
 private:
   int read_obj(uint64_t tenant_id, share::ObSysVarClassType sys_var, common::ObObj &obj);
@@ -54,16 +60,21 @@ private:
   int update_tenant_rpc_percentage(uint64_t tenant_id);
 private:
   common::ObArenaAllocator allocator_;
+  bool sys_tenant_work_area_percentage_checked_;
 };
 
 class ObTenantSqlMemoryTimerTask : private common::ObTimerTask
 {
 public:
+  explicit ObTenantSqlMemoryTimerTask(const ObTenantDutyTask &duty_task)
+    : duty_task_(duty_task)
+  {}
   int schedule(int tg_id);
 private:
   void runTimerTask() override;
 private:
   static constexpr int64_t SCHEDULE_PERIOD = 3 * 1000L * 1000L;
+  const ObTenantDutyTask &duty_task_;
 };
 
 }  // observer

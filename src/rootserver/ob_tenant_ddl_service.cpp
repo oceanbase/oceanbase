@@ -4295,6 +4295,8 @@ int ObTenantDDLService::update_special_tenant_sys_var(
 
         OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", OB_SYS_HOST_NAME));
         SET_TENANT_VARIABLE(SYS_VAR_OB_TCP_INVITED_NODES, val_buf);
+
+        SET_TENANT_VARIABLE(SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE, "30");
       } else if (is_meta_tenant(tenant_id)) {
         ObString compatibility_mode("0");
         SET_TENANT_VARIABLE(SYS_VAR_OB_COMPATIBILITY_MODE, compatibility_mode);
