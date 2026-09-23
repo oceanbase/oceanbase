@@ -1700,6 +1700,69 @@ int ObTransformUtils::is_expr_query(const ObSelectStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::check_query_from_dual(const ObSelectStmt *stmt,
+                                           bool &query_from_dual)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt *, 4> child_stmts;
+  query_from_dual = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt));
+  } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else if (stmt->get_table_items().count() == 0 && child_stmts.count() == 0) {
+    query_from_dual = true;
+  } else {
+    bool temp_flag = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count() && temp_flag; i++) {
+      TableItem *table_item = stmt->get_table_items().at(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(table_item));
+      } else if (!(table_item->is_temp_table() || table_item->is_generated_table())) {
+        temp_flag = false;
+      } else if (table_item->is_temp_table()) {
+        // get_child_stmts() does not include queries referenced by temporary tables.
+        ObSelectStmt *temp_stmt = NULL;
+        if (OB_ISNULL(temp_stmt = table_item->ref_query_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret), K(temp_stmt));
+        } else if (temp_stmt->has_recursive_cte()) {
+          temp_flag = false;
+        } else if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
+          LOG_WARN("failed to push back stmt", K(ret));
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count() && temp_flag; i++) {
+      ObSelectStmt *child_stmt = child_stmts.at(i);
+      temp_flag = false;
+      if (OB_FAIL(SMART_CALL(check_query_from_dual(child_stmt, temp_flag)))) {
+        LOG_WARN("failed to check query from dual", K(ret));
+      }
+    }
+    query_from_dual = temp_flag;
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_union_from_dual(const ObSelectStmt *stmt,
+                                           bool &is_union_from_dual)
+{
+  int ret = OB_SUCCESS;
+  is_union_from_dual = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  } else if (ObSelectStmt::UNION != stmt->get_set_op()) {
+    // do nothing
+  } else if (OB_FAIL(check_query_from_dual(stmt, is_union_from_dual))) {
+    LOG_WARN("failed to check query from dual", K(ret));
+  }
+  return ret;
+}
+
 int ObTransformUtils::is_aggr_query(const ObSelectStmt *stmt,
                                     bool &is_aggr_type)
 {

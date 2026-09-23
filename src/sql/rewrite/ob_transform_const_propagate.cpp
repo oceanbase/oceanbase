@@ -824,7 +824,8 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *child_stmt = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(table)) {
+  bool is_union_from_dual = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx()) || OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(ret));
   } else if (!table->is_generated_table()) {
@@ -832,6 +833,12 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
   } else if (OB_ISNULL(child_stmt = table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid target table ref query", K(ret));
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(
+                 COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0,
+                 COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+                 COMPAT_VERSION_4_4_2_BP4, COMPAT_VERSION_4_5_0, COMPAT_VERSION_5_0_2) &&
+             OB_FAIL(ObTransformUtils::check_union_from_dual(child_stmt, is_union_from_dual))) {
+    LOG_WARN("failed to check union from dual", K(ret));
   } else {
     for (int64_t j = 0; OB_SUCC(ret) && j < child_stmt->get_select_item_size(); ++j) {
       ObRawExpr *select_expr = child_stmt->get_select_items().at(j).expr_;
@@ -855,7 +862,9 @@ int ObTransformConstPropagate::collect_equal_pair_from_pullup(ObDMLStmt *stmt,
         // it into equal_param_constraints_ in transform context to makes plan cache correct.  
         // case2: select c1 from (select 1 as c1 from t1 union select 1 as c1 from t2); =>
         //        select 1  from (select 1 as c1 from t1 union select 1 as c1 from t2);
-        if (OB_FAIL(check_set_op_expr_const(child_stmt,
+        if (is_union_from_dual) {
+          // Do not specialize value-list UNIONs or fall through to other constant pullup paths.
+        } else if (OB_FAIL(check_set_op_expr_const(child_stmt,
                                             static_cast<ObSetOpRawExpr*>(select_expr),
                                             equal_info.const_expr_,
                                             equal_info.equal_infos_))) {

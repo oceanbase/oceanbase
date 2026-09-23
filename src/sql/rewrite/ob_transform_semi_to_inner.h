@@ -118,8 +118,6 @@ private:
                            bool& need_check_cost,
                            TransformParam& trans_param);
 
-  int check_query_from_dual(ObSelectStmt *stmt, bool& query_from_dual);
-
   bool is_less_or_greater_expr(ObItemType expr_type);
 
   int check_right_exprs_unique(ObDMLStmt& stmt,

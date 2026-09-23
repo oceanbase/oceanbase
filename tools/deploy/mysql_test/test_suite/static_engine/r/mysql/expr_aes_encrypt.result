@@ -14,6 +14,7 @@ select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asd
 +------+
 Warnings:
 Warning	9721	input value for iv is not valid
+Warning	9721	input value for iv is not valid
 select hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
 +--------------------------------------------------------------------------------------------------+
 | hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')) |
@@ -306,6 +307,7 @@ select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asd
 +------+
 Warnings:
 Warning	9721	input value for iv is not valid
+Warning	9721	input value for iv is not valid
 select hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
 +--------------------------------------------------------------------------------------------------+
 | hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj')) |
@@ -597,6 +599,7 @@ select 1 as flag from dual where aes_encrypt('asdasdasdasd', '12312313123', 'asd
 |    1 |
 +------+
 Warnings:
+Warning	9721	input value for iv is not valid
 Warning	9721	input value for iv is not valid
 select hex(aes_encrypt('asdasdasdasd', '12312313123', 'asdasdkljasdkljalskdjaklsdjaklsjdaklsdjlaksdj'))  from dual;
 +--------------------------------------------------------------------------------------------------+

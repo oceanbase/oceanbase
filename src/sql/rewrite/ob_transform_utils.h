@@ -428,7 +428,14 @@ public:
    * 那么它至多返回一个值，行为类似于一个表达式
    */
   static int is_expr_query(const ObSelectStmt *stmt, bool &is_expr_type);
-  
+
+  // Set query_from_dual if stmt and its nested queries access no real tables.
+  // Returns an error for invalid statement pointers or failed child collection.
+  static int check_query_from_dual(const ObSelectStmt *stmt, bool &query_from_dual);
+
+  // Set is_union_from_dual for UNION/UNION ALL roots that satisfy check_query_from_dual.
+  static int check_union_from_dual(const ObSelectStmt *stmt, bool &is_union_from_dual);
+
   /**
    * @brief is_aggr_query
    * 如果一个查询的select item只有一项聚合函数，并且没有 group 表达式，那么该查询至多返回一个值

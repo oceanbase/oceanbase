@@ -628,7 +628,8 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_set(ObSelectStmt *stm
                                                                ObIArray<ObRawExpr *> &pullup_preds)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(stmt)) {
+  bool is_union_from_dual = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (OB_UNLIKELY(!stmt->is_set_stmt())) {
@@ -644,9 +645,17 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_set(ObSelectStmt *stm
     } else if (OB_FAIL(SMART_CALL(pullup_predicates(stmt->get_set_query(1), dummy_sels, dummy_preds)))) {
       LOG_WARN("failed to push down predicates", K(ret));
     } else {/*do nothing*/}
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(
+                 COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0,
+                 COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+                 COMPAT_VERSION_4_4_2_BP4, COMPAT_VERSION_4_5_0, COMPAT_VERSION_5_0_2) &&
+             OB_FAIL(ObTransformUtils::check_union_from_dual(stmt, is_union_from_dual))) {
+    LOG_WARN("failed to check union from dual", K(ret));
   } else {
     ObIArray<ObSelectStmt *> &child_query = stmt->get_set_query();
     const int64_t child_num = child_query.count();
+    // Avoid specializing value-list UNIONs while preserving real-table predicates.
+    const bool pullup_const_select = !is_union_from_dual;
     ObSEArray<ObRawExpr *, 16> left_output_preds;
     ObSEArray<ObRawExpr *, 16> right_output_preds;
     ObSEArray<ObRawExpr *, 16> pullup_output_preds;
@@ -672,8 +681,9 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_set(ObSelectStmt *stm
       } else if (OB_FAIL(rename_set_op_predicates(*child_query.at(i), *stmt,
                                                   right_output_preds, true))) {
         LOG_WARN("rename predicates failed", K(ret));
-      } else if (OB_FAIL(pullup_predicates_from_const_select(stmt, child_query.at(i),
-                                                             right_output_preds))) {
+      } else if (pullup_const_select &&
+                 OB_FAIL(pullup_predicates_from_const_select(stmt, child_query.at(i),
+                                                            right_output_preds))) {
         LOG_WARN("pullup preds from const select failed", K(ret));
       } else if (0 == i) {
         ret = left_output_preds.assign(right_output_preds);
