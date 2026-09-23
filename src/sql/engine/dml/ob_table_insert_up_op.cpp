@@ -2424,18 +2424,13 @@ int ObTableInsertUpOp::update_auto_increment(const ObExpr &expr,
     } else {
       CacheHandle *cache_handle = autoinc_param->cache_handle_;
       if (!OB_ISNULL(cache_handle)
-          && true == cache_handle->last_row_dup_flag_
           && 0 != cache_handle->last_value_to_confirm_) {
         // auto-increment value has been generated for this row
         if (casted_value == cache_handle->last_value_to_confirm_) {
           // column may be updated, but updated value is the same with old value
           cache_handle->last_row_dup_flag_ = false;
           cache_handle->last_value_to_confirm_ = 0;
-        } else if (cache_handle->in_range(casted_value)) {
-          // update value in generated range
-          ret = OB_ERR_AUTO_INCREMENT_CONFLICT;
-          LOG_WARN("update value in auto-generated range", K(ret), K(casted_value), KPC(cache_handle));
-        } else {
+        } else if (casted_value > cache_handle->prefetch_end_) {
           autoinc_param->value_to_sync_ = casted_value;
           autoinc_param->sync_flag_ = true;
         }
