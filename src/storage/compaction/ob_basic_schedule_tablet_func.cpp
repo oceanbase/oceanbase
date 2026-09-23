@@ -11,6 +11,7 @@
 #include "storage/compaction/ob_basic_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
+#include "storage/ob_tenant_tablet_stat_mgr.h"
 namespace oceanbase
 {
 using namespace storage;
@@ -25,16 +26,20 @@ ObBasicScheduleTabletFunc::ObBasicScheduleTabletFunc(
     ls_status_(),
     tablet_cnt_(),
     freeze_param_(),
+    clear_stat_tablets_(),
     ls_could_schedule_new_round_(false),
     ls_could_schedule_merge_(false),
     is_skip_merge_tenant_(false),
     loop_cnt_(loop_cnt)
 {
+  clear_stat_tablets_.set_attr(ObMemAttr(MTL_ID(), "BatchClearTblts"));
 }
 
 void ObBasicScheduleTabletFunc::destroy()
 {
-  schedule_freeze_dag(true/*force*/); // schedule dag before destroy
+  // flush the pending state of the last ls, which is not covered by switch_ls.
+  // called in destructor, so both the flush and its pending state must stay in base class
+  schedule_freeze_dag(true/*force*/);
 }
 
 int ObBasicScheduleTabletFunc::switch_ls(ObLSHandle &ls_handle)
@@ -95,6 +100,13 @@ void ObBasicScheduleTabletFunc::schedule_freeze_dag(const bool force)
       LOG_INFO("success to schedule batch freeze dag", KR(tmp_ret), K_(freeze_param));
     }
     freeze_param_.clear_array();
+  }
+  if (force || clear_stat_tablets_.count() > SCHEDULE_DAG_THREHOLD) {
+    if (!clear_stat_tablets_.empty()
+        && OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->batch_clear_tablet_stat(ls_status_.ls_id_, clear_stat_tablets_))) {
+      LOG_WARN_RET(tmp_ret, "failed to batch clear tablet stats", K_(ls_status));
+    }
+    clear_stat_tablets_.reset();
   }
 }
 

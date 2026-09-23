@@ -25,10 +25,8 @@ ObScheduleTabletFunc::ObScheduleTabletFunc(
   : ObBasicScheduleTabletFunc(merge_version, loop_cnt),
     tablet_status_(),
     time_guard_(),
-    clear_stat_tablets_(),
     merge_reason_(merge_reason)
 {
-  clear_stat_tablets_.set_attr(ObMemAttr(MTL_ID(), "BatchClearTblts"));
 }
 
 // when call schedule_tablet, ls status have been checked
@@ -282,18 +280,6 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
     ret = OB_NO_NEED_MERGE;
   }
   return ret;
-}
-
-void ObScheduleTabletFunc::schedule_freeze_dag(const bool force)
-{
-  int tmp_ret = OB_SUCCESS;
-  IGNORE_RETURN ObBasicScheduleTabletFunc::schedule_freeze_dag(force);
-  if (force || clear_stat_tablets_.count() > SCHEDULE_DAG_THREHOLD) {
-    if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->batch_clear_tablet_stat(ls_status_.ls_id_, clear_stat_tablets_))) {
-      LOG_WARN_RET(tmp_ret, "failed to batch clear tablet stats", K(ls_status_.ls_id_));
-    }
-    clear_stat_tablets_.reset();
-  }
 }
 
 int ObScheduleTabletFunc::diagnose_switch_tablet(

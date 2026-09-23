@@ -43,7 +43,7 @@ struct ObBasicScheduleTabletFunc
   int diagnose_switch_ls(storage::ObLSHandle &ls_handle);
 protected:
   void update_tenant_cached_status();
-  virtual void schedule_freeze_dag(const bool force);
+  void schedule_freeze_dag(const bool force);
   int check_with_schedule_scn(
     const storage::ObTablet &tablet,
     const int64_t schedule_scn,
@@ -61,6 +61,7 @@ protected:
   ObLSStatusCache ls_status_;
   ObScheduleTabletCnt tablet_cnt_;
   ObBatchFreezeTabletsParam freeze_param_;
+  ObSEArray<ObTabletID, 64> clear_stat_tablets_; // flushed in destroy() for the last ls, so it must live in base class
   bool ls_could_schedule_new_round_;
   bool ls_could_schedule_merge_;  // suspend merge OR during restore inner_table
   bool is_skip_merge_tenant_; // remote tenant OR during restore tenant with(Standby role)

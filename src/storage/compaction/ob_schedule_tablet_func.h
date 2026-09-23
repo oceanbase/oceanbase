@@ -39,7 +39,6 @@ struct ObScheduleTabletFunc final : public ObBasicScheduleTabletFunc
   INHERIT_TO_STRING_KV("ObScheduleTabletFunc", ObBasicScheduleTabletFunc,
     K_(merge_reason), K_(tablet_status), K_(time_guard));
 private:
-  virtual void schedule_freeze_dag(const bool force) override;
   int schedule_tablet_new_round(
     storage::ObTabletHandle &tablet_handle,
     const bool user_request);
@@ -52,7 +51,6 @@ private:
 private:
   ObTabletStatusCache tablet_status_;
   ObCompactionScheduleTimeGuard time_guard_;
-  ObSEArray<ObTabletID, 64> clear_stat_tablets_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
 };
 
