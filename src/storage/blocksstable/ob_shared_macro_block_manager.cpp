@@ -478,6 +478,7 @@ int ObSharedMacroBlockMgr::defragment()
         if (OB_UNLIKELY(OB_EAGAIN != ret)) {
           LOG_WARN("fail to update tablet", K(ret), K(tablet_handle), K(macro_ids));
         } else {
+          ATOMIC_SET(&need_defragment_, true);
           ret = OB_SUCCESS;
         }
       }

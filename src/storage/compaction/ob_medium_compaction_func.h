@@ -81,7 +81,8 @@ public:
     ObCompactionTimeGuard &time_guard);
   static int check_replica_checksum_items(
       const ObReplicaCkmArray &checksum_items,
-      const bool is_medium_checker);
+      const bool is_medium_checker,
+      const ObIArray<ObTabletCheckInfo> *check_infos = nullptr);
   int schedule_next_medium_for_leader(
     const int64_t major_snapshot,
     bool &medium_clog_submitted);

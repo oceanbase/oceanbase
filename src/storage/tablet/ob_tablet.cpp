@@ -1664,8 +1664,16 @@ int ObTablet::init_with_update_medium_info(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(pointer_hdl), K_(log_handler));
-  } else if (OB_FAIL(assign_memtables(old_tablet.memtables_, old_tablet.memtable_count_))) {
-    LOG_WARN("fail to assign memtables", K(ret));
+  } else {
+    common::SpinRLockGuard guard(old_tablet.memtables_lock_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("fail to lock memtables", K(ret), "tablet_id", old_tablet.get_tablet_id());
+    } else if (OB_FAIL(assign_memtables(old_tablet.memtables_, old_tablet.memtable_count_))) {
+      LOG_WARN("fail to assign memtables", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(ddl_kvs_ = static_cast<ObDDLKV **>(allocator.alloc(sizeof(ObDDLKV *) * DDL_KV_ARRAY_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ddl_kvs_", K(ret), KP(ddl_kvs_));
@@ -1838,8 +1846,16 @@ int ObTablet::init_with_replace_members(
       || OB_ISNULL(log_handler_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(pointer_hdl), K_(log_handler));
-  } else if (OB_FAIL(assign_memtables(old_tablet.memtables_, old_tablet.memtable_count_))) {
-    LOG_WARN("fail to assign memtables", K(ret));
+  } else {
+    common::SpinRLockGuard guard(old_tablet.memtables_lock_);
+    if (OB_FAIL(guard.get_ret())) {
+      LOG_WARN("fail to lock memtables", K(ret), "tablet_id", old_tablet.get_tablet_id());
+    } else if (OB_FAIL(assign_memtables(old_tablet.memtables_, old_tablet.memtable_count_))) {
+      LOG_WARN("fail to assign memtables", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(ddl_kvs_ = static_cast<ObDDLKV **>(allocator.alloc(sizeof(ObDDLKV *) * DDL_KV_ARRAY_SIZE)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ddl_kvs_", K(ret), KP(ddl_kvs_));

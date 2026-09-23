@@ -276,6 +276,43 @@ TEST_F(TestLSTabletService, test_try_update_tablet_after_persist_stale_addr)
   ASSERT_EQ(OB_SUCCESS, t3m->del_tablet(key));
 }
 
+TEST_F(TestLSTabletService, test_update_medium_compaction_info_only_clears_matching_scn)
+{
+  const ObTabletID tablet_id(10000020);
+  const ObTabletMapKey key(ls_id_, tablet_id);
+  ObLSHandle ls_handle;
+  ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
+
+  ObTabletHandle tablet_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, tablet_handle));
+  const int64_t current_medium_scn = tablet_handle.get_obj()->get_last_major_snapshot_version();
+  const int64_t mismatched_medium_scn = current_medium_scn + 1;
+  ASSERT_GT(current_medium_scn, 0);
+  tablet_handle.get_obj()->tablet_meta_.extra_medium_info_.last_compaction_type_
+      = compaction::ObMediumCompactionInfo::MEDIUM_COMPACTION;
+  tablet_handle.get_obj()->tablet_meta_.extra_medium_info_.last_medium_scn_ = current_medium_scn;
+  tablet_handle.get_obj()->tablet_meta_.extra_medium_info_.wait_check_flag_ = true;
+
+  ObTabletHandle updated_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->update_medium_compaction_info(
+      tablet_id, mismatched_medium_scn, updated_handle));
+  ASSERT_TRUE(updated_handle.is_valid());
+  EXPECT_EQ(current_medium_scn, updated_handle.get_obj()->get_last_compaction_scn());
+  EXPECT_TRUE(updated_handle.get_obj()->tablet_meta_.extra_medium_info_.wait_check_flag_);
+
+  ObTabletHandle checked_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->update_medium_compaction_info(
+      tablet_id, current_medium_scn, checked_handle));
+  ASSERT_TRUE(checked_handle.is_valid());
+  EXPECT_EQ(current_medium_scn, checked_handle.get_obj()->get_last_compaction_scn());
+  EXPECT_FALSE(checked_handle.get_obj()->tablet_meta_.extra_medium_info_.wait_check_flag_);
+
+  ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr*)->del_tablet(key));
+}
+
 void TestLSTabletService::construct_sstable(
     const ObTabletID &tablet_id,
     blocksstable::ObSSTable &sstable,
@@ -1107,6 +1144,26 @@ TEST_F(TestLSTabletService, test_update_empty_shell)
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTablet *empty_shell_tablet = tablet_handle.get_obj();
   ASSERT_TRUE(empty_shell_tablet->is_empty_shell());
+  const ObMetaDiskAddr old_addr = empty_shell_tablet->get_tablet_addr();
+  ASSERT_TRUE(old_addr.is_file());
+  tablet_handle.reset();
+
+  const ObTabletMapKey key(ls_id_, tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->refresh_empty_shell_for_slog_ckpt(
+      *MTL(ObTenantMetaMemMgr*), key, old_addr));
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(
+      tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+  ASSERT_TRUE(tablet_handle.get_obj()->is_empty_shell());
+  const ObMetaDiskAddr refreshed_addr = tablet_handle.get_obj()->get_tablet_addr();
+  ASSERT_TRUE(refreshed_addr.is_file());
+  ASSERT_NE(old_addr, refreshed_addr);
+  tablet_handle.reset();
+
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->refresh_empty_shell_for_slog_ckpt(
+      *MTL(ObTenantMetaMemMgr*), key, old_addr));
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(
+      tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+  ASSERT_EQ(refreshed_addr, tablet_handle.get_obj()->get_tablet_addr());
   tablet_handle.reset();
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);

@@ -222,6 +222,7 @@ public:
       ObTabletHandle &handle);
   int update_medium_compaction_info(
       const common::ObTabletID &tablet_id,
+      const int64_t check_medium_scn,
       ObTabletHandle &handle);
   int update_tablet_table_store( // only for small sstables defragmentation
       const ObTabletHandle &old_tablet_handle,
