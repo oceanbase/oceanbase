@@ -6805,6 +6805,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[3] = $3[0];
   $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $2[1]) { $$->is_hidden_const_ = 1; }
 }
 | float_type_i opt_float_precision opt_unsigned_i opt_zerofill_i
 {
@@ -6824,6 +6825,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->param_num_ = (-1 == $2->int16_values_[1]) ? 1 : 2;
   } else {
     $$->param_num_ = 0;
+    $$->is_hidden_const_ = 1;
   }
   $$->sql_str_off_ = @$.first_column;
 }
@@ -6839,6 +6841,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[2] = $4[0];
   $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | DECIMAL opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -6852,6 +6855,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[2] = $4[0];
   $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | FIXED opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -6865,6 +6869,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[2] = $4[0];
   $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | NUMERIC opt_number_precision opt_unsigned_i opt_zerofill_i
 {
@@ -6878,6 +6883,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[2] = $4[0];
   $$->param_num_ = (NULL != $2) ? $2->param_num_ : 0;
   $$->sql_str_off_ = $2->sql_str_off_;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | BOOL
 {
@@ -6887,6 +6893,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[2] = 0;  // zerofill always false
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
+  $$->is_hidden_const_ = 1;
 }
 | BOOLEAN
 {
@@ -6896,6 +6903,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[2] = 0; // zerofill always false
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
+  $$->is_hidden_const_ = 1;
 }
 | datetime_type_i opt_datetime_fsp_i
 {
@@ -6903,12 +6911,14 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int16_values_[1] = $2[0];
   $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | date_year_type_i
 {
   malloc_terminal_node($$, result->malloc_pool_, $1[0]);
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
+  $$->is_hidden_const_ = 1;
 }
 | CHARACTER opt_string_length_i opt_binary opt_charset
 {
@@ -6917,6 +6927,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | NCHAR opt_string_length_i opt_binary
 {
@@ -6941,6 +6952,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | NATIONAL CHARACTER opt_string_length_i opt_binary
 {
@@ -6964,6 +6976,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $3[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 
 /*  | TEXT opt_binary opt_charset
@@ -7004,6 +7017,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $3[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | NVARCHAR string_length_i opt_binary
 {
@@ -7028,6 +7042,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $2[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | NATIONAL VARCHAR string_length_i opt_binary
 {
@@ -7051,6 +7066,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $3[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | CHARACTER VARYING string_length_i opt_binary opt_charset
 {
@@ -7059,6 +7075,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $3[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | NATIONAL CHARACTER VARYING string_length_i opt_binary
 {
@@ -7082,6 +7099,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->param_num_ = $4[1];
   $$->sql_str_off_ = @1.first_column;
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | blob_type_i opt_string_length_i_v2
 {
@@ -7096,6 +7114,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = $2[1];
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | text_type_i opt_string_length_i_v2 opt_binary opt_charset
 {
@@ -7114,6 +7133,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   }
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = $2[1];
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | BINARY opt_string_length_i
 {
@@ -7125,6 +7145,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = $2[1];
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | VARBINARY string_length_i
 {
@@ -7133,6 +7154,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 1; /* is binary */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = $2[1];
+  if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
 }
 | STRING_VALUE /* wrong or unsupported data type */
 {
@@ -7141,6 +7163,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->str_len_ = $1->str_len_;
   $$->sql_str_off_ = $1->sql_str_off_;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | BIT opt_bit_length_i
 {
@@ -7153,6 +7176,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
     $$->int16_values_[0] = $2[0];
     $$->sql_str_off_ = @1.first_column;
     $$->param_num_ = $2[1];
+    if (0 == $$->param_num_) { $$->is_hidden_const_ = 1; }
   }
 }
 | ENUM '(' string_list ')' opt_binary opt_charset
@@ -7164,6 +7188,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | SET '(' string_list ')' opt_binary opt_charset
 {
@@ -7174,6 +7199,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* is char */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | JSON
 {
@@ -7181,6 +7207,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = 0; /* length */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | GEOMETRY
 {
@@ -7189,6 +7216,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 0; /* geometry, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | POINT
 {
@@ -7197,6 +7225,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 1; /* point, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | LINESTRING
 {
@@ -7205,6 +7234,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 2; /* linestring, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | POLYGON
 {
@@ -7213,6 +7243,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 3; /* polygon, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | MULTIPOINT
 {
@@ -7221,6 +7252,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 4; /* mutipoint, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | MULTILINESTRING
 {
@@ -7229,6 +7261,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 5; /* multilinestring, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | MULTIPOLYGON
 {
@@ -7237,6 +7270,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 6; /* multipolygon, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | geometry_collection
 {
@@ -7246,18 +7280,21 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[1] = 7; /* geometrycollection, geometry uses collation type value convey sub geometry type. */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | ARRAY '(' data_type ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
   $$->int32_values_[0] = 0; /* arry type */
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | ARRAY COMP_LT data_type COMP_GT
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $3);
   $$->int32_values_[0] = 0; /* arry type */
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | ARRAY COMP_LT ARRAY COMP_LT data_type SHIFT_RIGHT
 {
@@ -7267,12 +7304,14 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, inner_array);
   $$->int32_values_[0] = 0; /* arry type */
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | data_type '[' ']'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 1, $1);
   $$->int32_values_[0] = 0; /* arry type */
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | VECTOR '(' INTNUM ')'
 {
@@ -7285,12 +7324,14 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLLECTION, 2, $3, $5);
   $$->int32_values_[0] = 2; /* map type */
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | SPARSEVECTOR
 {
   malloc_terminal_node($$, result->malloc_pool_, T_COLLECTION);
   $$->int32_values_[0] = 3; /* sparse vector type */
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 | ROARINGBITMAP
 {
@@ -7298,6 +7339,7 @@ int_type_i opt_int_length_i opt_unsigned_i opt_zerofill_i
   $$->int32_values_[0] = 0; /* length */
   $$->sql_str_off_ = @1.first_column;
   $$->param_num_ = 0;
+  $$->is_hidden_const_ = 1;
 }
 ;
 
