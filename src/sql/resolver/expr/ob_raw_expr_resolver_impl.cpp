@@ -3780,6 +3780,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
           } else {
             //prepare stmt不需要type，只需要计算?的个数
+            ObRawExpr *subprogram_var = NULL;
             if (OB_SUCC(ret) && nullptr != ctx_.secondary_namespace_) {
               const pl::ObPLSymbolTable* symbol_table = NULL;
               const pl::ObPLVar* var = NULL;
@@ -3803,8 +3804,18 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                   }
                 }
               }
+              if (OB_SUCC(ret) && is_subprogram_var) {
+                // replace question mark with get_subprogram_var before call resolve_external_param_info
+                OZ (ObRawExprUtils::build_get_subprogram_var(ctx_.expr_factory_,
+                                                             cur_ns->get_package_id(),
+                                                             cur_ns->get_routine_id(),
+                                                             val.v_.unknown_,
+                                                             &c_expr->get_result_type(),
+                                                             subprogram_var,
+                                                             session_info));
+              }
             }
-            ObRawExpr *original_expr = c_expr;
+            ObRawExpr *original_expr = OB_ISNULL(subprogram_var) ? c_expr : subprogram_var;
             OZ (ObResolverUtils::resolve_external_param_info(*ctx_.external_param_info_,
                                                              *session_info,
                                                              ctx_.expr_factory_,
@@ -4060,6 +4071,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             ExternalParamInfo param_info(expr, tmp, 1); // use sub_program_expr to replace param
             OX (ctx_.external_param_info_->params_.pop_back());
             OZ (ctx_.external_param_info_->push_back(param_info));
+            OX (expr = tmp);
           }
         }
       }
