@@ -13,6 +13,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#include <functional>
+
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
@@ -40,6 +42,118 @@ bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 
 MockLocCB loc_cb;
+
+TEST_F(TestObSimpleLogClusterConfigChangeMockEle, committed_info_to_learners)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "committed_info_to_learners");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t timeout_us = 30 * 1000 * 1000L;
+  const int64_t child_idx = 3;
+  const int64_t direct_child_idx = 4;
+  int64_t leader_idx = OB_INVALID_INDEX;
+  PalfHandleImplGuard leader;
+  std::vector<PalfHandleImplGuard*> palf_list;
+  const ObRegion leader_region("region1"), follower_region("region2"), child_region("region3");
+  const ObRegion default_region(DEFAULT_REGION_NAME);
+  auto wait_until = [&](const std::function<bool()> &ready) {
+    const int64_t deadline = ObTimeUtility::current_time() + timeout_us;
+    bool done = ready();
+    while (!done && ObTimeUtility::current_time() < deadline) {
+      ob_usleep(10 * 1000);
+      done = ready();
+    }
+    return done;
+  };
+  DEFER({
+    for (int64_t i = 0; i < node_cnt_; ++i) {
+      unblock_pcode(i, ObRpcPacketCode::OB_LOG_FETCH_REQ);
+      // Restore the fixture's initial region map for the next case.
+      if (i < member_cnt_) {
+        EXPECT_EQ(OB_SUCCESS, get_cluster()[0]->get_locality_manager()->set_server_region(
+            get_cluster()[i]->get_addr(), default_region));
+      } else {
+        const int ret = member_region_map_.erase_refactored(get_cluster()[i]->get_addr());
+        EXPECT_TRUE(OB_SUCCESS == ret || OB_HASH_NOT_EXIST == ret);
+      }
+    }
+    leader.reset();
+    revert_cluster_palf_handle_guard(palf_list);
+  });
+  // Block fetch before creating the LS, so no old fetch can carry committed info.
+  for (int64_t i = 0; i < node_cnt_; ++i) {
+    block_pcode(i, ObRpcPacketCode::OB_LOG_FETCH_REQ);
+  }
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_mock_election(id, leader_idx, leader));
+  ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  ASSERT_EQ(node_cnt_, palf_list.size());
+  const int64_t follower_idx = (leader_idx + 1) % member_cnt_;
+  const ObAddr follower_addr = get_cluster()[follower_idx]->get_addr();
+  for (int64_t i = 0; i < node_cnt_; ++i) {
+    ASSERT_TRUE(NULL != palf_list[i]);
+    ASSERT_TRUE(NULL != palf_list[i]->palf_handle_impl_);
+    const ObRegion &region = i == direct_child_idx ? child_region :
+        (i == follower_idx || i == child_idx ? follower_region : leader_region);
+    ASSERT_EQ(OB_SUCCESS, get_cluster()[0]->get_locality_manager()->set_server_region(
+        get_cluster()[i]->get_addr(), region));
+    ASSERT_EQ(OB_SUCCESS, palf_list[i]->palf_handle_impl_->update_self_region_());
+  }
+  for (int64_t i = child_idx; i <= direct_child_idx; ++i) {
+    ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(
+        ObMember(get_cluster()[i]->get_addr(), 1), timeout_us));
+  }
+  auto child_ready = [&](const int64_t child, const int64_t parent) {
+    ObAddr parent_addr;
+    LogLearnerList children;
+    auto &config = palf_list[child]->palf_handle_impl_->config_mgr_;
+    {
+      ObSpinLockGuard guard(config.parent_lock_);
+      parent_addr = config.parent_;
+    }
+    return parent_addr == get_cluster()[parent]->get_addr() &&
+        OB_SUCCESS == palf_list[parent]->palf_handle_impl_->config_mgr_.get_log_sync_children_list(children) &&
+        children.contains(get_cluster()[child]->get_addr());
+  };
+  ASSERT_TRUE(wait_until([&]() {
+    return child_ready(child_idx, follower_idx) && child_ready(direct_child_idx, leader_idx);
+  }));
+  const LSN before_lsn = leader.palf_handle_impl_->get_max_lsn();
+  ASSERT_EQ(before_lsn, leader.palf_handle_impl_->get_end_lsn());
+  // Hold remote ACKs until the only appended log has reached every test replica.
+  block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+  block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
+  DEFER({
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
+  });
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 1024));
+  const LSN target_lsn = leader.palf_handle_impl_->get_max_lsn();
+  ASSERT_GT(target_lsn, before_lsn);
+  ASSERT_TRUE(wait_until([&]() {
+    bool flushed = true;
+    LSN end_lsn;
+    for (int64_t i = 0; i <= direct_child_idx && flushed; ++i) {
+      palf_list[i]->palf_handle_impl_->sw_.get_max_flushed_end_lsn(end_lsn);
+      flushed = end_lsn == target_lsn;
+    }
+    return flushed;
+  }));
+  ASSERT_EQ(before_lsn, leader.palf_handle_impl_->get_end_lsn());
+  ASSERT_EQ(before_lsn, palf_list[child_idx]->palf_handle_impl_->get_end_lsn());
+  ASSERT_EQ(before_lsn, palf_list[direct_child_idx]->palf_handle_impl_->get_end_lsn());
+  // Admit one real follower's flushed LSN through the normal ACK handler.
+  ASSERT_EQ(OB_SUCCESS, leader.palf_handle_impl_->ack_log(follower_addr,
+      leader.palf_handle_impl_->state_mgr_.get_proposal_id(), target_lsn));
+  EXPECT_TRUE(wait_until([&]() {
+    return palf_list[child_idx]->palf_handle_impl_->get_end_lsn() == target_lsn &&
+        palf_list[direct_child_idx]->palf_handle_impl_->get_end_lsn() == target_lsn;
+  }));
+  EXPECT_EQ(target_lsn, leader.palf_handle_impl_->get_end_lsn());
+  EXPECT_EQ(target_lsn, palf_list[child_idx]->palf_handle_impl_->get_end_lsn());
+  EXPECT_EQ(target_lsn, palf_list[direct_child_idx]->palf_handle_impl_->get_end_lsn());
+  for (int64_t i = 0; i <= direct_child_idx; ++i) {
+    EXPECT_EQ(target_lsn, palf_list[i]->palf_handle_impl_->get_max_lsn());
+  }
+}
 
 // switch leader after appending config log
 TEST_F(TestObSimpleLogClusterConfigChangeMockEle, switch_leader_during_removing_member1)

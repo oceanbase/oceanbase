@@ -4221,6 +4221,7 @@ int LogSlidingWindow::leader_broadcast_committed_info_(const LSN &committed_end_
   int64_t log_proposal_id = INVALID_PROPOSAL_ID;
   ObMemberList dst_member_list;
   int64_t replica_num = 0;
+  LogLearnerList children_list;
   if (OB_FAIL(leader_get_committed_log_info_(committed_end_lsn, log_id, log_proposal_id))
       || OB_INVALID_LOG_ID == log_id) {
     // no need send committed_info
@@ -4230,6 +4231,11 @@ int LogSlidingWindow::leader_broadcast_committed_info_(const LSN &committed_end_
     PALF_LOG(WARN, "dst_member_list remove_server failed", K(ret), K_(palf_id), K_(self));
   } else if (dst_member_list.is_valid()
              && OB_FAIL(log_engine_->submit_committed_info_req(dst_member_list, curr_proposal_id,
+                log_id, log_proposal_id, committed_end_lsn))) {
+    PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(log_id));
+  } else if (OB_FAIL(mm_->get_log_sync_children_list(children_list))) {
+    PALF_LOG(WARN, "get_log_sync_children_list failed", K(ret), K_(palf_id), K_(self));
+  } else if (children_list.is_valid() && OB_FAIL(log_engine_->submit_committed_info_req(children_list, curr_proposal_id,
                 log_id, log_proposal_id, committed_end_lsn))) {
     PALF_LOG(WARN, "submit_committed_info_req failed", K(ret), K_(palf_id), K_(self), K(log_id));
   } else {
