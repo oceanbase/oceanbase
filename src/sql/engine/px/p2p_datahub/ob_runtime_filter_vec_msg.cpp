@@ -217,7 +217,7 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg)
     OB_UNIS_DECODE(row_store_);
     int64_t row_cnt = row_store_.get_row_cnt();
     int64_t buckets_cnt = max(row_cnt, 1);
-    if (OB_FAIL(rows_set_.create(buckets_cnt * 2,
+    if (OB_SUCC(ret) && OB_FAIL(rows_set_.create(buckets_cnt * 2,
         "RFDEInFilter",
         "RFDEInFilter"))) {
       LOG_WARN("fail to init in hash set", K(ret));
