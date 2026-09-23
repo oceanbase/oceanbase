@@ -7201,6 +7201,8 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
       //alter column的generated column flag应该自己解析，
       //所以需要清空掉自己以前拷贝的generated column flag
       alter_column_schema.erase_generated_column_flags();
+      // CHANGE replaces the MySQL default; resolve its expression flag from the new definition.
+      alter_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
       alter_column_schema.drop_not_null_cst();
       alter_column_schema.set_tenant_id(origin_col_schema->get_tenant_id());
       alter_column_schema.set_table_id(origin_col_schema->get_table_id());
@@ -7514,6 +7516,8 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
           alter_column_schema.erase_generated_column_flags();
           alter_column_schema.erase_string_lob_flag();
           if (!is_oracle_mode()) {
+            // MySQL replaces the default, while Oracle inherits it when DEFAULT is omitted.
+            alter_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
             alter_column_schema.drop_not_null_cst();
           }
           alter_table_stmt->set_sql_mode(session_info_->get_sql_mode());

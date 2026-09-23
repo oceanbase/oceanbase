@@ -11260,6 +11260,41 @@ int ObDDLService::modify_dep_obj_status_for_alter_table(
   return ret;
 }
 
+static int defer_column_default_for_not_null_validation(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    const ObColumnSchemaV2 &orig_column_schema,
+    ObColumnSchemaV2 &new_column_schema)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()
+      && obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_
+      && !new_column_schema.is_generated_column()) {
+    const AlterTableSchema &alter_schema = alter_table_arg.alter_table_schema_;
+    bool defer_default = false;
+    for (ObTableSchema::const_constraint_iterator iter = alter_schema.constraint_begin();
+         OB_SUCC(ret) && !defer_default && iter != alter_schema.constraint_end(); ++iter) {
+      if (OB_ISNULL(*iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("constraint is null", K(ret));
+      } else if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()
+                 && (*iter)->get_need_validate_data()) {
+        if (OB_UNLIKELY(1 != (*iter)->get_column_cnt())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected not null constraint column count", K(ret), KPC(*iter));
+        } else {
+          defer_default = OB_INVALID_ID != *(*iter)->cst_col_begin();
+        }
+      }
+    }
+    if (OB_SUCC(ret) && defer_default
+        && OB_FAIL(new_column_schema.set_cur_default_value(
+            orig_column_schema.get_cur_default_value(), orig_column_schema.is_default_expr_v2_column()))) {
+      LOG_WARN("failed to preserve default during not null validation", K(ret), K(orig_column_schema));
+    }
+  }
+  return ret;
+}
+
 // update relevant inner table if both ddl_operator and trans are not null
 int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                      const AlterTableSchema &alter_table_schema,
@@ -11422,6 +11457,9 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                          ddl_operator, trans, schema_guard, global_idx_schema_array,
                          update_column_name_set, new_column_schema))) {
               LOG_WARN("prepare alter column failed", K(ret));
+            } else if (OB_FAIL(defer_column_default_for_not_null_validation(
+                         alter_table_arg, *orig_column_schema, new_column_schema))) {
+              LOG_WARN("failed to defer column default", K(ret));
             } else if (OB_FAIL(new_table_schema.alter_column(
                          new_column_schema, ObTableSchema::CHECK_MODE_ONLINE, for_view))) {
               LOG_WARN("failed to alter column", K(ret));
@@ -11544,6 +11582,9 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                           nls_formats,
                                                           allocator))) {
                 RS_LOG(WARN, "fail to resolve timestamp column", K(ret));
+              } else if (OB_FAIL(defer_column_default_for_not_null_validation(
+                           alter_table_arg, *orig_column_schema, new_column_schema))) {
+                LOG_WARN("failed to defer column default", K(ret));
               } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
                                  ObTableSchema::CHECK_MODE_ONLINE,
                                  for_view))) {
@@ -11659,7 +11700,10 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                 }
               }
               if (OB_SUCC(ret)) {
-                if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
+                if (OB_FAIL(defer_column_default_for_not_null_validation(
+                        alter_table_arg, *orig_column_schema, new_column_schema))) {
+                  LOG_WARN("failed to defer column default", K(ret));
+                } else if (OB_FAIL(new_table_schema.alter_column(new_column_schema,
                             ObTableSchema::CHECK_MODE_ONLINE,
                             for_view))) {
                   RS_LOG(WARN, "failed to change column", K(ret));
@@ -14611,8 +14655,16 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
         if (ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
             || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
           HEAP_VAR(AlterTableSchema, tmp_alter_table_schema) {
-            if (OB_FAIL(tmp_alter_table_schema.assign(alter_table_schema))) {
+            // ADD_CONSTRAINT consumes only constraints here. ALTER COLUMN carries
+            // a partial column definition which cannot be copied as a full schema.
+            if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_) {
+              if (OB_FAIL(tmp_alter_table_schema.assign_constraint(alter_table_schema))) {
+                LOG_WARN("failed to assign constraints", K(ret));
+              }
+            } else if (OB_FAIL(tmp_alter_table_schema.assign(alter_table_schema))) {
               LOG_WARN("failed to assign", K(ret));
+            }
+            if (OB_FAIL(ret)) {
             } else if (OB_FAIL(refill_column_id_array_for_constraint(alter_table_arg.alter_constraint_type_, new_table_schema, schema_guard, tmp_alter_table_schema))) {
               LOG_WARN("failed to refill columns id", K(ret));
             } else if (OB_FAIL(alter_table_constraints(
