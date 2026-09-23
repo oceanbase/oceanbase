@@ -23,6 +23,17 @@ using namespace share;
 using namespace observer;
 using namespace sqlclient;
 namespace pl {
+
+inline bool is_valid_ip(const ObString &ip)
+{
+  ObAddr addr;
+  return !ip.empty() && addr.set_ip_addr(ip, 0);
+}
+
+inline bool is_valid_sql_id(const ObString &sql_id)
+{
+  return share::schema::ObOutlineInfo::is_sql_id_valid(sql_id);
+}
 /**
  * @brief ObDbmsXplan::enable_opt_trace
  * @param ctx
@@ -252,6 +263,11 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     LOG_WARN("failed to get format", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(svr_ip))) {
     LOG_WARN("failed to get sql id", K(ret));
+  } else if (!svr_ip.empty() && !is_valid_ip(svr_ip)) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("invalid ip address", K(ret));
+    ObString msg = "svr_ip";
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
   } else if (OB_FAIL(params.at(idx++).get_number(num_val))) {
     LOG_WARN("failed to get number value", K(ret));
   } else if (OB_FAIL(num_val.cast_to_int64(svr_port))) {
@@ -262,6 +278,13 @@ int ObDbmsXplan::display_cursor(sql::ObExecContext &ctx,
     LOG_WARN("failed to cast int", K(ret));
   } else if (!use_old_params && OB_FAIL(params.at(idx++).get_varchar(sql_handle))) {
     LOG_WARN("failed to get sql string", K(ret));
+  } else if (!use_old_params &&
+             !sql_handle.empty() &&
+             !is_valid_sql_id(sql_handle)) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("invalid sql id", K(ret));
+    ObString msg = "sql_handle";
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
   } else if (!use_old_params && OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
     LOG_WARN("failed to get plan name", K(ret));
   } else if (!use_old_params && !plan_name.empty() && OB_FAIL(num_val.from(plan_name.ptr(), 
@@ -343,6 +366,11 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
     LOG_WARN("unexpect null session", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(sql_handle))) {
     LOG_WARN("failed to get sql string", K(ret));
+  } else if (!sql_handle.empty() && !is_valid_sql_id(sql_handle)) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("invalid sql id", K(ret));
+    ObString msg = "sql_handle";
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
   } else if (OB_FAIL(params.at(idx++).get_varchar(plan_name))) {
     LOG_WARN("failed to get plan name", K(ret));
   } else if (OB_FAIL(num_val.from(plan_name.ptr(), 
@@ -361,6 +389,11 @@ int ObDbmsXplan::display_sql_plan_baseline(sql::ObExecContext &ctx,
     LOG_WARN("failed to get format", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(svr_ip))) {
     LOG_WARN("failed to get sql id", K(ret));
+  } else if (!svr_ip.empty() && !is_valid_ip(svr_ip)) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("invalid ip address", K(ret));
+    ObString msg = "svr_ip";
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
   } else if (OB_FAIL(params.at(idx++).get_number(num_val))) {
     LOG_WARN("failed to get number value", K(ret));
   } else if (OB_FAIL(num_val.cast_to_int64(svr_port))) {
@@ -440,6 +473,11 @@ int ObDbmsXplan::display_active_session_plan(sql::ObExecContext &ctx,
     LOG_WARN("unexpect null session", K(ret));
   } else if (OB_FAIL(params.at(idx++).get_varchar(svr_ip))) {
     LOG_WARN("failed to get sql id", K(ret));
+  } else if (!svr_ip.empty() && !is_valid_ip(svr_ip)) {
+    ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
+    LOG_WARN("invalid ip address", K(ret));
+    ObString msg = "svr_ip";
+    LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, msg.length(), msg.ptr());
   } else if (OB_FAIL(params.at(idx++).get_number(num_val))) {
     LOG_WARN("failed to get number value", K(ret));
   } else if (OB_FAIL(num_val.cast_to_int64(svr_port))) {
@@ -1428,6 +1466,7 @@ int ObDbmsXplan::inner_get_plan_info_use_current_session(sql::ObExecContext &ctx
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null sql connection", K(ret));
   } else {
+    conn->set_check_priv(true);
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *mysql_result = NULL;
       if (OB_FAIL(conn->execute_read(session->get_effective_tenant_id(), sql.ptr(), res))) {
