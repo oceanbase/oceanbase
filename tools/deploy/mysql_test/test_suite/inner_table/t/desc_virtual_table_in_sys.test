@@ -55,6 +55,8 @@ else 1 end) as query_type from dual`;
 
 if ($query_type == 1)
 {
+# PX reports skipped virtual-table tasks as warnings; normalize server addresses.
+--replace_regex /skipped server addr is '[^']+'/skipped server addr is 'SERVER'/
 eval select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from $database_name.$table_name;
 
 # Check distributed execute table runs in single server. To avoid overwrite ret problem in PX.

@@ -280,6 +280,11 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
+  if (OB_ISNULL(sqc) || OB_ISNULL(edge)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("NULL ptr", K(ret), KP(sqc), KP(edge));
+    return ret;
+  }
 #ifdef ERRSIM
   if (OB_FAIL(ERRSIM_HANDLE_SQC_FINISH_MSG_FAIL)) {
     LOG_WARN("fail to handle sqc finish msg because of errsim", K(ret));
@@ -340,11 +345,14 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
   }
   if (OB_SUCC(ret)) {
     // process for virtual table, mock eof buffer let px exit msg loop
-    if (sqc->is_ignore_vtable_error() && OB_SUCCESS != pkt.rc_
-        && ObVirtualTableErrorWhitelist::should_ignore_vtable_error(pkt.rc_)) {
+    if (sqc->is_ignore_vtable_error() && OB_SUCCESS != pkt.rc_) {
        // 如果收到一个sqc finish消息, 如果该sqc涉及虚拟表, 需要忽略所有错误码
        // 如果该dfo是root_dfo的child_dfo, 为了让px走出数据channel的消息循环
        // 需要mock一个eof dtl buffer本地发送至px(实际未经过rpc, attach即可)
+      // Emit the warning on the QC thread before clearing the original error.
+      ObCStringHelper helper;
+      LOG_USER_WARN(OB_ERR_TASK_SKIPPED, helper.convert(sqc->get_exec_addr()), pkt.rc_);
+      LOG_WARN("ignore virtual table error from sqc", K(pkt.rc_), K(sqc->get_exec_addr()));
       const_cast<ObPxFinishSqcResultMsg &>(pkt).rc_ = OB_SUCCESS;
       OZ(root_dfo_action_.notify_peers_mock_eof(edge,
           phy_plan_ctx->get_timeout_timestamp(),
