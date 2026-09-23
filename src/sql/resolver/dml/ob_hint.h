@@ -225,8 +225,7 @@ struct ObOptParamHint
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
     DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)   \
-    
-
+    DEF(_ENABLE_PX_TASK_REBALANCE,)                 \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
