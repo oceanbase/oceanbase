@@ -199,16 +199,15 @@ int ObSSTableRowLockMultiChecker::fetch_row(ObSSTableReadHandle &read_handle)
   } else {
     if (-1 == prefetcher_.cur_micro_data_fetch_idx_) {
       prefetcher_.cur_micro_data_fetch_idx_ = read_handle.micro_begin_idx_;
-    } else {
-      prefetcher_.inc_cur_micro_data_fetch_idx();
-    }
-    if (prefetcher_.cur_micro_data_fetch_idx_ > read_handle.micro_end_idx_) {
+    } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
       ret = OB_ITER_END;
       LOG_DEBUG("all prefetched blocks checked", K(ret), K(read_handle),
           K(prefetcher_.cur_micro_data_fetch_idx_), K(prefetcher_.is_prefetch_end_));
       if (prefetcher_.is_prefetch_end_) {
         ++prefetcher_.cur_range_fetch_idx_;
       }
+    } else {
+      prefetcher_.inc_cur_micro_data_fetch_idx();
     }
 
     if (OB_FAIL(ret)) {
