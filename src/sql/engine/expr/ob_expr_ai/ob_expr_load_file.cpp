@@ -5,6 +5,10 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_load_file.h"
+#include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
+#include "sql/ob_sql_utils.h"
 #include "sql/engine/expr/ob_expr_multi_mode_func_helper.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
@@ -184,9 +188,62 @@ int ObExprLoadFile::eval_load_file_vector(const ObExpr &expr, ObEvalCtx &ctx,
 }
 
 
-/*
+// Resolve both paths before consulting the shared privilege checker: that checker
+// intentionally tolerates realpath failures for other consumers, but reads must not.
+static int check_load_file_local_path(const ObString &location_url,
+                                     ObString &file_url,
+                                     ObSQLSessionInfo *session,
+                                     ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  if (ObSQLUtils::is_external_files_on_local_disk(location_url)) {
+    const int64_t prefix_len = ObSQLUtils::is_external_shared_files_on_local_disk(location_url)
+                              ? strlen(OB_SHARED_FILE_PREFIX) : strlen(OB_FILE_PREFIX);
+    ObString directory = location_url;
+    ObString file = file_url;
+    directory += prefix_len;
+    file += prefix_len;
+    char real_directory[PATH_MAX];
+    char real_file[PATH_MAX];
+    ObCStringHelper directory_helper;
+    ObCStringHelper file_helper;
+    const char *directory_cstr = nullptr;
+    const char *file_cstr = nullptr;
+    if (directory.empty() || file.empty()
+        || nullptr != memchr(directory.ptr(), '\0', directory.length())
+        || nullptr != memchr(file.ptr(), '\0', file.length())) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_ISNULL(directory_cstr = directory_helper.convert(directory))
+               || OB_ISNULL(file_cstr = file_helper.convert(file))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (nullptr == realpath(directory_cstr, real_directory)
+               || nullptr == realpath(file_cstr, real_file)) {
+      ret = OB_OBJECT_NAME_NOT_EXIST;
+      LOG_WARN("cannot resolve LOAD_FILE local path", K(ret), K(directory), K(file), K(errno));
+    } else {
+      const ObString base(real_directory);
+      const ObString target(real_file);
+      if (!target.prefix_match(base)
+          || (base != "/" && target.length() > base.length()
+              && target[base.length()] != '/')) {
+        ret = OB_ERR_NO_PRIV_DIRECT_PATH_ACCESS;
+      } else {
+        ObSqlString canonical_url;
+        if (OB_FAIL(canonical_url.append_fmt("%.*s%s", static_cast<int>(prefix_len),
+                                            location_url.ptr(), real_file))) {
+          LOG_WARN("build canonical file URL failed", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::check_location_access_priv(
+                       canonical_url.string(), session))) {
+          LOG_WARN("LOAD_FILE local path access denied", K(ret));
+        } else if (OB_FAIL(ob_write_string(alloc, canonical_url.string(), file_url))) {
+          LOG_WARN("save canonical file URL failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
 
-*/
 int ObExprLoadFile::read_file_from_location(const ObString &location_name,
                                             const ObString &filename,
                                             const uint64_t tenant_id,
@@ -199,7 +256,7 @@ int ObExprLoadFile::read_file_from_location(const ObString &location_name,
   const ObLocationSchema *location_schema = nullptr;
   ObString file_url;
   ObString access_info;
-  const ObSQLSessionInfo *session_info = exec_ctx.get_my_session();
+  ObSQLSessionInfo *session_info = exec_ctx.get_my_session();
   share::schema::ObSessionPrivInfo session_priv;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   int64_t document_ai_file_max_size = tenant_config.is_valid() ?
@@ -233,6 +290,8 @@ int ObExprLoadFile::read_file_from_location(const ObString &location_name,
     access_info = location_schema->get_location_access_info_str();
     if (OB_FAIL(build_file_path(location_url, filename, alloc, file_url))) {
       LOG_WARN("fail to build full file path", K(ret), K(location_url), K(filename));
+    } else if (OB_FAIL(check_load_file_local_path(location_url, file_url, session_info, alloc))) {
+      LOG_WARN("fail to check LOAD_FILE local path", K(ret), K(location_url), K(filename));
     } else {
       ObExternalDataAccessDriver driver;
       int64_t file_size = 0;
