@@ -121,7 +121,6 @@ int ObTabletLSMap::update(
         } else if (OB_FAIL(tmp->assign(tablet_ls_cache))) {
           LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
         } else {
-          // try_update_access_ts_(tmp); // always update for insert
           tmp->next_ = ls_buckets_[pos];
           ls_buckets_[pos] = tmp;
           ATOMIC_INC(&size_);
@@ -133,8 +132,6 @@ int ObTabletLSMap::update(
         LOG_TRACE("current tablet-ls is new enough, just skip", KPC(curr), K(tablet_ls_cache));
       } else if (OB_FAIL(curr->assign(tablet_ls_cache))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), K(tablet_ls_cache));
-      } else {
-        // try_update_access_ts_(curr); // always update for update
       }
     }
   }
@@ -168,7 +165,6 @@ int ObTabletLSMap::get(
     if (OB_ISNULL(curr)) {
       ret = OB_ENTRY_NOT_EXIST;
     } else {
-      // try_update_access_ts_(curr);
       if (OB_FAIL(tablet_ls_cache.assign(*curr))) {
         LOG_WARN("fail to assign tablet_ls_cache", KR(ret), KPC(curr));
       }
@@ -263,13 +259,31 @@ int ObTabletLSMap::del(const ObTabletLSKey &key)
   return ret;
 }
 
-// void ObTabletLSMap::try_update_access_ts_(ObTabletLSCache *cache_ptr)
-// {
-//   OB_ASSERT(NULL != cache_ptr);
-//   if (common::ObClockGenerator::getClock() > cache_ptr->get_last_access_ts() + MAX_ACCESS_TIME_UPDATE_THRESHOLD) {
-//     cache_ptr->set_last_access_ts(common::ObClockGenerator::getClock());
-//   }
-// }
+int ObTabletLSMap::get_tenant_set(
+    const int64_t tenant_bucket_num,
+    common::hash::ObHashSet<uint64_t> &tenant_set)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(tenant_set.create(tenant_bucket_num))) {
+    LOG_WARN("fail to create tenant_set", KR(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < BUCKETS_CNT; ++i) {
+      ObQSyncLockReadGuard guard(buckets_lock_[i % LOCK_SLOT_CNT]);
+      ObTabletLSCache *curr = ls_buckets_[i];
+      while (OB_NOT_NULL(curr) && OB_SUCC(ret)) {
+        const uint64_t tenant_id = curr->get_tenant_id();
+        ret = tenant_set.set_refactored(tenant_id, 0);
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(ret)) {
+          LOG_WARN("fail to set tenant_id", KR(ret), K(tenant_id));
+        }
+        curr = static_cast<ObTabletLSCache *>(curr->next_);
+      }
+    }
+  }
+  return ret;
+}
 
 } // end namespace share
 } // end namespace oceanbase

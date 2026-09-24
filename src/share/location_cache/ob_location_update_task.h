@@ -194,9 +194,11 @@ class ObClearTabletLSCacheTimerTask : public common::ObTimerTask
 public:
   explicit ObClearTabletLSCacheTimerTask(ObTabletLSService &tablet_ls_service);
   virtual ~ObClearTabletLSCacheTimerTask() {}
+  int reload_schedule();
   virtual void runTimerTask() override;
 private:
   ObTabletLSService &tablet_ls_service_;
+  int64_t interval_us_; // Effective schedule interval; 0 means the task is not scheduled.
 };
 
 class ObTabletLocationBroadcastTask

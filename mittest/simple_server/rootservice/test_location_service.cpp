@@ -345,13 +345,20 @@ TEST_F(TestLocationService, test_clear_tablet_ls_cache)
   }
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  // create table
+  int64_t affected_rows = 0;
+
+  // clear task depends on tablet_table_map_ which is updated with schema version
+  // 1. expired tablet_ls_cache will be cleared with double check
+  // clear task will check touched tablet_ls_cache, and touch other tablet_ls_cache
+
+  // 1.1 tablet_ls_cache exist in the first tablet_table_map_ and exist in the second tablet_table_map_
+  // means tablet_ls_cache is exist
+  const int64_t cache_size_origin = tablet_ls_service->inner_cache_.size(); // 110
+  int64_t cache_size_begin = tablet_ls_service->inner_cache_.size(); // 110
   const int64_t TABLET_COUNT = 10;
   ObSEArray<ObTabletLSPair, TABLET_COUNT> tablet_ls_pairs;
   ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
-  ASSERT_TRUE(TABLET_COUNT == tablet_ls_pairs.count());
-  const int64_t cache_size_before_renew = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(cache_size_before_renew > 0);
+  ASSERT_EQ(TABLET_COUNT, tablet_ls_pairs.count());
   ObArenaAllocator allocator;
   ObList<ObTabletID, ObIAllocator> tablet_list(allocator);
   ObSEArray<ObTabletLSCache, TABLET_COUNT> tablet_ls_caches;
@@ -359,32 +366,456 @@ TEST_F(TestLocationService, test_clear_tablet_ls_cache)
     const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
     ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(pair.get_tablet_id()));
   }
-
-  // renew cache
   ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list, tablet_ls_caches));
-  int64_t cache_size = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(TABLET_COUNT == cache_size - cache_size_before_renew);
-
-  // test clear dropped tenant cache
-  ASSERT_EQ(OB_SUCCESS, delete_tenant("oracle"));
+  int64_t cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  // the first clear task
   ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
-  cache_size = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(cache_size_before_renew == cache_size);
 
-  // test 1 million cache clear
-  const bool update_only = false;
-  for (int64_t i = 0; i < 1000000; ++i) {
+  // refresh schema version
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write(
+      "create view dummy_advance_schema_14 as select 1 c1 from dual", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write(
+      "drop view dummy_advance_schema_14", affected_rows));
+
+  // the second clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  {
+    // clear cache
+    ASSERT_EQ(OB_SUCCESS, batch_drop_table(tenant_id,oracle_sql_proxy, TABLET_COUNT));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    cache_size = tablet_ls_service->inner_cache_.size(); // 110
+    ASSERT_EQ(cache_size, cache_size_origin);
+  }
+
+  // 1.2 tablet_ls_cache not exist in the first tablet_table_map_
+  // and exist in the second tablet_table_map_
+  cache_size_begin = tablet_ls_service->inner_cache_.size(); // 110
+  // the first clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
+  ASSERT_EQ(TABLET_COUNT, tablet_ls_pairs.count());
+  tablet_list.clear();
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
+    ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(pair.get_tablet_id()));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list, tablet_ls_caches));
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  // the second clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  {
+    // clear cache
+    ASSERT_EQ(OB_SUCCESS, batch_drop_table(tenant_id,oracle_sql_proxy, TABLET_COUNT));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    cache_size = tablet_ls_service->inner_cache_.size(); // 110
+    ASSERT_TRUE(cache_size == cache_size_origin);
+  }
+
+  // 1.3 tablet_ls_cache exist in the first tablet_table_map_
+  // and not exist in the second tablet_table_map_
+  // means tablet_ls_cache is expired, and will be cleared in the second clear task
+  cache_size_begin = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
+  ASSERT_EQ(TABLET_COUNT, tablet_ls_pairs.count());
+  tablet_list.clear();
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
+    ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(pair.get_tablet_id()));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list, tablet_ls_caches));
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  // the first clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  ASSERT_EQ(OB_SUCCESS, batch_drop_table(tenant_id,oracle_sql_proxy, TABLET_COUNT));
+  ASSERT_TRUE(cache_size == cache_size_begin + TABLET_COUNT);
+  // the second clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_TRUE(cache_size == cache_size_begin);
+
+  // refresh schema version
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write(
+      "create view dummy_advance_schema_14 as select 1 c1 from dual", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write(
+      "drop view dummy_advance_schema_14", affected_rows));
+
+  // 1.4.1 tablet_ls_cache not exist in the first tablet_table_map_
+  // and not exist in the second tablet_table_map_
+  // means tablet_ls_cache is expired, and will be cleared in the second clear task
+  cache_size_begin = tablet_ls_service->inner_cache_.size(); // 110
+  for (int64_t i = 0; i < TABLET_COUNT; ++i) {
     ObTabletLSCache cache;
     ASSERT_EQ(OB_SUCCESS, cache.init(tenant_id, ObTabletID(i+300000), ObLSID(1002), ObClockGenerator::getClock(), 1));
-    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, update_only));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false));
   }
-  cache_size = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(1000000 == cache_size - cache_size_before_renew);
-  const int64_t start_time = ObTimeUtility::current_time();
+  // the first clear task
   ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_EQ(cache_size, cache_size_begin + TABLET_COUNT);
+  // refresh schema version
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write("create view dummy_advance_schema_14 as select 1 c1 from dual", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write("drop view dummy_advance_schema_14", affected_rows));
+  // the second clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(cache_size, cache_size_begin);
+
+  // 1.4.2 tablet_ls_cache not exist in the first tablet_table_map_
+  // and not exist in the second tablet_table_map_
+  // means tablet_ls_cache is expired, and will be cleared in the second clear task
+  cache_size_begin = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
+  ASSERT_EQ(TABLET_COUNT, tablet_ls_pairs.count());
+  tablet_list.clear();
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
+    ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(pair.get_tablet_id()));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list, tablet_ls_caches));
+  ASSERT_EQ(OB_SUCCESS, batch_drop_table(tenant_id,oracle_sql_proxy, TABLET_COUNT));
+  // the first clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_EQ(cache_size, cache_size_begin + TABLET_COUNT);
+  // refresh schema version
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write("create view dummy_advance_schema_14 as select 1 c1 from dual", affected_rows));
+  ASSERT_EQ(OB_SUCCESS, oracle_sql_proxy.write("drop view dummy_advance_schema_14", affected_rows));
+  // the second clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(cache_size, cache_size_begin);
+
+
+
+  // 2 when schema is stable and the last task found an unexisted cache,
+  // the next task will perform the same-schema double check
+  // this method is used to solve the problem that when the tenant does not perform any operation after the delete operation
+  // this scenario will cause tablet_ls_cache to not be cleared by double check
+  cache_size_begin = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
+  ASSERT_EQ(TABLET_COUNT, tablet_ls_pairs.count());
+  tablet_list.clear();
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
+    ASSERT_EQ(OB_SUCCESS, tablet_list.push_back(pair.get_tablet_id()));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list, tablet_ls_caches));
+  ASSERT_EQ(OB_SUCCESS, batch_drop_table(tenant_id,oracle_sql_proxy, TABLET_COUNT));
+  // the first clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 120
+  ASSERT_EQ(cache_size, cache_size_begin + TABLET_COUNT);
+  // the second clear task
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(cache_size, cache_size_begin);
+
+  // 3. tablet_ls_cache of tenant has been dropped, all expired cache should be cleared
+  ASSERT_EQ(OB_SUCCESS, batch_create_table(oracle_sql_proxy, TABLET_COUNT, true, tablet_ls_pairs));
+  ASSERT_EQ(TABLET_COUNT, tablet_ls_pairs.count());
+  int64_t cache_size_before_drop_tenant = tablet_ls_service->inner_cache_.size(); // 110
+  ObList<ObTabletID, ObIAllocator> tablet_list_2(allocator);
+  ObSEArray<ObTabletLSCache, TABLET_COUNT> tablet_ls_caches_2;
+  ARRAY_FOREACH(tablet_ls_pairs, idx) {
+    const ObTabletLSPair &pair = tablet_ls_pairs.at(idx);
+    ASSERT_EQ(OB_SUCCESS, tablet_list_2.push_back(pair.get_tablet_id()));
+  }
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->batch_renew_tablet_ls_cache(tenant_id, tablet_list_2, tablet_ls_caches_2));
   cache_size = tablet_ls_service->inner_cache_.size();
-  ASSERT_TRUE(cache_size_before_renew == cache_size);
-  LOG_INFO("TEST: clear 1 million cache", "cost_time", ObTimeUtility::current_time() - start_time); // cost_time = 1.67s
+  ASSERT_TRUE(TABLET_COUNT == cache_size - cache_size_before_drop_tenant);
+  ASSERT_EQ(OB_SUCCESS, delete_tenant("oracle"));
+
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+  cache_size = tablet_ls_service->inner_cache_.size(); // 110
+  ASSERT_EQ(cache_size_begin, cache_size);
+
+  // 4. tablet_ls_cache cleanup behavior for schema-version branches
+  int tmp_ret = OB_SUCCESS;
+  tenant_id = g_tenant_id;
+  ASSERT_NE(nullptr, location_service);
+  ASSERT_NE(nullptr, tablet_ls_service);
+  ASSERT_NE(nullptr, GCTX.schema_service_);
+  ASSERT_TRUE(is_valid_tenant_id(tenant_id));
+
+  // Use real schema versions as the stable baseline of this state-machine test.
+  ObSchemaGetterGuard schema_guard;
+  int64_t local_schema_version = OB_INVALID_VERSION;
+  int64_t latest_schema_version = OB_INVALID_VERSION;
+  ASSERT_EQ(OB_SUCCESS, GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
+  ASSERT_EQ(OB_SUCCESS, schema_guard.get_schema_version(tenant_id, local_schema_version));
+  ASSERT_EQ(OB_SUCCESS, tablet_ls_service->get_latest_schema_version_(tenant_id, latest_schema_version));
+  ASSERT_GT(local_schema_version, 0);
+  ASSERT_EQ(local_schema_version, latest_schema_version);
+
+  // Case 1:
+  // There is no last-task state and the fake tablet does not exist in schema.
+  // The first task initializes state, then two scans confirm and delete the cache.
+  {
+    SCOPED_TRACE("initialize state and double check unexisted cache");
+    const ObTabletID tablet_id(300001);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    ObTabletLSService::TenantCacheClearState clear_state;
+
+    // Remove task state to simulate the first clear task of this tenant.
+    tmp_ret = tablet_ls_service->tenant_cache_clear_state_map_.erase_refactored(tenant_id);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_HASH_NOT_EXIST == tmp_ret);
+
+    // Insert a cache whose tablet is absent from the tenant schema.
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    // The first task only initializes the latest schema version.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_FALSE(cache.is_touched());
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_EQ(OB_INVALID_VERSION, clear_state.local_schema_version_last_task_);
+    ASSERT_EQ(latest_schema_version, clear_state.latest_schema_version_last_task_);
+    ASSERT_FALSE(clear_state.need_followup_scan_);
+
+    // The first scan touches the cache and requests a double check.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_TRUE(cache.is_touched());
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_EQ(local_schema_version, clear_state.local_schema_version_last_task_);
+    ASSERT_EQ(latest_schema_version, clear_state.latest_schema_version_last_task_);
+    ASSERT_TRUE(clear_state.need_followup_scan_);
+
+    // The second scan still cannot find the tablet and deletes its cache.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_FALSE(clear_state.need_followup_scan_);
+  }
+
+  // Case 2:
+  // local == local_last == latest_last and has_need_double_check is false.
+  // The tenant scan must be skipped, so touched remains false.
+  {
+    SCOPED_TRACE("stable schema without unexisted cache skips scan");
+    const ObTabletID tablet_id(300002);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    const ObTabletLSService::TenantCacheClearState clear_state(
+        local_schema_version, latest_schema_version, false);
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->tenant_cache_clear_state_map_.set_refactored(
+        tenant_id, clear_state, 1 /* overwrite */));
+
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_FALSE(cache.is_touched());
+
+    // Clean the fake cache before entering the next case.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.del(cache_key));
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+  }
+
+  // Case 3:
+  // local > latest_last. A newer local schema requires a scan.
+  // An unexisted cache is touched and retained once.
+  {
+    SCOPED_TRACE("local schema newer than last task");
+    const ObTabletID tablet_id(300003);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    ObTabletLSService::TenantCacheClearState clear_state(
+        local_schema_version - 1, local_schema_version - 1, false);
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->tenant_cache_clear_state_map_.set_refactored(
+        tenant_id, clear_state, 1 /* overwrite */));
+
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_TRUE(cache.is_touched());
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_EQ(local_schema_version, clear_state.local_schema_version_last_task_);
+    ASSERT_EQ(latest_schema_version, clear_state.latest_schema_version_last_task_);
+    ASSERT_TRUE(clear_state.need_followup_scan_);
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.del(cache_key));
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+  }
+
+  // Case 4:
+  // local < latest_last. The local schema has not reached the last observed latest,
+  // so the tenant scan is skipped and touched stays false.
+  {
+    SCOPED_TRACE("local schema older than last task");
+    const ObTabletID tablet_id(300004);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    const ObTabletLSService::TenantCacheClearState clear_state(
+        local_schema_version + 1, local_schema_version + 1, true);
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->tenant_cache_clear_state_map_.set_refactored(
+        tenant_id, clear_state, 1 /* overwrite */));
+
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_FALSE(cache.is_touched());
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.del(cache_key));
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+  }
+
+  // Case 5:
+  // The tablet is absent from schema and has already been touched.
+  // The next scan confirms the cache is expired and deletes it.
+  {
+    SCOPED_TRACE("touched unexisted cache is deleted");
+    const ObTabletID tablet_id(300005);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    const ObTabletLSService::TenantCacheClearState clear_state(
+        local_schema_version - 1, local_schema_version - 1, false);
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->tenant_cache_clear_state_map_.set_refactored(
+        tenant_id, clear_state, 1 /* overwrite */));
+
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    cache.set_touched(true);
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tablet_ls_service->inner_cache_.get(cache_key, cache));
+  }
+
+  // Case 6:
+  // An untouched cache is kept once, then deleted by the same-schema double check.
+  {
+    SCOPED_TRACE("untouched cache requires double check");
+    const ObTabletID tablet_id(300006);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    ObTabletLSService::TenantCacheClearState clear_state(
+        local_schema_version - 1, local_schema_version - 1, false);
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->tenant_cache_clear_state_map_.set_refactored(
+        tenant_id, clear_state, 1 /* overwrite */));
+
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    // First scan keeps the cache and schedules a double check.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_TRUE(cache.is_touched());
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_EQ(latest_schema_version, clear_state.latest_schema_version_last_task_);
+    ASSERT_TRUE(clear_state.need_followup_scan_);
+
+    // Second scan at the same version deletes the touched cache.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+    ASSERT_EQ(OB_ENTRY_NOT_EXIST, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_FALSE(clear_state.need_followup_scan_);
+  }
+
+  // Case 7:
+  // An invalid latest version represents an interrupted scan. Rebuilding the latest
+  // watermark must preserve both the scan's local version and its pending retry flag.
+  {
+    SCOPED_TRACE("interrupted scan preserves retry state");
+    const ObTabletID tablet_id(300007);
+    const ObTabletLSKey cache_key(tenant_id, tablet_id);
+    ObTabletLSCache cache;
+    ObTabletLSService::TenantCacheClearState clear_state(
+        local_schema_version, OB_INVALID_VERSION, true);
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->tenant_cache_clear_state_map_.set_refactored(
+        tenant_id, clear_state, 1 /* overwrite */));
+
+    tmp_ret = tablet_ls_service->inner_cache_.del(cache_key);
+    ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret);
+    const int64_t cache_size_before_insert = tablet_ls_service->inner_cache_.size();
+    ASSERT_EQ(OB_SUCCESS, cache.init(
+        tenant_id, tablet_id, ObLSID(1002), ObClockGenerator::getClock(), 1 /* transfer_seq */));
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.update(cache, false /* update_only */));
+
+    // The recovery task only rebuilds the latest watermark and must not scan the cache.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_FALSE(cache.is_touched());
+    ASSERT_EQ(OB_SUCCESS,
+        tablet_ls_service->tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state));
+    ASSERT_EQ(local_schema_version, clear_state.local_schema_version_last_task_);
+    ASSERT_EQ(latest_schema_version, clear_state.latest_schema_version_last_task_);
+    ASSERT_TRUE(clear_state.need_followup_scan_);
+
+    // The next task sees the preserved retry flag and performs the pending scan.
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->clear_expired_cache());
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.get(cache_key, cache));
+    ASSERT_TRUE(cache.is_touched());
+    ASSERT_EQ(cache_size_before_insert + 1, tablet_ls_service->inner_cache_.size());
+
+    ASSERT_EQ(OB_SUCCESS, tablet_ls_service->inner_cache_.del(cache_key));
+    ASSERT_EQ(cache_size_before_insert, tablet_ls_service->inner_cache_.size());
+  }
+
+  // Remove the artificial state so subsequent tests start from normal service state.
+  tmp_ret = tablet_ls_service->tenant_cache_clear_state_map_.erase_refactored(tenant_id);
+  ASSERT_TRUE(OB_SUCCESS == tmp_ret || OB_HASH_NOT_EXIST == tmp_ret);
 }
 
 TEST_F(TestLocationService, test_clear_ls_location)

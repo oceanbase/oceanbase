@@ -37,18 +37,17 @@ int ObTabletLSService::init(
   } else if (OB_FAIL(async_queue_.init(this, user_thread_cnt, user_queue_size, "TabletLSAUp"))) {
     LOG_WARN("async_queue init failed",
         KR(ret), K(user_thread_cnt), K(user_queue_size));
-  } else if (OB_FAIL(TG_SCHEDULE(
-      lib::TGDefIDs::ServerGTimer,
-      clear_expired_cache_task_,
-      CLEAR_EXPIRED_CACHE_INTERVAL_US,
-      true/*repeat*/))) {
-    LOG_WARN("schedule clear expired cache timer task failed", KR(ret));
   } else if (OB_FAIL(auto_refresh_service_.init(*this, schema_service, sql_proxy))) {
     LOG_WARN("fail to init auto refresh service", KR(ret));
   } else if (OB_FAIL(broadcast_sender_.init(&srv_rpc_proxy))) {
     LOG_WARN("broadcast_sender init failed", KR(ret));
   } else if (OB_FAIL(broadcast_updater_.init(this))) {
     LOG_WARN("broadcast_updater init failed", KR(ret));
+  } else if (OB_FAIL(tenant_cache_clear_state_map_.create(
+      TENANT_MAP_BUCKET_NUM, "TenantClearMap"))) {
+    LOG_WARN("tenant_cache_clear_state_map_ init failed", KR(ret));
+  } else if (OB_FAIL(clear_expired_cache_task_.reload_schedule())) {
+    LOG_WARN("schedule clear expired cache timer task failed", KR(ret));
   } else {
     sql_proxy_ = &sql_proxy;
     inited_ = true;
@@ -278,6 +277,7 @@ int ObTabletLSService::destroy()
   auto_refresh_service_.destroy();
   broadcast_sender_.destroy();
   broadcast_updater_.destroy();
+  tenant_cache_clear_state_map_.destroy();
   return ret;
 }
 
@@ -290,6 +290,8 @@ int ObTabletLSService::reload_config()
     LOG_WARN("service not init", KR(ret));
   } else if (OB_FAIL(async_queue_.set_thread_count(thread_cnt))) {
     LOG_WARN("async_queue set thread count failed", KR(ret), K(thread_cnt));
+  } else if (OB_FAIL(clear_expired_cache_task_.reload_schedule())) {
+    LOG_WARN("reload clear expired cache timer task failed", KR(ret));
   }
   return ret;
 }
@@ -631,46 +633,76 @@ private:
   ObHashSet<uint64_t> &dropped_tenant_set_;
 };
 
-// Only clear cache for dropped tenant now
-// TODO: need a better clear strategy for each tenant expired caches
+class ObTabletLSService::NeedCheckTabletFunctor
+{
+public:
+  explicit NeedCheckTabletFunctor(
+      const uint64_t tenant_id,
+      ObHashMap<ObTabletID, uint64_t> &tablet_map,
+      bool &has_cache_pending_double_check)
+      : tenant_id_(tenant_id),
+        tablet_map_(tablet_map),
+        has_cache_pending_double_check_(has_cache_pending_double_check),
+        deleted_cache_count_(0) {}
+  ~NeedCheckTabletFunctor() {}
+  bool operator()(ObTabletLSCache &cache)
+  {
+    int ret = OB_SUCCESS;
+    bool is_expired_cache = false;
+    const uint64_t tenant_id = cache.get_tenant_id();
+    const ObTabletID tablet_id = cache.get_tablet_id();
+    if (tenant_id == tenant_id_) {
+      uint64_t table_id = 0;
+      ret = tablet_map_.get_refactored(tablet_id, table_id);
+      if (OB_SUCC(ret)) {
+        cache.set_touched(true);
+      } else if (OB_HASH_NOT_EXIST == ret) {
+        if (!cache.is_touched()) {
+          cache.set_touched(true);
+          has_cache_pending_double_check_ = true;
+        } else {
+          is_expired_cache = true;
+          ++deleted_cache_count_;
+        }
+      } else {
+        LOG_WARN("error unexpected", KR(ret), K(tenant_id), K(tablet_id));
+      }
+    }
+
+    return is_expired_cache;
+  }
+  int64_t get_deleted_cache_count() const { return deleted_cache_count_; }
+private:
+  DISALLOW_COPY_AND_ASSIGN(NeedCheckTabletFunctor);
+  const uint64_t tenant_id_;
+  ObHashMap<ObTabletID, uint64_t> &tablet_map_;
+  // Set when this scan retains an unchecked cache that is absent from tablet_map_.
+  // It forces a later safe scan even if the schema version does not advance.
+  bool &has_cache_pending_double_check_;
+  int64_t deleted_cache_count_;
+};
+
+// Clear tablet-ls caches for dropped tenants and expired tablets of live tenants.
 int ObTabletLSService::clear_expired_cache()
 {
   int ret = OB_SUCCESS;
-  bool sys_tenant_schema_ready = false;
-  ObArray<uint64_t> dropped_tenant_ids;
-  ObHashSet<uint64_t> dropped_tenant_set;
+  common::hash::ObHashSet<uint64_t> tenant_set;
   const int64_t cache_size = inner_cache_.size();
+  const int64_t start_time = ObTimeUtility::current_time();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("service not init", KR(ret));
-  } else if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
-  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
-    ret = OB_NEED_RETRY;
-    LOG_WARN("can not clear expiered cache because sys tenant schema is not ready", KR(ret), K(cache_size));
-  } else if (OB_FAIL(GCTX.schema_service_->get_dropped_tenant_ids(dropped_tenant_ids))) {
-    LOG_WARN("get tenant ids failed", KR(ret));
-  } else if (OB_FAIL(dropped_tenant_set.create(dropped_tenant_ids.count()))) {
-    LOG_WARN("create failed", KR(ret), "count", dropped_tenant_ids.count());
+  } else if (OB_FAIL(inner_cache_.get_tenant_set(TENANT_MAP_BUCKET_NUM, tenant_set))) {
+    LOG_WARN("get tenant set failed", KR(ret));
+  } else if (OB_FAIL(clear_expired_cache_of_dropped_tenant_(tenant_set))) {
+    LOG_WARN("clear expired cache of dropped tenant failed", KR(ret));
+  } else if (OB_FAIL(clear_expired_cache_of_tenant_(tenant_set))) {
+    LOG_WARN("clear expired cache of tenant failed", KR(ret));
   } else {
-    // use hashset to improve performance
-    ARRAY_FOREACH(dropped_tenant_ids, idx) {
-      const uint64_t tenant_id = dropped_tenant_ids.at(idx);
-      if (!is_user_tenant(tenant_id)) {
-        // skip
-      } else if (OB_FAIL(dropped_tenant_set.set_refactored(tenant_id))) {
-        // OB_HASH_EXIST is also unexpected
-        LOG_WARN("set_refactored failed", KR(ret), K(idx), K(tenant_id));
-      }
-    }
-    IsDroppedTenantCacheFunctor functor(dropped_tenant_set);
-    if (FAILEDx(inner_cache_.for_each_and_delete_if(functor))) {
-      LOG_WARN("for each and delete if is dropped tenant cache failed", KR(ret));
-    } else {
-      LOG_INFO("[TABLET_LOCATION] clear dropped tenant tablet ls cache successfully",
-          "cache_size_before_clear", cache_size, "cache_size_after_clear", inner_cache_.size());
-    }
+    LOG_INFO("clear expired cache", KR(ret),
+        "before_clear_cache_size", cache_size,
+        "after_clear_cache_size", inner_cache_.size(),
+        "cost_time_us", ObTimeUtility::current_time() - start_time);
   }
   return ret;
 }
@@ -747,6 +779,208 @@ int ObTabletLSService::flush_cache(const ObHashSet<uint64_t> &tenant_id_set)
     }
     LOG_INFO("flush tablet ls cache on local observer", KR(ret),
              "removed_count", functor.get_removed_count(), "cache_size", inner_cache_.size());
+  }
+  return ret;
+}
+
+int ObTabletLSService::clear_expired_cache_of_dropped_tenant_(
+    common::hash::ObHashSet<uint64_t> &tenant_set)
+{
+  int ret = OB_SUCCESS;
+  ObArray<uint64_t> dropped_tenant_ids;
+  ObHashSet<uint64_t> dropped_tenant_set;
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (!GCTX.schema_service_->is_tenant_refreshed(OB_SYS_TENANT_ID)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("can not clear expired cache because sys tenant schema is not ready", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_dropped_tenant_ids(dropped_tenant_ids))) {
+    LOG_WARN("get tenant ids failed", KR(ret));
+  } else if (dropped_tenant_ids.count() > 0) {
+    if (OB_FAIL(dropped_tenant_set.create(dropped_tenant_ids.count()))) {
+      LOG_WARN("create failed", KR(ret), "count", dropped_tenant_ids.count());
+    } else {
+      ARRAY_FOREACH(dropped_tenant_ids, idx) {
+        const uint64_t tenant_id = dropped_tenant_ids.at(idx);
+        if (!is_user_tenant(tenant_id)) {
+          // non-user tenant does not store tablet-ls cache
+        } else {
+          ret = tenant_set.exist_refactored(tenant_id);
+          if (OB_HASH_NOT_EXIST == ret) {
+            // skip
+            ret = OB_SUCCESS;
+          } else if (OB_HASH_EXIST != ret) {
+            LOG_WARN("exist_refactored failed", KR(ret), K(idx), K(tenant_id));
+          } else if (OB_FAIL(dropped_tenant_set.set_refactored(tenant_id))) {
+            LOG_WARN("set_refactored failed", KR(ret), K(idx), K(tenant_id));
+          } else if (OB_FAIL(tenant_set.erase_refactored(tenant_id))) {
+            LOG_WARN("erase_refactored failed", KR(ret), K(idx), K(tenant_id));
+          }
+        }
+        if (OB_SUCC(ret) && OB_FAIL(tenant_cache_clear_state_map_.erase_refactored(tenant_id))) {
+          if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("erase tenant cache clear state failed",
+                KR(ret), K(idx), K(tenant_id));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !dropped_tenant_set.empty()) {
+        IsDroppedTenantCacheFunctor functor(dropped_tenant_set);
+        if (FAILEDx(inner_cache_.for_each_and_delete_if(functor))) {
+          LOG_WARN("for each and delete if is dropped tenant cache failed", KR(ret));
+        } else {
+          LOG_INFO("[LOCATION CACHE]clear expired cache of dropped tenant succeeded",
+              KR(ret), K(dropped_tenant_ids));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletLSService::clear_expired_cache_of_tenant_(
+    common::hash::ObHashSet<uint64_t> &tenant_set)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  // tenant isolation and only handle the last error code
+  FOREACH_X(it, tenant_set, true) {
+    const uint64_t tenant_id = it->first;
+    if (OB_TMP_FAIL(clear_each_tenant_cache_(tenant_id))) {
+      LOG_WARN("clear each tenant cache failed", KR(tmp_ret), K(tenant_id));
+    }
+    ret = (OB_SUCCESS != tmp_ret) ? tmp_ret : ret;
+  }
+  return ret;
+}
+
+int ObTabletLSService::clear_each_tenant_cache_(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  common::hash::ObHashMap<common::ObTabletID, uint64_t> tablet_map;
+  TenantCacheClearState clear_state;
+  int64_t local_schema_version = OB_INVALID_VERSION;
+  int64_t latest_schema_version = OB_INVALID_VERSION;
+  // Set when this scan retains an unchecked cache that needs to be double-checked.
+  bool has_cache_pending_double_check = false;
+  bool need_clear = false;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, local_schema_version))) {
+    LOG_WARN("get local schema version failed", KR(ret), K(tenant_id));
+  } else {
+    ret = tenant_cache_clear_state_map_.get_refactored(tenant_id, clear_state);
+    if (OB_HASH_NOT_EXIST == ret) {
+      // The first task only initializes the latest schema version.
+      ret = OB_SUCCESS;
+    } else if (OB_SUCCESS != ret) {
+      LOG_WARN("get tenant cache clear state failed", KR(ret), K(tenant_id));
+    }
+
+    if (OB_SUCC(ret) && !clear_state.is_latest_schema_version_valid()) {
+      if (OB_FAIL(get_latest_schema_version_(tenant_id, latest_schema_version))) {
+        LOG_WARN("get latest schema version failed", KR(ret), K(tenant_id), K(clear_state));
+      } else {
+        // An invalid latest version means either first-time initialization or recovery
+        // from an interrupted scan. Preserve the local version and retry flag so an
+        // interrupted scan cannot lose its pending retry while rebuilding the watermark.
+        clear_state = TenantCacheClearState(
+            clear_state.local_schema_version_last_task_,
+            latest_schema_version,
+            clear_state.need_followup_scan_);
+        if (OB_FAIL(tenant_cache_clear_state_map_.set_refactored(
+            tenant_id, clear_state, 1))) {
+          LOG_WARN("set tenant cache clear state failed", KR(ret), K(tenant_id), K(clear_state));
+        }
+      }
+    } else if (OB_SUCC(ret)) {
+      if (local_schema_version < clear_state.latest_schema_version_last_task_) {
+        // The local schema has not reached the latest version observed by the last task.
+      } else if (local_schema_version > clear_state.latest_schema_version_last_task_) {
+        need_clear = true;
+      } else if (local_schema_version < clear_state.local_schema_version_last_task_) {
+        // local_schema_version == latest_schema_version_last_task_<local_schema_version_last_task_
+        LOG_WARN("local schema version is older than the version used by the last clear task",
+            K(tenant_id), K(local_schema_version), K(clear_state));
+      } else if (local_schema_version > clear_state.local_schema_version_last_task_) {
+        // local_schema_version == latest_schema_version_last_task_>local_schema_version_last_task_
+        need_clear = true;
+      } else if (clear_state.need_followup_scan_) {
+        // local_schema_version == latest_schema_version_last_task_==local_schema_version_last_task_
+        need_clear = true;
+      } else {
+        // The schema version has not changed and there is no cache to double check.
+      }
+
+      if (need_clear) {
+        // Persist an in-progress state before any fallible scan operation. If this task
+        // fails, the invalid latest schema version forces a later task to rebuild a fresh
+        // safety watermark, while the double-check flag guarantees another scan even when
+        // the schema version does not advance.
+        clear_state = TenantCacheClearState(local_schema_version, OB_INVALID_VERSION, true);
+        if (OB_FAIL(tenant_cache_clear_state_map_.set_refactored(tenant_id, clear_state, 1))) {
+          LOG_WARN("set tenant cache clear state before task failed",
+              KR(ret), K(tenant_id), K(clear_state));
+        } else if (OB_FAIL(schema_guard.generate_tablet_table_map(tenant_id, tablet_map))) {
+          LOG_WARN("generate tablet map failed", KR(ret), K(tenant_id), K(local_schema_version));
+        } else {
+          NeedCheckTabletFunctor functor(tenant_id, tablet_map, has_cache_pending_double_check);
+          if (OB_FAIL(inner_cache_.for_each_and_delete_if(functor))) {
+            LOG_WARN("clear expired tablet ls cache failed", KR(ret), K(tenant_id));
+          } else {
+            const int64_t deleted_cache_count = functor.get_deleted_cache_count();
+            LOG_INFO ("[LOCATION CACHE]clear expired tablet ls cache succeed", KR(ret),
+                K(tenant_id), K(deleted_cache_count));
+            if (OB_FAIL(get_latest_schema_version_(tenant_id, latest_schema_version))) {
+              LOG_WARN("get latest schema version after task failed",
+                  KR(ret), K(tenant_id), K(local_schema_version));
+            } else {
+              TenantCacheClearState next_clear_state(
+                  local_schema_version,
+                  latest_schema_version,
+                  has_cache_pending_double_check);
+              if (OB_FAIL(tenant_cache_clear_state_map_.set_refactored(
+                  tenant_id, next_clear_state, 1))) {
+                LOG_WARN("set tenant cache clear state after task failed",
+                    KR(ret), K(tenant_id), K(next_clear_state));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletLSService::get_latest_schema_version_(
+    const uint64_t tenant_id,
+    int64_t &latest_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id;
+  latest_schema_version = OB_INVALID_VERSION;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.schema_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ or GCTX.sql_proxy_ is null",
+        KR(ret), KP(GCTX.schema_service_), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(
+      *GCTX.sql_proxy_, schema_status, latest_schema_version))) {
+    LOG_WARN("get latest schema version failed", KR(ret), K(schema_status));
   }
   return ret;
 }

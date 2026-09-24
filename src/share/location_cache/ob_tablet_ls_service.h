@@ -141,15 +141,45 @@ private:
     const common::ObTabletID &tablet_id,
     const int64_t expire_renew_time,
     ObTabletLSCache &tablet_ls_cache);
+  int clear_expired_cache_of_dropped_tenant_(
+      common::hash::ObHashSet<uint64_t> &tenant_set);
+  int clear_expired_cache_of_tenant_(
+      common::hash::ObHashSet<uint64_t> &tenant_set);
+  int clear_each_tenant_cache_(const uint64_t tenant_id);
+  int get_latest_schema_version_(
+      const uint64_t tenant_id,
+      int64_t &latest_schema_version);
 private:
+  struct TenantCacheClearState
+  {
+    TenantCacheClearState() : TenantCacheClearState(OB_INVALID_VERSION, OB_INVALID_VERSION, false) {}
+    TenantCacheClearState(
+        const int64_t local_schema_version_last_task,
+        const int64_t latest_schema_version_last_task,
+        const bool need_followup_scan)
+        : local_schema_version_last_task_(local_schema_version_last_task),
+          latest_schema_version_last_task_(latest_schema_version_last_task),
+          need_followup_scan_(need_followup_scan) {}
+    bool is_latest_schema_version_valid() const
+    {
+      return OB_INVALID_VERSION != latest_schema_version_last_task_;
+    }
+    TO_STRING_KV(K_(local_schema_version_last_task),
+        K_(latest_schema_version_last_task), K_(need_followup_scan));
+
+    int64_t local_schema_version_last_task_;  // local version used by the last started scan
+    int64_t latest_schema_version_last_task_; // safety watermark; invalid means interrupted scan
+    bool need_followup_scan_;              // whether the last scan found a cache that needs to be double-checked
+  };
+
   class IsDroppedTenantCacheFunctor; // use to clear expired cache of dropped tenant
   class FlushCacheFunctor; // use to flush tablet-ls cache of specified tenants
 
+  class NeedCheckTabletFunctor;
   const int64_t MINI_MODE_UPDATE_THREAD_CNT = 1;
+  const int64_t TENANT_MAP_BUCKET_NUM = 128;
   const int64_t USER_TASK_QUEUE_SIZE = 100 * 1000; // 10W partitions
   const int64_t MINI_MODE_USER_TASK_QUEUE_SIZE = 10 * 1000; // 1W partitions
-  const int64_t CLEAR_EXPIRED_CACHE_INTERVAL_US = 6 * 3600 * 1000 * 1000L; // 6h
-
   bool inited_;
   bool stopped_;
   common::ObMySQLProxy *sql_proxy_;
@@ -160,6 +190,7 @@ private:
   ObTabletLocationUpdater broadcast_updater_; // process received broadcast task
   //TODO: need more queue later
   ObTabletLocationRefreshService auto_refresh_service_;
+  common::hash::ObHashMap<uint64_t, TenantCacheClearState> tenant_cache_clear_state_map_;
 };
 
 } // end namespace share

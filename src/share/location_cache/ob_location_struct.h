@@ -288,18 +288,22 @@ public:
   inline int64_t get_renew_time() const { return renew_time_; }
   const ObTabletLSKey &get_cache_key() const { return cache_key_; }
   inline int64_t get_transfer_seq() const { return transfer_seq_; }
+  inline bool is_touched() const { return touched_; }
+  inline void set_touched(const bool touched) { touched_ = touched; }
   int init(
       const uint64_t tenant_id,
       const ObTabletID &tablet_id,
       const ObLSID &ls_id,
       const int64_t renew_time,
       const int64_t transfer_seq);
-  TO_STRING_KV(K_(cache_key), K_(ls_id), K_(renew_time), K_(transfer_seq));
+  TO_STRING_KV(K_(cache_key), K_(ls_id), K_(renew_time), K_(transfer_seq),
+      K_(touched));
 private:
-   ObTabletLSKey cache_key_;
-   ObLSID ls_id_;
-   int64_t renew_time_;     // renew by sql
-   int64_t transfer_seq_;
+  ObTabletLSKey cache_key_;
+  ObLSID ls_id_;
+  int64_t renew_time_;     // renew by sql
+  int64_t transfer_seq_;
+  bool touched_;
 };
 
 //TODO: Reserved for tableapi. Need remove.

@@ -47,9 +47,7 @@ public:
 
   template <typename Function>
   int for_each_and_delete_if(Function &func);
-
-private:
-  // void try_update_access_ts_(ObTabletLSCache *cache_ptr);
+  int get_tenant_set(const int64_t tenant_bucket_num, common::hash::ObHashSet<uint64_t> &tenant_set);
 
 private:
   static const int64_t MAX_ACCESS_TIME_UPDATE_THRESHOLD = 10000000; // 10s

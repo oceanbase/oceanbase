@@ -1147,6 +1147,10 @@ DEF_TIME(_auto_refresh_tablet_location_interval, OB_CLUSTER_PARAMETER, "10m", "[
         "Polling period of auto refresh tablet location service. "
         "When the value is 0, it means shutting down related service. Range: [0s, +∞)",
         ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_auto_clear_tablet_ls_cache_interval, OB_CLUSTER_PARAMETER, "1h", "[0s,)",
+        "Polling period of auto clear tablet ls cache. "
+        "When the value is 0, it means shutting down clear service. Range: [0s, +∞)",
+        ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_auto_broadcast_tablet_location_rate_limit, OB_CLUSTER_PARAMETER, "10000", "[0, 100000]",
         "Maximum number of tablets broadcasted per second by a single observer. When the value is 0, it means shutting down related logic.",
         ObParameterAttr(Section::LOCATION_CACHE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -6,8 +6,10 @@
 #define USING_LOG_PREFIX SHARE_LOCATION
 
 #include "ob_location_update_task.h"
+#include "share/config/ob_server_config.h"
 #include "share/location_cache/ob_ls_location_service.h"
 #include "share/location_cache/ob_tablet_ls_service.h"
+#include "share/ob_thread_mgr.h"
 
 namespace oceanbase
 {
@@ -299,8 +301,37 @@ bool ObVTableLocUpdateTask::compare_without_version(
 
 ObClearTabletLSCacheTimerTask::ObClearTabletLSCacheTimerTask(
     ObTabletLSService &tablet_ls_service)
-    : tablet_ls_service_(tablet_ls_service)
+    : tablet_ls_service_(tablet_ls_service),
+      interval_us_(0)
 {
+}
+
+int ObClearTabletLSCacheTimerTask::reload_schedule()
+{
+  int ret = OB_SUCCESS;
+  const int64_t old_interval_us = interval_us_;
+  const int64_t schedule_interval_us = GCONF._auto_clear_tablet_ls_cache_interval;
+  if (OB_UNLIKELY(schedule_interval_us < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid clear expired cache interval", KR(ret), K(schedule_interval_us));
+  } else if (old_interval_us == schedule_interval_us) {
+    // The timer task is already using the latest interval.
+  } else if (OB_FAIL(TG_CANCEL_R(lib::TGDefIDs::ServerGTimer, *this))) {
+    LOG_WARN("cancel clear expired cache timer task failed", KR(ret));
+  } else if (schedule_interval_us > 0 && OB_FAIL(TG_SCHEDULE(
+      lib::TGDefIDs::ServerGTimer,
+      *this,
+      schedule_interval_us,
+      true/*repeat*/))) {
+    // schedule_interval_us == 0 means the task does not need to be scheduled
+    interval_us_ = 0;
+    LOG_WARN("schedule clear expired cache timer task failed", KR(ret), K(schedule_interval_us));
+  } else {
+    interval_us_ = schedule_interval_us;
+    LOG_INFO("reschedule clear expired cache timer task succeeded",
+        K(old_interval_us), "effective_interval_us", interval_us_);
+  }
+  return ret;
 }
 
 void ObClearTabletLSCacheTimerTask::runTimerTask()
