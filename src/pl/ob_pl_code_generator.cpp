@@ -9865,6 +9865,37 @@ int ObPLCodeGenerator::generate_out_param(const ObPLStmt &s,
     if (OB_FAIL(ret)) {
     } else if (expr->is_sys_func_expr()) {
       GET_POINTER_TO_ARG(p_arg);
+      if (OB_SUCC(ret)
+          && (T_OP_GET_PACKAGE_VAR == expr->get_expr_type()
+              || T_OP_GET_SUBPROGRAM_VAR == expr->get_expr_type())
+          && ObNullType != expr->get_result_type().get_type()
+          && ObExtendType != expr->get_result_type().get_type()) {
+        ObDataType data_type;
+        ObPLDataType pl_type;
+        ObLLVMValue converted_arg;
+        ObLLVMValue allocator;
+        ObLLVMValue src_obj;
+        ObLLVMValue dest_obj;
+        data_type.set_meta_type(expr->get_result_type().get_obj_meta());
+        data_type.set_accuracy(expr->get_result_type().get_accuracy());
+        pl_type.set_data_type(data_type);
+        CK (OB_NOT_NULL(s.get_namespace()));
+        OZ (buffer_guard.get_objparam_buffer(converted_arg));
+        OZ (extract_tmp_allocator_from_context(get_vars().at(CTX_IDX), allocator));
+        OZ (extract_obobj_ptr_from_objparam(p_arg, src_obj));
+        OZ (extract_obobj_ptr_from_objparam(converted_arg, dest_obj));
+        OZ (pl_type.generate_copy(*this,
+                                  *s.get_namespace(),
+                                  allocator,
+                                  src_obj,
+                                  dest_obj,
+                                  s.get_location(),
+                                  s.get_block()->in_notfound(),
+                                  s.get_block()->in_warning(),
+                                  OB_INVALID_ID,
+                                  true /*need_convert*/));
+        OX (p_arg = converted_arg);
+      }
       OZ (generate_set_variable(param_desc.at(i).param_,
                                 p_arg,
                                 T_DEFAULT == expr->get_expr_type(),
