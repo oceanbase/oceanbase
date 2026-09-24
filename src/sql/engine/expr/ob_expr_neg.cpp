@@ -246,7 +246,16 @@ int ObExprNeg::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObEx
       } else {
         // scale
         type.set_scale(type1.get_scale());
-        if (OB_LIKELY(0 < type1.get_precision())) {
+        if (ObIntType == type.get_type() && !type1.is_literal()) {
+          // Non-literal integer input is promoted to bigint for evaluation. Use the
+          // default accuracy of the promoted type as the result accuracy, so that a
+          // later re-deduction of this expression tree (e.g. copy_and_formalize on
+          // pushed down filters, where an implicit cast has been materialized above
+          // the child) derives the same result precision; otherwise the two deduction
+          // passes disagree and a downstream aggregation (e.g. ifnull) may pick a
+          // decimal int width that conflicts with the re-deduced datum meta.
+          type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[MYSQL_MODE][ObIntType]);
+        } else if (OB_LIKELY(0 < type1.get_precision())) {
           if (type1.get_type() == ObUNumberType) {
             type.set_precision(static_cast<int16_t>(type1.get_precision()));
           } else {
