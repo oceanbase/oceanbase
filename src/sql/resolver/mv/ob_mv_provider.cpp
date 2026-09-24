@@ -51,6 +51,55 @@ ObMVProvider::~ObMVProvider()
   }
 }
 
+int ObMVProvider::align_mv_stmt_output_column_names(
+    ObSelectStmt *stmt,
+    const ObTableSchema &container_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null stmt", K(ret));
+  } else {
+    const int64_t select_item_count = stmt->get_select_item_size();
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_item_count; ++i) {
+      SelectItem &select_item = stmt->get_select_item(i);
+      const ObColumnSchemaV2 *column_schema =
+          container_table_schema.get_column_schema(OB_APP_MIN_COLUMN_ID + i);
+      if (OB_ISNULL(select_item.expr_) || OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null select expression or column schema", K(ret), K(i),
+                 KP(select_item.expr_), KP(column_schema));
+      } else {
+        if (lib::is_oracle_mode()) {
+          // Oracle mode does not support explicit column lists on generated tables.
+          // Outer MV queries need to reference these columns, so use container column
+          // names instead of SELECT aliases.
+          select_item.select_alias_name_.reset();
+        } else if (select_item.select_alias_name_.empty()) {
+          select_item.select_alias_name_ = select_item.alias_name_;
+        }
+        select_item.alias_name_ = column_schema->get_column_name_str();
+        select_item.is_real_alias_ = true;
+      }
+    }
+    if (OB_SUCC(ret) && stmt->is_set_stmt()) {
+      ObIArray<ObSelectStmt *> &set_queries = stmt->get_set_query();
+      for (int64_t i = 0; OB_SUCC(ret) && i < set_queries.count(); ++i) {
+        ObSelectStmt *set_query = set_queries.at(i);
+        if (OB_ISNULL(set_query)
+            || OB_UNLIKELY(select_item_count != set_query->get_select_item_size())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected set query", K(ret), K(i), K(select_item_count), KPC(set_query));
+        } else if (OB_FAIL(SMART_CALL(
+                       align_mv_stmt_output_column_names(set_query, container_table_schema)))) {
+          LOG_WARN("failed to align set query output column names", K(ret), K(i));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // 1. resolve mv definition and get stmt
 // 2. check refresh type by stmt
 int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
@@ -128,6 +177,8 @@ int ObMVProvider::init_mv_provider(ObSQLSessionInfo *session_info,
                                               *mv_schema_,
                                               view_stmt))) {
             LOG_WARN("failed to gen mv stmt", K(ret));
+          } else if (OB_FAIL(align_mv_stmt_output_column_names(view_stmt, *mv_container_schema_))) {
+            LOG_WARN("failed to align mv output column names", K(ret));
           } else if (OB_FALSE_IT(trans_stmt = view_stmt)) {
           } else if (OB_FAIL(transform_mv_def_stmt(trans_stmt,
                                                   &alloc,

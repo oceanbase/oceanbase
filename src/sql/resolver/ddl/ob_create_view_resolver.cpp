@@ -215,7 +215,6 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       ObViewTableResolver view_table_resolver(params_, stmt->get_database_name(),
                                               table_schema.get_table_name());
       view_table_resolver.params_.is_from_create_view_ = true;
-      view_table_resolver.params_.is_specified_col_name_ = parse_tree.children_[VIEW_COLUMNS_NODE] != NULL;
       view_table_resolver.set_current_view_level(1);
       view_table_resolver.set_is_top_stmt(true);
       view_table_resolver.set_has_resolved_field_list(false);
@@ -224,7 +223,14 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       view_table_resolver.set_materialized(parse_tree.children_[MATERIALIZED_NODE] ? true : false);
       select_stmt_node = parse_tree.children_[SELECT_STMT_NODE];
       ParseNode *view_columns_node = parse_tree.children_[VIEW_COLUMNS_NODE];
-      bool has_column = (NULL != view_columns_node) && (view_columns_node->num_child_ > 0);
+      bool has_column = false;
+      for (int64_t i = 0; !has_column && OB_NOT_NULL(view_columns_node)
+                          && i < view_columns_node->num_child_; ++i) {
+        has_column = OB_NOT_NULL(view_columns_node->children_[i])
+                     && T_PRIMARY_KEY != view_columns_node->children_[i]->type_;
+      }
+      view_table_resolver.params_.is_specified_col_name_ = has_column;
+      table_schema.set_view_column_list_specified_mode(has_column);
       ObString sql_str(select_stmt_node->str_len_, select_stmt_node->str_value_);
       view_define = sql_str;
       view_definition_start_pos = select_stmt_node->stmt_loc_.first_column_;
@@ -472,6 +478,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         // create force view use origin view_define
         if (OB_FAIL(print_rebuilt_view_stmt(select_stmt,
                                             0 == column_list.count() ? NULL : &column_list,
+                                            compat_version,
                                             expanded_view))) {
           LOG_WARN("fail to expand view definition", K(ret));
         } else if (OB_FAIL(table_schema.set_view_definition(expanded_view))) {
@@ -1001,6 +1008,7 @@ int ObCreateViewResolver::check_privilege_needed(ObCreateTableStmt &stmt,
 }
 int ObCreateViewResolver::print_rebuilt_view_stmt(const ObSelectStmt *stmt,
                                                   common::ObIArray<common::ObString> *column_list,
+                                                  const uint64_t data_version,
                                                   common::ObString &expanded_view)
 {
   int ret = OB_SUCCESS;
@@ -1020,6 +1028,7 @@ int ObCreateViewResolver::print_rebuilt_view_stmt(const ObSelectStmt *stmt,
       ObObjPrintParams obj_print_params(params_.query_ctx_->get_timezone_info());
       obj_print_params.print_origin_stmt_ = true;
       obj_print_params.not_print_internal_catalog_ = true;
+      obj_print_params.data_version_ = data_version;
       ObSelectStmtPrinter stmt_printer(buf, buf_len, &pos, stmt,
                                       params_.schema_checker_->get_schema_guard(),
                                       obj_print_params, true);

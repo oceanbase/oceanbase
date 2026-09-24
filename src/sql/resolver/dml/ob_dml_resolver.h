@@ -476,6 +476,9 @@ protected:
   int resolve_outline_hints();
   virtual int resolve_order_item(const ParseNode &sort_node, OrderItem &order_item);
 
+  int refine_generate_table_column_name(const ParseNode &column_alias_node,
+                                        ObSelectStmt &select_stmt);
+
   int add_column_to_stmt(const TableItem &table_item,
                          const share::schema::ObColumnSchemaV2 &col,
                          common::ObIArray<ObColumnRefRawExpr*> &column_ids,
@@ -1082,8 +1085,6 @@ private:
                            ObIArray<ObRawExprResType> &res_types);
   int try_add_cast_to_values(const ObIArray<ObRawExprResType> &res_types,
                              ObIArray<ObRawExpr*> &values_vector);
-  int refine_generate_table_column_name(const ParseNode &column_alias_node,
-                                        ObSelectStmt &select_stmt);
   int replace_column_ref(ObIArray<ObRawExpr*> &values_vector,
                          ObIArray<ObColumnRefRawExpr*> &values_desc,
                          ObRawExpr *&expr);

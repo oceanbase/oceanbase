@@ -34,6 +34,7 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else {
     is_real_alias_ = other.is_real_alias_;
     alias_name_ = other.alias_name_;
+    select_alias_name_ = other.select_alias_name_;
     paramed_alias_name_ = other.paramed_alias_name_;
     expr_name_ = other.expr_name_;
     esc_str_flag_ = other.esc_str_flag_;

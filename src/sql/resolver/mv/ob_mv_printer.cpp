@@ -730,6 +730,36 @@ int ObMVPrinter::create_simple_column_expr(const ObString &table_name,
   return ret;
 }
 
+// Printer-built set queries may contain only branches. Expose the first branch's
+// output names so generated table column mapping and printing can use them.
+int ObMVPrinter::ensure_set_query_select_items(ObSelectStmt *view_stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(view_stmt) && view_stmt->get_select_items().empty()
+      && !view_stmt->get_set_query().empty()) {
+    const ObSelectStmt *first_set_query = view_stmt->get_set_query().at(0);
+    if (OB_ISNULL(first_set_query)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null first set query", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < first_set_query->get_select_item_size(); ++i) {
+      const SelectItem &source_item = first_set_query->get_select_item(i);
+      SelectItem output_item;
+      output_item.expr_ = source_item.expr_;
+      output_item.is_real_alias_ = source_item.is_real_alias_;
+      output_item.alias_name_ = source_item.alias_name_;
+      output_item.select_alias_name_ = source_item.select_alias_name_;
+      output_item.implicit_filled_ = source_item.implicit_filled_;
+      output_item.is_implicit_added_ = source_item.is_implicit_added_;
+      output_item.is_hidden_rowid_ = source_item.is_hidden_rowid_;
+      if (OB_FAIL(view_stmt->get_select_items().push_back(output_item))) {
+        LOG_WARN("failed to push back set stmt output item", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMVPrinter::create_simple_table_item(ObDMLStmt *stmt,
                                           const ObString &table_name,
                                           TableItem *&table_item,
@@ -738,22 +768,42 @@ int ObMVPrinter::create_simple_table_item(ObDMLStmt *stmt,
                                           const TableItem *source_table /* default null */)
 {
   int ret = OB_SUCCESS;
+  bool use_column_list = false;
   table_item = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt));
+  } else {
+    view_stmt = (NULL == view_stmt && NULL != source_table && NULL != source_table->ref_query_) ? source_table->ref_query_ : view_stmt;
+    if (OB_FAIL(ensure_set_query_select_items(view_stmt))) {
+      LOG_WARN("failed to ensure set query select items", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = 0; lib::is_mysql_mode()
+                          && !use_column_list && OB_NOT_NULL(view_stmt)
+                          && i < view_stmt->get_select_item_size(); ++i) {
+        const SelectItem &select_item = view_stmt->get_select_item(i);
+        use_column_list = !select_item.select_alias_name_.empty()
+                          && select_item.select_alias_name_ != select_item.alias_name_;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(table_item = stmt->create_table_item(ctx_.alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create table item failed", K(ret));
   } else if (OB_FAIL(stmt->get_table_items().push_back(table_item))) {
     LOG_WARN("add table item failed", K(ret));
   } else {
-    view_stmt = (NULL == view_stmt && NULL != source_table && NULL != source_table->ref_query_) ? source_table->ref_query_ : view_stmt;
     table_item->table_name_ = table_name;
     table_item->table_id_ = stmt->get_query_ctx()->available_tb_id_--;
     table_item->type_ = NULL == view_stmt ? TableItem::BASE_TABLE : TableItem::GENERATED_TABLE;
     table_item->ref_query_ = view_stmt;
     table_item->is_view_table_ = (NULL != source_table && source_table->table_type_ == ObTableType::USER_VIEW);
+    if (use_column_list) {
+      table_item->alias_name_ = table_name;
+      table_item->is_column_list_specified_ = true;
+    }
     if (OB_SUCC(ret) && add_to_from && OB_FAIL(stmt->add_from_item(table_item->table_id_))) {
       LOG_WARN("failed to add from item", K(ret));
     }

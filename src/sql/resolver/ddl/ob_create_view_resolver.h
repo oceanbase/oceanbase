@@ -123,6 +123,7 @@ private:
    */
   int print_rebuilt_view_stmt(const ObSelectStmt *stmt,
                               common::ObIArray<common::ObString> *column_list,
+                              const uint64_t data_version,
                               common::ObString &expanded_view);
   int print_star_expanded_view_stmt(common::ObString &expanded_view,
                                     const int64_t view_definition_start_pos,

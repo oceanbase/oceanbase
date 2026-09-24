@@ -249,8 +249,7 @@ int ObOuterJoinMJVPrinter::gen_insert_select_stmt(const int64_t delta_table_idx,
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_select_item_size(); ++i) {
     const SelectItem &ori_sel_item = mv_def_stmt_.get_select_item(i);
     SelectItem new_sel_item;
-    new_sel_item.is_real_alias_ = true;
-    new_sel_item.alias_name_ = ori_sel_item.alias_name_;
+    new_sel_item.set_alias_names(ori_sel_item);
     if (OB_FAIL(copier.copy_on_replace(ori_sel_item.expr_, new_sel_item.expr_))) {
       LOG_WARN("failed to copy select expr", K(ret));
     } else if (OB_FAIL(sel_stmt->get_select_items().push_back(new_sel_item))) {

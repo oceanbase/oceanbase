@@ -12102,7 +12102,7 @@ relation_factor %prec LOWER_PARENS
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, NULL, NULL, NULL);
 }
-| select_with_parens relation_name
+| select_with_parens table_subquery_alias
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 4, $1, $2, NULL, NULL);
 }

@@ -203,6 +203,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   is_system_table_ = other.is_system_table_;
   is_index_table_ = other.is_index_table_;
   is_view_table_ = other.is_view_table_;
+  is_column_list_specified_ = other.is_column_list_specified_;
   table_type_ = other.table_type_;
   lake_table_format_ = other.lake_table_format_;
   is_recursive_union_fake_table_ = other.is_recursive_union_fake_table_;

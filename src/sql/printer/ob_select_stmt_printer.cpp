@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL
 #include "sql/printer/ob_select_stmt_printer.h"
+#include "share/ob_cluster_version.h"
 namespace oceanbase
 {
 using namespace common;
@@ -286,11 +287,12 @@ int ObSelectStmtPrinter::print_select()
             continue;
           }
           ObRawExpr *expr = select_item.expr_;
-          // mysql会对view_definition最顶层stmt的select_item添加别名(仅最顶层)
-          // 别名规则见case：
-          // create view(a,b) v as select c1,c2 as alias from t1;
-          // 替换后：              select c1 as a, c2 as b from t1
-          // 因此需要将最顶层stmt中相应别名表达式的func_name替换成column_name
+          const bool preserve_select_alias = OB_INVALID_VERSION == print_params_.data_version_
+                                             || print_params_.data_version_ >= DATA_VERSION_4_4_2_4;
+          // Starting from data version 4.4.2.4, keep an explicit SELECT alias unchanged because
+          // GROUP BY, HAVING, or ORDER BY may refer to it. Before that version, replace it with
+          // the view's explicit column name to keep the persisted definition compatible with old
+          // observers during a rolling upgrade.
           bool need_add_alias = need_print_alias() || select_item.is_real_alias_;
           if (OB_SUCC(ret)) {
             ObRawExpr *tmp_expr = expr;
@@ -302,7 +304,8 @@ int ObSelectStmtPrinter::print_select()
             } else if (OB_ISNULL(expr)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("expr is null");
-            } else if (need_add_alias && NULL != column_list_ && select_item.is_real_alias_) {
+            } else if (need_add_alias && NULL != column_list_ && select_item.is_real_alias_
+                       && !preserve_select_alias) {
               expr->set_alias_column_name(column_list_->at(i));
             }
           }
@@ -314,8 +317,12 @@ int ObSelectStmtPrinter::print_select()
 
           if (OB_SUCC(ret) && need_add_alias) {
             ObString alias_string;
-            if (NULL != column_list_) {
+            if (NULL != column_list_ && (!select_item.is_real_alias_ || !preserve_select_alias)) {
               alias_string = column_list_->at(i);
+            } else if (!select_item.select_alias_name_.empty()) {
+              // An explicit generated table or CTE column list changes alias_name_ to the
+              // exposed column name. Keep printing the original per-SelectItem alias here.
+              alias_string = select_item.select_alias_name_;
             } else if (!select_item.alias_name_.empty()) {
               alias_string = select_item.alias_name_;
             } else {

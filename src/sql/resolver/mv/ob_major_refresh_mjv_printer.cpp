@@ -511,8 +511,7 @@ int ObMajorRefreshMJVPrinter::gen_mr_rt_mv_access_mv_data_select_list(ObSelectSt
     const ObColumnRefRawExpr *col_expr = NULL;
     const TableItem *table = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < orig_select_items.count(); ++i) {
-      select_items.at(i).is_real_alias_ = true;
-      select_items.at(i).alias_name_ = orig_select_items.at(i).alias_name_;
+      select_items.at(i).set_alias_names(orig_select_items.at(i));
       table = &delta_right_table;
       if (OB_ISNULL(col_expr = dynamic_cast<ObColumnRefRawExpr*>(orig_select_items.at(i).expr_))) {
         ret = OB_ERR_UNEXPECTED;
@@ -830,8 +829,7 @@ int ObMajorRefreshMJVPrinter::prepare_gen_access_delta_data_for_major_refresh_mj
       if (OB_FAIL(copier.copy_on_replace(orig_select_items.at(i).expr_, select_items.at(i).expr_))) {
         LOG_WARN("failed to generate group by exprs", K(ret));
       } else {
-        select_items.at(i).is_real_alias_ = true;
-        select_items.at(i).alias_name_ = orig_select_items.at(i).alias_name_;
+        select_items.at(i).set_alias_names(orig_select_items.at(i));
       }
     }
   } else {  // for refresh, generate select list as pk and other column, add order by
@@ -843,12 +841,10 @@ int ObMajorRefreshMJVPrinter::prepare_gen_access_delta_data_for_major_refresh_mj
       } else if (ObOptimizerUtil::find_item(rowkey_sel_pos, i, &idx)) {
         order_items.at(idx).expr_ = expr;
         select_items.at(idx).expr_ = expr;
-        select_items.at(idx).alias_name_ = orig_select_items.at(i).alias_name_;
-        select_items.at(idx).is_real_alias_ = true;
+        select_items.at(idx).set_alias_names(orig_select_items.at(i));
       } else {
         select_items.at(pos).expr_ = expr;
-        select_items.at(pos).alias_name_ = orig_select_items.at(i).alias_name_;
-        select_items.at(pos).is_real_alias_ = true;
+        select_items.at(pos).set_alias_names(orig_select_items.at(i));
         ++pos;
       }
     }

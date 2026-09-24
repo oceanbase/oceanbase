@@ -1354,6 +1354,7 @@ struct ObObjPrintParams
     cs_type_(cs_type),
     accuracy_(),
     print_flags_(0),
+    data_version_(OB_INVALID_VERSION),
     exec_ctx_(NULL),
     ob_obj_type_(ObNullType),
     coll_meta_(NULL)
@@ -1363,6 +1364,7 @@ struct ObObjPrintParams
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     accuracy_(),
     print_flags_(0),
+    data_version_(OB_INVALID_VERSION),
     exec_ctx_(NULL),
     ob_obj_type_(ObNullType),
     coll_meta_(NULL)
@@ -1372,11 +1374,12 @@ struct ObObjPrintParams
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     accuracy_(),
     print_flags_(0),
+    data_version_(OB_INVALID_VERSION),
     exec_ctx_(NULL),
     ob_obj_type_(ObNullType),
     coll_meta_(NULL)
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type), K_(accuracy), K_(print_flags), K_(ob_obj_type));
+  TO_STRING_KV(K_(tz_info), K_(cs_type), K_(accuracy), K_(print_flags), K_(data_version), K_(ob_obj_type));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
   ObAccuracy accuracy_;
@@ -1401,6 +1404,8 @@ struct ObObjPrintParams
       uint32_t reserved_:18;
     };
   };
+  // OB_INVALID_VERSION means that the printing behavior is not version-controlled.
+  uint64_t data_version_;
 
   /**
    * MySQL only

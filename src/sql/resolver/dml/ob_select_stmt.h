@@ -39,6 +39,7 @@ struct SelectItem
     : expr_(NULL),
       is_real_alias_(false),
       alias_name_(),
+      select_alias_name_(),
       paramed_alias_name_(),
       expr_name_(),
       questions_pos_(),
@@ -56,6 +57,7 @@ struct SelectItem
     expr_ = NULL;
     is_real_alias_ = false;
     alias_name_.reset();
+    select_alias_name_.reset();
     paramed_alias_name_.reset();
     expr_name_.reset();
     questions_pos_.reset();
@@ -76,11 +78,18 @@ struct SelectItem
     esc_str_flag_ = false;
     need_check_dup_name_ = false;
   }
+  void set_alias_names(const SelectItem &select_item)
+  {
+    is_real_alias_ = true;
+    alias_name_ = select_item.alias_name_;
+    select_alias_name_ = select_item.select_alias_name_;
+  }
   int deep_copy(ObIRawExprCopier &copier,
                 const SelectItem &other);
   TO_STRING_KV(N_EXPR, expr_,
                N_IS_ALIAS, is_real_alias_,
                N_ALIAS_NAME, alias_name_,
+               K_(select_alias_name),
                N_EXPR_NAME, expr_name_,
                K_(paramed_alias_name),
                K_(questions_pos),
@@ -92,7 +101,13 @@ struct SelectItem
 
   ObRawExpr *expr_;
   bool is_real_alias_;
+  // The exposed output column name. It normally equals the SELECT alias, but an explicit
+  // generated table or CTE column list overwrites it. For example, in
+  // `(select c1 as a1) v(x1)`, alias_name_ is `x1`.
   common::ObString alias_name_;
+  // The original explicit SELECT alias saved before alias_name_ is overwritten by an explicit
+  // table column name. In the example above, select_alias_name_ is `a1`.
+  common::ObString select_alias_name_;
   common::ObString paramed_alias_name_;
   common::ObString expr_name_;
 

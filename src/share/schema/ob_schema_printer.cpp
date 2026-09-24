@@ -3112,7 +3112,9 @@ int ObSchemaPrinter::print_view_definiton(
 
     if (OB_FAIL(ret)) {
       // pass
-    } else if (FALSE_IT(need_print_column_list = (is_oracle_mode && !is_inner_table(table_id)))) {
+    } else if (FALSE_IT(need_print_column_list = !is_inner_table(table_id)
+                                                 && (is_oracle_mode
+                                                     || table_schema->get_view_column_list_specified_mode()))) {
     } else if (need_print_column_list && OB_FAIL(databuff_printf(buf, buf_len, pos, " ("))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
     } else if (need_print_column_list && OB_FAIL(table_schema->get_column_ids(column_ids))) {

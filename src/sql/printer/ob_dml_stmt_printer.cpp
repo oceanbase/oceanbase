@@ -286,6 +286,24 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
       }
       DATA_PRINTF(" ");
       PRINT_IDENT_WITH_QUOT(table_item->alias_name_);
+      if (OB_SUCC(ret) && table_item->is_column_list_specified_) {
+        const ObIArray<SelectItem> &select_items = table_item->ref_query_->get_select_items();
+        bool is_first_column = true;
+        DATA_PRINTF(" (");
+        for (int64_t i = 0; OB_SUCC(ret) && i < select_items.count(); ++i) {
+          const SelectItem &select_item = select_items.at(i);
+          if (select_item.is_implicit_added_ || select_item.implicit_filled_) {
+            // Skip internal select items which are not part of the generated table column list.
+          } else {
+            if (!is_first_column) {
+              DATA_PRINTF(", ");
+            }
+            PRINT_IDENT_WITH_QUOT(select_item.alias_name_);
+            is_first_column = false;
+          }
+        }
+        DATA_PRINTF(")");
+      }
     } else {
       DATA_PRINTF(" ");
       PRINT_TABLE_NAME(print_params_, table_item);
@@ -2534,7 +2552,7 @@ int ObDMLStmtPrinter::print_cte_define_title(TableItem* cte_table)
   } else {
     PRINT_TABLE_NAME(print_params_, cte_table);
   }
-  if (OB_SUCC(ret) && OB_NOT_NULL(cte_table->node_) && OB_NOT_NULL(cte_table->node_->children_[1])) {
+  if (OB_SUCC(ret) && cte_table->is_column_list_specified_) {
     DATA_PRINTF("(");
     const ObIArray<SelectItem> &sub_select_items = sub_select_stmt->get_select_items();
     //打印列
@@ -2790,6 +2808,3 @@ int ObDMLStmtPrinter::print_flashback_info(const TableItem *table_item)
 
 } //end of namespace sql
 } //end of namespace oceanbase
-
-
-

@@ -477,10 +477,26 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
   select_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   select_resolver.set_current_view_level(current_view_level_);
   ObString alias_name;
-  if (alias_node != NULL) {
-    alias_name.assign_ptr((char *)(alias_node->str_value_), static_cast<int32_t>(alias_node->str_len_));
+  const ParseNode *column_alias_node = NULL;
+  if (OB_ISNULL(alias_node)) {
+    // Generate an anonymous table alias below.
+  } else if (T_IDENT == alias_node->type_) {
+    alias_name.assign_ptr(alias_node->str_value_, alias_node->str_len_);
+  } else if (T_LINK_NODE != alias_node->type_
+             || alias_node->num_child_ != 2
+             || OB_ISNULL(alias_node->children_)
+             || OB_ISNULL(alias_node->children_[0])
+             || OB_ISNULL(alias_node->children_[1])
+             || T_IDENT != alias_node->children_[0]->type_
+             || T_COLUMN_LIST != alias_node->children_[1]->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected generated table alias node", K(ret), K(alias_node->type_), K(alias_node->num_child_));
+  } else {
+    alias_name.assign_ptr(alias_node->children_[0]->str_value_, alias_node->children_[0]->str_len_);
+    column_alias_node = alias_node->children_[1];
   }
-  if (OB_ISNULL(merge_stmt)
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(merge_stmt)
       || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(merge_stmt), K(allocator_), K(ret));
@@ -489,6 +505,9 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
   } else if (OB_ISNULL(child_stmt= select_resolver.get_child_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child stmt is NULL", K(ret));
+  } else if (OB_NOT_NULL(column_alias_node)
+             && OB_FAIL(refine_generate_table_column_name(*column_alias_node, *child_stmt))) {
+    LOG_WARN("failed to refine generated table column names", K(ret));
   } else if (OB_FAIL(ObResolverUtils::check_duplicated_column(*child_stmt))) {
     LOG_WARN("fail to check duplicate column", K(ret));
   } else if (OB_UNLIKELY(NULL == (item = merge_stmt->create_table_item(*allocator_)))) {
@@ -502,6 +521,7 @@ int ObMergeResolver::resolve_generate_table(const ParseNode &table_node,
     item->table_name_ = alias_name;
     item->alias_name_ = alias_name;
     item->type_ = TableItem::GENERATED_TABLE;
+    item->is_column_list_specified_ = OB_NOT_NULL(column_alias_node);
     if (OB_FAIL(merge_stmt->add_table_item(session_info_, item))) {
       LOG_WARN("add table item failed", K(ret));
     } else {

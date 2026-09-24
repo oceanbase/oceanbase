@@ -297,6 +297,7 @@ protected:
                                 const ObString &column_name,
                                 const uint64_t table_id,
                                 ObRawExpr *&expr);
+  int ensure_set_query_select_items(ObSelectStmt *view_stmt);
   int create_simple_table_item(ObDMLStmt *stmt,
                                const ObString &table_name,
                                TableItem *&table_item,

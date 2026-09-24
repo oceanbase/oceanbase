@@ -420,6 +420,9 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
       LOG_WARN("fail to copy view definition", KR(ret), K(tenant_id), K(mview_table_id));
     }
   }
+  const bool need_print_column_list = OB_SUCC(ret)
+                                     && !is_oracle_mode
+                                     && mview_table_schema->get_view_column_list_specified_mode();
   // generate mview complete refresh sql
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_mview_insert_hint(
@@ -439,10 +442,17 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   } else if (OB_FAIL(sql_string.append_fmt(" %.*s ",
                      static_cast<int>(insert_columns.length()), insert_columns.ptr()))) {
     LOG_WARN("failed to append select sql string", KR(ret));
-  } else if (OB_FAIL(sql_string.append_fmt(" SELECT /*+ %.*s */ * FROM (%.*s) ",
-                     static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
-                     static_cast<int>(mview_select_sql.length()), mview_select_sql.ptr()))) {
+  } else if (!need_print_column_list
+             && OB_FAIL(sql_string.append_fmt(" SELECT /*+ %.*s */ * FROM (%.*s) ",
+                         static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                         static_cast<int>(mview_select_sql.length()), mview_select_sql.ptr()))) {
     LOG_WARN("failed to append select sql string", KR(ret));
+  } else if (need_print_column_list
+             && OB_FAIL(sql_string.append_fmt(" SELECT /*+ %.*s */ * FROM (%.*s) __mv_src %.*s ",
+                         static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                         static_cast<int>(mview_select_sql.length()), mview_select_sql.ptr(),
+                         static_cast<int>(insert_columns.length()), insert_columns.ptr()))) {
+    LOG_WARN("failed to append mysql select sql string", KR(ret));
   }
   LOG_INFO("prepare mview complete refresh sql", K(sql_string));
   return ret;

@@ -315,8 +315,7 @@ int ObSimpleMAVPrinter::gen_select_items_for_mav(const TableItem &table,
   // 1. add group by exprs and count aggr
   for (int64_t i = 0; OB_SUCC(ret) && i < orig_select_items.count(); ++i) {
     SelectItem &select_item = select_items.at(i);
-    select_item.is_real_alias_ = true;
-    select_item.alias_name_ = orig_select_items.at(i).alias_name_;
+    select_item.set_alias_names(orig_select_items.at(i));
     if (OB_ISNULL(orig_expr = orig_select_items.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(orig_select_items));
@@ -776,8 +775,7 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_select_item_size(); ++i) {
     const SelectItem &ori_select_item = mv_def_stmt_.get_select_item(i);
     SelectItem sel_item;
-    sel_item.alias_name_ = ori_select_item.alias_name_;
-    sel_item.is_real_alias_ = true;
+    sel_item.set_alias_names(ori_select_item);
     int64_t group_by_idx = -1;
     if (OB_ISNULL(ori_select_item.expr_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -840,8 +838,7 @@ int ObSimpleMAVPrinter::gen_simple_join_mav_basic_select_list(const TableItem &t
   // add select list for group by and basic aggr
   for (int64_t i = 0; OB_SUCC(ret) && i < orig_select_items.count(); ++i) {
     SelectItem sel_item;
-    sel_item.alias_name_ = orig_select_items.at(i).alias_name_;
-    sel_item.is_real_alias_ = true;
+    sel_item.set_alias_names(orig_select_items.at(i));
     if (OB_ISNULL(orig_select_items.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(orig_select_items));
@@ -1096,8 +1093,7 @@ int ObSimpleMAVPrinter::gen_group_recalculate_aggr_view(ObSelectStmt *&view_stmt
         LOG_WARN("unexpected group by idx", K(ret), K(group_by_idx), K(ori_select_item));
       } else {
         sel_item.expr_ = view_stmt->get_group_exprs().at(group_by_idx);
-        sel_item.alias_name_ = ori_select_item.alias_name_;
-        sel_item.is_real_alias_ = true;
+        sel_item.set_alias_names(ori_select_item);
         if (OB_FAIL(view_stmt->get_select_items().push_back(sel_item))) {
           LOG_WARN("failed to pushback", K(ret));
         }

@@ -181,7 +181,7 @@ int ObSimpleMJVPrinter::gen_access_mv_data_for_simple_mjv(ObSelectStmt *&sel_stm
                                             mv_table->table_id_, select_items.at(i).expr_))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else {
-        select_items.at(i).alias_name_ = orig_select_items.at(i).alias_name_;
+        select_items.at(i).set_alias_names(orig_select_items.at(i));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < orig_table_items.count(); ++i) {
@@ -301,8 +301,7 @@ int ObSimpleMJVPrinter::gen_one_access_delta_data_for_simple_mjv(const int64_t d
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_select_item_size(); ++i) {
     const SelectItem &ori_sel_item = mv_def_stmt_.get_select_item(i);
     SelectItem new_sel_item;
-    new_sel_item.is_real_alias_ = true;
-    new_sel_item.alias_name_ = ori_sel_item.alias_name_;
+    new_sel_item.set_alias_names(ori_sel_item);
     if (OB_FAIL(copier.copy_on_replace(ori_sel_item.expr_, new_sel_item.expr_))) {
       LOG_WARN("failed to copy select expr", K(ret));
     } else if (OB_FAIL(delta_stmt->get_select_items().push_back(new_sel_item))) {

@@ -73,6 +73,8 @@ public:
                                                    ObIAllocator &alloc,
                                                    ObSQLSessionInfo *session_info,
                                                    ObRawExprFactory &expr_factory);
+  static int align_mv_stmt_output_column_names(ObSelectStmt *stmt,
+                                               const ObTableSchema &container_table_schema);
   static int gen_dep_column_alias_name(const ObSelectStmt &stmt,
                                        int64_t &idx,
                                        ObIAllocator &alloc,

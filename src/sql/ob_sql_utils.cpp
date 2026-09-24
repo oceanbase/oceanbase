@@ -6534,9 +6534,13 @@ int ObSQLUtils::submit_compile_view_task(const share::schema::ObTableSchema &old
   } else if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get select stmt", K(ret));
-  } else if (is_oracle_mode() && !old_view_schema.is_sys_view()) {
+  } else if (!old_view_schema.is_sys_view()
+             && (is_oracle_mode() || old_view_schema.get_view_column_list_specified_mode())) {
     // column name in column schema should be the same as select item alias name in view definition
-    // when view definition is not rebuilt and column list grammar is used, overwrite alias name
+    // when the stored definition keeps an explicit SELECT alias and column list grammar is used,
+    // overwrite the alias name with the view's external column name after resolving the definition
+    // MySQL views without an explicit column list keep the names resolved from their definition.
+    // In particular, a UNION definition may differ from the schema's auto-generated column names.
     // sys view can not use column list grammar and column count of sys view may be changed
     const ObColumnSchemaV2 *column_schema;
     uint64_t column_id;

@@ -426,6 +426,9 @@ int ObTransformMVRewritePrepare::generate_mv_stmt(MvInfo &mv_info,
       LOG_WARN("failed to copy and convert string charset", K(ret));
     } else if (OB_FAIL(resolve_temp_stmt(view_definition, ctx, temp_query_ctx, mv_info.view_stmt_))) {
       LOG_WARN("failed to resolve mv define stmt", K(ret), K(view_definition));
+    } else if (OB_FAIL(ObMVProvider::align_mv_stmt_output_column_names(
+                           mv_info.view_stmt_, *mv_info.data_table_schema_))) {
+      LOG_WARN("failed to align mv output column names", K(ret));
     } else if (OB_FAIL(select_mv_sql.assign( "SELECT "))) {
       LOG_WARN("failed to assign sql", K(ret));
     }
