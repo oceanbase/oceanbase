@@ -1308,6 +1308,10 @@ int ObConstraintTask::set_check_constraint_validated()
     } else if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
       LOG_WARN("deep copy table arg failed", K(ret));
     } else {
+      // Table options were handled by the original ALTER. Replaying them while holding the
+      // constraint task's RX lock can request an incompatible table X lock.
+      alter_table_arg.alter_table_schema_.alter_option_bitset_.reset();
+      alter_table_arg.is_alter_options_ = false;
       ObTableSchema::const_constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin();
       if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_) {
         (*iter)->set_constraint_id(target_object_id_);
@@ -1535,6 +1539,9 @@ int ObConstraintTask::rollback_failed_check_constraint()
     } else if (OB_FAIL(deep_copy_table_arg(allocator, alter_table_arg_, alter_table_arg))) {
       LOG_WARN("fail to deep copy table arg", K(ret));
     } else {
+      // Rollback must only undo the constraint change, not repeat the original table options.
+      alter_table_arg.alter_table_schema_.alter_option_bitset_.reset();
+      alter_table_arg.is_alter_options_ = false;
       alter_table_arg.based_schema_object_infos_.reset();
       ObTableSchema::const_constraint_iterator iter = alter_table_arg.alter_table_schema_.constraint_begin();
       if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == alter_table_arg.alter_constraint_type_) {
