@@ -86,14 +86,11 @@ int ObSelectIntoOp::inner_open()
       }
       case ObExternalFileFormat::FormatType::ODPS_FORMAT:
       {
-        use_odps_jni_connector_ = GCONF._use_odps_jni_connector;
-        int8_t unused_mode = 0;
-        if (OB_FAIL(ObSQLUtils::parse_odps_jni_params_from_format_str(
-                MY_SPEC.external_properties_.str_,
-                use_odps_jni_connector_,
-                unused_mode))) {
-          LOG_WARN("failed to parse odps jni params from format str", K(ret));
-        } else if (!use_odps_jni_connector_) {
+        // the connector choice is carried by the format string stamped at
+        // plan build time and already parsed into external_properties_ above;
+        // the executor must follow the plan's snapshot instead of GCONF.
+        use_odps_jni_connector_ = external_properties_.odps_format_.use_odps_jni_connector_;
+        if (!use_odps_jni_connector_) {
 #if defined(OB_BUILD_CPP_ODPS)
           if (OB_FAIL(init_odps_tunnel())) {
             LOG_WARN("failed to init odps tunnel", K(ret));

@@ -364,17 +364,17 @@ int ObODPSJNITableRowIterator::init_storage_api_meta_param(
     // prepare_data_expr/prepare_partition_expr (no codegen'd exprs here).
     obexpr_odps_nonpart_col_idsmap_.reuse();
     obexpr_odps_part_col_idsmap_.reuse();
-    sorted_column_ids_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < nonpart_col_idxs.count(); ++i) {
       const int64_t target_idx = nonpart_col_idxs.at(i);
       if (OB_UNLIKELY(target_idx < 0 || target_idx >= mirror_nonpart_column_list_.count())) {
         ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
         LOG_WARN("unexpected odps column index", K(ret), K(target_idx),
                  K(mirror_nonpart_column_list_.count()));
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+            "wrong column index point to odps, please check the index of external$tablecol[index] and "
+            "metadata$partition_list_col[index]");
       } else if (OB_FAIL(obexpr_odps_nonpart_col_idsmap_.push_back(ExternalPair{i, target_idx}))) {
         LOG_WARN("failed to keep target idx of external col", K(ret), K(target_idx));
-      } else if (OB_FAIL(sorted_column_ids_.push_back(ExternalPair{i, target_idx}))) {
-        LOG_WARN("failed to keep sorted column ids", K(ret), K(target_idx));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < part_col_idxs.count(); ++i) {
@@ -383,14 +383,13 @@ int ObODPSJNITableRowIterator::init_storage_api_meta_param(
         ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
         LOG_WARN("unexpected odps partition column index", K(ret), K(target_idx),
                  K(mirror_partition_column_list_.count()));
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR,
+            "wrong column index point to odps, please check the index of external$tablecol[index] and "
+            "metadata$partition_list_col[index]");
       } else if (OB_FAIL(obexpr_odps_part_col_idsmap_.push_back(ExternalPair{i, target_idx}))) {
         LOG_WARN("failed to keep target idx of partition col", K(ret), K(target_idx));
-      } else if (OB_FAIL(sorted_column_ids_.push_back(
-                     ExternalPair{i, target_idx + mirror_nonpart_column_list_.count()}))) {
-        LOG_WARN("failed to keep sorted column ids", K(ret), K(target_idx));
       }
     }
-    lib::ob_sort(sorted_column_ids_.begin(), sorted_column_ids_.end(), ExternalPair::Compare());
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(init_all_columns_name_as_odps_params())) {
       LOG_WARN("failed to init expected columns and related types", K(ret));
@@ -459,8 +458,6 @@ int ObODPSJNITableRowIterator::prepare_data_expr(const ExprFixedArray &ext_file_
           "metadata$partition_list_col[index]");
     } else if (OB_FAIL(obexpr_odps_nonpart_col_idsmap_.push_back({i, target_idx}))) {
       LOG_WARN("failed to keep target_idx of external col", K(ret), K(target_idx));
-    } else if (OB_FAIL(sorted_column_ids_.push_back(ExternalPair{i, target_idx}))) {
-      LOG_WARN("failed to keep sorted_column_ids", K(ret), K(target_idx));
     } else if (scan_param_ != nullptr) {
       if (ObCollectionSQLType == cur_expr->obj_meta_.get_type() &&
           OB_FAIL(ObODPSTableUtils::create_array_helper(scan_param_->op_->get_eval_ctx().exec_ctx_,
@@ -473,7 +470,6 @@ int ObODPSJNITableRowIterator::prepare_data_expr(const ExprFixedArray &ext_file_
       }
     }
   }
-  lib::ob_sort(sorted_column_ids_.begin(), sorted_column_ids_.end(), ExternalPair::Compare());
   return ret;
 }
 
@@ -495,8 +491,6 @@ int ObODPSJNITableRowIterator::prepare_partition_expr(const ExprFixedArray &ext_
           "metadata$partition_list_col[index]");
     } else if (OB_FAIL(obexpr_odps_part_col_idsmap_.push_back({i, target_idx}))) {
       LOG_WARN("failed to keep target_idx of external col", K(ret), K(target_idx));
-    } else if (OB_FAIL(sorted_column_ids_.push_back({i, target_idx + mirror_nonpart_column_list_.count()}))) {
-      LOG_WARN("failed to keep sorted_column_ids", K(ret), K(target_idx));
     } else if (scan_param_ != nullptr) {
       if (OB_FAIL(check_type_static(mirror_partition_column_list_.at(target_idx), cur_expr, nullptr))) {
         LOG_WARN("odps type map ob type not support", K(ret), K(target_idx));
@@ -505,8 +499,6 @@ int ObODPSJNITableRowIterator::prepare_partition_expr(const ExprFixedArray &ext_
       }
     }
   }
-  lib::ob_sort(sorted_column_ids_.begin(), sorted_column_ids_.end(), ExternalPair::Compare());
-  LOG_DEBUG("sorted column ids", K(sorted_column_ids_));
   return ret;
 }
 
@@ -1872,6 +1864,80 @@ int ObODPSJNITableRowIterator::init_data_tunnel_reader_params(int64_t start, int
   return ret;
 }
 
+// 按列名在 arrow batch 里定位 odps 列，找不到时 field_idx 返回 -1
+static int find_arrow_field_by_name(const std::shared_ptr<arrow::Schema> &schema,
+                                     const ObString &name,
+                                     int64_t &field_idx)
+{
+  int ret = OB_SUCCESS;
+  field_idx = -1;
+  for (int64_t j = 0; OB_SUCC(ret) && j < schema->fields().size(); ++j) {
+    const std::string &field_name = schema->field(j)->name();
+    if (0 == name.case_compare(
+            ObString(static_cast<int64_t>(field_name.length()), field_name.c_str()))) {
+      field_idx = j;
+      break;
+    }
+  }
+  return ret;
+}
+
+// 将投影列（非分区/分区两张 idsmap）按列名解析到会话 arrow schema 的 field
+// 下标，init 到 reset（rescan）之间只解析一次：会话列集是运行期投影的超集
+// 时，多余列被自然跳过，真正缺列才报错；列数恰好等于投影时解析结果是恒等
+// 映射，同时把"列序对齐"从假设变成显式校验。之后每个 batch 的填列循环只做
+// 纯下标访问。
+int ObODPSJNITableRowIterator::resolve_sorted_columns_by_name(const std::shared_ptr<arrow::Schema> &schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("null session arrow schema", K(ret));
+  } else if (OB_NOT_NULL(resolved_batch_schema_)) {
+    // init 到 reset（rescan）之间只解析一次：同一查询的所有 task 共用同一
+    // 个会话列集（由会话分配机制保证），换 task 重新 import 出的 schema 对象
+    // 内容相同，直接复用首次解析结果
+  } else {
+    resolved_column_ids_.reuse();
+    const int64_t nonpart_cnt = obexpr_odps_nonpart_col_idsmap_.count();
+    const int64_t total_cnt = nonpart_cnt + obexpr_odps_part_col_idsmap_.count();
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+      const bool is_part_col = i >= nonpart_cnt;
+      const ExternalPair &pair = is_part_col
+          ? obexpr_odps_part_col_idsmap_.at(i - nonpart_cnt)
+          : obexpr_odps_nonpart_col_idsmap_.at(i);
+      const int64_t expr_idx = pair.ob_col_idx_;
+      const int64_t mirror_idx = pair.odps_col_idx_;
+      const ObSEArray<MirrorOdpsJniColumn, 4> &mirror_list = is_part_col
+          ? mirror_partition_column_list_ : mirror_nonpart_column_list_;
+      int64_t field_idx = -1;
+      if (OB_UNLIKELY(expr_idx < 0)
+          || OB_UNLIKELY(mirror_idx < 0 || mirror_idx >= mirror_list.count())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid projected column idx", K(ret), K(expr_idx), K(mirror_idx));
+      } else if (OB_FAIL(find_arrow_field_by_name(schema, mirror_list.at(mirror_idx).name_, field_idx))) {
+        LOG_WARN("failed to find field by name", K(ret));
+      } else if (OB_UNLIKELY(-1 == field_idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("projected column is missing from the session batch",
+                 K(ret), K(is_part_col), K(mirror_idx),
+                 "column", mirror_list.at(mirror_idx).name_,
+                 K(schema->fields().size()), K(total_cnt));
+      } else if (OB_FAIL(resolved_column_ids_.push_back(
+                     ResolvedColumnPair{expr_idx, mirror_idx, field_idx, is_part_col}))) {
+        LOG_WARN("failed to keep resolved column pair", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      resolved_batch_schema_ = schema;
+    } else {
+      resolved_column_ids_.reuse();
+      resolved_batch_schema_.reset();
+    }
+  }
+  return ret;
+}
+
 int ObODPSJNITableRowIterator::fill_column_exprs_storage(const ExprFixedArray &column_exprs, ObEvalCtx &ctx, int64_t num_rows)
 {
   int ret = OB_SUCCESS;
@@ -1912,53 +1978,37 @@ int ObODPSJNITableRowIterator::fill_column_exprs_storage(const ExprFixedArray &c
   } else {
     const std::shared_ptr<arrow::RecordBatch> cur_record_batch = state_.odps_jni_scanner_->get_cur_arrow_batch();
     const std::shared_ptr<arrow::Schema> cur_schema = cur_record_batch->schema();
-    if (sorted_column_ids_.empty()) {
+    if (obexpr_odps_nonpart_col_idsmap_.empty() && obexpr_odps_part_col_idsmap_.empty()) {
       if (cur_schema->fields().size() == 1 && obexpr_odps_part_col_idsmap_.empty() && obexpr_odps_nonpart_col_idsmap_.empty()) {
         // do nothing
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column count", K(ret), K(cur_schema->fields().size()));
       }
+    } else if (OB_FAIL(resolve_sorted_columns_by_name(cur_schema))) {
+      LOG_WARN("failed to resolve projected columns against session schema", K(ret));
     } else {
-      if (cur_schema->fields().size() != sorted_column_ids_.count()) {
-        // do nothing
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column count", K(ret), K(cur_schema->fields().size()), K(sorted_column_ids_.count()));
-      } else {
-        for (int64_t column_idx = 0; OB_SUCC(ret) && column_idx < cur_schema->fields().size(); ++column_idx) {
-          if (column_idx >= sorted_column_ids_.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid column idx", K(ret), K(column_idx), K(sorted_column_ids_.count()));
-          } else {
-            int64_t expr_idx = sorted_column_ids_.at(column_idx).ob_col_idx_;
-            int64_t target_index = sorted_column_ids_.at(column_idx).odps_col_idx_;
-            if (expr_idx < 0 || expr_idx >= column_exprs.count()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid target index for mirror column", K(ret), K(expr_idx), K(column_idx));
-            } else if (target_index < mirror_nonpart_column_list_.count()) {
-              ObExpr &expr = *column_exprs.at(expr_idx);  // do not check null ptr
-
-              const std::shared_ptr<arrow::Field> field = cur_schema->field(column_idx);
-              const std::shared_ptr<arrow::Array> array = cur_record_batch->column(column_idx);
-              MirrorOdpsJniColumn column = mirror_nonpart_column_list_.at(target_index);
-              if (OB_FAIL(fill_column_arrow(ctx, expr, array, field, column, num_rows, expr_idx))) {
-                LOG_WARN("failed to fill column", K(ret));
-              }
-            } else {
-              ObExpr &expr = *column_exprs.at(expr_idx);  // do not check null ptr
-              target_index -= mirror_nonpart_column_list_.count();
-              if (target_index < 0 || target_index >= mirror_partition_column_list_.count()) {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("invalid target index for mirror column", K(ret), K(target_index), K(column_idx));
-              } else {
-                const std::shared_ptr<arrow::Field> field = cur_schema->field(column_idx);
-                const std::shared_ptr<arrow::Array> array = cur_record_batch->column(column_idx);
-                MirrorOdpsJniColumn column = mirror_partition_column_list_.at(target_index);
-                if (OB_FAIL(fill_column_arrow(ctx, expr, array, field, column, num_rows, expr_idx))) {
-                  LOG_WARN("failed to fill column", K(ret));
-                }
-              }
-            }
+      // 列数恰好等于投影（恒等映射）与会话超集两种布局共用这一份填列循环：
+      // field 下标已在解析期按列名求出并按 schema 缓存，这里只做纯下标访问
+      for (int64_t i = 0; OB_SUCC(ret) && i < resolved_column_ids_.count(); ++i) {
+        const int64_t expr_idx = resolved_column_ids_.at(i).ob_col_idx_;
+        const int64_t mirror_idx = resolved_column_ids_.at(i).mirror_idx_;
+        const int64_t field_idx = resolved_column_ids_.at(i).field_idx_;
+        const bool is_part_col = resolved_column_ids_.at(i).is_part_col_;
+        const ObSEArray<MirrorOdpsJniColumn, 4> &mirror_list = is_part_col
+            ? mirror_partition_column_list_ : mirror_nonpart_column_list_;
+        if (OB_UNLIKELY(expr_idx < 0 || expr_idx >= column_exprs.count())
+            || OB_UNLIKELY(field_idx < 0 || field_idx >= cur_schema->fields().size())
+            || OB_UNLIKELY(mirror_idx < 0 || mirror_idx >= mirror_list.count())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid resolved column idx", K(ret), K(expr_idx), K(field_idx), K(mirror_idx));
+        } else {
+          ObExpr &expr = *column_exprs.at(expr_idx);  // do not check null ptr
+          const std::shared_ptr<arrow::Field> field = cur_schema->field(field_idx);
+          const std::shared_ptr<arrow::Array> array = cur_record_batch->column(field_idx);
+          MirrorOdpsJniColumn column = mirror_list.at(mirror_idx);
+          if (OB_FAIL(fill_column_arrow(ctx, expr, array, field, column, num_rows, expr_idx))) {
+            LOG_WARN("failed to fill column", K(ret), K(field_idx), K(mirror_idx), K(expr_idx));
           }
         }
       }
@@ -2001,27 +2051,28 @@ int ObODPSJNITableRowIterator::fill_column_exprs_tunnel(const ExprFixedArray &co
     } else {
       const std::shared_ptr<arrow::RecordBatch> cur_record_batch = state_.odps_jni_scanner_->get_cur_arrow_batch();
       const std::shared_ptr<arrow::Schema> cur_schema = cur_record_batch->schema();
-      for (int64_t column_idx = 0; OB_SUCC(ret) && column_idx < cur_schema->fields().size(); ++column_idx) {
-        if (column_idx >= sorted_column_ids_.count()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid column idx", K(ret), K(column_idx), K(sorted_column_ids_.count()));
-        } else {
-          int64_t expr_idx = sorted_column_ids_.at(column_idx).ob_col_idx_;
-          int64_t target_index = sorted_column_ids_.at(column_idx).odps_col_idx_;
-          if (expr_idx < 0 || expr_idx >= column_exprs.count()) {
+      if (OB_FAIL(resolve_sorted_columns_by_name(cur_schema))) {
+        LOG_WARN("failed to resolve projected columns against session schema", K(ret));
+      } else {
+        // tunnel 的 arrow batch 只携带非分区列；分区列由下方 part_list_val_ 循环单独填充
+        for (int64_t i = 0; OB_SUCC(ret) && i < resolved_column_ids_.count(); ++i) {
+          const int64_t expr_idx = resolved_column_ids_.at(i).ob_col_idx_;
+          const int64_t mirror_idx = resolved_column_ids_.at(i).mirror_idx_;
+          const int64_t field_idx = resolved_column_ids_.at(i).field_idx_;
+          if (resolved_column_ids_.at(i).is_part_col_) {
+            // do nothing, partition columns will handle in alone.
+          } else if (OB_UNLIKELY(expr_idx < 0 || expr_idx >= column_exprs.count())
+              || OB_UNLIKELY(field_idx < 0 || field_idx >= cur_schema->fields().size())
+              || OB_UNLIKELY(mirror_idx < 0 || mirror_idx >= mirror_nonpart_column_list_.count())) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid target index for mirror column", K(ret), K(expr_idx), K(column_idx));
+            LOG_WARN("invalid resolved column idx", K(ret), K(expr_idx), K(field_idx), K(mirror_idx));
           } else {
             ObExpr &expr = *column_exprs.at(expr_idx);  // do not check null ptr
-            if (expr.type_ == T_PSEUDO_PARTITION_LIST_COL || target_index < 0 || target_index >= mirror_nonpart_column_list_.count()) {
-              // do nothing, parititon columns will handle in alone.
-            } else {
-              const std::shared_ptr<arrow::Field> field = cur_schema->field(column_idx);
-              const std::shared_ptr<arrow::Array> array = cur_record_batch->column(column_idx);
-              MirrorOdpsJniColumn column = mirror_nonpart_column_list_.at(target_index);
-              if (OB_FAIL(fill_column_arrow(ctx, expr, array, field, column, num_rows, expr_idx))) {
-                LOG_WARN("failed to fill column", K(ret));
-              }
+            const std::shared_ptr<arrow::Field> field = cur_schema->field(field_idx);
+            const std::shared_ptr<arrow::Array> array = cur_record_batch->column(field_idx);
+            MirrorOdpsJniColumn column = mirror_nonpart_column_list_.at(mirror_idx);
+            if (OB_FAIL(fill_column_arrow(ctx, expr, array, field, column, num_rows, expr_idx))) {
+              LOG_WARN("failed to fill column", K(ret), K(field_idx), K(mirror_idx), K(expr_idx));
             }
           }
         }
@@ -2294,6 +2345,9 @@ void ObODPSJNITableRowIterator::reset()
   read_rounds_ = 0;
   read_rows_ = 0;
   batch_size_ = -1;
+  // rescan 会换新的 scanner/reader 会话，schema 可能变化，解析缓存一并失效
+  resolved_column_ids_.reuse();
+  resolved_batch_schema_.reset();
 }
 
 int ObODPSJNITableRowIterator::StateValues::reuse()

@@ -20,6 +20,7 @@
 namespace arrow {
 class Array;
 class Field;
+class Schema;
 }  // namespace arrow
 namespace oceanbase {
 namespace sql {
@@ -215,7 +216,8 @@ public:
     mirror_nonpart_column_list_.reset();
     mirror_partition_column_list_.reset();
     partition_specs_.reset();
-    sorted_column_ids_.reset();
+    resolved_column_ids_.reset();
+    resolved_batch_schema_.reset();
     obexpr_odps_nonpart_col_idsmap_.reset();
     obexpr_odps_part_col_idsmap_.reset();
     arena_alloc_.clear();
@@ -342,6 +344,11 @@ private:
   int fill_column_arrow(ObEvalCtx &ctx, const ObExpr &expr, const std::shared_ptr<arrow::Array> &array,
       const std::shared_ptr<arrow::Field> &field, const MirrorOdpsJniColumn &column,int64_t num_rows, int64_t column_idx);
   int fill_column_exprs_storage(const ExprFixedArray &column_exprs, ObEvalCtx &ctx, int64_t num_rows);
+  // Resolve every projected column (the non-partition and partition id maps)
+  // to its field index in the session arrow schema by column name, once per
+  // schema. The result is cached in resolved_column_ids_, so per-batch
+  // filling works on plain field indexes without any name lookup.
+  int resolve_sorted_columns_by_name(const std::shared_ptr<arrow::Schema> &schema);
   int fill_column_exprs_tunnel(const ExprFixedArray &column_exprs, ObEvalCtx &ctx, int64_t num_rows);
 
   int get_next_rows_tunnel(int64_t &count, int64_t capacity);
@@ -422,17 +429,24 @@ private:
   struct ExternalPair {
     int64_t ob_col_idx_;
     int64_t odps_col_idx_;
-    struct Compare {
-      bool operator()(ExternalPair &l, ExternalPair &r)
-      {
-        return l.odps_col_idx_ < r.odps_col_idx_;
-      }
-    };
     TO_STRING_KV(K_(ob_col_idx), K_(odps_col_idx));
   };
   ObTime ob_time_;
   ObString timezone_str_;
-  ObSEArray<ExternalPair, 4> sorted_column_ids_;
+  // resolved per session schema: every projected column (from the two id maps
+  // below) mapped to its field index in the session arrow schema by name;
+  // cached per schema and shared by the storage and tunnel arrow fill loops
+  struct ResolvedColumnPair {
+    int64_t ob_col_idx_;
+    int64_t mirror_idx_;  // index into the nonpart/part mirror column list
+    int64_t field_idx_;
+    bool is_part_col_;
+    TO_STRING_KV(K_(ob_col_idx), K_(mirror_idx), K_(field_idx), K_(is_part_col));
+  };
+  ObSEArray<ResolvedColumnPair, 16> resolved_column_ids_;
+  // the schema resolved_column_ids_ was built against; batches with the same
+  // schema reuse the resolution
+  std::shared_ptr<arrow::Schema> resolved_batch_schema_;
   // total_column_ids_ contains the all column with parittion column and
   ObSEArray<ExternalPair, 4> obexpr_odps_part_col_idsmap_;
   // obexpr_odps_nonpart_col_idsmap_ only contains the normal column index.

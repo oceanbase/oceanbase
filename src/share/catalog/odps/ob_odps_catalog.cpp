@@ -436,6 +436,15 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         LOG_WARN("failed to copy odps format str", K(ret));
       } else if (OB_FAIL(external_format.load_from_string(format_str, allocator))) {
         LOG_WARN("failed to parse odps format str", K(ret));
+      } else {
+        // DDL 串可能缺省 USE_ODPS_JNI_CONNECTOR，补快照当前 GCONF 值，避免 cpp 模式统计回源误走 JNI。
+        ObString stamped_format;
+        external_format.odps_format_.use_odps_jni_connector_ = GCONF._use_odps_jni_connector;
+        if (OB_FAIL(external_format.to_string_with_alloc(stamped_format, allocator))) {
+          LOG_WARN("failed to dump odps format str", K(ret));
+        } else {
+          format_str = stamped_format;
+        }
       }
     } else if (OB_FAIL(get_odps_format_str_from_catalog_properties(allocator, properties_, table_metadata->namespace_name_,
                                                           table_metadata->table_name_, api_mode, format_str, external_format))) {
@@ -823,6 +832,8 @@ int ObOdpsCatalog::get_odps_format_str_from_catalog_properties(common::ObIAlloca
   format.compression_code_ = properties.compression_code_;
   format.region_ = properties.region_;
   format.api_mode_ = api_mode;
+  // snapshot the current GCONF USE_ODPS_JNI_CONNECTOR into the format string
+  format.use_odps_jni_connector_ = GCONF._use_odps_jni_connector;
 
   if (OB_FAIL(format.encrypt())) {
       LOG_WARN("failed to encrypt format", K(ret), K(format));

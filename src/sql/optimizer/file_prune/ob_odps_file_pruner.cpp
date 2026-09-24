@@ -16,11 +16,80 @@
 #include "sql/ob_sql_context.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/rewrite/ob_query_range_define.h"
+#include "sql/resolver/dml/ob_stmt_expr_visitor.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
+
+// 从 stmt 表达式树里收集查询真实引用的 odps 伪列（不能走 column items：
+// resolver 会把全部存储生成列预解析进去，无裁剪信息）。
+namespace
+{
+class ObOdpsRefColIdxCollector : public ObStmtExprVisitor
+{
+public:
+  ObOdpsRefColIdxCollector(const uint64_t table_id,
+                           ObIArray<int64_t> &nonpart_idxs,
+                           ObIArray<int64_t> &part_idxs)
+      : table_id_(table_id), nonpart_idxs_(nonpart_idxs), part_idxs_(part_idxs)
+  {
+    // 跳过 SCOPE_BASIC_TABLE：该 scope 遍历的是被污染的全量 column items
+    set_relation_scope();
+  }
+  virtual ~ObOdpsRefColIdxCollector() {}
+  virtual int do_visit(ObRawExpr *&expr) override { return collect(expr); }
+  int collect(const ObRawExpr *expr)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(expr)) {
+      // do nothing
+    } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
+               || T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
+      const ObPseudoColumnRawExpr *pseudo_col_expr =
+          static_cast<const ObPseudoColumnRawExpr *>(expr);
+      if (pseudo_col_expr->get_table_id() != table_id_) {
+        // 其他表的伪列，忽略
+      } else {
+        const int64_t column_idx = pseudo_col_expr->get_column_idx() - 1;
+        ObIArray<int64_t> &idxs = T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
+                                      ? nonpart_idxs_
+                                      : part_idxs_;
+        bool found = false;
+        for (int64_t i = 0; !found && i < idxs.count(); ++i) {
+          found = (idxs.at(i) == column_idx);
+        }
+        if (OB_UNLIKELY(column_idx < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected odps pseudo column idx", K(ret), K(column_idx));
+        } else if (!found && OB_FAIL(idxs.push_back(column_idx))) {
+          LOG_WARN("failed to push back odps column idx", K(ret), K(column_idx));
+        }
+      }
+    } else if (expr->is_column_ref_expr()
+               && OB_NOT_NULL(static_cast<const ObColumnRefRawExpr *>(expr)->get_dependant_expr())) {
+      // 生成列引用：伪列藏在 dependant 表达式里
+      if (OB_FAIL(collect(static_cast<const ObColumnRefRawExpr *>(expr)->get_dependant_expr()))) {
+        LOG_WARN("failed to collect from dependant expr", K(ret));
+      }
+    } else if (!expr->has_flag(CNT_PSEUDO_COLUMN) && !expr->has_flag(CNT_COLUMN)) {
+      // 子树既无伪列也无列引用（生成列会间接引用伪列），无需递归
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+        if (OB_FAIL(collect(expr->get_param_expr(i)))) {
+          LOG_WARN("failed to collect from param expr", K(ret), K(i));
+        }
+      }
+    }
+    return ret;
+  }
+private:
+  uint64_t table_id_;
+  ObIArray<int64_t> &nonpart_idxs_;
+  ObIArray<int64_t> &part_idxs_;
+};
+} // anonymous namespace
 
 // ---------------------------------------------------------------------------
 // The split helpers of the QC-stage ODPS assignment. They only ever serve
@@ -484,14 +553,40 @@ int ObODPSFilePruner::init(ObSqlSchemaGuard &sql_schema_guard,
       } else if (OB_UNLIKELY(!is_odps_external_table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not an odps external table", K(ret), K(ref_table_id));
-      } else if (OB_FAIL(ob_write_string(allocator_, format_str, format_str_))) {
-        LOG_WARN("failed to copy odps format str", K(ret));
+      } else {
+        // stamp the effective connector choice (hint > GCONF) into the format string
+        ObString effective_format;
+        if (OB_FAIL(ObSQLUtils::apply_odps_hints_to_format_str(
+                format_str,
+                stmt.get_query_ctx()->get_global_hint().opt_params_,
+                allocator_,
+                effective_format))) {
+          LOG_WARN("failed to apply odps hints to format str", K(ret));
+        } else if (OB_FAIL(ob_write_string(allocator_,
+                effective_format.empty() ? format_str : effective_format,
+                format_str_))) {
+          LOG_WARN("failed to copy odps format str", K(ret));
+        }
       }
     }
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(collect_projected_column_idxs_(stmt))) {
       LOG_WARN("failed to collect projected odps column idxs", K(ret));
+    } else {
+      // 分区列不走查询表达式（走 session 的分区 spec），这里全量补齐防止欠集
+      const int64_t part_key_cnt = table_schema->get_partition_key_column_num();
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_key_cnt; ++i) {
+        bool found = false;
+        for (int64_t j = 0; !found && j < part_col_idxs_.count(); ++j) {
+          found = (part_col_idxs_.at(j) == i);
+        }
+        if (!found && OB_FAIL(part_col_idxs_.push_back(i))) {
+          LOG_WARN("failed to push back partition column idx", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(collect_clause_part_ids_(stmt))) {
       LOG_WARN("failed to collect clause part ids", K(ret));
     } else if (OB_FAIL(generate_column_meta_info(stmt))) {
@@ -570,53 +665,9 @@ int ObODPSFilePruner::fill_partition_values_(const ObTableSchema &table_schema,
   return ret;
 }
 
-// Recursively collect the 0-based odps column indexes of the pseudo columns
-// (external$tablecol[i] / metadata$partition_list_col[i]) hidden inside the
-// (stored generated) column expressions — the optimizer-time twin of
-// ObLogTableScan::extract_file_column_exprs_recursively, consistent with the
-// runtime ObExpr::extra_ - 1.
-int ObODPSFilePruner::collect_pseudo_col_idx_recursively_(const ObRawExpr *expr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
-             || T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
-    const ObPseudoColumnRawExpr *pseudo_col_expr = static_cast<const ObPseudoColumnRawExpr *>(expr);
-    const int64_t column_idx = pseudo_col_expr->get_column_idx() - 1;
-    ObSEArray<int64_t, 8> &idxs = T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()
-                                      ? nonpart_col_idxs_
-                                      : part_col_idxs_;
-    bool found = false;
-    for (int64_t i = 0; !found && i < idxs.count(); ++i) {
-      found = (idxs.at(i) == column_idx);
-    }
-    if (!found && OB_FAIL(idxs.push_back(column_idx))) {
-      LOG_WARN("failed to push back odps column idx", K(ret), K(column_idx));
-    }
-  } else if (expr->is_column_ref_expr()
-             && OB_NOT_NULL(static_cast<const ObColumnRefRawExpr *>(expr)->get_dependant_expr())) {
-    if (OB_FAIL(collect_pseudo_col_idx_recursively_(
-            static_cast<const ObColumnRefRawExpr *>(expr)->get_dependant_expr()))) {
-      LOG_WARN("failed to collect pseudo col idx from dependant expr", K(ret));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(collect_pseudo_col_idx_recursively_(expr->get_param_expr(i)))) {
-        LOG_WARN("failed to collect pseudo col idx from param expr", K(ret), K(i));
-      }
-    }
-  }
-  return ret;
-}
-
 namespace
 {
-// Same walk as ObODPSFilePruner::collect_pseudo_col_idx_recursively_, but keeps
-// the owning OB schema column id so the optimizer-time predicate printer can
-// resolve the white-filter column ids (the re-derived pushdown filter tree
-// carries OB column ids, not odps column indexes).
+// 与 ObOdpsRefColIdxCollector::collect 相同的遍历，但额外保留 OB 列 id，供优化器期谓词打印使用。
 int collect_pred_col_info_recursive_(const ObRawExpr *expr,
                                      const uint64_t column_id,
                                      ObIArray<ObOdpsPredColumnInfo> &infos)
@@ -660,7 +711,11 @@ int ObODPSFilePruner::collect_projected_column_idxs_(const ObDMLStmt &stmt)
   nonpart_col_idxs_.reset();
   part_col_idxs_.reset();
   pred_col_infos_.reset();
-  if (OB_FAIL(stmt.get_column_items(loc_meta_.table_loc_id_, column_items))) {
+  // 投影列集必须来自 stmt 表达式树（见 ObOdpsRefColIdxCollector 注释）
+  ObOdpsRefColIdxCollector collector(loc_meta_.table_loc_id_, nonpart_col_idxs_, part_col_idxs_);
+  if (OB_FAIL(const_cast<ObDMLStmt &>(stmt).iterate_stmt_expr(collector))) {
+    LOG_WARN("failed to collect referenced odps column idxs", K(ret));
+  } else if (OB_FAIL(stmt.get_column_items(loc_meta_.table_loc_id_, column_items))) {
     LOG_WARN("failed to get column items", K(ret), K(loc_meta_.table_loc_id_));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
@@ -668,8 +723,6 @@ int ObODPSFilePruner::collect_projected_column_idxs_(const ObDMLStmt &stmt)
     if (OB_ISNULL(item.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null column expr", K(ret), K(i));
-    } else if (OB_FAIL(collect_pseudo_col_idx_recursively_(item.expr_))) {
-      LOG_WARN("failed to collect pseudo col idx", K(ret), K(i));
     } else if (OB_FAIL(collect_pred_col_info_recursive_(item.expr_, item.column_id_, pred_col_infos_))) {
       LOG_WARN("failed to collect pred column info", K(ret), K(i));
     }

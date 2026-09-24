@@ -213,12 +213,8 @@ private:
   int resolve_partition_specs_(ObExecContext &exec_ctx,
                                const common::ObIArray<const share::schema::ObPartition *> &parts,
                                common::ObIArray<common::ObString> &part_specs);
-  /// Walks the statement's column items of this table and collects the projected
-  /// ODPS column indexes from the pseudo column exprs hidden inside the (stored
-  /// generated) column expressions — the optimizer-time twin of
-  /// ObLogTableScan::extract_file_column_exprs_recursively.
+  /// 从 stmt 表达式树收集投影 odps 列（column items 被污染不可用），分区列由 init() 补齐
   int collect_projected_column_idxs_(const ObDMLStmt &stmt);
-  int collect_pseudo_col_idx_recursively_(const ObRawExpr *expr);
   /// Schema partition ids selected by an explicit PARTITION(p0, ...) clause
   /// (empty when the clause is absent), from TableItem::part_ids_.
   int collect_clause_part_ids_(const ObDMLStmt &stmt);
