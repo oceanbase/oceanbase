@@ -1095,6 +1095,7 @@ private:
                                      ObPLSqlStmt *sql_stmt,
                                      int64_t into_idx,
                                      bool &can_transform);
+  int expr_depends_on_cur_time(const ObRawExpr &expr, bool &need_cur_time);
   int transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &into_expr_type);
   int replace_seq_expr_recursively(ObRawExpr *&expr, ObPLBlockNS *ns);
   int remove_cast_expr_for_temporal_type(ObRawExpr *&expr);

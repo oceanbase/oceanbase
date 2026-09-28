@@ -6483,6 +6483,83 @@ int ObPLResolver::get_into_expr_expected_type(ObRawExpr *into_expr,
   return ret;
 }
 
+// Whether the expression tree reads physical_plan_ctx cur_time. Such expressions must be
+// evaluated by the original SQL statement: PL refreshes cur_time for every expression it
+// evaluates, so duplicated time functions in one transformed 'select ... from dual' would
+// return different values. Keep the type list in sync with is_cur_time_dep_type() in
+// ob_pl_code_generator.cpp.
+int ObPLResolver::expr_depends_on_cur_time(const ObRawExpr &expr, bool &need_cur_time)
+{
+  int ret = OB_SUCCESS;
+  need_cur_time = false;
+  switch (expr.get_expr_type()) {
+    // group A: value IS the current time
+    case T_FUN_SYS_CUR_TIMESTAMP:
+    case T_FUN_SYS_CUR_TIME:
+    case T_FUN_SYS_CUR_DATE:
+    case T_FUN_SYS_UTC_TIME:
+    case T_FUN_SYS_UTC_TIMESTAMP:
+    case T_FUN_SYS_UTC_DATE:
+    case T_FUN_SYS_LOCALTIMESTAMP:
+    case T_FUN_SYS_SYSDATE:
+    case T_FUN_SYS_SYSTIMESTAMP:
+    case T_FUN_SYS_UNIX_TIMESTAMP:
+    // group B: date functions using the current date as base
+    case T_FUN_SYS_EXTRACT:
+    case T_FUN_SYS_TIME:
+    case T_FUN_SYS_YEAR:
+    case T_FUN_SYS_MONTH:
+    case T_FUN_SYS_MONTH_NAME:
+    case T_FUN_SYS_DAY_OF_MONTH:
+    case T_FUN_SYS_DAY:
+    case T_FUN_SYS_DAY_OF_WEEK:
+    case T_FUN_SYS_DAY_OF_YEAR:
+    case T_FUN_SYS_DAY_NAME:
+    case T_FUN_SYS_TO_SECONDS:
+    case T_FUN_SYS_WEEK_OF_YEAR:
+    case T_FUN_SYS_WEEKDAY_OF_DATE:
+    case T_FUN_SYS_YEARWEEK_OF_DATE:
+    case T_FUN_SYS_WEEK:
+    case T_FUN_SYS_QUARTER:
+    case T_FUN_SYS_DATE_FORMAT:
+    case T_FUN_SYS_TIME_STAMP_ADD:
+    case T_FUN_SYS_DATE_ADD:
+    case T_FUN_SYS_DATE_SUB:
+    case T_FUN_SYS_FROM_UNIX_TIME:
+    case T_FUN_SYS_ORA_TRUNC:
+    case T_FUN_SYS_ROUND:
+    case T_OP_COLL_PRED:
+    // json/xml: may cast the result to a date type internally
+    case T_FUN_SYS_JSON_VALUE:
+    case T_FUN_SYS_JSON_QUERY:
+    case T_FUN_SYS_XMLCAST:
+      need_cur_time = true;
+      break;
+    default:
+      need_cur_time = false;
+      break;
+  }
+  if (!need_cur_time && T_FUN_SYS_CAST == expr.get_expr_type() && expr.get_param_count() > 0) {
+    // A cast from TIME to a date-bearing type borrows the current date from cur_time
+    // (see CAST_FUNC_NAME(time, datetime/date/mdatetime/mdate) in ob_datum_cast.cpp).
+    const ObRawExpr *time_expr = expr.get_param_expr(0);
+    if (OB_NOT_NULL(time_expr)) {
+      const ObObjType in_type = time_expr->get_result_type().get_type();
+      const ObObjType out_type = expr.get_result_type().get_type();
+      need_cur_time = ob_is_time_tc(in_type)
+          && (ob_is_datetime_tc(out_type) || ob_is_date_tc(out_type)
+              || ob_is_mysql_date_tc(out_type) || ob_is_mysql_datetime_tc(out_type));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !need_cur_time && i < expr.get_param_count(); ++i) {
+    const ObRawExpr *child = expr.get_param_expr(i);
+    if (OB_NOT_NULL(child)) {
+      OZ (SMART_CALL(expr_depends_on_cur_time(*child, need_cur_time)));
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
                                                   ObPLFunctionAST &func,
                                                   ObPLSqlStmt *sql_stmt,
@@ -6559,6 +6636,13 @@ int ObPLResolver::check_value_expr_can_transform(ObRawExpr *expr,
           }
         }
       }
+    }
+  } else {
+    bool need_cur_time = false;
+    OZ (expr_depends_on_cur_time(*expr, need_cur_time));
+    if (OB_SUCC(ret) && need_cur_time) {
+      // Keep the statement untransformed so that all cur_time references share one snapshot.
+      can_transform = false;
     }
   }
 
