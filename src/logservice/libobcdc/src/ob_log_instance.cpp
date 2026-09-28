@@ -806,6 +806,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const bool skip_dirty_data = (TCONF.skip_dirty_data != 0);
   const bool skip_reversed_schema_verison = (TCONF.skip_reversed_schema_verison != 0);
   const bool enable_hbase_mode = (TCONF.enable_hbase_mode != 0);
+  const bool enable_hbase_timestamp_conversion = (TCONF.enable_hbase_timestamp_conversion != 0);
   const bool enable_backup_mode = (TCONF.enable_backup_mode != 0);
   const bool skip_hbase_mode_put_column_count_not_consistency = (TCONF.skip_hbase_mode_put_column_count_not_consistency != 0);
   const bool enable_convert_timestamp_to_unix_timestamp = (TCONF.enable_convert_timestamp_to_unix_timestamp != 0);
@@ -1050,9 +1051,10 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   // After initializing the timezone info getter successfully, initialize the obj2str_helper_
   if (OB_SUCC(ret)) {
     if (OB_FAIL(obj2str_helper_.init(*timezone_info_getter_, hbase_util_, enable_hbase_mode,
-            enable_convert_timestamp_to_unix_timestamp, enable_backup_mode, *tenant_mgr_))) {
+            enable_hbase_timestamp_conversion, enable_convert_timestamp_to_unix_timestamp,
+            enable_backup_mode, *tenant_mgr_))) {
       LOG_ERROR("init obj2str_helper fail", KR(ret), K(enable_hbase_mode),
-          K(enable_convert_timestamp_to_unix_timestamp), K(enable_backup_mode));
+          K(enable_hbase_timestamp_conversion), K(enable_convert_timestamp_to_unix_timestamp), K(enable_backup_mode));
     }
   }
 

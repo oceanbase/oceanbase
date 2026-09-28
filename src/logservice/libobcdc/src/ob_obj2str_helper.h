@@ -68,6 +68,7 @@ public:
   int init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
       ObLogHbaseUtil &hbase_util,
       const bool enable_hbase_mode,
+      const bool enable_hbase_timestamp_conversion,
       const bool enable_convert_timestamp_to_unix_timestamp,
       const bool enable_backup_mode,
       IObLogTenantMgr &tenant_mgr);
@@ -166,6 +167,8 @@ private:
   IObCDCTimeZoneInfoGetter      *timezone_info_getter_;
   ObLogHbaseUtil                *hbase_util_;
   bool                          enable_hbase_mode_;
+  // Fixed before formatter threads start; never changed by configuration reload.
+  bool                          enable_hbase_timestamp_conversion_;
   bool                          enable_convert_timestamp_to_unix_timestamp_;
   bool                          enable_backup_mode_;
   IObLogTenantMgr               *tenant_mgr_;

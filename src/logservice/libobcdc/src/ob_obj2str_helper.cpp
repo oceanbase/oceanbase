@@ -50,6 +50,7 @@ ObObj2strHelper::ObObj2strHelper() : inited_(false),
                                      timezone_info_getter_(NULL),
                                      hbase_util_(NULL),
                                      enable_hbase_mode_(false),
+                                     enable_hbase_timestamp_conversion_(true),
                                      enable_convert_timestamp_to_unix_timestamp_(false),
                                      enable_backup_mode_(false),
                                      tenant_mgr_(NULL)
@@ -64,6 +65,7 @@ ObObj2strHelper::~ObObj2strHelper()
 int ObObj2strHelper::init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
     ObLogHbaseUtil &hbase_util,
     const bool enable_hbase_mode,
+    const bool enable_hbase_timestamp_conversion,
     const bool enable_convert_timestamp_to_unix_timestamp,
     const bool enable_backup_mode,
     IObLogTenantMgr &tenant_mgr)
@@ -78,10 +80,14 @@ int ObObj2strHelper::init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
     timezone_info_getter_ = &timezone_info_getter;
     hbase_util_ = &hbase_util;
     enable_hbase_mode_ = enable_hbase_mode;
+    enable_hbase_timestamp_conversion_ = enable_hbase_timestamp_conversion;
     enable_convert_timestamp_to_unix_timestamp_ = enable_convert_timestamp_to_unix_timestamp;
     enable_backup_mode_ = enable_backup_mode;
     tenant_mgr_ = &tenant_mgr;
     inited_ = true;
+    OBLOG_LOG(INFO, "initialized HBase timestamp output policy", K(enable_hbase_mode_),
+        K(enable_hbase_timestamp_conversion_), K(enable_backup_mode_),
+        "convert_hbase_timestamp", enable_hbase_mode_ && enable_hbase_timestamp_conversion_ && !enable_backup_mode_);
   }
   return ret;
 }
@@ -119,6 +125,7 @@ void ObObj2strHelper::destroy()
   timezone_info_getter_ = NULL;
   hbase_util_ = NULL;
   enable_hbase_mode_ = false;
+  enable_hbase_timestamp_conversion_ = true;
   enable_convert_timestamp_to_unix_timestamp_ = false;
   enable_backup_mode_ = false;
   tenant_mgr_ = NULL;
@@ -317,11 +324,11 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
       }
 
       // 1. hbase table T column timestamp type should be converted to positive if it is negative
-      // 2. not converted in backup mode
+      // 2. Preserve stored values in backup mode or when timestamp conversion is disabled.
       if (OB_SUCC(ret)) {
         bool is_hbase_table_T_column = false;
 
-        if (obj.is_int() && enable_hbase_mode_ && ! enable_backup_mode_) {
+        if (obj.is_int() && enable_hbase_mode_ && !enable_backup_mode_ && enable_hbase_timestamp_conversion_) {
           if (OB_ISNULL(hbase_util_)) {
             OBLOG_LOG(ERROR, "hbase_util_ is null", K(hbase_util_));
             ret = OB_ERR_UNEXPECTED;
@@ -336,7 +343,7 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
           }
         }
         OBLOG_LOG(DEBUG, "[HBASE]", KR(ret), K(obj), K(obj_type), K(enable_hbase_mode_), K(enable_backup_mode_),
-            K(str_obj), K(is_hbase_table_T_column), K(table_id));
+            K(enable_hbase_timestamp_conversion_), K(str), K(is_hbase_table_T_column), K(table_id), K(column_id));
       }
     } // OB_SUCC(ret)
   }

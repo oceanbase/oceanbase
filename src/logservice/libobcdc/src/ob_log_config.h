@@ -603,8 +603,13 @@ public:
   T_DEF_BOOL(skip_abnormal_trans_log, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
   // Whether to allow hbase schema to take effect
-  // off by default; if it is, then convert the hbase table T timestamp field to a positive number
+  // Off by default; also enables HBase Put event handling.
   T_DEF_BOOL(enable_hbase_mode, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
+  // Read at instance initialization; preserve stored T values when disabled.
+  T_DEF_BOOL(enable_hbase_timestamp_conversion, OB_CLUSTER_PARAMETER, 1,
+      "Convert negative HBase T values to positive when HBase mode is enabled and backup mode is disabled. "
+      "0: preserve stored values, 1: convert (default). Requires instance reinitialization.");
 
   // Whether to allow timestamp->utc integer time
   // 1. off by default, the timestamp field is converted to year-month-day format based on time zone information.

@@ -11,6 +11,12 @@
  */
 
 #include <gtest/gtest.h>
+#include <limits>
+#include <string>
+#define private public
+#include "ob_obj2str_helper.h"
+#undef private
+#include "share/schema/ob_table_schema.h"
 #include "logservice/libobcdc/src/ob_log_utils.h"
 
 using namespace oceanbase;
@@ -670,6 +676,136 @@ TEST(utils, parse_addr_with_port_comprehensive)
 }
 }
 }
+
+namespace oceanbase
+{
+namespace libobcdc
+{
+using namespace common;
+using namespace share::schema;
+
+// 显式设置 helper 状态，白盒验证整数格式化行为。
+// 本组测试不覆盖配置加载、实例初始化和重新初始化流程。
+class TestObj2strHbaseTimestamp : public ::testing::Test
+{
+public:
+  TestObj2strHbaseTimestamp() : compat_mode_guard_(lib::Worker::CompatMode::MYSQL) {}
+
+  void SetUp() override
+  {
+    ASSERT_EQ(OB_SUCCESS, hbase_util_.init());
+    ASSERT_NO_FATAL_FAILURE(add_table(100001, ObIntType));
+    ASSERT_NO_FATAL_FAILURE(add_table(100002, ObInt32Type));
+
+    // 整数格式化只依赖 HBase 列缓存和输出策略。
+    // 不调用 init()，避免重复初始化其中不可重复初始化的进程级 SQL 状态。
+    helper_.hbase_util_ = &hbase_util_;
+    helper_.inited_ = true;
+  }
+
+  void add_table(const uint64_t table_id, const ObObjType timestamp_type)
+  {
+    ObTableSchema schema;
+    schema.set_tenant_id(OB_SYS_TENANT_ID);
+    schema.set_table_id(table_id);
+    schema.set_rowkey_column_num(3);
+    ASSERT_EQ(OB_SUCCESS, schema.set_table_name("timestamp$cf"));
+    const char *names[] = {"K", "Q", "T", "V"};
+    for (int64_t idx = 0; idx < 4; ++idx) {
+      ObColumnSchemaV2 column;
+      column.set_tenant_id(schema.get_tenant_id());
+      column.set_table_id(table_id);
+      column.set_column_id(OB_APP_MIN_COLUMN_ID + idx);
+      column.set_data_type(2 == idx ? timestamp_type : ObIntType);
+      column.set_rowkey_position(idx < 3 ? idx + 1 : 0);
+      ASSERT_EQ(OB_SUCCESS, column.set_column_name(names[idx]));
+      ASSERT_EQ(OB_SUCCESS, schema.add_column(column));
+    }
+    ASSERT_EQ(OB_SUCCESS, hbase_util_.add_hbase_table_id(schema));
+  }
+
+  void set_output_policy(const bool hbase_mode, const bool conversion, const bool backup)
+  {
+    helper_.enable_hbase_mode_ = hbase_mode;
+    helper_.enable_hbase_timestamp_conversion_ = conversion;
+    helper_.enable_backup_mode_ = backup;
+  }
+
+  void check_value(const int64_t value, const char *expected,
+      const uint64_t table_id = 100001, const uint64_t column_id = OB_APP_MIN_COLUMN_ID + 2)
+  {
+    ObArenaAllocator allocator;
+    ObTimeZoneInfoWrap tz_info;
+    ObArray<ObString> extended_type_info;
+    ObAccuracy accuracy;
+    ObObj obj;
+    ObString result;
+    obj.set_int(value);
+    ASSERT_EQ(OB_SUCCESS, helper_.obj2str(OB_SYS_TENANT_ID, table_id, column_id,
+        obj, result, allocator, false, extended_type_info, nullptr, accuracy, CS_TYPE_BINARY, &tz_info));
+    EXPECT_EQ(std::string(expected), std::string(result.ptr(), result.length()));
+    // 格式化不能修改原始对象，后续生成列计算仍需使用该对象。
+    EXPECT_EQ(value, obj.get_int());
+  }
+
+  // 将兼容模式切换限制在当前 fixture 生命周期内，析构后恢复，避免影响其他用例。
+  lib::CompatModeGuard compat_mode_guard_;
+  // 列缓存的生命周期覆盖 helper，析构时也先销毁 helper，再销毁缓存。
+  ObLogHbaseUtil hbase_util_;
+  ObObj2strHelper helper_;
+};
+
+// 覆盖 HBase 模式、时间戳转换、备份模式三个开关的全部 8 种组合。
+// 仅在 HBase 模式开启、转换开启且备份模式关闭时，去掉 T 列字符串的负号；其余组合保留原值。
+// 检查正负时间戳、0、-1、INT64_MIN 和 INT64_MAX，并验证输入 ObObj 始终不被修改。
+TEST_F(TestObj2strHbaseTimestamp, policy_matrix_and_boundaries)
+{
+  for (const bool hbase_mode : {false, true}) {
+    for (const bool conversion : {false, true}) {
+      for (const bool backup : {false, true}) {
+        SCOPED_TRACE(::testing::Message() << hbase_mode << "," << conversion << "," << backup);
+        set_output_policy(hbase_mode, conversion, backup);
+        const bool convert = hbase_mode && conversion && !backup;
+        check_value(-1700000000100L, convert ? "1700000000100" : "-1700000000100");
+        check_value(1700000000100L, "1700000000100");
+        check_value(0, "0");
+        check_value(-1, convert ? "1" : "-1");
+        // 转换仅去掉字符串负号，INT64_MIN 不涉及有符号整数取反，不会触发取反溢出。
+        check_value(std::numeric_limits<int64_t>::min(),
+            convert ? "9223372036854775808" : "-9223372036854775808");
+        check_value(std::numeric_limits<int64_t>::max(), "9223372036854775807");
+      }
+    }
+  }
+}
+
+// 开启 HBase 模式、关闭备份模式，分别验证转换开关开启和关闭时的表、列隔离行为。
+// 未注册表、因 T 列类型为 INT 而被排除的表，以及 HBase 表的 K/Q/V 列，均应保留负值。
+// INT 表场景仍传入 BIGINT 类型的 ObObj，专门验证 schema 过滤，不验证 INT 对象的格式化。
+TEST_F(TestObj2strHbaseTimestamp, table_and_column_isolation)
+{
+  for (const bool conversion : {false, true}) {
+    set_output_policy(true, conversion, false);
+    check_value(-123, "-123", 100003); // 未注册的表。
+    check_value(-123, "-123", 100002); // T 列为 INT 的表不应被注册为 HBase 表。
+    for (const int64_t idx : {0, 1, 3}) {
+      check_value(-123, "-123", 100001, OB_APP_MIN_COLUMN_ID + idx);
+    }
+  }
+}
+
+// 保留构造函数默认值：转换开启，HBase 模式和备份模式关闭。
+// 初始状态保留负 T；仅开启 HBase 模式后，应输出正数字符串。
+// 本用例验证 helper 的默认策略，不覆盖配置项默认值和 init() 参数传递。
+TEST_F(TestObj2strHbaseTimestamp, default_output_policy)
+{
+  check_value(-123, "-123");
+  helper_.enable_hbase_mode_ = true;
+  check_value(-123, "123");
+}
+
+} // namespace libobcdc
+} // namespace oceanbase
 
 int main(int argc, char **argv)
 {

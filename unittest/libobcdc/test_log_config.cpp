@@ -13,6 +13,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <memory>
 #include "ob_log_config.h"
 
 #define ADD_CONFIG_INT(var, value) \
@@ -296,6 +297,35 @@ TEST_F(TestLogConfig, format_cluster_url)
     delete config;
     config = NULL;
   }
+}
+
+TEST_F(TestLogConfig, hbase_timestamp_conversion)
+{
+  std::unique_ptr<ObLogConfig> config(new ObLogConfig());
+  ASSERT_EQ(OB_SUCCESS, config->init());
+  ASSERT_EQ(OB_SUCCESS, config->load_from_map(config_map_));
+  ASSERT_EQ(OB_SUCCESS, config->check_all());
+  EXPECT_TRUE(config->enable_hbase_timestamp_conversion);
+
+  for (const char *value : {"0", "1"}) {
+    config_map_["enable_hbase_timestamp_conversion"] = value;
+    ASSERT_EQ(OB_SUCCESS, config->load_from_map(config_map_));
+    ASSERT_EQ(OB_SUCCESS, config->check_all());
+    EXPECT_EQ('1' == value[0], static_cast<bool>(config->enable_hbase_timestamp_conversion));
+  }
+  const char raw_config[] = "enable_hbase_timestamp_conversion=0\n";
+  ASSERT_EQ(OB_SUCCESS, config->load_from_buffer(raw_config, strlen(raw_config)));
+  ASSERT_EQ(OB_SUCCESS, config->check_all());
+  EXPECT_FALSE(config->enable_hbase_timestamp_conversion);
+
+  for (const char *value : {"2", "-1", "invalid"}) {
+    config_map_["enable_hbase_timestamp_conversion"] = value;
+    ASSERT_EQ(OB_SUCCESS, config->load_from_map(config_map_));
+    EXPECT_EQ(OB_INVALID_CONFIG, config->check_all());
+  }
+  const char invalid_config[] = "enable_hbase_timestamp_conversion=invalid\n";
+  ASSERT_EQ(OB_SUCCESS, config->load_from_buffer(invalid_config, strlen(invalid_config)));
+  EXPECT_EQ(OB_INVALID_CONFIG, config->check_all());
 }
 
 } // namespace libobcdc
