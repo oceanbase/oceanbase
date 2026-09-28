@@ -1677,15 +1677,12 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
 {
   int ret = OB_SUCCESS;
   ObSEArray<SemiInfo*, 2> semi_infos;
-  ObSEArray<ObRawExpr*, 16> candi_conds;
   OPT_TRACE("try eliminate semi join");
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(stmt), K(ret));
   } else if (OB_FAIL(semi_infos.assign(stmt->get_semi_infos()))) {//copy origin semi infos
     LOG_WARN("failed to assign semi infos", K(ret));
-  } else if (OB_FAIL(stmt->get_equal_set_conditions(candi_conds, true))) {
-    LOG_WARN("failed to get equal set conditions", K(ret));
   } else {
     bool is_happened_self_key = false;
     bool is_happened_foreign_key = false;
@@ -1698,7 +1695,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
         LOG_WARN("get unexpected null", K(ret), K(semi_info));
       } else if (OB_FAIL(eliminate_semi_join_self_key(stmt,
                                                       semi_info,
-                                                      candi_conds,
                                                       is_happened_self_key,
                                                       has_removed_semi_info,
                                                       trans_tables))) {
@@ -1727,7 +1723,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_foreign_key(ObDMLStmt *
 
 int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
                                                              SemiInfo *semi_info,
-                                                             ObIArray<ObRawExpr*> &conds,
                                                              bool &trans_happened,
                                                              bool &has_removed_semi_info,
                                                              ObIArray<ObSEArray<TableItem *, 4>> &trans_tables)
@@ -1735,7 +1730,6 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
   int ret = OB_SUCCESS;
   trans_happened = false;
   has_removed_semi_info = false;
-  ObSEArray<ObRawExpr*, 4> candi_conds;
   ObSEArray<TableItem*, 16> left_tables;
   ObSEArray<TableItem*, 16> right_tables;
   TableItem *left_table = NULL;
@@ -1750,12 +1744,7 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
     if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(semi_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(stmt), K(semi_info));
-    } else if (OB_FAIL(candi_conds.assign(conds))) {
-      LOG_WARN("failed to assign exprs", K(ret));
-    } else if (semi_info->is_anti_join() && //conds do not contain anti join condition, here append it
-              OB_FAIL(append(candi_conds, semi_info->semi_conditions_))) {
-      LOG_WARN("failed to append exprs", K(ret));
-    } else if (OB_FAIL(check_transform_validity_semi_self_key(stmt, semi_info, candi_conds,
+    } else if (OB_FAIL(check_transform_validity_semi_self_key(stmt, semi_info,
                                                               left_table, right_table,
                                                               stmt_map_info))) {
       LOG_WARN("failed to check transform validity semi self key", K(ret));
@@ -1778,7 +1767,7 @@ int ObTransformJoinElimination::eliminate_semi_join_self_key(ObDMLStmt *stmt,
         has_removed_semi_info = true;
         trans_happened = true;
       }
-    } else if (OB_FAIL(check_transform_validity_semi_self_key(stmt, semi_info, conds,
+    } else if (OB_FAIL(check_transform_validity_semi_self_key(stmt, semi_info,
                                                               left_tables, right_tables,
                                                               stmt_map_infos, target_stmt))) {
       LOG_WARN("check whether tranformation is possibl failed", K(ret));
@@ -2314,7 +2303,6 @@ int ObTransformJoinElimination::try_remove_semi_info(ObDMLStmt *stmt,
 
 int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt *stmt,
                                                                        SemiInfo *semi_info,
-                                                                       ObIArray<ObRawExpr*> &candi_conds,
                                                                        TableItem *&source_table,
                                                                        TableItem *&right_table,
                                                                        ObStmtMapInfo &stmt_map_info)
@@ -2398,14 +2386,13 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
         OPT_TRACE("cross semi join with filters can not be elimated");
       } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
                                                           ctx_->session_info_, ctx_->schema_checker_,
-                                                          left_table, source_exprs, candi_conds,
-                                                          false, source_unique))) {
+                                                          left_table, source_exprs, dummy_exprs,
+                                                          false, source_unique, FLAGS_IGNORE_FILTERS))) {
         LOG_WARN("check expr unique in semi left tables failed", K(ret));
       } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
                                                 ctx_->session_info_, ctx_->schema_checker_,
-                                                right_table, target_exprs,
-                                                semi_info->is_anti_join() ? dummy_exprs : candi_conds,
-                                                false, target_unique))) {
+                                                right_table, target_exprs, dummy_exprs,
+                                                false, target_unique, FLAGS_IGNORE_FILTERS))) {
         LOG_WARN("check expr unique in semi right tables failed", K(ret));
       } else {
         source_table = source_unique && target_unique ? left_table : NULL;
@@ -2422,7 +2409,6 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
 
 int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt *stmt,
                                                           SemiInfo *semi_info,
-                                                          ObIArray<ObRawExpr*> &candi_conds,
                                                           ObIArray<TableItem*> &left_tables,
                                                           ObIArray<TableItem*> &right_tables,
                                                           ObIArray<ObStmtMapInfo> &stmt_map_infos,
@@ -2431,7 +2417,6 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
   int ret = OB_SUCCESS;
   target_stmt = NULL;
   TableItem *semi_right_table = NULL;
-  ObSEArray<ObRawExpr*, 16> right_conds;
   ObSEArray<TableItem*, 4> all_left_tables;
   ObSEArray<ObSqlBitSet<>, 4> select_relids;
   ObSEArray<ObRawExpr*, 16> dummy_exprs;
@@ -2454,8 +2439,6 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
                                                      semi_info->semi_conditions_,
                                                      semi_info->right_table_id_, select_relids))) {
     LOG_WARN("failed to get expr rel ids", K(ret));
-  } else if (OB_FAIL(semi_right_table->ref_query_->get_equal_set_conditions(right_conds, true))) {
-    LOG_WARN("failed to extract table exprs", K(ret));
   } else {
     target_stmt = semi_right_table->ref_query_;
     ObStmtMapInfo stmt_map_info;
@@ -2542,14 +2525,13 @@ int ObTransformJoinElimination::check_transform_validity_semi_self_key(ObDMLStmt
             OPT_TRACE("cross semi join with filters can not be elimated");
           } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(stmt,
                                                         ctx_->session_info_, ctx_->schema_checker_,
-                                                        left_table, source_exprs, candi_conds,
-                                                        false, source_unique))) {
+                                                        left_table, source_exprs, dummy_exprs,
+                                                        false, source_unique, FLAGS_IGNORE_FILTERS))) {
             LOG_WARN("check expr unique in semi left tables failed", K(ret));
           } else if (OB_FAIL(ObTransformUtils::check_exprs_unique_on_table_items(target_stmt,
                                             ctx_->session_info_, ctx_->schema_checker_,
-                                            right_table, target_exprs,
-                                            semi_info->is_anti_join() ? dummy_exprs : right_conds,
-                                            false, target_unique))) {
+                                            right_table, target_exprs, dummy_exprs,
+                                            false, target_unique, FLAGS_IGNORE_FILTERS))) {
             LOG_WARN("check expr unique in semi right tables failed", K(ret));
           } else {
             can_be_eliminated = source_unique && target_unique;
@@ -2667,6 +2649,27 @@ int ObTransformJoinElimination::check_semi_join_condition(ObDMLStmt *stmt,
         } else if (OB_FAIL(target_exprs.push_back(col2))) {
           LOG_WARN("push back column expr failed", K(ret));
         } else {/*do nothing*/}
+      }
+    }
+    /* check filters pushed into the target generated table */
+    if (OB_SUCC(ret) && is_simple_join_condition && target_table->is_generated_table()) {
+      ObSelectStmt *target_stmt = target_table->ref_query_;
+      if (OB_ISNULL(target_stmt)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null target stmt", K(ret));
+      } else {
+        ObIArray<ObRawExpr*> &target_conds = target_stmt->get_condition_exprs();
+        for (int64_t i = 0; OB_SUCC(ret) && i < target_conds.count(); ++i) {
+          if (OB_ISNULL(expr = target_conds.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("expr is null", K(ret));
+          } else {
+            target_tables_have_filter = true;
+            if (T_OP_OR == expr->get_expr_type()) {
+              is_simple_filter = false;
+            }
+          }
+        }
       }
     }
     /* source table is required in not null side, bad case:

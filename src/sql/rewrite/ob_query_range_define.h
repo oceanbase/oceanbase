@@ -268,7 +268,8 @@ struct ObQueryRangeCtx
       is_global_index_(false),
       unique_index_column_num_(-1),
       constraints_expr_factory_(nullptr),
-      ignore_fake_const_udf_(false) {}
+      ignore_fake_const_udf_(false),
+      table_id_(OB_INVALID_ID) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -318,6 +319,7 @@ struct ObQueryRangeCtx
   int64_t unique_index_column_num_;
   ObRawExprFactory *constraints_expr_factory_;
   bool ignore_fake_const_udf_;
+  uint64_t table_id_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
