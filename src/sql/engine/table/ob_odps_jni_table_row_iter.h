@@ -348,7 +348,13 @@ private:
   // to its field index in the session arrow schema by column name, once per
   // schema. The result is cached in resolved_column_ids_, so per-batch
   // filling works on plain field indexes without any name lookup.
-  int resolve_sorted_columns_by_name(const std::shared_ptr<arrow::Schema> &schema);
+  // allow_missing_part_col: tunnel batches carry non-partition columns only,
+  // so a partition column absent from the schema is legal there — it is simply
+  // left out of resolved_column_ids_ (its value is filled from part_list_val_),
+  // which keeps every kept field_idx valid; the storage path keeps the strict
+  // check.
+  int resolve_sorted_columns_by_name(const std::shared_ptr<arrow::Schema> &schema,
+      const bool allow_missing_part_col);
   int fill_column_exprs_tunnel(const ExprFixedArray &column_exprs, ObEvalCtx &ctx, int64_t num_rows);
 
   int get_next_rows_tunnel(int64_t &count, int64_t capacity);

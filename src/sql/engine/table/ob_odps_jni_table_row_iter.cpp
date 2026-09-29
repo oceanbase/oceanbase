@@ -1887,7 +1887,8 @@ static int find_arrow_field_by_name(const std::shared_ptr<arrow::Schema> &schema
 // 时，多余列被自然跳过，真正缺列才报错；列数恰好等于投影时解析结果是恒等
 // 映射，同时把"列序对齐"从假设变成显式校验。之后每个 batch 的填列循环只做
 // 纯下标访问。
-int ObODPSJNITableRowIterator::resolve_sorted_columns_by_name(const std::shared_ptr<arrow::Schema> &schema)
+int ObODPSJNITableRowIterator::resolve_sorted_columns_by_name(const std::shared_ptr<arrow::Schema> &schema,
+                                                                    const bool allow_missing_part_col)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema)) {
@@ -1918,11 +1919,17 @@ int ObODPSJNITableRowIterator::resolve_sorted_columns_by_name(const std::shared_
       } else if (OB_FAIL(find_arrow_field_by_name(schema, mirror_list.at(mirror_idx).name_, field_idx))) {
         LOG_WARN("failed to find field by name", K(ret));
       } else if (OB_UNLIKELY(-1 == field_idx)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("projected column is missing from the session batch",
-                 K(ret), K(is_part_col), K(mirror_idx),
-                 "column", mirror_list.at(mirror_idx).name_,
-                 K(schema->fields().size()), K(total_cnt));
+        // tunnel 的 arrow batch 只携带非分区列，分区列不在 session schema 中
+        // 是合法状态（值由 part_list_val_ 单独回填，不经过 resolved_column_ids_），
+        // 此时不能入表，保证表中不存在无效 field_idx；仅 storage 路径或非分区列
+        // 缺失才视为异常
+        if (OB_UNLIKELY(!allow_missing_part_col || !is_part_col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("projected column is missing from the session batch",
+                   K(ret), K(is_part_col), K(mirror_idx),
+                   "column", mirror_list.at(mirror_idx).name_,
+                   K(schema->fields().size()), K(total_cnt));
+        }
       } else if (OB_FAIL(resolved_column_ids_.push_back(
                      ResolvedColumnPair{expr_idx, mirror_idx, field_idx, is_part_col}))) {
         LOG_WARN("failed to keep resolved column pair", K(ret));
@@ -1985,7 +1992,7 @@ int ObODPSJNITableRowIterator::fill_column_exprs_storage(const ExprFixedArray &c
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column count", K(ret), K(cur_schema->fields().size()));
       }
-    } else if (OB_FAIL(resolve_sorted_columns_by_name(cur_schema))) {
+    } else if (OB_FAIL(resolve_sorted_columns_by_name(cur_schema, false))) {
       LOG_WARN("failed to resolve projected columns against session schema", K(ret));
     } else {
       // 列数恰好等于投影（恒等映射）与会话超集两种布局共用这一份填列循环：
@@ -2051,10 +2058,11 @@ int ObODPSJNITableRowIterator::fill_column_exprs_tunnel(const ExprFixedArray &co
     } else {
       const std::shared_ptr<arrow::RecordBatch> cur_record_batch = state_.odps_jni_scanner_->get_cur_arrow_batch();
       const std::shared_ptr<arrow::Schema> cur_schema = cur_record_batch->schema();
-      if (OB_FAIL(resolve_sorted_columns_by_name(cur_schema))) {
+      if (OB_FAIL(resolve_sorted_columns_by_name(cur_schema, true))) {
         LOG_WARN("failed to resolve projected columns against session schema", K(ret));
       } else {
-        // tunnel 的 arrow batch 只携带非分区列；分区列由下方 part_list_val_ 循环单独填充
+        // tunnel 的 arrow batch 只携带非分区列；分区列（field_idx 为 -1）由下方
+        // part_list_val_ 循环单独填充
         for (int64_t i = 0; OB_SUCC(ret) && i < resolved_column_ids_.count(); ++i) {
           const int64_t expr_idx = resolved_column_ids_.at(i).ob_col_idx_;
           const int64_t mirror_idx = resolved_column_ids_.at(i).mirror_idx_;
