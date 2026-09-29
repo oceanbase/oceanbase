@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "observer/mysql/obmp_stmt_send_piece_data.h"
+#include "observer/mysql/obsm_utils.h"
 
 #include "sql/ob_sql.h"
 #include "observer/omt/ob_tenant.h"
@@ -361,7 +362,7 @@ int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
         LOG_INFO("store piece successfully", K(ret), K(session.get_server_sid()),
                                              K(stmt_id_), K(param_id_));
         if (is_null_) {
-          OZ (piece->get_is_null_map().add_member(piece->get_position()));
+          OZ (piece->get_is_null_map().add_member(piece->get_buffer_array()->count() - 1));
         }
         ObOKPParam ok_param;
         ok_param.affected_rows_ = 0;
@@ -666,16 +667,16 @@ int ObPieceCache::get_oracle_buffer(int32_t stmt_id,
     // maybe because the retry mechanism repeatedly executes this piece of code, 
     // position should be set 0 
     piece->set_position(0);
+    if (NULL != is_null_map) {
+      piece->get_is_null_map(is_null_map, count);
+    }
     for (int64_t i=0; OB_SUCC(ret) && i < count; i++) {
       if (OB_FAIL(merge_piece_buffer(piece, str_buf.at(i)))) {
         LOG_WARN("merge piece buffer fail.", K(ret), K(stmt_id));
-      } else {
+      } else if (!ObSMUtils::update_from_bitmap(is_null_map, i)) {
         length = length + get_length_length(str_buf.at(i).length());
         length = length + str_buf.at(i).length();
       }
-    }
-    if (OB_SUCC(ret) && NULL != is_null_map) {
-      piece->get_is_null_map(is_null_map, count);
     }
   }
   LOG_DEBUG("get buffer.", K(ret), K(stmt_id), K(param_id), K(length));

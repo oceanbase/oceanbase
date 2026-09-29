@@ -199,9 +199,15 @@ public:
   ObIAllocator *get_allocator() { return nullptr != entity_ ? &entity_->get_arena_allocator() : NULL; }
   common::ObBitSet<> &get_is_null_map() { return is_null_map_; }
   void get_is_null_map(char *map, int64_t count) {
-    for (int64_t i = 0; i<count; i++) {
+    int64_t element_idx = 0;
+    for (int64_t i = 0; NULL != buffer_array_ && i < buffer_array_->count() && element_idx < count; i++) {
       if (is_null_map_.has_member(i)) {
-        obmysql::ObMySQLUtil::update_null_bitmap(map, i);
+        // Collection bitmaps have no reserved bits before the first element.
+        map[element_idx / 8] |= static_cast<char>(1U << (element_idx % 8));
+      }
+      const ObPieceMode mode = buffer_array_->at(i).get_piece_mode();
+      if (ObLastPiece == mode || ObInvalidPiece == mode) {
+        ++element_idx;
       }
     }
   }
@@ -215,7 +221,7 @@ private:
   uint16_t param_id_;
   uint64_t pos_;
   ObPieceBufferArray *buffer_array_;
-  common::ObBitSet<> is_null_map_;
+  common::ObBitSet<> is_null_map_; // Members are cached piece indices, not element indices.
   int err_ret_;
   lib::MemoryContext entity_;
 };  // end of class ObPiece
