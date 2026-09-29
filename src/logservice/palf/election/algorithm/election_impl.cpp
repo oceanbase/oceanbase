@@ -12,6 +12,7 @@
 
 #include "election_impl.h"
 #include "observer/ob_server.h"
+#include "share/config/ob_server_config.h"
 namespace oceanbase
 {
 using namespace share;
@@ -23,6 +24,28 @@ namespace election
 int64_t MAX_TST = 1_s;
 int64_t INIT_TS = -1;
 ObOccamTimer GLOBAL_REPORT_TIMER;
+
+int load_election_config()
+{
+  int ret = common::OB_SUCCESS;
+  const int64_t config_max_tst = GCONF._election_max_message_delay;
+  if (OB_UNLIKELY(config_max_tst < 100_ms || config_max_tst > 2500_ms)) {
+    ELECT_LOG(ERROR, "invalid _election_max_message_delay, fallback to default 1s", K(config_max_tst));
+  } else if (OB_UNLIKELY(4 * config_max_tst > MAX_LEASE_TIME)) {
+    ELECT_LOG(ERROR, "4 * _election_max_message_delay exceeds MAX_LEASE_TIME, "
+              "restart silence window can not cover granted lease, fallback to default 1s",
+              K(config_max_tst), K(MAX_LEASE_TIME));
+  } else {
+    ATOMIC_STORE(&MAX_TST, config_max_tst);
+  }
+  ELECT_LOG(INFO, "election timing config loaded", K(config_max_tst), K(MAX_TST),
+            "lease_interval", CALCULATE_LEASE_INTERVAL(),
+            "renew_lease_interval", CALCULATE_RENEW_LEASE_INTERVAL(),
+            "time_window_span", CALCULATE_TIME_WINDOW_SPAN_TS(),
+            "max_elect_cost_time", CALCULATE_MAX_ELECT_COST_TIME(),
+            "trigger_elect_watermark", CALCULATE_TRIGGER_ELECT_WATER_MARK());
+  return ret;
+}
 
 void DefaultRoleChangeCallBack::operator()(ElectionImpl *election,
                                            common::ObRole before,
@@ -268,6 +291,17 @@ int ElectionImpl::handle_message(const ElectionAcceptRequestMsg &msg)
                                                                 "receive bigger accept request");
     }
     acceptor_.on_accept_request(msg, &us_to_expired);
+  }
+  if (OB_UNLIKELY(msg.get_lease_interval() != CALCULATE_LEASE_INTERVAL())) {
+    static int64_t last_drift_warn_ts = 0;
+    const int64_t now = get_monotonic_ts();
+    if (now - ATOMIC_LOAD(&last_drift_warn_ts) > 10_s) {
+      ATOMIC_STORE(&last_drift_warn_ts, now);
+      LOG_NONE(WARN, "lease interval from leader differs from local value, "
+                     "_election_max_message_delay may be inconsistent across servers",
+                     "leader_lease_interval", msg.get_lease_interval(),
+                     "local_lease_interval", CALCULATE_LEASE_INTERVAL(), K(msg));
+    }
   }
   if (OB_LIKELY(us_to_expired > 0)) {
     if (us_to_expired - CALCULATE_TRIGGER_ELECT_WATER_MARK() < 0) {
