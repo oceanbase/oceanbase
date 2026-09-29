@@ -71,16 +71,21 @@
 #define DECLARE_RPC_PROXY_POST_FUNCTION(PRIO, REQTYPE, PCODE)               \
   RPC_AP(PRIO post_packet, PCODE, (palf::LogRpcPacketImpl<palf::REQTYPE>)); \
   int post_packet(const common::ObAddr &dst, const palf::LogRpcPacketImpl<palf::REQTYPE> &pkt, const int64_t tenant_id,  \
-                  const palf::PalfTransportCompressOptions &options)
+                  const palf::PalfTransportCompressOptions &options,                                            \
+                  obrpc::ObRpcPreparedBody *prepared_body = nullptr)
 
 #define DEFINE_RPC_PROXY_POST_FUNCTION(REQTYPE, PCODE)                                              \
   int LogRpcProxyV2::post_packet(const common::ObAddr &dst, const palf::LogRpcPacketImpl<palf::REQTYPE> &pkt, \
-                                 const int64_t tenant_id, const palf::PalfTransportCompressOptions &options)      \
+                                 const int64_t tenant_id,                                                      \
+                                 const palf::PalfTransportCompressOptions &options,                            \
+                                 obrpc::ObRpcPreparedBody *prepared_body)                                      \
   {                                                                                                           \
     int ret = common::OB_SUCCESS;                                                                             \
     static obrpc::LogRpcCB<obrpc::PCODE> cb;                                                                  \
+    LogRpcProxyV2 proxy = this->to(dst);                                                                       \
+    proxy.set_reusable_body(options.enable_transport_compress_ ? prepared_body : nullptr);                     \
     if (options.enable_transport_compress_) {                                                                 \
-      ret = this->to(dst)                                                                                     \
+      ret = proxy                                                                                            \
                 .timeout(3000 * 1000)                                                                         \
                 .trace_time(true)                                                                             \
                 .max_process_handler_time(100 * 1000)                                                         \
@@ -90,7 +95,7 @@
                 .dst_cluster_id(src_cluster_id_)                                                              \
                 .post_packet(pkt, &cb);                                                                       \
     } else {                                                                                                  \
-      ret = this->to(dst)                                                                                     \
+      ret = proxy                                                                                            \
                 .timeout(3000 * 1000)                                                                         \
                 .trace_time(true)                                                                             \
                 .max_process_handler_time(100 * 1000)                                                         \
@@ -105,8 +110,11 @@
 // no need transport compress
 #define DEFINE_RPC_PROXY_ELECTION_POST_FUNCTION(REQTYPE, PCODE)                                               \
   int LogRpcProxyV2::post_packet(const common::ObAddr &dst, const palf::LogRpcPacketImpl<palf::REQTYPE> &pkt, \
-                                 const int64_t tenant_id, const palf::PalfTransportCompressOptions &options)      \
+                                 const int64_t tenant_id,                                                      \
+                                 const palf::PalfTransportCompressOptions &options,                            \
+                                 obrpc::ObRpcPreparedBody *prepared_body)                                      \
   {                                                                                                           \
+    UNUSED(prepared_body);                                                                                    \
     TIMEGUARD_INIT(ELECT, 50_ms, 10_s);                                                                       \
     int ret = common::OB_SUCCESS;                                                                             \
     static obrpc::LogRpcCB<obrpc::PCODE> cb;                                                                  \
