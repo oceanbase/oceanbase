@@ -18,6 +18,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "ob_expr_json_func_helper.h"
+#include "ob_expr_json_utils.h" // for ObJsonUtil::remap_invalid_json_doc_error
 #include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
 #include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
 #include "lib/charset/ob_dtoa.h" // ob_gcvt_opt
@@ -286,13 +287,9 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
                                                   expect_type, j_base, parse_flag, ObJsonExprHelper::get_json_max_depth_config()))) {
-        LOG_WARN("fail to get json base", K(ret), K(j_in_type));
-        if (is_oracle) {
-          ret = OB_ERR_JSON_SYNTAX_ERROR;
-        } else {
-          ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
-          LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT_IN_PARAM);
-        }
+        const int origin_ret = ret;
+        ret = ObJsonUtil::remap_invalid_json_doc_error(ret, is_oracle);
+        LOG_WARN("fail to get json base", K(origin_ret), K(ret), K(j_in_type));
       }
     }
   }
