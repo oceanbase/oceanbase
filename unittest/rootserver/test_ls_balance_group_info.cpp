@@ -236,11 +236,13 @@ TEST_F(TestLSBalanceGroupInfo, repeated_transfer_returns_best_effort_selection)
   ObTransferPartList third_round;
   ASSERT_EQ(OB_SUCCESS, src_ls_bg_info_.transfer_out_by_factor(
       dst_ls_bg_info_, 0.3f, third_round));
-  EXPECT_TRUE(third_round.empty());
-  EXPECT_EQ(3, src_bg_info->get_part_groups_count());
-  EXPECT_EQ(230, src_bg_info->get_part_groups_data_size());
-  EXPECT_EQ(6, dst_bg_info->get_part_groups_count());
-  EXPECT_EQ(220, dst_bg_info->get_part_groups_data_size());
+  // The count boundary fix removes two of the three remaining groups while
+  // preserving one group in the source balance group.
+  ASSERT_EQ(2, third_round.count());
+  EXPECT_EQ(1, src_bg_info->get_part_groups_count());
+  EXPECT_EQ(90, src_bg_info->get_part_groups_data_size());
+  EXPECT_EQ(8, dst_bg_info->get_part_groups_count());
+  EXPECT_EQ(360, dst_bg_info->get_part_groups_data_size());
   EXPECT_EQ(450, src_bg_info->get_part_groups_data_size()
       + dst_bg_info->get_part_groups_data_size());
 }
