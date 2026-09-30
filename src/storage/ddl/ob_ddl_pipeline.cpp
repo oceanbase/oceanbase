@@ -610,6 +610,7 @@ int ObIVFCenterRowIterator::get_next_row(
       LOG_WARN("upexpected nullptr center_vector", K(ret), K(cur_row_pos_));
     } else {
       data_str.assign(reinterpret_cast<char *>(center_vector), static_cast<int64_t>(sizeof(float) * dim));
+      // Check payload bytes against the in-row threshold, excluding the LOB header in vec_res.
       if (OB_FAIL(sql::ObArrayExprUtils::set_array_res(nullptr, data_str.length(), row_allocator_, vec_res, data_str.ptr()))) {
         LOG_WARN("failed to set array res", K(ret));
       } else if (OB_ISNULL(buf = static_cast<char*>(row_allocator_.alloc(buf_len)))) {
@@ -620,10 +621,10 @@ int ObIVFCenterRowIterator::get_next_row(
         ObCenterId center_id(tablet_id_.id(), cur_row_pos_ + 1);
         if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(center_id, cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(center_id), K(cid_str));
-        } else if (vec_res.length() > lob_inrow_threshold_ || cid_str.length() > lob_inrow_threshold_) {
+        } else if (data_str.length() > lob_inrow_threshold_ || cid_str.length() > lob_inrow_threshold_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected outrow datum in ivf vector index",
-                    K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
+                    K(ret), K(data_str.length()), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
           for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
             if (center_vector_col_idx_ == i) {
@@ -701,6 +702,7 @@ int ObIVFSq8MetaRowIterator::get_next_row(
       LOG_WARN("fail to get result", K(ret));
     } else {
       data_str.assign(reinterpret_cast<char *>(cur_vector), static_cast<int64_t>(sizeof(float) * vec_dim_));
+      // Check payload bytes against the in-row threshold, excluding the LOB header in vec_res.
       if (OB_FAIL(sql::ObArrayExprUtils::set_array_res(nullptr, data_str.length(), row_allocator_, vec_res, data_str.ptr()))) {
         LOG_WARN("failed to set array res", K(ret));
       } else if (OB_ISNULL(buf = static_cast<char*>(row_allocator_.alloc(buf_len)))) {
@@ -712,10 +714,10 @@ int ObIVFSq8MetaRowIterator::get_next_row(
         ObCenterId center_id(tablet_id_.id(), cur_row_pos_ + 1);
         if (OB_FAIL(ObVectorClusterHelper::set_center_id_to_string(center_id, cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(center_id), K(cid_str));
-        } else if (vec_res.length() > lob_inrow_threshold_ || cid_str.length() > lob_inrow_threshold_) {
+        } else if (data_str.length() > lob_inrow_threshold_ || cid_str.length() > lob_inrow_threshold_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected outrow datum in ivf vector index",
-                    K(ret), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
+                    K(ret), K(data_str.length()), K(vec_res.length()), K(cid_str.length()), K(lob_inrow_threshold_));
         } else {
           for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
             if (meta_vector_col_idx_ == i) {
@@ -800,6 +802,7 @@ int ObIVFPqRowIterator::get_next_row(
       LOG_WARN("upexpected nullptr center_vector", K(ret), K(cur_row_pos_), K(center_count_per_kmeans));
     } else {
       data_str.assign(reinterpret_cast<char *>(center_vector), static_cast<int64_t>(sizeof(float) * dim));
+      // Check payload bytes against the in-row threshold, excluding the LOB header in vec_res.
       if (OB_FAIL(sql::ObArrayExprUtils::set_array_res(nullptr, data_str.length(), row_allocator_, vec_res, data_str.ptr()))) {
         LOG_WARN("failed to set array res", K(ret));
       } else if (OB_ISNULL(buf = static_cast<char*>(row_allocator_.alloc(buf_len)))) {
@@ -811,10 +814,10 @@ int ObIVFPqRowIterator::get_next_row(
         ObPqCenterId pq_center_id(tablet_id_.id(), cur_row_pos_ / center_count_per_kmeans + 1, cur_row_pos_ % center_count_per_kmeans + 1);
         if (OB_FAIL(ObVectorClusterHelper::set_pq_center_id_to_string(pq_center_id, pq_cid_str))) {
           LOG_WARN("failed to set center_id to string", K(ret), K(pq_center_id), K(pq_cid_str));
-        } else if (vec_res.length() > lob_inrow_threshold_ || pq_cid_str.length() > lob_inrow_threshold_) {
+        } else if (data_str.length() > lob_inrow_threshold_ || pq_cid_str.length() > lob_inrow_threshold_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected outrow datum in ivf vector index",
-                    K(ret), K(vec_res.length()), K(pq_cid_str.length()), K(lob_inrow_threshold_));
+                    K(ret), K(data_str.length()), K(vec_res.length()), K(pq_cid_str.length()), K(lob_inrow_threshold_));
         } else {
           for (int64_t i = 0; i < current_row_.get_column_count(); ++i) {
             if (pq_center_vector_col_idx_ == i) {
