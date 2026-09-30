@@ -6486,14 +6486,18 @@ int ObPLResolver::get_into_expr_expected_type(ObRawExpr *into_expr,
 // Whether the expression tree reads physical_plan_ctx cur_time. Such expressions must be
 // evaluated by the original SQL statement: PL refreshes cur_time for every expression it
 // evaluates, so duplicated time functions in one transformed 'select ... from dual' would
-// return different values. Keep the type list in sync with is_cur_time_dep_type() in
-// ob_pl_code_generator.cpp.
+// return different values.
+//
+// The type list is aligned with is_cur_time_dep_type() in ob_pl_code_generator.cpp, but an
+// expression is only flagged when it can really observe cur_time. Rejecting a statement that
+// does not read cur_time only loses the select-from-dual-to-assign optimization, so the
+// groups below are separated by how cur_time is consumed.
 int ObPLResolver::expr_depends_on_cur_time(const ObRawExpr &expr, bool &need_cur_time)
 {
   int ret = OB_SUCCESS;
   need_cur_time = false;
   switch (expr.get_expr_type()) {
-    // group A: value IS the current time
+    // group A: the value IS the current time
     case T_FUN_SYS_CUR_TIMESTAMP:
     case T_FUN_SYS_CUR_TIME:
     case T_FUN_SYS_CUR_DATE:
@@ -6504,7 +6508,15 @@ int ObPLResolver::expr_depends_on_cur_time(const ObRawExpr &expr, bool &need_cur
     case T_FUN_SYS_SYSDATE:
     case T_FUN_SYS_SYSTIMESTAMP:
     case T_FUN_SYS_UNIX_TIMESTAMP:
-    // group B: date functions using the current date as base
+      need_cur_time = true;
+      break;
+    // group B: date functions that convert an argument with ob_datum_to_ob_time_with_date().
+    // That helper reads cur_time only in its ObTimeTC branch, where the date part of a TIME
+    // value is borrowed from the current date; for date/datetime/timestamp/string/number
+    // arguments it never consumes cur_time (so numeric ROUND/TRUNC and YEAR(date) or
+    // DATE_FORMAT(datetime) are safe to transform). Flag such an expression only when one of
+    // its arguments is TIME typed; a nested cur_time reference is still found by the
+    // recursion at the end of this function.
     case T_FUN_SYS_EXTRACT:
     case T_FUN_SYS_TIME:
     case T_FUN_SYS_YEAR:
@@ -6528,8 +6540,16 @@ int ObPLResolver::expr_depends_on_cur_time(const ObRawExpr &expr, bool &need_cur
     case T_FUN_SYS_FROM_UNIX_TIME:
     case T_FUN_SYS_ORA_TRUNC:
     case T_FUN_SYS_ROUND:
+      for (int64_t i = 0; !need_cur_time && i < expr.get_param_count(); ++i) {
+        const ObRawExpr *param = expr.get_param_expr(i);
+        if (OB_NOT_NULL(param) && ob_is_time_tc(param->get_result_type().get_type())) {
+          need_cur_time = true;
+        }
+      }
+      break;
+    // group C: may cast the result or an element to a date type internally, keep them
+    // conservative until the exact cur_time consumption is known.
     case T_OP_COLL_PRED:
-    // json/xml: may cast the result to a date type internally
     case T_FUN_SYS_JSON_VALUE:
     case T_FUN_SYS_JSON_QUERY:
     case T_FUN_SYS_XMLCAST:
