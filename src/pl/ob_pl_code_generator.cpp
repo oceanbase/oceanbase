@@ -7425,18 +7425,36 @@ int ObPLCodeGenerator::generate_llvm_calc(int64_t expr_idx,
 
   /*
    * 为防止计算溢出，用int64进行计算
+   * Also fetch whether the operand is NULL: NULL must propagate to the result
    */
-#define GET_LLVM_VALUE(expr, value) \
+#define GET_LLVM_VALUE(expr, value, is_null) \
   do { \
     if (OB_SUCC(ret)) { \
       int64_t int_value = static_cast<const ObConstRawExpr*>(expr)->get_value().get_unknown(); \
       if (T_QUESTIONMARK == expr->get_expr_type()) { \
+        ObLLVMValue p_objparam; \
+        ObLLVMValue p_type; \
+        ObLLVMValue type; \
         if (OB_FAIL(extract_value_from_context(vars_.at(CTX_IDX),  int_value, ObIntType, value))) { \
           LOG_WARN("failed to extract_value_from_context", K(ret)); \
+        } else if (OB_FAIL(extract_objparam_from_context(vars_.at(CTX_IDX), int_value, p_objparam))) { \
+          LOG_WARN("failed to extract_objparam_from_context", K(ret)); \
+        } else if (OB_FAIL(extract_type_ptr_from_objparam(p_objparam, p_type))) { \
+          LOG_WARN("failed to extract_type_ptr_from_objparam", K(ret)); \
+        } else if (OB_FAIL(helper_.create_load(ObString("load_operand_type"), p_type, type))) { \
+          LOG_WARN("failed to create_load", K(ret)); \
+        } else if (OB_FAIL(helper_.create_icmp_eq(type, ObNullType, is_null))) { \
+          LOG_WARN("failed to create_icmp_eq", K(ret)); \
         } \
       } else if (expr->is_const_raw_expr()) { \
+        /* a constant is never NULL, its type is int32 */ \
+        ObLLVMValue const_type; \
         if (OB_FAIL(helper_.get_int64(int_value, value))) { \
           LOG_WARN("failed to get int64", K(ret)); \
+        } else if (OB_FAIL(helper_.get_int8(ObInt32Type, const_type))) { \
+          LOG_WARN("failed to get_int8", K(ret)); \
+        } else if (OB_FAIL(helper_.create_icmp_eq(const_type, ObNullType, is_null))) { \
+          LOG_WARN("failed to create_icmp_eq", K(ret)); \
         } \
       } else { \
         ret = OB_INVALID_ARGUMENT; \
@@ -7476,10 +7494,42 @@ int ObPLCodeGenerator::generate_llvm_calc(int64_t expr_idx,
       const ObRawExpr *right_expr = expr->get_param_expr(1);
       ObLLVMValue left;
       ObLLVMValue right;
+      ObLLVMValue left_is_null;
+      ObLLVMValue right_is_null;
+      ObLLVMValue operand_is_null;
+      ObLLVMBasicBlock null_result_block;
+      ObLLVMBasicBlock calc_block;
+      ObLLVMBasicBlock after_null_check_block;
 
-      GET_LLVM_VALUE(left_expr, left);
+      GET_LLVM_VALUE(left_expr, left, left_is_null);
 
-      GET_LLVM_VALUE(right_expr, right);
+      GET_LLVM_VALUE(right_expr, right, right_is_null);
+
+      // NULL propagates: the calculation result is NULL when any operand is NULL
+      if (OB_SUCC(ret)) {
+        ObObjParam null_objparam;
+        null_objparam.set_null();
+        null_objparam.set_param_meta();
+        if (OB_FAIL(helper_.create_or(left_is_null, right_is_null, operand_is_null))) {
+          LOG_WARN("failed to create_or", K(ret));
+        } else if (OB_FAIL(helper_.create_block(ObString("null_result_block"), func_, null_result_block))) {
+          LOG_WARN("failed to create_block", K(ret));
+        } else if (OB_FAIL(helper_.create_block(ObString("calc_block"), func_, calc_block))) {
+          LOG_WARN("failed to create_block", K(ret));
+        } else if (OB_FAIL(helper_.create_block(ObString("after_null_check_block"), func_, after_null_check_block))) {
+          LOG_WARN("failed to create_block", K(ret));
+        } else if (OB_FAIL(helper_.create_cond_br(operand_is_null, null_result_block, calc_block))) {
+          LOG_WARN("failed to create_cond_br", K(ret));
+        } else if (OB_FAIL(set_current(null_result_block))) {
+          LOG_WARN("failed to set_current", K(ret));
+        } else if (OB_FAIL(store_objparam(null_objparam, p_result_obj))) {
+          LOG_WARN("failed to store_objparam", K(ret));
+        } else if (OB_FAIL(helper_.create_br(after_null_check_block))) {
+          LOG_WARN("failed to create_br", K(ret));
+        } else if (OB_FAIL(set_current(calc_block))) {
+          LOG_WARN("failed to set_current", K(ret));
+        }
+      }
 
       if (OB_SUCC(ret)) {
         if (IS_COMMON_COMPARISON_OP(expr->get_expr_type())) {
@@ -7490,6 +7540,15 @@ int ObPLCodeGenerator::generate_llvm_calc(int64_t expr_idx,
           if (OB_FAIL(generate_arith_calc(left, right, expr->get_expr_type(), expr->get_result_type(), stmt_id, in_notfound, in_warning, p_result_obj))) {
             LOG_WARN("failed to generate_new_objparam", K(ret));
           }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        // The calculation ends in its own end block, join the NULL branch here
+        if (OB_FAIL(helper_.create_br(after_null_check_block))) {
+          LOG_WARN("failed to create_br", K(ret));
+        } else if (OB_FAIL(set_current(after_null_check_block))) {
+          LOG_WARN("failed to set_current", K(ret));
         }
       }
     }
