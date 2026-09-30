@@ -364,6 +364,10 @@ int ObTabletTruncateMdsHelper::replay_get_tablet_(
       skip = true;
       LOG_INFO("[TRUNCATE TABLET] tablet is empty shell, should skip replay",
           K(ls_id), K(tablet_id), K(scn));
+    } else if (tablet->get_tablet_meta().ha_status_.is_expected_status_deleted()) {
+      skip = true;
+      LOG_INFO("[TRUNCATE TABLET] no need to replay, because tablet will be deleted",
+          K(tablet_handle), "tablet_meta", tablet->get_tablet_meta());
     } else if (OB_FAIL(tablet->get_tablet_truncate_scn_and_version(truncate_commit_scn,
                                                                    unused_truncate_version))) {
       LOG_WARN("failed to get tablet truncate scn and version",
