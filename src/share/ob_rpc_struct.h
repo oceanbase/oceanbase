@@ -15544,15 +15544,18 @@ public:
       refresh_method_(share::schema::ObMVRefreshMethod::MAX),
       refresh_parallel_(0),
       timeout_us_(0),
-      force_(false)
+      force_(false),
+      is_initial_refresh_(false)
   {}
   inline bool is_valid() const
   {
-    return common::is_valid_tenant_id(tenant_id_) && mview_id_ != common::OB_INVALID_ID;
+    return common::is_valid_tenant_id(tenant_id_)
+        && common::OB_INVALID_ID != mview_id_
+        && (!is_initial_refresh_ || common::OB_INVALID_ID != run_user_id_);
   }
 
   TO_STRING_KV(K_(tenant_id), K_(run_user_id), K_(mview_id), K_(is_nested), K_(refresh_method),
-               K_(refresh_parallel), K_(timeout_us), K_(force));
+               K_(refresh_parallel), K_(timeout_us), K_(force), K_(is_initial_refresh));
   uint64_t tenant_id_;
   uint64_t run_user_id_;
   uint64_t mview_id_;
@@ -15561,6 +15564,7 @@ public:
   int64_t refresh_parallel_;
   int64_t timeout_us_; // FARM COMPAT WHITELIST
   bool force_;
+  bool is_initial_refresh_;
 };
 
 struct ObScheduleMViewRefreshResult
@@ -15609,6 +15613,45 @@ struct ObKillMViewRefreshResult
   OB_UNIS_VERSION(1);
 public:
   ObKillMViewRefreshResult()
+    : ret_(common::OB_SUCCESS)
+  {}
+  TO_STRING_KV(K_(ret));
+  int ret_;
+};
+
+// placeholder for mv_feature_502 OB_NOTIFY_MVIEW_REFRESH_TIMER
+struct ObNotifyMViewTimerArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum OpType : int64_t
+  {
+    INVALID = -1,
+    REGISTER = 0,
+    ACTIVATE = 1,
+    UNREGISTER = 2,
+    RESCHEDULE = 3,
+    MAX
+  };
+  // DDL reports either the changed MV or database; the two operation scopes are mutually exclusive.
+  ObNotifyMViewTimerArg()
+    : tenant_id_(common::OB_INVALID_ID),
+      mview_id_(common::OB_INVALID_ID),
+      database_id_(common::OB_INVALID_ID),
+      op_type_(INVALID)
+  {}
+  TO_STRING_KV(K_(tenant_id), K_(mview_id), K_(database_id), K_(op_type));
+  uint64_t tenant_id_;
+  uint64_t mview_id_;
+  uint64_t database_id_;
+  OpType op_type_;
+};
+
+struct ObNotifyMViewTimerResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObNotifyMViewTimerResult()
     : ret_(common::OB_SUCCESS)
   {}
   TO_STRING_KV(K_(ret));

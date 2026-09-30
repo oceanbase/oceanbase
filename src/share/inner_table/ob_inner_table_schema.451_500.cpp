@@ -4055,6 +4055,63 @@ int ObInnerTableSchema::all_mview_schema(ObTableSchema &table_schema)
       compat_version_default,
       compat_version_default); //default_value
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj refresh_interval_default;
+    refresh_interval_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("refresh_interval", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      refresh_interval_default,
+      refresh_interval_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj refresh_timeout_us_default;
+    refresh_timeout_us_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("refresh_timeout_us", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      refresh_timeout_us_default,
+      refresh_timeout_us_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj refresh_flags_default;
+    refresh_flags_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("refresh_flags", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      refresh_flags_default,
+      refresh_flags_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

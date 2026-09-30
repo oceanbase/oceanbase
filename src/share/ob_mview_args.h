@@ -29,6 +29,9 @@ public:
   int64_t refresh_dop_;
   share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
   uint64_t compat_version_;
+  int64_t refresh_interval_;
+  share::schema::ObMViewBuildMode build_mode_;
+  bool sched_suspended_;
 
   ObMVRefreshInfo() :
   refresh_method_(share::schema::ObMVRefreshMethod::NEVER),
@@ -39,7 +42,10 @@ public:
   parallel_(OB_INVALID_COUNT),
   refresh_dop_(0),
   nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::INDIVIDUAL),
-  compat_version_(0) {}
+  compat_version_(0),
+  refresh_interval_(0),
+  build_mode_(share::schema::ObMViewBuildMode::IMMEDIATE),
+  sched_suspended_(false) {}
 
   void reset() {
     refresh_method_ = share::schema::ObMVRefreshMethod::NEVER;
@@ -51,6 +57,9 @@ public:
     refresh_dop_ = 0;
     nested_refresh_mode_ = share::schema::ObMVNestedRefreshMode::INDIVIDUAL;
     compat_version_ = 0;
+    refresh_interval_ = 0;
+    build_mode_ = share::schema::ObMViewBuildMode::IMMEDIATE;
+    sched_suspended_ = false;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -62,7 +71,10 @@ public:
       && parallel_ == other.parallel_
       && refresh_dop_ == other.refresh_dop_
       && nested_refresh_mode_ == other.nested_refresh_mode_
-      && compat_version_ == other.compat_version_;
+      && compat_version_ == other.compat_version_
+      && refresh_interval_ == other.refresh_interval_
+      && build_mode_ == other.build_mode_
+      && sched_suspended_ == other.sched_suspended_;
   }
 
   TO_STRING_KV(K_(refresh_mode),
@@ -73,7 +85,10 @@ public:
       K_(parallel),
       K_(refresh_dop),
       K_(nested_refresh_mode),
-      K_(compat_version));
+      K_(compat_version),
+      K_(refresh_interval),
+      K_(build_mode),
+      K_(sched_suspended));
 };
 
 struct ObMVRequiredColumnsInfo {
@@ -263,7 +278,12 @@ public:
     is_alter_table_dop_(false),
     table_dop_(0),
     is_alter_compat_version_(false),
-    compat_version_(0)
+    compat_version_(0),
+    refresh_interval_(0),
+    is_alter_sched_suspended_(false),
+    sched_suspended_(false),
+    is_alter_refresh_mode_(false),
+    refresh_mode_(share::schema::ObMVRefreshMode::MAX)
   {
   }
   ~ObAlterMViewArg() = default;
@@ -289,7 +309,12 @@ public:
                K_(is_alter_table_dop),
                K_(table_dop),
                K_(is_alter_compat_version),
-               K_(compat_version));
+               K_(compat_version),
+               K_(refresh_interval),
+               K_(is_alter_sched_suspended),
+               K_(sched_suspended),
+               K_(is_alter_refresh_mode),
+               K_(refresh_mode));
 public:
   void set_exec_env(const ObString &exec_env)
   {
@@ -382,6 +407,11 @@ private:
   int64_t table_dop_;
   bool is_alter_compat_version_;
   uint64_t compat_version_;
+  int64_t refresh_interval_;
+  bool is_alter_sched_suspended_;
+  bool sched_suspended_;
+  bool is_alter_refresh_mode_;
+  share::schema::ObMVRefreshMode refresh_mode_;
 };
 
 struct ObAlterMLogArg

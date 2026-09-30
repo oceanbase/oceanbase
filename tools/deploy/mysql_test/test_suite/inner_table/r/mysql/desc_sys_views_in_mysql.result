@@ -9084,6 +9084,9 @@ ON_QUERY_COMPUTATION	varchar(1)	NO
 REFRESH_DOP	bigint(20)	NO			
 DATA_SYNC_SCN	bigint(20) unsigned	NO			
 DATA_SYNC_DELAY	varchar(128)	NO			
+REFRESH_INTERVAL	bigint(20)	YES			
+REFRESH_TIMEOUT_US	bigint(20)	YES			
+REFRESH_SCHEDULER_ENABLED	varchar(1)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_MVIEWS|%') then 2

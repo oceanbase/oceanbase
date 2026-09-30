@@ -219,6 +219,7 @@ TG_DEF(ShrBlkChk, ShrBlkChk, TIMER)
 TG_DEF(WindowLoop, WindowLoop, TIMER)
 TG_DEF(OMTProcCpuSampler, OmtProcCpuSampler, THREAD_POOL, 1)
 TG_DEF(MViewSched, MViewSched, REENTRANT_THREAD_POOL, 1)
+TG_DEF(MViewTimer, MViewTimer, REENTRANT_THREAD_POOL, 1)
 TG_DEF(FTDictRefresh, FTDictRefresh, TIMER)
 TG_DEF(FTDictAccessRowScnCache, FTDictAccessRowScnCache, TIMER)
 #endif

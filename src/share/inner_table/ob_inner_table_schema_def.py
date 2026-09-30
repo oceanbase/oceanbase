@@ -6364,7 +6364,10 @@ def_table_schema(
     ('data_sync_scn', 'uint', 'false', '0'),
     ('is_synced', 'bool', 'false', '0'),
     ('nested_refresh_mode', 'int', 'false', '0'),
-    ('compat_version', 'uint', 'false', '0')
+    ('compat_version', 'uint', 'false', '0'),
+    ('refresh_interval', 'int', 'true', '0'),
+    ('refresh_timeout_us', 'int', 'true', '0'),
+    ('refresh_flags', 'uint', 'false', '0')
   ]
 )
 
@@ -18719,6 +18722,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12625: __all_virtual_jvm_status
 # 12626: __all_virtual_java_udf_stats
 # 12627: __all_virtual_ext_plugin_info
+# 12628: __all_virtual_mview_refresh_timer
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -41172,7 +41176,7 @@ def_table_schema(
         CASE C.BUILD_MODE
           WHEN 0 THEN 'IMMEDIATE'
           WHEN 1 THEN 'DEFERRED'
-          WHEN 2 THEN 'PERBUILT'
+          WHEN 2 THEN 'PREBUILT'
           ELSE NULL
         END AS CHAR(9)
       ) AS BUILD_MODE,
@@ -41219,7 +41223,15 @@ def_table_schema(
           WHEN 0 THEN 'NOT AVAILABLE'
           ELSE TIMESTAMPDIFF(SECOND, SCN_TO_TIMESTAMP(C.data_sync_scn), NOW())
         END AS CHAR(128)
-      ) AS DATA_SYNC_DELAY
+      ) AS DATA_SYNC_DELAY,
+      C.REFRESH_INTERVAL AS REFRESH_INTERVAL,
+      C.REFRESH_TIMEOUT_US AS REFRESH_TIMEOUT_US,
+      CAST(
+        CASE (C.REFRESH_FLAGS & 1)
+          WHEN 0 THEN 'Y'
+          ELSE 'N'
+        END AS CHAR(1)
+      ) AS REFRESH_SCHEDULER_ENABLED
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -41286,7 +41298,7 @@ def_table_schema(
         CASE C.BUILD_MODE
           WHEN 0 THEN 'IMMEDIATE'
           WHEN 1 THEN 'DEFERRED'
-          WHEN 2 THEN 'PERBUILT'
+          WHEN 2 THEN 'PREBUILT'
           ELSE NULL
         END AS CHAR(9)
       ) AS BUILD_MODE,
@@ -41333,7 +41345,15 @@ def_table_schema(
           WHEN 0 THEN 'NOT AVAILABLE'
           ELSE TIMESTAMPDIFF(SECOND, SCN_TO_TIMESTAMP(C.data_sync_scn), NOW())
         END AS CHAR(128)
-      ) AS DATA_SYNC_DELAY
+      ) AS DATA_SYNC_DELAY,
+      C.REFRESH_INTERVAL AS REFRESH_INTERVAL,
+      C.REFRESH_TIMEOUT_US AS REFRESH_TIMEOUT_US,
+      CAST(
+        CASE (C.REFRESH_FLAGS & 1)
+          WHEN 0 THEN 'Y'
+          ELSE 'N'
+        END AS CHAR(1)
+      ) AS REFRESH_SCHEDULER_ENABLED
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -69749,7 +69769,7 @@ def_table_schema(
       CAST(
         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',
                              1, 'DEFERRED',
-                             2, 'PERBUILT',
+                             2, 'PREBUILT',
                                 NULL
         ) AS VARCHAR2(9)
       ) AS BUILD_MODE,
@@ -69795,7 +69815,12 @@ def_table_schema(
           WHEN 0 THEN 'NOT AVAILABLE'
           ELSE TO_CHAR((SYSDATE - SCN_TO_TIMESTAMP(C.data_sync_scn)) * 24 * 60 * 60)
         END AS VARCHAR(128)
-      ) AS DATA_SYNC_DELAY
+      ) AS DATA_SYNC_DELAY,
+      C.REFRESH_INTERVAL AS REFRESH_INTERVAL,
+      C.REFRESH_TIMEOUT_US AS REFRESH_TIMEOUT_US,
+      CAST(
+        DECODE(BITAND(C.REFRESH_FLAGS, 1), 0, 'Y', 'N') AS VARCHAR2(1)
+      ) AS REFRESH_SCHEDULER_ENABLED
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -69862,7 +69887,7 @@ def_table_schema(
       CAST(
         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',
                              1, 'DEFERRED',
-                             2, 'PERBUILT',
+                             2, 'PREBUILT',
                                 NULL
         ) AS VARCHAR2(9)
       ) AS BUILD_MODE,
@@ -69908,7 +69933,12 @@ def_table_schema(
           WHEN 0 THEN 'NOT AVAILABLE'
           ELSE TO_CHAR((SYSDATE - SCN_TO_TIMESTAMP(C.data_sync_scn)) * 24 * 60 * 60)
         END AS VARCHAR(128)
-      ) AS DATA_SYNC_DELAY
+      ) AS DATA_SYNC_DELAY,
+      C.REFRESH_INTERVAL AS REFRESH_INTERVAL,
+      C.REFRESH_TIMEOUT_US AS REFRESH_TIMEOUT_US,
+      CAST(
+        DECODE(BITAND(C.REFRESH_FLAGS, 1), 0, 'Y', 'N') AS VARCHAR2(1)
+      ) AS REFRESH_SCHEDULER_ENABLED
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -69977,7 +70007,7 @@ def_table_schema(
       CAST(
         DECODE(C.BUILD_MODE, 0, 'IMMEDIATE',
                              1, 'DEFERRED',
-                             2, 'PERBUILT',
+                             2, 'PREBUILT',
                                 NULL
         ) AS VARCHAR2(9)
       ) AS BUILD_MODE,
@@ -70023,7 +70053,12 @@ def_table_schema(
           WHEN 0 THEN 'NOT AVAILABLE'
           ELSE TO_CHAR((SYSDATE - SCN_TO_TIMESTAMP(C.data_sync_scn)) * 24 * 60 * 60)
         END AS VARCHAR(128)
-      ) AS DATA_SYNC_DELAY
+      ) AS DATA_SYNC_DELAY,
+      C.REFRESH_INTERVAL AS REFRESH_INTERVAL,
+      C.REFRESH_TIMEOUT_US AS REFRESH_TIMEOUT_US,
+      CAST(
+        DECODE(BITAND(C.REFRESH_FLAGS, 1), 0, 'Y', 'N') AS VARCHAR2(1)
+      ) AS REFRESH_SCHEDULER_ENABLED
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,

@@ -260,7 +260,11 @@ OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     parallel_,
     refresh_dop_,
     nested_refresh_mode_,
-    compat_version_);
+    compat_version_,
+    refresh_interval_,
+    build_mode_,
+    sched_suspended_
+    );
 
 OB_SERIALIZE_MEMBER(ObMVRequiredColumnsInfo,
                     base_table_id_,
@@ -330,6 +334,11 @@ void ObAlterMViewArg::reset()
   table_dop_ = 0;
   is_alter_compat_version_ = false;
   compat_version_ = 0;
+  refresh_interval_ = 0;
+  is_alter_sched_suspended_ = false;
+  sched_suspended_ = false;
+  is_alter_refresh_mode_ = false;
+  refresh_mode_ = ObMVRefreshMode::MAX;
 }
 
 int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
@@ -357,6 +366,11 @@ int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
     table_dop_ = other.table_dop_;
     is_alter_compat_version_ = other.is_alter_compat_version_;
     compat_version_ = other.compat_version_;
+    refresh_interval_ = other.refresh_interval_;
+    is_alter_sched_suspended_ = other.is_alter_sched_suspended_;
+    sched_suspended_ = other.sched_suspended_;
+    is_alter_refresh_mode_ = other.is_alter_refresh_mode_;
+    refresh_mode_ = other.refresh_mode_;
   }
   return ret;
 }
@@ -380,7 +394,13 @@ OB_SERIALIZE_MEMBER(ObAlterMViewArg,
                     is_alter_table_dop_,
                     table_dop_,
                     is_alter_compat_version_,
-                    compat_version_);
+                    compat_version_,
+                    refresh_interval_,
+                    is_alter_sched_suspended_,
+                    sched_suspended_,
+                    is_alter_refresh_mode_,
+                    refresh_mode_
+                    );
 
 bool ObAlterMLogArg::is_valid() const
 {
