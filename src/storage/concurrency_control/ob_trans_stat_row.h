@@ -22,7 +22,10 @@ public:
     : trans_version_(share::SCN::max_scn()),
     scn_(share::SCN::max_scn()),
     trans_id_(),
-    seq_no_() {}
+    seq_no_(),
+    snapshot_(share::SCN::max_scn()),
+    mvcc_row_(nullptr),
+    first_trans_node_(nullptr) {}
 
   void set(const share::SCN trans_version,
            const share::SCN scn,
@@ -41,13 +44,21 @@ public:
     scn_ = share::SCN::max_scn();
     trans_id_.reset();
     seq_no_.reset();
+    snapshot_ = share::SCN::max_scn();
+    mvcc_row_ = nullptr;
+    first_trans_node_ = nullptr;
   }
 
-  TO_STRING_KV(K_(trans_version), K_(scn), K_(trans_id), K_(seq_no));
+  TO_STRING_KV(K_(trans_version), K_(scn), K_(trans_id), K_(seq_no),
+               K_(snapshot), KP_(mvcc_row), KP_(first_trans_node));
   share::SCN trans_version_;
   share::SCN scn_;
   transaction::ObTransID trans_id_;
   transaction::ObTxSEQ seq_no_;
+  share::SCN snapshot_;
+  const void *mvcc_row_;
+  // Initial visible read position, not necessarily the physical version-chain head.
+  const void *first_trans_node_;
 public:
   static const int64_t MAX_TRANS_STRING_SIZE = 120;
 };

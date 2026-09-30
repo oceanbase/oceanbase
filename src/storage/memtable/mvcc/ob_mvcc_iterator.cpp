@@ -314,6 +314,12 @@ void ObMvccValueIterator::get_trans_stat_row(concurrency_control::ObTransStatRow
             version_iter_->get_tx_id(),
             version_iter_->get_seq_no());
   }
+  // Capture before row fusion advances version_iter_, so the address identifies
+  // the same visible node as the transaction metadata above. Preserve the read
+  // snapshot and MVCC row even when no node is visible.
+  row.snapshot_ = OB_NOT_NULL(ctx_) ? ctx_->get_snapshot_version() : SCN::max_scn();
+  row.mvcc_row_ = value_;
+  row.first_trans_node_ = version_iter_;
 }
 
 int ObMvccValueIterator::get_next_node(const void *&tnode)

@@ -450,7 +450,7 @@ DEF_TO_STRING(ObDatumRow)
     }
   }
   if (trans_info_) {
-    databuff_printf(buf, buf_len, pos, ",trans_info[version, scn, txid, seq_no(branch_id, seq)]:%s", trans_info_);
+    databuff_printf(buf, buf_len, pos, ",trans_info[version, scn, txid, seq_no(branch_id, seq), snapshot, mvcc_row, first_trans_node]:%s", trans_info_);
   }
   J_OBJ_END();
   return pos;
