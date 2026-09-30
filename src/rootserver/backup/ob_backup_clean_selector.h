@@ -13,6 +13,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/backup/ob_backup_store.h"
 #include "share/backup/ob_archive_store.h"
+#include "logservice/palf/lsn.h"
 
 namespace oceanbase
 {
@@ -21,6 +22,30 @@ namespace rootserver
 
 class ObUserTenantBackupDeleteMgr;
 
+// The LSN from which ONE log stream still needs its archive log, i.e. the lsn a restore of that log
+// stream would start to fetch the archive log at. Every piece which holds log at or after this lsn has
+// to be kept.
+//
+// It is always the start of a 64M palf block, because palf can only be advanced to a block boundary:
+// whoever reads the archive advances palf to a block boundary first(ObLSService::restore_update_ls_ ->
+// advance_base_info) and then asks the archive for the log from exactly that lsn
+// (ObLogRestoreArchiveDriver::get_palf_base_lsn_scn_). Hence it can be much smaller than the lsn of the
+// log at the SCN the caller has in mind. Where the block boundary comes from depends on the policy:
+//   - default : the palf base lsn recorded in the retained backup set
+//               (ObLSMetaPackage::palf_meta_.curr_lsn_), which ObLogHandler::get_palf_base_info has
+//               already rounded DOWN to a block boundary;
+//   - log_only: no backup set exists, so it is the start of the block the oldest kept piece begins in,
+//               see ObBackupDeleteSelector::get_anchor_piece_ls_need_lsn_.
+struct ObLSRestoreStartLSN final
+{
+  ObLSRestoreStartLSN() : ls_id_(), start_lsn_() {}
+  ~ObLSRestoreStartLSN() = default;
+  bool is_valid() const { return ls_id_.is_valid() && start_lsn_.is_valid(); }
+  TO_STRING_KV(K_(ls_id), K_(start_lsn));
+
+  share::ObLSID ls_id_;
+  palf::LSN start_lsn_;
+};
 
 // Abstracting static functions into the IObBackupDataProvider interface, allowing us to isolate the component
 // under test by replacing real database calls with mock objects.
@@ -81,6 +106,13 @@ public:
       const uint64_t tenant_id,
       const share::ObTenantArchivePieceAttr &piece_attr,
       share::ObPieceInfoDesc &piece_info_desc) = 0;
+
+  // Read the ls meta of `backup_set_desc` from the backup set dir, and return the lsn every log
+  // stream of it starts to fetch the archive log from when it is restored, see ObLSRestoreStartLSN.
+  virtual int get_backup_set_ls_restore_start_lsn(
+      const uint64_t tenant_id,
+      const share::ObBackupSetFileDesc &backup_set_desc,
+      common::ObIArray<ObLSRestoreStartLSN> &ls_start_lsn_array) = 0;
 };
 
 class ObBackupDataProvider final : public IObBackupDataProvider {
@@ -138,6 +170,11 @@ public:
       const uint64_t tenant_id,
       const share::ObTenantArchivePieceAttr &piece_attr,
       share::ObPieceInfoDesc &piece_info_desc) override;
+
+  int get_backup_set_ls_restore_start_lsn(
+      const uint64_t tenant_id,
+      const share::ObBackupSetFileDesc &backup_set_desc,
+      common::ObIArray<ObLSRestoreStartLSN> &ls_start_lsn_array) override;
 
 private:
   common::ObISQLClient *sql_proxy_;
@@ -312,12 +349,54 @@ private:
                                             ObIArray<share::ObBackupSetFileDesc> &set_list);
   int get_delete_obsolete_backup_piece_infos_(const share::ObBackupSetFileDesc &clog_data_clean_point,
                                               ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  int get_one_dest_deletable_backup_piece_infos_(const share::SCN &start_replay_scn,
+                                              const char *backup_path_str,
+                                              const int64_t dest_id,
+                                              const share::ObArchivePersistHelper &archive_table_op,
+                                              ObIArray<share::ObTenantArchivePieceAttr> &backup_piece_infos);
+  // `sorted_all_piece_infos` is all the pieces of the dest, sorted in ascending order of piece id.
+  int check_piece_can_be_deleted_(const share::ObTenantArchivePieceAttr &backup_piece_info,
+                                              const share::SCN &start_replay_scn,
+                                              const ObIArray<share::ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+                                              bool &can_be_deleted);
+  int check_scn_covered_by_other_piece_(const share::ObTenantArchivePieceAttr &piece_to_delete,
+                                              const share::SCN &scn,
+                                              const ObIArray<share::ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+                                              bool &is_scn_covered_by_other_kept_piece);
+  // ----------------------------Pieces still needed by a restore(LSN based)----------------------------
+  // The two delete obsolete policies protect the same thing - the archive log is read from the start of a
+  // 64M palf block and the archive may have split that block across two pieces - and only differ in where
+  // the "from which lsn is the log still needed" of every log stream comes from. That difference lives in
+  // filter_pieces_needed_by_restore_(default policy) and get_anchor_piece_ls_need_lsn_(log_only policy),
+  // the piece walk itself is shared in find_min_needed_piece_idx_.
+
+  // `sorted_pieces` are the pieces of ONE archive dest, sorted in ascending order of piece id.
+  // `min_needed_idx` is the index of the oldest piece which still holds needed log, -1 if none does. The
+  // caller keeps that piece and every piece after it. Never fails because of an unreadable piece.
+  int find_min_needed_piece_idx_(const ObIArray<share::ObTenantArchivePieceAttr> &sorted_pieces,
+                                              const ObIArray<ObLSRestoreStartLSN> &ls_need_lsn_array,
+                                              int64_t &min_needed_idx);
+  // Remove from `piece_list`(the pieces of ONE archive dest, sorted in ascending order of piece id) the
+  // pieces which still hold the archive log the restore of `clog_data_clean_point` needs, judged by LSN
+  // instead of SCN.
+  int filter_pieces_needed_by_restore_(const share::ObBackupSetFileDesc &clog_data_clean_point,
+                                              ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  // The need lsn of every log stream when there is no backup set to anchor on(log_only policy): the start
+  // of the palf block `anchor_piece` begins in.
+  int get_anchor_piece_ls_need_lsn_(const share::ObTenantArchivePieceAttr &anchor_piece,
+                                              ObIArray<ObLSRestoreStartLSN> &ls_need_lsn_array);
+  bool check_pieces_belong_to_one_dest_(const ObIArray<share::ObTenantArchivePieceAttr> &piece_list);
+  // `is_ls_cleared_array` and `is_ls_absent_in_round_array` are parallel to `ls_need_lsn_array` and are
+  // updated in place, see the implementation for their meaning.
+  int check_piece_log_needed_(const share::ObTenantArchivePieceAttr &backup_piece_info,
+                                              const ObIArray<ObLSRestoreStartLSN> &ls_need_lsn_array,
+                                              ObIArray<bool> &is_ls_cleared_array,
+                                              ObIArray<bool> &is_ls_absent_in_round_array,
+                                              bool &is_log_needed,
+                                              bool &are_all_ls_cleared_in_round,
+                                              bool &are_all_ls_cleared_in_every_round);
 
   int get_min_depended_piece_idx_(const ObIArray<share::ObTenantArchivePieceAttr> &candidate_piece_infos, int64_t &min_depended_pieces_idx);
-  int get_min_depended_piece_idx_ls_(const ObIArray<share::ObTenantArchivePieceAttr> &candidate_piece_infos,
-                                    const share::ObSingleLSInfoDesc &ls_info,
-                                    const int64_t file_id,
-                                    int64_t &min_depended_pieces_idx);
   int check_piece_dependency_(ObIArray<share::ObTenantArchivePieceAttr> &candidate_piece_infos);
   int get_delete_obsolete_backup_piece_infos_log_only_(int64_t expired_time,
                                             ObIArray<share::ObTenantArchivePieceAttr> &piece_list);

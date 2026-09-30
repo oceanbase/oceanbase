@@ -137,8 +137,19 @@ public:
   // Get all frozen pieces whose piece ids are smaller than `upper_piece_id`.
   int get_frozen_pieces(common::ObISQLClient &proxy, const int64_t dest_id, const int64_t upper_piece_id, 
       common::ObIArray<ObTenantArchivePieceAttr> &piece_list) const;
+  // Get the pieces which may be obsolete, i.e. the log they contain is not after `end_scn`.
+  // `use_checkpoint_scn` decides which column is taken as the upper bound of the log a piece contains:
+  //   false: piece.end_scn, which is only a nominal boundary calculated by
+  //          "round.start_scn + N * piece_switch_interval"(see ObTenantArchiveMgr::decide_piece_end_scn).
+  //          It is decided when the piece is created and never shrinks, even if archive is stopped in
+  //          the middle of the piece. So a frozen piece may be filtered out although all the log it
+  //          really contains is before `end_scn`;
+  //   true:  piece.checkpoint_scn, the real upper bound of the log a frozen piece contains. The caller
+  //          MUST check the deletability of every returned piece by itself, because a piece whose
+  //          nominal range still covers `end_scn` may be returned.
   int get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const SCN &end_scn,
-      const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const;
+      const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces,
+      const bool use_checkpoint_scn = false) const;
   int insert_or_update_piece(common::ObISQLClient &proxy, const ObTenantArchivePieceAttr &piece) const;
   // Usually, we need do it in a transaction.
   int batch_update_pieces(common::ObISQLClient &proxy, const common::ObIArray<ObTenantArchivePieceAttr> &pieces_array) const;

@@ -931,10 +931,12 @@ int ObArchivePersistHelper::get_frozen_pieces(
 }
 
 int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLClient &proxy, const SCN &end_scn,
-    const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces) const
+    const char *backup_dest_str, ObIArray<ObTenantArchivePieceAttr> &pieces,
+    const bool use_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
+  const char *upper_bound_column = use_checkpoint_scn ? OB_STR_CHECKPOINT_SCN : OB_STR_END_SCN;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObArchivePersistHelper not init", K(ret));
@@ -942,7 +944,7 @@ int ObArchivePersistHelper::get_candidate_obsolete_backup_pieces(common::ObISQLC
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid backup_dest_str", K(ret), K(backup_dest_str));
   } else if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%lu and %s<=%lu and %s='%s' and %s!='%s'",
-      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, OB_STR_END_SCN,
+      OB_ALL_LOG_ARCHIVE_PIECE_FILES_TNAME, OB_STR_TENANT_ID, tenant_id_, upper_bound_column,
       end_scn.get_val_for_inner_table_field(), OB_STR_PATH, backup_dest_str, OB_STR_FILE_STATUS, OB_STR_DELETED))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {

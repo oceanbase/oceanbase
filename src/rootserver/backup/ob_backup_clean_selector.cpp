@@ -18,6 +18,7 @@
 #include "share/backup/ob_backup_clean_operator.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/backup/ob_backup_utils.h"
+#include "storage/backup/ob_backup_data_store.h"
 namespace oceanbase
 {
 using namespace share;
@@ -867,6 +868,50 @@ int ObBackupDataProvider::load_piece_info_desc(
   return ret;
 }
 
+int ObBackupDataProvider::get_backup_set_ls_restore_start_lsn(
+    const uint64_t tenant_id,
+    const ObBackupSetFileDesc &backup_set_desc,
+    ObIArray<ObLSRestoreStartLSN> &ls_start_lsn_array)
+{
+  int ret = OB_SUCCESS;
+  ObBackupDest backup_dest;
+  ObBackupSetDesc set_desc;
+  storage::ObBackupDataStore store;
+  storage::ObBackupLSMetaInfosDesc ls_meta_infos;
+  ls_start_lsn_array.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDataProvider not inited", K(ret));
+  } else if (!backup_set_desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid backup set desc", K(ret), K(backup_set_desc));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy_, tenant_id,
+      backup_set_desc.backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest with storage info", K(ret), K(tenant_id), K(backup_set_desc));
+  } else if (OB_FALSE_IT(set_desc.backup_set_id_ = backup_set_desc.backup_set_id_)) {
+  } else if (OB_FALSE_IT(set_desc.backup_type_ = backup_set_desc.backup_type_)) {
+  } else if (OB_FAIL(store.init(backup_dest, set_desc))) {
+    LOG_WARN("failed to init backup data store", K(ret), K(backup_set_desc));
+  } else if (OB_FAIL(store.read_ls_meta_infos(ls_meta_infos))) {
+    LOG_WARN("failed to read ls meta infos", K(ret), K(backup_set_desc));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_meta_infos.ls_meta_packages_.count(); ++i) {
+      const storage::ObLSMetaPackage &ls_meta_package = ls_meta_infos.ls_meta_packages_.at(i);
+      ObLSRestoreStartLSN ls_start_lsn;
+      ls_start_lsn.ls_id_ = ls_meta_package.ls_meta_.ls_id_;
+      ls_start_lsn.start_lsn_ = ls_meta_package.palf_meta_.curr_lsn_;
+      if (!ls_start_lsn.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid ls restore start lsn", K(ret), K(ls_start_lsn), K(ls_meta_package));
+      } else if (OB_FAIL(ls_start_lsn_array.push_back(ls_start_lsn))) {
+        LOG_WARN("failed to push back ls restore start lsn", K(ret), K(ls_start_lsn));
+      }
+    }
+    LOG_INFO("[BACKUP_CLEAN]get backup set ls restore start lsn", K(ret), K(backup_set_desc),
+        K(ls_start_lsn_array));
+  }
+  return ret;
+}
 
 // Apply retention policy for current active backup path: keep pieces that are needed for the latest full backup
 // 1. if now db only do archive, then not allow to delete any piece on the current active backup path
@@ -1452,10 +1497,18 @@ int ObBackupDeleteSelector::get_all_dest_backup_piece_infos_(
         LOG_WARN("fail to set backup dest", K(ret), K(backup_dest_str));
       } else if (OB_FAIL(backup_dest.get_backup_path_str(backup_path_str.ptr(), backup_path_str.capacity()))) {
         LOG_WARN("fail to get backup path str", K(ret), K(backup_dest));
+      } else if (!is_log_only) {
+        // delete obsolete: only pick the pieces whose log is really not needed by the retained
+        // backup set chain any more, an un-deletable piece is skipped instead of failing the job.
+        if (OB_FAIL(get_one_dest_deletable_backup_piece_infos_(clog_data_clean_point, backup_path_str.ptr(),
+            archive_dest.second/*dest_id*/, archive_table_op, backup_piece_infos))) {
+          LOG_WARN("failed to get deletable backup piece infos of one dest", K(ret),
+              K(clog_data_clean_point), K(backup_path_str));
+        }
       } else if (OB_FAIL(archive_table_op.get_candidate_obsolete_backup_pieces(
                 *sql_proxy_, clog_data_clean_point, backup_path_str.ptr(), backup_piece_infos))) {
         LOG_WARN("failed to get candidate obsolete backup sets", K(ret));
-      } else if (is_log_only && backup_piece_infos.count() > 0) {
+      } else if (backup_piece_infos.count() > 0) {
         // get the about to expire piece,
         ObTenantArchivePieceAttr about_to_expire_piece;
         int64_t about_to_expire_piece_id = backup_piece_infos.at(backup_piece_infos.count() - 1).key_.piece_id_ + 1;
@@ -1477,6 +1530,580 @@ int ObBackupDeleteSelector::get_all_dest_backup_piece_infos_(
   return ret;
 }
 
+// Pick the deletable pieces of one archive dest. Pieces are checked in ascending order of piece id,
+// and once a piece can not be deleted, all the pieces after it are kept too, so that the remaining
+// pieces are always a continuous suffix which covers the log from start_replay_scn onwards.
+// Note that an un-deletable piece only means "nothing more can be reclaimed for this dest in this
+// round", it MUST NOT fail the whole backup clean job, otherwise the obsolete backup sets which have
+// already been figured out can not be deleted either, and the job would keep failing forever.
+//
+// The candidate pieces are selected by PATH while the pieces used to judge whether start_replay_scn
+// is still covered are selected by DEST_ID(see check_scn_covered_by_other_piece_), so the two must be
+// verified to belong to the same dest before they are compared: the caller reads the path and the
+// dest_id of one dest_no with two separate unlocked reads of __all_log_archive_dest_parameter, and an
+// "alter system set log_archive_dest_n" in between(allowed while archive is stopped) can repoint the
+// dest_no from dest A to dest B, leaving the caller with the path of B and the dest_id of A. A
+// candidate piece of another dest is therefore treated as un-deletable, which keeps it and all the
+// pieces after it; the next round of clean reads a consistent path/dest_id pair and moves on.
+int ObBackupDeleteSelector::get_one_dest_deletable_backup_piece_infos_(
+    const SCN &start_replay_scn,
+    const char *backup_path_str,
+    const int64_t dest_id,
+    const ObArchivePersistHelper &archive_table_op,
+    ObIArray<ObTenantArchivePieceAttr> &backup_piece_infos)
+{
+  int ret = OB_SUCCESS;
+  CompareBackupPieceInfo backup_piece_info_cmp;
+  ObArray<ObTenantArchivePieceAttr> candidate_piece_infos;
+  ObArray<ObTenantArchivePieceAttr> all_piece_infos;
+  if (OB_ISNULL(backup_path_str) || dest_id <= 0 || !start_replay_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(backup_path_str), K(dest_id), K(start_replay_scn));
+  } else if (OB_FAIL(archive_table_op.get_candidate_obsolete_backup_pieces(*sql_proxy_, start_replay_scn,
+      backup_path_str, candidate_piece_infos, true/*use_checkpoint_scn*/))) {
+    LOG_WARN("failed to get candidate obsolete backup pieces", K(ret), K(start_replay_scn), K(dest_id));
+  } else if (candidate_piece_infos.empty()) {
+    // do nothing
+  } else if (OB_FAIL(archive_table_op.get_pieces(*sql_proxy_, dest_id, all_piece_infos))) {
+    // Get all the pieces of the dest once here and pass it down to check_piece_can_be_deleted_, so
+    // that check_scn_covered_by_other_piece_ does not query and sort the pieces again for every
+    // candidate piece.
+    LOG_WARN("failed to get pieces of dest", K(ret), K(dest_id));
+  } else if (FALSE_IT(lib::ob_sort(candidate_piece_infos.begin(), candidate_piece_infos.end(), backup_piece_info_cmp))) {
+  } else if (FALSE_IT(lib::ob_sort(all_piece_infos.begin(), all_piece_infos.end(), backup_piece_info_cmp))) {
+  } else {
+    bool can_be_deleted = true;
+    for (int64_t i = 0; OB_SUCC(ret) && can_be_deleted && i < candidate_piece_infos.count(); i++) {
+      const ObTenantArchivePieceAttr &backup_piece_info = candidate_piece_infos.at(i);
+      if (OB_UNLIKELY(backup_piece_info.key_.dest_id_ != dest_id)) {
+        // The piece is not archived at `dest_id`, so `all_piece_infos` says nothing about it, see the
+        // comment above. Keep it and the pieces after it.
+        can_be_deleted = false;
+        LOG_WARN("[BACKUP_CLEAN]dest id of the candidate piece does not match the dest id of the path,"
+            " the archive dest may have just been changed, keep the piece", K(dest_id),
+            K(backup_piece_info));
+      } else if (OB_FAIL(check_piece_can_be_deleted_(backup_piece_info, start_replay_scn, all_piece_infos,
+          can_be_deleted))) {
+        LOG_WARN("failed to check piece can be deleted", K(ret), K(backup_piece_info));
+      } else if (!can_be_deleted) {
+        LOG_INFO("[BACKUP_CLEAN]backup piece can not be deleted, skip it and the pieces after it",
+            K(backup_piece_info), K(start_replay_scn));
+      } else if (OB_FAIL(backup_piece_infos.push_back(backup_piece_info))) {
+        LOG_WARN("failed to push back piece", K(ret), K(backup_piece_info));
+      }
+    }
+  }
+  return ret;
+}
+
+// A piece can be deleted only if none of the log it really contains is needed by the retained backup
+// set chain, i.e. all the log in the piece is before start_replay_scn.
+//
+// Pay attention that piece.end_scn_ is only a nominal boundary calculated by
+// "round.start_scn + N * piece_switch_interval"(see ObTenantArchiveMgr::decide_piece_end_scn), it is
+// determined when the piece is created and never shrinks, even if archive is stopped in the middle
+// of the piece. So for a FROZEN piece whose archive was stopped(e.g. the user runs
+// "alter system noarchivelog" after every data backup), end_scn_ may be far greater than the scn of
+// the last log it really contains. Judging by end_scn_ would treat such piece as "still needed" by
+// mistake. Here we use checkpoint_scn_/max_scn_(the real upper bound of the log in a frozen piece)
+// instead, and additionally require that start_replay_scn is still nominally covered by another kept
+// AVAILABLE piece(see check_scn_covered_by_other_piece_), so that the retained backup set is still
+// restorable.
+int ObBackupDeleteSelector::check_piece_can_be_deleted_(
+    const ObTenantArchivePieceAttr &backup_piece_info,
+    const SCN &start_replay_scn,
+    const ObIArray<ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+    bool &can_be_deleted)
+{
+  int ret = OB_SUCCESS;
+  can_be_deleted = false;
+  if (!backup_piece_info.is_valid() || !start_replay_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(backup_piece_info), K(start_replay_scn));
+  } else if (!can_backup_pieces_be_deleted_(backup_piece_info.status_)) {
+    // The piece may still be written, do not delete it.
+    can_be_deleted = false;
+    LOG_INFO("[BACKUP_CLEAN]piece is not frozen or inactive, can not be deleted", K(backup_piece_info));
+  } else if (backup_piece_info.end_scn_ <= start_replay_scn) {
+    // The whole nominal range of the piece is before start_replay_scn.
+    can_be_deleted = true;
+  } else if (backup_piece_info.max_scn_ > start_replay_scn
+      || backup_piece_info.checkpoint_scn_ > start_replay_scn) {
+    // The piece really contains the log which is needed by clog_data_clean_point.
+    can_be_deleted = false;
+    LOG_INFO("[BACKUP_CLEAN]piece contains the log needed by clog_data_clean_point, can not be deleted",
+        K(backup_piece_info), K(start_replay_scn));
+  } else {
+    // The nominal range of the piece covers start_replay_scn, but the piece does not contain any log
+    // after start_replay_scn. It can be deleted only if start_replay_scn is still nominally covered
+    // by another kept AVAILABLE piece, otherwise the restore path can not find the first piece.
+    bool is_scn_covered_by_other_kept_piece = false;
+    if (OB_FAIL(check_scn_covered_by_other_piece_(backup_piece_info, start_replay_scn,
+        sorted_all_piece_infos, is_scn_covered_by_other_kept_piece))) {
+      LOG_WARN("failed to check scn covered by other piece", K(ret), K(backup_piece_info),
+          K(start_replay_scn));
+    } else {
+      // The piece has no log after start_replay_scn, so it can be deleted as long as
+      // start_replay_scn is still covered by another piece which will be kept.
+      can_be_deleted = is_scn_covered_by_other_kept_piece;
+      LOG_INFO("[BACKUP_CLEAN]the nominal range of piece covers start_replay_scn but the piece does "
+          "not contain any log after it", K(is_scn_covered_by_other_kept_piece), K(backup_piece_info),
+          K(start_replay_scn));
+    }
+  }
+  return ret;
+}
+
+// Return whether `scn`(start_replay_scn) is covered by another piece which is guaranteed to be kept
+// and visible to restore.
+//
+// Pay attention that it is NOT enough that the log BYTES at `scn` physically exist in some other
+// piece. The restore path additionally requires a piece whose NOMINAL range contains `scn`:
+//   - ObArchiveStore::get_piece_paths_in_range accepts a piece list only if the FIRST piece
+//     satisfies "start_scn_ <= scn < end_scn_", otherwise it fails with "No enough log for restore".
+//     Its cross-boundary tolerance("prev.end_scn_ == cur.start_scn_ && prev.checkpoint_scn_ < scn")
+//     only applies to the END boundary of the restore range, where both prev and cur are kept; there
+//     is no such tolerance at the START boundary;
+//   - ObArchivePersistHelper::check_piece_continuity_between_two_scn judges a backup set restorable
+//     only if a not-deleted floor piece with "start_scn <= start_replay_scn" exists.
+// So deleting the only piece whose nominal range covers `scn` would make the retained backup set
+// un-restorable("no enough log" at restore job creation), even when all the log bytes it needs still
+// physically exist, e.g. in the first cross-boundary log group of the next piece.
+//
+// Therefore a piece `other` covers `scn` only if ALL the conditions below hold:
+//   0. other.key_.dest_id_ == piece_to_delete.key_.dest_id_. Restore only ever uses the pieces of ONE
+//      dest: ObArchiveStore::get_piece_paths_in_range takes the dest_id of its first piece and skips
+//      every piece with a different dest_id. So a piece of another dest can never be the first piece
+//      of a restore from the path of `piece_to_delete`, no matter how its scn range looks. The caller
+//      passes in the pieces of one dest only, this is the invariant it has to keep.
+//   1. other.file_status_ is AVAILABLE. The restore path skips every piece whose file_status is not
+//      AVAILABLE(see ObArchiveStore::get_piece_paths_in_range), so e.g. a DELETING piece is invisible
+//      to restore and must not be relied on.
+//   2. other.start_scn_ <= scn < other.end_scn_. The nominal range of `other` really contains scn,
+//      see above. This can hold for a piece other than the one being judged when the scn ranges of
+//      two rounds overlap, e.g. round 1 was stopped in the middle of its last piece(so its nominal
+//      end_scn_ exceeds the real archived progress) and round 2 started before that nominal end.
+//   3. other.checkpoint_scn_ > scn, strictly greater. `other` has really archived past scn. Note
+//      that a piece with checkpoint_scn_ == scn is itself a deletion candidate of this very job
+//      (get_candidate_obsolete_backup_pieces selects "checkpoint_scn <= start_replay_scn"), so it
+//      may be deleted in the same round and must not be treated as a piece which will be kept. With
+//      checkpoint_scn_ > scn, `other` can never enter the candidate set, hence really kept.
+int ObBackupDeleteSelector::check_scn_covered_by_other_piece_(
+    const ObTenantArchivePieceAttr &piece_to_delete,
+    const SCN &scn,
+    const ObIArray<ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+    bool &is_scn_covered_by_other_kept_piece)
+{
+  int ret = OB_SUCCESS;
+  is_scn_covered_by_other_kept_piece = false;
+  if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(scn));
+  } else {
+    for (int64_t i = 0; !is_scn_covered_by_other_kept_piece && i < sorted_all_piece_infos.count(); i++) {
+      const ObTenantArchivePieceAttr &other_piece_info = sorted_all_piece_infos.at(i);
+      if (other_piece_info.key_ == piece_to_delete.key_) {
+        // skip itself, a piece can not cover for its own deletion
+      } else if (other_piece_info.key_.dest_id_ != piece_to_delete.key_.dest_id_) {
+        // `other` is archived at another dest, it is invisible to a restore from the path of
+        // `piece_to_delete`, so it can not cover scn.
+      } else if (ObBackupFileStatus::BACKUP_FILE_AVAILABLE != other_piece_info.file_status_) {
+        // `other` is invisible to restore, it can not cover scn.
+      } else if (other_piece_info.end_scn_ <= scn) {
+        // The nominal range of `other` ends at or before scn, so it does not contain scn(as
+        // <start_scn, checkpoint_scn, end_scn>, with scn = 150): e.g. other = <50, 90, 100>, an
+        // older piece entirely before scn, it obviously can not cover scn.
+      } else if (other_piece_info.start_scn_ > scn) {
+        // The nominal range of `other` starts after scn, so it does not contain scn(as
+        // <start_scn, checkpoint_scn, end_scn>, with scn = 150): e.g. piece_to_delete = <100, 140,
+        // 200> and its successor other = <200, 300, 400>: the log group crossing the piece
+        // boundary(e.g. entries with scn [141, 210] make one group whose scn is the max entry scn
+        // 210) physically lives in `other`'s directory, so the log BYTES at scn 150 do exist in
+        // `other`. But restore planning still requires a piece with start_scn_ <= 150 as its first
+        // piece(see the comment above), which only piece_to_delete can provide, so `other` must
+        // not be counted as a covering piece.
+      } else if (other_piece_info.checkpoint_scn_ <= scn) {
+        // `other` nominally covers scn but has not really archived past it, it must not be treated
+        // as a piece which will be kept. Two cases(with scn = 150):
+        //   1. other.checkpoint_scn_ < scn, e.g. other = <130, 140, 430>: the log at scn 150 is not
+        //      archived into `other` at all(its real progress stopped at 140), and `other` is itself
+        //      a deletion candidate of this job(checkpoint_scn <= start_replay_scn);
+        //   2. other.checkpoint_scn_ == scn, e.g. other = <130, 150, 430>: `other` does contain the
+        //      log at 150, but it is still a deletion candidate of this very job, it may be judged
+        //      deletable and reclaimed in the same round(e.g. covered by yet another piece), so
+        //      relying on it could end up with every piece covering scn deleted. Only a piece with
+        //      checkpoint_scn_ strictly greater than scn can never enter the candidate set.
+      } else {
+        // Reaching here means both `piece_to_delete` and `other` nominally contain scn. Pieces of
+        // one round never overlap, so `other` must come from a different round: the round of
+        // `piece_to_delete` was stopped in the middle of it(its nominal end_scn_ stays ahead of the
+        // real archived progress, see the comment of check_piece_can_be_deleted_), and the next
+        // round started before that nominal end. For example(as <start_scn, checkpoint_scn, end_scn>):
+        //   piece_to_delete: <100, 120, 200>, the last piece of round 1, which was stopped at 120
+        //   other          : <130, 300, 430>, the first piece of round 2, which started at 130
+        // With start_replay_scn = 150, `other` nominally covers 150(130 <= 150 < 430) and has really
+        // archived past it(300 > 150), so restore can take `other` as its first piece even after
+        // piece_to_delete is reclaimed.
+        is_scn_covered_by_other_kept_piece = true;
+        LOG_INFO("[BACKUP_CLEAN]the log at scn is covered by another kept piece", K(scn),
+            K(piece_to_delete), K(other_piece_info));
+      }
+    }
+  }
+  return ret;
+}
+
+// Remove from `piece_list` the pieces whose archive log is still needed by the restore of the retained
+// backup set(`clog_data_clean_point`), which the SCN based checks above can NOT see.
+//
+// The reason is that the restore does NOT start to fetch the archive log at the lsn of
+// start_replay_scn, but at the start of the 64M palf block that lsn falls in:
+//   - what the backup writes into the backup set is palf_meta_.curr_lsn_, which
+//     ObLogHandler::get_palf_base_info has rounded DOWN to a block boundary
+//     ("lsn_2_block(base_lsn, PALF_BLOCK_SIZE) * PALF_BLOCK_SIZE"), because palf can only be advanced
+//     to a block boundary;
+//   - the restore advances palf to exactly that lsn(ObLSService::restore_update_ls_ ->
+//     advance_base_info) and then asks the archive for the log from palf's end_lsn
+//     (ObLogRestoreArchiveDriver::get_palf_base_lsn_scn_ / submit_fetch_log_task_).
+//
+// Meanwhile the archive splits a block across two pieces whenever the piece switches in the middle of
+// it: the file id is a pure function of the lsn("lsn / 64M + 1", archive::cal_archive_file_id), so the
+// new piece starts a NEW file with the SAME file id at offset 0 and its file header start_lsn is a
+// mid-block lsn(ObArchiveSender::decide_archive_file_ / fill_file_header_if_needed_), the first half of
+// the block is NOT re-archived into the new piece.
+//
+// So if the piece holding the first half of that block is reclaimed, the restore asks for an lsn which
+// is smaller than the min lsn of every remaining piece and fails fatally with OB_ARCHIVE_LOG_RECYCLED
+// (ObLogArchivePieceContext::get_) or OB_ERR_UNEXPECTED in backward_piece_. It is a silent failure:
+// every SCN level check(check_piece_continuity_between_two_scn, ObArchiveStore::get_piece_paths_in_range,
+// check_piece_can_be_deleted_ ...) still passes, the restore job is created and only fails later, when
+// it starts to restore the log.
+//
+// Note that the smaller the write rate of a log stream is, the more likely it is to be hit: a 64M block
+// of an idle log stream can span many pieces, so the block the retained backup set sits in may have
+// started several pieces before the piece holding start_replay_scn.
+//
+// The check here is exact, not heuristic: the lsn the restore will ask for is recorded in the backup
+// set(ObLSRestoreStartLSN), and the archived lsn range of a log stream in a piece is recorded in the
+// piece info(ObSingleLSInfoDesc::max_lsn_, exclusive upper bound, the same value the restore compares
+// with in ObLogArchivePieceContext::check_if_switch_piece_). Hence a piece must be kept iff
+// "piece.max_lsn(ls) > restore_start_lsn(ls)" for any log stream of the backup set.
+//
+// Only the "from which lsn is the archive log of every log stream still needed" part is specific to the
+// retained backup set, the piece walk itself is shared with the log_only policy, see
+// find_min_needed_piece_idx_.
+int ObBackupDeleteSelector::filter_pieces_needed_by_restore_(
+    const ObBackupSetFileDesc &clog_data_clean_point,
+    ObIArray<ObTenantArchivePieceAttr> &piece_list)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObLSRestoreStartLSN> ls_need_lsn_array;
+  // The index of the oldest piece which has to be kept, -1 means none of them has to.
+  int64_t first_kept_idx = -1;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
+  } else if (piece_list.count() <= 0) {
+    // do nothing
+  } else if (!clog_data_clean_point.is_valid()) {
+    // No backup set is retained, so no piece is deletable at all, get_all_dest_backup_piece_infos_
+    // has returned nothing in this case. Defend against it anyway.
+    piece_list.reset();
+    LOG_INFO("[BACKUP_CLEAN]clog data clean point is invalid, keep all the pieces");
+  } else if (clog_data_clean_point.plus_archivelog_) {
+    // The log needed by the restore of this backup set has been copied into the backup set itself, so
+    // the restore does not read the archive piece before its min_restore_scn at all.
+    LOG_INFO("[BACKUP_CLEAN]backup set is plus archivelog, skip the restore start lsn check",
+        K(clog_data_clean_point));
+  } else if (OB_FAIL(data_provider_->get_backup_set_ls_restore_start_lsn(job_attr_->tenant_id_,
+      clog_data_clean_point, ls_need_lsn_array))) {
+    // Conservative: the lsn the restore needs is unknown, so keep every piece in this round. The
+    // obsolete backup sets figured out in the same round are still deleted, and the next round retries.
+    LOG_WARN("[BACKUP_CLEAN]failed to get restore start lsn of the retained backup set, keep all the"
+        " pieces in this round", K(ret), K(clog_data_clean_point));
+    ret = OB_SUCCESS;
+    piece_list.reset();
+  } else if (ls_need_lsn_array.empty()) {
+    LOG_INFO("[BACKUP_CLEAN]the retained backup set has no log stream, skip the restore start lsn"
+        " check", K(clog_data_clean_point));
+  } else if (OB_FAIL(find_min_needed_piece_idx_(piece_list, ls_need_lsn_array, first_kept_idx))) {
+    LOG_WARN("failed to find min needed piece idx", K(ret), K(clog_data_clean_point));
+  } else if (first_kept_idx < 0) {
+    // None of the candidates holds the log the restore starts from, all of them are reclaimable.
+  } else {
+    // Keep the oldest piece which has to be kept AND every piece after it, so that the pieces left in
+    // the dest are always a continuous suffix: a piece in the middle must not be reclaimed even if it
+    // holds no needed log itself, otherwise the remaining pieces would have a hole in them.
+    // `piece_list` is sorted by piece id, so the pieces to keep are exactly the suffix starting at
+    // first_kept_idx: just pop them, which needs neither an extra array nor any allocation.
+    while (piece_list.count() > first_kept_idx) {
+      piece_list.pop_back();
+    }
+    LOG_INFO("[BACKUP_CLEAN]keep the pieces which hold the log the restore of the retained backup set"
+        " starts from", K(first_kept_idx), K(clog_data_clean_point), K(ls_need_lsn_array));
+  }
+  return ret;
+}
+
+// Return in `min_needed_idx` the index of the OLDEST piece of `sorted_pieces` which still holds the
+// archive log that a restore starting from `ls_need_lsn_array` needs, -1 if none of them does. The
+// caller keeps that piece and every piece after it, and reclaims the pieces before it.
+//
+// `sorted_pieces` MUST be the pieces of ONE archive dest, sorted in ascending order of piece id: the
+// whole walk relies on the archived lsn range of a log stream growing monotonically with the piece id,
+// which only holds inside one dest. The invariant is verified here, and a violation is handled
+// conservatively(keep every piece) instead of comparing the lsn of one dest with the pieces of another.
+//
+// `ls_need_lsn_array` is the "from which lsn is the archive log of this log stream still needed" of every
+// log stream which puts a constraint on the pieces. Where it comes from is up to the caller and is the
+// only difference between the two delete obsolete policies:
+//   - default : the palf base lsn recorded in the retained backup set, see
+//               filter_pieces_needed_by_restore_ / ObLSRestoreStartLSN;
+//   - log_only: there is no backup set to anchor on, so it is derived from the newest candidate piece
+//               itself, see get_anchor_piece_ls_need_lsn_.
+//
+// The walk goes in DESCENDING order of piece id: once every log stream has been "cleared", i.e. some
+// piece proves that no older piece can hold the log this log stream still needs, the walk stops right
+// there. In the healthy case this costs only ONE piece info read, and it never reads more piece infos
+// than the pieces it is about to reclaim plus a few.
+//
+// This function never fails because of a piece whose piece info can not be read: such a piece is
+// conservatively treated as needed. An un-deletable piece only means "nothing older can be reclaimed for
+// this dest in this round", it MUST NOT fail the whole backup clean job.
+int ObBackupDeleteSelector::find_min_needed_piece_idx_(
+    const ObIArray<ObTenantArchivePieceAttr> &sorted_pieces,
+    const ObIArray<ObLSRestoreStartLSN> &ls_need_lsn_array,
+    int64_t &min_needed_idx)
+{
+  int ret = OB_SUCCESS;
+  // Cleared for good: no piece older than the one which cleared it can hold the needed log of the log
+  // stream, no matter which round that piece belongs to.
+  ObArray<bool> is_ls_cleared_array;
+  // Cleared only inside the archive round currently being walked, see check_piece_log_needed_: a log
+  // stream which is absent from a frozen piece had not started archiving in that round yet, so it has
+  // nothing in the older pieces OF THAT ROUND, but it may well have log in the pieces of an older round.
+  ObArray<bool> is_ls_absent_in_round_array;
+  // The round id of the piece checked right before the current one(the newer neighbour), used to detect
+  // that the walk has just stepped into an older archive round.
+  int64_t last_round_id = -1;
+  min_needed_idx = -1;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
+  } else if (sorted_pieces.empty() || ls_need_lsn_array.empty()) {
+    // No piece to check, or no log stream puts any constraint on them.
+    LOG_INFO("[BACKUP_CLEAN]no piece to check or no need lsn, skip", K(sorted_pieces.count()),
+        K(ls_need_lsn_array.count()));
+  } else if (!check_pieces_belong_to_one_dest_(sorted_pieces)) {
+    // A delete obsolete job refuses to run at all when more than one archive dest is valid(see
+    // get_obsolete_backup_set_infos_helper_), and get_one_dest_deletable_backup_piece_infos_ drops every
+    // candidate whose dest_id does not match the dest it works on. If the invariant does not hold
+    // anyway(e.g. an "alter system set log_archive_dest_n" repointed a dest_no in the middle of this job,
+    // which is exactly what the dest_id check in get_one_dest_deletable_backup_piece_infos_ guards
+    // against), keep every piece in this round.
+    min_needed_idx = 0;
+    LOG_WARN("[BACKUP_CLEAN]the pieces do not belong to one archive dest, the archive dest may have"
+        " just been changed, keep all the pieces in this round", K(sorted_pieces));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_need_lsn_array.count(); ++i) {
+      if (OB_FAIL(is_ls_cleared_array.push_back(false))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (OB_FAIL(is_ls_absent_in_round_array.push_back(false))) {
+        LOG_WARN("failed to push back", K(ret));
+      }
+    }
+    for (int64_t i = sorted_pieces.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
+      const ObTenantArchivePieceAttr &backup_piece_info = sorted_pieces.at(i);
+      const int64_t round_id = backup_piece_info.key_.round_id_;
+      int tmp_ret = OB_SUCCESS;
+      bool is_log_needed = false;
+      bool are_all_ls_cleared_in_round = false;
+      bool are_all_ls_cleared_in_every_round = false;
+      if (round_id != last_round_id) {
+        // The walk has just stepped into an older archive round. "The log stream is absent from the
+        // piece, so it had not started archiving yet" is only conclusive inside one round(the pieces of
+        // a log stream are continuous inside a round, but a new round restarts the archive of every log
+        // stream), so drop those conclusions and let the round which has just been entered prove them
+        // again.
+        for (int64_t j = 0; j < is_ls_absent_in_round_array.count(); ++j) {
+          is_ls_absent_in_round_array.at(j) = false;
+        }
+        last_round_id = round_id;
+      }
+      if (OB_TMP_FAIL(check_piece_log_needed_(backup_piece_info, ls_need_lsn_array,
+          is_ls_cleared_array, is_ls_absent_in_round_array, is_log_needed,
+          are_all_ls_cleared_in_round, are_all_ls_cleared_in_every_round))) {
+        // Conservative: whether the piece is needed is unknown(e.g. the piece info file can not be
+        // read, which is the case for a piece that is not frozen yet), keep it. Never fail the whole
+        // clean job because of it.
+        min_needed_idx = i;
+        LOG_WARN("[BACKUP_CLEAN]failed to check whether the log of the piece is still needed,"
+            " keep the piece", K(tmp_ret), K(backup_piece_info));
+      } else {
+        if (is_log_needed) {
+          min_needed_idx = i;
+          // Keep the message and the first key/value of this log as they are, tools/obtest matches them.
+          LOG_INFO("find dependency by 64M block question", "piece_id",
+              backup_piece_info.key_.piece_id_, K(backup_piece_info.key_), K(ls_need_lsn_array));
+        }
+        if (are_all_ls_cleared_in_every_round) {
+          // None of the pieces before this one can hold the log any log stream still needs, no matter
+          // whether this piece itself has to be kept.
+          LOG_INFO("[BACKUP_CLEAN]no older piece can hold the log which is still needed, stop looking"
+              " backwards", K(i), K(is_log_needed), K(backup_piece_info.key_));
+          break;
+        } else if (are_all_ls_cleared_in_round) {
+          // Some log stream has only been cleared by being absent from this piece, which says nothing
+          // about the pieces of an OLDER round. Skip the rest of this round without reading it and go on
+          // with the newest piece of the previous round, where the absent log streams are looked at
+          // again. This costs one piece info read per archive round instead of one per piece.
+          int64_t prev_round_idx = i - 1;
+          while (prev_round_idx >= 0 && sorted_pieces.at(prev_round_idx).key_.round_id_ == round_id) {
+            --prev_round_idx;
+          }
+          LOG_INFO("[BACKUP_CLEAN]no older piece of this archive round can hold the log which is still"
+              " needed, skip the rest of the round", K(i), K(prev_round_idx), K(is_log_needed),
+              K(backup_piece_info.key_));
+          if (prev_round_idx < 0) {
+            break;
+          } else {
+            // The loop decrements i, so the next piece to check is `prev_round_idx`.
+            i = prev_round_idx + 1;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObBackupDeleteSelector::check_pieces_belong_to_one_dest_(
+    const ObIArray<ObTenantArchivePieceAttr> &piece_list)
+{
+  bool is_one_dest = true;
+  for (int64_t i = 1; is_one_dest && i < piece_list.count(); ++i) {
+    if (piece_list.at(i).key_.dest_id_ != piece_list.at(0).key_.dest_id_) {
+      is_one_dest = false;
+    }
+  }
+  return is_one_dest;
+}
+
+// Whether `backup_piece_info` still holds the archive log which a restore starting from
+// `ls_need_lsn_array` needs, i.e. "piece.max_lsn(ls) > need_lsn(ls)" for any of the log streams. This is
+// the per-piece worker of find_min_needed_piece_idx_, see the comment there.
+//
+// `is_ls_cleared_array` and `is_ls_absent_in_round_array` are in/out arrays parallel to
+// `ls_need_lsn_array`. A log stream is "cleared" by a piece when that piece proves that NO piece before
+// it holds the log this log stream still needs, so it does not have to be looked at again. There are
+// three ways for a piece to prove that, the first two are conclusive for every older piece and are
+// recorded in `is_ls_cleared_array`, the third one only for the older pieces of the SAME archive round
+// and is recorded in `is_ls_absent_in_round_array`(the caller resets it when it steps into an older
+// round, see find_min_needed_piece_idx_):
+//   1. the log stream does have archived data in the piece and all of it is already before its need
+//      lsn. The archived lsn range of a log stream grows monotonically with the piece id, so the range
+//      of the same log stream in every older piece is entirely below this piece's min lsn;
+//   2. the archived range of the log stream in the piece starts at the very beginning of palf(min lsn is
+//      0), i.e. the piece holds the first log this log stream ever archived. This is the usual case for
+//      a log stream which was created while the archive was already running, and it holds no matter
+//      whether the log of this piece is still needed;
+//   3. the log stream is absent from the piece. The piece info file of a FROZEN piece lists every log
+//      stream which had started archiving at or before that piece: a piece is only frozen after every
+//      archiving log stream has archived into a newer piece(see ObDestRoundCheckpointer::count_,
+//      max_active_piece_id_ is the MIN of the max piece id of the log streams), and the pieces of one
+//      log stream inside one round are continuous(enforced by ObLSDestRoundSummary::add_one_piece). So
+//      an absent log stream had not started archiving in this round yet and it has nothing in the older
+//      pieces of this round. The other reason for being absent - the log stream was gc'd in an earlier
+//      piece - is impossible here: `ls_need_lsn_array` always comes from a point in time NEWER than
+//      every piece of the walk(the retained backup set, or the newest candidate piece), and a log
+//      stream which exists at that time can not have been gc'd before, ls ids are never reused.
+// `are_all_ls_cleared_in_round` is true when every log stream is cleared by any of the three reasons, so
+// no older piece OF THIS ROUND holds needed log; `are_all_ls_cleared_in_every_round` is true when every
+// log stream is cleared by reason 1 or 2 only, so no older piece at all holds needed log. Both are
+// independent of whether the log of this piece itself is still needed.
+int ObBackupDeleteSelector::check_piece_log_needed_(
+    const ObTenantArchivePieceAttr &backup_piece_info,
+    const ObIArray<ObLSRestoreStartLSN> &ls_need_lsn_array,
+    ObIArray<bool> &is_ls_cleared_array,
+    ObIArray<bool> &is_ls_absent_in_round_array,
+    bool &is_log_needed,
+    bool &are_all_ls_cleared_in_round,
+    bool &are_all_ls_cleared_in_every_round)
+{
+  int ret = OB_SUCCESS;
+  ObPieceInfoDesc piece_info_desc;
+  is_log_needed = false;
+  are_all_ls_cleared_in_round = false;
+  are_all_ls_cleared_in_every_round = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
+  } else if (!backup_piece_info.is_valid() || ls_need_lsn_array.empty()
+      || ls_need_lsn_array.count() != is_ls_cleared_array.count()
+      || ls_need_lsn_array.count() != is_ls_absent_in_round_array.count()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(backup_piece_info), K(ls_need_lsn_array),
+        K(is_ls_cleared_array.count()), K(is_ls_absent_in_round_array.count()));
+  } else if (OB_FAIL(data_provider_->load_piece_info_desc(job_attr_->tenant_id_, backup_piece_info,
+      piece_info_desc))) {
+    LOG_WARN("failed to load piece info desc", K(ret), K(backup_piece_info));
+  } else {
+    are_all_ls_cleared_in_round = true;
+    are_all_ls_cleared_in_every_round = true;
+    for (int64_t i = 0; i < ls_need_lsn_array.count(); ++i) {
+      const ObLSRestoreStartLSN &ls_need_lsn = ls_need_lsn_array.at(i);
+      bool is_ls_found = false;
+      if (is_ls_cleared_array.at(i)) {
+        continue;
+      } else if (is_ls_absent_in_round_array.at(i)) {
+        are_all_ls_cleared_in_every_round = false;
+        continue;
+      }
+      for (int64_t j = 0; !is_ls_found && j < piece_info_desc.filelist_.count(); ++j) {
+        const ObSingleLSInfoDesc &single_ls_info = piece_info_desc.filelist_.at(j);
+        if (single_ls_info.ls_id_ != ls_need_lsn.ls_id_) {
+          continue;
+        }
+        is_ls_found = true;
+        // max_lsn_ is the exclusive upper bound of the log archived in this piece, the same semantic
+        // as InnerPieceContext::max_lsn_in_piece_, which the restore compares with by
+        // "max_lsn_in_piece_ > lsn" to decide whether the piece covers the lsn it wants.
+        const palf::LSN max_lsn_in_piece(single_ls_info.max_lsn_);
+        if (max_lsn_in_piece > ls_need_lsn.start_lsn_) {
+          is_log_needed = true;
+          LOG_INFO("[BACKUP_CLEAN]the piece holds the log which is still needed",
+              K(backup_piece_info.key_), K(ls_need_lsn), K(single_ls_info.min_lsn_),
+              K(single_ls_info.max_lsn_));
+          if (palf::PALF_INITIAL_LSN_VAL == single_ls_info.min_lsn_) {
+            // Reason 2: the piece holds the first log this log stream ever archived, so no older piece
+            // holds any log of it, let alone the log which is still needed.
+            is_ls_cleared_array.at(i) = true;
+          }
+        } else {
+          // Reason 1.
+          is_ls_cleared_array.at(i) = true;
+        }
+      }
+      if (!is_ls_found && backup_piece_info.status_.is_frozen()) {
+        // Reason 3. Only a FROZEN piece lists every log stream which had started archiving at or before
+        // it, so the absence of a log stream is only conclusive for a frozen piece. In fact only a
+        // frozen piece has a piece info file at all(see record_piece_info), the status is checked here
+        // just to make the requirement explicit.
+        is_ls_absent_in_round_array.at(i) = true;
+        LOG_INFO("[BACKUP_CLEAN]the log stream had not started archiving in this round yet, no older"
+            " piece of this round holds its log", K(backup_piece_info.key_), K(ls_need_lsn));
+      }
+      if (!is_ls_cleared_array.at(i)) {
+        are_all_ls_cleared_in_every_round = false;
+        if (!is_ls_absent_in_round_array.at(i)) {
+          are_all_ls_cleared_in_round = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBackupDeleteSelector::get_delete_obsolete_backup_piece_infos_(const ObBackupSetFileDesc &clog_data_clean_point,
                                             ObIArray<ObTenantArchivePieceAttr> &piece_list)
 {
@@ -1493,12 +2120,21 @@ int ObBackupDeleteSelector::get_delete_obsolete_backup_piece_infos_(const ObBack
       if (!backup_piece_info.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("backup piece info is invalid", K(ret), K(backup_piece_info));
-      } else if (!can_backup_pieces_be_deleted_(backup_piece_info.status_)) {
-        ret = OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED;
+      } else if (OB_UNLIKELY(!can_backup_pieces_be_deleted_(backup_piece_info.status_))) {
+        // defense, get_one_dest_deletable_backup_piece_infos_ has filtered out these pieces already.
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("piece can not be deleted", K(ret), K(backup_piece_info));
       } else if (OB_FAIL(piece_list.push_back(backup_piece_info))) {
         LOG_WARN("failed to push back piece list", K(ret), K(backup_piece_info));
       }
+    }
+    // The checks above only compare SCNs, they can not see that the restore of the retained backup set
+    // starts to fetch the archive log at the start of a 64M palf block, which may live in an older
+    // piece. Filter such pieces out by LSN here.
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(filter_pieces_needed_by_restore_(clog_data_clean_point, piece_list))) {
+      LOG_WARN("failed to filter the pieces needed by the restore of the retained backup set", K(ret),
+          K(clog_data_clean_point));
     }
   }
   LOG_INFO("[BACKUP_CLEAN] finish get delete obsolete backup piece infos", K(ret), K(piece_list));
@@ -1512,104 +2148,111 @@ bool ObBackupDeleteSelector::can_backup_pieces_be_deleted_(const ObArchivePieceS
 }
 
 // This function checks if older pieces are depended by the first not expired piece and get the min depended piece idx
+//
+// The log_only policy has no backup set to anchor on: any point covered by the pieces which are kept may
+// be recovered to, so what has to stay usable is the OLDEST KEPT piece itself. Hence the anchor is the
+// newest candidate piece(the first not expired one, appended by get_all_dest_backup_piece_infos_ as the
+// about_to_expire_piece), and the log which is still needed is the log from the start of the 64M palf
+// block that piece begins in - a restore/standby always starts to fetch the archive log at a block
+// boundary, see get_anchor_piece_ls_need_lsn_. Everything after that is the same walk as the default
+// policy does, see find_min_needed_piece_idx_.
 int ObBackupDeleteSelector::get_min_depended_piece_idx_(
   const ObIArray<ObTenantArchivePieceAttr> &candidate_piece_infos,
   int64_t &min_depended_pieces_idx)
 {
   int ret = OB_SUCCESS;
-  if (candidate_piece_infos.count() == 0) {
+  int tmp_ret = OB_SUCCESS;
+  ObArray<ObLSRestoreStartLSN> ls_need_lsn_array;
+  const int64_t anchor_idx = candidate_piece_infos.count() - 1;
+  if (anchor_idx < 0) {
     LOG_INFO("No candidate pieces to check dependency, skip");
-  } else {
-    const int64_t total_piece_count = candidate_piece_infos.count();
-    min_depended_pieces_idx = candidate_piece_infos.count() - 1;
-    ObPieceInfoDesc last_piece_info_desc;
-    // load the first not expired piece info(which is the last piece in candidate_piece_infos)
-    if (OB_FAIL(data_provider_->load_piece_info_desc(job_attr_->tenant_id_,
-                          candidate_piece_infos.at(min_depended_pieces_idx), last_piece_info_desc))) {
-      LOG_WARN("Failed to get last piece info desc", K(ret));
-    } else {
-      // traverse the first not expired piece's all ls
-      for (int64_t ls_idx = 0; OB_SUCC(ret) && ls_idx < last_piece_info_desc.filelist_.count(); ++ls_idx) {
-        ObSingleLSInfoDesc &ls_info = last_piece_info_desc.filelist_.at(ls_idx);
-        if (ls_info.filelist_.empty()) {
-          if (ls_info.deleted_) {
-            // detect a deleted ls which has no file in the last candidate piece, nothing can depend on older pieces.
-            LOG_INFO("deleted ls has empty filelist, skip", "ls_id", ls_info.ls_id_, "piece_id", last_piece_info_desc.piece_id_);
-          } else {
-            // detect a non-deleted ls with empty filelist, the following non-empty piece may rely on the older pieces
-            // the last candidate piece cannot used to decide the dependency, keep all candidates in curr round.
-            min_depended_pieces_idx = 0;
-            LOG_INFO("ls with empty filelist is not deleted, keep all candidates this round", "ls_id", ls_info.ls_id_, "piece_id", last_piece_info_desc.piece_id_);
-            break;
-          }
-        } else {
-          int64_t file_id = ls_info.filelist_.at(0).file_id_;
-          // for each ls, find the min depended piece idx
-          if (OB_FAIL(get_min_depended_piece_idx_ls_(candidate_piece_infos, ls_info, file_id, min_depended_pieces_idx))) {
-            LOG_WARN("Failed to get min depended piece idx for ls", K(ret), K(ls_idx));
-          } else if (min_depended_pieces_idx == 0) {
-            break;
-          }
-        }
-      }
-    }
+  } else if (OB_TMP_FAIL(get_anchor_piece_ls_need_lsn_(candidate_piece_infos.at(anchor_idx),
+      ls_need_lsn_array))) {
+    // Conservative: the lsn from which the log is still needed is unknown(e.g. the piece info file of
+    // the anchor piece can not be read), so keep every candidate piece in this round. Do NOT fail the
+    // whole clean job because of it: OB_BACKUP_DELETE_BACKUP_PIECE_NOT_ALLOWED is not retryable(see
+    // ObBackupUtils::is_need_retry_error), the job would go to FAILED and nothing would ever be
+    // reclaimed.
+    min_depended_pieces_idx = 0;
+    LOG_WARN("[BACKUP_CLEAN]failed to get the need lsn of the anchor piece, keep all the candidate"
+        " pieces in this round", K(tmp_ret), K(anchor_idx), K(candidate_piece_infos.at(anchor_idx)));
+  } else if (OB_FAIL(find_min_needed_piece_idx_(candidate_piece_infos, ls_need_lsn_array,
+      min_depended_pieces_idx))) {
+    LOG_WARN("Failed to find min needed piece idx", K(ret), K(ls_need_lsn_array));
+  } else if (min_depended_pieces_idx < 0) {
+    // No log stream of the anchor piece depends on an older piece. The anchor piece itself is kept
+    // anyway: it is the piece which is NOT expired yet, deleting it would break the recovery window.
+    min_depended_pieces_idx = anchor_idx;
   }
   LOG_INFO("Finished checking piece dependency", K(ret), K(min_depended_pieces_idx), K(candidate_piece_infos.count()));
   return ret;
 }
 
-int ObBackupDeleteSelector::get_min_depended_piece_idx_ls_(
-  const ObIArray<ObTenantArchivePieceAttr> &candidate_piece_infos,
-  const ObSingleLSInfoDesc &ls_info,
-  const int64_t file_id,
-  int64_t &min_depended_pieces_idx)
+// Return the lsn from which the archive log of every log stream of `anchor_piece` is still needed, which
+// is the start of the palf block `anchor_piece` begins in: whoever reads the archive advances palf to a
+// block boundary first and then asks the archive for the log from exactly that lsn(see
+// ObLSRestoreStartLSN), so the first half of that block, which lives in the piece the block was split
+// by, must not be reclaimed.
+//
+// Pay attention that EVERY log stream listed in the piece info puts such a constraint, including a log
+// stream which archived nothing into `anchor_piece`(max_lsn_ == min_lsn_, in which case its filelist_ is
+// empty too, see record_piece_info). Being idle is not "no information": min_lsn_ is the lsn the log
+// stream stands at when the anchor piece BEGINS, no matter whether the piece holds any new log of it
+// (ObLSArchiveTask::ArchiveDest::compensate_piece keeps piece_min_lsn_ at the archived lsn when a piece
+// switch finds nothing new to archive), which is exactly the same meaning as for a log stream which did
+// archive into the piece. So whoever starts to read the anchor still has to position palf at the start of
+// the block that lsn falls in, and the first half of that block lives in an older piece - reclaiming that
+// piece would break the read, silently, all the way until the log is really fetched. This is the more
+// likely case of the two: the more idle a log stream is, the more pieces a single 64M block of it spans.
+//
+// Note that a log stream which has been gc'd does not pin an older piece forever: only the LAST piece of
+// a deleted log stream lists it(see ObDestRoundCheckpointer::generate_one_piece_ and
+// ObLSDestRoundSummary::check_is_last_piece_for_deleted_ls), so as soon as the anchor moves past that
+// piece the constraint disappears by itself.
+int ObBackupDeleteSelector::get_anchor_piece_ls_need_lsn_(
+    const ObTenantArchivePieceAttr &anchor_piece,
+    ObIArray<ObLSRestoreStartLSN> &ls_need_lsn_array)
 {
   int ret = OB_SUCCESS;
-  ObPieceInfoDesc temp_piece_info_desc;
-  // Look back until get different file_id ( a new file_id means a new block in clog)
-  int64_t temp_piece_idx = min_depended_pieces_idx - 1;
-  if (temp_piece_idx >= candidate_piece_infos.count()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid piece index", K(ret), K(temp_piece_idx));
-  }
-  while (OB_SUCC(ret) && temp_piece_idx >= 0) {
-    temp_piece_info_desc.reset();
-    if (OB_FAIL(data_provider_->load_piece_info_desc(job_attr_->tenant_id_,
-                               candidate_piece_infos.at(temp_piece_idx), temp_piece_info_desc))) {
-      LOG_WARN("Failed to get temp piece info desc", K(ret), K(temp_piece_idx));
-    } else {
-      bool has_same_ls_id = false;
-      bool find_new_file_id = false;
-      // traverse to get the target ls_id
-      for (int64_t ls_idx_of_temp_piece = 0;
-          OB_SUCC(ret) && !has_same_ls_id && ls_idx_of_temp_piece < temp_piece_info_desc.filelist_.count();
-          ++ls_idx_of_temp_piece) {
-        ObSingleLSInfoDesc &temp_ls_info = temp_piece_info_desc.filelist_.at(ls_idx_of_temp_piece);
-        if (temp_ls_info.ls_id_ == ls_info.ls_id_) {
-          // check the dependency of the file in this ls
-          has_same_ls_id = true;
-          if (temp_ls_info.filelist_.empty()) {
-            LOG_INFO("ls has no archive file in the piece, skip", "ls_id", ls_info.ls_id_, "piece_id", temp_piece_info_desc.piece_id_);
-            temp_piece_idx--;
-          } else if (temp_ls_info.filelist_.at(temp_ls_info.filelist_.count() - 1).file_id_ == file_id) {
-            LOG_INFO("find dependency by 64M block question", "piece_id", temp_piece_info_desc.piece_id_);
-            min_depended_pieces_idx = MIN(min_depended_pieces_idx, temp_piece_idx);
-            if (temp_ls_info.filelist_.at(0).file_id_ == file_id) { // need to look back continue
-              temp_piece_idx--;
-            } else {
-              find_new_file_id = true;
-            }
-          } else {
-            find_new_file_id = true;
-          }
-          break;
+  ObPieceInfoDesc anchor_piece_info;
+  ls_need_lsn_array.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupDeleteSelector not inited", K(ret));
+  } else if (OB_FAIL(data_provider_->load_piece_info_desc(job_attr_->tenant_id_, anchor_piece,
+      anchor_piece_info))) {
+    LOG_WARN("Failed to load the piece info of the anchor piece", K(ret), K(anchor_piece));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < anchor_piece_info.filelist_.count(); ++i) {
+      const ObSingleLSInfoDesc &single_ls_info = anchor_piece_info.filelist_.at(i);
+      const palf::LSN min_lsn_in_piece(single_ls_info.min_lsn_);
+      ObLSRestoreStartLSN ls_need_lsn;
+      if (OB_UNLIKELY(!single_ls_info.ls_id_.is_valid() || !min_lsn_in_piece.is_valid()
+          || single_ls_info.max_lsn_ < single_ls_info.min_lsn_)) {
+        // The piece info is corrupted. Fail here on purpose: the caller keeps every candidate piece of
+        // this round then, which is the only safe thing to do when the lsn the log is needed from can
+        // not be told. Note that the check has to be done on min_lsn_ ITSELF, checking the rounded down
+        // lsn below would not do: rounding LOG_INVALID_LSN_VAL down to a block boundary turns it into a
+        // value which passes is_valid().
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid single ls info of the anchor piece", K(ret), K(anchor_piece.key_),
+            K(single_ls_info));
+      } else {
+        ls_need_lsn.ls_id_ = single_ls_info.ls_id_;
+        // Round the min lsn of the piece DOWN to the start of the palf block it falls in, the same way
+        // ObLogHandler::get_palf_base_info does it for the backup set.
+        ls_need_lsn.start_lsn_ = palf::LSN(palf::lsn_2_block(min_lsn_in_piece, palf::PALF_BLOCK_SIZE)
+            * palf::PALF_BLOCK_SIZE);
+        if (OB_UNLIKELY(!ls_need_lsn.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid ls need lsn", K(ret), K(ls_need_lsn), K(single_ls_info));
+        } else if (OB_FAIL(ls_need_lsn_array.push_back(ls_need_lsn))) {
+          LOG_WARN("failed to push back ls need lsn", K(ret), K(ls_need_lsn));
         }
       }
-      if (!has_same_ls_id || find_new_file_id) {
-        // the new generated ls OR the same ls_id but mutiple files which break the dependency
-        break;
-      }
     }
+    LOG_INFO("[BACKUP_CLEAN]get the need lsn of the anchor piece", K(ret), K(anchor_piece.key_),
+        K(ls_need_lsn_array));
   }
   return ret;
 }

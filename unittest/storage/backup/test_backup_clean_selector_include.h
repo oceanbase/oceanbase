@@ -130,12 +130,32 @@ public:
       const share::ObTenantArchivePieceAttr &piece_attr,
       share::ObPieceInfoDesc &piece_info_desc) override;
 
+  void set_ls_restore_start_lsns(const ObIArray<rootserver::ObLSRestoreStartLSN> &ls_start_lsn_array) {
+    ls_start_lsn_array_.reset();
+    for (int64_t i = 0; i < ls_start_lsn_array.count(); ++i) {
+      ls_start_lsn_array_.push_back(ls_start_lsn_array.at(i));
+    }
+  }
+  // Inject a failure of reading the ls meta of the backup set.
+  void set_ls_restore_start_lsn_ret(const int ret_code) { ls_start_lsn_ret_ = ret_code; }
+  // How many times the piece info file has been read, used to check that the caller does not read the
+  // piece info of every candidate piece when it does not have to.
+  int64_t get_load_piece_info_desc_count() const { return load_piece_info_desc_count_; }
+
+  int get_backup_set_ls_restore_start_lsn(
+      const uint64_t tenant_id,
+      const share::ObBackupSetFileDesc &backup_set_desc,
+      ObIArray<rootserver::ObLSRestoreStartLSN> &ls_start_lsn_array) override;
+
 private:
   bool policy_exist_ = false;
   ObArray<share::ObBackupSetFileDesc> backup_sets_;
   share::ObBackupPathString current_path_;
   ObArray<MockDestInfo> dest_infos_;
   ObArray<ObPieceInfoDesc> piece_info_descs_;
+  ObArray<rootserver::ObLSRestoreStartLSN> ls_start_lsn_array_;
+  int ls_start_lsn_ret_ = OB_SUCCESS;
+  int64_t load_piece_info_desc_count_ = 0;
   DISALLOW_COPY_AND_ASSIGN(MockBackupDataProvider);
 };
 
@@ -379,6 +399,7 @@ int MockBackupDataProvider::load_piece_info_desc(const uint64_t tenant_id,
   UNUSED(tenant_id);
   int ret = OB_SUCCESS;
   bool match_flag = false;
+  ++load_piece_info_desc_count_;
   for (int64_t i = 0; i < piece_info_descs_.count(); ++i) {
     printf("piece_id: %ld,: %ld\n", piece_info_descs_.at(i).piece_id_, piece_attr.key_.piece_id_);
     if (piece_info_descs_.at(i).piece_id_ == piece_attr.key_.piece_id_) {
@@ -392,6 +413,26 @@ int MockBackupDataProvider::load_piece_info_desc(const uint64_t tenant_id,
   return OB_SUCCESS;
 }
 
+// Mock implementation of get_backup_set_ls_restore_start_lsn
+int MockBackupDataProvider::get_backup_set_ls_restore_start_lsn(
+    const uint64_t tenant_id,
+    const share::ObBackupSetFileDesc &backup_set_desc,
+    ObIArray<rootserver::ObLSRestoreStartLSN> &ls_start_lsn_array) {
+  UNUSED(tenant_id);
+  UNUSED(backup_set_desc);
+  int ret = OB_SUCCESS;
+  ls_start_lsn_array.reset();
+  if (OB_SUCCESS != ls_start_lsn_ret_) {
+    ret = ls_start_lsn_ret_;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ls_start_lsn_array_.count(); ++i) {
+      if (OB_FAIL(ls_start_lsn_array.push_back(ls_start_lsn_array_.at(i)))) {
+        break;
+      }
+    }
+  }
+  return ret;
+}
 
 } // namespace rootserver
 } // namespace oceanbase

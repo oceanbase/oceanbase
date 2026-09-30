@@ -29,10 +29,8 @@ namespace backup {
 struct LSFileInfo {
   ObLSID ls_id;
   std::vector<int64_t> file_ids;
-  bool deleted;  // ObSingleLSInfoDesc::deleted_, marked on the last piece of a deleted ls
 
-  LSFileInfo(ObLSID id, std::vector<int64_t> files, bool is_deleted = false)
-    : ls_id(id), file_ids(files), deleted(is_deleted) {}
+  LSFileInfo(ObLSID id, std::vector<int64_t> files) : ls_id(id), file_ids(files) {}
 };
 
 struct PieceInfo {
@@ -47,6 +45,9 @@ struct PieceInfo {
 
 class TestBackupCleanPieceClogBlockDependency : public ::testing::Test {
 protected:
+  // Must be a user tenant id, otherwise ObTenantArchivePieceAttr::Key::is_pkey_valid() is false.
+  static const uint64_t TEST_TENANT_ID = 1002;
+
   void SetUp() override {
     ASSERT_EQ(OB_SUCCESS, mock_sql_proxy_.init(nullptr));
     mock_schema_service_ = std::make_unique<MockObMultiVersionSchemaService>();
@@ -64,6 +65,15 @@ protected:
     piece_desc.dest_id_ = dest_id;
     piece_desc.round_id_ = round_id;
     piece_desc.piece_id_ = piece_id;
+  }
+
+  // The archive file id of a log stream is a pure function of the lsn("lsn / PALF_BLOCK_SIZE + 1",
+  // archive::cal_archive_file_id with MAX_ARCHIVE_FILE_SIZE == palf::PALF_BLOCK_SIZE), so a file id is
+  // just the id of the palf block the log lives in. The lsn range a piece holds is derived from its file
+  // id list below: it starts at the beginning of the first block and ends in the middle of the last one,
+  // which is what a piece switch in the middle of a block looks like.
+  static uint64_t block_start_lsn(const int64_t file_id) {
+    return static_cast<uint64_t>(file_id - 1) * static_cast<uint64_t>(palf::PALF_BLOCK_SIZE);
   }
 
   // Helper function to create a single LS info desc
@@ -91,6 +101,48 @@ protected:
     file.file_id_ = file_id;
     file.size_bytes_ = size_bytes;
     ASSERT_EQ(OB_SUCCESS, ls_desc.filelist_.push_back(file));
+    // Keep the archived lsn range consistent with the file list: [start of the first block, somewhere
+    // inside the last block).
+    if (1 == ls_desc.filelist_.count()) {
+      ls_desc.min_lsn_ = block_start_lsn(file_id);
+    }
+    ls_desc.max_lsn_ = block_start_lsn(file_id) + static_cast<uint64_t>(palf::PALF_BLOCK_SIZE) / 2;
+  }
+
+  // Add one log stream entry to `piece` with an EXPLICIT archived lsn range, which is what the piece
+  // info file really records(ObSingleLSInfoDesc::min_lsn_/max_lsn_). `file_ids` may be empty, which is
+  // exactly how an IDLE log stream looks: it archived nothing into the piece, so it has no file at all
+  // while min_lsn_ == max_lsn_ == the lsn it stands at(see record_piece_info and
+  // ObLSArchiveTask::ArchiveDest::compensate_piece). The file id based helpers above always derive the
+  // range from the file list, so they can not express that state.
+  void add_ls_to_piece_with_range(ObPieceInfoDesc &piece,
+                                  const ObLSID &ls_id,
+                                  const uint64_t min_lsn,
+                                  const uint64_t max_lsn,
+                                  const std::vector<int64_t> &file_ids) {
+    ObSingleLSInfoDesc ls_desc;
+    create_single_ls_info_desc(ls_desc, piece.dest_id_, piece.round_id_, piece.piece_id_, ls_id);
+    for (int64_t file_id : file_ids) {
+      ObSingleLSInfoDesc::OneFile file;
+      file.file_id_ = file_id;
+      file.size_bytes_ = 1024;
+      ASSERT_EQ(OB_SUCCESS, ls_desc.filelist_.push_back(file));
+    }
+    ls_desc.min_lsn_ = min_lsn;
+    ls_desc.max_lsn_ = max_lsn;
+    ASSERT_EQ(OB_SUCCESS, piece.filelist_.push_back(ls_desc));
+  }
+
+  // Build the candidate piece attr array which matches `pieces` one by one.
+  void create_candidate_piece_attrs(const ObArray<ObPieceInfoDesc> &pieces,
+                                    ObArray<ObTenantArchivePieceAttr> &candidate_piece_infos) {
+    candidate_piece_infos.reset();
+    for (int64_t i = 0; i < pieces.count(); ++i) {
+      ObTenantArchivePieceAttr piece_attr;
+      create_candidate_piece_attr(piece_attr, pieces.at(i).dest_id_, pieces.at(i).round_id_,
+          pieces.at(i).piece_id_);
+      ASSERT_EQ(OB_SUCCESS, candidate_piece_infos.push_back(piece_attr));
+    }
   }
 
   // Create a piece and add it to pieces array
@@ -106,7 +158,6 @@ protected:
       for (int64_t file_id : ls_file.file_ids) {
         add_file_to_ls_desc(ls_desc, file_id);
       }
-      ls_desc.deleted_ = ls_file.deleted;
 
       ASSERT_EQ(OB_SUCCESS, piece.filelist_.push_back(ls_desc));
     }
@@ -114,22 +165,57 @@ protected:
     ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece));
   }
 
-  // Create candidate piece info array
-  void create_candidate_piece_infos(ObArray<ObTenantArchivePieceAttr> &candidate_piece_infos,
-                                   int64_t count) {
-    ObTenantArchivePieceAttr piece_attr_empty;
-    for (int64_t i = 0; i < count; ++i) {
-      ASSERT_EQ(OB_SUCCESS, candidate_piece_infos.push_back(piece_attr_empty));
-    }
+  // Build a VALID candidate piece attr. A piece attr which is not is_valid() is rejected by
+  // check_piece_log_needed_ with OB_INVALID_ARGUMENT, and such a piece is then conservatively treated
+  // as "still needed", so the dependency walk would stop at the oldest piece no matter what the piece
+  // info files say. Note that the default constructor leaves the fields uninitialized, reset() is a
+  // must here.
+  void create_candidate_piece_attr(ObTenantArchivePieceAttr &piece_attr,
+                                   const int64_t dest_id,
+                                   const int64_t round_id,
+                                   const int64_t piece_id) {
+    piece_attr.reset();
+    piece_attr.key_.tenant_id_ = TEST_TENANT_ID;
+    piece_attr.key_.dest_id_ = dest_id;
+    piece_attr.key_.round_id_ = round_id;
+    piece_attr.key_.piece_id_ = piece_id;
+    piece_attr.incarnation_ = 1;
+    piece_attr.dest_no_ = 0;
+    piece_attr.file_count_ = 1;
+    piece_attr.start_scn_ = SCN::base_scn();
+    piece_attr.checkpoint_scn_ = SCN::base_scn();
+    piece_attr.max_scn_ = SCN::base_scn();
+    piece_attr.end_scn_ = SCN::base_scn();
+    piece_attr.compatible_.version_ = ObArchiveCompatible::Compatible::COMPATIBLE_VERSION_1;
+    piece_attr.input_bytes_ = 1024;
+    piece_attr.output_bytes_ = 1024;
+    piece_attr.status_.status_ = ObArchivePieceStatus::Status::FROZEN;
+    piece_attr.file_status_ = ObBackupFileStatus::BACKUP_FILE_AVAILABLE;
+    piece_attr.cp_file_id_ = 0;
+    piece_attr.cp_file_offset_ = 0;
+    ASSERT_EQ(OB_SUCCESS, piece_attr.path_.assign("file:///archive"));
   }
 
   // Set selector and run test
   int64_t run_dependency_test(const ObArray<ObPieceInfoDesc> &pieces,
                              const ObArray<ObTenantArchivePieceAttr> &candidate_piece_infos) {
     ObBackupDeleteSelector selector;
-    selector.init(mock_sql_proxy_, *mock_schema_service_, mock_job_attr_, *mock_rpc_proxy_, *mock_delete_mgr_);
+    // The selector MUST be really inited: get_min_depended_piece_idx_ and the functions it calls
+    // check IS_NOT_INIT and fall back to "keep every candidate piece"(idx 0) when it fails, which
+    // would make every expectation below trivially pass/fail.
+    mock_job_attr_.reset();
+    mock_job_attr_.job_id_ = 1001;
+    mock_job_attr_.tenant_id_ = TEST_TENANT_ID;
+    mock_job_attr_.incarnation_id_ = 1;
+    EXPECT_EQ(OB_SUCCESS, selector.init(mock_sql_proxy_, *mock_schema_service_, mock_job_attr_,
+                                        *mock_rpc_proxy_, *mock_delete_mgr_));
 
     MockBackupDataProvider *mock_data_provider = OB_NEW(MockBackupDataProvider, "BackupProvider");
+    EXPECT_NE(nullptr, mock_data_provider);
+    if (nullptr != selector.data_provider_) {
+      OB_DELETE(IObBackupDataProvider, "BackupClean", selector.data_provider_);
+      selector.data_provider_ = nullptr;
+    }
     selector.data_provider_ = mock_data_provider;
     mock_data_provider->set_piece_info_descs(pieces);
 
@@ -151,9 +237,8 @@ protected:
 
     for (int64_t i = 0; i < pieces.count(); ++i) {
       ObTenantArchivePieceAttr piece_attr;
-      piece_attr.key_.tenant_id_ = 1;
-      piece_attr.key_.round_id_ = pieces.at(i).round_id_;
-      piece_attr.key_.piece_id_ = pieces.at(i).piece_id_;
+      create_candidate_piece_attr(piece_attr, pieces.at(i).dest_id_, pieces.at(i).round_id_,
+          pieces.at(i).piece_id_);
       candidate_piece_infos.push_back(piece_attr);
     }
     return run_dependency_test(pieces, candidate_piece_infos);
@@ -382,158 +467,69 @@ TEST_F(TestBackupCleanPieceClogBlockDependency, TestComplexScenarioWithMultipleS
   EXPECT_EQ(1, min_depended_pieces_idx);
 }
 
-// The last piece contains an deleted ls which has empty filelist, should has no dependency
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListDeletedLSInLastPiece) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1005, 5, 5, {LSFileInfo(ObLSID(1), {10})}),
-    PieceInfo(1005, 5, 6, {LSFileInfo(ObLSID(1), {11})}),
-    PieceInfo(1005, 5, 7, {LSFileInfo(ObLSID(1030), {}, true /*deleted*/)})
-  };
+// Test Case: the log stream is IDLE in the anchor piece(it archived NOTHING into it, so its file list is
+// empty and min_lsn_ == max_lsn_) while an OLDER piece holds the first half of the palf block it stands
+// in. Being idle is not "no information": min_lsn_ is still the lsn the log stream stands at when the
+// anchor begins, so reading the anchor still starts at the beginning of that block, and the piece holding
+// the first half of it must be kept.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestIdleLSInAnchorPieceDependsOnBlockPrefix) {
+  const uint64_t block_11_start = block_start_lsn(11);
+  const uint64_t mid_block_11 = block_11_start + static_cast<uint64_t>(palf::PALF_BLOCK_SIZE) / 2;
+  const ObLSID ls_id(1001);
+  ObArray<ObPieceInfoDesc> pieces;
+  ObArray<ObTenantArchivePieceAttr> candidate_piece_infos;
 
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  // ls1030 has no file in p7 and is deleted, nothing can be depended on. p7 only depends on itself.
-  EXPECT_EQ(2, min_depended_pieces_idx);
+  // piece 1(idx 0): the log stream archived the whole block 10 and nothing of block 11.
+  ObPieceInfoDesc piece1;
+  create_piece_info_desc(piece1, 1/*dest_id*/, 1/*round_id*/, 1/*piece_id*/);
+  add_ls_to_piece_with_range(piece1, ls_id, block_start_lsn(10), block_11_start, {10});
+  // piece 2(idx 1): the piece switch split block 11 in the middle, this piece holds its FIRST half, which
+  // is not re-archived into any newer piece.
+  ObPieceInfoDesc piece2;
+  create_piece_info_desc(piece2, 1/*dest_id*/, 1/*round_id*/, 2/*piece_id*/);
+  add_ls_to_piece_with_range(piece2, ls_id, block_11_start, mid_block_11, {11});
+  // piece 3(idx 2): the anchor, i.e. the first not expired piece. The log stream is idle in it, so it
+  // stands right where piece 2 left it, in the middle of block 11.
+  ObPieceInfoDesc piece3;
+  create_piece_info_desc(piece3, 1/*dest_id*/, 1/*round_id*/, 3/*piece_id*/);
+  add_ls_to_piece_with_range(piece3, ls_id, mid_block_11, mid_block_11, {}/*no file at all*/);
+  ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece1));
+  ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece2));
+  ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece3));
+  create_candidate_piece_attrs(pieces, candidate_piece_infos);
+
+  // Piece 2 has to be kept because it holds the first half of block 11, only piece 1 is reclaimable.
+  EXPECT_EQ(1, run_dependency_test(pieces, candidate_piece_infos));
 }
 
-// The last piece contains an non-deleted ls which has empty filelist, should keep all
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListNotDeletedLSInLastPiece) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {10})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {11})}),
-    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {})})
-  };
+// Test Case: the log stream is idle in the anchor piece as well, but it stands exactly at a block
+// boundary, so the block it is about to write has not been archived anywhere yet and no older piece has
+// to be kept for it.
+TEST_F(TestBackupCleanPieceClogBlockDependency, TestIdleLSAtBlockBoundaryInAnchorPiece) {
+  const uint64_t block_11_start = block_start_lsn(11);
+  const ObLSID ls_id(1001);
+  ObArray<ObPieceInfoDesc> pieces;
+  ObArray<ObTenantArchivePieceAttr> candidate_piece_infos;
 
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  EXPECT_EQ(0, min_depended_pieces_idx);
-}
+  // piece 1(idx 0) and piece 2(idx 1): the log stream archived block 9 and block 10 respectively, both of
+  // them end exactly at a block boundary.
+  ObPieceInfoDesc piece1;
+  create_piece_info_desc(piece1, 1/*dest_id*/, 1/*round_id*/, 1/*piece_id*/);
+  add_ls_to_piece_with_range(piece1, ls_id, block_start_lsn(9), block_start_lsn(10), {9});
+  ObPieceInfoDesc piece2;
+  create_piece_info_desc(piece2, 1/*dest_id*/, 1/*round_id*/, 2/*piece_id*/);
+  add_ls_to_piece_with_range(piece2, ls_id, block_start_lsn(10), block_11_start, {10});
+  // piece 3(idx 2): the anchor. The log stream is idle in it and stands at the start of block 11.
+  ObPieceInfoDesc piece3;
+  create_piece_info_desc(piece3, 1/*dest_id*/, 1/*round_id*/, 3/*piece_id*/);
+  add_ls_to_piece_with_range(piece3, ls_id, block_11_start, block_11_start, {}/*no file at all*/);
+  ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece1));
+  ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece2));
+  ASSERT_EQ(OB_SUCCESS, pieces.push_back(piece3));
+  create_candidate_piece_attrs(pieces, candidate_piece_infos);
 
-// The last piece has both a normal ls and an empty-filelist deleted ls, should has no dependency
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListDeletedLSWithNormalLS) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
-    PieceInfo(1, 1, 3, {
-      LSFileInfo(ObLSID(1001), {10}),
-      LSFileInfo(ObLSID(1030), {}, true /*deleted*/)
-    })
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  // ls1001 chain goes back to p2 (idx 1); ls1030 is skipped and does not pull idx to 0.
-  EXPECT_EQ(1, min_depended_pieces_idx);
-}
-
-// The last piece has both a normal ls and an empty-filelist deleted ls, should keep all
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListNotDeletedLSWithNormalLS) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
-    PieceInfo(1, 1, 3, {
-      LSFileInfo(ObLSID(1001), {10}),
-      LSFileInfo(ObLSID(1030), {}, false /*deleted*/)
-    })
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  // ls1001 chain goes back to p2 (idx 1); ls1030 is skipped and does not pull idx to 0.
-  EXPECT_EQ(0, min_depended_pieces_idx);
-}
-
-// Normal ls has no dependency, but a not-deleted empty ls after it forces keeping all candidates.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListNotDeletedLSOverridesNormalLS) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9}), LSFileInfo(ObLSID(1002), {20})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10}), LSFileInfo(ObLSID(1002), {})}),
-    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {11}), LSFileInfo(ObLSID(1002), {})})
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  EXPECT_EQ(0, min_depended_pieces_idx);
-}
-
-// An intermediate piece has the ls with an empty filelist. Archive file id is decided by lsn, so
-// p3's file 10 may continue the block ended in p1. The empty p2 must not stop the look-back.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListInMiddlePieceKeepsLookingBack) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {10})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {})}),   // no log archived in p2
-    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {10})})
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  // p3 -> (p2 empty, keep looking back) -> p1 last file is 10 == p3 first file, so depends on p1.
-  EXPECT_EQ(0, min_depended_pieces_idx);
-}
-
-// Same as above but the older piece ends with a different file id: chain breaks, p2 and p1 deletable.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestEmptyFileListInMiddlePieceNoDependency) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {})}),
-    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {10})})
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  EXPECT_EQ(2, min_depended_pieces_idx);
-}
-
-// All older pieces are empty for the ls: look-back reaches the beginning without crashing.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestAllOlderPiecesEmptyForLS) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {})}),
-    PieceInfo(1, 1, 3, {LSFileInfo(ObLSID(1001), {10})})
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  EXPECT_EQ(2, min_depended_pieces_idx);
-}
-
-// Deleted empty ls is listed before the normal ls. It must be skipped (not break) so that the
-// dependency of the normal ls is still computed.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestDeletedEmptyLSFirstThenNormalLSWithDependency) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
-    PieceInfo(1, 1, 3, {
-      LSFileInfo(ObLSID(1030), {}, true /*deleted*/),
-      LSFileInfo(ObLSID(1001), {10})
-    })
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  // ls1030 skipped, ls1001 depends on p2 -> idx 1 (not 2, which would mean ls1001 was never checked).
-  EXPECT_EQ(1, min_depended_pieces_idx);
-}
-
-// Deleted empty ls first, normal ls has no dependency: result stays at the sentinel itself.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestDeletedEmptyLSFirstThenNormalLSNoDependency) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10})}),
-    PieceInfo(1, 1, 3, {
-      LSFileInfo(ObLSID(1030), {}, true /*deleted*/),
-      LSFileInfo(ObLSID(1001), {11})
-    })
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  EXPECT_EQ(2, min_depended_pieces_idx);
-}
-
-// Not deleted empty ls first: conservative branch wins immediately regardless of the ls after it.
-TEST_F(TestBackupCleanPieceClogBlockDependency, TestNotDeletedEmptyLSFirstKeepsAll) {
-  std::vector<PieceInfo> piece_infos = {
-    PieceInfo(1, 1, 1, {LSFileInfo(ObLSID(1001), {9}), LSFileInfo(ObLSID(1002), {20})}),
-    PieceInfo(1, 1, 2, {LSFileInfo(ObLSID(1001), {10}), LSFileInfo(ObLSID(1002), {21})}),
-    PieceInfo(1, 1, 3, {
-      LSFileInfo(ObLSID(1002), {}),
-      LSFileInfo(ObLSID(1001), {11})
-    })
-  };
-
-  int64_t min_depended_pieces_idx = run_test_from_piece_infos(piece_infos);
-  EXPECT_EQ(0, min_depended_pieces_idx);
+  // No older piece holds any log from block 11 on, so only the anchor itself is kept.
+  EXPECT_EQ(2, run_dependency_test(pieces, candidate_piece_infos));
 }
 
 } // namespace backup
