@@ -25,12 +25,13 @@ namespace oceanbase
 namespace pl
 {
 
-enum PackageValueType
+enum PackageValueType //FARM COMPAT WHITELIST
 {
   INVALID_VALUE_TYPE = -1,
   NULL_TYPE,
   BOOL_TYPE,
-  HEX_STRING_TYPE
+  HEX_STRING_TYPE,
+  SERIALIZE_ERROR_TYPE
 };
 
 struct ObPackageVarEncodeInfo

@@ -1072,6 +1072,17 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                          new_var_val), K(package_id), K(var_idx), K(var_val));
     OX (need_free_new = true);
     if (OB_FAIL(ret)) {
+    } else if (var_val.is_int()) {
+      const int64_t serialize_ret = var_val.get_int();
+      if (serialize_ret >= OB_SUCCESS || serialize_ret <= -OB_MAX_ERROR_CODE) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid package variable serialization error marker",
+                 K(ret), K(serialize_ret), K(package_id), K(var_idx), K(from_proxy));
+      } else {
+        ret = static_cast<int>(serialize_ret);
+        LOG_WARN("package variable failed to serialize on source server",
+                 K(ret), K(package_id), K(var_idx), K(from_proxy));
+      }
     } else if (var->get_type().is_cursor_type()) {
       OV (var_val.is_tinyint() || var_val.is_number() || var_val.is_decimal_int(), OB_ERR_UNEXPECTED, K(var_val));
       if (OB_SUCC(ret)

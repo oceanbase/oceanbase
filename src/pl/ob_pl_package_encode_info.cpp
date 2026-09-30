@@ -37,6 +37,9 @@ int ObPackageVarEncodeInfo::construct()
     } else if (encode_value_.is_hex_string()) {
       value_type_ = PackageValueType::HEX_STRING_TYPE;
       value_len_ = encode_value_.get_hex_string().length();
+    } else if (encode_value_.is_int()) {
+      value_type_ = PackageValueType::SERIALIZE_ERROR_TYPE;
+      value_len_ = serialization::encoded_length(encode_value_.get_int());
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value type", K(ret));
@@ -77,6 +80,9 @@ int ObPackageVarEncodeInfo::encode(char *dst, const int64_t dst_len, int64_t &ds
         MEMCPY(dst + dst_pos, encode_value_.get_hex_string().ptr(), encode_value_.get_hex_string().length());
         dst_pos += encode_value_.get_hex_string().length();
       }
+    } else if (PackageValueType::SERIALIZE_ERROR_TYPE == value_type_) {
+      CK (value_len_ == serialization::encoded_length(encode_value_.get_int()));
+      OZ (serialization::encode(dst, dst_len, dst_pos, encode_value_.get_int()));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value type", K(ret));
@@ -105,6 +111,12 @@ int ObPackageVarEncodeInfo::decode(const char *src, const int64_t src_len, int64
       // shallow copy
       OX (encode_value_.set_hex_string(ObString(value_len_, src + src_pos)));
       OX (src_pos += value_len_);
+    } else if (PackageValueType::SERIALIZE_ERROR_TYPE == value_type_) {
+      int64_t error_code = OB_SUCCESS;
+      const int64_t value_start_pos = src_pos;
+      OZ (serialization::decode(src, src_len, src_pos, error_code));
+      CK (value_len_ == src_pos - value_start_pos);
+      OX (encode_value_.set_int(error_code));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected value type", K(ret));

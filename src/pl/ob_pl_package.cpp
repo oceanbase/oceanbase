@@ -294,7 +294,18 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
         if (OB_FAIL(package_state.get_package_var_val(var_idx, value))) {
           LOG_WARN("failt to get package var", K(ret), K(var_idx));
         } else {
-          if (var_type.is_cursor_type()) {
+          if (ser_value->is_int()) {
+            const int64_t serialize_ret = ser_value->get_int();
+            if (serialize_ret >= OB_SUCCESS || serialize_ret <= -OB_MAX_ERROR_CODE) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid package variable serialization error marker",
+                       K(ret), K(serialize_ret), K(get_id()), K(var_idx));
+            } else {
+              ret = static_cast<int>(serialize_ret);
+              LOG_WARN("package variable failed to serialize on source server",
+                       K(ret), K(get_id()), K(var_idx));
+            }
+          } else if (var_type.is_cursor_type()) {
             OV (ser_value->is_tinyint() || ser_value->is_number() || ser_value->is_decimal_int(),
                 OB_ERR_UNEXPECTED, KPC(ser_value), K(lbt()));
             if (OB_SUCC(ret) && (ser_value->is_tinyint() ? ser_value->get_bool()
@@ -579,7 +590,6 @@ int ObPLPackage::get_type(uint64_t type_id, const ObUserDefinedType *&type) cons
 }
 } // end namespace pl
 } // end namespace oceanbase
-
 
 
 

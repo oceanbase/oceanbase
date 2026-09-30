@@ -668,7 +668,15 @@ int ObPLPackageState::make_pkg_var_kv_value(ObPLResolveCtx &resolve_ctx, ObObj &
   } else if (var->get_type().is_opaque_type()) {
     value.set_null();
   } else {
-    OZ (var->get_type().serialize(resolve_ctx, var_val, value));
+    int tmp_ret = var->get_type().serialize(resolve_ctx, var_val, value);
+    if (OB_SUCCESS != tmp_ret) {
+      // Keep the current server's package state usable.  The error marker is
+      // synchronized through obproxy and raised when another server restores
+      // this package variable, so the request can be rerouted to this server.
+      value.set_int(tmp_ret);
+      LOG_WARN("failed to serialize package variable, encode error for remote sync",
+               K(tmp_ret), K(package_id_), K(var_idx));
+    }
   }
 
   return ret;
