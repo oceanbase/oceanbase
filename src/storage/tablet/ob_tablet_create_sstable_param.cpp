@@ -120,7 +120,7 @@ bool ObTabletCreateSSTableParam::is_valid() const
                && rowkey_column_cnt_ >= 0
                && column_cnt_ >= 0
                && occupy_size_ >= 0
-               && reused_occupy_size_ >= -1 && reused_occupy_size_ <= occupy_size_
+               && reused_occupy_size_ >= 0 && reused_occupy_size_ <= occupy_size_
                && ddl_scn_.is_valid()
                && filled_tx_scn_.is_valid()
                && tx_data_recycle_scn_.is_valid()

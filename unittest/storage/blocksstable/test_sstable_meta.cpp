@@ -800,6 +800,24 @@ TEST_F(TestSSTableMeta, test_huge_sstable_persister_linked_block)
   ASSERT_EQ(1, sstable_macro_info.linked_block_count_);
 }
 
+TEST_F(TestSSTableMeta, test_basic_meta_occupy_size_equality)
+{
+  param_.occupy_size_ = 100;
+  param_.reused_occupy_size_ = 40;
+  ObSSTableMeta sstable_meta;
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.init(param_, allocator_));
+  const ObSSTableBasicMeta &old_meta = sstable_meta.get_basic_meta();
+  ObSSTableBasicMeta new_meta = old_meta;
+  new_meta.occupy_size_ = 95;
+  ASSERT_TRUE(new_meta.is_valid());
+  ASSERT_TRUE(old_meta.check_basic_meta_equality(new_meta));
+  ASSERT_EQ(OB_SUCCESS, ObSSTableMetaChecker::check_sstable_basic_meta(old_meta, new_meta));
+  ASSERT_NE(old_meta, new_meta);
+
+  ++new_meta.data_checksum_;
+  ASSERT_EQ(OB_INVALID_DATA, ObSSTableMetaChecker::check_sstable_basic_meta(old_meta, new_meta));
+}
+
 TEST_F(TestSSTableMeta, test_empty_sstable_serialize_and_deserialize)
 {
   ObSSTableMeta sstable_meta;
