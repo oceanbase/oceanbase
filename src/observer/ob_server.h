@@ -278,6 +278,7 @@ private:
   int stop_server_in_arb_mode();
   int wait_server_in_arb_mode();
   int destroy_server_in_arb_mode();
+  int check_arbitration_file_system_fallocate_capability();
   // ------------------------------- arb server end --------------------------------------
 
 public:

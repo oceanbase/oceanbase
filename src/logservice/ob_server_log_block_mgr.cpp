@@ -91,6 +91,9 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
     CLOG_LOG(ERROR, "Invalid argument", K(ret), KPC(this), KP(log_disk_base_path));
   } else if (OB_FAIL(do_init_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_init_ failed", K(ret), KPC(this), K(log_disk_base_path));
+  } else if (OB_FAIL(probe_fallocate_compatibility_())) {
+    CLOG_LOG(ERROR, "disk/fs is not compatible with fallocate",
+        K(ret), KPC(this), K(log_disk_base_path));
   } else if (OB_FAIL(do_load_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_load_ failed", K(ret), KPC(this), K(log_disk_base_path));
   } else {
@@ -1732,5 +1735,18 @@ int ObServerLogBlockMgr::scan_ls_dir_(const char *ls_dir,
   }
   return ret;
 }
+
+int ObServerLogBlockMgr::probe_fallocate_compatibility_()
+{
+  int ret = OB_SUCCESS;
+  if (!GCONF._enable_fallocate_probe) {
+    CLOG_LOG(INFO, "fallocate probe is disabled by config, skip check",
+        K(GCONF._enable_fallocate_probe));
+  } else if (OB_FAIL(check_file_system_fallocate_capability(log_pool_path_))) {
+    CLOG_LOG(ERROR, "file system fallocate capability check failed", KR(ret), K(log_pool_path_));
+  }
+  return ret;
+}
+
 } // namespace logservice
 } // namespace oceanbase

@@ -1953,6 +1953,9 @@ DEF_BOOL(enable_sql_extension, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_block_file_punch_hole, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to punch whole when free blocks in block_file",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_fallocate_probe, OB_CLUSTER_PARAMETER, "True",
+         "specifies whether to probe file system fallocate capability at startup, modification works after restart",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_BOOL(_enable_trace_session_leak, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to enable tracing session leak",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

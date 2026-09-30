@@ -56,6 +56,7 @@
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
 #include "logservice/arbserver/ob_arb_cluster_white_list.h"
 #include "logservice/arbserver/ob_arb_server_config.h"
+#include "logservice/palf/log_io_utils.h"
 #endif
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
@@ -82,6 +83,7 @@
 #include "share/ob_license_utils.h"
 #include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
 #include "lib/encrypt/ob_rsa_getter.h"
+#include "lib/file/file_directory_utils.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -3773,6 +3775,29 @@ int ObServer::init_refresh_io_calibration()
 
 // ---------------------------------- arb server start -------------------------------
 #ifdef OB_BUILD_ARBITRATION
+
+int ObServer::check_arbitration_file_system_fallocate_capability()
+{
+  int ret = OB_SUCCESS;
+  const bool enable_fallocate_probe = GCONF._enable_fallocate_probe;
+  const char *const data_dir = GCONF.data_dir.get_value();
+  char arbitration_clog_dir[common::MAX_PATH_SIZE] = {'\0'};
+  if (!enable_fallocate_probe) {
+    LOG_INFO("fallocate probe is disabled, skip check", K(enable_fallocate_probe));
+  } else if (OB_FAIL(databuff_printf(arbitration_clog_dir,
+      sizeof(arbitration_clog_dir), "%s/clog", data_dir))) {
+    LOG_ERROR("construct arbitration clog path failed", KR(ret),
+              "path_buffer_size", sizeof(arbitration_clog_dir), K(data_dir));
+  } else if (OB_FAIL(FileDirectoryUtils::create_full_path(arbitration_clog_dir))) {
+    LOG_ERROR("create arbitration clog path failed", KR(ret), K(arbitration_clog_dir));
+  } else if (OB_FAIL(palf::check_arbitration_file_system_fallocate_capability(
+                arbitration_clog_dir))) {
+    LOG_ERROR("arbitration file system fallocate capability check failed",
+              KR(ret), K(arbitration_clog_dir));
+  }
+  return ret;
+}
+
 int ObServer::init_server_in_arb_mode()
 {
   int ret = OB_SUCCESS;
@@ -3821,7 +3846,9 @@ int ObServer::init_server_in_arb_mode()
   ObIOConfig io_config;
   io_config.disk_io_thread_count_ = GCONF.disk_io_thread_count;
   const double io_memory_ratio = 0.2;
-  if (OB_FAIL(palf::election::load_election_config())) {
+  if (OB_FAIL(check_arbitration_file_system_fallocate_capability())) {
+    LOG_ERROR("check_arbitration_file_system_fallocate_capability fail", K(ret));
+  } else if (OB_FAIL(palf::election::load_election_config())) {
     LOG_ERROR("load election config in arbitration mode failed", KR(ret));
   } else if (OB_FAIL(net_work_farme.init(arb_opts, &palf_env_mgr))) {
     LOG_ERROR("init ObArbSrvNetworkFrame failed", K(ret), K(arb_opts));
