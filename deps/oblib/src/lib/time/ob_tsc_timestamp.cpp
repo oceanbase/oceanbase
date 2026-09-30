@@ -35,7 +35,11 @@ int ObTscTimestamp::init()
       LIB_LOG(WARN, "invariant TSC not support", K(ret));
     } else {
       const int64_t cpu_freq_khz = get_cpufreq_khz_();
+#if defined(__x86_64__)
+      tsc_count_ = is_support_rdtscp_() ? rdtscp() : rdtsc();
+#else
       tsc_count_ = rdtscp();
+#endif
       start_us_ = tv.tv_sec * 1000000 + tv.tv_usec;
       // judge if cpu frequency and tsc are legal
       if (tsc_count_ > 0 && cpu_freq_khz > 0) {
@@ -123,16 +127,15 @@ bool ObTscTimestamp::is_support_invariant_tsc_()
   } else {
     ret = false;
   }
-  if (ret) {
-    cpu_info[3] = 0;
-    getcpuid(cpu_info, 0x80000001);
-    if (cpu_info[3] & (1<<27)) {
-      // RDTSCP is supported
-    } else {
-      ret = false;
-    }
-  }
   return ret;
+}
+
+bool ObTscTimestamp::is_support_rdtscp_()
+{
+  unsigned int cpu_info[4];
+  cpu_info[3] = 0;
+  getcpuid(cpu_info, 0x80000001);
+  return (cpu_info[3] & (1U << 27)) != 0;
 }
 
 #elif defined(__aarch64__)
