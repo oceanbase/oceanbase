@@ -483,7 +483,10 @@ int ObExpandVecOp::duplicate_expr(ObExpr *from, ObExpr *to)
       char *src_data = static_cast<ObFixedLengthBase *>(from_vec)->get_data();
       ObBitVector *src_nulls = static_cast<ObBitmapNullVectorBase *>(from_vec)->get_nulls();
       ObFixedLengthBase *to_vec = static_cast<ObFixedLengthBase *>(to->get_vector(eval_ctx_));
-      to_vec->set_data(src_data);
+      // The org vector may be re-initialized later (e.g. cast_to_uniform from a scalar
+      // fallback eval of a sibling dup pair's org), abandoning its data buffer. Copy the
+      // buffer content into dup's own frame slot; see VEC_DISCRETE below for details.
+      MEMCPY(to_vec->get_data(), src_data, brs_.size_ * to_vec->get_length());
       to_vec->get_nulls()->deep_copy(*src_nulls, brs_.size_);
       to_vec->set_has_null(from_vec->has_null());
       to->set_evaluated_projected(eval_ctx_);
@@ -492,26 +495,37 @@ int ObExpandVecOp::duplicate_expr(ObExpr *from, ObExpr *to)
     if (OB_FAIL(to->init_vector(eval_ctx_, VEC_DISCRETE, brs_.size_))) {
       LOG_WARN("init vector failed", K(ret));
     } else {
-      char **ptrs = static_cast<ObDiscreteBase *>(from_vec)->get_ptrs();
-      ObLength *lens = static_cast<ObDiscreteBase *>(from_vec)->get_lens();
+      char **src_ptrs = static_cast<ObDiscreteBase *>(from_vec)->get_ptrs();
+      ObLength *src_lens = static_cast<ObDiscreteBase *>(from_vec)->get_lens();
       ObBitVector *src_nulls = static_cast<ObBitmapNullVectorBase *>(from_vec)->get_nulls();
       ObDiscreteBase *to_vec = static_cast<ObDiscreteBase *>(to->get_vector(eval_ctx_));
-      to_vec->set_ptrs(ptrs);
-      to_vec->set_lens(lens);
+      // The org vector may be re-initialized later (e.g. cast_to_uniform from a scalar
+      // fallback eval of a sibling dup pair's org), which abandons its ptrs/lens arrays.
+      // Copy the array contents into dup's own frame slots; payloads stay shared.
+      MEMCPY(to_vec->get_ptrs(), src_ptrs, brs_.size_ * sizeof(char *));
+      MEMCPY(to_vec->get_lens(), src_lens, brs_.size_ * sizeof(ObLength));
       to_vec->get_nulls()->deep_copy(*src_nulls, brs_.size_);
       to_vec->set_has_null(from_vec->has_null());
       to->set_evaluated_projected(eval_ctx_);
     }
   } else if constexpr (fmt == VEC_CONTINUOUS) {
-    if (OB_FAIL(to->init_vector(eval_ctx_, VEC_CONTINUOUS, brs_.size_))) {
+    // dup expr never produces continuous format: a discrete vector holding per-row
+    // ptrs/lens into the org's payload carries the same snapshot, while the frame
+    // slot reserved for continuous data only holds an ObDynReserveBuf header and
+    // cannot hold payload copies.
+    if (OB_FAIL(to->init_vector(eval_ctx_, VEC_DISCRETE, brs_.size_))) {
       LOG_WARN("init vector failed", K(ret));
     } else {
-      uint32_t *offsets = static_cast<ObContinuousBase *>(from_vec)->get_offsets();
-      char *data = static_cast<ObContinuousBase *>(from_vec)->get_data();
+      uint32_t *src_offsets = static_cast<ObContinuousBase *>(from_vec)->get_offsets();
+      char *src_data = static_cast<ObContinuousBase *>(from_vec)->get_data();
       ObBitVector *src_nulls = static_cast<ObBitmapNullVectorBase *>(from_vec)->get_nulls();
-      ObContinuousBase *to_vec = static_cast<ObContinuousBase *>(to->get_vector(eval_ctx_));
-      to_vec->set_offsets(offsets);
-      to_vec->set_data(data);
+      ObDiscreteBase *to_vec = static_cast<ObDiscreteBase *>(to->get_vector(eval_ctx_));
+      char **to_ptrs = to_vec->get_ptrs();
+      ObLength *to_lens = to_vec->get_lens();
+      for (int64_t i = 0; i < brs_.size_; i++) {
+        to_ptrs[i] = src_data + src_offsets[i];
+        to_lens[i] = src_offsets[i + 1] - src_offsets[i];
+      }
       to_vec->get_nulls()->deep_copy(*src_nulls, brs_.size_);
       to_vec->set_has_null(from_vec->has_null());
       to->set_evaluated_projected(eval_ctx_);
