@@ -10382,6 +10382,12 @@ static int json_string(const ObObjType expect_type, ObObjCastParams &params,
       }
     }
   }
+  // Add the header after charset conversion and truncation, which operate on the payload.
+  if (OB_SUCC(ret) && !IS_CLUSTER_VERSION_BEFORE_4_1_0_0) {
+    if (OB_FAIL(ObTextStringResult::ob_convert_obj_temporay_lob(out, *params.allocator_v2_))) {
+      LOG_WARN("failed to add lob header after casting json to text", K(ret), K(expect_type), K(out));
+    }
+  }
   return ret;
 }
 
