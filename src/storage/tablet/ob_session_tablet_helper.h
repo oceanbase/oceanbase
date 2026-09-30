@@ -193,14 +193,16 @@ public:
       const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
 
   /// @brief Delete session tablets with GC-oriented batch.
-  ///   per-table failures are filtered
-  ///   (see remove_failed_tables inside check_and_lock_tables) so tablets that
-  ///   passed checks can still be deleted in the same invocation.
+  ///   Per-table failures are tolerated so tablets belonging to other tables
+  ///   can still be deleted in the same invocation.
   ///   It will try to DELETE tablets whose table schema is no
   ///   longer present (e.g. table already dropped while the tablet still exists),
   ///
   /// @return OB_SUCCESS on success, or an error code if a non-recoverable step fails.
-  int do_work_for_gc(ObSessionTabletGCTaskSummary &summary);
+  int do_work_for_gc(
+      ObSessionTabletGCTaskSummary &summary,
+      const hash::ObHashSet<uint64_t> &previous_batch_table_id_set,
+      /*out*/hash::ObHashSet<uint64_t> &current_batch_table_id_set);
   void set_timeout_us(int64_t timeout_us) { timeout_us_ = timeout_us; }
   TO_STRING_KV(K_(tenant_id), K_(tablet_infos));
 private:
@@ -226,23 +228,51 @@ private:
       return lhs.ls_id_ == rhs.ls_id_ ? lhs.tablet_id_ < rhs.tablet_id_ : lhs.ls_id_ < rhs.ls_id_;
     }
   };
-  /// @brief Remove entries whose data table id exists in @p failed_data_tb_id_set
-  ///        from delete candidate arrays in place.
-  /// @pre table_schemas_for_delete.count()
-  ///      == session_tablet_infos_for_delete.count()
-  ///
-  /// @param[in]     failed_data_tb_id_set       Set of data table ids whose
-  ///                                            tablets should be excluded.
-  /// @param[in,out] table_schemas_for_delete    Corresponding table schema array
-  ///                                            to be filtered.
-  /// @param[in,out] session_tablet_infos_for_delete Corresponding session tablet info array
-  ///                                                to be filtered.
-  /// @return OB_SUCCESS on success, OB_INVALID_ARGUMENT if arrays have different
-  ///         sizes or contain invalid entries.
-  static int remove_failed_tables(
-      const hash::ObHashSet<uint64_t> &failed_data_tb_id_set,
-      /*inout*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
-      /*inout*/common::ObIArray<ObSessionTabletInfo> &session_tablet_infos_for_delete);
+  struct GCTableLockGroup final
+  {
+  public:
+    GCTableLockGroup()
+      : base_table_id_(OB_INVALID_ID), can_lock_(true), tablet_ids_(), table_schemas_(), tablet_infos_()
+    {}
+    explicit GCTableLockGroup(const uint64_t base_table_id)
+      : base_table_id_(base_table_id), can_lock_(true), tablet_ids_(), table_schemas_(), tablet_infos_()
+    {}
+    int assign(const GCTableLockGroup &other);
+    bool is_valid() const
+    {
+      return OB_INVALID_ID != base_table_id_
+          && !tablet_ids_.empty()
+          && tablet_ids_.count() == table_schemas_.count()
+          && tablet_ids_.count() == tablet_infos_.count();
+    }
+    TO_STRING_KV(K_(base_table_id), K_(can_lock), K_(tablet_ids),
+        K_(table_schemas), K_(tablet_infos));
+
+    uint64_t base_table_id_;
+    bool can_lock_;
+    common::ObSEArray<ObTabletID, 4> tablet_ids_;
+    common::ObSEArray<const ObTableSchema *, 4> table_schemas_;
+    common::ObSEArray<ObSessionTabletInfo *, 4> tablet_infos_;
+  };
+  struct GCResult final
+  {
+  public:
+    GCResult()
+      : session_tablet_infos_for_delete_(), table_schemas_for_delete_(), ignored_tablets_cnt_(0)
+    {}
+    void reset()
+    {
+      session_tablet_infos_for_delete_.reset();
+      table_schemas_for_delete_.reset();
+      ignored_tablets_cnt_ = 0;
+    }
+    int append(const ObIArray<ObSessionTabletInfo> &tablet_infos, const ObIArray<const ObTableSchema *> &table_schemas);
+    TO_STRING_KV(K_(session_tablet_infos_for_delete), K_(table_schemas_for_delete), K_(ignored_tablets_cnt));
+
+    common::ObSEArray<ObSessionTabletInfo, 4> session_tablet_infos_for_delete_;
+    common::ObSEArray<const ObTableSchema *, 4> table_schemas_for_delete_;
+    int64_t ignored_tablets_cnt_;
+  };
   // Gather the main GTT v2 session table id together with its local index
   // tables and lob aux tables so they can be dropped atomically.
   static int collect_oracle_temp_table_v2_related_ids(
@@ -267,6 +297,10 @@ private:
       const int64_t sequence,
       const uint64_t session_id);
 private:
+  int lock_base_table_for_delete(const ObTableSchema &table_schema);
+  int lock_tablets_for_delete(
+      const ObTableSchema &table_schema,
+      const common::ObIArray<ObTabletID> &tablet_ids);
   int lock_table_for_delete(
       const ObTableSchema &table_schema,
       const common::ObIArray<ObTabletID> &tablet_ids);
@@ -278,14 +312,9 @@ private:
   /// Successfully checked tablets and their schemas are appended to the output
   /// arrays.
   ///
-  /// NOTE: When @p is_atomic_batch is FALSE, failures on individual tables are
-  /// tolerated: the failed data table ids are collected and later removed from
-  /// the output arrays via @c remove_failed_tables so that the remaining tablets
-  /// can still be deleted. When @p is_atomic_batch is TRUE, any single failure
-  /// causes the entire operation to fail.
+  /// Any failure other than an already removed tablet aborts the whole batch.
+  /// This method is only used by the normal delete path.
   ///
-  /// @param[in]  is_atomic_batch             If true, any single table failure
-  ///                                            aborts the whole batch.
   /// @param[out] table_schemas_for_delete    Receives the corresponding table
   ///                                           schemas.
   /// @param[out] session_tablet_infos_for_delete Receives the corresponding
@@ -293,12 +322,44 @@ private:
   /// @param[out] schema_missing_tablet_infos Tablets whose table schema is missing.
   /// @return OB_SUCCESS on success, or an appropriate error code on failure.
   int check_and_lock_tables(
-      const bool is_atomic_batch,
       share::schema::ObSchemaGetterGuard &schema_guard,
       /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
       /*out*/common::ObIArray<ObSessionTabletInfo> &session_tablet_infos_for_delete,
       /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos,
       /*out*/int64_t &ignored_tablets_cnt);
+  int check_tables_for_gc(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      /*out*/common::ObIArray<GCTableLockGroup> &table_lock_groups,
+      /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos);
+
+  /// Cool down before locking a GC batch if it contains a base table that was
+  /// locked by the immediately preceding batch. Without this pause, consecutive
+  /// GC transactions can repeatedly reacquire the ROW EXCLUSIVE table/online-DDL
+  /// locks on the same base table, leaving little opportunity for foreground
+  /// session-tablet creation to acquire its conflicting lock and increasing the
+  /// risk of OB_ERR_EXCLUSIVE_LOCK_CONFLICT (-4012). The pause gives foreground
+  /// work an opportunity to acquire the lock after the previous GC transaction
+  /// has released it.
+  ///
+  /// @param[in] tenant_id                       Tenant executing the GC task.
+  /// @param[in] table_lock_groups               Lock groups in the current batch.
+  /// @param[in] previous_batch_table_id_set     Base table ids actually locked
+  ///                                             by the preceding GC batch.
+  /// @return OB_SUCCESS after an optional cool down, or the hash-set lookup error.
+  static int cool_down_if_need_(
+      const uint64_t tenant_id,
+      const common::ObIArray<GCTableLockGroup> &table_lock_groups,
+      const hash::ObHashSet<uint64_t> &previous_batch_table_id_set);
+  int lock_tables_for_gc(
+      const common::ObIArray<GCTableLockGroup> &table_lock_groups,
+      /*out*/hash::ObHashSet<uint64_t> &current_batch_table_id_set,
+      /*out*/GCResult &gc_result);
+  int retry_lock_tablets_for_gc(
+      const GCTableLockGroup &table_lock_group,
+      GCResult &gc_result);
+#ifdef ERRSIM
+  int check_gc_tablet_lock_errsim(const ObSessionTabletInfo &tablet_info);
+#endif
   int delete_tablets(
       const ObIArray<storage::ObSessionTabletInfo> &session_tablet_infos,
       const int64_t schema_version);
@@ -382,6 +443,8 @@ public:
   /// @brief: batch interface for drop database
   static int is_any_table_has_active_session(
       const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
+  static constexpr int64_t SESSION_TABLET_GC_TABLE_ID_SET_BUCKET_CNT = 127;
+  static constexpr int64_t SESSION_TABLET_GC_BATCH_COOL_DOWN_US = 100 * 1000; // 100 ms
   static const int64_t MAX_GC_COUNT = 600;
   static const int64_t NUM_OF_TABLET_GROUP = 4;
   static const int64_t TABLET_GROUP_SIZE = 16;
