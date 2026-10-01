@@ -1210,6 +1210,34 @@ TEST_F(ObQueryRangeTest, single_key_cost_time)
   MbrFilterArray &ut_get_mbr_filter() { return mbr_filters_; }
   ColumnIdInfoMap &ut_get_columnId_map() { return columnId_map_; }
 */
+TEST_F(ObQueryRangeTest, spatial_relationship_by_mask)
+{
+  ObQueryRange query_range(allocator_);
+  ObKeyPart key_part(allocator_);
+  ObDomainOpType op_type = ObDomainOpType::T_DOMAIN_OP_END;
+  char mask_at_limit[256];
+  char oversized_mask[257];
+  OK(key_part.create_domain_key());
+
+  key_part.domain_keypart_->extra_param_.set_varchar("ANYINTERACT");
+  EXPECT_EQ(OB_SUCCESS, query_range.get_spatial_relationship_by_mask(&key_part, op_type));
+  EXPECT_EQ(ObDomainOpType::T_GEO_INTERSECTS, op_type);
+
+  key_part.domain_keypart_->extra_param_.set_varchar("contains");
+  EXPECT_EQ(OB_SUCCESS, query_range.get_spatial_relationship_by_mask(&key_part, op_type));
+  EXPECT_EQ(ObDomainOpType::T_GEO_COVERS, op_type);
+
+  MEMSET(mask_at_limit, 'a', sizeof(mask_at_limit));
+  MEMCPY(mask_at_limit, "contains", strlen("contains"));
+  key_part.domain_keypart_->extra_param_.set_varchar(ObString(sizeof(mask_at_limit), mask_at_limit));
+  EXPECT_EQ(OB_SUCCESS, query_range.get_spatial_relationship_by_mask(&key_part, op_type));
+  EXPECT_EQ(ObDomainOpType::T_GEO_COVERS, op_type);
+
+  MEMSET(oversized_mask, 'a', sizeof(oversized_mask));
+  key_part.domain_keypart_->extra_param_.set_varchar(ObString(sizeof(oversized_mask), oversized_mask));
+  EXPECT_EQ(OB_INVALID_MASK, query_range.get_spatial_relationship_by_mask(&key_part, op_type));
+}
+
 TEST_F(ObQueryRangeTest, serialize_geo_queryrange)
 {
   ObQueryRange pre_query_range;

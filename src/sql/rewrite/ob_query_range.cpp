@@ -10467,23 +10467,34 @@ int ObQueryRange::get_spatial_relationship_by_mask(ObKeyPart *out_key_part, ObDo
   if (!ob_is_string_type(out_key_part->domain_keypart_->extra_param_.get_type())) {
     op_type = ObDomainOpType::T_DOMAIN_OP_END;
   } else {
+    static const int64_t MAX_MASK_LENGTH = 256;
     ObString mask_str(out_key_part->domain_keypart_->extra_param_.get_string());
-    common::ObArenaAllocator temp_allocator(lib::ObLabel("GisIndex"));
-    ObString upper_str;
-    if (OB_FAIL(ob_simple_low_to_up(temp_allocator, mask_str, upper_str))) {
-      LOG_WARN("failed to get upper string", K(ret));
+    if (mask_str.length() > MAX_MASK_LENGTH) {
+      ret = OB_INVALID_MASK;
+      LOG_WARN("mask param too long", K(ret), K(mask_str.length()));
     } else {
-      char cmp_str[upper_str.length() + 1];
-      cmp_str[upper_str.length()] = '\0';
-      MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
-      if (nullptr != strstr(cmp_str, "ANYINTERACT")) {
-        op_type = ObDomainOpType::T_GEO_INTERSECTS;
-      } else if (nullptr != strstr(cmp_str, "CONTAINS")) {
-        // Support CONTAINS for spatial index optimization
-        op_type = ObDomainOpType::T_GEO_COVERS;
+      common::ObArenaAllocator temp_allocator(lib::ObLabel("GisIndex"));
+      ObString upper_str;
+      if (OB_FAIL(ob_simple_low_to_up(temp_allocator, mask_str, upper_str))) {
+        LOG_WARN("failed to get upper string", K(ret));
       } else {
-        // other spatial relationsh is not supported yet, no need to continue
-        op_type = ObDomainOpType::T_DOMAIN_OP_END;
+        char *cmp_str = static_cast<char *>(temp_allocator.alloc(upper_str.length() + 1));
+        if (OB_ISNULL(cmp_str)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc memory for cmp_str", K(ret), K(upper_str.length()));
+        } else {
+          cmp_str[upper_str.length()] = '\0';
+          MEMCPY(cmp_str, upper_str.ptr(), upper_str.length());
+          if (nullptr != strstr(cmp_str, "ANYINTERACT")) {
+            op_type = ObDomainOpType::T_GEO_INTERSECTS;
+          } else if (nullptr != strstr(cmp_str, "CONTAINS")) {
+            // Support CONTAINS for spatial index optimization
+            op_type = ObDomainOpType::T_GEO_COVERS;
+          } else {
+            // other spatial relationsh is not supported yet, no need to continue
+            op_type = ObDomainOpType::T_DOMAIN_OP_END;
+          }
+        }
       }
     }
   }
