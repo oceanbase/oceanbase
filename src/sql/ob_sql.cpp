@@ -63,6 +63,92 @@ namespace sql
 const int64_t ObSql::max_error_length = 80;
 const int64_t ObSql::SQL_MEM_SIZE_LIMIT = 1024 * 1024 * 64;
 
+static int check_stmt_accesses_oracle_trx_tmp_table_v2(const ObDMLStmt &stmt,
+                                                       const ObSqlSchemaGuard &schema_guard,
+                                                       bool &accesses_trx_tmp_table_v2)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt *, 4> child_stmts;
+  accesses_trx_tmp_table_v2 = false;
+  for (int64_t i = 0;
+       OB_SUCC(ret) && !accesses_trx_tmp_table_v2 && i < stmt.get_table_items().count();
+       ++i) {
+    const TableItem *table_item = stmt.get_table_items().at(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (table_item->is_basic_table() && !table_item->is_link_table()) {
+      const ObTableSchema *table_schema = nullptr;
+      const uint64_t table_id = table_item->ref_id_;
+      if (OB_FAIL(schema_guard.get_table_schema(table_id, table_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(table_id));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", K(ret), K(table_id));
+      } else {
+        accesses_trx_tmp_table_v2 = table_schema->is_oracle_trx_tmp_table_v2();
+      }
+    } else if (table_item->is_temp_table() && OB_NOT_NULL(table_item->ref_query_)) {
+      if (OB_FAIL(SMART_CALL(check_stmt_accesses_oracle_trx_tmp_table_v2(
+              *table_item->ref_query_, schema_guard, accesses_trx_tmp_table_v2)))) {
+        LOG_WARN("failed to check temporary table query", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !accesses_trx_tmp_table_v2) {
+    if (OB_FAIL(stmt.get_child_stmts(child_stmts))) {
+      LOG_WARN("failed to get child statements", K(ret));
+    }
+    for (int64_t i = 0;
+         OB_SUCC(ret) && !accesses_trx_tmp_table_v2 && i < child_stmts.count();
+         ++i) {
+      if (OB_ISNULL(child_stmts.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child statement is null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(check_stmt_accesses_oracle_trx_tmp_table_v2(
+                     *child_stmts.at(i), schema_guard, accesses_trx_tmp_table_v2)))) {
+        LOG_WARN("failed to check child statement", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+static int check_plan_accesses_oracle_trx_tmp_table_v2(
+    ObPhysicalPlan &phy_plan,
+    const uint64_t tenant_id,
+    ObSchemaGetterGuard &schema_guard,
+    bool &accesses_trx_tmp_table_v2)
+{
+  int ret = OB_SUCCESS;
+  accesses_trx_tmp_table_v2 = false;
+  ObIArray<uint64_t> &table_ids = phy_plan.get_gtt_trans_scope_ids();
+  for (int64_t i = 0;
+       OB_SUCC(ret) && !accesses_trx_tmp_table_v2 && i < table_ids.count();
+       ++i) {
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_ids.at(i), table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_ids.at(i)));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), K(tenant_id), K(table_ids.at(i)));
+    } else {
+      accesses_trx_tmp_table_v2 = table_schema->is_oracle_trx_tmp_table_v2();
+    }
+  }
+  return ret;
+}
+
+static int reject_oracle_trx_tmp_table_v2_in_autonomous_transaction()
+{
+  int ret = OB_NOT_SUPPORTED;
+  LOG_WARN("new transaction level temporary table can not be accessed "
+           "in autonomous transaction", K(ret));
+  LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                 "accessing a new transaction-level temporary table in an autonomous transaction is");
+  return ret;
+}
+
 int ObSql::init(common::ObOptStatManager *opt_stat_mgr,
                 ObReqTransport *transport,
                 common::ObITabletScan *vt_partition_service,
@@ -3696,8 +3782,22 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
   } else if (basic_stmt->is_dml_stmt()
             || basic_stmt->is_explain_stmt()
             || basic_stmt->is_help_stmt()) {
+    bool accesses_trx_tmp_table_v2 = false;
+    const bool is_data_dml = (stmt::T_SELECT == basic_stmt->get_stmt_type()
+                              || ObStmt::is_dml_write_stmt(basic_stmt->get_stmt_type()))
+                             && !ObStmt::is_show_stmt(
+                                  basic_stmt->get_query_ctx()->get_literal_stmt_type());
     //ccl check level-3: after resolve sql
-    if (OB_NOT_NULL(pc_ctx)
+    if (is_data_dml
+        && ObSQLUtils::is_in_autonomous_transaction(&result.get_exec_context())
+        && OB_FAIL(check_stmt_accesses_oracle_trx_tmp_table_v2(
+             *static_cast<ObDMLStmt *>(basic_stmt),
+             basic_stmt->get_query_ctx()->sql_schema_guard_,
+             accesses_trx_tmp_table_v2))) {
+      LOG_WARN("failed to check transaction temporary table access", K(ret));
+    } else if (accesses_trx_tmp_table_v2) {
+      ret = reject_oracle_trx_tmp_table_v2_in_autonomous_transaction();
+    } else if (OB_NOT_NULL(pc_ctx)
         && result.get_session().has_ccl_rule_checked() && result.get_session().is_enable_sql_ccl_rule()
         && OB_FAIL(ObSQLUtils::match_ccl_rule(
              pc_ctx->allocator_, result.get_session(), sql_ctx, ObString(parse_result.input_sql_len_, parse_result.input_sql_),
@@ -5333,6 +5433,25 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *pctx = pc_ctx.exec_ctx_.get_physical_plan_ctx();
+  bool accesses_trx_tmp_table_v2 = false;
+  const bool may_access_trx_tmp_table = OB_NOT_NULL(phy_plan)
+                                          && (stmt::T_SELECT == phy_plan->get_stmt_type()
+                                              || ObStmt::is_dml_write_stmt(phy_plan->get_stmt_type()))
+                                          && !ObStmt::is_show_stmt(phy_plan->get_literal_stmt_type())
+                                          && phy_plan->is_contain_oracle_trx_level_temporary_table();
+  if (may_access_trx_tmp_table
+      && ObSQLUtils::is_in_autonomous_transaction(&pc_ctx.exec_ctx_)) {
+    if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema guard is null", K(ret));
+    } else if (OB_FAIL(check_plan_accesses_oracle_trx_tmp_table_v2(
+                 *phy_plan,
+                 session.get_effective_tenant_id(),
+                 *pc_ctx.sql_ctx_.schema_guard_,
+                 accesses_trx_tmp_table_v2))) {
+      LOG_WARN("failed to check transaction temporary table access", K(ret));
+    }
+  }
   bool enable_send_plan_event = EVENT_CALL(EventTable::EN_DISABLE_REMOTE_EXEC_WITH_PLAN) == 0;
   bool evolution_plan = nullptr != phy_plan && phy_plan->get_evolution();
   bool enable_send_plan = (session.get_is_in_retry() || evolution_plan) && enable_send_plan_event;
@@ -5344,7 +5463,11 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
   LOG_DEBUG("before after_get_plan", K(enable_send_plan), K(enable_send_plan_event),
             "is_retry",session.get_is_in_retry(), K(last_query_retry_err), K(evolution_plan));
 //  LOG_INFO("after get paln", K(pctx), K(phy_plan));
-  if (NULL != pctx) {
+  // Reject data access before registering transaction GTT ids in the shared session state.
+  if (OB_SUCC(ret) && accesses_trx_tmp_table_v2) {
+    ret = reject_oracle_trx_tmp_table_v2_in_autonomous_transaction();
+  }
+  if (OB_SUCC(ret) && NULL != pctx) {
     if (NULL != phy_plan) {
       // record the plan id in trace_event, perf_event and atomic_event
       NG_TRACE_EXT(plan_id, OB_ID(plan_id), phy_plan->get_plan_id());

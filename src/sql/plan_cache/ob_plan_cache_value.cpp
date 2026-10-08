@@ -1973,7 +1973,25 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(session_info));
   }
+  bool accesses_oracle_trx_tmp_table_v2 = false;
+  if (OB_SUCC(ret)
+      && (stmt::T_SELECT == stmt_type_ || ObStmt::is_dml_write_stmt(stmt_type_))
+      && ObSQLUtils::is_in_autonomous_transaction(&pc_ctx.exec_ctx_)) {
+    for (int64_t i = 0;
+         !accesses_oracle_trx_tmp_table_v2 && i < stored_schema_objs_.count();
+         ++i) {
+      const PCVSchemaObj *schema_obj = stored_schema_objs_.at(i);
+      accesses_oracle_trx_tmp_table_v2 = OB_NOT_NULL(schema_obj)
+          && TMP_TABLE_ORA_TRX_V2 == schema_obj->table_type_;
+    }
+  }
   if (OB_FAIL(ret)) {
+  } else if (accesses_oracle_trx_tmp_table_v2) {
+    // Avoid location calculation for the cached plan. It may create a V2 GTT
+    // session tablet before the autonomous-transaction check in after_get_plan().
+    is_same = false;
+    LOG_DEBUG("new transaction temporary table plan can not be reused in autonomous transaction",
+              K(is_same), K(stmt_type_));
   } else if (is_nested_sql_ != ObSQLUtils::is_nested_sql(&pc_ctx.exec_ctx_)) {
     //the plan of nested sql can't match with the plan of general sql
     //because nested sql's plan be forced to use DAS plan

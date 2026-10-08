@@ -5711,6 +5711,15 @@ bool ObSQLUtils::is_in_autonomous_block(ObExecContext *cur_ctx)
   return bret;
 }
 
+bool ObSQLUtils::is_in_autonomous_transaction(ObExecContext *cur_ctx)
+{
+  bool bret = false;
+  for (; !bret && nullptr != cur_ctx; cur_ctx = cur_ctx->get_parent_ctx()) {
+    bret = is_in_autonomous_block(cur_ctx);
+  }
+  return bret;
+}
+
 bool ObSQLUtils::is_select_from_dual(ObExecContext &ctx)
 {
   bool bret = false;
