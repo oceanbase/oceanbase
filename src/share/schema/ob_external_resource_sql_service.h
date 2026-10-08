@@ -56,6 +56,8 @@ int drop_external_resource(const ObSimpleExternalResourceSchema &schema,
                            const std::optional<std::pair<ObString, ObString>> &extra_cond = std::nullopt);
 
 private:
+  static ObString truncate_name_for_ddl_operation(const ObString &name);
+
   DISALLOW_COPY_AND_ASSIGN(ObExternalResourceSqlService);
 };
 

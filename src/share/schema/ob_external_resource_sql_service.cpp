@@ -78,7 +78,7 @@ int ObExternalResourceSqlService::create_external_resource(const ObSimpleExterna
     opt.external_resource_id_ = new_schema.get_resource_id();
     opt.op_type_ = OB_DDL_CREATE_EXTERNAL_RESOURCE;
     opt.schema_version_ = new_schema.get_schema_version();
-    opt.external_resource_name_ = new_schema.get_name();
+    opt.external_resource_name_ = truncate_name_for_ddl_operation(new_schema.get_name());
     opt.ddl_stmt_str_ = ddl_stmt;
 
     if (OB_FAIL(log_operation(opt, sql_client))) {
@@ -147,7 +147,7 @@ int ObExternalResourceSqlService::drop_external_resource(const ObSimpleExternalR
       opt.external_resource_id_ = schema.get_resource_id();
       opt.op_type_ = OB_DDL_DROP_EXTERNAL_RESOURCE;
       opt.schema_version_ = schema.get_schema_version();
-      opt.external_resource_name_ = schema.get_name();
+      opt.external_resource_name_ = truncate_name_for_ddl_operation(schema.get_name());
       opt.ddl_stmt_str_ = ddl_stmt;
 
       if (OB_FAIL(log_operation(opt, sql_client))) {
@@ -157,6 +157,18 @@ int ObExternalResourceSqlService::drop_external_resource(const ObSimpleExternalR
   }
 
   return ret;
+}
+
+ObString ObExternalResourceSqlService::truncate_name_for_ddl_operation(const ObString &name)
+{
+  int64_t length = MIN(name.length(), OB_MAX_CORE_TALBE_NAME_LENGTH);
+  if (OB_NOT_NULL(name.ptr()) && length < name.length()) {
+    // truncate to UTF-8 boundary
+    while (length > 0 && (static_cast<unsigned char>(name.ptr()[length]) & 0xC0) == 0x80) {
+      --length;
+    }
+  }
+  return ObString(length, name.ptr());
 }
 
 } // namespace schema
