@@ -356,7 +356,8 @@ int ObMPStmtSendPieceData::store_piece(ObSQLSessionInfo &session)
         LOG_WARN("piece is null.", K(ret), K(stmt_id_), K(param_id_));
       } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, 
                                                       piece_cache->get_piece_mode(piece_mode_), 
-                                                      &buffer_))) {
+                                                      &buffer_,
+                                                      is_null_))) {
         LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
       } else {
         LOG_INFO("store piece successfully", K(ret), K(session.get_server_sid()),
@@ -593,7 +594,7 @@ int ObPieceCache::get_piece_buffer(int32_t stmt_id,
     } else {
       // fetch阶段，前一段读到了最后一个数据，但是长度恰好和piecesize相等，所以没有设置last标记
       piece_buf.set_piece_mode(ObLastPiece);
-      piece_buf.set_piece_buffer(NULL);
+      piece_buf.set_piece_buffer(NULL, false /* is_null */);
     }
   } else {
     buf_array = piece->get_buffer_array();
@@ -608,7 +609,15 @@ int ObPieceCache::get_piece_buffer(int32_t stmt_id,
       char *&pos = old_piece_buf->get_position();
       int64_t len = piece_size;
       // buf 需要根据piece_size截断
-      if ((buf->length() - (pos - (buf->ptr()))) <= piece_size) {
+      // NULL 值和空值可能存在空指针，需在计算偏移前先处理。
+      if (old_piece_buf->is_null() || 0 == buf->length()) {
+        old_piece_buf->set_piece_mode(ObLastPiece);
+        piece_buf.set_piece_mode(ObLastPiece);
+        if (old_piece_buf->is_null()) {
+          piece_buf.set_null();
+        }
+        len = 0;
+      } else if ((buf->length() - (pos - (buf->ptr()))) <= piece_size) {
         old_piece_buf->set_piece_mode(ObLastPiece);
         piece_buf.set_piece_mode(ObLastPiece);
         len = buf->length() - (pos - (buf->ptr()));
@@ -623,7 +632,9 @@ int ObPieceCache::get_piece_buffer(int32_t stmt_id,
       }
       piece_buf.get_piece_buffer()->set_length(len);
       piece_buf.get_piece_buffer()->assign_ptr(pos, static_cast<ObString::obstr_size_t>(len));
-      pos += len;
+      if (NULL != pos) {
+        pos += len;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get last piece already.", K(ret), K(offset),
@@ -718,7 +729,8 @@ int ObPieceCache::get_mysql_buffer(int32_t stmt_id,
 int ObPieceCache::make_piece_buffer(ObIAllocator *allocator,
                                     ObPieceBuffer *&piece_buffer, 
                                     ObPieceMode mode, 
-                                    ObString *buf)
+                                    ObString *buf,
+                                    bool is_null)
 {
   // 这个buf是不是要deep copy一份，外层的生命周期不可控
   int ret = OB_SUCCESS;
@@ -728,7 +740,7 @@ int ObPieceCache::make_piece_buffer(ObIAllocator *allocator,
   OX (MEMSET(piece_mem, 0, sizeof(ObPieceBuffer)));
   OV (OB_NOT_NULL(piece_buffer = new (piece_mem) ObPieceBuffer(allocator, mode)));
   CK (OB_NOT_NULL(piece_buffer));
-  OZ (piece_buffer->set_piece_buffer(buf));
+  OZ (piece_buffer->set_piece_buffer(buf, is_null));
   LOG_DEBUG("make piece buffer.", K(ret), K(mode), K(buf->length()));
   return ret;
 }
@@ -757,7 +769,8 @@ ObPieceMode ObPieceCache::get_piece_mode(int8_t mode)
 
 int ObPieceCache::add_piece_buffer(ObPiece *piece,
                                    ObPieceMode piece_mode,
-                                   ObString *buf)
+                                   ObString *buf,
+                                   bool is_null)
 {
   int ret = OB_SUCCESS;
   ObPieceBuffer *piece_buffer = NULL;
@@ -771,7 +784,8 @@ int ObPieceCache::add_piece_buffer(ObPiece *piece,
   } else if (OB_FAIL(make_piece_buffer(piece->get_allocator(), 
                                         piece_buffer, 
                                         piece_mode,
-                                        buf))) {
+                                        buf,
+                                        is_null))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("piece or piece_buffer is null when add piece buffer", 
               K(ret), K(piece), K(piece_buffer));

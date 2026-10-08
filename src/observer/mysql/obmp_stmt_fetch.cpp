@@ -854,6 +854,7 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
       ObObj &value = row.get_cell(i);
       if (OB_SUCC(ret) && NULL != column_map && ObSMUtils::update_from_bitmap(column_map, i)) {
         bool is_long_data = false;
+        const bool is_null = value.is_null();
         ObString str;
         ObPiece *piece = NULL;
         ObCharsetType target_charset_type = charset_type;
@@ -959,7 +960,7 @@ int ObMPStmtFetch::response_row(ObSQLSessionInfo &session,
           */
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, ObInvalidPiece, &str))) {
+        } else if (OB_FAIL(piece_cache->add_piece_buffer(piece, ObInvalidPiece, &str, is_null))) {
           LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id));
         } else {
           value.set_null();

@@ -117,10 +117,10 @@ public:
   void set_null() { is_null_ = true; }
   bool is_null() { return is_null_; }
   bool is_last_piece() { return ObLastPiece == mode_; }
-  int set_piece_buffer(ObString *buf) 
+  int set_piece_buffer(ObString *buf, bool is_null)
   {
     int ret = OB_SUCCESS;
-    if (NULL != allocator_ && NULL != buf && NULL != buf->ptr()) {
+    if (!is_null && NULL != allocator_ && NULL != buf && NULL != buf->ptr()) {
       if (OB_FAIL(ob_write_string(*allocator_, *buf, buffer_))) {
         SQL_ENG_LOG(WARN, "failed to write piece buffer", K(ret), K(mode_));
       } else {
@@ -132,7 +132,9 @@ public:
     } else {
       buffer_.assign(NULL, 0);
       pos_ = NULL;
-      is_null_ = true;
+    }
+    if (OB_SUCC(ret)) {
+      is_null_ = is_null;
     }
     SQL_ENG_LOG(DEBUG, "set_piece_buffer", K(ret), K(buffer_), K(NULL != buf ? *buf : NULL));
     return ret;
@@ -142,7 +144,7 @@ public:
   int64_t to_string(char *buffer, int64_t length) const;
 private:
   ObPieceMode mode_;
-  bool is_null_;
+  bool is_null_; // SQL NULL status supplied by the producer, independent of buffer_.ptr().
   ObString buffer_;
   char     *pos_;
   ObIAllocator *allocator_;
@@ -291,7 +293,7 @@ class ObPieceCache {
     {
       return (((static_cast<int64_t>(stmt_id)) << 32) | param_id);
     }
-    int add_piece_buffer(ObPiece *piece, ObPieceMode piece_mode, ObString *buf);
+    int add_piece_buffer(ObPiece *piece, ObPieceMode piece_mode, ObString *buf, bool is_null);
     /* merge ObPieceBuffer.buffer_ into buf , and move & free this ObPieceBuffer from buffer_array_
     * when ObPieceBuffer.is_last_piece() 
     * merge this ObPieceBuffer and finish merge
@@ -300,7 +302,8 @@ class ObPieceCache {
     int make_piece_buffer(ObIAllocator *allocator,
                           ObPieceBuffer *&piece_buffer, 
                           ObPieceMode mode, 
-                          ObString *buf);
+                          ObString *buf,
+                          bool is_null);
     int init_piece_cache(sql::ObSQLSessionInfo &session);
     void close_piece(ObPiece *&piece, sql::ObSQLSessionInfo &session);
     ObPieceMode get_piece_mode(int8_t mode);

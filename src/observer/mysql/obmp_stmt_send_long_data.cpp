@@ -356,7 +356,8 @@ int ObMPStmtSendLongData::store_piece(ObSQLSessionInfo &session)
       LOG_WARN("piece is null.", K(ret), K(piece), K(stmt_id_), K(param_id_));
     } else if (OB_FAIL(piece_cache->add_piece_buffer(piece,
                                                       ObPieceMode::ObInvalidPiece, 
-                                                      &buffer_))) {
+                                                      &buffer_,
+                                                      false /* is_null */))) {
       LOG_WARN("add piece buffer fail.", K(ret), K(stmt_id_));
     } else {
       // send long data do not response.
