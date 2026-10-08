@@ -1491,6 +1491,17 @@ int ObAllVirtualProxySchema::fill_row_(
           cells[cell_idx].set_collation_type(coll_type);
           break;
         }
+        case TENANT_ID: {
+          // Keep tenant_id compatible with existing OBProxy routing queries.
+          cells[cell_idx].set_int(static_cast<int64_t>(table_schema.get_tenant_id()));
+          break;
+        }
+        case LS_ID:
+        case RPC_PORT: {
+          // Reserve column IDs for proxy LS routing.
+          cells[cell_idx].set_null();
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid column id", KR(ret),

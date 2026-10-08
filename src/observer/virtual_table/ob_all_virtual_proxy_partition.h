@@ -43,6 +43,8 @@ class ObAllVirtualProxyPartition : public ObAllVirtualProxyBaseIterator
     SPARE4,
     SPARE5,
     SPARE6,
+    LS_ID,
+    SCHEMA_VERSION,
   };
 
   enum ALL_VIRTUAL_PROXY_PARTITOIN_TABLE_ROWKEY_IDX

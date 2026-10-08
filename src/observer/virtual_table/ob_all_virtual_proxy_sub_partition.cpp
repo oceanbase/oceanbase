@@ -307,6 +307,12 @@ int ObAllVirtualProxySubPartition::fill_row_(const ObSubPartition &sub_partition
         cells[i].set_collation_type(coll_type);
         break;
       }
+    case LS_ID:
+    case SCHEMA_VERSION: {
+        // Reserve column IDs for proxy LS routing.
+        cells[i].set_null();
+        break;
+      }
     default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column id", K(i), KR(ret));

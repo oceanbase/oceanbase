@@ -1060,6 +1060,9 @@ level1_decoded_db_name	varchar(128)	NO		NULL
 level1_decoded_table_name	varchar(256)	NO		NULL	
 level2_decoded_db_name	varchar(128)	NO		NULL	
 level2_decoded_table_name	varchar(256)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+rpc_port	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_plan_cache_plan_explain;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -1225,6 +1228,8 @@ spare3	bigint(20)	NO		NULL
 spare4	varchar(4096)	NO		NULL	
 spare5	varchar(4096)	NO		NULL	
 spare6	varchar(4096)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_proxy_sub_partition;
 Field	Type	Null	Key	Default	Extra
 tenant_name	varchar(128)	NO	PRI	NULL	
@@ -1245,6 +1250,8 @@ spare3	bigint(20)	NO		NULL
 spare4	varchar(4096)	NO		NULL	
 spare5	varchar(4096)	NO		NULL	
 spare6	varchar(4096)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+schema_version	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_trans_lock_stat;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	

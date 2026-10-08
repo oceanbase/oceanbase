@@ -72,6 +72,9 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator
     LEVEL1_DECODED_TABLE_NAME,//varchar
     LEVEL2_DECODED_DB_NAME,//varchar
     LEVEL2_DECODED_TABLE_NAME,//varchar
+    LS_ID,
+    TENANT_ID,
+    RPC_PORT,
   };
 
   enum ObComplexTableType

@@ -10954,6 +10954,9 @@ def_table_schema(
   ('level1_decoded_table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
   ('level2_decoded_db_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
   ('level2_decoded_table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+  ('ls_id', 'int'),
+  ('tenant_id', 'int'),
+  ('rpc_port', 'int'),
   ]
 )
 
@@ -11226,6 +11229,8 @@ def_table_schema(
     ('spare4', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare5', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare6', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('ls_id', 'int'),
+    ('schema_version', 'int'),
   ],
 )
 
@@ -11258,6 +11263,8 @@ def_table_schema(
     ('spare4', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare5', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare6', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('ls_id', 'int'),
+    ('schema_version', 'int'),
   ],
 )
 
@@ -18744,6 +18751,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12626: __all_virtual_java_udf_stats
 # 12627: __all_virtual_ext_plugin_info
 # 12628: __all_virtual_mview_refresh_timer
+# 12629: __all_virtual_proxy_ls_location
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -19355,6 +19363,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_ke
 # 15559: __all_virtual_tenant_memstore_diagnose_info
 # 15560: __all_virtual_jvm_status
 # 15561: __all_virtual_java_udf_stats
+# 15562: __all_virtual_proxy_ls_location
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
