@@ -66,7 +66,9 @@ struct ParquetStatInfo
                K_(avoided_fragmented_range_cnt));
 };
 
-enum FilterCalcMode {
+// Process-local Parquet iterator state; never serialized or persisted.
+enum FilterCalcMode // FARM COMPAT WHITELIST
+{
   DYNAMIC_EAGER_CALC,
   DYNAMIC_LAZY_CALC,
   FORCE_LAZY_CALC,
