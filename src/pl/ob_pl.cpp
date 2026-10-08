@@ -32,6 +32,9 @@
 #include "observer/ob_server.h"
 #include "pl/external_routine/ob_java_udf.h"
 #include "observer/mysql/obmp_utils.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "close_modules/oracle_pl/pl/opaque/ob_pl_xmldom.h"
+#endif
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "share/object/ob_obj_cast.h"
 #include "share/ob_cluster_version.h"
@@ -4434,6 +4437,7 @@ int ObPLExecState::final(int ret)
     DISABLE_SQL_MEMLEAK_GUARD;
     ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
     ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
+    ObPlXmlTypeManager::release_useless_resource(session->get_xml_pl_mngr());
 #endif
   }
 
@@ -4470,9 +4474,11 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     const ObUserDefinedType* user_type = NULL;
     if (!obj.is_pl_extend()) {
       ret = OB_NOT_SUPPORTED;
+      LOG_WARN("generic paramter has a non composite input value", K(ret), K(obj));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic paramter has a non composite input value");
     } else if (OB_ISNULL(composite = reinterpret_cast<ObPLComposite*>(obj.get_ext()))) {
       ret = OB_NOT_SUPPORTED;
+      LOG_WARN("generic parameter has null value pointer", K(ret), K(obj.get_udt_id()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "generic parameter has null value pointer");
     }
     if (OB_FAIL(ret)) {

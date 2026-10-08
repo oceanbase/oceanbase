@@ -1,0 +1,1 @@
+ob_unittest(test_dbms_xmldom test_dbms_xmldom.cpp)
