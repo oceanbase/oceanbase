@@ -348,18 +348,18 @@ int ObLimitOp::inner_get_next_batch(const int64_t max_row_cnt)
       // keep fetching until a different value is found
       batch_cnt = min(max_row_cnt, MY_SPEC.max_batch_size_);
       bool keep_iterating = false;
-      uint32_t matched_row_count = 0;
+      uint32_t valid_batch_size = 0;
       if (OB_FAIL(child_->get_next_batch(batch_cnt, child_brs))) {
           LOG_WARN("child_op failed to get next row",
                    K(ret), K(limit_), K(batch_cnt), K(child_brs->size_));
       } else if (OB_FAIL(compare_value_in_batch(keep_iterating, *(child_brs->skip_),
-                                            child_brs->size_, matched_row_count))) {
+                                            child_brs->size_, valid_batch_size))) {
         LOG_WARN("failed to is row order by item value equal", K(ret));
       }
       brs_.copy(child_brs);
       if (!keep_iterating) {
         brs_.end_ = true;
-        brs_.size_ = matched_row_count;
+        brs_.size_ = valid_batch_size;
       }
       output_cnt_ += brs_.size_;
     } else {
@@ -430,7 +430,7 @@ int ObLimitOp::is_row_order_by_item_value_equal(bool &is_equal)
 int ObLimitOp::compare_value_in_batch(bool &keep_iterating,
                                       const ObBitVector &skip,
                                       const int64_t batch_size,
-                                      uint32_t &row_count_matched)
+                                      uint32_t &valid_batch_size)
 {
   int ret = OB_SUCCESS;
   keep_iterating = true;
@@ -468,8 +468,8 @@ int ObLimitOp::compare_value_in_batch(bool &keep_iterating,
           keep_iterating = (0 == cmp_ret);
         }
       }
-      if (keep_iterating) {
-          row_count_matched++;
+      if (!keep_iterating) {
+        valid_batch_size = row_idx;
       }
     }
   }

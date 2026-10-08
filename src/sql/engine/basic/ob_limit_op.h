@@ -56,9 +56,9 @@ private:
   int convert_limit_percent();
   int is_row_order_by_item_value_equal(bool &is_equal);
   // batch version for routine is_row_order_by_item_value_equal()
-  int compare_value_in_batch(bool &is_iterator_end, const ObBitVector &skip,
+  int compare_value_in_batch(bool &keep_iterating, const ObBitVector &skip,
                              const int64_t batch_size,
-                             uint32_t &row_count_match);
+                             uint32_t &valid_batch_size);
   OB_INLINE int64_t find_last_available_row_cnt(const ObBitVector &skip, const int64_t batch_size)
   {
     int64_t row_num = 0;
