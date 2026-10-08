@@ -12,6 +12,7 @@
 
 #include "ob_remote_log_source.h"
 #include "ob_remote_log_source_allocator.h"    // ObResSrcAlloctor
+#include "lib/utility/ob_tracepoint.h"          // ERRSIM_POINT_DEF
 
 namespace oceanbase
 {
@@ -246,10 +247,13 @@ bool ObRemoteLocationParent::is_valid() const
   return is_valid_() && root_path_.is_valid();
 }
 
+ERRSIM_POINT_DEF(ERRSIM_LOG_RESTORE_LOCATION_BACKWRITE_DEEP_COPY_FAIL);
 int ObRemoteLocationParent::update_locate_info(ObRemoteLogParent &source)
 {
   int ret = OB_SUCCESS;
   ObRemoteLocationParent &dst = static_cast<ObRemoteLocationParent &>(source);
+  // Stage the fallible deep copy so a failure cannot corrupt the shared piece context.
+  ObLogArchivePieceContext bak_piece_context;
   if (OB_UNLIKELY(! dst.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid location parent", K(ret), K(dst));
@@ -258,9 +262,13 @@ int ObRemoteLocationParent::update_locate_info(ObRemoteLogParent &source)
     CLOG_LOG(WARN, "parent changed, just skip", K(dst), KPC(this));
   } else if (OB_UNLIKELY(! dst.piece_context_.is_valid())) {
     CLOG_LOG(TRACE, "piece_context not valid, just skip", K(dst));
-  } else if (OB_FAIL(dst.piece_context_.deep_copy_to(piece_context_))) {
-    CLOG_LOG(WARN, "deep copy to piece context failed", K(ret));
-    piece_context_.reset_locate_info();
+  } else if (OB_FAIL(ERRSIM_LOG_RESTORE_LOCATION_BACKWRITE_DEEP_COPY_FAIL)) {
+    CLOG_LOG(WARN, "ERRSIM force location backwrite deep copy failed",
+        K(ret), K(dst), KPC(this));
+  } else if (OB_FAIL(dst.piece_context_.deep_copy_to(bak_piece_context))) {
+    CLOG_LOG(WARN, "deep copy to staged piece context failed", K(ret), K(dst), KPC(this));
+  } else if (OB_FAIL(piece_context_.update_locate_info(bak_piece_context))) {
+    CLOG_LOG(WARN, "update piece context locate info failed", K(ret), K(dst), KPC(this));
   } else {
     CLOG_LOG(TRACE, "update locate info succ", KPC(this));
   }

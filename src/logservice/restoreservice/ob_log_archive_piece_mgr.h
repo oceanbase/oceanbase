@@ -97,6 +97,9 @@ public:
 
   int deep_copy_to(ObLogArchivePieceContext &other);
 
+  // Commit mutable locate state after the source context has been copied successfully.
+  int update_locate_info(const ObLogArchivePieceContext &source);
+
   void reset_locate_info();
 
   int get_max_archive_log(palf::LSN &lsn, share::SCN &scn);

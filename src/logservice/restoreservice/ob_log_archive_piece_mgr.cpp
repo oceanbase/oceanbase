@@ -336,6 +336,28 @@ int ObLogArchivePieceContext::deep_copy_to(ObLogArchivePieceContext &other)
   return ret;
 }
 
+int ObLogArchivePieceContext::update_locate_info(const ObLogArchivePieceContext &source)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited_
+      || !archive_dest_.is_valid()
+      || !source.is_valid()
+      || id_ != source.id_
+      || archive_dest_ != source.archive_dest_
+      || backup_archive_dest_ != source.backup_archive_dest_)) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "piece context not match", K(ret), K(source), KPC(this));
+  } else {
+    locate_round_ = source.locate_round_;
+    dest_id_ = source.dest_id_;
+    min_round_id_ = source.min_round_id_;
+    max_round_id_ = source.max_round_id_;
+    round_context_ = source.round_context_;
+    inner_piece_context_ = source.inner_piece_context_;
+  }
+  return ret;
+}
+
 void ObLogArchivePieceContext::reset_locate_info()
 {
   locate_round_ = false;
