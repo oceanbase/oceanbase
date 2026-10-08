@@ -1525,6 +1525,7 @@ ObExprRandCanonical::calc_random_expr_canonical,                    /* 890 */
   NULL, // ObExprOraIsCreatingNestedTable::eval_ora_is_creating_nested_table, /* 929 */
   NULL, // ObExprOraWithGrantOption::eval_ora_with_grant_option,       /* 930 */
   NULL, // ObExprOraDesEncryptedPassword::eval_ora_des_encrypted_password, /* 931 */
+  NULL, // ObExprDslMultiValueRange::eval_dsl_multi_value_range,        /* 932 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
