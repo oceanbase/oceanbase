@@ -1218,7 +1218,7 @@ int ObVecIdxMergeTask::check_and_wait_write()
   const static int64_t MAX_WAIT_CNT = 100;
   int64_t check_cnt = 0;
   const ObTabletID data_tablet_id = new_adapter_->get_data_tablet_id();
-  const int64_t ts = ctx_->task_status_.target_scn_.get_val_for_sql();
+  const int64_t wait_threshold_us = ctx_->task_status_.target_scn_.convert_to_ts();
   const ObLSID &ls_id = ls_id_;
   transaction::ObTransService *txs = MTL(transaction::ObTransService *);
   ObLSService *ls_service = MTL(ObLSService *);
@@ -1228,25 +1228,29 @@ int ObVecIdxMergeTask::check_and_wait_write()
   while(OB_SUCC(ret) && check_cnt < MAX_WAIT_CNT && ! snapshot_version.is_valid()) {
     if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
       LOG_WARN("get ls failed", K(ls_id));
-    } else if (OB_FAIL(ls_handle.get_ls()->check_modify_time_elapsed(data_tablet_id, ts, tx_id))) {
+    } else if (OB_FAIL(ls_handle.get_ls()->check_modify_time_elapsed(
+                   data_tablet_id, wait_threshold_us, tx_id))) {
       if (OB_EAGAIN != ret) {
-        LOG_WARN("check modify time elapsed failed", K(ret), K(ts), K(tx_id), K(data_tablet_id), K(ls_id));
+        LOG_WARN("check modify time elapsed failed", K(ret), K(wait_threshold_us), K(tx_id),
+                 K(data_tablet_id), K(ls_id));
       } else {
         ret = OB_SUCCESS;
         ob_usleep(WAIT_US);
-        LOG_INFO("there are some write trans donot commit, so need wait", K(ls_id), K(data_tablet_id), K(ts));
+        LOG_INFO("there are some write trans donot commit, so need wait", K(ls_id),
+                 K(data_tablet_id), K(wait_threshold_us));
       }
     } else if (OB_FAIL(txs->get_max_commit_version(snapshot_version))) {
       LOG_WARN("fail to get max commit version", K(ret));
     } else {
       ctx_->task_status_.target_scn_ = snapshot_version;
-      LOG_INFO("check success", K(snapshot_version), K(data_tablet_id), K(ts), K(tx_id));
+      LOG_INFO("check success", K(snapshot_version), K(data_tablet_id), K(wait_threshold_us), K(tx_id));
     }
     ++check_cnt;
   }
   if (OB_SUCC(ret) && check_cnt >= MAX_WAIT_CNT && ! snapshot_version.is_valid()) {
     ret = OB_EAGAIN;
-    LOG_WARN("check and wait write timeout, need retry", K(ret), K(data_tablet_id), K(ts), K(tx_id));
+    LOG_WARN("check and wait write timeout, need retry", K(ret), K(data_tablet_id),
+             K(wait_threshold_us), K(tx_id));
   }
   return ret;
 }

@@ -1243,8 +1243,8 @@ int ObPluginVectorIndexUtils::get_read_scn(bool is_leader, ObLSID &ls_id, SCN &t
     LOG_WARN("unexpected nullptr", K(ret), KP(ls_svr), K(ls_id));
   } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::SHARE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
-  } else  if (is_leader && OB_FAIL(target_scn.convert_from_ts(ObTimeUtility::fast_current_time()))) {
-    LOG_WARN("failed to convert ts to scn", K(ret));
+  } else if (is_leader && OB_FAIL(get_current_read_scn(target_scn))) {
+    LOG_WARN("failed to get current read scn", K(ret), K(ls_id));
   } else if (!is_leader && FALSE_IT(target_scn = ls_handle.get_ls()->get_ls_wrs_handler()->get_ls_weak_read_ts())) {
   }
   return ret;
