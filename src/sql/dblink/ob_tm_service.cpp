@@ -10,6 +10,7 @@
 
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/tx/ob_xa_service.h"
+#include "sql/ob_sql_trans_control.h"
 
 #define USING_LOG_PREFIX SQL
 
@@ -196,6 +197,7 @@ int ObTMService::tm_commit(ObExecContext &exec_ctx,
     LOG_WARN("not support tx free route for dblink trans");
   } else {
     tx_id = tx_desc->tid();
+    ObSqlTransControl::process_cursor_when_end_trans(my_session, tx_id.get_id());
     {
       ObSQLSessionInfo::LockGuard data_lock_guard(my_session->get_thread_data_lock());
       my_session->get_tx_desc() = NULL;

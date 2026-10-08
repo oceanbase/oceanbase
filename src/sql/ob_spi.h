@@ -960,6 +960,13 @@ public:
                             uint64_t routine_id,
                             bool ignore);
 
+#ifdef OB_BUILD_ORACLE_PL
+  static int register_tx_streaming_cursor_if_needed(ObSQLSessionInfo &session_info,
+                                                    pl::ObPLCursorInfo &cursor,
+                                                    uint64_t package_id,
+                                                    uint64_t routine_id,
+                                                    int64_t cursor_index);
+#endif
   static int convert_to_unstreaming_cursor(pl::ObPLExecCtx *ctx, ObSQLSessionInfo &session, int64_t cursor_index, int64_t tx_id, bool &converted);
   static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 
