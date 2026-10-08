@@ -344,7 +344,7 @@ int ObExprConvertTZ::eval_convert_tz(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     res.set_null();
   } else {
     int64_t timestamp_data = timestamp->get_datetime();
-    if (expr.args_[1]->is_const_expr() && expr.args_[2]->is_const_expr()) {
+    if (expr.args_[1]->is_static_const_expr() && expr.args_[2]->is_static_const_expr()) {
       if(OB_FAIL(calc_convert_tz_const(expr, ctx, timestamp_data, time_zone_s->get_string(), time_zone_d->get_string(),
                                   ctx.exec_ctx_.get_my_session(), res))) {
         LOG_WARN("calc convert tz zone failed", K(ret));
@@ -504,7 +504,7 @@ int ObExprConvertTZ::calc_convert_tz_vector(const ObExpr &expr,
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
-    if (expr.args_[1]->is_const_expr() && expr.args_[2]->is_const_expr()) {
+    if (expr.args_[1]->is_static_const_expr() && expr.args_[2]->is_static_const_expr()) {
       if (ObDateTimeTC == arg_tc) {
         DISPATCH_CONVERT_TZ_VECTOR_FUNC(convert_tz_vector_const, DateTime);
       }
