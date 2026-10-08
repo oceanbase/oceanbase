@@ -923,6 +923,12 @@ DEF_TIME(balancer_idle_time, OB_TENANT_PARAMETER, "10s", "[10s,]",
          "the time interval between the schedules of the tenant load-balancing task. "
          "Range: [10s, +∞)",
          ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_balancer_statistic_bg_stat_interval, OB_TENANT_PARAMETER, "10m", "[0s,)",
+         "the minimum time interval between periodic balance group statistics refreshes "
+         "when the tenant schema changes or transfers occur. "
+         "0 disables background statistics refreshes, including the initial refresh on thread startup. "
+         "Range: [0s, +∞)",
+         ObParameterAttr(Section::LOAD_BALANCE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(partition_balance_schedule_interval, OB_TENANT_PARAMETER, "2h", "[0s,]",
          "the time interval between generate partition balance task. "
          "The value should be no less than balancer_idle_time to enable partition balance. "
