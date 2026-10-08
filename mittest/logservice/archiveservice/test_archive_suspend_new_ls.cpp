@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 #include <unistd.h>
+#include "lib/time/ob_time_utility.h"
 
 #define private public
 #define protected public
@@ -33,6 +34,8 @@ namespace
 static const int64_t WAIT_ARCHIVE_STATE_RETRY_COUNT = 120;
 static const int64_t WAIT_ARCHIVE_READY_RETRY_COUNT = 360;
 static const useconds_t WAIT_ARCHIVE_STATE_INTERVAL_US = 500 * 1000;
+static const int64_t WAIT_LS_DESTROY_TIMEOUT_US = 30 * 1000 * 1000;
+static const useconds_t WAIT_LS_DESTROY_INTERVAL_US = 100 * 1000;
 
 int configure_archive_dest(ObSimpleArchive &test, const bool is_mandatory)
 {
@@ -514,6 +517,40 @@ private:
                 gen_meta_tenant_id(tenant_id_), sql.ptr(), affected_rows))) {
           ARCHIVE_LOG(WARN, "delete all ls election reference info failed", K(ret),
               K(tenant_id_), K(created_ls_id_));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+        if (OB_FAIL(tenant_guard.switch_to(tenant_id_))) {
+          ARCHIVE_LOG(WARN, "switch tenant before waiting for ls destroy failed", K(ret),
+              K(tenant_id_), K(created_ls_id_));
+        } else {
+          storage::ObLSService *ls_service = MTL(storage::ObLSService *);
+          const int64_t deadline = ObTimeUtility::current_monotonic_time()
+              + WAIT_LS_DESTROY_TIMEOUT_US;
+          bool waiting = true;
+          if (OB_ISNULL(ls_service)) {
+            ret = OB_ERR_UNEXPECTED;
+            ARCHIVE_LOG(ERROR, "ls service is NULL", K(ret), K(tenant_id_));
+          } else {
+            // remove_ls() only queues safe destruction. Do not let the next test
+            // reuse this ls_id until the old LS and its transaction manager are gone.
+            while (OB_SUCC(ret) && waiting) {
+              if (OB_FAIL(ls_service->check_ls_waiting_safe_destroy(created_ls_id_, waiting))) {
+                ARCHIVE_LOG(WARN, "check ls waiting safe destroy failed", K(ret),
+                    K(tenant_id_), K(created_ls_id_));
+              } else if (waiting) {
+                if (ObTimeUtility::current_monotonic_time() >= deadline) {
+                  ret = OB_TIMEOUT;
+                  ARCHIVE_LOG(WARN, "wait ls safe destroy timed out", K(ret),
+                      K(tenant_id_), K(created_ls_id_));
+                } else {
+                  usleep(WAIT_LS_DESTROY_INTERVAL_US);
+                }
+              }
+            }
+          }
         }
       }
 
