@@ -380,6 +380,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 594	__all_optstat_catalog_global_prefs	0	201001	1
 596	__all_table_opt_stat_invalidate_plan	0	201001	1
 604	__all_mview_refresh_pending_task	0	201001	1
+607	__all_tenant_pl_cache_keep_intent	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1

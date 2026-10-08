@@ -9387,6 +9387,25 @@ def_table_schema(
 # 605: __all_backup_archive_piece_task
 # 606: __all_backup_archive_piece_task_history
 
+def_table_schema(
+  owner = 'qinyudongfang.qydf',
+  table_name = '__all_tenant_pl_cache_keep_intent',
+  table_id = '607',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('object_id', 'uint'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('package_spec_id', 'uint'),
+    ('package_body_id', 'uint'),
+    ('database_id', 'uint'),
+    ('object_name', 'varchar:OB_MAX_OBJECT_NAME_LENGTH'),
+  ],
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################

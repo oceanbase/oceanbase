@@ -449,6 +449,7 @@
 # 594: __all_optstat_catalog_global_prefs
 # 596: __all_table_opt_stat_invalidate_plan
 # 604: __all_mview_refresh_pending_task
+# 607: __all_tenant_pl_cache_keep_intent
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
