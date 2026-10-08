@@ -3,8 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "unittest/sql/engine/op_tests/ob_op_test_kit.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_engine.h"
+#define USING_LOG_PREFIX SQL_ENG
+#define private public
 #include "sql/engine/window_function/win_expr.h"
+#undef private
+#include "unittest/sql/engine/op_tests/ob_op_test_kit.h"
 // Note: ob_op_test_datahub.h excluded due to macro conflicts with #define private public
 // Only include when testing datahub-dependent operators (Window Function with single_part_parallel)
 // #include "unittest/sql/engine/op_tests/ob_op_test_datahub.h"
@@ -25,6 +29,139 @@ namespace sql
  * for window function correctness.
  */
 class WindowFunctionOpTest : public OpTestKit {};
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsMissingParamReuse)
+{
+  auto &alloc = engine_.get_allocator();
+  ObWindowFunctionVecSpec spec(alloc, PHY_VEC_WINDOW_FUNCTION);
+  spec.plan_ = &engine_.get_phy_plan();
+  spec.max_batch_size_ = 2;
+  ObWindowFunctionVecOp op(engine_.get_exec_ctx(), spec, nullptr);
+  ObExpr stored_column;
+  ObExpr param_expr;
+  stored_column.datum_meta_.type_ = ObIntType;
+  ASSERT_EQ(OB_SUCCESS, spec.all_expr_.init(1));
+  ASSERT_EQ(OB_SUCCESS, spec.all_expr_.push_back(&stored_column));
+  WinFuncInfo info;
+  info.set_allocator(&alloc);
+  info.is_ignore_null_ = true;
+  ASSERT_EQ(OB_SUCCESS, info.init(1, 0, 0));
+  ASSERT_EQ(OB_SUCCESS, info.param_exprs_.push_back(&param_expr));
+  WinFuncColExpr win_col(info, op, 0, MTL_ID());
+  RowMeta row_meta(&alloc);
+  ASSERT_EQ(OB_SUCCESS, row_meta.init(spec.all_expr_, 0));
+  winfunc::RowStores stores;
+  winfunc::RowStore rows(MTL_ID(), &alloc, &alloc, stores);
+  ASSERT_EQ(OB_SUCCESS, rows.init(2, row_meta, lib::ObMemAttr(MTL_ID(), "WinReuseTest"), 1 << 20, false));
+  winfunc::WinExprEvalCtx ctx(rows, win_col, MTL_ID());
+
+  // An empty, initialized store makes any accidental NULL-bitmap read return an error.
+  // A missing parameter must reject reuse before accessing the store in either direction.
+  for (bool from_first : {false, true}) {
+    SCOPED_TRACE(from_first);
+    info.is_from_first_ = from_first;
+    winfunc::NthValue nth;
+    const winfunc::Frame previous = from_first ? winfunc::Frame(2, 4) : winfunc::Frame(0, 1);
+    const winfunc::Frame current = from_first ? winfunc::Frame(1, 4) : winfunc::Frame(0, 2);
+    const winfunc::Frame next = from_first ? winfunc::Frame(0, 4) : winfunc::Frame(0, 3);
+    nth.store_null_for_reuse(&previous);
+    bool may_reuse = true;
+    bool may_store = false;
+    ASSERT_EQ(OB_SUCCESS, nth.may_reuse_last_result(ctx, current, info, 1, may_reuse, may_store));
+    EXPECT_EQ(INT64_MAX, nth.param_index_);
+    EXPECT_FALSE(may_reuse);
+    EXPECT_TRUE(may_store);
+    EXPECT_TRUE(winfunc::Frame::same_frame(previous, nth.last_frame_));
+
+    // The cached miss must also avoid a store read for the next changed frame.
+    ASSERT_EQ(OB_SUCCESS, nth.may_reuse_last_result(ctx, next, info, 1, may_reuse, may_store));
+    EXPECT_EQ(INT64_MAX, nth.param_index_);
+    EXPECT_FALSE(may_reuse);
+    EXPECT_TRUE(may_store);
+
+    // After normal evaluation saves the new result, peer rows can still reuse it.
+    nth.store_null_for_reuse(&current);
+    ASSERT_EQ(OB_SUCCESS, nth.may_reuse_last_result(ctx, current, info, 1, may_reuse, may_store));
+    EXPECT_TRUE(may_reuse);
+    EXPECT_TRUE(may_store);
+  }
+}
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsLastValueExprRescan)
+{
+  auto result = window_function_test()
+                  .table("t", "p int, k int, v int")
+                  .select("p, k, last_value(case when v is not null then v + 1 end) ignore nulls "
+                          "over (partition by p order by k range between unbounded preceding and current row),"
+                          "last_value(v) ignore nulls "
+                          "over (partition by p order by k range between unbounded preceding and current row)")
+                  .with_sorted_data({{1, 1, NULL_VAL},
+                                     {1, 2, 20},
+                                     {1, 2, 20},
+                                     {1, 3, NULL_VAL},
+                                     {1, 4, 40},
+                                     {1, 5, NULL_VAL},
+                                     {2, 1, NULL_VAL},
+                                     {2, 2, NULL_VAL},
+                                     {3, 1, 10},
+                                     {3, 2, 20}},
+                                    "p ASC, k ASC")
+                  .with_batch_size(2)
+                  .with_rescan_times(2)
+                  .enable_dual_format_check()
+                  .run(engine_);
+  ASSERT_EQ(OB_SUCCESS, result.get_ret_code());
+  ASSERT_EQ(10, result.row_count());
+  EXPECT_EQ(2, result.get_rescan_count());
+  EXPECT_TRUE(result.verify_ordered({{1, 1, NULL_VAL, NULL_VAL},
+                                     {1, 2, 21, 20},
+                                     {1, 2, 21, 20},
+                                     {1, 3, 21, 20},
+                                     {1, 4, 41, 40},
+                                     {1, 5, 41, 40},
+                                     {2, 1, NULL_VAL, NULL_VAL},
+                                     {2, 2, NULL_VAL, NULL_VAL},
+                                     {3, 1, 11, 10},
+                                     {3, 2, 21, 20}}));
+}
+
+TEST_F(WindowFunctionOpTest, IgnoreNullsFirstValueExprRescan)
+{
+  auto result = window_function_test()
+                  .table("t", "p int, k int, v int")
+                  .select("p, k, first_value(case when v is not null then v + 1 end) ignore nulls "
+                          "over (partition by p order by k range between current row and unbounded following),"
+                          "first_value(v) ignore nulls "
+                          "over (partition by p order by k range between current row and unbounded following)")
+                  .with_sorted_data({{1, 1, NULL_VAL},
+                                     {1, 2, 20},
+                                     {1, 2, 20},
+                                     {1, 3, NULL_VAL},
+                                     {1, 4, 40},
+                                     {1, 5, NULL_VAL},
+                                     {2, 1, NULL_VAL},
+                                     {2, 2, NULL_VAL},
+                                     {3, 1, 10},
+                                     {3, 2, 20}},
+                                    "p ASC, k ASC")
+                  .with_batch_size(2)
+                  .with_rescan_times(2)
+                  .enable_dual_format_check()
+                  .run(engine_);
+  ASSERT_EQ(OB_SUCCESS, result.get_ret_code());
+  ASSERT_EQ(10, result.row_count());
+  EXPECT_EQ(2, result.get_rescan_count());
+  EXPECT_TRUE(result.verify_ordered({{1, 1, 21, 20},
+                                     {1, 2, 21, 20},
+                                     {1, 2, 21, 20},
+                                     {1, 3, 41, 40},
+                                     {1, 4, 41, 40},
+                                     {1, 5, NULL_VAL, NULL_VAL},
+                                     {2, 1, NULL_VAL, NULL_VAL},
+                                     {2, 2, NULL_VAL, NULL_VAL},
+                                     {3, 1, 11, 10},
+                                     {3, 2, 21, 20}}));
+}
 
 TEST_F(WindowFunctionOpTest, NullExtremumFrameRestart)
 {

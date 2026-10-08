@@ -538,8 +538,15 @@ int NthValue::may_reuse_last_result(
           break;
         }
       }
+      if (-1 == param_index_) {
+        // Cache a missing row-store column to avoid repeating the lookup for expressions.
+        param_index_ = INT64_MAX;
+      }
     }
-    if (OB_FAIL(ctx.input_rows_.is_all_null(param_index_, start_idx, end_idx, may_reused))) {
+    if (INT64_MAX == param_index_) {
+      // The parameter has no stored NULL bitmap; evaluate the changed frame normally.
+      may_reused = false;
+    } else if (OB_FAIL(ctx.input_rows_.is_all_null(param_index_, start_idx, end_idx, may_reused))) {
       LOG_WARN("failed to check if rows all nulls", K(ret));
     } else if (may_reused) {
       // update last frame
