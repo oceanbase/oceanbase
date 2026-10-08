@@ -615,6 +615,7 @@ public:
   static const ObRawExpr *skip_inner_added_expr(const ObRawExpr *expr);
 
   static ObRawExpr *skip_implicit_cast(ObRawExpr *e);
+  static ObRawExpr *skip_sensitive_field(ObRawExpr *e);
 
   static ObRawExpr *skip_inner_added_expr(ObRawExpr *expr);
   static const ObColumnRefRawExpr *get_column_ref_expr_recursively(const ObRawExpr *expr);

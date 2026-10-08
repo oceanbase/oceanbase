@@ -31,6 +31,17 @@ public:
                                 int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const override;
 protected:
+  static int prepare_eval_param(const ObExpr &expr,
+                                ObEvalCtx &ctx,
+                                const ObString &func_name,
+                                share::ObCipherOpMode &op_mode,
+                                bool &is_for_sensitive_rule,
+                                bool &is_ecb);
+  static int normalize_iv(const ObExpr &expr,
+                          const bool is_for_sensitive_rule,
+                          const bool is_ecb,
+                          const ObString &input_iv,
+                          ObString &iv_str);
   static const int64_t KEY_ID_LENGTH = sizeof(uint64_t);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprEnhancedAes);
@@ -42,6 +53,10 @@ public:
   explicit ObExprEnhancedAesEncrypt(common::ObIAllocator &alloc);
   virtual ~ObExprEnhancedAesEncrypt() {}
   static int eval_aes_encrypt(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_aes_encrypt_vector(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     const ObBitVector &skip,
+                                     const EvalBound &bound);
   virtual int calc_result_typeN(ObExprResType &type,
                                 ObExprResType *types,
                                 int64_t param_num,
@@ -50,6 +65,14 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
+  static int encrypt_one_cell(const ObExpr &expr,
+                              ObEvalCtx &ctx,
+                              const share::ObCipherOpMode op_mode,
+                              const ObString &src_str,
+                              const ObString &iv_str,
+                              const ObString &master_key,
+                              const uint64_t master_key_id,
+                              ObString &result);
   DISALLOW_COPY_AND_ASSIGN(ObExprEnhancedAesEncrypt);
 };
 

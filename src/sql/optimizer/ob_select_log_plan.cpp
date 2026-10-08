@@ -2449,6 +2449,7 @@ int ObSelectLogPlan::get_distinct_exprs(const ObLogicalOperator *top,
     LOG_WARN("get unexpected null", K(select_stmt), K(top), K(ret));
   } else {
     ObRawExpr *select_expr = NULL;
+    ObRawExpr *distinct_expr = NULL;
     ObSEArray<ObRawExpr *, 8> new_distinct_exprs;
     for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
       bool is_const = false;
@@ -2456,7 +2457,10 @@ int ObSelectLogPlan::get_distinct_exprs(const ObLogicalOperator *top,
       if (OB_ISNULL(select_expr)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("get unexpected null", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::is_const_expr(select_expr,
+      } else if (OB_ISNULL(distinct_expr = ObRawExprUtils::skip_sensitive_field(select_expr))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), KPC(select_expr));
+      } else if (OB_FAIL(ObOptimizerUtil::is_const_expr(distinct_expr,
                                                         top->get_output_equal_sets(),
                                                         top->get_output_const_exprs(),
                                                         get_onetime_query_refs(),
@@ -2464,7 +2468,7 @@ int ObSelectLogPlan::get_distinct_exprs(const ObLogicalOperator *top,
         LOG_WARN("failed to check whether is const expr", K(ret));
       } else if (is_const) {
         //skip it
-      } else if (OB_FAIL(reduce_exprs.push_back(select_expr))) {
+      } else if (OB_FAIL(reduce_exprs.push_back(distinct_expr))) {
         LOG_WARN("push expr to distinct exprs failed", K(ret));
       } else { /*do nothing*/ }
     }

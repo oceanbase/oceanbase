@@ -4653,6 +4653,18 @@ ObRawExpr *ObRawExprUtils::skip_implicit_cast(ObRawExpr *e)
   return res;
 }
 
+ObRawExpr *ObRawExprUtils::skip_sensitive_field(ObRawExpr *e)
+{
+  ObRawExpr *res = e;
+  while (res != NULL
+         && T_FUN_SYS_ENHANCED_AES_ENCRYPT == res->get_expr_type()
+         && ob_invalid_mode != res->get_encryption_mode()) {
+    // this implicit cast is added for sensitive field encryption, it's safe to skip
+    res = skip_implicit_cast(res->get_param_expr(0));
+  }
+  return res;
+}
+
 ObRawExpr *ObRawExprUtils::skip_inner_added_expr(ObRawExpr *expr)
 {
   expr = skip_implicit_cast(expr);

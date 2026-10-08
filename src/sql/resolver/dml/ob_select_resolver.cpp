@@ -1371,6 +1371,7 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   OZ( resolve_vector_index_params(parse_tree.children_[PARSE_SELECT_VECTOR_INDEX_PARAMS]));
   OZ( resolve_fetch_clause(parse_tree.children_[PARSE_SELECT_FETCH]) );
   OZ( resolve_check_option_clause(parse_tree.children_[PARSE_SELECT_WITH_CHECK_OPTION]) );
+  OZ( resolve_sensitive_rule(select_stmt) );
   OZ( resolve_into_clause(ObResolverUtils::get_select_into_node(parse_tree)) );
   OZ( resolve_for_update_clause(parse_tree.children_[PARSE_SELECT_FOR_UPD]) );
 
@@ -2783,11 +2784,6 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(resolve_sensitive_rule(get_select_stmt()))) {
-      LOG_WARN("failed to resolve sensitive rule", K(ret));
-    }
-  }
   return ret;
 }
 
