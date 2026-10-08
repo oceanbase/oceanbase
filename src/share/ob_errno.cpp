@@ -5291,6 +5291,20 @@ static const _error _error_OB_NON_RO_SELECT_DISABLE_TIMER = {
       .ob_str_error          = "OBE-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer",
       .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer"
 };
+static const _error _error_OB_ERR_MUST_CHANGE_PASSWORD_LOGIN = {
+      .error_name            = "OB_ERR_MUST_CHANGE_PASSWORD_LOGIN",
+      .error_cause           = "Internal Error",
+      .error_solution        = "Contact OceanBase Support",
+      .mysql_errno           = ER_MUST_CHANGE_PASSWORD_LOGIN,
+      .sqlstate              = "HY000",
+      .str_error             = "Your password has expired. To log in you must change it using a client that supports expired passwords.",
+      .str_user_error        = "Your password has expired. To log in you must change it using a client that supports expired passwords.",
+      .oracle_errno          = 600,
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -4415, Your password has expired. To log in you must change it using a client that supports expired passwords.",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -4415, Your password has expired. To log in you must change it using a client that supports expired passwords.",
+      .ob_str_error          = "OBE-00600: internal error code, arguments: -4415, Your password has expired. To log in you must change it using a client that supports expired passwords.",
+      .ob_str_user_error     = "OBE-00600: internal error code, arguments: -4415, Your password has expired. To log in you must change it using a client that supports expired passwords."
+};
 static const _error _error_OB_IMPORT_NOT_IN_SERVER = {
       .error_name            = "OB_IMPORT_NOT_IN_SERVER",
       .error_cause           = "Internal Error",
@@ -36407,6 +36421,7 @@ struct ObStrErrorInit
     _errors[-OB_OUT_OF_MAX_EXECUTION_TIME] = &_error_OB_OUT_OF_MAX_EXECUTION_TIME;
     _errors[-OB_ERR_MAX_EXECUTION_TIME_TRUNCATED] = &_error_OB_ERR_MAX_EXECUTION_TIME_TRUNCATED;
     _errors[-OB_NON_RO_SELECT_DISABLE_TIMER] = &_error_OB_NON_RO_SELECT_DISABLE_TIMER;
+    _errors[-OB_ERR_MUST_CHANGE_PASSWORD_LOGIN] = &_error_OB_ERR_MUST_CHANGE_PASSWORD_LOGIN;
     _errors[-OB_IMPORT_NOT_IN_SERVER] = &_error_OB_IMPORT_NOT_IN_SERVER;
     _errors[-OB_CONVERT_ERROR] = &_error_OB_CONVERT_ERROR;
     _errors[-OB_BYPASS_TIMEOUT] = &_error_OB_BYPASS_TIMEOUT;
@@ -38636,7 +38651,7 @@ namespace oceanbase
 {
 namespace common
 {
-int g_all_ob_errnos[2570] = {
+int g_all_ob_errnos[2571] = {
   0,      -4000,  -4001,  -4002,  -4003,  -4004,  -4005,  -4006,  -4007,  -4008,  -4009,  -4010,  -4011,  -4012,
   -4013,  -4014,  -4015,  -4016,  -4017,  -4018,  -4019,  -4020,  -4021,  -4022,  -4023,  -4024,  -4025,  -4026,
   -4027,  -4028,  -4029,  -4030,  -4031,  -4032,  -4033,  -4034,  -4035,  -4036,  -4037,  -4038,  -4039,  -4041,
@@ -38663,7 +38678,7 @@ int g_all_ob_errnos[2570] = {
   -4361,  -4362,  -4363,  -4364,  -4365,  -4366,  -4367,  -4368,  -4369,  -4370,  -4371,  -4372,  -4373,  -4374,
   -4375,  -4376,  -4377,  -4378,  -4379,  -4380,  -4381,  -4382,  -4383,  -4385,  -4386,  -4387,  -4388,  -4389,
   -4390,  -4391,  -4392,  -4393,  -4394,  -4395,  -4396,  -4397,  -4398,  -4399,  -4400,  -4401,  -4402,  -4403,
-  -4404,  -4405,  -4406,  -4407,  -4408,  -4409,  -4410,  -4411,  -4412,  -4413,  -4414,  -4505,  -4507,  -4510,
+  -4404,  -4405,  -4406,  -4407,  -4408,  -4409,  -4410,  -4411,  -4412,  -4413,  -4414,  -4415,  -4505,  -4507,  -4510,
   -4512,  -4515,  -4517,  -4518,  -4519,  -4523,  -4524,  -4525,  -4526,  -4527,  -4528,  -4529,  -4530,  -4531,
   -4532,  -4533,  -4537,  -4538,  -4539,  -4540,  -4541,  -4542,  -4543,  -4544,  -4545,  -4546,  -4547,  -4548,
   -4549,  -4550,  -4551,  -4552,  -4553,  -4554,  -4600,  -4601,  -4602,  -4603,  -4604,  -4605,  -4606,  -4607,

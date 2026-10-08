@@ -5193,6 +5193,8 @@ int ObCreateUserArg::assign(const ObCreateUserArg &other)
   is_create_role_ = other.is_create_role_;
   default_tablespace_name_ = other.default_tablespace_name_;
   default_tablegroup_name_ = other.default_tablegroup_name_;
+  password_expire_option_ = other.password_expire_option_;
+  password_lifetime_us_ = other.password_lifetime_us_;
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(user_infos_.assign(other.user_infos_))) {
@@ -5209,7 +5211,9 @@ OB_SERIALIZE_MEMBER((ObCreateUserArg, ObDDLArg),
                     primary_zone_,
                     is_create_role_,
                     default_tablespace_name_,
-                    default_tablegroup_name_);
+                    default_tablegroup_name_,
+                    password_expire_option_,
+                    password_lifetime_us_);
 
 bool ObDropUserArg::is_valid() const
 {

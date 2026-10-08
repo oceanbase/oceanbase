@@ -30,6 +30,7 @@
 #include "share/restore/ob_physical_restore_info.h"
 #include "share/schema/ob_error_info.h"
 #include "share/schema/ob_constraint.h"
+#include "share/schema/ob_password_expire_option.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_udf.h"
 #include "share/schema/ob_dependency_info.h"
@@ -6500,7 +6501,10 @@ struct ObCreateUserArg : public ObDDLArg
 public:
   ObCreateUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_not_exist_(false),
                       creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false),
-                      default_tablespace_name_(), default_tablegroup_name_()
+                      default_tablespace_name_(), default_tablegroup_name_(),
+                      password_expire_option_(share::schema::PASSWORD_EXPIRE_NONE),
+                      password_lifetime_us_(
+                          static_cast<int64_t>(share::schema::PASSWORD_EXPIRE_DEFAULT))
   {}
   virtual ~ObCreateUserArg()
   {}
@@ -6517,6 +6521,8 @@ public:
   bool is_create_role_;
   common::ObString default_tablespace_name_; // only used in oracle mode
   common::ObString default_tablegroup_name_; // reserved for Oracle user tablegroups
+  share::schema::ObPasswordExpireOption password_expire_option_;
+  int64_t password_lifetime_us_;
 };
 
 struct ObDropUserArg : public ObDDLArg

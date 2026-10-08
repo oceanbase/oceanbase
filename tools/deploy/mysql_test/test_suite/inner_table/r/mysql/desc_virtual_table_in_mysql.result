@@ -2097,6 +2097,8 @@ flags	bigint(20)	NO		0
 plugin	varchar(64)	NO			
 old_password	varchar(128)	NO			
 old_password_start_time	bigint(20)	NO		-1	
+password_expired	tinyint(4)	NO		0	
+password_lifetime	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user;
 IF(count(*) >= 0, 1, 0)
 1

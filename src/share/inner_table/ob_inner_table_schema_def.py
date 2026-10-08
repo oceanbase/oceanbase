@@ -482,6 +482,8 @@ all_user_def = dict(
       ('plugin', 'varchar:64', 'false', ''),
       ('old_password', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
       ('old_password_start_time', 'int', 'false', 'OB_INVALID_TIMESTAMP'),
+      ('password_expired', 'bool', 'false', 'false'),
+      ('password_lifetime', 'int', 'true', 'NULL'),
     ],
 )
 
