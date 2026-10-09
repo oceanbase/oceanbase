@@ -88,11 +88,13 @@ protected:
   int fill_specify_scn_info(common::ObIAllocator &alloc, uint64_t sepcify_scn);
 
 private:
-  int copy_basic_opt_stat(ObOptStat &src_opt_stat,
+  int copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &column_params,
+                          ObOptStat &src_opt_stat,
                           ObIArray<ObOptStat> &dst_opt_stats);
 
   int copy_basic_col_stats(const int64_t cur_row_cnt,
                            const int64_t total_row_cnt,
+                           const ObIArray<ObColumnStatParam> &column_params,
                            ObIArray<ObOptColumnStat *> &src_col_stats,
                            ObIArray<ObOptColumnStat *> &dst_col_stats);
 

@@ -464,7 +464,7 @@ int ObStatsEstimator::do_estimate(const ObOptStatGatherParam &gather_param,
             if (OB_FAIL(decode(allocator_))) {
               LOG_WARN("failed to decode results", K(ret));
             } else if (need_copy_basic_stat &&
-                       OB_FAIL(copy_basic_opt_stat(src_opt_stat, dst_opt_stats))) {
+                       OB_FAIL(copy_basic_opt_stat(gather_param.column_params_, src_opt_stat, dst_opt_stats))) {
               LOG_WARN("failed to copy stat to target opt stat", K(ret));
             } else {
               results_.reset();
@@ -510,7 +510,8 @@ int ObStatsEstimator::decode(ObIAllocator &allocator)
   return ret;
 }
 
-int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
+int ObStatsEstimator::copy_basic_opt_stat(const ObIArray<ObColumnStatParam> &column_params,
+                                          ObOptStat &src_opt_stat,
                                           ObIArray<ObOptStat> &dst_opt_stats)
 {
   int ret = OB_SUCCESS;
@@ -535,7 +536,8 @@ int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
         dst_opt_stats.at(i).table_stat_->set_row_count(row_cnt);
         dst_opt_stats.at(i).table_stat_->set_avg_row_size(tmp_tab_stat->get_avg_row_size());
         dst_opt_stats.at(i).table_stat_->set_sample_size(tmp_tab_stat->get_row_count());
-        if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(), row_cnt, tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
+        if (OB_FAIL(copy_basic_col_stats(tmp_tab_stat->get_row_count(), row_cnt, column_params,
+                                         tmp_col_stats, dst_opt_stats.at(i).column_stats_))) {
           LOG_WARN("failed to copy col stat", K(ret));
         } else {/*do nothing*/}
       } else {/*do nothing*/}
@@ -549,13 +551,16 @@ int ObStatsEstimator::copy_basic_opt_stat(ObOptStat &src_opt_stat,
 
 int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
                                            const int64_t total_row_cnt,
+                                           const ObIArray<ObColumnStatParam> &column_params,
                                            ObIArray<ObOptColumnStat *> &src_col_stats,
                                            ObIArray<ObOptColumnStat *> &dst_col_stats)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(src_col_stats.count() != dst_col_stats.count())) {
+  if (OB_UNLIKELY(src_col_stats.count() != dst_col_stats.count() ||
+                  src_col_stats.count() != column_params.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(src_col_stats.count()), K(dst_col_stats.count()), K(ret));
+    LOG_WARN("get unexpected error", K(src_col_stats.count()), K(dst_col_stats.count()),
+                                     K(column_params.count()), K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < dst_col_stats.count(); ++i) {
       if (OB_ISNULL(dst_col_stats.at(i)) || OB_ISNULL(src_col_stats.at(i))) {
@@ -566,9 +571,15 @@ int ObStatsEstimator::copy_basic_col_stats(const int64_t cur_row_cnt,
         int64_t num_null = src_col_stats.at(i)->get_num_null();
         int64_t num_distinct = src_col_stats.at(i)->get_num_distinct();
         if (sample_value_ >= 0.000001 && sample_value_ < 100.0) {
-          num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
+          if (!column_params.at(i).is_unique_column()) {
+            num_distinct = ObOptSelectivity::scale_distinct(total_row_cnt, cur_row_cnt, num_distinct);
+          }
           num_not_null = static_cast<int64_t>(num_not_null * 100 / sample_value_);
           num_null = static_cast<int64_t>(num_null * 100 / sample_value_);
+        }
+        if (column_params.at(i).is_unique_column()) {
+          // Refine unique columns for both sampled and full collection.
+          num_distinct = std::max<int64_t>(0, total_row_cnt - std::max<int64_t>(0, num_null));
         }
         dst_col_stats.at(i)->set_max_value(src_col_stats.at(i)->get_max_value());
         dst_col_stats.at(i)->set_min_value(src_col_stats.at(i)->get_min_value());
