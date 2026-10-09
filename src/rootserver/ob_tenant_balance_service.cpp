@@ -946,16 +946,29 @@ int ObTenantBalanceService::try_do_partition_balance_(int64_t &last_partition_ba
   return ret;
 }
 
-// when running normally, it will statistic balance group status every 10min when tenant schema version changes or transfer occurs
-// when thread starts, it will try to statistic bg stat every 10s until it is successful
+static int get_statistic_bg_stat_interval(const uint64_t tenant_id, int64_t &interval)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant config is invalid", KR(ret), K(tenant_id));
+  } else {
+    interval = tenant_config->_balancer_statistic_bg_stat_interval;
+  }
+  return ret;
+}
+
+// Refresh balance group statistics at the configured interval when the tenant schema version changes or transfer occurs.
+// When enabled, retry each scheduling round on thread startup until statistics are refreshed successfully.
 int ObTenantBalanceService::try_statistic_balance_group_status_(
     int64_t &last_statistic_bg_stat_time,
     int64_t &last_statistic_schema_version,
     ObTransferTaskID &last_statistic_max_transfer_task_id)
 {
   int ret = OB_SUCCESS;
+  int64_t interval = 0;
   const int64_t curr_time = ObTimeUtility::current_time();
-  const int64_t STATISTIC_BG_STAT_INTERVAL = 600 * 1000 * 1000L; // 10min
   ObRefreshSchemaStatus schema_status;
   schema_status.tenant_id_ = tenant_id_;
   int64_t latest_tenant_schema_version = OB_INVALID_VERSION;
@@ -963,11 +976,15 @@ int ObTenantBalanceService::try_statistic_balance_group_status_(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(get_statistic_bg_stat_interval(tenant_id_, interval))) {
+    LOG_WARN("failed to get balance group statistics interval", KR(ret), K_(tenant_id));
+  } else if (0 == interval) {
+    // Disable background statistics, including the initial refresh on thread startup.
   } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX has null ptr", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.schema_service_));
   } else if (last_statistic_schema_version > OB_INVALID_VERSION
-      && curr_time - last_statistic_bg_stat_time < STATISTIC_BG_STAT_INTERVAL) {
+      && curr_time - last_statistic_bg_stat_time < interval) {
     // no need to statistic because interval is not reached
   } else if (OB_FAIL(GCTX.schema_service_->get_schema_version_in_inner_table(
       *GCTX.sql_proxy_,
