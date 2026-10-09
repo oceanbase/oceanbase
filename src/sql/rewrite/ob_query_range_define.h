@@ -191,7 +191,8 @@ struct ObQueryRangeCtx
       can_range_get_(true),
       contail_geo_filters_(false),
       unique_index_column_num_(-1),
-      is_global_index_(false) {}
+      is_global_index_(false),
+      table_id_(OB_INVALID_ID) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -236,6 +237,7 @@ struct ObQueryRangeCtx
   bool contail_geo_filters_;
   int64_t unique_index_column_num_;
   bool is_global_index_;
+  uint64_t table_id_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
