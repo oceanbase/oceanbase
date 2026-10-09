@@ -2948,8 +2948,9 @@ int ObDDLService::create_hidden_table_with_pk_changed(
   ObString index_name("");
   const bool is_drop_pk = ObIndexArg::DROP_PRIMARY_KEY == index_action_type;
   const bool is_add_or_alter_pk = (ObIndexArg::ADD_PRIMARY_KEY == index_action_type) || (ObIndexArg::ALTER_PRIMARY_KEY == index_action_type);
-  // For add primary key and modify column in one sql, create user hidden table when modifing column.
-  const bool create_user_hidden_table_now = !(ObIndexArg::ADD_PRIMARY_KEY == index_action_type && alter_table_arg.is_alter_columns_);
+  // For ADD PRIMARY KEY with column changes or CONVERT, create the hidden table in the later phase.
+  const bool create_user_hidden_table_now = !(ObIndexArg::ADD_PRIMARY_KEY == index_action_type
+      && (alter_table_arg.is_alter_columns_ || alter_table_arg.is_convert_to_character_));
   if ((!is_drop_pk && !is_add_or_alter_pk)
     || (is_drop_pk && 0 != index_columns.count())
     || (is_add_or_alter_pk && 0 == index_columns.count())) {
@@ -4248,15 +4249,20 @@ int ObDDLService::alter_table_partition_by(
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   OZ (gen_alter_partition_new_table_schema_offline(
       alter_table_schema, orig_table_schema, new_table_schema));
-  OZ (create_user_hidden_table(orig_table_schema,
-                              new_table_schema,
-                              &alter_table_arg.sequence_ddl_arg_,
-                              bind_tablets,
-                              schema_guard,
-                              schema_guard,
-                              ddl_operator,
-                              trans,
-                              alter_table_arg.allocator_));
+  if (alter_table_arg.is_convert_to_character_) {
+    // Expand partition templates before CONVERT visits them and creates the hidden table.
+    OZ (try_format_partition_schema(new_table_schema));
+  } else {
+    OZ (create_user_hidden_table(orig_table_schema,
+                                new_table_schema,
+                                &alter_table_arg.sequence_ddl_arg_,
+                                bind_tablets,
+                                schema_guard,
+                                schema_guard,
+                                ddl_operator,
+                                trans,
+                                alter_table_arg.allocator_));
+  }
   return ret;
 }
 
@@ -13568,7 +13574,10 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                               need_redistribute_column_id))) {
             LOG_WARN("failed to alter table column!", K(*orig_table_schema), K(new_table_schema), K(ret));
           }
-          if (FAILEDx(create_user_hidden_table(*orig_table_schema,
+          if (OB_FAIL(ret)) {
+          } else if (alter_table_arg.is_convert_to_character_) {
+            LOG_TRACE("for modify column and convert to character set in one sql, create user hidden table in convert_to_character");
+          } else if (OB_FAIL(create_user_hidden_table(*orig_table_schema,
                                                 new_table_schema,
                                                 &alter_table_arg.sequence_ddl_arg_,
                                                 bind_tablets,
