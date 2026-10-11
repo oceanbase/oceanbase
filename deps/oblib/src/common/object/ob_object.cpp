@@ -643,7 +643,19 @@ int ObLobLocatorV2::get_inrow_data(ObString &inrow_data) const
         ret = OB_INVALID_ARGUMENT;
         COMMON_LOG(WARN, "Lob: invalid outrow data", K(ret));
       } else {
-        inrow_data.assign_ptr(disk_loc->get_inrow_data_ptr(), disk_loc->get_byte_size(disk_loc_buff.length()));
+        const char *inrow_ptr = disk_loc->get_inrow_data_ptr();
+        int64_t inrow_len = disk_loc->get_byte_size(disk_loc_buff.length());
+        if (OB_ISNULL(inrow_ptr)
+            || inrow_len < 0
+            || inrow_ptr < ptr_
+            || static_cast<uint64_t>(inrow_ptr - ptr_) + static_cast<uint64_t>(inrow_len)
+               > static_cast<uint64_t>(size_)) {
+          ret = OB_INVALID_ARGUMENT;
+          COMMON_LOG(WARN, "Lob: invalid inrow data range", K(ret), KP(inrow_ptr), K(inrow_len),
+                     KP(ptr_), K(size_));
+        } else {
+          inrow_data.assign_ptr(inrow_ptr, inrow_len);
+        }
       }
     } else if (!is_lob_disk_locator() && has_inrow_data()) {
       if (has_extern()) {
