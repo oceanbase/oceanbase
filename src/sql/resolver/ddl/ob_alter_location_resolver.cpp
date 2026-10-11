@@ -165,9 +165,10 @@ int ObAlterLocationResolver::resolve(const ParseNode &parse_tree)
         } else {
           ObString tmp;
           tmp.assign_ptr(option_node->str_value_, static_cast<int32_t>(option_node->str_len_));
-          credential_params.append(tmp);
-          if (i != num - 1) {
-            credential_params.append(common::SEPERATE_SYMBOL);
+          if (OB_FAIL(credential_params.append(tmp))) {
+            LOG_WARN("failed to append credential value", K(ret), K(option_node->value_));
+          } else if (i != num - 1 && OB_FAIL(credential_params.append(common::SEPERATE_SYMBOL))) {
+            LOG_WARN("failed to append credential separator", K(ret), K(option_node->value_));
           }
           if (OB_SUCC(ret) && option_node->value_ >= 1 && option_node->value_ <= 3) {
             ObString masked_sql;
