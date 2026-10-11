@@ -132,6 +132,8 @@ private:
   uint64_t get_cpufreq_khz_();
   // judge if it support tsc, entry is CPUID.80000007H:EDX[8].
   bool is_support_invariant_tsc_();
+  // CPUID.80000001H:EDX[27]
+  bool is_support_rdtscp_();
 #elif defined(__aarch64__)
   uint64_t get_cpufreq_khz_(void);
   bool is_support_invariant_tsc_()
