@@ -349,7 +349,7 @@ int ObModifyAutoincTask::modify_autoinc()
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("cannot find orig table", K(ret), K(alter_table_arg_));
     } else {
-      int64_t alter_column_id = 0;
+      int64_t alter_column_id = OB_INVALID_ID;
 
       ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
       ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
@@ -361,7 +361,9 @@ int ObModifyAutoincTask::modify_autoinc()
         } else {
           const ObString &orig_column_name = alter_column_schema->get_origin_column_name();
           const ObColumnSchemaV2 *orig_column_schema = orig_table_schema->get_column_schema(orig_column_name);
-          if (alter_column_schema->is_autoincrement() && !orig_column_schema->is_autoincrement()) {
+          if (OB_NOT_NULL(orig_column_schema)
+              && alter_column_schema->is_autoincrement()
+              && !orig_column_schema->is_autoincrement()) {
             alter_column_id = orig_column_schema->get_column_id();
             break; // there can only be one autoinc column
           }
