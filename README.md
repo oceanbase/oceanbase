@@ -114,6 +114,12 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 [Introduction to system architecture](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
 
+## Architecture evolution: 2010–2026
+
+A 2:29 animation traces OceanBase from its early server roles to peer OBServers, Tablet/Log Stream, HTAP, and later storage designs.
+
+The overview distinguishes Community Edition, Enterprise features, and the separate AI Lakebase product family. See the [timeline, technical notes, and sources](docs/architecture-evolution.md).
+
 # Contributing
 
 Contributions are highly appreciated. Read the [development guide](https://oceanbase.github.io/oceanbase) to get started.
