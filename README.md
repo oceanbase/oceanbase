@@ -116,11 +116,7 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 ## Architecture evolution: 2010–2026
 
-A 2:29 animation traces OceanBase from its early server roles to peer OBServers, Tablet/Log Stream, HTAP, and later storage designs.
-
 https://github.com/user-attachments/assets/21a0f985-ee00-49f8-b8c7-a35f0c3f4397
-
-The overview distinguishes Community Edition, Enterprise features, and the separate AI Lakebase product family. See the [timeline, technical notes, and sources](docs/architecture-evolution.md).
 
 # Contributing
 

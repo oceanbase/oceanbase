@@ -117,11 +117,7 @@ OceanBase 已服务超过 2000 家来自不同行业的客户，包括金融服�
 
 ## 架构演进：2010–2026
 
-这段 2 分 29 秒的完整英文动画，展示了 OceanBase 从早期服务分工，到对等 OBServer、Tablet/Log Stream、HTAP 及后续存储架构的演进。
-
 https://github.com/user-attachments/assets/21a0f985-ee00-49f8-b8c7-a35f0c3f4397
-
-视频区分社区版、企业版特性与独立的 AI Lakebase 产品系列。详细说明请参考[时间线、技术说明与出处（英文）](docs/architecture-evolution.md)。
 
 # 社区贡献
 
