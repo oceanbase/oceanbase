@@ -47,7 +47,7 @@ yum install git wget rpm* cpio make glibc-devel glibc-headers binutils m4 libtoo
 包括 Debian, Ubuntu 等等。
 
 ```shell
-apt-get install git wget rpm rpm2cpio cpio make build-essential binutils m4
+apt-get install git wget rpm rpm2cpio cpio make build-essential binutils libtinfo5 libtool-bin libaio1 libaio-dev m4
 ```
 
 ### SUSE 系统
