@@ -64,7 +64,7 @@ private:
   common::ObArray<LsElectionReferenceInfo> *all_ls_election_reference_info_;
   // refresh priority and detect recovery from failure
   common::ObOccamTimer recovery_detect_timer_;
-  // detect whether failure has occured
+  // detect whether failure has occurred
   common::ObOccamTimer failure_detect_timer_;
   common::ObOccamTimerTaskRAIIHandle refresh_priority_task_handle_;
   bool is_running_;
