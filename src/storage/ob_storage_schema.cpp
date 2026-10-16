@@ -2078,7 +2078,7 @@ int64_t ObStorageSchema::get_serialize_size() const
       encryption_,
       encrypt_key_);
   len += get_array_serialize_length(rowkey_array_);
-  //get columms size
+  //get columns size
   if (!column_info_simplified_) {
     len += get_column_array_serialize_length(column_array_);
   }
