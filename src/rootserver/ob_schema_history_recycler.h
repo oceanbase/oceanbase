@@ -258,14 +258,60 @@ protected:
   virtual int fill_schema_history_map() = 0;
   virtual int recycle_schema_history() = 0;
   virtual int compress_schema_history() = 0;
+
+  // ===== keyset pagination scan anchor helpers start =====
+  // Default implementation advances offset cursor.
+  // - Executors that use limit-offset pagination should do nothing.
+  // - Executors that use keyset pagination should overload update_scan_cursor_().
+
+  template <typename KEY>
+  void update_scan_cursor_(
+      const KEY &last_key,
+      const int64_t last_schema_version,
+      const bool has_row,
+      int64_t &start_idx)
+  {
+    UNUSED(last_key);
+    UNUSED(last_schema_version);
+    UNUSED(has_row);
+    start_idx += SCHEMA_HISTORY_BATCH_FETCH_NUM;
+  }
+
+  void reset_scan_anchor_()
+  {
+    has_anchor_ = false;
+    last_schema_version_ = OB_INVALID_VERSION;
+  }
+  // ===== keyset pagination scan anchor helpers end =====
 protected:
   uint64_t tenant_id_;
   int64_t schema_version_;
   const char* table_name_;
   common::ObMySQLProxy *sql_proxy_;
   ObSchemaHistoryRecycler* recycler_;
+
+  // keyset pagination anchor
+  bool has_anchor_;
+  int64_t last_schema_version_;
   DISALLOW_COPY_AND_ASSIGN(ObIRecycleSchemaExecutor);
 };
+
+#define DEFINE_KEYSET_UPDATE_SCAN_CURSOR_FUNC(KEY_TYPE) \
+  void update_scan_cursor_( \
+      const KEY_TYPE &last_key, \
+      const int64_t last_schema_version, \
+      const bool has_row, \
+      int64_t &start_idx) \
+  { \
+    UNUSED(start_idx); \
+    if (has_row) { \
+      last_key_ = last_key; \
+      has_anchor_ = true; \
+      last_schema_version_ = last_schema_version; \
+    } else { \
+      reset_scan_anchor_(); \
+    } \
+  }
 
 class ObRecycleSchemaExecutor : public ObIRecycleSchemaExecutor
 {
@@ -317,6 +363,8 @@ private:
   common::hash::ObHashMap<ObFirstSchemaKey,
                           ObRecycleSchemaValue,
                           common::hash::NoPthreadDefendMode> schema_history_map_;
+  ObFirstSchemaKey last_key_;
+  DEFINE_KEYSET_UPDATE_SCAN_CURSOR_FUNC(ObFirstSchemaKey);
   DISALLOW_COPY_AND_ASSIGN(ObRecycleSchemaExecutor);
 };
 
@@ -365,6 +413,8 @@ private:
   common::hash::ObHashMap<ObSecondSchemaKey,
                           ObRecycleSchemaValue,
                           common::hash::NoPthreadDefendMode> schema_history_map_;
+  ObSecondSchemaKey last_key_;
+  DEFINE_KEYSET_UPDATE_SCAN_CURSOR_FUNC(ObSecondSchemaKey);
   DISALLOW_COPY_AND_ASSIGN(ObSecondRecycleSchemaExecutor);
 };
 
@@ -415,8 +465,12 @@ private:
   common::hash::ObHashMap<ObThirdSchemaKey,
                           ObRecycleSchemaValue,
                           common::hash::NoPthreadDefendMode> schema_history_map_;
+  ObThirdSchemaKey last_key_;
+  DEFINE_KEYSET_UPDATE_SCAN_CURSOR_FUNC(ObThirdSchemaKey);
   DISALLOW_COPY_AND_ASSIGN(ObThirdRecycleSchemaExecutor);
 };
+
+#undef DEFINE_KEYSET_UPDATE_SCAN_CURSOR_FUNC
 
 /*
  * ##############################

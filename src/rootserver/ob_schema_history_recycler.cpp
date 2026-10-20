@@ -1191,7 +1191,8 @@ ObIRecycleSchemaExecutor::ObIRecycleSchemaExecutor(
     common::ObMySQLProxy *sql_proxy,
     ObSchemaHistoryRecycler *recycler)
     : tenant_id_(tenant_id), schema_version_(schema_version),
-      table_name_(table_name), sql_proxy_(sql_proxy), recycler_(recycler)
+      table_name_(table_name), sql_proxy_(sql_proxy), recycler_(recycler),
+      has_anchor_(false), last_schema_version_(OB_INVALID_VERSION)
 {
 }
 
@@ -1251,7 +1252,8 @@ ObRecycleSchemaExecutor::ObRecycleSchemaExecutor(
   common::ObMySQLProxy *sql_proxy,
   ObSchemaHistoryRecycler *recycler)
     : ObIRecycleSchemaExecutor(tenant_id, schema_version, table_name, sql_proxy, recycler),
-      schema_key_name_(schema_key_name), mode_(mode), schema_history_map_()
+      schema_key_name_(schema_key_name), mode_(mode), schema_history_map_(),
+      last_key_()
 {
 }
 
@@ -1309,16 +1311,29 @@ int ObRecycleSchemaExecutor::gen_fill_schema_history_sql(
     ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
+  UNUSED(start_idx);
   if (OB_FAIL(check_stop())) {
-    LOG_WARN("schema history recycler is stopped", K(ret));
-  } else if (OB_FAIL(sql.assign_fmt("select %s, schema_version, is_deleted from %s "
-                                    "where tenant_id = 0 and schema_version <= %ld "
-                                    "order by tenant_id, %s, schema_version "
-                                    "limit %ld, %ld",
+    LOG_WARN("schema history recycler is stopped", KR(ret));
+  } else if (OB_FAIL(sql.assign_fmt("select `%s`, schema_version, is_deleted from %s "
+                                    "where tenant_id = 0 "
+                                    "and `%s` >= %ld " // sys obj ddl frequency is low, so for safety, do not recycle sys obj
+                                    "and schema_version <= %ld ",
                                     schema_key_name_, table_name_,
-                                    schema_version_, schema_key_name_, start_idx,
-                                    SCHEMA_HISTORY_BATCH_FETCH_NUM))) {
-    LOG_WARN("fail to assign sql", K(ret), K_(tenant_id), K_(schema_version));
+                                    schema_key_name_, OB_MIN_USER_OBJECT_ID,
+                                    schema_version_))) {
+    LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K_(schema_version));
+  } else if (has_anchor_) {
+    if (OB_FAIL(sql.append_fmt(" and ((`%s` > %ld) or (`%s` = %ld and schema_version > %ld))",
+                               schema_key_name_, last_key_.first_schema_id_,
+                               schema_key_name_, last_key_.first_schema_id_,
+                               last_schema_version_))) {
+      LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K_(schema_version));
+    }
+  }
+
+  if (FAILEDx(sql.append_fmt(" order by tenant_id, `%s`, schema_version limit %ld",
+                             schema_key_name_, SCHEMA_HISTORY_BATCH_FETCH_NUM))) {
+    LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K_(schema_version));
   }
   return ret;
 }
@@ -1353,6 +1368,7 @@ int EXECUTOR::fill_schema_history_map() \
                                                 "ScheHisRecMap", "ScheHisRecMap"))) { \
     LOG_WARN("fail to create map", K(ret)); \
   } else { \
+    reset_scan_anchor_(); \
     KEY key; \
     ObRecycleSchemaValue value; \
     int64_t start_idx = 0; \
@@ -1376,6 +1392,9 @@ int EXECUTOR::fill_schema_history_map() \
             LOG_WARN("fail to iter", K(ret)); \
           } \
         } else { \
+          KEY last_key; \
+          int64_t last_schema_version = OB_INVALID_VERSION; \
+          bool has_row = false; \
           int64_t cost_ts = ObTimeUtility::current_time() - start_ts; \
           LOG_INFO("[SCHEMA_RECYCLE] gather recycle schema history", \
                    K(ret), "table_name", table_name_, K(cost_ts), K(sql)); \
@@ -1410,12 +1429,16 @@ int EXECUTOR::fill_schema_history_map() \
               value.max_schema_version_ = cur_value.max_schema_version_; \
               value.is_deleted_ = cur_value.is_deleted_; \
               value.record_cnt_++; \
+              /* update anchor */ \
+              last_key = cur_key; \
+              last_schema_version = cur_value.max_schema_version_; \
+              has_row = true; \
             } \
           } while (OB_SUCC(ret) && OB_SUCC(result->next())); \
           if (OB_ITER_END == ret) { \
             /*overwrite ret*/ \
             ret = OB_SUCCESS; \
-            start_idx += SCHEMA_HISTORY_BATCH_FETCH_NUM; \
+            update_scan_cursor_(last_key, last_schema_version, has_row, start_idx); \
             if (total_recycle_cnt >= TOTAL_RECYCLE_RECORD_CNT) { \
               /* Because of performance of limit statement */ \
               /* (limit statement may take tens of seconds when row count of table reaches 50 million), */ \
@@ -1789,7 +1812,8 @@ ObSecondRecycleSchemaExecutor::ObSecondRecycleSchemaExecutor(
   ObSchemaHistoryRecycler *recycler)
     : ObIRecycleSchemaExecutor(tenant_id, schema_version, table_name, sql_proxy, recycler),
       schema_key_name_(schema_key_name), second_schema_key_name_(second_schema_key_name),
-      schema_history_map_()
+      schema_history_map_(),
+      last_key_()
 {
 }
 
@@ -1828,17 +1852,27 @@ int ObSecondRecycleSchemaExecutor::gen_fill_schema_history_sql(
     ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
+  UNUSED(start_idx);
   if (OB_FAIL(check_stop())) {
-    LOG_WARN("schema history recycler is stopped", K(ret));
+    LOG_WARN("schema history recycler is stopped", KR(ret));
   } else if (OB_FAIL(sql.assign_fmt("select %s, %s, schema_version, is_deleted from %s "
-                                    "where tenant_id = 0 and schema_version <= %ld "
-                                    "order by tenant_id, %s, %s, schema_version "
-                                    "limit %ld, %ld",
-                                    schema_key_name_, second_schema_key_name_,
-                                    table_name_, schema_version_,
-                                    schema_key_name_, second_schema_key_name_,
-                                    start_idx, SCHEMA_HISTORY_BATCH_FETCH_NUM))) {
-    LOG_WARN("fail to assign sql", K(ret), K_(tenant_id), K_(schema_version));
+                                    "where tenant_id = 0 and schema_version <= %ld",
+                                    schema_key_name_, second_schema_key_name_, table_name_, schema_version_))) {
+    LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K_(schema_version));
+  } else if (has_anchor_) {
+    if (OB_FAIL(sql.append_fmt(" and ((%s > %ld)"
+                               " or (%s = %ld and %s > %ld)"
+                               " or (%s = %ld and %s = %ld and schema_version > %ld))",
+                               schema_key_name_, last_key_.first_schema_id_,
+                               schema_key_name_, last_key_.first_schema_id_, second_schema_key_name_, last_key_.second_schema_id_,
+                               schema_key_name_, last_key_.first_schema_id_, second_schema_key_name_, last_key_.second_schema_id_, last_schema_version_))) {
+      LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K_(schema_version));
+    }
+  }
+
+  if (FAILEDx(sql.append_fmt(" order by tenant_id, %s, %s, schema_version limit %ld",
+                             schema_key_name_, second_schema_key_name_, SCHEMA_HISTORY_BATCH_FETCH_NUM))) {
+    LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K_(schema_version));
   }
   return ret;
 }
@@ -1905,7 +1939,8 @@ ObThirdRecycleSchemaExecutor::ObThirdRecycleSchemaExecutor(
   ObSchemaHistoryRecycler *recycler)
     : ObIRecycleSchemaExecutor(tenant_id, schema_version, table_name, sql_proxy, recycler),
       schema_key_name_(schema_key_name), second_schema_key_name_(second_schema_key_name),
-      third_schema_key_name_(third_schema_key_name), schema_history_map_()
+      third_schema_key_name_(third_schema_key_name), schema_history_map_(),
+      last_key_()
 {
 }
 
@@ -1945,18 +1980,29 @@ int ObThirdRecycleSchemaExecutor::gen_fill_schema_history_sql(
     ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
+  UNUSED(start_idx);
   if (OB_FAIL(check_stop())) {
     LOG_WARN("schema history recycler is stopped", K(ret));
   } else if (OB_FAIL(sql.assign_fmt("select %s, %s, %s, schema_version, is_deleted from %s "
-                                    "where tenant_id = 0 and schema_version <= %ld "
-                                    "order by tenant_id, %s, %s, %s, schema_version "
-                                    "limit %ld, %ld",
-                                    schema_key_name_, second_schema_key_name_,
-                                    third_schema_key_name_, table_name_,
-                                    schema_version_, schema_key_name_,
-                                    second_schema_key_name_, third_schema_key_name_,
-                                    start_idx, SCHEMA_HISTORY_BATCH_FETCH_NUM))) {
-    LOG_WARN("fail to assign sql", K(ret), K_(tenant_id), K_(schema_version));
+                                    "where tenant_id = 0 and schema_version <= %ld",
+                                    schema_key_name_, second_schema_key_name_, third_schema_key_name_, table_name_, schema_version_))) {
+    LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K_(schema_version));
+  } else if (has_anchor_) {
+    if (OB_FAIL(sql.append_fmt(" and ((%s > %ld)"
+                               " or (%s = %ld and %s > %ld)"
+                               " or (%s = %ld and %s = %ld and %s > %ld)"
+                               " or (%s = %ld and %s = %ld and %s = %ld and schema_version > %ld))",
+                               schema_key_name_, last_key_.first_schema_id_,
+                               schema_key_name_, last_key_.first_schema_id_, second_schema_key_name_, last_key_.second_schema_id_,
+                               schema_key_name_, last_key_.first_schema_id_, second_schema_key_name_, last_key_.second_schema_id_, third_schema_key_name_, last_key_.third_schema_id_,
+                               schema_key_name_, last_key_.first_schema_id_, second_schema_key_name_, last_key_.second_schema_id_, third_schema_key_name_, last_key_.third_schema_id_, last_schema_version_))) {
+      LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K_(schema_version));
+    }
+  }
+
+  if (FAILEDx(sql.append_fmt(" order by tenant_id, %s, %s, %s, schema_version limit %ld",
+                             schema_key_name_, second_schema_key_name_, third_schema_key_name_, SCHEMA_HISTORY_BATCH_FETCH_NUM))) {
+    LOG_WARN("fail to append sql", KR(ret), K_(tenant_id), K_(schema_version));
   }
   return ret;
 }
