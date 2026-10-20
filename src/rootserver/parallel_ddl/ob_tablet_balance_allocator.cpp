@@ -150,7 +150,7 @@ int ObNonPartitionedTableTabletCache::reload_cache_(
 
       if (OB_SUCC(ret) && miss_ls_stat_array.count() > 0) {
         if (OB_FAIL(op.insert_update_balance_group_ls_stat(
-            default_timeout, tenant_id_, bg_id, miss_ls_stat_array))) {
+            tenant_id_, bg_id, miss_ls_stat_array))) {
           LOG_WARN("fail to insert miss ls stat", KR(ret), K_(tenant_id), K(miss_ls_stat_array));
         }
       }

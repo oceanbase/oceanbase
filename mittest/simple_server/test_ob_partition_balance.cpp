@@ -44,9 +44,10 @@ int ObPartitionBalance::process()
   int ret = OB_SUCCESS;
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
   ObString balance_strategy("partition balance");
+  const ObArray<ObBalanceGroupID> old_bg_ids;
   if (OB_FAIL(prepare_balance_group_())) {
     LOG_WARN("prepare_balance_group fail", KR(ret));
-  } else if (OB_FAIL(save_balance_group_stat_())) {
+  } else if (OB_FAIL(save_balance_group_stat_(old_bg_ids))) {
     LOG_WARN("save_balance_group_stat fail", KR(ret));
   } else if (OB_FAIL(process_balance_partition_inner_())) {
     LOG_WARN("process_balance_partition_inner fail", KR(ret));

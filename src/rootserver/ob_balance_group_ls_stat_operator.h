@@ -121,13 +121,11 @@ public:
       const bool for_update,
       common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array);
   int insert_update_balance_group_ls_stat(
-      const int64_t timeout_abs,
       const uint64_t tenant_id,
       const ObBalanceGroupID &balance_group_id,
       const common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array);
   int insert_update_balance_group_ls_stat(
-      const int64_t timeout_abs,
-      common::ObISQLClient &sql_proxy,
+      common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const ObBalanceGroupID &balance_group_id,
       const common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array);
@@ -136,13 +134,16 @@ public:
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,
       const ObBalanceGroupLSStat &ls_stat);
+  int get_all_balance_group_ids(
+      const uint64_t tenant_id,
+      common::ObIArray<ObBalanceGroupID> &balance_group_ids);
   int delete_balance_group_ls_stat(
-      const int64_t timeout,
       common::ObISQLClient &sql_client,
-      const uint64_t tenant_id);
+      const uint64_t tenant_id,
+      const ObBalanceGroupID &balance_group_id);
 private:
   int generate_insert_update_sql(
-      const ObBalanceGroupLSStat &bg_ls_stat,
+      const common::ObIArray<ObBalanceGroupLSStat> &bg_ls_stat_array,
       common::ObSqlString &sql_string);
   int generate_inc_sql_(
       const ObBalanceGroupLSStat &bg_ls_stat,

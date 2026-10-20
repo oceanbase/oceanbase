@@ -110,7 +110,7 @@ public:
 
 private:
   int prepare_balance_group_();
-  int save_balance_group_stat_();
+  int save_balance_group_stat_(const common::ObIArray<ObBalanceGroupID> &old_bg_ids);
   // balance group inner balance
   int process_balance_partition_inner_();
   // balance group extend balance
