@@ -380,6 +380,7 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     is_geo_range_ = geo_column_id_map != NULL;
     force_no_link_ = force_no_link;
     constraints_expr_factory_ = constraints_expr_factory;
+    table_id_ = pre_range_graph->get_table_id();
     if (OB_NOT_NULL(index_schema) &&
         index_schema->is_unique_index() &&
         index_schema->get_index_column_num() > 0) {
