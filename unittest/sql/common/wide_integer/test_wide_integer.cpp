@@ -1313,6 +1313,48 @@ void test_small_decint_to_nmb()
   uint64_t seed = 123456789;
   ASSERT_EQ(calc_nmb_hash(res_nmb, seed), calc_nmb_hash(expect_nmb, seed));
 
+  // integer part with a zero low 10^9 group plus a non-zero fractional part:
+  // the zero group sits in the middle and must be kept.
+  // expected value comes from canonical ObNumber::from(string)
+  const struct {
+    int64_t v;
+    int16_t scale;
+  } zero_mid_group_cases[] = {
+    {20000000005000LL, 4},     // 2000000000.5
+    {-20000000005000LL, 4},    // -2000000000.5
+    {1000000000500000000LL, 9},// 1000000000.5
+    {3000000000000000000LL, 9},// 3000000000
+    {20000000000000LL, 4},     // 2000000000 (zero fraction, zero group is trailing)
+  };
+  number::ObNumber res_nmb2;
+  for (uint32_t i = 0; i < sizeof(zero_mid_group_cases) / sizeof(zero_mid_group_cases[0]); i++) {
+    const int64_t v = zero_mid_group_cases[i].v;
+    const int16_t scale = zero_mid_group_cases[i].scale;
+    char val_str[64] = {0};
+    if (scale > 0) {
+      uint64_t base = 1;
+      for (int16_t j = 0; j < scale; j++) { base *= 10; }
+      uint64_t abs_v = v < 0 ? -(uint64_t)v : (uint64_t)v;
+      snprintf(val_str, sizeof(val_str), "%s%llu.%0*llu", v < 0 ? "-" : "",
+               (unsigned long long)(abs_v / base), (int)scale,
+               (unsigned long long)(abs_v % base));
+    } else {
+      snprintf(val_str, sizeof(val_str), "%lld", (long long)v);
+    }
+    ret = expect_nmb.from(val_str, (int32_t)strlen(val_str), tmp_alloc);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    // both int64 overloads must match the canonical from-string result
+    ret = wide::to_number(v, scale, (uint32_t *)digits, 3, res_nmb);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    ret = wide::to_number(v, scale, tmp_alloc, res_nmb2);
+    ASSERT_EQ(ret, OB_SUCCESS);
+    ASSERT_EQ(expect_nmb, res_nmb);
+    ASSERT_EQ(expect_nmb, res_nmb2);
+    uint64_t rand_seed = rand_value<uint64_t>(1, 1000000000);
+    ASSERT_EQ(calc_nmb_hash(expect_nmb, rand_seed), calc_nmb_hash(res_nmb, rand_seed));
+    ASSERT_EQ(calc_nmb_hash(expect_nmb, rand_seed), calc_nmb_hash(res_nmb2, rand_seed));
+  }
+
   static const uint64_t pows[] = {
     1,
     10,
