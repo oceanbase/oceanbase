@@ -142,8 +142,10 @@ public:
   int compute_spf_batch_rescan(bool &can_batch);
   int compute_spf_batch_rescan_compat(bool &can_batch);
   int check_right_is_local_scan(int64_t &local_scan_type) const;
+  int check_has_px_rescan(bool &has_px_rescan) const;
   static int need_compare_batch_rescan(const ObLogSubPlanFilter &first_op,
                                        const ObLogSubPlanFilter &second_op,
+                                       const bool ignore_row_count,
                                        bool &need_compare);
   int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
   bool is_px_batch_rescan_enabled();

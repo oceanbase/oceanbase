@@ -1049,6 +1049,7 @@ int ObLogSubPlanFilter::print_push_subq_used_hint(PlanText &plan_text)
 
 int ObLogSubPlanFilter::need_compare_batch_rescan(const ObLogSubPlanFilter &first_op,
                                                   const ObLogSubPlanFilter &second_op,
+                                                  const bool ignore_row_count,
                                                   bool &need_compare)
 {
   int ret = OB_SUCCESS;
@@ -1087,7 +1088,7 @@ int ObLogSubPlanFilter::need_compare_batch_rescan(const ObLogSubPlanFilter &firs
         LOG_WARN("failed get rescan path index id", K(ret));
       } else if (!simple_rescan_path) {
         need_compare = false;
-      } else if (ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
+      } else if (!ignore_row_count && ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
         need_compare = false;
       } else if (OB_FAIL(ObOptimizerUtil::get_rescan_path_index_id(op2,
                                                                    simple_rescan_path,
@@ -1097,13 +1098,32 @@ int ObLogSubPlanFilter::need_compare_batch_rescan(const ObLogSubPlanFilter &firs
         LOG_WARN("failed get rescan path index id", K(ret));
       } else if (!simple_rescan_path) {
         need_compare = false;
-      } else if (ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
+      } else if (!ignore_row_count && ObJoinOrder::PRUNING_ROW_COUNT_THRESHOLD <= range_row_count) {
         need_compare = false;
       } else if (first_table_id == second_table_id && first_index_id == second_index_id) {
         need_compare = true;
       } else {
         need_compare = false;
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::check_has_px_rescan(bool &has_px_rescan) const
+{
+  int ret = OB_SUCCESS;
+  has_px_rescan = false;
+  for (int64_t i = 1; OB_SUCC(ret) && !has_px_rescan && i < get_num_of_child(); ++i) {
+    const ObLogicalOperator *child = get_child(i);
+    if (init_plan_idxs_.has_member(i) || one_time_idxs_.has_member(i)) {
+      /* do nothing */
+    } else if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else {
+      // A local root can still contain PX exchanges below its scalar aggregation.
+      has_px_rescan = child->is_exchange_allocated();
     }
   }
   return ret;
