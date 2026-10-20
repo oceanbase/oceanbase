@@ -18,6 +18,8 @@
 #include "rootserver/ob_partition_balance.h"
 #include "rootserver/ob_tenant_balance_service.h" // ObTenantBalanceService
 #include "observer/ob_server_struct.h"//GCTX
+#include "share/ob_debug_sync.h"
+#include "lib/hash/ob_hashset.h"
 
 namespace oceanbase
 {
@@ -125,12 +127,15 @@ int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t time
   int64_t start_time = ObTimeUtility::current_time();
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
   ObBalanceStrategy balance_strategy;
+  ObArray<ObBalanceGroupID> old_bg_ids;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(this));
+  } else if (OB_FAIL(bg_ls_stat_operator_.get_all_balance_group_ids(tenant_id_, old_bg_ids))) {
+    LOG_WARN("fail to get old balance group ids", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(prepare_balance_group_())) {
     LOG_WARN("prepare_balance_group fail", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(save_balance_group_stat_())) {
+  } else if (OB_FAIL(save_balance_group_stat_(old_bg_ids))) {
     LOG_WARN("save balance group stat fail", KR(ret), K(tenant_id_));
   } else if (GEN_BG_STAT == task_mode_) {
     // finish
@@ -1173,15 +1178,13 @@ int ObPartitionBalance::try_swap_part_group_in_bg_(
   return ret;
 }
 
-int ObPartitionBalance::save_balance_group_stat_()
+// Refresh each BG in a separate transaction to shorten lock holding time
+// and reduce contention with concurrent DDL.
+int ObPartitionBalance::save_balance_group_stat_(const common::ObIArray<ObBalanceGroupID> &old_bg_ids)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
-  ObTimeoutCtx ctx;
   int64_t start_time = ObTimeUtility::current_time();
-  int64_t trans_timeout = OB_INVALID_TIMESTAMP;
+  hash::ObHashSet<ObBalanceGroupID> current_bg_ids;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(this));
@@ -1190,17 +1193,15 @@ int ObPartitionBalance::save_balance_group_stat_()
     LOG_WARN("sql_proxy is null", KR(ret));
   } else if (!is_user_tenant(tenant_id_)) {
     // do nothing
-  } else if (FALSE_IT(trans_timeout = GCONF.internal_sql_execute_timeout + bg_map_.size() * 100_ms)) {
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, trans_timeout))) {
-    LOG_WARN("fail to set timeout ctx", KR(ret), K(trans_timeout));
-  } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
-    LOG_WARN("fail to start trans", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(bg_ls_stat_operator_.delete_balance_group_ls_stat(ctx.get_timeout(), trans, tenant_id_))) {
-    LOG_WARN("fail to delete balance group ls stat", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(current_bg_ids.create(max(1L, bg_map_.size()), "BgStatIds", "BgStatIdNode", tenant_id_))) {
+    LOG_WARN("fail to create current balance group id set", KR(ret));
   } else {
-    // iterator all balance group
+    // STEP 1: Update existing BGs.
     FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
       common::ObArray<ObBalanceGroupLSStat> bg_ls_stat_array;
+      if (OB_FAIL(current_bg_ids.set_refactored(iter->first.id()))) {
+        LOG_WARN("fail to record current balance group id", KR(ret), K(iter->first));
+      }
       // iterator all ls
       for (int64_t i = 0; OB_SUCC(ret) && i < iter->second.count(); i++) {
         if (OB_NOT_NULL(iter->second.at(i))) {
@@ -1217,18 +1218,35 @@ int ObPartitionBalance::save_balance_group_stat_()
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(ctx.get_timeout(), trans, tenant_id_,
-                iter->first.id(), bg_ls_stat_array))) {
+        START_TRANSACTION(sql_proxy_, gen_meta_tenant_id(tenant_id_));
+        if (FAILEDx(bg_ls_stat_operator_.delete_balance_group_ls_stat(
+            trans, tenant_id_, iter->first.id()))) {
+          LOG_WARN("fail to delete balance group ls stat", KR(ret), K(tenant_id_), K(iter->first));
+        } else if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
+            trans, tenant_id_, iter->first.id(), bg_ls_stat_array))) {
           LOG_WARN("fail to insert update balance group ls stat", KR(ret), K(tenant_id_), K(iter->first));
         }
+        END_TRANSACTION(trans);
+        DEBUG_SYNC(AFTER_SAVE_BALANCE_GROUP_STAT);
       }
     }
-    // commit/abort
-    int tmp_ret = OB_SUCCESS;
-    const bool is_commit = OB_SUCC(ret);
-    if (OB_SUCCESS != (tmp_ret = trans.end(is_commit))) {
-      LOG_WARN("trans end failed", K(tmp_ret), K(is_commit));
-      ret = (OB_SUCCESS == ret ? tmp_ret : ret);
+    // STEP 2: Delete obsolete BGs.
+    for (int64_t i = 0; OB_SUCC(ret) && i < old_bg_ids.count(); ++i) {
+      const ObBalanceGroupID &bg_id = old_bg_ids.at(i);
+      const int hash_ret = current_bg_ids.exist_refactored(bg_id);
+      if (OB_HASH_EXIST == hash_ret) {
+        // The BG was already replaced in its own transaction.
+      } else if (OB_HASH_NOT_EXIST != hash_ret) {
+        ret = hash_ret;
+        LOG_WARN("fail to check current balance group id", KR(ret), K(bg_id));
+      } else {
+        START_TRANSACTION(sql_proxy_, gen_meta_tenant_id(tenant_id_));
+        if (FAILEDx(bg_ls_stat_operator_.delete_balance_group_ls_stat(
+            trans, tenant_id_, bg_id))) {
+          LOG_WARN("fail to clean obsolete balance group stat", KR(ret), K(tenant_id_), K(bg_id));
+        }
+        END_TRANSACTION(trans);
+      }
     }
   }
   int64_t end_time = ObTimeUtility::current_time();

@@ -237,7 +237,6 @@ int ObBalanceGroupLSStatOperator::get_balance_group_ls_stat(
 }
 
 int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
-    const int64_t timeout,
     const uint64_t tenant_id,
     const ObBalanceGroupID &balance_group_id,
     const common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array)
@@ -246,13 +245,11 @@ int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(timeout <= 0
-                         || OB_INVALID_ID == tenant_id
-                         || !balance_group_id.is_valid()
-                         || balance_group_ls_stat_array.count() <= 0)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+                        || !balance_group_id.is_valid()
+                        || balance_group_ls_stat_array.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret),
-             K(timeout),
              K(tenant_id),
              K(balance_group_id),
              K(balance_group_ls_stat_array));
@@ -267,7 +264,6 @@ int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
       LOG_WARN("fail to start trans", KR(ret));
     } else {
       if (OB_FAIL(insert_update_balance_group_ls_stat(
-              timeout,
               trans,
               tenant_id,
               balance_group_id,
@@ -286,56 +282,39 @@ int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
 }
 
 int ObBalanceGroupLSStatOperator::insert_update_balance_group_ls_stat(
-    const int64_t timeout,
     common::ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObBalanceGroupID &balance_group_id,
     const common::ObIArray<ObBalanceGroupLSStat> &balance_group_ls_stat_array)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeoutCtx timeout_ctx;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(timeout <= 0
-                         || OB_INVALID_ID == tenant_id
-                         || !balance_group_id.is_valid()
-                         || balance_group_ls_stat_array.count() <= 0)) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == tenant_id
+                        || !balance_group_id.is_valid()
+                        || balance_group_ls_stat_array.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret),
              K(tenant_id),
              K(balance_group_id),
              K(balance_group_ls_stat_array));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(
-          timeout_ctx,
-          timeout))) {
-    LOG_WARN("fail to set timeout", KR(ret), K(timeout));
   } else {
     const uint64_t sql_tenant_id = gen_meta_tenant_id(tenant_id);
-    for (int64_t i = 0; OB_SUCC(ret) && i < balance_group_ls_stat_array.count(); ++i) {
-      int64_t affected_rows = -1;
-      common::ObSqlString insert_update_sql;
-      const ObBalanceGroupLSStat &balance_group_ls_stat = balance_group_ls_stat_array.at(i);
-      if (OB_FAIL(generate_insert_update_sql(
-              balance_group_ls_stat,
-              insert_update_sql))) {
-        LOG_WARN("fail to generate insert update sql", KR(ret),
-                 K(balance_group_ls_stat),
-                 K(insert_update_sql));
-      } else if (OB_FAIL(sql_client.write(
-              sql_tenant_id,
-              insert_update_sql.ptr(),
-              affected_rows))) {
-        LOG_WARN("fail to insert update", KR(ret),
-                 K(sql_tenant_id),
-                 K(insert_update_sql));
-      } else if (affected_rows > 2) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected affected rows", KR(ret),
-                 K(sql_tenant_id),
-                 K(insert_update_sql),
-                 K(affected_rows));
-      }
+    int64_t affected_rows = -1;
+    const int64_t row_count = balance_group_ls_stat_array.count();
+    common::ObSqlString insert_update_sql;
+    if (OB_FAIL(generate_insert_update_sql(balance_group_ls_stat_array, insert_update_sql))) {
+      LOG_WARN("fail to generate insert update sql", KR(ret), K(tenant_id), K(balance_group_id));
+    } else if (OB_FAIL(sql_client.write(sql_tenant_id, insert_update_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to insert update", KR(ret), K(sql_tenant_id), K(insert_update_sql));
+    } else if (affected_rows > 2 * row_count) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", KR(ret), K(sql_tenant_id),
+               K(row_count), K(affected_rows), K(insert_update_sql));
+    } else {
+      LOG_INFO("balance group ls stat updated", K(tenant_id), K(balance_group_id),
+               K(row_count), K(affected_rows));
     }
   }
   return ret;
@@ -381,10 +360,60 @@ int ObBalanceGroupLSStatOperator::inc_balance_group_ls_stat(
   return ret;
 }
 
+int ObBalanceGroupLSStatOperator::get_all_balance_group_ids(
+    const uint64_t tenant_id,
+    common::ObIArray<ObBalanceGroupID> &balance_group_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  common::ObTimeoutCtx timeout_ctx;
+  const int64_t timeout = GCONF.internal_sql_execute_timeout + 30_s;
+  balance_group_ids.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(timeout_ctx, timeout))) {
+    LOG_WARN("fail to set timeout", KR(ret), K(timeout));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "SELECT DISTINCT balance_group_id_high, balance_group_id_low FROM %s WHERE tenant_id = %ld",
+      OB_ALL_BALANCE_GROUP_LS_STAT_TNAME, tenant_id))) {
+    LOG_WARN("fail to format sql", KR(ret));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, res) {
+      ObMySQLResult *result = nullptr;
+      if (OB_FAIL(sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("fail to get balance group ids", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret), K(tenant_id));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          ObBalanceGroupID bg_id;
+          EXTRACT_INT_FIELD_MYSQL(*result, "balance_group_id_high", bg_id.id_high_, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "balance_group_id_low", bg_id.id_low_, uint64_t);
+          if (FAILEDx(balance_group_ids.push_back(bg_id))) {
+            LOG_WARN("fail to push back balance group id", KR(ret), K(bg_id));
+          }
+        }
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBalanceGroupLSStatOperator::delete_balance_group_ls_stat(
-    const int64_t timeout,
     common::ObISQLClient &sql_client,
-    const uint64_t tenant_id)
+    const uint64_t tenant_id,
+    const ObBalanceGroupID &balance_group_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -392,10 +421,16 @@ int ObBalanceGroupLSStatOperator::delete_balance_group_ls_stat(
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_FAIL(sql.assign_fmt("delete from %s where tenant_id= %ld", OB_ALL_BALANCE_GROUP_LS_STAT_TNAME, tenant_id))) {
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !balance_group_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balance_group_id));
+  } else if (OB_FAIL(sql.assign_fmt(
+      "DELETE FROM %s WHERE tenant_id = %ld AND balance_group_id_high = %ld AND balance_group_id_low = %ld",
+      OB_ALL_BALANCE_GROUP_LS_STAT_TNAME, tenant_id,
+      balance_group_id.id_high_, balance_group_id.id_low_))) {
     LOG_WARN("fail to format sql", KR(ret));
   } else if (OB_FAIL(sql_client.write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
-    LOG_WARN("fail to delete inner table", KR(ret), K(sql));
+    LOG_WARN("fail to delete balance group ls stat", KR(ret), K(tenant_id), K(balance_group_id));
   }
   return ret;
 }
@@ -448,47 +483,50 @@ int ObBalanceGroupLSStatOperator::generate_inc_sql_(
 }
 
 int ObBalanceGroupLSStatOperator::generate_insert_update_sql(
-    const ObBalanceGroupLSStat &bg_ls_stat,
+    const common::ObIArray<ObBalanceGroupLSStat> &bg_ls_stat_array,
     common::ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(!bg_ls_stat.is_valid())) {
+  } else if (OB_UNLIKELY(bg_ls_stat_array.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(bg_ls_stat));
+    LOG_WARN("empty balance group ls stat array", KR(ret));
+  } else if (OB_FAIL(sql_string.append_fmt(
+      "INSERT INTO %s (tenant_id, balance_group_id_high, balance_group_id_low, "
+      "ls_id, tablet_group_count, balance_group_name) VALUES ",
+      OB_ALL_BALANCE_GROUP_LS_STAT_TNAME))) {
+    LOG_WARN("fail to append sql header", KR(ret));
   } else {
-    ObCStringHelper helper;
-    const char *group_name_str = nullptr;
-    if (OB_FAIL(helper.convert(
-        ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()), group_name_str))) {
-      LOG_WARN("fail to convert balance_group_name", K(ret));
-    } else if (OB_FAIL(sql_string.append_fmt(
-            "INSERT INTO %s ("
-            "tenant_id, "
-            "balance_group_id_high, "
-            "balance_group_id_low, "
-            "ls_id, "
-            "tablet_group_count, "
-            "balance_group_name)"
-            " VALUES ("
-            "%ld, %ld, %ld, %ld, %ld, '%s') "
-            "ON DUPLICATE KEY UPDATE "
-            "tablet_group_count = %ld, "
-            "balance_group_name = '%s'",
-            OB_ALL_BALANCE_GROUP_LS_STAT_TNAME,
-            bg_ls_stat.get_tenant_id(),
-            bg_ls_stat.get_balance_group_id().id_high_,
-            bg_ls_stat.get_balance_group_id().id_low_,
-            bg_ls_stat.get_ls_id().id(),
-            bg_ls_stat.get_tablet_group_count(),
-            group_name_str,
-            bg_ls_stat.get_tablet_group_count(),
-            group_name_str))) {
-      LOG_WARN("fail to append fmt", KR(ret), K(bg_ls_stat));
+    for (int64_t i = 0; OB_SUCC(ret) && i < bg_ls_stat_array.count(); ++i) {
+      const ObBalanceGroupLSStat &bg_ls_stat = bg_ls_stat_array.at(i);
+      ObCStringHelper helper;
+      const char *group_name_str = nullptr;
+      if (OB_UNLIKELY(!bg_ls_stat.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", KR(ret), K(bg_ls_stat));
+      } else if (OB_FAIL(helper.convert(
+          ObHexEscapeSqlStr(bg_ls_stat.get_balance_group_name().str()), group_name_str))) {
+        LOG_WARN("fail to convert balance_group_name", KR(ret));
+      } else if (OB_FAIL(sql_string.append_fmt(
+          "%s(%ld, %ld, %ld, %ld, %ld, '%s')",
+          0 == i ? "" : ", ",
+          bg_ls_stat.get_tenant_id(),
+          bg_ls_stat.get_balance_group_id().id_high_,
+          bg_ls_stat.get_balance_group_id().id_low_,
+          bg_ls_stat.get_ls_id().id(),
+          bg_ls_stat.get_tablet_group_count(),
+          group_name_str))) {
+        LOG_WARN("fail to append row", KR(ret), K(bg_ls_stat));
+      }
+    }
+    if (FAILEDx(sql_string.append(
+        " ON DUPLICATE KEY UPDATE tablet_group_count = VALUES(tablet_group_count), "
+        "balance_group_name = VALUES(balance_group_name)"))) {
+      LOG_WARN("fail to append update clause", KR(ret));
     } else {
-      LOG_INFO("balance group ls update sql", K(sql_string));
+      LOG_DEBUG("balance group ls update sql", K(sql_string));
     }
   }
   return ret;
@@ -823,7 +861,6 @@ int ObNewTableTabletAllocator::alloc_tablet_for_create_balance_group(
       }
     }
     if (FAILEDx(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
-        THIS_WORKER.get_timeout_remain(),
         *sql_proxy_,
         tenant_id_,
         bg_id,
@@ -934,7 +971,6 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(bg_ls_stat_operator_.insert_update_balance_group_ls_stat(
-                THIS_WORKER.get_timeout_remain(),
                 *sql_proxy_,
                 tenant_id_,
                 bg_id,

@@ -88,7 +88,7 @@ public:
 private:
   int prepare_balance_group_();
   int split_out_weighted_bg_map_();
-  int save_balance_group_stat_();
+  int save_balance_group_stat_(const common::ObIArray<ObBalanceGroupID> &old_bg_ids);
   int process_weight_balance_intragroup_();
   // balance group inner balance
   int process_balance_partition_inner_();

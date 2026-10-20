@@ -44,9 +44,10 @@ int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t time
   int ret = OB_SUCCESS;
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
   ObBalanceStrategy balance_strategy(ObBalanceStrategy::PB_INTER_GROUP);
+  const ObArray<ObBalanceGroupID> old_bg_ids;
   if (OB_FAIL(prepare_balance_group_())) {
     LOG_WARN("prepare_balance_group fail", KR(ret));
-  } else if (OB_FAIL(save_balance_group_stat_())) {
+  } else if (OB_FAIL(save_balance_group_stat_(old_bg_ids))) {
     LOG_WARN("save_balance_group_stat fail", KR(ret));
   } else if (OB_FAIL(process_weight_balance_intragroup_())) {
     LOG_WARN("process_weight_balance_intragroup failed", KR(ret));
