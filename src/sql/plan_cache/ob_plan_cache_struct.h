@@ -402,7 +402,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       insert_batch_opt_info_(allocator),
       is_batch_insert_opt_(false),
       is_arraybinding_(false),
-      regenerating_expired_plan_(false)
+      regenerating_expired_plan_(false),
+      expired_plan_id_(OB_INVALID_ID)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -478,7 +479,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(insert_batch_opt_info_),
     K(is_batch_insert_opt_),
     K(is_arraybinding_),
-    K(regenerating_expired_plan_)
+    K(regenerating_expired_plan_),
+    K(expired_plan_id_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -544,6 +546,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
 
   bool is_arraybinding_;
   bool regenerating_expired_plan_;
+  ObCacheObjID expired_plan_id_;
 };
 
 struct ObPlanCacheStat
