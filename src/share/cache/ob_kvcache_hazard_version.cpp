@@ -77,7 +77,7 @@ int KVCacheHazardThreadStore::init(const int64_t thread_id)
 void KVCacheHazardThreadStore::set_exit()
 {
   thread_id_ = 0;
-  acquired_version_ = UINT64_MAX;
+  clear_acquired_version();
   ATOMIC_SET(&inited_, false);
 }
 
@@ -200,7 +200,7 @@ int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold)
   if (OB_FAIL(ret)) {
     destroy();
   } else {
-    version_ = 0;
+    ATOMIC_STORE(&version_, 0);
     thread_waiting_node_threshold_ = thread_waiting_node_threshold;
     inited_ = true;
   }
@@ -213,7 +213,7 @@ void GlobalHazardVersion::destroy()
   COMMON_LOG(INFO, "Hazard version begin to destroy");
   {
     lib::ObMutexGuard guard(thread_store_lock_);
-    KVCacheHazardThreadStore *ts = thread_stores_;
+    KVCacheHazardThreadStore *ts = ATOMIC_LOAD(&thread_stores_);
     while (OB_NOT_NULL(ts)) {
       KVCacheHazardThreadStore *tmp_ts = ts->get_next();
       ts->~KVCacheHazardThreadStore();
@@ -223,7 +223,7 @@ void GlobalHazardVersion::destroy()
   }
 
   inited_ = false;
-  thread_stores_ = nullptr;
+  ATOMIC_STORE(&thread_stores_, nullptr);
   thread_store_allocator_.reset();
 }
 
@@ -264,9 +264,14 @@ int GlobalHazardVersion::acquire()
   } else if (OB_FAIL(get_thread_store(ts))) {
     COMMON_LOG(WARN, "Fail to get thread store", K(ret));
   } else {
-    ts->set_acquired_version(version_);
-    while (ts->get_acquired_version() != ATOMIC_LOAD(&version_)) {
-      ts->set_acquired_version(version_);
+    uint64_t version = ATOMIC_LOAD(&version_);
+    for (;;) {
+      ts->set_acquired_version(version);
+      const uint64_t latest = ATOMIC_LOAD(&version_);
+      if (version == latest) {
+        break;
+      }
+      version = latest;
     }
   }
 
@@ -284,7 +289,7 @@ void GlobalHazardVersion::release()
   } else if (OB_FAIL(get_thread_store(ts))) {
     COMMON_LOG(WARN, "Fail to get thread store", K(ret));
   } else {
-    ts->set_acquired_version(UINT64_MAX);
+    ts->clear_acquired_version();
     if (ts->get_waiting_count() >= thread_waiting_node_threshold_) {
       uint64_t min_version = UINT64_MAX;
       if (OB_FAIL(get_min_version(min_version))) {
@@ -310,7 +315,7 @@ int GlobalHazardVersion::retire(const uint64_t tenant_id)
   } else if (OB_FAIL(get_min_version(min_version))) {
     COMMON_LOG(WARN, "Fail to get current min version", K(ret));
   } else {
-    KVCacheHazardThreadStore *ts = thread_stores_;
+    KVCacheHazardThreadStore *ts = ATOMIC_LOAD(&thread_stores_);
     while (ts != nullptr) {
       ts->retire(min_version, tenant_id);
       ts = ts->get_next();
@@ -336,7 +341,7 @@ int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
     // find free thread store to reuse
     {
       lib::ObMutexGuard guard(thread_store_lock_);
-      KVCacheHazardThreadStore *free_store = thread_stores_;
+      KVCacheHazardThreadStore *free_store = ATOMIC_LOAD(&thread_stores_);
       while (OB_SUCC(ret) && nullptr != free_store) {
         if (!free_store->is_inited()) {
           if (OB_FAIL(free_store->init(thread_id))) {
@@ -374,8 +379,8 @@ int GlobalHazardVersion::get_thread_store(KVCacheHazardThreadStore *&ts)
           COMMON_LOG(WARN, "Fail to set thread local pointer when creaet", K(ret), K(syserr));
         } else {
           lib::ObMutexGuard guard(thread_store_lock_);
-          ts->set_next(thread_stores_);
-          thread_stores_ = ts;
+          ts->set_next(ATOMIC_LOAD(&thread_stores_));
+          ATOMIC_STORE(&thread_stores_, ts);
         }  // thread_store_lock_ guard
         if (OB_FAIL(ret)) {
           ts->~KVCacheHazardThreadStore();
@@ -402,7 +407,7 @@ int GlobalHazardVersion::print_current_status() const
     param.set_mem_attr(common::OB_SERVER_TENANT_ID, ObModIds::OB_TEMP_VARIABLES);
     CREATE_WITH_TEMP_CONTEXT(param) {
       int64_t ctxpos = 0;
-      KVCacheHazardThreadStore *ts = thread_stores_;
+      KVCacheHazardThreadStore *ts = ATOMIC_LOAD(&thread_stores_);
       int64_t total_nodes_num = 0;
       uint64_t min_version = UINT64_MAX;
       int64_t ts_count = 0;
@@ -456,8 +461,9 @@ int GlobalHazardVersion::get_min_version(uint64_t &min_version) const
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "This HazardVersion is not inited", K(ret), K(inited_));
   } else {
+    // Take the cutoff before scanning the atomically published stores.
     min_version = ATOMIC_LOAD(&version_);
-    KVCacheHazardThreadStore *ts = thread_stores_;
+    KVCacheHazardThreadStore *ts = ATOMIC_LOAD(&thread_stores_);
     uint64_t thread_version = UINT64_MAX;
 
     while (nullptr != ts) {

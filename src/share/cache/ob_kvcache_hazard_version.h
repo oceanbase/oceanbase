@@ -51,21 +51,25 @@ public:
   OB_INLINE int64_t get_thread_id() const { return thread_id_; }
   OB_INLINE int64_t get_waiting_count() const { return ATOMIC_LOAD(&waiting_nodes_count_); }
   OB_INLINE uint64_t get_last_retire_version() const { return ATOMIC_LOAD(&last_retire_version_); }
-  OB_INLINE uint64_t get_acquired_version() const { return acquired_version_; }
-  OB_INLINE void set_acquired_version(const uint64_t version) { acquired_version_ = version; }
+  OB_INLINE uint64_t get_acquired_version() const { return ATOMIC_LOAD(&acquired_version_); }
+  // Publishing protection must precede the version recheck and all protected loads.
+  // A release store alone does not provide the required StoreLoad ordering.
+  OB_INLINE void set_acquired_version(const uint64_t version) { ATOMIC_STORE(&acquired_version_, version); }
+  // Protected accesses must finish before making the slot inactive.
+  OB_INLINE void clear_acquired_version() { ATOMIC_STORE_REL(&acquired_version_, UINT64_MAX); }
   OB_INLINE KVCacheHazardThreadStore *get_next() const { return ATOMIC_LOAD(&next_); }
   OB_INLINE void set_next(KVCacheHazardThreadStore * const next) { ATOMIC_SET(&next_, next); }
   int delete_node(KVCacheHazardNode &node);  // Put node in delete_list and set its version
 
   // Local retire: Retire nodes in delete_list whose version is less than version and send rest nodes to node_receiver
   void retire(const uint64_t version, const uint64_t tenant_id);
-  TO_STRING_KV(K_(thread_id), K_(inited), K_(last_retire_version), KP_(delete_list), K_(waiting_nodes_count), K_(acquired_version));
+  TO_STRING_KV(K_(thread_id), K_(inited), K_(last_retire_version), KP_(delete_list), K_(waiting_nodes_count), "acquired_version", get_acquired_version());
 
 private:
   void add_nodes(KVCacheHazardNode &list);
 
 private:
-  uint64_t acquired_version_;
+  uint64_t acquired_version_;  // Access atomically after publication.
   KVCacheHazardNode * delete_list_;  // nodes waiting to retire
   int64_t waiting_nodes_count_;  // length of delete_list_
   uint64_t last_retire_version_;  // last version of retire()
