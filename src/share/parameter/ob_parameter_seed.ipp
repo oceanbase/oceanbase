@@ -1468,6 +1468,13 @@ DEF_STR_WITH_CHECKER(audit_log_format, OB_TENANT_PARAMETER, "CSV",
          "the audit log file format, values: CSV",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
          "CSV");
+DEF_STR_WITH_CHECKER(audit_log_format_options, OB_TENANT_PARAMETER, "",
+         common::ObConfigAuditLogFormatOptionsChecker,
+         "JSON options for audit CSV: field_delimiter (1-50 bytes, default comma), "
+         "line_delimiter (1-50 bytes, default LF), "
+         "field_enclosure (0-1 byte wrapped around string fields, default double quote, "
+         "empty string disables it). Empty value restores defaults.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(audit_log_max_size, OB_TENANT_PARAMETER, "0M", "[0M,)",
          "the maximum combined size of the audit log files",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

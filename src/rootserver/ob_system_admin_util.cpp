@@ -1339,7 +1339,7 @@ int ObAdminSetConfig::build_dml_before_update_(
             || OB_FAIL(dml.add_pk_column("svr_ip", svr_ip))
             || OB_FAIL(dml.add_pk_column("svr_port", svr_port))
             || OB_FAIL(dml.add_pk_column("name", item.name_.ptr()))
-            || OB_FAIL(dml.add_column("value", item.value_.ptr()))
+            || OB_FAIL(dml.add_column("value", ObHexEscapeSqlStr(item.value_.str())))
             || OB_FAIL(dml.add_column("info", item.comment_.ptr()))
             || OB_FAIL(dml.add_column("config_version", new_version))) {
     LOG_WARN("add column failed", KR(ret), K(item), K(new_version), K(svr_ip), K(svr_port));

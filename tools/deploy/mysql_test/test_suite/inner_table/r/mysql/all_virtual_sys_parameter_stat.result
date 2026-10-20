@@ -33,6 +33,7 @@ audit_log_buffer_size
 audit_log_compression
 audit_log_enable
 audit_log_format
+audit_log_format_options
 audit_log_max_size
 audit_log_path
 audit_log_prune_seconds

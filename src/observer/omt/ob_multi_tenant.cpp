@@ -1723,8 +1723,8 @@ int ObMultiTenant::update_tenant_audit_log_config()
   } else if (OB_ISNULL(audit_logger)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("audit logger should not be null", K(ret));
-  } else {
-    audit_logger->reload_config();
+  } else if (OB_FAIL(audit_logger->reload_config())) {
+    LOG_WARN("failed to reload tenant audit log config", K(ret));
   }
 #endif
   return ret;

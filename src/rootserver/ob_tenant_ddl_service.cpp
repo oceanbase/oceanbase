@@ -210,7 +210,7 @@ int ObTenantDDLService::init_tenant_config_(
                  || OB_FAIL(dml.add_pk_column(K(svr_port)))
                  || OB_FAIL(dml.add_pk_column("name", config->key_.ptr()))
                  || OB_FAIL(dml.add_column("data_type", item->data_type()))
-                 || OB_FAIL(dml.add_column("value", config->value_.ptr()))
+                 || OB_FAIL(dml.add_column("value", ObHexEscapeSqlStr(config->value_)))
                  || OB_FAIL(dml.add_column("info", ""))
                  || OB_FAIL(dml.add_column("config_version", config_version))
                  || OB_FAIL(dml.add_column("section", item->section()))
