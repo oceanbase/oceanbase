@@ -557,6 +557,7 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   transaction::ObTxDesc *tx_desc = NULL;
   bool is_sess_in_retry = false;
   int last_query_retry_err = OB_SUCCESS;
+  int64_t retry_cnt = 0;
   if (!is_big_table_ && OB_FAIL(add_block_sample_info(sample_block_ratio_, seed_, sample_str))) {
     LOG_WARN("failed to add block sample info", K(ret));
   } else if (OB_FAIL(add_basic_hint_info(basic_hint_str, max_ds_timeout, is_big_table_ ? 1 : degree))) {
@@ -568,7 +569,8 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
   } else if (OB_FAIL(prepare_and_store_session(session_info, session_value,
                                                nested_count, is_no_backslash_escapes, tx_desc,
                                                is_sess_in_retry,
-                                               last_query_retry_err))) {
+                                               last_query_retry_err,
+                                               retry_cnt))) {
     throw_ds_error = true;//here we must throw error, because the session may be unavailable.
     LOG_WARN("failed to prepare and store session", K(ret));
   } else {
@@ -588,7 +590,8 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
     if (OB_SUCCESS != (tmp_ret = restore_session(session_info, session_value,
                                                  nested_count, is_no_backslash_escapes, tx_desc,
                                                  is_sess_in_retry,
-                                                 last_query_retry_err))) {
+                                                 last_query_retry_err,
+                                                 retry_cnt))) {
       throw_ds_error = true;//here we must throw error, because the session may be unavailable.
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
@@ -1181,7 +1184,8 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
                                                  bool &is_no_backslash_escapes,
                                                  transaction::ObTxDesc *&tx_desc,
                                                  bool &is_sess_in_retry,
-                                                 int &last_query_retry_err)
+                                                 int &last_query_retry_err,
+                                                 int64_t &retry_cnt)
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
@@ -1202,6 +1206,8 @@ int ObDynamicSampling::prepare_and_store_session(ObSQLSessionInfo *session,
       ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
       is_sess_in_retry = session->get_is_in_retry();
       last_query_retry_err = session->get_retry_info().get_last_query_retry_err();
+      retry_cnt = session->get_retry_info().get_retry_cnt();
+      session->get_retry_info_for_update().set_retry_cnt(0);
       nested_count = session->get_nested_count();
       IS_NO_BACKSLASH_ESCAPES(session->get_sql_mode(), is_no_backslash_escapes);
       session->set_sql_mode(session->get_sql_mode() & ~SMO_NO_BACKSLASH_ESCAPES);
@@ -1226,7 +1232,8 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
                                        bool is_no_backslash_escapes,
                                        transaction::ObTxDesc *tx_desc,
                                        bool &is_sess_in_retry,
-                                       int &last_query_retry_err)
+                                       int &last_query_retry_err,
+                                       int64_t retry_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session) || OB_ISNULL(session_value)) {
@@ -1237,6 +1244,8 @@ int ObDynamicSampling::restore_session(ObSQLSessionInfo *session,
   } else if (OB_FALSE_IT(session->set_session_in_retry(is_sess_in_retry, last_query_retry_err))) {
   } else {
     ObSQLSessionInfo::LockGuard data_lock_guard(session->get_thread_data_lock());
+    session->get_retry_info_for_update().set_last_query_retry_err(last_query_retry_err);
+    session->get_retry_info_for_update().set_retry_cnt(retry_cnt);
     session->set_nested_count(nested_count);
     if (is_no_backslash_escapes) {
       session->set_sql_mode(session->get_sql_mode() | SMO_NO_BACKSLASH_ESCAPES);
