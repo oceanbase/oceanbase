@@ -209,7 +209,7 @@ ObServer::ObServer()
     diag_(),
     scramble_rand_(),
     duty_task_(),
-    sql_mem_task_(),
+    sql_mem_task_(duty_task_),
     ctas_clean_up_task_(),
     refresh_active_time_task_(),
     refresh_network_speed_task_(),

@@ -12,6 +12,11 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "ob_tenant_duty_task.h"
+#include "common/ob_smart_var.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/string/ob_sql_string.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 #include "sql/engine/ob_tenant_sql_memory_manager.h"
 #include "observer/omt/ob_tenant.h"
 
@@ -24,14 +29,118 @@ using namespace sql;
 namespace observer {
 
 ObTenantDutyTask::ObTenantDutyTask()
-  : allocator_(ObModIds::OB_DUTY_TASK)
+  : allocator_(ObModIds::OB_DUTY_TASK),
+    sys_tenant_work_area_percentage_checked_(false)
 {
 }
 
 void ObTenantDutyTask::runTimerTask()
 {
   allocator_.reset_remain_one_page();
+  if (!is_sys_tenant_work_area_percentage_checked()) {
+    bool is_server_serving = false;
+    if (SS_SERVING == GCTX.status_
+        && OB_NOT_NULL(GCTX.schema_service_)
+        && GCTX.schema_service_->is_sys_full_schema()) {
+      int ret = OB_SUCCESS;
+      int64_t baseline_schema_version = OB_INVALID_VERSION;
+      if (OB_FAIL(GCTX.schema_service_->get_baseline_schema_version(
+              OB_SYS_TENANT_ID, true/*auto_update*/, baseline_schema_version))) {
+        LOG_WARN("get sys tenant baseline schema version failed", KR(ret));
+      } else {
+        // During fresh bootstrap an observer can enter SS_SERVING before the bootstrap
+        // transaction is committed. A completed baseline schema version is persisted only
+        // after bootstrap finishes, so it is safe to inspect the system variable history
+        // then.
+        is_server_serving = baseline_schema_version > 0;
+      }
+    }
+    if (is_server_serving) {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(adjust_sys_tenant_work_area_percentage_())) {
+        LOG_WARN("adjust sys tenant work area percentage failed", KR(ret));
+      } else {
+        ATOMIC_STORE(&sys_tenant_work_area_percentage_checked_, true);
+      }
+    }
+  }
   update_all_tenants();
+}
+
+static int check_sys_tenant_work_area_percentage_is_initial_value(
+    common::ObISQLClient &sql_client,
+    bool &is_initial_value)
+{
+  static constexpr const char *SYS_TENANT_WORK_AREA_PERCENTAGE_VARIABLE =
+      "ob_sql_work_area_percentage";
+  static constexpr int64_t SYS_TENANT_LEGACY_WORK_AREA_PERCENTAGE = 5;
+  int ret = OB_SUCCESS;
+  int64_t initial_value_state = 0;
+  ObSqlString sql;
+  is_initial_value = false;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    if (OB_FAIL(sql.assign_fmt(
+        "SELECT CASE WHEN COUNT(*) = 0 THEN -1 "
+        "WHEN COUNT(*) = 1 AND MIN(value) = '%ld' THEN 1 "
+        "ELSE 0 END AS initial_value_state "
+        "FROM (SELECT value FROM %s WHERE tenant_id = 0 AND zone = '' "
+        "AND name = '%s' AND is_deleted = 0 LIMIT 2) AS variable_history",
+        SYS_TENANT_LEGACY_WORK_AREA_PERCENTAGE,
+        OB_ALL_SYS_VARIABLE_HISTORY_TNAME,
+        SYS_TENANT_WORK_AREA_PERCENTAGE_VARIABLE))) {
+      LOG_WARN("failed to construct sys tenant work area percentage initial value query", KR(ret));
+    } else if (OB_FAIL(sql_client.read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
+      LOG_WARN("failed to query whether sys tenant work area percentage is initial value", KR(ret));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get sys tenant work area percentage initial value query result", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("failed to get sys tenant work area percentage initial value state", KR(ret));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "initial_value_state", initial_value_state, int64_t);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("failed to extract sys tenant work area percentage initial value state", KR(ret));
+      } else if (OB_UNLIKELY(initial_value_state < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected empty sys tenant work area percentage history",
+                 KR(ret), K(initial_value_state));
+      } else {
+        is_initial_value = 1 == initial_value_state;
+        LOG_INFO("checked whether sys tenant work area percentage is initial value",
+                 K(is_initial_value), K(initial_value_state));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTenantDutyTask::adjust_sys_tenant_work_area_percentage_()
+{
+  static constexpr int64_t SYS_TENANT_COMPATIBLE_WORK_AREA_PERCENTAGE = 80;
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  bool is_initial_value = false;
+  ObSqlString sql;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(check_sys_tenant_work_area_percentage_is_initial_value(
+                 *GCTX.sql_proxy_, is_initial_value))) {
+    LOG_WARN("check whether sys tenant work area percentage is initial value failed", KR(ret));
+  } else if (!is_initial_value) {
+    LOG_INFO("sys tenant work area percentage is not the initial value, "
+             "skip compatibility adjustment");
+  } else if (OB_FAIL(sql.assign_fmt("SET GLOBAL ob_sql_work_area_percentage = %ld",
+                                    SYS_TENANT_COMPATIBLE_WORK_AREA_PERCENTAGE))) {
+    LOG_WARN("construct sys tenant work area percentage sql failed", KR(ret));
+  } else if (OB_FAIL(GCTX.sql_proxy_->write(OB_SYS_TENANT_ID, sql.ptr(), affected_rows))) {
+    LOG_WARN("set sys tenant work area percentage failed", KR(ret), K(sql));
+  } else {
+    LOG_INFO("set sys tenant work area percentage succeeded",
+             K(SYS_TENANT_COMPATIBLE_WORK_AREA_PERCENTAGE));
+  }
+  return ret;
 }
 
 int ObTenantDutyTask::schedule(int tg_id)
@@ -46,7 +155,8 @@ void ObTenantDutyTask::update_all_tenants()
   GCTX.omt_->get_tenant_ids(ids);
 
   for (int64_t i = 0; i < ids.size(); i++) {
-    if (ids[i] <= OB_USER_TENANT_ID) {
+    if (is_virtual_tenant_id(ids[i])
+        || (is_sys_tenant(ids[i]) && !is_sys_tenant_work_area_percentage_checked())) {
       continue;
     } else {
       if (OB_FAIL(update_tenant_wa_percentage(ids[i]))) {
@@ -194,7 +304,9 @@ void ObTenantSqlMemoryTimerTask::runTimerTask()
   GCTX.omt_->get_tenant_ids(ids);
   // Each tenant must calculate the global bound size regularly, so the failure of one tenant should not affect other tenants, so there is no judgment OB_SUCC(ret) to end
   for (int64_t i = 0; i < ids.size(); i++) {
-    if (ids[i] <= OB_MAX_RESERVED_TENANT_ID) {
+    if (is_virtual_tenant_id(ids[i])
+        || (is_sys_tenant(ids[i])
+            && !duty_task_.is_sys_tenant_work_area_percentage_checked())) {
       continue;
     } else {
       MTL_SWITCH(ids[i]) {
