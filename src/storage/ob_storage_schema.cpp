@@ -1918,6 +1918,8 @@ int ObStorageSchema::get_skip_index_col_attr(
       if (OB_FAIL(ret)) {
       } else if (is_rowkey) {
         //skip
+      } else if (!is_storage_index_table() && !column_array_[col_idx].is_column_stored_in_sstable()) {
+        // Keep the same column order as get_multi_version_column_descs.
       } else {
         const ObObjMeta &meta_type = column_array_[col_idx].meta_type_;
         for (int64_t skip_col_id = 0; OB_SUCC(ret) && skip_col_id < skip_idx_attr_array_.count(); ++skip_col_id) {
@@ -2240,11 +2242,14 @@ void ObStorageSchema::reset_string(ObString &str)
 
 void ObStorageSchema::update_column_cnt(const int64_t input_col_cnt)
 {
+  const int64_t origin_column_cnt = column_cnt_;
+  const int64_t origin_store_column_cnt = store_column_cnt_;
   column_cnt_ = MAX(column_cnt_, input_col_cnt);
   store_column_cnt_ = MAX(store_column_cnt_, input_col_cnt);
-  if (column_cnt_ != column_array_.count()) {
+  if (column_cnt_ != column_array_.count() || origin_store_column_cnt != store_column_cnt_) {
     column_info_simplified_ = true;
-    STORAGE_LOG(INFO, "update column cnt", K(column_cnt_), K(store_column_cnt_), K(column_cnt_), K(column_array_.count()));
+    STORAGE_LOG(INFO, "update column cnt", K(origin_column_cnt), K_(column_cnt),
+        K(origin_store_column_cnt), K_(store_column_cnt), "column_array_size", column_array_.count());
   }
 }
 

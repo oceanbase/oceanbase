@@ -329,6 +329,75 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
 }
 
+TEST_F(TestStorageSchema, update_column_cnt_with_virtual_columns)
+{
+  for (int64_t virtual_column_cnt = 0; virtual_column_cnt <= 2; ++virtual_column_cnt) {
+    share::schema::ObTableSchema table_schema;
+    ObStorageSchema storage_schema;
+    TestSchemaPrepare::prepare_schema(table_schema, 1, 4);
+    for (int64_t i = 0; i < virtual_column_cnt; ++i) {
+      share::schema::ObColumnSchemaV2 *column = table_schema.get_column_schema(OB_APP_MIN_COLUMN_ID + 1 + i);
+      ASSERT_NE(nullptr, column);
+      column->add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+    }
+    ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+    int64_t stored_column_cnt = 0;
+    ASSERT_EQ(OB_SUCCESS, storage_schema.get_store_column_count(stored_column_cnt, true));
+    ASSERT_EQ(4 - virtual_column_cnt, stored_column_cnt);
+
+    storage_schema.update_column_cnt(stored_column_cnt);
+    ASSERT_FALSE(storage_schema.is_column_info_simplified());
+
+    // Memtables report stored columns; virtual columns can hide the growth in column_cnt_.
+    storage_schema.update_column_cnt(stored_column_cnt + 1);
+    ASSERT_TRUE(storage_schema.is_column_info_simplified());
+    ASSERT_EQ(OB_SUCCESS, storage_schema.get_store_column_count(stored_column_cnt, true));
+    ASSERT_EQ(5 - virtual_column_cnt, stored_column_cnt);
+    if (virtual_column_cnt > 0) {
+      ASSERT_EQ(storage_schema.get_column_count(), storage_schema.column_array_.count());
+    }
+
+    storage_schema.update_column_cnt(stored_column_cnt);
+    ASSERT_TRUE(storage_schema.is_column_info_simplified());
+  }
+}
+
+TEST_F(TestStorageSchema, skip_index_attrs_match_stored_columns)
+{
+  for (int64_t is_index = 0; is_index <= 1; ++is_index) {
+    share::schema::ObTableSchema table_schema;
+    ObStorageSchema storage_schema;
+    TestSchemaPrepare::prepare_schema(table_schema, 1, 4);
+    table_schema.set_table_type(is_index ? share::schema::USER_INDEX : share::schema::USER_TABLE);
+    if (is_index) {
+      table_schema.set_index_type(share::schema::INDEX_TYPE_NORMAL_LOCAL);
+      table_schema.set_data_table_id(TestSchemaPrepare::TABLE_ID + 1);
+    }
+    share::schema::ObColumnSchemaV2 *virtual_column = table_schema.get_column_schema(OB_APP_MIN_COLUMN_ID + 2);
+    ASSERT_NE(nullptr, virtual_column);
+    virtual_column->add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+    virtual_column->set_skip_index_attr(0);
+    ASSERT_EQ(OB_SUCCESS, storage_schema.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+
+    ObArray<share::schema::ObColDesc> column_descs;
+    ObArray<share::schema::ObSkipIndexColumnAttr> skip_idx_attrs;
+    ASSERT_EQ(OB_SUCCESS, storage_schema.get_multi_version_column_descs(column_descs));
+    ASSERT_EQ(OB_SUCCESS, storage_schema.get_skip_index_col_attr(true, skip_idx_attrs));
+    ASSERT_EQ(5 + is_index, column_descs.count());
+    ASSERT_EQ(column_descs.count(), skip_idx_attrs.count());
+    for (int64_t i = 0; i < column_descs.count(); ++i) {
+      const uint64_t column_id = column_descs.at(i).col_id_;
+      if (column_id >= OB_APP_MIN_COLUMN_ID) {
+        const share::schema::ObColumnSchemaV2 *column = table_schema.get_column_schema(column_id);
+        ASSERT_NE(nullptr, column);
+        ASSERT_EQ(column->get_skip_index_attr().get_packed_value(), skip_idx_attrs.at(i).get_packed_value());
+      } else {
+        ASSERT_FALSE(skip_idx_attrs.at(i).has_skip_index());
+      }
+    }
+  }
+}
+
 TEST_F(TestStorageSchema, test_clipped_schema_for_tablet_split)
 {
   share::schema::ObTableSchema table_schema;
