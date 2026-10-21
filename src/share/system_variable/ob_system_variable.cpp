@@ -2267,12 +2267,14 @@ bool ObSysVarOnCheckFuncs::can_set_trans_var(ObSetVar::SetScopeType scope,
      */
     ret = !session.is_in_transaction() || session.is_txn_free_route_temp();
   } else if (lib::is_mysql_mode()) {
-    /*
-     * mysql mode is much simpler than oracle mode, only 'SET TRANSACTION xxx' is forbidden
-     * when it appears in an explicit transaction, and it will not create new snapshot or
-     * transaction in all cases.
-     */
-    ret = !session.is_in_transaction() || ObSetVar::SET_SCOPE_NEXT_TRANS != scope;
+    // With autocommit disabled, a plain SELECT can acquire a snapshot without
+    // activating the underlying transaction. It still starts a transaction for
+    // MySQL's SET TRANSACTION restrictions. Track statements that need a
+    // transaction so that constant SELECTs do not trigger this restriction.
+    const bool transaction_started = session.is_in_transaction()
+        || (!session.get_local_autocommit()
+            && stmt::T_NONE != session.get_first_need_txn_stmt_type());
+    ret = !transaction_started || ObSetVar::SET_SCOPE_NEXT_TRANS != scope;
   } else {
     // nothing.
   }
