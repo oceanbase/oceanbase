@@ -159,7 +159,7 @@ public:
       if (OB_UNLIKELY(ATOMIC_LOAD(timer_running_flag_) == false)) {// timer is stopped, not allow to coimmit task and schedule again
         if (future_.is_valid()) {
           if (CLICK_FAIL(future_.wait())) {// waiting for thread pool run the task done
-            OCCAM_LOG(ERROR, "future wait failed, some error occured and could not handle", KR(ret), K(*this));
+            OCCAM_LOG(ERROR, "future wait failed, some error occurred and could not handle", KR(ret), K(*this));
           }
         }
         try_delete_this_task_if_there_is_no_handle = true;
@@ -177,7 +177,7 @@ public:
           OCCAM_LOG(WARN, "last commit task not scheduled yet, give up committing new task this time", KR(ret), K(*this));
         } else {// not first time to run task, and last committed task in thread pool has run done
           bool *stop_task = nullptr;
-          if (CLICK_FAIL(future_.get(stop_task))) {// some unknown error occured, task scheduled must stop
+          if (CLICK_FAIL(future_.get(stop_task))) {// some unknown error occurred, task scheduled must stop
             allow_to_commit = false;
             allow_to_register_next_task = false;
             OCCAM_LOG(ERROR, "fail to get value from future", KR(ret), K(*this));
