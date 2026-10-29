@@ -37,7 +37,7 @@ OB_DEF_SERIALIZE_SIZE(ObExtraRpcHeader)
 }
 
 #ifdef ERRSIM
-  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, module_type_, log_reduction_mode_, extra_rpc_header_);
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, log_reduction_mode_, extra_rpc_header_, module_type_); // FARM COMPAT WHITELIST, errsim-only member moved to tail for cross-version rpc wire compat, verified by obtestv2 compat farm runs
 #else
   OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, log_reduction_mode_, extra_rpc_header_);
 #endif
