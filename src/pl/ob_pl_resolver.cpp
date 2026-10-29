@@ -19374,6 +19374,12 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
       } else if (!eligible || OB_ISNULL(return_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected AST structure", K(ret), K(ast), K(routine_info));
+      } else if (OB_FAIL(ObPLRouter::check_expr_sql_transpiler_eligible(
+                           *return_stmt->get_ret_expr(), eligible))) {
+        LOG_WARN("failed to check expr sql transpiler eligible", K(ret), K(ast), K(routine_info));
+      } else if (!eligible) {
+        // Keep the UDF expression for routines whose persisted eligibility flag
+        // predates the user-variable restriction.
       } else if (OB_FAIL(ObPLExprCopier::copy_expr(expr_factory_, return_stmt->get_ret_expr(), tmp_expr))){
         LOG_WARN("failed to copy expr", K(ret), K(ast), K(return_stmt->get_ret_expr()), K(tmp_expr));
       } else if (OB_FAIL(SMART_CALL(sql_transpiler_substitute(ast, *udf_expr, tmp_expr)))) {
