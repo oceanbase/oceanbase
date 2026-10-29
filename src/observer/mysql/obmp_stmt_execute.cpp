@@ -2672,6 +2672,11 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                 }
               }
             }
+            if (OB_SUCC(ret) && OB_UNLIKELY(extra_len < 0 || extra_len > str.length())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("got invalid ps lob param header length", K(ret), K(extra_len), K(length),
+                       K(is_lob_v1), K(has_inrow_data));
+            }
           }
           if (is_lob_v1 || MYSQL_TYPE_ORA_CLOB != type || has_inrow_data) {
             OZ(copy_or_convert_str(allocator,
