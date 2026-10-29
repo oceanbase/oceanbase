@@ -21,6 +21,7 @@
 #include "rootserver/ob_root_service.h"
 #include "share/schema/ob_mlog_info.h"
 #include "share/vector_index/ob_vector_index_util.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -29,6 +30,8 @@ using namespace oceanbase::obrpc;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
+
+ERRSIM_POINT_DEF(EN_INDEX_BUILD_RELEASE_LOB_META_NOT_EXIST, "Simulate a missing LOB meta table while releasing index-build snapshots");
 
 int ObIndexSSTableBuildTask::set_nls_format(const ObString &nls_date_format,
                                             const ObString &nls_timestamp_format,
@@ -762,6 +765,28 @@ int ObIndexBuildTask::wait_trans_end()
   return ret;
 }
 
+int ObIndexBuildTask::append_rowkey_doc_snapshot_tablets(
+    const ObTableSchema &data_table_schema,
+    ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  uint64_t rowkey_doc_table_id = OB_INVALID_ID;
+  const ObIndexType index_type = create_index_arg_.index_type_;
+  // Keep this set aligned with ObDomainIdUtils::check_table_need_domain_id_merge(DOC_ID):
+  // domain-id merge reads rowkey-doc as a second source while building these auxiliaries.
+  const bool need_rowkey_doc = is_doc_rowkey_aux(index_type)
+                            || is_fts_index_aux(index_type)
+                            || is_fts_doc_word_aux(index_type)
+                            || is_multivalue_index_aux(index_type);
+  if (!need_rowkey_doc) {
+  } else if (OB_FAIL(data_table_schema.get_rowkey_doc_tid(rowkey_doc_table_id))) {
+    LOG_WARN("failed to get rowkey doc table id", K(ret), K(index_type), K(data_table_schema));
+  } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, rowkey_doc_table_id, tablet_ids))) {
+    LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(index_type), K(rowkey_doc_table_id));
+  }
+  return ret;
+}
+
 int ObIndexBuildTask::hold_snapshot(
     common::ObMySQLTransaction &trans,
     const int64_t snapshot)
@@ -806,6 +831,8 @@ int ObIndexBuildTask::hold_snapshot(
     } else if (need_acquire_lob && data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       LOG_WARN("failed to get data lob piece table snapshot", K(ret));
+    } else if (OB_FAIL(append_rowkey_doc_snapshot_tablets(*data_table_schema, tablet_ids))) {
+      LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(object_id_), K(target_object_id_));
     } else if (index_table_schema->is_vec_vid_rowkey_type() && 
               OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
       LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
@@ -863,9 +890,12 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
     } else if (OB_ISNULL(data_table_schema)) {
       // ignore ret
       LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema));
-    } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
-                OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
+    } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID
+               && (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))
+                   || OB_FAIL(OB_E(EN_INDEX_BUILD_RELEASE_LOB_META_NOT_EXIST) OB_SUCCESS)
+                  )) {
       if (OB_TABLE_NOT_EXIST == ret) {
+        LOG_INFO("data lob meta table not exist when releasing index build snapshot", K(ret), K(object_id_), K(target_object_id_));
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get data lob meta table snapshot", K(ret));
@@ -878,7 +908,17 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
         LOG_WARN("failed to get data lob piece table snapshot", K(ret));
       }
     }
-    
+
+    // Collect rowkey-doc independently because a missing LOB auxiliary is ignored above.
+    if (OB_SUCC(ret) && OB_NOT_NULL(data_table_schema)
+        && OB_FAIL(append_rowkey_doc_snapshot_tablets(*data_table_schema, tablet_ids))) {
+      if (OB_ERR_INDEX_KEY_NOT_FOUND == ret || OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get rowkey doc table snapshot", K(ret), K(object_id_), K(target_object_id_));
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, index_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(object_id_));
