@@ -764,7 +764,7 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
             } else {
               LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(storage_info));
             }
-          } else if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
+          } else if (ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format())) {
             load_args.file_name_ = temp_file_name;
           } else {
             if (OB_ISNULL(file_ptr = temp_file_name.reverse_find('/'))) {
