@@ -1440,7 +1440,9 @@ int ObVecIndexBuilderUtil::set_vec_index_snapshot_data_table_columns(
         LOG_WARN("add_column failed", K(store_column), K(row_desc), K(ret));
       }
     }
-    if (FAILEDx(index_schema.sort_column_array_by_column_id())) {
+    if (FAILEDx(ObVectorIndexUtil::set_snapshot_vid_nullable(data_schema, index_schema))) {
+      LOG_WARN("failed to set snapshot VID nullable", K(ret));
+    } else if (FAILEDx(index_schema.sort_column_array_by_column_id())) {
       LOG_WARN("failed to sort column", K(ret));
     } else {
       LOG_INFO("succeed to set vec index table columns", K(index_schema));

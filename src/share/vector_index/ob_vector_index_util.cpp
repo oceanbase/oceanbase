@@ -1209,6 +1209,78 @@ int ObVectorIndexUtil::check_has_extra_info(const ObTableSchema &data_table_sche
   return ret;
 }
 
+int ObVectorIndexUtil::check_snapshot_vid_compatible(
+    const ObTableSchema &data_schema,
+    const ObTableSchema &snapshot_schema,
+    bool &compatible)
+{
+  int ret = OB_SUCCESS;
+  compatible = false;
+  uint64_t vid_col_id = OB_INVALID_ID;
+  const ObColumnSchemaV2 *snapshot_vid = nullptr;
+  if (!snapshot_schema.is_vec_index_snapshot_data_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid snapshot table type", K(ret), K(snapshot_schema.get_table_id()));
+  } else if (OB_FAIL(data_schema.get_vec_index_vid_col_id(vid_col_id))) {
+    LOG_WARN("failed to get VID column id", K(ret));
+  } else if (OB_ISNULL(snapshot_vid = snapshot_schema.get_column_schema(vid_col_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("snapshot VID column not found", K(ret), K(vid_col_id),
+             K(snapshot_schema.get_table_id()));
+  } else {
+    compatible = !snapshot_vid->is_not_null_for_write() && !snapshot_vid->is_not_null_for_read();
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::check_snapshot_vid_compatible(
+    ObSchemaGetterGuard &schema_guard,
+    uint64_t tenant_id, uint64_t data_table_id, uint64_t snapshot_table_id,
+    bool &compatible)
+{
+  int ret = OB_SUCCESS;
+  compatible = false;
+  const ObTableSchema *data_schema = nullptr;
+  const ObTableSchema *snapshot_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_schema))) {
+    LOG_WARN("failed to get data table schema", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(
+          tenant_id, snapshot_table_id, snapshot_schema))) {
+    LOG_WARN("failed to get snapshot table schema", K(ret), K(tenant_id), K(snapshot_table_id));
+  } else if (OB_ISNULL(data_schema) || OB_ISNULL(snapshot_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema not found", K(ret), K(tenant_id),
+             K(data_table_id), K(snapshot_table_id));
+  } else if (OB_FAIL(check_snapshot_vid_compatible(*data_schema, *snapshot_schema, compatible))) {
+    LOG_WARN("failed to check snapshot VID", K(ret), K(tenant_id),
+             K(data_table_id), K(snapshot_table_id));
+  }
+  return ret;
+}
+
+int ObVectorIndexUtil::set_snapshot_vid_nullable(
+    const ObTableSchema &data_schema,
+    ObTableSchema &snapshot_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t vid_col_id = OB_INVALID_ID;
+  ObColumnSchemaV2 *snapshot_vid = nullptr;
+  if (!snapshot_schema.is_vec_index_snapshot_data_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid snapshot table type", K(ret), K(snapshot_schema.get_table_id()));
+  } else if (OB_FAIL(data_schema.get_vec_index_vid_col_id(vid_col_id))) {
+    LOG_WARN("failed to get VID column id", K(ret));
+  } else if (OB_ISNULL(snapshot_vid = snapshot_schema.get_column_schema(vid_col_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("snapshot VID column not found", K(ret), K(vid_col_id),
+             K(snapshot_schema.get_table_id()));
+  } else {
+    snapshot_vid->set_nullable(true);
+    snapshot_vid->drop_not_null_cst();
+  }
+  return ret;
+}
+
 int ObVectorIndexUtil::check_column_has_vector_index(
     const ObTableSchema &data_table_schema, ObSchemaGetterGuard &schema_guard, const int64_t col_id, bool &is_column_has_vector_index, ObIndexType& index_type)
 {
@@ -4124,6 +4196,9 @@ int ObVectorIndexUtil::generate_index_schema_from_exist_table(
     LOG_WARN("unexpected nullptr", K(ret), K(old_index_table_name));
   } else if (OB_FAIL(new_index_schema.assign(*old_index_schema))) {
     LOG_WARN("fail to assign schema", K(ret));
+  } else if (new_index_schema.is_vec_index_snapshot_data_type()
+             && OB_FAIL(set_snapshot_vid_nullable(data_table_schema, new_index_schema))) {
+    LOG_WARN("failed to set snapshot VID nullable", K(ret));
   } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator, 
                                                    data_table_schema.get_table_id(), 
                                                    new_index_name_suffix,
