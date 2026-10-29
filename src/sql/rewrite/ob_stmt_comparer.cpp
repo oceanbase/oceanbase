@@ -258,11 +258,11 @@ bool ObStmtCompareContext::compare_query(const ObQueryRefRawExpr &first,
              OB_ISNULL(first_sel = first.get_ref_stmt()) ||
              OB_ISNULL(second_sel = second.get_ref_stmt())) {
     bret = false;
-  } else if (OB_FAIL(ObStmtComparer::check_stmt_containment(first_sel,
-                                                            second_sel,
-                                                            stmt_map_info,
-                                                            relation,
-                                                            true))) {
+  } else if (OB_FAIL(SMART_CALL(ObStmtComparer::check_stmt_containment(first_sel,
+                                                                      second_sel,
+                                                                      stmt_map_info,
+                                                                      relation,
+                                                                      true)))) {
     LOG_WARN("failed to compute stmt relationship", K(ret));
     err_code_ = ret;
   } else if (stmt_map_info.is_select_item_equal_ && QueryRelation::QUERY_EQUAL == relation) {

@@ -633,6 +633,7 @@ int ObRawExpr::get_geo_cast_result_type(ObGeoType& geo_type) const
 bool ObRawExpr::same_as(const ObRawExpr &expr,
                         ObExprEqualCheckContext *check_context) const
 {
+  int ret = OB_SUCCESS;
   bool bret = false;
   if (this == &expr) {
     bret = true;
@@ -643,7 +644,14 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
 
     const ObRawExpr *l = get_same_identify(this, check_context);
     const ObRawExpr *r = get_same_identify(&expr, check_context);
-    bret = l->inner_same_as(*r, check_context);
+    ret = SMART_CALL(OB_FALSE_IT(bret = l->inner_same_as(*r, check_context)));
+    if (OB_FAIL(ret)) {
+      bret = false;
+      if (NULL != check_context) {
+        check_context->err_code_ = ret;
+      }
+      LOG_WARN("failed to compare expressions with smart call", K(ret));
+    }
 
     if (NULL != check_context) {
       check_context->recursion_level_ -= 1;
