@@ -430,19 +430,29 @@ struct RuntimeContext
 public:
   struct TmpAllocGuard
   {
-    TmpAllocGuard(RuntimeContext &agg_ctx) : agg_ctx_(agg_ctx), org_allocator_ptr_(&agg_ctx_.inner_data_allocator_) {}
+    TmpAllocGuard(RuntimeContext &agg_ctx)
+      : agg_ctx_(agg_ctx),
+        org_allocator_ptr_(&agg_ctx_.inner_data_allocator_),
+        org_rb_allocator_ptr_(agg_ctx_.rb_allocator_),
+        rb_allocator_(MTL_ID())
+    {
+      agg_ctx_.rb_allocator_ = &rb_allocator_;
+    }
 
     void set_data_allocator(ObIAllocator &allocator) {
       agg_ctx_.data_alloc_wrapper_.set_alloc(&allocator);
     }
 
     ~TmpAllocGuard() {
+      agg_ctx_.rb_allocator_ = org_rb_allocator_ptr_;
       agg_ctx_.data_alloc_wrapper_.set_alloc(org_allocator_ptr_);
     }
 
   private:
     RuntimeContext &agg_ctx_;
     ObIAllocator *org_allocator_ptr_;
+    ObRbAggAllocator *org_rb_allocator_ptr_;
+    ObRbAggAllocator rb_allocator_;
   };
 
   sql::ObEvalCtx &eval_ctx_;
