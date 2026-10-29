@@ -1107,13 +1107,15 @@ int ObTableParam::construct_columns_and_projector(
       } else if (OB_FAIL(truncate_col_ids.push_back(common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID))) {
         LOG_WARN("fail to push back sql sequence col to truncate col ids", K(ret));
       }
+      // Truncate partition keys use positions in the full multi-version row.
+      // Keep STORING columns in storage order, even when they are not output,
+      // so persisted partition key positions still address the correct columns.
       for (int64_t i = 0; OB_SUCC(ret) && i < non_rowkey_column_ids.count(); ++i) {
         const uint64_t column_id = non_rowkey_column_ids.at(i).col_id_;
         const ObColumnSchemaV2 *column_schema = NULL;
         if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("The column is NULL", K(ret), K(table_schema.get_table_id()), K(column_id), K(i));
-        } else if (column_schema->is_user_specified_storing_column()) {
         } else if (OB_FAIL(truncate_col_ids.push_back(column_id))) {
           LOG_WARN("fail to push back non rowkey col id to truncate col ids");
         }
