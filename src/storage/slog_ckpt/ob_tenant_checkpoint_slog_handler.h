@@ -138,6 +138,7 @@ public:
 
   int get_meta_block_list(common::ObIArray<blocksstable::MacroBlockId> &block_list);
   ObSharedBlockReaderWriter &get_shared_block_reader_writer() { return shared_block_rwriter_; }
+  common::TCRWLock &get_slog_ckpt_lock() { return slog_ckpt_lock_; }
   virtual int replay(const ObRedoModuleReplayParam &param) override;
   virtual int replay_over() override;
   int write_checkpoint(bool is_force);
@@ -225,6 +226,8 @@ private:
   int64_t finished_replay_tablet_cnt_;
   int replay_create_tablet_errcode_;
   common::TCRWLock lock_;  // protect block_handle
+  common::TCRWLock slog_ckpt_lock_; // protect snapshot update from SLOG write through tablet CAS
+  // Keep the report_slog lock for existing 4.2.x callers; always acquire slog_ckpt_lock_ first.
   common::TCRWLock slog_check_lock_; // protect is_copying_tablets_
   common::hash::ObHashSet<ObTabletMapKey> tablet_key_set_;
   bool is_copying_tablets_;

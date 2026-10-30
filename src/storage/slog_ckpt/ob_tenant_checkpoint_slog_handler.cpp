@@ -234,6 +234,7 @@ ObTenantCheckpointSlogHandler::ObTenantCheckpointSlogHandler()
     finished_replay_tablet_cnt_(0),
     replay_create_tablet_errcode_(OB_SUCCESS),
     lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
+    slog_ckpt_lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     slog_check_lock_(common::ObLatchIds::SLOG_CKPT_LOCK),
     tablet_key_set_(),
     is_copying_tablets_(false),
@@ -1019,6 +1020,7 @@ int ObTenantCheckpointSlogHandler::write_checkpoint(bool is_force)
 int ObTenantCheckpointSlogHandler::get_cur_cursor()
 {
   int ret = OB_SUCCESS;
+  TCWLockGuard ckpt_guard(slog_ckpt_lock_);
   TCWLockGuard guard(slog_check_lock_);
   tablet_key_set_.destroy();
   if (OB_FAIL(MTL(ObStorageLogger *)->get_active_cursor(ckpt_cursor_))) {
@@ -1033,6 +1035,7 @@ int ObTenantCheckpointSlogHandler::get_cur_cursor()
 
 void ObTenantCheckpointSlogHandler::clean_copy_status()
 {
+  TCWLockGuard ckpt_guard(slog_ckpt_lock_);
   TCWLockGuard guard(slog_check_lock_);
   is_copying_tablets_ = false;
   tablet_key_set_.destroy();

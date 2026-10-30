@@ -1029,6 +1029,84 @@ int ObTablet::init_with_update_medium_info(
   return ret;
 }
 
+int ObTablet::init_with_new_snapshot_version(
+    common::ObArenaAllocator &allocator,
+    const ObTablet &old_tablet,
+    const int64_t snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  const ObTabletMeta &old_tablet_meta = old_tablet.tablet_meta_;
+  const ObTabletTableStore *old_table_store = nullptr;
+  ObStorageSchema *old_storage_schema = nullptr;
+  const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
+
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!old_tablet.is_valid() || snapshot_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(old_tablet), K(snapshot_version));
+  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid())
+      || OB_ISNULL(memtable_mgr_)
+      || OB_ISNULL(log_handler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(memtable_mgr), K_(log_handler));
+  } else if (OB_FAIL(assign_memtables(old_tablet.memtables_, old_tablet.memtable_count_))) {
+    LOG_WARN("fail to assign memtables", K(ret));
+  } else if (OB_ISNULL(ddl_kvs_ = static_cast<ObITable**>(allocator.alloc(sizeof(ObITable*) * DDL_KV_ARRAY_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ddl_kvs_", K(ret), KP(ddl_kvs_));
+  } else if (OB_FAIL(assign_ddl_kvs(old_tablet.ddl_kvs_, old_tablet.ddl_kv_count_))) {
+    LOG_WARN("fail to assign ddl kvs", K(ret), KP(old_tablet.ddl_kvs_), K(old_tablet.ddl_kv_count_));
+  } else if (OB_FAIL(old_tablet.fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret), K(old_tablet));
+  } else if (OB_FAIL(table_store_wrapper.get_member(old_table_store))) {
+    LOG_WARN("fail to get table store", K(ret), K(table_store_wrapper));
+  } else if (OB_FAIL(old_tablet.load_storage_schema(allocator, old_storage_schema))) {
+    LOG_WARN("fail to load storage schema", K(ret));
+  } else if (OB_FAIL(tablet_meta_.init(allocator, old_tablet_meta))) {
+    LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet_meta));
+  } else if (FALSE_IT(tablet_meta_.snapshot_version_ = MAX(snapshot_version, tablet_meta_.snapshot_version_))) {
+  } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
+    LOG_WARN("fail to allocate and new table store", K(ret));
+  } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this, *old_table_store))) {
+    LOG_WARN("fail to copy table store", K(ret), KPC(old_table_store));
+  } else if (OB_FAIL(try_update_start_scn())) {
+    LOG_WARN("failed to update start scn", K(ret), KPC(old_table_store));
+  } else if (OB_FAIL(mds_data_.init_for_evict_medium_info(allocator, old_mds_data, 0/*finish_medium_scn*/))) {
+    LOG_WARN("failed to init mds data", K(ret), K(old_mds_data));
+  } else if (OB_FAIL(check_medium_list())) {
+    LOG_WARN("failed to check medium list", K(ret), KPC(this));
+  } else if (FALSE_IT(set_mem_addr())) {
+  } else {
+    ALLOC_AND_INIT(allocator, storage_schema_addr_, *old_storage_schema);
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_read_info(allocator))) {
+      LOG_WARN("failed to build read info", K(ret));
+    } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
+      LOG_WARN("failed to increase macro ref cnt", K(ret));
+    /* NOTICE!!!
+     * Subsequently, skipping `is_inited_ = true` is prohibited (i.e., OB_FAIL must not occur), otherwise
+     * it will lead to a macro block refcnt leak. */
+    } else {
+      if (old_tablet.get_tablet_meta().has_next_tablet_) {
+        set_next_tablet_guard(old_tablet.next_tablet_guard_);
+      }
+      LOG_INFO("succeeded to init tablet with new snapshot", K(ret), KPC(this));
+      is_inited_ = true;
+    }
+  }
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+
+  ObTabletObjLoadHelper::free(allocator, old_storage_schema);
+
+  return ret;
+}
+
 int ObTablet::init_empty_shell(
     ObArenaAllocator &allocator,
     const ObTablet &old_tablet)

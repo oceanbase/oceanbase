@@ -333,7 +333,9 @@ private:
                               const SCN freeze_snapshot_version,
                               ObIArray<ObTableHandleV2> &frozen_memtable_handles);
 
-  int create_memtable_if_no_active_memtable_(ObTablet *tablet);
+  int handle_no_active_memtable_(const ObTabletID &tablet_id,
+                                const ObTablet *tablet,
+                                SCN freeze_snapshot_version);
   int decide_real_snapshot_version_(const ObTabletID &tablet_id,
                                     const ObTablet *tablet,
                                     const SCN freeze_snapshot_version,

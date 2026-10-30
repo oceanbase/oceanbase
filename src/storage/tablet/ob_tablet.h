@@ -182,6 +182,10 @@ public:
   int init_with_update_medium_info(
       common::ObArenaAllocator &allocator,
       const ObTablet &old_tablet);
+  int init_with_new_snapshot_version(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      const int64_t snapshot_version);
   // batch replace sstables without data modification
   int init_for_defragment(
       common::ObArenaAllocator &allocator,

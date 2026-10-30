@@ -214,6 +214,7 @@ public:
       const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
   int update_tablet_report_status(const common::ObTabletID &tablet_id);
+  int update_tablet_snapshot_version(const common::ObTabletID &tablet_id, const int64_t snapshot_version);
   int update_tablet_restore_status(
       const common::ObTabletID &tablet_id,
       const ObTabletRestoreStatus::STATUS &restore_status,
@@ -472,6 +473,12 @@ private:
   int direct_get_tablet(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
+  int safe_update_cas_tablet(
+      const ObTabletMapKey &key,
+      const ObMetaDiskAddr &addr,
+      const ObTabletHandle &old_handle,
+      ObTabletHandle &new_handle,
+      common::ObTimeGuard &time_guard);
   int inner_table_scan(
       ObTabletHandle &tablet_handle,
       ObTableScanIterator &iter,

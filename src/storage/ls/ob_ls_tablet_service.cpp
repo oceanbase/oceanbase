@@ -66,6 +66,7 @@
 #include "storage/slog/ob_storage_log_replayer.h"
 #include "storage/slog/ob_storage_log_struct.h"
 #include "storage/slog/ob_storage_logger.h"
+#include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "share/ob_lob_access_utils.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_store.h"
@@ -1596,6 +1597,88 @@ int ObLSTabletService::update_tablet_report_status(const common::ObTabletID &tab
     } else {
       FLOG_INFO("tablet doesn't need to report", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObLSTabletService::update_tablet_snapshot_version(
+    const common::ObTabletID &tablet_id,
+    const int64_t snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UTabletSnapVer"));
+  ObTabletHandle old_tablet_handle;
+  ObTimeGuard time_guard("ObLSTabletService::update_tablet_snapshot_version", 1_s);
+  ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
+  time_guard.click("Lock");
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() || 0 >= snapshot_version)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(tablet_id), K(snapshot_version));
+  } else if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
+    LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(old_tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old tablet is null", K(ret), K(tablet_id));
+  } else {
+    time_guard.click("GetTablet");
+
+    ObTabletHandle tmp_tablet_hdl;
+    ObTabletHandle new_tablet_hdl;
+    ObTablet *tmp_tablet = nullptr;
+    ObTablet *old_tablet = old_tablet_handle.get_obj();
+    const share::ObLSID &ls_id = ls_->get_ls_id();
+    const ObTabletMapKey key(ls_id, tablet_id);
+    ObMetaDiskAddr disk_addr;
+
+    if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_TABLET_NOT_EXIST;
+      } else {
+        LOG_WARN("failed to acquire tablet", K(ret), K(key));
+      }
+    } else if (OB_ISNULL(tmp_tablet = tmp_tablet_hdl.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("temporary tablet is null", K(ret), K(key));
+    } else if (OB_FAIL(tmp_tablet->init_with_new_snapshot_version(allocator, *old_tablet, snapshot_version))) {
+      LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
+    } else if (FALSE_IT(time_guard.click("InitNew"))) {
+    } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tmp_tablet, new_tablet_hdl))) {
+      LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_hdl));
+    } else if (OB_ISNULL(new_tablet_hdl.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("persisted tablet is null", K(ret), K(key));
+    } else if (FALSE_IT(disk_addr = new_tablet_hdl.get_obj()->tablet_addr_)) {
+    } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_handle, new_tablet_hdl, time_guard))) {
+      LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+    } else {
+      LOG_INFO("succeeded to init tablet with updating snapshot version", K(ret), K(key), K(disk_addr), K(snapshot_version));
+    }
+  }
+  return ret;
+}
+
+int ObLSTabletService::safe_update_cas_tablet(
+    const ObTabletMapKey &key,
+    const ObMetaDiskAddr &addr,
+    const ObTabletHandle &old_handle,
+    ObTabletHandle &new_handle,
+    ObTimeGuard &time_guard)
+{
+  int ret = OB_SUCCESS;
+  TCRLockGuard guard(MTL(ObTenantCheckpointSlogHandler *)->get_slog_ckpt_lock());
+  if (OB_FAIL(ObTabletSlogHelper::write_update_tablet_slog(key.ls_id_, key.tablet_id_, addr))) {
+    LOG_WARN("fail to write update tablet slog", K(ret), K(key), K(addr));
+  } else if (FALSE_IT(time_guard.click("WrSlog"))) {
+  } else if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->compare_and_swap_tablet(key, old_handle, new_handle))) {
+    LOG_ERROR("failed to compare and swap tablet", K(ret), K(key), K(addr));
+    ob_usleep(1000 * 1000);
+    ob_abort();
+  } else {
+    time_guard.click("CASwap");
   }
   return ret;
 }

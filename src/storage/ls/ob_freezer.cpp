@@ -1027,25 +1027,11 @@ int ObFreezer::set_tablet_freeze_flag_(const int64_t trace_id,
                                               ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     TRANS_LOG(WARN, "[Freezer] fail to get tablet", K(ret), K(tablet_id));
     stat_.add_diagnose_info("fail to get tablet");
-  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (need_rewrite_meta) {
-    // only create memtable and decide snapshot version when need_rewrite_meta
-    if (OB_FAIL(create_memtable_if_no_active_memtable_(tablet))) {
-      if (OB_NO_NEED_UPDATE == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("[Freezer] fail to create an active memtable for force_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
-        stat_.add_diagnose_info("fail to create an active memtable for force_tablet_freeze");
-      }
-    } else if (OB_FAIL(decide_real_snapshot_version_(
-                   tablet_id, tablet, freeze_snapshot_version_, freeze_snapshot_version_))) {
-      TRANS_LOG(WARN, "[Freezer] fail to decide real snapshot", K(ret), K(ls_id), K(tablet_id));
-      stat_.add_diagnose_info("fail to decide real snapshot");
-    }
-  }
-
-  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(WARN, "[Freezer] tablet is null", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet->get_memtable_mgr()))) {
+    ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "[Freezer] tablet_memtable_mgr is null", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(memtable_mgr->set_is_tablet_freeze_for_active_memtable(frozen_memtable_handle, trace_id))) {
     (void)handle_set_tablet_freeze_failed(need_rewrite_meta, tablet_id, ls_id, tablet, freeze_snapshot_version, ret);
@@ -1064,65 +1050,6 @@ int ObFreezer::set_tablet_freeze_flag_(const int64_t trace_id,
   return ret;
 }
 
-int ObFreezer::create_memtable_if_no_active_memtable_(ObTablet *tablet)
-{
-  int ret = OB_SUCCESS;
-  share::ObLSID ls_id = get_ls_id();
-  ObTabletMemtableMgr *memtable_mgr = nullptr;
-  ObTableHandleV2 last_frozen_memtable_handle;
-  memtable::ObMemtable *last_frozen_memtable = nullptr;
-  const common::ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-  SCN clog_checkpoint_scn = tablet->get_tablet_meta().clog_checkpoint_scn_;
-  int64_t schema_version = 0;
-  SCN max_callbacked_scn = SCN::min_scn();
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("[Freezer] not inited", K(ret), K_(is_inited), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(get_max_consequent_callbacked_scn(max_callbacked_scn))) {
-    LOG_WARN("[Freezer] fail to get max_consequent_callbacked_scn", K(ret), K(ls_id), K(tablet_id));
-  } else if (max_callbacked_scn < clog_checkpoint_scn) {
-    ret = OB_NO_NEED_UPDATE;
-    LOG_WARN("[Freezer] cannot create memtable because max_callbacked_scn < clog_checkpoint_scn", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet->get_memtable_mgr()))) {
-    LOG_WARN("[Freezer] memtable mgr should not be null", K(ret), K(ls_id), K(tablet_id));
-  } else if (memtable_mgr->has_active_memtable()) {
-    LOG_INFO("[Freezer] no need to create an active memtable", K(ret), K(ls_id), K(tablet_id));
-  } else { // create a new memtable since there is no active memtable
-    // get schema_version
-    if (OB_FAIL(memtable_mgr->get_last_frozen_memtable(last_frozen_memtable_handle))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        LOG_WARN("[Freezer] fail to get last frozen memtable", K(ret), K(ls_id), K(tablet_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else if (OB_FAIL(last_frozen_memtable_handle.get_data_memtable(last_frozen_memtable))) {
-      LOG_WARN("[Freezer] fail to get memtable", K(ret), K(ls_id), K(tablet_id));
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_NOT_NULL(last_frozen_memtable)) {
-      schema_version = last_frozen_memtable->get_max_schema_version();
-    } else {
-      schema_version = tablet->get_tablet_meta().max_sync_storage_schema_version_;
-      //do nothing
-    }
-    // create new memtable
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(get_ls_tablet_svr()->create_memtable(tablet_id, schema_version))) {
-        if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
-          LOG_WARN("[Freezer] failed to create memtable", K(ret), K(ls_id), K(tablet_id),
-                   K(schema_version));
-        }
-      } else {
-        LOG_INFO("[Freezer] succeed to create new active memtable", K(ret), K(ls_id),
-                 K(tablet_id), K(schema_version));
-      }
-    }
-  }
-
-  return ret;
-}
-
 void ObFreezer::handle_set_tablet_freeze_failed(const bool need_rewrite_meta,
                                                 const ObTabletID &tablet_id,
                                                 const ObLSID &ls_id,
@@ -1131,9 +1058,13 @@ void ObFreezer::handle_set_tablet_freeze_failed(const bool need_rewrite_meta,
                                                 int &ret)
 {
   if (ret == OB_ENTRY_NOT_EXIST) {
-    ret = OB_SUCCESS;
-    TRANS_LOG(INFO, "[Freezer] no need to freeze", K(ret), K(ls_id), K(tablet_id));
-    stat_.add_diagnose_info("no need to freeze");
+    if (need_rewrite_meta) {
+      ret = handle_no_active_memtable_(tablet_id, tablet, freeze_snapshot_version);
+    } else {
+      ret = OB_SUCCESS;
+      TRANS_LOG(INFO, "[Freezer] no need to freeze", K(ret), K(ls_id), K(tablet_id));
+      stat_.add_diagnose_info("no need to freeze");
+    }
   } else {
     TRANS_LOG(WARN, "[Freezer] fail to set is_tablet_freeze", K(ret), K(ls_id), K(tablet_id));
     stat_.add_diagnose_info("fail to set is_tablet_freeze");
@@ -1180,6 +1111,61 @@ int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
     }
   }
 
+  return ret;
+}
+
+int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
+                                       const ObTablet *tablet,
+                                       SCN freeze_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSID ls_id = get_ls_id();
+  ObTabletMemtableMgr *memtable_mgr = nullptr;
+  if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_ISNULL(memtable_mgr = static_cast<ObTabletMemtableMgr *>(tablet->get_memtable_mgr()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("memtable mgr is null", K(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(decide_real_snapshot_version_(tablet_id, tablet, freeze_snapshot_version, freeze_snapshot_version))) {
+    LOG_WARN("failed to decide real snapshot version", K(ret), KPC(tablet));
+  } else if (!memtable_mgr->has_memtable()) {
+    // We need trigger a dag to rewrite the snapshot version of tablet
+    // meta for the major merge and medium merge. While the implementation
+    // need pay much attentio.
+    // 1. If we trigger the dag each time the freeze happened, there may
+    //    be alive dag not finished, and we rewrite the tablet meta first.
+    //    It will cause the snapshot version to be pushed by mistake.
+    // 2. We need fetch the weak read timestamp at first, otherwise the
+    //    concurrent memtable creation may miscalculate the version
+    //
+    // NOTICE: use freeze_snapshot_version as input parameter
+
+    // check exist mini compaction dag running
+    ObTabletMergeDagParam param;
+    param.merge_type_ = ObMergeType::MINI_MERGE;
+    param.merge_version_ = ObVersionRange::MIN_VERSION;
+    param.ls_id_ = ls_id;
+    param.tablet_id_ = tablet_id;
+    param.for_diagnose_ = true; // initialize the DAG key without fetching the tablet
+
+    ObTabletMiniMergeDag tmp_mini_dag;
+    bool is_exist = false;
+    if (OB_FAIL(tmp_mini_dag.init_by_param(&param))) {
+      LOG_WARN("failed to init mini dag", K(ret), K(param));
+    } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->check_dag_exist(&tmp_mini_dag, is_exist))) {
+      LOG_WARN("failed to check dag exists", K(ret), K(ls_id), K(tablet_id));
+    } else if (is_exist) {
+      // we need to wait the current mini compaction dag to complete
+      ret = OB_EAGAIN;
+      LOG_WARN("exist running mini compaction dag, try later", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(get_ls_tablet_svr()->update_tablet_snapshot_version(
+                   tablet_id, freeze_snapshot_version.get_val_for_tx()))) {
+      LOG_WARN("failed to update tablet snapshot version", K(ret), K(ls_id), K(tablet_id), K(freeze_snapshot_version));
+    }
+  } else {
+    TRANS_LOG(INFO, "[Freezer] memtable_mgr has memtable", K(ret), K(ls_id), K(tablet_id));
+  }
   return ret;
 }
 
