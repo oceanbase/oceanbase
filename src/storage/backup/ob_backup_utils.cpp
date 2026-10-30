@@ -1658,7 +1658,8 @@ int ObBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupProvid
   } else if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (OB_FAIL(prepare_batch_tablet_(tenant_id, ls_id))) {
+  } else if (!meet_end_ && external_sort_.is_all_got()
+      && OB_FAIL(prepare_batch_tablet_(tenant_id, ls_id))) {
     LOG_WARN("failed to prepare batch tablet", K(ret), K(tenant_id), K(ls_id));
   } else {
     ObArray<ObBackupProviderItem> tmp_items;
@@ -1689,6 +1690,12 @@ int ObBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupProvid
         LOG_WARN("failed to remove duplicates", K(ret));
       } else if (items.count() >= batch_size) {
         break;
+      } else if (!external_sort_.is_all_got()) {
+        // The item buffer still has pending items. Keep consuming them before
+        // expanding new tablets, otherwise remove_duplicates_ may shrink items
+        // below batch_size and trigger prepare_batch_tablet_ prematurely, which
+        // allocates tablet ctxs while the old items are not drained and causes
+        // unbounded ctx accumulation.
       } else if (OB_FAIL(prepare_batch_tablet_(tenant_id, ls_id))) {
         LOG_WARN("failed to prepare batch tablet", K(ret), K(tenant_id), K(ls_id));
       }
