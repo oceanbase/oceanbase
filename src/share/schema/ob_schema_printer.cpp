@@ -489,6 +489,7 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
   sql::ObRawExpr *expr = NULL;
   ObTimeZoneInfo tz_infos;
   sql::ObRawExprPrinter raw_printer(buf, buf_len, &pos, &schema_guard_, &tz_infos);
+  const ObTenantSchema *tenant_schema = NULL;
   SMART_VARS_3((sql::ObSQLSessionInfo, session), (ObExecContext, exec_ctx, allocator),
                (ObPhysicalPlanCtx, phy_plan_ctx, allocator)) {
     LinkExecCtxGuard link_guard(session, exec_ctx);
@@ -500,6 +501,13 @@ int ObSchemaPrinter::print_generated_column_definition(const ObColumnSchemaV2 &g
                                     0 /*default proxy id*/,
                                     &allocator))) {
       SHARE_SCHEMA_LOG(WARN, "fail to init session", K(ret));
+    } else if (OB_FAIL(schema_guard_.get_tenant_info(table_schema.get_tenant_id(), tenant_schema))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to get tenant schema", K(ret), K(table_schema.get_tenant_id()));
+    } else if (OB_ISNULL(tenant_schema)) {
+      ret = OB_TENANT_NOT_EXIST;
+      SHARE_SCHEMA_LOG(WARN, "tenant schema is null", K(ret), K(table_schema.get_tenant_id()));
+    } else if (OB_FAIL(session.init_tenant(tenant_schema->get_tenant_name_str(), table_schema.get_tenant_id()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to init session tenant", K(ret), K(table_schema.get_tenant_id()));
     } else if (OB_FAIL(session.load_default_sys_variable(false, false))) {
       SHARE_SCHEMA_LOG(WARN, "session load default system variable failed", K(ret));
       /* bug: 
