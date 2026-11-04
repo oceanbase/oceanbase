@@ -7,12 +7,20 @@
 // EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 // MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 // See the Mulan PubL v2 for more details.
+#include <atomic>
 #include <cstdio>
+#include <functional>
 #include <gtest/gtest.h>
+#include <mutex>
 #include <signal.h>
+#include <string>
+#include <thread>
+#include <vector>
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
+#include "logservice/ob_log_base_header.h"
+#include "logservice/palf/log_reader_utils.h"
 
 const std::string TEST_NAME = "arb_service";
 
@@ -71,6 +79,757 @@ int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
 int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+
+// Queue real election messages. The test chooses their delivery order, while
+// PALF/configuration RPCs, disk IO and reconfirm still use the real cluster.
+class DegradeVoteElectionTransport : public palf::election::ElectionMsgSender
+{
+public:
+  int broadcast(const palf::election::ElectionPrepareRequestMsg &msg,
+                const ObIArray<ObAddr> &) const override
+  {
+    std::lock_guard<std::mutex> guard(lock_);
+    prepare_requests_.push_back(msg);
+    return OB_SUCCESS;
+  }
+  int broadcast(const palf::election::ElectionAcceptRequestMsg &msg,
+                const ObIArray<ObAddr> &) const override
+  {
+    std::lock_guard<std::mutex> guard(lock_);
+    accept_requests_.push_back(msg);
+    return OB_SUCCESS;
+  }
+  int send(const palf::election::ElectionPrepareResponseMsg &msg) const override
+  {
+    std::lock_guard<std::mutex> guard(lock_);
+    prepare_responses_.push_back(msg);
+    return OB_SUCCESS;
+  }
+  int send(const palf::election::ElectionAcceptResponseMsg &msg) const override
+  {
+    std::lock_guard<std::mutex> guard(lock_);
+    accept_responses_.push_back(msg);
+    return OB_SUCCESS;
+  }
+  int send(const palf::election::ElectionChangeLeaderMsg &) const override
+  { return OB_SUCCESS; }
+
+  template <typename T>
+  std::vector<T> take(std::vector<T> &queue)
+  {
+    std::lock_guard<std::mutex> guard(lock_);
+    std::vector<T> result;
+    result.swap(queue);
+    return result;
+  }
+
+  mutable std::mutex lock_;
+  mutable std::vector<palf::election::ElectionPrepareRequestMsg> prepare_requests_;
+  mutable std::vector<palf::election::ElectionAcceptRequestMsg> accept_requests_;
+  mutable std::vector<palf::election::ElectionPrepareResponseMsg> prepare_responses_;
+  mutable std::vector<palf::election::ElectionAcceptResponseMsg> accept_responses_;
+};
+
+// Observe actual rebuild notifications without repairing the divergent history.
+class DegradeVoteRebuildObserver : public palf::PalfRebuildCb
+{
+public:
+  int on_rebuild(const int64_t id, const palf::LSN &lsn) override
+  {
+    last_id_.store(id);
+    last_lsn_.store(lsn.val_);
+    count_.fetch_add(1);
+    return OB_SUCCESS;
+  }
+
+  std::atomic<int64_t> count_{0};
+  std::atomic<int64_t> last_id_{-1};
+  std::atomic<uint64_t> last_lsn_{0};
+};
+
+static int defer_degrade_vote_election_tasks(palf::election::ElectionImpl &election)
+{
+  using namespace palf::election;
+  int ret = OB_SUCCESS;
+  for (auto *handle : {&election.proposer_.renew_lease_task_handle_,
+                       &election.proposer_.devote_task_handle_,
+                       &election.acceptor_.time_window_task_handle_}) {
+    if (OB_SUCCESS != (ret = handle->reschedule_after(3600_s))) {
+      break;
+    } else if (handle->task_->future_.is_valid() &&
+               OB_SUCCESS != (ret = handle->task_->future_.wait())) {
+      break;
+    }
+  }
+  return ret;
+}
+
+static int change_degrade_vote_config(PalfHandleImpl &handle,
+                                     const LogConfigChangeArgs &args,
+                                     const int64_t timeout_us)
+{
+  // 配置变更可能暂时忙，仅对 OB_EAGAIN 做有界重试。
+  const int64_t deadline = ObTimeUtility::current_time() + timeout_us;
+  int ret = OB_EAGAIN;
+  while (OB_EAGAIN == ret) {
+    const int64_t remaining_us = deadline - ObTimeUtility::current_time();
+    if (remaining_us <= 0) {
+      ret = OB_TIMEOUT;
+    } else {
+      ret = handle.one_stage_config_change_(args, remaining_us);
+      if (OB_EAGAIN == ret) {
+        ob_usleep(10 * 1000);
+      }
+    }
+  }
+  return ret;
+}
+
+static int count_degrade_vote_marker(PalfHandleImpl &handle,
+                                    const std::string &marker,
+                                    int64_t &count)
+{
+  count = 0;
+  PalfBufferIterator iterator;
+  int ret = handle.alloc_palf_buffer_iterator(LSN(PALF_INITIAL_LSN_VAL), iterator);
+  while (OB_SUCCESS == ret && OB_SUCCESS == (ret = iterator.next())) {
+    LogEntry entry;
+    LSN lsn;
+    if (OB_SUCCESS != (ret = iterator.get_entry(entry, lsn))) {
+      break;
+    } else if (entry.get_data_len() == static_cast<int64_t>(marker.size()) &&
+               0 == MEMCMP(entry.get_data_buf(), marker.data(), marker.size())) {
+      ++count;
+    }
+  }
+  return OB_ITER_END == ret ? OB_SUCCESS : ret;
+}
+
+static int make_degrade_vote_marker(const std::string &tag,
+                                   const char fill,
+                                   std::string &marker)
+{
+  const ObLogBaseHeader header(TRANS_SERVICE_LOG_BASE_TYPE,
+                               ObReplayBarrierType::NO_NEED_BARRIER, 0);
+  marker.assign(header.get_serialize_size(), '\0');
+  int64_t pos = 0;
+  const int ret = header.serialize(&marker[0], marker.size(), pos);
+  if (OB_SUCCESS == ret) {
+    marker.append(tag).append(4096, fill);
+  }
+  return ret;
+}
+
+TEST_F(TestObSimpleLogClusterArbService, test_2f1a_stale_vote_committed_log_divergence)
+{
+  using namespace palf::election;
+  using palf::election::LockGuard;
+  SET_CASE_LOG_FILE(TEST_NAME, "test_2f1a_stale_vote_committed_log_divergence");
+  const int64_t saved_arb_timeout = ARB_TIMEOUT_ARG;
+  const uint64_t saved_cluster_version = ObClusterVersion::get_instance().cluster_version_;
+  ARB_TIMEOUT_ARG = 60 * 1000 * 1000L;
+  ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_2_0_0;
+  DEFER(ARB_TIMEOUT_ARG = saved_arb_timeout;
+        ObClusterVersion::get_instance().cluster_version_ = saved_cluster_version);
+
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t wait_timeout = 20 * 1000 * 1000L;
+  int64_t a_idx = -1;
+  int64_t r_idx = -1;
+  PalfHandleImplGuard leader;
+  PalfHandleLiteGuard arb;
+  std::vector<PalfHandleImplGuard *> handles;
+  std::vector<ObSimpleLogServer *> paused_arb_servers;
+  // Restore the transports before these objects and the PALF handles go away.
+  DegradeVoteElectionTransport a_transport;
+  DegradeVoteElectionTransport b_transport;
+  DegradeVoteElectionTransport r_transport;
+  DEFER(revert_cluster_palf_handle_guard(handles);
+        arb.reset(); leader.reset(); delete_paxos_group(id);
+        for (auto *server : paused_arb_servers) {
+          ObTenantEnv::set_tenant(server->get_tenant_base());
+          EXPECT_EQ(OB_SUCCESS, server->log_service_.get_arbitration_service()->start());
+        });
+  // 建组前暂停 A、B 的后台升降级，避免与用例手动变更竞争。
+  for (auto *server : get_cluster()) {
+    if (!server->is_arb_server() && get_member_list().contains(server->get_addr())) {
+      auto *log_server = dynamic_cast<ObSimpleLogServer *>(server);
+      ASSERT_NE(nullptr, log_server);
+      auto *arb_service = log_server->log_service_.get_arbitration_service();
+      ASSERT_NE(nullptr, arb_service);
+      ASSERT_FALSE(arb_service->has_set_stop());
+      arb_service->lib::Threads::stop();
+      arb_service->lib::Threads::wait();
+      // 只释放工作线程资源，保留探活；退出时重新启动。
+      arb_service->lib::Threads::destroy();
+      paused_arb_servers.push_back(log_server);
+    }
+  }
+  ASSERT_EQ(2, paused_arb_servers.size());
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, r_idx, a_idx, leader));
+  ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, handles));
+  ASSERT_EQ(OB_SUCCESS, get_arb_member_guard(id, arb));
+  ASSERT_TRUE(a_idx == 0 || a_idx == 1);
+  const int64_t b_idx = 1 - a_idx;
+  PalfHandleImpl &a = *handles[a_idx]->palf_handle_impl_;
+  PalfHandleImpl &b = *handles[b_idx]->palf_handle_impl_;
+  auto &r = *arb.palf_handle_lite_;
+  ElectionImpl &a_election = a.election_;
+  ElectionImpl &b_election = b.election_;
+  ElectionImpl &r_election = r.election_;
+  const ObAddr a_addr = a.self_;
+  const ObAddr b_addr = b.self_;
+  MockLocCB loc_cb;
+  loc_cb.leader_ = a_addr;
+  ASSERT_EQ(OB_SUCCESS, a.set_location_cache_cb(&loc_cb));
+  ASSERT_EQ(OB_SUCCESS, b.set_location_cache_cb(&loc_cb));
+  DEFER(a.reset_location_cache_cb(); b.reset_location_cache_cb());
+
+  // Every wait in the reproduction is bounded. Once B is elected, keep renewing
+  // its lease with actual Accept requests/responses while PALF runs reconfirm.
+  std::function<int()> renew_b = []() { return OB_SUCCESS; };
+  auto wait_for = [&](const std::function<bool()> &condition,
+                      const bool keep_b_lease = false) -> int {
+    const int64_t deadline = ObTimeUtility::current_time() + wait_timeout;
+    while (!condition()) {
+      if (ObTimeUtility::current_time() >= deadline) {
+        return OB_TIMEOUT;
+      }
+      if (keep_b_lease) {
+        const int ret = renew_b();
+        if (OB_SUCCESS != ret) {
+          return ret;
+        }
+      }
+      ob_usleep(10 * 1000);
+    }
+    return OB_SUCCESS;
+  };
+
+  // 1. Establish a genuinely committed common prefix on A and B.
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 10, id, 4096));
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() { return a.get_end_lsn() == a.get_max_lsn(); }));
+  const LSN common_end = a.get_end_lsn();
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    return b.get_end_lsn() == common_end && b.get_max_lsn() == common_end;
+  }));
+  LogConfigVersion old_version;
+  ASSERT_EQ(OB_SUCCESS, a.get_config_version(old_version));
+  ASSERT_EQ(old_version, b_election.get_membership_version_());
+  ASSERT_EQ(OB_SUCCESS, defer_degrade_vote_election_tasks(a_election));
+  ASSERT_EQ(OB_SUCCESS, defer_degrade_vote_election_tasks(b_election));
+  ASSERT_EQ(OB_SUCCESS, defer_degrade_vote_election_tasks(r_election));
+  auto *a_sender = a_election.msg_handler_;
+  auto *b_sender = b_election.msg_handler_;
+  auto *r_sender = r_election.msg_handler_;
+  {
+    LockGuard guard(a_election.lock_);
+    a_election.msg_handler_ = &a_transport;
+  }
+  {
+    LockGuard guard(b_election.lock_);
+    b_election.msg_handler_ = &b_transport;
+  }
+  {
+    LockGuard guard(r_election.lock_);
+    r_election.msg_handler_ = &r_transport;
+  }
+  DEFER(a_election.stop(); b_election.stop(); r_election.stop();
+        a_election.msg_handler_ = a_sender;
+        b_election.msg_handler_ = b_sender;
+        r_election.msg_handler_ = r_sender);
+
+  auto deliver_accept = [&](const ElectionAcceptRequestMsg &request,
+                            ElectionImpl &receiver) -> int {
+    ElectionAcceptRequestMsg delivered(request);
+    delivered.set_receiver(receiver.get_self_addr());
+    const int ret = receiver.handle_message(delivered);
+    return OB_SUCCESS == ret ? defer_degrade_vote_election_tasks(receiver) : ret;
+  };
+  // Refresh A's real lease and membership acknowledgements before the fault.
+  {
+    LockGuard guard(a_election.lock_);
+    a_election.proposer_.propose();
+  }
+  auto renew_requests = a_transport.take(a_transport.accept_requests_);
+  ASSERT_FALSE(renew_requests.empty());
+  for (const auto &request : renew_requests) {
+    ASSERT_EQ(OB_SUCCESS, deliver_accept(request, a_election));
+    ASSERT_EQ(OB_SUCCESS, deliver_accept(request, b_election));
+    ASSERT_EQ(OB_SUCCESS, deliver_accept(request, r_election));
+  }
+  for (auto *transport : {&a_transport, &b_transport, &r_transport}) {
+    for (const auto &response : transport->take(transport->accept_responses_)) {
+      if (response.get_receiver() == a_addr) {
+        ASSERT_EQ(OB_SUCCESS, a_election.handle_message(response));
+      }
+    }
+    transport->take(transport->prepare_responses_);
+  }
+  ASSERT_TRUE(a_election.proposer_.check_leader());
+  // Hold only time during setup, then expire it explicitly at step 4. No ballot,
+  // configuration, log position, role or committed state is manufactured.
+  const int64_t setup_lease_end = get_monotonic_ts() + 60_s;
+  {
+    LockGuard guard(a_election.lock_);
+    int64_t lease_end = 0;
+    int64_t epoch = 0;
+    a_election.proposer_.leader_lease_and_epoch_.get(lease_end, epoch);
+    a_election.proposer_.leader_lease_and_epoch_.
+        set_lease_and_epoch_if_lease_expired_or_just_set_lease(setup_lease_end, epoch);
+  }
+  for (auto *election : {&a_election, &b_election, &r_election}) {
+    LockGuard guard(election->lock_);
+    ASSERT_EQ(a_addr, election->acceptor_.lease_.get_owner());
+    election->acceptor_.lease_.lease_end_ts_ = setup_lease_end;
+  }
+  auto *b_vote = b_election.acceptor_.time_window_task_handle_.task_->func_shared_ptr_.get_ptr();
+  auto *r_vote = r_election.acceptor_.time_window_task_handle_.task_->func_shared_ptr_.get_ptr();
+  ASSERT_NE(nullptr, b_vote);
+  ASSERT_NE(nullptr, r_vote);
+  EXPECT_FALSE((*b_vote)());
+  EXPECT_FALSE((*r_vote)());
+
+  // 2. B generates a Prepare in the OLD configuration. R caches it before A
+  // degrades B. A's resulting leader Prepare is intentionally not delivered,
+  // reproducing its blocked RPC and the prepare_success_ballot mismatch.
+  block_net(a_idx, b_idx);
+  DEFER(unblock_net(a_idx, b_idx));
+  {
+    LockGuard guard(b_election.lock_);
+    b_election.proposer_.last_do_prepare_ts_ =
+        ObClockGenerator::getClock() - CALCULATE_MAX_ELECT_COST_TIME();
+    b_election.proposer_.prepare(FOLLOWER);
+  }
+  auto prepares = b_transport.take(b_transport.prepare_requests_);
+  ASSERT_EQ(1, prepares.size());
+  ASSERT_EQ(old_version, prepares.front().get_membership_version());
+  for (auto *receiver : {&a_election, &b_election, &r_election}) {
+    ElectionPrepareRequestMsg request(prepares.front());
+    request.set_receiver(receiver->get_self_addr());
+    ASSERT_EQ(OB_SUCCESS, receiver->handle_message(request));
+    ASSERT_EQ(OB_SUCCESS, defer_degrade_vote_election_tasks(*receiver));
+  }
+  ASSERT_TRUE(r_election.acceptor_.is_time_window_opened_);
+  ASSERT_EQ(b_addr, r_election.acceptor_.highest_priority_prepare_req_.get_sender());
+  ASSERT_NE(a_election.proposer_.prepare_success_ballot_, a_election.proposer_.ballot_number_);
+
+  // 3. Persist the actual degradation on A and R, then commit an identifiable
+  // tail using A's new one-full-replica quorum. B retains the old short prefix.
+  ObTenantEnv::set_tenant(get_cluster()[a_idx]->get_tenant_base());
+  const LogConfigChangeArgs degrade_b(ObMember(b_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+  ASSERT_EQ(OB_SUCCESS, change_degrade_vote_config(a, degrade_b, 10 * 1000 * 1000L));
+  LogConfigVersion degraded_version;
+  ASSERT_EQ(OB_SUCCESS, a.get_config_version(degraded_version));
+  ASSERT_TRUE(old_version < degraded_version);
+  ASSERT_EQ(1, a.config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    LockGuard guard(r_election.lock_);
+    return r_election.get_membership_version_() == degraded_version;
+  }));
+  ASSERT_EQ(old_version, b_election.get_membership_version_());
+  const auto &r_members = r_election.proposer_.memberlist_with_states_.get_member_list().get_addr_list();
+  ASSERT_EQ(2, r_members.count());
+  for (const auto &member : r_members) {
+    ASSERT_NE(b_addr, member);
+  }
+
+  auto append_marker = [&](PalfHandleImpl &handle, const std::string &marker,
+                           LSN &lsn, SCN &scn, const bool keep_b_lease) -> int {
+    PalfAppendOptions options;
+    ObRole role = FOLLOWER;
+    bool pending = true;
+    int ret = handle.get_role(role, options.proposal_id, pending);
+    if (OB_SUCCESS != ret || LEADER != role || pending) {
+      return OB_SUCCESS == ret ? OB_NOT_MASTER : ret;
+    }
+    SCN ref_scn;
+    ref_scn.convert_for_logservice(ObTimeUtility::current_time_ns());
+    const int64_t deadline = ObTimeUtility::current_time() + wait_timeout;
+    do {
+      ret = handle.submit_log(options, marker.data(), marker.size(), ref_scn, lsn, scn);
+      if (OB_EAGAIN != ret && OB_ERR_OUT_OF_UPPER_BOUND != ret) {
+        break;
+      } else if (ObTimeUtility::current_time() >= deadline) {
+        ret = OB_TIMEOUT;
+        break;
+      } else if (keep_b_lease && OB_SUCCESS != (ret = renew_b())) {
+        break;
+      }
+      ob_usleep(1000);
+    } while (true);
+    return ret;
+  };
+  std::string a_marker;
+  ASSERT_EQ(OB_SUCCESS, make_degrade_vote_marker("COMMITTED_ON_A_AFTER_DEGRADE:", 'A', a_marker));
+  const int64_t a_tail_count = 8;
+  LSN last_a_lsn;
+  SCN last_a_scn;
+  for (int64_t i = 0; i < a_tail_count; ++i) {
+    ASSERT_EQ(OB_SUCCESS, append_marker(a, a_marker, last_a_lsn, last_a_scn, false));
+    if (0 == i) {
+      // Commit the first entry separately so A's final predecessor is beyond
+      // the common prefix even when the remaining entries are grouped together.
+      ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+        return a.get_end_lsn() > last_a_lsn + a_marker.size() && a.get_end_lsn() == a.get_max_lsn();
+      }));
+    }
+  }
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    return a.get_end_lsn() > last_a_lsn + a_marker.size() && a.get_end_lsn() == a.get_max_lsn();
+  }));
+  const LSN a_committed_end = a.get_end_lsn();
+  ASSERT_GT(a_committed_end, common_end);
+  ASSERT_EQ(common_end, b.get_max_lsn());
+  ASSERT_EQ(common_end, b.get_end_lsn());
+  int64_t a_marker_count = 0;
+  ASSERT_EQ(OB_SUCCESS, count_degrade_vote_marker(a, a_marker, a_marker_count));
+  ASSERT_EQ(a_tail_count, a_marker_count);
+  PALF_LOG(INFO, "REPRO step 3: A tail is committed, B is still short",
+           K(id), K(common_end), K(a_committed_end), K(old_version), K(degraded_version));
+
+  // 4. Expire A's lease and run the production timers. The original bug gives
+  // B a real Prepare OK from R despite R's newer configuration. EXPECT keeps
+  // going so the test also diagnoses the subsequent committed-log violation.
+  {
+    LockGuard guard(a_election.lock_);
+    int64_t lease_end = 0;
+    int64_t epoch = 0;
+    a_election.proposer_.leader_lease_and_epoch_.get(lease_end, epoch);
+    a_election.proposer_.leader_lease_and_epoch_.
+        set_lease_and_epoch_if_lease_expired_or_just_set_lease(get_monotonic_ts() - 1, epoch);
+    a_election.acceptor_.lease_.lease_end_ts_ = get_monotonic_ts() - 1;
+  }
+  auto *a_renew = a_election.proposer_.renew_lease_task_handle_.task_->func_shared_ptr_.get_ptr();
+  ASSERT_NE(nullptr, a_renew);
+  EXPECT_FALSE((*a_renew)());
+  ASSERT_FALSE(a_election.proposer_.check_leader());
+  for (auto *election : {&b_election, &r_election}) {
+    LockGuard guard(election->lock_);
+    election->acceptor_.lease_.lease_end_ts_ = get_monotonic_ts() - 1;
+  }
+  b_transport.take(b_transport.prepare_responses_);
+  r_transport.take(r_transport.prepare_responses_);
+  EXPECT_FALSE((*b_vote)());
+  EXPECT_FALSE((*r_vote)());
+  auto b_votes = b_transport.take(b_transport.prepare_responses_);
+  auto r_votes = r_transport.take(r_transport.prepare_responses_);
+  int64_t stale_vote_count = 0;
+  for (const auto &vote : r_votes) {
+    if (vote.get_receiver() == b_addr && vote.is_accepted()) {
+      ++stale_vote_count;
+    }
+  }
+  EXPECT_EQ(0, stale_vote_count) << "R voted for B with a stale configuration";
+  if (0 == stale_vote_count) {
+    // A fixed implementation stops the bad chain here. It must not fabricate
+    // a vote or force B to lead merely to execute the remaining reproduction.
+    EXPECT_FALSE(b_election.proposer_.check_leader());
+    // Positive control formerly covered by the small election unittest: R
+    // must still vote for a legitimate candidate in its current configuration.
+    a_transport.take(a_transport.prepare_requests_);
+    {
+      LockGuard guard(a_election.lock_);
+      a_election.proposer_.last_do_prepare_ts_ =
+          ObClockGenerator::getClock() - CALCULATE_MAX_ELECT_COST_TIME();
+      a_election.proposer_.prepare(FOLLOWER);
+    }
+    auto valid_prepares = a_transport.take(a_transport.prepare_requests_);
+    ASSERT_EQ(1, valid_prepares.size());
+    ASSERT_EQ(degraded_version, valid_prepares.front().get_membership_version());
+    ElectionPrepareRequestMsg valid_request(valid_prepares.front());
+    valid_request.set_receiver(r_election.get_self_addr());
+    ASSERT_EQ(OB_SUCCESS, r_election.handle_message(valid_request));
+    ASSERT_EQ(OB_SUCCESS, defer_degrade_vote_election_tasks(r_election));
+    {
+      LockGuard guard(r_election.lock_);
+      r_election.acceptor_.last_time_window_open_ts_ =
+          ObClockGenerator::getClock() - CALCULATE_TIME_WINDOW_SPAN_TS() - 1;
+    }
+    EXPECT_FALSE((*r_vote)());
+    int64_t valid_vote_count = 0;
+    for (const auto &vote : r_transport.take(r_transport.prepare_responses_)) {
+      if (vote.get_receiver() == a_addr && vote.is_accepted()) {
+        ++valid_vote_count;
+      }
+    }
+    EXPECT_EQ(1, valid_vote_count) << "R must still vote for a valid candidate after rejecting stale B";
+    return;
+  }
+  ASSERT_EQ(1, stale_vote_count);
+  PALF_LOG(INFO, "REPRO step 4: R voted for B after the membership changed",
+           K(id), K(stale_vote_count), K(old_version), K(degraded_version));
+  for (const auto &votes : {b_votes, r_votes}) {
+    for (const auto &vote : votes) {
+      if (vote.get_receiver() == b_addr && vote.is_accepted()) {
+        ASSERT_EQ(OB_SUCCESS, b_election.handle_message(vote));
+      }
+    }
+  }
+  // Only renew after the genuine Prepare replies have formed a majority.
+  // Calling propose() without this check could accidentally force the chain.
+  ASSERT_EQ(b_election.proposer_.ballot_number_, b_election.proposer_.prepare_success_ballot_);
+  renew_b = [&]() -> int {
+    {
+      LockGuard guard(b_election.lock_);
+      if (b_election.proposer_.prepare_success_ballot_ != b_election.proposer_.ballot_number_) {
+        return OB_STATE_NOT_MATCH;
+      }
+      b_election.proposer_.propose();
+    }
+    for (const auto &request : b_transport.take(b_transport.accept_requests_)) {
+      int ret = deliver_accept(request, b_election);
+      if (OB_SUCCESS != ret || OB_SUCCESS != (ret = deliver_accept(request, r_election))) {
+        return ret;
+      }
+    }
+    for (auto *transport : {&b_transport, &r_transport}) {
+      for (const auto &response : transport->take(transport->accept_responses_)) {
+        if (response.get_receiver() == b_addr) {
+          const int ret = b_election.handle_message(response);
+          if (OB_SUCCESS != ret) {
+            return ret;
+          }
+        }
+      }
+    }
+    return OB_SUCCESS;
+  };
+  ASSERT_EQ(OB_SUCCESS, renew_b());
+  ASSERT_TRUE(b_election.proposer_.check_leader());
+
+  // 5. B + R perform real PALF prepare/reconfirm. A is isolated, so R supplies
+  // no full-replica tail and B chooses its own shorter prefix. Degrade A in
+  // reconfirm through the actual configuration-change/persistence path.
+  loc_cb.leader_ = b_addr;
+  block_net(a_idx, r_idx);
+  DEFER(unblock_net(a_idx, r_idx));
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() { return b.reconfirm_.can_do_degrade(); }, true));
+  // can_do_degrade() becomes true after reconfirm's log-selection/fetch phase.
+  // A is isolated and R has no full log, so B must still have only the common
+  // prefix here. Check the observable tail instead of renamed private members
+  // (majority_max_* in 4.2/4.3.5, prepare_quorum_max_accepted_* in master/4.4).
+  const LSN b_reconfirmed_max = b.get_max_lsn();
+  ASSERT_EQ(common_end, b_reconfirmed_max);
+  ASSERT_LT(b_reconfirmed_max, a_committed_end);
+  std::atomic<bool> change_done(false);
+  std::atomic<int> change_ret(OB_EAGAIN);
+  std::thread change_thread([&]() {
+    ObTenantEnv::set_tenant(get_cluster()[b_idx]->get_tenant_base());
+    const LogConfigChangeArgs degrade_a(ObMember(a_addr, 1), 0, DEGRADE_ACCEPTOR_TO_LEARNER);
+    change_ret.store(change_degrade_vote_config(b, degrade_a, 10 * 1000 * 1000L));
+    change_done.store(true);
+  });
+  const int change_wait_ret = wait_for([&]() { return change_done.load(); }, true);
+  change_thread.join();
+  ASSERT_EQ(OB_SUCCESS, change_wait_ret);
+  ASSERT_EQ(OB_SUCCESS, change_ret.load());
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    ObRole role = FOLLOWER;
+    int64_t proposal_id = 0;
+    bool pending = true;
+    return OB_SUCCESS == b.get_role(role, proposal_id, pending) && LEADER == role && !pending;
+  }, true));
+  ASSERT_EQ(1, b.config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+  PALF_LOG(INFO, "REPRO step 5: B completed reconfirm using its short tail",
+           K(id), K(common_end), K(a_committed_end), "B_committed_end", b.get_end_lsn());
+
+  // 6. B commits distinct data across A's already-committed LSN range. A stays
+  // isolated so its original committed entries remain available as evidence.
+  ObTenantEnv::set_tenant(get_cluster()[b_idx]->get_tenant_base());
+  std::string b_marker;
+  ASSERT_EQ(OB_SUCCESS, make_degrade_vote_marker("COMMITTED_ON_B_AFTER_RECONFIRM:", 'B', b_marker));
+  // Make A's old end fall inside a fully persisted B group, regardless of how
+  // A's eight entries were batched. This reproduces the partial group read in
+  // get_prev_log_info_for_fetch_, without corrupting or patching either log.
+  b_marker.resize(static_cast<size_t>(a_committed_end - common_end) + 4096, 'B');
+  ASSERT_LT(b_marker.size(), static_cast<size_t>(MAX_LOG_BODY_SIZE));
+  LSN last_b_lsn;
+  SCN last_b_scn;
+  const int64_t write_deadline = ObTimeUtility::current_time() + wait_timeout;
+  do {
+    ASSERT_LT(ObTimeUtility::current_time(), write_deadline);
+    ASSERT_EQ(OB_SUCCESS, renew_b());
+    ASSERT_EQ(OB_SUCCESS, append_marker(b, b_marker, last_b_lsn, last_b_scn, true));
+    ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+      return b.get_end_lsn() > last_b_lsn + b_marker.size();
+    }, true));
+  } while (b.get_end_lsn() <= a_committed_end);
+  ASSERT_EQ(OB_SUCCESS, count_degrade_vote_marker(a, a_marker, a_marker_count));
+  ASSERT_EQ(a_tail_count, a_marker_count);
+  int64_t preserved_on_b = 0;
+  int64_t committed_on_b = 0;
+  ASSERT_EQ(OB_SUCCESS, count_degrade_vote_marker(b, a_marker, preserved_on_b));
+  ASSERT_EQ(OB_SUCCESS, count_degrade_vote_marker(b, b_marker, committed_on_b));
+  ASSERT_GT(committed_on_b, 0);
+  EXPECT_EQ(a_tail_count, preserved_on_b)
+      << "B completed reconfirm and committed past A's committed tail, but lost A's committed entries";
+  ReadBufGuard a_bytes("MitTest", 4096);
+  ReadBufGuard b_bytes("MitTest", 4096);
+  int64_t a_read_size = 0;
+  int64_t b_read_size = 0;
+  ASSERT_EQ(OB_SUCCESS, a.log_engine_.read_log(common_end, 4096, a_bytes.read_buf_, a_read_size));
+  ASSERT_EQ(OB_SUCCESS, b.log_engine_.read_log(common_end, 4096, b_bytes.read_buf_, b_read_size));
+  ASSERT_EQ(4096, a_read_size);
+  ASSERT_EQ(a_read_size, b_read_size);
+  EXPECT_EQ(0, MEMCMP(a_bytes.read_buf_.buf_, b_bytes.read_buf_.buf_, a_read_size))
+      << "A and B contain different committed bytes at the same LSN after stale voting and reconfirm";
+  PALF_LOG(INFO, "REPRO step 6: compare committed history at the same LSN",
+           K(id), K(common_end), K(a_committed_end), "B_committed_end", b.get_end_lsn(),
+           K(a_marker_count), K(preserved_on_b), K(committed_on_b));
+
+  // 7. Restore the network and keep sync enabled. Obtain A's fetch positions
+  // from its real sliding window, then exercise B's production storage path.
+  // The request ends inside B's different group and must fail before any logs
+  // are sent. Also observe incoming fetch traffic, so an unreachable leader
+  // or a disabled follower cannot masquerade as the incident's stalled fetch.
+  DegradeVoteRebuildObserver rebuild_observer;
+  PalfRebuildCbNode rebuild_node(&rebuild_observer);
+  ASSERT_EQ(OB_SUCCESS, a.register_rebuild_cb(&rebuild_node));
+  DEFER(a.unregister_rebuild_cb(&rebuild_node));
+  LSN initial_rebuild_lsn;
+  ASSERT_EQ(OB_SUCCESS, a.get_last_rebuild_lsn(initial_rebuild_lsn));
+  ASSERT_FALSE(initial_rebuild_lsn.is_valid());
+  ASSERT_TRUE(a.is_sync_enabled());
+  LSN a_prev_lsn;
+  LSN a_fetch_start;
+  int64_t a_prev_log_id = OB_INVALID_LOG_ID;
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    return a.sw_.is_all_committed_log_slided_out(a_prev_lsn, a_prev_log_id, a_fetch_start);
+  }, true));
+  ASSERT_TRUE(a_prev_lsn.is_valid());
+  ASSERT_GT(a_prev_lsn, common_end);
+  ASSERT_LT(a_prev_lsn, a_fetch_start);
+  ASSERT_EQ(a_committed_end, a_fetch_start);
+  LogInfo prev_log_info;
+  ASSERT_EQ(OB_NEED_RETRY, b.get_prev_log_info_for_fetch_(a_prev_lsn, a_fetch_start, prev_log_info));
+  auto check_failed_storage_fetch = [&]() -> int {
+    FetchLogStat fetch_stat;
+    const int ret = b.fetch_log_from_storage_(a_addr, FETCH_LOG_FOLLOWER,
+        b.state_mgr_.get_proposal_id(), a_prev_lsn, a_fetch_start,
+        1024 * 1024, PALF_SLIDING_WINDOW_SIZE, SCN::max_scn(), fetch_stat);
+    EXPECT_EQ(0, fetch_stat.total_size_);
+    EXPECT_EQ(0, fetch_stat.group_log_cnt_);
+    return ret;
+  };
+  ASSERT_EQ(OB_NEED_RETRY, check_failed_storage_fetch());
+  unblock_net(a_idx, b_idx);
+  unblock_net(a_idx, r_idx);
+  ObTenantEnv::set_tenant(get_cluster()[a_idx]->get_tenant_base());
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    ObRole role = LEADER;
+    int64_t proposal_id = 0;
+    bool pending = true;
+    return OB_SUCCESS == a.get_role(role, proposal_id, pending) && FOLLOWER == role;
+  }, true));
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    ObAddr fetch_dst;
+    common::RWLock::RLockGuard guard(a.lock_);
+    return OB_SUCCESS == a.sw_.get_fetch_log_dst_(fetch_dst) && b_addr == fetch_dst;
+  }, true));
+  auto request_and_observe_fetch = [&]() -> int {
+    const int64_t previous_received_size = ATOMIC_LOAD(&b.accum_fetch_log_size_);
+    int ret = OB_SUCCESS;
+    {
+      common::RWLock::RLockGuard guard(a.lock_);
+      ret = a.sw_.try_fetch_log(FetchTriggerType::LOG_LOOP_TH);
+    }
+    if (OB_SUCCESS == ret) {
+      // This production counter advances when B handles fetch RPCs. Its
+      // periodic reset is allowed; a positive changed value proves receipt.
+      ret = wait_for([&]() {
+        const int64_t received_size = ATOMIC_LOAD(&b.accum_fetch_log_size_);
+        return received_size > 0 && received_size != previous_received_size;
+      }, true);
+    }
+    return ret;
+  };
+  ASSERT_EQ(OB_SUCCESS, request_and_observe_fetch());
+  ASSERT_EQ(a_committed_end, a.get_end_lsn());
+  ASSERT_EQ(a_committed_end, a.get_max_lsn());
+  ASSERT_EQ(0, rebuild_observer.count_.load());
+  PALF_LOG(INFO, "REPRO step 7: network restored, B receives fetches but A cannot advance",
+           K(id), K(a_prev_lsn), K(a_fetch_start), "A_max_lsn", a.get_max_lsn(),
+           "B_received_fetch_size", ATOMIC_LOAD(&b.accum_fetch_log_size_));
+
+  // 8. Advance B's checkpoint through the public API after real log commits.
+  // set_base_lsn rounds down to a block boundary, so write just over one block.
+  // Retain the physical first block: base_lsn alone is not a lower-bound read
+  // error. Repeat real fetch RPCs and verify the incident's no-rebuild state.
+  ASSERT_LT(a_committed_end, LSN(PALF_BLOCK_SIZE));
+  const LSN checkpoint_base(PALF_BLOCK_SIZE);
+  const LSN b_end_before_checkpoint = b.get_end_lsn();
+  std::string checkpoint_marker;
+  ASSERT_EQ(OB_SUCCESS, make_degrade_vote_marker("B_CHECKPOINT_PROGRESS:", 'C', checkpoint_marker));
+  checkpoint_marker.resize(1024 * 1024, 'C');
+  ObTenantEnv::set_tenant(get_cluster()[b_idx]->get_tenant_base());
+  const int64_t checkpoint_deadline = ObTimeUtility::current_time() + 60 * 1000 * 1000L;
+  while (b.get_end_lsn() <= checkpoint_base) {
+    ASSERT_LT(ObTimeUtility::current_time(), checkpoint_deadline);
+    ASSERT_EQ(OB_SUCCESS, renew_b());
+    ASSERT_EQ(OB_SUCCESS, append_marker(b, checkpoint_marker, last_b_lsn, last_b_scn, true));
+    ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+      return b.get_end_lsn() > last_b_lsn + checkpoint_marker.size();
+    }, true));
+  }
+  ASSERT_GT(b.get_end_lsn(), b_end_before_checkpoint);
+  ASSERT_EQ(OB_SUCCESS, b.set_base_lsn(checkpoint_base));
+  LSN b_base_lsn;
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+    return OB_SUCCESS == b.get_base_lsn(b_base_lsn) && b_base_lsn == checkpoint_base;
+  }, true));
+  LSN b_begin_lsn;
+  ASSERT_EQ(OB_SUCCESS, b.get_begin_lsn(b_begin_lsn));
+  ASSERT_LT(b_begin_lsn, a_committed_end);
+  ASSERT_LT(a_committed_end, b_base_lsn);
+  ObTenantEnv::set_tenant(get_cluster()[a_idx]->get_tenant_base());
+  for (int64_t round = 0; round < 3; ++round) {
+    ASSERT_EQ(OB_SUCCESS, request_and_observe_fetch());
+    // Leave the real log-loop fetch timer running for a full retry interval;
+    // three immediate calls would only demonstrate a momentary lack of progress.
+    const int64_t observation_end = ObTimeUtility::current_time() + PALF_FETCH_LOG_INTERVAL_US;
+    ASSERT_EQ(OB_SUCCESS, wait_for([&]() {
+      return ObTimeUtility::current_time() >= observation_end;
+    }, true));
+    ASSERT_EQ(OB_NEED_RETRY, check_failed_storage_fetch());
+    ASSERT_TRUE(a.is_sync_enabled());
+    ASSERT_EQ(a_committed_end, a.get_end_lsn());
+    ASSERT_EQ(a_committed_end, a.get_max_lsn());
+    ASSERT_EQ(0, rebuild_observer.count_.load());
+    LSN last_rebuild_lsn;
+    ASSERT_EQ(OB_SUCCESS, a.get_last_rebuild_lsn(last_rebuild_lsn));
+    ASSERT_EQ(initial_rebuild_lsn, last_rebuild_lsn);
+    PalfStat a_stat;
+    ASSERT_EQ(OB_SUCCESS, a.stat(a_stat));
+    ASSERT_EQ(FOLLOWER, a_stat.role_);
+    ASSERT_FALSE(a_stat.is_need_rebuild_);
+  }
+  PalfStat b_stat;
+  ASSERT_EQ(OB_SUCCESS, b.stat(b_stat));
+  ASSERT_EQ(LEADER, b_stat.role_);
+  ASSERT_TRUE(b_stat.degraded_list_.contains(a_addr));
+  ASSERT_EQ(OB_SUCCESS, b.get_begin_lsn(b_begin_lsn));
+  ASSERT_LT(b_begin_lsn, a.get_max_lsn());
+  ASSERT_LT(a.get_max_lsn(), b_base_lsn);
+  PALF_LOG(INFO, "REPRO step 8: B.begin < A.max < B.base, fetch retries never notify rebuild",
+           K(id), K(b_begin_lsn), "A_max_lsn", a.get_max_lsn(), K(b_base_lsn),
+           "B_committed_end", b.get_end_lsn(), "rebuild_count", rebuild_observer.count_.load());
+
+  // Positive control, only after recording the automatic no-rebuild failure:
+  // send an explicit real notification and verify the registered callback can
+  // fire. This separates a missing automatic notification from a broken test
+  // observer or a follower that would reject a valid rebuild notification.
+  ObTenantEnv::set_tenant(get_cluster()[b_idx]->get_tenant_base());
+  PalfBaseInfo checkpoint_info;
+  ASSERT_EQ(OB_SUCCESS, b.get_base_info(checkpoint_base, checkpoint_info));
+  ASSERT_EQ(OB_SUCCESS, b.log_engine_.submit_notify_rebuild_req(
+      a_addr, checkpoint_base, checkpoint_info.prev_log_info_));
+  ASSERT_EQ(OB_SUCCESS, wait_for([&]() { return rebuild_observer.count_.load() > 0; }, true));
+  EXPECT_EQ(id, rebuild_observer.last_id_.load());
+  EXPECT_EQ(checkpoint_base.val_, rebuild_observer.last_lsn_.load());
+  PALF_LOG(INFO, "REPRO positive control: explicit notification reaches A's rebuild callback",
+           K(id), K(checkpoint_base), "rebuild_count", rebuild_observer.count_.load());
+}
 
 TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
 {
