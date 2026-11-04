@@ -197,6 +197,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObPlanBaselineItem);
 };
 
+struct BaselineSortInfo
+{
+  explicit BaselineSortInfo(ObPlanBaselineItem *baseline = nullptr)
+    : baseline_(baseline),
+      is_accepted_(nullptr != baseline && baseline->get_accepted()),
+      avg_cpu_time_(nullptr != baseline ? baseline->get_avg_cpu_time() : -1)
+  {}
+
+  TO_STRING_KV(K_(baseline), K_(is_accepted), K_(avg_cpu_time));
+
+  ObPlanBaselineItem *baseline_;
+  bool is_accepted_;
+  int64_t avg_cpu_time_;
+};
+
 class ObSpmSet : public ObILibCacheNode
 {
 
@@ -227,6 +242,7 @@ public:
 
   TO_STRING_KV(K_(is_inited));
 private:
+  static void sort_baselines(ObIArray<ObPlanBaselineItem*> &all_baselines);
   bool is_inited_;
   ObBaselineKey baseline_key_; //used for manager key memory
   common::ObSEArray<ObPlanBaselineItem*, 4> baseline_array_;
@@ -237,19 +253,19 @@ private:
 
 struct BaselineCmp
 {
-  inline bool operator()(const ObPlanBaselineItem *left, const ObPlanBaselineItem *right)
+  inline bool operator()(const BaselineSortInfo &left, const BaselineSortInfo &right) const
   {
-    bool bret = false;
-    if (left == nullptr || right == nullptr) {
-      bret = left != nullptr;
-    } else if (!left->get_accepted() || !right->get_accepted()) {
-      bret = left->get_accepted();
-    } else if (left->get_avg_cpu_time() < 0 || right->get_avg_cpu_time() < 0) {
-      bret = left->get_avg_cpu_time() >= 0;
+    bool is_less = false;
+    if (nullptr == left.baseline_ || nullptr == right.baseline_) {
+      is_less = nullptr != left.baseline_;
+    } else if (!left.is_accepted_ || !right.is_accepted_) {
+      is_less = left.is_accepted_;
+    } else if (0 > left.avg_cpu_time_ || 0 > right.avg_cpu_time_) {
+      is_less = 0 <= left.avg_cpu_time_;
     } else {
-      bret = left->get_avg_cpu_time() < right->get_avg_cpu_time();
+      is_less = left.avg_cpu_time_ < right.avg_cpu_time_;
     }
-    return bret;
+    return is_less;
   }
 };
 
