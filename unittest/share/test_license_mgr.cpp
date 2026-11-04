@@ -287,6 +287,59 @@ TEST_F(TestLicense, LicenseTimestampService) {
   }
 }
 
+TEST_F(TestLicense, LicenseTimestampServiceBoottime)
+{
+  ObLicenseTimestampService &service = license_mgr_->timestamp_service_;
+  const int64_t single_second = 1000 * 1000;
+  const int64_t single_day = 24L * 60 * 60 * single_second;
+  const int64_t initial_time = 1739894401000000;
+  int64_t time = 0;
+
+  ASSERT_EQ(OB_NOT_INIT, service.get_time(time));
+  service.UPDATE_TIME_DURATION = 60 * single_second;
+  service.modified_sys_time_ = initial_time;
+  ASSERT_EQ(OB_SUCCESS, service.start_with_time(initial_time));
+  ASSERT_EQ(OB_SUCCESS, service.get_time(time));
+  ASSERT_EQ(initial_time, time);
+
+  // Simulate a long idle/suspend interval without relying on CPU frequency.
+  service.last_boottime_ -= 180 * single_day;
+  service.modified_sys_time_ = initial_time + 180 * single_day;
+  ASSERT_EQ(OB_SUCCESS, service.get_time(time));
+  ASSERT_EQ(service.modified_sys_time_, time);
+
+  // A large wall-clock rollback must not stop elapsed time from advancing LTS.
+  int64_t last_time = time;
+  service.last_boottime_ -= single_day;
+  service.modified_sys_time_ = initial_time;
+  ASSERT_EQ(OB_SUCCESS, service.get_time(time));
+  ASSERT_GE(time, last_time + single_day);
+  ASSERT_LT(time, last_time + single_day + single_second);
+
+  // Preserve the existing protection against large forward wall-clock jumps.
+  last_time = time;
+  service.last_boottime_ -= single_day;
+  service.modified_sys_time_ = initial_time + 400 * single_day;
+  ASSERT_EQ(OB_SUCCESS, service.get_time(time));
+  ASSERT_GE(time, last_time + single_day);
+  ASSERT_LT(time, last_time + single_day + single_second);
+}
+
+TEST_F(TestLicense, LicenseTimestampServiceBoottimeRollback)
+{
+  ObLicenseTimestampService &service = license_mgr_->timestamp_service_;
+  const int64_t initial_time = 1739894401000000;
+  ASSERT_EQ(OB_SUCCESS, service.start_with_time(initial_time));
+  // Reject an invalid clock sample without changing either time baseline.
+  service.last_boottime_ += 60L * 1000 * 1000;
+  const int64_t last_boottime = service.last_boottime_;
+  int64_t time = 0;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, service.get_time(time));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, service.update_time());
+  ASSERT_EQ(initial_time, service.current_time_);
+  ASSERT_EQ(last_boottime, service.last_boottime_);
+}
+
 TEST_F(TestLicense, TestLicenseUtils) {
   ObLicenseMgr& g_license_mgr = ObLicenseMgr::instance;
   ObLicenseTimestampService& g_time_service = g_license_mgr.timestamp_service_;
