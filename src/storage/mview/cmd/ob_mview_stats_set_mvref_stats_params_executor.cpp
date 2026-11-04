@@ -146,6 +146,10 @@ int ObMViewStatsSetMVRefStatsParamsExecutor::resolve_arg(
     }
   }
   // resolve retention_period
+  // NULL is stored as 31. With a NULL mv_list both sys default columns are written, so changing only
+  // collection_level also resets the sys default retention to 31. An mview level value is stored only
+  // and no purge reads it. See "Semantics of retention_period" in
+  // share/schema/ob_mview_refresh_stats_params.h.
   if (OB_SUCC(ret)) {
     if (INT64_MAX == arg.retention_period_) {
       stats_params_.set_retention_period(ObMViewRefreshStatsParams::DEFAULT_RETENTION_PERIOD);

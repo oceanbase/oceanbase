@@ -1021,7 +1021,7 @@ ob_set_subtarget(ob_storage mview
   mview/ob_mlog_purge.cpp
   mview/ob_mview_refresh_helper.cpp
   mview/ob_mview_refresh_stats_collect.cpp
-  mview/ob_mview_refresh_stats_purge.cpp
+  mview/ob_mview_refresh_stats_utils.cpp
   mview/ob_mview_refresh.cpp
   mview/ob_mview_transaction.cpp
   mview/ob_mview_sched_job_utils.cpp

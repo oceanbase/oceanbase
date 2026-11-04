@@ -17,7 +17,6 @@
 #include "observer/ob_server_struct.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mview_refresh_stats_params.h"
-#include "storage/mview/ob_mview_refresh_stats_purge.h"
 
 namespace oceanbase
 {
@@ -204,8 +203,6 @@ int ObMViewMaintenanceTask::gc_mview()
     ObSchemaGetterGuard schema_guard;
     int64_t tenant_schema_version = OB_INVALID_VERSION;
     int64_t gc_mview_num = 0;
-    int64_t gc_stats_num = 0;
-    int64_t affected_rows = 0;
 
     // We must check tenant schema is refreshed first. Because tenant schema may not be fully refreshed when observer restarts.
     //
@@ -227,9 +224,7 @@ int ObMViewMaintenanceTask::gc_mview()
       LOG_WARN("fail to get schema version", KR(ret), K(tenant_id_));
     }
 
-    while (OB_SUCC(ret) && (mview_idx_ < mview_ids_.count() || OB_INVALID_ID != gc_mview_id_) &&
-           gc_stats_num < MVREF_STATS_NUM_PURGE_PER_SCHED) {
-      const int64_t limit = MVREF_STATS_NUM_PURGE_PER_SCHED - gc_stats_num;
+    while (OB_SUCC(ret) && (mview_idx_ < mview_ids_.count() || OB_INVALID_ID != gc_mview_id_)) {
       if (OB_INVALID_ID == gc_mview_id_) { // check next mview id
         const uint64_t mview_id = mview_ids_.at(mview_idx_);
         ObMViewInfo mview_info;
@@ -254,27 +249,15 @@ int ObMViewMaintenanceTask::gc_mview()
         }
       } else {
         const uint64_t mview_id = gc_mview_id_;
-        ObMViewRefreshStats::FilterParam filter_param;
-        filter_param.set_mview_id(mview_id);
-        if (OB_FAIL(ObMViewRefreshStatsPurgeUtil::purge_refresh_stats(
-              *GCTX.sql_proxy_, tenant_id_, filter_param, affected_rows, limit))) {
-          LOG_WARN("fail to purge refresh stats", KR(ret), K(tenant_id_), K(filter_param),
-                   K(limit));
+        if (OB_FAIL(drop_mview(mview_id))) {
+          LOG_WARN("fail to drop mview", KR(ret), K(mview_id));
         } else {
-          gc_stats_num += affected_rows;
-        }
-        if (OB_SUCC(ret) && affected_rows < limit) {
-          if (OB_FAIL(drop_mview(mview_id))) {
-            LOG_WARN("fail to drop mview", KR(ret), K(mview_id));
-          } else {
-            gc_mview_id_ = OB_INVALID_ID;
-            ++gc_mview_num;
-          }
+          gc_mview_id_ = OB_INVALID_ID;
+          ++gc_mview_num;
         }
       }
     }
     gc_mview_num_ += gc_mview_num;
-    gc_stats_num_ += gc_stats_num;
   }
   if (OB_SUCC(ret) && fetch_finish_ && mview_idx_ >= mview_ids_.count() &&
       OB_INVALID_ID == gc_mview_id_) { // goto next status

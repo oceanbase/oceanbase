@@ -240,96 +240,6 @@ int ObMViewRefreshRunStats::insert_run_stats(ObISQLClient &sql_client,
   return ret;
 }
 
-int ObMViewRefreshRunStats::dec_num_mvs_current(ObISQLClient &sql_client, uint64_t tenant_id,
-                                                int64_t refresh_id, int64_t dec_val)
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, dec num mvs current is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || refresh_id <= 0 || dec_val <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(refresh_id), K(dec_val));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObSqlString sql;
-    int64_t affected_rows = 0;
-    if (OB_FAIL(sql.assign_fmt("update %s set num_mvs_current = num_mvs_current - %ld"
-                               " where tenant_id = 0 and refresh_id = %ld;",
-                               OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME, dec_val, refresh_id))) {
-      LOG_WARN("fail to assign sql", KR(ret));
-    } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    } else if (OB_UNLIKELY(!(is_single_row(affected_rows) || is_zero_row(affected_rows)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("affected_rows unexpected to be one or zero", KR(ret), K(affected_rows));
-    }
-  }
-  return ret;
-}
-
-int ObMViewRefreshRunStats::drop_all_run_stats(ObISQLClient &sql_client, uint64_t tenant_id,
-                                               int64_t &affected_rows, int64_t limit)
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, drop all run stats is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("delete from %s where tenant_id = 0",
-                               OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME))) {
-      LOG_WARN("fail to assign sql", KR(ret));
-    } else if (limit > 0 && OB_FAIL(sql.append_fmt(" limit %ld", limit))) {
-      LOG_WARN("fail to append sql", KR(ret));
-    } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    }
-  }
-  return ret;
-}
-
-int ObMViewRefreshRunStats::drop_empty_run_stats(ObISQLClient &sql_client, uint64_t tenant_id,
-                                                 int64_t &affected_rows, int64_t limit)
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, drop empty run stats is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObSqlString sql;
-    if (OB_FAIL(sql.assign_fmt("delete from %s where tenant_id = 0 and num_mvs_current <= 0",
-                               OB_ALL_MVIEW_REFRESH_RUN_STATS_TNAME))) {
-      LOG_WARN("fail to assign sql", KR(ret));
-    } else if (limit > 0 && OB_FAIL(sql.append_fmt(" limit %ld", limit))) {
-      LOG_WARN("fail to append sql", KR(ret));
-    } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("fail to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    }
-  }
-  return ret;
-}
-
 /**
  * ObMViewRefreshStats
  */
@@ -545,101 +455,6 @@ int ObMViewRefreshStats::drop_all_refresh_stats(ObISQLClient &sql_client, uint64
   return ret;
 }
 
-int ObMViewRefreshStats::drop_refresh_stats_record(ObISQLClient &sql_client, uint64_t tenant_id,
-                                                   const ObMViewRefreshStatsRecordId &record_id)
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, drop refresh stats record is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !record_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(record_id));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
-        OB_FAIL(dml.add_pk_column("refresh_id", record_id.refresh_id_)) ||
-        OB_FAIL(dml.add_pk_column("mview_id", record_id.mview_id_)) ||
-        OB_FAIL(dml.add_pk_column("retry_id", record_id.retry_id_))) {
-      LOG_WARN("add column failed", KR(ret));
-    } else {
-      ObDMLExecHelper exec(sql_client, exec_tenant_id);
-      int64_t affected_rows = 0;
-      if (OB_FAIL(exec.exec_delete(OB_ALL_MVIEW_REFRESH_STATS_TNAME, dml, affected_rows))) {
-        LOG_WARN("execute delete failed", KR(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObMViewRefreshStats::collect_record_ids(ObISQLClient &sql_client, uint64_t tenant_id,
-                                            const FilterParam &filter_param,
-                                            ObIArray<ObMViewRefreshStatsRecordId> &record_ids,
-                                            int64_t limit)
-{
-  int ret = OB_SUCCESS;
-  record_ids.reset();
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, collect record ids is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !filter_param.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(filter_param));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    SMART_VAR(ObMySQLProxy::MySQLResult, res)
-    {
-      common::sqlclient::ObMySQLResult *result = nullptr;
-      ObSqlString sql;
-      ObMViewRefreshStatsRecordId record_id;
-      if (OB_FAIL(
-            sql.assign_fmt("select refresh_id, mview_id, retry_id from %s where tenant_id = 0",
-                           OB_ALL_MVIEW_REFRESH_STATS_TNAME))) {
-        LOG_WARN("fail to assign sql", KR(ret));
-      } else if (filter_param.has_mview_id() &&
-                 OB_FAIL(sql.append_fmt(" and mview_id = %ld", filter_param.get_mview_id()))) {
-        LOG_WARN("fail to append sql", KR(ret));
-      } else if (filter_param.has_retention_period() &&
-                 OB_FAIL(sql.append_fmt(" and end_time < date_sub(now(), interval %ld day)",
-                                        filter_param.get_retention_period()))) {
-        LOG_WARN("fail to append sql", KR(ret));
-      } else if (limit > 0 && OB_FAIL(sql.append_fmt(" limit %ld", limit))) {
-        LOG_WARN("fail to append sql", KR(ret));
-      } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", KR(ret), K(sql));
-      } else if (OB_ISNULL(result = res.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", KR(ret));
-      }
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(result->next())) {
-          if (OB_UNLIKELY(OB_ITER_END != ret)) {
-            LOG_WARN("fail to get next", KR(ret));
-          } else {
-            ret = OB_SUCCESS;
-            break;
-          }
-        }
-        EXTRACT_INT_FIELD_MYSQL(*result, "refresh_id", record_id.refresh_id_, int64_t);
-        EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", record_id.mview_id_, uint64_t);
-        EXTRACT_INT_FIELD_MYSQL(*result, "retry_id", record_id.retry_id_, int64_t);
-        OZ(record_ids.push_back(record_id));
-      }
-    }
-  }
-  return ret;
-}
-
 /**
  * ObMViewRefreshChangeStats
  */
@@ -809,39 +624,6 @@ int ObMViewRefreshChangeStats::drop_all_change_stats(ObISQLClient &sql_client, u
       LOG_WARN("fail to append sql", KR(ret));
     } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    }
-  }
-  return ret;
-}
-
-int ObMViewRefreshChangeStats::drop_change_stats_record(
-  ObISQLClient &sql_client, uint64_t tenant_id, const ObMViewRefreshStatsRecordId &record_id)
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, drop change stats record is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !record_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(record_id));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
-        OB_FAIL(dml.add_pk_column("refresh_id", record_id.refresh_id_)) ||
-        OB_FAIL(dml.add_pk_column("mview_id", record_id.mview_id_)) ||
-        OB_FAIL(dml.add_pk_column("retry_id", record_id.retry_id_))) {
-      LOG_WARN("add column failed", KR(ret));
-    } else {
-      ObDMLExecHelper exec(sql_client, exec_tenant_id);
-      int64_t affected_rows = 0;
-      if (OB_FAIL(exec.exec_delete(OB_ALL_MVIEW_REFRESH_CHANGE_STATS_TNAME, dml, affected_rows))) {
-        LOG_WARN("execute delete failed", KR(ret));
-      }
     }
   }
   return ret;
@@ -1028,39 +810,6 @@ int ObMViewRefreshStmtStats::drop_all_stmt_stats(ObISQLClient &sql_client, uint6
       LOG_WARN("fail to append sql", KR(ret));
     } else if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", KR(ret), K(exec_tenant_id), K(sql));
-    }
-  }
-  return ret;
-}
-
-int ObMViewRefreshStmtStats::drop_stmt_stats_record(ObISQLClient &sql_client, uint64_t tenant_id,
-                                                    const ObMViewRefreshStatsRecordId &record_id)
-{
-  int ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_3_0_0)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3 does not support this operation", KR(ret), K(tenant_id), K(compat_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.0.0, drop stmt stats record is");
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !record_id.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(record_id));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    ObDMLSqlSplicer dml;
-    if (OB_FAIL(dml.add_pk_column("tenant_id", 0)) ||
-        OB_FAIL(dml.add_pk_column("refresh_id", record_id.refresh_id_)) ||
-        OB_FAIL(dml.add_pk_column("mview_id", record_id.mview_id_)) ||
-        OB_FAIL(dml.add_pk_column("retry_id", record_id.retry_id_))) {
-      LOG_WARN("add column failed", KR(ret));
-    } else {
-      ObDMLExecHelper exec(sql_client, exec_tenant_id);
-      int64_t affected_rows = 0;
-      if (OB_FAIL(exec.exec_delete(OB_ALL_MVIEW_REFRESH_STMT_STATS_TNAME, dml, affected_rows))) {
-        LOG_WARN("execute delete failed", KR(ret));
-      }
     }
   }
   return ret;

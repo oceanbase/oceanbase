@@ -22,25 +22,6 @@ namespace share
 class ObDMLSqlSplicer;
 namespace schema
 {
-struct ObMViewRefreshStatsRecordId
-{
-public:
-  ObMViewRefreshStatsRecordId()
-    : refresh_id_(OB_INVALID_ID), mview_id_(OB_INVALID_ID), retry_id_(OB_INVALID_ID)
-  {
-  }
-  bool is_valid() const
-  {
-    return OB_INVALID_ID != refresh_id_ && OB_INVALID_ID != mview_id_ && OB_INVALID_ID != retry_id_;
-  }
-  TO_STRING_KV(K_(refresh_id), K_(mview_id), K_(retry_id));
-
-public:
-  int64_t refresh_id_;
-  uint64_t mview_id_;
-  int64_t retry_id_;
-};
-
 class ObMViewRefreshRunStats : public ObSchema
 {
   OB_UNIS_VERSION(1);
@@ -96,12 +77,6 @@ public:
 
   int gen_insert_run_stats_dml(uint64_t exec_tenant_id, share::ObDMLSqlSplicer &dml) const;
   static int insert_run_stats(ObISQLClient &sql_client, const ObMViewRefreshRunStats &run_stats);
-  static int dec_num_mvs_current(ObISQLClient &sql_client, uint64_t tenant_id, int64_t refresh_id,
-                                 int64_t dec_val);
-  static int drop_all_run_stats(ObISQLClient &sql_client, uint64_t tenant_id,
-                                int64_t &affected_rows, int64_t limit = -1);
-  static int drop_empty_run_stats(ObISQLClient &sql_client, uint64_t tenant_id,
-                                  int64_t &affected_rows, int64_t limit = -1);
 
   TO_STRING_KV(K_(tenant_id),
                K_(refresh_id),
@@ -200,56 +175,6 @@ public:
                                   const ObMViewRefreshStats &refresh_stats);
   static int drop_all_refresh_stats(ObISQLClient &sql_client, uint64_t tenant_id,
                                     int64_t &affected_rows, int64_t limit = -1);
-  static int drop_refresh_stats_record(ObISQLClient &sql_client, uint64_t tenant_id,
-                                       const ObMViewRefreshStatsRecordId &record_id);
-
-  class FilterParam
-  {
-  public:
-    FilterParam() : mview_id_(OB_INVALID_ID), retention_period_(0), flag_(0) {}
-
-#define DEFINE_GETTER_AND_SETTER(type, name)                  \
-  OB_INLINE bool has_##name() const { return has_##name##_; } \
-  OB_INLINE type get_##name() const { return name##_; }       \
-  OB_INLINE void set_##name(type name)                        \
-  {                                                           \
-    name##_ = name;                                           \
-    has_##name##_ = true;                                     \
-  }
-
-    DEFINE_GETTER_AND_SETTER(uint64_t, mview_id);
-    DEFINE_GETTER_AND_SETTER(int64_t, retention_period);
-
-#undef DEFINE_GETTER_AND_SETTER
-
-    bool has_no_flag() const { return flag_ == 0; }
-    bool has_any_flag() const { return flag_ != 0; }
-    bool is_valid() const
-    {
-      return (!has_mview_id_ || OB_INVALID_ID != mview_id_) &&
-             (!has_retention_period_ || retention_period_ > 0);
-    }
-    TO_STRING_KV(K_(mview_id), K_(retention_period), K_(has_mview_id), K_(has_retention_period));
-
-  private:
-    uint64_t mview_id_;
-    int64_t retention_period_;
-    union
-    {
-      uint64_t flag_;
-      struct
-      {
-        uint64_t has_mview_id_ : 1;
-        uint64_t has_retention_period_ : 1;
-        uint64_t reserved : 62;
-      };
-    };
-  };
-
-  static int collect_record_ids(ObISQLClient &sql_client, uint64_t tenant_id,
-                                const FilterParam &filter_param,
-                                ObIArray<ObMViewRefreshStatsRecordId> &record_ids,
-                                int64_t limit = -1);
 
   TO_STRING_KV(K_(tenant_id),
                K_(refresh_id),
@@ -321,8 +246,6 @@ public:
                                  const ObMViewRefreshChangeStats &change_stats);
   static int drop_all_change_stats(ObISQLClient &sql_client, uint64_t tenant_id,
                                    int64_t &affected_rows, int64_t limit = -1);
-  static int drop_change_stats_record(ObISQLClient &sql_client, uint64_t tenant_id,
-                                      const ObMViewRefreshStatsRecordId &record_id);
 
   TO_STRING_KV(K_(tenant_id),
                K_(refresh_id),
@@ -390,8 +313,6 @@ public:
   static int insert_stmt_stats(ObISQLClient &sql_client, const ObMViewRefreshStmtStats &stmt_stats);
   static int drop_all_stmt_stats(ObISQLClient &sql_client, uint64_t tenant_id,
                                  int64_t &affected_rows, int64_t limit = -1);
-  static int drop_stmt_stats_record(ObISQLClient &sql_client, uint64_t tenant_id,
-                                    const ObMViewRefreshStatsRecordId &record_id);
 
   TO_STRING_KV(K_(tenant_id),
                K_(refresh_id),

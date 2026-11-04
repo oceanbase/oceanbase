@@ -44,6 +44,32 @@ public:
   void reset() override;
   int64_t get_convert_size() const override;
 
+  // Semantics of retention_period (retention of refresh stats, in days)
+  //
+  // Valid stored values are -1 and [1, 365000], 31 by default. -1 is meant as never purge, but only the
+  // auto purge honors it. The PL interfaces pass a NULL argument down as INT64_MAX. The behavior below
+  // is user visible and kept for compatibility; do not change a single entry alone.
+  //
+  // | Entry                                      | v = NULL                 | v = -1                         |
+  // |--------------------------------------------|--------------------------|--------------------------------|
+  // | set_system_default('RETENTION_PERIOD', v)  | sys default reset to 31  | sys default set to -1          |
+  // | set_mvref_stats_params(NULL, level, v) [1] | sys default reset to 31  | sys default set to -1          |
+  // | set_mvref_stats_params(mv, level, v) [2]   | mview level value = 31   | mview level value = -1         |
+  // | daily auto purge [3]                       | purge by sys default     | sys default -1: skip the round |
+  // | PURGE_REFRESH_STATS(mv, v) [4]             | purge by sys default [5] | delete all existing stats      |
+  //
+  // [1] Writes both sys default columns and drops all mview level params. A NULL level or v resets that
+  //     column to the product default (TYPICAL / 31), so set_mvref_stats_params(NULL, 'ADVANCED') also
+  //     resets the sys default retention to 31.
+  // [2] Stored only. No purge reads mview level retention: the purge DELETE has no mview_id condition,
+  //     so every mview is purged by the sys default.
+  // [3] No argument; the v = -1 column means the sys default is -1. The sys default is re-read every 10
+  //     successful DELETEs, and reading -1 stops the round.
+  // [4] mv is ignored and the whole tenant is purged. v is not range checked: -1, 0 or any other negative
+  //     value is used as days, which puts the cutoff at or after now(), so all existing stats are deleted.
+  // [5] A sys default of -1 is used as days in the same way, so all existing stats are deleted.
+  //
+  // TODO: redesign the retention_period semantics as a whole instead of patching a single entry.
   static bool is_retention_period_valid(int64_t retention_period)
   {
     return retention_period == -1 || (retention_period >= 1 && retention_period <= 365000);

@@ -39,8 +39,9 @@ public:
 private:
   static const int64_t MVREF_STATS_MAINTENANCE_INTERVAL = 24LL * 3600 * 1000 * 1000; // 1day
   static const int64_t MVREF_STATS_MAINTENANCE_SCHED_INTERVAL = 10LL * 1000 * 1000; // 10s
-  static const int64_t MVIEW_NUM_FETCH_PER_SCHED = 1000;
-  static const int64_t MVREF_STATS_NUM_PURGE_PER_SCHED = 1000;
+  /// Sentinel: retention not set for this round; -1 means never purge (tenant-level unified retention)
+  static const int64_t RETENTION_PERIOD_NOT_SET = 0;
+  static const int64_t RETENTION_PERIOD_NEVER_PURGE = -1;
 
   enum class StatusType
   {
@@ -62,21 +63,16 @@ private:
 
 private:
   uint64_t tenant_id_;
-  int64_t round_;
   StatusType status_;
   int error_code_;
-  uint64_t last_fetch_mview_id_;
-  ObArray<uint64_t> mview_ids_;
-  int64_t mview_idx_;
-  int64_t fetch_mview_num_;
-  int64_t purge_mview_num_;
+  /// Tenant-level unified retention period (days). NOT_SET for uninitialized, -1 for never purge.
+  int64_t retention_period_;
   int64_t purge_stats_num_;
   int64_t start_time_;
   int64_t start_purge_time_;
   int64_t cost_us_;
   int64_t prepare_cost_us_;
   int64_t purge_cost_us_;
-  bool fetch_finish_;
   bool in_sched_;
   bool is_stop_;
   bool is_inited_;

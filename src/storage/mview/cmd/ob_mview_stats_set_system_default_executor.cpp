@@ -93,6 +93,8 @@ int ObMViewStatsSetSystemDefaultExecutor::resolve_arg(const ObMViewStatsSetSyste
     }
   } else if (0 == arg.parameter_name_.case_compare("RETENTION_PERIOD")) {
     op_type_ = OpType::SET_RETENTION_PERIOD;
+    // NULL resets the sys default to 31 and -1 is stored as is; only this column is updated. See
+    // "Semantics of retention_period" in share/schema/ob_mview_refresh_stats_params.h.
     if (INT64_MAX == arg.retention_period_) {
       retention_period_ = ObMViewRefreshStatsParams::DEFAULT_RETENTION_PERIOD;
     } else {
