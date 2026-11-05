@@ -175,16 +175,31 @@ void ObLogIOAdapter::destroy()
       cb_map_.destroy();
     }
     if (OB_NOT_NULL(log_local_device_)) {
+      if (OB_NOT_NULL(io_manager_)) {
+        int tmp_ret = io_manager_->remove_device_channel(log_local_device_);
+        if (OB_SUCCESS != tmp_ret) {
+          CLOG_LOG_RET(WARN, tmp_ret, "remove device channel failed",
+                       K(tmp_ret), KP_(io_manager), KP_(log_local_device));
+        }
+      }
       log_local_device_->destroy();
       device_manager_->release_device((ObIODevice*&) log_local_device_);
     }
     if (OB_NOT_NULL(log_remote_device_)) {
+      if (OB_NOT_NULL(io_manager_)) {
+        int tmp_ret = io_manager_->remove_device_channel(log_remote_device_);
+        if (OB_SUCCESS != tmp_ret) {
+          CLOG_LOG_RET(WARN, tmp_ret, "remove device channel failed",
+                       K(tmp_ret), KP_(io_manager), KP_(log_remote_device));
+        }
+      }
       log_remote_device_->destroy();
       device_manager_->release_device((ObIODevice*&) log_remote_device_);
     }
     using_device_ = NULL;
     log_local_device_ = NULL;
     log_remote_device_ = NULL;
+    io_manager_ = NULL;
     device_manager_ = NULL;
     is_inited_ = false;
     CLOG_LOG(INFO, "ObLogIOAdapter destory");
