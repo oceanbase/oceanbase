@@ -416,10 +416,10 @@ int ObDirectLoadOptimizerCtx::check_transaction(ObSQLSessionInfo *session_info)
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "using insert overwrite within a transaction is");
       LOG_WARN("insert overwrite within a transaction is not support", KR(ret), K(auto_commit), K(session_info->is_in_transaction()));
-    } else {
+    } else if (is_full_direct_load()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full or inc direct-insert within a transaction is");
-      LOG_WARN("using full or inc direct-insert within a transaction is not support", KR(ret), K(auto_commit), K(session_info->is_in_transaction()));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "using full direct-insert within a transaction is");
+      LOG_WARN("using full direct-insert within a transaction is not support", KR(ret), K(auto_commit), K(session_info->is_in_transaction()));
     }
   }
   return ret;
