@@ -54,6 +54,7 @@ int LogIODeviceWrapper::init(const char *clog_dir,
     } else if (OB_FAIL(io_manager->add_device_channel(log_local_device_, disk_io_thread_count, disk_io_thread_count, max_io_depth))) {
       PALF_LOG(WARN, "failed to add device channel", K(ret));
     } else {
+      io_manager_ = io_manager;
       device_manager_ = device_manager;
       is_inited_ = true;
       PALF_LOG(INFO, "log_local_device_ init successfully", KP_(log_local_device));
@@ -72,9 +73,17 @@ void LogIODeviceWrapper::destroy()
 {
   if (is_inited_) {
     if (OB_NOT_NULL(log_local_device_)) {
+      if (OB_NOT_NULL(io_manager_)) {
+        int tmp_ret = io_manager_->remove_device_channel(log_local_device_);
+        if (OB_SUCCESS != tmp_ret) {
+          PALF_LOG_RET(WARN, tmp_ret, "remove device channel failed",
+                       K(tmp_ret), KP_(io_manager), KP_(log_local_device));
+        }
+      }
       log_local_device_->destroy();
       device_manager_->release_device((ObIODevice*&) log_local_device_);
     }
+    io_manager_ = NULL;
     device_manager_ = NULL;
     is_inited_ = false;
     PALF_LOG(INFO, "LogIODeviceWrapper destory");
