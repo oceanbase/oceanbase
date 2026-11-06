@@ -268,12 +268,7 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
     CK (coll->get_count() > pos);
     CK (1 == coll->get_column_count());
     CK (OB_NOT_NULL(data = reinterpret_cast<ObObj*>(coll->get_data())));
-    if (stmt::T_ANONYMOUS_BLOCK == stmt_type_) {
-      // for anonymous block, no need to convert int type to number
-      OX (params_->at(i) = *(data + pos));
-    } else {
-      OZ (param_assign_after_convert_int2number(params_->at(i), *(data + pos)));
-    }
+    OZ (param_assign_after_convert_int2number(params_->at(i), *(data + pos)));
     if (data[pos].is_numeric_type()) {
       ObAccuracy default_acc =
         ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][data[pos].get_type()];
