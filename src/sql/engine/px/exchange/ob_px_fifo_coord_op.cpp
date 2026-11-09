@@ -152,32 +152,35 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
     int64_t left = row_reader_.left_rows();
     if (left >= row_cnt || (left > 0 && msg_loop_.all_eof(task_channels_.count()))) {
       clear_evaluated_flag();
-      clear_dynamic_const_parent_flag();
-      metric_.mark_interval_start();
-      if (!is_vectorized()) {
-        ret = row_reader_.get_next_row(MY_SPEC.child_exprs_,
-                                       MY_SPEC.dynamic_const_exprs_,
-                                       eval_ctx_);
+      if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+        LOG_WARN("failed to clear dynamic const parent flags", K(ret));
       } else {
-        int64_t read_rows = 0;
-        ret = get_spec().use_rich_format_
-              ? row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
-                                         eval_ctx_,  row_cnt, read_rows, vector_rows_)
-              : row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
-                                         eval_ctx_,  row_cnt, read_rows, stored_rows_);
-        brs_.size_ = read_rows;
-        brs_.all_rows_active_ = true;
-      }
-      metric_.mark_interval_end(&time_recorder_);
-      if (OB_FAIL(ret)) {
-        LOG_WARN("get row failed", K(ret));
-      } else {
-        if (!first_row_sent_) {
-          // used to make sure logging the following message once.
-          first_row_sent_ = true;
-          LOG_TRACE("TIMERECORD ",
-                    "reserve:=1 name:=RQC dfoid:=-1 sqcid:=-1 taskid:=-1 start:",
-                    ObTimeUtility::current_time());
+        metric_.mark_interval_start();
+        if (!is_vectorized()) {
+          ret = row_reader_.get_next_row(MY_SPEC.child_exprs_,
+                                         MY_SPEC.dynamic_const_exprs_,
+                                         eval_ctx_);
+        } else {
+          int64_t read_rows = 0;
+          ret = get_spec().use_rich_format_
+                ? row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
+                                           eval_ctx_,  row_cnt, read_rows, vector_rows_)
+                : row_reader_.get_next_batch(MY_SPEC.child_exprs_, MY_SPEC.dynamic_const_exprs_,
+                                           eval_ctx_,  row_cnt, read_rows, stored_rows_);
+          brs_.size_ = read_rows;
+          brs_.all_rows_active_ = true;
+        }
+        metric_.mark_interval_end(&time_recorder_);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("get row failed", K(ret));
+        } else {
+          if (!first_row_sent_) {
+            // used to make sure logging the following message once.
+            first_row_sent_ = true;
+            LOG_TRACE("TIMERECORD ",
+                      "reserve:=1 name:=RQC dfoid:=-1 sqcid:=-1 taskid:=-1 start:",
+                      ObTimeUtility::current_time());
+          }
         }
       }
       break;

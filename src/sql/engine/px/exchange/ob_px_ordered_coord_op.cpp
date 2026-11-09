@@ -163,8 +163,9 @@ int ObPxOrderedCoordOp::inner_get_next_row()
     // TODO qubin.qb: Implement separated inner_get_next_batch to
     // isolate them
     do_clear_datum_eval_flag();
-    clear_dynamic_const_parent_flag();
-    if (channel_idx_ < task_ch_set_.count()) {
+    if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+      LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+    } else if (channel_idx_ < task_ch_set_.count()) {
       int64_t idx = channel_idx_;
       ObReceiveRowReader *reader = (NULL != readers_ && idx < reader_cnt_) ? &readers_[idx] : NULL;
       ObDtlChannel *ch = msg_loop_.get_channel(idx + receive_order_.get_data_channel_start_idx());
@@ -304,8 +305,9 @@ int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   clear_evaluated_flag();
-  clear_dynamic_const_parent_flag();
-  if (iter_end_) {
+  if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+    LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+  } else if (iter_end_) {
     ret = OB_ITER_END;
   } else if (OB_UNLIKELY(!first_row_fetched_)) {
     // 驱动初始 DFO 的分发

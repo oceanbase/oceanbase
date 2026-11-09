@@ -412,10 +412,11 @@ int ObPxMSReceiveVecOp::GlobalOrderInput::get_rows_from_channels(
       int64_t add_rows = 0;
       while (OB_SUCC(ret) && ms_receive_op->row_reader_.has_more()) {
         ms_receive_op->clear_evaluated_flag();
-        ms_receive_op->clear_dynamic_const_parent_flag();
         int64_t read_rows = 0;
         const ObPxMSReceiveVecSpec &spec = ms_receive_op->my_spec();
-        if (OB_FAIL(ms_receive_op->row_reader_.get_next_batch_vec(spec.child_exprs_,
+        if (OB_FAIL(ms_receive_op->clear_dynamic_const_parent_flag())) {
+          LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+        } else if (OB_FAIL(ms_receive_op->row_reader_.get_next_batch_vec(spec.child_exprs_,
                                                               spec.dynamic_const_exprs_,
                                                               eval_ctx,
                                                               spec.max_batch_size_,
@@ -672,11 +673,12 @@ int ObPxMSReceiveVecOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
-  clear_dynamic_const_parent_flag();
   // 从channel sets 读取数据，并向上迭代
   const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(get_spec());
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
-  if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_))) {
+  if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+    LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+  } else if (OB_ISNULL(phy_plan_ctx = GET_PHY_PLAN_CTX(ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("Get operator context failed", K(ret), K(MY_SPEC.id_));
   } else if (OB_FAIL(try_link_channel())) {
@@ -878,10 +880,11 @@ int ObPxMSReceiveVecOp::get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_c
         }
         while (OB_SUCC(ret) && row_reader_.has_more()) {
           clear_evaluated_flag();
-          clear_dynamic_const_parent_flag();
           int64_t read_rows = 0;
           // Get row to %child_exprs_ instead of %all_exprs_ which contain sort expressions
-          if (OB_FAIL(row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_,
+          if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+            LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+          } else if (OB_FAIL(row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_,
                                                         MY_SPEC.dynamic_const_exprs_,
                                                         eval_ctx_,
                                                         get_spec().max_batch_size_,

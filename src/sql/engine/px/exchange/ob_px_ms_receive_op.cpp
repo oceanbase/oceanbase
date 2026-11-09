@@ -361,8 +361,9 @@ int ObPxMSReceiveOp::GlobalOrderInput::get_one_row_from_channels(
       int64_t add_rows = 0;
       while (OB_SUCC(ret) && ms_receive_op->row_reader_.has_more()) {
         ms_receive_op->clear_evaluated_flag();
-        ms_receive_op->clear_dynamic_const_parent_flag();
-        if (OB_FAIL(ms_receive_op->row_reader_.get_next_row(ms_receive_op->my_spec().child_exprs_,
+        if (OB_FAIL(ms_receive_op->clear_dynamic_const_parent_flag())) {
+          LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+        } else if (OB_FAIL(ms_receive_op->row_reader_.get_next_row(ms_receive_op->my_spec().child_exprs_,
                                       ms_receive_op->my_spec().dynamic_const_exprs_, eval_ctx))) {
           LOG_WARN("get row failed", K(ret));
         } else {
@@ -621,8 +622,9 @@ int ObPxMSReceiveOp::inner_get_next_row()
       //   clear_evaluated_flag
       // TODO qubin.qb: Implement separated inner_get_next_batch to isolate them
       do_clear_datum_eval_flag();
-      clear_dynamic_const_parent_flag();
-      if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx,
+      if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+        LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+      } else if (OB_FAIL(get_one_row_from_channels(phy_plan_ctx,
                                             row_heap_.writable_channel_idx(),
                                             MY_SPEC.all_exprs_,
                                             eval_ctx_,
@@ -771,9 +773,9 @@ int ObPxMSReceiveOp::get_all_rows_from_channels(
         }
         while (OB_SUCC(ret) && row_reader_.has_more()) {
           clear_evaluated_flag();
-          clear_dynamic_const_parent_flag();
-          // Get row to %child_exprs_ instead of %all_exprs_ which contain sort expressions
-          if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
+          if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+            LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+          } else if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
                                                MY_SPEC.dynamic_const_exprs_,
                                                eval_ctx_))) {
             LOG_WARN("get row from reader failed", K(ret));

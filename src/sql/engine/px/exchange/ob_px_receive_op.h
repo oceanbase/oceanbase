@@ -135,13 +135,15 @@ public:
   // changed, if we don't clear dynamic const expr parent expr evaluate flag, the
   // parent expr datum ptr may point to the last dynamic param datum memory which
   // is invalid now
-  OB_INLINE void clear_dynamic_const_parent_flag()
+  OB_INLINE int clear_dynamic_const_parent_flag()
   {
+    int ret = OB_SUCCESS;
     const ObPxReceiveSpec &spec = static_cast<const ObPxReceiveSpec &>(spec_);
-    for (int64_t i = 0; i < spec.dynamic_const_exprs_.count(); i++) {
-      ObDynamicParamSetter::clear_parent_evaluated_flag(
-                          eval_ctx_, *spec.dynamic_const_exprs_.at(i));
+    for (int64_t i = 0; OB_SUCC(ret) && i < spec.dynamic_const_exprs_.count(); i++) {
+      ret = clear_dynamic_const_ancestors_preserving_received(
+                            *spec.dynamic_const_exprs_.at(i), spec.child_exprs_);
     }
+    return ret;
   }
   void reset_for_rescan()
   {
@@ -166,6 +168,20 @@ public:
     return ts_;
   }
 protected:
+  int clear_dynamic_const_ancestors_preserving_received(ObExpr &expr, const ExprFixedArray &received_exprs)
+  {
+    int ret = OB_SUCCESS;
+    for (uint32_t i = 0; OB_SUCC(ret) && i < expr.parent_cnt_; ++i) {
+      ret = SMART_CALL(clear_dynamic_const_ancestors_preserving_received(*expr.parents_[i], received_exprs));
+    }
+    if (OB_SUCC(ret)
+        && T_INVALID != expr.type_
+        && !common::has_exist_in_array(received_exprs, &expr)) {
+      expr.get_eval_info(eval_ctx_).clear_evaluated_flag();
+    }
+    return ret;
+  }
+
   ObPxTaskChSet task_ch_set_;
   bool iter_end_;
   bool channel_linked_;

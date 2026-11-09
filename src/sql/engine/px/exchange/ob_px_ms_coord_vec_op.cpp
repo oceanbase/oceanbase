@@ -403,8 +403,9 @@ int ObPxMSCoordVecOp::next_row(const bool need_store_output)
     int64_t timeout_us = 0;
     int64_t nth_channel = OB_INVALID_INDEX_INT64;
     clear_evaluated_flag();
-    clear_dynamic_const_parent_flag();
-    if (row_heap_.capacity() > 0) {
+    if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+      LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+    } else if (row_heap_.capacity() > 0) {
       int64_t idx = row_heap_.writable_channel_idx();
       ObReceiveRowReader *reader = (NULL != readers_ && idx < reader_cnt_) ? &readers_[idx] : NULL;
       ObDtlChannel *ch = msg_loop_.get_channel(idx + receive_order_.get_data_channel_start_idx());

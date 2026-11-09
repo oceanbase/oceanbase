@@ -861,8 +861,9 @@ int ObPxFifoReceiveOp::get_rows_from_channels(const int64_t row_cnt, int64_t tim
     int64_t left = row_reader_.left_rows();
     if (left >= row_cnt || (left > 0 && msg_loop_.all_eof(task_channels_.count()))) {
       clear_evaluated_flag();
-      clear_dynamic_const_parent_flag();
-      if (!is_vectorized()) {
+      if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+        LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+      } else if (!is_vectorized()) {
         if (OB_FAIL(row_reader_.get_next_row(MY_SPEC.child_exprs_,
                                              MY_SPEC.dynamic_const_exprs_,
                                              eval_ctx_))) {
@@ -918,9 +919,10 @@ int ObPxFifoReceiveOp::get_rows_from_channels_vec(const int64_t row_cnt, int64_t
     int64_t left = row_reader_.left_rows();
     if (left >= row_cnt || (left > 0 && msg_loop_.all_eof(task_channels_.count()))) {
       clear_evaluated_flag();
-      clear_dynamic_const_parent_flag();
       int64_t read_rows = 0;
-      if (OB_FAIL(row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_,
+      if (OB_FAIL(clear_dynamic_const_parent_flag())) {
+        LOG_WARN("failed to clear dynamic const parent flags", K(ret));
+      } else if (OB_FAIL(row_reader_.get_next_batch_vec(MY_SPEC.child_exprs_,
                                               MY_SPEC.dynamic_const_exprs_,
                                               eval_ctx_,
                                               row_cnt,
