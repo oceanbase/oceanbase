@@ -506,7 +506,9 @@ int ObTabletAutoincrementService::clear_tablet_autoinc_seq_cache(
 int ObTabletAutoincCacheCleaner::add_single_table(const schema::ObSimpleTableSchemaV2 &table_schema)
 {
   int ret = OB_SUCCESS;
-  if (table_schema.is_table_with_hidden_pk_column() || table_schema.is_aux_lob_meta_table()) {
+  if (table_schema.is_table_with_hidden_pk_column()
+      || table_schema.is_aux_lob_meta_table()
+      || table_schema.is_mlog_table()) {
     const uint64_t tenant_id = table_schema.get_tenant_id();
     ObArray<ObTabletID> tablet_ids;
     if (OB_UNLIKELY(tenant_id != tenant_id_)) {
@@ -514,6 +516,10 @@ int ObTabletAutoincCacheCleaner::add_single_table(const schema::ObSimpleTableSch
       LOG_WARN("tenant id mismatch", K(ret), K(tenant_id), K(tenant_id_));
     } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
       LOG_WARN("failed to get tablet ids", K(ret));
+    } else if (schema::PARTITION_LEVEL_ONE == table_schema.get_part_level()
+               && table_schema.get_hidden_partition_num() > 0
+               && OB_FAIL(table_schema.get_first_level_hidden_tablet_ids(tablet_ids))) {
+      LOG_WARN("failed to get hidden tablet ids", K(ret));
     } else if (OB_FAIL(append(tablet_ids_, tablet_ids))) {
       LOG_WARN("failed to append tablet ids", K(ret));
     }
@@ -521,7 +527,7 @@ int ObTabletAutoincCacheCleaner::add_single_table(const schema::ObSimpleTableSch
   return ret;
 }
 
-// add user table and its related tables that use tablet autoinc, e.g., lob meta table
+// Add the table and its related tables that use tablet autoinc, including LOB meta and mlog tables.
 int ObTabletAutoincCacheCleaner::add_table(schema::ObSchemaGetterGuard &schema_guard, const schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -541,6 +547,18 @@ int ObTabletAutoincCacheCleaner::add_table(schema::ObSchemaGetterGuard &schema_g
       } else if (OB_FAIL(add_single_table(*lob_meta_table_schema))) {
         LOG_WARN("failed to add single table", K(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret) && table_schema.has_mlog_table()) {
+    const uint64_t mlog_tid = table_schema.get_mlog_tid();
+    const ObTableSchema *mlog_table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(table_schema.get_tenant_id(), mlog_tid, mlog_table_schema))) {
+      LOG_WARN("failed to get mlog table schema", K(ret), K(mlog_tid));
+    } else if (OB_ISNULL(mlog_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid mlog table schema", K(ret), K(mlog_tid));
+    } else if (OB_FAIL(add_single_table(*mlog_table_schema))) {
+      LOG_WARN("failed to add mlog table", K(ret), K(mlog_tid));
     }
   }
   return ret;
@@ -577,65 +595,68 @@ int ObTabletAutoincCacheCleaner::add_database(const schema::ObDatabaseSchema &da
 int ObTabletAutoincCacheCleaner::commit(const int64_t timeout_us)
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("ObTabletAutoincCacheCleaner", 1 * 1000 * 1000);
-  ObTabletAutoincrementService &tablet_autoinc_service = share::ObTabletAutoincrementService::get_instance();
-  uint64_t data_version = 0;
-  common::ObZone zone;
-  common::ObSEArray<common::ObAddr, 8> server_list;
-  ObUnitInfoGetter ui_getter;
-  obrpc::ObClearTabletAutoincSeqCacheArg arg;
-  const ObLSID unused_ls_id = SYS_LS;
-  int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout_us;
-  const ObTimeoutCtx &ctx = ObTimeoutCtx::get_ctx();
-  if (THIS_WORKER.is_timeout_ts_valid()) {
-    abs_timeout_us = std::min(abs_timeout_us, THIS_WORKER.get_timeout_ts());
-  }
-  if (ctx.is_timeout_set()) {
-    abs_timeout_us = std::min(abs_timeout_us, ctx.get_abs_timeout());
-  }
-  if (ctx.is_trx_timeout_set()) {
-    abs_timeout_us = std::min(abs_timeout_us, ObTimeUtility::current_time() + ctx.get_trx_timeout_us());
-  }
+  if (tablet_ids_.empty()) {
+  } else {
+    ObTimeGuard time_guard("ObTabletAutoincCacheCleaner", 1 * 1000 * 1000);
+    ObTabletAutoincrementService &tablet_autoinc_service = share::ObTabletAutoincrementService::get_instance();
+    uint64_t data_version = 0;
+    common::ObZone zone;
+    common::ObSEArray<common::ObAddr, 8> server_list;
+    ObUnitInfoGetter ui_getter;
+    obrpc::ObClearTabletAutoincSeqCacheArg arg;
+    const ObLSID unused_ls_id = SYS_LS;
+    int64_t abs_timeout_us = ObTimeUtility::current_time() + timeout_us;
+    const ObTimeoutCtx &ctx = ObTimeoutCtx::get_ctx();
+    if (THIS_WORKER.is_timeout_ts_valid()) {
+      abs_timeout_us = std::min(abs_timeout_us, THIS_WORKER.get_timeout_ts());
+    }
+    if (ctx.is_timeout_set()) {
+      abs_timeout_us = std::min(abs_timeout_us, ctx.get_abs_timeout());
+    }
+    if (ctx.is_trx_timeout_set()) {
+      abs_timeout_us = std::min(abs_timeout_us, ObTimeUtility::current_time() + ctx.get_trx_timeout_us());
+    }
 
-  const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-  if ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
-      || min_cluster_version >= CLUSTER_VERSION_4_3_0_1) {
-    if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("srv_rpc_proxy or sql_proxy in GCTX is null", K(ret), K(GCTX.srv_rpc_proxy_), K(GCTX.sql_proxy_));
-    } else if (OB_FAIL(ui_getter.init(*GCTX.sql_proxy_, &GCONF))) {
-      LOG_WARN("init unit info getter failed", K(ret));
-    } else if (OB_FAIL(ui_getter.get_tenant_servers(tenant_id_, server_list))) {
-      LOG_WARN("get tenant servers failed", K(ret));
-    } else if (OB_FAIL(arg.init(tablet_ids_, unused_ls_id))) {
-      LOG_WARN("failed to init clear tablet autoinc arg", K(ret));
-    } else {
-      bool need_clean_self = false;
-      rootserver::ObClearTabletAutoincSeqCacheProxy proxy(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::clear_tablet_autoinc_seq_cache);
-      for (int64_t i = 0; i < server_list.count(); i++) { // overwrite ret
-        const common::ObAddr &addr = server_list.at(i);
-        const int64_t cur_timeout_us = abs_timeout_us - ObTimeUtility::current_time();
-        if (cur_timeout_us <= 0) {
-          ret = OB_TIMEOUT;
-          break;
-        } else if (GCTX.self_addr() == addr) {
-          need_clean_self = true;
-        } else {
-          if (OB_FAIL(proxy.call(addr, cur_timeout_us, tenant_id_, arg))) {
-            LOG_WARN("failed to send rpc call", K(ret), K(addr), K(timeout_us), K(tenant_id_));
+    const int64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if ((min_cluster_version >= MOCK_CLUSTER_VERSION_4_2_3_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+        || min_cluster_version >= CLUSTER_VERSION_4_3_0_1) {
+      if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.sql_proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("srv_rpc_proxy or sql_proxy in GCTX is null", K(ret), K(GCTX.srv_rpc_proxy_), K(GCTX.sql_proxy_));
+      } else if (OB_FAIL(ui_getter.init(*GCTX.sql_proxy_, &GCONF))) {
+        LOG_WARN("init unit info getter failed", K(ret));
+      } else if (OB_FAIL(ui_getter.get_tenant_servers(tenant_id_, server_list))) {
+        LOG_WARN("get tenant servers failed", K(ret));
+      } else if (OB_FAIL(arg.init(tablet_ids_, unused_ls_id))) {
+        LOG_WARN("failed to init clear tablet autoinc arg", K(ret));
+      } else {
+        bool need_clean_self = false;
+        rootserver::ObClearTabletAutoincSeqCacheProxy proxy(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::clear_tablet_autoinc_seq_cache);
+        for (int64_t i = 0; i < server_list.count(); i++) { // overwrite ret
+          const common::ObAddr &addr = server_list.at(i);
+          const int64_t cur_timeout_us = abs_timeout_us - ObTimeUtility::current_time();
+          if (cur_timeout_us <= 0) {
+            ret = OB_TIMEOUT;
+            break;
+          } else if (GCTX.self_addr() == addr) {
+            need_clean_self = true;
+          } else {
+            if (OB_FAIL(proxy.call(addr, cur_timeout_us, tenant_id_, arg))) {
+              LOG_WARN("failed to send rpc call", K(ret), K(addr), K(timeout_us), K(tenant_id_));
+            }
           }
         }
-      }
-      if (need_clean_self) { // overwrite ret
-        if (OB_FAIL(tablet_autoinc_service.clear_tablet_autoinc_seq_cache(tenant_id_, tablet_ids_, abs_timeout_us))) {
-          LOG_WARN("failed to clear tablet autoinc", K(ret));
+        if (need_clean_self) { // overwrite ret
+          if (OB_FAIL(tablet_autoinc_service.clear_tablet_autoinc_seq_cache(tenant_id_, tablet_ids_, abs_timeout_us))) {
+            LOG_WARN("failed to clear tablet autoinc", K(ret));
+          }
         }
-      }
 
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(proxy.wait())) {
-        LOG_WARN("wait batch result failed", K(tmp_ret), K(ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(proxy.wait())) {
+          LOG_WARN("wait batch result failed", K(tmp_ret), K(ret));
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
+        }
       }
     }
   }

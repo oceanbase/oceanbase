@@ -25370,6 +25370,7 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
     LOG_WARN("variable is not init", K(ret));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
+    ObTabletAutoincCacheCleaner tablet_autoinc_cleaner(tenant_id);
     bool to_recyclebin = false;
     const ObTableSchema *old_orig_table_schema = NULL;
     const ObTableSchema *old_hidden_table_schema = NULL;
@@ -25498,6 +25499,13 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(lock_table(trans, new_hidden_table_schema))) {
           LOG_WARN("fail to lock_table", KR(ret), K(new_hidden_table_schema));
+        } else {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(tablet_autoinc_cleaner.add_table(schema_guard, new_hidden_table_schema))) {
+            LOG_WARN("failed to collect tablet autoinc cache to clean", K(tmp_ret), K(new_hidden_table_schema));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(drop_table_in_trans(schema_guard,
                                         new_hidden_table_schema,
                                         false,
@@ -25542,6 +25550,13 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
       if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
         LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
         ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      // Cache reclamation must not prevent DDL completion after the schema transaction commits.
+      if (OB_TMP_FAIL(tablet_autoinc_cleaner.commit())) {
+        LOG_WARN("failed to clean tablet autoinc cache after dropping hidden table", K(tmp_ret), K(tenant_id), K(alter_table_arg.task_id_));
       }
     }
   }
