@@ -4066,19 +4066,21 @@ int ObOptimizerUtil::check_need_sort(const ObIArray<ObRawExpr*> &expected_order_
     //r_idx < right_count、l_idx == left_count 时仍可对 expected_order_exprs 进行检查
     while (OB_SUCC(ret) && is_match && !find_unique && r_idx < right_count) {
       // if expected_order_expr = cast(col as dst_type), input_order_expr = col
-      // and cast is lossless, no need to add sort for `cast(col as dst_type)`
+      // and cast is lossless and order-preserving, no need to add sort for it.
       ObRawExpr *expected_order_expr = expected_order_exprs.at(r_idx);
       ObRawExpr *input_ordering_expr = NULL;
       if (OB_ISNULL(expected_order_expr)) {
         // do nothing
-      } else if (OB_FAIL(get_expr_without_lossless_cast(expected_order_expr, expected_order_expr))) {
+      } else if (OB_FAIL(get_expr_without_lossless_cast(expected_order_expr, expected_order_expr,
+                                                       false, false, true /* need_order_preserving */))) {
         LOG_WARN("failed to get expr without lossless cast", K(ret));
       }
 
       if (OB_SUCC(ret) && (l_idx < left_count)) {
         if (OB_ISNULL(input_ordering.at(l_idx).expr_)) {
           // do nothing
-        } else if (OB_FAIL(get_expr_without_lossless_cast(input_ordering.at(l_idx).expr_, input_ordering_expr))) {
+        } else if (OB_FAIL(get_expr_without_lossless_cast(input_ordering.at(l_idx).expr_, input_ordering_expr,
+                                                         false, false, true /* need_order_preserving */))) {
           LOG_WARN("failed to get expr without lossless cast", K(ret), KPC(input_ordering.at(l_idx).expr_));
         }
       }
@@ -6240,7 +6242,8 @@ bool ObOptimizerUtil::is_lossless_type_conv(const ObRawExprResType &child_type, 
 int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
                                              bool &is_lossless,
                                              bool is_query_range, /* = false */
-                                             bool allow_imprecise_column_cast /* = false */ )
+                                             bool allow_imprecise_column_cast, /* = false */
+                                             bool need_order_preserving /* = false */ )
 {
   int ret = OB_SUCCESS;
   is_lossless = false;
@@ -6364,8 +6367,10 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
           }
         }
       } else if (ObEnumSetTC == child_tc) {
-        if (ObStringTC == dst_tc || ObTextTC == dst_tc || ObNumberTC == dst_tc
-            || ObDoubleTC == dst_tc) {
+        if (ObStringTC == dst_tc || ObTextTC == dst_tc) {
+          // ENUM/SET numeric order can differ from its string order.
+          is_lossless = !need_order_preserving;
+        } else if (ObNumberTC == dst_tc || ObDoubleTC == dst_tc) {
           is_lossless = true;
         }
       }
@@ -6460,7 +6465,8 @@ int ObOptimizerUtil::is_lossless_column_cast(const ObRawExpr *expr,
 int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
                                                     const ObRawExpr*& expr,
                                                     bool is_query_range, /* = false */
-                                                    bool allow_imprecise_column_cast /* = false */ )
+                                                    bool allow_imprecise_column_cast, /* = false */
+                                                    bool need_order_preserving /* = false */ )
 {
   int ret = OB_SUCCESS;
   bool is_lossless = true;
@@ -6474,7 +6480,8 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
       if (OB_FAIL(is_lossless_column_cast(expr,
                                           is_lossless,
                                           is_query_range,
-                                          allow_imprecise_column_cast))) {
+                                          allow_imprecise_column_cast,
+                                          need_order_preserving))) {
         LOG_WARN("failed to check is lossless column cast", K(ret), KPC(expr));
       } else if (is_lossless) {
         if (OB_UNLIKELY(1 > expr->get_param_count())) {
@@ -6505,14 +6512,16 @@ int ObOptimizerUtil::get_expr_without_lossless_cast(const ObRawExpr* ori_expr,
 int ObOptimizerUtil::get_expr_without_lossless_cast(ObRawExpr* ori_expr,
                                                     ObRawExpr*& expr,
                                                     bool is_query_range, /* = false */
-                                                    bool allow_imprecise_column_cast /* = false */ )
+                                                    bool allow_imprecise_column_cast, /* = false */
+                                                    bool need_order_preserving /* = false */ )
 {
   int ret = OB_SUCCESS;
   const ObRawExpr *tmp_expr = NULL;
   if (OB_FAIL(get_expr_without_lossless_cast(ori_expr,
                                              tmp_expr,
                                              is_query_range,
-                                             allow_imprecise_column_cast))) {
+                                             allow_imprecise_column_cast,
+                                             need_order_preserving))) {
     LOG_WARN("failed to get expr without lossless cast", K(ret));
   } else {
     expr = const_cast<ObRawExpr*>(tmp_expr);

@@ -19528,7 +19528,8 @@ int ObJoinOrder::extract_real_join_keys(ObIArray<ObRawExpr *> &join_keys)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < join_keys.count(); ++i) {
-    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(join_keys.at(i), join_keys.at(i)))) {
+    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(join_keys.at(i), join_keys.at(i),
+                                                               false, false, true /* need_order_preserving */))) {
       LOG_WARN("failed to get expr without lossless column cast", K(ret));
     }
   }

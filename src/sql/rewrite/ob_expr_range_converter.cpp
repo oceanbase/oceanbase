@@ -322,6 +322,15 @@ int ObExprRangeConverter::get_basic_range_node(const ObRawExpr *l_expr,
                                                                        r_expr, 
                                                                        use_implicit_cast_feature))) {
       LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (l_expr->get_result_type().is_enum_or_set()
+               && r_expr->get_result_type().is_enum_or_set()
+               && l_expr->get_subschema_id() != r_expr->get_subschema_id()
+               && (ObStringTC == calc_type.get_type_class() || ObTextTC == calc_type.get_type_class())) {
+      // Different ENUM/SET definitions cannot share codes for string comparison.
+      // Leave this condition as a filter without extracting a range from it.
+      if (OB_FAIL(generate_always_true_or_false_node(true, range_node))) {
+        LOG_WARN("failed to generate always true node", K(ret));
+      }
     } else if ((l_expr->has_flag(IS_COLUMN) && r_expr->is_const_expr()) ||
                (l_expr->is_const_expr() && r_expr->has_flag(IS_COLUMN))) {
       if (OB_FAIL(gen_column_cmp_node(*l_expr, 

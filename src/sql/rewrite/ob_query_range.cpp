@@ -2243,6 +2243,13 @@ int ObQueryRange::get_basic_query_range(const ObRawExpr *l_expr,
         LOG_WARN("failed to get expr without lossless cast", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, r_expr))) {
         LOG_WARN("failed to get expr without lossless cast", K(ret));
+      } else if (l_expr->get_result_type().is_enum_or_set()
+                 && r_expr->get_result_type().is_enum_or_set()
+                 && l_expr->get_subschema_id() != r_expr->get_subschema_id()
+                 && (ObStringTC == calc_type.get_type_class() || ObTextTC == calc_type.get_type_class())) {
+        // Different ENUM/SET definitions cannot share codes for string comparison.
+        // Leave this condition as a filter without extracting a range from it.
+        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
       } else if (l_expr->is_const_expr() && r_expr->is_const_expr()) { //const
         if (OB_FAIL(get_const_key_part(l_expr, r_expr, escape_expr, cmp_type,
                                        out_key_part, dtc_params))) {
