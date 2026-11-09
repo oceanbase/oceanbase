@@ -24,7 +24,6 @@
 #include "pl/ob_pl_profiler.h"
 #endif
 #include "sql/plan_cache/ob_ps_cache.h"
-#include "share/stat/ob_opt_stat_manager.h" // for ObOptStatManager
 #include "ob_sess_info_verify.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
@@ -929,12 +928,6 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
             }
             if (OB_SUCC(ret)) {
               LOG_DEBUG("succeed to delete rows in oracle temporary table", K(sql), K(affect_rows));
-              //delete relation temp table stats.
-              int64_t affect_rows = 0;
-              if (OB_FAIL(ObOptStatManager::get_instance().delete_table_stat(tenant_id,
-                                                      table_schema->get_table_id(), affect_rows))) {
-                LOG_WARN("failed to delete table stats", K(ret));
-              }
             }
             LOG_INFO("delete rows in oracle temporary table", K(ret), K(affect_rows),
                      "clean_time", ObTimeUtility::current_time() - cur_time, K(sql));
