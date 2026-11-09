@@ -2339,7 +2339,8 @@ int ObTransformUtils::is_expr_not_null(ObNotNullContext &ctx,
     LOG_WARN("failed to check compound expr", K(ret));
   } else if (is_not_null) {
     // do nothing
-  } else if (expr->is_static_scalar_const_expr()) {
+  } else if (expr->is_static_scalar_const_expr() &&
+             (expr->is_const_raw_expr() || NULL != constraints)) {
     bool is_null = false;
     if (OB_FAIL(is_const_expr_not_null(ctx, expr, is_not_null, is_null))) {
       LOG_WARN("failed to check calculable expr not null", K(ret));
