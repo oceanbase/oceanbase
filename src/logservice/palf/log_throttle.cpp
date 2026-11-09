@@ -36,6 +36,7 @@ void LogWritingThrottle::reset()
 {
   last_update_ts_ = OB_INVALID_TIMESTAMP;
   need_writing_throttling_notified_ = false;
+  gc_stalled_notified_ = false;
   appended_log_size_cur_round_ = 0;
   decay_factor_ = 0;
   throttling_options_.reset();
@@ -81,6 +82,9 @@ int LogWritingThrottle::throttling(const int64_t throttling_size,
       if (OB_FAIL(ObThrottlingUtils::get_throttling_interval(THROTTLING_CHUNK_SIZE, throttling_size, trigger_base_log_disk_size,
                                                              cur_unrecyclable_size, decay_factor_, time_interval))) {
         LOG_WARN("failed to get_throttling_interval", KPC(this));
+      } else if (throttling_options_.gc_stalled_) {
+        // Keep the first stalled IO from losing its wait to integer truncation.
+        time_interval = MAX(1L, time_interval);
       }
       int64_t remain_interval_us = time_interval;
       bool has_freed_up_space = false;
@@ -170,7 +174,8 @@ int LogWritingThrottle::update_throtting_options_guarded_by_lock_(IPalfEnvImpl *
 
         if (OB_SUCC(ret)) {
           // update other field
-          has_freed_up_space = new_throttling_options.unrecyclable_disk_space_ < throttling_options_.unrecyclable_disk_space_;
+          has_freed_up_space = new_throttling_options.unrecyclable_disk_space_ < throttling_options_.unrecyclable_disk_space_
+              || (throttling_options_.gc_stalled_ && !new_throttling_options.gc_stalled_);
           bool has_unrecyclable_space_changed = new_throttling_options.unrecyclable_disk_space_ != throttling_options_.unrecyclable_disk_space_;
           if (has_unrecyclable_space_changed || need_start_throttling) {
             // reset appended_log_size_cur_round_ when unrecyclable_disk_space_ changed
@@ -215,7 +220,9 @@ bool LogWritingThrottle::check_need_update_throtting_options_guarded_by_lock_()
 {
   SpinLockGuard guard(lock_);
   int64_t cur_ts = ObClockGenerator::getClock();
-  return cur_ts > last_update_ts_ + UPDATE_INTERVAL_US;
+  // Both entering and leaving stalled must reach the next IO before the periodic refresh.
+  return ATOMIC_LOAD(&gc_stalled_notified_) != throttling_options_.gc_stalled_
+      || cur_ts > last_update_ts_ + UPDATE_INTERVAL_US;
 }
 } // end namespace palf
 } // end namespace oceanbase

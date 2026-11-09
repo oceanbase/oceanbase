@@ -238,6 +238,13 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_1, leader);
 
+  // Prepare enough flushed logs to advance the GC base into block 2 in CASE 8.
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = 600 * MB;
+  usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
+  ASSERT_EQ(OB_SUCCESS, submit_log(leader, 60, id, 1 * MB));
+  max_lsn_1 = leader.palf_handle_impl_->sw_.get_max_lsn();
+  wait_lsn_until_flushed(max_lsn_1, leader);
+
   int64_t prev_has_batched_size = log_io_worker->batch_io_task_mgr_.handle_count_;
   PALF_LOG(INFO, "[CASE 6] flush meta task no need throttling", K(max_lsn_1));
   int64_t cur_ts = common::ObClockGenerator::getClock();
@@ -289,11 +296,18 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   ASSERT_EQ(true, throttle->decay_factor_ < old_decay_factor);
 
 
-  PALF_LOG(INFO, "[CASE 8] need break from writing throttling while unrecyclable size fallbacks", K(max_lsn_1));
+  PALF_LOG(INFO, "[CASE 8] break from throttling when GC releases a retained block", K(max_lsn_1));
+  // Usage is about 210 MB before advancing the base and at most 167 MB after
+  // flushing the pending logs. Set the throttling threshold to 180 MB.
+  palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = 450 * MB;
+  usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
+  ASSERT_EQ(true, throttle->need_throttling_not_guarded_by_lock_(log_io_worker->need_purging_throttling_func_));
+  ASSERT_EQ(true, max_lsn_1 > LSN(130 * MB));
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 20, id, 1 * MB));
 
   cur_ts = common::ObClockGenerator::getClock();
-  leader.get_palf_handle_impl()->log_engine_.update_base_lsn_used_for_gc(LSN(70 * MB));
+  // Base block 2 retains block 1 for restart, allowing block 0 to be recycled.
+  ASSERT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->log_engine_.update_base_lsn_used_for_gc(LSN(130 * MB)));
   LSN max_lsn_2 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_2, leader);
   int64_t break_ts = common::ObClockGenerator::getClock();
@@ -309,7 +323,8 @@ TEST_F(TestObSimpleLogClusterLogThrottling, test_throttling_basic)
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_usage_limit_size_ = 400 * MB;
   usleep(LogWritingThrottle::UPDATE_INTERVAL_US);
   palf_env_impl.disk_options_wrapper_.disk_opts_for_stopping_writing_.log_disk_throttling_percentage_ = 100;
-  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 85, id, 2 * MB));
+  // Account for the additional 60 MB prepared before CASE 6.
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 55, id, 2 * MB));
   max_lsn_2 = leader.palf_handle_impl_->sw_.get_max_lsn();
   wait_lsn_until_flushed(max_lsn_2, leader);
   leader.get_palf_handle_impl()->log_engine_.update_base_lsn_used_for_gc(LSN(130 * MB));

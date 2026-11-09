@@ -900,6 +900,17 @@ int ObTenant::construct_mtl_init_ctx(const ObTenantMeta &meta, share::ObTenantMo
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
       ret = is_virtual_tenant_id(id_) ? OB_SUCCESS : OB_ENTRY_NOT_EXIST;
     } else {
+      const int64_t utilization_threshold = tenant_config->log_disk_utilization_threshold;
+      const int64_t limit_threshold = tenant_config->log_disk_utilization_limit_threshold;
+      // Block GC can finish DRAINING before the later config refresh.
+      // Apply a valid pair now; keep startup defaults for an invalid pair.
+      if (utilization_threshold < limit_threshold) {
+        mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_threshold_ = utilization_threshold;
+        mtl_init_ctx_->palf_options_.disk_options_.log_disk_utilization_limit_threshold_ = limit_threshold;
+      } else {
+        LOG_WARN("invalid tenant log disk watermarks, keep startup defaults",
+                 K_(id), K(utilization_threshold), K(limit_threshold));
+      }
       mtl_init_ctx_->palf_options_.disk_options_.log_writer_parallelism_ = tenant_config->_log_writer_parallelism;
     }
     LOG_INFO("construct_mtl_init_ctx success", "palf_options", mtl_init_ctx_->palf_options_.disk_options_);

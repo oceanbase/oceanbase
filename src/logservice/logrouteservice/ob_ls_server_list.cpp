@@ -91,6 +91,24 @@ int LSSvrList::add_server_or_update(const common::ObAddr &svr,
   return ret;
 }
 
+int LSSvrList::add_server_if_absent(const common::ObAddr &svr,
+    const palf::LSN &start_lsn,
+    const palf::LSN &end_lsn,
+    const FetchPriority fetch_prio,
+    const bool is_leader)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  for (int64_t i = 0; ! found && i < svr_items_.count(); ++i) {
+    found = svr_items_.at(i).svr_ == svr;
+  }
+  if (! found && OB_FAIL(add_server_or_update(
+      svr, start_lsn, end_lsn, fetch_prio, is_leader))) {
+    LOG_WARN("add server failed", K(ret), K(svr), K(start_lsn), K(end_lsn));
+  }
+  return ret;
+}
+
 int LSSvrList::next_server(const palf::LSN &next_lsn,
     const BlackList &blacklist,
     common::ObAddr &svr)

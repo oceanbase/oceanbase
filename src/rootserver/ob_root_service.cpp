@@ -25,6 +25,7 @@
 #include "lib/container/ob_array_iterator.h"
 #include "lib/file/file_directory_utils.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/utility/ob_tracepoint.h"
 
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/ob_thread_mgr.h"
@@ -108,6 +109,7 @@
 #include "rootserver/backup/ob_backup_proxy.h" //ObBackupServiceProxy
 #include "logservice/palf_handle_guard.h"
 #include "logservice/ob_log_service.h"
+#include "logservice/ob_server_log_block_mgr.h"
 #include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/ob_heartbeat_service.h"
@@ -9460,6 +9462,8 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
       ret = check_freeze_trigger_percentage_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE)) {
       ret = check_write_throttle_trigger_percentage(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), "server_log_disk_utilization_threshold")) {
+      ret = check_server_log_disk_utilization_threshold_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), WEAK_READ_VERSION_REFRESH_INTERVAL)) {
       int64_t refresh_interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
       if (valid && OB_FAIL(check_weak_read_version_refresh_interval(refresh_interval, valid))) {
@@ -9538,6 +9542,33 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
     } else if (0 == STRCMP(item->name_.ptr(), ENABLE_LOGONLY_REPLICA)) {
       ret = check_enable_logonly_replica_(*item);
     }
+  }
+  return ret;
+}
+
+int ObRootService::check_server_log_disk_utilization_threshold_(
+    obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  const int64_t new_value = ObConfigIntParser::get(item.value_.ptr(), is_valid);
+  const int64_t current_value = GCONF.server_log_disk_utilization_threshold;
+  const bool in_upgrade_mode = GCONF.in_upgrade_mode();
+  if (OB_UNLIKELY(!is_valid)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid server log disk utilization threshold", KR(ret), K(item));
+  } else if (0 == new_value) {
+    LOG_INFO("allow server log disk utilization threshold modification",
+             K(current_value), K(new_value), K(in_upgrade_mode));
+  } else if (OB_ISNULL(GCTX.log_block_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("server log block manager is unavailable", KR(ret));
+  } else if (!GCTX.log_block_mgr_->is_shared_log_pool_supported()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("server log disk utilization threshold modification is not allowed",
+             KR(ret), K(current_value), K(new_value), K(in_upgrade_mode));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
+                   "enable server_log_disk_utilization_threshold before cluster version 4.2.5.8 or during upgrade");
   }
   return ret;
 }

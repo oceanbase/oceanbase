@@ -39,14 +39,26 @@ public:
 #endif
   RPC_S(PR3 get_palf_stat, OB_LOG_GET_PALF_STAT,
       (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
+  RPC_S(PR3 get_log_fetch_sources, OB_LOG_GET_FETCH_SOURCES,
+      (logservice::LogGetFetchSourcesReq), logservice::LogGetFetchSourcesResp);
+  RPC_S(PR3 request_ls_gc, OB_LOG_REQUEST_LS_GC,
+      (logservice::ObLSGCRequest), logservice::ObLSGCResponse);
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 log_probe_rs, OB_LOG_PROBE_RS, (logservice::LogProbeRsReq), logservice::LogProbeRsResp);
 #endif
+};
+
+class ObLogServiceAsyncRpcProxy : public ObLogServiceRpcProxy
+{
+public:
+  DEFINE_TO(ObLogServiceAsyncRpcProxy);
+  explicit ObLogServiceAsyncRpcProxy(const ObLogServiceRpcProxy &proxy)
+    : ObLogServiceRpcProxy(proxy), mock_proxy_(NULL) {}
+  RPC_AP(PR3 get_palf_stat_async, OB_LOG_GET_PALF_STAT,
+      (logservice::LogGetPalfStatReq), logservice::LogGetPalfStatResp);
 };
 
 } // end namespace obrpc
 } // end namespace oceanbase
 
 #endif
-
-

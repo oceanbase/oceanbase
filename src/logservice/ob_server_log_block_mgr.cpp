@@ -13,12 +13,14 @@
 #define USING_LOG_PREFIX CLOG
 #include "ob_server_log_block_mgr.h"
 #include <fcntl.h>                              // IO operation
-#include <type_traits>                          // decltype
+#include <cstddef>                              // offsetof
+#include <cstdlib>                              // std::abs
 #include <regex>                                // std::regex
 #include "lib/lock/ob_spin_lock.h"              // ObSpinLockGuard
 #include "lib/ob_define.h"                      // OB_MAX_FILE_NAME_LENGTH
 #include "lib/time/ob_time_utility.h"           // ObTimeUtility
 #include "lib/utility/ob_macro_utils.h"         // OB_UNLIKELY
+#include "lib/utility/ob_tracepoint.h"          // ERRSIM_POINT_DEF
 #include "lib/utility/ob_utility.h"             // lower_align
 #include "lib/utility/serialization.h"          // serialization
 #include "lib/file/file_directory_utils.h"      // FileDirectoryUtils
@@ -28,9 +30,13 @@
 #include "lib/thread/ob_thread_name.h"          // set_thread_name
 #include "palf/log_block_pool_interface.h"      // ILogBlockPool
 #include "palf/log_define.h"                    // block_id_to_string
+#include "palf/palf_env.h"                       // PalfEnv
 #include "observer/ob_server.h"                 // OBSERVER
 #include "observer/ob_server_utils.h"           // get_log_disk_info_in_config
 #include "share/unit/ob_unit_resource.h"        // UNIT_MIN_LOG_DISK_SIZE
+#include "share/ob_cluster_version.h"
+#include "share/ob_debug_sync.h"
+#include "share/config/ob_server_config.h"
 #include "share/ob_errno.h"                     // errno
 #include "logservice/ob_log_service.h"          // ObLogService
 #include "logservice/palf/log_io_utils.h"       // rename_with_retry
@@ -44,6 +50,11 @@ using namespace palf;
 using namespace share;
 namespace logservice
 {
+ERRSIM_POINT_DEF(ERRSIM_IGNORE_LOG_POOL_SHRINK_HEADROOM);
+ERRSIM_POINT_DEF(ERRSIM_SKIP_SHARED_LOG_POOL_CONFIG_CHECK);
+ERRSIM_POINT_DEF(ERRSIM_LS_REMOVE_BLOCK_TENANT, "Select the tenant for the partial LS return crash boundary.");
+ERRSIM_POINT_DEF(ERRSIM_LS_REMOVE_BLOCK_ID, "Select the LS for the partial LS return crash boundary.");
+
 const char *ObServerLogBlockMgr::LOG_POOL_PATH = "log_pool";
 const int64_t ObServerLogBlockMgr::NORMAL_STATUS = 0;
 const int64_t ObServerLogBlockMgr::EXPANDING_STATUS = 1;
@@ -81,10 +92,14 @@ int ObServerLogBlockMgr::check_clog_directory_is_empty(const char *clog_dir, boo
 ObServerLogBlockMgr::ObServerLogBlockMgr()
     : log_pool_meta_serialize_buf_(NULL),
       log_pool_meta_(),
+      cross_tenant_reclaim_enabled_(false),
+      has_v2_meta_(false),
+      reclaim_service_(),
       min_block_id_(0),
       max_block_id_(0),
       min_log_disk_size_for_all_tenants_(0),
       block_cnt_in_use_(0),
+      total_block_cnt_(0),
       is_started_(false),
       is_inited_(false)
 {
@@ -110,6 +125,7 @@ int ObServerLogBlockMgr::init(const char *log_disk_base_path)
   } else if (OB_FAIL(do_load_(log_disk_base_path))) {
     CLOG_LOG(ERROR, "do_load_ failed", K(ret), KPC(this), K(log_disk_base_path));
   } else {
+    reclaim_service_.refresh_pool_write_stopped();
     get_tenants_log_disk_size_func_ = [this](int64_t &log_disk_size) -> int
     {
       log_disk_size = 0;
@@ -129,10 +145,14 @@ void ObServerLogBlockMgr::destroy()
   is_inited_ = false;
   is_started_ = false;
   block_cnt_in_use_ = 0;
+  ATOMIC_STORE(&total_block_cnt_, 0);
   min_log_disk_size_for_all_tenants_ = 0;
   max_block_id_ = 0;
   min_block_id_ = 0;
   log_pool_meta_.reset();
+  ATOMIC_STORE(&cross_tenant_reclaim_enabled_, false);
+  ATOMIC_STORE(&has_v2_meta_, false);
+  reclaim_service_.reset();
   if (NULL != log_pool_meta_serialize_buf_) {
     ob_free_align(log_pool_meta_serialize_buf_);
     log_pool_meta_serialize_buf_ = NULL;
@@ -174,7 +194,8 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
   LogPoolMeta old_log_pool_meta = get_log_pool_meta_guarded_by_lock_();
   LogPoolMeta new_log_pool_meta = old_log_pool_meta;
   const int64_t aligned_new_size_byte = new_log_pool_meta.next_total_size_ = lower_align_(new_size_byte);
-  const int64_t curr_total_size = old_log_pool_meta.curr_total_size_;
+  const int64_t curr_total_size = get_total_size_();
+  new_log_pool_meta.curr_total_size_ = curr_total_size;
   const int64_t old_block_cnt = calc_block_cnt_by_size_(curr_total_size);
   const int64_t new_block_cnt =
       calc_block_cnt_by_size_(new_log_pool_meta.next_total_size_);
@@ -184,7 +205,9 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObServerLogBlockMgr has not inited", K(ret), KPC(this),
              K(new_size_byte), K(aligned_new_size_byte));
-  } else if (curr_total_size == aligned_new_size_byte) {
+  } else if (curr_total_size == aligned_new_size_byte
+             && old_log_pool_meta.curr_total_size_ == curr_total_size
+             && NORMAL_STATUS == old_log_pool_meta.status_) {
     CLOG_LOG(TRACE, "no need do resize", K(ret), KPC(this), K(new_size_byte), K(aligned_new_size_byte));
   } else if (FALSE_IT(new_log_pool_meta.status_ =
                           (aligned_new_size_byte > curr_total_size ? EXPANDING_STATUS
@@ -224,6 +247,7 @@ int ObServerLogBlockMgr::resize_(const int64_t new_size_byte)
     CLOG_LOG(INFO, "resize success", K(ret), KPC(this), K(new_size_byte), K(aligned_new_size_byte),
              K(old_block_cnt), K(new_block_cnt), K(cost_ts));
   }
+  reclaim_service_.refresh_pool_write_stopped();
   return ret;
 }
 
@@ -234,10 +258,120 @@ int ObServerLogBlockMgr::get_disk_usage(int64_t &in_use_size_byte, int64_t &tota
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObServerLogBlockMgr has not inited", K(ret), KPC(this));
   } else {
-    total_size_byte = get_total_size_guarded_by_lock_();
+    total_size_byte = get_total_size_();
     in_use_size_byte = get_in_use_size_guarded_by_lock_();
   }
   return ret;
+}
+
+int ObServerLogBlockMgr::get_block_usage(
+    int64_t &in_use_block_cnt,
+    int64_t &total_block_cnt)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "ObServerLogBlockMgr has not inited", KR(ret), KPC(this));
+  } else {
+    RLockGuard guard(block_id_range_lock_);
+    const int64_t curr_total_block_cnt = ATOMIC_LOAD(&total_block_cnt_);
+    if (OB_UNLIKELY(min_block_id_ > max_block_id_ || block_cnt_in_use_ < 0
+                   || curr_total_block_cnt < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "invalid server log block usage", KR(ret), K(min_block_id_),
+               K(max_block_id_), K(block_cnt_in_use_), K(curr_total_block_cnt), KPC(this));
+    } else {
+      in_use_block_cnt = block_cnt_in_use_;
+      total_block_cnt = curr_total_block_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObServerLogBlockMgr::get_reclaim_block_count(
+    const int64_t utilization_threshold,
+    int64_t &reclaim_block_cnt)
+{
+  int ret = OB_SUCCESS;
+  int64_t in_use_block_cnt = 0;
+  int64_t total_block_cnt = 0;
+  LogPoolMeta meta;
+  reclaim_block_cnt = 0;
+  if (OB_UNLIKELY(utilization_threshold < 0 || utilization_threshold > 100)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid server log disk utilization threshold",
+             KR(ret), K(utilization_threshold), KPC(this));
+  } else if (0 == utilization_threshold) {
+  } else if (OB_FAIL(get_block_usage(in_use_block_cnt, total_block_cnt))) {
+    CLOG_LOG(WARN, "get block usage failed", KR(ret), KPC(this));
+  } else {
+    int64_t allowed_in_use_block_cnt = total_block_cnt * utilization_threshold / 100;
+    {
+      ObSpinLockGuard guard(log_pool_meta_lock_);
+      meta = log_pool_meta_;
+    }
+    if (SHRINKING_STATUS == meta.status_) {
+      const int64_t limit_threshold = GCONF.server_log_disk_utilization_limit_threshold;
+      if (OB_UNLIKELY(limit_threshold <= 0 || limit_threshold > 100)) {
+        ret = OB_INVALID_CONFIG;
+        CLOG_LOG(WARN, "invalid pool utilization limit for shrink",
+                 KR(ret), K(limit_threshold));
+      } else {
+        const int64_t target_total_block_cnt = calc_block_cnt_by_size_(meta.next_total_size_);
+        const bool ignore_shrink_headroom = 0 != ERRSIM_IGNORE_LOG_POOL_SHRINK_HEADROOM;
+        if (target_total_block_cnt < total_block_cnt) {
+          allowed_in_use_block_cnt = common::min(
+              allowed_in_use_block_cnt,
+              target_total_block_cnt * get_shrink_utilization_threshold_(
+                  limit_threshold, ignore_shrink_headroom) / 100);
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      reclaim_block_cnt = common::max(0, in_use_block_cnt - allowed_in_use_block_cnt);
+    }
+  }
+  return ret;
+}
+
+bool ObServerLogBlockMgr::is_shared_log_pool_supported() const
+{
+  const uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  return ATOMIC_LOAD(&has_v2_meta_)
+      || 0 != GCONF.server_log_disk_utilization_threshold
+      || 0 != ERRSIM_SKIP_SHARED_LOG_POOL_CONFIG_CHECK
+      || min_cluster_version > CLUSTER_VERSION_4_2_5_8
+      || (CLUSTER_VERSION_4_2_5_8 == min_cluster_version && !GCONF.in_upgrade_mode());
+}
+
+int ObServerLogBlockMgr::persist_cross_tenant_reclaim_enabled(const bool enabled)
+{
+  int ret = OB_SUCCESS;
+  char log_pool_meta_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObServerLogBlockMgr has not inited", KR(ret), K(enabled), KPC(this));
+  } else if (OB_FAIL(databuff_printf(log_pool_meta_path, OB_MAX_FILE_NAME_LENGTH,
+                                     "%s/meta", log_pool_path_))) {
+    CLOG_LOG(WARN, "construct log pool meta path failed", KR(ret), KPC(this));
+  } else {
+    ObSpinLockGuard resize_guard(resize_lock_);
+    LogPoolMeta meta;
+    {
+      ObSpinLockGuard meta_guard(log_pool_meta_lock_);
+      meta = log_pool_meta_;
+    }
+    if (OB_FAIL(update_log_pool_meta_guarded_by_lock_(
+            log_pool_path_, log_pool_meta_path, meta, enabled))) {
+      CLOG_LOG(WARN, "update log pool meta failed", KR(ret), K(enabled), KPC(this));
+    }
+  }
+  return ret;
+}
+
+bool ObServerLogBlockMgr::is_cross_tenant_reclaim_enabled() const
+{
+  return ATOMIC_LOAD(&cross_tenant_reclaim_enabled_);
 }
 
 int ObServerLogBlockMgr::create_block(const char *dest_block_path,
@@ -264,6 +398,7 @@ int ObServerLogBlockMgr::create_block(const char *dest_block_path,
     CLOG_LOG(ERROR, "fsync_with_retry failed", K(ret), KPC(this), K(dest_block_path), K(src_block_path));
   } else {
     CLOG_LOG(INFO, "create_new_block_at success", K(ret), KPC(this), K(dest_block_path), K(src_block_path));
+    reclaim_service_.refresh_pool_write_stopped();
   }
   return ret;
 }
@@ -292,7 +427,26 @@ int ObServerLogBlockMgr::remove_block(const char *src_block_path)
     } else if (OB_FAIL(move_block_not_guarded_by_lock_(dest_block_path, src_block_path))) {
       CLOG_LOG(ERROR, "move_block_not_guarded_by_lock_ failed", K(ret), KPC(this), K(src_block_path));
     } else {
+      ObLogService *log_service = MTL(ObLogService*);
+      PalfEnv *palf_env = NULL;
+      // Startup cleanup may run before the tenant log service is available.
+      if (NULL != log_service && NULL != (palf_env = log_service->get_palf_env())) {
+        palf_env->record_gc_progress();
+      }
       CLOG_LOG(INFO, "delete_block_at success", K(ret), KPC(this), K(src_block_path));
+      reclaim_service_.refresh_pool_write_stopped();
+      const int64_t tenant_id = -static_cast<int64_t>(ERRSIM_LS_REMOVE_BLOCK_TENANT);
+      const int64_t ls_id = -static_cast<int64_t>(ERRSIM_LS_REMOVE_BLOCK_ID);
+      if (tenant_id > 0 && ls_id > 0) {
+        char ls_path[128] = {'\0'};
+        // Match only a removed LS directory, excluding ordinary GC and other tenants.
+        if (OB_SUCCESS == databuff_printf(ls_path, sizeof(ls_path), "/tenant_%ld/%ld.tmp/", tenant_id, ls_id)
+            && NULL != strstr(src_block_path, ls_path)) {
+          CLOG_LOG(INFO, "ls removal pauses after physical block return", K(tenant_id), K(ls_id),
+              K(src_block_path), K(dest_block_path));
+          DEBUG_SYNC(AFTER_LS_REMOVE_BLOCK);
+        }
+      }
     }
   }
   return ret;
@@ -307,10 +461,15 @@ int ObServerLogBlockMgr::create_tenant(const int64_t log_disk_size)
   } else {
     ObSpinLockGuard guard(resize_lock_);
     int64_t tmp_log_disk_size = min_log_disk_size_for_all_tenants_;
-    if ((tmp_log_disk_size += log_disk_size) > get_total_size_guarded_by_lock_()) {
+    if ((tmp_log_disk_size += log_disk_size) > get_total_size_()) {
       ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
-      CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
-          K(ret), KPC(this), K(log_disk_size));
+      if (reclaim_service_.is_shared_log_enabled()) {
+        CLOG_LOG(WARN, "ObServerLogBlockMGR can not hold any new tenants",
+            K(ret), KPC(this), K(log_disk_size));
+      } else {
+        CLOG_LOG(ERROR, "ObServerLogBlockMGR can not hold any new tenants",
+            K(ret), KPC(this), K(log_disk_size));
+      }
     } else {
       min_log_disk_size_for_all_tenants_ = tmp_log_disk_size;
       CLOG_LOG(INFO, "ObServerLogBlockMGR create_tenant success", KPC(this), K(log_disk_size));
@@ -327,7 +486,7 @@ void ObServerLogBlockMgr::abort_create_tenant(const int64_t log_disk_size)
     ObSpinLockGuard guard(resize_lock_);
     min_log_disk_size_for_all_tenants_ -= log_disk_size;
     OB_ASSERT(min_log_disk_size_for_all_tenants_ >= 0
-        && min_log_disk_size_for_all_tenants_ <= get_total_size_guarded_by_lock_());
+        && min_log_disk_size_for_all_tenants_ <= get_total_size_());
     CLOG_LOG(INFO, "ObServerLogBlockMGR abort_create_tenant success", KPC(this), K(log_disk_size));
   }
 }
@@ -387,7 +546,7 @@ int ObServerLogBlockMgr::update_tenant(const int64_t old_log_disk_size,
   } else if (can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = new_log_disk_size)) {
     // For shrinking log disk, we still update log disk size of 'new_unit' to 'old_log_disk_size'.
   } else if (!can_update_log_disk_size_with_expected_log_disk && FALSE_IT(allowed_new_log_disk_size = old_log_disk_size)) {
-  } else if ((tmp_log_disk_size += allowed_new_log_disk_size) > get_total_size_guarded_by_lock_()) {
+  } else if ((tmp_log_disk_size += allowed_new_log_disk_size) > get_total_size_()) {
     ret = OB_MACHINE_RESOURCE_NOT_ENOUGH;
     CLOG_LOG(WARN, "ObServerLogBlockMGR can not hold any new tenants", KPC(this),  K(old_log_disk_size),
              K(new_log_disk_size), K(allowed_new_log_disk_size), K(tmp_log_disk_size));
@@ -517,7 +676,9 @@ int ObServerLogBlockMgr::prepare_dir_and_create_meta_(const char *log_pool_path,
     CLOG_LOG(ERROR, "databuff_printf failed", KR(ret), K(log_pool_tmp_path));
   } else if (OB_FAIL(LOG_IO_ADAPTER.open(log_pool_tmp_meta_path, CREATE_FILE_FLAG, CREATE_FILE_MODE, io_fd))) {
     CLOG_LOG(ERROR, "create meta file failed", KR(ret), K(log_pool_tmp_path));
-  } else if (OB_FAIL(update_log_pool_meta_guarded_by_lock_(log_pool_tmp_meta_path, init_log_pool_meta))) {
+  } else if (OB_FAIL(update_log_pool_meta_guarded_by_lock_(
+                 log_pool_tmp_path, log_pool_tmp_meta_path, init_log_pool_meta,
+                 /* cross_tenant_reclaim_enabled */ false))) {
     CLOG_LOG(ERROR, "update_log_pool_meta_guarded_by_lock_ failed", K(ret),
              K(init_log_pool_meta), K(log_pool_tmp_path), K(log_pool_path));
   } else if (OB_FAIL(LOG_IO_ADAPTER.rename(log_pool_tmp_path, log_pool_path))) {
@@ -571,7 +732,6 @@ int ObServerLogBlockMgr::do_load_(const char *log_disk_path)
     CLOG_LOG(ERROR, "check_log_pool_whehter_is_integrity_ failed, unexpected error",
              K(ret), KPC(this), K(log_pool_path_), K(has_allocated_block_cnt));
   } else {
-    block_cnt_in_use_ = has_allocated_block_cnt;
     CLOG_LOG(INFO, "do_load_ success", K(ret), KPC(this), K(time_guard));
   }
   return ret;
@@ -691,15 +851,21 @@ int ObServerLogBlockMgr::try_continous_to_resize_(
   int ret = OB_SUCCESS;
   const int64_t free_size_byte = get_free_size_guarded_by_lock_();
   const int64_t current_total_size_byte = has_allocated_block_size_byte + free_size_byte;
-  LogPoolMeta new_log_pool_meta = log_pool_meta_;
+  const LogPoolMeta old_log_pool_meta = log_pool_meta_;
+  LogPoolMeta new_log_pool_meta = old_log_pool_meta;
+  // A crash may happen after deleting blocks but before saving shrink progress.
+  new_log_pool_meta.curr_total_size_ = current_total_size_byte;
   const int64_t old_block_cnt = calc_block_cnt_by_size_(current_total_size_byte);
   const int64_t new_block_cnt =
       calc_block_cnt_by_size_(new_log_pool_meta.next_total_size_);
   const int64_t resize_block_cnt = std::abs(new_block_cnt - old_block_cnt);
+  // Restore both counters before resuming an interrupted shrink.
+  block_cnt_in_use_ = has_allocated_block_size_byte / BLOCK_SIZE;
+  ATOMIC_STORE(&total_block_cnt_, old_block_cnt);
   if (NORMAL_STATUS == new_log_pool_meta.status_) {
     CLOG_LOG(INFO, "current status is normal, no need continous do resize", K(ret),
              KPC(this));
-  } else if (OB_FAIL(do_resize_(log_pool_meta_, resize_block_cnt, new_log_pool_meta))) {
+  } else if (OB_FAIL(do_resize_(old_log_pool_meta, resize_block_cnt, new_log_pool_meta))) {
     CLOG_LOG(INFO, "do_resize_ failed", K(ret), KPC(this), K(new_log_pool_meta));
   } else {
     CLOG_LOG(INFO, "try_continous_do_resize_ success", K(ret), KPC(this),
@@ -727,7 +893,13 @@ int ObServerLogBlockMgr::load_meta_()
     CLOG_LOG(ERROR, "the meta of log pool has corrupted", K(ret), KPC(this));
   } else {
     log_pool_meta_ = log_pool_meta_entry.log_pool_meta_;
-    CLOG_LOG(INFO, "load_meta_ success", K(ret), KPC(this));
+    ATOMIC_STORE(&has_v2_meta_, log_pool_meta_entry.is_v2());
+    ATOMIC_STORE(&cross_tenant_reclaim_enabled_, log_pool_meta_entry.cross_tenant_reclaim_enabled_);
+    if (OB_FAIL(reclaim_service_.init(this))) {
+      CLOG_LOG(ERROR, "init server log block reclaim service failed", KR(ret), KPC(this));
+    } else {
+      CLOG_LOG(INFO, "load_meta_ success", KR(ret), KPC(this));
+    }
   }
   return ret;
 }
@@ -803,10 +975,9 @@ int ObServerLogBlockMgr::get_all_tenants_log_disk_size_(int64_t &all_tenants_log
   return ret;
 }
 
-int64_t ObServerLogBlockMgr::get_total_size_guarded_by_lock_()
+int64_t ObServerLogBlockMgr::get_total_size_() const
 {
-  ObSpinLockGuard guard(log_pool_meta_lock_);
-  return log_pool_meta_.curr_total_size_;
+  return ATOMIC_LOAD(&total_block_cnt_) * BLOCK_SIZE;
 }
 
 int64_t ObServerLogBlockMgr::get_free_size_guarded_by_lock_()
@@ -821,26 +992,63 @@ int64_t ObServerLogBlockMgr::get_in_use_size_guarded_by_lock_()
   return block_cnt_in_use_*BLOCK_SIZE;
 }
 
-int ObServerLogBlockMgr::update_log_pool_meta_guarded_by_lock_(const char *pathname,
-                                                               const LogPoolMeta &meta)
+int ObServerLogBlockMgr::update_log_pool_meta_guarded_by_lock_(const char *parent_dir,
+                                                               const char *pathname,
+                                                               const LogPoolMeta &meta,
+                                                               const bool cross_tenant_reclaim_enabled)
 {
   int ret = OB_SUCCESS;
-  {
-    ObSpinLockGuard guard(log_pool_meta_lock_);
-    log_pool_meta_ = meta;
-  }
-  LogPoolMetaEntry log_pool_meta_entry(meta);
+  bool tmp_file_exist = false;
+  ObIOFd tmp_fd;
+  char tmp_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
+  LogPoolMetaEntry log_pool_meta_entry(meta, cross_tenant_reclaim_enabled);
+  const bool use_v2 = is_shared_log_pool_supported();
+  log_pool_meta_entry.set_version(use_v2);
   log_pool_meta_entry.update_checksum();
   int64_t pos = 0;
   memset(log_pool_meta_serialize_buf_, '\0', LOG_POOL_META_SERIALIZE_SIZE);
-  if (OB_FAIL(log_pool_meta_entry.serialize(log_pool_meta_serialize_buf_,
+  if (cross_tenant_reclaim_enabled && !use_v2) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "cannot persist shared reclaim before the version gate opens", K(ret), KPC(this));
+  } else if (OB_FAIL(log_pool_meta_entry.serialize(log_pool_meta_serialize_buf_,
                                             LOG_POOL_META_SERIALIZE_SIZE, pos))) {
     CLOG_LOG(ERROR, "meta serialize failed", K(ret), KPC(this), K(pos));
-  } else if (OB_FAIL(write_until_success(pathname, log_pool_meta_serialize_buf_,
+  } else if (OB_FAIL(databuff_printf(
+                 tmp_path, OB_MAX_FILE_NAME_LENGTH, "%s.tmp", pathname))) {
+    CLOG_LOG(ERROR, "construct tmp meta path failed", KR(ret), K(pathname));
+  } else if (OB_FAIL(palf::is_exists(tmp_path, tmp_file_exist))) {
+    CLOG_LOG(ERROR, "check tmp meta file failed", KR(ret), K(tmp_path));
+  } else if (tmp_file_exist && OB_FAIL(LOG_IO_ADAPTER.unlink(tmp_path))) {
+    CLOG_LOG(ERROR, "remove stale tmp meta file failed", KR(ret), K(tmp_path));
+  } else if (OB_FAIL(LOG_IO_ADAPTER.open(
+                 tmp_path, CREATE_FILE_FLAG, CREATE_FILE_MODE, tmp_fd))) {
+    CLOG_LOG(ERROR, "create tmp meta file failed", KR(ret), K(tmp_path));
+  } else if (OB_FAIL(write_until_success(tmp_path, log_pool_meta_serialize_buf_,
                                          LOG_POOL_META_SERIALIZE_SIZE, 0))) {
-    CLOG_LOG(ERROR, "write_until_success failed", K(ret), KPC(this), K(pos));
+    CLOG_LOG(ERROR, "write tmp meta file failed", KR(ret), K(tmp_path));
+  } else if (OB_FAIL(rename_with_retry(tmp_path, pathname))) {
+    CLOG_LOG(ERROR, "replace meta file failed", KR(ret), K(tmp_path), K(pathname));
+  } else if (OB_FAIL(fsync_with_retry(parent_dir))) {
+    CLOG_LOG(ERROR, "fsync meta parent directory failed", KR(ret), K(parent_dir));
   } else {
+    // Runtime callers hold resize_lock_. Publish both values before releasing it,
+    // so a following resize cannot overwrite the committed marker with an old value.
+    {
+      ObSpinLockGuard guard(log_pool_meta_lock_);
+      log_pool_meta_ = meta;
+      if (use_v2) {
+        ATOMIC_STORE(&has_v2_meta_, true);
+      }
+      ATOMIC_STORE(&cross_tenant_reclaim_enabled_, cross_tenant_reclaim_enabled);
+    }
     CLOG_LOG(INFO, "update_log_pool_meta_guarded_by_lock_ success", K(ret), KPC(this));
+  }
+  if (tmp_fd.is_valid()) {
+    const int tmp_ret = LOG_IO_ADAPTER.close(tmp_fd);
+    if (OB_SUCCESS != tmp_ret) {
+      // Closing this handle cannot undo a completed rename and directory fsync.
+      CLOG_LOG(WARN, "close tmp meta file failed", KR(tmp_ret), K(tmp_path));
+    }
   }
   return ret;
 }
@@ -919,7 +1127,9 @@ int ObServerLogBlockMgr::do_resize_(const LogPoolMeta &old_log_pool_meta,
   char log_pool_meta_path[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   if (OB_FAIL(databuff_printf(log_pool_meta_path, OB_MAX_FILE_NAME_LENGTH, "%s/%s", log_pool_path_, "meta"))) {
     CLOG_LOG(ERROR, "databuff_printf failed", KR(ret), K(log_pool_meta_path));
-  } else if (OB_FAIL(update_log_pool_meta_guarded_by_lock_(log_pool_meta_path, new_log_pool_meta))) {
+  } else if (OB_FAIL(update_log_pool_meta_guarded_by_lock_(
+                 log_pool_path_, log_pool_meta_path, new_log_pool_meta,
+                 is_cross_tenant_reclaim_enabled()))) {
     CLOG_LOG(ERROR, "update_log_pool_meta_ failed", K(ret), KPC(this));
   } else if (EXPANDING_STATUS == new_log_pool_meta.status_
              && OB_FAIL(do_expand_(new_log_pool_meta, resize_block_cnt))) {
@@ -932,17 +1142,25 @@ int ObServerLogBlockMgr::do_resize_(const LogPoolMeta &old_log_pool_meta,
              K(resize_block_cnt));
   }
   int tmp_ret = OB_SUCCESS;
-  // If resize success, make 'new_size_byte' valid, othersize, rollback 'log_pool_meta_'
-  // to 'origin_log_pool_meta'.
-  if (OB_SUCC(ret)) {
-    new_log_pool_meta.curr_total_size_ = new_log_pool_meta.next_total_size_;
-    new_log_pool_meta.status_ = NORMAL_STATUS;
-    if (OB_TMP_FAIL(update_log_pool_meta_guarded_by_lock_(log_pool_meta_path, new_log_pool_meta))) {
+  if (OB_FAIL(ret)) {
+    // Deleted blocks cannot be rolled back. Preserve shrink progress; restore old metadata otherwise.
+    const LogPoolMeta &meta = SHRINKING_STATUS == new_log_pool_meta.status_
+        ? new_log_pool_meta : old_log_pool_meta;
+    if (OB_TMP_FAIL(update_log_pool_meta_guarded_by_lock_(
+            log_pool_path_, log_pool_meta_path, meta,
+            is_cross_tenant_reclaim_enabled()))) {
       CLOG_LOG(ERROR, "update_log_pool_meta_ failed", K(ret), KPC(this), K(tmp_ret));
-      ret = tmp_ret;
     }
   } else {
-    if (OB_TMP_FAIL(update_log_pool_meta_guarded_by_lock_(log_pool_meta_path, old_log_pool_meta))) {
+    // Keep SHRINKING while tenants still hold blocks needed to reach the target.
+    if (EXPANDING_STATUS == new_log_pool_meta.status_
+        || new_log_pool_meta.curr_total_size_ == new_log_pool_meta.next_total_size_) {
+      new_log_pool_meta.curr_total_size_ = new_log_pool_meta.next_total_size_;
+      new_log_pool_meta.status_ = NORMAL_STATUS;
+    }
+    if (OB_TMP_FAIL(update_log_pool_meta_guarded_by_lock_(
+            log_pool_path_, log_pool_meta_path, new_log_pool_meta,
+            is_cross_tenant_reclaim_enabled()))) {
       CLOG_LOG(ERROR, "update_log_pool_meta_ failed", K(ret), KPC(this), K(tmp_ret));
       ret = tmp_ret;
     }
@@ -1018,16 +1236,19 @@ int ObServerLogBlockMgr::remove_resizing_tmp_dir_(const char *dir_path)
   return ret;
 }
 
-int ObServerLogBlockMgr::do_shrink_(const LogPoolMeta &new_log_pool_meta,
+int ObServerLogBlockMgr::do_shrink_(LogPoolMeta &new_log_pool_meta,
                                     const int64_t shrink_block_cnt)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(free_blocks_at_log_pool_(shrink_block_cnt))) {
+  int64_t freed_block_cnt = 0;
+  if (OB_FAIL(free_blocks_at_log_pool_(shrink_block_cnt, freed_block_cnt))) {
     CLOG_LOG(ERROR, "free_blocks_at_log_pool_ failed", K(ret), KPC(this),
              K(shrink_block_cnt));
   } else {
-    CLOG_LOG(INFO, "do_shrink_ success", K(ret), KPC(this), K(shrink_block_cnt));
+    CLOG_LOG(INFO, "shrink pass finished", KR(ret), KPC(this), K(shrink_block_cnt),
+             K(freed_block_cnt));
   }
+  new_log_pool_meta.curr_total_size_ -= freed_block_cnt * BLOCK_SIZE;
   int tmp_ret = OB_SUCCESS;
   if (OB_TMP_FAIL(fsync_with_retry(log_pool_path_))) {
     CLOG_LOG(ERROR, "fsync_with_retry failed", K(ret), K(tmp_ret), KPC(this));
@@ -1070,20 +1291,63 @@ int ObServerLogBlockMgr::allocate_block_at_tmp_dir_(const char *tmp_dir,
   return ret;
 }
 
-int ObServerLogBlockMgr::free_blocks_at_log_pool_(const int64_t block_cnt)
+bool ObServerLogBlockMgr::is_shrink_utilization_threshold_reached_(
+    const int64_t in_use_block_cnt,
+    const int64_t total_block_cnt,
+    const int64_t limit_threshold) const
+{
+  const bool ignore_shrink_headroom = 0 != ERRSIM_IGNORE_LOG_POOL_SHRINK_HEADROOM;
+  const int64_t shrink_threshold = get_shrink_utilization_threshold_(
+      limit_threshold, ignore_shrink_headroom);
+  return reclaim_service_.is_shared_log_enabled()
+      && (ignore_shrink_headroom
+          ? in_use_block_cnt * 100 >= total_block_cnt * limit_threshold
+          : in_use_block_cnt * 100 > (total_block_cnt - 1) * shrink_threshold);
+}
+
+int64_t ObServerLogBlockMgr::get_shrink_utilization_threshold_(
+    const int64_t limit_threshold,
+    const bool ignore_shrink_headroom) const
+{
+  return ignore_shrink_headroom
+      ? limit_threshold : (limit_threshold > 5 ? limit_threshold - 5 : 0);
+}
+
+int ObServerLogBlockMgr::free_blocks_at_log_pool_(const int64_t block_cnt,
+                                                  int64_t &freed_block_cnt)
 {
   int ret = OB_SUCCESS;
-  int64_t remain_block_cnt = block_cnt;
+  freed_block_cnt = 0;
   block_id_t block_id = LOG_INVALID_BLOCK_ID;
-  while (OB_SUCC(ret) && remain_block_cnt > 0) {
-    if (OB_FAIL(get_and_inc_min_block_id_guarded_by_lock_(block_id))) {
+  while (OB_SUCC(ret) && freed_block_cnt < block_cnt) {
+    int64_t in_use_block_cnt = 0;
+    int64_t total_block_cnt = 0;
+    const int64_t limit_threshold = GCONF.server_log_disk_utilization_limit_threshold;
+    if (reclaim_service_.is_shared_log_enabled()
+        && OB_UNLIKELY(limit_threshold <= 0 || limit_threshold > 100)) {
+      ret = OB_INVALID_CONFIG;
+      CLOG_LOG(WARN, "invalid pool utilization limit for shrink", KR(ret), K(limit_threshold));
+    } else if (OB_FAIL(get_block_usage(in_use_block_cnt, total_block_cnt))) {
+      CLOG_LOG(WARN, "get block usage failed", KR(ret), KPC(this));
+    } else if (is_shrink_utilization_threshold_reached_(
+                   in_use_block_cnt, total_block_cnt, limit_threshold)) {
+      // Keep five percentage points below the hard stop for concurrent block allocation.
+      CLOG_LOG(INFO, "shrink reaches utilization threshold", K(in_use_block_cnt),
+               K(total_block_cnt), K(limit_threshold), K(freed_block_cnt), K(block_cnt));
+      break;
+    } else if (OB_ENTRY_NOT_EXIST == (ret = get_and_inc_min_block_id_guarded_by_lock_(block_id))) {
+      // Return successfully with partial progress. GC can return more blocks later.
+      ret = OB_SUCCESS;
+      CLOG_LOG(INFO, "shrink waits for tenant blocks", K(block_cnt), K(freed_block_cnt));
+      break;
+    } else if (OB_FAIL(ret)) {
       CLOG_LOG(ERROR,
                "get_and_inc_min_block_id_guarded_by_lock_ failed, unexpected error",
-               K(ret), KPC(this), K(remain_block_cnt), K(block_cnt));
+               KR(ret), KPC(this), K(freed_block_cnt), K(block_cnt));
     } else if (OB_FAIL(free_block_at_(log_pool_path_, block_id))) {
       CLOG_LOG(ERROR, "free_block_at_ failed", K(ret), KPC(this), K(block_id));
     } else {
-      remain_block_cnt--;
+      freed_block_cnt++;
     }
   }
   return ret;
@@ -1098,9 +1362,12 @@ int ObServerLogBlockMgr::free_block_at_(const char *dir_path,
     CLOG_LOG(ERROR, "construct_absolute_block_path failed", K(ret), KPC(this), K(dir_path),
              K(src_block_id));
   } else if (OB_FAIL(LOG_IO_ADAPTER.unlink(block_path))) {
-    CLOG_LOG(ERROR, "unlinkat_until_success_i failed", K(ret), KPC(this), K(dir_path),
-             K(src_block_id));
+    // A concurrent return may not have renamed this reserved block into the pool yet.
+    // Startup scanning rebuilds the block range from physical files after this failure.
+    CLOG_LOG(ERROR, "unlink reserved block failed, restart observer to rebuild block range",
+             KR(ret), KPC(this), K(block_path));
   } else {
+    ATOMIC_DEC(&total_block_cnt_);
     if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
       CLOG_LOG(INFO, "free_block_at_ success", K(ret), KPC(this), K(dir_path),
                K(src_block_id));
@@ -1137,6 +1404,7 @@ int ObServerLogBlockMgr::move_blocks_from_tmp_dir_to_log_pool_(
       CLOG_LOG(ERROR, "move_block_not_guarded_by_lock_ failed", K(ret), KPC(this),
                K(dest_block_path), K(src_block_path));
     } else {
+      ATOMIC_INC(&total_block_cnt_);
       remain_block_cnt--;
       src_block_id++;
     }
@@ -1502,15 +1770,24 @@ void ObServerLogBlockMgr::LogPoolMetaEntry::update_checksum()
 
 int64_t ObServerLogBlockMgr::LogPoolMetaEntry::calc_checksum_()
 {
-  int64_t checksum = 0;
-  int64_t header_checksum_len = sizeof(*this) - sizeof(checksum_);
-  checksum = static_cast<int64_t>(ob_crc64(this, header_checksum_len));
-  return checksum;
+  uint64_t checksum = 0;
+  if (VERSION_V1 == version_ || VERSION_V2 == version_) {
+    // The prefix ends at the old V1 checksum offset. V2 appends only the marker,
+    // not the padding between the marker and checksum_.
+    checksum = ob_crc64(this, offsetof(LogPoolMetaEntry, cross_tenant_reclaim_enabled_));
+    if (VERSION_V2 == version_) {
+      checksum = ob_crc64(checksum, &cross_tenant_reclaim_enabled_,
+                          sizeof(cross_tenant_reclaim_enabled_));
+    }
+  }
+  return static_cast<int64_t>(checksum);
 }
 
 bool ObServerLogBlockMgr::LogPoolMetaEntry::check_integrity()
 {
-  return checksum_ == calc_checksum_();
+  return MAGIC_NUM == magic_
+         && (VERSION_V1 == version_ || VERSION_V2 == version_)
+         && checksum_ == calc_checksum_();
 }
 
 DEFINE_SERIALIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
@@ -1520,8 +1797,15 @@ DEFINE_SERIALIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   if (OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, magic_))
       || OB_FAIL(serialization::encode_i16(buf, buf_len, new_pos, version_))
       || OB_FAIL(serialization::encode_i32(buf, buf_len, new_pos, flag_))
-      || OB_FAIL(log_pool_meta_.serialize(buf, buf_len, new_pos))
-      || OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, checksum_))) {
+      || OB_FAIL(log_pool_meta_.serialize(buf, buf_len, new_pos))) {
+    CLOG_LOG(ERROR, "serialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (VERSION_V1 != version_ && VERSION_V2 != version_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "unsupported log pool meta version", KR(ret), KPC(this));
+  } else if (VERSION_V2 == version_ && OB_FAIL(serialization::encode_bool(
+                 buf, buf_len, new_pos, cross_tenant_reclaim_enabled_))) {
+    CLOG_LOG(ERROR, "serialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, new_pos, checksum_))) {
     CLOG_LOG(ERROR, "serialize failed", K(ret), KPC(this), K(pos), K(new_pos));
   } else {
     pos = new_pos;
@@ -1536,10 +1820,20 @@ DEFINE_DESERIALIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   if (OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &magic_))
       || OB_FAIL(serialization::decode_i16(buf, data_len, new_pos, &version_))
       || OB_FAIL(serialization::decode_i32(buf, data_len, new_pos, &flag_))
-      || OB_FAIL(log_pool_meta_.deserialize(buf, data_len, new_pos))
-      || OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &checksum_))) {
+      || OB_FAIL(log_pool_meta_.deserialize(buf, data_len, new_pos))) {
+    CLOG_LOG(ERROR, "deserialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (VERSION_V1 != version_ && VERSION_V2 != version_) {
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(ERROR, "unsupported log pool meta version", KR(ret), KPC(this));
+  } else if (VERSION_V2 == version_ && OB_FAIL(serialization::decode_bool(
+                 buf, data_len, new_pos, &cross_tenant_reclaim_enabled_))) {
+    CLOG_LOG(ERROR, "deserialize failed", KR(ret), KPC(this), K(pos), K(new_pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &checksum_))) {
     CLOG_LOG(ERROR, "deserialize failed", K(ret), KPC(this), K(pos), K(new_pos));
   } else {
+    if (VERSION_V1 == version_) {
+      cross_tenant_reclaim_enabled_ = false;
+    }
     pos = new_pos;
     CLOG_LOG(INFO, "deserialize LogPoolMeta success", KPC(this), K(buf));
   }
@@ -1553,6 +1847,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObServerLogBlockMgr::LogPoolMetaEntry)
   size += serialization::encoded_length_i16(sizeof(version_));
   size += serialization::encoded_length_i32(sizeof(flag_));
   size += log_pool_meta_.get_serialize_size();
+  if (VERSION_V2 == version_) {
+    size += serialization::encoded_length_bool(cross_tenant_reclaim_enabled_);
+  }
   size += serialization::encoded_length_i64(sizeof(checksum_));
   return size;
 }

@@ -546,7 +546,7 @@ int ObLSService::write_prepare_create_ls_slog_(const ObLSMeta &ls_meta) const
   log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
                                           ObRedoLogSubType::OB_REDO_LOG_CREATE_LS);
   if (OB_FAIL(slogger->write_log(log_param))) {
-    LOG_WARN("fail to write remove ls slog", K(log_param));
+    LOG_WARN("fail to write create ls prepare slog", K(log_param));
   }
   return ret;
 }
@@ -583,6 +583,9 @@ int ObLSService::write_abort_create_ls_slog_(const share::ObLSID &ls_id) const
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_BEFORE_REMOVE_LS_SLOG, "Pause user LS removal before its slog for the selected tenant.");
+ERRSIM_POINT_DEF(ERRSIM_AFTER_REMOVE_LS_SLOG, "Pause user LS removal after its slog for the selected tenant.");
+
 int ObLSService::write_remove_ls_slog_(const share::ObLSID &ls_id) const
 {
   int ret = OB_SUCCESS;
@@ -593,8 +596,19 @@ int ObLSService::write_remove_ls_slog_(const share::ObLSID &ls_id) const
   log_param.data_ = &slog_entry;
   log_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
                                             ObRedoLogSubType::OB_REDO_LOG_DELETE_LS);
+  // System LS cleanup must not consume the retained user LS crash injection.
+  if (OB_UNLIKELY(ERRSIM_BEFORE_REMOVE_LS_SLOG == -static_cast<int64_t>(MTL_ID()))
+      && ls_id.is_user_ls()) {
+    LOG_INFO("ls removal pauses before durable slog", K(MTL_ID()), K(ls_id));
+    DEBUG_SYNC(BEFORE_REMOVE_LS_SLOG);
+  }
   if (OB_FAIL(slogger->write_log(log_param))) {
     LOG_WARN("fail to write remove ls slog", K(log_param));
+  } else if (OB_UNLIKELY(ERRSIM_AFTER_REMOVE_LS_SLOG == -static_cast<int64_t>(MTL_ID()))
+             && ls_id.is_user_ls()) {
+    // The delete record is durable, while PALF files and the LS map entry still exist.
+    LOG_INFO("ls removal pauses after durable slog", K(MTL_ID()), K(ls_id));
+    DEBUG_SYNC(AFTER_REMOVE_LS_SLOG);
   }
   return ret;
 }

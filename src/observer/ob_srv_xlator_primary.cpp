@@ -212,6 +212,8 @@ void oceanbase::observer::init_srv_xlator_for_logservice(ObSrvRpcXlator *xlator)
 {
   RPC_PROCESSOR(logservice::LogMembershipChangeP);
   RPC_PROCESSOR(logservice::LogGetPalfStatReqP);
+  RPC_PROCESSOR(logservice::LogGetFetchSourcesReqP);
+  RPC_PROCESSOR(logservice::LogRequestLSGCP);
 #ifdef OB_BUILD_ARBITRATION
   RPC_PROCESSOR(logservice::LogServerProbeP);
 #endif

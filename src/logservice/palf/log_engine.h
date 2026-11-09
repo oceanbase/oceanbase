@@ -440,7 +440,7 @@ public:
                           LogGetStatResp &resp);
 
   LogMeta get_log_meta() const;
-  const LSN &get_base_lsn_used_for_block_gc() const;
+  LSN get_base_lsn_used_for_block_gc() const;
   int get_min_block_info_for_gc(block_id_t &block_id, share::SCN &max_scn);
   int get_min_block_info(block_id_t &block_id, share::SCN &min_scn);
   // ===================== NetService end ========================

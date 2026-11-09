@@ -579,7 +579,8 @@ int ObSimpleLogServer::init_log_service_()
 
   if (OB_FAIL(net_keepalive_->init(&deliver_))) {
   } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &batch_rpc_, &ls_service_,
-      &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_, &mock_locality_manager_))) {
+      &location_service_, &reporter_, &log_block_pool_, log_block_pool_.get_reclaim_coordinator(),
+      &sql_proxy_, net_keepalive_, &mock_locality_manager_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
   } else if (OB_FAIL(log_block_pool_.create_tenant(opts.disk_options_.log_disk_usage_limit_size_))) {
     SERVER_LOG(ERROR, "crete tenant failed", K(ret));
@@ -925,6 +926,10 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
       SERVER_LOG(WARN, "need_drop_by_loss_config", K(ret), K(pcode), K(src), K(rpc_loss_config_), KPC(palf_env_impl_));
       return true;
     }
+    if (obrpc::OB_LOG_REQUEST_LS_GC == pcode) {
+      // process() has passed the processor's entry timeout check.
+      ATOMIC_INC(&gc_rpc_started_);
+    }
     return false;
   };
   if (this->need_filter_packet_by_pcode_blacklist(pcode)) {
@@ -1020,6 +1025,21 @@ int ObLogDeliver::handle_req_(rpc::ObRequest &req)
     case obrpc::OB_LOG_GET_PALF_STAT: {
       //modify_pkt.set_tenant_id(node_id_);
       PROCESS(LogGetPalfStatReqP)
+    }
+    case obrpc::OB_LOG_REQUEST_LS_GC: {
+      const int64_t saved_timeout = THIS_WORKER.get_timeout_ts();
+      THIS_WORKER.set_timeout_ts(req.get_receive_timestamp() + pkt.get_timeout());
+      DEFER({
+        THIS_WORKER.set_timeout_ts(saved_timeout);
+        ATOMIC_INC(&gc_rpc_finished_);
+      });
+      // Fixtures can install LS service after the RPC worker takes its tenant snapshot.
+      ObTenantEnv::set_tenant(ObTenantEnv::get_tenant());
+      PROCESS(LogRequestLSGCP)
+    }
+    case obrpc::OB_LOG_GET_FETCH_SOURCES: {
+      ObTenantEnv::set_tenant(ObTenantEnv::get_tenant());
+      PROCESS(LogGetFetchSourcesReqP)
     }
     case obrpc::OB_LOG_CHANGE_ACCESS_MODE_CMD: {
       //modify_pkt.set_tenant_id(node_id_);

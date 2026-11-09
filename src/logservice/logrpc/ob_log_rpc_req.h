@@ -15,9 +15,11 @@
 
 #include "lib/utility/ob_unify_serialize.h"                    // OB_UNIS_VERSION
 #include "lib/utility/ob_print_utils.h"                        // TO_STRING_KV
+#include "lib/container/ob_array_serialization.h"
 #include "common/ob_member_list.h"                             // ObMemberList
 #include "logservice/palf/palf_options.h"                      // AccessMode
 #include "logservice/palf/palf_handle_impl.h"                  // PalfStat
+#include "share/ob_ls_id.h"                                    // ObLSID
 #include "share/scn.h"
 
 namespace oceanbase
@@ -179,6 +181,116 @@ public:
   void reset();
   TO_STRING_KV(K_(palf_stat));
   palf::PalfStat palf_stat_;
+};
+
+struct LogFetchSource
+{
+  LogFetchSource() : server_(), begin_lsn_(), end_lsn_() {}
+  bool is_valid() const
+  {
+    return server_.is_valid() && begin_lsn_.is_valid() && end_lsn_.is_valid()
+        && begin_lsn_ < end_lsn_;
+  }
+  common::ObAddr server_;
+  palf::LSN begin_lsn_;
+  palf::LSN end_lsn_;
+  TO_STRING_KV(K_(server), K_(begin_lsn), K_(end_lsn));
+  OB_UNIS_VERSION(1);
+};
+
+// Read-only log source discovery for standby and CDC consumers.
+struct LogGetFetchSourcesReq
+{
+  LogGetFetchSourcesReq() : src_(), tenant_id_(common::OB_INVALID_TENANT_ID), ls_id_() {}
+  bool is_valid() const
+  {
+    return src_.is_valid() && common::is_valid_tenant_id(tenant_id_) && ls_id_.is_valid();
+  }
+  common::ObAddr src_;
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  TO_STRING_KV(K_(src), K_(tenant_id), K_(ls_id));
+  OB_UNIS_VERSION(1);
+};
+
+struct LogGetFetchSourcesResp
+{
+  LogGetFetchSourcesResp() : sources_() {}
+  bool is_valid() const { return !sources_.empty(); }
+  void reset() { sources_.reset(); }
+  common::ObSArray<LogFetchSource> sources_;
+  TO_STRING_KV(K_(sources));
+  OB_UNIS_VERSION(1);
+};
+
+constexpr int64_t INVALID_GC_TOKEN = 0;
+
+class ObLSGCRequest
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSGCRequest();
+  ~ObLSGCRequest() { reset(); }
+  int init(const common::ObAddr &src,
+           const share::ObLSID &ls_id,
+           const share::SCN &cutoff_scn,
+           const share::SCN &end_scn,
+           const palf::LogConfigVersion &config_version,
+           const int64_t mode_version,
+           const palf::LSN &begin_lsn,
+           const palf::LSN &end_lsn,
+           const int64_t gc_token);
+  bool is_valid() const;
+  void reset();
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const share::SCN &get_cutoff_scn() const { return cutoff_scn_; }
+  const share::SCN &get_end_scn() const { return end_scn_; }
+  const palf::LogConfigVersion &get_config_version() const { return config_version_; }
+  int64_t get_mode_version() const { return mode_version_; }
+  const palf::LSN &get_begin_lsn() const { return begin_lsn_; }
+  const palf::LSN &get_end_lsn() const { return end_lsn_; }
+  int64_t get_gc_token() const { return gc_token_; }
+  TO_STRING_KV(K_(src), K_(ls_id), K_(cutoff_scn), K_(end_scn),
+      K_(config_version), K_(mode_version), K_(begin_lsn), K_(end_lsn), K_(gc_token));
+public:
+  // Public because DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR accesses req.src_ directly.
+  common::ObAddr src_;
+private:
+  share::ObLSID ls_id_;
+  // Coverage uses [cutoff_scn_, end_scn_); the end boundary is excluded.
+  share::SCN cutoff_scn_;
+  share::SCN end_scn_;
+  // Echo the last GC response's config version, including its leader term.
+  // Invalid on the first request.
+  palf::LogConfigVersion config_version_;
+  // The requester's applied access-mode version; absent on older senders.
+  int64_t mode_version_;
+  // Valid LSNs certify coverage of [cutoff_scn_, end_scn_) in mode_version_.
+  // Keep the actual committed LSN range for log source discovery.
+  palf::LSN begin_lsn_;
+  palf::LSN end_lsn_;
+  // Zero starts a handshake. A formal request echoes the last successful response.
+  int64_t gc_token_;
+};
+
+class ObLSGCResponse
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSGCResponse();
+  ~ObLSGCResponse() { reset(); }
+  int init(const bool allow_gc, const palf::LogConfigVersion &config_version, const int64_t gc_token);
+  bool is_valid() const;
+  void reset();
+  bool is_gc_allowed() const { return allow_gc_; }
+  const palf::LogConfigVersion &get_config_version() const { return config_version_; }
+  int64_t get_gc_token() const { return gc_token_; }
+  TO_STRING_KV(K_(allow_gc), K_(config_version), K_(gc_token));
+private:
+  bool allow_gc_;
+  palf::LogConfigVersion config_version_;
+  // Zero denies the request and requires a new handshake.
+  int64_t gc_token_;
 };
 
 enum LogServerProbeType

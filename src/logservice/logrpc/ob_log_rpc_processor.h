@@ -104,6 +104,18 @@ DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogGetPalfStatReqP,
                                      LogGetPalfStatResp,
                                      obrpc::OB_LOG_GET_PALF_STAT);
 
+DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogRequestLSGCP,
+                                     obrpc::ObLogServiceRpcProxy,
+                                     ObLSGCRequest,
+                                     ObLSGCResponse,
+                                     obrpc::OB_LOG_REQUEST_LS_GC);
+
+DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogGetFetchSourcesReqP,
+                                     obrpc::ObLogServiceRpcProxy,
+                                     LogGetFetchSourcesReq,
+                                     LogGetFetchSourcesResp,
+                                     obrpc::OB_LOG_GET_FETCH_SOURCES);
+
 #ifdef OB_BUILD_ARBITRATION
 DEFINE_LOGSERVICE_RPC_PROCESSOR(LogServerProbeP,
                                 obrpc::ObLogServiceRpcProxy,

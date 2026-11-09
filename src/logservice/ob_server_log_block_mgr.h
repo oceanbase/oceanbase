@@ -23,8 +23,9 @@
 #include "lib/lock/ob_spin_lock.h"          // ObSpinLock
 #include "lib/function/ob_function.h"       // ObFunction
 #include "palf/log_define.h"                // block_id_t
-#include "palf/log_block_pool_interface.h"  // ObIServerLogBlockPool
+#include "palf/log_block_pool_interface.h"  // ILogBlockPool
 #include "palf/log_io_utils.h"              // ObBaseDirFunctor
+#include "ob_server_log_block_reclaim_service.h"
 
 namespace oceanbase
 {
@@ -43,14 +44,12 @@ private:
   static const int64_t KB = 1024ll;
   static const int64_t BLOCK_SIZE = palf::PALF_PHY_BLOCK_SIZE;
   static const int64_t LOG_POOL_META_SERIALIZE_SIZE = 4 * KB;
-  static const int64_t SLEEP_TS_US = 1 * 1000;
   static const int CREATE_FILE_FLAG = O_RDWR | O_CREAT | O_EXCL | O_SYNC | O_DIRECT;
   static const int OPEN_FILE_FLAG = O_RDWR | O_SYNC | O_DIRECT;
   static const int OPEN_DIR_FLAG = O_DIRECTORY | O_RDONLY;
   static const int CREATE_DIR_MODE =
       S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IROTH;
   static const int CREATE_FILE_MODE = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
-  static const int64_t RUN_INTERVAL = 1 * 1000 * 1000;
   static const int64_t PRINT_INTERVAL = 3 * 1000 * 1000;
 
 private:
@@ -96,26 +95,36 @@ private:
   };
 
   struct LogPoolMetaEntry {
-    LogPoolMetaEntry() {}
-    LogPoolMetaEntry(const LogPoolMeta &log_pool_meta)
+    LogPoolMetaEntry() : LogPoolMetaEntry(LogPoolMeta()) {}
+    LogPoolMetaEntry(const LogPoolMeta &log_pool_meta,
+                     const bool cross_tenant_reclaim_enabled = false)
       : magic_(MAGIC_NUM),
         version_(VERSION),
         flag_(0),
-        log_pool_meta_(log_pool_meta) {}
+        log_pool_meta_(log_pool_meta),
+        cross_tenant_reclaim_enabled_(cross_tenant_reclaim_enabled),
+        checksum_(0) {}
     ~LogPoolMetaEntry() {}
+    bool is_v2() const { return VERSION_V2 == version_; }
+    void set_version(const bool use_v2) { version_ = use_v2 ? VERSION_V2 : VERSION_V1; }
     void update_checksum();
     bool check_integrity();
     int16_t magic_;
     int16_t version_;
     int32_t flag_;
     LogPoolMeta log_pool_meta_;
+    // Keep the preceding fields in the V1 layout for checksum compatibility.
+    bool cross_tenant_reclaim_enabled_;
     int64_t checksum_;
-    TO_STRING_KV(K_(magic), K_(version), K_(flag), K_(log_pool_meta), K_(checksum));
+    TO_STRING_KV(K_(magic), K_(version), K_(flag), K_(log_pool_meta),
+                 K_(cross_tenant_reclaim_enabled), K_(checksum));
     NEED_SERIALIZE_AND_DESERIALIZE;
   private:
     int64_t calc_checksum_();
     static const int64_t MAGIC_NUM = 0x4C50;
-    static const int64_t VERSION = 1;
+    static const int64_t VERSION_V1 = 1;
+    static const int64_t VERSION_V2 = 2;
+    static const int64_t VERSION = VERSION_V2;
   };
 
   struct GetBlockIdListFunctor : public palf::ObBaseDirFunctor
@@ -158,6 +167,23 @@ public:
   // @param[out] current in used diskspace.
   // @param[out] current total diskspace.
   int get_disk_usage(int64_t &in_use_size_byte, int64_t &total_size_byte);
+  // Return current in-use and total physical block counts.
+  int get_block_usage(int64_t &in_use_block_cnt, int64_t &total_block_cnt);
+  // Return blocks that tenants need to recycle for watermark reclaim or an active shrink.
+  int get_reclaim_block_count(const int64_t utilization_threshold,
+                              int64_t &reclaim_block_cnt);
+  // Return the server reclaim coordinator shared by tenant PALF environments.
+  palf::ILogBlockReclaimCoordinator *get_reclaim_coordinator()
+  {
+    return &reclaim_service_;
+  }
+  // Persist the cross-tenant reclaim marker together with log-pool metadata.
+  int persist_cross_tenant_reclaim_enabled(const bool enabled);
+  // Return the marker published after the last committed log-pool meta update.
+  bool is_cross_tenant_reclaim_enabled() const;
+  // A durable V2 meta keeps the feature available across subsequent upgrades.
+  // Without V2, use the cluster version and upgrade-mode gate for first enable.
+  bool is_shared_log_pool_supported() const;
 
   // @brief allocate a new block, and move it to the specified directory with the specified
   // name.
@@ -201,7 +227,8 @@ public:
   int force_update_tenant_log_disk(const uint64_t tenant_id,
                                    const int64_t new_log_disk_size);
   TO_STRING_KV("dir:",
-               log_pool_path_, K_(log_pool_meta),
+               log_pool_path_, K_(log_pool_meta), K_(has_v2_meta),
+               K_(reclaim_service),
                K_(min_block_id), K_(max_block_id), K(min_log_disk_size_for_all_tenants_),
                K_(is_inited));
 
@@ -234,10 +261,12 @@ private:
   bool check_space_is_enough_(const int64_t log_disk_size) const;
   int get_all_tenants_log_disk_size_(int64_t &log_disk_size) const;
 private:
-  int update_log_pool_meta_guarded_by_lock_(const char *pathname,
-                                            const LogPoolMeta &meta);
+  int update_log_pool_meta_guarded_by_lock_(const char *parent_dir,
+                                            const char *pathname,
+                                            const LogPoolMeta &meta,
+                                            const bool cross_tenant_reclaim_enabled);
   const LogPoolMeta &get_log_pool_meta_guarded_by_lock_() const;
-  int64_t get_total_size_guarded_by_lock_();
+  int64_t get_total_size_() const;
   int64_t get_free_size_guarded_by_lock_();
   int64_t get_in_use_size_guarded_by_lock_();
   int get_and_inc_max_block_id_guarded_by_lock_(palf::block_id_t &out_block_id,
@@ -256,14 +285,18 @@ private:
   // 2. 移动失败会重试
   int do_expand_(const LogPoolMeta &new_log_meta, const int64_t resize_block_cnt);
 
-  // 原子性的保证:
-  // 1. 删除操作失败会重试
-  int do_shrink_(const LogPoolMeta &new_log_meta, const int64_t resize_block_cnt);
+  // Save partial progress and keep SHRINKING until enough tenant blocks are returned.
+  int do_shrink_(LogPoolMeta &new_log_meta, const int64_t resize_block_cnt);
   int allocate_blocks_at_tmp_dir_(const char *tmp_dir,
                                   const palf::block_id_t start_block_id,
                                   const int64_t block_cnt);
   int allocate_block_at_tmp_dir_(const char *tmp_dir, const palf::block_id_t block_id);
-  int free_blocks_at_log_pool_(const int64_t block_cnt);
+  bool is_shrink_utilization_threshold_reached_(const int64_t in_use_block_cnt,
+                                                const int64_t total_block_cnt,
+                                                const int64_t limit_threshold) const;
+  int64_t get_shrink_utilization_threshold_(const int64_t limit_threshold,
+                                            const bool ignore_shrink_headroom) const;
+  int free_blocks_at_log_pool_(const int64_t block_cnt, int64_t &freed_block_cnt);
   int free_block_at_(const char *path, const palf::block_id_t block_id);
   int move_blocks_from_tmp_dir_to_log_pool_(const char *tmp_dir,
                                             const palf::block_id_t start_block_id,
@@ -288,6 +321,10 @@ private:
   char log_pool_path_[OB_MAX_FILE_NAME_LENGTH];
   char *log_pool_meta_serialize_buf_;
   LogPoolMeta log_pool_meta_;
+  // Runtime meta writes and marker publication share resize_lock_.
+  bool cross_tenant_reclaim_enabled_;
+  bool has_v2_meta_;
+  ObServerLogBlockReclaimService reclaim_service_;
   // [min_block_id_, max_block_id_)
   palf::block_id_t min_block_id_;
   palf::block_id_t max_block_id_;
@@ -317,6 +354,9 @@ private:
   // NB: in progress of expanding, the free size byte calcuated by BLOCK_SIZE * (max_block_id_ - min_block_id_) may be greater than
   //     curr_total_size_, if we calcuated log disk in use by curr_total_size_ - 'free size byte', the resule may be negative.
   int64_t block_cnt_in_use_;
+  // Count completed block IO independently of committed metadata; rebuild on startup.
+  // Access atomically. Tenant transfers do not change this count.
+  int64_t total_block_cnt_;
   // Before start ObServerLogBlockMgr, not support log disk resize.
   bool is_started_;
   bool is_inited_;

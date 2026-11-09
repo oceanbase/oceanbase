@@ -42,6 +42,7 @@ int PalfEnv::create_palf_env(
     obrpc::ObBatchRpc *batch_rpc,
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool,
+    ILogBlockReclaimCoordinator *log_block_reclaim_coordinator,
     PalfMonitorCb *monitor,
     share::ObResourceManager *resource_manager,
     common::ObIOManager *io_manager,
@@ -51,11 +52,13 @@ int PalfEnv::create_palf_env(
   palf_env = MTL_NEW(PalfEnv, "PalfEnv");
   if (NULL == palf_env) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "allocate PalfEnv failed", KR(ret), K(base_dir));
   } else if (OB_FAIL(FileDirectoryUtils::delete_tmp_file_or_directory_at(base_dir))) {
     CLOG_LOG(WARN, "delete_tmp_file_or_directory_at failed", K(ret), K(base_dir));
   } else if (OB_FAIL(palf_env->palf_env_impl_.init(options, base_dir, self, obrpc::ObRpcNetHandler::CLUSTER_ID,
                                                    MTL_ID(), transport, batch_rpc,
-                                                   log_alloc_mgr, log_block_pool, monitor,
+                                                   log_alloc_mgr, log_block_pool,
+                                                   log_block_reclaim_coordinator, monitor,
                                                    resource_manager, io_manager))) {
     PALF_LOG(WARN, "PalfEnvImpl init failed", K(ret), K(base_dir));
   } else {
@@ -156,9 +159,26 @@ int PalfEnv::get_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
   return palf_env_impl_.get_disk_usage(used_size_byte, total_size_byte);
 }
 
+int PalfEnv::check_log_disk_usage_reached_threshold(const int64_t threshold_percentage, bool &reached)
+{
+  return palf_env_impl_.check_log_disk_usage_reached_threshold(threshold_percentage, reached);
+}
+
 int PalfEnv::get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte)
 {
   return palf_env_impl_.get_stable_disk_usage(used_size_byte, total_size_byte);
+}
+
+int PalfEnv::get_reclaim_snapshot(const int64_t now_us,
+                                 const bool server_need_reclaim,
+                                 TenantReclaimSnapshot &snapshot)
+{
+  return palf_env_impl_.get_reclaim_snapshot(now_us, server_need_reclaim, snapshot);
+}
+
+int PalfEnv::apply_reclaim_quota(const int64_t reclaim_blocks)
+{
+  return palf_env_impl_.apply_reclaim_quota(reclaim_blocks);
 }
 
 int PalfEnv::get_options(PalfOptions &options)
@@ -179,6 +199,11 @@ int PalfEnv::update_options(const PalfOptions &options)
 bool PalfEnv::check_disk_space_enough()
 {
   return palf_env_impl_.check_disk_space_enough();
+}
+
+void PalfEnv::record_gc_progress()
+{
+  palf_env_impl_.record_gc_progress();
 }
 
 int PalfEnv::for_each(const ObFunction<int(const PalfHandle &)> &func)

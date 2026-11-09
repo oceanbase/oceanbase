@@ -1233,6 +1233,9 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_gc_block)
   EXPECT_EQ(OB_SUCCESS, log_engine->get_block_min_scn(expect_block_id, expect_scn));
   EXPECT_EQ(expect_scn, min_block_scn);
   EXPECT_EQ(OB_SUCCESS, log_engine->delete_block(0));
+  // A repeated deletion succeeds after missing-file normalization. Shared quota
+  // and physical accounting are covered by physical_return_records_shared_progress_once.
+  EXPECT_EQ(OB_SUCCESS, log_engine->delete_block(0));
   EXPECT_EQ(false, log_engine->min_block_max_scn_.is_valid());
 
   EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, leader_idx, log_entry_size));
@@ -1964,7 +1967,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_iow_memleak)
     std::thread throttling_th([palf_env_impl, &need_stop](){
       PalfEnvImpl *impl = dynamic_cast<PalfEnvImpl*>(palf_env_impl);
       while (!need_stop) {
-        impl->log_io_worker_wrapper_.notify_need_writing_throttling(true);
+        impl->log_io_worker_wrapper_.notify_need_writing_throttling(true, false /* gc_stalled */);
         usleep(1000);
       }
     });

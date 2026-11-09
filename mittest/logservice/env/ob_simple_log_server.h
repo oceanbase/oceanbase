@@ -149,7 +149,9 @@ public:
       : rpc::frame::ObReqDeliver(),
         palf_env_impl_(NULL),
         tg_id_(0),
-        is_stopped_(true) {}
+        is_stopped_(true),
+        gc_rpc_started_(0),
+        gc_rpc_finished_(0) {}
   ~ObLogDeliver() { destroy(true); }
   int init() override final {return OB_SUCCESS;}
   int init(const common::ObAddr &self, const bool is_bootstrap);
@@ -188,6 +190,8 @@ private:
   int tg_id_;
   bool is_stopped_;
   int64_t node_id_;
+  int64_t gc_rpc_started_;
+  int64_t gc_rpc_finished_;
 };
 
 class MockElectionAlloc

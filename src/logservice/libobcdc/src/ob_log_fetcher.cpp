@@ -19,6 +19,7 @@
 #include "lib/oblog/ob_log_module.h"  // LOG_*
 
 #include "ob_log_config.h"            // ObLogConfig
+#include "ob_log_trace_id.h"          // get_self_addr
 #include "ob_log_timer.h"             // ObLogFixedTimer
 #include "ob_log_sys_ls_task_handler.h"  // IObLogSysLsTaskHandler
 #include "ob_log_task_pool.h"         // ObLogTransTaskPool
@@ -118,9 +119,16 @@ int ObLogFetcher::init(
     const common::ObRegion prefer_region(cfg.region.str());
 
     const bool is_tenant_mode = TCTX.is_tenant_sync_mode();
+    obrpc::ObLogServiceRpcProxy log_rpc_proxy;
 
-    if (is_integrated_fetching_mode(fetching_mode) && OB_FAIL(log_route_service_.init(
+    if (OB_FAIL(rpc_.init(cfg.io_thread_num))) {
+      LOG_ERROR("init rpc handler fail", KR(ret));
+    } else if (OB_FAIL(rpc_.get_log_service_proxy(log_rpc_proxy))) {
+      LOG_ERROR("get log service rpc proxy failed", KR(ret));
+    } else if (is_integrated_fetching_mode(fetching_mode) && OB_FAIL(log_route_service_.init(
         proxy,
+        log_rpc_proxy,
+        get_self_addr(),
         prefer_region,
         cluster_id,
         false/*is_across_cluster*/,
@@ -158,8 +166,6 @@ int ObLogFetcher::init(
         part_trans_resolver_factory_,
         static_cast<void *>(this)))) {
       LOG_ERROR("init part fetch mgr fail", KR(ret));
-    } else if (OB_FAIL(rpc_.init(cfg.io_thread_num))) {
-      LOG_ERROR("init rpc handler fail", KR(ret));
     } else if (OB_FAIL(start_lsn_locator_.init(
         cfg.start_lsn_locator_thread_num,
         cfg.start_lsn_locator_locate_count,
@@ -252,6 +258,11 @@ void ObLogFetcher::destroy()
     idle_pool_.destroy();
     dead_pool_.destroy();
     start_lsn_locator_.destroy();
+    if (is_integrated_fetching_mode(fetching_mode_)) {
+      log_route_service_.stop();
+      log_route_service_.wait();
+      log_route_service_.destroy();
+    }
     rpc_.destroy();
     progress_controller_.destroy();
     ls_fetch_mgr_.destroy();
@@ -259,10 +270,6 @@ void ObLogFetcher::destroy()
     dispatcher_ = nullptr;
     cluster_id_filter_.destroy();
     lsn_filter_.destroy();
-    if (is_integrated_fetching_mode(fetching_mode_)) {
-      log_route_service_.wait();
-      log_route_service_.destroy();
-    }
     // Finally reset fetching_mode_ because of some processing dependencies, such as ObLogRouteService
     if (is_direct_fetching_mode(fetching_mode_)) {
       log_ext_handler_.wait();

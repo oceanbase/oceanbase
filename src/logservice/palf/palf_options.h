@@ -201,13 +201,15 @@ struct PalfThrottleOptions
   TO_STRING_KV("total_disk_space", total_disk_space_ / MB,
                K_(stopping_writing_percentage), K_(trigger_percentage),
                "maximum_duration(s)", maximum_duration_/ (1000 * 1000L),
-               "unrecyclable_disk_space(MB)", unrecyclable_disk_space_ / MB);
+               "unrecyclable_disk_space(MB)", unrecyclable_disk_space_ / MB, K_(gc_stalled));
 public:
   int64_t total_disk_space_;
   int64_t stopping_writing_percentage_;
   int64_t trigger_percentage_;
   int64_t maximum_duration_;
+  // Complete pressure sample, including the GC stalled adjustment when active.
   int64_t unrecyclable_disk_space_;
+  bool gc_stalled_;
 };
 
 inline int64_t PalfThrottleOptions::get_available_size_after_limit() const

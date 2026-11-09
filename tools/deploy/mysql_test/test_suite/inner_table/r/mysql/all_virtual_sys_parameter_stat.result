@@ -161,6 +161,8 @@ log_disk_throttling_percentage
 log_disk_utilization_limit_threshold
 log_disk_utilization_threshold
 log_restore_concurrency
+log_retention_replica_count
+log_retention_time
 log_storage_compress_all
 log_storage_compress_func
 log_storage_warning_tolerance_time
@@ -239,6 +241,8 @@ server_balance_disk_tolerance_percent
 server_check_interval
 server_cpu_quota_max
 server_cpu_quota_min
+server_log_disk_utilization_limit_threshold
+server_log_disk_utilization_threshold
 server_permanent_offline_time
 sql_login_thread_count
 sql_net_thread_count

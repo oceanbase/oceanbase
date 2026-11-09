@@ -11,6 +11,7 @@
  */
 
 #include <gtest/gtest.h>
+#include "share/ob_cluster_version.h"
 #define private public
 #include "mock_logservice_container/mock_log_engine.h"
 #include "mock_logservice_container/mock_election.h"
@@ -90,6 +91,30 @@ TEST_F(TestLogStateMgr, logonly_replica_state_caps)
   EXPECT_FALSE(state_mgr_.is_arb_replica());
   EXPECT_FALSE(state_mgr_.can_be_active_leader());
   EXPECT_TRUE(state_mgr_.is_sync_enabled());
+}
+
+TEST_F(TestLogStateMgr, active_state_does_not_fence_election_epoch)
+{
+  ASSERT_EQ(OB_SUCCESS, state_mgr_.init(palf_id_, self_, log_prepare_meta_, log_replica_property_meta_,
+      &mock_election_, &mock_sw_, &mock_reconfirm_, &mock_log_engine_, &mock_config_mgr_,
+      &mock_mode_mgr_, &mock_role_change_cb_, &plugins_));
+  state_mgr_.set_leader_and_epoch_(self_, 10);
+  state_mgr_.update_role_and_state_(LEADER, ACTIVE);
+  mock_election_.role_ = LEADER;
+  mock_election_.leader_epoch_ = 10;
+  const int64_t proposal_id = state_mgr_.get_proposal_id();
+  ASSERT_TRUE(state_mgr_.check_epoch_is_same_with_election(state_mgr_.get_leader_epoch()));
+
+  mock_election_.leader_epoch_ = 11;
+  ASSERT_TRUE(state_mgr_.is_leader_active());
+  ASSERT_EQ(proposal_id, state_mgr_.get_proposal_id());
+  ASSERT_FALSE(state_mgr_.check_epoch_is_same_with_election(state_mgr_.get_leader_epoch()));
+
+  mock_election_.leader_epoch_ = 10;
+  mock_election_.role_ = FOLLOWER;
+  ASSERT_TRUE(state_mgr_.is_leader_active());
+  ASSERT_EQ(proposal_id, state_mgr_.get_proposal_id());
+  ASSERT_FALSE(state_mgr_.check_epoch_is_same_with_election(state_mgr_.get_leader_epoch()));
 }
 
 TEST_F(TestLogStateMgr, replay_to_leader_active)
@@ -177,5 +202,7 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level("TRACE");
   PALF_LOG(INFO, "begin unittest::test_log_state_mgr");
   ::testing::InitGoogleTest(&argc, argv);
+  oceanbase::common::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
+  oceanbase::common::ObClusterVersion::get_instance().update_cluster_version(DATA_CURRENT_VERSION);
   return RUN_ALL_TESTS();
 }

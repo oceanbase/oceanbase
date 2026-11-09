@@ -47,6 +47,7 @@ class PalfRoleChangeCb;
 class PalfHandle;
 class PalfDiskOptions;
 class ILogBlockPool;
+class ILogBlockReclaimCoordinator;
 
 class PalfEnv
 {
@@ -65,6 +66,7 @@ public:
                              obrpc::ObBatchRpc *batch_rpc,
                              common::ObILogAllocator *alloc_mgr,
                              ILogBlockPool *log_block_pool,
+                             ILogBlockReclaimCoordinator *log_block_reclaim_coordinator,
                              PalfMonitorCb *monitor,
                              share::ObResourceManager *resource_manager,
                              common::ObIOManager *io_manager,
@@ -102,11 +104,18 @@ public:
   // @param [out] total_size_byte, if in shrinking status, total_size_byte is the value after shrinking.
   // NB: total_size_byte may be smaller than used_size_byte.
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
+  int check_log_disk_usage_reached_threshold(const int64_t threshold_percentage, bool &reached);
 
   // @brief get stable disk usage
   // @param [out] used_size_byte
   // @param [out] total_size_byte, if in shrinking status, total_size_byte is the value before shrinking.
   int get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
+  // Export candidates and check progress under server reclaim pressure during the server scan.
+  int get_reclaim_snapshot(const int64_t now_us,
+                           const bool server_need_reclaim,
+                           TenantReclaimSnapshot &snapshot);
+  // Apply the server-assigned block quota; zero clears the pending quota.
+  int apply_reclaim_quota(const int64_t reclaim_blocks);
 
   // @brief update options
   // @param [in] options
@@ -120,6 +129,8 @@ public:
   int check_log_disk_under_pressure(bool &log_disk_under_pressure);
   // @brief check the disk space used to palf whether is enough
   bool check_disk_space_enough();
+  // Record a physical log block return.
+  void record_gc_progress();
   // for failure detector
   // @brief get io statistic info
   // @param [out] last working time

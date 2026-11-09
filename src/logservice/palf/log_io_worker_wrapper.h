@@ -37,7 +37,7 @@ public:
   // NB: nowdays, this interface can only be called when create_palf_handle_impl!!! otherwise, round_robin_idx_
   // will not be correct.
   LogIOWorker *get_log_io_worker(const int64_t palf_id);
-  int notify_need_writing_throttling(const bool &need_throtting);
+  int notify_need_writing_throttling(const bool &need_throtting, const bool gc_stalled);
   int64_t get_last_working_time() const;
   TO_STRING_KV(K_(is_inited), K_(is_user_tenant), K_(log_writer_parallelism), KP(log_io_workers_), K_(round_robin_idx));
 

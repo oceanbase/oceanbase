@@ -991,7 +991,12 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
   if (OB_SUCC(ret)) {
     if (!is_virtual_tenant_id(tenant_id)
         && OB_FAIL(GCTX.log_block_mgr_->create_tenant(log_disk_size))) {
-      LOG_ERROR("create_tenant in ObServerLogBlockMgr failed", KR(ret));
+      if (OB_MACHINE_RESOURCE_NOT_ENOUGH == ret
+          && GCTX.log_block_mgr_->get_reclaim_coordinator()->is_shared_log_enabled()) {
+        LOG_WARN("create_tenant in ObServerLogBlockMgr failed", KR(ret), K(tenant_id), K(log_disk_size));
+      } else {
+        LOG_ERROR("create_tenant in ObServerLogBlockMgr failed", KR(ret), K(tenant_id), K(log_disk_size));
+      }
     }
     // if create_tenant in ObServerLogBlockMGR success, the log disk size need by this tenant has been pinned,
     // otherwise, the assigned log disk size of ObServerLogBlockMGR is origin.
@@ -2462,15 +2467,17 @@ int ObMultiTenant::operate_in_each_tenant(const std::function<int()> &func, bool
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   for (int64_t i = 0; i < id_list.size(); i++) {
     auto id = id_list[i];
-    int tmp_ret = OB_SUCCESS;
+    int ret_code = OB_SUCCESS;
     if (skip_virtual_tenant && is_virtual_tenant_id(id)) {
       continue;
     }
-    if (OB_SUCCESS != (tmp_ret = guard.switch_to(id))) {
-      LOG_WARN("switch to tenant failed", K(tmp_ret), K(id));
-    } else if (OB_FAIL(func())) {
-      LOG_WARN("execute func failed", K(ret), K(id));
-    } else {
+    if (OB_SUCCESS != (ret_code = guard.switch_to(id))) {
+      LOG_WARN("switch to tenant failed", K(ret_code), K(id));
+    } else if (OB_SUCCESS != (ret_code = func())) {
+      LOG_WARN("execute func failed", K(ret_code), K(id));
+    }
+    if (OB_SUCCESS == ret && OB_SUCCESS != ret_code) {
+      ret = ret_code;
     }
   }
   return ret;

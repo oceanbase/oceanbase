@@ -281,6 +281,7 @@ public:
 	IOTaskCond(const int64_t palf_id, const int64_t palf_epoch) : LogIOTask(palf_id, palf_epoch), count_(0) {}
   virtual int do_task_(int tg_id, IPalfHandleImplGuard &guard) override final
   {
+    ATOMIC_AAF(&count_, 1);
     PALF_LOG(INFO, "before cond_wait");
     cond_.wait();
     PALF_LOG(INFO, "after cond_wait");

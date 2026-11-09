@@ -11,6 +11,7 @@
  */
 
 #include "ob_log_rpc_req.h"
+#include "lib/oblog/ob_log.h"
 
 namespace oceanbase
 {
@@ -305,6 +306,109 @@ void LogGetPalfStatResp::reset()
 
 OB_SERIALIZE_MEMBER(LogGetPalfStatResp, palf_stat_);
 // ============= LogGetPalfStatResp end =============
+
+OB_SERIALIZE_MEMBER(LogFetchSource, server_, begin_lsn_, end_lsn_);
+OB_SERIALIZE_MEMBER(LogGetFetchSourcesReq, src_, tenant_id_, ls_id_);
+OB_SERIALIZE_MEMBER(LogGetFetchSourcesResp, sources_);
+
+// ============= ObLSGCRequest begin =============
+ObLSGCRequest::ObLSGCRequest()
+  : src_(), ls_id_(), cutoff_scn_(), end_scn_(), config_version_(), mode_version_(palf::INVALID_PROPOSAL_ID),
+    begin_lsn_(), end_lsn_(), gc_token_(INVALID_GC_TOKEN)
+{
+}
+
+int ObLSGCRequest::init(const common::ObAddr &src,
+                        const share::ObLSID &ls_id,
+                        const share::SCN &cutoff_scn,
+                        const share::SCN &end_scn,
+                        const palf::LogConfigVersion &config_version,
+                        const int64_t mode_version,
+                        const palf::LSN &begin_lsn,
+                        const palf::LSN &end_lsn,
+                        const int64_t gc_token)
+{
+  int ret = OB_SUCCESS;
+  if (!src.is_valid() || !ls_id.is_valid()
+      || !cutoff_scn.is_valid() || !end_scn.is_valid() || cutoff_scn > end_scn
+      || !begin_lsn.is_valid() || !end_lsn.is_valid() || begin_lsn >= end_lsn || gc_token < INVALID_GC_TOKEN) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid retained ls gc request argument", K(ret), K(src), K(ls_id),
+        K(cutoff_scn), K(end_scn), K(begin_lsn), K(end_lsn), K(gc_token));
+  } else {
+    src_ = src;
+    ls_id_ = ls_id;
+    cutoff_scn_ = cutoff_scn;
+    end_scn_ = end_scn;
+    config_version_ = config_version;
+    mode_version_ = mode_version;
+    begin_lsn_ = begin_lsn;
+    end_lsn_ = end_lsn;
+    gc_token_ = gc_token;
+  }
+  return ret;
+}
+
+bool ObLSGCRequest::is_valid() const
+{
+  return src_.is_valid() && ls_id_.is_valid()
+      && cutoff_scn_.is_valid() && end_scn_.is_valid() && cutoff_scn_ <= end_scn_
+      && begin_lsn_.is_valid() && end_lsn_.is_valid() && begin_lsn_ < end_lsn_ && gc_token_ >= INVALID_GC_TOKEN;
+}
+
+void ObLSGCRequest::reset()
+{
+  src_.reset();
+  ls_id_.reset();
+  cutoff_scn_.reset();
+  end_scn_.reset();
+  config_version_.reset();
+  mode_version_ = palf::INVALID_PROPOSAL_ID;
+  begin_lsn_.reset();
+  end_lsn_.reset();
+  gc_token_ = INVALID_GC_TOKEN;
+}
+
+OB_SERIALIZE_MEMBER(ObLSGCRequest, src_, ls_id_, cutoff_scn_, end_scn_, config_version_, mode_version_,
+    begin_lsn_, end_lsn_, gc_token_);
+// ============= ObLSGCRequest end =============
+
+// ============= ObLSGCResponse begin =============
+ObLSGCResponse::ObLSGCResponse()
+  : allow_gc_(false), config_version_(), gc_token_(INVALID_GC_TOKEN)
+{
+}
+
+int ObLSGCResponse::init(const bool allow_gc,
+                        const palf::LogConfigVersion &config_version,
+                        const int64_t gc_token)
+{
+  int ret = OB_SUCCESS;
+  if (!config_version.is_valid() || gc_token < INVALID_GC_TOKEN || (allow_gc && INVALID_GC_TOKEN == gc_token)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid retained ls gc response argument", K(ret), K(config_version), K(allow_gc), K(gc_token));
+  } else {
+    allow_gc_ = allow_gc;
+    config_version_ = config_version;
+    gc_token_ = gc_token;
+  }
+  return ret;
+}
+
+bool ObLSGCResponse::is_valid() const
+{
+  return config_version_.is_valid() && gc_token_ >= INVALID_GC_TOKEN && (!allow_gc_ || gc_token_ > INVALID_GC_TOKEN);
+}
+
+void ObLSGCResponse::reset()
+{
+  allow_gc_ = false;
+  config_version_.reset();
+  gc_token_ = INVALID_GC_TOKEN;
+}
+
+OB_SERIALIZE_MEMBER(ObLSGCResponse, allow_gc_, config_version_, gc_token_);
+// ============= ObLSGCResponse end =============
 
 // ============= LogServerProbeMsg start =============
 LogServerProbeMsg::LogServerProbeMsg()

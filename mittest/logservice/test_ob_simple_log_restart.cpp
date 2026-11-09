@@ -16,6 +16,10 @@
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cerrno>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <signal.h>
 #include <stdexcept>
@@ -70,6 +74,264 @@ bool ObSimpleLogClusterTestBase::need_add_arb_server_  = false;
 constexpr int64_t timeout_ts_us = 3 * 1000 * 1000;
 int64_t log_entry_size = 2 * 1024 * 1024 + 16 * 1024;
 bool ObSimpleLogClusterTestBase::need_remote_log_store_ = false;
+
+class GcCrashEnv : public ObSimpleLogClusterTestEnv
+{
+public:
+  void TestBody() override {}
+};
+
+// Re-exec each phase so the process that opens the recovered files inherits no PALF memory.
+TEST(SharedLogGcCrashDeathTest, pending_writes_recover_after_gc_stall_and_sigkill)
+{
+  ::testing::FLAGS_gtest_death_test_style = "threadsafe";
+  // A failed child assertion must not unwind the deliberately blocked I/O task.
+#define CHECK_CRASH_CHILD(condition) \
+  do { \
+    if (!(condition)) { \
+      fprintf(stderr, "%s:%d: %s\n", __FILE__, __LINE__, #condition); \
+      fflush(stderr); \
+      _exit(2); \
+    } \
+  } while (false)
+  // Re-executed death-test children share the parent's unique image directory.
+  // Keep failed images for diagnosis without colliding with the next invocation.
+  bool owns_image_dir = false;
+  if (NULL == getenv("OB_TEST_GC_CRASH_IMAGE_DIR")) {
+    char image_dir[] = "gc_stall_crash.XXXXXX";
+    ASSERT_NE(nullptr, ::mkdtemp(image_dir));
+    ASSERT_EQ(0, setenv("OB_TEST_GC_CRASH_IMAGE_DIR", image_dir, 1));
+    owns_image_dir = true;
+  }
+  DEFER({
+    if (owns_image_dir) {
+      unsetenv("OB_TEST_GC_CRASH_IMAGE_DIR");
+    }
+  });
+  const std::string image = std::string(getenv("OB_TEST_GC_CRASH_IMAGE_DIR")) + "/image";
+  const std::string manifest = image + "/expected";
+  const int64_t id = 55001;
+  const int64_t timeout_us = 30 * 1000 * 1000L;
+  auto checksum_prefix = [](PalfHandleImpl *handle, const LSN &end, uint64_t &checksum,
+                            int64_t &count) {
+    int ret = OB_SUCCESS;
+    checksum = 0;
+    count = 0;
+    PalfBufferIterator iter;
+    if (OB_FAIL(handle->alloc_palf_buffer_iterator(LSN(0), iter))) {
+    } else {
+      while (OB_SUCCESS == (ret = iter.next())) {
+        const char *buf = nullptr;
+        int64_t len = 0;
+        SCN scn;
+        LSN lsn;
+        bool raw = false;
+        if (OB_FAIL(iter.get_entry(buf, len, scn, lsn, raw))) {
+          break;
+        } else if (lsn >= end) {
+          break;
+        } else {
+          checksum = ob_crc64(checksum, buf, len);
+          ++count;
+        }
+      }
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+    return ret;
+  };
+  ASSERT_EXIT({
+    ObSimpleLogClusterTestBase::member_cnt_ = 3;
+    ObSimpleLogClusterTestBase::node_cnt_ = 3;
+    // Give both fresh processes the same bounded port range when Farm has not assigned one.
+    if (nullptr == getenv("mit_network_start_port")) {
+      CHECK_CRASH_CHILD(0 == setenv("mit_network_start_port", "22000", 1));
+      CHECK_CRASH_CHILD(0 == setenv("mit_network_port_num", "100", 1));
+    }
+    CHECK_CRASH_CHILD(OB_SUCCESS == GcCrashEnv::start());
+    GcCrashEnv env;
+    PalfHandleImplGuard leader;
+    int64_t leader_idx = 0;
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.create_paxos_group(id, leader_idx, leader));
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.submit_log(leader, 8, id, 4096));
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.wait_until_has_committed(
+        leader, leader.palf_handle_impl_->get_max_lsn()));
+    std::vector<PalfHandleImplGuard*> replicas;
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.get_cluster_palf_handle_guard(id, replicas));
+    for (int64_t i = 0; i < 3; ++i) {
+      CHECK_CRASH_CHILD(OB_SUCCESS == env.check_replica_sync(id, &leader, replicas[i], timeout_us));
+      PalfEnvImpl *palf_env = replicas[i]->palf_env_impl_;
+      palf_env->block_gc_timer_task_.stop();
+      palf_env->block_gc_timer_task_.wait();
+      ObServerLogBlockMgr *pool = nullptr;
+      CHECK_CRASH_CHILD(OB_SUCCESS == env.get_log_pool(i, pool));
+      CHECK_CRASH_CHILD(OB_SUCCESS == pool->persist_cross_tenant_reclaim_enabled(true));
+    }
+    PalfHandleImpl *handle = leader.palf_handle_impl_;
+    PalfEnvImpl *palf_env = leader.palf_env_impl_;
+    ObTenantEnv::set_tenant(env.get_cluster()[leader_idx]->get_tenant_base());
+    const LSN committed = handle->get_end_lsn();
+    uint64_t checksum = 0;
+    int64_t count = 0;
+    CHECK_CRASH_CHILD(OB_SUCCESS == checksum_prefix(handle, committed, checksum, count));
+    CHECK_CRASH_CHILD(8 == count);
+    // Two healthy followers could otherwise commit the queued entry without the leader's flush.
+    env.block_all_net(leader_idx);
+    IOTaskCond pending_io(id, handle->log_engine_.palf_epoch_);
+    CHECK_CRASH_CHILD(OB_SUCCESS == handle->log_engine_.log_io_worker_->submit_io_task(&pending_io));
+    const int64_t deadline = ObTimeUtility::current_time() + timeout_us;
+    while (0 == ATOMIC_LOAD(&pending_io.count_) && ObTimeUtility::current_time() < deadline) {
+      ob_usleep(1000);
+    }
+    CHECK_CRASH_CHILD(1 == ATOMIC_LOAD(&pending_io.count_));
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.submit_log(leader, 1, id, 4096));
+    CHECK_CRASH_CHILD(handle->get_max_lsn() > committed);
+    CHECK_CRASH_CHILD(committed == handle->get_end_lsn());
+
+    PalfDiskOptions opts = palf_env->disk_options_wrapper_.get_disk_opts_for_stopping_writing();
+    opts.log_disk_throttling_percentage_ = 60;
+    opts.log_disk_throttling_maximum_duration_ = 1000 * 1000L;
+    CHECK_CRASH_CHILD(OB_SUCCESS == palf_env->disk_options_wrapper_.update_disk_options(opts));
+    TenantLogBlockReclaimService &service = palf_env->tenant_reclaim_service_;
+    // Seed an outstanding GC round; the process dies with real log writes queued behind I/O.
+    service.sync_reclaim_mode(LogReclaimState::ENABLED, true, false);
+    service.update_reclaim_snapshot(1, 0);
+    CHECK_CRASH_CHILD(OB_SUCCESS == service.apply_reclaim_quota(1));
+    const int64_t stall_deadline = ObTimeUtility::current_time() + timeout_us;
+    do {
+      palf_env->period_calc_disk_usage();
+      if (!palf_env->gc_stall_stopped_) { ob_usleep(1000); }
+    } while (!palf_env->gc_stall_stopped_ && ObTimeUtility::current_time() < stall_deadline);
+    CHECK_CRASH_CHILD(palf_env->gc_stall_stopped_);
+    CHECK_CRASH_CHILD(!(palf_env->check_disk_space_enough()));
+    PalfAppendOptions append_opts;
+    LSN rejected_lsn;
+    SCN rejected_scn;
+    const char data[] = "write rejected during GC stall";
+    CHECK_CRASH_CHILD(OB_LOG_OUTOF_DISK_SPACE == handle->submit_log(
+        append_opts, data, sizeof(data), SCN::min_scn(), rejected_lsn, rejected_scn));
+    CHECK_CRASH_CHILD(committed == handle->get_end_lsn());
+
+    // Preserve the directories outside the test runner's per-process startup cleanup.
+    const int rename_ret = ::rename(TEST_NAME.c_str(), image.c_str());
+    if (0 != rename_ret) {
+      fprintf(stderr, "rename %s to %s failed: %d (%s)\n",
+          TEST_NAME.c_str(), image.c_str(), errno, strerror(errno));
+    }
+    CHECK_CRASH_CHILD(0 == rename_ret);
+    std::ofstream expected(manifest);
+    expected << committed.val_ << ' ' << checksum << ' ' << count << '\n';
+    for (int64_t i = 0; i < 3; ++i) {
+      expected << env.get_cluster()[i]->get_addr().get_port() << '\n';
+    }
+    expected.close();
+    CHECK_CRASH_CHILD(expected.good());
+    if (::testing::Test::HasFailure()) { _exit(2); }
+    ::kill(::getpid(), SIGKILL);
+    _exit(3);
+  }, ::testing::KilledBySignal(SIGKILL), "");
+
+  ASSERT_EXIT({
+    uint64_t committed_val = 0;
+    uint64_t expected_checksum = 0;
+    int64_t expected_count = 0;
+    int ports[3] = {0};
+    std::ifstream expected(manifest);
+    expected >> committed_val >> expected_checksum >> expected_count;
+    for (int64_t i = 0; i < 3; ++i) { expected >> ports[i]; }
+    CHECK_CRASH_CHILD(expected.good());
+    expected.close();
+    CHECK_CRASH_CHILD(ports[0] > 3);
+    // The allocator rounds an environment start to the next multiple of three.
+    const std::string start_port = std::to_string(ports[0] - 4);
+    CHECK_CRASH_CHILD(0 == setenv("mit_network_start_port", start_port.c_str(), 1));
+    CHECK_CRASH_CHILD(0 == setenv("mit_network_port_num", "9", 1));
+    for (int64_t i = 0; i < 3; ++i) {
+      const std::string dir = "/port_" + std::to_string(ports[i]);
+      CHECK_CRASH_CHILD(0 == ::rename((image + dir).c_str(), (TEST_NAME + dir).c_str()));
+    }
+    ObSimpleLogClusterTestBase::member_cnt_ = 3;
+    ObSimpleLogClusterTestBase::node_cnt_ = 3;
+    CHECK_CRASH_CHILD(OB_SUCCESS == GcCrashEnv::start());
+    GcCrashEnv env;
+    PalfHandleImplGuard leader;
+    int64_t leader_idx = 0;
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.get_leader(id, leader, leader_idx));
+    std::vector<PalfHandleImplGuard*> replicas;
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.get_cluster_palf_handle_guard(id, replicas));
+    for (int64_t i = 0; i < 3; ++i) {
+      CHECK_CRASH_CHILD(ports[i] == env.get_cluster()[i]->get_addr().get_port());
+      ObServerLogBlockMgr *pool = nullptr;
+      CHECK_CRASH_CHILD(OB_SUCCESS == env.get_log_pool(i, pool));
+      CHECK_CRASH_CHILD(pool->is_cross_tenant_reclaim_enabled());
+      CHECK_CRASH_CHILD(LogReclaimState::DRAINING == pool->reclaim_service_.get_reclaim_state());
+      PalfEnvImpl *palf_env = replicas[i]->palf_env_impl_;
+      CHECK_CRASH_CHILD(0 == palf_env->tenant_reclaim_service_.pending_blocks_);
+      CHECK_CRASH_CHILD(OB_INVALID_TIMESTAMP == palf_env->tenant_reclaim_service_.get_gc_stall_start_ts());
+      palf_env->period_calc_disk_usage();
+      CHECK_CRASH_CHILD(!(palf_env->gc_stall_stopped_));
+      CHECK_CRASH_CHILD(palf_env->check_disk_space_enough());
+    }
+    // A new append also carries the recovered leader's committed LSN to its followers.
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.submit_log(leader, 1, id, 4096));
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.wait_until_has_committed(
+        leader, leader.palf_handle_impl_->get_max_lsn()));
+    for (int64_t i = 0; i < 3; ++i) {
+      CHECK_CRASH_CHILD(OB_SUCCESS == env.check_replica_sync(id, &leader, replicas[i], timeout_us));
+      PalfHandleImpl *handle = replicas[i]->palf_handle_impl_;
+      const LSN committed(committed_val);
+      const int64_t deadline = ObTimeUtility::current_time() + timeout_us;
+      LSN flushed;
+      do {
+        handle->sw_.get_max_flushed_end_lsn(flushed);
+        if (handle->get_end_lsn() >= committed && flushed >= committed) { break; }
+        ob_usleep(1000);
+      } while (ObTimeUtility::current_time() < deadline);
+      CHECK_CRASH_CHILD(handle->get_end_lsn() >= committed && flushed >= committed);
+      uint64_t checksum = 0;
+      int64_t count = 0;
+      CHECK_CRASH_CHILD(OB_SUCCESS == checksum_prefix(
+          replicas[i]->palf_handle_impl_, LSN(committed_val), checksum, count));
+      CHECK_CRASH_CHILD(expected_count == count);
+      CHECK_CRASH_CHILD(expected_checksum == checksum);
+    }
+    CHECK_CRASH_CHILD(OB_SUCCESS == env.revert_cluster_palf_handle_guard(replicas));
+    leader.reset();
+    CHECK_CRASH_CHILD(OB_SUCCESS == GcCrashEnv::close());
+    _exit(::testing::Test::HasFailure() ? 2 : 0);
+  }, ::testing::ExitedWithCode(0), "");
+#undef CHECK_CRASH_CHILD
+  EXPECT_EQ(OB_SUCCESS, FileDirectoryUtils::delete_directory_rec(image.c_str()));
+}
+
+TEST_F(TestObSimpleLogClusterRestart, log_sync_state_is_volatile)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "log_sync_state_is_volatile");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  {
+    PalfHandleImplGuard leader;
+    ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    ASSERT_EQ(OB_SUCCESS, submit_log(leader, 3, id, 4096));
+    ASSERT_EQ(OB_SUCCESS, wait_until_has_committed(leader, leader.palf_handle_impl_->get_max_lsn()));
+    PalfHandleImpl *handle = leader.palf_handle_impl_;
+    ASSERT_EQ(OB_SUCCESS, handle->disable_sync());
+    ASSERT_FALSE(handle->is_sync_enabled());
+  }
+  ASSERT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    IPalfHandleImplGuard guard;
+    ASSERT_EQ(OB_SUCCESS, get_cluster()[0]->get_palf_env()->get_palf_handle_impl(id, guard));
+    IPalfHandleImpl *handle = guard.get_palf_handle_impl();
+    ASSERT_NE(nullptr, handle);
+    ASSERT_TRUE(handle->is_sync_enabled());
+    ASSERT_EQ(OB_SUCCESS, handle->disable_sync());
+    ASSERT_FALSE(handle->is_sync_enabled());
+    ASSERT_EQ(OB_SUCCESS, handle->enable_sync());
+    ASSERT_TRUE(handle->is_sync_enabled());
+  }
+}
 
 TEST_F(TestObSimpleLogClusterRestart, read_block_in_flashback)
 {

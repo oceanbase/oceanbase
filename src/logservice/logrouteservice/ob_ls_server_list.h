@@ -49,6 +49,13 @@ public:
       const FetchPriority fetch_prio,
       const bool is_leader);
 
+  // Add a server only when this list has no entry for it.
+  int add_server_if_absent(const common::ObAddr &svr,
+      const palf::LSN &start_lsn,
+      const palf::LSN &end_lsn,
+      const FetchPriority fetch_prio,
+      const bool is_leader);
+
   // Iterate over the server that serves the next LSN
   // 1. return OB_ITER_END when the list of servers has been traversed or when no servers are available
   // 2. After returning OB_ITER_END, the history is cleared and the server can be iterated over normally next time
@@ -263,4 +270,3 @@ private:
 } // namespace oceanbase
 
 #endif
-

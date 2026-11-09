@@ -93,8 +93,9 @@ public:
   LogWritingThrottle() {reset();}
   ~LogWritingThrottle() {reset();}
   void reset();
-  //invoked by gc thread
+  // Invoked by GC, or by LogLoop during a stall, after a complete disk usage sample.
   inline void notify_need_writing_throttling(const bool is_need);
+  void notify_gc_stalled(const bool gc_stalled) { ATOMIC_STORE(&gc_stalled_notified_, gc_stalled); }
   inline bool need_writing_throttling_notified() const;
   int update_throttling_options(IPalfEnvImpl *palf_env_impl);
   int throttling(const int64_t io_size,
@@ -102,7 +103,7 @@ public:
                  IPalfEnvImpl *palf_env_impl);
   int after_append_log(const int64_t log_size);
   TO_STRING_KV(K_(last_update_ts),
-               K_(need_writing_throttling_notified),
+               K_(need_writing_throttling_notified), K_(gc_stalled_notified),
                K_(appended_log_size_cur_round),
                K_(decay_factor),
                K_(throttling_options),
@@ -125,8 +126,9 @@ private:
   int64_t last_update_ts_;
   //ts when next log can be appended
   //log_size can be appended during current round, will be reset when unrecyclable_size changed
-  // notified by gc, local meta may not be ready
+  // The latest pressure notification may arrive before local options are refreshed.
   mutable bool need_writing_throttling_notified_;
+  bool gc_stalled_notified_;
   int64_t appended_log_size_cur_round_;
   double decay_factor_;
   //append_speed during current round, Bytes per usecond

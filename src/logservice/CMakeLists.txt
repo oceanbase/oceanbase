@@ -40,6 +40,7 @@ ob_set_subtarget(ob_logservice cdcservice
 ob_set_subtarget(ob_logservice common
   ob_append_callback.cpp
   ob_garbage_collector.cpp
+  ob_ls_retention_gc_handler.cpp
   ob_location_adapter.cpp
   ob_log_base_header.cpp
   ob_log_handler.cpp
@@ -49,6 +50,7 @@ ob_set_subtarget(ob_logservice common
   ob_reporter_adapter.cpp
   ob_switch_leader_adapter.cpp
   ob_server_log_block_mgr.cpp
+  ob_server_log_block_reclaim_service.cpp
   ob_log_flashback_service.cpp
   ob_net_keepalive_adapter.cpp
   ob_log_external_storage_handler.cpp
@@ -155,6 +157,7 @@ ob_set_subtarget(ob_logservice palf
   palf/palf_callback_wrapper.cpp
   palf/palf_env.cpp
   palf/palf_env_impl.cpp
+  palf/tenant_log_block_reclaim_service.cpp
   palf/palf_handle.cpp
   palf/palf_handle_impl.cpp
   palf/log_cache.cpp

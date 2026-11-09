@@ -97,7 +97,10 @@ int ObLogService::mtl_init(ObLogService* &logservice)
   obrpc::ObNetKeepAlive *net_keepalive = &(obrpc::ObNetKeepAlive::get_instance());
   ObNetKeepAliveAdapter *net_keepalive_adapter = NULL;
   storage::ObLocalityManager *locality_manager = GCTX.locality_manager_;
-  if (OB_FAIL(TMA_MGR_INSTANCE.get_tenant_log_allocator(tenant_id, alloc_mgr))) {
+  if (OB_ISNULL(log_block_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log block manager is NULL", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(TMA_MGR_INSTANCE.get_tenant_log_allocator(tenant_id, alloc_mgr))) {
     CLOG_LOG(WARN, "get_tenant_log_allocator failed", K(ret));
   } else if (OB_ISNULL(net_keepalive_adapter = MTL_NEW(ObNetKeepAliveAdapter, "logservice", net_keepalive))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -112,6 +115,7 @@ int ObLogService::mtl_init(ObLogService* &logservice)
                                       location_service,
                                       reporter,
                                       log_block_mgr,
+                                      log_block_mgr->get_reclaim_coordinator(),
                                       mysql_proxy,
                                       net_keepalive_adapter,
                                       locality_manager))) {
@@ -266,6 +270,7 @@ int ObLogService::init(const PalfOptions &options,
                        ObLocationService *location_service,
                        observer::ObIMetaReport *reporter,
                        palf::ILogBlockPool *log_block_pool,
+                       palf::ILogBlockReclaimCoordinator *log_block_reclaim_coordinator,
                        common::ObMySQLProxy *sql_proxy,
                        IObNetKeepAliveAdapter *net_keepalive_adapter,
                        storage::ObLocalityManager *locality_manager)
@@ -281,13 +286,14 @@ int ObLogService::init(const PalfOptions &options,
   } else if (false == options.is_valid() || OB_ISNULL(base_dir) || OB_UNLIKELY(!self.is_valid())
       || OB_ISNULL(alloc_mgr) || OB_ISNULL(transport) || OB_ISNULL(batch_rpc) || OB_ISNULL(ls_service)
       || OB_ISNULL(location_service) || OB_ISNULL(reporter) || OB_ISNULL(log_block_pool)
+      || OB_ISNULL(log_block_reclaim_coordinator)
       || OB_ISNULL(sql_proxy) || OB_ISNULL(net_keepalive_adapter) || OB_ISNULL(locality_manager)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid arguments", K(ret), K(options), KP(base_dir), K(self),
              KP(alloc_mgr), KP(transport), KP(batch_rpc), KP(ls_service), KP(location_service), KP(reporter),
-             KP(log_block_pool), KP(sql_proxy), KP(net_keepalive_adapter));
+             KP(log_block_pool), KP(log_block_reclaim_coordinator), KP(sql_proxy), KP(net_keepalive_adapter));
   } else if (OB_FAIL(PalfEnv::create_palf_env(options, base_dir, self, transport, batch_rpc,
-                                              alloc_mgr, log_block_pool, &monitor_,
+                                              alloc_mgr, log_block_pool, log_block_reclaim_coordinator, &monitor_,
                                               &G_RES_MGR, &OB_IO_MANAGER, palf_env_))) {
     CLOG_LOG(WARN, "failed to create_palf_env", K(base_dir), K(ret));
   } else if (OB_ISNULL(palf_env_)) {
@@ -553,6 +559,18 @@ int ObLogService::get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_si
     ret = OB_NOT_INIT;
   } else {
     ret = palf_env_->get_disk_usage(used_size_byte, total_size_byte);
+  }
+  return ret;
+}
+
+int ObLogService::check_log_disk_usage_reached_threshold(const int64_t threshold_percentage, bool &reached)
+{
+  int ret = OB_SUCCESS;
+  reached = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = palf_env_->check_log_disk_usage_reached_threshold(threshold_percentage, reached);
   }
   return ret;
 }

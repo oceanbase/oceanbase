@@ -104,6 +104,7 @@ TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; pr
   EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta));
   // Test invalid
   EXPECT_FALSE(log_meta1.is_valid());
+  ASSERT_EQ(OB_SUCCESS, log_meta1.update_log_replica_property_meta(replica_meta1));
 
   const int64_t BUFSIZE = 1 << 21;
   char buf[BUFSIZE];

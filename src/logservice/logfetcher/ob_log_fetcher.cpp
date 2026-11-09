@@ -119,9 +119,18 @@ int ObLogFetcher::init(
     const int64_t MIN_FETCH_LOG_ARPC_RES_CNT = 4;
     const common::ObRegion region(cfg.region.str());
     const obrpc::ObCdcClientType client_type = get_client_type_from_user_type(log_fetcher_user_);
+    obrpc::ObLogServiceRpcProxy log_rpc_proxy;
 
-    if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.init(
+    if (OB_FAIL(init_self_addr_())) {
+      LOG_ERROR("init_self_addr_ fail", KR(ret));
+    } else if (OB_FAIL(rpc_.init(cluster_id, self_tenant_id, client_type, cfg.io_thread_num, cfg))) {
+      LOG_ERROR("init rpc handler fail", KR(ret));
+    } else if (OB_FAIL(rpc_.get_log_service_proxy(log_rpc_proxy))) {
+      LOG_ERROR("get log service rpc proxy failed", KR(ret));
+    } else if (is_integrated_fetching_mode(fetching_mode_) && OB_FAIL(log_route_service_.init(
         proxy,
+        log_rpc_proxy,
+        get_self_addr(),
         region,
         cluster_id,
         false/*is_across_cluster*/,
@@ -156,10 +165,6 @@ int ObLogFetcher::init(
             ls_ctx_add_info_factory,
             static_cast<void *>(this)))) {
       LOG_ERROR("init part fetch mgr fail", KR(ret));
-    } else if (OB_FAIL(init_self_addr_())) {
-      LOG_ERROR("init_self_addr_ fail", KR(ret));
-    } else if (OB_FAIL(rpc_.init(cluster_id, self_tenant_id, client_type, cfg.io_thread_num, cfg))) {
-      LOG_ERROR("init rpc handler fail", KR(ret));
     } else if (is_cdc(log_fetcher_user_) && OB_FAIL(start_lsn_locator_.init(
             cfg.start_lsn_locator_thread_num,
             cfg.start_lsn_locator_locate_count,
@@ -256,15 +261,16 @@ void ObLogFetcher::destroy()
   if (is_cdc(log_fetcher_user_)) {
     start_lsn_locator_.destroy();
   }
-  rpc_.destroy();
   progress_controller_.destroy();
   ls_fetch_mgr_.destroy();
   if (is_integrated_fetching_mode(fetching_mode_)) {
+    log_route_service_.stop();
     log_route_service_.wait();
     log_route_service_.destroy();
     bg_worker_.wait();
     bg_worker_.destroy();
   }
+  rpc_.destroy();
   log_ext_handler_concurrency_ = 0;
   if (is_direct_fetching_mode(fetching_mode_)) {
     log_ext_handler_.wait();

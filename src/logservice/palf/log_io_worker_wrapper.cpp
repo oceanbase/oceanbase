@@ -107,16 +107,15 @@ void LogIOWorkerWrapper::wait()
   PALF_LOG(INFO, "LogIOWorkerWrapper has finished waiting", KPC(this));
 }
 
-int LogIOWorkerWrapper::notify_need_writing_throttling(const bool &need_throttling)
+int LogIOWorkerWrapper::notify_need_writing_throttling(const bool &need_throttling,
+                                                       const bool gc_stalled)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else {
     throttle_.notify_need_writing_throttling(need_throttling);
-    if (need_throttling) {
-      LOG_INFO("success to notify_need_writing_throttling True");
-    }
+    throttle_.notify_gc_stalled(gc_stalled);
   }
   return ret;
 }

@@ -14,22 +14,23 @@
 #define OCEANBASE_LOGSERVICE_OB_GARBAGE_COLLECTOR_
 
 #include "common/ob_role.h"
-#include "lib/hash/ob_array_hash_map.h"
-#include "lib/hash/ob_hashset.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/hash/ob_linear_hash_map.h"
+#include "lib/lock/ob_spin_rwlock.h"
 #include "lib/net/ob_addr.h"
 #include "share/ob_thread_pool.h"
 #include "share/ob_ls_id.h"
-#include "share/ls/ob_ls_status_operator.h"
+#include "share/ls/ob_ls_i_life_manager.h"
 #include "storage/tx_storage/ob_safe_destroy_handler.h"
 #include "logservice/ob_log_base_header.h"
 #include "logservice/ob_append_callback.h"
-#include "logservice/logrpc/ob_log_rpc_proxy.h"
+#include "logservice/ob_ls_retention_gc_handler.h"
 
 namespace oceanbase
 {
 namespace obrpc
 {
+class ObLogServiceRpcProxy;
 class ObSrvRpcProxy;
 }
 namespace transaction
@@ -51,6 +52,8 @@ class SCN;
 }
 namespace logservice
 {
+class ObGCHandler;
+
 enum ObGCLSLOGType
 {
   UNKNOWN_TYPE = 0,
@@ -215,6 +218,9 @@ private:
                                         bool &has_dropped);
   int delete_ls_status_(const share::ObLSID &id);
   void execute_gc_(ObGCCandidateArray &gc_candidates);
+  void execute_remove_ls_replica_(storage::ObLS &ls, ObGCHandler &gc_handler, const GCCandidate &candidate);
+  int refresh_retention_gc_();
+  bool is_force_remove_by_unit_(const GCCandidate &candidate) const;
 private:
   class InsertLSFunctor;
   class QueryLSIsValidMemberFunctor;
@@ -247,6 +253,20 @@ public:
   int execute_pre_remove();
   int check_ls_can_offline(const share::ObLSStatus &ls_status);
   int gc_check_invalid_member_seq(const int64_t gc_seq, bool &need_gc);
+  // Retiring replica: the single GC thread samples end SCN on the first check
+  // and reuses it until LS teardown without changing the sync state.
+  // Only OB_SUCCESS with allow_gc=true permits removal. The permit survives
+  // failed removal retries until LS teardown.
+  int check_retention_gc_permission(bool &allow_gc);
+  // Leader side: the single GC thread refreshes replica coverage caches.
+  // OB_EAGAIN requests a retry in a later round.
+  int refresh_retention_gc_cache();
+  // Leader-side read-only snapshot for log source discovery; expired entries are omitted.
+  int get_log_fetch_sources(LogGetFetchSourcesResp &response);
+  // Leader-side RPC entry: register the requester and check cached coverage.
+  // OB_SUCCESS may still deny GC; use the response only when the call succeeds.
+  int handle_retention_gc_request(const ObLSGCRequest &request,
+                                  ObLSGCResponse &response);
   static bool is_valid_ls_gc_state(const LSGCState &state);
   static bool is_ls_offline_gc_state(const LSGCState &state);
   void set_log_sync_stopped();
@@ -351,6 +371,7 @@ private:
   int64_t block_log_debug_time_;
   bool log_sync_stopped_;//used for trans_service to kill trx, True means this replica may not be able to fully synchronize the logs.
   int64_t last_print_dba_log_ts_;
+  ObLSRetentionGCHandler retention_gc_handler_;
 };
 
 } // namespace logservice

@@ -140,6 +140,7 @@ void PalfThrottleOptions::reset()
   trigger_percentage_ = -1;
   maximum_duration_ = -1;
   unrecyclable_disk_space_ = -1;
+  gc_stalled_ = false;
 }
 
 bool PalfThrottleOptions::is_valid() const
@@ -157,7 +158,8 @@ bool PalfThrottleOptions::operator==(const PalfThrottleOptions &other) const
     && stopping_writing_percentage_ == other.stopping_writing_percentage_
     && trigger_percentage_ == other.trigger_percentage_
     && maximum_duration_ == other.maximum_duration_
-    && unrecyclable_disk_space_ == other.unrecyclable_disk_space_;
+    && unrecyclable_disk_space_ == other.unrecyclable_disk_space_
+    && gc_stalled_ == other.gc_stalled_;
 }
 
 }// end of namespace palf

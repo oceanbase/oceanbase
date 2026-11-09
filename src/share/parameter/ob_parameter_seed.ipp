@@ -694,6 +694,31 @@ DEF_INT(log_disk_utilization_threshold, OB_TENANT_PARAMETER,"80",
         "Range: [10, 100)",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_INT(server_log_disk_utilization_limit_threshold, OB_CLUSTER_PARAMETER, "95", "[80, 100]",
+        "Specifies the log disk utilization threshold, as a percentage, for pausing log writes on an OBServer. "
+        "Log writes are paused when utilization reaches or exceeds this threshold and resume when it falls "
+        "below the threshold. This value should be greater than server_log_disk_utilization_threshold.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(server_log_disk_utilization_threshold, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
+        "Controls shared log disk reclamation and specifies the target log disk utilization of an OBServer, "
+        "as a percentage. A value of 0 disables shared reclamation. A positive value enables shared "
+        "reclamation and sets its utilization target. A positive value should be less than "
+        "server_log_disk_utilization_limit_threshold.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME(log_retention_time, OB_TENANT_PARAMETER, "2h", "[0s,)",
+        "Specifies the target retention period for a tenant's logs. This period also defines the time window "
+        "of logs to protect before deleting a log stream replica left behind after migration. Under log disk "
+        "space pressure, logs that are safe to reclaim may be reclaimed before the retention period expires.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(log_retention_replica_count, OB_TENANT_PARAMETER, "0", "[0,)",
+        "Specifies the minimum number of other replicas that must cover each log position within the "
+        "retention window before a log stream replica left behind after migration can be deleted. "
+        "A value of 0 disables this coverage check.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_INT(log_disk_throttling_percentage, OB_TENANT_PARAMETER, "60",
         "[40, 100]",
         "the threshold of the size of the log disk when writing_limit will be triggered. Rang:[40,100]. setting 100 means turn off writing limit",

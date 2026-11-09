@@ -545,7 +545,7 @@ public:
     LogMeta meta;
     return meta;
   }
-  const LSN &get_base_lsn_used_for_block_gc() const
+  LSN get_base_lsn_used_for_block_gc() const
   {
     return base_lsn_for_block_gc_;
   }

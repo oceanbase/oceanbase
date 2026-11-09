@@ -20,6 +20,7 @@
 #include "rpc/obrpc/ob_rpc_proxy.h"       // ObRpcProxy
 #include "logservice/cdcservice/ob_cdc_req.h"
 #include "logservice/cdcservice/ob_cdc_rpc_proxy.h"    // ObCdcProxy
+#include "logservice/logrpc/ob_log_rpc_proxy.h"
 
 #include "ob_log_utils.h"                 // _SEC_
 
@@ -122,6 +123,7 @@ public:
       const int64_t io_thread_num,
       const ObLogFetcherConfig &cfg);
   void destroy();
+  int get_log_service_proxy(obrpc::ObLogServiceRpcProxy &proxy) { return net_client_.get_proxy(proxy); }
   int reload_ssl_config();
   int update_compressor_type(const common::ObCompressorType &compressor_type);
 

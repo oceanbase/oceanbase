@@ -20,7 +20,6 @@
 #include "cdcservice/ob_cdc_service.h"
 #include "logrpc/ob_log_rpc_req.h"
 #include "logrpc/ob_log_rpc_proxy.h"
-#include "palf/log_block_pool_interface.h"             // ILogBlockPool
 #include "palf/log_define.h"
 #include "rcservice/ob_role_change_service.h"
 #include "restoreservice/ob_log_restore_service.h"     // ObLogRestoreService
@@ -76,6 +75,8 @@ class PalfHandleGuard;
 class PalfRoleChangeCb;
 class PalfDiskOptions;
 class PalfEnv;
+class ILogBlockPool;
+class ILogBlockReclaimCoordinator;
 }
 namespace storage
 {
@@ -109,6 +110,7 @@ public:
            share::ObLocationService *location_service,
            observer::ObIMetaReport *reporter,
            palf::ILogBlockPool *log_block_pool,
+           palf::ILogBlockReclaimCoordinator *log_block_reclaim_coordinator,
            common::ObMySQLProxy *sql_proxy,
            IObNetKeepAliveAdapter *net_keepalive_adapter,
            storage::ObLocalityManager *locality_manager);
@@ -161,11 +163,26 @@ public:
   // @param [out] used_size_byte
   // @param [out] total_size_byte, if in shrinking status, total_size_byte is the value after shrinking.
   // NB: total_size_byte may be smaller than used_size_byte.
+  // Return physical usage for statistics, diagnostics, or capacity accounting.
+  // Shared reclaim can retain physical logs beyond the tenant limit. Do not use
+  // this value to decide whether a usage threshold is reached; call
+  // check_log_disk_usage_reached_threshold() instead.
   int get_palf_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
+  // Check whether usage reaches threshold_percentage [0, 100] of the tenant limit (>=).
+  // Shared reclaim uses real unrecyclable bytes; local reclaim uses physical bytes.
+  // DRAINING follows the tenant's effective reclaim mode. The limit is the
+  // recycling limit, i.e. the target capacity during shrink.
+  // This query excludes synthetic GC-stall pressure and the server write-stop flag.
+  // For ordinary log write admission, use check_disk_space_enough() instead.
+  int check_log_disk_usage_reached_threshold(const int64_t threshold_percentage, bool &reached);
 
   // @brief get palf disk usage
   // @param [out] used_size_byte
   // @param [out] total_size_byte, if in shrinking status, total_size_byte is the value before shrinking.
+  // Return physical usage for statistics, diagnostics, or capacity accounting.
+  // Shared reclaim can retain physical logs beyond the tenant limit. Do not use
+  // this value to decide whether a usage threshold is reached; call
+  // check_log_disk_usage_reached_threshold() instead.
   int get_palf_stable_disk_usage(int64_t &used_size_byte, int64_t &total_size_byte);
   // why we need update 'log_disk_size_' and 'log_disk_util_threshold' separately.
   //

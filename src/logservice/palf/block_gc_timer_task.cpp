@@ -43,7 +43,7 @@ int BlockGCTimerTask::start()
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(TG_START(tg_id_))) {
     PALF_LOG(WARN, "BlockGCTimerTask TG_START failed", K(ret));
-  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, BLOCK_GC_TIMER_INTERVAL_MS, true))) {
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, *this, BLOCK_GC_TIMER_INTERVAL_US, true))) {
     PALF_LOG(WARN, "BlockGCTimerTask TG_SCHEDULE failed", K(ret));
   } else {
     PALF_LOG(INFO, "BlockGCTimerTask start success", K(tg_id_), KPC(palf_env_impl_));

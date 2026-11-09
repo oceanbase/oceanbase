@@ -905,6 +905,7 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
   block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
   block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
   int64_t log_storage_used = 0;
+  int64_t unrecyclable_log_size = 0;
   int64_t meta_storage_used = 0;
   int64_t log_storage_logical_block_size = 0;
   int64_t meta_storage_logical_block_size = 0;
@@ -917,16 +918,25 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
     ret = OB_SUCCESS;
   } else if (OB_FAIL(log_storage_.get_logical_block_size(log_storage_logical_block_size))) {
     PALF_LOG(WARN, "LogStorage get_logical_block_size failed", KPC(this));
-  } else if (OB_FAIL(log_meta_storage_.get_logical_block_size(meta_storage_logical_block_size))) {
-    PALF_LOG(WARN, "MetaStorage get_logical_block_size failed", KPC(this));
   } else {
+    const LSN end_lsn = log_storage_.get_end_lsn();
+    const LSN base_lsn = get_base_lsn_used_for_block_gc();
+    const block_id_t base_block_id = lsn_2_block(base_lsn, log_storage_logical_block_size);
+    // GC keeps the block before the base block for restart. Rebuild may have removed it.
+    const block_id_t begin_block_id = MAX(min_block_id, base_block_id > 0 ? base_block_id - 1 : 0);
+    const LSN begin_lsn(begin_block_id * log_storage_logical_block_size);
+    // LSNs exclude each redo block's 4 KiB header. Keep this approximation since
+    // the omitted overhead is about 0.0061% for full 64 MiB blocks.
+    unrecyclable_log_size = end_lsn > begin_lsn ? static_cast<int64_t>(end_lsn - begin_lsn) : 0;
     //usage calculation should be precise to avoid stopping writing when actually no need
     log_storage_used = (max_block_id - min_block_id) * (log_storage_logical_block_size + MAX_INFO_BLOCK_SIZE)
-      + lsn_2_offset(log_storage_.get_end_lsn(), log_storage_logical_block_size) + MAX_INFO_BLOCK_SIZE;
+      + lsn_2_offset(end_lsn, log_storage_logical_block_size) + MAX_INFO_BLOCK_SIZE;
     PALF_LOG(TRACE, "log_storage_used size", K(min_block_id), K(max_block_id), K(log_storage_used));
   }
   // calc meta storage used
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(log_meta_storage_.get_logical_block_size(meta_storage_logical_block_size))) {
+    PALF_LOG(WARN, "MetaStorage get_logical_block_size failed", KPC(this));
   } else if (OB_FAIL(log_meta_storage_.get_block_id_range(min_block_id, max_block_id))) {
     PALF_LOG(WARN, "get_block_id_range failed", K(ret), KPC(this));
   } else {
@@ -934,7 +944,7 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
     total_used_size_byte = log_storage_used + meta_storage_used;
 
     const int64_t unrecyclable_meta_size = meta_storage_used;
-    unrecyclable_disk_space = log_storage_.get_end_lsn() - get_base_lsn_used_for_block_gc() + unrecyclable_meta_size;
+    unrecyclable_disk_space = unrecyclable_log_size + unrecyclable_meta_size;
     PALF_LOG(TRACE, "get_total_used_disk_space", K(meta_storage_used), K(log_storage_used), K(total_used_size_byte));
   }
   return ret;
@@ -1352,7 +1362,7 @@ LogMeta LogEngine::get_log_meta() const
   return log_meta_;
 }
 
-const LSN &LogEngine::get_base_lsn_used_for_block_gc() const
+LSN LogEngine::get_base_lsn_used_for_block_gc() const
 {
   ObSpinLockGuard guard(log_meta_lock_);
   return base_lsn_for_block_gc_;

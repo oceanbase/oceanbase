@@ -940,6 +940,7 @@ private:
   int add_rs_event_for_alter_ls_replica_(const obrpc::ObAdminAlterLSReplicaArg &arg, const int ret_val);
   int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_server_log_disk_utilization_threshold_(obrpc::ObAdminSetConfigItem &item);
   int check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_tenant_memstore_limit_(obrpc::ObAdminSetConfigItem &item);

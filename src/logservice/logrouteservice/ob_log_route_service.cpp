@@ -38,6 +38,8 @@ ObLogRouteService::ObLogRouteService() :
     asyn_task_allocator_(),
     svr_blacklist_(),
     systable_queryer_(),
+    log_rpc_proxy_(),
+    self_addr_(),
     all_svr_cache_(),
     ls_route_timer_task_(*this),
     timer_(),
@@ -65,6 +67,8 @@ ERRSIM_POINT_DEF(LOG_ROUTE_HANDLER_INIT_FAIL);
 ERRSIM_POINT_DEF(LOG_ROUTE_HANDLER_START_FAIL);
 #endif
 int ObLogRouteService::init(ObISQLClient *proxy,
+    const obrpc::ObLogServiceRpcProxy &log_rpc_proxy,
+    const common::ObAddr &self_addr,
     const common::ObRegion &prefer_region,
     const int64_t cluster_id,
     const bool is_across_cluster,
@@ -93,9 +97,10 @@ int ObLogRouteService::init(ObISQLClient *proxy,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObLogRouteService has been inited twice", KR(ret), K(cluster_id), K(is_across_cluster));
-  } else if (OB_ISNULL(proxy) || OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
+  } else if (OB_ISNULL(proxy) || !log_rpc_proxy.is_inited() || !self_addr.is_valid()
+      || OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(proxy), K(cluster_id));
+    LOG_WARN("invalid argument", KR(ret), K(proxy), K(cluster_id), K(self_addr));
   } else if (OB_FAIL(ls_route_key_set_.create(DEFAULT_LS_ROUTE_KEY_SET_SIZE))) {
     LOG_ERROR("ls_route_key_set_ init failed", KR(ret));
   } else if (OB_FAIL(ls_router_map_.init("LSRouterMap"))) {
@@ -136,6 +141,8 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
   } else {
     cluster_id_ = cluster_id;
+    log_rpc_proxy_ = log_rpc_proxy;
+    self_addr_ = self_addr;
     source_tenant_id_ = source_tenant_id;
     self_tenant_id_ = self_tenant_id;
     log_router_allocator_.set_nway(NWAY);
@@ -229,6 +236,8 @@ void ObLogRouteService::destroy()
   ls_route_key_set_.destroy();
   ls_router_map_.destroy();
   systable_queryer_.destroy();
+  log_rpc_proxy_.destroy();
+  self_addr_.reset();
   all_svr_cache_.destroy();
   svr_blacklist_.destroy();
 
@@ -854,6 +863,11 @@ int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
   }
 
   if (OB_SUCC(ret)) {
+    // RPC discovery is best effort and must not affect the SQL result.
+    (void)query_log_fetch_sources_and_update_(router_key, svr_list);
+  }
+
+  if (OB_SUCC(ret)) {
     // Sort by fetch queue policy (meta_table > fetch_prio > replica > follower) after list built
     svr_list.sort_by_priority();
   }
@@ -879,6 +893,48 @@ int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
 
   LOG_INFO("get_ls_svr_list_ done", KR(ret), K(router_key), K(svr_list), K(tg_id_));
 
+  return ret;
+}
+
+int ObLogRouteService::query_log_fetch_sources_and_update_(const ObLSRouterKey &router_key,
+    LSSvrList &svr_list)
+{
+  int ret = OB_SUCCESS;
+  ObAddr leader;
+  LogGetFetchSourcesReq request;
+  LogGetFetchSourcesResp response;
+  request.src_ = self_addr_;
+  request.tenant_id_ = router_key.get_tenant_id();
+  request.ls_id_ = router_key.get_ls_id();
+  if (OB_FAIL(svr_list.get_leader(leader))) {
+    if (REACH_TIME_INTERVAL(10 * _SEC_)) {
+      LOG_INFO("no leader found in sql candidates, skip log source rpc",
+          K(ret), K(router_key), K(svr_list));
+    }
+  } else if (OB_FAIL(log_rpc_proxy_.to(leader).by(request.tenant_id_).dst_cluster_id(cluster_id_)
+      .group_id(share::OBCG_STORAGE).timeout(2 * _SEC_).get_log_fetch_sources(request, response))) {
+    if ((OB_NOT_SUPPORTED == ret || OB_UNKNOWN_PACKET == ret) && REACH_TIME_INTERVAL(10 * _SEC_)) {
+      LOG_INFO("log source rpc is not supported, use sql discovery", K(ret), K(router_key), K(leader));
+    }
+  } else if (!response.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid log source view", K(ret), K(router_key), K(response));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < response.sources_.count(); ++i) {
+      const LogFetchSource &source = response.sources_.at(i);
+      FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
+      if (!source.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid log source range", K(ret), K(router_key), K(source));
+      } else if (!all_svr_cache_.is_svr_avail(source.server_, fetch_priority)) {
+        // Apply the same server and zone policy as SQL-discovered candidates.
+      } else if (OB_FAIL(svr_list.add_server_if_absent(source.server_, source.begin_lsn_,
+          source.end_lsn_, fetch_priority, source.server_ == leader))) {
+        LOG_WARN("add rpc log source failed", K(ret), K(router_key), K(source));
+      }
+    }
+  }
+  LOG_INFO("query log sources", K(ret), K(router_key), K(leader), K(response));
   return ret;
 }
 
@@ -1296,4 +1352,3 @@ void ObLogRouteService::ObLSRouteTimerTask::runTimerTask()
 
 } // namespace logservice
 } // namespace oceanbase
-

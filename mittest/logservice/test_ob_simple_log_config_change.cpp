@@ -14,10 +14,13 @@
  */
 
 #include <gtest/gtest.h>
+#include <thread>
 #define private public
 #define protected public
 #include "env/ob_simple_log_cluster_env.h"
 #include "logservice/leader_coordinator/election_priority_impl/election_priority_impl.h"
+#include "logservice/ob_ls_retention_gc_handler.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #undef protected
 #undef private
 
@@ -30,11 +33,214 @@ namespace oceanbase
 using namespace logservice;
 namespace unittest
 {
+// Keep one fixture so the shared log cluster is destroyed only after all cases.
 class TestObSimpleLogClusterConfigChange : public ObSimpleLogClusterTestEnv
 {
 public:
-  TestObSimpleLogClusterConfigChange() :  ObSimpleLogClusterTestEnv()
-  {}
+  TestObSimpleLogClusterConfigChange()
+    : ObSimpleLogClusterTestEnv(), id_(-1), leader_idx_(0), leader_(), ls_{},
+      saved_copies_(0), config_saved_(false), saved_self_(), saved_cluster_id_(0) {}
+  void init_retention_gc()
+  {
+    saved_self_ = GCTX.self_addr();
+    saved_cluster_id_ = GCONF.cluster_id;
+    GCONF.cluster_id = server(0)->cluster_id_;
+    id_ = ATOMIC_AAF(&palf_id_, 1);
+    ASSERT_EQ(OB_SUCCESS, create_paxos_group(id_, leader_idx_, leader_));
+    GCTX.self_addr_seq_.set_addr(get_cluster()[leader_idx_]->get_addr());
+    const int ret = omt::ObTenantConfigMgr::get_instance().add_tenant_config(1002);
+    ASSERT_TRUE(OB_SUCCESS == ret || OB_ENTRY_EXIST == ret);
+    {
+      omt::ObTenantConfigGuard config(
+          omt::ObTenantConfigMgr::get_instance().get_tenant_config_with_lock(1002, 0, 0));
+      ASSERT_TRUE(config.is_valid());
+      saved_copies_ = config->log_retention_replica_count;
+      config_saved_ = true;
+      config->log_retention_replica_count = 4;
+    }
+    for (int64_t i = 0; i < 7; ++i) {
+      bind_gc(i);
+      ASSERT_FALSE(HasFatalFailure());
+    }
+    ASSERT_EQ(OB_SUCCESS, submit_log(leader_, 8, id_, 512));
+    wait_committed(leader_, leader_.palf_handle_impl_->get_max_lsn());
+    ASSERT_FALSE(HasFatalFailure());
+    std::vector<PalfHandleImplGuard*> replicas;
+    ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id_, replicas));
+    DEFER(revert_cluster_palf_handle_guard(replicas));
+    // Majority commit does not guarantee that every Paxos replica has committed the tail.
+    for (int64_t i = 0; i < 3; ++i) {
+      sync_committed_info(i, *replicas[i]);
+      ASSERT_FALSE(HasFatalFailure());
+    }
+    for (int64_t i = 3; i <= 4; ++i) {
+      ASSERT_EQ(OB_SUCCESS, leader_.palf_handle_impl_->add_learner(
+          ObMember(get_cluster()[i]->get_addr(), 1), 30 * 1000 * 1000L));
+      ASSERT_EQ(OB_SUCCESS, check_replica_sync(id_, &leader_, replicas[i], 30 * 1000 * 1000L));
+      sync_committed_info(i, *replicas[i]);
+      ASSERT_FALSE(HasFatalFailure());
+      ASSERT_EQ(OB_SUCCESS, leader_.palf_handle_impl_->remove_learner(
+          ObMember(get_cluster()[i]->get_addr(), 1), 30 * 1000 * 1000L));
+    }
+  }
+  void wait_committed(PalfHandleImplGuard &replica, const LSN &end)
+  {
+    const int64_t deadline = ObTimeUtility::current_monotonic_time() + 30 * 1000 * 1000L;
+    while (replica.palf_handle_impl_->get_end_lsn() < end
+        && ObTimeUtility::current_monotonic_time() < deadline) {
+      ob_usleep(1000);
+    }
+    ASSERT_GE(replica.palf_handle_impl_->get_end_lsn(), end);
+  }
+  void sync_committed_info(const int64_t i, PalfHandleImplGuard &replica)
+  {
+    PalfHandleImpl *leader = leader_.palf_handle_impl_;
+    const LSN committed = leader->get_end_lsn();
+    int64_t log_id = OB_INVALID_LOG_ID;
+    int64_t log_proposal_id = INVALID_PROPOSAL_ID;
+    int64_t checksum = 0;
+    SCN scn;
+    LSN lsn;
+    LSN end;
+    const int64_t deadline = ObTimeUtility::current_monotonic_time() + 30 * 1000 * 1000L;
+    do {
+      leader->sw_.get_last_slide_log_info_(log_id, scn, lsn, end, log_proposal_id, checksum);
+      if (end < committed) { ob_usleep(1000); }
+    } while (end < committed && ObTimeUtility::current_monotonic_time() < deadline);
+    ASSERT_EQ(committed, end);
+    // A replica may miss the final commit broadcast; learners are not its destinations.
+    // Retry because a replica ignores committed info until its logs are flushed and submitted.
+    while (replica.palf_handle_impl_->get_end_lsn() < committed
+        && ObTimeUtility::current_monotonic_time() < deadline) {
+      ASSERT_EQ(OB_SUCCESS, leader->log_engine_.submit_committed_info_req(
+          get_cluster()[i]->get_addr(), leader->state_mgr_.get_proposal_id(),
+          log_id, log_proposal_id, committed));
+      ob_usleep(10 * 1000);
+    }
+    ASSERT_GE(replica.palf_handle_impl_->get_end_lsn(), committed);
+    while (replica.palf_handle_impl_->get_end_scn() < scn
+        && ObTimeUtility::current_monotonic_time() < deadline) {
+      ob_usleep(1000);
+    }
+    ASSERT_GE(replica.palf_handle_impl_->get_end_scn(), scn);
+  }
+  void TearDown() override
+  {
+    if (0 <= id_) {
+      leader_.reset();
+      for (int64_t i = 0; i < 7; ++i) {
+        if (NULL != ls_[i]) {
+          ls_[i]->get_gc_handler()->reset();
+          ls_[i] = NULL;
+        }
+        server(i)->get_tenant_base()->set(static_cast<storage::ObLSService *>(NULL));
+      }
+    }
+    ObSimpleLogClusterTestEnv::TearDown();
+    if (config_saved_) {
+      omt::ObTenantConfigGuard config(
+          omt::ObTenantConfigMgr::get_instance().get_tenant_config_with_lock(1002, 0, 0));
+      if (config.is_valid()) {
+        config->log_retention_replica_count = saved_copies_;
+      }
+    }
+    if (0 <= id_) {
+      GCTX.self_addr_seq_.set_addr(saved_self_);
+      GCONF.cluster_id = saved_cluster_id_;
+    }
+  }
+  ObSimpleLogServer *server(const int64_t i)
+  {
+    return static_cast<ObSimpleLogServer *>(get_cluster()[i]);
+  }
+  void bind_gc(const int64_t i)
+  {
+    ObSimpleLogServer *svr = server(i);
+    ObTenantEnv::set_tenant(svr->get_tenant_base());
+    ASSERT_EQ(OB_SUCCESS, svr->init_ls_service_for_role_change_());
+    ASSERT_EQ(OB_SUCCESS, svr->add_empty_ls_to_ls_map_(id_, ls_[i]));
+    svr->get_tenant_base()->set(&svr->ls_service_);
+    ASSERT_EQ(OB_SUCCESS, ls_[i]->get_gc_handler()->init(ls_[i]));
+  }
+  ObLSRetentionGCHandler::Leader &gc_leader(const int64_t i)
+  {
+    return ls_[i]->get_gc_handler()->retention_gc_handler_.leader_;
+  }
+  void start_request(const int64_t i, ObLSGCRequest &request)
+  {
+    ObTenantEnv::set_tenant(get_cluster()[i]->get_tenant_base());
+    PalfHandleGuard guard;
+    PalfStat stat;
+    ASSERT_EQ(OB_SUCCESS, server(i)->log_service_.open_palf(ObLSID(id_), guard));
+    ASSERT_EQ(OB_SUCCESS, guard.stat(stat));
+    ASSERT_LT(stat.begin_scn_, stat.end_scn_);
+    ASSERT_EQ(OB_SUCCESS, request.init(get_cluster()[i]->get_addr(), ObLSID(id_),
+        stat.begin_scn_, stat.end_scn_, LogConfigVersion(), stat.mode_version_,
+        stat.begin_lsn_, stat.end_lsn_, INVALID_GC_TOKEN));
+  }
+  int send(const ObLSGCRequest &request, ObLSGCResponse &response, const int64_t destination,
+           const int64_t timeout_us)
+  {
+    response.reset();
+    return server(5)->log_service_.get_rpc_proxy()->to(get_cluster()[destination]->get_addr())
+        .by(1002).timeout(timeout_us).group_id(share::OBCG_STORAGE).request_ls_gc(request, response);
+  }
+  void advance(ObLSGCRequest &request, const ObLSGCResponse &response)
+  {
+    ASSERT_TRUE(response.is_valid());
+    ASSERT_EQ(OB_SUCCESS, request.init(request.src_, request.get_ls_id(), request.get_cutoff_scn(),
+        request.get_end_scn(), response.get_config_version(), request.get_mode_version(),
+        request.get_begin_lsn(), request.get_end_lsn(), response.get_gc_token()));
+  }
+  void handshake(ObLSGCRequest &request)
+  {
+    ObLSGCResponse response;
+    ASSERT_EQ(INVALID_GC_TOKEN, request.get_gc_token());
+    ASSERT_EQ(OB_SUCCESS, send(request, response, leader_idx_, 5 * 1000 * 1000L));
+    ASSERT_FALSE(response.is_gc_allowed());
+    ASSERT_GT(response.get_gc_token(), INVALID_GC_TOKEN);
+    advance(request, response);
+  }
+  void hold(ObLSGCRequest &request)
+  {
+    ObLSGCResponse response;
+    ASSERT_EQ(OB_SUCCESS, send(request, response, leader_idx_, 5 * 1000 * 1000L));
+    ASSERT_FALSE(response.is_gc_allowed());
+    ASSERT_GT(response.get_gc_token(), request.get_gc_token());
+    advance(request, response);
+  }
+  void refresh()
+  {
+    ObTenantEnv::set_tenant(get_cluster()[leader_idx_]->get_tenant_base());
+    ASSERT_EQ(OB_SUCCESS, gc_leader(leader_idx_).refresh_cache());
+    ASSERT_EQ(3, gc_leader(leader_idx_).member_replica_caches_.count());
+    for (int64_t i = 0; i < 3; ++i) {
+      ASSERT_TRUE(gc_leader(leader_idx_).member_replica_caches_.at(i).is_valid());
+    }
+  }
+  void approve(ObLSGCRequest &request)
+  {
+    ObLSGCResponse response;
+    ASSERT_EQ(OB_SUCCESS, send(request, response, leader_idx_, 5 * 1000 * 1000L));
+    ASSERT_TRUE(response.is_gc_allowed());
+    ASSERT_EQ(request.get_gc_token(), response.get_gc_token());
+    ASSERT_TRUE(gc_leader(leader_idx_).is_gc_approved_(request.src_));
+  }
+  void reject(const ObLSGCRequest &request)
+  {
+    ObLSGCResponse response;
+    ASSERT_EQ(OB_SUCCESS, send(request, response, leader_idx_, 5 * 1000 * 1000L));
+    ASSERT_FALSE(response.is_gc_allowed());
+    ASSERT_EQ(INVALID_GC_TOKEN, response.get_gc_token());
+  }
+  int64_t id_;
+  int64_t leader_idx_;
+  PalfHandleImplGuard leader_;
+  storage::ObLS *ls_[7];
+  int64_t saved_copies_;
+  bool config_saved_;
+  ObAddr saved_self_;
+  int64_t saved_cluster_id_;
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
@@ -1420,6 +1626,175 @@ TEST_F(TestObSimpleLogClusterConfigChange, switch_lagged_learner_to_acceptor)
   revert_cluster_palf_handle_guard(palf_list);
   PALF_LOG(INFO, "end switch_lagged_learner_to_acceptor", K(id));
 }
+
+
+TEST_F(TestObSimpleLogClusterConfigChange, requester_restart_rejects_delayed_rpc_and_preserves_other_copy)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "retention_gc_requester_restart");
+  init_retention_gc();
+  ASSERT_FALSE(HasFatalFailure());
+  ObLSGCRequest old;
+  start_request(3, old);
+  handshake(old);
+  hold(old);
+  ASSERT_FALSE(HasFatalFailure());
+  ASSERT_EQ(OB_SUCCESS, restart_server(3));
+  {
+    // Restore the leader's committed boundary before sampling the recovered range.
+    std::vector<PalfHandleImplGuard*> replicas;
+    ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id_, replicas));
+    DEFER(revert_cluster_palf_handle_guard(replicas));
+    sync_committed_info(3, *replicas[3]);
+    ASSERT_FALSE(HasFatalFailure());
+  }
+  ObLSGCRequest recovered;
+  start_request(3, recovered);
+  handshake(recovered);
+  ObLSGCRequest other;
+  start_request(4, other);
+  handshake(other);
+  hold(other);
+  refresh();
+  approve(recovered);
+  ASSERT_FALSE(HasFatalFailure());
+  ObTenantEnv::set_tenant(server(3)->get_tenant_base());
+  ASSERT_EQ(OB_SUCCESS, server(3)->remove_ls(id_));
+  PalfHandleGuard removed;
+  ASSERT_EQ(OB_LS_NOT_EXIST, server(3)->log_service_.open_palf(ObLSID(id_), removed));
+  for (int64_t i = 0; i < 8; ++i) {
+    reject(old);
+    ASSERT_FALSE(gc_leader(leader_idx_).is_gc_hold_(old.src_));
+  }
+  hold(other);
+  ASSERT_TRUE(gc_leader(leader_idx_).is_gc_hold_(other.src_));
+  ASSERT_TRUE(gc_leader(leader_idx_).is_gc_approved_(recovered.src_));
+  ObTenantEnv::set_tenant(get_cluster()[leader_idx_]->get_tenant_base());
+  LogGetFetchSourcesResp sources;
+  ASSERT_EQ(OB_SUCCESS, gc_leader(leader_idx_).get_log_fetch_sources(sources));
+  for (int64_t i = 0; i < sources.sources_.count(); ++i) {
+    ASSERT_NE(recovered.src_, sources.sources_.at(i).server_);
+  }
+}
+
+TEST_F(TestObSimpleLogClusterConfigChange, leader_aba_and_palf_restart_fence_old_rpc_tokens)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "retention_gc_leader_aba");
+  init_retention_gc();
+  ASSERT_FALSE(HasFatalFailure());
+  const int64_t original_leader = leader_idx_;
+  ObLSGCRequest first;
+  start_request(3, first);
+  handshake(first);
+  const ObLSGCRequest first_formal = first;
+  hold(first);
+  ObLSGCRequest other;
+  start_request(4, other);
+  handshake(other);
+  hold(other);
+  refresh();
+  approve(first);
+  ASSERT_FALSE(HasFatalFailure());
+  leader_.reset();
+  leader_idx_ = (original_leader + 1) % 3;
+  ASSERT_EQ(OB_SUCCESS, switch_leader(id_, leader_idx_, leader_));
+  ObLSGCResponse response;
+  ASSERT_EQ(OB_NOT_MASTER, send(first, response, original_leader, 5 * 1000 * 1000L));
+  reject(first);
+  ASSERT_TRUE(gc_leader(leader_idx_).retained_replica_caches_.empty());
+  leader_.reset();
+  leader_idx_ = original_leader;
+  ASSERT_EQ(OB_SUCCESS, switch_leader(id_, leader_idx_, leader_));
+  reject(first);
+  ASSERT_TRUE(gc_leader(leader_idx_).gc_requests_.empty());
+  // Restart PALF from files and reconstruct the GC handler as a fresh process would.
+  leader_.reset();
+  ASSERT_EQ(OB_SUCCESS, restart_server(original_leader));
+  ObGCHandler *handler = ls_[original_leader]->get_gc_handler();
+  handler->ObGCHandler::~ObGCHandler();
+  new (handler) ObGCHandler();
+  ASSERT_EQ(OB_SUCCESS, handler->init(ls_[original_leader]));
+  ASSERT_EQ(OB_SUCCESS, switch_leader(id_, original_leader, leader_));
+  ObLSGCRequest recovered;
+  start_request(3, recovered);
+  handshake(recovered);
+  ASSERT_FALSE(HasFatalFailure());
+  ASSERT_EQ(first_formal.get_gc_token(), recovered.get_gc_token());
+  ASSERT_NE(first_formal.get_config_version(), recovered.get_config_version());
+  reject(first_formal);
+  hold(recovered);
+  ASSERT_TRUE(gc_leader(leader_idx_).is_gc_hold_(recovered.src_));
+}
+
+TEST_F(TestObSimpleLogClusterConfigChange, timed_out_rpc_waiting_for_lock_cannot_change_gc_state)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "retention_gc_rpc_timeout");
+  init_retention_gc();
+  ASSERT_FALSE(HasFatalFailure());
+  ObLSGCRequest old;
+  start_request(3, old);
+  handshake(old);
+  ASSERT_FALSE(HasFatalFailure());
+  ObLSGCResponse delayed_response;
+  int rpc_ret = OB_ERR_UNEXPECTED;
+  const int64_t timeout_us = 200 * 1000L;
+  auto &state = gc_leader(leader_idx_);
+  auto &deliver = server(leader_idx_)->deliver_;
+  auto wait_count = [](int64_t &counter, const int64_t expected) {
+    const int64_t deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000L;
+    while (ATOMIC_LOAD(&counter) < expected && ObTimeUtility::current_time() < deadline) {
+      ob_usleep(1000);
+    }
+    return expected == ATOMIC_LOAD(&counter);
+  };
+  const int64_t started = ATOMIC_LOAD(&deliver.gc_rpc_started_);
+  ASSERT_TRUE(wait_count(deliver.gc_rpc_finished_, started));
+  state.lock_.lock();
+  const int64_t next_token = state.next_gc_token_;
+  std::thread delayed([&]() {
+    ObTenantEnv::set_tenant(server(5)->get_tenant_base());
+    rpc_ret = send(old, delayed_response, leader_idx_, timeout_us);
+    ObTenantEnv::set_tenant(NULL);
+  });
+  // Observe process() after its entry timeout check while the decision lock is held.
+  const bool entered = wait_count(deliver.gc_rpc_started_, started + 1);
+  // The receiver's deadline starts at receipt and may outlast the caller's deadline.
+  // Hold the lock for a full timeout after observing receiver entry.
+  const int64_t expired_at = ObTimeUtility::current_time() + timeout_us;
+  while (ObTimeUtility::current_time() <= expired_at) {
+    ob_usleep(1000);
+  }
+  delayed.join();
+  state.lock_.unlock();
+  ASSERT_TRUE(wait_count(deliver.gc_rpc_finished_, started + 1));
+  ASSERT_TRUE(entered);
+  ASSERT_EQ(OB_TIMEOUT, rpc_ret);
+  ASSERT_FALSE(delayed_response.is_gc_allowed());
+  {
+    lib::ObMutexGuard guard(state.lock_);
+    ASSERT_EQ(1, state.gc_requests_.count());
+    ASSERT_EQ(old.src_, state.gc_requests_.at(0).server_);
+    ASSERT_EQ(old.get_gc_token(), state.gc_requests_.at(0).token_);
+    ASSERT_EQ(ObLSRetentionGCHandler::Leader::GCRequestState::PREPARE,
+              state.gc_requests_.at(0).phase_);
+    ASSERT_EQ(next_token, state.next_gc_token_);
+    ASSERT_TRUE(state.retained_replica_caches_.empty());
+  }
+  ObLSGCRequest current;
+  start_request(3, current);
+  handshake(current);
+  ObLSGCRequest other;
+  start_request(4, other);
+  handshake(other);
+  hold(other);
+  refresh();
+  approve(current);
+  ASSERT_FALSE(HasFatalFailure());
+  reject(old);
+  hold(other);
+  ASSERT_TRUE(state.is_gc_approved_(current.src_));
+  ASSERT_TRUE(state.is_gc_hold_(other.src_));
+}
+
 
 } // end unittest
 } // end oceanbase

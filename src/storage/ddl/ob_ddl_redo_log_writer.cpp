@@ -70,8 +70,8 @@ int ObDDLCtrlSpeedItem::refresh()
   int64_t refresh_speed = 0;
   bool ignore = false;
   bool force_wait = false;
-  int64_t total_used_space = 0; // for current tenant, used bytes.
-  int64_t total_disk_space = 0; // for current tenant, limit used bytes.
+  bool disk_usage_reached_threshold = false;
+  int64_t disk_used_stop_write_threshold = 0;
   ObLSHandle ls_handle;
   palf::PalfOptions palf_opt;
   logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
@@ -101,8 +101,12 @@ int ObDDLCtrlSpeedItem::refresh()
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(log_service->get_palf_options(palf_opt))) {
     LOG_WARN("fail to get palf_options", K(ret));
-  } else if (OB_FAIL(log_service->get_palf_disk_usage(total_used_space, total_disk_space))) {
-    STORAGE_LOG(WARN, "failed to get the disk space that clog used", K(ret));
+  } else if (FALSE_IT(disk_used_stop_write_threshold = min(
+      palf_opt.disk_options_.log_disk_utilization_threshold_,
+      palf_opt.disk_options_.log_disk_utilization_limit_threshold_))) {
+  } else if (OB_FAIL(log_service->check_log_disk_usage_reached_threshold(
+      disk_used_stop_write_threshold, disk_usage_reached_threshold))) {
+    LOG_WARN("failed to check log disk usage threshold", K(ret));
   } else if (OB_ISNULL(GCTX.bandwidth_throttle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, bandwidth throttle is null", K(ret), KP(GCTX.bandwidth_throttle_));
@@ -111,12 +115,11 @@ int ObDDLCtrlSpeedItem::refresh()
   } else {
     // archive is not on if ignore = true.
     write_speed_ = ignore ? std::max(refresh_speed, 1 * MIN_WRITE_SPEED) : std::max(archive_speed, 1 * MIN_WRITE_SPEED);
-    disk_used_stop_write_threshold_ = min(palf_opt.disk_options_.log_disk_utilization_threshold_,
-                                       palf_opt.disk_options_.log_disk_utilization_limit_threshold_);
-    need_stop_write_ = 100.0 * total_used_space / total_disk_space >= disk_used_stop_write_threshold_ ? true : false;
+    disk_used_stop_write_threshold_ = disk_used_stop_write_threshold;
+    need_stop_write_ = disk_usage_reached_threshold;
   }
   LOG_DEBUG("current ddl clog write speed", K(ret), K(need_stop_write_), K(ls_id_), K(archive_speed), K(write_speed_),
-    K(total_used_space), K(total_disk_space), K(disk_used_stop_write_threshold_), K(refresh_speed));
+    K(disk_usage_reached_threshold), K(disk_used_stop_write_threshold_), K(refresh_speed));
   return ret;
 }
 

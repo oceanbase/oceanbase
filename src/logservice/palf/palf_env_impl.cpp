@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX PALF
 #include "palf_env_impl.h"
+#include <stdlib.h>
 #include <string.h>
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/ob_define.h"
@@ -19,10 +20,14 @@
 #include "lib/oblog/ob_log.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/utility/ob_macro_utils.h"
+#include "lib/utility/ob_print_utils.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "lib/oblog/ob_log_module.h"
 #include "share/allocator/ob_tenant_mutil_allocator.h"
 #include "share/config/ob_server_config.h"
 #include "share/ob_errno.h"
+#include "share/ob_occam_time_guard.h"
+#include "share/ob_debug_sync.h"
 #include "share/ob_occam_thread_pool.h"
 #include "log_define.h"
 #include "palf_handle_impl_guard.h"             // IPalfHandleImplGuard
@@ -33,6 +38,7 @@
 #include "log_io_utils.h"
 #include "share/resource_manager/ob_resource_manager.h"       // ObResourceManager
 #include "share/io/ob_io_manager.h"                           // ObIOManager
+#include "observer/omt/ob_tenant_config_mgr.h"                // TENANT_CONF
 
 namespace oceanbase
 {
@@ -105,6 +111,7 @@ void PalfDiskOptionsWrapper::reset()
   disk_opts_for_stopping_writing_.reset();
   status_ = Status::INVALID_STATUS;
   cur_unrecyclable_log_disk_size_ = -1;
+  ATOMIC_STORE(&gc_stalled_, false);
   sequence_ = -1;
 }
 
@@ -119,6 +126,60 @@ void PalfDiskOptionsWrapper::set_cur_unrecyclable_log_disk_size(const int64_t un
 {
   ObSpinLockGuard guard(disk_opts_lock_);
   cur_unrecyclable_log_disk_size_ = unrecyclable_log_disk_size;
+  ATOMIC_STORE(&gc_stalled_, false);
+}
+
+// 算法概览：U 为真实不可回收量，d 为超过 GC 宽限期后的卡顿时长。
+// 无有效卡顿时限流压力 E=U；卡顿时按日志盘额度计算限流线 A 和停写线 B，
+// 取 U0=min(B, max(U, A+1))，再按 E=U0+(B-U0)*min(d,T)/T 线性增加压力。
+// E>A 时复用现有 IO 限流，E>=B 或 d>=最大限流时长 T 时停止接收新日志。
+// GC 恢复后 E 回到最新 U；E 只影响限流，真实容量判断仍使用实际磁盘用量。
+int PalfDiskOptionsWrapper::try_update_throttling_disk_usage(
+    const int64_t unrecyclable_size,
+    const int64_t stalled_duration_us,
+    bool &need_throttling,
+    bool &gc_stall_stopped)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(disk_opts_lock_.trylock())) {
+    PALF_LOG(TRACE, "failed to lock disk options", K(ret));
+  } else {
+    const PalfDiskOptions &opts = disk_opts_for_stopping_writing_;
+    const int64_t trigger = opts.log_disk_throttling_percentage_;
+    const int64_t stop = opts.log_disk_utilization_limit_threshold_;
+    // 默认使用真实不可回收量 U；GC 恢复或不满足卡顿限流条件时，撤销附加压力。
+    cur_unrecyclable_log_disk_size_ = unrecyclable_size;
+    gc_stall_stopped = false;
+    // 配置有效、限流阈值低于停写阈值，且 GC 无进展已达到宽限期后，才启用卡顿限流。
+    const bool gc_stalled = unrecyclable_size >= 0 && opts.is_valid() && opts.log_disk_usage_limit_size_ > 0
+        && trigger < stop && stalled_duration_us >= 0;
+    if (gc_stalled) {
+      // 用租户日志盘额度乘以限流/停写百分比，得到以字节为单位的两条阈值线。
+      const int64_t trigger_size = opts.log_disk_usage_limit_size_ * trigger / 100;
+      const int64_t stop_size = opts.log_disk_usage_limit_size_ * stop / 100;
+      // 每轮用最新 U 计算起点：start_size = min(stop_size, max(U, trigger_size + 1))。
+      // +1 保证 U 较低时也能越过限流触发线；卡顿期间新增的不可回收日志也会计入起点。
+      const int64_t start_size = MIN(stop_size, MAX(unrecyclable_size, trigger_size + 1));
+      const int64_t maximum_duration_us = opts.log_disk_throttling_maximum_duration_;
+      // 令 d = stalled_duration_us，T = maximum_duration_us，单位均为微秒。
+      // 限流用量 E = start_size + (stop_size - start_size) * min(d, T) / T。
+      // 固定本轮 U 时，E 随卡顿时长线性逼近停写线，再交给现有 IO 限流公式计算等待时间。
+      // E 仅用于限流，实际磁盘用量和容量判断仍使用真实值。
+      // Use a floating-point ratio to avoid overflowing the capacity-duration product.
+      const double stalled_ratio = static_cast<double>(MIN(stalled_duration_us, maximum_duration_us))
+          / static_cast<double>(maximum_duration_us);
+      cur_unrecyclable_log_disk_size_ = start_size
+          + static_cast<int64_t>(static_cast<double>(stop_size - start_size) * stalled_ratio);
+      // E 到达停写线或卡顿满 T 时，关闭租户新日志入口，防止只限速仍持续积压。
+      gc_stall_stopped = cur_unrecyclable_log_disk_size_ >= stop_size
+          || stalled_duration_us >= maximum_duration_us;
+    }
+    ATOMIC_STORE(&gc_stalled_, gc_stalled);
+    need_throttling = opts.is_valid()
+        && cur_unrecyclable_log_disk_size_ > opts.log_disk_usage_limit_size_ * trigger / 100;
+    disk_opts_lock_.unlock();
+  }
+  return ret;
 }
 
 bool PalfDiskOptionsWrapper::need_throttling() const
@@ -215,6 +276,7 @@ int PalfDiskOptionsWrapper::update_disk_options_not_guarded_by_lock_(const PalfD
 PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_alloc_mgr_(NULL),
                              log_block_pool_(NULL),
+                             log_block_reclaim_coordinator_(NULL),
                              fetch_log_engine_(),
                              log_rpc_(),
                              cb_thread_pool_(),
@@ -224,6 +286,8 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              log_updater_(),
                              monitor_(NULL),
                              disk_options_wrapper_(),
+                             tenant_reclaim_service_(),
+                             throttling_update_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              disk_not_enough_print_interval_in_gc_thread_(OB_INVALID_TIMESTAMP),
                              disk_not_enough_print_interval_in_loop_thread_(OB_INVALID_TIMESTAMP),
                              self_(),
@@ -231,6 +295,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              last_palf_epoch_(0),
                              rebuild_replica_log_lag_threshold_(0),
                              diskspace_enough_(true),
+                             gc_stall_stopped_(false),
                              tenant_id_(0),
                              io_adapter_(),
                              is_inited_(false),
@@ -254,22 +319,24 @@ int PalfEnvImpl::init(
     obrpc::ObBatchRpc *batch_rpc,
     common::ObILogAllocator *log_alloc_mgr,
     ILogBlockPool *log_block_pool,
+    ILogBlockReclaimCoordinator *log_block_reclaim_coordinator,
     PalfMonitorCb *monitor,
     ObResourceManager *resource_manager,
     ObIOManager *io_manager)
 {
   int ret = OB_SUCCESS;
-  int pret = 0;
   const int64_t io_cb_num = PALF_SLIDING_WINDOW_SIZE * 128;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "PalfEnvImpl is inited twiced", K(ret));
   } else if (OB_ISNULL(base_dir) || !self.is_valid() || NULL == transport || NULL == batch_rpc
-             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool) || OB_ISNULL(monitor)
+             || OB_ISNULL(log_alloc_mgr) || OB_ISNULL(log_block_pool)
+             || OB_ISNULL(log_block_reclaim_coordinator) || OB_ISNULL(monitor)
              || OB_ISNULL(resource_manager) || OB_ISNULL(io_manager)) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "invalid arguments", K(ret), KP(transport), KP(batch_rpc), K(base_dir), K(self), KP(transport),
-             KP(log_alloc_mgr), KP(log_block_pool), KP(monitor), KP(resource_manager), KP(io_manager));
+             KP(log_alloc_mgr), KP(log_block_pool), KP(log_block_reclaim_coordinator), KP(monitor),
+             KP(resource_manager), KP(io_manager));
   } else if (OB_FAIL(init_log_io_worker_config_(options.disk_options_.log_writer_parallelism_,
                                                 tenant_id,
                                                 log_io_worker_config_))) {
@@ -289,14 +356,10 @@ int PalfEnvImpl::init(
     PALF_LOG(ERROR, "LogSharedQueueTh init failed", K(ret));
   } else if (OB_FAIL(block_gc_timer_task_.init(this))) {
     PALF_LOG(ERROR, "ObCheckLogBlockCollectTask init failed", K(ret));
-  } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", base_dir)) && false) {
-    ret = OB_ERR_UNEXPECTED;
-  } else if ((pret = snprintf(tmp_log_dir_, MAX_PATH_SIZE, "%s/tmp_dir", log_dir_)) && false) {
-    ret = OB_ERR_UNEXPECTED;
-    PALF_LOG(ERROR, "error unexpected", K(ret));
-  } else if (pret < 0 || pret >= MAX_PATH_SIZE) {
-    ret = OB_BUF_NOT_ENOUGH;
-    PALF_LOG(ERROR, "construct log path failed", K(ret), K(pret));
+  } else if (OB_FAIL(databuff_printf(log_dir_, MAX_PATH_SIZE, "%s", base_dir))) {
+    PALF_LOG(ERROR, "construct log directory failed", KR(ret), K(base_dir));
+  } else if (OB_FAIL(databuff_printf(tmp_log_dir_, MAX_PATH_SIZE, "%s/tmp_dir", log_dir_))) {
+    PALF_LOG(ERROR, "construct temporary log directory failed", KR(ret), K(log_dir_));
   } else if (OB_FAIL(palf_handle_impl_map_.init("LOG_HASH_MAP", tenant_id))) {
     PALF_LOG(ERROR, "palf_handle_impl_map_ init failed", K(ret));
   } else if (OB_FAIL(log_loop_thread_.init(this, self))) {
@@ -312,9 +375,13 @@ int PalfEnvImpl::init(
     PALF_LOG(ERROR, "LogUpdater init failed", K(ret));
   } else if (OB_FAIL(io_adapter_.init(tenant_id, resource_manager, io_manager))) {
     PALF_LOG(ERROR, "LogIOAdapter init failed", K(ret));
+  } else if (OB_FAIL(tenant_reclaim_service_.init(/* shared_reclaim_enabled */
+                 LogReclaimState::DISABLED != log_block_reclaim_coordinator->get_reclaim_state()))) {
+    PALF_LOG(ERROR, "TenantLogBlockReclaimService init failed", KR(ret), K(tenant_id));
   } else {
     log_alloc_mgr_ = log_alloc_mgr;
     log_block_pool_ = log_block_pool;
+    log_block_reclaim_coordinator_ = log_block_reclaim_coordinator;
     monitor_ = monitor;
     self_ = self;
     tenant_id_ = tenant_id;
@@ -400,6 +467,7 @@ void PalfEnvImpl::destroy()
   log_updater_.destroy();
   log_rpc_.destroy();
   election_timer_.destroy();
+  tenant_reclaim_service_.reset();
   log_alloc_mgr_ = NULL;
   monitor_ = NULL;
   disk_not_enough_print_interval_in_gc_thread_ = OB_INVALID_TIMESTAMP;
@@ -408,6 +476,7 @@ void PalfEnvImpl::destroy()
   log_dir_[0] = '\0';
   tmp_log_dir_[0] = '\0';
   disk_options_wrapper_.reset();
+  gc_stall_stopped_ = false;
   rebuild_replica_log_lag_threshold_ = 0;
   io_adapter_.destroy();
 }
@@ -660,8 +729,18 @@ PalfEnvImpl::LogGetRecycableFileCandidate::LogGetRecycableFileCandidate()
     min_using_block_id_(LOG_INVALID_BLOCK_ID),
     oldest_palf_id_(INVALID_PALF_ID),
     oldest_block_scn_(),
+    retention_scn_(),
+    retention_expired_blocks_(0),
+    retention_unexpired_blocks_(0),
     ret_code_(OB_SUCCESS)
 {}
+
+PalfEnvImpl::LogGetRecycableFileCandidate::LogGetRecycableFileCandidate(
+    const SCN &retention_scn)
+  : LogGetRecycableFileCandidate()
+{
+  retention_scn_ = retention_scn;
+}
 
 PalfEnvImpl::LogGetRecycableFileCandidate::~LogGetRecycableFileCandidate()
 {
@@ -671,6 +750,9 @@ PalfEnvImpl::LogGetRecycableFileCandidate::~LogGetRecycableFileCandidate()
   min_block_id_ = LOG_INVALID_BLOCK_ID;
   oldest_palf_id_ = INVALID_PALF_ID;
   oldest_block_scn_.reset();
+  retention_scn_.reset();
+  retention_expired_blocks_ = 0;
+  retention_unexpired_blocks_ = 0;
   id_ = -1;
 }
 
@@ -678,6 +760,7 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
 {
   bool bool_ret = true;
   if (NULL == palf_handle_impl) {
+    ret_code_ = OB_ERR_UNEXPECTED;
     PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "the value in hashmap is NULL, unexpected error", K(palf_id), KP(palf_handle_impl));
     bool_ret = false;
   } else {
@@ -711,16 +794,21 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
       PALF_LOG(TRACE, "can not recycle blocks, need keep at least two blocks or has been concurrently"
           " with rebuild, skip it",
           K(ret), KPC(palf_handle_impl), K(min_block_id), K(min_using_block_id));
-    } else if (min_block_max_scn_.is_valid() && min_block_max_scn_ < min_block_max_scn) {
-      PALF_LOG(TRACE, "current palf_handle_impl is not older than previous, skip it", K(min_block_max_scn),
-          K(min_block_max_scn_), KPC(palf_handle_impl), K(min_block_id));
     } else {
-      id_ = palf_id.id_;
-      min_block_id_ = min_block_id;
-      min_block_max_scn_ = min_block_max_scn;
-      min_using_block_id_ = min_using_block_id;
-      PALF_LOG(TRACE, "can be recycable palf_handle_impl", K(id_), K(min_block_id_), K(min_using_block_id_),
-          K(min_block_max_scn_), K(base_lsn));
+      if (!min_block_max_scn_.is_valid() || min_block_max_scn_ >= min_block_max_scn) {
+        id_ = palf_id.id_;
+        min_block_id_ = min_block_id;
+        min_block_max_scn_ = min_block_max_scn;
+        min_using_block_id_ = min_using_block_id;
+        PALF_LOG(TRACE, "can be recycable palf_handle_impl", K(id_), K(min_block_id_), K(min_using_block_id_),
+            K(min_block_max_scn_), K(base_lsn));
+      }
+      if (retention_scn_.is_valid()
+          && OB_FAIL(collect_reclaim_blocks_(*palf_handle_impl, min_block_id, min_using_block_id))) {
+        ret_code_ = ret;
+        bool_ret = false;
+        PALF_LOG(WARN, "collect retention reclaim blocks failed", KR(ret), K(palf_id));
+      }
     }
     if (min_block_max_scn.is_valid() && (!oldest_block_scn_.is_valid() || oldest_block_scn_ > min_block_max_scn)) {
       oldest_block_scn_ = min_block_max_scn;
@@ -730,127 +818,250 @@ bool PalfEnvImpl::LogGetRecycableFileCandidate::operator()(const LSKey &palf_id,
   return bool_ret;
 }
 
-int PalfEnvImpl::try_recycle_blocks()
+ERRSIM_POINT_DEF(ERRSIM_PALF_RETENTION_LOCATE_ERROR,
+                 "Inject an error while locating the log retention boundary.");
+int PalfEnvImpl::LogGetRecycableFileCandidate::collect_reclaim_blocks_(
+    IPalfHandleImpl &palf_handle_impl,
+    const block_id_t min_block_id,
+    const block_id_t min_using_block_id)
 {
   int ret = OB_SUCCESS;
-  PalfDiskOptions disk_opts_for_stopping_writing;
-  PalfDiskOptions disk_opts_for_recycling_blocks;
-  PalfDiskOptionsWrapper::Status status = PalfDiskOptionsWrapper::Status::INVALID_STATUS;
-  int64_t sequence = -1;
-  disk_options_wrapper_.get_disk_opts(disk_opts_for_stopping_writing,
-                                      disk_opts_for_recycling_blocks,
-                                      status,
-                                      sequence);
-  int64_t total_used_size_byte = 0;
-  int64_t total_unrecyclable_size_byte = 0;
-  int64_t total_size_to_recycle_blocks = disk_opts_for_recycling_blocks.log_disk_usage_limit_size_;
-  int64_t total_size_to_stop_write = disk_opts_for_stopping_writing.log_disk_usage_limit_size_;
-  int64_t palf_id = 0;
-  int64_t maximum_used_size = 0;
-  int tmp_ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(get_disk_usage_(total_used_size_byte, total_unrecyclable_size_byte,
-                                     palf_id, maximum_used_size))) {
-    PALF_LOG(WARN, "get_disk_usage_ failed", K(ret), KPC(this));
-  } else if (FALSE_IT(disk_options_wrapper_.set_cur_unrecyclable_log_disk_size(total_unrecyclable_size_byte))) {
-  } else if (OB_SUCCESS != (tmp_ret = log_io_worker_wrapper_.notify_need_writing_throttling(disk_options_wrapper_.need_throttling()))) {
-    PALF_LOG_RET(WARN, tmp_ret, "failed to update_disk_info", K(disk_options_wrapper_));
+  int64_t candidate_blocks = min_using_block_id - min_block_id - 1;
+  int64_t retention_expired_blocks = 0;
+  LSN retention_lsn;
+  const int errsim_ret = ERRSIM_PALF_RETENTION_LOCATE_ERROR;
+  if (OB_UNLIKELY(OB_SUCCESS != errsim_ret)) {
+    ret = errsim_ret;
   } else {
-    const int64_t usable_disk_size_to_recycle_blocks =
-        calculate_disk_space_threshold(total_size_to_recycle_blocks,
-            disk_opts_for_recycling_blocks.log_disk_utilization_threshold_);
-    const int64_t usable_disk_limit_size_to_stop_writing =
-        total_size_to_stop_write
-        * disk_opts_for_stopping_writing.log_disk_utilization_limit_threshold_ / 100LL;
-    const bool need_recycle =
-        usable_disk_size_to_recycle_blocks >= total_used_size_byte ? false : true;
-    const bool is_shrinking = disk_options_wrapper_.is_shrinking();
-    constexpr int64_t MB = 1024 * 1024LL;
-    const int64_t print_error_log_disk_size =
-        disk_opts_for_stopping_writing.log_disk_usage_limit_size_
-        * disk_opts_for_stopping_writing.log_disk_utilization_threshold_ / 100LL;
-    const bool need_print_error_log =
-        print_error_log_disk_size >= total_used_size_byte ? false : true;
-
-    // step1. change SHRINKING_STATUS to normal
-    // 1. when there is no possibility to stop writing,
-    // 2. the snapshot of status is SHRINKING_STATUS.
-    bool has_recycled = false;
-    int64_t oldest_palf_id = INVALID_PALF_ID;
-    const bool in_shrinking = (PalfDiskOptionsWrapper::Status::SHRINKING_STATUS == status);
-    if (OB_SUCC(ret) && in_shrinking) {
-      if (total_used_size_byte <= usable_disk_size_to_recycle_blocks) {
-        disk_options_wrapper_.change_to_normal(sequence);
-        PALF_LOG(INFO, "change_to_normal success", K(disk_options_wrapper_),
-                 K(total_used_size_byte), K(usable_disk_size_to_recycle_blocks));
-      }
-    }
-
-    SCN oldest_scn;
-    // step2. try recycle blocks
-    if (true == need_recycle) {
-      if (OB_FAIL(recycle_blocks_(has_recycled, oldest_palf_id, oldest_scn))) {
-        PALF_LOG(WARN, "recycle_blocks_ failed", K(usable_disk_size_to_recycle_blocks),
-                 K(total_used_size_byte), KPC(this));
-      }
-    }
-
-    // step3. try print error log
-    // NB: print error log when:
-    // 1. write-stop.(i.e. set 'diskspace_enough_' to true when the disk usage execeed than the 'log_disk_throttling_percentage_' in disk_opts_for_stopping_writing);
-    // 2. the used log disk space exceeded the log disk recycle threshold and there is no recycable block(in shrinking log disk status, disk_opts_for_stopping_writing is not
-    //    same with disk_opts_for_recycling_blocks).
-    if (!check_disk_space_enough() || (true == need_print_error_log && false == has_recycled)) {
-      constexpr int64_t INTERVAL = 1*1000*1000;
-      if (palf_reach_time_interval(INTERVAL, disk_not_enough_print_interval_in_gc_thread_)) {
-        int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
-        const int64_t log_disk_usage_limit_size = disk_opts_for_stopping_writing.log_disk_usage_limit_size_;
-        const int64_t log_disk_warn_percent = disk_opts_for_stopping_writing.log_disk_utilization_threshold_;
-        const int64_t log_disk_limit_percent = disk_opts_for_stopping_writing.log_disk_utilization_limit_threshold_;
-        LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
-            "total_size(MB)", log_disk_usage_limit_size/MB,
-            "used_size(MB)", total_used_size_byte/MB,
-            "used_percent(%)", (total_used_size_byte*100) / (log_disk_usage_limit_size+1),
-            "warn_size(MB)", (log_disk_usage_limit_size*log_disk_warn_percent)/100/MB,
-            "warn_percent(%)", log_disk_warn_percent,
-            "limit_size(MB)", (log_disk_usage_limit_size*log_disk_limit_percent)/100/MB,
-            "limit_percent(%)", log_disk_limit_percent,
-            "total_unrecyclable_size_byte(MB)", total_unrecyclable_size_byte/MB,
-            "maximum_used_size(MB)", maximum_used_size/MB,
-            "maximum_log_stream", palf_id,
-            "oldest_log_stream", oldest_palf_id,
-            "oldest_scn", oldest_scn,
-            "in_shrinking", in_shrinking);
-        LOG_DBA_ERROR_(OB_LOG_DISK_SPACE_ALMOST_FULL, tmp_ret, "log disk space is almost full",
-            ", total_size(MB)=", log_disk_usage_limit_size/MB,
-            ", used_size(MB)=", total_used_size_byte/MB,
-            ", used_percent(%)=", (total_used_size_byte*100) / (log_disk_usage_limit_size+1),
-            ", warn_size(MB)=", (log_disk_usage_limit_size*log_disk_warn_percent)/100/MB,
-            ", warn_percent(%)=", log_disk_warn_percent,
-            ", limit_size(MB)=", (log_disk_usage_limit_size*log_disk_limit_percent)/100/MB,
-            ", limit_percent(%)=", log_disk_limit_percent,
-            ", total_unrecyclable_size_byte(MB)=", total_unrecyclable_size_byte/MB,
-            ", maximum_used_size(MB)=", maximum_used_size/MB,
-            ", maximum_log_stream=", palf_id,
-            ", oldest_log_stream=", oldest_palf_id,
-            ", oldest_scn=", oldest_scn,
-            ", in_shrinking=", in_shrinking);
-      }
+    ret = palf_handle_impl.locate_by_scn_coarsely(retention_scn_, retention_lsn);
+  }
+  if (OB_SUCCESS != ret) {
+    if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+      // The retention boundary is older than all remaining logs.
+      ret = OB_SUCCESS;
+    } else if (OB_ENTRY_NOT_EXIST == ret) {
+      // The LS no longer has logs; discard the earlier candidate count.
+      candidate_blocks = 0;
+      ret = OB_SUCCESS;
     } else {
-       if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
-         PALF_LOG(INFO, "LOG_DISK_OPTION", K(disk_options_wrapper_));
-       }
+      PALF_LOG(WARN, "locate retention boundary failed", KR(ret), K(retention_scn_),
+               K(min_block_id), K(min_using_block_id));
     }
-
-    (void)remove_stale_incomplete_palf_();
+  } else if (!retention_lsn.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "invalid retention lsn", KR(ret), K(retention_scn_), K(retention_lsn));
+  } else {
+    const block_id_t retention_block_id = lsn_2_block(retention_lsn, PALF_BLOCK_SIZE);
+    const block_id_t candidate_end_block_id = min_using_block_id - 1;
+    const block_id_t retention_expired_end_block_id =
+        common::min(candidate_end_block_id, retention_block_id);
+    // Keep the block containing the retention SCN; the end block is exclusive.
+    retention_expired_blocks = retention_expired_end_block_id > min_block_id
+        ? retention_expired_end_block_id - min_block_id : 0;
+  }
+  if (OB_SUCC(ret)) {
+    retention_expired_blocks_ += retention_expired_blocks;
+    retention_unexpired_blocks_ += candidate_blocks - retention_expired_blocks;
   }
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_PALF_RECLAIM_BY_MODE_PAUSE, "Pause reclaim for the tenant selected by the absolute error code.");
+
+int PalfEnvImpl::try_reclaim_blocks_by_mode_(
+    const bool local_reclaim_needed,
+    bool &has_recycled,
+    int64_t &oldest_palf_id,
+    SCN &oldest_scn)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ERRSIM_PALF_RECLAIM_BY_MODE_PAUSE == -tenant_id_)) {
+    // Pause before checking demand so tests can stop selected tenants before resizing.
+    PALF_LOG(INFO, "tenant reclaim enters debug sync", K_(tenant_id));
+    DEBUG_SYNC(BEFORE_PALF_RECLAIM_BY_MODE);
+  }
+  if (OB_ISNULL(log_block_reclaim_coordinator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "log block reclaim coordinator is null", KR(ret), KPC(this));
+  } else {
+    const LogReclaimState reclaim_state = log_block_reclaim_coordinator_->get_reclaim_state();
+    const bool server_reclaim_needed = log_block_reclaim_coordinator_->need_reclaim();
+    tenant_reclaim_service_.sync_reclaim_mode(
+        reclaim_state, server_reclaim_needed,
+        /* local_reclaim_done */ !local_reclaim_needed);
+    if (LogReclaimState::ENABLED == reclaim_state
+        && OB_SUCCESS != (tmp_ret = try_update_reclaim_snapshot_())) {
+      PALF_LOG_RET(WARN, tmp_ret, "update tenant reclaim snapshot failed", KPC(this));
+    }
+    const bool reclaim_by_shared_quota = LogReclaimState::ENABLED == reclaim_state
+        && server_reclaim_needed && tenant_reclaim_service_.can_recycle();
+    const bool reclaim_by_local_watermark = LogReclaimState::ENABLED != reclaim_state
+        && local_reclaim_needed;
+    if (reclaim_by_shared_quota || reclaim_by_local_watermark) {
+      if (OB_FAIL(recycle_blocks_(has_recycled, oldest_palf_id, oldest_scn))) {
+        PALF_LOG(WARN, "recycle blocks by reclaim mode failed", KR(ret), K(reclaim_state),
+                 K(server_reclaim_needed), K(local_reclaim_needed), KPC(this));
+      }
+    }
+  }
+  return ret;
+}
+
+void PalfEnvImpl::report_disk_full_(
+    const PalfDiskOptions &disk_options,
+    const int64_t total_used_size_byte,
+    const int64_t total_unrecyclable_size_byte,
+    const int64_t maximum_used_size,
+    const int64_t maximum_palf_id,
+    const int64_t oldest_palf_id,
+    const SCN &oldest_scn,
+    const bool in_shrinking) const
+{
+  constexpr int64_t MB = 1024 * 1024LL;
+  int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
+  const int64_t log_disk_usage_limit_size = disk_options.log_disk_usage_limit_size_;
+  const int64_t log_disk_warn_percent = disk_options.log_disk_utilization_threshold_;
+  const int64_t log_disk_limit_percent = disk_options.log_disk_utilization_limit_threshold_;
+  const bool shared_reclaim_enabled = tenant_reclaim_service_.is_shared_reclaim_enabled();
+  const int64_t used_size_for_tenant_limit =
+      shared_reclaim_enabled ? total_unrecyclable_size_byte : total_used_size_byte;
+  const bool tenant_write_stopped = !ATOMIC_LOAD(&diskspace_enough_);
+  const bool pool_write_stopped = OB_NOT_NULL(log_block_reclaim_coordinator_)
+      && log_block_reclaim_coordinator_->is_pool_write_stopped();
+  LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg",
+      "[SHARED_LOG_RECLAIM] log disk space is almost full", "ret", tmp_ret,
+      "total_size(MB)", log_disk_usage_limit_size/MB,
+      "used_size(MB)", used_size_for_tenant_limit/MB,
+      "used_percent(%)", (used_size_for_tenant_limit*100) / (log_disk_usage_limit_size+1),
+      "physical_used_size(MB)", total_used_size_byte/MB,
+      K(shared_reclaim_enabled), K(tenant_write_stopped), K(pool_write_stopped),
+      "warn_size(MB)", (log_disk_usage_limit_size*log_disk_warn_percent)/100/MB,
+      "warn_percent(%)", log_disk_warn_percent,
+      "limit_size(MB)", (log_disk_usage_limit_size*log_disk_limit_percent)/100/MB,
+      "limit_percent(%)", log_disk_limit_percent,
+      "total_unrecyclable_size_byte(MB)", total_unrecyclable_size_byte/MB,
+      "maximum_used_size(MB)", maximum_used_size/MB,
+      "maximum_log_stream", maximum_palf_id,
+      "oldest_log_stream", oldest_palf_id,
+      "oldest_scn", oldest_scn,
+      "in_shrinking", in_shrinking);
+  LOG_DBA_ERROR_(OB_LOG_DISK_SPACE_ALMOST_FULL, tmp_ret,
+      "[SHARED_LOG_RECLAIM] log disk space is almost full",
+      ", total_size(MB)=", log_disk_usage_limit_size/MB,
+      ", used_size(MB)=", used_size_for_tenant_limit/MB,
+      ", used_percent(%)=", (used_size_for_tenant_limit*100) / (log_disk_usage_limit_size+1),
+      ", physical_used_size(MB)=", total_used_size_byte/MB,
+      ", warn_size(MB)=", (log_disk_usage_limit_size*log_disk_warn_percent)/100/MB,
+      ", warn_percent(%)=", log_disk_warn_percent,
+      ", limit_size(MB)=", (log_disk_usage_limit_size*log_disk_limit_percent)/100/MB,
+      ", limit_percent(%)=", log_disk_limit_percent,
+      ", total_unrecyclable_size_byte(MB)=", total_unrecyclable_size_byte/MB,
+      ", maximum_used_size(MB)=", maximum_used_size/MB,
+      ", maximum_log_stream=", maximum_palf_id,
+      ", oldest_log_stream=", oldest_palf_id,
+      ", oldest_scn=", oldest_scn,
+      ", in_shrinking=", in_shrinking);
+}
+
+int PalfEnvImpl::try_recycle_blocks()
+{
+  // Warn after 100 ms and detect hangs after one second.
+  TIMEGUARD_INIT(PALF, 100_ms, 1_s);
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  PalfDiskOptions disk_opts_for_stopping_writing;
+  PalfDiskOptions disk_opts_for_recycling_blocks;
+  PalfDiskOptionsWrapper::Status status = PalfDiskOptionsWrapper::Status::INVALID_STATUS;
+  int64_t sequence = -1;
+  int64_t total_used_size_byte = 0;
+  int64_t total_unrecyclable_size_byte = 0;
+  int64_t maximum_palf_id = INVALID_PALF_ID;
+  int64_t maximum_used_size = 0;
+  const int64_t now_us = ObTimeUtility::current_monotonic_time();
+  disk_options_wrapper_.get_disk_opts(disk_opts_for_stopping_writing,
+                                      disk_opts_for_recycling_blocks,
+                                      status,
+                                      sequence);
+  if (IS_INIT && OB_NOT_NULL(log_block_reclaim_coordinator_)
+      && OB_TMP_FAIL(log_block_reclaim_coordinator_->try_advance_reclaim(now_us))) {
+    PALF_LOG_RET(WARN, tmp_ret, "advance server log reclaim failed", KPC(this));
+  }
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfEnvImpl is not initialized", KR(ret), KPC(this));
+  } else if (OB_FAIL(get_disk_usage_(total_used_size_byte, total_unrecyclable_size_byte,
+                                     maximum_palf_id, maximum_used_size))) {
+    PALF_LOG(WARN, "get disk usage failed", KR(ret), KPC(this));
+  } else if (FALSE_IT(update_log_throttling_(total_unrecyclable_size_byte))) {
+  } else {
+    const int64_t local_reclaim_watermark =
+        calculate_disk_space_threshold(disk_opts_for_recycling_blocks.log_disk_usage_limit_size_,
+            disk_opts_for_recycling_blocks.log_disk_utilization_threshold_);
+    const bool local_reclaim_needed = total_used_size_byte > local_reclaim_watermark;
+    const bool in_shrinking = PalfDiskOptionsWrapper::Status::SHRINKING_STATUS == status;
+    bool has_recycled = false;
+    int64_t oldest_palf_id = INVALID_PALF_ID;
+    SCN oldest_scn;
+
+    if (OB_FAIL(try_reclaim_blocks_by_mode_(
+            local_reclaim_needed, has_recycled, oldest_palf_id, oldest_scn))) {
+      PALF_LOG(WARN, "try reclaim blocks by mode failed", KR(ret), K(local_reclaim_watermark),
+               K(total_used_size_byte), KPC(this));
+    }
+
+    const int64_t tenant_warn_watermark =
+        disk_opts_for_stopping_writing.log_disk_usage_limit_size_
+        * disk_opts_for_stopping_writing.log_disk_utilization_threshold_ / 100LL;
+    const int64_t used_size_for_tenant_limit =
+        tenant_reclaim_service_.is_shared_reclaim_enabled()
+        ? total_unrecyclable_size_byte : total_used_size_byte;
+    // Use the current tenant write-limit basis after syncing the reclaim mode.
+    // Shared history may stay above the local watermark without server pressure.
+    if (in_shrinking && used_size_for_tenant_limit <= local_reclaim_watermark) {
+      disk_options_wrapper_.change_to_normal(sequence);
+      PALF_LOG(INFO, "change_to_normal success", K(disk_options_wrapper_),
+               K(total_used_size_byte), K(used_size_for_tenant_limit), K(local_reclaim_watermark));
+    }
+    const bool tenant_disk_almost_full = used_size_for_tenant_limit > tenant_warn_watermark;
+    // Report either the global hard stop, or a tenant above its warning watermark
+    // that could not return a block in this turn.
+    if (!check_disk_space_enough() || (tenant_disk_almost_full && !has_recycled)) {
+      constexpr int64_t REPORT_INTERVAL_US = 1 * 1000 * 1000;
+      if (palf_reach_time_interval(
+              REPORT_INTERVAL_US, disk_not_enough_print_interval_in_gc_thread_)) {
+        report_disk_full_(disk_opts_for_stopping_writing, total_used_size_byte,
+                          total_unrecyclable_size_byte, maximum_used_size,
+                          maximum_palf_id, oldest_palf_id, oldest_scn,
+                          in_shrinking);
+      }
+    } else if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+      PALF_LOG(INFO, "[SHARED_LOG_RECLAIM] LOG_DISK_OPTION", K(disk_options_wrapper_));
+    }
+    (void)remove_stale_incomplete_palf_();
+  }
+  // Assigned work and its stalled time survive this call until the block count reaches zero.
+  return ret;
+}
+
+int PalfEnvImpl::get_reclaim_snapshot(const int64_t now_us,
+                                     const bool server_need_reclaim,
+                                     TenantReclaimSnapshot &snapshot)
+{
+  return tenant_reclaim_service_.get_reclaim_snapshot(now_us, server_need_reclaim, snapshot);
+}
+
+int PalfEnvImpl::apply_reclaim_quota(const int64_t reclaim_blocks)
+{
+  return tenant_reclaim_service_.apply_reclaim_quota(reclaim_blocks);
+}
+
 bool PalfEnvImpl::check_disk_space_enough()
 {
-  return true == ATOMIC_LOAD(&diskspace_enough_);
+  return true == ATOMIC_LOAD(&diskspace_enough_)
+         && !ATOMIC_LOAD(&gc_stall_stopped_)
+         && (OB_ISNULL(log_block_reclaim_coordinator_)
+             || !log_block_reclaim_coordinator_->is_pool_write_stopped());
 }
 
 PalfEnvImpl::GetTotalUsedDiskSpace::GetTotalUsedDiskSpace()
@@ -944,6 +1155,43 @@ int PalfEnvImpl::get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_s
   } else {
     total_usable_size_byte = disk_options.log_disk_usage_limit_size_;
     PALF_LOG(INFO, "get_disk_usage", K(ret), "capacity(MB):", total_usable_size_byte/MB, "used(MB):", used_size_byte/MB);
+  }
+  return ret;
+}
+
+int PalfEnvImpl::check_log_disk_usage_reached_threshold(
+    const int64_t threshold_percentage, bool &reached)
+{
+  int ret = OB_SUCCESS;
+  int64_t physical_size = 0;
+  int64_t unrecyclable_size = 0;
+  int64_t unused_palf_id = 0;
+  int64_t unused_maximum_size = 0;
+  const PalfDiskOptions disk_options = disk_options_wrapper_.get_disk_opts_for_recycling_blocks();
+  const int64_t limit_size = disk_options.log_disk_usage_limit_size_;
+  reached = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "palf env is not inited", K(ret));
+  } else if (threshold_percentage < 0 || threshold_percentage > 100) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid disk usage threshold", K(ret), K(threshold_percentage));
+  } else if (limit_size <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(WARN, "invalid log disk limit", K(ret), K(limit_size));
+  } else if (OB_FAIL(get_disk_usage_(physical_size, unrecyclable_size,
+                                    unused_palf_id, unused_maximum_size))) {
+    PALF_LOG(WARN, "get disk usage failed", K(ret));
+  } else {
+    const int64_t used_size = tenant_reclaim_service_.is_shared_reclaim_enabled()
+        ? unrecyclable_size : physical_size;
+    if (used_size > INT64_MAX / 100 || limit_size > INT64_MAX / 100) {
+      ret = OB_SIZE_OVERFLOW;
+      PALF_LOG(ERROR, "log disk size is too large for threshold comparison",
+          K(ret), K(used_size), K(limit_size), K(threshold_percentage));
+    } else {
+      reached = used_size * 100 >= threshold_percentage * limit_size;
+    }
   }
   return ret;
 }
@@ -1202,6 +1450,83 @@ int PalfEnvImpl::get_disk_usage_(int64_t &used_size_byte)
   return ret;
 }
 
+int PalfEnvImpl::get_reclaim_summary_(int64_t &retention_expired_blocks,
+                                      int64_t &retention_unexpired_blocks)
+{
+  int ret = OB_SUCCESS;
+  int64_t retention_us = 0;
+  // Copy the setting and release the config reference before reading log blocks.
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (!tenant_config.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      PALF_LOG(WARN, "tenant config is invalid", KR(ret), K(tenant_id_));
+    } else {
+      retention_us = tenant_config->log_retention_time;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t now_us = ObTimeUtility::current_time();
+    SCN retention_scn;
+    if (OB_FAIL(calc_retention_scn_(now_us, retention_us, retention_scn))) {
+      PALF_LOG(WARN, "calculate retention scn failed", KR(ret), K(now_us),
+               K(retention_us), K(tenant_id_));
+    } else {
+      LogGetRecycableFileCandidate functor(retention_scn);
+      if (OB_FAIL(palf_handle_impl_map_.for_each(functor))) {
+        if (OB_SUCCESS != functor.ret_code_) {
+          ret = functor.ret_code_;
+        }
+        PALF_LOG(WARN, "collect tenant reclaim summary failed", KR(ret), K(tenant_id_));
+      } else {
+        retention_expired_blocks = functor.retention_expired_blocks_;
+        retention_unexpired_blocks = functor.retention_unexpired_blocks_;
+      }
+    }
+  }
+  return ret;
+}
+
+int PalfEnvImpl::calc_retention_scn_(
+    const int64_t now_us,
+    const int64_t retention_us,
+    SCN &retention_scn)
+{
+  int ret = OB_SUCCESS;
+  retention_scn.reset();
+  if (OB_UNLIKELY(now_us < 0 || retention_us < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid retention boundary argument", KR(ret), K(now_us), K(retention_us));
+  } else {
+    const int64_t retention_ts = now_us > retention_us ? now_us - retention_us : 0;
+    if (OB_FAIL(retention_scn.convert_from_ts(retention_ts))) {
+      PALF_LOG(WARN, "convert retention timestamp failed", KR(ret), K(retention_ts));
+    }
+  }
+  return ret;
+}
+
+int PalfEnvImpl::try_update_reclaim_snapshot_()
+{
+  int ret = OB_SUCCESS;
+  bool need_update = false;
+  if (OB_FAIL(tenant_reclaim_service_.check_need_update_snapshot(need_update))) {
+    PALF_LOG(WARN, "check tenant reclaim snapshot update failed", KR(ret), K(tenant_id_));
+  } else if (need_update) {
+    int64_t retention_expired_blocks = 0;
+    int64_t retention_unexpired_blocks = 0;
+    if (OB_FAIL(get_reclaim_summary_(retention_expired_blocks,
+                                     retention_unexpired_blocks))) {
+      // Keep the last successful counts, less blocks already recycled, until the next refresh.
+      PALF_LOG(WARN, "get reclaim summary failed", KR(ret), K(tenant_id_));
+    } else {
+      tenant_reclaim_service_.update_reclaim_snapshot(
+          retention_expired_blocks, retention_unexpired_blocks);
+    }
+  }
+  return ret;
+}
+
 int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SCN &oldest_scn)
 {
   int ret = OB_SUCCESS;
@@ -1221,6 +1546,7 @@ int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SC
           "lsn of PalfHandleImpl whether has been advanced", K(ret), KPC(this));
     } else if (OB_FAIL(get_palf_handle_impl(palf_id, guard))) {
       PALF_LOG(WARN, "get_palf_handle_impl failed", K(ret), K(palf_id));
+    } else if (FALSE_IT(inject_gc_stall_(palf_id, min_block_id))) {
     } else if (OB_FAIL(guard.get_palf_handle_impl()->delete_block(min_block_id))) {
       PALF_LOG(WARN, "delete block failed", K(ret), K(min_block_id), K(functor));
     } else {
@@ -1231,6 +1557,27 @@ int PalfEnvImpl::recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, SC
     oldest_scn = functor.oldest_block_scn_;
   }
   return ret;
+}
+
+ERRSIM_POINT_DEF(ERRSIM_PALF_BLOCK_GC_STALL);
+ERRSIM_POINT_DEF(ERRSIM_PALF_BLOCK_GC_DELAY, "Absolute error code is the block GC delay in milliseconds.");
+void PalfEnvImpl::inject_gc_stall_(const int64_t palf_id, const block_id_t min_block_id)
+{
+  if (OB_UNLIKELY(ERRSIM_PALF_BLOCK_GC_STALL == -tenant_id_)) {
+    PALF_LOG(INFO, "block GC enters debug sync", K_(tenant_id), K(palf_id), K(min_block_id));
+    DEBUG_SYNC(BEFORE_PALF_RECYCLE_BLOCK);
+    PALF_LOG(INFO, "block GC leaves debug sync", K_(tenant_id), K(palf_id), K(min_block_id));
+  }
+  const int64_t sleep_ms = abs(static_cast<int64_t>(ERRSIM_PALF_BLOCK_GC_DELAY));
+  if (OB_UNLIKELY(sleep_ms > 0)) {
+    PALF_LOG(INFO, "block GC sleeps", K_(tenant_id), K(palf_id), K(min_block_id), K(sleep_ms));
+    const int64_t end_ts = ObTimeUtility::current_monotonic_time() + sleep_ms * 1000;
+    int64_t left_us = sleep_ms * 1000;
+    while (left_us > 0) {
+      ob_usleep(MIN(left_us, 1000 * 1000L));
+      left_us = end_ts - ObTimeUtility::current_monotonic_time();
+    }
+  }
 }
 
 int PalfEnvImpl::wait_until_reference_count_to_zero_(const int64_t palf_id)
@@ -1403,23 +1750,84 @@ int PalfEnvImpl::get_throttling_options(PalfThrottleOptions &options)
   return ret;
 }
 
+void PalfEnvImpl::update_log_throttling_(const int64_t unrecyclable_size)
+{
+  int ret = OB_SUCCESS;
+  bool state_changed = false;
+  bool gc_stalled = false;
+  bool gc_stall_stopped = false;
+  int64_t stalled_duration_us = OB_INVALID_TIMESTAMP;
+  // GC 和 LogLoop 按同一顺序发布压力、停写状态和 IO 通知；锁忙时保留旧值，下一轮再更新。
+  // 两层锁均使用 trylock，避免 LogLoop 等待另一个发布者或磁盘配置更新。
+  if (OB_FAIL(throttling_update_lock_.trylock())) {
+    PALF_LOG(TRACE, "failed to lock throttling update", K(ret));
+  } else {
+    const bool prev_gc_stalled = disk_options_wrapper_.is_gc_stalled();
+    const bool prev_gc_stall_stopped = ATOMIC_LOAD(&gc_stall_stopped_);
+    const int64_t gc_stall_start_ts = tenant_reclaim_service_.get_gc_stall_start_ts();
+    const int64_t now_us = ObTimeUtility::current_monotonic_time();
+    // 卡顿起点已包含 1 秒无进展宽限期，d 只累计宽限期之后的时间，使用单调时钟。
+    // 起点无效或仍在未来时，d 保持无效值，本轮按真实 U 限流并清除旧卡顿状态。
+    if (OB_INVALID_TIMESTAMP != gc_stall_start_ts && now_us >= gc_stall_start_ts) {
+      stalled_duration_us = now_us - gc_stall_start_ts;
+    }
+    bool need_throttling = false;
+    // 只在取得新 U 样本后发布 E，保持“本轮采样基值 + IO 新增量”的记账方式。
+    // 不用旧 U 单独推进时间项，避免刷新 E 时清掉尚未被采样覆盖的 IO 增量。
+    if (OB_FAIL(disk_options_wrapper_.try_update_throttling_disk_usage(
+        unrecyclable_size, stalled_duration_us, need_throttling, gc_stall_stopped))) {
+      PALF_LOG(TRACE, "try_update_throttling_disk_usage failed", K(ret));
+    } else {
+      gc_stalled = disk_options_wrapper_.is_gc_stalled();
+      ATOMIC_STORE(&gc_stall_stopped_, gc_stall_stopped);
+      state_changed = prev_gc_stalled != gc_stalled || prev_gc_stall_stopped != gc_stall_stopped;
+      ret = log_io_worker_wrapper_.notify_need_writing_throttling(need_throttling, gc_stalled);
+    }
+    throttling_update_lock_.unlock();
+  }
+  if (state_changed) {
+    PALF_LOG(INFO, "[LOG DISK THROTTLING] GC state changed", K(gc_stalled), K(gc_stall_stopped),
+             K(stalled_duration_us), K(unrecyclable_size));
+  }
+  if (OB_SUCCESS == ret && gc_stalled && REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
+    PALF_LOG(INFO, "[LOG DISK THROTTLING] [GC STALLED]", K(stalled_duration_us),
+             K(unrecyclable_size), K(gc_stall_stopped), K(disk_options_wrapper_));
+  }
+  if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
+    PALF_LOG(WARN, "update log writing throttling failed", K(ret));
+  }
+}
+
 void PalfEnvImpl::period_calc_disk_usage()
 {
   int ret = OB_SUCCESS;
   constexpr int64_t MB = 1024 * 1024;
   PalfDiskOptions disk_options = disk_options_wrapper_.get_disk_opts_for_stopping_writing();
   int64_t used_size_byte = 0;
-  int64_t total_usable_size_byte = 0;
-  if (OB_FAIL(get_disk_usage_(used_size_byte))) {
+  int64_t unrecyclable_size_byte = 0;
+  int64_t unused_palf_id = 0;
+  int64_t unused_maximum_used_size = 0;
+  if (OB_FAIL(get_disk_usage_(used_size_byte, unrecyclable_size_byte,
+                             unused_palf_id, unused_maximum_used_size))) {
     PALF_LOG(WARN, "get_disk_usage_ failed", K(ret));
   } else {
+    // GC normally publishes pressure. LogLoop only handles stall expiry and recovery.
+    const int64_t gc_stall_start_ts = tenant_reclaim_service_.get_gc_stall_start_ts();
+    if (disk_options_wrapper_.is_gc_stalled()
+        || (OB_INVALID_TIMESTAMP != gc_stall_start_ts
+            && ObTimeUtility::current_monotonic_time() >= gc_stall_start_ts)) {
+      update_log_throttling_(unrecyclable_size_byte);
+    }
+    const int64_t used_size_for_tenant_limit =
+        tenant_reclaim_service_.is_shared_reclaim_enabled()
+        ? unrecyclable_size_byte : used_size_byte;
     const int64_t log_disk_usage_limit_size =  disk_options.log_disk_usage_limit_size_;
     const int64_t log_disk_limit_percent = disk_options.log_disk_utilization_limit_threshold_;
     const int64_t log_disk_warn_percent = disk_options.log_disk_utilization_threshold_;
     const int64_t usable_disk_limit_size_to_stop_writing =
       log_disk_usage_limit_size * log_disk_limit_percent / 100LL;
     const bool curr_diskspace_enough =
-        usable_disk_limit_size_to_stop_writing >= used_size_byte ? true : false;
+        usable_disk_limit_size_to_stop_writing >= used_size_for_tenant_limit ? true : false;
     const int64_t warn_siz =
       log_disk_usage_limit_size * log_disk_warn_percent / 100LL;
     if (diskspace_enough_ != curr_diskspace_enough) {
@@ -1431,18 +1839,20 @@ void PalfEnvImpl::period_calc_disk_usage()
       constexpr int64_t INTERVAL = 1*1000*1000;
       if (palf_reach_time_interval(INTERVAL, disk_not_enough_print_interval_in_loop_thread_)) {
         int tmp_ret = OB_LOG_OUTOF_DISK_SPACE;
-        LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg", "log disk space is almost full", "ret", tmp_ret,
+        LOG_DBA_ERROR(OB_LOG_OUTOF_DISK_SPACE, "msg",
+            "[SHARED_LOG_RECLAIM] log disk space is almost full", "ret", tmp_ret,
             "total_size(MB)", log_disk_usage_limit_size/MB,
-            "used_size(MB)", used_size_byte/MB,
-            "used_percent(%)", (used_size_byte*100) / (log_disk_usage_limit_size + 1),
+            "used_size(MB)", used_size_for_tenant_limit/MB,
+            "used_percent(%)", (used_size_for_tenant_limit*100) / (log_disk_usage_limit_size + 1),
             "warn_size(MB)", warn_siz/MB,
             "warn_percent(%)", log_disk_warn_percent,
             "limit_size(MB)", usable_disk_limit_size_to_stop_writing/MB,
             "limit_percent(%)", log_disk_limit_percent);
-        LOG_DBA_ERROR_(OB_LOG_DISK_SPACE_ALMOST_FULL, tmp_ret, "log disk space is almost full",
+        LOG_DBA_ERROR_(OB_LOG_DISK_SPACE_ALMOST_FULL, tmp_ret,
+            "[SHARED_LOG_RECLAIM] log disk space is almost full",
             ", total_size(MB)=", log_disk_usage_limit_size/MB,
-            ", used_size(MB)=", used_size_byte/MB,
-            ", used_percent(%)=", (used_size_byte*100) / (log_disk_usage_limit_size + 1),
+            ", used_size(MB)=", used_size_for_tenant_limit/MB,
+            ", used_percent(%)=", (used_size_for_tenant_limit*100) / (log_disk_usage_limit_size + 1),
             ", warn_size(MB)=", warn_siz/MB,
             ", warn_percent(%)=", log_disk_warn_percent,
             ", limit_size(MB)=", usable_disk_limit_size_to_stop_writing/MB,

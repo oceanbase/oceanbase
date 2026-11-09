@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #include "ob_log_request_handler.h"
+#include "logservice/ob_garbage_collector.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_reconfig_checker_adapter.h"
 
@@ -203,6 +204,55 @@ int LogRequestHandler::handle_sync_request<LogGetPalfStatReq, LogGetPalfStatResp
     } else {
       CLOG_LOG(TRACE, "get_palf_stat success", K(ret), K(palf_id), K(server), K(req), K(resp));
     }
+  }
+  return ret;
+}
+
+template <>
+int LogRequestHandler::handle_sync_request<LogGetFetchSourcesReq, LogGetFetchSourcesResp>(
+    const LogGetFetchSourcesReq &req,
+    LogGetFetchSourcesResp &resp)
+{
+  int ret = OB_SUCCESS;
+  storage::ObLSHandle ls_handle;
+  ObLogHandler *log_handler = NULL;
+  storage::ObLS *ls = NULL;
+  ObGCHandler *gc_handler = NULL;
+  resp.reset();
+  if (!req.is_valid() || req.tenant_id_ != MTL_ID()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid log sources request", K(ret), K(req), K(MTL_ID()));
+  } else if (OB_FAIL(get_log_handler_(req.ls_id_.id(), ls_handle, log_handler))) {
+    CLOG_LOG(WARN, "get log handler failed", K(ret), K(req));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(gc_handler = ls->get_gc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "get gc handler failed", K(ret), K(req), KP(ls), KP(gc_handler));
+  } else if (OB_FAIL(gc_handler->get_log_fetch_sources(resp))) {
+    CLOG_LOG(TRACE, "get cached log sources failed", K(ret), K(req));
+  }
+  return ret;
+}
+
+template <>
+int LogRequestHandler::handle_sync_request<ObLSGCRequest, ObLSGCResponse>(
+    const ObLSGCRequest &req,
+    ObLSGCResponse &resp)
+{
+  int ret = common::OB_SUCCESS;
+  storage::ObLSHandle ls_handle;
+  logservice::ObLogHandler *log_handler = NULL;
+  storage::ObLS *ls = NULL;
+  ObGCHandler *gc_handler = NULL;
+  if (!req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid retained ls gc request", K(ret), K(req));
+  } else if (OB_FAIL(get_log_handler_(req.get_ls_id().id(), ls_handle, log_handler))) {
+    CLOG_LOG(WARN, "get log handler failed", K(ret), K(req));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls()) || OB_ISNULL(gc_handler = ls->get_gc_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "get gc handler failed", K(ret), K(req), KP(ls), KP(gc_handler));
+  } else if (OB_FAIL(gc_handler->handle_retention_gc_request(req, resp))) {
+    CLOG_LOG(WARN, "handle retained ls gc request failed", K(ret), K(req), K(resp));
   }
   return ret;
 }

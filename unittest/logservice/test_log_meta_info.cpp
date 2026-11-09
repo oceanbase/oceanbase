@@ -14,12 +14,14 @@
 #include "logservice/palf/log_meta_info.h"            // LogPrepareMeta...
 #undef private
 #include "logservice/ob_log_service.h"                // ObLogService
+#include "share/ob_cluster_version.h"
 #include <gtest/gtest.h>
 
 namespace oceanbase
 {
 using namespace common;
 using namespace palf;
+using share::SCN;
 constexpr int64_t palf::LogConfigMeta::LOG_CONFIG_META_VERSION;
 constexpr int64_t palf::LogConfigMeta::LOG_CONFIG_META_VERSION_INC;
 namespace unittest
@@ -376,6 +378,11 @@ TEST(TestLogReplicaPropertyMeta, test_log_replica_property_meta)
   LogReplicaPropertyMeta replica_meta1;
   EXPECT_FALSE(replica_meta.is_valid());
   EXPECT_EQ(OB_SUCCESS, replica_meta.generate(true, LogReplicaType::NORMAL_REPLICA));
+  EXPECT_EQ(1, replica_meta.version_);
+  EXPECT_EQ(serialization::encoded_length_i64(replica_meta.version_)
+      + serialization::encoded_length_bool(replica_meta.allow_vote_)
+      + serialization::encoded_length_i32(replica_meta.replica_type_),
+      replica_meta.get_serialize_size());
   replica_meta.reset();
   EXPECT_FALSE(replica_meta.is_valid());
   EXPECT_EQ(OB_SUCCESS, replica_meta.generate(false, LogReplicaType::NORMAL_REPLICA));

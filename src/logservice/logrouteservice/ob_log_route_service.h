@@ -23,6 +23,7 @@
 #include "ob_log_systable_queryer.h"        // ObLogSysTableQueryer
 #include "ob_log_route_struct.h"            // ObLSRouterKey, ObLSRouterValue
 #include "ob_log_all_svr_cache.h"           // ObLogAllSvrCache
+#include "logservice/logrpc/ob_log_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -51,6 +52,8 @@ public:
   virtual ~ObLogRouteService();
 
   // @param [in] proxy             ObMySQLProxy
+  // @param [in] log_rpc_proxy     Proxy bound to the fetcher's RPC transport
+  // @param [in] self_addr         Source address for log service RPC requests
   // @param [in] prefer_region     Prefer Region to fetch log
   // @param [in] cluster_id        ClusterID
   // @param [in] is_across_cluster Whether SQL queries cross cluster
@@ -73,6 +76,8 @@ public:
   // @retval OB_SUCCESS           Success
   // @retval Other return values  Failed
   int init(ObISQLClient *proxy,
+      const obrpc::ObLogServiceRpcProxy &log_rpc_proxy,
+      const common::ObAddr &self_addr,
       const common::ObRegion &prefer_region,
       const int64_t cluster_id,
       const bool is_across_cluster,
@@ -307,6 +312,7 @@ private:
       const ObLSRouterKey &router_key,
       ObLSRouterValue &router_value);
   int update_all_server_and_zone_cache_();
+  int query_log_fetch_sources_and_update_(const ObLSRouterKey &router_key, LSSvrList &svr_list);
   void free_mem_();
 
 private:
@@ -388,6 +394,8 @@ private:
   ObSliceAlloc asyn_task_allocator_;
   ObLogSvrBlacklist svr_blacklist_;
   ObLogSysTableQueryer systable_queryer_;
+  obrpc::ObLogServiceRpcProxy log_rpc_proxy_;
+  common::ObAddr self_addr_;
   ObLogAllSvrCache all_svr_cache_;
   ObLSRouteTimerTask ls_route_timer_task_;
   common::ObTimer timer_;
@@ -409,4 +417,3 @@ private:
 } // namespace oceanbase
 
 #endif
-

@@ -14,6 +14,7 @@
 #define OCEANBASE_LOGSERVICE_LOG_MGR_
 #include <sys/types.h>
 #include "common/ob_member_list.h"
+#include "lib/atomic/ob_atomic.h"
 #include "lib/hash/ob_link_hashmap.h"
 #include "lib/lock/ob_mutex.h"
 #include "lib/lock/ob_spin_lock.h"
@@ -33,9 +34,11 @@
 #include "palf_handle_impl.h"
 #include "log_io_worker_wrapper.h"
 #include "block_gc_timer_task.h"
+#include "tenant_log_block_reclaim_service.h"
 #include "log_updater.h"
 #include "log_io_utils.h"
 #include "log_io_adapter.h"
+#include "tenant_log_block_reclaim_service.h"
 namespace oceanbase
 {
 namespace common
@@ -65,6 +68,7 @@ class IPalfHandleImpl;
 class PalfHandleImpl;
 class PalfHandle;
 class ILogBlockPool;
+class ILogBlockReclaimCoordinator;
 
 class PalfHandleImplFactory
 {
@@ -103,6 +107,7 @@ public:
                              disk_opts_for_recycling_blocks_(),
                              status_(Status::INVALID_STATUS),
                              cur_unrecyclable_log_disk_size_(0),
+                             gc_stalled_(false),
                              sequence_(-1),
                              disk_opts_lock_(common::ObLatchIds::PALF_ENV_LOCK) {}
   ~PalfDiskOptionsWrapper() { reset(); }
@@ -112,12 +117,12 @@ public:
   int update_disk_options(const PalfDiskOptions &disk_opts);
 
   void change_to_normal(const int64_t sequence);
-  const PalfDiskOptions& get_disk_opts_for_stopping_writing() const
+  PalfDiskOptions get_disk_opts_for_stopping_writing() const
   {
     ObSpinLockGuard guard(disk_opts_lock_);
     return disk_opts_for_stopping_writing_;
   }
-  const PalfDiskOptions& get_disk_opts_for_recycling_blocks() const
+  PalfDiskOptions get_disk_opts_for_recycling_blocks() const
   {
     ObSpinLockGuard guard(disk_opts_lock_);
     return disk_opts_for_recycling_blocks_;
@@ -125,6 +130,15 @@ public:
   void set_cur_unrecyclable_log_disk_size(const int64_t unrecyclable_log_disk_size);
   bool need_throttling() const;
   int check_log_disk_under_pressure(bool &log_disk_under_pressure) const;
+  // A busy lock leaves the previous pressure and all output arguments unchanged.
+  int try_update_throttling_disk_usage(const int64_t unrecyclable_size,
+                                      const int64_t stalled_duration_us,
+                                      bool &need_throttling,
+                                      bool &gc_stall_stopped);
+  bool is_gc_stalled() const
+  {
+    return ATOMIC_LOAD(&gc_stalled_);
+  }
 
   void get_disk_opts(PalfDiskOptions &disk_opts_for_stopping_writing,
                      PalfDiskOptions &disk_opts_for_recycling_blocks,
@@ -146,6 +160,7 @@ public:
     options.trigger_percentage_ = disk_opts_for_stopping_writing_.log_disk_throttling_percentage_;
     options.maximum_duration_ = disk_opts_for_stopping_writing_.log_disk_throttling_maximum_duration_;
     options.unrecyclable_disk_space_ = cur_unrecyclable_log_disk_size_;
+    options.gc_stalled_ = ATOMIC_LOAD(&gc_stalled_);
   }
 
   bool is_shrinking() const
@@ -164,7 +179,7 @@ public:
   static constexpr int64_t MB = 1024*1024ll;
   TO_STRING_KV(K_(disk_opts_for_stopping_writing), K_(disk_opts_for_recycling_blocks), K_(status),
                "cur_unrecyclable_log_disk_size(MB)", cur_unrecyclable_log_disk_size_/MB,
-               K_(sequence));
+               K_(gc_stalled), K_(sequence));
 
 private:
   int update_disk_options_not_guarded_by_lock_(const PalfDiskOptions &new_opts);
@@ -176,7 +191,9 @@ private:
   PalfDiskOptions disk_opts_for_stopping_writing_;
   PalfDiskOptions disk_opts_for_recycling_blocks_;
   Status status_;
+  // Throttling pressure only; physical usage and capacity checks keep their original inputs.
   int64_t cur_unrecyclable_log_disk_size_;
+  bool gc_stalled_;
   int64_t sequence_;
   mutable ObSpinLock disk_opts_lock_;
 };
@@ -239,6 +256,7 @@ public:
            obrpc::ObBatchRpc *batch_rpc,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
+           ILogBlockReclaimCoordinator *log_block_reclaim_coordinator,
            PalfMonitorCb *monitor,
            share::ObResourceManager *resource_manager,
            common::ObIOManager *io_manager);
@@ -278,8 +296,16 @@ public:
 
   // =================== disk space management ==================
   int try_recycle_blocks();
+  // Collect tenant reclaim state and check progress independently of this tenant's block GC.
+  int get_reclaim_snapshot(const int64_t now_us,
+                           const bool server_need_reclaim,
+                           TenantReclaimSnapshot &snapshot);
+  int apply_reclaim_quota(const int64_t reclaim_blocks);
   bool check_disk_space_enough() override final;
+  void record_gc_progress()
+  { tenant_reclaim_service_.record_gc_progress(); }
   int get_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
+  int check_log_disk_usage_reached_threshold(const int64_t threshold_percentage, bool &reached);
   int get_stable_disk_usage(int64_t &used_size_byte, int64_t &total_usable_size_byte);
   int check_log_disk_under_pressure(bool &log_disk_under_pressure);
   int update_options(const PalfOptions &options);
@@ -320,6 +346,7 @@ private:
 
   struct LogGetRecycableFileCandidate {
     LogGetRecycableFileCandidate();
+    explicit LogGetRecycableFileCandidate(const share::SCN &retention_scn);
     ~LogGetRecycableFileCandidate();
     bool operator() (const LSKey &palf_id, IPalfHandleImpl *palf_handle_impl);
     int64_t id_;
@@ -328,8 +355,18 @@ private:
     block_id_t min_using_block_id_;
     int64_t oldest_palf_id_;
     share::SCN oldest_block_scn_;
+    share::SCN retention_scn_;
+    int64_t retention_expired_blocks_;
+    int64_t retention_unexpired_blocks_;
     int ret_code_;
-    TO_STRING_KV(K_(id), K_(min_block_max_scn), K_(min_block_id), K_(min_using_block_id), K_(oldest_palf_id), K_(oldest_block_scn), K_(ret_code));
+    TO_STRING_KV(K_(id), K_(min_block_max_scn), K_(min_block_id), K_(min_using_block_id),
+                 K_(oldest_palf_id), K_(oldest_block_scn), K_(retention_scn),
+                 K_(retention_expired_blocks), K_(retention_unexpired_blocks), KR(ret_code_));
+  private:
+    // Count reclaimable blocks on each side of the retention boundary for one LS.
+    int collect_reclaim_blocks_(IPalfHandleImpl &palf_handle_impl,
+                                const block_id_t min_block_id,
+                                const block_id_t min_using_block_id);
   };
   struct GetTotalUsedDiskSpace
   {
@@ -382,7 +419,29 @@ private:
                       int64_t &unrecyclable_disk_space,
                       int64_t &palf_id,
                       int64_t &maximum_used_size);
+  int try_update_reclaim_snapshot_();
+  int get_reclaim_summary_(int64_t &retention_expired_blocks,
+                           int64_t &retention_unexpired_blocks);
+  static int calc_retention_scn_(const int64_t now_us,
+                                 const int64_t retention_us,
+                                 share::SCN &retention_scn);
+  // Sync reclaim mode and run one shared-quota or local-watermark GC step.
+  int try_reclaim_blocks_by_mode_(const bool local_reclaim_needed,
+                                  bool &has_recycled,
+                                  int64_t &oldest_palf_id,
+                                  share::SCN &oldest_scn);
+  // Emit detailed diagnostics after a log-disk-full condition is rate limited.
+  void report_disk_full_(const PalfDiskOptions &disk_options,
+                         const int64_t total_used_size_byte,
+                         const int64_t total_unrecyclable_size_byte,
+                         const int64_t maximum_used_size,
+                         const int64_t maximum_palf_id,
+                         const int64_t oldest_palf_id,
+                         const share::SCN &oldest_scn,
+                         const bool in_shrinking) const;
   int recycle_blocks_(bool &has_recycled, int64_t &oldest_palf_id, share::SCN &oldest_scn);
+  void inject_gc_stall_(const int64_t palf_id, const block_id_t min_block_id);
+  void update_log_throttling_(const int64_t unrecyclable_size);
   int wait_until_reference_count_to_zero_(const int64_t palf_id);
   // check the diskspace whether is enough to hold a new palf instance.
   bool check_can_create_palf_handle_impl_() const;
@@ -405,6 +464,7 @@ private:
   RWLock palf_meta_lock_;
   common::ObILogAllocator *log_alloc_mgr_;
   ILogBlockPool *log_block_pool_;
+  ILogBlockReclaimCoordinator *log_block_reclaim_coordinator_;
   FetchLogEngine fetch_log_engine_;
   LogRpc log_rpc_;
   LogIOTaskCbThreadPool cb_thread_pool_;
@@ -416,6 +476,9 @@ private:
   PalfMonitorCb *monitor_;
 
   PalfDiskOptionsWrapper disk_options_wrapper_;
+  TenantLogBlockReclaimService tenant_reclaim_service_;
+  // Keep GC and LogLoop pressure updates and their IO notifications in the same order.
+  common::ObSpinLock throttling_update_lock_;
   int64_t disk_not_enough_print_interval_in_gc_thread_;
   int64_t disk_not_enough_print_interval_in_loop_thread_;
 
@@ -432,6 +495,7 @@ private:
 
   LogIOWorkerConfig log_io_worker_config_;
   bool diskspace_enough_;
+  bool gc_stall_stopped_;
   int64_t tenant_id_;
   LogIOAdapter io_adapter_;
   bool is_inited_;

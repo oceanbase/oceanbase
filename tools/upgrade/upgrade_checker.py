@@ -386,11 +386,29 @@ def check_data_version(query_cur):
             logging.info("check data version success, all tenant's compatible/target_data_version/current_data_version is {0}".format(data_version_str))
 
 # 2. 检查paxos副本是否同步, paxos副本是否缺失
+def get_unsync_replica_count(query_cur):
+  sql = """select tenant_id, ls_id, svr_ip, svr_port from GV$OB_LOG_STAT where in_sync = 'NO'"""
+  (desc, unsync_replicas) = query_cur.exec_query(sql)
+  unsync_count = 0
+  for tenant_id, ls_id, svr_ip, svr_port in unsync_replicas:
+    if ':' in svr_ip:
+      svr_ip = '[{0}]'.format(svr_ip)
+    member_prefix = ',{0}:{1}:'.format(svr_ip, svr_port)
+    sql = """select count(*), ifnull(sum(locate('{2}', concat(',', paxos_member_list)) > 0
+             or locate('{2}', concat(',', learner_list)) > 0), 0)
+             from GV$OB_LOG_STAT where tenant_id = {0} and ls_id = {1} and role = 'LEADER'""".format(tenant_id, ls_id, member_prefix)
+    (desc, results) = query_cur.exec_query(sql)
+    if len(results) != 1 or len(results[0]) != 2:
+      raise MyError('result cnt not match')
+    elif results[0][0] != 1 or results[0][1] > 0:
+      unsync_count += 1
+  return unsync_count
+
 def check_paxos_replica(query_cur):
   # 2.1 检查paxos副本是否同步
-  (desc, results) = query_cur.exec_query("""select count(1) as unsync_cnt from GV$OB_LOG_STAT where in_sync = 'NO'""")
-  if results[0][0] > 0 :
-    fail_list.append('{0} replicas unsync, please check'.format(results[0][0]))
+  unsync_count = get_unsync_replica_count(query_cur)
+  if unsync_count > 0:
+    fail_list.append('{0} replicas unsync, please check'.format(unsync_count))
   # 2.2 检查paxos副本是否有缺失 TODO
   logging.info('check paxos replica success')
 
