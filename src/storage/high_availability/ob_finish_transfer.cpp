@@ -102,11 +102,9 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
   observer::ObInnerSQLConnection *conn = NULL;
   SCN start_scn;
   SCN finish_scn;
-  bool is_majority_passed = false;
   share::ObRsMgr *rs_mgr = GCTX.rs_mgr_;
   obrpc::ObSrvRpcProxy *svr_rpc_proxy = GCTX.srv_rpc_proxy_;
   int64_t result = OB_SUCCESS;
-  common::ObArray<common::ObAddr> member_addr_list;
   bool majority_backfilled = false;
   ObLSLocation ls_location;
   bool is_leader = false;
@@ -235,30 +233,13 @@ int ObTxFinishTransfer::do_tx_transfer_doing_(const ObTransferTaskID &task_id, c
         SERVER_EVENT_SYNC_ADD("TRANSFER", "BETWEEN_REGISTER_FINISH_TRANSFER_IN_AND_OUT");
   #endif
         DEBUG_SYNC(SWITCH_LEADER_BETWEEN_FINISH_TRANSFER_IN_AND_OUT);
-        // 5. The leader of dest ls checks that majority ls replia satisfies the finish_scn of the playback
-        // (the step of non-multi-source transaction, only the leader of dest ls does).
-        // Abort is required if no majority replays to finish_scn beyond the threshold.
-        // Here, the leader of dest_ls checks the destination of the majority to be more secure, and if the
-        // FINISH_TRANSFER step fails, it will not affect the reading and writing of dest_ls, but the main switch will
-        // have an impact, so here we will also guarantee all within a certain threshold. Copy, after a certain threshold
-        // is exceeded, the majority is guaranteed; here, the transfer seq at the log stream level also needs to be
-        // incremented (in TX_START_TRASNFER_IN)
+        // 5. Wait for the leader tablet status to become NORMAL and obtain finish_scn.
+        // All destination members have completed backfill under the member list lock.
+        // Followers can replay FINISH_TRANSFER_IN asynchronously.
         if (FAILEDx(wait_transfer_tablet_status_normal_(tenant_id, dest_ls_id, tablet_list, start_scn, timeout_ctx, finish_scn))) {
           LOG_WARN("failed to wait tablet status normal", K(ret), K(tenant_id), K(dest_ls_id), K(tablet_list));
-        } else if (OB_FAIL(member_list.get_addr_array(member_addr_list))) {
-          LOG_WARN("failed to get addr array", K(ret), K(member_list));
-        } else if (OB_FAIL(wait_all_ls_replica_replay_scn_(task_id, tenant_id, dest_ls_id,
-            member_addr_list, finish_scn, quorum, timeout_ctx, is_majority_passed))) {
-          LOG_WARN("failed to check ls replica replay scn",
-              K(ret),
-              K(tenant_id),
-              K(dest_ls_id),
-              K(member_addr_list),
-              K(finish_scn));
-        } else if (!is_majority_passed) {
-          ret = OB_TIMEOUT;
-          LOG_WARN("majority replay scn not passed", K(ret));
         }
+
         // 6. The leader of dest_ls registers a multi-source transaction,
         // and the type is TX_FINISH_TRANSFER_OUT. The contents of the log are src_ls_id, dest_ls_id, finish_scn, and
         // tablet_id_list.
