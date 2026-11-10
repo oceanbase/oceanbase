@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL
 #include <gtest/gtest.h>
+#include <ctime>
 #define private public
 #include "sql/audit/ob_audit_log_utils.h"
 #include "share/io/ob_io_manager.h"
@@ -125,10 +126,16 @@ TEST_F(TestAuditLogUtils, prune_log)
 {
   sql::ObAuditLogger logger;
   system("rm -rf audit");
-  system("fallocate -l 10K ./audit_file.test");
+  ASSERT_EQ(0, system("dd if=/dev/urandom of=audit_file.test bs=1M count=1"));
   logger.log_cfg_.audit_log_path_ = "file://audit/1234/567";
   const char *dir_path = "1004/ip:port";
-  int64_t expire_time = 1711947601000000;
+  struct tm tm_time = {};
+  tm_time.tm_year = 2024 - 1900;
+  tm_time.tm_mon = 3;
+  tm_time.tm_mday = 1;
+  tm_time.tm_hour = 13;
+  tm_time.tm_sec = 1;
+  const int64_t expire_time = mktime(&tm_time) * 1000000;
   databuff_printf(logger.log_file_.dir_path_, sizeof(logger.log_file_.dir_path_), "%s", dir_path);
   EXPECT_EQ(OB_SUCCESS, logger.compress_and_upload_log("./audit_file.test", "20240401120000000", true));
   EXPECT_EQ(OB_SUCCESS, logger.compress_and_upload_log("./audit_file.test", "20240401130000000", true));
@@ -136,8 +143,22 @@ TEST_F(TestAuditLogUtils, prune_log)
   EXPECT_EQ(OB_SUCCESS, logger.compress_and_upload_log("./audit_file.test", "20240401150000000", true));
   EXPECT_EQ(OB_SUCCESS, logger.compress_and_upload_log("./audit_file.test", "20240401160000000", true));
   EXPECT_EQ(OB_SUCCESS, logger.compress_and_upload_log("./audit_file.test", "20240401170000000", true));
-  logger.log_cfg_.audit_log_max_size_ = 3 * 10 * 1024 * 1024 - 1;
-  EXPECT_EQ(OB_SUCCESS, logger.prune_log(expire_time));
+  logger.log_cfg_.audit_log_max_size_ = 0;
+  ASSERT_EQ(OB_SUCCESS, logger.prune_log(expire_time));
+  for (int64_t hour = 12; hour <= 17; ++hour) {
+    char filename[256] = "";
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(filename, sizeof(filename),
+        "audit/1234/567/1004/ip:port/audit.log.20240401%02ld0000000", hour));
+    EXPECT_EQ(hour >= 14, 0 == ::access(filename, F_OK)) << filename;
+  }
+  logger.log_cfg_.audit_log_max_size_ = 3 * 1024 * 1024;
+  ASSERT_EQ(OB_SUCCESS, logger.prune_log(0));
+  for (int64_t hour = 14; hour <= 17; ++hour) {
+    char filename[256] = "";
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(filename, sizeof(filename),
+        "audit/1234/567/1004/ip:port/audit.log.20240401%02ld0000000", hour));
+    EXPECT_EQ(hour >= 15, 0 == ::access(filename, F_OK)) << filename;
+  }
 }
 
 } // end namespace sql

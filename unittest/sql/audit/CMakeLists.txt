@@ -1,1 +1,2 @@
 sql_unittest(test_audit_log_utils)
+sql_unittest(test_audit_log_archive)
