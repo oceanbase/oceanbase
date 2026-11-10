@@ -28,6 +28,10 @@ namespace common
 {
 class ObISQLClient;
 }
+namespace share
+{
+class ObArchivePersistHelper;
+}
 namespace rootserver 
 {
 class ObIBackupDeleteMgr;
@@ -201,6 +205,22 @@ private:
   int get_all_dest_backup_piece_infos_(
     const share::ObBackupSetFileDesc &clog_data_clean_point,
     ObArray<share::ObTenantArchivePieceAttr> &backup_piece_infos);
+  int get_one_dest_deletable_backup_piece_infos_(
+      const share::SCN &start_replay_scn,
+      const char *backup_path_str,
+      const int64_t dest_id,
+      const share::ObArchivePersistHelper &archive_table_op,
+      ObArray<share::ObTenantArchivePieceAttr> &backup_piece_infos);
+  int check_piece_can_be_deleted_(
+      const share::ObTenantArchivePieceAttr &backup_piece_info,
+      const share::SCN &start_replay_scn,
+      const ObIArray<share::ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+      bool &can_be_deleted);
+  int check_scn_covered_by_other_piece_(
+      const share::ObTenantArchivePieceAttr &piece_to_delete,
+      const share::SCN &scn,
+      const ObIArray<share::ObTenantArchivePieceAttr> &sorted_all_piece_infos,
+      bool &is_scn_covered_by_other_kept_piece);
   struct CompareBackupSetInfo
   {
     bool operator()(const share::ObBackupSetFileDesc &lhs,
