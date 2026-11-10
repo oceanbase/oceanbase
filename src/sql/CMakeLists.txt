@@ -1218,6 +1218,7 @@ ob_set_subtarget(ob_sql resolver_dml
   resolver/dml/ob_stmt_expr_visitor.cpp
   resolver/dml/ob_hint.cpp
   resolver/dml/ob_standard_group_checker.cpp
+  resolver/dml/ob_oracle_update_join_checker.cpp
   resolver/dml/ob_update_resolver.cpp
   resolver/dml/ob_update_stmt.cpp
   resolver/dml/ob_view_table_resolver.cpp

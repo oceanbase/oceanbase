@@ -23,6 +23,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/ob_sql_trans_control.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/resolver/dml/ob_oracle_update_join_checker.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/optimizer/ob_intersect_route_policy.h"
@@ -13249,6 +13250,11 @@ int ObLogPlan::check_group_commit(const ObLogicalOperator *root)
     LOG_WARN("unexpected null", K(ret));
   } else if (!get_optimizer_context().get_global_hint().group_commit_hint_.group_commit_enabled_) {
     // not group commit
+  } else if (ObOracleUpdateJoinChecker::is_update_join(*get_stmt()) &&
+             !sql_ctx->multi_stmt_item_.is_batch_group_commit()) {
+    // Resolver has checked the restricted JOIN. It always executes as one request,
+    // using ordinary multi-table UPDATE and the existing single-request commit path.
+    is_group_commit_ = true;
   } else if (OB_FAIL(check_table_schema_for_group_commit(root, update_op))) {
     LOG_WARN("fail to check table schema for group commit", K(ret));
   } else if (!sql_ctx->multi_stmt_item_.is_batch_group_commit()) {

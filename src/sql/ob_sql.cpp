@@ -68,6 +68,7 @@
 #include "observer/omt/ob_th_worker.h"
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
+#include "sql/resolver/dml/ob_oracle_update_join_checker.h"
 #include "sql/printer/ob_raw_expr_printer.h"
 #include "sql/engine/px/ob_px_admission.h"
 #include "sql/code_generator/ob_code_generator.h"
@@ -1466,6 +1467,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     // Set group commit param indices directly from stmt
     if (is_group_commit && basic_stmt->is_update_stmt()) {
       ObUpdateStmt *dml_stmt = static_cast<ObUpdateStmt*>(basic_stmt);
+      info_ctx.is_update_join_group_commit_ = ObOracleUpdateJoinChecker::is_update_join(*dml_stmt);
       if (dml_stmt->has_group_commit_param_idx()) {
         info_ctx.group_commit_param_idx_ = &dml_stmt->get_group_commit_param_idx();
       }

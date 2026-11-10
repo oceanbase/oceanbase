@@ -391,6 +391,7 @@ int ObPsCache::get_or_add_stmt_info(const PsCacheInfoCtx &info_ctx,
       tmp_stmt_info.set_ps_item(ps_item);
       tmp_stmt_info.set_ps_need_parameterization(info_ctx.ps_need_parameterization_);
       tmp_stmt_info.set_is_group_commit(info_ctx.is_group_commit_);
+      tmp_stmt_info.set_is_update_join_group_commit(info_ctx.is_update_join_group_commit_);
       // calc check_sum with normalized sql
       uint64_t ps_stmt_checksum = ob_crc64(info_ctx.normalized_sql_.ptr(),
                                            info_ctx.normalized_sql_.length()); // actual is crc32

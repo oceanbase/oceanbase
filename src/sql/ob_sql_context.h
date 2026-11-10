@@ -169,6 +169,7 @@ public:
       batched_queries_(NULL),
       is_ps_mode_(false),
       is_batch_group_commit_(false),
+      is_update_join_group_commit_(false),
       ab_cnt_(0)
   {
   }
@@ -179,6 +180,7 @@ public:
       batched_queries_(NULL),
       is_ps_mode_(false),
       is_batch_group_commit_(false),
+      is_update_join_group_commit_(false),
       ab_cnt_(0)
   {
   }
@@ -194,6 +196,7 @@ public:
       batched_queries_(queries),
       is_ps_mode_(false),
       is_batch_group_commit_(false),
+      is_update_join_group_commit_(false),
       ab_cnt_(0)
   {
   }
@@ -240,9 +243,11 @@ public:
   inline int64_t get_ab_cnt() { return ab_cnt_; }
   inline bool is_batch_group_commit() const { return is_batch_group_commit_; }
   inline void set_batch_group_commit(bool is_batch_group_commit) { is_batch_group_commit_ = is_batch_group_commit; }
+  inline bool is_update_join_group_commit() const { return is_update_join_group_commit_; }
+  inline void set_update_join_group_commit(bool value) { is_update_join_group_commit_ = value; }
 
   TO_STRING_KV(K_(is_part_of_multi_stmt), K_(seq_num), K_(sql), KPC_(batched_queries),
-               K_(is_ps_mode), K_(ab_cnt), K_(is_batch_group_commit));
+               K_(is_ps_mode), K_(ab_cnt), K_(is_batch_group_commit), K_(is_update_join_group_commit));
 
 private:
   bool is_part_of_multi_stmt_; // 是否为multi stmt，非multi stmt也使用这个结构体，因此需要这个标记
@@ -252,6 +257,7 @@ private:
   const common::ObIArray<ObString> *batched_queries_;
   bool is_ps_mode_;
   bool is_batch_group_commit_;
+  bool is_update_join_group_commit_;
   int64_t ab_cnt_;
 };
 

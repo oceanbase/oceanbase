@@ -635,6 +635,14 @@ int ObMPStmtExecute::create_group_commit_sub_request(ObSQLSessionInfo &session,
   } else if (OB_ISNULL(ps_info = guard.get_stmt_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get stmt info is null", K(ret));
+  } else if (ps_session_info->is_update_join_group_commit()) {
+    // This key only owns the existing counters/allocator. Forced single requests
+    // never enter the wait queue, even when they have the same SQL and key.
+    ObObjParam bookkeeping_key;
+    bookkeeping_key.set_int(0);
+    if (OB_FAIL(group_key_params.push_back(bookkeeping_key))) {
+      LOG_WARN("failed to build single-request group key", K(ret));
+    }
   } else {
     const common::ObIArray<int64_t> &key_param_pos_array = ps_session_info->get_group_commit_key_params_idx();
     int64_t key_param_cnt = key_param_pos_array.count();
@@ -657,7 +665,8 @@ int ObMPStmtExecute::create_group_commit_sub_request(ObSQLSessionInfo &session,
   } else if (OB_FAIL(sub_req->deep_copy_params(*params_))) {
     LOG_WARN("fail to deep copy params", K(ret), KPC(params_));
   } else {
-    group_sql_key.shallow_copy(ps_info->get_sql_key(), &param_types.at(0), param_types.count());
+    group_sql_key.shallow_copy(ps_info->get_sql_key(),
+        param_types.empty() ? nullptr : &param_types.at(0), param_types.count());
     group_key.shallow_copy(&group_key_params.at(0), group_key_params.count());
 
     sub_req->req_ = req_;
@@ -665,7 +674,8 @@ int ObMPStmtExecute::create_group_commit_sub_request(ObSQLSessionInfo &session,
     sub_req->ps_client_stmt_id_ = stmt_id_;
     bool direct_execute = false;
     if (OB_FAIL(MTL(ObSqlGroupCommitAggregator*)->add_sub_request(
-        group_sql_key, group_key, sub_req, direct_execute, need_response_error))) {
+        group_sql_key, group_key, sub_req, direct_execute, need_response_error,
+        ps_session_info->is_update_join_group_commit()))) {
       LOG_WARN("fail to add sub request", K(ret), K(need_response_error));
     } else if (direct_execute) {
       group_commit_exec_mode_ = GROUP_COMMIT_SUB_EXEC;
@@ -2159,6 +2169,10 @@ int ObMPStmtExecute::process()
     } else if (OB_FAIL(session.get_ps_session_info(stmt_id_, ps_session_info))) {
       LOG_WARN("get ps_session_info failed", K(stmt_id_));
 #ifdef OB_HOTSPOT_GROUP_COMMIT
+    } else if (is_group_commit_enabled_ && ps_session_info->is_update_join_group_commit() &&
+               (is_arraybinding_ || is_ps_cursor())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Oracle update join group commit with array binding or cursor");
     } else if (is_group_commit_enabled_ &&
         OB_FAIL(create_group_commit_sub_request(session, ps_session_info, need_response_error))) {
       LOG_WARN("fail to create group commit sub request", K(ret), K(need_response_error), K(group_commit_exec_mode_));
@@ -2190,7 +2204,12 @@ int ObMPStmtExecute::process()
 
       need_response_error = false;
       need_disconnect = false;
-      ret = process_execute_stmt(ObMultiStmtItem(false, 0, ObString()),
+      ObMultiStmtItem multi_stmt_item(false, 0, ObString());
+      // init_process_var copies this flag to ctx_ for the existing group commit retry policy.
+      // The execution mode remains SUB_EXEC, without batch parameters or aggregation.
+      multi_stmt_item.set_update_join_group_commit(
+          is_group_commit_enabled_ && ps_session_info->is_update_join_group_commit());
+      ret = process_execute_stmt(multi_stmt_item,
                                  session,
                                  false, // has_mode
                                  false, // force_sync_resp

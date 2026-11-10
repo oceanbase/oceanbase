@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dml/ob_update_resolver.h"
+#include "sql/resolver/dml/ob_oracle_update_join_checker.h"
 #include "lib/string/ob_sql_string.h"
 
 namespace oceanbase
@@ -191,12 +192,22 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
     } else { /*do nothing*/ }
   }
 
+  // Oracle's restricted direct JOIN extension uses the ordinary multi-table DML path.
+  if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    if (OB_FAIL(ObOracleUpdateJoinChecker::check(*update_stmt, *schema_checker_,
+                                                *session_info_, params_.is_batch_stmt_))) {
+      LOG_WARN("unsupported Oracle update join", K(ret));
+    }
+  }
+
 #ifdef OB_HOTSPOT_GROUP_COMMIT
   // Resolve primary key parameter positions if group_commit hint is enabled
   // Only do this in PS protocol prepare stage
   if (OB_SUCC(ret) && update_stmt->get_query_ctx()->get_global_hint().group_commit_enabled()) {
     if (params_.is_prepare_protocol_) {
-      if (params_.is_prepare_stage_ &&OB_FAIL(resolve_group_commit_key_param_infos())) {
+      if (ObOracleUpdateJoinChecker::is_update_join(*update_stmt)) {
+        // Single-request execution does not group requests by their row keys.
+      } else if (params_.is_prepare_stage_ && OB_FAIL(resolve_group_commit_key_param_infos())) {
         LOG_WARN("failed to resolve pk param infos for group commit", K(ret));
       }
     } else {

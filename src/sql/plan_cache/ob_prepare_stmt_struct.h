@@ -260,6 +260,8 @@ public:
   bool is_ps_need_parameterization() const { return ps_need_parameterization_; }
   void set_is_group_commit(bool is_group_commit) { is_group_commit_ = is_group_commit; }
   bool is_group_commit() const { return is_group_commit_; }
+  void set_is_update_join_group_commit(bool value) { is_update_join_group_commit_ = value; }
+  bool is_update_join_group_commit() const { return is_update_join_group_commit_; }
   // Group commit pk/uk parameter indices
   int set_group_commit_key_params_idx(const common::ObIArray<int64_t> &idx_array);
   const common::ObIArray<int64_t> &get_group_commit_key_params_idx() const { return group_commit_key_params_idx_; }
@@ -307,6 +309,7 @@ private:
   stmt::StmtType literal_stmt_type_;
   bool ps_need_parameterization_;
   bool is_group_commit_;
+  bool is_update_join_group_commit_;
   ObFixedArray<int64_t, common::ObIAllocator> group_commit_key_params_idx_;
 };
 
@@ -373,7 +376,8 @@ public:
     ref_cnt_(0),
     inner_stmt_id_(0),
     num_of_returning_into_(common::OB_INVALID_STMT_ID), // num_of_returning_into_ init as -1
-    is_group_commit_(false)
+    is_group_commit_(false),
+    is_update_join_group_commit_(false)
   {
     param_types_.set_attr(ObMemAttr(tenant_id, "ParamTypes"));
     param_type_infos_.set_attr(ObMemAttr(tenant_id, "ParamTypesInfo"));
@@ -413,6 +417,8 @@ public:
   inline ObPsStmtId get_inner_stmt_id() { return inner_stmt_id_; }
   inline void set_is_group_commit(const bool is_group_commit) { is_group_commit_ = is_group_commit; }
   inline bool is_group_commit() const { return is_group_commit_; }
+  void set_is_update_join_group_commit(bool value) { is_update_join_group_commit_ = value; }
+  bool is_update_join_group_commit() const { return is_update_join_group_commit_; }
   // Group commit pk/uk parameter indices
   int set_group_commit_key_params_idx(const common::ObIArray<int64_t> &idx_array) {
     return group_commit_key_params_idx_.assign(idx_array);
@@ -430,6 +436,7 @@ public:
                K_(inner_stmt_id),
                K_(num_of_returning_into),
                K_(is_group_commit),
+               K_(is_update_join_group_commit),
                K_(group_commit_key_params_idx));
 
 private:
@@ -443,6 +450,7 @@ private:
   ObPsStmtId inner_stmt_id_;
   int32_t num_of_returning_into_;
   bool is_group_commit_;
+  bool is_update_join_group_commit_;
   ObFixedArray<int32_t, common::ObIAllocator> group_key_param_pos_arr_;
   common::ObSEArray<int64_t, 4> group_commit_key_params_idx_;
 
@@ -488,6 +496,7 @@ struct PsCacheInfoCtx
     stmt_type_(stmt::T_NONE),
     ps_need_parameterization_(true),
     is_group_commit_(false),
+    is_update_join_group_commit_(false),
     group_commit_param_idx_(NULL) {}
 
 
@@ -500,7 +509,7 @@ struct PsCacheInfoCtx
                K_(no_param_sql),
                K_(stmt_type),
                K_(ps_need_parameterization),
-               K_(is_group_commit));
+               K_(is_group_commit), K_(is_update_join_group_commit));
 
   int64_t param_cnt_;
   int32_t num_of_returning_into_;
@@ -514,6 +523,7 @@ struct PsCacheInfoCtx
   stmt::StmtType stmt_type_;
   bool ps_need_parameterization_;
   bool is_group_commit_;
+  bool is_update_join_group_commit_;
   const common::ObIArray<int64_t> *group_commit_param_idx_;
 };
 

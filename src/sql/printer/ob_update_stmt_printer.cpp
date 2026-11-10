@@ -160,9 +160,9 @@ int ObUpdateStmtPrinter::print_set()
             }
           }
         }
-        if (OB_SUCC(ret)) {
-          --*pos_;
-        }
+      }
+      if (OB_SUCC(ret)) {
+        --*pos_;
       }
     }
   }

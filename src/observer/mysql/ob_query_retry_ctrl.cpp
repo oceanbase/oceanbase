@@ -40,7 +40,7 @@ void ObRetryPolicy::try_packet_retry(ObRetryParam &v) const
   const ObMultiStmtItem &multi_stmt_item = v.ctx_.multi_stmt_item_;
   if (v.force_local_retry_) {
     v.retry_type_ = RETRY_TYPE_LOCAL;
-  } else if (multi_stmt_item.is_batch_group_commit()) {
+  } else if (multi_stmt_item.is_batch_group_commit() || multi_stmt_item.is_update_join_group_commit()) {
     if (v.local_retry_times_ <= 5) {
       v.retry_type_ = RETRY_TYPE_LOCAL;
     } else if (!THIS_WORKER.can_retry()) {

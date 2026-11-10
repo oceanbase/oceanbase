@@ -287,6 +287,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator)
     literal_stmt_type_(stmt::T_NONE),
     ps_need_parameterization_(true),
     is_group_commit_(false),
+    is_update_join_group_commit_(false),
     group_commit_key_params_idx_(inner_allocator)
 {
 }
@@ -319,6 +320,7 @@ ObPsStmtInfo::ObPsStmtInfo(ObIAllocator *inner_allocator,
     literal_stmt_type_(stmt::T_NONE),
     ps_need_parameterization_(true),
     is_group_commit_(false),
+    is_update_join_group_commit_(false),
     group_commit_key_params_idx_(inner_allocator)
 {
 }
@@ -479,6 +481,7 @@ int ObPsStmtInfo::deep_copy(const ObPsStmtInfo &other)
     literal_stmt_type_ = other.literal_stmt_type_;
     ps_need_parameterization_ = other.ps_need_parameterization_;
     is_group_commit_ = other.is_group_commit_;
+    is_update_join_group_commit_ = other.is_update_join_group_commit_;
     if (other.get_dep_objs_cnt() > 0) {
       dep_objs_cnt_ = other.get_dep_objs_cnt();
       if (NULL == (dep_objs_ = reinterpret_cast<ObSchemaObjVersion *>
