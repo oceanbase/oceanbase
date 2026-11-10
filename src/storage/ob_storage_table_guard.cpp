@@ -16,6 +16,7 @@
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/ob_relative_table.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
@@ -76,7 +77,8 @@ void ObStorageTableGuard::throttle_if_needed_()
                                                                          *ls,
                                                                          throttle_tool,
                                                                          share_ti_guard,
-                                                                         module_ti_guard);
+                                                                         module_ti_guard,
+                                                                         &ObStorageTableGuard::is_task_canceled_);
         }
       }
 
@@ -92,6 +94,21 @@ void ObStorageTableGuard::throttle_if_needed_()
       }
     }
   }
+}
+
+bool ObStorageTableGuard::is_task_canceled_()
+{
+  bool canceled = false;
+  sql::ObSQLSessionInfo *session = THIS_WORKER.get_session();
+  if (OB_NOT_NULL(session)) {
+    // Synchronize with session state updates from kill/disconnect threads.
+    sql::ObSQLSessionInfo::LockGuard guard(session->get_thread_data_lock());
+    canceled = session->is_query_killed() || session->is_zombie();
+  }
+  if (!canceled && THIS_WORKER.is_timeout()) {
+    canceled = true;
+  }
+  return canceled;
 }
 
 int ObStorageTableGuard::refresh_and_protect_memtable_for_write(ObRelativeTable &relative_table)
