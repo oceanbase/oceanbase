@@ -68,18 +68,19 @@ public:
                               common::ObISQLClient &sql_client,
                               ObIAllocator &allocator,
                               common::number::ObNumber &next_value);
+  int add_sequence_to_value_table(const uint64_t tenant_id,
+                                  const uint64_t src_tenant_id,
+                                  const uint64_t old_sequence_id,
+                                  const uint64_t new_sequence_id,
+                                  common::ObISQLClient &sql_client,
+                                  common::ObISQLClient &src_sql_client,
+                                  ObIAllocator &allocator);
 private:
   int clean_and_write_back_cache(common::ObISQLClient *sql_client,
                                  const ObSequenceSchema &sequence_schema, bool &need_write_back,
                                  ObIAllocator &allocator);
   int add_sequence(common::ObISQLClient &sql_client, const ObSequenceSchema &sequence_schema,
                    const bool only_history, const uint64_t *old_sequence_id);
-  int add_sequence_to_value_table(const uint64_t tenant_id,
-                                  const uint64_t exec_tenant_id,
-                                  const uint64_t old_sequence_id,
-                                  const uint64_t new_sequence_id,
-                                  common::ObISQLClient &sql_client,
-                                  ObIAllocator &allocator);
   int clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id, ObNumber &inner_next_value,
                            obrpc::ObSeqCleanCacheRes &cache_res, ObIAllocator &allocator);
 

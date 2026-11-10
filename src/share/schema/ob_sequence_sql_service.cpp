@@ -645,9 +645,10 @@ int ObSequenceSqlService::add_sequence(common::ObISQLClient &sql_client,
   }
   if (OB_FAIL(ret)) {
   } else if (need_sync_seq_val && OB_FAIL(add_sequence_to_value_table(tenant_id,
-                                                                      exec_tenant_id,
+                                                                      tenant_id,
                                                                       *old_sequence_id,
                                                                       sequence_schema.get_sequence_id(),
+                                                                      sql_client,
                                                                       sql_client,
                                                                       allocator))) {
     LOG_WARN("fail to sync value to all_sequence_value", K(ret), K(tenant_id), K(exec_tenant_id), K(*old_sequence_id));
@@ -659,25 +660,27 @@ int ObSequenceSqlService::add_sequence(common::ObISQLClient &sql_client,
 // And get next_val from all_sequence_value via old_sequence_id, do nothing if no record found due to next_val is start_val,
 // else fill the next val to the table.
 int ObSequenceSqlService::add_sequence_to_value_table(const uint64_t tenant_id,
-                                                      const uint64_t exec_tenant_id,
+                                                      const uint64_t src_tenant_id,
                                                       const uint64_t old_sequence_id,
                                                       const uint64_t new_sequence_id,
                                                       common::ObISQLClient &sql_client,
+                                                      common::ObISQLClient &src_sql_client,
                                                       ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   ObSqlString sql;
   ObSqlString values;
   common::number::ObNumber next_value;
-  if (OB_FAIL(get_sequence_sync_value(tenant_id,
+  if (OB_FAIL(get_sequence_sync_value(src_tenant_id,
                                       old_sequence_id,
                                       false,/*is select for update*/
-                                      sql_client,
+                                      src_sql_client,
                                       allocator,
                                       next_value))) {
     ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
     if (OB_FAIL(ret)) {
-      LOG_WARN("fail to get sequence sync value", K(ret), K(tenant_id), K(old_sequence_id));
+      LOG_WARN("fail to get sequence sync value", K(ret), K(src_tenant_id), K(tenant_id), K(old_sequence_id));
     }
   } else if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (", OB_ALL_SEQUENCE_VALUE_TNAME))) {
     LOG_WARN("append table name failed, ", K(ret));

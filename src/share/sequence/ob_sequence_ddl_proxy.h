@@ -45,7 +45,8 @@ public:
   int create_sequence_without_bitset(share::schema::ObSequenceSchema &seq_schema,
                                      common::ObMySQLTransaction &trans,
                                      share::schema::ObSchemaGetterGuard &schema_guard,
-                                     const common::ObString *ddl_stmt_str);
+                                     const common::ObString *ddl_stmt_str,
+                                     const bool need_sync_seq_val = true);
   int create_sequence(share::schema::ObSequenceSchema &seq_schema,
                       const common::ObBitSet<> &opt_bitset,
                       common::ObMySQLTransaction &trans,

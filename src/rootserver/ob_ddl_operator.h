@@ -298,7 +298,9 @@ public:
   int create_sequence_in_create_table(share::schema::ObTableSchema &table_schema,
                                       common::ObMySQLTransaction &trans,
                                       share::schema::ObSchemaGetterGuard &schema_guard,
-                                      const obrpc::ObSequenceDDLArg *sequence_ddl_arg);
+                                      const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
+                                      const uint64_t src_tenant_id,
+                                      share::schema::ObSchemaGetterGuard &src_schema_guard);
   int drop_sequence_in_drop_table(const share::schema::ObTableSchema &table_schema,
                                   common::ObMySQLTransaction &trans,
                                   share::schema::ObSchemaGetterGuard &schema_guard);
