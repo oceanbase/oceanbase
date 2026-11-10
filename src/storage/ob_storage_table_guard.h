@@ -86,6 +86,8 @@ private:
   void throttle_if_needed_();
   int double_check_get_memtable_for_replay_(const share::SCN replay_scn,
                                             bool &need_retry);
+  // Only observes cancellation; statement error handling remains in the caller.
+  static bool is_task_canceled_();
 
 private:
   static const int64_t LOG_INTERVAL_US = 10 * 1000 * 1000;        // 10s
