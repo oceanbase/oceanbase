@@ -30,12 +30,13 @@ ObSequenceDDLProxy::~ObSequenceDDLProxy()
 {
 }
 
-// create sequence for truncate op, offline ddl, etc. And should synchronize the sequcen value obtained from inner table.
+// Synchronize the old sequence value unless the caller initializes it separately.
 int ObSequenceDDLProxy::create_sequence_without_bitset(
     ObSequenceSchema &seq_schema,
     common::ObMySQLTransaction &trans,
     share::schema::ObSchemaGetterGuard &schema_guard,
-    const ObString *ddl_stmt_str)
+    const ObString *ddl_stmt_str,
+    const bool need_sync_seq_val)
 {
   int ret = OB_SUCCESS;
   uint64_t sequence_id = OB_INVALID_ID;
@@ -52,7 +53,7 @@ int ObSequenceDDLProxy::create_sequence_without_bitset(
   } else if (exists) {
     ret = OB_OBJECT_NAME_EXIST;
     LOG_WARN("sequence already exist", K(sequence_id), K(ret));
-  } else if (OB_FAIL(inner_create_sequence(seq_schema, trans, schema_guard, ddl_stmt_str, true /* need_sync_seq_val */))) {
+  } else if (OB_FAIL(inner_create_sequence(seq_schema, trans, schema_guard, ddl_stmt_str, need_sync_seq_val))) {
     LOG_WARN("fail inner create sequence", K(seq_schema), K(ret));
   }
   return ret;

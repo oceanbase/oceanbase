@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "rootserver/ob_ddl_operator.h"
 
+#include "lib/allocator/ob_allocator.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
@@ -42,6 +43,7 @@
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_security_audit_sql_service.h"
+#include "share/schema/ob_sequence_sql_service.h"
 #include "share/sequence/ob_sequence_ddl_proxy.h"
 #include "share/inner_table/ob_inner_table_schema.h"
 #include "share/config/ob_server_config.h"
@@ -1762,11 +1764,22 @@ int ObDDLOperator::sync_version_for_cascade_table(
 int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
                                                    common::ObMySQLTransaction &trans,
                                                    share::schema::ObSchemaGetterGuard &schema_guard,
-                                                   const obrpc::ObSequenceDDLArg *sequence_ddl_arg)
+                                                   const obrpc::ObSequenceDDLArg *sequence_ddl_arg,
+                                                   const uint64_t src_tenant_id,
+                                                   share::schema::ObSchemaGetterGuard &src_schema_guard)
 {
   int ret = OB_SUCCESS;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  ObSchemaGetterGuard &sequence_schema_guard = src_tenant_id == table_schema.get_tenant_id()
+      ? schema_guard : src_schema_guard;
   if (!(table_schema.is_user_table() || table_schema.is_oracle_tmp_table())) {
     // do nothing
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (nullptr != sequence_ddl_arg && src_tenant_id != table_schema.get_tenant_id()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("cannot add identity column while inheriting source sequences", KR(ret), K(src_tenant_id));
   } else {
     for (ObTableSchema::const_column_iterator iter = table_schema.column_begin();
          OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
@@ -1791,10 +1804,11 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
             sequence_schema = sequence_ddl_arg->seq_schema_;
           } else {
             const ObSequenceSchema *tmp_sequence_schema = NULL;
-            if (OB_FAIL(schema_guard.get_sequence_schema(table_schema.get_tenant_id(),
+            // Imported columns retain their source sequence IDs until creation succeeds.
+            if (OB_FAIL(sequence_schema_guard.get_sequence_schema(src_tenant_id,
                                                          column_schema.get_sequence_id(),
                                                          tmp_sequence_schema))) {
-              LOG_WARN("get sequence schema failed", K(ret), K(column_schema));
+              LOG_WARN("get sequence schema failed", K(ret), K(src_tenant_id), K(column_schema));
             } else if (OB_ISNULL(tmp_sequence_schema)) {
               ret = OB_NOT_INIT;
               LOG_WARN("sequence not found", K(ret), K(column_schema));
@@ -1803,18 +1817,31 @@ int ObDDLOperator::create_sequence_in_create_table(ObTableSchema &table_schema,
             } else {}
           }
           if (OB_SUCC(ret)) {
+            sequence_schema.set_tenant_id(table_schema.get_tenant_id());
             sequence_schema.set_database_id(table_schema.get_database_id());
-            sequence_schema.set_sequence_name(sequence_name);
-            if (nullptr == sequence_ddl_arg) {
+            if (OB_FAIL(sequence_schema.set_sequence_name(sequence_name))) {
+              LOG_WARN("set sequence name failed", KR(ret));
+            } else if (nullptr == sequence_ddl_arg) {
               // In some scenes like trunctae table and offline ddl, should inherit the sequce object from origin table except sequence id, etc.
               // Validity check and set of option bitset are completed in creating origin table phase,
               // thus we do not have to check the validity of option_bitset again for the hidden table.
               if (OB_FAIL(ddl_operator.create_sequence_without_bitset(sequence_schema,
                                                                       trans,
                                                                       schema_guard,
-                                                                      nullptr))) {
+                                                                      nullptr,
+                                                                      src_tenant_id == table_schema.get_tenant_id()))) {
               LOG_WARN("create sequence fail", K(ret), K(table_schema));
-              } else {/* do nothing. */}
+              } else if (src_tenant_id != table_schema.get_tenant_id()) {
+                // The auxiliary restore tenant is stable; do not read it through the target transaction.
+                ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+                if (OB_FAIL(schema_service->get_sequence_sql_service().add_sequence_to_value_table(
+                    table_schema.get_tenant_id(), src_tenant_id,
+                    column_schema.get_sequence_id(), sequence_schema.get_sequence_id(),
+                    trans, sql_proxy_, allocator))) {
+                  LOG_WARN("inherit source sequence value failed", KR(ret), K(src_tenant_id),
+                           K(column_schema.get_sequence_id()), K(sequence_schema));
+                }
+              }
             } else if (OB_FAIL(ddl_operator.create_sequence(sequence_schema,
                                                             sequence_ddl_arg->option_bitset_,
                                                             trans,
