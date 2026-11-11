@@ -138,6 +138,20 @@ int ObRenameTableResolver::resolve_rename_action(const ParseNode &rename_action_
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("rename table required by materialized view is not supported", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");
+        } else if (table_schema->is_materialized_view()) {
+          const ObTableSchema *container_schema = NULL;
+          if (OB_FAIL(schema_checker_->get_table_schema(rename_table_stmt->get_tenant_id(),
+                                                        table_schema->get_data_table_id(),
+                                                        container_schema))) {
+            LOG_WARN("failed to get mview container schema", KR(ret), KPC(table_schema));
+          } else if (OB_ISNULL(container_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mview container schema is null", KR(ret), KPC(table_schema));
+          } else if (container_schema->required_by_mv_refresh()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("rename mview required by materialized view is not supported", KR(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");
+          }
         }
       }
     }

@@ -4796,6 +4796,9 @@ int ObDDLOperator::rename_table(const ObTableSchema &table_schema,
           OB_DDL_TABLE_RENAME,
           ddl_stmt_str))) {
         RS_LOG(WARN, "failed to alter table option!", K(ret));
+      } else if (new_table_schema.is_materialized_view()
+                 && OB_FAIL(ObMViewSchedJobUtils::rename_mview_refresh_job(trans, schema_guard, new_table_schema))) {
+        RS_LOG(WARN, "failed to update materialized view refresh job for rename", KR(ret), K(new_table_schema));
       } else {
         bool has_aux_table_updated = false;
         HEAP_VAR(ObTableSchema, new_aux_table_schema) {

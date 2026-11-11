@@ -28,6 +28,7 @@ namespace schema
 class ObSchemaGetterGuard;
 class ObUserInfo;
 class ObMViewInfo;
+class ObTableSchema;
 }
 }
 namespace common
@@ -36,6 +37,7 @@ class ObIAllocator;
 class ObISQLClient;
 class ObObj;
 class ObString;
+class ObSqlString;
 }
 namespace sql
 {
@@ -117,6 +119,10 @@ public:
                                     const uint64_t tenant_id,
                                     const uint64_t table_id);
 
+  static int rename_mview_refresh_job(common::ObISQLClient &sql_client,
+                                       share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const share::schema::ObTableSchema &new_mview_schema);
+
   static int calc_date_expr_from_str(sql::ObSQLSessionInfo &session,
                                            common::ObIAllocator &allocator,
                                            const uint64_t tenant_id,
@@ -160,6 +166,10 @@ public:
                                       const common::ObString &parameter_value);
 
 private:
+  static int generate_mview_job_action_(const common::ObString &db_name,
+                                         const common::ObString &table_name,
+                                         const share::schema::ObMVNestedRefreshMode nested_refresh_mode,
+                                         common::ObSqlString &job_action);
   static int acquire_major_refresh_mv_merge_scn_(common::ObISQLClient &trans,
                                                  const uint64_t tenant_id);
   static int get_owner_name_from_table_id_(common::ObISQLClient &sql_client,
