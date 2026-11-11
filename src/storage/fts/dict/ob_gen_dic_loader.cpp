@@ -68,10 +68,11 @@ uint64_t ObGenDicLoader::ObGenDicLoaderKey::hash() const
 int ObGenDicLoader::ObGenDicLoaderKey::set_parser_name(const char *parser_name)
 {
   int ret = OB_SUCCESS;
-  uint64_t len = STRLEN(parser_name);
+  uint64_t len = 0;
   if (OB_ISNULL(parser_name)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The parser name is nullptr", K(ret), KP(parser_name));
+  } else if (FALSE_IT(len = STRLEN(parser_name))) {
   } else if (OB_UNLIKELY(len >= OB_PLUGIN_NAME_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("The parser name is too long", K(ret), KCSTRING(parser_name));

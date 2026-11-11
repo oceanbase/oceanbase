@@ -28,6 +28,74 @@ using namespace blocksstable;
 namespace blocksstable
 {
 
+TEST(TestMacroBlockBloomFilterDeserialize, test_frame_bounds)
+{
+  ObBloomFilter source;
+  ASSERT_EQ(OB_SUCCESS, source.init_by_row_count(3));
+  ASSERT_EQ(OB_SUCCESS, source.insert(12345));
+  char buf[128] = {};
+  const int64_t initial_pos = 3;
+  int64_t data_len = initial_pos;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i32(buf, sizeof(buf), data_len,
+                                                ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_V1));
+  const int64_t size_pos = data_len;
+  const int64_t frame_size = sizeof(int32_t) + sizeof(int64_t) + source.get_serialize_size();
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), data_len, frame_size));
+  ASSERT_EQ(OB_SUCCESS, source.serialize(buf, sizeof(buf), data_len));
+  ASSERT_EQ(initial_pos + frame_size, data_len);
+  const int64_t frame_end = data_len;
+  const int64_t tail = 123456789;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), data_len, tail));
+
+  ObMacroBlockBloomFilter valid_bf;
+  int64_t pos = initial_pos;
+  ASSERT_EQ(OB_SUCCESS, valid_bf.deserialize(buf, data_len, pos));
+  EXPECT_EQ(frame_end, pos);
+  EXPECT_EQ(0, MEMCMP(source.get_bits(), valid_bf.get_bloom_filter().get_bits(), source.get_nbytes()));
+  int64_t decoded_tail = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_i64(buf, data_len, pos, &decoded_tail));
+  EXPECT_EQ(tail, decoded_tail);
+
+  const int64_t invalid_sizes[] = {frame_size + 1, INT64_MAX, -1};
+  for (const int64_t invalid_size : invalid_sizes) {
+    pos = size_pos;
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), pos, invalid_size));
+    ObMacroBlockBloomFilter bf;
+    pos = initial_pos;
+    EXPECT_EQ(OB_ERR_UNEXPECTED, bf.deserialize(buf, frame_end, pos));
+    EXPECT_EQ(nullptr, bf.get_bloom_filter().get_bits());
+  }
+
+  // The next record must not supply the terminator missing from this frame.
+  pos = size_pos;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), pos, frame_size - 1));
+  ObMacroBlockBloomFilter short_bf;
+  pos = initial_pos;
+  EXPECT_EQ(OB_ERR_UNEXPECTED, short_bf.deserialize(buf, data_len, pos));
+  EXPECT_EQ(nullptr, short_bf.get_bloom_filter().get_bits());
+}
+
+TEST(TestMacroBlockBloomFilterDeserialize, test_large_nbit_without_bitmap)
+{
+  char buf[32] = {};
+  int64_t data_len = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i32(buf, sizeof(buf), data_len,
+                                                ObMacroBlockBloomFilter::MACRO_BLOCK_BLOOM_FILTER_V1));
+  const int64_t size_pos = data_len;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), data_len, 0));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 1));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 34359738496LL));
+  ASSERT_LE(data_len, 20);
+  int64_t pos = size_pos;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), pos, data_len));
+
+  ObMacroBlockBloomFilter bf;
+  pos = 0;
+  EXPECT_EQ(OB_ERR_UNEXPECTED, bf.deserialize(buf, data_len, pos));
+  EXPECT_EQ(nullptr, bf.get_bloom_filter().get_bits());
+  EXPECT_EQ(0, bf.get_bloom_filter().get_nbit());
+}
+
 // Old data block meta val without bloom filter before 4.3.5.1
 class MockDataBlockMetaVal final
 {
@@ -333,6 +401,44 @@ void set_macro_id_to_valid(MacroBlockId & macro_id, const int64_t data_version)
     macro_id.version_ = MacroBlockId::MACRO_BLOCK_ID_VERSION_V1;
   }
   macro_id.second_id_ = 1;
+}
+
+TEST(TestMacroBlockBloomFilterDeserialize, test_meta_frame_bounds)
+{
+  MockDataBlockMetaVal source;
+  set_macro_id_to_valid(source.macro_id_, DATA_VERSION_4_3_5_0);
+  char buf[512] = {};
+  const int64_t initial_pos = 1;
+  int64_t data_len = initial_pos;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(buf, sizeof(buf), data_len));
+  const int64_t bf_size_pos = data_len;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 1));
+  const int64_t bf_pos = data_len;
+  buf[data_len++] = 0x5a;
+  const int64_t frame_end = data_len;
+  int64_t pos = initial_pos + sizeof(int32_t);
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i32(buf, sizeof(buf), pos, frame_end - initial_pos));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_i64(buf, sizeof(buf), data_len, 123456789));
+
+  ObDataBlockMetaVal valid_meta;
+  pos = initial_pos;
+  ASSERT_EQ(OB_SUCCESS, valid_meta.deserialize(buf, data_len, pos));
+  EXPECT_EQ(frame_end, pos);
+  EXPECT_EQ(1, valid_meta.macro_block_bf_size_);
+  EXPECT_EQ(buf + bf_pos, valid_meta.macro_block_bf_buf_);
+
+  ObDataBlockMetaVal truncated_meta;
+  pos = initial_pos;
+  EXPECT_EQ(OB_ERR_UNEXPECTED, truncated_meta.deserialize(buf, frame_end - 1, pos));
+  EXPECT_EQ(nullptr, truncated_meta.macro_block_bf_buf_);
+
+  // A bloom filter slice cannot extend into the bytes following the meta frame.
+  pos = bf_size_pos;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), pos, 2));
+  ObDataBlockMetaVal oversized_bf_meta;
+  pos = initial_pos;
+  EXPECT_EQ(OB_ERR_UNEXPECTED, oversized_bf_meta.deserialize(buf, data_len, pos));
+  EXPECT_EQ(nullptr, oversized_bf_meta.macro_block_bf_buf_);
 }
 
 class TestMacroBlockBloomFilter : public TestIndexBlockDataPrepare

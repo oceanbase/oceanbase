@@ -389,6 +389,9 @@ int ObDataBlockMetaVal::deserialize(const char *buf, const int64_t data_len, int
       LOG_WARN("object version mismatch", K(ret), K(version_));
     } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &length_))) {
       LOG_WARN("fail to decode length", K(ret), K(data_len), K(pos));
+    } else if (OB_UNLIKELY(length_ < pos - start_pos || length_ > data_len - start_pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid data block meta length", K(ret), K(data_len), K(pos), K(start_pos), K_(length));
     } else if (OB_UNLIKELY(pos + sizeof(encrypt_key_) > data_len)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect data_len", K(ret), K(data_len), K(pos));
@@ -442,7 +445,13 @@ int ObDataBlockMetaVal::deserialize(const char *buf, const int64_t data_len, int
         if (pos < start_pos + length_) {
           LST_DO_CODE(OB_UNIS_DECODE, macro_block_bf_size_);
         }
-        if (macro_block_bf_size_ > 0) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(macro_block_bf_size_ < 0 || pos > start_pos + length_
+                              || macro_block_bf_size_ > start_pos + length_ - pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid macro block bloom filter length", K(ret), K(pos), K(start_pos), K_(length),
+                   K_(macro_block_bf_size));
+        } else if (macro_block_bf_size_ > 0) {
           macro_block_bf_buf_ = buf + pos;
           pos += macro_block_bf_size_;
         }

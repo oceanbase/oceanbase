@@ -458,11 +458,12 @@ int ObMacroBlockBloomFilter::deserialize(const char *buf, const int64_t data_len
     LOG_WARN("fail to deserialize version_", K(ret), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &serialize_size))) {
     LOG_WARN("fail to deserialize additional serialize_size", K(ret), K(data_len), K(pos), KPC(this));
-  } else if (OB_UNLIKELY(serialize_size <= sizeof(version_) + sizeof(serialize_size))) {
+  } else if (OB_UNLIKELY(serialize_size <= static_cast<int64_t>(sizeof(version_) + sizeof(serialize_size))
+                         || serialize_size > data_len - initial_pos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to deserialize macro block bloom filter, unexpected serialize_size",
              K(ret), K(data_len), K(pos), K(serialize_size));
-  } else if (pos - initial_pos < serialize_size && OB_FAIL(bf_.deserialize(buf, data_len, pos))) {
+  } else if (pos - initial_pos < serialize_size && OB_FAIL(bf_.deserialize(buf, initial_pos + serialize_size, pos))) {
     LOG_WARN("fail to deserialize bloom filter", K(ret), K(data_len), K(pos), K(initial_pos), K(serialize_size));
   } else if (OB_UNLIKELY(pos - initial_pos != serialize_size)) {
     ret = OB_ERR_UNEXPECTED;

@@ -25,6 +25,97 @@ static ObSimpleMemLimitGetter getter;
 namespace blocksstable
 {
 
+TEST(TestBloomFilterDeserialize, test_large_nbit)
+{
+  char buf[64] = {};
+  const int64_t nbit = 34359738496LL; // Its byte count truncates to 16 with an int32 allocation.
+  int64_t data_len = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 1));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, nbit));
+  const int64_t header_len = data_len;
+  const char bits[16] = {};
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vstr(buf, sizeof(buf), data_len, bits, sizeof(bits)));
+
+  const int64_t data_lens[] = {header_len, data_len};
+  for (const int64_t len : data_lens) {
+    ObBloomFilter bf;
+    int64_t pos = 0;
+    EXPECT_EQ(OB_ERR_UNEXPECTED, bf.deserialize(buf, len, pos));
+    EXPECT_EQ(nullptr, bf.get_bits());
+    EXPECT_EQ(0, bf.get_nbit());
+    EXPECT_FALSE(bf.is_valid());
+  }
+}
+
+TEST(TestBloomFilterDeserialize, test_invalid_bitmap_preserves_filter)
+{
+  const char bits[] = {0x5a, 0x25};
+  char buf[64] = {};
+  int64_t data_len = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 1));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 16));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vstr(buf, sizeof(buf), data_len, bits, sizeof(bits)));
+  ObBloomFilter bf;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, bf.deserialize(buf, data_len, pos));
+  const uint8_t *old_bits = bf.get_bits();
+
+  // A different bitmap size, a missing terminator, and a truncated bitmap must not alter the filter.
+  for (int64_t i = 0; i < 3; ++i) {
+    data_len = 0;
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, 2));
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(buf, sizeof(buf), data_len, i == 0 ? 24 : 16));
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vstr(buf, sizeof(buf), data_len, bits, sizeof(bits)));
+    if (i == 0) {
+      buf[data_len++] = 0; // Enough input remains, but the encoded bitmap length still disagrees with nbit.
+    }
+    pos = 0;
+    EXPECT_EQ(OB_ERR_UNEXPECTED, bf.deserialize(buf, data_len - i, pos));
+    ASSERT_EQ(old_bits, bf.get_bits());
+    EXPECT_EQ(1, bf.get_nhash());
+    EXPECT_EQ(16, bf.get_nbit());
+    EXPECT_EQ(0, MEMCMP(bits, bf.get_bits(), sizeof(bits)));
+  }
+}
+
+TEST(TestBloomFilterDeserialize, test_invalid_position)
+{
+  const char buf[4] = {};
+  const int64_t invalid_pos[] = {-1, sizeof(buf), sizeof(buf) + 1, INT64_MAX};
+  for (const int64_t initial_pos : invalid_pos) {
+    ObBloomFilter bf;
+    int64_t pos = initial_pos;
+    EXPECT_EQ(OB_INVALID_ARGUMENT, bf.deserialize(buf, sizeof(buf), pos));
+    EXPECT_EQ(initial_pos, pos);
+    EXPECT_EQ(nullptr, bf.get_bits());
+  }
+}
+
+TEST(TestBloomFilterDeserialize, test_roundtrip_and_reuse)
+{
+  ObBloomFilter bf;
+  const int64_t row_counts[] = {3, 3, 32};
+  uint32_t key_hash = 12345;
+  for (const int64_t row_count : row_counts) {
+    ObBloomFilter source;
+    ASSERT_EQ(OB_SUCCESS, source.init_by_row_count(row_count));
+    ASSERT_EQ(OB_SUCCESS, source.insert(key_hash));
+    char buf[128] = {};
+    int64_t data_len = 1;
+    ASSERT_EQ(OB_SUCCESS, source.serialize(buf, sizeof(buf), data_len));
+    int64_t pos = 1;
+    ASSERT_EQ(OB_SUCCESS, bf.deserialize(buf, data_len, pos));
+    EXPECT_EQ(data_len, pos);
+    EXPECT_EQ(source.get_nhash(), bf.get_nhash());
+    EXPECT_EQ(source.get_nbit(), bf.get_nbit());
+    EXPECT_EQ(0, MEMCMP(source.get_bits(), bf.get_bits(), source.get_nbytes()));
+    bool may_contain = false;
+    ASSERT_EQ(OB_SUCCESS, bf.may_contain(key_hash, may_contain));
+    EXPECT_TRUE(may_contain);
+    ++key_hash;
+  }
+}
+
 class TestBloomFilterCache : public ::testing::Test
 {
 public:

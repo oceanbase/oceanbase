@@ -3148,6 +3148,9 @@ int ObTablet::load_deserialize_v1(
     LOG_WARN("failed to deserialize tablet meta's version", K(ret), K(len), K(new_pos));
   } else if (OB_FAIL(serialization::decode_i32(buf, len, new_pos, (int32_t *)&length_))) {
     LOG_WARN("failed to deserialize tablet meta's length", K(ret), K(len), K(new_pos));
+  } else if (OB_UNLIKELY(length_ < new_pos - pos || length_ > len - pos)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet length", K(ret), K_(length), K(len), K(pos), K(new_pos));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to allocate and new table store", K(ret));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema_addr_.ptr_))) {
@@ -3322,6 +3325,9 @@ int ObTablet::load_deserialize_v2(
     LOG_WARN("failed to deserialize tablet meta's version", K(ret), K(len), K(new_pos));
   } else if (OB_FAIL(serialization::decode_i32(buf, len, new_pos, &length_))) {
     LOG_WARN("failed to deserialize tablet meta's length", K(ret), K(len), K(new_pos));
+  } else if (OB_UNLIKELY(length_ < new_pos - pos || length_ > len - pos)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid tablet length", K(ret), K_(length), K(len), K(pos), K(new_pos));
   } else if (new_pos - pos < length_ && OB_FAIL(tablet_meta_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize tablet meta", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length_ && OB_FAIL(table_store_addr_.addr_.deserialize(buf, len, new_pos))) {
@@ -3458,6 +3464,9 @@ int ObTablet::deserialize(
       LOG_WARN("failed to deserialize tablet meta's version", K(ret), K(len), K(new_pos));
     } else if (OB_FAIL(serialization::decode_i32(buf, len, new_pos, &length_))) {
       LOG_WARN("failed to deserialize tablet meta's length", K(ret), K(len), K(new_pos));
+    } else if (OB_UNLIKELY(length_ < new_pos - pos || length_ > len - pos)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid tablet length", K(ret), K_(length), K(len), K(pos), K(new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(tablet_meta_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize tablet meta", K(ret), K(len), K(new_pos));
     } else if (OB_FAIL(pull_memtables_without_ddl())) {
@@ -8951,7 +8960,7 @@ int ObTablet::assign_memtables(ObIMemtable * const * memtables, const int64_t me
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(memtables) || OB_UNLIKELY(memtable_count < 0 || 0 != memtable_count_)) {
+  if (OB_ISNULL(memtables) || OB_UNLIKELY(memtable_count < 0 || memtable_count > MAX_MEMSTORE_CNT || 0 != memtable_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid memtable argument", K(ret), KP(memtables), K(memtable_count));
   } else {
@@ -8979,7 +8988,7 @@ int ObTablet::assign_ddl_kvs(ObDDLKV * const *ddl_kvs, const int64_t ddl_kv_coun
 
   if (OB_UNLIKELY(OB_NOT_NULL(ddl_kvs) && ddl_kv_count == 0) ||
       OB_UNLIKELY(OB_ISNULL(ddl_kvs) && ddl_kv_count > 0) ||
-      OB_UNLIKELY(ddl_kv_count < 0 || 0 != ddl_kv_count_)) {
+      OB_UNLIKELY(ddl_kv_count < 0 || ddl_kv_count > DDL_KV_ARRAY_SIZE || 0 != ddl_kv_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid ddl_kv argument", K(ret), KP(ddl_kvs), K(ddl_kv_count));
   } else {

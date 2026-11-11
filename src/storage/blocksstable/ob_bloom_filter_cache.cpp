@@ -213,7 +213,7 @@ int ObBloomFilter::deserialize(const char *buf, const int64_t data_len, int64_t 
   int64_t decode_nhash = 0;
   int64_t decode_nbit = 0;
 
-  if (OB_ISNULL(buf) || OB_UNLIKELY(data_len - pos < min_bf_size)) {
+  if (OB_ISNULL(buf) || OB_UNLIKELY(pos < 0 || pos > data_len || data_len - pos < min_bf_size)) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument to deserialize bloomfilter", KP(buf), K(data_len), K(pos), K(ret));
   } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &decode_nhash))) {
@@ -224,27 +224,28 @@ int ObBloomFilter::deserialize(const char *buf, const int64_t data_len, int64_t 
     ret = OB_ERR_UNEXPECTED;
     LIB_LOG(WARN, "Unexpected deserialize nhash or nbit", K(decode_nhash), K(decode_nbit), K(ret));
   } else {
-    int64_t nbyte = calc_nbyte(decode_nbit);
-    if (!is_valid() || calc_nbyte(nbit_) != nbyte) {
+    const int64_t nbyte = calc_nbyte(decode_nbit);
+    int64_t decode_byte = 0;
+    int64_t decode_pos = pos;
+    const char *decode_bits = nullptr;
+    // Validate the complete bitmap before allocating memory or changing an existing filter.
+    if (OB_UNLIKELY(serialization::encoded_length_vstr(nbyte) > data_len - pos)
+        || OB_ISNULL(decode_bits = serialization::decode_vstr(buf, data_len, decode_pos, &decode_byte))
+        || OB_UNLIKELY(nbyte != decode_byte || decode_pos > data_len)) {
+      ret = OB_ERR_UNEXPECTED;
+      LIB_LOG(WARN, "Unexpected bits decode length", K(decode_byte), K(nbyte), K(data_len), K(decode_pos), K(ret));
+    } else if (!is_valid() || calc_nbyte(nbit_) != nbyte) {
       destroy();
-      if (OB_ISNULL(bits_ = (uint8_t *)allocator_.alloc(static_cast<int32_t>(nbyte)))) {
+      if (OB_ISNULL(bits_ = (uint8_t *)allocator_.alloc(nbyte))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LIB_LOG(WARN, "bits alloc memory failed", K(decode_nbit), K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      int64_t decode_byte = 0;
       nhash_ = decode_nhash;
       nbit_ = decode_nbit;
-      clear();
-      if (OB_ISNULL(serialization::decode_vstr(buf, data_len, pos,
-                                               reinterpret_cast<char*>(bits_), nbyte, &decode_byte))) {
-        ret = OB_ERR_UNEXPECTED;
-        LIB_LOG(WARN, "Failed to decode bits", K(data_len), K(pos), K(ret));
-      } else if (nbyte != decode_byte) {
-        ret = OB_ERR_UNEXPECTED;
-        LIB_LOG(WARN, "Unexcepted bits decode length", K(decode_byte), K(nbyte), K(ret));
-      }
+      MEMCPY(bits_, decode_bits, nbyte);
+      pos = decode_pos;
     }
   }
 
