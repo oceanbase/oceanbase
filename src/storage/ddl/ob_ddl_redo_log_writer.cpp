@@ -1463,7 +1463,9 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
     const blocksstable::MacroBlockId &macro_block_id)
 {
   int ret = OB_SUCCESS;
-  int64_t wait_timeout_us = MAX(ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, GCONF._data_storage_io_timeout * 1);
+  // Snapshot the dynamic configuration because MAX can evaluate its arguments twice.
+  const int64_t io_timeout_us = GCONF._data_storage_io_timeout;
+  const int64_t wait_timeout_us = MAX(ObDDLRedoLogHandle::DDL_REDO_LOG_TIMEOUT, io_timeout_us);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redo log writer has not been inited", K(ret));
@@ -1473,8 +1475,8 @@ int ObDDLRedoLogWriter::wait_macro_block_log_finish(
       } else if (!ddl_redo_handle_array_.at(i).is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid handle", K(ret), K(ddl_redo_handle_array_.at(i)));
-      } else if (OB_FAIL(ddl_redo_handle_array_.at(i).wait())) {
-        LOG_WARN("failed to wait", K(ret));
+      } else if (OB_FAIL(ddl_redo_handle_array_.at(i).wait(wait_timeout_us))) {
+        LOG_WARN("failed to wait", K(ret), K(i), K(wait_timeout_us));
       } else if (OB_FAIL(ddl_redo_handle_array_.at(i).cb_->get_ret_code())) {
         LOG_WARN("ddl redo callback executed failed", K(ret));
       }

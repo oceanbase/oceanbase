@@ -272,6 +272,9 @@ int ObDDLIncRedoLogWriter::write_inc_commit_log(
 int ObDDLIncRedoLogWriter::wait_inc_redo_log_finish()
 {
   int ret = OB_SUCCESS;
+  // Snapshot the dynamic configuration because MAX can evaluate its arguments twice.
+  const int64_t io_timeout_us = GCONF._data_storage_io_timeout;
+  const int64_t wait_timeout_us = MAX(ObDDLIncLogHandle::DDL_INC_LOG_TIMEOUT, io_timeout_us);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
@@ -281,8 +284,8 @@ int ObDDLIncRedoLogWriter::wait_inc_redo_log_finish()
     // no redo log has been written yet
   } else {
     common::ObTimeGuard timeguard("write_inc_redo_log wait", 5 * 1000 * 1000); // 5s
-    if (OB_FAIL(ddl_inc_log_handle_.wait())) {
-      LOG_WARN("fail to wait io finish", K(ret));
+    if (OB_FAIL(ddl_inc_log_handle_.wait(wait_timeout_us))) {
+      LOG_WARN("fail to wait io finish", K(ret), K(wait_timeout_us));
     } else if (OB_FAIL(ddl_inc_log_handle_.cb_->get_ret_code())) {
       LOG_WARN("ddl redo callback executed failed", K(ret));
     }
