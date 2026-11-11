@@ -437,9 +437,8 @@ int ObDRService::check_and_update_service_epoch_(
         ret = OB_STATE_NOT_MATCH;
         LOG_WARN("can not do service, because leader epoch is not newest", K(proposal_id), K(service_epoch_in_table));
       } else if (proposal_id == service_epoch_in_table) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("proposal_id and service epoch is equal, already checked before",
-                  KR(ret), K_(tenant_id), K(proposal_id), K(service_epoch_in_table));
+        LOG_INFO("proposal_id and service epoch is equal, already checked before",
+                  K_(tenant_id), K(proposal_id), K(service_epoch_in_table));
       } else if (OB_FAIL(update_tenant_service_epoch_(trans, proposal_id))) {
         // if proposal_id > service_epoch, update service epoch to newest one
         LOG_WARN("fail to update service epoch", KR(ret), K(proposal_id));
