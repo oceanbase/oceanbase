@@ -56,6 +56,8 @@ ob_set_subtarget(ob_rootserver common
   ob_create_inner_schema_executor.cpp
   ob_ddl_help.cpp
   ob_ddl_operator.cpp
+  ob_password_ddl_operator.cpp
+  ob_password_ddl_service.cpp
   ob_ddl_sql_generator.cpp
   ob_index_builder.cpp
   ob_mlog_builder.cpp

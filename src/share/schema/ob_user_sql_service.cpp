@@ -653,6 +653,19 @@ int ObUserSqlService::set_passwd_impl(
         LOG_WARN("add old_password_start_time column failed", K(user_info.get_old_password_start_time()), K(ret));
       }
     }
+    if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_4_2_4) {
+      if (OB_FAIL(dml.add_column("password_expired", user_info.get_password_expired()))) {
+        LOG_WARN("add password_expired column failed", K(ret));
+      } else if (static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT)
+                 == user_info.get_password_lifetime()) {
+        if (OB_FAIL(dml.add_column(true, "password_lifetime"))) {
+          LOG_WARN("add null password_lifetime column failed", K(ret));
+        }
+      } else if (OB_FAIL(dml.add_column("password_lifetime",
+                                        user_info.get_password_lifetime()))) {
+        LOG_WARN("add password_lifetime column failed", K(user_info.get_password_lifetime()), K(ret));
+      }
+    }
 
     // udpate __all_user table
     if (FAILEDx(exec.exec_update(OB_ALL_USER_TNAME, dml, affected_rows))) {
@@ -1157,6 +1170,17 @@ int ObUserSqlService::gen_user_dml(
       LOG_WARN("add old_password column failed", K(user.get_old_password()), K(ret));
     } else if (OB_FAIL(dml.add_column("old_password_start_time", user.get_old_password_start_time()))) {
       LOG_WARN("add old_password_start_time column failed", K(user.get_old_password_start_time()), K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && compat_version >= DATA_VERSION_4_4_2_4) {
+    if (OB_FAIL(dml.add_column("password_expired", user.get_password_expired()))) {
+      LOG_WARN("add password_expired column failed", K(ret));
+    } else if (static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT) == user.get_password_lifetime()) {
+      if (OB_FAIL(dml.add_column(true, "password_lifetime"))) {
+        LOG_WARN("add null password_lifetime column failed", K(ret));
+      }
+    } else if (OB_FAIL(dml.add_column("password_lifetime", user.get_password_lifetime()))) {
+      LOG_WARN("add password_lifetime column failed", K(user.get_password_lifetime()), K(ret));
     }
   }
   return ret;

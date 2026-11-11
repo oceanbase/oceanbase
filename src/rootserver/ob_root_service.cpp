@@ -79,6 +79,7 @@
 #include "pl_ddl/ob_pl_ddl_service.h"
 #include "storage/ddl/ob_tablet_split_util.h"
 #include "rootserver/ob_ai_model_ddl_service.h"
+#include "rootserver/ob_password_ddl_service.h"
 #include "parallel_ddl/ob_drop_tablegroup_helper.h" // ObDropTableGroupHelper
 #include "parallel_ddl/ob_create_tablegroup_helper.h" // ObCreateTableGroupHelper
 #include "share/table/ob_ttl_util.h"
@@ -5884,13 +5885,14 @@ int ObRootService::alter_role(const obrpc::ObAlterRoleArg &arg)
 int ObRootService::set_passwd(const obrpc::ObSetPasswdArg &arg)
 {
   int ret = OB_SUCCESS;
+  ObPasswordDDLService password_ddl_service(&ddl_service_);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (OB_FAIL(ddl_service_.set_passwd(arg))){
+  } else if (OB_FAIL(password_ddl_service.set_passwd(arg))) {
     LOG_WARN("set passwd failed",  K(arg), K(ret));
   }
   return ret;

@@ -29,6 +29,7 @@
 #include "share/sequence/ob_sequence_option.h"
 #include "share/system_variable/ob_system_variable_factory.h"
 #include "share/schema/ob_priv_type.h"
+#include "share/schema/ob_password_expire_option.h"
 #include "share/ob_priv_common.h"
 #include "lib/worker.h"
 #include "objit/common/ob_item_type.h"
@@ -5182,7 +5183,10 @@ public:
      max_user_connections_(0),
      proxied_user_info_(NULL), proxied_user_info_capacity_(0), proxied_user_info_cnt_(0),
      proxy_user_info_(NULL), proxy_user_info_capacity_(0), proxy_user_info_cnt_(0), user_flags_(),
-     trigger_list_(), plugin_(), old_password_(), old_password_start_time_(common::OB_INVALID_TIMESTAMP)
+     trigger_list_(), plugin_(), old_password_(), old_password_start_time_(common::OB_INVALID_TIMESTAMP),
+     password_expired_(false),
+     password_lifetime_us_(static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT)),
+     password_expire_option_(PASSWORD_EXPIRE_NONE)
   { }
   explicit ObUserInfo(common::ObIAllocator *allocator);
   virtual ~ObUserInfo();
@@ -5279,7 +5283,8 @@ public:
                "proxied info", ObArrayWrap<ObProxyInfo*>(proxied_user_info_, proxied_user_info_cnt_),
                "proxy info", ObArrayWrap<ObProxyInfo*>(proxy_user_info_, proxy_user_info_cnt_),
                K_(user_flags), K_(trigger_list), K_(plugin),
-               K_(old_password), K_(old_password_start_time)
+               K_(old_password), K_(old_password_start_time), K_(password_expired),
+               K_(password_lifetime_us), K_(password_expire_option)
               );
   bool role_exists(const uint64_t role_id, const uint64_t option) const;
   int get_seq_by_role_id(uint64_t role_id, uint64_t &seq) const;
@@ -5299,6 +5304,14 @@ public:
   inline const char* get_old_password() const { return extract_str(old_password_); }
   inline const common::ObString& get_old_password_str() const { return old_password_; }
   inline int64_t get_old_password_start_time() const { return old_password_start_time_; }
+  inline void set_password_expired(const bool password_expired) { password_expired_ = password_expired; }
+  inline bool get_password_expired() const { return password_expired_; }
+  inline const char *get_password_expired_str() const { return password_expired_ ? "Y" : "N"; }
+  inline void set_password_lifetime(const int64_t password_lifetime_us)
+  { password_lifetime_us_ = password_lifetime_us; }
+  inline int64_t get_password_lifetime() const { return password_lifetime_us_; }
+  void set_password_expire_option(const ObPasswordExpireOption option);
+  inline ObPasswordExpireOption get_password_expire_option() const { return password_expire_option_; }
 private:
   int add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info);
   int assign_proxy_info_array_(ObProxyInfo **src_arr,
@@ -5341,6 +5354,10 @@ private:
   common::ObString plugin_;
   common::ObString old_password_;
   int64_t old_password_start_time_;
+  bool password_expired_;
+  int64_t password_lifetime_us_;
+  // CREATE USER clause for DDL SQL reconstruction; not stored in __all_user.
+  ObPasswordExpireOption password_expire_option_;
   DISABLE_COPY_ASSIGN(ObUserInfo);
 };
 
@@ -6252,6 +6269,7 @@ struct ObNeedPriv
              const common::ObString &catalog = ObString(),
              const common::ObString &sensitive_rule = ObString())
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+        grantee_id_(common::OB_INVALID_ID),
         is_sys_table_(is_sys_table), obj_type_(share::schema::ObObjectType::INVALID),
         is_for_update_(is_for_update), priv_check_type_(priv_check_type),
         columns_(), check_any_column_priv_(false), catalog_(catalog),
@@ -6269,6 +6287,7 @@ struct ObNeedPriv
             const common::ObString &catalog = ObString(),
             const common::ObString &sensitive_rule = ObString())
     : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+      grantee_id_(common::OB_INVALID_ID),
       is_sys_table_(is_sys_table), obj_type_(obj_type),
       is_for_update_(is_for_update), priv_check_type_(priv_check_type),
       columns_(), check_any_column_priv_(false), catalog_(catalog),
@@ -6276,8 +6295,8 @@ struct ObNeedPriv
   { }
 
   ObNeedPriv()
-      : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
-        obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
+      : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), grantee_id_(common::OB_INVALID_ID),
+        is_sys_table_(false), obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
         priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false),
         catalog_(), sensitive_rule_()
   { }
@@ -6294,6 +6313,7 @@ struct ObNeedPriv
   common::ObString table_;
   ObPrivLevel priv_level_;
   ObPrivSet priv_set_;
+  uint64_t grantee_id_;
   bool is_sys_table_; // May be used to represent the table of schema metadata
   share::schema::ObObjectType obj_type_;
   bool is_for_update_;
@@ -6305,8 +6325,8 @@ struct ObNeedPriv
   // If check_any_column_priv_ true, then check the table has any column with the priv_set.
   common::ObString catalog_;
   common::ObString sensitive_rule_;
-  TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
-               K_(priv_check_type), K_(catalog), K_(sensitive_rule));
+  TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(grantee_id),
+               K_(is_sys_table), K_(is_for_update), K_(priv_check_type), K_(catalog), K_(sensitive_rule));
 };
 
 struct ObStmtNeedPrivs

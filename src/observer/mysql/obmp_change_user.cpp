@@ -366,10 +366,7 @@ int ObMPChangeUser::process()
 
   if (OB_SUCC(ret)) {
     session->set_password_expired(false);
-    if (OB_FAIL(check_password_expired(session->get_effective_tenant_id(),
-                                       auth_user_id,
-                                       schema_guard,
-                                       *session))) {
+    if (OB_FAIL(check_password_expired(session->get_effective_tenant_id(), auth_user_id, schema_guard, *session))) {
       LOG_WARN("fail to check password expired for change user", K(ret));
     }
   }

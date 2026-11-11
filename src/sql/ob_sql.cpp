@@ -3767,8 +3767,7 @@ int ObSql::generate_physical_plan(ParseResult &parse_result,
                                                            stmt_need_privs,
                                                            stmt_ora_need_privs))) {
     LOG_WARN("Failed to check ora privilege info", K(ret), K(*basic_stmt));
-  } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired(sql_ctx,
-                                                              basic_stmt->get_stmt_type()))) {
+  } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired(sql_ctx, basic_stmt))) {
     LOG_WARN("Falied to check password expired", K(ret));
   } else if ((sql_ctx.is_batch_params_execute()) &&
              NULL != pc_ctx &&
@@ -4806,8 +4805,8 @@ int ObSql::pc_get_plan(ObPlanCacheCtx &pc_ctx,
           LOG_DEBUG("cached phy plan", K(*plan));
           NG_TRACE(check_priv);
         }
-        if (OB_SUCC(ret) && OB_FAIL(ObPrivilegeCheck::check_password_expired(pc_ctx.sql_ctx_,
-                                                                            stmt::T_NONE))) {
+        if (OB_SUCC(ret)
+            && OB_FAIL(ObPrivilegeCheck::check_password_expired(pc_ctx.sql_ctx_, nullptr))) {
           LOG_WARN("Falied to check password expired", K(ret));
         }
       }

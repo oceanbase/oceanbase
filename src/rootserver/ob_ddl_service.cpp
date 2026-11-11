@@ -88,6 +88,7 @@
 #include "rootserver/ob_alter_table_constraint_checker.h"
 #include "share/ob_domain_index_builder_util.h"
 #include "rootserver/ob_objpriv_mysql_ddl_service.h"
+#include "rootserver/ob_password_ddl_service.h"
 #include "storage/ob_micro_block_format_version_helper.h"
 #include "rootserver/ob_create_index_on_empty_table_helper.h"
 #include "share/ob_license_utils.h"
@@ -32659,75 +32660,6 @@ int ObDDLService::rename_user_in_trans(
   return ret;
 }
 
-int ObDDLService::set_passwd(const ObSetPasswdArg &arg)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = arg.tenant_id_;
-  uint64_t user_id = OB_INVALID_ID;
-  const ObString &user_name = arg.user_;
-  const ObString &host_name = arg.host_;
-  const ObString &passwd = arg.passwd_;
-  const bool modify_max_connections = arg.modify_max_connections_;
-  const uint64_t max_connections_per_hour = arg.max_connections_per_hour_;
-  const uint64_t max_user_connections = arg.max_user_connections_;
-  const share::schema::ObSSLType ssl_type = arg.ssl_type_;
-  const ObString &plugin = arg.plugin_;
-  const bool retain_current_password = arg.retain_current_password_;
-  const bool discard_old_password = arg.discard_old_password_;
-
-  ObSchemaGetterGuard schema_guard;
-  bool is_oracle_mode = false;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("check inner stat faile", K(ret));
-  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
-    LOG_WARN("fail to check is oracle mode", K(ret));
-  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
-  } else {
-    ObSqlString ddl_stmt_str;
-    ObString ddl_sql;
-    if (OB_FAIL(schema_guard.get_user_id(tenant_id, user_name, host_name, user_id))) {
-      LOG_WARN("get_user_id failed", K(tenant_id), K(user_name), K(host_name), K(ret));
-    } else if (OB_INVALID_ID == user_id) {
-      ret = OB_USER_NOT_EXIST; //no such user
-      LOG_WARN("Try to set password for non-exist user", K(tenant_id), K(user_name), K(host_name), K(ret));
-    } else if (share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED == ssl_type) {
-      if (modify_max_connections) {
-        if (OB_FAIL(ObDDLSqlGenerator::gen_set_max_connections_sql(
-              ObAccountArg(user_name, host_name), max_connections_per_hour, max_user_connections,
-              ddl_stmt_str, is_oracle_mode))) {
-          LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
-        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-        } else if (OB_FAIL(set_max_connection_in_trans(tenant_id, user_id,
-                                        max_connections_per_hour, max_user_connections,
-                                        &ddl_sql, schema_guard))) {
-          LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
-        }
-      } else {
-        if (OB_FAIL(ObDDLSqlGenerator::gen_set_passwd_sql(ObAccountArg(user_name, host_name),
-              passwd, ddl_stmt_str, plugin, is_oracle_mode,
-              retain_current_password, discard_old_password))) {
-          LOG_WARN("gen_set_passwd_sql failed", K(ret), K(arg));
-        } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-        } else if (OB_FAIL(set_passwd_in_trans(tenant_id, user_id, passwd,
-                                        &ddl_sql, schema_guard, plugin,
-                                        retain_current_password, discard_old_password))) {
-          LOG_WARN("Set passwd failed", K(tenant_id), K(user_id), K(passwd), K(ret));
-        }
-      }
-    } else {
-      if (OB_FAIL(ObDDLSqlGenerator::gen_alter_user_require_sql(
-          ObAccountArg(user_name, host_name), arg, ddl_stmt_str))) {
-        LOG_WARN("gen_alter_user_require_sql failed", K(ret), K(arg));
-      } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-      } else if (OB_FAIL(alter_user_require_in_trans(tenant_id, user_id, arg, &ddl_sql, schema_guard))) {
-        LOG_WARN("alter_user_require failed", K(tenant_id), K(user_id), K(arg), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDDLService::check_add_sys_variable(const bool &update_sys_var,
     const ObSysVariableSchema &sys_variable_schema,
     share::schema::ObSysVarSchema &sysvar,
@@ -32763,61 +32695,6 @@ int ObDDLService::check_add_sys_variable(const bool &update_sys_var,
       execute = false;
     } else if (OB_FAIL(sysvar.set_value(old_schema->get_value()))) {
       LOG_WARN("fail to set old value", KR(ret), K(sysvar), KPC(old_schema));
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::set_passwd_in_trans(
-    const uint64_t tenant_id,
-    const uint64_t user_id,
-    const common::ObString &new_passwd,
-    const ObString *ddl_stmt_str,
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const common::ObString &plugin,
-    const bool retain_current_password,
-    const bool discard_old_password)
-{
-  int ret = OB_SUCCESS;
-  ObDDLSQLTransaction trans(schema_service_);
-  int64_t refreshed_schema_version = 0;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("variable is not init");
-  } else if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Tenant_id or user_id is invalid", K(tenant_id), K(user_id), K(ret));
-  } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
-    LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
-    LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-  } else {
-    ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-    if (OB_FAIL(ddl_operator.set_passwd(tenant_id,
-                                        user_id,
-                                        new_passwd,
-                                        ddl_stmt_str,
-                                        trans,
-                                        plugin,
-                                        retain_current_password,
-                                        discard_old_password))) {
-      LOG_WARN("fail to set password", K(ret), K(tenant_id), K(user_id), K(new_passwd));
-    }
-    if (trans.is_started()) {
-      int temp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-        ret = (OB_SUCC(ret)) ? temp_ret : ret;
-      }
-    }
-  }
-
-  // publish schema
-  if (OB_SUCC(ret)) {
-    ret = publish_schema(tenant_id);
-    if (OB_FAIL(ret)) {
-      LOG_WARN("pubish schema failed", K(ret));
     }
   }
   return ret;
@@ -33221,6 +33098,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
   ObSchemaGetterGuard schema_guard;
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   int64_t refreshed_schema_version = 0;
+  ObPasswordDDLService password_ddl_service(this);
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_UNLIKELY(!arg.is_valid())) {
@@ -33453,17 +33331,23 @@ int ObDDLService::grant(const ObGrantArg &arg)
                                                                        plugin,
                                                                        is_oracle_mode,
                                                                        false,
-                                                                       false))) {
+                                                                       false,
+                                                                       true /*modify_password*/,
+                                                                       PASSWORD_EXPIRE_NONE,
+                                                                       static_cast<int64_t>(PASSWORD_EXPIRE_NONE)))) {
                 LOG_WARN("gen set passwd sql failed", K(user_name), K(host_name), K(pwd), K(ret));
               } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
-              } else if (OB_FAIL(set_passwd_in_trans(arg.tenant_id_,
-                                                     user_id,
-                                                     pwd,
-                                                     &ddl_sql,
-                                                     schema_guard,
-                                                     plugin,
-                                                     false /*retain_current_password*/,
-                                                     false /*discard_old_password*/))) {
+              } else if (OB_FAIL(password_ddl_service.set_passwd_in_trans(arg.tenant_id_,
+                                                                          user_id,
+                                                                          pwd,
+                                                                          &ddl_sql,
+                                                                          schema_guard,
+                                                                          plugin,
+                                                                          false /*retain_current_password*/,
+                                                                          false /*discard_old_password*/,
+                                                                          PASSWORD_EXPIRE_NONE,
+                                                                          static_cast<int64_t>(PASSWORD_EXPIRE_NONE),
+                                                                          arg.password_last_changed_))) {
                 LOG_WARN("Set password error", KR(ret), K(arg), K(user_id), K(pwd), K(ddl_sql));
               }
             }
@@ -33484,9 +33368,7 @@ int ObDDLService::grant(const ObGrantArg &arg)
                 } else if (OB_FAIL(user_info.set_plugin(plugin))) {
                   LOG_WARN("set_plugin error", "tenant_id", arg.tenant_id_, K(user_name), K(host_name), K(ret));
                 } else if (FALSE_IT(user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
-                } else if (OB_FAIL(create_user(user_info,
-                                               OB_INVALID_ID,
-                                               user_id))) {
+                } else if (OB_FAIL(create_user(user_info, OB_INVALID_ID, user_id))) {
                   LOG_WARN("Create user error", "tenant_id", arg.tenant_id_,
                            K(user_name), K(host_name), K(ret));
                 } else {
@@ -36723,6 +36605,8 @@ int ObDDLService::create_user_in_trans(share::schema::ObUserInfo &user_info,
   int ret = OB_SUCCESS;
   ObDDLSQLTransaction trans(schema_service_);
   const uint64_t tenant_id = user_info.get_tenant_id();
+  const ObPasswordExpireOption password_expire_option = user_info.get_password_expire_option();
+  const int64_t password_lifetime_us = user_info.get_password_lifetime();
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else {
@@ -36752,6 +36636,13 @@ int ObDDLService::create_user_in_trans(share::schema::ObUserInfo &user_info,
                                                               user_info.get_x509_subject_str(),
                                                               ddl_stmt_str))) {
       LOG_WARN("gen append_ssl_info_sql failed", K(ret));
+    } else if (!is_oracle_mode
+               && OB_FAIL(ObDDLSqlGenerator::append_password_expire_option_sql(password_expire_option,
+                                                                               password_lifetime_us,
+                                                                               true,
+                                                                               ddl_stmt_str))) {
+      LOG_WARN("append password expiration option failed", K(ret), K(password_expire_option),
+               K(password_lifetime_us));
     } else if (FALSE_IT(ddl_sql = ddl_stmt_str.string())) {
     } else if (OB_FAIL(ddl_operator.create_user(user_info, &ddl_sql, trans))) {
       LOG_WARN("Failed to create user", K(ret));

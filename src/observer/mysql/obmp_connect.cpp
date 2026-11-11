@@ -26,6 +26,7 @@
 #include "sql/engine/dml/ob_trigger_handler.h"
 #include "share/ob_license_utils.h"
 #include "share/ob_tenant_info_proxy.h"
+#include "share/ob_cluster_version.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
 #include "common/object/ob_object.h"
 
@@ -1700,12 +1701,29 @@ int ObMPBase::check_password_expired(const uint64_t tenant_id,
                                      ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  const ObSMConnection *conn = get_conn();
   if (!is_valid_tenant_id(tenant_id) || !is_valid_id(user_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(user_id));
-  } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired_on_connection(
-             tenant_id, user_id, schema_guard, session))) {
+  } else if (OB_ISNULL(conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("connection is null", K(ret));
+  } else if (OB_FAIL(ObPrivilegeCheck::check_password_expired_on_connection(tenant_id, user_id, schema_guard, session))) {
     LOG_WARN("fail to check password expired", K(ret), K(tenant_id), K(user_id));
+  } else if (MYSQL_MODE == session.get_compatibility_mode() && session.is_password_expired()) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get tenant data version", K(ret), K(tenant_id));
+    } else if (compat_version >= DATA_VERSION_4_4_2_4) {
+      bool disconnect_on_expired_password = true;
+      if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_DISCONNECT_ON_EXPIRED_PASSWORD,
+                                           disconnect_on_expired_password))) {
+        LOG_WARN("fail to get disconnect_on_expired_password", K(ret), K(tenant_id));
+      } else if (disconnect_on_expired_password && !conn->cap_flags_.cap_flags_.OB_CLIENT_CAN_HANDLE_EXPIRED_PASSWORDS) {
+        ret = OB_ERR_MUST_CHANGE_PASSWORD_LOGIN;
+        LOG_WARN("client cannot handle expired password session", K(ret), K(tenant_id));
+      }
+    }
   }
   return ret;
 }

@@ -74,9 +74,9 @@ public:
       const ObStmt *basic_stmt,
       common::ObIArray<share::schema::ObOraNeedPriv> &stmt_need_priv,
       uint64_t check_flag);
-	// check if password is expired according to the flag in session info
-  static int check_password_expired(const ObSqlCtx &ctx, const stmt::StmtType stmt_type);
-	// check if password is expired and set the flag in session info
+  // check if password is expired according to the flag in session info
+  static int check_password_expired(const ObSqlCtx &ctx, const ObStmt *basic_stmt);
+  // check if password is expired and set the flag in session info
   static int check_password_expired_on_connection(const uint64_t tenant_id,
                                                   const uint64_t user_id,
                                                   share::schema::ObSchemaGetterGuard &schema_guard,
@@ -88,7 +88,8 @@ public:
   ///@param stmt_need_priv[out]   priv info needed by stmt
   static int get_stmt_need_privs(const share::schema::ObSessionPrivInfo &session_priv,
                                  const ObStmt *basic_stmt,
-                                 common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
+                                 common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv,
+                                 const ObSqlCtx *sql_ctx = NULL);
   // check privilege version for upgrade compatibility
   static int get_priv_need_check(const share::schema::ObSessionPrivInfo &session_priv,
                                  const share::ObCompatFeatureType feature_type,
@@ -113,7 +114,8 @@ private:
    ///@param stmt_need_priv[out]   priv info needed by stmt
   static int one_level_stmt_need_priv(const share::schema::ObSessionPrivInfo &session_priv,
                                       const ObStmt *basic_stmt,
-                                      common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
+                                      common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv,
+                                      const ObSqlCtx *sql_ctx = NULL);
 
   static const ObGetStmtNeedPrivsFunc priv_check_funcs_[];
   static const ObGetStmtOraNeedPrivsFunc get_ora_priv_funcs_[];
@@ -130,8 +132,11 @@ private:
                                             share::schema::ObSchemaGetterGuard &schema_guard,
                                             sql::ObSQLSessionInfo &session);
   enum ObPasswordLifeTime { FOREVER = 0, LIMIT};
-  static bool check_password_expired_time(int64_t password_last_changed_ts,
-                                          int64_t password_life_time);
+  static int check_password_expired_time(const int64_t password_last_changed_ts,
+                                        const int64_t password_lifetime_us,
+                                        const int64_t current_ts,
+                                        const common::ObTimeZoneInfo *tz_info,
+                                        bool &is_expired);
   static int check_password_life_time_oracle(const uint64_t tenant_id,
                                              const uint64_t user_id,
                                              share::schema::ObSchemaGetterGuard &schema_guard,

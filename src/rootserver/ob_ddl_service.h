@@ -98,6 +98,7 @@ class ObTableGroupHelp;
 class ObSnapshotInfoManager;
 struct ObTruncateInfoService;
 class ObPLDDLService;
+class ObPasswordDDLService;
 class ObDDLService
 {
 public:
@@ -106,6 +107,7 @@ public:
   friend class ObTableGroupHelp;
   friend class ObStandbyClusterSchemaProcessor;
   friend class ObPLDDLService;
+  friend class ObPasswordDDLService;
   ObDDLService();
   virtual ~ObDDLService() {}
 
@@ -800,7 +802,6 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                          share::schema::ObSchemaGetterGuard &schema_guard);
   int rename_user(const obrpc::ObRenameUserArg &arg,
                   ObIArray<int64_t> &failed_index);
-  int set_passwd(const obrpc::ObSetPasswdArg &arg);
   int drop_user(const obrpc::ObDropUserArg &arg,
                 common::ObIArray<int64_t> &failed_index);
   int alter_role(const obrpc::ObAlterRoleArg &arg);
@@ -2326,14 +2327,6 @@ private:
                                   common::ObIArray<share::schema::ObUserInfo> &user_infos);
   int replay_alter_user(const share::schema::ObUserInfo &user_info,
       share::schema::ObSchemaGetterGuard &schema_guard);
-  int set_passwd_in_trans(const uint64_t tenant_id,
-                          const uint64_t user_id,
-                          const common::ObString &new_passwd,
-                          const common::ObString *ddl_stmt_str,
-                          share::schema::ObSchemaGetterGuard &schema_guard,
-                          const common::ObString &plugin,
-                          const bool retain_current_password = false,
-                          const bool discard_old_password = false);
   int set_max_connection_in_trans(const uint64_t tenant_id,
                                   const uint64_t user_id,
                                   const uint64_t max_connections_per_hour,

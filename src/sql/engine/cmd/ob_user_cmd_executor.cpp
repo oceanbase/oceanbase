@@ -263,7 +263,12 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
             LOG_WARN("set plugin failed", K(ret));
           } else if (FALSE_IT(user_info.set_password_last_changed(ObTimeUtility::current_time()))) {
             LOG_WARN("set set_password_last_changed failed", K(ret));
+          } else if (FALSE_IT(user_info.set_password_lifetime(stmt.get_password_lifetime_us()))) {
+            LOG_WARN("set_password_lifetime failed", K(ret));
           } else {
+            user_info.set_password_expire_option(stmt.get_password_expire_option());
+            user_info.set_password_expired(
+                PASSWORD_EXPIRE_NOW == stmt.get_password_expire_option());
             user_info.set_tenant_id(tenant_id);
             if (user_name.empty()) {
               user_info.set_user_id(OB_EMPTY_USER_ID);
@@ -282,6 +287,11 @@ int ObCreateUserExecutor::execute(ObExecContext &ctx, ObCreateUserStmt &stmt)
     }
 
     if (OB_SUCC(ret)) {
+      if (0 < arg.user_infos_.count()) {
+        // Keep the legacy RPC fields in sync for older RootService nodes.
+        arg.password_expire_option_ = arg.user_infos_.at(0).get_password_expire_option();
+        arg.password_lifetime_us_ = arg.user_infos_.at(0).get_password_lifetime();
+      }
       if (OB_FAIL(create_user(common_rpc_proxy, arg))) {
         LOG_WARN("Create user rpc failed", K(ret));
       }

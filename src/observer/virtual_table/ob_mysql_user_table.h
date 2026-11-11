@@ -76,6 +76,8 @@ private:
     CREATE_ROLE_PRIV,
     DROP_ROLE_PRIV,
     USER_ATTRIBUTES,
+    PASSWORD_LAST_CHANGED,
+    PASSWORD_LIFETIME,
   };
 public:
   ObMySQLUserTable();
@@ -87,6 +89,10 @@ public:
   inline void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
 
 private:
+  int fill_password_last_changed_cell(const int64_t password_last_changed,
+                                      common::ObObj &cell) const;
+  int fill_password_lifetime_cell(const int64_t password_lifetime_us,
+                                  common::ObObj &cell) const;
   uint64_t tenant_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMySQLUserTable);

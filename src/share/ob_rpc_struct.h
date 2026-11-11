@@ -37,6 +37,7 @@
 #include "share/restore/ob_physical_restore_info.h"
 #include "share/schema/ob_error_info.h"
 #include "share/schema/ob_constraint.h"
+#include "share/schema/ob_password_expire_option.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_udf.h"
 #include "share/schema/ob_dependency_info.h"
@@ -6313,14 +6314,19 @@ struct ObCreateUserArg : public ObDDLArg
 
 public:
   ObCreateUserArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), if_not_exist_(false),
-                      creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false)
+                      creator_id_(common::OB_INVALID_ID), primary_zone_(), is_create_role_(false),
+                      default_tablespace_name_(), default_tablegroup_name_(),
+                      password_expire_option_(share::schema::PASSWORD_EXPIRE_NONE),
+                      password_lifetime_us_(
+                          static_cast<int64_t>(share::schema::PASSWORD_EXPIRE_DEFAULT))
   {}
   virtual ~ObCreateUserArg()
   {}
   bool is_valid() const;
   int assign(const ObCreateUserArg &other);
   virtual bool contain_sensitive_data() const { return true; }
-  TO_STRING_KV(K_(tenant_id), K_(user_infos));
+  TO_STRING_KV(K_(tenant_id), K_(user_infos),
+               K_(password_expire_option), K_(password_lifetime_us));
 
   uint64_t tenant_id_;
   bool if_not_exist_;
@@ -6328,6 +6334,10 @@ public:
   uint64_t creator_id_;
   common::ObString primary_zone_; // only used in oracle mode
   bool is_create_role_;
+  common::ObString default_tablespace_name_; // only used in oracle mode
+  common::ObString default_tablegroup_name_; // reserved for Oracle user tablegroups
+  share::schema::ObPasswordExpireOption password_expire_option_;
+  int64_t password_lifetime_us_;
 };
 
 struct ObDropUserArg : public ObDDLArg
@@ -6394,15 +6404,21 @@ public:
   ssl_type_(share::schema::ObSSLType::SSL_TYPE_NOT_SPECIFIED),
   modify_max_connections_(false),
   max_connections_per_hour_(OB_INVALID_ID), max_user_connections_(OB_INVALID_ID),
-  retain_current_password_(false), discard_old_password_(false)
+  plugin_(), retain_current_password_(false), discard_old_password_(false),
+  modify_password_(false), password_expire_option_(share::schema::PASSWORD_EXPIRE_NONE),
+  password_lifetime_us_(static_cast<int64_t>(share::schema::PASSWORD_EXPIRE_NONE)),
+  password_last_changed_(common::OB_INVALID_TIMESTAMP)
   { }
   virtual ~ObSetPasswdArg() {}
   bool is_valid() const;
+  bool has_password_expire_option() const
+  { return share::schema::PASSWORD_EXPIRE_NONE != password_expire_option_; }
   virtual bool contain_sensitive_data() const { return true; }
   TO_STRING_KV(K_(tenant_id), K_(user), K_(host), K_(passwd), K_(ssl_type),
                K_(ssl_cipher), K_(x509_issuer), K_(x509_subject),
                K_(max_connections_per_hour), K_(max_user_connections), K_(plugin),
-               K_(retain_current_password), K_(discard_old_password));
+               K_(retain_current_password), K_(discard_old_password), K_(modify_password),
+               K_(password_expire_option), K_(password_lifetime_us), K_(password_last_changed));
 
   uint64_t tenant_id_;
   common::ObString user_;
@@ -6418,6 +6434,10 @@ public:
   common::ObString plugin_;
   bool retain_current_password_;
   bool discard_old_password_;
+  bool modify_password_;
+  share::schema::ObPasswordExpireOption password_expire_option_;
+  int64_t password_lifetime_us_;
+  int64_t password_last_changed_;
 };
 
 struct ObLockUserArg : public ObDDLArg
@@ -6604,7 +6624,8 @@ public:
                  upd_col_ids_(), ref_col_ids_(),
                  grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
 	               sel_col_ids_(), column_names_priv_(), grantor_(), grantor_host_(),
-                 catalog_(), sensitive_rule_(), modify_password_()
+                 catalog_(), sensitive_rule_(), modify_password_(),
+                 password_last_changed_(common::OB_INVALID_TIMESTAMP)
   { }
   virtual ~ObGrantArg() {}
   bool is_valid() const;
@@ -6617,7 +6638,8 @@ public:
                K_(option), K_(object_type), K_(object_id), K_(grantor_id), K_(ins_col_ids),
                K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv),
                K_(grantor), K_(grantor_host), K_(catalog), K_(sensitive_rule),
-               K_(modify_password));
+               K_(modify_password),
+               K_(password_last_changed));
 
   uint64_t tenant_id_;
   share::schema::ObPrivLevel priv_level_;
@@ -6650,6 +6672,7 @@ public:
   common::ObString catalog_;
   common::ObString sensitive_rule_;
   common::ObSArray<bool> modify_password_;
+  int64_t password_last_changed_;
 };
 
 struct ObStandbyGrantArg : public ObDDLArg

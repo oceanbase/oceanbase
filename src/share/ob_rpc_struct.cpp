@@ -5096,6 +5096,10 @@ int ObCreateUserArg::assign(const ObCreateUserArg &other)
   creator_id_ = other.creator_id_;
   primary_zone_ = other.primary_zone_;
   is_create_role_ = other.is_create_role_;
+  default_tablespace_name_ = other.default_tablespace_name_;
+  default_tablegroup_name_ = other.default_tablegroup_name_;
+  password_expire_option_ = other.password_expire_option_;
+  password_lifetime_us_ = other.password_lifetime_us_;
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", KR(ret));
   } else if (OB_FAIL(user_infos_.assign(other.user_infos_))) {
@@ -5110,7 +5114,11 @@ OB_SERIALIZE_MEMBER((ObCreateUserArg, ObDDLArg),
                     if_not_exist_,
                     creator_id_,
                     primary_zone_,
-                    is_create_role_);
+                    is_create_role_,
+                    default_tablespace_name_,
+                    default_tablegroup_name_,
+                    password_expire_option_,
+                    password_lifetime_us_);
 
 bool ObDropUserArg::is_valid() const
 {
@@ -5310,7 +5318,11 @@ OB_DEF_SERIALIZE(ObSetPasswdArg)
               max_user_connections_,
               plugin_,
               retain_current_password_,
-              discard_old_password_);
+              discard_old_password_,
+              modify_password_,
+              password_expire_option_,
+              password_lifetime_us_,
+              password_last_changed_);
   return ret;
 }
 
@@ -5325,6 +5337,10 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
   plugin_.reset();
   retain_current_password_ = false;
   discard_old_password_ = false;
+  modify_password_ = false;
+  password_expire_option_ = PASSWORD_EXPIRE_NONE;
+  password_lifetime_us_ = static_cast<int64_t>(PASSWORD_EXPIRE_NONE);
+  password_last_changed_ = OB_INVALID_TIMESTAMP;
 
   BASE_DESER((, ObDDLArg));
   LST_DO_CODE(OB_UNIS_DECODE,
@@ -5341,7 +5357,20 @@ OB_DEF_DESERIALIZE(ObSetPasswdArg)
               max_user_connections_,
               plugin_,
               retain_current_password_,
-              discard_old_password_);
+              discard_old_password_,
+              modify_password_,
+              password_expire_option_,
+              password_lifetime_us_,
+              password_last_changed_);
+  // Legacy requests do not contain modify_password_.
+  if (OB_SUCC(ret)
+      && !modify_password_
+      && PASSWORD_EXPIRE_NONE == password_expire_option_
+      && !discard_old_password_
+      && !modify_max_connections_
+      && ObSSLType::SSL_TYPE_NOT_SPECIFIED == ssl_type_) {
+    modify_password_ = true;
+  }
   return ret;
 }
 
@@ -5362,7 +5391,11 @@ OB_DEF_SERIALIZE_SIZE(ObSetPasswdArg)
               max_user_connections_,
               plugin_,
               retain_current_password_,
-              discard_old_password_);
+              discard_old_password_,
+              modify_password_,
+              password_expire_option_,
+              password_lifetime_us_,
+              password_last_changed_);
   return len;
 }
 
@@ -5525,6 +5558,7 @@ int ObGrantArg::assign(const ObGrantArg &other)
   grantor_host_ = other.grantor_host_;
   catalog_ = other.catalog_;
   sensitive_rule_ = other.sensitive_rule_;
+  password_last_changed_ = other.password_last_changed_;
 
   if (OB_FAIL(ObDDLArg::assign(other))) {
     SHARE_LOG(WARN, "fail to assign ddl arg", K(ret));
@@ -5589,7 +5623,8 @@ OB_DEF_SERIALIZE(ObGrantArg)
               catalog_,
               sensitive_rule_,
               plugins_,
-              modify_password_);
+              modify_password_,
+              password_last_changed_);
 return ret;
 }
 
@@ -5626,7 +5661,8 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               catalog_,
               sensitive_rule_,
               plugins_,
-              modify_password_);
+              modify_password_,
+              password_last_changed_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -5692,7 +5728,8 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               catalog_,
               sensitive_rule_,
               plugins_,
-              modify_password_);
+              modify_password_,
+              password_last_changed_);
   return len;
 }
 

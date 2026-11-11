@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/dcl/ob_set_password_stmt.h"
 using namespace oceanbase::common;
+using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator *name_pool)
@@ -20,7 +21,11 @@ ObSetPasswordStmt::ObSetPasswordStmt(ObIAllocator *name_pool)
       masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
       modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
       max_user_connections_(OB_INVALID_ID), retain_current_password_(false),
-      discard_old_password_(false)
+      discard_old_password_(false),
+      modify_password_(false),
+      password_expire_option_(PASSWORD_EXPIRE_NONE),
+      password_lifetime_us_(static_cast<int64_t>(PASSWORD_EXPIRE_NONE)),
+      password_last_changed_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -29,12 +34,25 @@ ObSetPasswordStmt::ObSetPasswordStmt()
       masked_sql_(), tenant_id_(false), need_enc_(false), for_current_user_(false),
       modify_max_connections_(false), max_connections_per_hour_(OB_INVALID_ID),
       max_user_connections_(OB_INVALID_ID), retain_current_password_(false),
-      discard_old_password_(false)
+      discard_old_password_(false),
+      modify_password_(false),
+      password_expire_option_(PASSWORD_EXPIRE_NONE),
+      password_lifetime_us_(static_cast<int64_t>(PASSWORD_EXPIRE_NONE)),
+      password_last_changed_(OB_INVALID_TIMESTAMP)
 {
 }
 
 ObSetPasswordStmt::~ObSetPasswordStmt()
 {
+}
+
+void ObSetPasswordStmt::set_password_expire_option(const ObPasswordExpireOption option,
+                                                   const int64_t password_lifetime_us,
+                                                   const int64_t password_last_changed)
+{
+  password_expire_option_ = option;
+  password_lifetime_us_ = password_lifetime_us;
+  password_last_changed_ = password_last_changed;
 }
 
 int ObSetPasswordStmt::set_user_password(const common::ObString &user_name,

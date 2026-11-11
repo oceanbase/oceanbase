@@ -16,6 +16,7 @@
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 #include "lib/string/ob_strings.h"
 #include "share/ob_define.h"
+#include "share/schema/ob_password_expire_option.h"
 
 namespace oceanbase
 {
@@ -59,6 +60,10 @@ public:
   void set_max_connections_per_hour(uint64_t val) { max_connections_per_hour_ = val; }
   uint64_t get_max_user_connections() { return max_user_connections_; }
   void set_max_user_connections(uint64_t val) { max_user_connections_ = val; }
+  void set_password_expire_option(const share::schema::ObPasswordExpireOption option,
+                                  const int64_t password_lifetime_us);
+  share::schema::ObPasswordExpireOption get_password_expire_option() const { return password_expire_option_; }
+  int64_t get_password_lifetime_us() const { return password_lifetime_us_; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
@@ -74,6 +79,8 @@ private:
   obrpc::ObCreateUserArg create_user_arg_; // 用于返回exec_tenant_id_
   uint64_t max_connections_per_hour_;
   uint64_t max_user_connections_;
+  share::schema::ObPasswordExpireOption password_expire_option_;
+  int64_t password_lifetime_us_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateUserStmt);
 };

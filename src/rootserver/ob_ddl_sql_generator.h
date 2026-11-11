@@ -53,13 +53,20 @@ public:
                                  const common::ObString &x509_issuer,
                                  const common::ObString &x509_subject,
                                  common::ObSqlString &sql_string);
+  static int append_password_expire_option_sql(const share::schema::ObPasswordExpireOption password_expire_option,
+                                               const int64_t password_lifetime_us,
+                                               const bool append_password_expire_keyword,
+                                               common::ObSqlString &sql_string);
   static int gen_set_passwd_sql(const obrpc::ObAccountArg &account,
                                 const common::ObString &passwd,
                                 common::ObSqlString &sql_string,
                                 const common::ObString &plugin,
                                 const bool is_oracle_mode,
                                 const bool retain_current_password,
-                                const bool discard_old_password);
+                                const bool discard_old_password,
+                                const bool modify_password,
+                                const share::schema::ObPasswordExpireOption password_expire_option,
+                                const int64_t password_lifetime_us);
   static int gen_set_max_connections_sql(const obrpc::ObAccountArg &account,
                                         const uint64_t max_connections_per_hour,
                                         const uint64_t max_user_connections,

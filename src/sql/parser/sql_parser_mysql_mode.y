@@ -18,6 +18,7 @@
 %error-verbose
 %{
 #include <stdint.h>
+
 #define YYDEBUG 1
 %}
 
@@ -466,6 +467,7 @@ GLOBAL_ALIAS SESSION_ALIAS WITH_COLUMN_GROUP
 %type <node> drop_user_stmt user_list user_specification_without_password user_specification_with_password
 %type <node> create_role_stmt drop_role_stmt role_list role_with_host role user_specification_without_password_list
 %type <node> set_password_stmt opt_for_user opt_retain_current_password
+%type <node> opt_password_expire_option password_expire_option
 %type <node> rename_user_stmt rename_info rename_list
 %type <node> rename_table_stmt rename_table_actions rename_table_action
 %type <node> truncate_table_stmt
@@ -17874,16 +17876,18 @@ opt_tablespace_option
  *
  *****************************************************************************/
 create_user_stmt:
-create_with_opt_hint USER opt_if_not_exists user_specification_list opt_resource_option
+create_with_opt_hint USER opt_if_not_exists user_specification_list opt_resource_option opt_password_expire_option
 {
   ParseNode *users_node = NULL;
   (void)($1);
   merge_nodes(users_node, result, T_USERS, $4);
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 4, $3, users_node, NULL, res_opt_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 5,
+                           $3, users_node, NULL, res_opt_node, $6);
 }
-| create_with_opt_hint USER opt_if_not_exists user_specification_list require_specification opt_resource_option
+| create_with_opt_hint USER opt_if_not_exists user_specification_list
+  require_specification opt_resource_option opt_password_expire_option
 {
   ParseNode *users_node = NULL;
   (void)($1);
@@ -17892,7 +17896,8 @@ create_with_opt_hint USER opt_if_not_exists user_specification_list opt_resource
   merge_nodes(require_node, result, T_TLS_OPTIONS, $5);
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 4, $3, users_node, require_node, res_opt_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER, 5,
+                           $3, users_node, require_node, res_opt_node, $7);
 }
 ;
 
@@ -18295,16 +18300,19 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE opt_retain_current_password
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $5, need_enc_node, NULL, NULL, NULL, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, $5, need_enc_node, NULL, NULL, NULL, $6, NULL);
 }
 | SET PASSWORD opt_for_user COMP_EQ PASSWORD '(' password ')' opt_retain_current_password
 {
   ParseNode *need_enc_node = NULL;
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $7, need_enc_node, NULL, NULL, NULL, $9);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, $7, need_enc_node, NULL, NULL, NULL, $9, NULL);
 }
-| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin BY password opt_retain_current_password
+| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin BY password
+  opt_retain_current_password opt_password_expire_option
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
@@ -18312,9 +18320,11 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE opt_retain_current_password
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 1;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $7, need_enc_node, NULL, $5, from_alter, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, $7, need_enc_node, NULL, $5, from_alter, $8, $9);
 }
-| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password opt_retain_current_password
+| alter_with_opt_hint USER user_with_host_name IDENTIFIED opt_auth_plugin AS password
+  opt_retain_current_password opt_password_expire_option
 {
   (void)($1);
   ParseNode *need_enc_node = NULL;
@@ -18322,23 +18332,34 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE opt_retain_current_password
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, $7, need_enc_node, NULL, $5, from_alter, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, $7, need_enc_node, NULL, $5, from_alter, $8, $9);
+}
+| alter_with_opt_hint USER user_with_host_name password_expire_option
+{
+  (void)($1);
+  ParseNode *from_alter = NULL;
+  malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, NULL, NULL, NULL, NULL, from_alter, NULL, $4);
 }
 | alter_with_opt_hint USER user_with_host_name require_specification
 {
   (void)($1);
   ParseNode *require_node = NULL;
   merge_nodes(require_node, result, T_TLS_OPTIONS, $4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, NULL, NULL, require_node, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, NULL, NULL, require_node, NULL, NULL, NULL, NULL);
 }
 | alter_with_opt_hint USER user_with_host_name WITH resource_option_list
 {
   (void)($1);
   ParseNode *res_opt_node = NULL;
   merge_nodes(res_opt_node, result, T_USER_RESOURCE_OPTIONS, $5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, NULL, NULL, res_opt_node, NULL, NULL, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, NULL, NULL, res_opt_node, NULL, NULL, NULL, NULL);
 }
-| alter_with_opt_hint USER user_with_host_name DISCARD OLD PASSWORD
+| alter_with_opt_hint USER user_with_host_name DISCARD OLD PASSWORD opt_password_expire_option
 {
   (void)($1);
   ParseNode *from_alter = NULL;
@@ -18346,7 +18367,8 @@ SET PASSWORD opt_for_user COMP_EQ STRING_VALUE opt_retain_current_password
   malloc_terminal_node(from_alter, result->malloc_pool_, T_BOOL);
   malloc_terminal_node(retain_or_discard_node, result->malloc_pool_, T_BOOL);
   retain_or_discard_node->value_ = 0;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 7, $3, NULL, NULL, NULL, NULL, from_alter, retain_or_discard_node);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SET_PASSWORD, 8,
+                           $3, NULL, NULL, NULL, NULL, from_alter, retain_or_discard_node, $7);
 }
 ;
 
@@ -18360,6 +18382,39 @@ RETAIN CURRENT PASSWORD
 {
   $$ = NULL;
 }
+opt_password_expire_option:
+password_expire_option
+{
+  $$ = $1;
+}
+| /**/
+{
+  $$ = NULL;
+}
+;
+
+password_expire_option:
+PASSWORD EXPIRE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PASSWORD_EXPIRE, 1, NULL);
+  $$->value_ = -2;
+}
+| PASSWORD EXPIRE DEFAULT
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PASSWORD_EXPIRE, 1, NULL);
+  $$->value_ = -1;
+}
+| PASSWORD EXPIRE NEVER
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PASSWORD_EXPIRE, 1, NULL);
+  $$->value_ = 0;
+}
+| PASSWORD EXPIRE INTERVAL INTNUM DAY
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PASSWORD_EXPIRE, 1, $4);
+  $$->value_ = 1;
+}
+;
 
 opt_for_user:
 FOR user opt_host_name

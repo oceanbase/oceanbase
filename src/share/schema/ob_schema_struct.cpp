@@ -9326,12 +9326,20 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     trigger_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     plugin_(),
     old_password_(),
-    old_password_start_time_(OB_INVALID_TIMESTAMP)
+    old_password_start_time_(OB_INVALID_TIMESTAMP),
+    password_expired_(false),
+    password_lifetime_us_(static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT)),
+    password_expire_option_(PASSWORD_EXPIRE_NONE)
 {
 }
 
 ObUserInfo::~ObUserInfo()
 {
+}
+
+void ObUserInfo::set_password_expire_option(const ObPasswordExpireOption option)
+{
+  password_expire_option_ = option;
 }
 
 int ObUserInfo::assign_proxy_info_array_(ObProxyInfo **src_arr,
@@ -9444,6 +9452,9 @@ int ObUserInfo::assign(const ObUserInfo &other)
         LOG_WARN("Fail to deep copy old_password", K(ret));
       }
       old_password_start_time_ = other.old_password_start_time_;
+      password_expired_ = other.password_expired_;
+      password_lifetime_us_ = other.password_lifetime_us_;
+      password_expire_option_ = other.password_expire_option_;
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
@@ -9454,7 +9465,11 @@ int ObUserInfo::assign(const ObUserInfo &other)
 
 bool ObUserInfo::is_valid() const
 {
-  return ObSchema::is_valid() && ObPriv::is_valid();
+  return ObSchema::is_valid()
+         && ObPriv::is_valid()
+         && static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT) <= password_lifetime_us_
+         && PASSWORD_EXPIRE_NONE <= password_expire_option_
+         && PASSWORD_EXPIRE_INTERVAL >= password_expire_option_;
 }
 
 int ObUserInfo::add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info)
@@ -9589,6 +9604,9 @@ void ObUserInfo::reset()
   plugin_.reset();
   old_password_.reset();
   old_password_start_time_ = OB_INVALID_TIMESTAMP;
+  password_expired_ = false;
+  password_lifetime_us_ = static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT);
+  password_expire_option_ = PASSWORD_EXPIRE_NONE;
 }
 
 int64_t ObUserInfo::get_convert_size() const
@@ -9676,6 +9694,9 @@ OB_DEF_SERIALIZE(ObUserInfo)
     LST_DO_CODE(OB_UNIS_ENCODE, plugin_);
     LST_DO_CODE(OB_UNIS_ENCODE, old_password_);
     LST_DO_CODE(OB_UNIS_ENCODE, old_password_start_time_);
+    LST_DO_CODE(OB_UNIS_ENCODE, password_lifetime_us_);
+    LST_DO_CODE(OB_UNIS_ENCODE, password_expired_);
+    LST_DO_CODE(OB_UNIS_ENCODE, password_expire_option_);
   }
   return ret;
 }
@@ -9779,6 +9800,9 @@ OB_DEF_DESERIALIZE(ObUserInfo)
       LST_DO_CODE(OB_UNIS_DECODE, plugin_);
       LST_DO_CODE(OB_UNIS_DECODE, old_password_);
       LST_DO_CODE(OB_UNIS_DECODE, old_password_start_time_);
+      LST_DO_CODE(OB_UNIS_DECODE, password_lifetime_us_);
+      LST_DO_CODE(OB_UNIS_DECODE, password_expired_);
+      LST_DO_CODE(OB_UNIS_DECODE, password_expire_option_);
     }
   }
 
@@ -9823,6 +9847,9 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN, plugin_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, old_password_);
   LST_DO_CODE(OB_UNIS_ADD_LEN, old_password_start_time_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, password_lifetime_us_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, password_expired_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, password_expire_option_);
   return len;
 }
 
@@ -10344,6 +10371,7 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
   columns_.reset();
   priv_level_ = other.priv_level_;
   priv_set_ = other.priv_set_;
+  grantee_id_ = other.grantee_id_;
   is_sys_table_ = other.is_sys_table_;
   is_for_update_ = other.is_for_update_;
   priv_check_type_ = other.priv_check_type_;

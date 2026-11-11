@@ -480,6 +480,8 @@ all_user_def = dict(
       ('plugin', 'varchar:64', 'false', ''),
       ('old_password', 'varchar:OB_MAX_PASSWORD_LENGTH', 'false', ''),
       ('old_password_start_time', 'int', 'false', 'OB_INVALID_TIMESTAMP'),
+      ('password_expired', 'bool', 'false', 'false'),
+      ('password_lifetime', 'int', 'true', 'NULL'),
     ],
 )
 
@@ -12225,6 +12227,8 @@ def_table_schema(
   ('create_role_priv', 'varchar:1'),
   ('drop_role_priv', 'varchar:1'),
   ('user_attributes', 'longtext', 'true', 'NULL'),
+  ('password_last_changed', 'timestamp', 'true'),
+  ('password_lifetime', 'int', 'true'),
   ],
 )
 
@@ -33980,7 +33984,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS,
           OLD_PASSWORD,
           OLD_PASSWORD_START_TIME,
-          (CASE WHEN (PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE
+          (CASE WHEN (PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE,
+          (CASE WHEN PASSWORD_EXPIRED = 0 THEN 'NO' ELSE 'YES' END) AS PASSWORD_EXPIRED,
+          CAST(PASSWORD_LIFETIME / 86400000000 AS SIGNED) AS PASSWORD_LIFETIME
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -34056,7 +34062,9 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS,
           OLD_PASSWORD,
           OLD_PASSWORD_START_TIME,
-          (CASE WHEN (PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE
+          (CASE WHEN (PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE,
+          (CASE WHEN PASSWORD_EXPIRED = 0 THEN 'NO' ELSE 'YES' END) AS PASSWORD_EXPIRED,
+          CAST(PASSWORD_LIFETIME / 86400000000 AS SIGNED) AS PASSWORD_LIFETIME
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )

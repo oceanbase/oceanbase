@@ -36,10 +36,10 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ObCreateUserStmt *create_user_stmt = NULL;
   if (OB_UNLIKELY(lib::is_oracle_mode() && 5 != parse_tree.num_child_)
-      || OB_UNLIKELY(lib::is_mysql_mode() && 4 != parse_tree.num_child_)
+      || OB_UNLIKELY(lib::is_mysql_mode() && 5 != parse_tree.num_child_)
       || OB_UNLIKELY(T_CREATE_USER != parse_tree.type_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("expect 4 child in mysql mode and 5 child in oracle mode, create user type",
+    LOG_WARN("expect 5 children in mysql and oracle mode, create user type",
              "actual_num", parse_tree.num_child_,
              "type", parse_tree.type_,
              K(ret));
@@ -65,11 +65,29 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
     ParseNode *users = const_cast<ParseNode*>(parse_tree.children_[1]);
     ParseNode *require_info = const_cast<ParseNode*>(parse_tree.children_[2]);
     ParseNode *resource_options = !lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
+    ParseNode *password_expire_node = !lib::is_oracle_mode()
+                                      ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL;
     ParseNode *profile = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[3]) : NULL;
     ParseNode *primary_zone = lib::is_oracle_mode() ? const_cast<ParseNode*>(parse_tree.children_[4]) : NULL; 
     ParseNode *ssl_infos = NULL;
+    ObPasswordExpireOption password_expire_option = PASSWORD_EXPIRE_NONE;
+    int64_t password_lifetime_us = static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT);
     create_user_stmt->set_tenant_id(params_.session_info_->get_effective_tenant_id());
-		//resolve if_not_exists
+
+    if (OB_NOT_NULL(password_expire_node)) {
+      uint64_t compat_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(session_info_->get_effective_tenant_id()));
+      } else if (OB_FAIL(ObSetPasswordResolver::resolve_password_expire_option(*password_expire_node,
+                                                                               compat_version,
+                                                                               password_expire_option,
+                                                                               password_lifetime_us))) {
+        LOG_WARN("failed to resolve password expire option", K(ret));
+      } else if (PASSWORD_EXPIRE_NOW == password_expire_option) {
+        password_lifetime_us = static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT);
+      }
+    }
+        //resolve if_not_exists
     if (OB_SUCC(ret)) {
       if (NULL != if_not_exist) {
         if (T_IF_NOT_EXISTS != if_not_exist->type_) {
@@ -336,6 +354,10 @@ int ObCreateUserResolver::resolve(const ParseNode &parse_tree)
           }
         }
       }
+    }
+
+    if (OB_SUCC(ret)) {
+      create_user_stmt->set_password_expire_option(password_expire_option, password_lifetime_us);
     }
   }
   return ret;

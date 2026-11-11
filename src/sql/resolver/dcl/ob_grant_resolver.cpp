@@ -17,6 +17,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "share/ob_table_lock_compat_versions.h"
 #include "lib/encrypt/ob_encrypted_helper.h"
+#include "lib/time/ob_time_utility.h"
 #include "sql/parser/parse_node.h"
 
 using namespace oceanbase::sql;
@@ -1283,6 +1284,7 @@ int ObGrantResolver::resolve_ora(const ParseNode &parse_tree)
 int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
+  const int64_t password_last_changed = ObTimeUtility::current_time();
 
   ParseNode *node = const_cast<ParseNode*>(&parse_tree);
   ObGrantStmt *grant_stmt = NULL;
@@ -1548,6 +1550,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                   }
                   pwd.assign_ptr(const_cast<char *>(user_node->children_[1]->str_value_),
                       static_cast<int32_t>(user_node->children_[1]->str_len_));
+                  grant_stmt->set_password_last_changed(password_last_changed);
                   if (OB_ISNULL(user_node->children_[2])) {
                     ret = OB_ERR_PARSE_SQL;
                     LOG_WARN("The child 2 of user_node should not be NULL", K(ret));

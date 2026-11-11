@@ -44,6 +44,8 @@ public:
   void set_need_create_user(bool need_create_user) { need_create_user_ = need_create_user; }
   void set_need_create_user_priv(bool need_create_user_priv)
   { need_create_user_priv_ = need_create_user_priv; }
+  void set_password_last_changed(const int64_t password_last_changed)
+  { grant_arg_.password_last_changed_ = password_last_changed; }
   int set_priv_array(const share::ObRawPrivArray &array_in);
   int set_obj_priv_array(const share::ObRawObjPrivArray &array_in);
   void set_option(uint64_t option) { option_ = option; }

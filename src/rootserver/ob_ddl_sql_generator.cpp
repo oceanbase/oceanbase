@@ -309,25 +309,111 @@ int ObDDLSqlGenerator::append_ssl_info_sql(const ObSSLType &ssl_type,
   return ret;
 }
 
+int ObDDLSqlGenerator::append_password_expire_option_sql(const ObPasswordExpireOption password_expire_option,
+                                                         const int64_t password_lifetime_us,
+                                                         const bool append_password_expire_keyword,
+                                                         ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  const char *password_expire_keyword = append_password_expire_keyword ? " PASSWORD EXPIRE" : "";
+  switch (password_expire_option) {
+    case PASSWORD_EXPIRE_NOW: {
+      if (OB_FAIL(sql_string.append(password_expire_keyword))) {
+        LOG_WARN("append password expire option failed", K(ret));
+      }
+      break;
+    }
+    case PASSWORD_EXPIRE_DEFAULT: {
+      if (OB_FAIL(sql_string.append_fmt("%s DEFAULT", password_expire_keyword))) {
+        LOG_WARN("append password expire default option failed", K(ret));
+      }
+      break;
+    }
+    case PASSWORD_EXPIRE_NEVER: {
+      if (OB_FAIL(sql_string.append_fmt("%s NEVER", password_expire_keyword))) {
+        LOG_WARN("append password expire never option failed", K(ret));
+      }
+      break;
+    }
+    case PASSWORD_EXPIRE_INTERVAL: {
+      const int64_t password_lifetime_days = password_lifetime_us / USECS_PER_DAY;
+      if (OB_FAIL(sql_string.append_fmt("%s INTERVAL %ld DAY", password_expire_keyword, password_lifetime_days))) {
+        LOG_WARN("append password expire interval option failed",
+                 K(ret),
+                 K(password_lifetime_us),
+                 K(password_lifetime_days));
+      }
+      break;
+    }
+    case PASSWORD_EXPIRE_NONE: {
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObDDLSqlGenerator::gen_set_passwd_sql(const ObAccountArg &account,
                                           const ObString &password,
                                           ObSqlString &sql_string,
                                           const ObString &plugin,
                                           const bool is_oracle_mode,
                                           const bool retain_current_password,
-                                          const bool discard_old_password)
+                                          const bool discard_old_password,
+                                          const bool modify_password,
+                                          const ObPasswordExpireOption password_expire_option,
+                                          const int64_t password_lifetime_us)
 {
   int ret = OB_SUCCESS;
   char ALTER_USER_WITH_PLUGIN_SQL[] = "ALTER USER `%.*s`@`%.*s` IDENTIFIED WITH %.*s AS '%.*s'";
   char ALTER_USER_WITH_PLUGIN_ORACLE_SQL[] = "ALTER USER `%.*s` IDENTIFIED WITH %.*s BY VALUES '%.*s'";
   char ALTER_USER_DISCARD_OLD_PASSWORD_SQL[] = "ALTER USER `%.*s`@`%.*s` DISCARD OLD PASSWORD";
   char ALTER_USER_EXPIRE_ROLLOVER_SQL[] = "ALTER USER `%.*s` EXPIRE PASSWORD ROLLOVER PERIOD";
+  char ALTER_USER_PASSWORD_EXPIRE_SQL[] = "ALTER USER `%.*s`@`%.*s` PASSWORD EXPIRE";
   ObCStringHelper helper;
   const char *password_str = helper.convert(ObHexEscapeSqlStr(password.ptr(), false, false));
   const char *plugin_str = helper.convert(ObHexEscapeSqlStr(plugin.ptr(), false, false));
   if (OB_UNLIKELY(!account.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("username or password should not be null", K(account), K(password), K(ret));
+  } else if (modify_password) {
+    if (plugin.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("plugin should not be empty", K(ret));
+    } else if (!is_oracle_mode) {
+      // ALTER USER ... IDENTIFIED WITH plugin AS ...
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_SQL, is_oracle_mode),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr(),
+                                        account.host_name_.length(),
+                                        account.host_name_.ptr(),
+                                        static_cast<int32_t>(strlen(plugin_str)),
+                                        plugin_str,
+                                        static_cast<int32_t>(strlen(password_str)),
+                                        password_str))) {
+        LOG_WARN("append sql failed", K(account), K(plugin), K(ret));
+      } else if (retain_current_password && OB_FAIL(sql_string.append(" RETAIN CURRENT PASSWORD"))){  // ALTER USER ... IDENTIFIED WITH plugin AS ... RETAIN CURRENT PASSWORD
+          LOG_WARN("append sql failed", K(ret));
+      } else if (OB_FAIL(append_password_expire_option_sql(password_expire_option,  // ALTER USER ... IDENTIFIED WITH plugin AS ... PASSWORD EXPIRE ...
+                                                           password_lifetime_us,
+                                                           true,
+                                                           sql_string))) {
+        LOG_WARN("append password expiration option failed", K(ret), K(password_expire_option), K(password_lifetime_us));
+      }
+    } else {
+      // ALTER USER ... IDENTIFIED WITH plugin BY VALUES ...
+      if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_ORACLE_SQL, is_oracle_mode),
+                                        account.user_name_.length(),
+                                        account.user_name_.ptr(),
+                                        static_cast<int32_t>(strlen(plugin_str)),
+                                        plugin_str,
+                                        static_cast<int32_t>(strlen(password_str)),
+                                        password_str))) {
+        LOG_WARN("append sql failed", K(account), K(password), K(ret));
+      }
+    }
   } else if (discard_old_password) {
     // DISCARD OLD PASSWORD (MySQL mode) / EXPIRE PASSWORD ROLLOVER PERIOD (Oracle mode)
     if (!is_oracle_mode) {
@@ -338,6 +424,12 @@ int ObDDLSqlGenerator::gen_set_passwd_sql(const ObAccountArg &account,
                                         account.host_name_.length(),
                                         account.host_name_.ptr()))) {
         LOG_WARN("append sql failed", K(account), K(ret));
+      // MySQL: ALTER USER ... DISCARD OLD PASSWORD PASSWORD EXPIRE ...
+      } else if (OB_FAIL(append_password_expire_option_sql(password_expire_option,
+                                                           password_lifetime_us,
+                                                           true,
+                                                           sql_string))) {
+        LOG_WARN("append password expiration option failed", K(ret), K(password_expire_option), K(password_lifetime_us));
       }
     } else {
       // Oracle: ALTER USER ... EXPIRE PASSWORD ROLLOVER PERIOD
@@ -347,37 +439,18 @@ int ObDDLSqlGenerator::gen_set_passwd_sql(const ObAccountArg &account,
         LOG_WARN("append sql failed", K(account), K(ret));
       }
     }
-  } else if (plugin.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("plugin should not be empty", K(ret));
-  } else if (!is_oracle_mode) {
-    // ALTER USER ... IDENTIFIED WITH plugin AS ...
-    if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_SQL, is_oracle_mode),
+  } else if (PASSWORD_EXPIRE_NONE != password_expire_option) {
+    // MySQL: ALTER USER ... PASSWORD EXPIRE ...
+    if (OB_FAIL(sql_string.append_fmt(ALTER_USER_PASSWORD_EXPIRE_SQL,
                                       account.user_name_.length(),
                                       account.user_name_.ptr(),
                                       account.host_name_.length(),
-                                      account.host_name_.ptr(),
-                                      static_cast<int32_t>(strlen(plugin_str)),
-                                      plugin_str,
-                                      static_cast<int32_t>(strlen(password_str)),
-                                      password_str))) {
-      LOG_WARN("append sql failed", K(account), K(password), K(plugin), K(ret));
-    } else if (retain_current_password) {
-      // Append RETAIN CURRENT PASSWORD for MySQL mode
-      if (OB_FAIL(sql_string.append(" RETAIN CURRENT PASSWORD"))) {
-        LOG_WARN("append sql failed", K(ret));
-      }
-    }
-  } else {
-    // ALTER USER ... IDENTIFIED WITH plugin BY VALUES ...
-    if (OB_FAIL(sql_string.append_fmt(adjust_ddl_format_str(ALTER_USER_WITH_PLUGIN_ORACLE_SQL, is_oracle_mode),
-                                      account.user_name_.length(),
-                                      account.user_name_.ptr(),
-                                      static_cast<int32_t>(strlen(plugin_str)),
-                                      plugin_str,
-                                      static_cast<int32_t>(strlen(password_str)),
-                                      password_str))) {
-      LOG_WARN("append sql failed", K(account), K(password), K(ret));
+                                      account.host_name_.ptr()))) {
+      LOG_WARN("append password expire account failed", K(ret));
+    } else if (OB_FAIL(append_password_expire_option_sql(
+        password_expire_option, password_lifetime_us, false, sql_string))) {
+      LOG_WARN("append password expiration option failed",
+               K(ret), K(password_expire_option), K(password_lifetime_us));
     }
   }
   return ret;

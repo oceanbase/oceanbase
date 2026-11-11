@@ -2042,6 +2042,22 @@ int ObSchemaRetrieveUtils::fill_user_schema(
                                                           ignore_column_error,
                                                           default_old_password_start_time);
     }
+    if (OB_SUCC(ret)) {
+      EXTRACT_BOOL_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+          result, password_expired, user_info, false, ignore_column_error, false);
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t default_password_lifetime =
+          static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT);
+      EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+          result,
+          password_lifetime,
+          user_info,
+          int64_t,
+          true,
+          ignore_column_error,
+          default_password_lifetime);
+    }
   }
   return ret;
 }

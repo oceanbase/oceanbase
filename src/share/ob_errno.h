@@ -275,6 +275,7 @@ constexpr int OB_LS_NOT_IN_LEARNER_LIST = -4410;
 constexpr int OB_OUT_OF_MAX_EXECUTION_TIME = -4412;
 constexpr int OB_ERR_MAX_EXECUTION_TIME_TRUNCATED = -4413;
 constexpr int OB_NON_RO_SELECT_DISABLE_TIMER = -4414;
+constexpr int OB_ERR_MUST_CHANGE_PASSWORD_LOGIN = -4415;
 constexpr int OB_IMPORT_NOT_IN_SERVER = -4505;
 constexpr int OB_CONVERT_ERROR = -4507;
 constexpr int OB_BYPASS_TIMEOUT = -4510;
@@ -2463,6 +2464,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_OUT_OF_MAX_EXECUTION_TIME__USER_ERROR_MSG "Query execution was interrupted, maximum statement execution time exceeded, maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
 #define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__USER_ERROR_MSG "Max execution time is truncated to the range [0, 4294967295]"
 #define OB_NON_RO_SELECT_DISABLE_TIMER__USER_ERROR_MSG "Select is not a read only statement, disabling timer"
+#define OB_ERR_MUST_CHANGE_PASSWORD_LOGIN__USER_ERROR_MSG "Your password has expired. To log in you must change it using a client that supports expired passwords."
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
 #define OB_CONVERT_ERROR__USER_ERROR_MSG "Convert error"
 #define OB_BYPASS_TIMEOUT__USER_ERROR_MSG "Bypass timeout"
@@ -5383,6 +5385,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4413, Max execution time is truncated to the range [0, 4294967295]"
 #define OB_NON_RO_SELECT_DISABLE_TIMER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer"
 #define OB_NON_RO_SELECT_DISABLE_TIMER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer"
+#define OB_ERR_MUST_CHANGE_PASSWORD_LOGIN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4415, Your password has expired. To log in you must change it using a client that supports expired passwords."
+#define OB_ERR_MUST_CHANGE_PASSWORD_LOGIN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4415, Your password has expired. To log in you must change it using a client that supports expired passwords."
 #define OB_IMPORT_NOT_IN_SERVER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_IMPORT_NOT_IN_SERVER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4505, Import not in service"
 #define OB_CONVERT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4507, Convert error"
@@ -9724,7 +9728,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2542];
+extern int g_all_ob_errnos[2543];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

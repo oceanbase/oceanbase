@@ -115,17 +115,33 @@ int ObSetPasswordExecutor::execute(ObExecContext &ctx, ObSetPasswordStmt &stmt)
       arg.plugin_ = plugin;
       arg.retain_current_password_ = stmt.get_retain_current_password();
       arg.discard_old_password_ = stmt.get_discard_old_password();
-      if (stmt.get_need_enc()) {
-        if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd, plugin, arg.passwd_, enc_buf, SECURE_PASSWD_BUF_LEN, session))) {
+      arg.modify_password_ = stmt.get_modify_password();
+      arg.password_expire_option_ = stmt.get_password_expire_option();
+      arg.password_lifetime_us_ = stmt.get_password_lifetime_us();
+      arg.password_last_changed_ = stmt.get_password_last_changed();
+      arg.passwd_ = passwd;
+      if (stmt.get_modify_password() && stmt.get_need_enc()) {
+        if (OB_FAIL(ObCreateUserExecutor::encrypt_passwd(passwd,
+                                                         plugin,
+                                                         arg.passwd_,
+                                                         enc_buf,
+                                                         SECURE_PASSWD_BUF_LEN,
+                                                         session))) {
           LOG_WARN("Encrypt passwd failed", K(ret));
         }
-      } else {
-        arg.passwd_ = passwd;
       }
-      if (OB_SUCC(ret) && OB_FAIL(common_rpc_proxy->set_passwd(arg))) {
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(common_rpc_proxy->set_passwd(arg))) {
           LOG_WARN("Set password failed", K(ret));
-      } else if (0 == user_name.case_compare(session->get_user_name())) {
-        session->set_password_expired(false);
+        } else if (stmt.get_for_current_user()) {
+          if (PASSWORD_EXPIRE_NOW == stmt.get_password_expire_option()) {
+            session->set_password_expired(true);
+          } else if (stmt.get_modify_password()) {
+            session->set_password_expired(false);
+          } else {
+            // do nothing
+          }
+        }
       }
     }
   }

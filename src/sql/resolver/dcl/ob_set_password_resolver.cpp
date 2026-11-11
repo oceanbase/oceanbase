@@ -18,6 +18,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/parser/parse_node.h"
+#include "sql/parser/parse_define.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -95,6 +96,83 @@ bool ObSetPasswordResolver::is_valid_encrypted_passwd(const ObString &str, const
   return bret;
 }
 
+int ObSetPasswordResolver::resolve_password_expire_option(
+    const ParseNode &password_expire_node,
+    const uint64_t compat_version,
+    ObPasswordExpireOption &option,
+    int64_t &password_lifetime_us)
+{
+  int ret = OB_SUCCESS;
+  option = PASSWORD_EXPIRE_NONE;
+  password_lifetime_us = static_cast<int64_t>(PASSWORD_EXPIRE_NONE);
+  if (OB_UNLIKELY(T_PASSWORD_EXPIRE != password_expire_node.type_)
+      || OB_UNLIKELY(1 != password_expire_node.num_child_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid password expire ParseNode", K(ret), K(password_expire_node.type_),
+             K(password_expire_node.num_child_));
+  } else if (OB_UNLIKELY(!lib::is_mysql_mode())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("password expiration option is supported only in MySQL mode", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "password expiration option in Oracle mode");
+  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_4_2_4)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("password expiration option is not supported below data version 4.4.2 BP4",
+             K(ret), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "password expiration option below data version 4.4.2 BP4");
+  } else {
+    switch (password_expire_node.value_) {
+      case PASSWORD_EXPIRE_NOW: {
+        option = PASSWORD_EXPIRE_NOW;
+        break;
+      }
+      case PASSWORD_EXPIRE_DEFAULT: {
+        option = PASSWORD_EXPIRE_DEFAULT;
+        password_lifetime_us = static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT);
+        break;
+      }
+      case PASSWORD_EXPIRE_NEVER: {
+        option = PASSWORD_EXPIRE_NEVER;
+        password_lifetime_us = static_cast<int64_t>(PASSWORD_EXPIRE_NEVER);
+        break;
+      }
+      case PASSWORD_EXPIRE_INTERVAL: {
+        const ParseNode *interval_node = password_expire_node.children_[0];
+        if (OB_ISNULL(interval_node) || OB_UNLIKELY(T_INT != interval_node->type_)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid password expire interval ParseNode", K(ret), KP(interval_node));
+        } else {
+          const int64_t interval_days = interval_node->value_;
+          if (OB_UNLIKELY(0 >= interval_days)
+              || OB_UNLIKELY(interval_days > UINT_MAX16)) {
+            char interval_value[32] = {'\0'};
+            const int print_len = snprintf(interval_value,
+                                           sizeof(interval_value),
+                                           "%ld",
+                                           interval_days);
+            ret = OB_ERR_WRONG_VALUE;
+            LOG_WARN("invalid password expire interval", K(ret), K(interval_days));
+            if (0 < print_len && print_len < static_cast<int>(sizeof(interval_value))) {
+              LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DAY", interval_value);
+            } else {
+              LOG_USER_ERROR(OB_ERR_WRONG_VALUE, "DAY", "out of range");
+            }
+          } else {
+            option = PASSWORD_EXPIRE_INTERVAL;
+            password_lifetime_us = interval_days * USECS_PER_DAY;
+          }
+        }
+        break;
+      }
+      default: {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid password expire option", K(ret), K(password_expire_node.value_));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -106,7 +184,8 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_) || OB_ISNULL(node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Session info  and nodeshould not be NULL", KP(session_info_), KP(node), K(ret));
-  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_) || OB_UNLIKELY(7 != node->num_child_)) {
+  } else if (OB_UNLIKELY(T_SET_PASSWORD != node->type_)
+             || OB_UNLIKELY(7 != node->num_child_ && 8 != node->num_child_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Set password ParseNode error", K(node->type_), K(node->num_child_), K(ret));
   } else if (OB_ISNULL(set_pwd_stmt = create_stmt<ObSetPasswordStmt>())) {
@@ -115,6 +194,7 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
   } else {
     stmt_ = set_pwd_stmt;
     set_pwd_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
+    set_pwd_stmt->set_modify_password(OB_NOT_NULL(node->children_[1]));
     ObString user_name;
     ObString host_name;
     ObString plugin;
@@ -127,10 +207,12 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
     bool need_set_password = true;
     ObString password;
     bool need_enc = false;
-    ObSchemaGetterGuard schema_guard;
+    ObSchemaGetterGuard *schema_guard = nullptr;
     const ObUserInfo *user_info = NULL;
     uint64_t tenant_id = session_info_->get_effective_tenant_id();
     bool is_in_rollover = false;
+    ObPasswordExpireOption password_expire_option = PASSWORD_EXPIRE_NONE;
+    int64_t password_lifetime_us = static_cast<int64_t>(PASSWORD_EXPIRE_NONE);
     // resolve user and host name
     if (OB_SUCC(ret) && NULL != node->children_[0]) {
       ParseNode *user_hostname_node = node->children_[0];
@@ -161,12 +243,11 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
       set_pwd_stmt->set_for_current_user(true);
     }
     // get user info
-    if (OB_ISNULL(GCTX.schema_service_)) {
+    if (OB_ISNULL(schema_checker_)
+        || OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema service is null", K(ret));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_name, host_name, user_info))) {
+      LOG_WARN("schema checker or schema guard is null", K(ret), KP(schema_checker_), KP(schema_guard));
+    } else if (OB_FAIL(schema_guard->get_user_info(tenant_id, user_name, host_name, user_info))) {
       LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else if (OB_ISNULL(user_info)) {
       ret = OB_USER_NOT_EXIST;
@@ -240,9 +321,9 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
         && compat_version >= DATA_VERSION_4_4_2_1) {
       const int64_t start_ts = user_info->get_old_password_start_time();
       int64_t password_rollover_time = 0;
-      if (OB_FAIL(schema_guard.get_user_password_rollover_time(tenant_id,
-                                                               user_info->get_user_id(),
-                                                               password_rollover_time))) {
+      if (OB_FAIL(schema_guard->get_user_password_rollover_time(tenant_id,
+                                                                user_info->get_user_id(),
+                                                                password_rollover_time))) {
         LOG_WARN("fail to get password rollover time", K(ret), K(tenant_id), KPC(user_info));
       } else if (password_rollover_time <= 0) {
         // dual password is not enabled, do nothing
@@ -268,9 +349,19 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
     }
     // resolve password
     if (OB_FAIL(ret) || !need_set_password) {
+    } else if (8 == node->num_child_
+               && OB_NOT_NULL(node->children_[7])
+               && OB_FAIL(resolve_password_expire_option(*node->children_[7],
+                                                         compat_version,
+                                                         password_expire_option,
+                                                         password_lifetime_us))) {
+      LOG_WARN("failed to resolve password expire option", K(ret));
     } else if (set_pwd_stmt->get_discard_old_password()) {
       password = user_info->get_passwd_str();
       plugin = user_info->get_plugin();
+      need_enc = false;
+    } else if (!set_pwd_stmt->get_modify_password()) {
+      password = user_info->get_passwd_str();
       need_enc = false;
     } else if (OB_ISNULL(node->children_[1]) || OB_ISNULL(node->children_[2])) {
       ret = OB_ERR_PARSE_SQL;
@@ -388,6 +479,14 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                  "ISSUER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_ISSUER)],
                  "CIPHER", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_CIPHER)],
                  "SUBJECT", infos[static_cast<int32_t>(ObSSLSpecifiedType::SSL_SPEC_TYPE_SUBJECT)], K(ret));
+      } else {
+        const bool modify_plugin = !ObEncryptedHelper::is_same_auth_plugin(plugin, user_info->get_plugin());
+        const int64_t password_last_changed = (set_pwd_stmt->get_modify_password() || modify_plugin)
+                                              ? ObTimeUtility::current_time()
+                                              : user_info->get_password_last_changed();
+        set_pwd_stmt->set_password_expire_option(password_expire_option,
+                                                 password_lifetime_us,
+                                                 password_last_changed);
       }
     }
     // check privileges
@@ -400,6 +499,8 @@ int ObSetPasswordResolver::resolve(const ParseNode &parse_tree)
                  K(ret),
                  K(params_.session_info_->get_priv_user_id()),
                  K(user_name));
+      } else if (!set_pwd_stmt->get_modify_password()) {
+        // do nothing
       } else {
         // replace password to *** in query_string for audit
         ObString masked_sql;

@@ -27,7 +27,9 @@ ObCreateUserStmt::ObCreateUserStmt(ObIAllocator *name_pool)
       if_not_exist_(false),
       profile_id_(OB_INVALID_ID),
       max_connections_per_hour_(0),
-      max_user_connections_(0)
+      max_user_connections_(0),
+      password_expire_option_(PASSWORD_EXPIRE_NONE),
+      password_lifetime_us_(static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT))
 {
 }
 
@@ -40,12 +42,21 @@ ObCreateUserStmt::ObCreateUserStmt()
       if_not_exist_(false),
       profile_id_(OB_INVALID_ID),
       max_connections_per_hour_(0),
-      max_user_connections_(0)
+      max_user_connections_(0),
+      password_expire_option_(PASSWORD_EXPIRE_NONE),
+      password_lifetime_us_(static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT))
 {
 }
 
 ObCreateUserStmt::~ObCreateUserStmt()
 {
+}
+
+void ObCreateUserStmt::set_password_expire_option(const ObPasswordExpireOption option,
+                                                  const int64_t password_lifetime_us)
+{
+  password_expire_option_ = option;
+  password_lifetime_us_ = password_lifetime_us;
 }
 
 int ObCreateUserStmt::add_user(const common::ObString &user_name,

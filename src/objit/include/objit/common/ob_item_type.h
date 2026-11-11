@@ -2985,6 +2985,7 @@ typedef enum ObItemType
   T_BACKUP_ARCHIVELOG_ALL = 4994, // for backup archivelog all
   T_BYTE_ORDER_MARK = 4995,
   T_FOR_UPDATE_LIST = 4998,
+  T_PASSWORD_EXPIRE = 4999,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

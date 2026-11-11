@@ -13,6 +13,7 @@
 #include "observer/virtual_table/ob_mysql_user_table.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_sql_string.h"
+#include "share/ob_cluster_version.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -70,6 +71,37 @@ void ObMySQLUserTable::reset()
   ObVirtualTableScannerIterator::reset();
 }
 
+int ObMySQLUserTable::fill_password_last_changed_cell(const int64_t password_last_changed, common::ObObj &cell) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_TIMESTAMP == password_last_changed) {
+    cell.set_null();
+  } else if (OB_UNLIKELY(0 > password_last_changed)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "password last changed timestamp is invalid", K(ret), K(password_last_changed));
+  } else {
+    cell.set_timestamp(password_last_changed);
+  }
+  return ret;
+}
+
+int ObMySQLUserTable::fill_password_lifetime_cell(const int64_t password_lifetime_us, common::ObObj &cell) const
+{
+  int ret = OB_SUCCESS;
+  if (static_cast<int64_t>(PASSWORD_EXPIRE_DEFAULT) == password_lifetime_us) {
+    cell.set_null();
+  } else if (static_cast<int64_t>(PASSWORD_EXPIRE_NEVER) == password_lifetime_us) {
+    // mysql.user uses 0 to represent PASSWORD EXPIRE NEVER.
+    cell.set_int(0);
+  } else if (OB_UNLIKELY(0 > password_lifetime_us || 0 != password_lifetime_us % USECS_PER_DAY)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "password lifetime is invalid", K(ret), K(password_lifetime_us));
+  } else {
+    cell.set_int(password_lifetime_us / USECS_PER_DAY);
+  }
+  return ret;
+}
+
 int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -85,10 +117,14 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
   } else {
     if (!start_to_read_) {
       ObObj *cells = NULL;
-      if (OB_ISNULL(cells = cur_row_.cells_)) {
+      uint64_t compat_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
+        SERVER_LOG(WARN, "fail to get tenant data version", K(ret), K_(tenant_id));
+      } else if (OB_ISNULL(cells = cur_row_.cells_)) {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
       }  else {
+        const bool is_password_expire_supported = DATA_VERSION_4_4_2_4 <= compat_version;
         ObArray<const ObUserInfo *> user_array;
         if (OB_FAIL(schema_guard_->get_user_infos_with_tenant_id(tenant_id_, user_array))) {
           SERVER_LOG(WARN, "Get user info with tenant id error", K(ret));
@@ -102,6 +138,8 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
               const ObString &ssl_type_str = (ObSSLType::SSL_TYPE_NOT_SPECIFIED == user_info->get_ssl_type()
                   ? get_ssl_type_string(ObSSLType::SSL_TYPE_NONE)
                   : user_info->get_ssl_type_str());
+              const char *password_expired_str =
+                  is_password_expire_supported ? user_info->get_password_expired_str() : "";
               for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < output_column_ids_.count(); ++col_idx) {
                 const uint64_t col_id = output_column_ids_.at(col_idx);
                 switch (col_id) {
@@ -212,8 +250,22 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   COLUMN_SET_WITH_TYPE(MAX_UPDATES, int, 0);
                   COLUMN_SET_WITH_TYPE(PLUGIN, varchar, user_info->get_plugin());
                   COLUMN_SET_WITH_TYPE(AUTHENTICATION_STRING, varchar, user_info->get_passwd_str());
-                  COLUMN_SET_WITH_TYPE(PASSWORD_EXPIRED, varchar, "");
+                  COLUMN_SET_WITH_TYPE(PASSWORD_EXPIRED, varchar, password_expired_str);
                   COLUMN_SET_WITH_TYPE(ACCOUNT_LOCKED, varchar, user_info->get_is_locked() ? "Y" : "N");
+                  case (PASSWORD_LAST_CHANGED): {
+                    const int64_t password_last_changed = user_info->get_password_last_changed();
+                    if (OB_FAIL(fill_password_last_changed_cell(password_last_changed, cells[col_idx]))) {
+                      SERVER_LOG(WARN, "failed to fill password last changed cell", K(ret), K(password_last_changed));
+                    }
+                    break;
+                  }
+                  case (PASSWORD_LIFETIME): {
+                    const int64_t password_lifetime_us = user_info->get_password_lifetime();
+                    if (OB_FAIL(fill_password_lifetime_cell(password_lifetime_us, cells[col_idx]))) {
+                      SERVER_LOG(WARN, "failed to fill password lifetime cell", K(ret), K(password_lifetime_us));
+                    }
+                    break;
+                  }
 
 #undef EXIST_PRIV_CASE
 #undef NO_EXIST_PRIV_CASE

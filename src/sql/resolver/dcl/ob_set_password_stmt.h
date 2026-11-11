@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_RESOLVER_DCL_OB_SET_PASSWORD_STMT_
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 #include "lib/string/ob_strings.h"
+#include "share/schema/ob_password_expire_option.h"
 namespace oceanbase
 {
 namespace sql
@@ -52,6 +53,19 @@ public:
   void set_retain_current_password(bool retain_current_password) { retain_current_password_ = retain_current_password; }
   bool get_discard_old_password() const { return discard_old_password_; }
   void set_discard_old_password(bool discard_old_password) { discard_old_password_ = discard_old_password; }
+  bool get_modify_password() const { return modify_password_; }
+  void set_modify_password(const bool modify_password) { modify_password_ = modify_password; }
+  bool has_password_expire_option() const
+  { return share::schema::PASSWORD_EXPIRE_NONE != password_expire_option_; }
+  share::schema::ObPasswordExpireOption get_password_expire_option() const
+  { return password_expire_option_; }
+  int64_t get_password_lifetime_us() const { return password_lifetime_us_; }
+
+  int64_t get_password_last_changed() const { return password_last_changed_; }
+
+  void set_password_expire_option(const share::schema::ObPasswordExpireOption option,
+                                  const int64_t password_lifetime_us,
+                                  const int64_t password_last_changed);
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
@@ -69,6 +83,10 @@ private:
   common::ObStrings plugins_;
   bool retain_current_password_;
   bool discard_old_password_;
+  bool modify_password_;
+  share::schema::ObPasswordExpireOption password_expire_option_;
+  int64_t password_lifetime_us_;
+  int64_t password_last_changed_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSetPasswordStmt);
 };

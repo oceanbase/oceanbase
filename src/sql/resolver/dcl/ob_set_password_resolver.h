@@ -33,6 +33,11 @@ public:
   static bool is_valid_secure_auth_string(const common::ObString &str, const common::ObString &plugin);
 
   static bool is_valid_encrypted_passwd(const common::ObString &str, const common::ObString &plugin);
+
+  static int resolve_password_expire_option(const ParseNode &password_expire_node,
+                                            const uint64_t compat_version,
+                                            share::schema::ObPasswordExpireOption &option,
+                                            int64_t &password_lifetime_us);
 private:
   int resolve_require_node(const ParseNode &require_info, const common::ObString &user_name,
                           const common::ObString &host_name, ObSSLType &ssl_type, ObString *infos);
