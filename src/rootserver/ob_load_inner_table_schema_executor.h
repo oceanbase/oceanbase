@@ -52,6 +52,7 @@ private:
   int init_args_(const ObIArray<ObTableSchema> &table_schemas);
   int append_arg(const ObIArray<int64_t> &insert_idx, const share::ObLoadInnerTableSchemaInfo &info);
   int call_next_arg_(ObLoadTenantTableSchemaProxy& proxy);
+  void errsim_renew_location_before_load_schema_();
 
 private:
   static const int64_t LOAD_ROWS_PER_BATCH = 1000;

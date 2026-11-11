@@ -289,6 +289,20 @@ int ObLoadInnerTableSchemaExecutor::init(const ObIArray<ObTableSchema> &table_sc
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_RENEW_LOCATION_BEFORE_LOAD_SCHEMA);
+void ObLoadInnerTableSchemaExecutor::errsim_renew_location_before_load_schema_()
+{
+  if (is_user_tenant(tenant_id_) && 0 == next_arg_index_
+      && OB_NOT_NULL(GCTX.location_service_)
+      && OB_UNLIKELY(ERRSIM_RENEW_LOCATION_BEFORE_LOAD_SCHEMA)) {
+    ObAddr unused_server;
+    const int tmp_ret = GCTX.location_service_->get_leader(
+        GCONF.cluster_id, tenant_id_, share::SYS_LS, true/*force_renew*/, unused_server);
+    FLOG_INFO("ERRSIM renewed user sys ls location before next schema rpc",
+        KR(tmp_ret), K_(tenant_id), K_(next_arg_index));
+  }
+}
+
 int ObLoadInnerTableSchemaExecutor::call_next_arg_(ObLoadTenantTableSchemaProxy& proxy)
 {
   int ret = OB_SUCCESS;
@@ -301,6 +315,7 @@ int ObLoadInnerTableSchemaExecutor::call_next_arg_(ObLoadTenantTableSchemaProxy&
   } else if (OB_ISNULL(GCTX.location_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", KR(ret), KP(GCTX.location_service_));
+  } else if (FALSE_IT(errsim_renew_location_before_load_schema_())) {
   } else if (OB_FAIL(GCTX.location_service_->get_leader(GCONF.cluster_id, tenant_id_,
           share::SYS_LS, false/*force_renew*/, server))) {
     LOG_WARN("failed to get tenant sys ls leader", KR(ret), K_(tenant_id));
