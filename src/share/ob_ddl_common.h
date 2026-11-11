@@ -16,8 +16,6 @@
 #include "share/ob_batch_selector.h"
 #include "storage/ddl/ob_ddl_struct.h"
 
-#define DATA_VERSION_SUPPORT_EMPTY_TABLE_CREATE_INDEX_OPT(data_version) (data_version > MOCK_DATA_VERSION_4_2_5_3 && data_version < DATA_VERSION_4_3_0_0) || (data_version >= DATA_VERSION_4_4_1_0)
-
 namespace oceanbase
 {
 namespace obrpc
@@ -602,6 +600,11 @@ static inline ObDDLType get_create_index_type(const int64_t data_format_version,
 {
   return ((DATA_VERSION_4_2_2_0 <= data_format_version && data_format_version < DATA_VERSION_4_3_0_0) || data_format_version >= DATA_VERSION_4_3_2_0)
     && index_schema.is_storage_local_index_table() && index_schema.is_partitioned_table() ? ObDDLType::DDL_CREATE_PARTITIONED_LOCAL_INDEX : ObDDLType::DDL_CREATE_INDEX;
+}
+
+static inline bool is_support_empty_table_create_index_opt(const uint64_t data_version)
+{
+  return (data_version > MOCK_DATA_VERSION_4_2_5_3 && data_version < DATA_VERSION_4_3_0_0) || (data_version >= DATA_VERSION_4_4_1_0);
 }
 
 enum ObCheckExistedDDLMode
