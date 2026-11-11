@@ -320,6 +320,11 @@ int ObMPStmtExecute::construct_execute_param_for_arraybinding(int64_t pos)
           params_->at(i).set_precision(default_acc.get_precision());
         }
       }
+      if (lib::is_oracle_mode() && params_->at(i).is_character_type()) {
+        // Collection elements are ObObj values; restore the character accuracy stored in
+        // the element descriptor when constructing the execution ObObjParam.
+        params_->at(i).set_length_semantics(coll->get_element_desc().get_length_semantics());
+      }
       params_->at(i).set_param_meta();
     }
   }
