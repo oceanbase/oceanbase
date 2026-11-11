@@ -304,6 +304,7 @@ public:
               const common::ObIArray<uint64_t> *tsc_out_cols = NULL,
               const bool force_mysql_mode = false,
               const bool query_cs_replica = false);
+  int assign_output_sel_mask_from_bitmap(const int64_t access_count, const char *bitmap, const int64_t bitmap_bytes);
 
   // convert aggregate column projector from 'aggregate_column_ids' and 'output_projector_'
   // convert group by column projector from 'group_by_column_ids' and 'output_projector_'
@@ -354,6 +355,12 @@ public:
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
   inline bool is_safe_filter_with_di() const { return is_safe_filter_with_di_; }
+  // used by the DAS ScanCtDef table-param rebuild to restore the CG-computed
+  // value carried in the rebuild descriptor (M6)
+  inline void set_is_safe_filter_with_di(const bool is_safe)
+  {
+    is_safe_filter_with_di_ = is_safe;
+  }
   inline int8_t get_access_virtual_col_cnt() const { return access_virtual_col_cnt_; }
   DECLARE_TO_STRING;
 

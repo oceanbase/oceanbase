@@ -524,6 +524,7 @@ public:
   const static uint32_t INVALID_EXP_CTX_ID = UINT32_MAX;
 
   ObExpr();
+  int deserialize_body(const char *buf, const int64_t data_len, int64_t &pos, const int64_t version);
   OB_INLINE int eval(ObEvalCtx &ctx, common::ObDatum *&datum) const;
   int eval_enumset(ObEvalCtx &ctx,
                    const common::ObIArray<common::ObString> &str_values,
@@ -1662,12 +1663,57 @@ namespace common
 namespace serialization
 {
 
+// Keep the decode state separate so guards restore it independently of encoding.
+OB_INLINE bool &compact_expr_ptr_decode_state()
+{
+  RLOCAL_INLINE(bool, g_use_compact_expr_ptr);
+  return g_use_compact_expr_ptr;
+}
+
+OB_INLINE bool use_compact_expr_ptr()
+{
+  return using_v4_encoding() || compact_expr_ptr_decode_state();
+}
+
+class CompactExprPtrGuard final
+{
+public:
+  explicit CompactExprPtrGuard(const bool enable) : saved_(compact_expr_ptr_decode_state())
+  {
+    compact_expr_ptr_decode_state() = enable;
+  }
+  ~CompactExprPtrGuard()
+  {
+    compact_expr_ptr_decode_state() = saved_;
+  }
+  void set(const bool enable)
+  {
+    compact_expr_ptr_decode_state() = enable;
+  }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(CompactExprPtrGuard);
+  bool saved_;
+};
+
 // ObExpr pointer serialize && deserialize.
 // Convert pointer to index of expr array, serialize && deserialize the index.
 // The serialized index is the real index + 1, to make room for NULL.
-inline int64_t encoded_length(sql::ObExpr *)
+inline int64_t encoded_length(sql::ObExpr *expr)
 {
-  return sizeof(uint32_t);
+  int64_t len = sizeof(uint32_t);
+  if (use_compact_expr_ptr()) {
+    uint32_t idx = 0;
+    if (NULL != expr) {
+      sql::ObExpr::ObExprIArray *array = sql::ObExpr::get_serialize_array();
+      if (NULL != array && !array->empty() && expr >= &array->at(0)) {
+        const uint64_t off = static_cast<uint64_t>(expr - &array->at(0) + 1);
+        if (off <= array->count()) { idx = static_cast<uint32_t>(off); }
+      }
+    }
+    len = encoded_length_vi32(static_cast<int32_t>(idx));
+  }
+  return len;
 }
 
 inline int encode(char *buf, const int64_t buf_len, int64_t &pos, sql::ObExpr *expr)
@@ -1683,7 +1729,8 @@ inline int encode(char *buf, const int64_t buf_len, int64_t &pos, sql::ObExpr *e
     }
   }
   if (OB_SUCC(ret)) {
-    ret = encode_i32(buf, buf_len, pos, idx);
+    ret = use_compact_expr_ptr() ? encode_vi32(buf, buf_len, pos, static_cast<int32_t>(idx)) :
+                                   encode_i32(buf, buf_len, pos, idx);
   }
   return ret;
 }
@@ -1692,7 +1739,8 @@ inline int decode(const char *buf, const int64_t data_len, int64_t &pos, sql::Ob
 {
   int ret = common::OB_SUCCESS;
   uint32_t idx = 0;
-  ret = decode_i32(buf, data_len, pos, reinterpret_cast<int32_t *>(&idx));
+  ret = use_compact_expr_ptr() ? decode_vi32(buf, data_len, pos, reinterpret_cast<int32_t *>(&idx)) :
+                                 decode_i32(buf, data_len, pos, reinterpret_cast<int32_t *>(&idx));
   if (OB_SUCC(ret)) {
     if (0 == idx) {
       expr = NULL;

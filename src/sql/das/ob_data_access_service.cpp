@@ -17,9 +17,13 @@
 #include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_parallel_handler.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "share/detect/ob_detect_manager_utils.h"
 #include "share/ob_cluster_version.h"
+#include "sql/engine/expr/ob_expr_ser_compact.h"
+#include "sql/engine/ob_physical_plan.h"
+#include "sql/engine/ob_physical_plan_ctx.h"
 
 namespace oceanbase
 {
@@ -30,6 +34,7 @@ using namespace transaction;
 using namespace observer;
 namespace sql
 {
+
 namespace
 {
 
@@ -51,6 +56,33 @@ int64_t calc_das_batch_req_map_shard_count()
   return shard_count;
 }
 
+ObSessionSerializeMode freeze_das_session_serialize_mode(ObDASRemoteInfo &remote_info,
+                                                         ObDASRef &das_ref,
+                                                         ObSQLSessionInfo *session)
+{
+  const ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
+  const ObPhysicalPlan *plan = OB_ISNULL(plan_ctx) ? nullptr : plan_ctx->get_phy_plan();
+  remote_info.compact_session_ = OB_NOT_NULL(plan) && plan->is_compact_session_serialize();
+  remote_info.reuse_outer_tx_for_session_ = remote_info.compact_session_
+      && (remote_info.need_calc_expr_ || remote_info.need_calc_udf_)
+      && remote_info.need_tx_
+      && !das_ref.is_parallel_submit()
+      && OB_NOT_NULL(session)
+      && remote_info.trans_desc_ == session->get_tx_desc();
+  return ObSessionSerializeMode(
+      remote_info.compact_session_, !remote_info.reuse_outer_tx_for_session_);
+}
+
+bool has_das_v4_record_carrier(const ObDASRemoteInfo &remote_info)
+{
+  bool has_carrier =
+    remote_info.has_expr_ && OB_NOT_NULL(remote_info.frame_info_) && remote_info.frame_info_->rt_exprs_.count() > 0;
+  for (int64_t i = 0; !has_carrier && i < remote_info.ctdefs_.count(); ++i) {
+    const ObDASBaseCtDef *ctdef = remote_info.ctdefs_.at(i);
+    has_carrier = OB_NOT_NULL(ctdef) && DAS_OP_TABLE_SCAN == ctdef->op_type_;
+  }
+  return has_carrier;
+}
 }
 
 ObDataAccessService::ObDataAccessService()
@@ -338,13 +370,17 @@ int ObDataAccessService::try_post_lookup_batch_task(ObDASRef &das_ref,
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(collect_das_task_info(task_ops, remote_info))) {
       LOG_WARN("collect das task info failed", K(ret));
+    } else if (FALSE_IT(das_async_cb->set_compact_das_response(use_compact_das_response(remote_info, task_ops)))) {
     } else if (OB_FAIL(register_das_batch_request(request_id, das_async_cb))) {
       LOG_WARN("register das batch request failed", K(ret), K(request_id));
     } else {
+      const ObSessionSerializeMode das_mode =
+          freeze_das_session_serialize_mode(remote_info, das_ref, session);
       request_registered = true;
       batch_task.init(tenant_id, request_id, task_arg);
       das_async_cb->mark_lookup_batch_request(request_id);
       das_ref.get_das_ref_count_ctx().inc_pending_batch_request();
+      ObSessionSerializeModeGuard session_serialize_guard(das_mode);
       if (OB_FAIL(GCTX.batch_rpc_->post(tenant_id,
                                         task_arg.get_runner_svr(),
                                         GCONF.cluster_id,
@@ -743,15 +779,12 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
     remote_info.trans_desc_ = session->get_tx_desc();
   }
   remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
-
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (OB_FAIL(remote_info.snapshot_.assign(*task_arg.get_task_op()->get_snapshot()))) {
     LOG_WARN("assign snapshot fail", K(ret));
   } else if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
     LOG_WARN("failed to allocate das async cb", K(ret));
-  } else {
-    das_async_cb->set_task_resp_addrs(task_arg.get_ctrl_svr(), task_arg.get_runner_svr());
   }
   // prepare op result in advance avoiding racing condition.
   for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
@@ -804,16 +837,23 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
   } else if (OB_UNLIKELY(timeout <= 0)) {
     ret = OB_TIMEOUT;
     LOG_WARN("das is timeout", K(ret), K(plan_ctx->get_timeout_timestamp()), K(timeout));
-  } else if (OB_FAIL(das_rpc_proxy_
-                  .to(task_arg.get_runner_svr())
-                  .by(tenant_id)
-                  .timeout(timeout)
-                  .das_async_access(task_arg, das_async_cb))) {
-    LOG_WARN("rpc remote sync access failed", K(ret), K(task_arg), K(group_id));
-    // RPC fail, add task's LSID to trans_result
-    // indicate some transaction participant may touched
-    for (int i = 0; i < task_ops.count(); i++) {
-      das_ref.get_exec_ctx().get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
+  } else if (FALSE_IT(das_async_cb->set_compact_das_response(use_compact_das_response(remote_info, task_ops)))) {
+  } else {
+    const ObSessionSerializeMode das_mode =
+        freeze_das_session_serialize_mode(remote_info, das_ref, session);
+    ObSessionSerializeModeGuard session_serialize_guard(das_mode);
+    if (OB_FAIL(das_rpc_proxy_
+                .to(task_arg.get_runner_svr())
+                .by(tenant_id)
+                .timeout(timeout)
+                .compressed(ObDASUtils::get_rpc_compressor_type(*session))
+                .das_async_access(task_arg, das_async_cb))) {
+      LOG_WARN("rpc remote sync access failed", K(ret), K(task_arg), K(group_id));
+      // RPC fail, add task's LSID to trans_result
+      // indicate some transaction participant may touched
+      for (int i = 0; i < task_ops.count(); i++) {
+        das_ref.get_exec_ctx().get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
+      }
     }
   }
   if (OB_FAIL(ret)) {
@@ -888,7 +928,6 @@ int ObDataAccessService::do_sync_remote_das_task(
   SMART_VAR(ObDASTaskResp, task_resp) {
     // we need das_factory to allocate task op result on receiving rpc response.
     task_resp.set_das_factory(&das_ref.get_das_factory());
-
     // prepare op result in advance avoiding racing condition.
     for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
       if (OB_ISNULL(task_op = task_ops.at(i))) {
@@ -938,17 +977,26 @@ int ObDataAccessService::do_sync_remote_das_task(
     } else if (OB_UNLIKELY(timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("das is timeout", K(ret), K(plan_ctx->get_timeout_timestamp()), K(timeout));
+    } else if (FALSE_IT(task_resp.set_compact_das_response(use_compact_das_response(remote_info, task_ops)))) {
     } else if (FALSE_IT(das_rpc_proxy_.set_detect_session_killed(true))) {
-    } else if (OB_FAIL(das_rpc_proxy_
-                    .to(task_arg.get_runner_svr())
-                    .by(tenant_id)
-                    .timeout(timeout)
-                    .remote_sync_access(task_arg, task_resp))) {
-      LOG_WARN("rpc remote sync access failed", K(ret), K(task_arg));
-      // RPC fail, add task's LSID to trans_result
-      // indicate some transaction participant may touched
-      for (int i = 0; i < task_ops.count(); i++) {
-        das_ref.get_exec_ctx().get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
+    } else {
+      const ObSessionSerializeMode das_mode =
+          freeze_das_session_serialize_mode(remote_info, das_ref, session);
+      // remote_sync_access() serializes in the caller thread before waiting for
+      // the response. Keeping the guard for the whole blocking call is intentional.
+      ObSessionSerializeModeGuard session_serialize_guard(das_mode);
+      if (OB_FAIL(das_rpc_proxy_
+                  .to(task_arg.get_runner_svr())
+                  .by(tenant_id)
+                  .timeout(timeout)
+                  .compressed(ObDASUtils::get_rpc_compressor_type(*session))
+                  .remote_sync_access(task_arg, task_resp))) {
+        LOG_WARN("rpc remote sync access failed", K(ret), K(task_arg));
+        // RPC fail, add task's LSID to trans_result
+        // indicate some transaction participant may touched
+        for (int i = 0; i < task_ops.count(); i++) {
+          das_ref.get_exec_ctx().get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -1151,7 +1199,7 @@ int ObDataAccessService::parallel_submit_das_task(ObDASRef &das_ref, ObDasAggreg
 }
 
 bool ObDataAccessService::should_use_deser_cache_format(const ObIArray<ObIDASTaskOp*> &task_ops,
-                                                        ObSQLSessionInfo *session) const
+                                                        ObSQLSessionInfo *session, const ObPhysicalPlan *plan) const
 {
   bool tenant_config_enabled = OB_NOT_NULL(session) && session->get_das_deserialize_lib_cache_percentage() > 0;
 
@@ -1164,7 +1212,7 @@ bool ObDataAccessService::should_use_deser_cache_format(const ObIArray<ObIDASTas
       is_non_dml_task = false;
     }
   }
-  return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_3
+  return OB_NOT_NULL(plan) && plan->get_min_cluster_version() >= CLUSTER_VERSION_4_4_2_3
       && tenant_config_enabled
       && is_non_dml_task;
 }
@@ -1178,10 +1226,14 @@ int ObDataAccessService::collect_das_task_info(ObIArray<ObIDASTaskOp*> &task_ops
   if (OB_NOT_NULL(remote_info.exec_ctx_)) {
     session = remote_info.exec_ctx_->get_my_session();
   }
-  remote_info.use_deser_cache_format_ = should_use_deser_cache_format(task_ops, session);
-
+  ObPhysicalPlanCtx *plan_ctx =
+    OB_NOT_NULL(remote_info.exec_ctx_) ? remote_info.exec_ctx_->get_physical_plan_ctx() : nullptr;
+  const ObPhysicalPlan *phy_plan = OB_NOT_NULL(plan_ctx) ? plan_ctx->get_phy_plan() : nullptr;
+  remote_info.use_deser_cache_format_ = should_use_deser_cache_format(task_ops, session, phy_plan);
   for (int i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
     task_op = task_ops.at(i);
+    // A rebuild miss forces inline CtDef encoding for the whole request.
+    remote_info.force_inline_ctdef_ |= task_op->is_force_inline_ctdef();
     if (task_op->get_ctdef() != nullptr) {
       remote_info.has_expr_ |= task_op->get_ctdef()->has_expr();
       remote_info.need_calc_expr_ |= task_op->get_ctdef()->has_pdfilter_or_calc_expr();
@@ -1207,6 +1259,19 @@ int ObDataAccessService::collect_das_task_info(ObIArray<ObIDASTaskOp*> &task_ops
       if (OB_FAIL(collect_das_task_attach_info(remote_info, task_op->get_attach_rtdef()))) {
         LOG_WARN("collect das task attach info failed", K(ret));
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const bool compact_enabled = OB_NOT_NULL(phy_plan) && phy_plan->is_serialize_compact_opt_enabled();
+    const ObExprFrameInfo *frame_info = remote_info.frame_info_;
+    if (remote_info.has_expr_
+        && (OB_ISNULL(frame_info) || frame_info->ser_expr_marks_.count() > frame_info->rt_exprs_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid expression frame for DAS serialization", K(ret), KP(frame_info));
+    } else {
+      remote_info.ser_compact_state_ =
+        compact_enabled && has_das_v4_record_carrier(remote_info) ?
+          SerCompactState::V4 : SerCompactState::LEGACY;
     }
   }
   return ret;
@@ -1258,7 +1323,8 @@ int ObDataAccessService::setup_extra_result(ObDASRef &das_ref,
                                         timeout_ts,
                                         task_resp.get_runner_svr(),
                                         GCTX.net_frame_->get_req_transport(),
-                                        das_ref.enable_rich_format_))) {
+                                        das_ref.enable_rich_format_,
+                                        task_resp.use_compact_das_response()))) {
     LOG_WARN("init extra data failed", KR(ret));
   } else {
     extra_result->set_has_more(true);

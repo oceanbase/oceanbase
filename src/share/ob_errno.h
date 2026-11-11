@@ -1323,6 +1323,7 @@ constexpr int OB_TRANS_INVALID_MESSAGE = -6208;
 constexpr int OB_TRANS_INVALID_MESSAGE_TYPE = -6209;
 constexpr int OB_PARTITION_IS_FROZEN = -6214;
 constexpr int OB_PARTITION_IS_NOT_FROZEN = -6215;
+constexpr int OB_DAS_CTDEF_REBUILD_MISS = -6216;
 constexpr int OB_TRANS_INVALID_LOG_TYPE = -6219;
 constexpr int OB_TRANS_SQL_SEQUENCE_ILLEGAL = -6220;
 constexpr int OB_TRANS_CANNOT_BE_KILLED = -6221;
@@ -3643,6 +3644,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_TRANS_CTX_NOT_EXIST__USER_ERROR_MSG "Transaction context does not exist"
 #define OB_PARTITION_IS_FROZEN__USER_ERROR_MSG "Partition is frozen"
 #define OB_PARTITION_IS_NOT_FROZEN__USER_ERROR_MSG "Partition is not frozen"
+#define OB_DAS_CTDEF_REBUILD_MISS__USER_ERROR_MSG "DAS ScanCtDef table param rebuild schema unavailable"
 #define OB_TRANS_INVALID_LOG_TYPE__USER_ERROR_MSG "Transaction invalid log type"
 #define OB_TRANS_SQL_SEQUENCE_ILLEGAL__USER_ERROR_MSG "SQL sequence illegal"
 #define OB_TRANS_CANNOT_BE_KILLED__USER_ERROR_MSG "Transaction context cannot be killed"
@@ -7743,6 +7745,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_PARTITION_IS_FROZEN__OBE_USER_ERROR_MSG "OBE-24761: transaction rolled back: partition is frozen"
 #define OB_PARTITION_IS_NOT_FROZEN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6215, Partition is not frozen"
 #define OB_PARTITION_IS_NOT_FROZEN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6215, Partition is not frozen"
+#define OB_DAS_CTDEF_REBUILD_MISS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6216, DAS ScanCtDef table param rebuild schema unavailable"
+#define OB_DAS_CTDEF_REBUILD_MISS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6216, DAS ScanCtDef table param rebuild schema unavailable"
 #define OB_TRANS_INVALID_LOG_TYPE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6219, Transaction invalid log type"
 #define OB_TRANS_INVALID_LOG_TYPE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6219, Transaction invalid log type"
 #define OB_TRANS_SQL_SEQUENCE_ILLEGAL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6220, SQL sequence illegal"
@@ -9720,7 +9724,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2541];
+extern int g_all_ob_errnos[2542];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

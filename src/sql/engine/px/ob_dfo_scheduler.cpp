@@ -423,6 +423,9 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
       LOG_WARN("no memory", K(ret));
     }
   }
+  const ObSessionSerializeMode px_mode(
+      OB_NOT_NULL(phy_plan) && phy_plan->is_compact_session_serialize(),
+      true /* tx_desc_inline */);
   const bool ignore_vtable_error = coord_info_.should_ignore_vtable_error();
   int64_t cluster_id = GCONF.cluster_id;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
@@ -481,20 +484,23 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
             ret = OB_SUCCESS;
             sqc.set_server_not_alive(true);
           }
-        } else if (OB_FAIL(proxy
-                          .by(THIS_WORKER.get_rpc_tenant()?: session->get_effective_tenant_id())
-                          .timeout(timeout_us)
-                          .fast_init_sqc(args, &sqc_cb))) {
-          if (ignore_vtable_error) {
-            LOG_WARN("ignore error when init sqc with virtual table failed", K(ret), K(sqc));
-            ObFastInitSqcReportQCMessageCall call(&sqc, ret, phy_plan_ctx->get_timeout_timestamp(), true);
-            call.mock_sqc_finish_msg();
-            ret = OB_SUCCESS;
-          } else {
-            LOG_WARN("fail to init sqc", K(ret), K(sqc));
+        } else {
+          ObSessionSerializeModeGuard session_serialize_guard(px_mode);
+          if (OB_FAIL(proxy
+                      .by(THIS_WORKER.get_rpc_tenant()?: session->get_effective_tenant_id())
+                      .timeout(timeout_us)
+                      .fast_init_sqc(args, &sqc_cb))) {
+            if (ignore_vtable_error) {
+              LOG_WARN("ignore error when init sqc with virtual table failed", K(ret), K(sqc));
+              ObFastInitSqcReportQCMessageCall call(&sqc, ret, phy_plan_ctx->get_timeout_timestamp(), true);
+              call.mock_sqc_finish_msg();
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("fail to init sqc", K(ret), K(sqc));
+            }
+            sqc.set_need_report(false);
+            sqc.set_server_not_alive(true);
           }
-          sqc.set_need_report(false);
-          sqc.set_server_not_alive(true);
         }
       }
     }

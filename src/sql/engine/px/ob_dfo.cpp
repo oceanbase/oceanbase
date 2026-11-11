@@ -430,6 +430,8 @@ int ObPxRpcInitSqcArgs::serialize_common_parts_1(char *buf, const int64_t buf_le
 int ObPxRpcInitSqcArgs::serialize_common_parts_2(
     char *buf, const int64_t buf_len, int64_t &pos) const
 {
+  serialization::SerCompactEncodingGuard compact_guard(
+    OB_NOT_NULL(ser_phy_plan_) && ser_phy_plan_->is_serialize_compact_opt_enabled());
   int ret = OB_SUCCESS;
   ObPhyOpSeriCtx seri_ctx;
   seri_ctx.exec_ctx_ = exec_ctx_;
@@ -522,7 +524,6 @@ OB_DEF_DESERIALIZE(ObPxRpcInitSqcArgs)
 
 OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
 {
-
   int ret = OB_SUCCESS;
   int64_t len = 0;
   if (OB_ISNULL(exec_ctx_) || OB_ISNULL(ser_phy_plan_) || OB_ISNULL(op_spec_root_)) {
@@ -541,6 +542,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitSqcArgs)
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected status: op root is null", K(ret));
       } else {
+        serialization::SerCompactEncodingGuard compact_guard(ser_phy_plan_->is_serialize_compact_opt_enabled());
         const ObExprFrameInfo *frame_info = static_cast<ObPxTransmitSpec *>(op_spec_root_)->dfo_expr_frame_info_;
         frame_info = NULL == frame_info ? &ser_phy_plan_->get_expr_frame_info() : frame_info;
         len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_, *frame_info);
@@ -620,10 +622,14 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
 
       LOG_TRACE("deserialize sqc", K_(sqc));
       if (OB_SUCC(ret)) {
+        SerCompactState frame_state = SerCompactState::UNKNOWN;
         const ObExprFrameInfo *frame_info = &des_phy_plan_->get_expr_frame_info();
         if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
-            buf, data_len, pos, *exec_ctx_, *frame_info))) {
+            buf, data_len, pos, *exec_ctx_, *frame_info, SerCompactState::UNKNOWN, &frame_state, des_phy_plan_))) {
           LOG_WARN("failed to serialize rt expr", K(ret), K(sqc_));
+        }
+        serialization::CompactExprPtrGuard expr_ptr_guard(SerCompactState::V4 == frame_state);
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
             buf, data_len, pos, *des_phy_plan_, op_spec_root_, scan_spec_ops_))) {
           LOG_WARN("fail deserialize tree", K(ret), K(sqc_));
@@ -640,6 +646,7 @@ int ObPxRpcInitSqcArgs::do_deserialize(int64_t &pos, const char *net_buf, int64_
           int64_t batch_size = std::max<int64_t>(des_phy_plan_->get_batch_size(), 1);
           for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
             const ObExpr &expr = exprs.at(i);
+            if (T_INVALID == expr.type_) { continue; }
             for (int64_t j = 0; j < datum_frame.count() && OB_SUCC(ret); j++) {
               const ObFrameInfo &frame_info = datum_frame.at(j);
               if (expr.frame_idx_ == frame_info.frame_idx_) {
@@ -710,6 +717,7 @@ OB_DEF_SERIALIZE(ObPxRpcInitTaskArgs)
     ObPhyPlanVersionGuard plan_cluster_version_guard(*ser_phy_plan_);
     // 序列化Task的核心部分到执行端：sub plan tree
     if (OB_SUCC(ret)) {
+      serialization::SerCompactEncodingGuard compact_guard(ser_phy_plan_->is_serialize_compact_opt_enabled());
       const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
       if (OB_ISNULL(op_spec_root_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -794,10 +802,14 @@ OB_DEF_DESERIALIZE(ObPxRpcInitTaskArgs)
     LOG_TRACE("deserialized task", KP_(sqc_task_ptr), KP_(sqc_handler), K_(task));
 
     if (OB_SUCC(ret)) {
+      SerCompactState frame_state = SerCompactState::UNKNOWN;
       const ObExprFrameInfo *expr_frame_info = &inner_phy_plan_->get_expr_frame_info();
       if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
-          buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo*>(expr_frame_info)))) {
+          buf, data_len, pos, *exec_ctx_, *expr_frame_info, SerCompactState::UNKNOWN, &frame_state, inner_phy_plan_))) {
         LOG_WARN("failed to serialize rt expr", K(ret));
+      }
+      serialization::CompactExprPtrGuard expr_ptr_guard(SerCompactState::V4 == frame_state);
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
                   buf, data_len, pos, *inner_phy_plan_, inner_op_spec_root_))) {
         LOG_WARN("fail deserialize tree", K(ret));
@@ -868,6 +880,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxRpcInitTaskArgs)
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected status: op root is null", K(ret));
       } else {
+        serialization::SerCompactEncodingGuard compact_guard(ser_phy_plan_->is_serialize_compact_opt_enabled());
         const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
         len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_, *frame_info);
         len += ObPxTreeSerializer::get_tree_serialize_size(*op_spec_root_, false /* is_fulltree */);

@@ -313,6 +313,101 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx42x)
   return ret;
 }
 
+OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx42x)
+{
+  int64_t len = 0;
+  ParamStore empty_param_store;
+  const ParamStore *param_store = NULL;
+  const ObRowIdListArray *row_id_list_array = NULL;
+  int64_t cursor_count = implicit_cursor_infos_.count();
+  // used for function sys_view_bigint_param(idx), @note unused anymore
+  ObSEArray<common::ObObj, 1> sys_view_bigint_params_;
+  char message_[1] = {'\0'}; //error msg buffer, unused anymore
+  if (exec_ctx_ != NULL) {
+    row_id_list_array = &exec_ctx_->get_row_id_list_array();
+  }
+  if ((row_id_list_array != NULL && !row_id_list_array->empty() && phy_plan_ != NULL) ||
+       is_multi_dml_) {
+    param_store = &empty_param_store;
+  } else {
+    param_store = &param_store_;
+  }
+  //按老的序列方式进行
+  OB_UNIS_ADD_LEN(tenant_id_);
+  OB_UNIS_ADD_LEN(tsc_snapshot_timestamp_);
+  OB_UNIS_ADD_LEN(cur_time_);
+  OB_UNIS_ADD_LEN(merging_frozen_time_);
+  OB_UNIS_ADD_LEN(ts_timeout_us_);
+  OB_UNIS_ADD_LEN(consistency_level_);
+  OB_UNIS_ADD_LEN(*param_store);
+  OB_UNIS_ADD_LEN(sys_view_bigint_params_);
+  OB_UNIS_ADD_LEN(sql_mode_);
+  OB_UNIS_ADD_LEN(autoinc_params_);
+  OB_UNIS_ADD_LEN(tablet_autoinc_param_);
+  OB_UNIS_ADD_LEN(last_insert_id_session_);
+  OB_UNIS_ADD_LEN(message_);
+  OB_UNIS_ADD_LEN(expr_op_size_);
+  OB_UNIS_ADD_LEN(is_ignore_stmt_);
+  if (row_id_list_array != NULL && !row_id_list_array->empty() &&
+      phy_plan_ != NULL && !(param_store_.empty())) {
+    //按需序列化param store
+    OB_UNIS_ADD_LEN(param_store_.count());
+    int32_t real_param_cnt = 0;
+    len += serialization::encoded_length_i32(real_param_cnt);
+    if (phy_plan_->get_row_param_map().count() > 0) {
+      const ObIArray<int64_t> &param_idxs = phy_plan_->get_row_param_map().at(0);
+      for (int64_t i = 0; i < param_idxs.count(); ++i) {
+        OB_UNIS_ADD_LEN(param_idxs.at(i));
+        OB_UNIS_ADD_LEN(param_store_.at(param_idxs.at(i)));
+      }
+    }
+    for (int64_t k = 0; k < row_id_list_array->count(); ++k) {
+      auto row_id_list = row_id_list_array->at(k);
+      if (OB_NOT_NULL(row_id_list)) {
+        for (int64_t i = 0; i < row_id_list->count(); ++i) {
+          //row_param_map从1开始，因为index=0的位置用来存放公共param了
+          int64_t row_idx = row_id_list->at(i) + 1;
+          if (row_idx < phy_plan_->get_row_param_map().count() && row_idx >= 0) {
+            const ObIArray<int64_t> &param_idxs = phy_plan_->get_row_param_map().at(row_idx);
+            for (int64_t j = 0; j < param_idxs.count(); ++j) {
+              OB_UNIS_ADD_LEN(param_idxs.at(j));
+              OB_UNIS_ADD_LEN(param_store_.at(param_idxs.at(j)));
+            }
+          }
+        }
+      }
+    }
+  } else {
+    int64_t param_cnt = 0;
+    OB_UNIS_ADD_LEN(param_cnt);
+  }
+  OB_UNIS_ADD_LEN(foreign_key_checks_);
+  OB_UNIS_ADD_LEN(unsed_worker_count_since_222rel_);
+  OB_UNIS_ADD_LEN(tenant_schema_version_);
+  OB_UNIS_ADD_LEN(cursor_count);
+  OB_UNIS_ADD_LEN(plan_start_time_);
+  OB_UNIS_ADD_LEN(last_trace_id_);
+  OB_UNIS_ADD_LEN(tenant_srs_version_);
+  OB_UNIS_ADD_LEN(original_param_cnt_);
+  OB_UNIS_ADD_LEN(array_param_groups_.count());
+  if (array_param_groups_.count() > 0) {
+    for (int64_t i = 0 ; i < array_param_groups_.count(); i++) {
+      OB_UNIS_ADD_LEN(array_param_groups_.at(i));
+    }
+  }
+  OB_UNIS_ADD_LEN(all_local_session_vars_.count());
+  for (int64_t i = 0; i < all_local_session_vars_.count(); ++i) {
+    if (OB_NOT_NULL(all_local_session_vars_.at(i).get_local_vars())) {
+      OB_UNIS_ADD_LEN(*all_local_session_vars_.at(i).get_local_vars());
+    }
+  }
+  OB_UNIS_ADD_LEN(mview_ids_);
+  OB_UNIS_ADD_LEN(last_refresh_scns_);
+  OB_UNIS_ADD_LEN(is_direct_insert_plan_);
+  OB_UNIS_ADD_LEN(check_pdml_affected_rows_);
+  return len;
+}
+
 int ObPhysicalPlanCtx42x::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;

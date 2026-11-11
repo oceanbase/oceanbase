@@ -17,6 +17,7 @@
 #include "sql/ob_sql.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_data_access_service.h"
+#include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_scan_op.h"
 #include "sql/engine/px/ob_px_interruption.h"
 #include "share/detect/ob_detect_manager_utils.h"
@@ -24,6 +25,7 @@
 #include "share/rpc/ob_batch_rpc.h"
 #include "rpc/obrpc/ob_poc_rpc_proxy.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "observer/omt/ob_tenant.h"
 
 namespace oceanbase
 {
@@ -194,6 +196,7 @@ int ObDASLookupBatchExecutor::process_task(ObDASTaskArg &task_arg,
   SQL_INFO_GUARD(ObString("DAS LOOKUP BATCH PROCESS"), task_arg.get_remote_info()->sql_id_);
   task_resp.set_ctrl_svr(task_arg.get_ctrl_svr());
   task_resp.set_runner_svr(task_arg.get_runner_svr());
+  task_resp.set_compact_das_response(use_compact_das_response(*task_arg.get_remote_info(), task_ops));
   if (task_ops.count() == 0 || task_results.count() != 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
@@ -256,7 +259,8 @@ int ObDASLookupBatchExecutor::process_task(ObDASTaskArg &task_arg,
         } else {
           if (OB_FAIL(task_op->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
             LOG_WARN("fill task result to controller failed", K(ret));
-          } else if (OB_UNLIKELY(has_more) && OB_FAIL(task_op->fill_extra_result(interrupt_info))) {
+          } else if (OB_UNLIKELY(has_more)
+                     && OB_FAIL(task_op->fill_extra_result(interrupt_info, task_resp.use_compact_das_response()))) {
             LOG_WARN("fill extra result to controller failed", KR(ret));
           } else {
             task_resp.set_has_more(has_more);
@@ -501,6 +505,8 @@ int ObDASBaseAccessP<pcode>::process()
   LOG_DEBUG("DAS base access remote process", K_(RpcProcessor::arg));
   ObDASTaskArg &task = RpcProcessor::arg_;
   ObDASTaskResp &task_resp = RpcProcessor::result_;
+  RpcProcessor::set_result_compress_type(
+      ObDASUtils::get_rpc_compressor_type(MTL_ID()));
   SQL_INFO_GUARD(ObString("DAS REMOTE PROCESS"), task.get_remote_info()->sql_id_);
   const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task.get_task_ops();
   common::ObSEArray<ObIDASTaskResult*, 2> &task_results = task_resp.get_op_results();
@@ -525,6 +531,7 @@ int ObDASBaseAccessP<pcode>::process()
   //regardless of the success of the task execution, the following meta info must be set
   task_resp.set_ctrl_svr(task.get_ctrl_svr());
   task_resp.set_runner_svr(task.get_runner_svr());
+  task_resp.set_compact_das_response(use_compact_das_response(*task.get_remote_info(), task_ops));
   if (task_ops.count() == 0 || task_results.count() != 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
@@ -621,7 +628,8 @@ int ObDASBaseAccessP<pcode>::process()
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(fill_target->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
           LOG_WARN("fill task result to controller failed", K(ret), K(reuse_enable));
-        } else if (OB_UNLIKELY(has_more) && OB_FAIL(fill_target->fill_extra_result(interrupt_info))) {
+        } else if (OB_UNLIKELY(has_more)
+                   && OB_FAIL(fill_target->fill_extra_result(interrupt_info, task_resp.use_compact_das_response()))) {
           LOG_WARN("fill extra result to controller failed", KR(ret), K(reuse_enable));
         } else {
           task_resp.set_has_more(has_more);
@@ -936,6 +944,8 @@ int ObDASSyncFetchP::process()
   FLTSpanGuard(fetch_das_result_process);
   ObDASDataFetchReq &req = arg_;
   ObDASDataFetchRes &res = result_;
+  set_result_compress_type(
+      ObDASUtils::get_rpc_compressor_type(req.get_tenant_id()));
   ObDataAccessService *das = NULL;
   const uint64_t tenant_id = req.get_tenant_id();
   const int64_t task_id = req.get_task_id();
@@ -1008,7 +1018,13 @@ int execute_lookup_batch_task(const char *buf,
                               common::ObAddr &ctrl_svr)
 {
   int ret = OB_SUCCESS;
-  {
+  omt::ObTenant *cur_tenant = THIS_THWORKER.get_tenant();
+  if (OB_ISNULL(cur_tenant)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant is null for lookup batch task", K(ret));
+  } else {
+    // The outer batch RPC context may carry the sender thread's compatibility mode.
+    lib::CompatModeGuard compat_mode_guard(cur_tenant->get_compat_mode());
     ObDASLookupBatchExecutor executor(GCTX);
     ret = executor.execute(buf, size, tenant_id, request_id, task_resp, ctrl_svr);
     if (OB_SUCC(ret)) {

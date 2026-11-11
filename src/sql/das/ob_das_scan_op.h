@@ -419,7 +419,7 @@ public:
 
   virtual int decode_task_result(ObIDASTaskResult *task_result) override;
   virtual int fill_task_result(ObIDASTaskResult &task_result, bool &has_more, int64_t &memory_limit) override;
-  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info) override;
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info, bool use_compact_das_response) override;
   virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
   virtual const ObDASBaseCtDef *get_ctdef() const override { return scan_ctdef_; }
@@ -566,6 +566,14 @@ private:
   int64_t base_read_row_cnt_;
   int64_t delta_read_row_cnt_;
   ObDasExecuteRemoteInfo das_execute_remote_info_;
+  // Per-output-column fixed length table built by init() from the result
+  // output exprs (0 = variable length).
+  // Both ends run init() with the same ctdef output exprs, so the tables
+  // agree; the compact datum-store wire codec derives fixed column lengths
+  // from it. Runtime-only, never serialized.
+  uint32_t *fixed_lens_;
+  int64_t fixed_lens_cnt_;
+  int64_t fixed_lens_capacity_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl

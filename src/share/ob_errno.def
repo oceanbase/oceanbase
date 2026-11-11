@@ -1754,6 +1754,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT, -6006, ER_LOCK_WAIT_T
 DEFINE_ERROR(OB_CLOCK_OUT_OF_ORDER, -6201, -1, "25000", "Clock out of order");
 DEFINE_ERROR_EXT_DEP(OB_SWITCHING_TO_FOLLOWER_GRACEFULLY, -6202, -1, "HY000", "tx ctx switching to follower gracefully", "%s");
 DEFINE_ERROR_DEP(OB_MASK_SET_NO_NODE, -6203, -1, "25000", "Mask set has no node");
+DEFINE_ERROR(OB_DAS_CTDEF_REBUILD_MISS, -6216, -1, "HY000", "DAS ScanCtDef table param rebuild schema unavailable");
 DEFINE_ERROR(OB_TRANS_HAS_DECIDED, -6204, -1, "HY000", "Transaction has been decided");
 DEFINE_ERROR(OB_TRANS_INVALID_STATE, -6205, -1, "HY000", "Transaction state invalid");
 DEFINE_ERROR(OB_TRANS_STATE_NOT_CHANGE, -6206, -1, "HY000", "Transaction state not changed");

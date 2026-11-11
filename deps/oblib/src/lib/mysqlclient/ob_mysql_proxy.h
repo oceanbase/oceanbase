@@ -131,6 +131,10 @@ public:
   inline uint64_t get_session_id() const { return session_id_;}
   inline void reset() { session_id_ = OB_INVALID_ID;
                         ddl_info_.reset();}
+  bool is_ddl_info_empty() const
+  {
+    return 0 == ddl_info_.ddl_info_ && OB_INVALID_ID == session_id_;
+  }
   bool is_valid() { return !(is_ddl() && OB_INVALID_ID == session_id_); }
   InnerDDLInfo &get_inner_ddl_info() { return ddl_info_; }
   TO_STRING_KV(K_(ddl_info), K_(session_id));

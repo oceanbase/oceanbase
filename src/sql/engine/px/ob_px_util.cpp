@@ -26,6 +26,9 @@
 #include "share/stat/ob_opt_stat_manager.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/das/ob_das_define.h"
+#include "sql/engine/expr/ob_expr_ser_compact.h"
+#include "sql/engine/ob_ser_compact_bindings.h"
 #include "sql/ob_sql_context.h"
 #include "sql/resolver/dml/ob_hint.h"
 #ifdef OB_BUILD_CPP_ODPS
@@ -2095,7 +2098,8 @@ int ObPxTreeSerializer::serialize_frame_info(char *buf,
                                        const ObIArray<ObFrameInfo> &all_frames,
                                        char **frames,
                                        const int64_t frame_cnt,
-                                       bool no_ser_data/* = false*/)
+                                       bool no_ser_data/* = false*/,
+                                       bool compact_vector_header/* = false*/)
 {
   int ret = OB_SUCCESS;
   int64_t need_extra_mem_size = 0;
@@ -2105,29 +2109,40 @@ int ObPxTreeSerializer::serialize_frame_info(char *buf,
       OB_UNIS_ENCODE(all_frames.at(i));
     }
   }
-  int64_t item_size = 0;
+  int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  int64_t wire_item_size = item_size;
   if ((all_frames.count() > 0) && all_frames.at(0).use_rich_format_) {
-    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
-  } else {
-    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    item_size += sizeof(VectorHeader);
+    if (!compact_vector_header) {
+      wire_item_size = item_size;
+    }
   }
   for (int64_t i = 0; i < all_frames.count() && OB_SUCC(ret); ++i) {
     const ObFrameInfo &frame_info = all_frames.at(i);
-    //TODO shengle seri can opt, only serialize: sizeof(ObDatum) + sizeof(ObEvalInfo)
     if (frame_info.frame_idx_ >= frame_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("frame index exceed frame count", K(ret), K(frame_cnt), K(frame_info.frame_idx_));
     } else {
       char *frame_buf = frames[frame_info.frame_idx_];
-      int64_t expr_mem_size = no_ser_data ? 0 : frame_info.expr_cnt_ * item_size;
+      const int64_t expr_mem_size = no_ser_data ? 0 : static_cast<int64_t>(frame_info.expr_cnt_) * wire_item_size;
       OB_UNIS_ENCODE(expr_mem_size);
-      if (pos + expr_mem_size > buf_len) {
+      if (OB_FAIL(ret)) {
+      } else if (pos + expr_mem_size > buf_len) {
         ret = OB_SIZE_OVERFLOW;
         LOG_WARN("ser frame info size overflow", K(ret), K(pos),
           K(expr_mem_size), K(buf_len));
       } else if (!no_ser_data && 0 < expr_mem_size) {
-        MEMCPY(buf + pos, frame_buf, expr_mem_size);
-        pos += expr_mem_size;
+        if (compact_vector_header && wire_item_size != item_size) {
+          for (int64_t j = 0; j < frame_info.expr_cnt_; ++j) {
+            MEMCPY(buf + pos, frame_buf + j * item_size, wire_item_size);
+            pos += wire_item_size;
+          }
+          LOG_TRACE("compact frame slot encode", K(frame_info.frame_idx_), K(frame_info.expr_cnt_),
+                    K(item_size), K(wire_item_size), K(expr_mem_size));
+        } else {
+          MEMCPY(buf + pos, frame_buf, expr_mem_size);
+          pos += expr_mem_size;
+        }
       }
       for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
         ObDatum *expr_datum = reinterpret_cast<ObDatum *>
@@ -2176,6 +2191,11 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("trace start ser expr frame info", K(ret), K(buf_len), K(pos));
+  const bool compact = SERIALIZE_PLAN_PART && serialization::using_v4_encoding();
+  if (compact && OB_ISNULL(ctx.get_physical_plan_ctx()->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan is null for compact expr frame", K(ret));
+  }
   if (SERIALIZE_PLAN_PART) {
     int64_t need_ctx_cnt = expr_frame_info.need_ctx_cnt_;
     OB_UNIS_ENCODE(need_ctx_cnt);
@@ -2193,18 +2213,25 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
   // rt exprs
   if (SERIALIZE_PLAN_PART) {
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
-    const int32_t expr_cnt = expr_frame_info.is_mark_serialize()
-        ? expr_frame_info.ser_expr_marks_.count()
-        : exprs.count();
-    ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
+    const int64_t serialized_expr_cnt = serialized_expr_count(expr_frame_info, compact);
+    if (OB_UNLIKELY(serialized_expr_cnt < 0 || serialized_expr_cnt > exprs.count()
+                    || serialized_expr_cnt > INT32_MAX)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid PX expr count", K(ret), K(serialized_expr_cnt), K(exprs.count()));
+    }
+    const int32_t expr_cnt = static_cast<int32_t>(serialized_expr_cnt);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, expr_cnt))) {
       LOG_WARN("fail to encode op type", K(ret));
-    } else if (nullptr == ObExpr::get_serialize_array()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("serialize array is null", K(ret), K(pos), K(expr_cnt));
     } else {
-      if (!expr_frame_info.is_mark_serialize()) {
+      // The following tree serializer still needs this array after this function returns.
+      ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
+      if (compact) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr_cnt; ++i) {
+          ObExprCompactHeader header(exprs.at(i), !expr_frame_member_selected(expr_frame_info, i));
+          OB_UNIS_ENCODE(header);
+        }
+      } else if (!expr_frame_info.is_mark_serialize()) {
         LOG_TRACE("exprs normal serialization", K(expr_cnt));
         for (int64_t i = 0; i < expr_cnt && OB_SUCC(ret); ++i) {
           if (OB_FAIL(exprs.at(i).serialize(buf, buf_len, pos))) {
@@ -2214,7 +2241,7 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
       } else {
         LOG_TRACE("exprs mark serialization", K(expr_cnt), K(exprs.count()));
         for (int64_t i = 0; i < expr_cnt && OB_SUCC(ret); ++i) {
-          if (expr_frame_info.ser_expr_marks_.at(i)) {
+          if (expr_frame_member_selected(expr_frame_info, i)) {
             if (OB_FAIL(exprs.at(i).serialize(buf, buf_len, pos))) {
               LOG_WARN("failed to serialize expr", K(ret), K(i), K(exprs.at(i)));
             }
@@ -2225,21 +2252,12 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
       }
     }
   }
-  // frames
-  int64_t frame_count = 0;
-  char **frames = nullptr;
-  if (ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr) {
-    frame_count = ctx.get_ori_frame_cnt();
-    frames = ctx.get_ori_frames();
-  } else {
-    frame_count = ctx.get_frame_cnt();
-    frames = ctx.get_frames();
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(encode_expr_frame_tail(buf, buf_len, pos, ctx, expr_frame_info,
+                                                compact && expr_frame_info.rt_exprs_.count() > 0,
+                                                SERIALIZE_PLAN_PART))) {
+    LOG_WARN("serialize expression frame tail failed", K(ret));
   }
-  OB_UNIS_ENCODE(frame_count);
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.const_frame_, frames, frame_count));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.param_frame_, frames, frame_count));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.dynamic_frame_, frames, frame_count));
-  OZ(serialize_frame_info<SERIALIZE_PLAN_PART>(buf, buf_len, pos, expr_frame_info.datum_frame_, frames, frame_count, true));
   LOG_DEBUG("trace end ser expr frame info", K(ret), K(buf_len), K(pos));
   return ret;
 }
@@ -2253,7 +2271,8 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
                                        ObIArray<char *> *char_ptrs,
                                        char **&frames,
                                        int64_t &frame_cnt,
-                                       bool no_deser_data)
+                                       bool no_deser_data,
+                                       bool compact_vector_header)
 {
   int ret = OB_SUCCESS;
   int64_t frame_info_cnt = all_frames.count();
@@ -2280,37 +2299,72 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
   for (int64_t i = 0; i < all_frames.count() && OB_SUCC(ret); ++i) {
     const ObFrameInfo &frame_info = all_frames.at(i);
     int64_t expr_mem_size = 0;
-    OB_UNIS_DECODE(expr_mem_size);
-    if (frame_info.frame_idx_ >= frame_cnt) {
+    const bool packed = compact_vector_header && frame_info.use_rich_format_ && !no_deser_data;
+    const int64_t wire_item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    const int64_t item_size = wire_item_size + (frame_info.use_rich_format_ ? sizeof(VectorHeader) : 0);
+    if (OB_FAIL(serialization::decode(buf, data_len, pos, expr_mem_size))) {
+      LOG_WARN("decode frame memory size failed", K(ret));
+    } else if (frame_info.frame_idx_ >= frame_cnt) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("frame index exceed frame count", K(ret), K(frame_cnt), K(frame_info.frame_idx_));
+    } else if (expr_mem_size < 0) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("negative serialized frame memory size", K(ret), K(expr_mem_size));
+    } else if (packed
+               && (frame_info.expr_cnt_ > frame_info.frame_size_ / item_size
+                   || frame_info.expr_cnt_ > INT64_MAX / wire_item_size
+                   || expr_mem_size != frame_info.expr_cnt_ * wire_item_size)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("invalid packed frame slot size", K(ret), K(expr_mem_size), K(frame_info));
+    } else if (frame_info.frame_size_ > INT64_MAX
+               || static_cast<uint64_t>(expr_mem_size) > frame_info.frame_size_ || expr_mem_size > data_len - pos
+               || (no_deser_data && expr_mem_size != 0)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("invalid serialized frame memory size", K(ret), K(expr_mem_size), K(frame_info), K(pos), K(data_len));
     } else if (0 < frame_info.expr_cnt_) {
       char *frame_buf = nullptr;
       if (nullptr == (frame_buf = static_cast<char*>(allocator.alloc(frame_info.frame_size_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate frame buf", K(ret));
-      } else if (pos + expr_mem_size > data_len) {
-        ret = OB_SIZE_OVERFLOW;
-        LOG_WARN("ser frame info size overflow", K(ret), K(pos),
-          K(frame_info.frame_size_), K(data_len));
       } else {
         MEMSET(frame_buf, 0, frame_info.frame_size_);
         frames[frame_info.frame_idx_] = frame_buf;
         if (nullptr != char_ptrs && OB_FAIL(char_ptrs->push_back(frame_buf))) {
           LOG_WARN("failed to push back frame buf", K(ret));
         }
-        if (!no_deser_data && 0 < expr_mem_size) {
-          MEMCPY(frame_buf, buf + pos, expr_mem_size);
-          pos += expr_mem_size;
+        if (OB_SUCC(ret) && !no_deser_data && 0 < expr_mem_size) {
+          if (packed) {
+            for (int64_t j = 0; j < frame_info.expr_cnt_; ++j) {
+              char *slot = frame_buf + j * item_size;
+              MEMCPY(slot, buf + pos, wire_item_size);
+              pos += wire_item_size;
+              // Active const expressions are initialized after layout replay.
+              // Unselected slots retain a valid, empty header until first use.
+              new (slot + wire_item_size) VectorHeader();
+            }
+            LOG_TRACE("compact frame slot decode", K(frame_info.frame_idx_), K(frame_info.expr_cnt_),
+                      K(item_size), K(wire_item_size), K(expr_mem_size));
+          } else {
+            MEMCPY(frame_buf, buf + pos, expr_mem_size);
+            pos += expr_mem_size;
+          }
         }
       }
     }
   }
-  OB_UNIS_DECODE(need_extra_mem_size);
+  if (OB_SUCC(ret) && OB_FAIL(serialization::decode(buf, data_len, pos, need_extra_mem_size))) {
+    LOG_WARN("decode extra frame memory size failed", K(ret));
+  }
+  if (OB_SUCC(ret)
+      && (need_extra_mem_size < 0 || need_extra_mem_size > data_len - pos
+          || (no_deser_data && need_extra_mem_size != 0))) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid extra frame memory size", K(ret), K(need_extra_mem_size));
+  }
   int64_t expr_datum_size = 0;
   int64_t des_mem_size = 0;
   char *expr_datum_buf = nullptr;
-  if (0 < need_extra_mem_size
+  if (OB_SUCC(ret) && 0 < need_extra_mem_size
       && nullptr == (expr_datum_buf = static_cast<char*>(allocator.alloc(need_extra_mem_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
@@ -2324,17 +2378,28 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
       item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
     }
     char *frame_buf = frames[frame_info.frame_idx_];
+    if (frame_info.expr_cnt_ > static_cast<uint64_t>(data_len - pos)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("datum count exceeds remaining frame data", K(ret), K(frame_info.expr_cnt_), K(pos), K(data_len));
+    }
     for (int64_t j = 0; j < frame_info.expr_cnt_ && OB_SUCC(ret); ++j) {
-      ObDatum *expr_datum = reinterpret_cast<ObDatum *>
-                                (frame_buf + j * item_size);
-      OB_UNIS_DECODE(expr_datum_size);
-      if (pos + expr_datum_size > data_len) {
-        ret = OB_SIZE_OVERFLOW;
+      if (OB_FAIL(serialization::decode(buf, data_len, pos, expr_datum_size))) {
+        LOG_WARN("decode frame datum size failed", K(ret), K(j));
+      } else if (expr_datum_size < 0 || expr_datum_size > data_len - pos
+                 || expr_datum_size > need_extra_mem_size - des_mem_size || (no_deser_data && expr_datum_size != 0)) {
+        ret = OB_DESERIALIZE_ERROR;
         LOG_WARN("ser frame info size overflow", K(ret), K(pos),
           K(expr_datum_size), K(data_len));
       } else if (0 == expr_datum_size) {
         // 对于该序列化数据，datum的len_为0， 前面已将ObDatum反序列化, 不需要再做其他处理
       } else {
+        if (OB_ISNULL(frame_buf) || frame_info.frame_size_ < sizeof(ObDatum)
+            || static_cast<uint64_t>(j) > (frame_info.frame_size_ - sizeof(ObDatum)) / item_size) {
+          ret = OB_DESERIALIZE_ERROR;
+          LOG_WARN("datum header exceeds frame memory", K(ret), K(j), K(frame_info));
+          break;
+        }
+        ObDatum *expr_datum = reinterpret_cast<ObDatum *>(frame_buf + j * item_size);
         // TODO: longzhong.wlz 之前说这里有兼容性问题，后续一并处理，暂时先这样
         MEMCPY(expr_datum_buf, buf + pos, expr_datum_size);
         expr_datum->ptr_ = expr_datum_buf;
@@ -2353,13 +2418,18 @@ int ObPxTreeSerializer::deserialize_frame_info(const char *buf,
 }
 
 template <bool DESERIALIZE_PLAN_PART>
-int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
-                                       int64_t data_len,
-                                       int64_t &pos,
-                                       ObExecContext &ctx,
-                                       const ObExprFrameInfo &expr_frame_info)
+int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf, int64_t data_len, int64_t &pos, ObExecContext &ctx,
+                                                    const ObExprFrameInfo &expr_frame_info,
+                                                    const SerCompactState expected_state,
+                                                    SerCompactState *ser_compact_state,
+                                                    ObPhysicalPlan *receiving_plan)
 {
   int ret = OB_SUCCESS;
+  serialization::CompactExprPtrGuard ptr_guard(false);
+  SerCompactState state = SerCompactState::UNKNOWN;
+  if (OB_NOT_NULL(ser_compact_state)) { *ser_compact_state = SerCompactState::UNKNOWN; }
+  ObIArray<ObExpr> &exprs = const_cast<ObArray<ObExpr> &>(expr_frame_info.rt_exprs_);
+  ObArray<ObExprCompactHeader> compact_headers;
   int32_t expr_cnt = 0;
   if (DESERIALIZE_PLAN_PART) {
     int64_t need_ctx_cnt = 0;
@@ -2378,66 +2448,103 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   }
 
   if (DESERIALIZE_PLAN_PART) {
-    ObIArray<ObExpr> &exprs = const_cast<ObArray<ObExpr> &>(expr_frame_info.rt_exprs_);
-    ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
+    // The following tree deserializer still needs this array after this function returns.
+    ObExpr::get_serialize_array() = &exprs;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &expr_cnt))) {
-      LOG_WARN("fail to encode op type", K(ret));
+      LOG_WARN("decode expr count failed", K(ret));
+    } else if (OB_UNLIKELY(expr_cnt < 0)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("invalid PX expr count", K(ret), K(expr_cnt));
     } else if (OB_FAIL(exprs.prepare_allocate(expr_cnt))) {
       LOG_WARN("failed to prepare allocator expr", K(ret));
-    } else {
-      for (int64_t i = 0; i < expr_cnt && OB_SUCC(ret); ++i) {
-        ObExpr &expr = exprs.at(i);
-        if (OB_FAIL(expr.deserialize(buf, data_len, pos))) {
-          LOG_WARN("failed to serialize expr", K(ret));
+    } else if (SerCompactState::LEGACY != expected_state && OB_FAIL(compact_headers.prepare_allocate(expr_cnt))) {
+      LOG_WARN("failed to prepare compact expr headers", K(ret), K(expr_cnt));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr_cnt; ++i) {
+      ObExpr &expr = exprs.at(i);
+      ObExprCompactHeader local_header;
+      ObExprCompactHeader &header = SerCompactState::LEGACY == expected_state ? local_header : compact_headers.at(i);
+      header = ObExprCompactHeader(expr);
+      DEF_UNIS_VERSION_DECODE_REC(record, expr, header);
+      OB_UNIS_DECODE(record);
+      if (OB_FAIL(ret)) {
+      } else if (!record.decoded()) {
+        ret = OB_DESERIALIZE_ERROR;
+      } else {
+        const SerCompactState decoded_state = record.version() == ObExprCompactHeader::unis_declared_version() ?
+                                                SerCompactState::V4 :
+                                                SerCompactState::LEGACY;
+        if ((SerCompactState::UNKNOWN != expected_state && expected_state != decoded_state)
+            || (SerCompactState::UNKNOWN != state && state != decoded_state)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("inconsistent expr frame serialization mode", K(ret), K(i), K(expected_state), K(state),
+                   K(decoded_state));
+        } else {
+          state = decoded_state;
         }
       }
     }
   }
 
-  // frames
-  int64_t frame_cnt = 0;
-  char **frames = nullptr;
-  const ObIArray<char*> *param_frame_ptrs = &plan_ctx->get_param_frame_ptrs();
-  OB_UNIS_DECODE(frame_cnt);
-  ObIArray<char *> *const_char_ptrs = DESERIALIZE_PLAN_PART ?
-                              &(const_cast<ObExprFrameInfo &>(expr_frame_info)).const_frame_ptrs_ :
-                              NULL;
+  const bool compact = SerCompactState::V4 == state;
+  ptr_guard.set(compact);
+  ObDASExprFrameLayout layout;
   if (OB_FAIL(ret)) {
-  } else if (nullptr == (frames = static_cast<char**>(
-              ctx.get_allocator().alloc(sizeof(char*) * frame_cnt)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed allocate frames", K(ret));
-  } else if (FALSE_IT(MEMSET(frames, 0, sizeof(char*) * frame_cnt))) {
-  } else if (OB_FAIL(deserialize_frame_info<DESERIALIZE_PLAN_PART>(
-      buf, data_len, pos, ctx.get_allocator(), expr_frame_info.const_frame_,
-      const_char_ptrs, frames, frame_cnt))) {
-    LOG_WARN("failed to deserialize const frame", K(ret));
-  } else if (OB_FAIL(deserialize_frame_info<DESERIALIZE_PLAN_PART>(
-      buf, data_len, pos, ctx.get_allocator(), expr_frame_info.param_frame_,
-      const_cast<ObIArray<char*>*>(param_frame_ptrs), frames, frame_cnt))) {
-    LOG_WARN("failed to deserialize const frame", K(ret));
-  } else if (OB_FAIL(deserialize_frame_info<DESERIALIZE_PLAN_PART>(
-      buf, data_len, pos, ctx.get_allocator(),expr_frame_info.dynamic_frame_,
-      nullptr, frames, frame_cnt))) {
-    LOG_WARN("failed to deserialize const frame", K(ret));
-  } else if (OB_FAIL(deserialize_frame_info<DESERIALIZE_PLAN_PART>(
-      buf, data_len, pos, ctx.get_allocator(),expr_frame_info.datum_frame_,
-      nullptr, frames, frame_cnt, true))) {
-    LOG_WARN("failed to deserialize const frame", K(ret));
+  } else if (compact && OB_FAIL(layout.deserialize_meta(buf, data_len, pos, expr_frame_info))) {
+    LOG_WARN("decode compact expression frame layout failed", K(ret));
+  } else if (OB_FAIL(decode_expr_frame_data(buf, data_len, pos, ctx, expr_frame_info, layout, compact,
+                                                DESERIALIZE_PLAN_PART))) {
+    LOG_WARN("decode expression frame data failed", K(ret));
+  } else if (compact) {
+    ObExprReplayCtx replay_ctx(exprs, expr_frame_info.const_frame_, expr_frame_info.param_frame_,
+                               expr_frame_info.dynamic_frame_, expr_frame_info.datum_frame_, layout.cg_batch_size_,
+                               layout.original_param_cnt_, layout.partial_frame_);
+    if (OB_FAIL(replay_ctx.prepare(compact_headers))) {
+      LOG_WARN("prepare compact expr frame replay failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+      if (OB_FAIL(compact_headers.at(i).replay_to(exprs.at(i), replay_ctx))) {
+        LOG_WARN("replay compact expr frame failed", K(ret), K(i));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(replay_ctx.check())) {
+      LOG_WARN("check compact expr frame replay failed", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else {
-    ctx.set_frames(frames);
-    ctx.set_frame_cnt(frame_cnt);
     // init const vector
     ObEvalCtx eval_ctx(ctx);
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
     for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
       const ObExpr &expr = exprs.at(i);
-      if (expr.is_const_expr()
-          && UINT32_MAX != expr.vector_header_off_
-          && T_OP_ROW != expr.type_) {
-        ret = expr.init_vector(eval_ctx, VEC_UNIFORM_CONST, 1/*size*/);
+      if (expr.is_const_expr() && UINT32_MAX != expr.vector_header_off_ && T_OP_ROW != expr.type_
+          && T_INVALID != expr.type_) {
+        if (OB_FAIL(expr.init_vector(eval_ctx, VEC_UNIFORM_CONST, 1 /*size*/))) {
+          LOG_WARN("init const vector failed", K(ret), K(i), "expr_type", expr.type_, K(expr.datum_meta_),
+                   K(expr.get_vec_value_tc()), K(expr.flag_), K(expr.is_static_const_), K(expr.is_dynamic_const_),
+                   K(expr.frame_idx_), K(expr.datum_off_), K(expr.vector_header_off_), "is_hole",
+                   T_INVALID == expr.type_);
+        }
       }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (DESERIALIZE_PLAN_PART) {
+      exprs.reuse();
+    }
+  } else {
+    if (OB_NOT_NULL(ser_compact_state)) {
+      *ser_compact_state = state;
+    }
+    // Legacy may omit layout members. A receiving plan must not upgrade those
+    // members to V4 when it is forwarded to another PX/DAS worker.
+    if (DESERIALIZE_PLAN_PART && SerCompactState::LEGACY == state && OB_NOT_NULL(receiving_plan)) {
+      receiving_plan->set_serialize_compact_opt_flags(
+        receiving_plan->get_serialize_compact_opt_flags() & ~ObPhysicalPlan::SERIALIZE_COMPACT_OPT);
     }
   }
   return ret;
@@ -2448,16 +2555,19 @@ int64_t ObPxTreeSerializer::get_serialize_frame_info_size(
                                        const ObIArray<ObFrameInfo> &all_frames,
                                        char **frames,
                                        int64_t frame_cnt,
-                                       bool no_ser_data/* = false*/)
+                                       bool no_ser_data/* = false*/,
+                                       bool compact_vector_header/* = false*/)
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
   int64_t need_extra_mem_size = 0;
-  int64_t item_size = 0;
+  int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+  int64_t wire_item_size = item_size;
   if ((all_frames.count() > 0) && all_frames.at(0).use_rich_format_) {
-    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
-  } else {
-    item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
+    item_size += sizeof(VectorHeader);
+    if (!compact_vector_header) {
+      wire_item_size = item_size;
+    }
   }
   if (SERIALIZE_PLAN_PART) {
     OB_UNIS_ADD_LEN(all_frames.count());
@@ -2471,7 +2581,7 @@ int64_t ObPxTreeSerializer::get_serialize_frame_info_size(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("frame index exceed frame count", K(ret), K(frame_cnt), K(frame_info.frame_idx_));
     } else {
-      int64_t expr_mem_size = no_ser_data ? 0 : frame_info.expr_cnt_ * item_size;
+      const int64_t expr_mem_size = no_ser_data ? 0 : static_cast<int64_t>(frame_info.expr_cnt_) * wire_item_size;
       OB_UNIS_ADD_LEN(expr_mem_size);
       len += expr_mem_size;
       char *frame_buf = frames[frame_info.frame_idx_];
@@ -2514,6 +2624,7 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
 {
   int ret = OB_SUCCESS;
   int64_t len = 0;
+  const bool compact = SERIALIZE_PLAN_PART && serialization::using_v4_encoding();
   if (SERIALIZE_PLAN_PART) {
     int64_t need_ctx_cnt = expr_frame_info.need_ctx_cnt_;
     OB_UNIS_ADD_LEN(need_ctx_cnt);
@@ -2528,42 +2639,158 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
 
   if (SERIALIZE_PLAN_PART) {
     const ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
-    int32_t expr_cnt = expr_frame_info.is_mark_serialize()
-        ? expr_frame_info.ser_expr_marks_.count()
-        : exprs.count();
-    ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
-    len += serialization::encoded_length_i32(expr_cnt);
-    if (!expr_frame_info.is_mark_serialize()) {
-      for (int64_t i = 0; i < expr_cnt; ++i) {
-        len += exprs.at(i).get_serialize_size();
-      }
+    const int64_t serialized_expr_cnt = serialized_expr_count(expr_frame_info, compact);
+    if (OB_UNLIKELY(serialized_expr_cnt < 0 || serialized_expr_cnt > exprs.count()
+                    || serialized_expr_cnt > INT32_MAX)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid PX expr count for size", K(ret), K(serialized_expr_cnt), K(exprs.count()));
     } else {
-      for (int64_t i = 0; i < expr_cnt; ++i) {
-        if (expr_frame_info.ser_expr_marks_.at(i)) {
+      const int32_t expr_cnt = static_cast<int32_t>(serialized_expr_cnt);
+      // Keep parity with serialize_expr_frame_info(): tree size calculation reuses this array.
+      ObExpr::get_serialize_array() = &(const_cast<ObIArray<ObExpr> &>(exprs));
+      len += serialization::encoded_length_i32(expr_cnt);
+      if (compact) {
+        for (int64_t i = 0; i < expr_cnt; ++i) {
+          ObExprCompactHeader header(exprs.at(i), !expr_frame_member_selected(expr_frame_info, i));
+          OB_UNIS_ADD_LEN(header);
+        }
+      } else if (!expr_frame_info.is_mark_serialize()) {
+        for (int64_t i = 0; i < expr_cnt; ++i) {
           len += exprs.at(i).get_serialize_size();
-        } else {
-          len += ObEmptyExpr::instance().get_serialize_size();
+        }
+      } else {
+        for (int64_t i = 0; i < expr_cnt; ++i) {
+          if (expr_frame_member_selected(expr_frame_info, i)) {
+            len += exprs.at(i).get_serialize_size();
+          } else {
+            len += ObEmptyExpr::instance().get_serialize_size();
+          }
         }
       }
     }
   }
-  int64_t frame_count = 0;
-  char **frames = nullptr;
-  if (ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr) {
-    frame_count = ctx.get_ori_frame_cnt();
-    frames = ctx.get_ori_frames();
-  } else {
-    frame_count = ctx.get_frame_cnt();
-    frames = ctx.get_frames();
-  }
-  OB_UNIS_ADD_LEN(frame_count);
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.const_frame_, frames, frame_count);
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.param_frame_, frames, frame_count);
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.dynamic_frame_, frames, frame_count);
-  len += get_serialize_frame_info_size<SERIALIZE_PLAN_PART>(expr_frame_info.datum_frame_, frames, frame_count, true);
+  len += expr_frame_tail_size(ctx, expr_frame_info, compact && expr_frame_info.rt_exprs_.count() > 0,
+                                  SERIALIZE_PLAN_PART);
   LOG_DEBUG("trace end get ser expr frame info size", K(ret), K(len));
   return len;
 }
+
+namespace oceanbase
+{
+namespace sql
+{
+
+int encode_expr_frame_tail(char *buf, const int64_t buf_len, int64_t &pos, ObExecContext &ctx,
+                               const ObExprFrameInfo &info, const bool compact, const bool include_plan_part)
+{
+  int ret = OB_SUCCESS;
+  const bool original_frames = ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr;
+  const int64_t frame_cnt = original_frames ? ctx.get_ori_frame_cnt() : ctx.get_frame_cnt();
+  char **frames = original_frames ? ctx.get_ori_frames() : ctx.get_frames();
+  if (compact) {
+    ObDASExprFrameLayout layout;
+    if (OB_FAIL(layout.init(ctx, info.partial_frame_))) {
+      LOG_WARN("get compact expression frame layout failed", K(ret));
+    } else if (OB_FAIL(layout.serialize_meta(buf, buf_len, pos, info))) {
+      LOG_WARN("serialize expression frame layout failed", K(ret));
+    }
+  } else {
+    OB_UNIS_ENCODE(frame_cnt);
+  }
+  const ObIArray<ObFrameInfo> *arrays[] = {&info.const_frame_, &info.param_frame_, &info.dynamic_frame_,
+                                           &info.datum_frame_};
+  for (int64_t a = 0; OB_SUCC(ret) && a < ARRAYSIZEOF(arrays); ++a) {
+    if (compact || !include_plan_part) {
+      ret = ObPxTreeSerializer::serialize_frame_info<false>(buf, buf_len, pos, *arrays[a], frames, frame_cnt, a == 3,
+                                                          compact);
+    } else {
+      ret = ObPxTreeSerializer::serialize_frame_info<true>(buf, buf_len, pos, *arrays[a], frames, frame_cnt, a == 3,
+                                                         compact);
+    }
+    if (OB_FAIL(ret)) { LOG_WARN("serialize expression frame data failed", K(ret), K(a)); }
+  }
+  return ret;
+}
+
+int64_t expr_frame_tail_size(ObExecContext &ctx, const ObExprFrameInfo &info, const bool compact,
+                                 const bool include_plan_part)
+{
+  int64_t len = 0;
+  const bool original_frames = ctx.get_ori_frame_cnt() != 0 && ctx.get_ori_frames() != nullptr;
+  const int64_t frame_cnt = original_frames ? ctx.get_ori_frame_cnt() : ctx.get_frame_cnt();
+  char **frames = original_frames ? ctx.get_ori_frames() : ctx.get_frames();
+  if (compact) {
+    ObDASExprFrameLayout layout;
+    if (OB_SUCCESS == layout.init(ctx, info.partial_frame_)) {
+      len += layout.meta_size(info);
+    }
+  } else {
+    OB_UNIS_ADD_LEN(frame_cnt);
+  }
+  const ObIArray<ObFrameInfo> *arrays[] = {&info.const_frame_, &info.param_frame_, &info.dynamic_frame_,
+                                           &info.datum_frame_};
+  for (int64_t a = 0; a < ARRAYSIZEOF(arrays); ++a) {
+    len += (compact || !include_plan_part) ?
+             ObPxTreeSerializer::get_serialize_frame_info_size<false>(*arrays[a], frames, frame_cnt, a == 3,
+                                                                     compact) :
+             ObPxTreeSerializer::get_serialize_frame_info_size<true>(*arrays[a], frames, frame_cnt, a == 3,
+                                                                    compact);
+  }
+  return len;
+}
+
+int decode_expr_frame_data(const char *buf, const int64_t data_len, int64_t &pos, ObExecContext &ctx,
+                               const ObExprFrameInfo &info, const ObDASExprFrameLayout &layout, const bool compact,
+                               const bool include_plan_part)
+{
+  int ret = OB_SUCCESS;
+  int64_t frame_cnt = layout.frame_cnt_;
+  char **frames = nullptr;
+  if (!compact && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &frame_cnt))) {
+    LOG_WARN("decode expression frame count failed", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (frame_cnt < 0 || frame_cnt > das::OB_DAS_MAX_PACKET_SIZE / static_cast<int64_t>(sizeof(char *))) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid expression frame count", K(ret), K(frame_cnt));
+  } else if (frame_cnt > 0) {
+    frames = static_cast<char **>(ctx.get_allocator().alloc(sizeof(char *) * frame_cnt));
+    if (OB_ISNULL(frames)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      MEMSET(frames, 0, sizeof(char *) * frame_cnt);
+    }
+  }
+  ObExprFrameInfo &decoded = const_cast<ObExprFrameInfo &>(info);
+  const ObIArray<ObFrameInfo> *arrays[] = {&info.const_frame_, &info.param_frame_, &info.dynamic_frame_,
+                                           &info.datum_frame_};
+  ObIArray<char *> *ptr_arrays[] = {
+    include_plan_part ? &decoded.const_frame_ptrs_ : nullptr,
+    &const_cast<ObIArray<char *> &>(ctx.get_physical_plan_ctx()->get_param_frame_ptrs()),
+    nullptr, nullptr};
+  for (int64_t a = 0; OB_SUCC(ret) && a < ARRAYSIZEOF(arrays); ++a) {
+    if (compact || !include_plan_part) {
+      ret = ObPxTreeSerializer::deserialize_frame_info<false>(buf, data_len, pos, ctx.get_allocator(), *arrays[a],
+                                                              ptr_arrays[a], frames, frame_cnt, a == 3, compact);
+    } else {
+      ret = ObPxTreeSerializer::deserialize_frame_info<true>(buf, data_len, pos, ctx.get_allocator(), *arrays[a],
+                                                             ptr_arrays[a], frames, frame_cnt, a == 3, compact);
+    }
+    if (OB_FAIL(ret)) { LOG_WARN("deserialize expression frame data failed", K(ret), K(a)); }
+  }
+  if (OB_SUCC(ret)) {
+    ctx.set_frames(frames);
+    ctx.set_frame_cnt(frame_cnt);
+  }
+  return ret;
+}
+
+} // namespace sql
+} // namespace oceanbase
+
+// The runtime-only size helper also needs an out-of-line definition for external callers.
+template int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size<false>(
+    ObExecContext &ctx, const ObExprFrameInfo &expr_frame_info);
 
 /* Previously, QC set sqc.is_fulltree_ and serialize it.
  * QC find all dfos which contain QC and mark sqcs in this and all descedant dfos as fulltree.

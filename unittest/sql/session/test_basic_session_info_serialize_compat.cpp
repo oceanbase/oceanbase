@@ -460,6 +460,146 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo42x)
   return ret;
 }
 
+OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo42x)
+{
+  int64_t len = 0;
+  int ret = OB_SUCCESS;
+  ObTimeZoneInfo tmp_tz_info;//为了兼容老版本，创建临时time zone info 占位
+  // To be compatible with old version which store sql_mode and compatibility mode in ObSQLModeManager;
+  int64_t compatibility_mode_index = 0;
+  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+    LOG_WARN("convert compatibility mode to index failed", K(ret));
+  }
+  bool has_tx_desc = tx_desc_ != NULL;
+  OB_UNIS_ADD_LEN(has_tx_desc);
+  if (has_tx_desc) {
+    OB_UNIS_ADD_LEN(*tx_desc_);
+  }
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              consistency_level_,
+              compatibility_mode_index,
+              tmp_tz_info,
+              tenant_id_ | (rpc_tenant_id_ << 32),
+              effective_tenant_id_,
+              is_changed_to_temp_tenant_,
+              user_id_,
+              master_sessid_,
+              capability_.capability_,
+              thread_data_.database_name_);
+  // 计算需要序列化的用户变量和系统变量的序列化长度
+  ObSEArray<share::ObSysVarClassType, 64> sys_var_ids;
+  ObSEArray<ObString, 32> user_var_names;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(calc_need_serialize_vars(sys_var_ids, user_var_names))) {
+    LOG_WARN("fail to calc need serialize vars", K(ret));
+  } else {
+    int64_t actual_ser_user_var_count = 0;
+    ObSessionVariable user_var_val;
+    for (int64_t i = 0; OB_SUCC(ret) && i < user_var_names.count(); ++i) {
+      user_var_val.reset();
+      const ObString &user_var_name = user_var_names.at(i);
+      ret = user_var_val_map_.get_refactored(user_var_name, user_var_val);
+      if (OB_SUCCESS != ret && OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("fail to get user var from session user var map", K(i), K(user_var_name),
+                 K(user_var_val_map_.size()), K(ret));
+      } else {
+        if (OB_SUCCESS == ret) {
+          actual_ser_user_var_count++;
+          len += serialization::encoded_length(user_var_name);
+          len += serialization::encoded_length(user_var_val.meta_);
+          len += serialization::encoded_length(user_var_val.value_);
+        }
+        ret = OB_SUCCESS;
+      }
+    }
+    len += serialization::encoded_length(actual_ser_user_var_count);
+  }
+  if (OB_SUCC(ret)) {
+    len += serialization::encoded_length(sys_var_ids.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < sys_var_ids.count(); ++i) {
+      int64_t sys_var_idx = -1;
+      if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_ids.at(i), sys_var_idx))) {
+        LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(sys_var_ids.at(i)), K(ret));
+      } else if (sys_var_idx < 0 || ALL_SYS_VARS_COUNT <= sys_var_idx) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("sys var idx is invalid", K(sys_var_idx), K(ALL_SYS_VARS_COUNT), K(ret));
+      } else if (OB_ISNULL(sys_vars_[sys_var_idx])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("sys var is NULL", K(ret), K(sys_var_idx), K(ALL_SYS_VARS_COUNT));
+      } else {
+        int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
+        len += serialization::encoded_length(sys_var_id);
+        len += sys_vars_[sys_var_idx]->get_serialize_size();
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // mock use next_tx_read_only_
+    bool tx_read_only = next_tx_read_only_;
+    len += serialization::encoded_length_bool(tx_read_only);
+  }
+  // 不再有意义字段，为了兼容性考虑
+  bool unused_literal_query = false;
+  int64_t unused_inner_safe_weak_read_snapshot = 0;
+  int64_t unused_weak_read_snapshot_source = 0;
+  int64_t unused_safe_weak_read_snapshot = 0;
+  bool need_serial_exec = false;
+  uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
+  // No meaningful field for serialization compatibility
+  bool is_foreign_key_cascade = false;
+  bool is_foreign_key_check_exist = false;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              sys_vars_cache_.inc_data_,
+              unused_safe_weak_read_snapshot,
+              unused_inner_safe_weak_read_snapshot,
+              unused_literal_query,
+              tz_info_wrap_,
+              app_trace_id_,
+              proxy_capability_.capability_,
+              client_mode_,
+              proxy_sessid_,
+              nested_count_,
+              thread_data_.user_name_,
+              next_tx_isolation_,
+              reserved_read_snapshot_version_,
+              check_sys_variable_,
+              unused_weak_read_snapshot_source,
+              database_id_,
+              thread_data_.user_at_host_name_,
+              thread_data_.user_at_client_ip_,
+              current_execution_id_,
+              labels_,
+              total_stmt_tables_,
+              cur_stmt_tables_,
+              is_foreign_key_cascade,
+              sys_var_in_pc_str_,
+              config_in_pc_str_,
+              is_foreign_key_check_exist,
+              need_serial_exec,
+              sql_scope_flags,
+              stmt_type_,
+              thread_data_.client_addr_,
+              thread_data_.user_client_addr_,
+              process_query_time_,
+              flt_vars_.last_flt_trace_id_,
+              flt_vars_.row_traceformat_,
+              flt_vars_.last_flt_span_id_,
+              exec_min_cluster_version_,
+              is_client_sessid_support_,
+              use_rich_vector_format_);
+  OB_UNIS_ADD_LEN(ObString(sql_id_));
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              proxy_user_id_,
+              thread_data_.proxy_user_name_,
+              thread_data_.proxy_host_name_);
+  OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
+  OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
+  OB_UNIS_ADD_LEN(is_diagnosis_enabled_);
+  OB_UNIS_ADD_LEN(diagnosis_limit_num_);
+  OB_UNIS_ADD_LEN(client_sessid_);
+  return len;
+}
+
 class TestBasicSessionInfoSerializeCompat : public ::testing::Test
 {
 public:

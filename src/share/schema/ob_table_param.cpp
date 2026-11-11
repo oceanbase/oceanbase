@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 #include "ob_table_param.h"
 #include "share/ob_compute_property.h"
+#include "sql/engine/ob_bit_vector.h"
 #include "storage/column_store/ob_column_store_replica_util.h"
 
 namespace oceanbase
@@ -679,6 +680,32 @@ void ObTableParam::reset()
   aggregate_param_props_.reset();
   plan_enable_rich_format_ = false;
   table_type_ = ObTableType::MAX_TABLE_TYPE;
+}
+
+int ObTableParam::assign_output_sel_mask_from_bitmap(const int64_t access_count, const char *bitmap,
+                                                     const int64_t bitmap_bytes)
+{
+  int ret = OB_SUCCESS;
+  int64_t expected_bytes = 0;
+  if (OB_UNLIKELY(access_count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid access column count", K(ret), K(access_count));
+  } else {
+    expected_bytes = sql::ObTinyBitVector::memory_size(access_count);
+    if (OB_UNLIKELY(expected_bytes != bitmap_bytes || (0 < bitmap_bytes && OB_ISNULL(bitmap)))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid output selection bitmap", K(ret), K(access_count), K(expected_bytes), K(bitmap_bytes),
+               KP(bitmap));
+    } else {
+      output_sel_mask_.reset();
+      if (OB_FAIL(output_sel_mask_.prepare_allocate(access_count))) {
+        LOG_WARN("allocate output selection mask failed", K(ret), K(access_count));
+      }
+      const sql::ObTinyBitVector *selection_mask = reinterpret_cast<const sql::ObTinyBitVector *>(bitmap);
+      for (int64_t i = 0; OB_SUCC(ret) && i < access_count; ++i) { output_sel_mask_.at(i) = selection_mask->at(i); }
+    }
+  }
+  return ret;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)

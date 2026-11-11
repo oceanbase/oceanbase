@@ -902,6 +902,144 @@ TEST_F(TestSQLSessionInfoSerializeCompat, test_das_split_round_trip)
   sess_dst.cached_tenant_config_info_.session_ = nullptr;
 }
 
+TEST_F(TestSQLSessionInfoSerializeCompat, test_das_compact_split_round_trip)
+{
+  common::ObArenaAllocator src_allocator(ObModIds::OB_SQL_SESSION);
+  common::ObArenaAllocator wire_allocator(ObModIds::OB_SQL_SESSION);
+  const auto init_session = [](ObSQLSessionInfo &session,
+                               ObArenaAllocator &allocator,
+                               const bool load_defaults) {
+    ASSERT_EQ(OB_SUCCESS, session.test_init(0, 0, 0, &allocator));
+    if (load_defaults) {
+      init_set(session);
+    }
+    init_remote_extra_maps(session);
+    session.cached_tenant_config_info_.session_ = nullptr;
+  };
+  ObSQLSessionInfo sess_src(500);
+  ASSERT_NO_FATAL_FAILURE(init_session(sess_src, src_allocator, true));
+  fill_session_info(sess_src);
+  sess_src.is_max_availability_mode_ = true;
+  // Change a variable used by both PC and PL cache strings from its default value.
+  ASSERT_EQ(OB_SUCCESS, sess_src.update_sys_variable(share::SYS_VAR_DIV_PRECISION_INCREMENT, 6));
+  sess_src.set_cur_sql_id(const_cast<char *>("0123456789abcdef0123456789abcdef"));
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_module_name(ObString::make_string("compact_das_module")));
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_client_id(ObString::make_string("compact_das_client")));
+  ASSERT_EQ(OB_SUCCESS,
+            sess_src.set_context_values(ObString::make_string("COMPACT_CTX"),
+                                        ObString::make_string("COMPACT_ATTR"),
+                                        ObString::make_string("COMPACT_VALUE")));
+  const uint64_t seq_id = 10002;
+  const share::ObSequenceValue seq_value(20260904);
+  ASSERT_EQ(OB_SUCCESS, sess_src.set_sequence_value(500, seq_id, seq_value));
+
+  char *compact_buf = static_cast<char *>(wire_allocator.alloc(BUF_SIZE));
+  char *split_buf = static_cast<char *>(wire_allocator.alloc(BUF_SIZE));
+  ASSERT_TRUE(OB_NOT_NULL(compact_buf) && OB_NOT_NULL(split_buf));
+  const ObSessionSerializeMode compact_mode(true, true);
+  int64_t compact_len = 0;
+  int64_t split_len = 0;
+  int64_t inv_size = 0;
+  int64_t var_size = 0;
+  {
+    ObSessionSerializeModeGuard guard(compact_mode);
+    const int64_t expected_compact_len = sess_src.get_serialize_size();
+    ASSERT_EQ(OB_SUCCESS, sess_src.serialize(compact_buf, BUF_SIZE, compact_len));
+    ASSERT_EQ(expected_compact_len, compact_len);
+    ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split(split_buf, BUF_SIZE, split_len));
+    ASSERT_EQ(OB_SUCCESS, sess_src.das_serialize_split_size(inv_size, var_size));
+  }
+  ASSERT_EQ(split_len, inv_size + var_size);
+
+  common::ObArenaAllocator ref_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_ref(500);
+  ASSERT_NO_FATAL_FAILURE(init_session(sess_ref, ref_allocator, true));
+  int64_t compact_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.deserialize(compact_buf, compact_len, compact_pos));
+  ASSERT_EQ(compact_len, compact_pos);
+
+  DasSplitSections sections;
+  ASSERT_EQ(OB_SUCCESS, parse_das_split_sections(split_buf, split_len, sections));
+  ObSQLSessionInfo sess_templ(500);
+  init_set(sess_templ);
+  sess_templ.cached_tenant_config_info_.session_ = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sess_templ.gen_sys_var_in_pl_cache_str());
+  ASSERT_FALSE(sess_templ.is_first_gen_);
+  ASSERT_FALSE(sess_templ.is_first_gen_pl_cache_str_);
+  char *const pc_buf = sess_templ.sys_var_in_pc_str_.ptr();
+  char *const pl_buf = sess_templ.sys_var_in_pl_cache_str_.ptr();
+  const int64_t pc_capacity = sess_templ.get_sys_vars_encode_max_size();
+  ASSERT_NE(nullptr, pc_buf);
+  ASSERT_NE(nullptr, pl_buf);
+  ASSERT_NE(sess_ref.sys_var_in_pc_str_, sess_templ.sys_var_in_pc_str_);
+  ASSERT_NE(sess_ref.sys_var_in_pl_cache_str_, sess_templ.sys_var_in_pl_cache_str_);
+  ASSERT_LT(sess_ref.sys_var_in_pc_str_.length(), pc_capacity);
+  ASSERT_LT(sess_ref.sys_var_in_pl_cache_str_.length(), 256);
+  int64_t tpos = 0;
+  {
+    ObSessionSerializeModeGuard guard(compact_mode);
+    ASSERT_EQ(OB_SUCCESS,
+              sess_templ.das_build_template_invariant_section(
+                  sections.inv_, sections.inv_len_, tpos));
+  }
+  ASSERT_EQ(sections.inv_len_, tpos);
+  // Compact decode must regenerate current values without discarding usable buffers.
+  EXPECT_EQ(pc_buf, sess_templ.sys_var_in_pc_str_.ptr());
+  EXPECT_EQ(pl_buf, sess_templ.sys_var_in_pl_cache_str_.ptr());
+  EXPECT_EQ(pc_capacity, sess_templ.get_sys_vars_encode_max_size());
+  EXPECT_EQ(sess_ref.sys_var_in_pc_str_, sess_templ.sys_var_in_pc_str_);
+  EXPECT_EQ(sess_ref.sys_var_in_pl_cache_str_, sess_templ.sys_var_in_pl_cache_str_);
+
+  common::ObArenaAllocator dst_allocator(ObModIds::OB_SQL_SESSION);
+  ObSQLSessionInfo sess_dst(500);
+  ASSERT_NO_FATAL_FAILURE(init_session(sess_dst, dst_allocator, false));
+  int64_t vpos = 0;
+  {
+    ObSessionSerializeModeGuard guard(compact_mode);
+    ASSERT_EQ(OB_SUCCESS, sess_dst.das_apply_invariant_section(sess_templ));
+    ASSERT_EQ(OB_SUCCESS,
+              sess_dst.das_decode_volatile_section(
+                  sections.var_, sections.var_len_, vpos));
+  }
+  ASSERT_EQ(sections.var_len_, vpos);
+  for (ObSQLSessionInfo *decoded : {&sess_ref, &sess_dst}) {
+    ASSERT_FALSE(decoded->is_max_availability_mode_);
+    ASSERT_TRUE(decoded->ddl_info_.is_ddl_info_empty());
+    ASSERT_EQ(ObString::make_string("compact_das_module"), decoded->get_module_name());
+    ASSERT_EQ(ObString::make_string("compact_das_client"), decoded->get_client_identifier());
+    ObString context_value;
+    bool context_exists = false;
+    ASSERT_EQ(OB_SUCCESS,
+              decoded->get_context_values(ObString::make_string("COMPACT_CTX"),
+                                          ObString::make_string("COMPACT_ATTR"),
+                                          context_value,
+                                          context_exists));
+    ASSERT_TRUE(context_exists);
+    ASSERT_EQ(ObString::make_string("COMPACT_VALUE"), context_value);
+    share::ObSequenceValue decoded_seq_value;
+    ASSERT_EQ(OB_SUCCESS, decoded->get_sequence_value(500, seq_id, decoded_seq_value));
+    ASSERT_EQ(0, seq_value.val().compare(decoded_seq_value.val()));
+  }
+
+  // The outer DAS envelope restores sql_id after nested Session decode.
+  sess_ref.set_cur_sql_id(const_cast<char *>(sess_src.get_cur_sql_id().ptr()));
+  sess_dst.set_cur_sql_id(const_cast<char *>(sess_src.get_cur_sql_id().ptr()));
+  char *reser_ref = static_cast<char *>(wire_allocator.alloc(BUF_SIZE));
+  char *reser_dst = static_cast<char *>(wire_allocator.alloc(BUF_SIZE));
+  ASSERT_TRUE(OB_NOT_NULL(reser_ref) && OB_NOT_NULL(reser_dst));
+  int64_t reser_ref_len = 0;
+  int64_t reser_dst_len = 0;
+  ASSERT_EQ(OB_SUCCESS, sess_ref.serialize(reser_ref, BUF_SIZE, reser_ref_len));
+  ASSERT_EQ(OB_SUCCESS, sess_dst.serialize(reser_dst, BUF_SIZE, reser_dst_len));
+  ASSERT_EQ(reser_ref_len, reser_dst_len);
+  ASSERT_EQ(0, MEMCMP(reser_ref, reser_dst, reser_ref_len));
+
+  sess_dst.das_detach_borrowed_sys_vars();
+  sess_src.cached_tenant_config_info_.session_ = nullptr;
+  sess_ref.cached_tenant_config_info_.session_ = nullptr;
+  sess_dst.cached_tenant_config_info_.session_ = nullptr;
+}
+
 TEST_F(TestSQLSessionInfoSerializeCompat, test_das_apply_invariant)
 {
   ObPhysicalPlan user_var_plan;

@@ -257,6 +257,12 @@ int ObExpr::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
   int64_t len = 0;
 
   OB_UNIS_DECODE(version);
+  if (OB_SUCC(ret) && serialization::SER_COMPACT_OPT_VERSION == version) {
+    // Compact records are dispatched from their own version envelope. A compact serialize opt
+    // record reaching the legacy member decoder is a channel bug.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("compact expr record is not supported by legacy deserialize", K(ret), K(version));
+  }
   OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
     if (len < 0) {
@@ -268,11 +274,17 @@ int ObExpr::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
     }
   }
   if (OB_SUCC(ret)) {
-    const_cast<int64_t&>(data_len) = len;
-    int64_t pos_orig = pos;
-    buf = buf + pos_orig;
-    pos = 0;
+    const int64_t body_start = pos;
+    int64_t body_pos = 0;
+    ret = deserialize_body(buf + body_start, len, body_pos, version);
+    pos = body_start + len;
+  }
+  return ret;
+}
 
+int ObExpr::deserialize_body(const char *buf, const int64_t data_len, int64_t &pos, const int64_t version)
+{
+  int ret = OB_SUCCESS;
     LST_DO_CODE(OB_UNIS_DECODE,
                 type_,
                 datum_meta_,
@@ -350,8 +362,6 @@ int ObExpr::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
     OB_UNIS_DECODE(local_session_var_id_);
     LST_DO_CODE(OB_UNIS_DECODE, serialization::make_ser_carray(attrs_, attrs_cnt_));
 
-    pos = pos_orig + len;
-  }
   return ret;
 
 }

@@ -104,6 +104,11 @@ public:
     bad_file_.reset();
   }
 
+  bool is_empty() const
+  {
+    return !is_enabled_ && 0 == limit_num_ && log_file_.empty() && bad_file_.empty();
+  }
+
   bool is_enabled_;
   int64_t limit_num_;
   common::ObString log_file_;
@@ -145,6 +150,44 @@ public:
 class ObExecContext;
 class ObSysVarInPC;
 class ObBasicSessionInfo;
+
+struct ObSessionSerializeMode
+{
+  constexpr ObSessionSerializeMode()
+    : compact_session_(false),
+      tx_desc_inline_(true)
+  {}
+  constexpr ObSessionSerializeMode(const bool compact_session, const bool tx_desc_inline)
+    : compact_session_(compact_session),
+      tx_desc_inline_(tx_desc_inline)
+  {}
+
+  bool compact_session_;
+  bool tx_desc_inline_;
+};
+
+// The mode applies to synchronous encoding/decoding in the current thread.
+// Nested Guards restore the enclosing mode when they leave scope.
+class ObSessionSerializeModeGuard
+{
+public:
+  explicit ObSessionSerializeModeGuard(const ObSessionSerializeMode &mode);
+  ~ObSessionSerializeModeGuard();
+  static ObSessionSerializeMode get_mode()
+  {
+    return current_mode();
+  }
+private:
+  static ObSessionSerializeMode &current_mode()
+  {
+    RLOCAL_INLINE(ObSessionSerializeMode, mode);
+    return mode;
+  }
+  ObSessionSerializeModeGuard(const ObSessionSerializeModeGuard &) = delete;
+  ObSessionSerializeModeGuard &operator=(const ObSessionSerializeModeGuard &) = delete;
+private:
+  const ObSessionSerializeMode old_mode_;
+};
 
 enum ObDisconnectState
 {
@@ -605,6 +648,14 @@ public:
   void set_global_vars_version(const int64_t modify_time) { global_vars_version_ = modify_time; }
   void set_is_deserialized() { is_deserialized_ = true; }
   bool get_is_deserialized() { return is_deserialized_; }
+  bool is_compact_session_serialize() const
+  {
+    return ObSessionSerializeModeGuard::get_mode().compact_session_;
+  }
+  bool is_tx_desc_inline_serialize() const
+  {
+    return ObSessionSerializeModeGuard::get_mode().tx_desc_inline_;
+  }
   void set_exec_min_cluster_version() { exec_min_cluster_version_ = GET_MIN_CLUSTER_VERSION(); }
   uint64_t get_exec_min_cluster_version() const { return exec_min_cluster_version_; }
   // local sys var getters
@@ -1883,6 +1934,11 @@ private:
                                   const common::ObObj &val);
   int calc_need_serialize_vars(common::ObIArray<share::ObSysVarClassType> &sys_var_ids,
                                common::ObIArray<common::ObString> &user_var_names) const;
+protected:
+  static const int64_t COMPACT_SESSION_VERSION = 4;
+private:
+  int64_t get_serialize_version_() const;
+  bool need_serialize_pc_config_env_(const bool compact_session_serialize) const;
   int deep_copy_sys_variable(share::ObBasicSysVar &sys_var,
                              const share::ObSysVarClassType sys_var_id,
                              const common::ObObj &src_val);

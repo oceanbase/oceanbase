@@ -408,7 +408,7 @@ void ObRpcProcessorBase::compress_result(const char *src_buf, int64_t src_len,
     need_compress = false;
   } else {
   }
-  RPC_OBRPC_LOG(DEBUG, "result compressed", K(ret), K(need_compress),
+  RPC_OBRPC_LOG(TRACE, "result compressed", K(ret), K(need_compress),
                 K_(result_compress_type), K(src_len), K(real_len));
   if (OB_SUCC(ret) && need_compress) {
     pkt->set_content(dst_buf, real_len);

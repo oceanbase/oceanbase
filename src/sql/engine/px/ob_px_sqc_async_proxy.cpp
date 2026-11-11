@@ -61,8 +61,16 @@ int ObPxSqcAsyncProxy::launch_all_rpc_request() {
     LOG_WARN("fail to prepare allocate result array");
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(session_) || OB_ISNULL(phy_plan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session or plan is null when launching SQC RPC requests", K(ret), KP(session_), KP(phy_plan_));
+  } else {
     int64_t cluster_id = GCONF.cluster_id;
+    const ObSessionSerializeMode px_mode(
+        phy_plan_->is_compact_session_serialize(),
+        true /* tx_desc_inline */);
+    ObSessionSerializeModeGuard session_serialize_guard(px_mode);
     SMART_VAR(ObPxRpcInitSqcArgs, args) {
       if (sqcs_.count() > 1) {
         args.enable_serialize_cache();

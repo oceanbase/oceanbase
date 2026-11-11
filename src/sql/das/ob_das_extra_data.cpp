@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_extra_data.h"
+#include "sql/das/ob_das_utils.h"
 namespace oceanbase
 {
 namespace sql
@@ -36,7 +37,8 @@ int ObDASExtraData::init(const int64_t task_id,
                          const int64_t timeout_ts,
                          const common::ObAddr &result_addr,
                          rpc::frame::ObReqTransport *transport,
-                         const bool enable_rich_format)
+                         const bool enable_rich_format,
+                         const bool use_compact_das_response)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(rpc_proxy_.init(transport))) {
@@ -48,6 +50,7 @@ int ObDASExtraData::init(const int64_t task_id,
     has_more_ = false;
     need_check_output_datum_ = false;
     enable_rich_format_ = enable_rich_format;
+    result_.set_compact_das_response(use_compact_das_response);
   }
   return ret;
 }
@@ -71,6 +74,7 @@ int ObDASExtraData::fetch_result()
                      .to(result_addr_)
                      .by(tenant_id)
                      .timeout(timeout)
+                     .compressed(ObDASUtils::get_rpc_compressor_type(tenant_id))
                      .sync_fetch_das_result(req, result_))) {
     LOG_WARN("rpc sync fetch das result failed", KR(ret));
   } else if (!enable_rich_format_ && OB_FAIL(result_.get_datum_store().begin(result_iter_))) {
@@ -176,6 +180,7 @@ void ObDASExtraData::erase_task_result()
                        .to(result_addr_)
                        .by(tenant_id)
                        .timeout(timeout)
+                       .compressed(ObDASUtils::get_rpc_compressor_type(tenant_id))
                        .async_erase_das_result(req, nullptr))) {
       LOG_WARN("rpc async erase das result failed", KR(ret));
     }

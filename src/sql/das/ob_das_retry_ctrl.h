@@ -33,6 +33,10 @@ public:
   static void tablet_location_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &);
   static void tablet_nothing_readable_proc(ObDASRef &, ObIDASTaskOp &, bool &);
   static void task_network_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &);
+  // compact serialize opt: the runner could not rebuild the ScanCtDef table_param with the
+  // precise schema version (OB_DAS_CTDEF_REBUILD_MISS). Resend the task with
+  // the ctdef encoded TP_INLINE (full table_param), invisible to the statement.
+  static void ctdef_rebuild_miss_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &);
 };
 
 }  // namespace sql

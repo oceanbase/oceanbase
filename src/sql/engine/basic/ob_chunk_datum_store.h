@@ -72,6 +72,8 @@ struct AssignDefaultDatumValue
 class ObChunkDatumStore
 {
   OB_UNIS_VERSION_V(1);
+  friend struct ObChunkDatumStoreCompactHeader;
+
 public:
   static inline int deep_copy_unswizzling(
       const ObDatum &src, ObDatum *dst, char *buf, int64_t max_size, int64_t &pos)

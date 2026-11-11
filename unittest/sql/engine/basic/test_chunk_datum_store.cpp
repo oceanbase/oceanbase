@@ -15,6 +15,7 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "sql/ob_sql_init.h"
+#include "sql/engine/basic/ob_chunk_datum_store_compact_header.h"
 
 namespace oceanbase
 {
@@ -971,6 +972,273 @@ TEST_F(TestChunkDatumStore, test_only_disk_data1)
 
   it.reset();
   rs.reset();
+}
+
+TEST_F(TestChunkDatumStore, test_das_compact_v4_codec)
+{
+  const uint32_t fixed_lens[COLS] = {8, 0, 0};
+  ObChunkDatumStore src("TEST");
+  ASSERT_EQ(OB_SUCCESS, src.init(0, tenant_id_, ctx_id_, label_, false /*enable_dump*/, 0, 4096));
+  CALL(append_rows, src, 128);
+  ASSERT_EQ(OB_SUCCESS, src.finish_add_row());
+
+  ObChunkDatumStoreCompactHeader compact_src(src, fixed_lens, ARRAYSIZEOF(fixed_lens));
+  const int64_t wire_size = serialization::encoded_length(compact_src);
+  ObArenaAllocator wire_alloc("DASCompactStore");
+  char *wire = static_cast<char *>(wire_alloc.alloc(wire_size + 1));
+  ASSERT_NE(nullptr, wire);
+  wire[wire_size] = static_cast<char>(0x5a);
+  int64_t wire_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(wire, wire_size, wire_pos, compact_src));
+  ASSERT_EQ(wire_size, wire_pos);
+  ASSERT_EQ(static_cast<char>(0x5a), wire[wire_size]);
+  ASSERT_EQ(serialization::SER_COMPACT_OPT_VERSION, static_cast<uint8_t>(wire[0]));
+
+  int64_t envelope_pos = 0;
+  int64_t version = 0;
+  int64_t body_len = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi64(wire, wire_size, envelope_pos, &version));
+  ASSERT_EQ(serialization::SER_COMPACT_OPT_VERSION, version);
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi64(wire, wire_size, envelope_pos, &body_len));
+  ASSERT_EQ(wire_size - envelope_pos, body_len);
+  int32_t wire_col_cnt = 0;
+  int64_t block_cnt = 0;
+  int32_t first_block_rows = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi32(wire, wire_size, envelope_pos, &wire_col_cnt));
+  ASSERT_EQ(3, wire_col_cnt);
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi64(wire, wire_size, envelope_pos, &block_cnt));
+  ASSERT_GT(block_cnt, 1);
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi32(wire, wire_size, envelope_pos, &first_block_rows));
+  ASSERT_GT(first_block_rows, 0);
+  const int64_t first_row_flags_pos = envelope_pos;
+
+  ObChunkDatumStore dst("TEST");
+  ASSERT_EQ(OB_SUCCESS, dst.init(0, tenant_id_, ctx_id_, label_, false /*enable_dump*/, 0, 4096));
+  ObChunkDatumStoreCompactHeader compact_dst(dst, fixed_lens, ARRAYSIZEOF(fixed_lens));
+  int64_t decode_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode(wire, wire_size, decode_pos, compact_dst));
+  ASSERT_EQ(wire_size, decode_pos);
+  ASSERT_EQ(0, dst.get_row_cnt());
+  ObChunkDatumStoreReplayCtx replay_ctx;
+  ASSERT_EQ(OB_SUCCESS, compact_dst.replay_to(dst, replay_ctx));
+  ASSERT_EQ(src.get_row_cnt(), dst.get_row_cnt());
+  ObChunkDatumStore::Iterator dst_it;
+  CALL(verify_n_rows, dst, dst_it, dst.get_row_cnt(), true);
+
+  ObChunkDatumStore truncated_dst("TEST");
+  ASSERT_EQ(OB_SUCCESS, truncated_dst.init(0, tenant_id_, ctx_id_, label_, false, 0, 4096));
+  ObChunkDatumStoreCompactHeader compact_truncated(truncated_dst, fixed_lens, ARRAYSIZEOF(fixed_lens));
+  int64_t truncated_pos = 0;
+  ASSERT_NE(OB_SUCCESS, serialization::decode(wire, wire_size - 1, truncated_pos, compact_truncated));
+  ASSERT_EQ(0, truncated_dst.get_row_cnt());
+
+  char *malformed = static_cast<char *>(wire_alloc.alloc(wire_size));
+  ASSERT_NE(nullptr, malformed);
+  MEMCPY(malformed, wire, wire_size);
+  malformed[first_row_flags_pos] = static_cast<char>(0x80);
+  ObChunkDatumStore malformed_dst("TEST");
+  ASSERT_EQ(OB_SUCCESS, malformed_dst.init(0, tenant_id_, ctx_id_, label_, false, 0, 4096));
+  ObChunkDatumStoreCompactHeader compact_malformed(malformed_dst, fixed_lens, ARRAYSIZEOF(fixed_lens));
+  int64_t malformed_pos = 0;
+  ASSERT_EQ(OB_DESERIALIZE_ERROR, serialization::decode(malformed, wire_size, malformed_pos, compact_malformed));
+  ASSERT_EQ(0, malformed_dst.get_row_cnt());
+
+  ObChunkDatumStore empty("TEST");
+  ASSERT_EQ(OB_SUCCESS, empty.init(0, tenant_id_, ctx_id_, label_, false /*enable_dump*/, 0, 4096));
+  ObChunkDatumStoreCompactHeader compact_empty(empty, fixed_lens, ARRAYSIZEOF(fixed_lens));
+  char empty_wire[32];
+  int64_t empty_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(empty_wire, sizeof(empty_wire), empty_pos, compact_empty));
+  static const unsigned char EMPTY_STANDARD_V4_GOLDEN[] = {0x04, 0x86, 0x80, 0x80, 0x80, 0x00,
+                                                           0xff, 0xff, 0xff, 0xff, 0x0f, 0x00};
+  ASSERT_EQ(sizeof(EMPTY_STANDARD_V4_GOLDEN), empty_pos);
+  ASSERT_EQ(0, MEMCMP(EMPTY_STANDARD_V4_GOLDEN, empty_wire, empty_pos));
+}
+
+TEST_F(TestChunkDatumStore, compact_encode_rejects_short_buffers_without_overwrite)
+{
+  const uint32_t fixed_lens[COLS] = {8, 0, 0};
+  for (const bool legacy_image : {false, true}) {
+    ObChunkDatumStore src("TEST");
+    ASSERT_EQ(OB_SUCCESS, src.init(0, tenant_id_, ctx_id_, label_, false));
+    int64_t number = 42;
+    ObDatum cells[COLS];
+    cells[0].set_string(reinterpret_cast<const char *>(&number), sizeof(number));
+    cells[1].set_string("payload", 7);
+    cells[2].set_null();
+    if (legacy_image) { cells[0].len_ = sizeof(int32_t); }
+    ASSERT_EQ(OB_SUCCESS, src.add_row(cells, COLS, 0, nullptr));
+    ASSERT_EQ(OB_SUCCESS, src.finish_add_row(false));
+    ObChunkDatumStoreCompactHeader encoded(src, fixed_lens, COLS);
+    const int64_t size = encoded.get_serialize_size();
+    ObArenaAllocator alloc;
+    char *bytes = static_cast<char *>(alloc.alloc(size + 16));
+    ASSERT_NE(nullptr, bytes);
+    for (int64_t limit = 0; limit <= size; ++limit) {
+      MEMSET(bytes, 0x5a, size + 16);
+      int64_t pos = 0;
+      const int ret = encoded.serialize(bytes, limit, pos);
+      if (limit < size) {
+        ASSERT_NE(OB_SUCCESS, ret) << "legacy=" << legacy_image << " limit=" << limit;
+      } else {
+        ASSERT_EQ(OB_SUCCESS, ret);
+        ASSERT_EQ(size, pos);
+      }
+      for (int64_t i = limit; i < size + 16; ++i) { ASSERT_EQ(static_cast<char>(0x5a), bytes[i]); }
+    }
+  }
+}
+
+TEST_F(TestChunkDatumStore, compact_body_rejects_truncated_cells)
+{
+  // Keep the record envelope valid while truncating its row body.
+  for (const uint32_t fixed_len : {0U, 8U}) {
+    char body[64] = {};
+    int64_t size = 0;
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi32(body, sizeof(body), size, 1));
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(body, sizeof(body), size, 1));
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi32(body, sizeof(body), size, 1));
+    const int64_t row_start = size;
+    body[size++] = 0; // flags
+    body[size++] = 0; // one non-null column
+    if (fixed_len == 0) { ASSERT_EQ(OB_SUCCESS, serialization::encode_i32(body, sizeof(body), size, 8)); }
+    MEMSET(body + size, 0x5a, 8);
+    size += 8;
+    for (int64_t end = row_start; end <= size; ++end) {
+      SCOPED_TRACE(::testing::Message() << "fixed_len=" << fixed_len << " end=" << end);
+      char wire[80] = {};
+      int64_t wire_size = 0;
+      ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(wire, sizeof(wire), wire_size, 4));
+      ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(wire, sizeof(wire), wire_size, end));
+      MEMCPY(wire + wire_size, body, end);
+      wire_size += end;
+      ObChunkDatumStore dst("TEST");
+      ASSERT_EQ(OB_SUCCESS, dst.init(0, tenant_id_, ctx_id_, label_, false));
+      ObChunkDatumStoreCompactHeader decoded(dst, &fixed_len, 1);
+      int64_t pos = 0;
+      const int ret = decoded.deserialize(wire, wire_size, pos);
+      if (end < size) {
+        ASSERT_NE(OB_SUCCESS, ret);
+        ASSERT_EQ(nullptr, decoded.compact_buf_);
+        ASSERT_EQ(0, dst.get_row_cnt());
+      } else {
+        ASSERT_EQ(OB_SUCCESS, ret);
+        ASSERT_EQ(wire_size, pos);
+        ObChunkDatumStoreReplayCtx ctx;
+        ASSERT_EQ(OB_SUCCESS, decoded.replay_to(dst, ctx));
+        ASSERT_EQ(1, dst.get_row_cnt());
+      }
+    }
+  }
+}
+
+TEST_F(TestChunkDatumStore, compact_body_rejects_invalid_lengths)
+{
+  const uint32_t fixed_len = 0;
+  for (const bool negative_rows : {false, true}) {
+    char body[32] = {};
+    int64_t size = 0;
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi32(body, sizeof(body), size, 1));
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(body, sizeof(body), size, 1));
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_vi32(body, sizeof(body), size, negative_rows ? -1 : 1));
+    body[size++] = 0;
+    body[size++] = 0;
+    ASSERT_EQ(OB_SUCCESS, serialization::encode_i32(body, sizeof(body), size, (1 << 29) - 1));
+    ObChunkDatumStore dst("TEST");
+    ASSERT_EQ(OB_SUCCESS, dst.init(0, tenant_id_, ctx_id_, label_, false));
+    ObChunkDatumStoreCompactHeader decoded(dst, &fixed_len, 1);
+    int64_t pos = 0;
+    ASSERT_NE(OB_SUCCESS, decoded.deserialize_(body, size, pos));
+    ASSERT_EQ(nullptr, decoded.compact_buf_);
+  }
+  // An otherwise valid empty store must not hide trailing body bytes.
+  char body[32] = {};
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi32(body, sizeof(body), size, -1));
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_vi64(body, sizeof(body), size, 0));
+  body[size++] = 0;
+  ObChunkDatumStore dst("TEST");
+  ASSERT_EQ(OB_SUCCESS, dst.init(0, tenant_id_, ctx_id_, label_, false));
+  ObChunkDatumStoreCompactHeader decoded(dst, &fixed_len, 1);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_DESERIALIZE_ERROR, decoded.deserialize_(body, size, pos));
+}
+
+TEST_F(TestChunkDatumStore, compact_and_legacy_rows_share_a_block)
+{
+  const uint32_t fixed_lens[COLS] = {8, 0, 0};
+  const int64_t values[] = {101, 102, 103, 104};
+  const int32_t short_value = 104;
+  ObObj extended;
+  extended.set_ext(ObActionFlag::OP_NOP);
+  ObChunkDatumStore src("TEST");
+  ASSERT_EQ(OB_SUCCESS, src.init(0, tenant_id_, ctx_id_, label_, false, 0, 4096));
+  for (int64_t i = 0; i < 4; ++i) {
+    ObDatum cells[COLS];
+    cells[0].set_string(reinterpret_cast<const char *>(&values[i]), sizeof(values[i]));
+    cells[1].set_string("abc", 3);
+    cells[2].set_null();
+    if (i == 1) {
+      cells[1].set_string(reinterpret_cast<const char *>(&extended), sizeof(extended));
+      cells[1].set_ext();
+    } else if (i == 2) {
+      cells[1].set_string("", 0);
+    } else if (i == 3) {
+      cells[0].set_string(reinterpret_cast<const char *>(&short_value), sizeof(short_value));
+    }
+    ASSERT_EQ(OB_SUCCESS, src.add_row(cells, COLS, 0, nullptr));
+  }
+  ASSERT_EQ(OB_SUCCESS, src.finish_add_row());
+  ObChunkDatumStoreCompactHeader encoded(src, fixed_lens, COLS);
+  char bytes[4096];
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, encoded.serialize(bytes, sizeof(bytes), pos));
+  ASSERT_EQ(encoded.get_serialize_size(), pos);
+
+  ObChunkDatumStore dst("TEST");
+  ASSERT_EQ(OB_SUCCESS, dst.init(0, tenant_id_, ctx_id_, label_, false, 0, 4096));
+  ObChunkDatumStoreCompactHeader decoded(dst, fixed_lens, COLS);
+  int64_t decode_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, decoded.deserialize(bytes, pos, decode_pos));
+  ASSERT_EQ(pos, decode_pos);
+  ASSERT_EQ(1, decoded.block_descs_.count());
+  ASSERT_EQ(4, decoded.block_descs_.at(0).row_cnt_);
+  ASSERT_EQ(0, dst.get_row_cnt());
+  ObChunkDatumStoreReplayCtx replay_ctx;
+  ASSERT_EQ(OB_SUCCESS, decoded.replay_to(dst, replay_ctx));
+  ASSERT_EQ(4, dst.get_row_cnt());
+  ObChunkDatumStore::Iterator iterator;
+  ASSERT_EQ(OB_SUCCESS, dst.begin(iterator));
+  for (int64_t i = 0; i < 4; ++i) {
+    const ObChunkDatumStore::StoredRow *row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, iterator.get_next_row(row));
+    ASSERT_NE(nullptr, row);
+    const uintptr_t row_start = reinterpret_cast<uintptr_t>(row);
+    const ObDatum *cells = row->cells();
+    for (int64_t col = 0; col < 2; ++col) {
+      const uintptr_t data_start = reinterpret_cast<uintptr_t>(cells[col].ptr_);
+      ASSERT_GE(data_start, row_start + sizeof(*row) + COLS * sizeof(ObDatum));
+      ASSERT_LE(data_start, row_start + row->row_size_);
+      ASSERT_LE(cells[col].len_, row_start + row->row_size_ - data_start);
+    }
+    const char *expected =
+      i == 3 ? reinterpret_cast<const char *>(&short_value) : reinterpret_cast<const char *>(&values[i]);
+    ASSERT_EQ(i == 3 ? sizeof(short_value) : sizeof(values[i]), cells[0].len_);
+    ASSERT_EQ(0, MEMCMP(expected, cells[0].ptr_, cells[0].len_));
+    ASSERT_TRUE(cells[2].is_null());
+    if (i == 1) {
+      ASSERT_EQ(ObDatumDesc::EXT, cells[1].flag_);
+      ASSERT_EQ(sizeof(extended), cells[1].len_);
+      ASSERT_EQ(0, MEMCMP(&extended, cells[1].ptr_, sizeof(extended)));
+    } else if (i == 2) {
+      ASSERT_FALSE(cells[1].is_null());
+      ASSERT_EQ(0, cells[1].len_);
+      ASSERT_EQ(nullptr, cells[2].ptr_);
+    } else {
+      ASSERT_EQ(3, cells[1].len_);
+      ASSERT_EQ(0, MEMCMP("abc", cells[1].ptr_, 3));
+    }
+  }
 }
 
 TEST_F(TestChunkDatumStore, test_append_block)

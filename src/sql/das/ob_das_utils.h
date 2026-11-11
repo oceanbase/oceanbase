@@ -16,6 +16,7 @@
 #include "share/ob_ls_id.h"
 #include "share/location_cache/ob_location_struct.h"
 #include "common/ob_tablet_id.h"
+#include "lib/compress/ob_compress_util.h"
 #include "sql/dtl/ob_dtl_task.h"
 #include "sql/ob_phy_table_location.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
@@ -26,9 +27,13 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObSQLSessionInfo;
+
 class ObDASUtils
 {
 public:
+  static common::ObCompressorType get_rpc_compressor_type(ObSQLSessionInfo &session);
+  static common::ObCompressorType get_rpc_compressor_type(const uint64_t tenant_id);
   static void log_user_error_and_warn(const obrpc::ObRpcResultCode &rcode);
   static int store_warning_msg(const common::ObWarningBuffer &wb, obrpc::ObRpcResultCode &rcode);
   static int get_tablet_loc_by_id(const ObTabletID &tablet_id,

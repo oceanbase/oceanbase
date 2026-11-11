@@ -12,9 +12,13 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_utils.h"
+#include "sql/ob_sql_define.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "pl/ob_pl.h"
+#include "share/ob_cluster_version.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "sql/das/ob_das_vec_define.h"
+#include "sql/session/ob_sql_session_info.h"
 namespace oceanbase
 {
 using namespace common;
@@ -22,6 +26,33 @@ using namespace share;
 using namespace share::schema;
 namespace sql
 {
+ObCompressorType ObDASUtils::get_rpc_compressor_type(ObSQLSessionInfo &session)
+{
+  ObCompressorType compressor_type = NONE_COMPRESSOR;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_4) {
+    if (session.get_rpc_tenant_id() == session.get_effective_tenant_id()) {
+      compressor_type = session.is_enable_das_rpc_compress() ? LZ4_COMPRESSOR : NONE_COMPRESSOR;
+    } else {
+      // The Session cache follows effective_tenant_id. Keep the RPC tenant
+      // lookup for inner/temp-tenant cases where the two tenant ids differ.
+      compressor_type = get_rpc_compressor_type(session.get_rpc_tenant_id());
+    }
+  }
+  return compressor_type;
+}
+
+ObCompressorType ObDASUtils::get_rpc_compressor_type(const uint64_t tenant_id)
+{
+  bool enable_das_rpc_compress = false;
+  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_4) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      enable_das_rpc_compress = (tenant_config->_sql_rpc_opt_flags & ObSqlRpcOptFlags::DAS_RPC_COMPRESS) != 0;
+    }
+  }
+  return enable_das_rpc_compress ? LZ4_COMPRESSOR : NONE_COMPRESSOR;
+}
+
 void ObDASUtils::log_user_error_and_warn(const obrpc::ObRpcResultCode &rcode)
 {
   if (OB_UNLIKELY(OB_SUCCESS != rcode.rcode_)) {

@@ -86,6 +86,29 @@ void finish_check_serialization();
 #define OB_UNIS_ENCODE(obj) OB_UNIS_ENCODE_IF(obj, true)
 #define OB_UNIS_DECODE(obj) OB_UNIS_DECODE_IF(obj, true)
 
+#define OB_UNIS_DECODE_PARSED(OBJECT, VIEW)                                                                            \
+  do {                                                                                                                 \
+    if (OB_FAIL(ret)) {                                                                                                \
+    } else if (OB_FAIL((OBJECT).deserialize_parsed((VIEW), pos))) {                                                    \
+      RPC_WARN("decode parsed record failed", K(ret), K(pos));                                                         \
+    }                                                                                                                  \
+  } while (false)
+
+#define OB_UNIS_DECODE_REQUIRED(OBJECT)                                                                                \
+  do {                                                                                                                 \
+    if (OB_SUCC(ret) && pos < data_len && OB_FAIL(NS_::decode(buf, data_len, pos, (OBJECT)))) {                        \
+      RPC_WARN("decode required field failed", K(ret), K(pos), "name", MSTR(OBJECT));                                  \
+    }                                                                                                                  \
+  } while (false)
+
+#define OB_UNIS_DECODE_EXPECTED(OBJECT, VERSION)                                                                       \
+  do {                                                                                                                 \
+    if (OB_SUCC(ret) && pos < data_len                                                                                 \
+        && OB_FAIL((OBJECT).template deserialize_expected<VERSION>(buf, data_len, pos))) {                             \
+      RPC_WARN("decode required record version failed", K(ret), K(pos));                                               \
+    }                                                                                                                  \
+  } while (false)
+
 // int FUNC(tmp, obj): copy tmp to obj
 #define OB_UNIS_DECODE_AND_FUNC(obj, FUNC)                       \
   if (OB_SUCC(ret)) {                                            \
@@ -289,11 +312,21 @@ struct EmptyUnisStruct
 //-----------------------------------------------------------------------
 #define OB_UNIS_VERSION(VER)                            \
   public: OB_DECLARE_UNIS(,);                           \
+  static constexpr int64_t unis_declared_version()                                                                     \
+  {                                                                                                                    \
+    return UNIS_VERSION;                                                                                               \
+  }                                                                                                                    \
+                                                                                                                       \
 private:                                                \
 const static int64_t UNIS_VERSION = VER
 
 #define OB_UNIS_VERSION_V(VER)                          \
   public: OB_DECLARE_UNIS(virtual,);                    \
+  static constexpr int64_t unis_declared_version()                                                                     \
+  {                                                                                                                    \
+    return UNIS_VERSION;                                                                                               \
+  }                                                                                                                    \
+                                                                                                                       \
 private:                                                \
 const static int64_t UNIS_VERSION = VER
 

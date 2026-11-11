@@ -114,5 +114,23 @@ void ObDASRetryCtrl::task_network_retry_proc(ObDASRef &, ObIDASTaskOp &, bool &n
   need_retry = true;
 }
 
+void ObDASRetryCtrl::ctdef_rebuild_miss_retry_proc(ObDASRef &das_ref, ObIDASTaskOp &task_op, bool &need_retry)
+{
+  // compact serialize opt: the runner could not rebuild the ScanCtDef table_param with the
+  // precise schema version. Resend this task with the ctdef encoded TP_INLINE
+  // (full table_param on wire), so no rebuild is needed on the runner and the
+  // statement stays untouched. The INLINE decode path never re-emits
+  // OB_DAS_CTDEF_REBUILD_MISS, so this cannot loop.
+  task_op.set_force_inline_ctdef(true);
+  need_retry = true;
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di) && di->get_ash_stat().can_start_das_retry()
+      && OB_NOT_NULL(das_ref.get_exec_ctx().get_my_session())) {
+    di->get_ash_stat().record_cur_das_test_start_ts(
+      common::ObTimeUtility::current_time() - task_op.das_task_start_timestamp_, need_retry);
+  }
+  LOG_INFO("[DAS RETRY] resend DAS task with inline scan ctdef after rebuild miss", K(task_op.errcode_));
+}
+
 }  // namespace sql
 }  // namespace oceanbase

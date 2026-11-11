@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_scan_op.h"
+#include "sql/engine/basic/ob_chunk_datum_store_compact_header.h"
+#include "sql/engine/ob_ser_compact_bindings.h"
 #include "sql/das/ob_das_extra_data.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
 #include "sql/das/iter/ob_das_iter_utils.h"
@@ -778,7 +780,7 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
   return ret;
 }
 
-int ObDASScanOp::fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info)
+int ObDASScanOp::fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info, const bool use_compact_das_response)
 {
   int ret = OB_SUCCESS;
   ObDASTaskResultMgr &result_mgr = MTL(ObDataAccessService *)->get_task_res_mgr();
@@ -796,7 +798,8 @@ int ObDASScanOp::fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info)
                                                  remain_row_cnt_,
                                                  scan_ctdef_,
                                                  scan_rtdef_,
-                                                 *this))) {
+                                                 *this,
+                                                 use_compact_das_response))) {
     LOG_WARN("save task result failed", KR(ret), K(task_id_), K(interrupt_info));
   }
   return ret;
@@ -1543,7 +1546,10 @@ ObDASScanResult::ObDASScanResult()
     ssstore_read_bytes_(0),
     base_read_row_cnt_(0),
     delta_read_row_cnt_(0),
-    das_execute_remote_info_()
+    das_execute_remote_info_(),
+    fixed_lens_(nullptr),
+    fixed_lens_cnt_(0),
+    fixed_lens_capacity_(0)
 {
 }
 
@@ -1616,6 +1622,9 @@ void ObDASScanResult::reset()
   output_exprs_ = nullptr;
   eval_ctx_ = nullptr;
   enable_rich_format_ = false;
+  fixed_lens_ = nullptr;
+  fixed_lens_cnt_ = 0;
+  fixed_lens_capacity_ = 0;
 }
 
 int ObDASScanResult::init_result_iter(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx)
@@ -1639,7 +1648,6 @@ int ObDASScanResult::init_result_iter(const ExprFixedArray *output_exprs, ObEval
 
 int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
 {
-  UNUSED(alloc);
   int ret = OB_SUCCESS;
   const ObDASScanOp &scan_op = static_cast<const ObDASScanOp&>(op);
   uint64_t tenant_id = MTL_ID();
@@ -1669,6 +1677,30 @@ int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
       LOG_WARN("init vec row store failed", K(ret));
     }
   }
+  // P4: build the per-column fixed length table for the compact response wire
+  // codec; both ends run init() with the same ctdef output exprs, so the
+  // tables agree without being sent.
+  if (OB_SUCC(ret)) {
+    const ExprFixedArray &result_output = scan_op.get_result_outputs();
+    const int64_t column_cnt = result_output.count();
+    if (fixed_lens_capacity_ < column_cnt) {
+      uint32_t *fixed_lens = static_cast<uint32_t *>(alloc.alloc(sizeof(uint32_t) * column_cnt));
+      if (OB_ISNULL(fixed_lens)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc das scan result fixed lens failed", K(ret), K(column_cnt));
+      } else {
+        fixed_lens_ = fixed_lens;
+        fixed_lens_capacity_ = column_cnt;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      fixed_lens_cnt_ = column_cnt;
+      for (int64_t i = 0; i < fixed_lens_cnt_; ++i) {
+        const ObExpr *expr = result_output.at(i);
+        fixed_lens_[i] = (nullptr != expr && expr->is_fixed_length_data_) ? expr->get_fixed_length() : 0;
+      }
+    }
+  }
 
   return ret;
 }
@@ -1694,15 +1726,84 @@ int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result, ObIDASTaskO
   return OB_SUCCESS;
 }
 
-OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
-                    datum_store_,
-                    enable_rich_format_,
-                    vec_row_store_,
-                    io_read_bytes_,
-                    ssstore_read_bytes_,
-                    base_read_row_cnt_,  // FARM COMPAT WHITELIST
-                    delta_read_row_cnt_, // FARM COMPAT WHITELIST
-                    das_execute_remote_info_);
+OB_DEF_SERIALIZE(ObDASScanResult)
+{
+  int ret = OB_SUCCESS;
+  const bool compact = serialization::using_v4_encoding();
+  if (OB_FAIL(ObIDASTaskResult::serialize(buf, buf_len, pos))) {
+    LOG_WARN("serialize das task result base failed", K(ret));
+  } else if (compact) {
+    ObChunkDatumStoreCompactHeader compact_store(datum_store_, fixed_lens_, fixed_lens_cnt_);
+    OB_UNIS_ENCODE(compact_store);
+  } else {
+    OB_UNIS_ENCODE(datum_store_);
+  }
+  OB_UNIS_ENCODE(enable_rich_format_);
+  if (!compact || enable_rich_format_) { OB_UNIS_ENCODE(vec_row_store_); }
+  LST_DO_CODE(OB_UNIS_ENCODE, io_read_bytes_, ssstore_read_bytes_,
+              base_read_row_cnt_,  // FARM COMPAT WHITELIST
+              delta_read_row_cnt_, // FARM COMPAT WHITELIST
+              das_execute_remote_info_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASScanResult)
+{
+  int ret = OB_SUCCESS;
+  ObChunkDatumStoreCompactHeader compact_store(datum_store_, fixed_lens_, fixed_lens_cnt_);
+  DEF_UNIS_VERSION_DECODE_REC(record, datum_store_, compact_store);
+  if (OB_FAIL(ObIDASTaskResult::deserialize(buf, data_len, pos))) {
+    LOG_WARN("deserialize das task result base failed", K(ret));
+  } else if (!datum_store_.is_inited()
+             && OB_FAIL(datum_store_.init(UINT64_MAX, MTL_ID(), ObCtxIds::DEFAULT_CTX_ID, "DASScanResult", false))) {
+    LOG_WARN("init DAS scan result datum store failed", K(ret));
+  } else {
+    OB_UNIS_DECODE(record);
+    if (OB_FAIL(ret)) {
+    } else if (!record.decoded()) {
+      ret = OB_DESERIALIZE_ERROR;
+    }
+  }
+  const bool compact = record.version() == ObChunkDatumStoreCompactHeader::unis_declared_version();
+  OB_UNIS_DECODE(enable_rich_format_);
+  if (OB_SUCC(ret) && compact && !enable_rich_format_ && compact_store.decoded_column_cnt_ != fixed_lens_cnt_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < compact_store.block_descs_.count(); ++i) {
+      if (compact_store.block_descs_.at(i).row_cnt_ > 0) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("compact DAS scan result column count mismatch", K(ret), K(compact_store.decoded_column_cnt_),
+                 K_(fixed_lens_cnt));
+      }
+    }
+  }
+  if (!compact || enable_rich_format_) { OB_UNIS_DECODE(vec_row_store_); }
+  LST_DO_CODE(OB_UNIS_DECODE, io_read_bytes_, ssstore_read_bytes_, base_read_row_cnt_, delta_read_row_cnt_,
+              das_execute_remote_info_);
+  if (OB_FAIL(ret)) {
+  } else if (compact) {
+    ObChunkDatumStoreReplayCtx replay_ctx;
+    if (OB_FAIL(compact_store.replay_to(datum_store_, replay_ctx))) {
+      LOG_WARN("replay compact DAS scan result datum store failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDASScanResult)
+{
+  int64_t len = ObIDASTaskResult::get_serialize_size();
+  const bool compact = serialization::using_v4_encoding();
+  if (compact) {
+    ObChunkDatumStoreCompactHeader compact_store(datum_store_, fixed_lens_, fixed_lens_cnt_);
+    OB_UNIS_ADD_LEN(compact_store);
+  } else {
+    OB_UNIS_ADD_LEN(datum_store_);
+  }
+  OB_UNIS_ADD_LEN(enable_rich_format_);
+  if (!compact || enable_rich_format_) { OB_UNIS_ADD_LEN(vec_row_store_); }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, io_read_bytes_, ssstore_read_bytes_, base_read_row_cnt_, delta_read_row_cnt_,
+              das_execute_remote_info_);
+  return len;
+}
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {

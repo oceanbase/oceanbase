@@ -78,7 +78,8 @@ public:
       dynamic_frame_(allocator),
       datum_frame_(allocator),
       ser_expr_marks_(allocator),
-      allocator_(allocator)
+      allocator_(allocator),
+      partial_frame_(false)
   {
   }
 
@@ -92,7 +93,8 @@ public:
       dynamic_frame_(allocator),
       datum_frame_(allocator),
       ser_expr_marks_(allocator),
-      allocator_(allocator)
+      allocator_(allocator),
+      partial_frame_(true)
   {
   }
 
@@ -122,8 +124,8 @@ public:
                K_(param_frame),
                K_(dynamic_frame),
                K_(datum_frame),
-               K_(ser_expr_marks));
-
+               K_(ser_expr_marks),
+               K_(partial_frame));
 
 private:
   common::ObArray<ObExpr> _rt_exprs_;
@@ -147,6 +149,9 @@ public:
   // mark need serialize exrps in mark serialization
   common::ObFixedArray<bool, common::ObIAllocator> ser_expr_marks_;
   common::ObIAllocator &allocator_;
+  // Preserve the layout's partial state across decode/copy/forwarding,
+  // independently of whether rt_exprs_ references an external array.
+  bool partial_frame_;
 };
 
 // Empty struct, for unused expr serialization.

@@ -13,6 +13,7 @@
 #include "ob_batch_processor.h"
 #include "sql/ob_sql.h"
 #include "sql/ob_sql_task.h"
+#include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_data_access_service.h"
 #include "observer/omt/ob_tenant.h"
@@ -96,6 +97,8 @@ int ObBatchP::process()
           case LOOKUP_DAS_BATCH_REQ1:
             // go through
           case LOOKUP_DAS_BATCH_REQ2:
+            set_result_compress_type(
+                sql::ObDASUtils::get_rpc_compressor_type(MTL_ID()));
             das_batch_cnt++;
             handle_das_req(msg_type, buf + pos, req->size_ - (int32_t)pos);
             break;

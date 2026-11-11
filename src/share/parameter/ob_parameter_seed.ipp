@@ -3510,3 +3510,10 @@ DEF_INT(_force_das_scan_row_count_threshold, OB_TENANT_PARAMETER, "0", "[0,)",
         "When the estimated scan row count of a table is less than this threshold,"
         "the optimizer will force data scanning through DAS. Range:[0, +∞]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_INT(_sql_rpc_opt_flags, OB_TENANT_PARAMETER, "7",
+        "SQL RPC optimization bitmap. Bit 0: compact expression serialization; "
+        "bit 1: compact session serialization; bit 2: DAS RPC compression. "
+        "A set bit enables the corresponding optimization. The value 0 disables all optimizations. "
+        "Bits 3-62 are reserved.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

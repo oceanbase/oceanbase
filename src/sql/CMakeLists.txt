@@ -63,6 +63,8 @@ ob_set_subtarget(ob_sql das
   das/ob_das_ref.cpp
   das/ob_das_rpc_processor.cpp
   das/ob_das_location_router.cpp
+  das/ob_das_scan_ctdef_compact.cpp
+  das/ob_das_ser_compact.cpp
   das/ob_das_scan_op.cpp
   das/ob_das_task.cpp
   das/ob_das_update_op.cpp
@@ -219,6 +221,7 @@ ob_set_subtarget(ob_sql engine_basic
   engine/basic/ob_temp_row_store.cpp
   engine/basic/ob_temp_column_store.cpp
   engine/basic/ob_chunk_datum_store.cpp
+  engine/basic/ob_chunk_datum_store_compact_header.cpp
   engine/basic/ob_chunk_row_store.cpp
   engine/basic/ob_count_op.cpp
   engine/basic/ob_expr_values_op.cpp
@@ -366,6 +369,7 @@ ob_set_subtarget(ob_sql engine_dml
 ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_batch_eval_util.cpp
   engine/expr/ob_expr.cpp
+  engine/expr/ob_expr_ser_compact.cpp
   engine/expr/ob_expr_acos.cpp
   engine/expr/ob_expr_symmetric_encrypt.cpp
   engine/expr/ob_expr_agg_param_list.cpp

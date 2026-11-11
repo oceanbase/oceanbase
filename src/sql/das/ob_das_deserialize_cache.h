@@ -81,15 +81,17 @@ struct ObDasCtdefExprCacheVal
 {
   explicit ObDasCtdefExprCacheVal(common::ObIAllocator &allocator)
     : rt_exprs_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator)),
-      ctdefs_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator))
+  ctdefs_(common::OB_MALLOC_NORMAL_BLOCK_SIZE, common::ModulePageAllocator(allocator)),
+    ser_compact_state_(SerCompactState::UNKNOWN)
   {  }
 
   ~ObDasCtdefExprCacheVal() = default;
 
-  TO_STRING_KV("rt_expr_cnt", rt_exprs_.count(), "ctdef_cnt", ctdefs_.count());
+  TO_STRING_KV("rt_expr_cnt", rt_exprs_.count(), "ctdef_cnt", ctdefs_.count(), K_(ser_compact_state));
 
   common::ObArray<ObExpr> rt_exprs_;
   common::ObSEArray<const ObDASBaseCtDef*, 2> ctdefs_;
+  SerCompactState ser_compact_state_;
 };
 
 struct ObDasDeserializeCacheKey : public ObILibCacheKey
@@ -104,7 +106,7 @@ struct ObDasDeserializeCacheKey : public ObILibCacheKey
   ObDasDeserializeCacheKey()
     : ObILibCacheKey(ObLibCacheNameSpace::NS_DAS_DESER),
       type_(CacheType::INVALID),
-      key_()
+      key_(), layout_key_()
   {  }
 
   virtual int deep_copy(common::ObIAllocator &allocator, const ObILibCacheKey &other) override;
@@ -112,11 +114,12 @@ struct ObDasDeserializeCacheKey : public ObILibCacheKey
   virtual bool is_equal(const ObILibCacheKey &other) const override;
 
   TO_STRING_KV("type", static_cast<int>(type_),
-               "key_len", key_.length(),
+                "key_len", key_.length(), "layout_key_len", layout_key_.length(),
                K_(namespace));
 
   CacheType type_;
   common::ObString key_;
+  common::ObString layout_key_;
 };
 
 class ObDasDeserializeCacheNode : public ObILibCacheNode

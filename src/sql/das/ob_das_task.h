@@ -31,6 +31,10 @@ namespace oceanbase
 namespace common
 {
 class ObNewRowIterator;
+namespace serialization
+{
+class UnisRecordView;
+}
 }  // namespace common
 namespace sql
 {
@@ -38,6 +42,7 @@ class ObDASTaskArg;
 class ObIDASTaskResult;
 class ObDASExtraData;
 class ObExprFrameInfo;
+using common::serialization::UnisRecordView;
 class ObDASScanOp;
 class ObDASTaskFactory;
 class ObDasAggregatedTask;
@@ -136,6 +141,9 @@ public:
       detectable_id_(),
       tsc_monitor_info_(nullptr),
       stmt_type_(0),
+      force_inline_ctdef_(false), ser_compact_state_(SerCompactState::UNKNOWN),
+    pending_ctdef_expr_begin_(0), pending_ctdef_expr_len_(0), pending_ctdef_layout_(),
+    pending_ctdef_expr_cache_miss_(false),
       ctdef_cache_obj_guard_(DAS_DESER_HANDLE),
       session_cache_obj_guard_(DAS_DESER_HANDLE)
   {
@@ -148,30 +156,36 @@ public:
     return g_remote_info;
   }
   TO_STRING_EMPTY();
+  bool is_serialize_compact_opt_enabled() const
+  {
+    return SerCompactState::V4 == ser_compact_state_;
+  }
   int serialize_cacheable_ctdef_expr(char *buf, int64_t buf_len, int64_t &pos) const;
-  int deserialize_cacheable_ctdef_expr(const char *buf, int64_t data_len, int64_t &pos, ObEvalCtx *&eval_ctx);
+  int deserialize_cacheable_ctdef_expr(const char *buf, int64_t data_len, int64_t &pos, ObEvalCtx *&eval_ctx,
+                                       ObIArray<ObExpr> *&active_exprs, SerCompactState &ser_compact_state);
   int64_t get_cacheable_ctdef_expr_serialize_size() const;
   int decode_cacheable_ctdef_expr(const char *buf,
                                   int64_t data_len,
                                   int64_t &pos,
                                   ObIAllocator &ctdef_alloc,
-                                  ObIArray<ObExpr> &exprs);
+                                  ObIArray<ObExpr> &exprs, SerCompactState &ser_compact_state,
+                                  const UnisRecordView *first_record = nullptr);
   void release_cached_ctdef_obj();
   void cleanup_deser_cache_session();
   static int reserve_len_prefix(char *buf, const int64_t buf_len, int64_t &pos);
   static int fill_len_prefix(char *buf, const int64_t len_pos, const int64_t blob_len);
-  static int serialize_session_blob(ObSQLSessionInfo &session,
-                                    bool use_split_session,
-                                    char *buf,
-                                    int64_t buf_len,
-                                    int64_t &pos);
+  int64_t get_serialize_body_size() const;
   static int deser_ctdef_expr_with_cache(ObDASRemoteInfo &remote_info,
                                          const char *buf,
                                          int64_t data_len,
                                          int64_t &pos,
                                          int64_t ctdef_expr_begin,
                                          int64_t ctdef_expr_len,
-                                         ObIArray<ObExpr> *&active_exprs);
+                                         ObIArray<ObExpr> *&active_exprs, bool &cache_hit,
+                                         SerCompactState &ser_compact_state, const common::ObString &layout_key,
+                                         const UnisRecordView *first_record);
+  static int commit_ctdef_expr_cache(ObDASRemoteInfo &remote_info, const char *buf, int64_t ctdef_expr_begin,
+                                     int64_t ctdef_expr_len);
   static int deser_session_with_cache(ObDASRemoteInfo &remote_info,
                                       ObDesExecContext &des_exec_ctx,
                                       uint64_t tenant_id,
@@ -200,7 +214,13 @@ public:
       uint64_t need_subschema_ctx_              : 1;
       uint64_t has_attach_ctdef_                : 1;  // placeholder from master, unused
       uint64_t use_deser_cache_format_          : 1;  // FARM COMPAT WHITELIST
-      uint64_t reserved_                        : 57;
+      uint64_t compact_session_                 : 1;
+      // Common DAS requests serialize the same tx in ObDASRemoteInfo::trans_desc_ and Session::tx_desc_.
+      // Compact mode can reuse the outer tx bytes to omit the Session copy for non-parallel submission.
+      // The receiver decodes those bytes again into a separate Session tx_desc_.
+      uint64_t reuse_outer_tx_for_session_      : 1;
+      // Keep bits 9-63 reserved, including the retired compact format markers.
+      uint64_t reserved_                        : 55;
     };
   };
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
@@ -211,6 +231,15 @@ public:
   ObDetectableId detectable_id_;
   ObTSCMonitorInfo *tsc_monitor_info_;
   uint64_t stmt_type_;
+  // runtime-only (never serialized): when true, scan ctdefs in this request are
+  // encoded TP_INLINE with full table_param (compact serialize opt force-inline resend)
+  bool force_inline_ctdef_;
+  // Sender uses the CG snapshot; receiver derives this state from its records.
+  SerCompactState ser_compact_state_;
+  int64_t pending_ctdef_expr_begin_;
+  int64_t pending_ctdef_expr_len_;
+  common::ObString pending_ctdef_layout_;
+  bool pending_ctdef_expr_cache_miss_;
   ObDasExecuteLocalInfo *das_execute_local_info_;
   ObCacheObjGuard ctdef_cache_obj_guard_;
   ObCacheObjGuard session_cache_obj_guard_;
@@ -284,8 +313,9 @@ public:
     UNUSED(memory_limit);
     return OB_NOT_IMPLEMENT;
   }
-  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info)
+  virtual int fill_extra_result(const ObDASTCBInterruptInfo &interrupt_info, const bool use_compact_das_response)
   {
+    UNUSED(use_compact_das_response);
     return common::OB_NOT_IMPLEMENT;
   }
   virtual int init_task_info(uint32_t row_extend_size) = 0;
@@ -341,6 +371,14 @@ public:
   void set_write_branch_id(const int16_t branch_id) { write_branch_id_ = branch_id; }
   bool is_local_task() const { return task_started_; }
   void set_can_part_retry(const bool flag) { can_part_retry_ = flag; }
+  void set_force_inline_ctdef(const bool flag)
+  {
+    force_inline_ctdef_ = flag;
+  }
+  bool is_force_inline_ctdef() const
+  {
+    return force_inline_ctdef_;
+  }
   bool can_part_retry() const { return can_part_retry_; }
   bool is_in_retry() const { return in_part_retry_ || in_stmt_retry_; }
   bool is_in_part_retry() const { return in_part_retry_; }
@@ -400,7 +438,10 @@ protected:
       /*the first 16 bits are static flags*/
       uint16_t can_part_retry_   : 1;
       uint16_t global_lookup_generated_task_ : 1;
-      uint16_t flag_reserved_    : 14;
+      // this resend must serialize scan ctdefs with full table_param (TP_INLINE):
+      // set when the runner reported OB_DAS_CTDEF_REBUILD_MISS (compact serialize opt)
+      uint16_t force_inline_ctdef_ : 1;
+      uint16_t flag_reserved_ : 13;
       /*the last 16 bits are status masks*/
       uint16_t task_started_     : 1;
       uint16_t in_part_retry_    : 1;
@@ -448,6 +489,8 @@ public:
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;
+
+bool use_compact_das_response(const ObDASRemoteInfo &remote_info, const common::ObIArray<ObIDASTaskOp *> &task_ops);
 
 class ObIDASTaskResult
 {
@@ -574,6 +617,14 @@ public:
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   void set_das_factory(ObDASTaskFactory *das_factory) { das_factory_ = das_factory; };
+  void set_compact_das_response(bool use_compact_das_response)
+  {
+    use_compact_das_response_ = use_compact_das_response;
+  }
+  bool use_compact_das_response() const
+  {
+    return use_compact_das_response_;
+  }
   TO_STRING_KV(K_(has_more),
                K_(ctrl_svr),
                K_(runner_svr),
@@ -588,6 +639,7 @@ private:
   obrpc::ObRpcResultCode rcode_; //返回的错误信息
   transaction::ObTxExecResult trans_result_;
   ObDASTaskFactory *das_factory_;  // no need to serialize
+  bool use_compact_das_response_ = false; // runtime-only, never serialized
 };
 
 template <typename T>
@@ -628,11 +680,14 @@ struct DASCtEncoder
       SQL_DAS_LOG(WARN, "decode idx failed", K(ret), K(idx));
     } else if (OB_UNLIKELY(common::OB_INVALID_INDEX == idx)) {
       val = nullptr;
-    } else if (OB_UNLIKELY(idx < 0) || OB_UNLIKELY(idx >= remote_info->ctdefs_.count())) {
-      ret = common::OB_ERR_UNEXPECTED;
-      SQL_DAS_LOG(WARN, "idx is invalid", K(ret), K(idx), K(remote_info->ctdefs_.count()));
     } else {
-      val = static_cast<const T *>(remote_info->ctdefs_.at(idx));
+      const common::ObIArray<const ObDASBaseCtDef *> &ctdefs = remote_info->ctdefs_;
+      if (OB_UNLIKELY(idx < 0) || OB_UNLIKELY(idx >= ctdefs.count())) {
+        ret = common::OB_ERR_UNEXPECTED;
+        SQL_DAS_LOG(WARN, "idx is invalid", K(ret), K(idx), K(ctdefs.count()));
+      } else {
+        val = static_cast<const T *>(ctdefs.at(idx));
+      }
     }
     return ret;
   }
@@ -771,6 +826,18 @@ public:
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   bool has_more() { return has_more_; }
   int64_t get_task_id() const { return task_id_; }
+  void set_enable_rich_format(const bool enable)
+  {
+    enable_rich_format_ = enable;
+  }
+  void set_compact_das_response(const bool use_compact_das_response)
+  {
+    use_compact_das_response_ = use_compact_das_response;
+  }
+  bool use_compact_das_response() const
+  {
+    return use_compact_das_response_;
+  }
   TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store),
                K_(io_read_bytes), K_(ssstore_read_bytes),
                K_(base_read_row_cnt), K_(delta_read_row_cnt));
@@ -781,6 +848,8 @@ private:
   bool has_more_;
   bool enable_rich_format_;
   ObTempRowStore vec_row_store_;
+  bool use_compact_das_response_;
+
 public:
   int64_t io_read_bytes_;
   int64_t ssstore_read_bytes_;
@@ -805,5 +874,19 @@ private:
   int64_t task_id_;
 };
 }  // namespace sql
+
+namespace common
+{
+namespace serialization
+{
+template <>
+struct EnumEncoder<false, const sql::ObDASBaseCtDef *> : sql::DASCtEncoder<sql::ObDASBaseCtDef>
+{};
+
+template <>
+struct EnumEncoder<false, sql::ObDASBaseRtDef *> : sql::DASRtEncoder<sql::ObDASBaseRtDef>
+{};
+} // namespace serialization
+} // namespace common
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_TASK_H_ */

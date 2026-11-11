@@ -90,6 +90,7 @@ int ObTask::load_code() {
 
 OB_DEF_SERIALIZE(ObTask)
 {
+  serialization::SerCompactEncodingGuard legacy_guard(false);
   int ret = OB_SUCCESS;
   if (OB_I(t1) OB_ISNULL(exec_ctx_) || OB_ISNULL(ser_phy_plan_)) {
     ret = OB_NOT_INIT;
@@ -105,6 +106,7 @@ OB_DEF_SERIALIZE(ObTask)
 
   // 序列化Task的核心部分到远端：sub plan tree
   if (OB_SUCC(ret)) {
+    serialization::SerCompactEncodingGuard compact_guard(ser_phy_plan_->is_serialize_compact_opt_enabled());
     const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
     if (OB_ISNULL(root_spec_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -129,6 +131,7 @@ OB_DEF_SERIALIZE(ObTask)
 
 OB_DEF_DESERIALIZE(ObTask)
 {
+  serialization::CompactExprPtrGuard legacy_ptr_guard(false);
   int ret = OB_SUCCESS;
   if (OB_I(t1) OB_ISNULL(exec_ctx_) || OB_ISNULL(des_phy_plan_)) {
     ret = OB_NOT_INIT;
@@ -159,10 +162,13 @@ OB_DEF_DESERIALIZE(ObTask)
     LST_DO_CODE(OB_UNIS_DECODE, ob_task_id_);
 
     if (OB_SUCC(ret)) {
+      SerCompactState frame_state = SerCompactState::UNKNOWN;
+      serialization::CompactExprPtrGuard expr_ptr_guard(false);
       const ObExprFrameInfo *frame_info = &des_phy_plan_->get_expr_frame_info();
       if (OB_FAIL(ObPxTreeSerializer::deserialize_expr_frame_info<true>(
-          buf, data_len, pos, *exec_ctx_, *const_cast<ObExprFrameInfo *>(frame_info)))) {
+          buf, data_len, pos, *exec_ctx_, *frame_info, SerCompactState::UNKNOWN, &frame_state, des_phy_plan_))) {
         LOG_WARN("failed to serialize rt expr", K(ret));
+      } else if (FALSE_IT(expr_ptr_guard.set(SerCompactState::V4 == frame_state))) {
       } else if (OB_FAIL(ObPxTreeSerializer::deserialize_tree(
           buf, data_len, pos, *des_phy_plan_, root_spec_))) {
         LOG_WARN("fail deserialize tree", K(ret));
@@ -196,6 +202,7 @@ OB_DEF_DESERIALIZE(ObTask)
 
 OB_DEF_SERIALIZE_SIZE(ObTask)
 {
+  serialization::SerCompactEncodingGuard legacy_guard(false);
   int64_t len = 0;
   if (OB_I(t1) OB_ISNULL(exec_ctx_) || OB_ISNULL(ser_phy_plan_)) {
     LOG_ERROR_RET(OB_NOT_INIT, "task not init", K_(exec_ctx), K_(ser_phy_plan));
@@ -211,6 +218,7 @@ OB_DEF_SERIALIZE_SIZE(ObTask)
     if (OB_ISNULL(root_spec_)) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "unexpected status: op root is null");
     } else {
+      serialization::SerCompactEncodingGuard compact_guard(ser_phy_plan_->is_serialize_compact_opt_enabled());
       const ObExprFrameInfo *frame_info = &ser_phy_plan_->get_expr_frame_info();
       len += ObPxTreeSerializer::get_serialize_expr_frame_info_size<true>(*exec_ctx_,
                                     *const_cast<ObExprFrameInfo *>(frame_info));

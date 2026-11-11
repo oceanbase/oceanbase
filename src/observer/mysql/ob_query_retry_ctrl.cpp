@@ -1218,6 +1218,11 @@ int ObQueryRetryCtrl::init()
   ERR_RETRY_FUNC("SCHEMA",   OB_OBJECT_NAME_NOT_EXIST,           schema_error_proc,          empty_proc,                                           nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_OBJECT_NAME_EXIST,               schema_error_proc,          empty_proc,                                           nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_EAGAIN,                   schema_error_proc,          inner_schema_error_proc,                              nullptr);
+  // compact serialize opt: runner 无法按精确版本重建 ScanCtDef table_param 时返回该码；
+  // DAS 分区级重试重发该 task 并以 TP_INLINE 全量序列化 table_param（语句无感），
+  // 若非 DAS 可重试上下文则按 schema_error_proc 走语句级重试兜底。
+  ERR_RETRY_FUNC("SCHEMA", OB_DAS_CTDEF_REBUILD_MISS, schema_error_proc, inner_schema_error_proc,
+                 ObDASRetryCtrl::ctdef_rebuild_miss_retry_proc);
   ERR_RETRY_FUNC("SCHEMA",   OB_SCHEMA_NOT_UPTODATE,             schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_PARALLEL_DDL_CONFLICT,       schema_error_proc,          inner_schema_error_proc,                              nullptr);
   ERR_RETRY_FUNC("SCHEMA",   OB_ERR_DDL_RESOURCE_NOT_ENOUGH,     long_wait_retry_proc,       long_wait_retry_proc,                                 nullptr);

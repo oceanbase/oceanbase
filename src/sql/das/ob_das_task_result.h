@@ -107,6 +107,7 @@ public:
   bool is_exiting_; //is_exiting_ = true表示该TCB正在退出，持有的结果已经失效，不能再访问
   bool is_vectorized_;
   bool enable_rich_format_;
+  bool use_compact_das_response_;
   int64_t read_rows_;
   int64_t max_batch_size_;
   const ObChunkDatumStore::StoredRow *stored_row_;
@@ -321,7 +322,8 @@ public:
                        int64_t read_rows,
                        const ObDASScanCtDef *scan_ctdef,
                        ObDASScanRtDef *scan_rtdef,
-                       ObDASScanOp &scan_op);
+                       ObDASScanOp &scan_op,
+                       bool use_compact_das_response);
   int erase_task_result(int64_t task_id, bool need_unreg_dm);
   //从中间结果管理器中获取一个block大小的结果，默认为2M大小
   int iterator_task_result(ObDASDataFetchRes &res,

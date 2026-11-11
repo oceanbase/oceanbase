@@ -657,6 +657,7 @@ void ObChunkDatumStore::reset()
   max_blk_size_ = default_block_size_;
   n_blocks_ = 0;
   row_cnt_ = 0;
+  col_count_ = -1;
 }
 
 void *ObChunkDatumStore::alloc_blk_mem(const int64_t size, const bool for_iterator)
@@ -1565,6 +1566,10 @@ int ObChunkDatumStore::inner_add_batch(const ObDatum **datums,
   }
   if (OB_SUCC(ret)) {
     row_cnt_ += size;
+    // keep col_count_ in line with every add_row variant: the DAS compact wire
+    // codec needs it to size the null bitmap and the datum array, and its
+    // header guard rejects stores that carry blocks with col_count_ <= 0
+    if (OB_UNLIKELY(col_count_ < 0) && size > 0) { col_count_ = col_cnt; }
   }
 
 #ifndef NDEBUG

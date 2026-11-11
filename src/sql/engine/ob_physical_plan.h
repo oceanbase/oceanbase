@@ -18,6 +18,7 @@
 #include "lib/allocator/ob_mod_define.h"
 #include "common/ob_field.h"
 #include "sql/ob_sql_context.h"
+#include "sql/ob_sql_define.h"
 #include "sql/engine/ob_physical_plan_ctx.h"
 #include "sql/engine/expr/ob_expr_operator_factory.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
@@ -560,6 +561,17 @@ public:
   virtual int update_cache_obj_stat(ObILibCacheCtx &ctx);
   void calc_whether_need_trans();
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
+  static constexpr int64_t SERIALIZE_COMPACT_OPT = 1LL << 0;
+  int64_t get_serialize_compact_opt_flags() const { return serialize_compact_opt_flags_; }
+  void set_serialize_compact_opt_flags(int64_t flags) { serialize_compact_opt_flags_ = flags; }
+  bool is_serialize_compact_opt_enabled() const
+  {
+    return 0 != (serialize_compact_opt_flags_ & SERIALIZE_COMPACT_OPT);
+  }
+  bool is_compact_session_serialize() const
+  {
+    return 0 != (serialize_compact_opt_flags_ & ObSqlRpcOptFlags::COMPACT_SESSION_SERIALIZE);
+  }
   inline void set_min_cluster_version(uint64_t curr_cluster_version)
   {
     if (curr_cluster_version > min_cluster_version_) {
@@ -793,6 +805,7 @@ public:
   bool is_packed_;
   bool has_instead_of_trigger_; // mask if has instead of trigger on view
   uint64_t min_cluster_version_; // record min cluster version in code gen
+  int64_t serialize_compact_opt_flags_; // CG snapshot; bit 0 enables compact serialize opt.
   bool need_record_plan_info_;
   bool enable_append_; // for APPEND hint
   uint64_t append_table_id_;

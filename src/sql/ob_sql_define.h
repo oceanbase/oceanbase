@@ -483,6 +483,15 @@ enum class ObParallelDASOption {
   MAX_VALUE
 };
 
+struct ObSqlRpcOptFlags
+{
+  // Bit assignments for _sql_rpc_opt_flags must remain stable.
+  // Bits 3-62 are reserved; bit 63 is the sign bit of the int64 parameter.
+  static constexpr uint64_t COMPACT_EXPR_SERIALIZE = 1ULL << 0;
+  static constexpr uint64_t COMPACT_SESSION_SERIALIZE = 1ULL << 1;
+  static constexpr uint64_t DAS_RPC_COMPRESS = 1ULL << 2;
+};
+
 enum OrderingFlag
 {
   NOT_MATCH = 0,

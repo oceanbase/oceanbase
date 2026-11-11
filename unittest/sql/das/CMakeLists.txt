@@ -1,0 +1,6 @@
+sql_unittest(test_das_ctdef_serialize)
+target_link_options(test_das_ctdef_serialize PRIVATE -Wl,--allow-shlib-undefined)
+sql_unittest(test_das_scan_ctdef_rebuild)
+target_link_options(test_das_scan_ctdef_rebuild PRIVATE -Wl,--allow-shlib-undefined)
+sql_unittest(test_das_resp_compact)
+target_link_options(test_das_resp_compact PRIVATE -Wl,--allow-shlib-undefined)

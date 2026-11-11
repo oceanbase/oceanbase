@@ -101,6 +101,35 @@ OB_DEF_SERIALIZE(ObDtlLinkedBuffer42x)
   return ret;
 }
 
+OB_DEF_SERIALIZE_SIZE(ObDtlLinkedBuffer42x)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN(size_);
+  len += size_;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+    is_data_msg_,
+    seq_no_,
+    tenant_id_,
+    is_eof_,
+    timeout_ts_,
+    msg_type_,
+    flags_,
+    dfo_key_,
+    use_interm_result_,
+    batch_id_,
+    batch_info_valid_);
+  if (batch_info_valid_) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, batch_info_);
+  }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, dfo_id_, sqc_id_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, enable_channel_sync_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, register_dm_info_);
+  if (seq_no_ == 1) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, op_info_);
+  }
+  return len;
+}
+
 int ObDtlLinkedBuffer42x::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   using namespace oceanbase::common;

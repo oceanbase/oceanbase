@@ -63,6 +63,16 @@ public:
   common::ObFixedArray<uint64_t, common::ObIAllocator> *last_refresh_scns_;
 };
 
+struct ObDASExprFrameLayout;
+
+int encode_expr_frame_tail(char *buf, int64_t buf_len, int64_t &pos, ObExecContext &ctx,
+                           const ObExprFrameInfo &info, bool compact, bool include_plan_part = true);
+int decode_expr_frame_data(const char *buf, int64_t data_len, int64_t &pos, ObExecContext &ctx,
+                           const ObExprFrameInfo &info, const ObDASExprFrameLayout &layout, bool compact,
+                           bool include_plan_part = true);
+int64_t expr_frame_tail_size(ObExecContext &ctx, const ObExprFrameInfo &info, bool compact,
+                             bool include_plan_part = true);
+
 class ObBaseOrderMap
 {
 public:
@@ -499,13 +509,18 @@ public:
                                        const ObIArray<ObFrameInfo> &all_frame,
                                        char **frames,
                                        const int64_t frame_cnt,
-                                       bool no_ser_data = false);
+                                       bool no_ser_data = false,
+                                       bool compact_vector_header = false);
   template <bool DESERIALIZE_PLAN_PART>
+  // LEGACY allows compact layout holes with a legacy tail; UNKNOWN infers a uniform record family.
   static int deserialize_expr_frame_info(const char *buf,
                                        int64_t buf_len,
                                        int64_t &pos,
                                        ObExecContext &ctx,
-                                       const ObExprFrameInfo &expr_frame_info);
+                                       const ObExprFrameInfo &expr_frame_info,
+    common::serialization::SerCompactState expected_state = common::serialization::SerCompactState::LEGACY,
+    common::serialization::SerCompactState *ser_compact_state = nullptr,
+    ObPhysicalPlan *receiving_plan = nullptr);
   template <bool DESERIALIZE_PLAN_PART>
   static int deserialize_frame_info(const char *buf,
                                       int64_t buf_len,
@@ -515,7 +530,8 @@ public:
                                       ObIArray<char *> *char_ptrs_,
                                       char **&frames,
                                       int64_t &frame_cnt,
-                                      bool no_deser_data = false);
+                                      bool no_deser_data = false,
+                                      bool compact_vector_header = false);
   template <bool SERIALIZE_PLAN_PART>
   static int64_t get_serialize_expr_frame_info_size(
                                       ObExecContext &ctx,
@@ -525,7 +541,8 @@ public:
                                        const ObIArray<ObFrameInfo> &all_frame,
                                        char **frames,
                                        const int64_t frame_cnt,
-                                       bool no_ser_data = false);
+                                       bool no_ser_data = false,
+                                       bool compact_vector_header = false);
 };
 
 class ObPxChannelUtil

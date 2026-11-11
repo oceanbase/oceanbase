@@ -102,6 +102,38 @@ OB_DEF_SERIALIZE(ObTableScanCtDef42x)
   return ret;
 }
 
+OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef42x)
+{
+  int64_t len = 0;
+  bool has_lookup = (lookup_ctdef_ != nullptr);
+  bool is_new_query_range = scan_flags_.is_new_query_range();
+  OB_UNIS_ADD_LEN(pre_query_range_);
+  OB_UNIS_ADD_LEN(flashback_item_.need_scn_);
+  OB_UNIS_ADD_LEN(flashback_item_.flashback_query_expr_);
+  OB_UNIS_ADD_LEN(flashback_item_.flashback_query_type_);
+  OB_UNIS_ADD_LEN(bnlj_param_idxs_);
+  OB_UNIS_ADD_LEN(scan_flags_);
+  OB_UNIS_ADD_LEN(scan_ctdef_);
+  OB_UNIS_ADD_LEN(has_lookup);
+  if (has_lookup) {
+    OB_UNIS_ADD_LEN(*lookup_ctdef_);
+    OB_UNIS_ADD_LEN(*lookup_loc_meta_);
+  }
+  bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
+  OB_UNIS_ADD_LEN(has_dppr_tbl);
+  if (has_dppr_tbl) {
+    OB_UNIS_ADD_LEN(*das_dppr_tbl_);
+  }
+  OB_UNIS_ADD_LEN(calc_part_id_expr_);
+  OB_UNIS_ADD_LEN(global_index_rowkey_exprs_);
+  OB_UNIS_ADD_LEN(flashback_item_.fq_read_tx_uncommitted_);
+  if (is_new_query_range) {
+    OB_UNIS_ADD_LEN(pre_range_graph_);
+  }
+  OB_UNIS_ADD_LEN(flags_);
+  return len;
+}
+
 int ObTableScanCtDef42x::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;

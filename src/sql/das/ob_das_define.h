@@ -19,6 +19,7 @@
 #include "common/ob_tablet_id.h"
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
+#include "share/ob_cluster_version.h"
 
 #define DAS_SCAN_OP(_task_op) \
     (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() && \
@@ -40,6 +41,11 @@ namespace oceanbase
 {
 namespace sql
 {
+using common::serialization::SerCompactState;
+// Development-only capability gate. Replace with the official version
+// assigned by the release owner before merge.
+static const uint64_t DAS_REMOTE_INFO_V4_MIN_VERSION = CLUSTER_VERSION_4_4_2_4;
+
 class ObDASTaskArg;
 class ObIDASTaskOp;
 class ObExecContext;

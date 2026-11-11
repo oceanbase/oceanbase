@@ -24,6 +24,8 @@ namespace oceanbase
 namespace sql
 {
 
+class ObPhysicalPlan;
+
 template <class T>
 class ObSliceHashAllocer
 {
@@ -137,7 +139,8 @@ public:
   int64_t gen_lookup_batch_request_id() { return ATOMIC_AAF(&next_lookup_batch_request_id_, 1); }
 private:
   bool should_use_deser_cache_format(const ObIArray<ObIDASTaskOp*> &task_ops,
-                                     ObSQLSessionInfo *session) const;
+                                     ObSQLSessionInfo *session,
+                                     const ObPhysicalPlan *plan) const;
   int execute_dist_das_task(ObDASRef &das_ref,
       ObDasAggregatedTask &task_ops, bool async = true);
   int try_post_lookup_batch_task(ObDASRef &das_ref,

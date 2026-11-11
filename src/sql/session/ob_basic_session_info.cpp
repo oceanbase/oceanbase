@@ -39,6 +39,18 @@ namespace oceanbase
 namespace sql
 {
 
+ObSessionSerializeModeGuard::ObSessionSerializeModeGuard(
+    const ObSessionSerializeMode &mode)
+  : old_mode_(current_mode())
+{
+  current_mode() = mode;
+}
+
+ObSessionSerializeModeGuard::~ObSessionSerializeModeGuard()
+{
+  current_mode() = old_mode_;
+}
+
 ObBasicSessionInfo::SysVarsCacheData ObBasicSessionInfo::SysVarsCache::base_data_;
 
 ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
@@ -5230,16 +5242,30 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
   return len;
 }
 
+int64_t ObBasicSessionInfo::get_serialize_version_() const
+{
+  int64_t version = UNIS_VERSION;
+  if (is_compact_session_serialize()) {
+    version = COMPACT_SESSION_VERSION;
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    version = 1;
+  }
+  return version;
+}
+
+bool ObBasicSessionInfo::need_serialize_pc_config_env_(
+    const bool compact_session_serialize) const
+{
+  return compact_session_serialize
+      && OB_NOT_NULL(cur_phy_plan_)
+      && cur_phy_plan_->contain_pl_udf_or_trigger();
+}
+
 int ObBasicSessionInfo::serialize(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
-      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
-    const int64_t compat_version = 1;
-    OB_UNIS_ENCODE(compat_version);
-  } else {
-    OB_UNIS_ENCODE(UNIS_VERSION);
-  }
+  OB_UNIS_ENCODE(get_serialize_version_());
   if (OB_SUCC(ret)) {
     int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
     int64_t pos_bak = (pos += size_nbytes);
@@ -5260,27 +5286,33 @@ int ObBasicSessionInfo::serialize(char *buf, int64_t buf_len, int64_t &pos) cons
 int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  const bool compact_session_serialize = is_compact_session_serialize();
+  const bool has_pc_config_env =
+      need_serialize_pc_config_env_(compact_session_serialize);
   ObTimeZoneInfo tmp_tz_info;//为了兼容老版本，创建临时time zone info 占位
   // To be compatible with old version which store sql_mode and compatibility mode in ObSQLModeManager;
   int64_t compatibility_mode_index = 0;
-  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+  if (!compact_session_serialize
+      && OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
     LOG_WARN("convert compatibility mode to index failed", K(ret));
   }
-  bool has_tx_desc = tx_desc_ != NULL;
+  const bool has_tx_desc = tx_desc_ != NULL
+      && is_tx_desc_inline_serialize();
   OB_UNIS_ENCODE(has_tx_desc);
   if (has_tx_desc) {
     OB_UNIS_ENCODE(*tx_desc_);
     LOG_TRACE("serialize txDesc", KPC_(tx_desc));
   }
+  OB_UNIS_ENCODE(consistency_level_);
+  OB_UNIS_ENCODE_IF(compatibility_mode_index, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(tmp_tz_info, !compact_session_serialize);
   LST_DO_CODE(OB_UNIS_ENCODE,
-              consistency_level_,
-              compatibility_mode_index,
-              tmp_tz_info,
               // NOTE: rpc_tenant_id may cause compatability problem,
               // But only in diagnose tenant, so keep the stupid hack as it is.
               tenant_id_ | (rpc_tenant_id_ << 32),
-              effective_tenant_id_,
-              is_changed_to_temp_tenant_,
+              effective_tenant_id_);
+  OB_UNIS_ENCODE(is_changed_to_temp_tenant_);
+  LST_DO_CODE(OB_UNIS_ENCODE,
               user_id_,
               is_master_session() ? get_sid() : master_sessid_,
               capability_.capability_,
@@ -5329,7 +5361,7 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
           } else if (OB_FAIL(serialization::encode(buf, buf_len, pos, user_var_val.value_))) {
             LOG_WARN("fail to serialize user var val value", K(buf_len), K(pos),
                      K(user_var_val.value_), K(ret));
-          } else {}
+          }
         }
       }
     }
@@ -5355,6 +5387,23 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
         int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
         if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_id))) {
           LOG_ERROR("fail to serialize sys var id", K(buf_len), K(pos), K(sys_var_id), K(ret));
+        } else if (compact_session_serialize) {
+          const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
+          if (OB_FAIL(serialization::encode(buf, buf_len, pos, payload_len))) {
+            LOG_ERROR("fail to serialize compact sys var payload length",
+                      K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
+          } else {
+            const int64_t payload_start = pos;
+            if (OB_FAIL(sys_vars_[sys_var_idx]->serialize_(buf, buf_len, pos))) {
+              LOG_ERROR("fail to serialize compact sys var payload",
+                        K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
+            } else if (OB_UNLIKELY(pos - payload_start != payload_len)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("compact sys var payload size mismatch",
+                        K(ret), K(i), K(sys_var_id), K(payload_len),
+                        "actual_len", pos - payload_start);
+            }
+          }
         } else if (OB_FAIL(sys_vars_[sys_var_idx]->serialize(buf, buf_len, pos))) {
           LOG_ERROR("fail to serialize sys var", K(buf_len), K(pos), K(i), K(sys_var_idx),
                     K(*sys_vars_[sys_var_idx]), K(ret));
@@ -5388,12 +5437,25 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   // No meaningful field for serialization compatibility
   bool is_foreign_key_cascade = false;
   bool is_foreign_key_check_exist = false;
+  OB_UNIS_ENCODE_IF(sys_vars_cache_.inc_data_, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(unused_safe_weak_read_snapshot, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(unused_inner_safe_weak_read_snapshot, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(unused_literal_query, !compact_session_serialize);
+
+  const bool tz_is_position = tz_info_wrap_.is_position_class();
+  const bool error_on_overlap_time = tz_info_wrap_.is_error_on_overlap_time();
+  OB_UNIS_ENCODE_IF(tz_is_position, compact_session_serialize);
+  OB_UNIS_ENCODE_IF(error_on_overlap_time, compact_session_serialize);
+  if (!compact_session_serialize || tz_is_position) {
+    OB_UNIS_ENCODE(tz_info_wrap_);
+  } else if (OB_UNLIKELY(!tz_info_wrap_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid offset timezone for compact session", K(ret), K(tz_info_wrap_));
+  } else {
+    OB_UNIS_ENCODE(tz_info_wrap_.get_tz_info_offset().get_offset());
+  }
+
   LST_DO_CODE(OB_UNIS_ENCODE,
-              sys_vars_cache_.inc_data_,
-              unused_safe_weak_read_snapshot,
-              unused_inner_safe_weak_read_snapshot,
-              unused_literal_query,
-              tz_info_wrap_,
               app_trace_id_,
               proxy_capability_.capability_,
               client_mode_,
@@ -5401,49 +5463,59 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              reserved_read_snapshot_version_,
-              check_sys_variable_,
-              unused_weak_read_snapshot_source,
+              reserved_read_snapshot_version_);
+  OB_UNIS_ENCODE(check_sys_variable_);
+  OB_UNIS_ENCODE_IF(unused_weak_read_snapshot_source, !compact_session_serialize);
+  LST_DO_CODE(OB_UNIS_ENCODE,
               database_id_,
               thread_data_.user_at_host_name_,
               thread_data_.user_at_client_ip_,
-              current_execution_id_,
-              labels_,
-              total_stmt_tables_,
-              cur_stmt_tables_,
-              is_foreign_key_cascade,
-              sys_var_in_pc_str_,
-              config_in_pc_str_,
-              is_foreign_key_check_exist,
-              need_serial_exec,
+              current_execution_id_);
+
+  OB_UNIS_ENCODE(labels_);
+
+  OB_UNIS_ENCODE_IF(total_stmt_tables_, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(cur_stmt_tables_, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(is_foreign_key_cascade, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(sys_var_in_pc_str_, !compact_session_serialize);
+  // cur_phy_plan_ is not available reliably while the receiver decodes Session.
+  OB_UNIS_ENCODE_IF(has_pc_config_env, compact_session_serialize);
+  OB_UNIS_ENCODE_IF(
+      config_in_pc_str_, !compact_session_serialize || has_pc_config_env);
+  OB_UNIS_ENCODE_IF(is_foreign_key_check_exist, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(need_serial_exec, !compact_session_serialize);
+  LST_DO_CODE(OB_UNIS_ENCODE,
               sql_scope_flags,
               stmt_type_,
               thread_data_.client_addr_,
               thread_data_.user_client_addr_,
               process_query_time_,
-              flt_vars_.last_flt_trace_id_,
-              flt_vars_.row_traceformat_,
+              flt_vars_.last_flt_trace_id_);
+  OB_UNIS_ENCODE(flt_vars_.row_traceformat_);
+  LST_DO_CODE(OB_UNIS_ENCODE,
               flt_vars_.last_flt_span_id_,
-              exec_min_cluster_version_,
-              is_client_sessid_support_,
-              use_rich_vector_format_);
+              exec_min_cluster_version_);
+  LST_DO_CODE(OB_UNIS_ENCODE, is_client_sessid_support_, use_rich_vector_format_);
   }();
-  OB_UNIS_ENCODE(ObString(sql_id_));
-  if (OB_SUCC(ret)) {
-    LST_DO_CODE(OB_UNIS_ENCODE,
-                proxy_user_id_,
-                thread_data_.proxy_user_name_,
-                thread_data_.proxy_host_name_,
-                enable_role_ids_wrapper_.get_enable_role_ids());
-  }
-  OB_UNIS_ENCODE(sys_var_config_hash_val_);
+  OB_UNIS_ENCODE_IF(ObString(sql_id_), !compact_session_serialize);
+  const bool has_proxy_identity = OB_INVALID_ID != proxy_user_id_
+      || !thread_data_.proxy_user_name_.empty()
+      || !thread_data_.proxy_host_name_.empty();
+  OB_UNIS_ENCODE_IF(has_proxy_identity, compact_session_serialize);
+  OB_UNIS_ENCODE_IF(proxy_user_id_, !compact_session_serialize || has_proxy_identity);
+  OB_UNIS_ENCODE_IF(thread_data_.proxy_user_name_, !compact_session_serialize || has_proxy_identity);
+  OB_UNIS_ENCODE_IF(thread_data_.proxy_host_name_, !compact_session_serialize || has_proxy_identity);
+  OB_UNIS_ENCODE(enable_role_ids_wrapper_.get_enable_role_ids());
+  OB_UNIS_ENCODE_IF(sys_var_config_hash_val_, !compact_session_serialize);
   OB_UNIS_ENCODE(enable_mysql_compatible_dates_);
-  OB_UNIS_ENCODE(is_diagnosis_enabled_);
-  OB_UNIS_ENCODE(diagnosis_limit_num_);
+  OB_UNIS_ENCODE_IF(is_diagnosis_enabled_, !compact_session_serialize);
+  OB_UNIS_ENCODE_IF(diagnosis_limit_num_, !compact_session_serialize);
   OB_UNIS_ENCODE(client_sessid_);
-  OB_UNIS_ENCODE(diagnosis_info_);
+  const bool has_diagnosis_info = !diagnosis_info_.is_empty();
+  OB_UNIS_ENCODE_IF(has_diagnosis_info, compact_session_serialize);
+  OB_UNIS_ENCODE_IF(diagnosis_info_, !compact_session_serialize || has_diagnosis_info);
   OB_UNIS_ENCODE(client_create_time_);
-  OB_UNIS_ENCODE(sys_var_in_pl_cache_str_);
+  OB_UNIS_ENCODE_IF(sys_var_in_pl_cache_str_, !compact_session_serialize);
   OB_UNIS_ENCODE(global_rich_vector_configured_);
   return ret;
 }
@@ -5462,6 +5534,20 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
     }                                           \
   } while (0)
 
+#define DAS_SESSION_ENCODE_INV_IF(value, condition) \
+  do {                                              \
+    if (invariant_phase && (condition)) {           \
+      OB_UNIS_ENCODE(value);                        \
+    }                                               \
+  } while (0)
+
+#define DAS_SESSION_ENCODE_VAR_IF(value, condition) \
+  do {                                              \
+    if (!invariant_phase && (condition)) {          \
+      OB_UNIS_ENCODE(value);                        \
+    }                                               \
+  } while (0)
+
 #define DAS_SESSION_DECODE_INV(...)             \
   do {                                          \
     if (invariant_phase) {                      \
@@ -5476,30 +5562,47 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
     }                                           \
   } while (0)
 
+#define DAS_SESSION_DECODE_INV_IF(value, condition) \
+  do {                                              \
+    if (invariant_phase && (condition)) {           \
+      OB_UNIS_DECODE(value);                        \
+    }                                               \
+  } while (0)
+
+#define DAS_SESSION_DECODE_VAR_IF(value, condition) \
+  do {                                              \
+    if (!invariant_phase && (condition)) {          \
+      OB_UNIS_DECODE(value);                        \
+    }                                               \
+  } while (0)
+
 int ObBasicSessionInfo::das_serialize_basic_block_payload_(char *buf,
                                                            int64_t buf_len,
                                                            int64_t &pos,
                                                            const bool invariant_phase) const
 {
   int ret = OB_SUCCESS;
+  const bool compact_session_serialize = is_compact_session_serialize();
+  const bool has_pc_config_env =
+      need_serialize_pc_config_env_(compact_session_serialize);
   ObTimeZoneInfo tmp_tz_info;//为了兼容老版本，创建临时time zone info 占位
   int64_t compatibility_mode_index = 0;
-  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+  if (!compact_session_serialize
+      && OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
     LOG_WARN("convert compatibility mode to index failed", K(ret));
   }
   // [VOLATILE] tx desc changes per query
-  bool has_tx_desc = tx_desc_ != NULL;
+  const bool has_tx_desc = tx_desc_ != NULL && is_tx_desc_inline_serialize();
   if (!invariant_phase) {
     OB_UNIS_ENCODE(has_tx_desc);
     if (has_tx_desc) {
       OB_UNIS_ENCODE(*tx_desc_);
     }
   }
-
-  DAS_SESSION_ENCODE_INV(consistency_level_,
-          compatibility_mode_index,
-          tmp_tz_info,
-          tenant_id_ | (rpc_tenant_id_ << 32),
+  DAS_SESSION_ENCODE_INV(consistency_level_);
+  DAS_SESSION_ENCODE_INV_IF(compatibility_mode_index, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(tmp_tz_info, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV(tenant_id_ | (rpc_tenant_id_ << 32),
           effective_tenant_id_,
           is_changed_to_temp_tenant_,
           user_id_,
@@ -5574,6 +5677,23 @@ int ObBasicSessionInfo::das_serialize_basic_block_payload_(char *buf,
           int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
           if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_id))) {
             LOG_ERROR("fail to serialize sys var id", K(sys_var_id), K(ret));
+          } else if (compact_session_serialize) {
+            const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
+            if (OB_FAIL(serialization::encode(buf, buf_len, pos, payload_len))) {
+              LOG_ERROR("fail to serialize compact sys var payload length",
+                        K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
+            } else {
+              const int64_t payload_start = pos;
+              if (OB_FAIL(sys_vars_[sys_var_idx]->serialize_(buf, buf_len, pos))) {
+                LOG_ERROR("fail to serialize compact sys var payload",
+                          K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
+              } else if (OB_UNLIKELY(pos - payload_start != payload_len)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_ERROR("compact sys var payload size mismatch",
+                          K(ret), K(i), K(sys_var_id), K(payload_len),
+                          "actual_len", pos - payload_start);
+              }
+            }
           } else if (OB_FAIL(sys_vars_[sys_var_idx]->serialize(buf, buf_len, pos))) {
             LOG_ERROR("fail to serialize sys var", K(sys_var_idx), K(ret));
           }
@@ -5596,11 +5716,26 @@ int ObBasicSessionInfo::das_serialize_basic_block_payload_(char *buf,
   uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
   bool is_foreign_key_cascade = false;
   bool is_foreign_key_check_exist = false;
-  DAS_SESSION_ENCODE_VAR(sys_vars_cache_.inc_data_);
-  DAS_SESSION_ENCODE_INV(unused_safe_weak_read_snapshot,
-          unused_inner_safe_weak_read_snapshot,
-          unused_literal_query,
-          tz_info_wrap_);
+  DAS_SESSION_ENCODE_VAR_IF(sys_vars_cache_.inc_data_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(unused_safe_weak_read_snapshot, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(unused_inner_safe_weak_read_snapshot, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(unused_literal_query, !compact_session_serialize);
+  if (invariant_phase) {
+    const bool tz_is_position = tz_info_wrap_.is_position_class();
+    const bool error_on_overlap_time = tz_info_wrap_.is_error_on_overlap_time();
+    if (compact_session_serialize) {
+      OB_UNIS_ENCODE(tz_is_position);
+      OB_UNIS_ENCODE(error_on_overlap_time);
+    }
+    if (!compact_session_serialize || tz_is_position) {
+      OB_UNIS_ENCODE(tz_info_wrap_);
+    } else if (OB_UNLIKELY(!tz_info_wrap_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid offset timezone for compact DAS session", K(ret), K(tz_info_wrap_));
+    } else {
+      OB_UNIS_ENCODE(tz_info_wrap_.get_tz_info_offset().get_offset());
+    }
+  }
   DAS_SESSION_ENCODE_VAR(app_trace_id_);
   DAS_SESSION_ENCODE_INV(proxy_capability_.capability_,
           client_mode_,
@@ -5609,20 +5744,21 @@ int ObBasicSessionInfo::das_serialize_basic_block_payload_(char *buf,
   DAS_SESSION_ENCODE_INV(thread_data_.user_name_);
   DAS_SESSION_ENCODE_VAR(next_tx_isolation_,
           reserved_read_snapshot_version_);
-  DAS_SESSION_ENCODE_INV(check_sys_variable_,
-          unused_weak_read_snapshot_source,
-          database_id_,
+  DAS_SESSION_ENCODE_INV(check_sys_variable_);
+  DAS_SESSION_ENCODE_INV_IF(unused_weak_read_snapshot_source, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV(database_id_,
           thread_data_.user_at_host_name_,
           thread_data_.user_at_client_ip_);
-  DAS_SESSION_ENCODE_VAR(current_execution_id_,
-          labels_,
-          total_stmt_tables_,
-          cur_stmt_tables_);
-  DAS_SESSION_ENCODE_INV(is_foreign_key_cascade,
-          sys_var_in_pc_str_,
-          config_in_pc_str_,
-          is_foreign_key_check_exist,
-          need_serial_exec);
+  DAS_SESSION_ENCODE_VAR(current_execution_id_, labels_);
+  DAS_SESSION_ENCODE_VAR_IF(total_stmt_tables_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_VAR_IF(cur_stmt_tables_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(is_foreign_key_cascade, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(sys_var_in_pc_str_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(has_pc_config_env, compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(
+      config_in_pc_str_, !compact_session_serialize || has_pc_config_env);
+  DAS_SESSION_ENCODE_INV_IF(is_foreign_key_check_exist, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(need_serial_exec, !compact_session_serialize);
   DAS_SESSION_ENCODE_VAR(sql_scope_flags,
           stmt_type_);
   DAS_SESSION_ENCODE_INV(thread_data_.client_addr_,
@@ -5634,20 +5770,29 @@ int ObBasicSessionInfo::das_serialize_basic_block_payload_(char *buf,
   DAS_SESSION_ENCODE_INV(exec_min_cluster_version_,
           is_client_sessid_support_,
           use_rich_vector_format_);
-  DAS_SESSION_ENCODE_VAR(ObString(sql_id_));
-  DAS_SESSION_ENCODE_INV(proxy_user_id_,
-          thread_data_.proxy_user_name_,
-          thread_data_.proxy_host_name_,
-          enable_role_ids_wrapper_.get_enable_role_ids(),
-          sys_var_config_hash_val_,
-          enable_mysql_compatible_dates_,
-          is_diagnosis_enabled_,
-          diagnosis_limit_num_,
-          client_sessid_,
-          diagnosis_info_,
-          client_create_time_,
-          sys_var_in_pl_cache_str_,
-          global_rich_vector_configured_);
+  DAS_SESSION_ENCODE_VAR_IF(ObString(sql_id_), !compact_session_serialize);
+  const bool has_proxy_identity = OB_INVALID_ID != proxy_user_id_
+      || !thread_data_.proxy_user_name_.empty()
+      || !thread_data_.proxy_host_name_.empty();
+  DAS_SESSION_ENCODE_INV_IF(has_proxy_identity, compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(proxy_user_id_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_ENCODE_INV_IF(
+      thread_data_.proxy_user_name_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_ENCODE_INV_IF(
+      thread_data_.proxy_host_name_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_ENCODE_INV(enable_role_ids_wrapper_.get_enable_role_ids());
+  DAS_SESSION_ENCODE_INV_IF(sys_var_config_hash_val_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV(enable_mysql_compatible_dates_);
+  DAS_SESSION_ENCODE_INV_IF(is_diagnosis_enabled_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(diagnosis_limit_num_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV(client_sessid_);
+  const bool has_diagnosis_info = !diagnosis_info_.is_empty();
+  DAS_SESSION_ENCODE_INV_IF(has_diagnosis_info, compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(
+      diagnosis_info_, !compact_session_serialize || has_diagnosis_info);
+  DAS_SESSION_ENCODE_INV(client_create_time_);
+  DAS_SESSION_ENCODE_INV_IF(sys_var_in_pl_cache_str_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV(global_rich_vector_configured_);
   return ret;
 }
 
@@ -5657,6 +5802,7 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
                                                              const bool invariant_phase)
 {
   int ret = OB_SUCCESS;
+  const bool compact_session_serialize = is_compact_session_serialize();
   ObTimeZoneInfo tmp_tz_info;
   int64_t compatibility_mode_index = 0;
   int64_t unused_inner_safe_weak_read_snapshot = 0;
@@ -5666,6 +5812,9 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
   bool need_serial_exec = false;
   bool is_foreign_key_cascade = false;
   bool is_foreign_key_check_exist = false;
+  bool has_pc_config_env = false;
+  bool has_proxy_identity = true;
+  bool has_diagnosis_info = true;
   uint64_t sql_scope_flags = 0;
   const ObTZInfoMap *tz_info_map = nullptr;
   if (invariant_phase) {
@@ -5691,10 +5840,10 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
     }
   }
 
-  DAS_SESSION_DECODE_INV(consistency_level_,
-          compatibility_mode_index,
-          tmp_tz_info,
-          tenant_id_,
+  DAS_SESSION_DECODE_INV(consistency_level_);
+  DAS_SESSION_DECODE_INV_IF(compatibility_mode_index, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(tmp_tz_info, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV(tenant_id_,
           effective_tenant_id_,
           is_changed_to_temp_tenant_,
           user_id_,
@@ -5771,19 +5920,41 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
           ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
           int16_t tmp_sys_var_id = -1;
           int64_t store_idx = -1;
+          int64_t sys_var_len = -1;
+          int64_t sys_var_end = -1;
           if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
             LOG_WARN("fail to deserialize sys var id", K(ret));
           } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
+          } else if (compact_session_serialize
+                     && OB_FAIL(serialization::decode(buf, data_len, pos, sys_var_len))) {
+            LOG_WARN("fail to deserialize compact sys var payload length",
+                     K(ret), K(i), K(sys_var_id), K(data_len), K(pos));
+          } else if (compact_session_serialize
+                     && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
+            ret = OB_DESERIALIZE_ERROR;
+            LOG_WARN("invalid compact sys var payload length",
+                     K(ret), K(i), K(sys_var_id), K(sys_var_len), K(data_len), K(pos));
+          } else if (compact_session_serialize && FALSE_IT(sys_var_end = pos + sys_var_len)) {
           } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
             if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
               ret = OB_SUCCESS;
-              int64_t sys_var_version = 0;
-              int64_t sys_var_len = 0;
-              OB_UNIS_DECODE(sys_var_version);
-              OB_UNIS_DECODE(sys_var_len);
-              if (OB_SUCC(ret)) {
-                pos += sys_var_len;
-                LOG_WARN("invalid sys var id, maybe version different, skip", K(sys_var_id));
+              if (compact_session_serialize) {
+                pos = sys_var_end;
+                LOG_WARN("invalid compact sys var id, maybe version different, skip",
+                         K(sys_var_id), K(sys_var_len));
+              } else {
+                int64_t sys_var_version = 0;
+                OB_UNIS_DECODE(sys_var_version);
+                OB_UNIS_DECODE(sys_var_len);
+                if (OB_SUCC(ret) && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
+                  ret = OB_DESERIALIZE_ERROR;
+                  LOG_WARN("invalid serialized sys var length",
+                           K(ret), K(sys_var_id), K(sys_var_version), K(sys_var_len),
+                           K(data_len), K(pos));
+                } else if (OB_SUCC(ret)) {
+                  pos += sys_var_len;
+                  LOG_WARN("invalid sys var id, maybe version different, skip", K(sys_var_id));
+                }
               }
             } else {
               LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
@@ -5795,13 +5966,26 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
           } else if (OB_ISNULL(sys_var)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("create sys var is NULL", K(ret));
-          } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
-            LOG_WARN("fail to deserialize sys var", K(sys_var_id), K(ret));
-          } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
-            LOG_WARN("fail to update system variable", K(sys_var_id), K(ret));
-          } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
-                                                      check_timezone_valid, false))) {
-            LOG_WARN("process system variable error", K(ret), K(*sys_var));
+          } else {
+            if (compact_session_serialize) {
+              if (OB_FAIL(sys_var->deserialize_(buf, sys_var_end, pos))) {
+                LOG_WARN("fail to deserialize compact sys var payload",
+                         K(ret), K(data_len), K(pos), K(sys_var_id), K(sys_var_len));
+              } else if (OB_UNLIKELY(pos != sys_var_end)) {
+                ret = OB_DESERIALIZE_ERROR;
+                LOG_WARN("compact sys var payload length mismatch",
+                         K(ret), K(sys_var_id), K(sys_var_len), K(pos), K(sys_var_end));
+              }
+            } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
+              LOG_WARN("fail to deserialize sys var", K(sys_var_id), K(ret));
+            }
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+              LOG_WARN("fail to update system variable", K(sys_var_id), K(ret));
+            } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
+                                                        check_timezone_valid, false))) {
+              LOG_WARN("process system variable error", K(ret), K(*sys_var));
+            }
           }
         }
       }
@@ -5809,10 +5993,13 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
     if (CACHED_SYS_VAR_VERSION == sys_var_base_version_) {
       OZ (process_session_variable_fast());
     }
-    sys_var_in_pc_str_.reset();
+    if (!compact_session_serialize) {
+      // Compact decode regenerates these strings using their existing buffers.
+      sys_var_in_pc_str_.reset();
+      sys_var_in_pl_cache_str_.reset();
+    }
     config_in_pc_str_.reset();
     exec_env_inited_ = false;
-    sys_var_in_pl_cache_str_.reset();
     tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
   }
 
@@ -5825,11 +6012,33 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
     }
   }
 
-  DAS_SESSION_DECODE_VAR(sys_vars_cache_.inc_data_);
-  DAS_SESSION_DECODE_INV(unused_safe_weak_read_snapshot,
-          unused_inner_safe_weak_read_snapshot,
-          unused_literal_query,
-          tz_info_wrap_);
+  DAS_SESSION_DECODE_VAR_IF(sys_vars_cache_.inc_data_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(unused_safe_weak_read_snapshot, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(unused_inner_safe_weak_read_snapshot, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(unused_literal_query, !compact_session_serialize);
+  if (invariant_phase) {
+    bool tz_is_position = false;
+    bool error_on_overlap_time = false;
+    if (compact_session_serialize) {
+      OB_UNIS_DECODE(tz_is_position);
+      OB_UNIS_DECODE(error_on_overlap_time);
+    }
+    if (!compact_session_serialize || tz_is_position) {
+      OB_UNIS_DECODE(tz_info_wrap_);
+      if (OB_SUCC(ret) && compact_session_serialize) {
+        OZ(tz_info_wrap_.set_error_on_overlap_time(error_on_overlap_time));
+      }
+    } else {
+      int32_t tz_offset = 0;
+      OB_UNIS_DECODE(tz_offset);
+      if (OB_SUCC(ret)) {
+        tz_info_wrap_.reset();
+        tz_info_wrap_.set_tz_info_map(tz_info_map);
+        OZ(tz_info_wrap_.set_error_on_overlap_time(error_on_overlap_time));
+        OX(tz_info_wrap_.set_tz_info_offset(tz_offset));
+      }
+    }
+  }
   DAS_SESSION_DECODE_VAR(app_trace_id_);
   DAS_SESSION_DECODE_INV(proxy_capability_.capability_,
           client_mode_,
@@ -5838,20 +6047,21 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
   DAS_SESSION_DECODE_INV(thread_data_.user_name_);
   DAS_SESSION_DECODE_VAR(next_tx_isolation_,
           reserved_read_snapshot_version_);
-  DAS_SESSION_DECODE_INV(check_sys_variable_,
-          unused_weak_read_snapshot_source,
-          database_id_,
+  DAS_SESSION_DECODE_INV(check_sys_variable_);
+  DAS_SESSION_DECODE_INV_IF(unused_weak_read_snapshot_source, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV(database_id_,
           thread_data_.user_at_host_name_,
           thread_data_.user_at_client_ip_);
-  DAS_SESSION_DECODE_VAR(current_execution_id_,
-          labels_,
-          total_stmt_tables_,
-          cur_stmt_tables_);
-  DAS_SESSION_DECODE_INV(is_foreign_key_cascade,
-          sys_var_in_pc_str_,
-          config_in_pc_str_,
-          is_foreign_key_check_exist,
-          need_serial_exec);
+  DAS_SESSION_DECODE_VAR(current_execution_id_, labels_);
+  DAS_SESSION_DECODE_VAR_IF(total_stmt_tables_, !compact_session_serialize);
+  DAS_SESSION_DECODE_VAR_IF(cur_stmt_tables_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(is_foreign_key_cascade, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(sys_var_in_pc_str_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(has_pc_config_env, compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(
+      config_in_pc_str_, !compact_session_serialize || has_pc_config_env);
+  DAS_SESSION_DECODE_INV_IF(is_foreign_key_check_exist, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(need_serial_exec, !compact_session_serialize);
   DAS_SESSION_DECODE_VAR(sql_scope_flags,
           stmt_type_);
   DAS_SESSION_DECODE_INV(thread_data_.client_addr_,
@@ -5874,11 +6084,13 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
       } else if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.user_at_client_ip_,
                                                             &thread_data_.user_at_client_ip_))) {
         LOG_WARN("fail to write user_at_client_ip", K(ret));
-      } else if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pc_str_,
-                                                            &sys_var_in_pc_str_))) {
+      } else if (!compact_session_serialize
+                 && OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pc_str_,
+                                                               &sys_var_in_pc_str_))) {
         LOG_WARN("fail to write sys_var_in_pc_str", K(ret));
-      } else if (OB_FAIL(sess_level_name_pool_.write_string(config_in_pc_str_,
-                                                            &config_in_pc_str_))) {
+      } else if ((!compact_session_serialize || has_pc_config_env)
+                 && OB_FAIL(sess_level_name_pool_.write_string(config_in_pc_str_,
+                                                               &config_in_pc_str_))) {
         LOG_WARN("fail to write config_in_pc_str_", K(ret));
       }
     }
@@ -5900,31 +6112,55 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
   }
 
   ObString sql_id;
-  DAS_SESSION_DECODE_VAR(sql_id);
+  DAS_SESSION_DECODE_VAR_IF(sql_id, !compact_session_serialize);
   if (OB_SUCC(ret) && !invariant_phase) {
-    set_cur_sql_id(sql_id.ptr());
+    if (compact_session_serialize) {
+      reset_cur_sql_id();
+    } else {
+      set_cur_sql_id(sql_id.ptr());
+    }
   }
 
-  DAS_SESSION_DECODE_INV(proxy_user_id_,
-          thread_data_.proxy_user_name_,
-          thread_data_.proxy_host_name_,
-          enable_role_ids_wrapper_.get_enable_role_ids());
+  DAS_SESSION_DECODE_INV_IF(has_proxy_identity, compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(proxy_user_id_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_DECODE_INV_IF(
+      thread_data_.proxy_user_name_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_DECODE_INV_IF(
+      thread_data_.proxy_host_name_, !compact_session_serialize || has_proxy_identity);
+  if (invariant_phase && !has_proxy_identity) {
+    proxy_user_id_ = OB_INVALID_ID;
+    thread_data_.proxy_user_name_.reset();
+    thread_data_.proxy_host_name_.reset();
+  }
+  DAS_SESSION_DECODE_INV(enable_role_ids_wrapper_.get_enable_role_ids());
   if (OB_SUCC(ret) && invariant_phase) {
-    if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_user_name_,
-                                                   &thread_data_.proxy_user_name_))) {
+    if (has_proxy_identity
+        && OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_user_name_,
+                                                      &thread_data_.proxy_user_name_))) {
       LOG_WARN("fail to write proxy_user_name", K(ret));
-    } else if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_host_name_,
-                                                          &thread_data_.proxy_host_name_))) {
+    } else if (has_proxy_identity
+               && OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_host_name_,
+                                                             &thread_data_.proxy_host_name_))) {
       LOG_WARN("fail to write proxy_host_name", K(ret));
     }
   }
-  DAS_SESSION_DECODE_INV(sys_var_config_hash_val_,
-          enable_mysql_compatible_dates_,
-          is_diagnosis_enabled_,
-          diagnosis_limit_num_,
-          client_sessid_,
-          diagnosis_info_,
-          client_create_time_);
+  DAS_SESSION_DECODE_INV_IF(sys_var_config_hash_val_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV(enable_mysql_compatible_dates_);
+  if (invariant_phase && compact_session_serialize) {
+    sys_var_config_hash_val_ = 0;
+    is_diagnosis_enabled_ = false;
+    diagnosis_limit_num_ = 0;
+  }
+  DAS_SESSION_DECODE_INV_IF(is_diagnosis_enabled_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(diagnosis_limit_num_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV(client_sessid_);
+  DAS_SESSION_DECODE_INV_IF(has_diagnosis_info, compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(
+      diagnosis_info_, !compact_session_serialize || has_diagnosis_info);
+  if (invariant_phase && !has_diagnosis_info) {
+    diagnosis_info_.reset();
+  }
+  DAS_SESSION_DECODE_INV(client_create_time_);
   if (invariant_phase) {
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sess_level_name_pool_.write_string(diagnosis_info_.log_file_,
@@ -5941,11 +6177,17 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
       }
     }
   }
-  DAS_SESSION_DECODE_INV(sys_var_in_pl_cache_str_,
-          global_rich_vector_configured_);
+  DAS_SESSION_DECODE_INV_IF(sys_var_in_pl_cache_str_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV(global_rich_vector_configured_);
   if (OB_SUCC(ret) && invariant_phase) {
-    if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pl_cache_str_,
-                                                   &sys_var_in_pl_cache_str_))) {
+    if (compact_session_serialize) {
+      if (OB_FAIL(gen_sys_var_in_pc_str())) {
+        LOG_WARN("fail to rebuild sys var in pc str", K(ret));
+      } else if (OB_FAIL(gen_sys_var_in_pl_cache_str())) {
+        LOG_WARN("fail to rebuild sys var in pl cache str", K(ret));
+      }
+    } else if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pl_cache_str_,
+                                                          &sys_var_in_pl_cache_str_))) {
       LOG_WARN("fail to write sys_var_in_pl_cache_str", K(ret));
     }
   }
@@ -5962,16 +6204,36 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
 }
 #undef DAS_SESSION_ENCODE_INV
 #undef DAS_SESSION_ENCODE_VAR
+#undef DAS_SESSION_ENCODE_INV_IF
+#undef DAS_SESSION_ENCODE_VAR_IF
 #undef DAS_SESSION_DECODE_INV
 #undef DAS_SESSION_DECODE_VAR
+#undef DAS_SESSION_DECODE_INV_IF
+#undef DAS_SESSION_DECODE_VAR_IF
 
 int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   int64_t version = 0;
   int64_t len = 0;
+  bool compact_session_serialize = false;
 
   OB_UNIS_DECODE(version);
+  if (OB_SUCC(ret)) {
+    switch (version) {
+      case 1:
+      case 2:
+      case UNIS_VERSION:
+        break;
+      case COMPACT_SESSION_VERSION:
+        compact_session_serialize = true;
+        break;
+      default:
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("unsupported Basic session version", K(ret), K(version));
+        break;
+    }
+  }
   OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
     if (len < 0) {
@@ -5994,23 +6256,23 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     bool has_tx_desc = 0;
     if (OB_FAIL(serialization::decode(buf, data_len, pos, has_tx_desc))) {
       LOG_WARN("fail to deserialize has_tx_desc_", K(data_len), K(pos), K(ret));
-    } else if (has_tx_desc) {
+    }
+    if (OB_SUCC(ret) && has_tx_desc) {
       transaction::ObTransService* txs = MTL(transaction::ObTransService*);
       if (OB_FAIL(txs->acquire_tx(buf, data_len, pos, tx_desc_))) {
         LOG_WARN("acquire tx by deserialize fail", K(data_len), K(pos), K(ret));
       } else {
         LOG_TRACE("deserialize txDesc from session", KPC_(tx_desc));
       }
-    } else {
+    } else if (OB_SUCC(ret)) {
       tx_desc_ = NULL;
     }
+    OB_UNIS_DECODE(consistency_level_);
+    OB_UNIS_DECODE_IF(compatibility_mode_index, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(tmp_tz_info, !compact_session_serialize);
+    LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, effective_tenant_id_);
+    OB_UNIS_DECODE(is_changed_to_temp_tenant_);
     LST_DO_CODE(OB_UNIS_DECODE,
-                consistency_level_,
-                compatibility_mode_index,
-                tmp_tz_info,
-                tenant_id_,
-                effective_tenant_id_,
-                is_changed_to_temp_tenant_,
                 user_id_,
                 master_sessid_,
                 capability_.capability_,
@@ -6096,20 +6358,41 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
           ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
           int16_t tmp_sys_var_id = -1;
           int64_t store_idx = -1;
+          int64_t sys_var_len = -1;
+          int64_t sys_var_end = -1;
           if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
             LOG_WARN("fail to deserialize sys var id", K(data_len), K(pos), K(ret));
           } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
+          } else if (compact_session_serialize
+                     && OB_FAIL(serialization::decode(buf, data_len, pos, sys_var_len))) {
+            LOG_WARN("fail to deserialize compact sys var payload length",
+                     K(ret), K(i), K(sys_var_id), K(data_len), K(pos));
+          } else if (compact_session_serialize
+                     && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
+            ret = OB_DESERIALIZE_ERROR;
+            LOG_WARN("invalid compact sys var payload length",
+                     K(ret), K(i), K(sys_var_id), K(sys_var_len), K(data_len), K(pos));
+          } else if (compact_session_serialize && FALSE_IT(sys_var_end = pos + sys_var_len)) {
           } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
             if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
               // 可能是版本不同，为了兼容，跳过这段数据，并继续循环
               ret = OB_SUCCESS;
-              int64_t sys_var_version = 0;
-              int64_t sys_var_len = 0;
-              OB_UNIS_DECODE(sys_var_version);
-              OB_UNIS_DECODE(sys_var_len);
-              if (OB_SUCC(ret)) {
-                pos += sys_var_len; // 跳过这段数据
-                LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
+              if (compact_session_serialize) {
+                pos = sys_var_end;
+                LOG_WARN("invalid compact sys var id, maybe version is different, skip it",
+                         K(sys_var_id), K(sys_var_len));
+              } else {
+                int64_t sys_var_version = 0;
+                OB_UNIS_DECODE(sys_var_version);
+                OB_UNIS_DECODE(sys_var_len);
+                if (OB_SUCC(ret) && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
+                  ret = OB_DESERIALIZE_ERROR;
+                  LOG_WARN("invalid serialized sys var length",
+                           K(ret), K(sys_var_id), K(sys_var_version), K(sys_var_len), K(data_len), K(pos));
+                } else if (OB_SUCC(ret)) {
+                  pos += sys_var_len; // 跳过这段数据
+                  LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
+                }
               }
             } else {
               LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
@@ -6121,14 +6404,28 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
           } else if (OB_ISNULL(sys_var)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("create sys var is NULL", K(ret));
-          } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
-            LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
-          } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
-            LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
-          } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
-                                                      check_timezone_valid,
-                                                      false /*is_update_sys_var*/))) {
-            LOG_WARN("process system variable error",  K(ret), K(*sys_var));
+          } else {
+            if (compact_session_serialize) {
+              if (OB_FAIL(sys_var->deserialize_(buf, sys_var_end, pos))) {
+                LOG_WARN("fail to deserialize compact sys var payload",
+                         K(ret), K(data_len), K(pos), K(sys_var_id), K(sys_var_len));
+              } else if (OB_UNLIKELY(pos != sys_var_end)) {
+                ret = OB_DESERIALIZE_ERROR;
+                LOG_WARN("compact sys var payload length mismatch",
+                         K(ret), K(sys_var_id), K(sys_var_len), K(pos), K(sys_var_end));
+              }
+            } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
+              LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
+            }
+            if (OB_SUCC(ret)
+                && OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+              LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
+            } else if (OB_SUCC(ret)
+                       && OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
+                                                           check_timezone_valid,
+                                                           false /*is_update_sys_var*/))) {
+              LOG_WARN("process system variable error",  K(ret), K(*sys_var));
+            }
           }
         }
       }
@@ -6157,23 +6454,48 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     bool unused_literal_query = false;
     bool need_serial_exec = false;
     uint64_t sql_scope_flags = 0;
+    bool has_pc_config_env = false;
 
-    sys_var_in_pc_str_.reset(); //sys_var_in_pc_str_在反序列化系统变量阶段可能会被污染，需要reset掉
+    if (!compact_session_serialize) {
+      // The legacy wire value replaces any string generated while loading the sysvar baseline.
+      sys_var_in_pc_str_.reset();
+      sys_var_in_pl_cache_str_.reset();
+    }
     config_in_pc_str_.reset();
+    if (compact_session_serialize) {
+      sys_var_config_hash_val_ = 0;
+    }
     exec_env_inited_ = false;
-    sys_var_in_pl_cache_str_.reset();
     flt_vars_.last_flt_trace_id_.reset();
     flt_vars_.last_flt_span_id_.reset();
     const ObTZInfoMap *tz_info_map = tz_info_wrap_.get_tz_info_offset().get_tz_info_map();
     // No meaningful field for serialization compatibility
     bool is_foreign_key_cascade = false;
     bool is_foreign_key_check_exist = false;
+    OB_UNIS_DECODE_IF(sys_vars_cache_.inc_data_, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(unused_safe_weak_read_snapshot, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(unused_inner_safe_weak_read_snapshot, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(unused_literal_query, !compact_session_serialize);
+    bool tz_is_position = false;
+    bool error_on_overlap_time = false;
+    OB_UNIS_DECODE_IF(tz_is_position, compact_session_serialize);
+    OB_UNIS_DECODE_IF(error_on_overlap_time, compact_session_serialize);
+    if (!compact_session_serialize || tz_is_position) {
+      OB_UNIS_DECODE(tz_info_wrap_);
+      if (OB_SUCC(ret) && compact_session_serialize) {
+        OZ(tz_info_wrap_.set_error_on_overlap_time(error_on_overlap_time));
+      }
+    } else {
+      int32_t timezone_offset = 0;
+      OB_UNIS_DECODE(timezone_offset);
+      if (OB_SUCC(ret)) {
+        tz_info_wrap_.reset();
+        tz_info_wrap_.set_tz_info_map(tz_info_map);
+        OZ(tz_info_wrap_.set_error_on_overlap_time(error_on_overlap_time));
+        OX(tz_info_wrap_.set_tz_info_offset(timezone_offset));
+      }
+    }
     LST_DO_CODE(OB_UNIS_DECODE,
-                sys_vars_cache_.inc_data_,
-                unused_safe_weak_read_snapshot,
-                unused_inner_safe_weak_read_snapshot,
-                unused_literal_query,
-                tz_info_wrap_,
                 app_trace_id_,
                 proxy_capability_.capability_,
                 client_mode_,
@@ -6181,38 +6503,50 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
                 nested_count_,
                 thread_data_.user_name_,
                 next_tx_isolation_,
-                reserved_read_snapshot_version_,
-                check_sys_variable_,
-                unused_weak_read_snapshot_source,
+                reserved_read_snapshot_version_);
+    OB_UNIS_DECODE(check_sys_variable_);
+    OB_UNIS_DECODE_IF(unused_weak_read_snapshot_source, !compact_session_serialize);
+    LST_DO_CODE(OB_UNIS_DECODE,
                 database_id_,
                 thread_data_.user_at_host_name_,
                 thread_data_.user_at_client_ip_,
                 current_execution_id_,
-                labels_,
-                total_stmt_tables_,
-                cur_stmt_tables_,
-                is_foreign_key_cascade,
-                sys_var_in_pc_str_,
-                config_in_pc_str_,
-                is_foreign_key_check_exist,
-                need_serial_exec,
+                labels_);
+    if (compact_session_serialize) {
+      total_stmt_tables_.reset();
+      cur_stmt_tables_.reset();
+    }
+    OB_UNIS_DECODE_IF(total_stmt_tables_, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(cur_stmt_tables_, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(is_foreign_key_cascade, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(sys_var_in_pc_str_, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(has_pc_config_env, compact_session_serialize);
+    OB_UNIS_DECODE_IF(
+        config_in_pc_str_, !compact_session_serialize || has_pc_config_env);
+    OB_UNIS_DECODE_IF(is_foreign_key_check_exist, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(need_serial_exec, !compact_session_serialize);
+    LST_DO_CODE(OB_UNIS_DECODE,
                 sql_scope_flags,
                 stmt_type_,
                 thread_data_.client_addr_,
                 thread_data_.user_client_addr_,
                 process_query_time_,
-                flt_vars_.last_flt_trace_id_,
-                flt_vars_.row_traceformat_,
-                flt_vars_.last_flt_span_id_);
+                flt_vars_.last_flt_trace_id_);
+    OB_UNIS_DECODE(flt_vars_.row_traceformat_);
+    OB_UNIS_DECODE(flt_vars_.last_flt_span_id_);
     if (OB_SUCC(ret) && pos < data_len) {
       OB_UNIS_DECODE(exec_min_cluster_version_);
     } else {
       exec_min_cluster_version_ = CLUSTER_VERSION_4_0_0_0;
     }
-    if (OB_SUCC(ret) && pos < data_len) {
-      LST_DO_CODE(OB_UNIS_DECODE, is_client_sessid_support_);
+    if (compact_session_serialize) {
+      LST_DO_CODE(OB_UNIS_DECODE, is_client_sessid_support_, use_rich_vector_format_);
+    } else {
+      if (OB_SUCC(ret) && pos < data_len) {
+        LST_DO_CODE(OB_UNIS_DECODE, is_client_sessid_support_);
+      }
+      LST_DO_CODE(OB_UNIS_DECODE, use_rich_vector_format_);
     }
-    LST_DO_CODE(OB_UNIS_DECODE, use_rich_vector_format_);
     // deep copy string.
     if (OB_SUCC(ret)) {
       if (OB_FAIL(sess_level_name_pool_.write_string(app_trace_id_, &app_trace_id_))) {
@@ -6228,9 +6562,13 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
                                                 &thread_data_.user_at_client_ip_))) {
         LOG_WARN("fail to write user_at_client_ip to string_buf_",
                   K(thread_data_.user_at_client_ip_), K(ret));
-      } else if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pc_str_, &sys_var_in_pc_str_))) {
+      } else if (!compact_session_serialize
+                 && OB_FAIL(sess_level_name_pool_.write_string(
+                     sys_var_in_pc_str_, &sys_var_in_pc_str_))) {
         LOG_WARN("fail to write sys_var_in_pc_str to string_buf_", K(sys_var_in_pc_str_), K(ret));
-      } else if (OB_FAIL(sess_level_name_pool_.write_string(config_in_pc_str_, &config_in_pc_str_))) {
+      } else if ((!compact_session_serialize || has_pc_config_env)
+                 && OB_FAIL(sess_level_name_pool_.write_string(
+                     config_in_pc_str_, &config_in_pc_str_))) {
         LOG_WARN("fail to write config_in_pc_str_ to string_buf_", K(config_in_pc_str_), K(ret));
       }
     }
@@ -6256,13 +6594,26 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     release_to_pool_ = OB_SUCC(ret);
     force_rich_vector_format_ = ForceRichFormatStatus::Disable;
     ObString sql_id;
-    OB_UNIS_DECODE(sql_id);
+    OB_UNIS_DECODE_IF(sql_id, !compact_session_serialize);
+    if (compact_session_serialize) {
+      reset_cur_sql_id();
+    }
+    bool has_proxy_identity = true;
+    OB_UNIS_DECODE_IF(has_proxy_identity, compact_session_serialize);
     if (OB_SUCC(ret)) {
-      set_cur_sql_id(sql_id.ptr());
-      LST_DO_CODE(OB_UNIS_DECODE,
-                  proxy_user_id_,
-                  thread_data_.proxy_user_name_,
-                  thread_data_.proxy_host_name_);
+      if (!compact_session_serialize) {
+        set_cur_sql_id(sql_id.ptr());
+      }
+      OB_UNIS_DECODE_IF(proxy_user_id_, !compact_session_serialize || has_proxy_identity);
+      OB_UNIS_DECODE_IF(
+          thread_data_.proxy_user_name_, !compact_session_serialize || has_proxy_identity);
+      OB_UNIS_DECODE_IF(
+          thread_data_.proxy_host_name_, !compact_session_serialize || has_proxy_identity);
+      if (!has_proxy_identity) {
+        proxy_user_id_ = OB_INVALID_ID;
+        thread_data_.proxy_user_name_.reset();
+        thread_data_.proxy_host_name_.reset();
+      }
 
       if (version == 2) {
         enable_role_ids_wrapper_.get_enable_role_ids().reset();
@@ -6270,7 +6621,7 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
         OB_UNIS_DECODE(enable_role_ids_wrapper_.get_enable_role_ids());
       }
 
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && has_proxy_identity) {
         if (OB_FAIL(sess_level_name_pool_.write_string(thread_data_.proxy_user_name_,
                                             &thread_data_.proxy_user_name_))) {
           LOG_WARN("fail to write username to string_buf_", K(thread_data_.proxy_user_name_), K(ret));
@@ -6280,12 +6631,22 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
         }
       }
     }
-    OB_UNIS_DECODE(sys_var_config_hash_val_);
+    OB_UNIS_DECODE_IF(sys_var_config_hash_val_, !compact_session_serialize);
     OB_UNIS_DECODE(enable_mysql_compatible_dates_);
-    OB_UNIS_DECODE(is_diagnosis_enabled_);
-    OB_UNIS_DECODE(diagnosis_limit_num_);
+    if (compact_session_serialize) {
+      is_diagnosis_enabled_ = false;
+      diagnosis_limit_num_ = 0;
+    }
+    OB_UNIS_DECODE_IF(is_diagnosis_enabled_, !compact_session_serialize);
+    OB_UNIS_DECODE_IF(diagnosis_limit_num_, !compact_session_serialize);
     OB_UNIS_DECODE(client_sessid_);
-    OB_UNIS_DECODE(diagnosis_info_);
+    bool has_diagnosis_info = true;
+    OB_UNIS_DECODE_IF(has_diagnosis_info, compact_session_serialize);
+    OB_UNIS_DECODE_IF(
+        diagnosis_info_, !compact_session_serialize || has_diagnosis_info);
+    if (!has_diagnosis_info) {
+      diagnosis_info_.reset();
+    }
     OB_UNIS_DECODE(client_create_time_);
 
     if (OB_SUCC(ret)) {
@@ -6294,9 +6655,20 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
       }
     }
 
-    OB_UNIS_DECODE(sys_var_in_pl_cache_str_);
+    OB_UNIS_DECODE_IF(sys_var_in_pl_cache_str_, !compact_session_serialize);
     OB_UNIS_DECODE(global_rich_vector_configured_);
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && compact_session_serialize) {
+      if (OB_FAIL(gen_sys_var_in_pc_str())) {
+        LOG_WARN("fail to rebuild sys var in pc str", K(ret));
+      } else if (OB_FAIL(gen_sys_var_in_pl_cache_str())) {
+        LOG_WARN("fail to rebuild sys var in pl cache str", K(ret));
+      } else {
+        LOG_TRACE("[SESSION_SYSVAR_COMPACT] rebuild derived state",
+            "pc_string_bytes", sys_var_in_pc_str_.length(),
+            "pl_string_bytes", sys_var_in_pl_cache_str_.length(),
+            K(sys_var_config_hash_val_));
+      }
+    } else if (OB_SUCC(ret)) {
       if (OB_FAIL(sess_level_name_pool_.write_string(sys_var_in_pl_cache_str_, &sys_var_in_pl_cache_str_))) {
         LOG_WARN("fail to write sys_var_in_pl_cache_str to string_buf_", K(sys_var_in_pl_cache_str_), K(ret));
       }
@@ -6742,25 +7114,31 @@ int ObBasicSessionInfo::load_all_sys_vars(const ObSysVariableSchema &sys_var_sch
 OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
 {
   int64_t len = 0;
+  const bool compact_session_serialize = is_compact_session_serialize();
+  const bool has_pc_config_env =
+      need_serialize_pc_config_env_(compact_session_serialize);
   ObTimeZoneInfo tmp_tz_info;//为了兼容老版本，创建临时time zone info 占位
   int ret = OB_SUCCESS;
   // To be compatible with old version which store sql_mode and compatibility mode in ObSQLModeManager;
   int64_t compatibility_mode_index = 0;
-  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+  if (!compact_session_serialize
+      && OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
     LOG_WARN("convert compatibility mode to index failed", K(ret));
   }
-  char has_tx_desc = tx_desc_ != NULL ? 1 : 0;
+  const bool has_tx_desc = tx_desc_ != NULL
+      && is_tx_desc_inline_serialize();
   OB_UNIS_ADD_LEN(has_tx_desc);
   if (has_tx_desc) {
     OB_UNIS_ADD_LEN(*tx_desc_);
   }
+  OB_UNIS_ADD_LEN(consistency_level_);
+  OB_UNIS_ADD_LEN_IF(compatibility_mode_index, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(tmp_tz_info, !compact_session_serialize);
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-              consistency_level_,
-              compatibility_mode_index,
-              tmp_tz_info,
               tenant_id_ | (rpc_tenant_id_<<32),
-              effective_tenant_id_,
-              is_changed_to_temp_tenant_,
+              effective_tenant_id_);
+  OB_UNIS_ADD_LEN(is_changed_to_temp_tenant_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
               user_id_,
               is_master_session() ? get_sid() : master_sessid_,
               capability_.capability_,
@@ -6810,7 +7188,13 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
       } else {
         int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
         len += serialization::encoded_length(sys_var_id);
-        len += sys_vars_[sys_var_idx]->get_serialize_size();
+        if (compact_session_serialize) {
+          const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
+          len += serialization::encoded_length(payload_len);
+          len += payload_len;
+        } else {
+          len += sys_vars_[sys_var_idx]->get_serialize_size();
+        }
       }
     }
   }
@@ -6827,12 +7211,20 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   // No meaningful field for serialization compatibility
   bool is_foreign_key_cascade = false;
   bool is_foreign_key_check_exist = false;
+  OB_UNIS_ADD_LEN_IF(sys_vars_cache_.inc_data_, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(unused_safe_weak_read_snapshot, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(unused_inner_safe_weak_read_snapshot, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(unused_literal_query, !compact_session_serialize);
+  const bool tz_is_position = tz_info_wrap_.is_position_class();
+  const bool error_on_overlap_time = tz_info_wrap_.is_error_on_overlap_time();
+  OB_UNIS_ADD_LEN_IF(tz_is_position, compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(error_on_overlap_time, compact_session_serialize);
+  if (!compact_session_serialize || tz_is_position) {
+    OB_UNIS_ADD_LEN(tz_info_wrap_);
+  } else {
+    OB_UNIS_ADD_LEN(tz_info_wrap_.get_tz_info_offset().get_offset());
+  }
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-              sys_vars_cache_.inc_data_,
-              unused_safe_weak_read_snapshot,
-              unused_inner_safe_weak_read_snapshot,
-              unused_literal_query,
-              tz_info_wrap_,
               app_trace_id_,
               proxy_capability_.capability_,
               client_mode_,
@@ -6840,47 +7232,56 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               nested_count_,
               thread_data_.user_name_,
               next_tx_isolation_,
-              reserved_read_snapshot_version_,
-              check_sys_variable_,
-              unused_weak_read_snapshot_source,
+              reserved_read_snapshot_version_);
+  OB_UNIS_ADD_LEN(check_sys_variable_);
+  OB_UNIS_ADD_LEN_IF(unused_weak_read_snapshot_source, !compact_session_serialize);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
               database_id_,
               thread_data_.user_at_host_name_,
               thread_data_.user_at_client_ip_,
               current_execution_id_,
-              labels_,
-              total_stmt_tables_,
-              cur_stmt_tables_,
-              is_foreign_key_cascade,
-              sys_var_in_pc_str_,
-              config_in_pc_str_,
-              is_foreign_key_check_exist,
-              need_serial_exec,
+              labels_);
+  OB_UNIS_ADD_LEN_IF(total_stmt_tables_, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(cur_stmt_tables_, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(is_foreign_key_cascade, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(sys_var_in_pc_str_, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(has_pc_config_env, compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(
+      config_in_pc_str_, !compact_session_serialize || has_pc_config_env);
+  OB_UNIS_ADD_LEN_IF(is_foreign_key_check_exist, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(need_serial_exec, !compact_session_serialize);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
               sql_scope_flags,
               stmt_type_,
               thread_data_.client_addr_,
               thread_data_.user_client_addr_,
               process_query_time_,
-              flt_vars_.last_flt_trace_id_,
-              flt_vars_.row_traceformat_,
-              flt_vars_.last_flt_span_id_,
-              exec_min_cluster_version_,
-              is_client_sessid_support_,
-              use_rich_vector_format_);
-  OB_UNIS_ADD_LEN(ObString(sql_id_));
-  const common::ObSEArray<uint64_t, 4> enable_role_ids = enable_role_ids_wrapper_.get_enable_role_ids();
+              flt_vars_.last_flt_trace_id_);
+  OB_UNIS_ADD_LEN(flt_vars_.row_traceformat_);
   LST_DO_CODE(OB_UNIS_ADD_LEN,
-              proxy_user_id_,
-              thread_data_.proxy_user_name_,
-              thread_data_.proxy_host_name_,
-              enable_role_ids);
-  OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
+              flt_vars_.last_flt_span_id_,
+              exec_min_cluster_version_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, is_client_sessid_support_, use_rich_vector_format_);
+  OB_UNIS_ADD_LEN_IF(ObString(sql_id_), !compact_session_serialize);
+  const common::ObSEArray<uint64_t, 4> enable_role_ids = enable_role_ids_wrapper_.get_enable_role_ids();
+  const bool has_proxy_identity = OB_INVALID_ID != proxy_user_id_
+      || !thread_data_.proxy_user_name_.empty()
+      || !thread_data_.proxy_host_name_.empty();
+  OB_UNIS_ADD_LEN_IF(has_proxy_identity, compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(proxy_user_id_, !compact_session_serialize || has_proxy_identity);
+  OB_UNIS_ADD_LEN_IF(thread_data_.proxy_user_name_, !compact_session_serialize || has_proxy_identity);
+  OB_UNIS_ADD_LEN_IF(thread_data_.proxy_host_name_, !compact_session_serialize || has_proxy_identity);
+  OB_UNIS_ADD_LEN(enable_role_ids);
+  OB_UNIS_ADD_LEN_IF(sys_var_config_hash_val_, !compact_session_serialize);
   OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
-  OB_UNIS_ADD_LEN(is_diagnosis_enabled_);
-  OB_UNIS_ADD_LEN(diagnosis_limit_num_);
+  OB_UNIS_ADD_LEN_IF(is_diagnosis_enabled_, !compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(diagnosis_limit_num_, !compact_session_serialize);
   OB_UNIS_ADD_LEN(client_sessid_);
-  OB_UNIS_ADD_LEN(diagnosis_info_);
+  const bool has_diagnosis_info = !diagnosis_info_.is_empty();
+  OB_UNIS_ADD_LEN_IF(has_diagnosis_info, compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(diagnosis_info_, !compact_session_serialize || has_diagnosis_info);
   OB_UNIS_ADD_LEN(client_create_time_);
-  OB_UNIS_ADD_LEN(sys_var_in_pl_cache_str_);
+  OB_UNIS_ADD_LEN_IF(sys_var_in_pl_cache_str_, !compact_session_serialize);
   OB_UNIS_ADD_LEN(global_rich_vector_configured_);
   return len;
 }
@@ -6899,26 +7300,44 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
     }                                            \
   } while (0)
 
+#define DAS_SESSION_ADD_LEN_INV_IF(value, condition) \
+  do {                                                \
+    if (invariant_phase && (condition)) {             \
+      OB_UNIS_ADD_LEN(value);                         \
+    }                                                 \
+  } while (0)
+
+#define DAS_SESSION_ADD_LEN_VAR_IF(value, condition) \
+  do {                                                \
+    if (!invariant_phase && (condition)) {            \
+      OB_UNIS_ADD_LEN(value);                         \
+    }                                                 \
+  } while (0)
+
 int ObBasicSessionInfo::das_get_basic_block_payload_size_(int64_t &len, const bool invariant_phase) const
 {
   int ret = OB_SUCCESS;
   len = 0;
+  const bool compact_session_serialize = is_compact_session_serialize();
+  const bool has_pc_config_env =
+      need_serialize_pc_config_env_(compact_session_serialize);
   ObTimeZoneInfo tmp_tz_info;
   int64_t compatibility_mode_index = 0;
-  if (OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
+  if (!compact_session_serialize
+      && OB_FAIL(compatibility_mode2index(get_compatibility_mode(), compatibility_mode_index))) {
     LOG_WARN("convert compatibility mode to index failed", K(ret));
   }
-  char has_tx_desc = tx_desc_ != NULL ? 1 : 0;
+  const bool has_tx_desc = tx_desc_ != NULL && is_tx_desc_inline_serialize();
   if (!invariant_phase) {
     OB_UNIS_ADD_LEN(has_tx_desc);
     if (has_tx_desc) {
       OB_UNIS_ADD_LEN(*tx_desc_);
     }
   }
-  DAS_SESSION_ADD_LEN_INV(consistency_level_,
-           compatibility_mode_index,
-           tmp_tz_info,
-           tenant_id_ | (rpc_tenant_id_ << 32),
+  DAS_SESSION_ADD_LEN_INV(consistency_level_);
+  DAS_SESSION_ADD_LEN_INV_IF(compatibility_mode_index, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(tmp_tz_info, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV(tenant_id_ | (rpc_tenant_id_ << 32),
            effective_tenant_id_,
            is_changed_to_temp_tenant_,
            user_id_,
@@ -6975,7 +7394,13 @@ int ObBasicSessionInfo::das_get_basic_block_payload_size_(int64_t &len, const bo
         } else {
           int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
           len += serialization::encoded_length(sys_var_id);
-          len += sys_vars_[sys_var_idx]->get_serialize_size();
+          if (compact_session_serialize) {
+            const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
+            len += serialization::encoded_length(payload_len);
+            len += payload_len;
+          } else {
+            len += sys_vars_[sys_var_idx]->get_serialize_size();
+          }
         }
       }
     }
@@ -6992,11 +7417,21 @@ int ObBasicSessionInfo::das_get_basic_block_payload_size_(int64_t &len, const bo
   uint64_t sql_scope_flags = sql_scope_flags_.get_flags();
   bool is_foreign_key_cascade = false;
   bool is_foreign_key_check_exist = false;
-  DAS_SESSION_ADD_LEN_VAR(sys_vars_cache_.inc_data_);
-  DAS_SESSION_ADD_LEN_INV(unused_safe_weak_read_snapshot,
-           unused_inner_safe_weak_read_snapshot,
-           unused_literal_query,
-           tz_info_wrap_);
+  DAS_SESSION_ADD_LEN_VAR_IF(sys_vars_cache_.inc_data_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(unused_safe_weak_read_snapshot, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(unused_inner_safe_weak_read_snapshot, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(unused_literal_query, !compact_session_serialize);
+  if (invariant_phase) {
+    const bool tz_is_position = tz_info_wrap_.is_position_class();
+    const bool error_on_overlap_time = tz_info_wrap_.is_error_on_overlap_time();
+    DAS_SESSION_ADD_LEN_INV_IF(tz_is_position, compact_session_serialize);
+    DAS_SESSION_ADD_LEN_INV_IF(error_on_overlap_time, compact_session_serialize);
+    if (!compact_session_serialize || tz_is_position) {
+      OB_UNIS_ADD_LEN(tz_info_wrap_);
+    } else {
+      OB_UNIS_ADD_LEN(tz_info_wrap_.get_tz_info_offset().get_offset());
+    }
+  }
   DAS_SESSION_ADD_LEN_VAR(app_trace_id_);
   DAS_SESSION_ADD_LEN_INV(proxy_capability_.capability_,
            client_mode_,
@@ -7005,20 +7440,21 @@ int ObBasicSessionInfo::das_get_basic_block_payload_size_(int64_t &len, const bo
   DAS_SESSION_ADD_LEN_INV(thread_data_.user_name_);
   DAS_SESSION_ADD_LEN_VAR(next_tx_isolation_,
            reserved_read_snapshot_version_);
-  DAS_SESSION_ADD_LEN_INV(check_sys_variable_,
-           unused_weak_read_snapshot_source,
-           database_id_,
+  DAS_SESSION_ADD_LEN_INV(check_sys_variable_);
+  DAS_SESSION_ADD_LEN_INV_IF(unused_weak_read_snapshot_source, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV(database_id_,
            thread_data_.user_at_host_name_,
            thread_data_.user_at_client_ip_);
-  DAS_SESSION_ADD_LEN_VAR(current_execution_id_,
-           labels_,
-           total_stmt_tables_,
-           cur_stmt_tables_);
-  DAS_SESSION_ADD_LEN_INV(is_foreign_key_cascade,
-           sys_var_in_pc_str_,
-           config_in_pc_str_,
-           is_foreign_key_check_exist,
-           need_serial_exec);
+  DAS_SESSION_ADD_LEN_VAR(current_execution_id_, labels_);
+  DAS_SESSION_ADD_LEN_VAR_IF(total_stmt_tables_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_VAR_IF(cur_stmt_tables_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(is_foreign_key_cascade, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(sys_var_in_pc_str_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(has_pc_config_env, compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(
+      config_in_pc_str_, !compact_session_serialize || has_pc_config_env);
+  DAS_SESSION_ADD_LEN_INV_IF(is_foreign_key_check_exist, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(need_serial_exec, !compact_session_serialize);
   DAS_SESSION_ADD_LEN_VAR(sql_scope_flags,
            stmt_type_);
   DAS_SESSION_ADD_LEN_INV(thread_data_.client_addr_,
@@ -7030,25 +7466,37 @@ int ObBasicSessionInfo::das_get_basic_block_payload_size_(int64_t &len, const bo
   DAS_SESSION_ADD_LEN_INV(exec_min_cluster_version_,
            is_client_sessid_support_,
            use_rich_vector_format_);
-  DAS_SESSION_ADD_LEN_VAR(ObString(sql_id_));
+  DAS_SESSION_ADD_LEN_VAR_IF(ObString(sql_id_), !compact_session_serialize);
   const common::ObSEArray<uint64_t, 4> enable_role_ids = enable_role_ids_wrapper_.get_enable_role_ids();
-  DAS_SESSION_ADD_LEN_INV(proxy_user_id_,
-           thread_data_.proxy_user_name_,
-           thread_data_.proxy_host_name_,
-           enable_role_ids,
-           sys_var_config_hash_val_,
-           enable_mysql_compatible_dates_,
-           is_diagnosis_enabled_,
-           diagnosis_limit_num_,
-           client_sessid_,
-           diagnosis_info_,
-           client_create_time_,
-           sys_var_in_pl_cache_str_,
-           global_rich_vector_configured_);
+  const bool has_proxy_identity = OB_INVALID_ID != proxy_user_id_
+      || !thread_data_.proxy_user_name_.empty()
+      || !thread_data_.proxy_host_name_.empty();
+  DAS_SESSION_ADD_LEN_INV_IF(has_proxy_identity, compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(
+      proxy_user_id_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_ADD_LEN_INV_IF(
+      thread_data_.proxy_user_name_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_ADD_LEN_INV_IF(
+      thread_data_.proxy_host_name_, !compact_session_serialize || has_proxy_identity);
+  DAS_SESSION_ADD_LEN_INV(enable_role_ids);
+  DAS_SESSION_ADD_LEN_INV_IF(sys_var_config_hash_val_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV(enable_mysql_compatible_dates_);
+  DAS_SESSION_ADD_LEN_INV_IF(is_diagnosis_enabled_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(diagnosis_limit_num_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV(client_sessid_);
+  const bool has_diagnosis_info = !diagnosis_info_.is_empty();
+  DAS_SESSION_ADD_LEN_INV_IF(has_diagnosis_info, compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(
+      diagnosis_info_, !compact_session_serialize || has_diagnosis_info);
+  DAS_SESSION_ADD_LEN_INV(client_create_time_);
+  DAS_SESSION_ADD_LEN_INV_IF(sys_var_in_pl_cache_str_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV(global_rich_vector_configured_);
   return ret;
 }
 #undef DAS_SESSION_ADD_LEN_INV
 #undef DAS_SESSION_ADD_LEN_VAR
+#undef DAS_SESSION_ADD_LEN_INV_IF
+#undef DAS_SESSION_ADD_LEN_VAR_IF
 
 ////////////////////////////////////////////////////////////////
 void ObBasicSessionInfo::reset_session_changed_info()

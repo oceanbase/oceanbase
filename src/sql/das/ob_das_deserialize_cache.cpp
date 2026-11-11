@@ -201,8 +201,22 @@ int ObDasDeserializeCacheKey::deep_copy(common::ObIAllocator &allocator,
   const ObDasDeserializeCacheKey &key = static_cast<const ObDasDeserializeCacheKey&>(other);
   namespace_ = key.namespace_;
   type_ = key.type_;
-  if (OB_FAIL(ob_write_string(allocator, key.key_, key_))) {
-    LOG_WARN("deep copy das deserialize cache key failed", K(ret), K(key));
+  const int64_t size = static_cast<int64_t>(key.key_.length()) + key.layout_key_.length();
+  key_.reset();
+  layout_key_.reset();
+  if (size > 0) {
+    char *data = static_cast<char *>(allocator.alloc(size));
+    if (OB_ISNULL(data)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate DAS cache key failed", K(ret), K(size));
+    } else {
+      if (key.key_.length() > 0) { MEMCPY(data, key.key_.ptr(), key.key_.length()); }
+      if (key.layout_key_.length() > 0) {
+        MEMCPY(data + key.key_.length(), key.layout_key_.ptr(), key.layout_key_.length());
+      }
+      key_.assign_ptr(data, key.key_.length());
+      layout_key_.assign_ptr(data + key.key_.length(), key.layout_key_.length());
+    }
   }
   return ret;
 }
@@ -212,6 +226,7 @@ uint64_t ObDasDeserializeCacheKey::hash() const
   uint64_t hash_val = 0;
   hash_val = murmurhash(&type_, sizeof(type_), hash_val);
   hash_val = key_.hash(hash_val);
+  if (!layout_key_.empty()) { hash_val = layout_key_.hash(hash_val); }
   return hash_val;
 }
 
@@ -219,7 +234,7 @@ bool ObDasDeserializeCacheKey::is_equal(const ObILibCacheKey &other) const
 {
   const ObDasDeserializeCacheKey &key = static_cast<const ObDasDeserializeCacheKey&>(other);
   return type_ == key.type_
-      && key_ == key.key_;
+      && key_ == key.key_ && layout_key_ == key.layout_key_;
 }
 
 int ObDasDeserializeCacheNode::inner_get_cache_obj(ObILibCacheCtx &ctx,

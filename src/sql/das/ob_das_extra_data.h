@@ -27,7 +27,7 @@ public:
            const int64_t timeout_ts,
            const common::ObAddr &result_addr,
            rpc::frame::ObReqTransport *transport,
-           const bool enable_rich_format);
+           const bool enable_rich_format, bool use_compact_das_response);
   void set_output_info(const ExprFixedArray *output_exprs, ObEvalCtx *eval_ctx)
   {
     output_exprs_ = output_exprs;

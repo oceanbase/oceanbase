@@ -760,6 +760,9 @@ int ObRpcProxy::rpc_post(const typename pcodeStruct::Request &args,
           EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
         } else if (dst_data_size >= original_len) {
           need_compressed = false;
+          RPC_OBRPC_LOG(TRACE, "[RPC_COMPRESS_POC] request compression fallback",
+                      "pcode", pcodeStruct::PCODE, K_(compressor_type),
+                      K(dst_data_size), K(original_len));
           EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, original_len);
         } else {
           req.pkt_->set_content(req.buf(), dst_data_size);

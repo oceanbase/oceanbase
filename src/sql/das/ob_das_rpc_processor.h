@@ -170,10 +170,10 @@ public:
   common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() { return result_.get_op_results(); };
   const sql::ObDASTaskResp &get_task_resp() const { return result_; };
 
-  void set_task_resp_addrs(const common::ObAddr &ctrl_svr, const common::ObAddr &runner_svr)
+
+  void set_compact_das_response(bool use_compact_das_response)
   {
-    result_.set_ctrl_svr(ctrl_svr);
-    result_.set_runner_svr(runner_svr);
+    result_.set_compact_das_response(use_compact_das_response);
   }
 
   const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return context_->get_task_ops(); };

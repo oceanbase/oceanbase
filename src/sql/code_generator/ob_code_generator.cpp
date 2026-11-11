@@ -14,6 +14,8 @@
 
 #include "sql/code_generator/ob_code_generator.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "sql/das/ob_das_define.h"
 
 namespace oceanbase
 {
@@ -33,6 +35,15 @@ int ObCodeGenerator::generate(const ObLogPlan &log_plan,
     phy_plan.set_batch_size(batch_size);
   }
   phy_plan.set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  int64_t serialize_flags = 0;
+  if (OB_SUCC(ret) && phy_plan.get_min_cluster_version() >= CLUSTER_VERSION_4_4_2_4) {
+    if (tenant_config.is_valid()) {
+      serialize_flags |= tenant_config->_sql_rpc_opt_flags & ObSqlRpcOptFlags::COMPACT_SESSION_SERIALIZE;
+      serialize_flags |= tenant_config->_sql_rpc_opt_flags & ObSqlRpcOptFlags::COMPACT_EXPR_SERIALIZE;
+    }
+  }
+  phy_plan.set_serialize_compact_opt_flags(serialize_flags);
   phy_plan.set_enable_vec_batch_accum(log_plan.get_optimizer_context().get_enable_vec_batch_accum()
                                       && !disable_vec_batch_accum_for_ddl);
   if (OB_FAIL(ret)) {

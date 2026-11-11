@@ -2035,11 +2035,25 @@ int64_t ObStaticEngineExprCG::frame_max_offset(const ObExpr &e, const int64_t ba
   return size;
 };
 
-int ObStaticEngineExprCG::generate_partial_expr_frame(
-    const ObPhysicalPlan &plan,
-    ObExprFrameInfo &partial_expr_frame_info,
-    ObIArray<ObRawExpr *> &raw_exprs,
-    const bool use_rich_format)
+void ObStaticEngineExprCG::trim_frame(ObFrameInfo &frame, const ObExpr *farthest_expr, const int64_t batch_size,
+                                      const bool use_rich_format, const bool parameter_frame,
+                                      const bool trim_expr_count)
+{
+  const int64_t item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + (use_rich_format ? sizeof(VectorHeader) : 0);
+  const int64_t cnt =
+    nullptr == farthest_expr ? std::min<int64_t>(1, frame.expr_cnt_) : farthest_expr->datum_off_ / item_size + 1;
+  if (trim_expr_count) { frame.expr_cnt_ = std::min<int64_t>(frame.expr_cnt_, cnt); }
+  const int64_t size =
+    parameter_frame ?
+      cnt * item_size :
+      (nullptr == farthest_expr ? item_size :
+                                  std::max(item_size, frame_max_offset(*farthest_expr, batch_size, use_rich_format)));
+  frame.frame_size_ = std::min<int64_t>(frame.frame_size_, size);
+}
+
+int ObStaticEngineExprCG::generate_partial_expr_frame(const ObPhysicalPlan &plan,
+                                                      ObExprFrameInfo &partial_expr_frame_info,
+                                                      ObIArray<ObRawExpr *> &raw_exprs, const bool use_rich_format)
 {
   int ret = OB_SUCCESS;
   const ObExprFrameInfo &global = plan.get_expr_frame_info();
@@ -2173,41 +2187,22 @@ int ObStaticEngineExprCG::generate_partial_expr_frame(
     OZ(partial.param_frame_.assign(global.param_frame_));
     OZ(partial.dynamic_frame_.assign(global.dynamic_frame_));
     OZ(partial.datum_frame_.assign(global.datum_frame_));
-    int64_t item_size = 0;
-    if (use_rich_format) {
-      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo) + sizeof(VectorHeader);
-    } else {
-      item_size = sizeof(ObDatum) + sizeof(ObEvalInfo);
-    }
-    FOREACH_CNT_X(f, partial.param_frame_, OB_SUCC(ret)) {
+    FOREACH_CNT_X(f, partial.param_frame_, OB_SUCC(ret))
+    {
       ObExpr *e = farthest_exprs.at(f->frame_idx_);
-      int cnt = NULL == e
-          ? std::min<int64_t>(1, f->expr_cnt_)
-          : (e->datum_off_ / item_size) + 1;
-      f->expr_cnt_ = std::min<int64_t>(f->expr_cnt_, cnt);
-      f->frame_size_ = std::min<int64_t>(f->frame_size_, cnt * item_size);
+      trim_frame(*f, e, batch_size, use_rich_format, true, true);
       f->use_rich_format_ = plan.get_use_rich_format();
     }
-    FOREACH_CNT_X(f, partial.dynamic_frame_, OB_SUCC(ret)) {
+    FOREACH_CNT_X(f, partial.dynamic_frame_, OB_SUCC(ret))
+    {
       ObExpr *e = farthest_exprs.at(f->frame_idx_);
-      int cnt = NULL == e
-          ? std::min<int64_t>(1, f->expr_cnt_)
-          : (e->datum_off_ / item_size) + 1;
-      f->expr_cnt_ = std::min<int64_t>(f->expr_cnt_, cnt);
-      int64_t size = item_size; // avoid zero frame size
-      if (NULL != e) {
-        size = std::max(size, frame_max_offset(*e, batch_size, use_rich_format));
-      }
-      f->frame_size_ = std::min<int64_t>(size, f->frame_size_);
+      trim_frame(*f, e, batch_size, use_rich_format, false, true);
       f->use_rich_format_ = plan.get_use_rich_format();
     }
-    FOREACH_CNT_X(f, partial.datum_frame_, OB_SUCC(ret)) {
+    FOREACH_CNT_X(f, partial.datum_frame_, OB_SUCC(ret))
+    {
       ObExpr *e = farthest_exprs.at(f->frame_idx_);
-      int64_t size = item_size; // avoid zero frame size
-      if (NULL != e) {
-        size = std::max(size, frame_max_offset(*e, batch_size, use_rich_format));
-      }
-      f->frame_size_ = std::min<int64_t>(size, f->frame_size_);
+      trim_frame(*f, e, batch_size, use_rich_format, false, false);
     }
   }
 

@@ -249,8 +249,11 @@ int rpc_encode_unprepared_req(ObRpcProxy &proxy, uint64_t gtid, ObRpcPacketCode 
                       payload_buf, payload_sz, compressed_buf, payload_sz + max_overflow_size, dst_data_size))) {
         RPC_OBRPC_LOG(WARN, "compress failed", K(tmp_ret));
       } else if (dst_data_size >= payload_sz) {
+        RPC_OBRPC_LOG(TRACE, "[RPC_COMPRESS_POC] PNIO request compression fallback",
+                      K(pcode), K(compressor_type), K(dst_data_size), K(payload_sz));
       } else {
-        RPC_OBRPC_LOG(DEBUG, "compress request success", K(compressor_type), K(dst_data_size), K(payload_sz));
+        RPC_OBRPC_LOG(TRACE, "[RPC_COMPRESS_POC] PNIO request compressed",
+                      K(pcode), K(compressor_type), K(dst_data_size), K(payload_sz));
         // replace buf
         pkt.set_compressor_type(compressor_type);
         pkt.set_original_len(static_cast<int32_t>(payload_sz));
@@ -339,6 +342,7 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_decode);
   int ret = common::OB_SUCCESS;
   int64_t pos = 0;
+  char *uncompressed_buf = NULL;
   if (OB_FAIL(pkt.decode(resp_buf, resp_sz))) {
     RPC_OBRPC_LOG(WARN, "decode packet fail", KP(resp_buf), K(resp_sz), K(pos));
   } else if (OB_FAIL(pkt.verify_checksum())) {
@@ -347,7 +351,41 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
     UNIS_VERSION_GUARD(pkt.get_unis_version());
     const char* payload = pkt.get_cdata();
     int64_t limit = pkt.get_clen();
-    if (OB_FAIL(rcode.deserialize(payload, limit, pos))) {
+    const common::ObCompressorType compressor_type = pkt.get_compressor_type();
+    if (common::INVALID_COMPRESSOR != compressor_type) {
+      const int32_t original_len = pkt.get_original_len();
+      common::ObCompressor *compressor = NULL;
+      int64_t dst_data_size = 0;
+      if (OB_UNLIKELY(original_len <= 0 || original_len > get_max_rpc_packet_size())) {
+        ret = common::OB_INVALID_ARGUMENT;
+        RPC_OBRPC_LOG(WARN, "invalid compressed response original length", K(ret), K(original_len), K(limit));
+      } else if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(
+                     compressor_type, compressor))) {
+        RPC_OBRPC_LOG(WARN, "get response compressor failed", K(ret), K(compressor_type));
+      } else if (OB_ISNULL(compressor)) {
+        ret = common::OB_ERR_UNEXPECTED;
+        RPC_OBRPC_LOG(WARN, "response compressor is null", K(ret), K(compressor_type));
+      } else if (OB_ISNULL(uncompressed_buf = static_cast<char *>(
+                     common::ob_malloc(original_len, common::ObModIds::OB_RPC)))) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        RPC_OBRPC_LOG(WARN, "allocate response decompression buffer failed", K(ret), K(original_len));
+      } else if (OB_FAIL(compressor->decompress(
+                     payload, limit, uncompressed_buf, original_len, dst_data_size))) {
+        RPC_OBRPC_LOG(WARN, "decompress response failed", K(ret), K(compressor_type), K(limit), K(original_len));
+      } else if (OB_UNLIKELY(dst_data_size != original_len)) {
+        ret = common::OB_ERR_UNEXPECTED;
+        RPC_OBRPC_LOG(ERROR, "decompressed response length not match",
+                      K(ret), K(dst_data_size), K(original_len));
+      } else {
+        RPC_OBRPC_LOG(TRACE, "[RPC_COMPRESS_POC] response decompressed",
+                      "pcode", pkt.get_pcode(), K(compressor_type),
+                      "compressed_len", limit, K(original_len));
+        payload = uncompressed_buf;
+        limit = original_len;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(rcode.deserialize(payload, limit, pos))) {
       rcode.rcode_ = common::OB_DESERIALIZE_ERROR;
       RPC_OBRPC_LOG(WARN, "deserialize result code fail", KP(payload), K(limit), K(resp_sz), K(pos));
     } else {
@@ -359,6 +397,10 @@ int rpc_decode_resp(const char* resp_buf, int64_t resp_sz, T& result, ObRpcPacke
         ret = rcode.rcode_;
       }
     }
+  }
+  if (OB_NOT_NULL(uncompressed_buf)) {
+    common::ob_free(uncompressed_buf);
+    uncompressed_buf = NULL;
   }
   return ret;
 }

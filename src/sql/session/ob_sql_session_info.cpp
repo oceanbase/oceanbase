@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_SESSION
 
 #include "ob_sql_session_info.h"
+#include "sql/ob_sql_define.h"
 #include "rpc/ob_rpc_define.h"
 #include "pl/ob_pl_package.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
@@ -36,6 +37,7 @@
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "storage/tablet/ob_tablet_to_global_temporary_table_operator.h"
 #include "pl/external_routine/ob_java_udf.h"
+#include "lib/utility/ob_print_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -2433,16 +2435,23 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo::ApplicationInfo)
   return len;
 }
 
+int64_t ObSQLSessionInfo::get_serialize_version_() const
+{
+  int64_t version = UNIS_VERSION;
+  if (is_compact_session_serialize()) {
+    version = COMPACT_SESSION_VERSION;
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0
+      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
+    version = 1;
+  }
+  return version;
+}
+
 int ObSQLSessionInfo::serialize(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0 &&
-      GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0) {
-    const int64_t compat_version = 1;
-    OB_UNIS_ENCODE(compat_version);
-  } else {
-    OB_UNIS_ENCODE(UNIS_VERSION);
-  }
+  const int64_t serialize_start = pos;
+  OB_UNIS_ENCODE(get_serialize_version_());
   if (OB_SUCC(ret)) {
     int64_t size_nbytes = common::serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
     int64_t pos_bak = (pos += size_nbytes);
@@ -2457,40 +2466,45 @@ int ObSQLSessionInfo::serialize(char *buf, int64_t buf_len, int64_t &pos) const
         size_nbytes, tmp_pos, serial_size);
     }
   }
+  LOG_TRACE("[SESSION_SYSVAR_COMPACT] SQL session wrapper",
+      K(ret), "compact_session", is_compact_session_serialize(), "total_bytes", pos - serialize_start);
   return ret;
 }
 
 int ObSQLSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
+  const bool compact_session_serialize = is_compact_session_serialize();
   BASE_SER((ObSQLSessionInfo, ObBasicSessionInfo));
   LST_DO_CODE(OB_UNIS_ENCODE,
       thread_data_.cur_query_start_time_,
       user_priv_set_,
       db_priv_set_,
       trans_type_,
-      global_sessid_,
-      inner_flag_,
-      is_max_availability_mode_,
-      session_type_,
-      has_temp_table_flag_,
-      enable_early_lock_release_,
-      enable_role_array_,
-      in_definer_named_proc_,
-      priv_user_id_,
-      xa_end_timeout_seconds_,
-      prelock_,
-      proxy_version_,
-      min_proxy_version_ps_,
-      thread_data_.is_in_retry_,
-      ddl_info_,
+      global_sessid_);
+  OB_UNIS_ENCODE(inner_flag_);
+  OB_UNIS_ENCODE_IF(is_max_availability_mode_, !compact_session_serialize);
+  OB_UNIS_ENCODE(session_type_);
+  LST_DO_CODE(OB_UNIS_ENCODE, has_temp_table_flag_, enable_early_lock_release_);
+  LST_DO_CODE(OB_UNIS_ENCODE, enable_role_array_, in_definer_named_proc_);
+  LST_DO_CODE(OB_UNIS_ENCODE, priv_user_id_, xa_end_timeout_seconds_);
+  OB_UNIS_ENCODE(prelock_);
+  LST_DO_CODE(OB_UNIS_ENCODE, proxy_version_, min_proxy_version_ps_);
+  OB_UNIS_ENCODE(thread_data_.is_in_retry_);
+  const bool has_ddl_info = !ddl_info_.is_ddl_info_empty();
+  OB_UNIS_ENCODE_IF(has_ddl_info, compact_session_serialize);
+  OB_UNIS_ENCODE_IF(ddl_info_, !compact_session_serialize || has_ddl_info);
+  LST_DO_CODE(OB_UNIS_ENCODE,
       gtt_session_scope_unique_id_,
-      gtt_trans_scope_unique_id_,
+      gtt_trans_scope_unique_id_);
+  LST_DO_CODE(OB_UNIS_ENCODE,
       gtt_session_scope_ids_,
-      gtt_trans_scope_ids_,
+      gtt_trans_scope_ids_);
+  LST_DO_CODE(OB_UNIS_ENCODE,
       affected_rows_,
-      unit_gc_min_sup_proxy_version_,
-      gtt_tablet_info_map_,
+      unit_gc_min_sup_proxy_version_);
+  OB_UNIS_ENCODE(gtt_tablet_info_map_);
+  LST_DO_CODE(OB_UNIS_ENCODE,
       trans_gtt_v2_sequence_,
       min_data_version_of_init_sess_);
   OZ (const_cast<ObSQLSessionInfo *>(this)->serialize_remote_extra_sess_state_(buf, buf_len, pos));
@@ -2513,26 +2527,42 @@ int ObSQLSessionInfo::serialize_remote_extra_sess_state_(char *buf,
                                                          int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  OZ (app_info_encoder_.serialize(*this, buf, buf_len, pos));
+  const bool compact_session_serialize = is_compact_session_serialize();
+  const bool has_application_info = !client_app_info_.is_empty();
+  OB_UNIS_ENCODE_IF(has_application_info, compact_session_serialize);
+  if (!compact_session_serialize || has_application_info) {
+    OZ (app_info_encoder_.serialize(*this, buf, buf_len, pos));
+  }
   OZ (client_id_info_encoder_.serialize(*this, buf, buf_len, pos));
   OZ (app_ctx_info_encoder_.serialize(*this, buf, buf_len, pos));
   OZ (sequence_currval_encoder_.serialize(*this, buf, buf_len, pos));
-  OZ (control_info_encoder_.serialize(*this, buf, buf_len, pos));
+  if (!compact_session_serialize) {
+    OZ (control_info_encoder_.serialize(*this, buf, buf_len, pos));
+  }
   return ret;
 }
 
 int ObSQLSessionInfo::deserialize_remote_extra_sess_state_(const char *buf,
                                                             int64_t data_len,
-                                                            int64_t &pos)
+                                                            int64_t &pos,
+                                                            const bool compact_session_serialize)
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
-  OZ (app_info_encoder_.deserialize(*this, buf, data_len, pos));
+  bool has_application_info = true;
+  OB_UNIS_DECODE_IF(has_application_info, compact_session_serialize);
+  if (has_application_info) {
+    OZ (app_info_encoder_.deserialize(*this, buf, data_len, pos));
+  } else {
+    client_app_info_.reset();
+  }
   OZ (client_id_info_encoder_.deserialize(*this, buf, data_len, pos));
   OZ (app_ctx_info_encoder_.deserialize(*this, buf, data_len, pos));
   OX (recalc_curr_session_context_size_());
   OZ (sequence_currval_encoder_.deserialize(*this, buf, data_len, pos));
-  OZ (control_info_encoder_.deserialize(*this, buf, data_len, pos));
+  if (!compact_session_serialize) {
+    OZ (control_info_encoder_.deserialize(*this, buf, data_len, pos));
+  }
   return ret;
 }
 
@@ -2541,8 +2571,13 @@ int ObSQLSessionInfo::calc_remote_extra_sess_state_serialize_size_(int64_t &len)
   int ret = OB_SUCCESS;
   int64_t part_len = 0;
   len = 0;
-  OZ (app_info_encoder_.get_serialize_size(*this, part_len));
-  len += part_len;
+  const bool compact_session_serialize = is_compact_session_serialize();
+  const bool has_application_info = !client_app_info_.is_empty();
+  OB_UNIS_ADD_LEN_IF(has_application_info, compact_session_serialize);
+  if (!compact_session_serialize || has_application_info) {
+    OZ (app_info_encoder_.get_serialize_size(*this, part_len));
+    len += part_len;
+  }
   part_len = 0;
   OZ (client_id_info_encoder_.get_serialize_size(*this, part_len));
   len += part_len;
@@ -2553,8 +2588,10 @@ int ObSQLSessionInfo::calc_remote_extra_sess_state_serialize_size_(int64_t &len)
   OZ (sequence_currval_encoder_.get_serialize_size(*this, part_len));
   len += part_len;
   part_len = 0;
-  OZ (control_info_encoder_.get_serialize_size(*this, part_len));
-  len += part_len;
+  if (!compact_session_serialize) {
+    OZ (control_info_encoder_.get_serialize_size(*this, part_len));
+    len += part_len;
+  }
   return ret;
 }
 
@@ -2892,6 +2929,20 @@ int ObSQLSessionInfo::das_serialize_split_size(int64_t &inv_len, int64_t &var_le
     }                                           \
   } while (0)
 
+#define DAS_SESSION_ENCODE_INV_IF(value, condition) \
+  do {                                              \
+    if (invariant_phase && (condition)) {           \
+      OB_UNIS_ENCODE(value);                        \
+    }                                               \
+  } while (0)
+
+#define DAS_SESSION_DECODE_INV_IF(value, condition) \
+  do {                                              \
+    if (invariant_phase && (condition)) {           \
+      OB_UNIS_DECODE(value);                        \
+    }                                               \
+  } while (0)
+
 #define DAS_SESSION_ADD_LEN_INV(...)            \
   do {                                           \
     if (invariant_phase) {                       \
@@ -2906,19 +2957,28 @@ int ObSQLSessionInfo::das_serialize_split_size(int64_t &inv_len, int64_t &var_le
     }                                            \
   } while (0)
 
+#define DAS_SESSION_ADD_LEN_INV_IF(value, condition) \
+  do {                                                \
+    if (invariant_phase && (condition)) {             \
+      OB_UNIS_ADD_LEN(value);                         \
+    }                                                 \
+  } while (0)
+
 int ObSQLSessionInfo::das_serialize_sql_block_payload_(char *buf,
                                                        int64_t buf_len,
                                                        int64_t &pos,
                                                        const bool invariant_phase) const
 {
   int ret = OB_SUCCESS;
+  const bool compact_session_serialize = is_compact_session_serialize();
   DAS_SESSION_ENCODE_VAR(thread_data_.cur_query_start_time_);            // [VOLATILE] per-query
   DAS_SESSION_ENCODE_INV(user_priv_set_,
           db_priv_set_);
   DAS_SESSION_ENCODE_VAR(trans_type_);                                   // [VOLATILE] tx
   DAS_SESSION_ENCODE_INV(global_sessid_,
-          inner_flag_,
-          is_max_availability_mode_,
+          inner_flag_);
+  DAS_SESSION_ENCODE_INV_IF(is_max_availability_mode_, !compact_session_serialize);
+  DAS_SESSION_ENCODE_INV(
           session_type_,
           has_temp_table_flag_,
           enable_early_lock_release_,
@@ -2930,8 +2990,10 @@ int ObSQLSessionInfo::das_serialize_sql_block_payload_(char *buf,
           proxy_version_,
           min_proxy_version_ps_);
   DAS_SESSION_ENCODE_VAR(thread_data_.is_in_retry_);                     // [VOLATILE] retry status
-  DAS_SESSION_ENCODE_INV(ddl_info_,
-          gtt_session_scope_unique_id_,
+  const bool has_ddl_info = !ddl_info_.is_ddl_info_empty();
+  DAS_SESSION_ENCODE_INV_IF(has_ddl_info, compact_session_serialize);
+  DAS_SESSION_ENCODE_INV_IF(ddl_info_, !compact_session_serialize || has_ddl_info);
+  DAS_SESSION_ENCODE_INV(gtt_session_scope_unique_id_,
           gtt_trans_scope_unique_id_,
           gtt_session_scope_ids_,
           gtt_trans_scope_ids_);
@@ -2955,13 +3017,18 @@ int ObSQLSessionInfo::das_deserialize_sql_block_payload_(const char *buf,
                                                          const bool invariant_phase)
 {
   int ret = OB_SUCCESS;
+  const bool compact_session_serialize = is_compact_session_serialize();
   DAS_SESSION_DECODE_VAR(thread_data_.cur_query_start_time_);
   DAS_SESSION_DECODE_INV(user_priv_set_,
           db_priv_set_);
   DAS_SESSION_DECODE_VAR(trans_type_);
   DAS_SESSION_DECODE_INV(global_sessid_,
-          inner_flag_,
-          is_max_availability_mode_,
+          inner_flag_);
+  if (invariant_phase && compact_session_serialize) {
+    is_max_availability_mode_ = false;
+  }
+  DAS_SESSION_DECODE_INV_IF(is_max_availability_mode_, !compact_session_serialize);
+  DAS_SESSION_DECODE_INV(
           session_type_,
           has_temp_table_flag_,
           enable_early_lock_release_,
@@ -2973,8 +3040,13 @@ int ObSQLSessionInfo::das_deserialize_sql_block_payload_(const char *buf,
           proxy_version_,
           min_proxy_version_ps_);
   DAS_SESSION_DECODE_VAR(thread_data_.is_in_retry_);
-  DAS_SESSION_DECODE_INV(ddl_info_,
-          gtt_session_scope_unique_id_,
+  bool has_ddl_info = true;
+  DAS_SESSION_DECODE_INV_IF(has_ddl_info, compact_session_serialize);
+  DAS_SESSION_DECODE_INV_IF(ddl_info_, !compact_session_serialize || has_ddl_info);
+  if (invariant_phase && !has_ddl_info) {
+    ddl_info_.reset();
+  }
+  DAS_SESSION_DECODE_INV(gtt_session_scope_unique_id_,
           gtt_trans_scope_unique_id_,
           gtt_session_scope_ids_,
           gtt_trans_scope_ids_);
@@ -2984,7 +3056,8 @@ int ObSQLSessionInfo::das_deserialize_sql_block_payload_(const char *buf,
           trans_gtt_v2_sequence_,
           min_data_version_of_init_sess_);
   if (OB_SUCC(ret) && !invariant_phase) {
-    if (OB_FAIL(deserialize_remote_extra_sess_state_(buf, data_len, pos))) {
+    if (OB_FAIL(deserialize_remote_extra_sess_state_(
+            buf, data_len, pos, compact_session_serialize))) {
       LOG_WARN("deserialize das volatile remote extra session state failed", K(ret));
     } else {
       (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
@@ -2999,13 +3072,15 @@ int ObSQLSessionInfo::das_get_sql_block_payload_size_(
 {
   int ret = OB_SUCCESS;
   len = 0;
+  const bool compact_session_serialize = is_compact_session_serialize();
   DAS_SESSION_ADD_LEN_VAR(thread_data_.cur_query_start_time_);
   DAS_SESSION_ADD_LEN_INV(user_priv_set_,
            db_priv_set_);
   DAS_SESSION_ADD_LEN_VAR(trans_type_);
   DAS_SESSION_ADD_LEN_INV(global_sessid_,
-           inner_flag_,
-           is_max_availability_mode_,
+           inner_flag_);
+  DAS_SESSION_ADD_LEN_INV_IF(is_max_availability_mode_, !compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV(
            session_type_,
            has_temp_table_flag_,
            enable_early_lock_release_,
@@ -3017,8 +3092,10 @@ int ObSQLSessionInfo::das_get_sql_block_payload_size_(
            proxy_version_,
            min_proxy_version_ps_);
   DAS_SESSION_ADD_LEN_VAR(thread_data_.is_in_retry_);
-  DAS_SESSION_ADD_LEN_INV(ddl_info_,
-           gtt_session_scope_unique_id_,
+  const bool has_ddl_info = !ddl_info_.is_ddl_info_empty();
+  DAS_SESSION_ADD_LEN_INV_IF(has_ddl_info, compact_session_serialize);
+  DAS_SESSION_ADD_LEN_INV_IF(ddl_info_, !compact_session_serialize || has_ddl_info);
+  DAS_SESSION_ADD_LEN_INV(gtt_session_scope_unique_id_,
            gtt_trans_scope_unique_id_,
            gtt_session_scope_ids_,
            gtt_trans_scope_ids_);
@@ -3041,10 +3118,13 @@ int ObSQLSessionInfo::das_get_sql_block_payload_size_(
 
 #undef DAS_SESSION_ENCODE_INV
 #undef DAS_SESSION_ENCODE_VAR
+#undef DAS_SESSION_ENCODE_INV_IF
 #undef DAS_SESSION_DECODE_INV
 #undef DAS_SESSION_DECODE_VAR
+#undef DAS_SESSION_DECODE_INV_IF
 #undef DAS_SESSION_ADD_LEN_INV
 #undef DAS_SESSION_ADD_LEN_VAR
+#undef DAS_SESSION_ADD_LEN_INV_IF
 
 int ObSQLSessionInfo::das_apply_sql_invariant_from_(const ObSQLSessionInfo &templ)
 {
@@ -3151,8 +3231,24 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
   int ret = OB_SUCCESS;
   int64_t version = 0;
   int64_t len = 0;
+  bool sql_compact = false;
 
   OB_UNIS_DECODE(version);
+  if (OB_SUCC(ret)) {
+    switch (version) {
+      case 1:
+      case 2:
+      case UNIS_VERSION:
+        break;
+      case COMPACT_SESSION_VERSION:
+        sql_compact = true;
+        break;
+      default:
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("unsupported SQL session version", K(ret), K(version));
+        break;
+    }
+  }
   OB_UNIS_DECODE(len);
   if (OB_SUCC(ret)) {
     if (len < 0) {
@@ -3170,26 +3266,32 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
     pos = 0;
 
     BASE_DESER((ObSQLSessionInfo, ObBasicSessionInfo));
+    const bool compact_session_serialize = sql_compact;
     LST_DO_CODE(OB_UNIS_DECODE,
         thread_data_.cur_query_start_time_,
         user_priv_set_,
         db_priv_set_,
         trans_type_,
-        global_sessid_,
-        inner_flag_,
-        is_max_availability_mode_,
-        session_type_,
-        has_temp_table_flag_,
-        enable_early_lock_release_,
-        enable_role_array_,
-        in_definer_named_proc_,
-        priv_user_id_,
-        xa_end_timeout_seconds_,
-        prelock_,
-        proxy_version_,
-        min_proxy_version_ps_,
-        thread_data_.is_in_retry_,
-        ddl_info_,
+        global_sessid_);
+    OB_UNIS_DECODE(inner_flag_);
+    if (compact_session_serialize) {
+      is_max_availability_mode_ = false;
+    }
+    OB_UNIS_DECODE_IF(is_max_availability_mode_, !compact_session_serialize);
+    OB_UNIS_DECODE(session_type_);
+    LST_DO_CODE(OB_UNIS_DECODE, has_temp_table_flag_, enable_early_lock_release_);
+    LST_DO_CODE(OB_UNIS_DECODE, enable_role_array_, in_definer_named_proc_);
+    LST_DO_CODE(OB_UNIS_DECODE, priv_user_id_, xa_end_timeout_seconds_);
+    OB_UNIS_DECODE(prelock_);
+    LST_DO_CODE(OB_UNIS_DECODE, proxy_version_, min_proxy_version_ps_);
+    OB_UNIS_DECODE(thread_data_.is_in_retry_);
+    bool has_ddl_info = true;
+    OB_UNIS_DECODE_IF(has_ddl_info, compact_session_serialize);
+    OB_UNIS_DECODE_IF(ddl_info_, !compact_session_serialize || has_ddl_info);
+    if (!has_ddl_info) {
+      ddl_info_.reset();
+    }
+    LST_DO_CODE(OB_UNIS_DECODE,
         gtt_session_scope_unique_id_,
         gtt_trans_scope_unique_id_,
         gtt_session_scope_ids_,
@@ -3215,7 +3317,8 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
     OB_UNIS_DECODE(trans_gtt_v2_sequence_);
     OB_UNIS_DECODE(min_data_version_of_init_sess_);
     if (OB_SUCC(ret) && pos < len) {
-      OZ (deserialize_remote_extra_sess_state_(buf, data_len, pos));
+      OZ (deserialize_remote_extra_sess_state_(
+          buf, data_len, pos, compact_session_serialize));
     }
     (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
 
@@ -3228,27 +3331,27 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
 OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
 {
   int64_t len = 0;
+  const bool compact_session_serialize = is_compact_session_serialize();
   BASE_ADD_LEN((ObSQLSessionInfo, ObBasicSessionInfo));
   LST_DO_CODE(OB_UNIS_ADD_LEN,
       thread_data_.cur_query_start_time_,
       user_priv_set_,
       db_priv_set_,
       trans_type_,
-      global_sessid_,
-      inner_flag_,
-      is_max_availability_mode_,
-      session_type_,
-      has_temp_table_flag_,
-      enable_early_lock_release_,
-      enable_role_array_,
-      in_definer_named_proc_,
-      priv_user_id_,
-      xa_end_timeout_seconds_,
-      prelock_,
-      proxy_version_,
-      min_proxy_version_ps_,
-      thread_data_.is_in_retry_,
-      ddl_info_,
+      global_sessid_);
+  OB_UNIS_ADD_LEN(inner_flag_);
+  OB_UNIS_ADD_LEN_IF(is_max_availability_mode_, !compact_session_serialize);
+  OB_UNIS_ADD_LEN(session_type_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, has_temp_table_flag_, enable_early_lock_release_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, enable_role_array_, in_definer_named_proc_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, priv_user_id_, xa_end_timeout_seconds_);
+  OB_UNIS_ADD_LEN(prelock_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, proxy_version_, min_proxy_version_ps_);
+  OB_UNIS_ADD_LEN(thread_data_.is_in_retry_);
+  const bool has_ddl_info = !ddl_info_.is_ddl_info_empty();
+  OB_UNIS_ADD_LEN_IF(has_ddl_info, compact_session_serialize);
+  OB_UNIS_ADD_LEN_IF(ddl_info_, !compact_session_serialize || has_ddl_info);
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
       gtt_session_scope_unique_id_,
       gtt_trans_scope_unique_id_,
       gtt_session_scope_ids_,
@@ -4606,6 +4709,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&record_ps_execute_params_, tenant_config->_record_ps_execute_params);
       ATOMIC_STORE(&enable_pl_sql_parameterize_, tenant_config->_enable_pl_sql_parameterize);
       ATOMIC_STORE(&enable_ps_meta_response_optimize_, tenant_config->enable_ps_meta_response_optimize);
+      ATOMIC_STORE(&enable_das_rpc_compress_,
+                   (tenant_config->_sql_rpc_opt_flags & ObSqlRpcOptFlags::DAS_RPC_COMPRESS) != 0);
       ATOMIC_STORE(&das_deserialize_lib_cache_percentage_, tenant_config->_das_deserialize_lib_cache_percentage);
       ATOMIC_STORE(&enable_das_scan_iter_reuse_, tenant_config->_enable_das_scan_iter_reuse);
     }

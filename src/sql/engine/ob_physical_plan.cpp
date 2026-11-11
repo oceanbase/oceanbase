@@ -115,6 +115,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     is_packed_(false),
     has_instead_of_trigger_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    serialize_compact_opt_flags_(0),
     need_record_plan_info_(false),
     enable_append_(false),
     append_table_id_(0),
@@ -240,6 +241,7 @@ void ObPhysicalPlan::reset()
   encrypt_meta_array_.reset();
   need_serial_exec_ = false;
   batch_size_ = 0;
+  serialize_compact_opt_flags_ = 0;
   contain_pl_udf_or_trigger_ = false;
   is_packed_ = false;
   has_instead_of_trigger_ = false;
@@ -307,6 +309,7 @@ int ObPhysicalPlan::copy_common_info(ObPhysicalPlan &src)
   //copy plan_id/hint/privs
   object_id_ = src.object_id_;
   min_cluster_version_ = src.min_cluster_version_;
+  serialize_compact_opt_flags_ = src.serialize_compact_opt_flags_;
   disable_auto_memory_mgr_ = src.disable_auto_memory_mgr_;
   if (OB_FAIL(set_phy_plan_hint(src.get_phy_plan_hint()))) {
     LOG_WARN("Failed to copy query hint", K(ret));
@@ -949,7 +952,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     need_strong_routing_,
                     enable_vec_batch_accum_,
                     phy_hint_.lookup_batch_rpc_flag_,
-                    try_ls_snapshot_first_);
+                    try_ls_snapshot_first_,
+                    serialize_compact_opt_flags_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

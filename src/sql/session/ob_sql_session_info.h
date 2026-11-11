@@ -644,6 +644,7 @@ class ObSQLSessionInfo: public common::ObVersionProvider, public ObBasicSessionI
   // compatibility handling based on the version number during deserialization.
   // notice: Do not modify the version number arbitrarily.
   OB_UNIS_VERSION(3);
+  static const int64_t COMPACT_SESSION_VERSION = 4;
 public:
   friend class LinkExecCtxGuard;
   // notice!!! register exec ctx to session for later access
@@ -898,6 +899,7 @@ public:
                                  enable_fk_skip_parent_pure_lock_(false),
                                  enable_json_bin_view_(false),
                                  enable_ps_meta_response_optimize_(false),
+                                 enable_das_rpc_compress_(false),
                                  das_deserialize_lib_cache_percentage_(0),
                                  session_(session),
                                  enable_das_scan_iter_reuse_(false)
@@ -973,6 +975,7 @@ public:
     bool enable_fk_skip_parent_pure_lock() const { return ATOMIC_LOAD(&enable_fk_skip_parent_pure_lock_); }
     bool enable_json_bin_view() const { return enable_json_bin_view_; }
     bool enable_ps_meta_response_optimize() const { return enable_ps_meta_response_optimize_; }
+    bool enable_das_rpc_compress() const { return ATOMIC_LOAD(&enable_das_rpc_compress_); }
     int64_t get_das_deserialize_lib_cache_percentage() const { return ATOMIC_LOAD(&das_deserialize_lib_cache_percentage_); }
     bool enable_das_scan_iter_reuse() const { return ATOMIC_LOAD(&enable_das_scan_iter_reuse_); }
   private:
@@ -1030,6 +1033,7 @@ public:
     bool enable_fk_skip_parent_pure_lock_;
     bool enable_json_bin_view_;
     bool enable_ps_meta_response_optimize_;
+    bool enable_das_rpc_compress_;
     int64_t das_deserialize_lib_cache_percentage_;
     ObSQLSessionInfo *session_;
     bool enable_das_scan_iter_reuse_;
@@ -1045,6 +1049,10 @@ public:
       module_name_.reset();
       action_name_.reset();
       client_info_.reset();
+    }
+    bool is_empty() const
+    {
+      return module_name_.empty() && action_name_.empty() && client_info_.empty();
     }
     TO_STRING_KV(K_(module_name), K_(action_name), K_(client_info));
   };
@@ -1993,6 +2001,12 @@ public:
     return cached_tenant_config_info_.enable_das_scan_iter_reuse();
   }
 
+  bool is_enable_das_rpc_compress()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_das_rpc_compress();
+  }
+
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
   void set_proxy_version(uint64_t v) { proxy_version_ = v; }
@@ -2132,8 +2146,12 @@ private:
   inline int init_mem_context(uint64_t tenant_id);
   inline int64_t get_truncated_sql_len(const ObString &stmt) override;
   int serialize_remote_extra_sess_state_(char *buf, int64_t buf_len, int64_t &pos);
-  int deserialize_remote_extra_sess_state_(const char *buf, int64_t data_len, int64_t &pos);
+  int deserialize_remote_extra_sess_state_(const char *buf,
+                                           int64_t data_len,
+                                           int64_t &pos,
+                                           const bool compact_session_serialize);
   int calc_remote_extra_sess_state_serialize_size_(int64_t &len);
+  int64_t get_serialize_version_() const;
   void recalc_curr_session_context_size_();
 
   static const int64_t MAX_STORED_PLANS_COUNT = 10240;

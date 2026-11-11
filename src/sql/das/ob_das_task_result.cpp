@@ -35,6 +35,7 @@ ObDASTCB::ObDASTCB()
     is_exiting_(false),
     is_vectorized_(false),
     enable_rich_format_(false),
+    use_compact_das_response_(false),
     read_rows_(0),
     max_batch_size_(0),
     stored_row_(NULL),
@@ -378,7 +379,7 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
                                          int64_t read_rows,
                                          const ObDASScanCtDef *scan_ctdef,
                                          ObDASScanRtDef *scan_rtdef,
-                                         ObDASScanOp &scan_op)
+                                         ObDASScanOp &scan_op, const bool use_compact_das_response)
 {
   int ret = OB_SUCCESS;
   DASTCBInfo tcb_info(task_id);
@@ -418,6 +419,7 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
       } else if (OB_FAIL(tcb->init(task_id, scan_rtdef, scan_ctdef, output_exprs, mem_profile_key,
                                    mem_profile_info, interrupt_info))) {
         LOG_WARN("tcb init failed", KR(ret));
+      } else if (FALSE_IT(tcb->use_compact_das_response_ = use_compact_das_response)) {
       } else if (enable_rich_format) {
         OZ(save_task_result_by_vector(read_rows, output_exprs, eval_ctx,
                                           tcb, result, scan_rtdef, mem_profile_info));
@@ -884,6 +886,8 @@ int ObDASTaskResultMgr::iterator_task_result(ObDASDataFetchRes &res,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mem profile is null when fetch tcb result, it should not happen", K(ret), K(mem_profile_key));
     } else {
+      res.set_compact_das_response(tcb->use_compact_das_response_);
+      res.set_enable_rich_format(tcb->enable_rich_format_);
       if (tcb->enable_rich_format_) {
         int64_t row_cnt_before = tcb->vec_row_store_->get_row_cnt_in_memory();
         OZ (fetch_result_by_vector(tcb, res, has_more));

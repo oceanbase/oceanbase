@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "lib/utility/utility.h"
 #include "observer/omt/ob_tenant.h"
+#include "sql/das/ob_das_utils.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_data_access_service.h"
 #include "sql/das/ob_das_task.h"
@@ -276,11 +277,16 @@ int ObBatchRpcProxy::post_batch(uint64_t tenant_id, const common::ObAddr &addr, 
       rpc_timeout = simulate_timeout;
       RPC_LOG(INFO, "simulate lookup batch rpc timeout", K(rpc_timeout), K(batch_type), K(tenant_id), K(addr));
     }
+    // Batch workers do not own an SQL Session. The tenant id selects the
+    // tenant-level DAS compressor configuration here.
+    const common::ObCompressorType compressor_type =
+        sql::ObDASUtils::get_rpc_compressor_type(tenant_id);
     ret = this->to(addr)
               .dst_cluster_id(dst_cluster_id)
               .by(tenant_id)
               .as(tenant_id)
               .timeout(rpc_timeout)
+              .compressed(compressor_type)
               .post_packet(pkt, &s_lookup_cb);
   } else {
     ret = this->to(addr).dst_cluster_id(dst_cluster_id).by(tenant_id).as(OB_SERVER_TENANT_ID).post_packet(pkt, &s_cb);

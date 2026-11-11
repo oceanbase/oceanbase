@@ -213,10 +213,11 @@ int ObDynamicParamSetter::update_dynamic_param(ObEvalCtx &eval_ctx, ObDatum &dat
 
 void ObDynamicParamSetter::clear_parent_evaluated_flag(ObEvalCtx &eval_ctx, const ObExpr &expr)
 {
-  for (int64_t i = 0; i < expr.parent_cnt_; i++) {
-    clear_parent_evaluated_flag(eval_ctx, *expr.parents_[i]);
+  // Partial PX layout holes have no executable frame offsets.
+  if (T_INVALID != expr.type_) {
+    for (int64_t i = 0; i < expr.parent_cnt_; i++) { clear_parent_evaluated_flag(eval_ctx, *expr.parents_[i]); }
+    expr.get_eval_info(eval_ctx).clear_evaluated_flag();
   }
-  expr.get_eval_info(eval_ctx).clear_evaluated_flag();
 }
 
 ObOpSpec::ObOpSpec(ObIAllocator &alloc, const ObPhyOperatorType type)

@@ -183,6 +183,9 @@ public:
 
   static int init_temp_expr_mem_size(ObTempExpr &temp_expr);
   static int64_t frame_max_offset(const ObExpr &e, const int64_t batch_size, const bool use_rich_format);
+  // Both CG and compact replay start with the complete frame metadata.
+  static void trim_frame(ObFrameInfo &frame, const ObExpr *farthest_expr, const int64_t batch_size,
+                         const bool use_rich_format, const bool parameter_frame, const bool trim_expr_count);
 
 private:
   static ObExpr *get_rt_expr(const ObRawExpr &raw_expr);

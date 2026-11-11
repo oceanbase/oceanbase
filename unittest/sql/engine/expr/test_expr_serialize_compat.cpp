@@ -120,8 +120,7 @@ OB_DEF_SERIALIZE(ObExpr42x)
               obj_datum_map_,
               ser_eval_func_,
               serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
-              serialization::make_ser_carray(args_, arg_cnt_),
-              serialization::make_ser_carray(parents_, parent_cnt_),
+              serialization::make_ser_carray(args_, arg_cnt_), serialization::make_ser_carray(parents_, parent_cnt_),
               frame_idx_,
               datum_off_,
               res_buf_off_,
@@ -154,6 +153,23 @@ OB_DEF_SERIALIZE(ObExpr42x)
   return ret;
 }
 
+OB_DEF_SERIALIZE_SIZE(ObExpr42x)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, type_, datum_meta_, obj_meta_, max_length_, obj_datum_map_, ser_eval_func_,
+              serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
+              serialization::make_ser_carray(args_, arg_cnt_), serialization::make_ser_carray(parents_, parent_cnt_),
+              frame_idx_, datum_off_, res_buf_off_, res_buf_len_, expr_ctx_id_, extra_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, eval_info_off_, flag_, ser_eval_batch_func_, eval_flags_off_, pvt_skip_off_);
+  ObExprOperatorType type = T_INVALID;
+  if (nullptr != extra_info_) { type = extra_info_->type_; }
+  OB_UNIS_ADD_LEN(type);
+  if (T_INVALID != type) { OB_UNIS_ADD_LEN(*extra_info_); }
+  OB_UNIS_ADD_LEN(dyn_buf_header_offset_);
+  OB_UNIS_ADD_LEN(local_session_var_id_);
+  return len;
+}
+
 int ObExpr42x::deserialize(const char *buf, const int64_t data_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -169,8 +185,7 @@ int ObExpr42x::deserialize(const char *buf, const int64_t data_len, int64_t &pos
               obj_datum_map_,
               ser_eval_func_,
               serialization::make_ser_carray(ser_inner_functions_, inner_func_cnt_),
-              serialization::make_ser_carray(args_, arg_cnt_),
-              serialization::make_ser_carray(parents_, parent_cnt_),
+              serialization::make_ser_carray(args_, arg_cnt_), serialization::make_ser_carray(parents_, parent_cnt_),
               frame_idx_,
               datum_off_,
               res_buf_off_,

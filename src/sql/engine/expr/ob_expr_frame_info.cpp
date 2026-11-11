@@ -34,6 +34,7 @@ int ObExprFrameInfo::assign(const ObExprFrameInfo &other,
 {
   int ret = OB_SUCCESS;
   need_ctx_cnt_ = other.need_ctx_cnt_;
+  partial_frame_ = other.partial_frame_;
 
   if (OB_FAIL(rt_exprs_.assign(other.rt_exprs_))) {
     LOG_WARN("failed to copy rt exprs", K(ret));

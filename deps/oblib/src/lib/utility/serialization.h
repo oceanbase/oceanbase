@@ -26,6 +26,50 @@ namespace common
 {
 namespace serialization
 {
+static constexpr int64_t SER_COMPACT_OPT_VERSION = 4;
+
+enum class SerCompactState : uint8_t
+{
+  UNKNOWN,
+  LEGACY,
+  V4
+};
+
+OB_INLINE int merge_ser_compact_state(const SerCompactState next, SerCompactState &state)
+{
+  int ret = OB_SUCCESS;
+  if (SerCompactState::UNKNOWN == next) {
+  } else if (SerCompactState::UNKNOWN == state || state == next) {
+    state = next;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+  }
+  return ret;
+}
+
+OB_INLINE bool &using_v4_encoding()
+{
+  RLOCAL_INLINE(bool, g_using_v4_encoding);
+  return g_using_v4_encoding;
+}
+
+class SerCompactEncodingGuard final
+{
+public:
+  explicit SerCompactEncodingGuard(const bool enable = true) : saved_(using_v4_encoding())
+  {
+    using_v4_encoding() = enable;
+  }
+  ~SerCompactEncodingGuard()
+  {
+    using_v4_encoding() = saved_;
+  }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(SerCompactEncodingGuard);
+  bool saved_;
+};
+
 const uint64_t OB_MAX_V1B = (__UINT64_C(1) << 7) - 1;
 const uint64_t OB_MAX_V2B = (__UINT64_C(1) << 14) - 1;
 const uint64_t OB_MAX_V3B = (__UINT64_C(1) << 21) - 1;
