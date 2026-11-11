@@ -114,6 +114,10 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 [Introduction to system architecture](https://en.oceanbase.com/docs/community-observer-en-10000000000829641)
 
+## Architecture evolution: 2010–2026
+
+https://github.com/user-attachments/assets/21a0f985-ee00-49f8-b8c7-a35f0c3f4397
+
 # Contributing
 
 Contributions are highly appreciated. Read the [development guide](https://oceanbase.github.io/oceanbase) to get started.
