@@ -174,6 +174,11 @@ public:
     external_routine_url_(),
     external_routine_resource_(),
     grouping_set_info_(nullptr),
+    has_ignore_null_(false),
+    enable_fast_bypass_(false),
+    is_statistic_agg_(false),
+    is_filter_distinct_bitmap_aggr_(false),
+    filter_distinct_param_exprs_(),
     retention_is_final_(false)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
@@ -214,6 +219,11 @@ public:
     external_routine_url_(),
     external_routine_resource_(),
     grouping_set_info_(nullptr),
+    has_ignore_null_(false),
+    enable_fast_bypass_(false),
+    is_statistic_agg_(false),
+    is_filter_distinct_bitmap_aggr_(false),
+    filter_distinct_param_exprs_(alloc),
     retention_is_final_(false)
   {}
   virtual ~ObAggrInfo();
@@ -243,6 +253,7 @@ public:
     grouping_idxs_.set_allocator(alloc);
     group_idxs_.set_allocator(alloc);
     distinct_hash_funcs_.set_allocator(alloc);
+    filter_distinct_param_exprs_.set_allocator(alloc);
   }
   int64_t to_string(char *buf, const int64_t buf_len) const;
   int assign(const ObAggrInfo &rhs);
@@ -307,6 +318,12 @@ public:
   ObString external_routine_url_;
   ObString external_routine_resource_;
   GroupingSetRTInfo *grouping_set_info_;
+  bool has_ignore_null_;
+  bool enable_fast_bypass_;
+  bool is_statistic_agg_;
+  // Only for serialization compatibility with 5.0.2.
+  bool is_filter_distinct_bitmap_aggr_;
+  ExprFixedArray filter_distinct_param_exprs_;
   bool retention_is_final_;// RETENTION: true for SINGLE/FINAL, false for PARTIAL stage-1
 };
 

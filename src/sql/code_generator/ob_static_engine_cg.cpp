@@ -8080,10 +8080,9 @@ int ObStaticEngineCG::fill_aggr_infos(ObLogGroupBy &op,
                                group_exprs,
                                rollup_exprs,
                                op.get_hash_rollup_info(),
-                               op.get_grouping_set_info()))) {
+                               op.get_grouping_set_info(),
+                               op.is_push_down()))) {
       LOG_WARN("failed to fill_aggr_info", K(ret));
-    } else if (T_FUN_RETENTION == aggr_exprs.at(i)->get_expr_type()) {
-      aggr_info.retention_is_final_ = !op.is_push_down();
     }
   }//end of for
 
@@ -8127,7 +8126,8 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
     common::ObIArray<ObExpr *> *group_exprs/*NULL*/,
     common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/,
     const ObHashRollupInfo *hash_rollup_info /*nullptr*/,
-    const ObGroupingSetInfo *grouping_set_info /* nullptr */)
+    const ObGroupingSetInfo *grouping_set_info /* nullptr */,
+    const bool is_push_down /*false*/)
 {
   int ret = OB_SUCCESS;
   if (T_FUN_TOP_FRE_HIST == raw_expr.get_expr_type() &&
@@ -8585,6 +8585,11 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
           LOG_WARN("push_back fail", K(ret));
         }
       }
+    }
+
+    // retention()
+    if (OB_SUCC(ret) && T_FUN_RETENTION == raw_expr.get_expr_type()) {
+      aggr_info.retention_is_final_ = !is_push_down;
     }
 
     if (OB_SUCC(ret)) {
@@ -9073,7 +9078,7 @@ int ObStaticEngineCG::fill_wf_info(ObIArray<ObExpr *> &all_expr,
       //do nothing
     } else if (OB_FAIL(fill_aggr_info(*static_cast<ObAggFunRawExpr *>(agg_raw_expr),
                                       *expr,
-                                      wf_info.aggr_info_, nullptr, nullptr))) {
+                                      wf_info.aggr_info_, nullptr, nullptr, nullptr, nullptr, false))) {
       LOG_WARN("failed to fill_aggr_info", K(ret));
     } else {
       wf_info.aggr_info_.real_aggr_type_ = agg_raw_expr->get_expr_type();

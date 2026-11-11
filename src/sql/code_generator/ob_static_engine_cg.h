@@ -554,7 +554,8 @@ private:
                     common::ObIArray<ObExpr *> *group_exprs/*NULL*/,
                     common::ObIArray<ObExpr *> *rollup_exprs/*NULL*/,
                     const ObHashRollupInfo *hash_rollup_info = nullptr,
-                    const ObGroupingSetInfo *grouping_set_info = nullptr);
+                    const ObGroupingSetInfo *grouping_set_info = nullptr,
+                    const bool is_push_down = false);
   int generate_hash_rollup_info(const ObHashRollupInfo &rollup_info, HashRollupRTInfo *&rt_info);
   int generate_grouping_set_info(const ObGroupingSetInfo &grouping_set_info, GroupingSetRTInfo *&rt_info);
   int extract_non_aggr_expr(ObExpr *input,

@@ -110,6 +110,12 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   if (grouping_set_info_ != nullptr) {
     OB_UNIS_ENCODE(*grouping_set_info_);
   }
+  OB_UNIS_ENCODE(enable_fast_bypass_);
+  OB_UNIS_ENCODE(is_statistic_agg_);
+  OB_UNIS_ENCODE(has_ignore_null_);
+  OB_UNIS_ENCODE(is_filter_distinct_bitmap_aggr_);
+  OB_UNIS_ENCODE(filter_distinct_param_exprs_);
+  OB_UNIS_ENCODE(retention_is_final_);
   return ret;
 }
 
@@ -195,6 +201,12 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
       }
     }
   }
+  OB_UNIS_DECODE(enable_fast_bypass_);
+  OB_UNIS_DECODE(is_statistic_agg_);
+  OB_UNIS_DECODE(has_ignore_null_);
+  OB_UNIS_DECODE(is_filter_distinct_bitmap_aggr_);
+  OB_UNIS_DECODE(filter_distinct_param_exprs_);
+  OB_UNIS_DECODE(retention_is_final_);
   return ret;
 }
 
@@ -253,6 +265,12 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   if (grouping_set_info_ != nullptr) {
     OB_UNIS_ADD_LEN(*grouping_set_info_);
   }
+  OB_UNIS_ADD_LEN(enable_fast_bypass_);
+  OB_UNIS_ADD_LEN(is_statistic_agg_);
+  OB_UNIS_ADD_LEN(has_ignore_null_);
+  OB_UNIS_ADD_LEN(is_filter_distinct_bitmap_aggr_);
+  OB_UNIS_ADD_LEN(filter_distinct_param_exprs_);
+  OB_UNIS_ADD_LEN(retention_is_final_);
   return len;
 }
 
@@ -324,7 +342,11 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
   returning_type_ = rhs.returning_type_;
   with_unique_keys_ = rhs.with_unique_keys_;
   max_disuse_param_expr_ = rhs.max_disuse_param_expr_;
+  has_ignore_null_ = rhs.has_ignore_null_;
   hash_rollup_info_ = nullptr;
+  enable_fast_bypass_ = rhs.enable_fast_bypass_;
+  is_statistic_agg_ = rhs.is_statistic_agg_;
+  is_filter_distinct_bitmap_aggr_ = rhs.is_filter_distinct_bitmap_aggr_;
   retention_is_final_ = rhs.retention_is_final_;
   if (OB_FAIL(param_exprs_.assign(rhs.param_exprs_))) {
     LOG_WARN("fail to assign param exprs", K(ret));
@@ -344,6 +366,9 @@ int ObAggrInfo::assign(const ObAggrInfo &rhs)
     LOG_WARN("fail to assign group_idxs_", K(ret));
   } else if (OB_FAIL(distinct_hash_funcs_.assign(rhs.distinct_hash_funcs_))) {
     LOG_WARN("fail to assign distinct_hash_funcs_", K(ret));
+  } else if (OB_FAIL(filter_distinct_param_exprs_.assign(
+               rhs.filter_distinct_param_exprs_))) {
+    LOG_WARN("fail to assign filter distinct param exprs", K(ret));
   }
   if (OB_FAIL(ret)) {
   } else if (rhs.hash_rollup_info_ != nullptr) {
