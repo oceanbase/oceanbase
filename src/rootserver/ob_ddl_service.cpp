@@ -36240,6 +36240,12 @@ int ObDDLService::generate_split_info_for_schema_(const ObPartitionLevel target_
     LOG_WARN("fail to generate object_id for partition schema", KR(ret), K(inc_table_schema));
   } else if (OB_FAIL(generate_tablet_id(inc_table_schema))) {
     LOG_WARN("fail to fetch new table id", K(inc_table_schema), KR(ret));
+  } else {
+    // Split SSTables inherit source metadata; preserve the matching storage attributes.
+    inc_table_schema.set_progressive_merge_round(new_table_schema.get_progressive_merge_round());
+    inc_table_schema.set_row_store_type(new_table_schema.get_row_store_type());
+    inc_table_schema.set_store_format(new_table_schema.get_store_format());
+    inc_table_schema.set_storage_format_version(new_table_schema.get_storage_format_version());
   }
 
   return ret;
