@@ -1030,7 +1030,7 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
       YYABORT_UNEXPECTED;                                                   \
     } else if (strncmp(node->str_value_, PACKAGE_KEY_PREFIX_V1, 4) != 0) { \
       yyerror(NULL, result, "invalid arguments node,not start with 'pkg.'");\
-      YYABORT_UNEXPECTED;                                                   \
+      YYABORT_PARSE_SQL_ERROR;                                              \
     } else {                                     \
       int64_t len2 = strlen(PACKAGE_KEY_PREFIX_V2);                        \
       if (0 == strncmp(node->str_value_, PACKAGE_KEY_PREFIX_V2, len2)) {   \
@@ -1042,7 +1042,7 @@ int STORE_PARAM_NODE_NEED_PARAMETERIZE(ParamList *param,
             || (node->str_value_[i] >= 'a'                                 \
                && node->str_value_[i] <= 'z'))) {                             \
           yyerror(NULL, result, "invalid arguments node, include invalid char"); \
-          YYABORT_UNEXPECTED;                                               \
+          YYABORT_PARSE_SQL_ERROR;                                          \
         }                                                                   \
       }                                                                     \
     }                                                                       \
