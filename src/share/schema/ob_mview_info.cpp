@@ -6,6 +6,9 @@
 #define USING_LOG_PREFIX SHARE_SCHEMA
 
 #include "share/schema/ob_mview_info.h"
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+#include "rootserver/mview/ob_mview_pending_task_utils.h"
+#endif
 #include "share/inner_table/ob_inner_table_schema_constants.h"
 #include "share/ob_dml_sql_splicer.h"
 #include "share/schema/ob_schema_utils.h"
@@ -376,7 +379,9 @@ int ObMViewInfo::check_consistent_refresh_satisfied(ObISQLClient &sql_client,
     sqlclient::ObMySQLResult *sql_result = nullptr;
     int64_t result = 0;
     char snapshot_clause[64] = "";
-    uint64_t data_version = 0;
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+    bool is_refresh_queuing_enabled = false;
+#endif
     if (OB_INVALID_SCN_VAL != snapshot_version) {
       snprintf(snapshot_clause, sizeof(snapshot_clause),
                 " AS OF SNAPSHOT %lu", snapshot_version);
@@ -414,12 +419,15 @@ int ObMViewInfo::check_consistent_refresh_satisfied(ObISQLClient &sql_client,
                   KR(ret), K(mview_id), K(target_data_sync_ts), K(result));
       } else if (0 != result) {
         satisfied = true;
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-      } else if (data_version >= MOCK_DATA_VERSION_4_4_2_3) {
+#ifdef OB_BUILD_MV_CLOSE_MODULES
+      } else if (OB_FAIL(rootserver::ObMViewPendingTaskUtils::is_initial_refresh_queuing_enabled(
+                     tenant_id, is_refresh_queuing_enabled))) {
+        LOG_WARN("failed to check whether initial refresh queuing is enabled", KR(ret), K(tenant_id));
+      } else if (is_refresh_queuing_enabled) {
         ret = OB_ERR_MVIEW_CAN_NOT_NESTED_CONSISTENT_REFRESH;
         LOG_WARN("nested consistent refresh mview can not succeed",
                     KR(ret), K(mview_id), K(target_data_sync_ts), K(result));
+#endif
       } else {
         satisfied = false;
       }
