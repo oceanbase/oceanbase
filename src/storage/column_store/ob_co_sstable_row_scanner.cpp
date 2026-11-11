@@ -1192,13 +1192,15 @@ int ObCOSSTableRowScanner::init_group_by_info(ObTableAccessContext &context)
 {
   int ret = OB_SUCCESS;
 
-  ObICGGroupByProcessor *group_by_processor = nullptr;
+  // The projection chain may change between default and materialized CGs.
+  group_by_iters_.reuse();
   ObVectorStore *vector_store = static_cast<ObVectorStore*>(context.block_row_store_);
   group_by_cell_ = vector_store->get_group_by_cell();
   if (OB_UNLIKELY(context.query_flag_.is_reverse_scan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected state, group by can not pushdown in reverse scan", K(ret));
-  } else if (group_by_iters_.count() > 0) {
+  } else if (OB_FAIL(group_by_cell_->clear_agg_cell_assign_status())) {
+    LOG_WARN("Failed to clear agg cell assign status", K(ret));
   } else if (ObICGIterator::OB_CG_TILE_SCANNER == project_iter_->get_type()) {
     ObCGTileScanner *tile_iter = static_cast<ObCGTileScanner*>(project_iter_);
     ObIArray<ObICGIterator*> &cg_scanners = tile_iter->get_inner_cg_scanners();

@@ -18,6 +18,10 @@
 
 #include "storage/access/ob_vector_store.h"
 #include "storage/column_store/ob_cg_scanner.h"
+#include "storage/column_store/ob_virtual_cg_scanner.h"
+#include "storage/column_store/ob_cg_group_by_scanner.h"
+#include "storage/column_store/ob_co_sstable_row_scanner.h"
+#include "storage/access/ob_pushdown_aggregate.h"
 #include "storage/column_store/ob_cg_tile_scanner.h"
 #include "storage/column_store/ob_co_sstable_rows_filter.h"
 
@@ -167,6 +171,84 @@ public:
   ObBitVector *skip_bit_;
   MockObCOSSTableRowsFilter co_filter_;
 };
+
+// Rebind processors when a column changes between default and materialized storage.
+TEST_F(TestCOSSTableRowsFilter, group_by_processor_switch_and_reinit)
+{
+  init_all();
+  ObGroupByCell cell(64, allocator_);
+  cell.is_inited_ = true;
+  ObExpr expr;
+  ObAggCellBasicInfo info(-1, -1, nullptr, &expr, 64, false);
+  ObCountAggCell count_cell(info, allocator_, false);
+  ObSEArray<ObExpr *, 1> outputs;
+  ASSERT_EQ(OB_SUCCESS, outputs.push_back(&expr));
+  ASSERT_EQ(OB_SUCCESS, cell.agg_cells_.push_back(&count_cell));
+  ObDefaultCGGroupByScanner default_scanner;
+  ObCGGroupByScanner real_scanner;
+  default_scanner.output_exprs_ = &outputs;
+  default_scanner.group_by_cell_ = &cell;
+  real_scanner.output_exprs_ = &outputs;
+  real_scanner.group_by_cell_ = &cell;
+  vector_store_->group_by_cell_ = &cell;
+  ObCOSSTableRowScanner scanner;
+  ObICGIterator *sequence[] = {&default_scanner, &real_scanner, &real_scanner,
+                             &default_scanner, &default_scanner};
+  for (ObICGIterator *iter : sequence) {
+    scanner.project_iter_ = iter;
+    EXPECT_EQ(OB_SUCCESS, scanner.init_group_by_info(context_));
+    EXPECT_EQ(1, scanner.group_by_iters_.count());
+    if (1 == scanner.group_by_iters_.count()) {
+      EXPECT_EQ(dynamic_cast<ObICGGroupByProcessor *>(iter), scanner.group_by_iters_.at(0));
+    }
+    const auto &mapping = iter == &default_scanner ? default_scanner.group_by_agg_idxs_
+                                                  : real_scanner.group_by_agg_idxs_;
+    EXPECT_EQ(1, mapping.count());
+    if (1 == mapping.count()) {
+      EXPECT_EQ(1, mapping.at(0).count());
+      if (1 == mapping.at(0).count()) {
+        EXPECT_EQ(0, mapping.at(0).at(0));
+      }
+    }
+  }
+  ObCGTileScanner tile;
+  tile.cg_scanners_.set_allocator(&allocator_);
+  EXPECT_EQ(OB_SUCCESS, tile.cg_scanners_.reserve(2));
+  EXPECT_EQ(OB_SUCCESS, tile.cg_scanners_.push_back(&default_scanner));
+  EXPECT_EQ(OB_SUCCESS, tile.cg_scanners_.push_back(&real_scanner));
+  scanner.project_iter_ = &tile;
+  for (int64_t group_by_idx = 0; group_by_idx < 2; ++group_by_idx) {
+    scanner.group_by_project_idx_ = group_by_idx;
+    EXPECT_EQ(OB_SUCCESS, scanner.init_group_by_info(context_));
+    EXPECT_EQ(2, scanner.group_by_iters_.count());
+    if (2 == scanner.group_by_iters_.count()) {
+      EXPECT_EQ(dynamic_cast<ObICGGroupByProcessor *>(tile.cg_scanners_.at(group_by_idx)),
+                scanner.group_by_iters_.at(0));
+    }
+    EXPECT_EQ(1, default_scanner.group_by_agg_idxs_.count());
+    EXPECT_EQ(1, real_scanner.group_by_agg_idxs_.count());
+    if (1 == default_scanner.group_by_agg_idxs_.count() && 1 == real_scanner.group_by_agg_idxs_.count()) {
+      EXPECT_EQ(0 == group_by_idx ? 1 : 0, default_scanner.group_by_agg_idxs_.at(0).count());
+      EXPECT_EQ(1 == group_by_idx ? 1 : 0, real_scanner.group_by_agg_idxs_.at(0).count());
+    }
+  }
+  tile.cg_scanners_.reuse();
+  scanner.project_iter_ = &default_scanner;
+  outputs.at(0) = nullptr;
+  EXPECT_EQ(OB_ERR_UNEXPECTED, scanner.init_group_by_info(context_));
+  EXPECT_EQ(0, scanner.group_by_iters_.count());
+  outputs.at(0) = &expr;
+  EXPECT_EQ(OB_SUCCESS, scanner.init_group_by_info(context_));
+  EXPECT_EQ(1, scanner.group_by_iters_.count());
+  EXPECT_EQ(1, default_scanner.group_by_agg_idxs_.count());
+  if (1 == default_scanner.group_by_agg_idxs_.count()) {
+    EXPECT_EQ(1, default_scanner.group_by_agg_idxs_.at(0).count());
+  }
+  // These objects are borrowed from the stack, not owned by the scanner/store.
+  scanner.project_iter_ = nullptr;
+  vector_store_->group_by_cell_ = nullptr;
+  cell.agg_cells_.reuse();
+}
 
 void TestCOSSTableRowsFilter::init_vector_store()
 {
