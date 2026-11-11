@@ -70,7 +70,7 @@ private:
   int analyze(bool &reordered);
   int analyze_impl(sql::ObPushdownFilterExecutor &filter, bool &reordered);
   void collect_filter_info(sql::ObPushdownFilterExecutor &filter, ObFilterCondition &filter_condition);
-  void judge_filter_whether_enable_reorder(sql::ObPushdownFilterExecutor *filter);
+  int judge_filter_whether_enable_reorder(sql::ObPushdownFilterExecutor *filter);
 
 private:
   const ObTableIterParam *iter_param_;

@@ -11,6 +11,7 @@
  */
 #define USING_LOG_PREFIX STORAGE
 #include "ob_where_optimizer.h"
+#include "common/ob_smart_call.h"
 #include "storage/access/ob_table_access_param.h"
 
 namespace oceanbase
@@ -44,6 +45,8 @@ int ObWhereOptimizer::init(
   } else if (OB_ISNULL(iter_param_ = iter_param) || OB_ISNULL(filter_ = filter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("iter param or filter is null", K(ret), K(iter_param_), K(filter_));
+  } else if (OB_FAIL(SMART_CALL(judge_filter_whether_enable_reorder(filter)))) {
+    LOG_WARN("Failed to judge whether filter can be reordered", K(ret), KP(filter));
   } else {
     if (filter_iters != nullptr) {
       filter_->inc_ref();
@@ -55,7 +58,6 @@ int ObWhereOptimizer::init(
     reorder_filter_times_ = 0;
     reorder_filter_interval_ = 1;
     disable_bypass_ = false;
-    judge_filter_whether_enable_reorder(filter);
     is_inited_ = true;
   }
   return ret;
@@ -99,7 +101,7 @@ int ObWhereOptimizer::analyze(bool &reordered)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
-    ret = analyze_impl(*filter_, reordered);
+    ret = SMART_CALL(analyze_impl(*filter_, reordered));
   }
   return ret;
 }
@@ -128,24 +130,29 @@ int ObWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter, bool &
         }
       }
       if (need_reorder) {
-        int cg_iter_idxs[child_cnt];
-        for (int64_t i = 0; i < child_cnt; ++i) {
-          cg_iter_idxs[i] = children[i]->get_cg_iter_idx();
-        }
-        for (int64_t i = 0; i < child_cnt; ++i) {
-          children[i] = filter_conditions_.at(i).filter_;
-          children[i]->set_cg_iter_idx(cg_iter_idxs[i]);
-          if (filter_iters_ != nullptr && iter_filter_node_ != nullptr && cg_iter_idxs[i] != -1) {
-            (*filter_iters_).at(cg_iter_idxs[i]) = filter_conditions_.at(i).filter_iter_;
-            (*iter_filter_node_).at(cg_iter_idxs[i]) = filter_conditions_.at(i).filter_node_;
+        ObSEArray<int64_t, 4> cg_iter_idxs;
+        cg_iter_idxs.set_attr(ObMemAttr(MTL_ID(), "WhereOptimizer"));
+        if (OB_FAIL(cg_iter_idxs.prepare_allocate(child_cnt))) {
+          LOG_WARN("Failed to prepare allocate cg iterator indexes", K(ret), K(child_cnt));
+        } else {
+          for (int64_t i = 0; i < child_cnt; ++i) {
+            cg_iter_idxs.at(i) = children[i]->get_cg_iter_idx();
           }
+          for (int64_t i = 0; i < child_cnt; ++i) {
+            children[i] = filter_conditions_.at(i).filter_;
+            children[i]->set_cg_iter_idx(cg_iter_idxs.at(i));
+            if (filter_iters_ != nullptr && iter_filter_node_ != nullptr && cg_iter_idxs.at(i) != -1) {
+              (*filter_iters_).at(cg_iter_idxs.at(i)) = filter_conditions_.at(i).filter_iter_;
+              (*iter_filter_node_).at(cg_iter_idxs.at(i)) = filter_conditions_.at(i).filter_node_;
+            }
+          }
+          reordered = true;
         }
-        reordered = true;
       }
     }
   } else if (filter.is_logic_op_node()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < child_cnt; ++i) {
-      if (OB_FAIL(analyze_impl(*children[i], reordered))) {
+      if (OB_FAIL(SMART_CALL(analyze_impl(*children[i], reordered)))) {
         LOG_WARN("Failed to analyze filter tree", K(ret), K(i), KP(children[i]));
       }
     }
@@ -169,22 +176,28 @@ void ObWhereOptimizer::collect_filter_info(
   }
 }
 
-void ObWhereOptimizer::judge_filter_whether_enable_reorder(sql::ObPushdownFilterExecutor *filter) {
+int ObWhereOptimizer::judge_filter_whether_enable_reorder(sql::ObPushdownFilterExecutor *filter) {
+  int ret = OB_SUCCESS;
   if (filter == nullptr) {
     // do nothing
   } else if (filter->is_logic_op_node()) {
     bool enable_reorder = true;
-    for (int64_t i = 0; i < filter->get_child_count(); ++i) { // enable reorder of this filter if all childs are not logic op nodes
+    for (int64_t i = 0; OB_SUCC(ret) && i < filter->get_child_count(); ++i) { // enable reorder of this filter if all childs are not logic op nodes
       sql::ObPushdownFilterExecutor *child = filter->get_childs()[i];
       if (child->is_logic_op_node()) {
         enable_reorder = false;
-        judge_filter_whether_enable_reorder(child);
+        if (OB_FAIL(SMART_CALL(judge_filter_whether_enable_reorder(child)))) {
+          LOG_WARN("Failed to judge whether child filter can be reordered", K(ret), K(i), KP(child));
+        }
       } else if (child->is_sample_node()) {
         enable_reorder = false;
       }
     }
-    filter->set_enable_reorder(enable_reorder);
+    if (OB_SUCC(ret)) {
+      filter->set_enable_reorder(enable_reorder);
+    }
   }
+  return ret;
 }
 
 int ObWhereOptimizer::reorder_co_filter()
