@@ -457,6 +457,10 @@ DEF_BOOL(_optimizer_sortmerge_join_enabled, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_nested_loop_join_enabled, OB_TENANT_PARAMETER, "True",
          "enable/disable nested loop join",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_last_insert_id_42x_compatibility, OB_TENANT_PARAMETER, "False",
+         "Use OceanBase 4.2.x last_insert_id packet and session semantics in MySQL mode. "
+         "When disabled, preserve the current last_insert_id behavior.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //
 DEF_BOOL(_enable_mysql_compatible_dates, OB_TENANT_PARAMETER, "False",
          "Specifies whether to use MySQL-compatible date format that allows for invalid dates.",

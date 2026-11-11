@@ -447,7 +447,17 @@ private:
   int post_upgrade_for_sys_tenant_work_area_percentage_();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 4)
+class ObUpgradeFor4424Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4424Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4424Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int post_upgrade_for_last_insert_id_compatibility_();
+};
 
 /* =========== special upgrade processor end   ============= */
 

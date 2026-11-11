@@ -2552,5 +2552,46 @@ int ObUpgradeFor4423Processor::check_sys_tenant_work_area_percentage_is_initial_
 }
 /* =========== 4423 upgrade processor end ============= */
 
+/* =========== 4424 upgrade processor start ============= */
+int ObUpgradeFor4424Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_last_insert_id_compatibility_())) {
+    LOG_WARN("fail to enable last insert id 42x compatibility", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+// Enable 4.2.x compatibility when advancing a tenant from 4.2.x.
+// Cross-version restore is also in scope and must not be excluded.
+int ObUpgradeFor4424Processor::post_upgrade_for_last_insert_id_compatibility_()
+{
+  int ret = OB_SUCCESS;
+  uint64_t source_data_version = 0;
+  int64_t affected_rows = 0;
+  ObString sql("ALTER SYSTEM SET _enable_last_insert_id_42x_compatibility = 'True'");
+  if (OB_ISNULL(sql_proxy_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_)) {
+    // Skip system and meta tenants.
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, source_data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K_(tenant_id));
+  } else if (source_data_version < DATA_VERSION_4_2_0_0
+             || source_data_version >= DATA_VERSION_4_3_0_0) {
+    // Leave the setting unchanged here for non-4.2.x sources.
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+    // Do not advance compatible if persisting the setting fails.
+    LOG_WARN("fail to enable last insert id 42x compatibility", KR(ret), K_(tenant_id), K(sql));
+  } else {
+    LOG_INFO("enabled last insert id 42x compatibility for upgrade",
+             K_(tenant_id), K(source_data_version), K(DATA_CURRENT_VERSION));
+  }
+  return ret;
+}
+/* =========== 4424 upgrade processor end ============= */
+
 } // end share
 } // end oceanbase

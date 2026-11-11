@@ -870,6 +870,7 @@ public:
                                  enable_column_store_(false),
                                  enable_decimal_int_type_(false),
                                  enable_update_split_with_unique_id_(false),
+                                 enable_last_insert_id_42x_compatibility_(false),
                                  enable_mysql_compatible_dates_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
@@ -928,6 +929,7 @@ public:
     bool get_enable_column_store() const { return enable_column_store_; }
     bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
     bool get_enable_update_split_with_unique_id() const { return enable_update_split_with_unique_id_; }
+    bool get_enable_last_insert_id_42x_compatibility() const { return enable_last_insert_id_42x_compatibility_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
     bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
@@ -1002,6 +1004,7 @@ public:
     bool enable_column_store_;
     bool enable_decimal_int_type_;
     bool enable_update_split_with_unique_id_;
+    bool enable_last_insert_id_42x_compatibility_;
     bool enable_mysql_compatible_dates_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
@@ -1798,6 +1801,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_insertup_replace_gts_opt();
+  }
+  bool is_enable_last_insert_id_42x_compatibility()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_last_insert_id_42x_compatibility();
   }
   bool enable_foreign_key_gts_opt()
   {

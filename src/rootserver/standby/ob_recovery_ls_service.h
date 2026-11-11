@@ -190,6 +190,7 @@ private:
  int check_valid_to_operator_ls_(const share::SCN &syn_scn);
  //readable scn need report
  void try_tenant_upgrade_end_();
+ int set_last_insert_id_compatibility_for_upgrade_(const uint64_t source_data_version);
  int get_min_data_version_(uint64_t &compatible);
  int check_sys_table_schema_refreshed_();
  int get_max_system_table_schema_version_(int64_t &target_schema_version);

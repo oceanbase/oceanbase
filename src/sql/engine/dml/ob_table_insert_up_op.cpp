@@ -369,6 +369,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
   ObInsRtDef &ins_rtdef = insert_up_rtdef.ins_rtdef_;
   ObUpdRtDef &upd_rtdef = insert_up_rtdef.upd_rtdef_;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  const bool use_42x_last_insert_id = plan_ctx->is_last_insert_id_42x_compatible();
   ObAuditRecordData &audit_record = GET_MY_SESSION(ctx_)->get_raw_audit_record();
 
   NG_TRACE_TIMES(2, insertup_start_shuff);
@@ -414,7 +415,8 @@ int ObTableInsertUpOp::do_insert_up_cache()
           LOG_WARN("merge implict cursor failed", K(ret));
         } else if (need_after_row_process(ins_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
           LOG_WARN("failed to push dml modify row to modified row list", K(ret));
-        } else if (is_first_insert_row && OB_FAIL(record_session_last_insert_id())) {
+        } else if (!use_42x_last_insert_id && is_first_insert_row
+                   && OB_FAIL(record_session_last_insert_id())) {
           LOG_WARN("fail to guarantee last_insert_id", K(ret));
         } else {
           is_first_insert_row = false;
@@ -447,7 +449,7 @@ int ObTableInsertUpOp::do_insert_up_cache()
         LOG_WARN("convert expr to stored row failed", K(ret), "exprs", get_primary_table_upd_old_row());
       } else if (OB_FAIL(calc_auto_increment(upd_ctdef))) {
         LOG_WARN("calc auto_inc failed", K(ret), K(upd_ctdef));
-      } else if (OB_FAIL(record_stmt_last_update_id())) {
+      } else if (!use_42x_last_insert_id && OB_FAIL(record_stmt_last_update_id())) {
         LOG_WARN("fail to record stmt last update id", K(ret));
       } else if (is_ignore_) {
         if (OB_FAIL(do_update_with_ignore())) {
@@ -1098,6 +1100,7 @@ int ObTableInsertUpOp::do_insert_up()
   bool is_iter_end = false;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
   int64_t last_stmt_insert_id = 0;
+  const bool use_42x_last_insert_id = plan_ctx->is_last_insert_id_42x_compatible();
   while (OB_SUCC(ret) && !is_iter_end) {
     int64_t insert_rows = 0;
     bool has_record_last_insert_id = false;
@@ -1118,7 +1121,9 @@ int ObTableInsertUpOp::do_insert_up()
       LOG_WARN("try insert is not duplicated, failed to process foreign key handle", K(ret));
     } else if (!check_is_duplicated()) {
       insert_rows_ += insert_rows;
-      guarantee_session_last_insert_id();
+      if (!use_42x_last_insert_id) {
+        guarantee_session_last_insert_id();
+      }
       LOG_TRACE("try insert is not duplicated", K(ret), K(insert_rows_));
     }
     GET_DIAGNOSTIC_INFO->get_ash_stat().in_duplicate_conflict_resolve_=true;
@@ -1161,6 +1166,8 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end,
   bool reach_mem_limit = false;
   int row_count = 0;
   bool is_first_insert_row = true;
+  ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+  const bool use_42x_last_insert_id = plan_ctx->is_last_insert_id_42x_compatible();
   NG_TRACE_TIMES(2, insert_up_start_load_row);
   int64_t default_row_store_mem_limit = OB_DEFAULT_INSERT_UP_MEMORY_LIMIT;
   int64_t simulate_batch_count = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
@@ -1178,12 +1185,18 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end,
       }
     } else if (OB_FAIL(try_insert_row(is_skipped))) {
       LOG_WARN("try insert row to das", K(ret));
-    } else if (is_first_insert_row && OB_FAIL(record_session_last_insert_id())) {
+    } else if (!use_42x_last_insert_id && is_first_insert_row
+               && OB_FAIL(record_session_last_insert_id())) {
       LOG_WARN("fail to set last_insert_id", K(ret));
     } else if (!is_skipped &&
           OB_FAIL(insert_up_row_store_.add_row(MY_SPEC.all_saved_exprs_, &eval_ctx_))) {
       LOG_WARN("add insert_up row to row store failed", K(ret));
     } else {
+      if (use_42x_last_insert_id) {
+        // In 4.2.x only generated IDs become session candidates, including
+        // rows staged before duplicate detection and internal-batch retries.
+        plan_ctx->record_last_insert_id_cur_stmt();
+      }
       insert_rows++;
       is_first_insert_row = false;
       row_count++;
@@ -1294,6 +1307,9 @@ bool ObTableInsertUpOp::check_is_duplicated()
     ObDASInsRtDef &ins_rtdef = insert_up_rtdef.ins_rtdef_.das_rtdef_;
     if (ins_rtdef.is_duplicated_) {
       ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+      if (OB_NOT_NULL(plan_ctx) && plan_ctx->is_last_insert_id_42x_compatible()) {
+        plan_ctx->set_last_insert_id_cur_stmt(0);
+      }
       bret = true;
     }
   }
@@ -1579,7 +1595,7 @@ int ObTableInsertUpOp::reset_das_env()
     if (OB_ISNULL(plan_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr", K(ret));
-    } else {
+    } else if (!plan_ctx->is_last_insert_id_42x_compatible()) {
       plan_ctx->set_last_insert_id_cur_stmt(0);
     }
   }

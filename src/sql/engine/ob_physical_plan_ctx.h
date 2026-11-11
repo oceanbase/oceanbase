@@ -341,9 +341,18 @@ public:
   {
     return last_insert_id_session_;
   }
+  bool is_last_insert_id_42x_compatible() const;
   inline uint64_t calc_last_insert_id_to_client()
   {
-    if (last_insert_id_changed_) {
+    if (is_last_insert_id_42x_compatible()) {
+      // Preserve the 4.2.x priority: recorded packet ID, generated ID,
+      // LAST_INSERT_ID(expr), then the input auto-increment column value.
+      if (0 == last_insert_id_to_client_) {
+        last_insert_id_to_client_ = last_insert_id_cur_stmt_ > 0
+            ? last_insert_id_cur_stmt_
+            : (last_insert_id_with_expr_ ? last_insert_id_session_ : autoinc_col_value_);
+      }
+    } else if (last_insert_id_changed_) {
       last_insert_id_to_client_ = last_insert_id_session_;
     } else if (last_insert_id_cur_stmt_ != 0) {
       last_insert_id_to_client_ = last_insert_id_cur_stmt_;

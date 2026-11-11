@@ -1612,6 +1612,8 @@ void ObRecoveryLSService::try_tenant_upgrade_end_()
         LOG_WARN("fail to assign tenant name", KR(ret), K_(tenant_id));
       } else if (OB_FAIL(item.name_.assign("compatible"))) {
         LOG_WARN("fail to assign config name", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(set_last_insert_id_compatibility_for_upgrade_(min_data_version))) {
+        LOG_WARN("fail to set last insert id compatibility for upgrade", KR(ret), K_(tenant_id));
       } else if (OB_FAIL(arg.items_.push_back(item))) {
         LOG_WARN("fail to push back item", KR(ret), K(item));
       } else if (OB_FAIL(rs_rpc_proxy_->timeout(timeout).admin_set_config(arg))) {
@@ -1623,6 +1625,27 @@ void ObRecoveryLSService::try_tenant_upgrade_end_()
       } // end HEAP_VAR
     }
   }
+}
+
+// This recovery path also serves restore tenants. Enable 4.2.x compatibility
+// for both standby upgrades and cross-version restores from 4.2.x.
+int ObRecoveryLSService::set_last_insert_id_compatibility_for_upgrade_(
+    const uint64_t source_data_version)
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObString sql("ALTER SYSTEM SET _enable_last_insert_id_42x_compatibility = 'True'");
+  if (OB_ISNULL(proxy_) || !is_user_tenant(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid upgrade context", KR(ret), KP(proxy_), K_(tenant_id));
+  } else if (source_data_version >= DATA_VERSION_4_2_0_0
+             && source_data_version < DATA_VERSION_4_3_0_0) {
+    // Persist the setting before advancing compatible; failure leaves this step retryable.
+    if (OB_FAIL(proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to enable last insert id 42x compatibility", KR(ret), K_(tenant_id));
+    }
+  }
+  return ret;
 }
 
 int ObRecoveryLSService::get_max_system_table_schema_version_(int64_t &target_schema_version)

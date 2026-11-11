@@ -4672,6 +4672,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_column_store_ = tenant_config->_enable_column_store;
       enable_decimal_int_type_ = tenant_config->_enable_decimal_int_type;
       enable_update_split_with_unique_id_ = tenant_config->_enable_update_split_with_unique_id;
+      enable_last_insert_id_42x_compatibility_ = tenant_config->_enable_last_insert_id_42x_compatibility;
       sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
         tenant_config->sql_plan_management_mode.get_value_string());
       enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;

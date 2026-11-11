@@ -1618,5 +1618,20 @@ uint64_t ObPhysicalPlanCtx::get_last_refresh_scn(uint64_t mview_id) const
   return last_refresh_scn;
 }
 
+bool ObPhysicalPlanCtx::is_last_insert_id_42x_compatible() const
+{
+  bool compatible = false;
+  if (lib::is_mysql_mode() && OB_NOT_NULL(exec_ctx_)) {
+    ObSQLSessionInfo *session = exec_ctx_->get_my_session();
+    if (OB_NOT_NULL(session)) {
+      const uint64_t data_version = session->get_data_version();
+      // Preserve 4.2.x behavior before the tenant data version advances during upgrade.
+      compatible = (data_version >= DATA_VERSION_4_2_0_0 && data_version < DATA_VERSION_4_3_0_0)
+                   || session->is_enable_last_insert_id_42x_compatibility();
+    }
+  }
+  return compatible;
+}
+
 } //sql
 } //oceanbase
