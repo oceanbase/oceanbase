@@ -225,7 +225,7 @@ struct ObSigReplaceSpan
 };
 
 // Compute the raw [off,len) span of an identifier token in sql, robust to
-// backtick quoting/escaping and sql_str_off_ off-by-one. Returns false if the
+// identifier quoting/escaping and sql_str_off_ off-by-one. Returns false if the
 // span cannot be located (defensive: caller skips it).
 static bool identifier_raw_span(const ObString &sql, const ParseNode *ident,
                                 int64_t &off, int64_t &len)
@@ -242,14 +242,15 @@ static bool identifier_raw_span(const ObString &sql, const ParseNode *ident,
     if (a < 0 || a >= total) {
       // unusable offset
     } else {
-      // sql_str_off_ may point at the backtick or one past it depending on the
+      // sql_str_off_ may point at the opening quote or one past it depending on the
       // lexer rule; probe both.
       int64_t start = a;
-      // MySQL quoted identifiers point past the opening quote; double quotes require ANSI_QUOTES.
-      const bool mysql_quoted = !lib::is_oracle_mode() && ident->is_input_quoted_;
-      const char quote = mysql_quoted && a > 0 && buf[a - 1] == '"' ? '"' : '`';
+      // Quoted identifiers point past the opening quote in both dialects.
+      const bool is_input_quoted = ident->is_input_quoted_;
+      const char quote = lib::is_oracle_mode() || (is_input_quoted && a > 0 && buf[a - 1] == '"')
+          ? '"' : '`';
 
-      if (a > 0 && buf[a - 1] == quote && (buf[a] != quote || mysql_quoted)) {
+      if (a > 0 && buf[a - 1] == quote && (buf[a] != quote || is_input_quoted)) {
         start = a - 1;
       }
 
@@ -260,7 +261,7 @@ static bool identifier_raw_span(const ObString &sql, const ParseNode *ident,
         while (i < total && !closed) {
           if (buf[i] == quote) {
             if (i + 1 < total && buf[i + 1] == quote) {
-              i += 2;  // escaped `` inside a quoted identifier
+              i += 2;  // doubled quote inside a quoted identifier
             } else {
               closed = true;
             }
