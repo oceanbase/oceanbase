@@ -147,6 +147,7 @@ int ObMPResetConnection::process()
       }
 
       // 6.2 ps cursor
+      session->reset_all_package_state();
       if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
         if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
           LOG_WARN("failed to close all cursor", K(ret));
@@ -210,9 +211,6 @@ int ObMPResetConnection::process()
       session->reset_pl_profiler_resource();
       session->reset_pl_code_coverage_resource();
 #endif
-
-      // 10.2 非分布式需要的话，分布式也需要，用于清理package的全局变量值
-      session->reset_all_package_state();
 
       // 10.3 currval 清理
       session->reuse_all_sequence_value();

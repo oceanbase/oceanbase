@@ -593,6 +593,7 @@ int ObMPChangeUser::reset_session_for_change_user(sql::ObSQLSessionInfo *session
       }
 
       // 6.2 ps cursor
+      session->reset_all_package_state();
       if (OB_SUCC(ret) && session->get_cursor_cache().is_inited()) {
         if (OB_FAIL(session->get_cursor_cache().close_all(*session))) {
           LOG_WARN("failed to close all cursor", K(ret));
@@ -654,9 +655,6 @@ int ObMPChangeUser::reset_session_for_change_user(sql::ObSQLSessionInfo *session
       session->reset_pl_profiler_resource();
       session->reset_pl_code_coverage_resource();
 #endif
-
-      // 10.2 package state
-      session->reset_all_package_state();
 
       // 10.3 sequence currval
       session->reuse_all_sequence_value();
