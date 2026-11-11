@@ -4835,6 +4835,7 @@ int PalfHandleImpl::after_flush_mode_meta_(const int64_t proposal_id,
                                            const LogModeMeta &mode_meta)
 {
   int ret = OB_SUCCESS;
+  const int64_t previous_accepted_pid = mode_mgr_.get_accepted_mode_meta().proposal_id_;
   const ObAddr &leader = state_mgr_.get_leader();
   if (proposal_id != state_mgr_.get_proposal_id()) {
     PALF_LOG(WARN, "proposal_id has changed during flushing", K(ret), K(proposal_id),
@@ -4851,6 +4852,13 @@ int PalfHandleImpl::after_flush_mode_meta_(const int64_t proposal_id,
     PALF_LOG(WARN, "submit_change_mode_meta_resp failed", K(ret), K_(self), K(leader), K(proposal_id));
   } else {
     PALF_LOG(INFO, "submit_change_mode_meta_resp success", K(ret), K_(self), K(leader), K(proposal_id));
+  }
+  // Repeated flush callbacks and already accepted metas must not reset the retry baseline.
+  // Schedule independently of the mode-meta ACK result.
+  if (!is_applied_mode_meta && proposal_id == state_mgr_.get_proposal_id() &&
+      mode_meta.proposal_id_ > previous_accepted_pid &&
+      mode_mgr_.get_accepted_mode_meta().proposal_id_ == mode_meta.proposal_id_) {
+    state_mgr_.on_mode_meta_flushed();
   }
   return ret;
 }

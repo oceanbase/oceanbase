@@ -1081,11 +1081,35 @@ bool LogStateMgr::need_freeze_group_buffer() const
   return is_leader_active_();
 }
 
+bool LogStateMgr::is_mode_change_pending_() const
+{
+  const LogModeMeta accepted_meta = mode_mgr_->get_accepted_mode_meta();
+  int64_t applied_version = INVALID_PROPOSAL_ID;
+  // Reconfirm advances proposal_id but preserves the previous mode_version.
+  return (is_follower_active_() || is_follower_pending_()) && leader_.is_valid() &&
+      can_receive_log(get_proposal_id()) && accepted_meta.is_valid() &&
+      accepted_meta.proposal_id_ == get_proposal_id() &&
+      accepted_meta.mode_version_ == get_proposal_id() &&
+      OB_SUCCESS == mode_mgr_->get_mode_version(applied_version) &&
+      applied_version < accepted_meta.mode_version_;
+}
+
+void LogStateMgr::on_mode_meta_flushed()
+{
+  if (is_mode_change_pending_()) {
+    // Arm the next ordinary LogLoop check without issuing a fetch from the flush callback.
+    last_check_start_id_time_us_ = OB_INVALID_TIMESTAMP;
+  }
+}
+
 int LogStateMgr::check_and_try_fetch_log_()
 {
   int ret = OB_SUCCESS;
   const int64_t now_us = ObTimeUtility::current_time();
   const uint64_t start_id = sw_->get_start_id();
+  const bool mode_change_pending = is_mode_change_pending_();
+  const int64_t fetch_interval_us = mode_change_pending ?
+      MODE_CHANGE_FETCH_LOG_INTERVAL_US : PALF_FETCH_LOG_INTERVAL_US;
   if (false == ATOMIC_LOAD(&is_sync_enabled_)) {
     if (palf_reach_time_interval(5 * 1000 * 1000, check_sync_enabled_time_)) {
       PALF_LOG(INFO, "sync is disabled, cannot fetch log", K_(palf_id));
@@ -1093,13 +1117,20 @@ int LogStateMgr::check_and_try_fetch_log_()
   } else if (OB_INVALID_ID == last_check_start_id_
       || OB_INVALID_TIMESTAMP == last_check_start_id_time_us_
       || (last_check_start_id_ == start_id
-          && now_us - last_check_start_id_time_us_ > PALF_FETCH_LOG_INTERVAL_US)) {
+          && now_us - last_check_start_id_time_us_ > fetch_interval_us)) {
     if (OB_FAIL(sw_->try_fetch_log(FetchTriggerType::LOG_LOOP_TH))) {
       PALF_LOG(WARN, "sw try_fetch_log failed", K(ret), K_(palf_id));
     } else {
       last_check_start_id_ = start_id;
       last_check_start_id_time_us_ = now_us;
       PALF_LOG(TRACE, "sw try_fetch_log success", K(ret), K_(palf_id), K(start_id));
+      if (mode_change_pending) {
+        // Uncommitted tails still require the normal receive/flush (or duplicate-log) ACK.
+        const int tmp_ret = sw_->submit_push_log_resp(leader_);
+        if (OB_SUCCESS != tmp_ret) {
+          PALF_LOG_RET(WARN, tmp_ret, "submit_push_log_resp after mode-change fetch failed", K_(palf_id));
+        }
+      }
     }
   } else if (last_check_start_id_ != start_id) {
     last_check_start_id_ = start_id;

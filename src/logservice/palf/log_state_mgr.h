@@ -58,6 +58,8 @@ public:
            LogModeMgr *mode_mgr_,
            palf::PalfRoleChangeCbWrapper *palf_role_change_cb,
            LogPlugins *plugins);
+  // Caller holds PalfHandleImpl write lock; only the first accepted meta calls this.
+  void on_mode_meta_flushed();
   virtual bool is_state_changed();
   virtual int switch_state();
   virtual int handle_prepare_request(const common::ObAddr &new_leader,
@@ -163,10 +165,12 @@ private:
   bool check_leader_log_sync_state_();
   bool need_fetch_log_() const;
   int check_and_try_fetch_log_();
+  bool is_mode_change_pending_() const;
   bool need_reset_broadcast_leader_() const;
   void reset_broadcast_leader_();
 private:
   static const uint64_t UNION_ROLE_VAL_MASK = (1ll << 32) - 1;
+  static const int64_t MODE_CHANGE_FETCH_LOG_INTERVAL_US = 200 * 1000; // 200ms
 private:
   common::ObAddr self_;
   int64_t  palf_id_;

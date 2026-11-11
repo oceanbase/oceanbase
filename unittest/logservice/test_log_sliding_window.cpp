@@ -51,6 +51,48 @@ public:
       return false;
     }
   };
+  class RecordingFetchLogEngine : public MockLogEngine
+  {
+  public:
+    RecordingFetchLogEngine()
+      : fetch_count_(0), ack_count_(0), fetch_ret_(OB_SUCCESS), fetch_size_(0),
+        ack_proposal_id_(INVALID_PROPOSAL_ID) {}
+    int submit_fetch_log_req(const common::ObAddr &server,
+                             const FetchLogType fetch_type,
+                             const int64_t proposal_id,
+                             const LSN &prev_lsn,
+                             const LSN &start_lsn,
+                             const int64_t fetch_size,
+                             const int64_t fetch_count,
+                             const int64_t accepted_mode_pid) override
+    {
+      UNUSEDx(server, proposal_id, prev_lsn, fetch_count, accepted_mode_pid);
+      ++fetch_count_;
+      fetch_type_ = fetch_type;
+      start_lsn_ = start_lsn;
+      fetch_size_ = fetch_size;
+      return fetch_ret_;
+    }
+    int submit_push_log_resp(const common::ObAddr &server,
+                             const int64_t &proposal_id,
+                             const LSN &lsn,
+                             const bool is_batch) override
+    {
+      UNUSEDx(server, is_batch);
+      ++ack_count_;
+      ack_proposal_id_ = proposal_id;
+      ack_lsn_ = lsn;
+      return OB_SUCCESS;
+    }
+    int64_t fetch_count_;
+    int64_t ack_count_;
+    int fetch_ret_;
+    FetchLogType fetch_type_;
+    LSN start_lsn_;
+    int64_t fetch_size_;
+    int64_t ack_proposal_id_;
+    LSN ack_lsn_;
+  };
   class TransientFailureLogEngine : public MockLogEngine
   {
   public:
@@ -120,10 +162,19 @@ public:
 public:
   int64_t palf_id_;
   common::ObAddr self_;
-  MockLogStateMgr mock_state_mgr_;
+  class SyncAwareMockLogStateMgr : public MockLogStateMgr
+  {
+  public:
+    SyncAwareMockLogStateMgr() : sync_enabled_(true) {}
+    int disable_sync() override { sync_enabled_ = false; return OB_SUCCESS; }
+    bool is_sync_enabled() const override { return sync_enabled_; }
+    bool sync_enabled_;
+  };
+  SyncAwareMockLogStateMgr mock_state_mgr_;
   MockLogConfigMgr mock_mm_;
   MockLogModeMgr mock_mode_mgr_;
   MockLogEngine mock_log_engine_;
+  RecordingFetchLogEngine recording_fetch_engine_;
   TransientFailureLogEngine transient_failure_log_engine_;
   MockPalfFSCbWrapper palf_fs_cb_;
   ObTenantMutilAllocator *alloc_mgr_;
@@ -131,6 +182,7 @@ public:
   LogQuorumPolicy quorum_policy_;
   MockPublicLogSlidingWindow log_sw_;
   char *data_buf_;
+  void init_mode_change_fetch_env();
 };
 
 TestLogSlidingWindow::TestLogSlidingWindow() {}
@@ -177,6 +229,19 @@ void gen_default_palf_base_info_(PalfBaseInfo &palf_base_info)
   prev_log_info.accum_checksum_ = -1;
   palf_base_info.prev_log_info_ = prev_log_info;
   palf_base_info.curr_lsn_ = default_prev_lsn;
+}
+
+void TestLogSlidingWindow::init_mode_change_fetch_env()
+{
+  PalfBaseInfo base_info;
+  gen_default_palf_base_info_(base_info);
+  ASSERT_EQ(OB_SUCCESS, log_sw_.init(palf_id_, self_, &mock_state_mgr_, &mock_mm_,
+      &mock_mode_mgr_, &recording_fetch_engine_, &palf_fs_cb_, alloc_mgr_, plugins_, base_info,
+      true, &quorum_policy_));
+  mock_state_mgr_.mock_proposal_id_ = 2;
+  mock_state_mgr_.role_ = FOLLOWER;
+  mock_state_mgr_.state_ = ACTIVE;
+  mock_state_mgr_.leader_.set_ip_addr("127.0.0.2", 12345);
 }
 
 TEST_F(TestLogSlidingWindow, test_log_checksum)
@@ -376,6 +441,116 @@ TEST_F(TestLogSlidingWindow, test_fetch_log)
   EXPECT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(fetch_log_type, prev_lsn, fetch_start_lsn, fetch_start_log_id));
   mock_state_mgr_.disable_sync();
   EXPECT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(fetch_log_type, prev_lsn, fetch_start_lsn, fetch_start_log_id));
+}
+
+TEST_F(TestLogSlidingWindow, reconfirm_notify_fetch_preserves_streaming_fetch_marker)
+{
+  log_sw_.last_fetch_trigger_type_ = FetchTriggerType::SLIDING_CB;
+
+  EXPECT_FALSE(log_sw_.need_execute_fetch_(FetchTriggerType::RECONFIRM_NOTIFY_FETCH));
+  EXPECT_FALSE(log_sw_.need_execute_fetch_(FetchTriggerType::ADD_MEMBER_PRE_CHECK));
+  EXPECT_FALSE(log_sw_.need_execute_fetch_(FetchTriggerType::MODE_META_BARRIER));
+  EXPECT_FALSE(log_sw_.need_execute_fetch_(FetchTriggerType::LEARNER_REGISTER));
+}
+
+TEST_F(TestLogSlidingWindow, log_loop_fetch_resumes_streaming)
+{
+  init_mode_change_fetch_env();
+  log_sw_.last_fetch_trigger_type_ = FetchTriggerType::SLIDING_CB;
+  log_sw_.last_fetch_req_time_ = 123;
+  log_sw_.last_fetch_end_lsn_ = LSN(4096);
+  log_sw_.last_fetch_max_log_id_ = 8;
+  log_sw_.last_fetch_committed_end_lsn_ = LSN(1024);
+
+  EXPECT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(FetchTriggerType::LOG_LOOP_TH));
+  EXPECT_EQ(1, recording_fetch_engine_.fetch_count_);
+  EXPECT_EQ(FETCH_LOG_FOLLOWER, recording_fetch_engine_.fetch_type_);
+  EXPECT_EQ(LSN(0), recording_fetch_engine_.start_lsn_);
+  EXPECT_EQ(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE, recording_fetch_engine_.fetch_size_);
+  EXPECT_EQ(FetchTriggerType::LOG_LOOP_TH, log_sw_.last_fetch_trigger_type_);
+  EXPECT_GT(log_sw_.last_fetch_req_time_, 123);
+  EXPECT_EQ(LSN(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE), log_sw_.last_fetch_end_lsn_);
+  EXPECT_EQ(PALF_SLIDING_WINDOW_SIZE, log_sw_.last_fetch_max_log_id_);
+  EXPECT_FALSE(log_sw_.last_fetch_committed_end_lsn_.is_valid());
+
+  // An in-flight response for the superseded fetch cannot complete the new fetch.
+  bool need_fetch = false;
+  log_sw_.try_update_committed_lsn_for_fetch_(LSN(4096), 8, LSN(1024), need_fetch);
+  EXPECT_FALSE(need_fetch);
+  EXPECT_FALSE(log_sw_.last_fetch_committed_end_lsn_.is_valid());
+  // Finishing the current fetch resumes the existing streaming continuation exactly once.
+  log_sw_.try_update_committed_lsn_for_fetch_(log_sw_.last_fetch_end_lsn_,
+      log_sw_.last_fetch_max_log_id_, LSN(0), need_fetch);
+  EXPECT_TRUE(need_fetch);
+  log_sw_.try_fetch_log_streamingly_(LSN(0));
+  EXPECT_EQ(2, recording_fetch_engine_.fetch_count_);
+  EXPECT_EQ(FetchTriggerType::SLIDING_CB, log_sw_.last_fetch_trigger_type_);
+  log_sw_.try_fetch_log_streamingly_(LSN(0));
+  EXPECT_EQ(2, recording_fetch_engine_.fetch_count_);
+  EXPECT_FALSE(log_sw_.need_execute_fetch_(FetchTriggerType::RECONFIRM_NOTIFY_FETCH));
+}
+
+TEST_F(TestLogSlidingWindow, mode_change_fetch_starts_after_committed_tail)
+{
+  init_mode_change_fetch_env();
+  log_sw_.committed_end_lsn_ = LSN(100);
+  log_sw_.last_slide_end_lsn_ = LSN(100);
+  EXPECT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(FetchTriggerType::LOG_LOOP_TH));
+  EXPECT_EQ(1, recording_fetch_engine_.fetch_count_);
+  EXPECT_EQ(LSN(100), recording_fetch_engine_.start_lsn_);
+  EXPECT_EQ(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE, recording_fetch_engine_.fetch_size_);
+}
+
+TEST_F(TestLogSlidingWindow, mode_change_fetch_preserves_buffer_limit_and_waits_for_slide)
+{
+  init_mode_change_fetch_env();
+  EXPECT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(FetchTriggerType::LOG_LOOP_TH));
+  EXPECT_EQ(FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE, recording_fetch_engine_.fetch_size_);
+  log_sw_.committed_end_lsn_ = LSN(100);
+  mock_state_mgr_.mock_proposal_id_ = 3;
+  EXPECT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(FetchTriggerType::LOG_LOOP_TH));
+  EXPECT_EQ(1, recording_fetch_engine_.fetch_count_);
+}
+
+TEST_F(TestLogSlidingWindow, mode_change_fetch_reacknowledges_persisted_tail_in_current_proposal)
+{
+  init_mode_change_fetch_env();
+  // Load an uncommitted tail persisted under proposal 1; the current proposal is 2.
+  char payload[32] = {};
+  SCN scn;
+  scn.convert_for_logservice(100);
+  LogEntryHeader entry_header;
+  ASSERT_EQ(OB_SUCCESS, entry_header.generate_header(payload, sizeof(payload), scn));
+  const int64_t header_size = LogGroupEntryHeader::HEADER_SER_SIZE;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, entry_header.serialize(data_buf_ + header_size, 4096, pos));
+  MEMCPY(data_buf_ + header_size + pos, payload, sizeof(payload));
+  const int64_t body_size = pos + sizeof(payload);
+  const int64_t total_size = header_size + body_size;
+  LogWriteBuf write_buf;
+  ASSERT_EQ(OB_SUCCESS, write_buf.push_back(data_buf_, total_size));
+  LogGroupEntryHeader group_header;
+  int64_t checksum = 0;
+  ASSERT_EQ(OB_SUCCESS, group_header.generate(false, false, write_buf, body_size, scn,
+      1, LSN(0), 1, checksum));
+  (void) group_header.update_accumulated_checksum(checksum);
+  (void) group_header.update_header_checksum();
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, group_header.serialize(data_buf_, total_size, pos));
+  LogGroupEntry group_entry;
+  ASSERT_EQ(OB_SUCCESS, group_entry.generate(group_header, data_buf_ + header_size));
+  ASSERT_EQ(OB_SUCCESS, log_sw_.append_disk_log(LSN(0), group_entry));
+  ASSERT_EQ(LSN(0), log_sw_.committed_end_lsn_);
+
+  ASSERT_EQ(OB_SUCCESS, log_sw_.try_fetch_log(FetchTriggerType::LOG_LOOP_TH));
+  EXPECT_EQ(1, recording_fetch_engine_.fetch_count_);
+  ASSERT_EQ(OB_SUCCESS, log_sw_.submit_push_log_resp(mock_state_mgr_.leader_));
+  EXPECT_EQ(LSN(0), recording_fetch_engine_.ack_lsn_);
+  TruncateLogInfo truncate_info;
+  ASSERT_EQ(OB_SUCCESS, log_sw_.receive_log(mock_state_mgr_.leader_, FETCH_LOG_RESP,
+      LSN(0), INVALID_PROPOSAL_ID, LSN(0), data_buf_, total_size, true, truncate_info));
+  EXPECT_EQ(2, recording_fetch_engine_.ack_proposal_id_);
+  EXPECT_EQ(LSN(total_size), recording_fetch_engine_.ack_lsn_);
 }
 
 TEST_F(TestLogSlidingWindow, test_report_log_task_trace)

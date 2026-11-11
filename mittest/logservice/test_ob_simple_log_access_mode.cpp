@@ -33,6 +33,8 @@ class TestObSimpleLogClusterAccessMode : public ObSimpleLogClusterTestEnv
 public:
   TestObSimpleLogClusterAccessMode() :  ObSimpleLogClusterTestEnv()
   {}
+  void check_mode_change_tail_recovery(const bool drop_ack, const bool drop_fetch = false,
+                                       const bool change_sync = false, const bool drop_mode_meta = false);
 };
 
 int64_t ObSimpleLogClusterTestBase::member_cnt_ = 3;
@@ -46,6 +48,304 @@ bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 // 3. change_access_mode when leader's net is blocked
 // 4. change_access_mode, then add_member
 // 5. prev logs have slid, and pid of prev logs is different from current pid
+
+void TestObSimpleLogClusterAccessMode::check_mode_change_tail_recovery(
+    const bool drop_ack, const bool drop_fetch, const bool change_sync, const bool drop_mode_meta)
+{
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  std::vector<PalfHandleImplGuard*> replicas;
+  ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, replicas));
+  const int64_t first_follower = (leader_idx + 1) % 3;
+  const int64_t second_follower = (leader_idx + 2) % 3;
+  // Recovery must use mode meta, even if every legacy notify-fetch packet is dropped.
+  block_pcode(first_follower, obrpc::OB_LOG_NOTIFY_FETCH_LOG);
+  block_pcode(second_follower, obrpc::OB_LOG_NOTIFY_FETCH_LOG);
+  if (drop_mode_meta) {
+    block_pcode(first_follower, obrpc::OB_LOG_CHANGE_MODE_META_REQ);
+    block_pcode(second_follower, obrpc::OB_LOG_CHANGE_MODE_META_REQ);
+  }
+  if (drop_fetch) {
+    block_pcode(leader_idx, obrpc::OB_LOG_FETCH_REQ);
+  }
+  if (drop_ack) {
+    block_pcode(leader_idx, obrpc::OB_LOG_PUSH_RESP);
+    block_pcode(leader_idx, obrpc::OB_BATCH);
+  } else {
+    block_pcode(first_follower, obrpc::OB_LOG_PUSH_REQ);
+    block_pcode(second_follower, obrpc::OB_LOG_PUSH_REQ);
+    block_pcode(first_follower, obrpc::OB_BATCH);
+    block_pcode(second_follower, obrpc::OB_BATCH);
+  }
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 1, id, 4096));
+  const LSN tail_end = leader.palf_handle_impl_->sw_.get_max_lsn();
+  LSN first_flushed;
+  LSN second_flushed;
+  const int64_t flush_deadline = ObTimeUtility::current_time() + 1000 * 1000;
+  do {
+    replicas[first_follower]->palf_handle_impl_->sw_.get_max_flushed_end_lsn(first_flushed);
+    replicas[second_follower]->palf_handle_impl_->sw_.get_max_flushed_end_lsn(second_flushed);
+    if (!drop_ack || (first_flushed >= tail_end && second_flushed >= tail_end)) {
+      break;
+    }
+    // Poll actual flush progress; this is not a fixed wait for asynchronous completion.
+    ob_usleep(1000);
+  } while (ObTimeUtility::current_time() < flush_deadline);
+  EXPECT_EQ(drop_ack, first_flushed >= tail_end);
+  EXPECT_EQ(drop_ack, second_flushed >= tail_end);
+
+  AccessMode mode;
+  int64_t mode_version = 0;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, mode));
+  int64_t new_proposal_id = INVALID_PROPOSAL_ID;
+  auto change_mode = [&]() {
+    LogModeMgr &mgr = leader.palf_handle_impl_->mode_mgr_;
+    return change_sync ? mgr.change_sync_mode(mode_version, SyncMode::SYNC, new_proposal_id) :
+        mgr.change_access_mode(mode_version, AccessMode::RAW_WRITE, share::SCN::min_scn());
+  };
+  const int64_t mode_start = ObTimeUtility::current_time();
+  for (int64_t follower : {first_follower, second_follower}) {
+    PalfHandleImpl *impl = replicas[follower]->palf_handle_impl_;
+    PalfHandleImpl::WLockGuard guard(impl->lock_);
+    impl->state_mgr_.last_check_start_id_ = impl->sw_.get_start_id();
+    impl->state_mgr_.last_check_start_id_time_us_ = mode_start;
+  }
+  int ret = OB_EAGAIN;
+  bool accepted = false;
+  int64_t first_accept_time = OB_INVALID_TIMESTAMP;
+  bool meta_unblocked = !drop_mode_meta;
+  const int64_t prepare_deadline = ObTimeUtility::current_time() +
+      (drop_mode_meta ? 6 : 1) * 1000 * 1000;
+  while (OB_EAGAIN == ret && !accepted && ObTimeUtility::current_time() < prepare_deadline) {
+    bool accept_retried = false;
+    {
+      PalfHandleImpl::WLockGuard guard(leader.palf_handle_impl_->lock_);
+      ret = change_mode();
+      const LogModeMgr &mgr = leader.palf_handle_impl_->mode_mgr_;
+      accepted = MODE_ACCEPT == mgr.state_ && mgr.is_reach_quorum_() &&
+          mgr.accepted_mode_meta_.proposal_id_ == leader.palf_handle_impl_->state_mgr_.get_proposal_id();
+      if (!meta_unblocked && MODE_ACCEPT == mgr.state_ &&
+          mgr.last_submit_mode_meta_.proposal_id_ == leader.palf_handle_impl_->state_mgr_.get_proposal_id()) {
+        if (OB_INVALID_TIMESTAMP == first_accept_time) {
+          first_accept_time = mgr.last_submit_req_ts_;
+        } else if (mgr.last_submit_req_ts_ > first_accept_time) {
+          EXPECT_GE(mgr.last_submit_req_ts_ - first_accept_time, 2 * 1000 * 1000);
+          PALF_LOG(INFO, "mode-meta original accept retry", K(id),
+              "retry_us", mgr.last_submit_req_ts_ - first_accept_time);
+          accept_retried = true;
+        }
+      }
+    }
+    if (accept_retried) {
+      unblock_pcode(first_follower, obrpc::OB_LOG_CHANGE_MODE_META_REQ);
+      unblock_pcode(second_follower, obrpc::OB_LOG_CHANGE_MODE_META_REQ);
+      meta_unblocked = true;
+    }
+    if (OB_EAGAIN == ret && !accepted) {
+      ob_usleep(1000);
+    }
+  }
+  EXPECT_TRUE(meta_unblocked);
+  EXPECT_TRUE(accepted);
+  EXPECT_EQ(OB_EAGAIN, ret);
+  // The first fetch must be armed by the mode-meta flush, before any successful fetch response.
+  for (int64_t follower : {first_follower, second_follower}) {
+    PalfHandleImpl *impl = replicas[follower]->palf_handle_impl_;
+    bool fetched = false;
+    const int64_t deadline = ObTimeUtility::current_time() + 1000 * 1000;
+    while (!fetched && ObTimeUtility::current_time() < deadline) {
+      {
+        PalfHandleImpl::RLockGuard guard(impl->lock_);
+        fetched = impl->mode_mgr_.get_accepted_mode_meta().mode_version_ ==
+            impl->state_mgr_.get_proposal_id() && impl->sw_.last_fetch_req_time_ >= mode_start;
+      }
+      if (!fetched) {
+        ob_usleep(1000);
+      }
+    }
+    EXPECT_TRUE(fetched);
+    PALF_LOG(INFO, "mode-change first LogLoop fetch", K(id), K(change_sync), K(follower),
+        "elapsed_us", ObTimeUtility::current_time() - mode_start);
+  }
+  if (drop_fetch) {
+    for (int64_t follower : {first_follower, second_follower}) {
+      PalfHandleImpl *impl = replicas[follower]->palf_handle_impl_;
+      int64_t first_attempt = 0;
+      int64_t first_check_time = 0;
+      {
+        PalfHandleImpl::WLockGuard guard(impl->lock_);
+        first_attempt = impl->sw_.last_fetch_req_time_;
+        first_check_time = impl->state_mgr_.last_check_start_id_time_us_;
+      }
+      int64_t next_attempt = first_attempt;
+      int64_t next_check_time = first_check_time;
+      const int64_t retry_deadline = ObTimeUtility::current_time() + 1000 * 1000;
+      while (next_attempt == first_attempt && ObTimeUtility::current_time() < retry_deadline) {
+        {
+          PalfHandleImpl::WLockGuard guard(impl->lock_);
+          next_attempt = impl->sw_.last_fetch_req_time_;
+          next_check_time = impl->state_mgr_.last_check_start_id_time_us_;
+        }
+        if (next_attempt == first_attempt) {
+          ob_usleep(1000);
+        }
+      }
+      EXPECT_GT(next_attempt, first_attempt);
+      // The interval starts before submission; variable submission cost can make
+      // the spacing between successful RPC submission timestamps slightly shorter.
+      EXPECT_GT(next_check_time - first_check_time, 200 * 1000);
+    }
+  }
+  // Keep the ordinary 2 s fallback enabled, with a fresh baseline at packet recovery.
+  for (int64_t follower : {first_follower, second_follower}) {
+    PalfHandleImpl *impl = replicas[follower]->palf_handle_impl_;
+    PalfHandleImpl::WLockGuard guard(impl->lock_);
+    impl->state_mgr_.last_check_start_id_ = impl->sw_.get_start_id();
+    impl->state_mgr_.last_check_start_id_time_us_ = ObTimeUtility::current_time();
+  }
+  if (drop_ack) {
+    unblock_pcode(leader_idx, obrpc::OB_LOG_PUSH_RESP);
+    unblock_pcode(leader_idx, obrpc::OB_BATCH);
+  } else {
+    unblock_pcode(first_follower, obrpc::OB_LOG_PUSH_REQ);
+    unblock_pcode(second_follower, obrpc::OB_LOG_PUSH_REQ);
+    unblock_pcode(first_follower, obrpc::OB_BATCH);
+    unblock_pcode(second_follower, obrpc::OB_BATCH);
+  }
+  if (drop_fetch) {
+    unblock_pcode(leader_idx, obrpc::OB_LOG_FETCH_REQ);
+  }
+  const int64_t recovery_start = ObTimeUtility::current_time();
+  while (OB_EAGAIN == ret && ObTimeUtility::current_time() - recovery_start < 5 * 1000 * 1000) {
+    {
+      PalfHandleImpl::WLockGuard guard(leader.palf_handle_impl_->lock_);
+      ret = change_mode();
+    }
+    if (OB_EAGAIN == ret) {
+      ob_usleep(1000);
+    }
+  }
+  EXPECT_EQ(OB_SUCCESS, ret);
+  PALF_LOG(INFO, "mode-change tail recovery finished", K(id), K(change_sync), K(drop_ack), K(drop_fetch),
+      "recovery_us", ObTimeUtility::current_time() - recovery_start);
+  // Complete before the ordinary 2 s fallback fetch interval.
+  EXPECT_LT(ObTimeUtility::current_time() - recovery_start, 1800 * 1000);
+  LSN committed_end;
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->sw_.get_committed_end_lsn(committed_end));
+  EXPECT_GE(committed_end, tail_end);
+  EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_access_mode(mode_version, mode));
+  EXPECT_EQ(change_sync ? AccessMode::APPEND : AccessMode::RAW_WRITE, mode);
+  if (change_sync) {
+    SyncMode sync_mode;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->get_sync_mode(sync_mode));
+    EXPECT_EQ(SyncMode::SYNC, sync_mode);
+  }
+  unblock_pcode(first_follower, obrpc::OB_LOG_NOTIFY_FETCH_LOG);
+  unblock_pcode(second_follower, obrpc::OB_LOG_NOTIFY_FETCH_LOG);
+  revert_cluster_palf_handle_guard(replicas);
+  leader.reset();
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, mode_change_recovers_missing_tail)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "mode_change_recovers_missing_tail");
+  check_mode_change_tail_recovery(false);
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, mode_change_recovers_old_tail_ack)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "mode_change_recovers_old_tail_ack");
+  check_mode_change_tail_recovery(true);
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, mode_change_retries_lost_fetch_request)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "mode_change_retries_lost_fetch_request");
+  check_mode_change_tail_recovery(false, true);
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, sync_mode_retries_lost_fetch_request)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "sync_mode_retries_lost_fetch_request");
+  check_mode_change_tail_recovery(false, true, true);
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, sync_mode_recovers_missing_tail)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "sync_mode_recovers_missing_tail");
+  check_mode_change_tail_recovery(false, false, true);
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, sync_mode_retries_lost_initial_mode_meta)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "sync_mode_retries_lost_initial_mode_meta");
+  check_mode_change_tail_recovery(false, false, true, true);
+}
+
+TEST_F(TestObSimpleLogClusterAccessMode, mode_meta_flush_arms_only_first_pending_mode)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "mode_meta_flush_arms_only_first_pending_mode");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  std::vector<PalfHandleImplGuard*> replicas;
+  ASSERT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, replicas));
+  PalfHandleImpl *impl = replicas[(leader_idx + 1) % 3]->palf_handle_impl_;
+  {
+    // Hold the write lock so LogLoop cannot consume the armed check during the assertions.
+    PalfHandleImpl::WLockGuard guard(impl->lock_);
+    const LogModeMeta old_accepted = impl->mode_mgr_.accepted_mode_meta_;
+    const LogModeMeta old_applied = impl->mode_mgr_.applied_mode_meta_;
+    const int64_t old_pid = impl->state_mgr_.get_proposal_id();
+    const int64_t old_start_id = impl->state_mgr_.last_check_start_id_;
+    const int64_t old_check_time = impl->state_mgr_.last_check_start_id_time_us_;
+    const FetchTriggerType trigger = impl->sw_.last_fetch_trigger_type_;
+    const int64_t fetch_time = impl->sw_.last_fetch_req_time_;
+    const LSN fetch_end = impl->sw_.last_fetch_end_lsn_;
+    const LSN fetch_committed = impl->sw_.last_fetch_committed_end_lsn_;
+    const int64_t fetch_max_id = impl->sw_.last_fetch_max_log_id_;
+    const int64_t baseline = ObTimeUtility::current_time();
+    impl->state_mgr_.last_check_start_id_time_us_ = baseline;
+    // Initial reconfirm meta does not request an early check.
+    EXPECT_NE(old_pid, old_accepted.mode_version_);
+    impl->state_mgr_.on_mode_meta_flushed();
+    EXPECT_EQ(baseline, impl->state_mgr_.last_check_start_id_time_us_);
+
+    const int64_t pid = old_pid + 1;
+    impl->state_mgr_.prepare_meta_.log_proposal_id_ = pid;
+    LogModeMeta meta;
+    EXPECT_EQ(OB_SUCCESS, meta.generate(pid, pid, AccessMode::APPEND, SyncMode::SYNC, share::SCN::min_scn()));
+    EXPECT_EQ(OB_SUCCESS, impl->after_flush_mode_meta_(pid, false, meta));
+    EXPECT_EQ(OB_INVALID_TIMESTAMP, impl->state_mgr_.last_check_start_id_time_us_);
+    EXPECT_EQ(trigger, impl->sw_.last_fetch_trigger_type_);
+    EXPECT_EQ(fetch_time, impl->sw_.last_fetch_req_time_);
+    EXPECT_EQ(fetch_end, impl->sw_.last_fetch_end_lsn_);
+    EXPECT_EQ(fetch_committed, impl->sw_.last_fetch_committed_end_lsn_);
+    EXPECT_EQ(fetch_max_id, impl->sw_.last_fetch_max_log_id_);
+    // A second queued flush of the same meta must not re-arm a consumed check.
+    impl->state_mgr_.last_check_start_id_time_us_ = baseline;
+    EXPECT_EQ(OB_SUCCESS, impl->after_flush_mode_meta_(pid, false, meta));
+    EXPECT_EQ(baseline, impl->state_mgr_.last_check_start_id_time_us_);
+    EXPECT_EQ(OB_SUCCESS, impl->after_flush_mode_meta_(pid, true, meta));
+    EXPECT_FALSE(impl->state_mgr_.is_mode_change_pending_());
+    impl->after_flush_mode_meta_(old_pid, false, old_accepted);
+    EXPECT_EQ(baseline, impl->state_mgr_.last_check_start_id_time_us_);
+    EXPECT_EQ(fetch_time, impl->sw_.last_fetch_req_time_);
+
+    impl->mode_mgr_.accepted_mode_meta_ = old_accepted;
+    impl->mode_mgr_.applied_mode_meta_ = old_applied;
+    impl->state_mgr_.prepare_meta_.log_proposal_id_ = old_pid;
+    impl->state_mgr_.last_check_start_id_ = old_start_id;
+    impl->state_mgr_.last_check_start_id_time_us_ = old_check_time;
+  }
+  revert_cluster_palf_handle_guard(replicas);
+  leader.reset();
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+}
 
 TEST_F(TestObSimpleLogClusterAccessMode, basic_change_access_mode)
 {
