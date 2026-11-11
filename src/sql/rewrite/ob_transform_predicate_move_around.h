@@ -434,6 +434,10 @@ private:
 
   int check_validity_for_like_predicate(ObRawExpr *expr,
                                         bool &is_valid_for_like);
+
+  int collect_valid_pullup_preds_for_having(ObSelectStmt &sel_stmt,
+                                            ObIArray<ObRawExpr *> &pullup_preds,
+                                            ObIArray<ObRawExpr *> &having_pullup_preds);
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
   ObArenaAllocator allocator_;
