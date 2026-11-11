@@ -1,1 +1,2 @@
 sql_unittest(test_audit_log_utils)
+ob_unittest(test_audit_log_rotate_schedule)

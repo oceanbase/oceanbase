@@ -1673,6 +1673,14 @@ DEF_CAP(audit_log_rotate_on_size, OB_TENANT_PARAMETER, "256M", "[0,)"
          "whenever a write to the audit log file causes its size to exceed the config value, "
          "it will be renamed and a new audit log file using is opened, range: [0,)",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(audit_log_rotate_on_time, OB_TENANT_PARAMETER, "",
+         common::ObConfigAuditLogRotateOnTimeChecker,
+         "controls time-based audit log rotation in the observer's local time zone. "
+         "Use HH:MM[,HH:MM...] for fixed times each day, "
+         "or HH:MM/Nm or HH:MM/Nh for rotation every N minutes or hours. "
+         "Interval schedules restart at HH:MM each day. "
+         "An empty value disables time-based rotation",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR_WITH_CHECKER(audit_log_strategy, OB_TENANT_PARAMETER, "ASYNCHRONOUS",
          common::ObConfigAuditLogStrategyChecker,
          "the logging method used by the audit log plugin. "

@@ -5,9 +5,6 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "ob_config_helper.h"
-#ifdef OB_BUILD_AUDIT_SECURITY
-#include "sql/audit/ob_audit_log_format_options.h"
-#endif
 #include "share/ob_resource_limit.h"
 #include "src/observer/ob_server.h"
 #include "share/config/ob_config_mode_name_def.h"
@@ -17,6 +14,10 @@
 #include "plugin/legacy/sys/ob_plugin_load_param.h"
 #include "share/table/ob_table_config_util.h"
 #include "storage/ob_micro_block_format_version_helper.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_format_options.h"
+#include "sql/audit/ob_audit_log_rotate_schedule.h"
+#endif
 
 namespace oceanbase
 {
@@ -491,6 +492,16 @@ bool ObConfigAuditLogQuerySQLChecker::check(const ObConfigItem &t) const
   common::ObString tmp_string(t.str());
   return 0 == tmp_string.case_compare("ALL")
       || 0 == tmp_string.case_compare("NONE");
+}
+
+bool ObConfigAuditLogRotateOnTimeChecker::check(const ObConfigItem &t) const
+{
+#ifdef OB_BUILD_AUDIT_SECURITY
+  sql::ObAuditLogRotateSchedule schedule;
+  return OB_SUCCESS == schedule.parse(ObString(t.str()));
+#else
+  return ObString(t.str()).empty();
+#endif
 }
 
 bool ObConfigAuditLogStrategyChecker::check(const ObConfigItem &t) const

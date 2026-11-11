@@ -42,6 +42,7 @@ audit_log_path
 audit_log_prune_seconds
 audit_log_query_sql
 audit_log_rotate_on_size
+audit_log_rotate_on_time
 audit_log_strategy
 audit_sys_operations
 audit_trail
