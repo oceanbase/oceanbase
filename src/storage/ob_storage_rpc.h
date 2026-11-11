@@ -122,6 +122,7 @@ public:
   int64_t ls_rebuild_seq_;
   ObSArray<ObCopyMacroBlockInfo> copy_macro_block_infos_;
   share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
+  int64_t hold_version_; // placeholder for migration hold src tablet
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockRangeArg);
 };
 
@@ -194,6 +195,7 @@ public:
   share::ObScnRange minor_sstable_scn_range_;
   share::ObScnRange ddl_sstable_scn_range_;
   share::SCN inc_major_ddl_sstable_end_scn_;
+  int64_t hold_version_; // placeholder for migration hold src tablet
 };
 
 struct ObCopyTabletsSSTableInfoArg final
@@ -374,6 +376,7 @@ public:
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   share::ObTaskId migration_task_id_; // FARM COMPAT WHITELIST
+  int64_t hold_version_; // placeholder for migration hold src tablet
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRangeInfoArg);
 };
 

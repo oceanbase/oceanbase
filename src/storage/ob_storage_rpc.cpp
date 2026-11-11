@@ -161,7 +161,8 @@ ObCopyMacroBlockRangeArg::ObCopyMacroBlockRangeArg()
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
     copy_macro_block_infos_(),
-    migration_task_id_()
+    migration_task_id_(),
+    hold_version_(0)
 {
 }
 
@@ -177,6 +178,7 @@ void ObCopyMacroBlockRangeArg::reset()
   ls_rebuild_seq_ = -1;
   copy_macro_block_infos_.reset();
   migration_task_id_.reset();
+  hold_version_ = 0;
 }
 
 bool ObCopyMacroBlockRangeArg::is_valid() const
@@ -209,13 +211,14 @@ int ObCopyMacroBlockRangeArg::assign(const ObCopyMacroBlockRangeArg &arg)
     need_check_seq_ = arg.need_check_seq_;
     ls_rebuild_seq_ = arg.ls_rebuild_seq_;
     migration_task_id_ = arg.migration_task_id_;
+    hold_version_ = arg.hold_version_;
   }
   return ret;
 }
 
 OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, data_version_,
     backfill_tx_scn_, copy_macro_range_info_, need_check_seq_, ls_rebuild_seq_, copy_macro_block_infos_,
-    migration_task_id_);
+    migration_task_id_, hold_version_);
 
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
@@ -324,7 +327,8 @@ ObCopyTabletSSTableInfoArg::ObCopyTabletSSTableInfoArg()
     max_major_sstable_snapshot_(0),
     minor_sstable_scn_range_(),
     ddl_sstable_scn_range_(),
-    inc_major_ddl_sstable_end_scn_(SCN::min_scn())
+    inc_major_ddl_sstable_end_scn_(SCN::min_scn()),
+    hold_version_(0)
 {
 }
 
@@ -339,6 +343,7 @@ void ObCopyTabletSSTableInfoArg::reset()
   minor_sstable_scn_range_.reset();
   ddl_sstable_scn_range_.reset();
   inc_major_ddl_sstable_end_scn_.set_min();
+  hold_version_ = 0;
 }
 
 bool ObCopyTabletSSTableInfoArg::is_valid() const
@@ -352,7 +357,7 @@ bool ObCopyTabletSSTableInfoArg::is_valid() const
 
 OB_SERIALIZE_MEMBER(ObCopyTabletSSTableInfoArg,
     tablet_id_, max_major_sstable_snapshot_, minor_sstable_scn_range_,
-    ddl_sstable_scn_range_, inc_major_ddl_sstable_end_scn_);
+    ddl_sstable_scn_range_, inc_major_ddl_sstable_end_scn_, hold_version_);
 
 ObCopyTabletsSSTableInfoArg::ObCopyTabletsSSTableInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -599,7 +604,8 @@ ObCopySSTableMacroRangeInfoArg::ObCopySSTableMacroRangeInfoArg()
     macro_range_max_marco_count_(0),
     need_check_seq_(false),
     ls_rebuild_seq_(0),
-    migration_task_id_()
+    migration_task_id_(),
+    hold_version_(0)
 {
 }
 
@@ -617,6 +623,7 @@ void ObCopySSTableMacroRangeInfoArg::reset()
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
   migration_task_id_.reset();
+  hold_version_ = 0;
 }
 
 bool ObCopySSTableMacroRangeInfoArg::is_valid() const
@@ -644,6 +651,7 @@ int ObCopySSTableMacroRangeInfoArg::assign(const ObCopySSTableMacroRangeInfoArg 
     need_check_seq_ = arg.need_check_seq_;
     ls_rebuild_seq_ = arg.ls_rebuild_seq_;
     migration_task_id_ = arg.migration_task_id_;
+    hold_version_ = arg.hold_version_;
   }
   return ret;
 }
@@ -651,7 +659,8 @@ int ObCopySSTableMacroRangeInfoArg::assign(const ObCopySSTableMacroRangeInfoArg 
 OB_SERIALIZE_MEMBER(ObCopySSTableMacroRangeInfoArg, tenant_id_, ls_id_,
     tablet_id_, copy_table_key_array_, macro_range_max_marco_count_,
     need_check_seq_, ls_rebuild_seq_,
-    migration_task_id_ // FARM COMPAT WHITELIST
+    migration_task_id_, // FARM COMPAT WHITELIST
+    hold_version_
 );
 
 ObCopySSTableMacroRangeInfoHeader::ObCopySSTableMacroRangeInfoHeader()
