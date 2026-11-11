@@ -1345,6 +1345,8 @@ int ObVecIndexAsyncTask::do_work()
 {
   int ret = OB_SUCCESS;
   bool task_started = false;
+  bool compatible = false;
+  ObSchemaGetterGuard schema_guard;
   ObPluginVectorIndexAdapterGuard adpt_guard;
   ObPluginVectorIndexService *vector_index_service = MTL(ObPluginVectorIndexService *);
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
@@ -1365,6 +1367,18 @@ int ObVecIndexAsyncTask::do_work()
   } else if (OB_ISNULL(adpt_guard.get_adatper())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get vector index adapter", KR(ret), KPC(ctx_));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+          tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get schema guard", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObVectorIndexUtil::check_snapshot_vid_compatible(
+                 schema_guard, tenant_id_, adpt_guard.get_adatper()->get_data_table_id(),
+                 adpt_guard.get_adatper()->get_snapshot_table_id(), compatible))) {
+    LOG_WARN("failed to check snapshot VID", K(ret), K(ctx_->task_status_));
+  } else if (!compatible) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("snapshot VID does not allow NULL; table-level rebuild is required", K(ret),
+             K(tenant_id_), K(ls_id_), K(ctx_->task_status_),
+             K(adpt_guard.get_adatper()->get_snapshot_table_id()));
   } else if (FALSE_IT(task_started = true)) {
   } else if (adpt_guard.get_adatper()->has_doing_vector_index_task()) {
     ret = OB_EAGAIN;
@@ -1744,6 +1758,7 @@ int ObVecIndexAsyncTask::optimize_vector_index(ObPluginVectorIndexAdaptor &adapt
 int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor &adaptor, transaction::ObTxDesc *tx_desc, transaction::ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
+  bool compatible = false;
   ObVecIdxSnapshotDataWriteCtx ctx;
   ctx.ls_id_ = ls_id_;
   ctx.data_tablet_id_ = adaptor.get_data_tablet_id();
@@ -1812,6 +1827,13 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table schema not exist", K(ret), K(adaptor.get_snapshot_table_id()), K(adaptor.get_data_table_id()),
           KP(snapshot_table_schema), KP(data_table_schema));
+      } else if (OB_FAIL(ObVectorIndexUtil::check_snapshot_vid_compatible(
+                     *data_table_schema, *snapshot_table_schema, compatible))) {
+        LOG_WARN("failed to check snapshot VID", K(ret));
+      } else if (!compatible) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("snapshot VID does not allow NULL; table-level rebuild is required", K(ret),
+                 K(adaptor.get_snapshot_table_id()));
       } else if (FALSE_IT(lob_inrow_threshold = snapshot_table_schema->get_lob_inrow_threshold())) {
       } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
                                             &adaptor,
@@ -1835,15 +1857,6 @@ int ObVecIndexAsyncTask::refresh_snapshot_index_data(ObPluginVectorIndexAdaptor 
             LOG_WARN("fail to get column schema", K(ret), K(all_column_ids.at(i)));
           } else if (column_schema->is_vec_hnsw_vid_column() ) {
             vector_vid_col_idx = i;
-            if (!column_schema->is_nullable()) {
-              ObString index_name;
-              if (OB_FAIL(snapshot_table_schema->get_index_name(index_name))) {
-                LOG_WARN("failed to get index name", K(ret));
-              } else {
-                ret = OB_NOT_SUPPORTED;
-                LOG_INFO("vector index created before 4.3.5.2 do not support vector index optimize task, please rebuild vector index.", K(ret), K(index_name));
-              }
-            }
           } else if (column_schema->is_hidden_pk_column_id(all_column_ids.at(i))) {
             pk_increment_col_idx = i;
           } else if (column_schema->is_vec_hnsw_vector_column()) {

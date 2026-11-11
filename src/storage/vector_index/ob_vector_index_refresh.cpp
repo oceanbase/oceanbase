@@ -16,6 +16,7 @@
 #include "storage/vector_index/ob_vector_index_refresh.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
+#include "share/ob_vec_index_builder_util.h"
 
 namespace oceanbase {
 namespace storage {
@@ -474,6 +475,9 @@ int ObVectorIndexRefresher::do_rebuild() {
   int64_t index_id_table_row_cnt = 0;
   bool triggered = true;
   bool rebuild_index_online = false;
+  bool need_schema_repair = false;
+  const ObTableSchema *snapshot_schema = nullptr;
+  uint64_t snapshot_table_id = OB_INVALID_ID;
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
   dbms_scheduler::ObDBMSSchedJobInfo job_info;
   int64_t start_time_us = common::ObTimeUtility::fast_current_time();
@@ -564,6 +568,25 @@ int ObVectorIndexRefresher::do_rebuild() {
     }
   }
 
+  if (OB_SUCC(ret) && domain_table_schema->is_vec_hnsw_index()) {
+    const ObString &index_name = domain_table_schema->get_table_name_str();
+    bool compatible = false;
+    if (OB_FAIL(ObVecIndexBuilderUtil::get_vec_table_schema_by_name(
+                   schema_guard, tenant_id, domain_table_schema->get_database_id(), index_name,
+                   INDEX_TYPE_VEC_INDEX_SNAPSHOT_DATA_LOCAL, &allocator, snapshot_schema))) {
+      LOG_WARN("failed to get snapshot schema", K(ret), K(index_name));
+    } else if (OB_ISNULL(snapshot_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("snapshot table not found", K(ret), K(index_name));
+    } else if (OB_FAIL(ObVectorIndexUtil::check_snapshot_vid_compatible(
+                   *base_table_schema, *snapshot_schema, compatible))) {
+      LOG_WARN("failed to check snapshot VID", K(ret), K(index_name));
+    } else {
+      need_schema_repair = !compatible;
+      snapshot_table_id = snapshot_schema->get_table_id();
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id,
                                                       domain_table_schema->get_database_id(),
@@ -578,7 +601,7 @@ int ObVectorIndexRefresher::do_rebuild() {
     // do nothing
     triggered = false;
     LOG_INFO("[VEC_INDEX][REBUILD] table or db in recyclebin", KPC(db_schema), KPC(domain_table_schema), KPC(index_id_tb_schema));
-  } else if (OB_UNLIKELY(0 == refresh_ctx_->delta_rate_threshold_)) {
+  } else if (OB_UNLIKELY(need_schema_repair || 0 == refresh_ctx_->delta_rate_threshold_)) {
     // do nothing
   } else if (!domain_table_schema->is_vec_hnsw_index()) {
     // no need to get table cnt if not hnsw index
@@ -632,8 +655,12 @@ int ObVectorIndexRefresher::do_rebuild() {
     LOG_INFO("[VEC_INDEX][REBUILD] no need to rebuild index", K(triggered), K(rebuild_index_online), KPC(refresh_ctx_), K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt));
   }
 
+  if (OB_SUCC(ret) && triggered && need_schema_repair) {
+    rebuild_index_online = false;
+  }
   if (OB_SUCC(ret) && triggered) {
-    LOG_INFO("start to rebuild vec index");
+    LOG_INFO("start to rebuild vec index", K(need_schema_repair), K(snapshot_table_id),
+             K(refresh_ctx_->base_tb_id_), K(refresh_ctx_->domain_tb_id_));
     const int64_t ddl_rpc_timeout = GCONF._ob_ddl_timeout;
     ObTimeoutCtx timeout_ctx;
     ObAddr rs_addr;
@@ -672,7 +699,8 @@ int ObVectorIndexRefresher::do_rebuild() {
     } else if (OB_FAIL(common_rpc_proxy->to(rs_addr).timeout(ddl_rpc_timeout).rebuild_vec_index(rebuild_index_arg, rebuild_index_res))) {
       LOG_WARN("failed to post backup ls data res", K(ret), K(ddl_rpc_timeout), K(rebuild_index_arg));
     } else {
-      LOG_INFO("succ to send rebuild vector index rpc", K(rs_addr), K(refresh_ctx_));
+      LOG_INFO("succ to send rebuild vector index rpc", K(rs_addr), KPC(refresh_ctx_),
+               K(need_schema_repair), K(snapshot_table_id), K(rebuild_index_res.task_id_));
     }
     if (OB_SUCC(ret)) {
       if (rebuild_index_online) {
@@ -683,15 +711,23 @@ int ObVectorIndexRefresher::do_rebuild() {
                                                             session_info,
                                                             common_rpc_proxy,
                                                             is_support_cancel))) {
-        LOG_WARN("fail wait rebuild vec index finish", K(ret));
+        LOG_WARN("fail wait rebuild vec index finish", K(ret), K(need_schema_repair),
+                 K(snapshot_table_id), K(rebuild_index_res.task_id_));
       } else {
-        LOG_INFO("succ to wait rebuild vec index", K(ret), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
+        LOG_INFO("succ to wait rebuild vec index", K(ret), K(need_schema_repair),
+                 K(snapshot_table_id), K(rebuild_index_res.task_id_), K(rebuild_index_arg));
+        if (need_schema_repair) {
+          LOG_INFO("snapshot VID schema repair rebuild completed", K(tenant_id),
+                   K(snapshot_table_id), K(rebuild_index_res.task_id_),
+                   K(refresh_ctx_->base_tb_id_), K(refresh_ctx_->domain_tb_id_));
+        }
       }
     }
   }
   }
   int64_t cost_ms = (common::ObTimeUtility::fast_current_time() - start_time_us) / 1000;
-  FLOG_INFO("[VEC_INDEX][REBUILD] rebuild index cost", K(ret), K(cost_ms), K(triggered), KPC(refresh_ctx_));
+  FLOG_INFO("[VEC_INDEX][REBUILD] rebuild index cost", K(ret), K(cost_ms), K(triggered),
+            K(need_schema_repair), K(snapshot_table_id), KPC(refresh_ctx_));
   return ret;
 }
 

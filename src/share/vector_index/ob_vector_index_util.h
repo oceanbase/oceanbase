@@ -466,6 +466,17 @@ public:
   static int determine_vid_type(
       const ObTableSchema &table_schema,
       ObDocIDType &vid_type);
+  static int check_snapshot_vid_compatible(
+      const ObTableSchema &data_schema,
+      const ObTableSchema &snapshot_schema,
+      bool &compatible);
+  static int check_snapshot_vid_compatible(
+      ObSchemaGetterGuard &schema_guard,
+      uint64_t tenant_id, uint64_t data_table_id, uint64_t snapshot_table_id,
+      bool &compatible);
+  static int set_snapshot_vid_nullable(
+      const ObTableSchema &data_schema,
+      ObTableSchema &snapshot_schema);
   static int construct_rebuild_index_param(
       const ObTableSchema &data_table_schema,
       const ObString &old_index_params,

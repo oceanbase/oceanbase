@@ -14,6 +14,9 @@
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "src/storage/ls/ob_ls.h"
 #include "lib/hash/ob_hashset.h"
+#include "lib/hash/ob_hashmap.h"
+#include "share/schema/ob_multi_version_schema_service.h"
+#include "share/vector_index/ob_vector_index_util.h"
 
 namespace oceanbase
 {
@@ -83,6 +86,22 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
   int ret = OB_SUCCESS;
   ObPluginVectorIndexMgr *index_ls_mgr = nullptr;
   ObArray<ObVecIndexAsyncTaskCtx*> task_ctx_array;
+  schema::ObSchemaGetterGuard schema_guard;
+  struct SnapshotCheckResult
+  {
+    uint64_t data_table_id_;
+    int64_t index_table_id_;
+    bool compatible_;
+    int64_t skipped_partition_count_;
+    TO_STRING_KV(K_(data_table_id), K_(index_table_id), K_(compatible),
+                 K_(skipped_partition_count));
+  };
+  typedef hash::ObHashMap<uint64_t, SnapshotCheckResult, hash::NoPthreadDefendMode,
+      hash::hash_func<uint64_t>, hash::equal_to<uint64_t>,
+      hash::SimpleAllocer<hash::HashMapTypes<uint64_t, SnapshotCheckResult>::AllocType>,
+      hash::NormalPointer, ObMalloc, 2> SnapshotCheckMap;
+  SnapshotCheckMap snapshot_checks;
+  bool cache_available = false;
   DEBUG_SYNC(LOAD_VECTOR_INDEX_ASYNC_TASK);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -127,6 +146,16 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
       } else {
         conflict_sets_ready = true;
       }
+      if (OB_FAIL(schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+              tenant_id_, schema_guard))) {
+        LOG_WARN("failed to get schema guard", K(ret), K(tenant_id_));
+      } else if (OB_TMP_FAIL(snapshot_checks.create(
+              16, "VecSnapCheck", "VecSnapCheck", tenant_id_))) {
+        LOG_WARN("failed to create snapshot check cache, check each partition this round",
+                 K(tmp_ret), K(tenant_id_));
+      } else {
+        cache_available = true;
+      }
       // create new tasks
       RWLock::RLockGuard lock_guard(index_ls_mgr->get_adapter_map_lock());
       FOREACH_X(iter, index_ls_mgr->get_complete_adapter_map(),
@@ -150,6 +179,44 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
             int64_t index_table_id = OB_INVALID_ID;
             bool inc_new_task = false;
             common::ObCurTraceId::TraceId new_trace_id;
+            if (OB_TMP_FAIL(ObVecIndexAsyncTaskUtil::get_table_id_from_adapter(
+                    adapter, tablet_id, index_table_id)) || OB_INVALID_ID == index_table_id) {
+              LOG_WARN("failed to get table id from adapter", K(tmp_ret), K(tablet_id));
+              continue;
+            }
+            const uint64_t snapshot_table_id = adapter->get_snapshot_table_id();
+            SnapshotCheckResult local_result = {data_table_id, index_table_id, false, 0};
+            SnapshotCheckResult *check_result = cache_available
+                ? snapshot_checks.get(snapshot_table_id)
+                : nullptr;
+            if (OB_ISNULL(check_result)) {
+              if (OB_TMP_FAIL(ObVectorIndexUtil::check_snapshot_vid_compatible(
+                      schema_guard, tenant_id_, data_table_id, snapshot_table_id,
+                      local_result.compatible_))) {
+                LOG_WARN("failed to check snapshot VID", K(tmp_ret), K(tenant_id_),
+                         K(data_table_id), K(snapshot_table_id));
+                continue;
+              }
+              check_result = &local_result;
+              if (cache_available) {
+                if (OB_TMP_FAIL(snapshot_checks.set_refactored(snapshot_table_id, local_result))) {
+                  cache_available = false;
+                  LOG_WARN("failed to cache snapshot check, check each partition this round",
+                           K(tmp_ret), K(tenant_id_), K(snapshot_table_id));
+                } else if (OB_ISNULL(check_result = snapshot_checks.get(snapshot_table_id))) {
+                  cache_available = false;
+                  check_result = &local_result;
+                  LOG_WARN("snapshot check cache entry not found, check each partition this round",
+                           K(tenant_id_), K(snapshot_table_id));
+                }
+              }
+            }
+            if (!check_result->compatible_) {
+              if (cache_available) {
+                ++check_result->skipped_partition_count_;
+              }
+              continue;
+            }
 
             char *task_ctx_buf = static_cast<char *>(allocator->alloc(sizeof(ObVecIndexAsyncTaskCtx)));
             ObVecIndexAsyncTaskCtx* task_ctx = nullptr;
@@ -159,10 +226,6 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
             } else if (FALSE_IT(task_ctx = new(task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
             } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id_, new_task_id))) {
               LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id_));
-            } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_table_id_from_adapter(adapter, tablet_id, index_table_id))) { // only get table 3 table_id to generate new task
-              LOG_WARN("fail to get table id from adapter", K(ret), K(tablet_id));
-            } else if (OB_INVALID_ID == index_table_id) {
-              LOG_DEBUG("index table id is invalid, skip", K(ret)); // skip to next
             } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(++task_trace_base_num, allocator, new_trace_id))) {
               LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
             } else {
@@ -197,6 +260,37 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
         }
       }
       LOG_INFO("finish load async task", K(ret), K(ls_->get_ls_id()), K(task_ctx_array.count()), K(current_task_cnt));
+    }
+  }
+  if (cache_available) {
+    for (SnapshotCheckMap::iterator iter = snapshot_checks.begin();
+        iter != snapshot_checks.end(); ++iter) {
+      const SnapshotCheckResult &item = iter->second;
+      if (!item.compatible_ && item.skipped_partition_count_ > 0) {
+        int tmp_ret = OB_SUCCESS;
+        const schema::ObDatabaseSchema *database_schema = nullptr;
+        const schema::ObTableSchema *data_schema = nullptr;
+        const schema::ObTableSchema *index_schema = nullptr;
+        ObString index_name;
+        if (OB_TMP_FAIL(schema_guard.get_table_schema(tenant_id_, item.data_table_id_, data_schema))
+            || OB_TMP_FAIL(schema_guard.get_table_schema(
+                tenant_id_, item.index_table_id_, index_schema))) {
+        } else if (OB_ISNULL(data_schema) || OB_ISNULL(index_schema)) {
+          tmp_ret = OB_TABLE_NOT_EXIST;
+        } else if (OB_TMP_FAIL(index_schema->get_index_name(index_name))) {
+        } else if (OB_TMP_FAIL(schema_guard.get_database_schema(
+                       tenant_id_, data_schema->get_database_id(), database_schema))) {
+        } else if (OB_ISNULL(database_schema)) {
+          tmp_ret = OB_ERR_BAD_DATABASE;
+        }
+        const ObString table_name = OB_ISNULL(data_schema) ? ObString() : data_schema->get_table_name_str();
+        const ObString database_name = OB_ISNULL(database_schema) ? ObString() : database_schema->get_database_name_str();
+        LOG_WARN("skip vector partition task creation: snapshot VID does not allow NULL; "
+                 "use DBMS_VECTOR.REBUILD_INDEX for table-level rebuild",
+                 K(tenant_id_), K(database_name), K(table_name), K(index_name),
+                 K(item.data_table_id_), K(item.index_table_id_),
+                 K(item.skipped_partition_count_), K(tmp_ret));
+      }
     }
   }
   if (OB_FAIL(ret)) {
