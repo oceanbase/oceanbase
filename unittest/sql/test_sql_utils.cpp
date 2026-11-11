@@ -24,6 +24,15 @@ using namespace oceanbase::observer;
 namespace test
 {
 
+void SqlCompileMallocCallback::operator()(const lib::ObMemAttr &attr, int64_t add_size, const lib::AObject &obj)
+{
+  // Each diagnostic callback must receive the event, including the total callback around nested phases.
+  ObProcessMallocCallback *previous_callback = active_process_malloc_callback;
+  active_process_malloc_callback = &callback_;
+  callback_(attr, add_size, obj);
+  active_process_malloc_callback = previous_callback;
+}
+
 CmdLineParam clp;
 bool comparisonFunc(const char *c1, const char *c2)
 {
@@ -458,7 +467,8 @@ void TestSqlUtils::do_resolve(
     ObMemPerfGuard mem_perf_guard("parse");
     int64_t max_mem_used = 0;
     observer::ObProcessMallocCallback pmcb(0, max_mem_used);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    SqlCompileMallocCallback compile_callback(pmcb);
+    lib::ObMallocCallbackGuard guard(compile_callback);
     OK(parser.parse(query, parse_result));
     if (NULL != memory_usage) {
       memory_usage->parse_mem_used_ = pmcb.get_cur_used();
@@ -508,7 +518,8 @@ void TestSqlUtils::do_resolve(
     ObMemPerfGuard mem_perf_guard("resolve");
     int64_t max_mem_used = 0;
     observer::ObProcessMallocCallback pmcb(0, max_mem_used);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    SqlCompileMallocCallback compile_callback(pmcb);
+    lib::ObMallocCallbackGuard guard(compile_callback);
     ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
     if (NULL != memory_usage) {
       memory_usage->resolve_mem_used_ = pmcb.get_cur_used();

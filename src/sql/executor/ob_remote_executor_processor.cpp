@@ -736,7 +736,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
         ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
         audit_record.request_memory_used_ = 0;
         observer::ObProcessMallocCallback pmcb(0, audit_record.request_memory_used_);
-        lib::ObMallocCallbackGuard guard(pmcb);
+        observer::ObProcessMallocCallbackGuard guard(pmcb);
         session->set_peer_addr(task.get_ctrl_server());
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), plan->get_stmt_type());
         if (OB_FAIL(execute_remote_plan(exec_ctx_, *plan))) {
@@ -1103,7 +1103,7 @@ int ObRpcRemoteExecuteP::process()
         ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
         audit_record.request_memory_used_ = 0;
         observer::ObProcessMallocCallback pmcb(0, audit_record.request_memory_used_);
-        lib::ObMallocCallbackGuard guard(pmcb);
+        observer::ObProcessMallocCallbackGuard guard(pmcb);
         NG_TRACE_EXT(execute_task, OB_ID(task), task,
                      OB_ID(stmt_type), task.get_des_phy_plan().get_stmt_type());
         phy_plan_.set_next_phy_operator_id(exec_ctx_.get_phy_op_size());

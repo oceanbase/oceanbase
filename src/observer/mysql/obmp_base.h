@@ -17,6 +17,7 @@
 #include "observer/mysql/obmp_packet_sender.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/alloc/ob_malloc_callback.h"
+#include "lib/allocator/ob_ctx_define.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "rpc/obmysql/ob_i_cs_mem_pool.h"
 #include "rpc/obmysql/packet/ompk_handshake_response.h"
@@ -336,63 +337,100 @@ inline void ObMPBase::clear_wb_content(sql::ObSQLSessionInfo &session)
   session.reset_warnings_buf();
 }
 
+class ObProcessMallocCallback;
+inline thread_local ObProcessMallocCallback *active_process_malloc_callback = nullptr;
+
 class ObProcessMallocCallback final : public lib::ObMallocCallback
 {
 public:
   ObProcessMallocCallback(int64_t cur_used, int64_t &max_used)
-    : cur_used_(cur_used), max_used_(max_used) {
-      max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
-  }
-  virtual ~ObProcessMallocCallback() {}
-
-  virtual void operator()(const ObMemAttr &attr, int64_t add_size, const lib::AObject &obj) override
+    : cur_used_(cur_used), max_used_(max_used)
   {
-    //You can use:
-    //alter system set_tp tp_no=405, error_code=label_high64, frequency=1;
-    //alter system set_tp tp_no=406, error_code=label_low64, frequency=1;
-    //to inject a monitored ObLabel.
-    //When this injection takes effect,
-    //the maximum memory usage will only be counted for the specified label.
-    //tp_no=405 and tp_no=406 need to be used at the same time
+    max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
+  }
 
-    //To obtain the label_high64 and label_low64 values of an ObLabel,
-    //you can use the tool './label2int64 LabelName' to easily retrieve them.
-    //If you don't have access to this tool,
-    //you can map a string that conforms to the ObLabel format into two int64_t integer values,
-    //ensuring consistency with the endianness of the target machine.
+  virtual void operator()(const lib::ObMemAttr &attr, int64_t add_size, const lib::AObject &obj) override
+  {
     UNUSED(obj);
-    int64_t label_high64 = - EVENT_CODE(EventTable::EN_SQL_MEMORY_LABEL_HIGH64);
-    if (OB_UNLIKELY(ObLabel("SqlDtlBuf") == attr.label_
-                    || ObCtxIds::MEMSTORE_CTX_ID == attr.ctx_id_
-                    || ObCtxIds::LOGGER_CTX_ID == attr.ctx_id_)) {
-      // do nothing
-    } else if (label_high64 != 0) {
-      int64_t label_low64 = - EVENT_CODE(EventTable::EN_SQL_MEMORY_LABEL_LOW64);
-      char trace_label[16] = {'\0'};
-      MEMSET(trace_label, 0, sizeof(trace_label));
-      MEMCPY(trace_label, &label_high64, sizeof(int64_t));
-      MEMCPY(trace_label + 8, &label_low64, sizeof(int64_t));
-      if (ObLabel(trace_label) == attr.label_) {
-        cur_used_ += add_size;
-        max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
-#ifdef ERRSIM
-        int64_t dynamic_leak_size = - EVENT_CODE(EventTable::EN_SQL_MEMORY_DYNAMIC_LEAK_SIZE);
-        if (dynamic_leak_size > 0 && max_used_ >= dynamic_leak_size) {
-          ob_abort();
-        }
-#endif //end of ERRSIM
-      }
-    } else {
-      cur_used_ += add_size;
-      max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
+    if (this == active_process_malloc_callback && is_tracked(attr)) {
+      update_used(add_size);
     }
   }
+
   int64_t get_cur_used() const { return cur_used_; }
   int64_t get_max_used() const { return max_used_; }
+
 private:
+  bool is_tracked(const lib::ObMemAttr &attr) const
+  {
+    bool is_tracked = false;
+    if (lib::ObLabel("SqlDtlBuf") == attr.label_
+        || common::ObCtxIds::MEMSTORE_CTX_ID == attr.ctx_id_
+        || common::ObCtxIds::LOGGER_CTX_ID == attr.ctx_id_) {
+      // These categories are outside request-memory accounting.
+    } else {
+      // TP 405/406 select the allocation label for both positive and negative events.
+      const int64_t label_high64 = - EVENT_CODE(common::EventTable::EN_SQL_MEMORY_LABEL_HIGH64);
+      if (0 == label_high64) {
+        is_tracked = true;
+      } else {
+        //You can use:
+        //alter system set_tp tp_no=405, error_code=label_high64, frequency=1;
+        //alter system set_tp tp_no=406, error_code=label_low64, frequency=1;
+        //to inject a monitored ObLabel.
+        //When this injection takes effect,
+        //the maximum memory usage will only be counted for the specified label.
+        //tp_no=405 and tp_no=406 need to be used at the same time
+
+        //To obtain the label_high64 and label_low64 values of an ObLabel,
+        //you can use the tool './label2int64 LabelName' to easily retrieve them.
+        //If you don't have access to this tool,
+        //you can map a string that conforms to the ObLabel format into two int64_t integer values,
+        //ensuring consistency with the endianness of the target machine.
+        const int64_t label_low64 = - EVENT_CODE(common::EventTable::EN_SQL_MEMORY_LABEL_LOW64);
+        char trace_label[16] = {'\0'};
+        MEMCPY(trace_label, &label_high64, sizeof(label_high64));
+        MEMCPY(trace_label + 8, &label_low64, sizeof(label_low64));
+        is_tracked = lib::ObLabel(trace_label) == attr.label_;
+      }
+    }
+    return is_tracked;
+  }
+
+  void update_used(int64_t add_size)
+  {
+    cur_used_ += add_size;
+    max_used_ = cur_used_ > max_used_ ? cur_used_ : max_used_;
+#ifdef ERRSIM
+    const int64_t dynamic_leak_size = - EVENT_CODE(common::EventTable::EN_SQL_MEMORY_DYNAMIC_LEAK_SIZE);
+    if (0 != EVENT_CODE(common::EventTable::EN_SQL_MEMORY_LABEL_HIGH64)
+        && dynamic_leak_size > 0 && max_used_ >= dynamic_leak_size) {
+      ob_abort();
+    }
+#endif
+  }
+
   int64_t cur_used_;
   int64_t &max_used_;
-}; // end of class ObProcessMallocCallback
+};
+
+class ObProcessMallocCallbackGuard
+{
+public:
+  explicit ObProcessMallocCallbackGuard(ObProcessMallocCallback &callback)
+    : previous_callback_(active_process_malloc_callback), callback_guard_(callback)
+  {
+    active_process_malloc_callback = &callback;
+  }
+  ~ObProcessMallocCallbackGuard()
+  {
+    active_process_malloc_callback = previous_callback_;
+  }
+private:
+  ObProcessMallocCallback *previous_callback_;
+  lib::ObMallocCallbackGuard callback_guard_;
+  DISALLOW_COPY_AND_ASSIGN(ObProcessMallocCallbackGuard);
+};
 
 class ObMemPerfCallback final : public lib::ObMallocCallback
 {

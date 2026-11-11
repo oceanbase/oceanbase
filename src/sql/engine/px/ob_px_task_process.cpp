@@ -187,7 +187,7 @@ int ObPxTaskProcess::process()
     session->get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session->get_raw_audit_record().request_memory_used_);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    observer::ObProcessMallocCallbackGuard guard(pmcb);
     session->set_peer_addr(arg_.task_.get_sqc_addr());
     session->set_cur_phy_plan(arg_.des_phy_plan_);
     session->set_thread_id(GETTID());

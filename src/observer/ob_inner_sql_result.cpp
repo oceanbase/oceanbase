@@ -55,7 +55,8 @@ ObInnerSQLResult::ObInnerSessionGuard::~ObInnerSessionGuard()
 }
 
 ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_session, ObDiagnosticInfo *di)
-    : column_map_created_(false), column_indexed_(false), column_map_(),
+    : destruction_memory_callback_(), destruction_memory_guard_(),
+      column_map_created_(false), column_indexed_(false), column_map_(),
       mem_context_(nullptr),
       mem_context_destroy_guard_(mem_context_),
       sql_ctx_(), schema_guard_(share::schema::ObSchemaMgrItem::MOD_INNER_SQL_RESULT),
@@ -80,6 +81,8 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_sess
 
 int ObInnerSQLResult::init(bool has_tenant_resource)
 {
+  ObProcessMallocCallback callback(0, session_.get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   lib::ContextParam param;
   param.set_mem_attr(session_.get_effective_tenant_id(),
@@ -123,6 +126,8 @@ int ObInnerSQLResult::init()
 
 ObInnerSQLResult::~ObInnerSQLResult()
 {
+  destruction_memory_callback_.emplace(0, session_.get_raw_audit_record().request_memory_used_);
+  destruction_memory_guard_.emplace(*destruction_memory_callback_);
   close();
   if (result_set_ != nullptr) {
     int ret = OB_SUCCESS;
@@ -200,6 +205,8 @@ int ObInnerSQLResult::open()
 
 int ObInnerSQLResult::close()
 {
+  ObProcessMallocCallback callback(0, session_.get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   // close can be executed too if result set not open.
   if (opened_) {
@@ -215,6 +222,8 @@ int ObInnerSQLResult::close()
 
 int ObInnerSQLResult::force_close()
 {
+  ObProcessMallocCallback callback(0, session_.get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   if (OB_FAIL(inner_close())) {
     LOG_WARN("result set close failed", K(ret));
@@ -255,6 +264,8 @@ int ObInnerSQLResult::inner_close()
 
 int ObInnerSQLResult::next()
 {
+  ObProcessMallocCallback callback(0, session_.get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
   ObInnerSqlWaitGuard guard(is_inner_session(), inner_sql_di_, &session_);
@@ -295,6 +306,8 @@ int ObInnerSQLResult::next()
 
 int ObInnerSQLResult::build_column_map() const
 {
+  ObProcessMallocCallback callback(0, session_.get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   if (!opened_) {
     ret = OB_NOT_INIT;
@@ -542,6 +555,8 @@ int ObInnerSQLResult::get_int(const int64_t col_idx, int64_t &int_val) const
 
 int ObInnerSQLResult::get_number_impl(const int64_t col_idx, number::ObNumber &ret_nmb) const
 {
+  ObProcessMallocCallback callback(0, session_.get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   if (!opened_) {
     ret = OB_NOT_INIT;

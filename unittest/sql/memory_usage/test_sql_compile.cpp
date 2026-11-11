@@ -163,7 +163,8 @@ void TestSQLCompile::test_sql_compile(const char *file_name_prefix)
         lib::ObMallocCallbackGuard mp_guard(mpcb);
         int64_t max_mem_used = 0;
         observer::ObProcessMallocCallback pmcb(0, max_mem_used);
-        lib::ObMallocCallbackGuard guard(pmcb);
+        SqlCompileMallocCallback compile_callback(pmcb);
+        lib::ObMallocCallbackGuard guard(compile_callback);
         ObMemPerfGuard mem_perf_guard("hard_parse");
         ASSERT_NO_FATAL_FAILURE(do_load_sql(query, stmt, TREE_FORMAT, 0, case_id, &memory_usage));
         // of_tmp << CSJ(*stmt) << std::endl;
@@ -250,7 +251,8 @@ int TestSQLCompile::transform(ObDMLStmt *&stmt, MemoryUsage &memory_usage)
     ObMemPerfGuard mem_perf_guard("rewrite");
     int64_t max_mem_used = 0;
     observer::ObProcessMallocCallback pmcb(0, max_mem_used);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    SqlCompileMallocCallback compile_callback(pmcb);
+    lib::ObMallocCallbackGuard guard(compile_callback);
 
     trans_ctx.allocator_ = &allocator_;
     trans_ctx.schema_checker_ = &schema_checker;
@@ -284,7 +286,8 @@ int TestSQLCompile::optimize(ObDMLStmt *&stmt, ObLogPlan *&logical_plan, MemoryU
     ObMemPerfGuard mem_perf_guard("optimize");
     int64_t max_mem_used = 0;
     observer::ObProcessMallocCallback pmcb(0, max_mem_used);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    SqlCompileMallocCallback compile_callback(pmcb);
+    lib::ObMallocCallbackGuard guard(compile_callback);
     ObOptimizerContext optctx(&session_info_,
                               &exec_ctx_,
                               &query_ctx->sql_schema_guard_,

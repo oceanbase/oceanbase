@@ -392,7 +392,7 @@ public:
       common::ObMaxWaitGuard max_wait_guard(&audit_.record_.exec_record_.max_wait_event_);
       common::ObTotalWaitGuard total_wait_guard(&audit_.total_wait_desc_);
       observer::ObProcessMallocCallback pmcb(0, audit_.record_.request_memory_used_);
-      lib::ObMallocCallbackGuard malloc_guard(pmcb);
+      observer::ObProcessMallocCallbackGuard malloc_guard(pmcb);
       audit_.set_tb_audit_ret_code(ret_code);
       audit_.set_tb_audit_snapshot(snapshot);
       audit_.set_tb_audit_stmt_type(stmt_type);
@@ -480,7 +480,7 @@ The following macro definition is used to record sql audit, how to use:
   common::ObMaxWaitGuard max_wait_guard(&audit.record_.exec_record_.max_wait_event_);     \
   common::ObTotalWaitGuard total_wait_guard(&audit.total_wait_desc_);                     \
   observer::ObProcessMallocCallback pmcb(0, audit.record_.request_memory_used_);          \
-  lib::ObMallocCallbackGuard malloc_guard_(pmcb);                                         \
+  observer::ObProcessMallocCallbackGuard malloc_guard_(pmcb);                                                         \
   if (audit.need_audit_ && OB_NOT_NULL(audit_ctx)) {                                      \
     if (lib::is_diagnose_info_enabled()) {                                                \
       audit.record_.exec_record_.record_start();                                          \

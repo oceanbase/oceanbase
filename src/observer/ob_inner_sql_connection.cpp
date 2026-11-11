@@ -968,7 +968,7 @@ int ObInnerSQLConnection::query(sqlclient::ObIExecutor &executor,
         get_session().get_raw_audit_record().request_memory_used_ = 0;
         observer::ObProcessMallocCallback pmcb(0,
               get_session().get_raw_audit_record().request_memory_used_);
-        lib::ObMallocCallbackGuard guard(pmcb);
+        ObProcessMallocCallbackGuard guard(pmcb);
         int64_t local_tenant_schema_version = -1;
         int64_t local_sys_schema_version = -1;
         ObWaitEventDesc max_wait_desc;
@@ -1240,6 +1240,8 @@ int ObInnerSQLConnection::start_transaction_inner(
         }
         // remote
       } else {
+        ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+        ObProcessMallocCallbackGuard memory_guard(callback);
         TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
         common::ObAddr resource_server_addr; // MYADDR
         GET_LS_ID_FOR_SEARCH_TENANT_RESOURCE_SERVER
@@ -1324,6 +1326,8 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
 
   SMART_VAR(ObInnerSQLResult, res, get_session(), is_inner_session(),diagnostic_info_)
   {
+    ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+    ObProcessMallocCallbackGuard memory_guard(callback);
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("connection not inited", K(ret));
@@ -1435,6 +1439,8 @@ int ObInnerSQLConnection::forward_request_(const uint64_t tenant_id,
                                            ObInnerSQLResult &res,
                                            const int32_t group_id)
 {
+  ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+  ObProcessMallocCallbackGuard memory_guard(callback);
   int ret = OB_SUCCESS;
   ObInnerSqlWaitGuard guard(is_inner_session(), diagnostic_info_, inner_session_);
   TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
@@ -1526,6 +1532,8 @@ int ObInnerSQLConnection::rollback()
           LOG_WARN("close result set failed", K(ret));
         }
       } else {
+        ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+        ObProcessMallocCallbackGuard memory_guard(callback);
         TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
         int64_t query_timeout = OB_INVALID_TIMESTAMP;
         int64_t trx_timeout = OB_INVALID_TIMESTAMP;
@@ -1607,6 +1615,8 @@ int ObInnerSQLConnection::commit()
           LOG_WARN("close result set failed", K(ret));
         }
       } else {
+        ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+        ObProcessMallocCallbackGuard memory_guard(callback);
         TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
         int64_t query_timeout = OB_INVALID_TIMESTAMP;
         int64_t trx_timeout = OB_INVALID_TIMESTAMP;
@@ -1735,6 +1745,8 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
       LOG_WARN("resource_conn of resource_svr still doesn't has the tenant resource",
                K(ret), K(MYADDR), K(tenant_id), K(get_resource_conn_id()));
     } else { // !has_tenant_resource
+      ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+      ObProcessMallocCallbackGuard memory_guard(callback);
       TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
       int64_t query_timeout = OB_DEFAULT_SESSION_TIMEOUT;
       int64_t trx_timeout = OB_DEFAULT_SESSION_TIMEOUT;
@@ -1948,6 +1960,8 @@ int ObInnerSQLConnection::execute_read_inner(const int64_t cluster_id,
     LOG_WARN("resource_conn of resource_svr still doesn't has the tenant resource",
              K(ret), K(MYADDR), K(tenant_id), K(get_resource_conn_id()));
   } else if (!local_execute) {
+    ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+    ObProcessMallocCallbackGuard memory_guard(callback);
     TimeoutGuard timeout_guard(*this); // backup && restore worker/session timeout
     int64_t query_timeout = OB_INVALID_TIMESTAMP;
     int64_t trx_timeout = OB_INVALID_TIMESTAMP;
@@ -2112,6 +2126,8 @@ int ObInnerSQLConnection::execute(
     } else if (OB_FAIL(query(executor, res))) {
       LOG_WARN("executor execute failed", K(ret), K(tenant_id), K(executor));
     } else {
+      ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+      ObProcessMallocCallbackGuard memory_guard(callback);
       lib::CompatModeGuard g(get_compat_mode());
       MTL_SWITCH(tenant_id) {
         WITH_CONTEXT(res.mem_context_) {
@@ -2542,6 +2558,8 @@ int ObInnerSQLConnection::execute_inner_tablet_write(
 
   SMART_VAR(ObInnerSQLResult, res, get_session(), is_inner_session(), diagnostic_info_)
   {
+    ObProcessMallocCallback callback(0, get_session().get_raw_audit_record().request_memory_used_);
+    ObProcessMallocCallbackGuard memory_guard(callback);
     if (!inited_) {
       ret = OB_NOT_INIT;
       LOG_WARN("connection not inited", K(ret));

@@ -14,6 +14,7 @@
 #include <gtest/gtest.h>
 #define private public
 #define protected public
+#include "lib/alloc/ob_malloc_callback.h"
 #include "lib/allocator/page_arena.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/utility/ob_test_util.h"
@@ -37,6 +38,14 @@
 #include "sql/engine/ob_exec_context.h"
 #include "../share/schema/mock_schema_service.h"
 #include "optimizer/ob_mock_location_service.h"
+
+namespace oceanbase
+{
+namespace observer
+{
+class ObProcessMallocCallback;
+}
+}
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -89,6 +98,17 @@ enum ParserResultFormat
 {
   TREE_FORMAT,
   JSON_FORMAT
+};
+
+// Measure nested compile phases and the total with the production accounting callback.
+class SqlCompileMallocCallback final : public lib::ObMallocCallback
+{
+public:
+  explicit SqlCompileMallocCallback(observer::ObProcessMallocCallback &callback) : callback_(callback) {}
+  virtual void operator()(const lib::ObMemAttr &attr, int64_t add_size, const lib::AObject &obj) override;
+
+private:
+  observer::ObProcessMallocCallback &callback_;
 };
 
 struct MemoryUsage

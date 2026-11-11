@@ -118,7 +118,7 @@ int ObMPStmtSendLongData::process()
     session.get_raw_audit_record().request_memory_used_ = 0;
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    observer::ObProcessMallocCallbackGuard guard(pmcb);
     int64_t tenant_version = 0;
     int64_t sys_version = 0;
     const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());

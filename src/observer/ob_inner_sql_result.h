@@ -6,6 +6,7 @@
 #ifndef OCEANBASE_OBSERVER_OB_INNER_SQL_RESULT_H_
 #define OCEANBASE_OBSERVER_OB_INNER_SQL_RESULT_H_
 
+#include <optional>
 #include "lib/hash/ob_hashtable.h"
 #include "lib/hash/ob_hashutils.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
@@ -14,6 +15,7 @@
 #include "sql/ob_result_set.h"
 #include "sql/ob_sql_context.h"
 #include "share/rc/ob_context.h"
+#include "observer/mysql/obmp_base.h"
 
 namespace oceanbase
 {
@@ -206,6 +208,10 @@ private:
 
   typedef common::hash::ObHashMap<
       common::ObString, int64_t, common::hash::NoPthreadDefendMode> ColumnMap;
+  // Construct the cleanup callback and guard only when destruction starts.
+  // Keep both alive until all result resource members have been destroyed.
+  std::optional<ObProcessMallocCallback> destruction_memory_callback_;
+  std::optional<ObProcessMallocCallbackGuard> destruction_memory_guard_;
   mutable bool column_map_created_;
   mutable bool column_indexed_;
   mutable ColumnMap column_map_;

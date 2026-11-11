@@ -525,7 +525,7 @@ int ObMPQuery::do_process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
   session.get_raw_audit_record().request_memory_used_ = 0;
   observer::ObProcessMallocCallback pmcb(0,
         session.get_raw_audit_record().request_memory_used_);
-  lib::ObMallocCallbackGuard guard(pmcb);
+  observer::ObProcessMallocCallbackGuard guard(pmcb);
   // 执行setup_wb后，所有WARNING都会写入到当前session的WARNING BUFFER中
   setup_wb(session);
   // 当新语句开始的时候，将该值归0，因为curr_trans_last_stmt_end_time是用于

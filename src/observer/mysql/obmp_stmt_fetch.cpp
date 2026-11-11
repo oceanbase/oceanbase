@@ -699,7 +699,7 @@ int ObMPStmtFetch::process()
     session.set_proxy_version(get_proxy_version());
     observer::ObProcessMallocCallback pmcb(0,
           session.get_raw_audit_record().request_memory_used_);
-    lib::ObMallocCallbackGuard guard(pmcb);
+    observer::ObProcessMallocCallbackGuard guard(pmcb);
     int64_t packet_len = (reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet())).get_clen();
     if (OB_UNLIKELY(!session.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
