@@ -1159,8 +1159,8 @@ int ObSimpleMAVPrinter::gen_mav_delta_mv_view(ObSelectStmt *simple_delta_stmt,
       if (OB_ISNULL(calc_aggr_sel_items.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret), K(i), K(calc_aggr_sel_items));
-      } else if (!ObMVCheckerUtils::is_group_recalculate_aggr(*calc_aggr_sel_items.at(i).expr_)) {
-        /* do nothing */
+      } else if (!calc_aggr_sel_items.at(i).expr_->is_aggr_expr()) {
+        // non-aggr exprs are group keys that are already been output by simple_delta_stmt
       } else if (OB_FAIL(create_simple_column_expr(right_table->get_table_name(), sel_item.alias_name_, right_table->table_id_, sel_item.expr_))) {
         LOG_WARN("failed to create simple column exprs", K(ret));
       } else if (OB_FAIL(delta_stmt->get_select_items().push_back(sel_item))) {

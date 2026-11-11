@@ -41,6 +41,15 @@ public:
                                        ObSQLSessionInfo *session_info,
                                        const bool enable_simplify_aggr_dep,
                                        int64_t &select_idx);
+  static int check_count_param_not_null(const ObSelectStmt &stmt,
+                                        ObRawExpr *count_param,
+                                        ObSQLSessionInfo *session_info,
+                                        bool &is_not_null);
+  static int get_equivalent_null_check_param(ObRawExpr *param_expr, ObRawExpr *&check_param);
+  static int build_count_expr(ObRawExprFactory &expr_factory,
+                              ObSQLSessionInfo &session_info,
+                              ObRawExpr *param_expr,
+                              ObAggFunRawExpr *&count_expr);
 private:
   // Aggregate dependent-column collection internals.
   static int collect_default_count_expr(const ObSelectStmt &stmt,
@@ -56,11 +65,6 @@ private:
                                            const int64_t stmt_idx,
                                            ObMVCheckerResult &result);
   static int find_default_count_expr(const ObSelectStmt &stmt, int64_t &select_idx);
-  static int get_equivalent_null_check_param(ObRawExpr *param_expr, ObRawExpr *&check_param);
-  static int build_count_expr(ObRawExprFactory &expr_factory,
-                              ObSQLSessionInfo &session_info,
-                              ObRawExpr *param_expr,
-                              ObAggFunRawExpr *&count_expr);
   static int check_union_all_marker_candidate(const ObRawExpr &set_expr,
                                               const ObRawExpr &branch_expr,
                                               const common::ObIArray<ObRawExpr *> &marker_exprs,
@@ -84,6 +88,7 @@ public:
                                               ObSchemaGetterGuard *schema_guard,
                                               ObIArray<uint64_t> &missing_column_ids);
   static int check_has_rowid_exprs(const ObDMLStmt *stmt, bool &has_rowid);
+  static int get_column_ref_through_implicit_lossless_cast(const ObRawExpr *expr, const ObColumnRefRawExpr *&column);
 };
 
 }  // namespace sql

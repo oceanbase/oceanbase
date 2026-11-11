@@ -1230,13 +1230,11 @@ int ObMVPrinter::get_column_name_from_origin_select_items(const uint64_t table_i
   int ret = OB_SUCCESS;
   col_name = NULL;
   const ObIArray<SelectItem> &select_items = mv_def_stmt_.get_select_items();
-  ObColumnRefRawExpr *col_expr = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && NULL == col_name && i < select_items.count(); ++i) {
-    int64_t idx = OB_INVALID_INDEX;
-    if (OB_ISNULL(select_items.at(i).expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(i), K(select_items.at(i)));
-    } else if (NULL == (col_expr = dynamic_cast<ObColumnRefRawExpr*>(select_items.at(i).expr_))) {
+    const ObColumnRefRawExpr *col_expr = NULL;
+    if (OB_FAIL(ObMVCheckerUtils::get_column_ref_through_implicit_lossless_cast(select_items.at(i).expr_, col_expr))) {
+      LOG_WARN("failed to get column ref through implicit lossless casts", K(ret), K(i));
+    } else if (NULL == col_expr) {
       /* do nothing */
     } else if (col_expr->get_table_id() != table_id || col_expr->get_column_id() != column_id) {
       /* do nothing */

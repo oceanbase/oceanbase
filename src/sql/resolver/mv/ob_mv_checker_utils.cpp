@@ -37,9 +37,24 @@ bool ObMVCheckerUtils::is_count_star(const ObRawExpr &aggr)
 
 bool ObMVCheckerUtils::is_basic_aggr(const ObRawExpr &aggr)
 {
-  return aggr.is_aggr_expr()
-         && (T_FUN_COUNT == aggr.get_expr_type() || T_FUN_SUM == aggr.get_expr_type())
-         && !static_cast<const ObAggFunRawExpr &>(aggr).is_param_distinct();
+  bool is_basic = false;
+  if (!aggr.is_aggr_expr()
+      || static_cast<const ObAggFunRawExpr &>(aggr).is_param_distinct()) {
+    is_basic = false;
+  } else if (T_FUN_COUNT == aggr.get_expr_type()) {
+    is_basic = true;
+  } else if (T_FUN_SUM == aggr.get_expr_type()) {
+    // for SUM, if the parameter is unsigned type, it needs recalculation
+    // otherwise the contribution `factor * param` would be invalid if the factor is negative
+    const ObAggFunRawExpr &sum_expr = static_cast<const ObAggFunRawExpr &>(aggr);
+    const ObRawExpr *param = 1 == sum_expr.get_real_param_count()
+                               ? ObRawExprUtils::skip_implicit_cast(sum_expr.get_param_expr(0))
+                               : NULL;
+    is_basic = NULL != param && !ob_is_unsigned_type(param->get_data_type());
+  } else {
+    is_basic = false;
+  }
+  return is_basic;
 }
 
 const char *ObMVCheckerUtils::get_table_type_str(const TableItem::TableType type)
@@ -247,34 +262,24 @@ int ObMVCheckerUtils::get_equivalent_count_aggr(const ObSelectStmt &stmt,
   bool is_not_null = false;
   ObRawExpr *check_param = NULL;
   select_idx = -1;
-  if (OB_ISNULL(count_param) || OB_ISNULL(session_info) || OB_ISNULL(session_info->get_cur_exec_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(count_param), K(session_info));
-  } else {
-    ObNotNullContext not_null_ctx(session_info->get_cur_exec_ctx(),
-                                  &session_info->get_cur_exec_ctx()->get_allocator(),
-                                  &stmt);
-    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
-      LOG_WARN("failed to generate stmt context", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, count_param, is_not_null, NULL))) {
-      LOG_WARN("failed to check expr not null", K(ret));
-    } else if (is_not_null) {
-      // equivalent to count(*)
-      if (OB_FAIL(find_default_count_expr(stmt, select_idx))) {
-        LOG_WARN("failed to find default count expr", K(ret));
-      } else if (-1 == select_idx) {
-        // COUNT(*) is not exists in the select list
-        // If the stmt is normal group by
-        //     For creating materialized view, COUNT(*) already has been added
-        //     into the dependent columns list.
-        //     For refreshing materialized view, it is unexpected and will be
-        //     handled in the MVPrinter (ObSimpleMAVPrinter).
-        // If the stmt is scalar group by
-        //     COUNT(*) may not be added into the dependent columns list, check
-        //     whether there has other equivalent first (set select_idx later).
-        if (!stmt.is_scala_group_by()) {
-          select_idx = stmt.get_select_item_size();
-        }
+  if (OB_FAIL(check_count_param_not_null(stmt, count_param, session_info, is_not_null))) {
+    LOG_WARN("failed to check count parameter nullability", K(ret));
+  } else if (is_not_null) {
+    // equivalent to count(*)
+    if (OB_FAIL(find_default_count_expr(stmt, select_idx))) {
+      LOG_WARN("failed to find default count expr", K(ret));
+    } else if (-1 == select_idx) {
+      // COUNT(*) is not exists in the select list
+      // If the stmt is normal group by
+      //     For creating materialized view, COUNT(*) already has been added
+      //     into the dependent columns list.
+      //     For refreshing materialized view, it is unexpected and will be
+      //     handled in the MVPrinter (ObSimpleMAVPrinter).
+      // If the stmt is scalar group by
+      //     COUNT(*) may not be added into the dependent columns list, check
+      //     whether there has other equivalent first (set select_idx later).
+      if (!stmt.is_scala_group_by()) {
+        select_idx = stmt.get_select_item_size();
       }
     }
   }
@@ -325,6 +330,31 @@ int ObMVCheckerUtils::get_equivalent_count_aggr(const ObSelectStmt &stmt,
   }
   return ret;
 }
+
+int ObMVCheckerUtils::check_count_param_not_null(const ObSelectStmt &stmt,
+                                                 ObRawExpr *count_param,
+                                                 ObSQLSessionInfo *session_info,
+                                                 bool &is_not_null)
+{
+  int ret = OB_SUCCESS;
+  is_not_null = false;
+  if (OB_ISNULL(count_param) || OB_ISNULL(session_info) || OB_ISNULL(session_info->get_cur_exec_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(count_param), K(session_info));
+  } else {
+    // Prove nullability after joins and WHERE, including outer-join null extension.
+    ObNotNullContext not_null_ctx(session_info->get_cur_exec_ctx(),
+                                  &session_info->get_cur_exec_ctx()->get_allocator(),
+                                  &stmt);
+    if (OB_FAIL(not_null_ctx.generate_stmt_context(NULLABLE_SCOPE::NS_WHERE))) {
+      LOG_WARN("failed to generate stmt context", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx, count_param, is_not_null, NULL))) {
+      LOG_WARN("failed to check expr not null", K(ret));
+    }
+  }
+  return ret;
+}
+
 
 int ObMVCheckerUtils::find_default_count_expr(const ObSelectStmt &stmt, int64_t &select_idx)
 {
@@ -557,12 +587,10 @@ int ObMVCheckerUtils::get_missing_table_key_column_ids(const ObSelectStmt &stmt,
     LOG_WARN("failed to get table rowkey ids", K(ret), KPC(table_schema));
   }
   for (int64_t i = 0; OB_SUCC(ret) && !missing_column_ids.empty() && i < stmt.get_select_item_size(); ++i) {
-    const ObRawExpr *expr = stmt.get_select_item(i).expr_;
-    if (OB_ISNULL(expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null select expr", K(ret), K(i), K(stmt.get_select_item(i)));
-    } else if (expr->is_column_ref_expr()) {
-      const ObColumnRefRawExpr *col_expr = static_cast<const ObColumnRefRawExpr *>(expr);
+    const ObColumnRefRawExpr *col_expr = NULL;
+    if (OB_FAIL(get_column_ref_through_implicit_lossless_cast(stmt.get_select_item(i).expr_, col_expr))) {
+      LOG_WARN("failed to get column ref through implicit lossless casts", K(ret), K(i));
+    } else if (NULL != col_expr) {
       if (col_expr->get_table_id() == table_item.table_id_
           && OB_FAIL(ObOptimizerUtil::remove_item(missing_column_ids, col_expr->get_column_id()))) {
         LOG_WARN("failed to remove selected table key column", K(ret), KPC(col_expr));
@@ -599,6 +627,27 @@ int ObMVCheckerUtils::check_has_rowid_exprs(const ObDMLStmt *stmt, bool &has_row
         }
       }
     }
+  }
+  return ret;
+}
+
+// If `expr` is a column ref expr, set `column` to `expr`.
+// If `expr` is a column ref expr with implicit lossless casts, set `column` to the column reference.
+// Otherwise, set `column` to NULL.
+int ObMVCheckerUtils::get_column_ref_through_implicit_lossless_cast(const ObRawExpr *expr,
+                                                                    const ObColumnRefRawExpr *&column)
+{
+  int ret = OB_SUCCESS;
+  column = NULL;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (!ObRawExprUtils::is_column_ref_skip_implicit_cast(expr)) {
+    // Only column refs and internal CAST chains are eligible.
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(expr, expr))) {
+    LOG_WARN("failed to get expr without lossless cast", K(ret));
+  } else if (expr->is_column_ref_expr()) {
+    column = static_cast<const ObColumnRefRawExpr *>(expr);
   }
   return ret;
 }
