@@ -289,7 +289,7 @@ TEST_F(TestCheckAlterTableArgForParallel, serialize_size_tripwire)
   arg.tz_info_wrap_.set_tz_info_offset(0);
 
   const int64_t sz = arg.get_serialize_size();
-  const int64_t EXPECTED_SERIALIZE_SIZE = 869;
+  const int64_t EXPECTED_SERIALIZE_SIZE = 872;
   ASSERT_EQ(EXPECTED_SERIALIZE_SIZE, sz)
       << "ObAlterTableArg serialize size changed. "
          "Review ObAlterTableArg::has_no_non_column_operation() and its field tests "
