@@ -343,7 +343,7 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
     LOG_INFO("store commit");
     ObTransService *txs = nullptr;
     ObMutexGuard guard(store_ctx_->get_op_lock());
-    if (OB_ISNULL(MTL(ObTransService *))) {
+    if (OB_ISNULL(txs = MTL(ObTransService *))) {
       ret = OB_ERR_SYS;
       LOG_WARN("trans service is null", KR(ret));
     } else if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {

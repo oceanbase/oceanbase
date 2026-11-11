@@ -1278,7 +1278,7 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
 {
   int ret = OB_SUCCESS;
   ObTransService *txs = nullptr;
-  if (OB_ISNULL(MTL(ObTransService *))) {
+  if (OB_ISNULL(txs = MTL(ObTransService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("trans service is null", KR(ret));
   } else {
