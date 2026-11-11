@@ -681,6 +681,7 @@ int ObDefaultCGGroupByScanner::switch_context(
 int ObDefaultCGGroupByScanner::init_group_by_info()
 {
   int ret = OB_SUCCESS;
+  group_by_agg_idxs_.reuse();
   ObGroupByAggIdxArray agg_idxs;
   for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_->count(); ++i) {
     agg_idxs.reuse();
