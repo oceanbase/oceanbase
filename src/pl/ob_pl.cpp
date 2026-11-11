@@ -2321,25 +2321,57 @@ int ObPL::trans_sql(PlTransformTreeCtx &trans_ctx, ParseNode *root, ObExecContex
                                               sql_info,
                                               special_params))) {
       LOG_WARN("fail to check and generate param info", K(ret));
-    } else if (trans_ctx.is_ps_mode_ && OB_NOT_NULL(trans_ctx.ps_pc_ctx_)) {
-      trans_ctx.ps_pc_ctx_->ps_need_parameterized_ &= sql_info.ps_need_parameterized_;
     }
     if (OB_SUCC(ret)) {
       char *buf = NULL;
       int32_t pos = 0;
-      buf = (char *)trans_ctx.allocator_->alloc(pc_ctx.raw_sql_.length());
-      if (NULL == buf) {
-        LOG_WARN("fail to alloc buf", K(pc_ctx.raw_sql_.length()));
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-      } else if (OB_FAIL(ObSqlParameterization::construct_sql_for_pl(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
-        LOG_WARN("fail to construct_sql", K(ret));
-      } else {
+      if (trans_ctx.is_ps_mode_ && OB_NOT_NULL(trans_ctx.ps_pc_ctx_)
+          && !sql_info.ps_need_parameterized_) {
+        // This fragment cannot be fully PS-parameterized (e.g. project-list
+        // constants in SELECT ... INTO).  Use the raw SQL text directly so that
+        // the ? placeholder for the constant does NOT appear in the output, and
+        // the rest of the anonymous block still gets parameterized normally.
+        buf = (char *)trans_ctx.raw_sql_or_expr_.ptr();
+        pos = trans_ctx.raw_sql_or_expr_.length();
         if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + pos) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected error about trans_ctx.buf", K(ret));
         } else {
           MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_, buf, pos);
           trans_ctx.buf_len_ += pos;
+        }
+        if (OB_SUCC(ret) && trans_ctx.ps_pc_ctx_->ps_need_parameterized_) {
+          if (param_num != pc_ctx.fp_result_.raw_params_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected param num", K(ret), K(param_num),
+                     K(pc_ctx.fp_result_.raw_params_.count()));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+            ObPCParam *raw_param = pc_ctx.fp_result_.raw_params_.at(i);
+            if (OB_ISNULL(raw_param) || OB_ISNULL(raw_param->node_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid raw param", K(ret), K(i), KP(raw_param));
+            } else if (T_QUESTIONMARK == raw_param->node_->type_
+                       && OB_FAIL(trans_ctx.ps_pc_ctx_->fp_result_.raw_params_.push_back(raw_param))) {
+              LOG_WARN("fail to push back raw param", K(ret), K(i));
+            }
+          }
+        }
+      } else {
+        buf = (char *)trans_ctx.allocator_->alloc(pc_ctx.raw_sql_.length());
+        if (NULL == buf) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to alloc buf", K(ret), K(pc_ctx.raw_sql_.length()));
+        } else if (OB_FAIL(ObSqlParameterization::construct_sql_for_pl(pc_ctx.fp_result_.pc_key_.name_, special_params, buf, pc_ctx.raw_sql_.length(), pos))) {
+          LOG_WARN("fail to construct_sql", K(ret));
+        } else {
+          if (trans_ctx.buf_size_ < trans_ctx.buf_len_ + pos) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error about trans_ctx.buf", K(ret));
+          } else {
+            MEMCPY(trans_ctx.buf_ + trans_ctx.buf_len_, buf, pos);
+            trans_ctx.buf_len_ += pos;
+          }
         }
         CK (OB_NOT_NULL(trans_ctx.params_));
         for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
