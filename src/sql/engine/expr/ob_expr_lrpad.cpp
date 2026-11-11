@@ -139,24 +139,28 @@ int ObExprBaseLRpad::calc_type_length_oracle(const ObExprResType &result_type,
     if (OB_FAIL(ret)) {
     } else if (false == both_const_str) {
       // 当两个参数中任意一个不是常量时，Oracle 会简单地将字符数乘以mbmaxlen作为字节数
-      result_size = LS_CHAR == result_type.get_length_semantics() ? width : width * mbmaxlen;
+      if (LS_CHAR == result_type.get_length_semantics()) {
+        result_size = width;
+      } else {
+        result_size = width > max_result_size / mbmaxlen ? max_result_size : width * mbmaxlen;
+      }
     } else {
       if (OB_FAIL(text.get_string(str_text))) {
         LOG_WARN("Failed to get str_text", K(ret), K(text));
       } else if (OB_FAIL(ObCharset::display_len(result_type.get_collation_type(),
                                                 str_text, text_width))) {
         LOG_WARN("Failed to get displayed length", K(ret), K(str_text));
-      } else if (text_width == width) {
+      } else if (text_width == width && OB_LIKELY(str_text.length() <= max_result_size)) {
         result_size = width;
-      } else if (text_width > width) {
+      } else if (text_width > width || OB_UNLIKELY(str_text.length() > max_result_size)) {
         // substr
         int64_t total_width = 0;
         pad_space = true;
         if (OB_FAIL(ObCharset::max_display_width_charpos(
-          result_type.get_collation_type(), str_text.ptr(), str_text.length(),
-          width, prefix_size, &total_width))) {
+          result_type.get_collation_type(), str_text.ptr(),
+          std::min<int64_t>(str_text.length(), max_result_size), width, prefix_size, &total_width))) {
         } else {
-          pad_space = (total_width != width);
+          pad_space = total_width != width && prefix_size + space_str.length() <= max_result_size;
           result_size = prefix_size + (pad_space ? space_str.length() : 0);
         }
       } else if (OB_FAIL(pad_text.get_string(str_pad))) {
@@ -787,9 +791,6 @@ int ObExprBaseLRpad::get_padding_info_mysql_vector(const ObCollationType &cs,
   int64_t text_size = str_text.length();
   int64_t pad_size = str_padtext.length();
   // GOAL: get repeat_count, prefix_size and pad space.
-  if (pad_len < 0) {
-    pad_len = ObCharsetStringHelper::fast_strlen_char<false, false>(cs, str_padtext);
-  }
   repeat_count = std::min((len - text_len) / pad_len, (max_result_size - text_size) / pad_size);
   int64_t remain_len = len - (text_len + pad_len * repeat_count);
   prefix_size = ObCharsetStringHelper::fast_charpos<false, false>(cs, str_padtext, remain_len);
@@ -989,7 +990,13 @@ int ObExprBaseLRpad::calc_mysql_inner_vector(const LRpadType pad_type,
     res_vec->set_null(idx); // mysql 5.7 return null while mysql 8.0 return empty string
   } else {
     has_set_to_lob_locator = true;
-    if (OB_FAIL(get_padding_info_mysql_vector(cs_type, str_text, text_len, int_len, str_pad, pad_len,
+    if (pad_len < 0) {
+      pad_len = ObCharsetStringHelper::fast_strlen_char<false, false>(cs_type, str_pad);
+    }
+    if (OB_UNLIKELY(pad_len == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid pad character length", K(ret), K(pad_len), K(str_pad));
+    } else if (OB_FAIL(get_padding_info_mysql_vector(cs_type, str_text, text_len, int_len, str_pad, pad_len,
                     max_result_size, repeat_count, prefix_size, result_size))) {
       LOG_WARN("Failed to get padding info", K(ret), K(str_text), K(int_len),
                                               K(str_pad), K(max_result_size));
@@ -1136,67 +1143,53 @@ inline static int padding_vector_oracle_optimized(const char *text,
 
 int ObExprBaseLRpad::init_pad_ctx(const ObExpr &expr,
                                  ObEvalCtx &ctx,
-                                 ObExecContext &exec_ctx,
-                                 uint64_t pad_id,
                                  const ObString &str_pad,
                                  int64_t length,
-                                 int64_t buffer_size,
                                  bool is_mysql_mode,
                                  const int64_t max_result_size,
                                  ObExprLRPadContext *&pad_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t pad_len = 0;
-
-  if (OB_FAIL(exec_ctx.create_expr_op_ctx(pad_id, pad_ctx))) {
-    LOG_WARN("failed to create operator ctx", K(ret), K(pad_id));
-  } else {
-    // 根据模式选择不同的 pad_len 计算方法
-    if (is_mysql_mode) {
-      pad_len = ObCharset::strlen_char(expr.datum_meta_.cs_type_, str_pad.ptr(), str_pad.length());
-    } else {
-      if (OB_FAIL(ObCharset::display_len(expr.datum_meta_.cs_type_, str_pad, pad_len))) {
-        LOG_WARN("failed to get display len", K(ret));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-    } else {
-      int64_t repeat_count = (length + pad_len - 1) / pad_len;
-      repeat_count = std::min(repeat_count, (max_result_size + str_pad.length() - 1) / str_pad.length());
-      char *pad_buf = static_cast<char *>(exec_ctx.get_allocator().alloc(str_pad.length() * repeat_count));
-      if (OB_ISNULL(pad_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("Failed to alloc", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < repeat_count; ++i) {
-          MEMCPY(pad_buf + i * str_pad.length(), str_pad.ptr(), str_pad.length());
-        }
-        pad_ctx->set_pad_buf(pad_buf);
-        pad_ctx->set_pad_len(pad_len);
-      }
-    }
+  int64_t mbmaxlen = 0;
+  const int64_t pad_size = str_pad.length();
+  const ObCollationType cs_type = expr.datum_meta_.cs_type_;
+  ObExecContext &exec_ctx = ctx.exec_ctx_;
+  if (OB_FAIL(exec_ctx.create_expr_op_ctx(expr.expr_ctx_id_, pad_ctx))) {
+    LOG_WARN("failed to create operator ctx", K(ret), K(expr.expr_ctx_id_));
+  } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(cs_type, mbmaxlen))) {
+    LOG_WARN("failed to get mbmaxlen by coll", K(ret));
+  } else if (is_mysql_mode) {
+    pad_len = ObCharset::strlen_char(cs_type, str_pad.ptr(), pad_size);
+  } else if (OB_FAIL(ObCharset::display_len(expr.datum_meta_.cs_type_, str_pad, pad_len))) {
+    LOG_WARN("failed to get display len", K(ret));
   }
 
-  // 初始化 result_buf 和 char_pos（MySQL 和 Oracle 模式都需要）
   if (OB_SUCC(ret)) {
-    int64_t max_batch_size = ctx.max_batch_size_;
-    char **result_buf = static_cast<char **>(exec_ctx.get_allocator().alloc(max_batch_size * sizeof(char *)));
-    if (OB_ISNULL(result_buf)) {
+    if (OB_UNLIKELY(pad_size > pad_len * mbmaxlen)) {
+      pad_len = 0;
+    }
+    // Cache a zero count too; only rows that actually need padding report it as an error.
+    pad_ctx->set_pad_len(pad_len);
+    pad_ctx->set_mbmaxlen(mbmaxlen);
+  }
+  if (OB_SUCC(ret) && pad_len > 0) {
+    // Avoid adding to a requested width that can already be INT64_MAX.
+    const int64_t repeat_count = std::min(length / pad_len + (length % pad_len != 0),
+        max_result_size / pad_size + (max_result_size % pad_size != 0));
+    char *pad_buf = static_cast<char *>(exec_ctx.get_allocator().alloc(pad_size * repeat_count));
+    if (OB_ISNULL(pad_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to alloc", K(ret));
     } else {
-      pad_ctx->set_result_buf(result_buf);
-      for (int64_t i = 0; OB_SUCC(ret) && i < max_batch_size; ++i) {
-        if (OB_ISNULL(result_buf[i] = expr.get_str_res_mem(ctx, buffer_size, i))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("Failed to alloc", K(ret));
-        }
+      for (int64_t i = 0; i < repeat_count; ++i) {
+        MEMCPY(pad_buf + i * pad_size, str_pad.ptr(), pad_size);
       }
+      pad_ctx->set_pad_buf(pad_buf);
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && pad_len > 0) {
     int64_t *char_pos = NULL;
     if (OB_ISNULL(char_pos = static_cast<int64_t *>(exec_ctx.get_allocator().alloc(pad_len * sizeof(int64_t))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1226,6 +1219,30 @@ int ObExprBaseLRpad::init_pad_ctx(const ObExpr &expr,
     }
   }
 
+  if (OB_SUCC(ret) && (!is_mysql_mode || (pad_len > 0 && length <= max_result_size))) {
+    int64_t buffer_size = length > max_result_size / mbmaxlen ? max_result_size : length * mbmaxlen;
+    if (!is_mysql_mode) {
+      // Oracle can use the last available byte for a multibyte space.
+      buffer_size += ObCharsetUtils::get_const_str(cs_type, ' ').length() - 1;
+    }
+    char **result_buf = static_cast<char **>(exec_ctx.get_allocator().alloc(
+        ctx.max_batch_size_ * sizeof(char *)));
+    if (OB_ISNULL(result_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc result buffer array", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.max_batch_size_; ++i) {
+        if (OB_ISNULL(result_buf[i] = expr.get_str_res_mem(ctx, buffer_size, i))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc result buffer", K(ret), K(buffer_size));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        pad_ctx->set_result_buf(result_buf);
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1238,44 +1255,37 @@ int ObExprBaseLRpad::calc_mysql_vector_optimized(const ObExpr &expr,
                                                  const ObSQLSessionInfo &session) {
   int ret = OB_SUCCESS;
   int64_t max_result_size = -1;
-  int64_t mbmaxlen = 0;
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   TextVec *text_vec = static_cast<TextVec *>(expr.args_[0]->get_vector(ctx));
   IntegerUniCVec *len_vec = static_cast<IntegerUniCVec *>(expr.args_[1]->get_vector(ctx));
-  StrUniCVec *pad_text_vec = static_cast<StrUniCVec *>(expr.args_[2]->get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ObExprLRPadContext *pad_ctx = NULL;
   ObSolidifiedVarsGetter helper(expr, ctx, &session);
 
-  if (OB_UNLIKELY(len_vec->has_null() || pad_text_vec->has_null() || len_vec->get_int(0) < 0 || pad_text_vec->get_string(0).empty())) {
-    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
-      if (skip.at(idx) || eval_flags.at(idx)) {
-        continue;
-      } else {
+  if (OB_UNLIKELY(len_vec->get_int(0) < 0)) {
+    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+      if (!skip.at(idx) && !eval_flags.at(idx)) {
         res_vec->set_null(idx);
       }
     }
   } else if (OB_UNLIKELY(len_vec->get_int(0) == 0)) {
-    for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
       if (skip.at(idx) || eval_flags.at(idx)) {
         continue;
+      } else if (text_vec->is_null(idx)) {
+        res_vec->set_null(idx);
       } else {
         res_vec->set_string(idx, ObString::make_empty_string());
       }
     }
   } else if (OB_FAIL(helper.get_max_allowed_packet(max_result_size))) {
     LOG_WARN("Failed to get max allow packet size", K(ret));
-  } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(expr.datum_meta_.cs_type_, mbmaxlen))) {
-    LOG_WARN("failed to get mbmaxlen by coll", K(ret));
   } else {
-    // get context
-    int64_t length = len_vec->get_int(0);
-    int64_t buffer_size = std::min(max_result_size, length * mbmaxlen);
     ObExecContext &exec_ctx = ctx.exec_ctx_;
     uint64_t pad_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (NULL == (pad_ctx = static_cast<ObExprLRPadContext *>(exec_ctx.get_expr_op_ctx(pad_id)))) {
-      ObString str_pad = pad_text_vec->get_string(bound.start());
-      if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, length, buffer_size, true, max_result_size, pad_ctx))) {
+      const ObString str_pad = expr.args_[2]->get_vector(ctx)->get_string(0);
+      if (OB_FAIL(init_pad_ctx(expr, ctx, str_pad, len_vec->get_int(0), true, max_result_size, pad_ctx))) {
         LOG_WARN("failed to init pad ctx", K(ret));
       }
     }
@@ -1287,29 +1297,29 @@ int ObExprBaseLRpad::calc_mysql_vector_optimized(const ObExpr &expr,
       if (is_left_pad) {
         if (is_ascii) {
           if (can_do_ascii_optimize) {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, true, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, true, true>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           } else {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, true, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, true, false>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           }
         } else {
           if (can_do_ascii_optimize) {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, false, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, false, true>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           } else {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, false, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, true, false, false>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           }
         }
       } else {
         if (is_ascii) {
           if (can_do_ascii_optimize) {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, true, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, true, true>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           } else {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, true, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, true, false>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           }
         } else {
           if (can_do_ascii_optimize) {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, false, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, false, true>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           } else {
-            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, false, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, pad_ctx);
+            ret = calc_mysql_inner_vector_optimized<ResVec, TextVec, false, false, false>(expr, ctx, skip, bound, max_result_size, pad_ctx);
           }
         }
       }
@@ -1323,7 +1333,6 @@ int ObExprBaseLRpad::calc_mysql_inner_vector_optimized(const ObExpr &expr,
                                                        ObEvalCtx &ctx,
                                                        const ObBitVector &skip,
                                                        const EvalBound &bound,
-                                                       const int64_t mbmaxlen,
                                                        const int64_t max_result_size,
                                                        ObExprLRPadContext *pad_ctx)
 {
@@ -1335,10 +1344,12 @@ int ObExprBaseLRpad::calc_mysql_inner_vector_optimized(const ObExpr &expr,
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   int64_t length = len_vec->get_int(0);
   ObString str_pad = pad_text_vec->get_string(0);
+  const int64_t pad_size = str_pad.length();
   int64_t pad_len = pad_ctx->get_pad_len();
+  const int64_t mbmaxlen = pad_ctx->get_mbmaxlen();
   char *pad_buf = pad_ctx->get_pad_buf();
-  char **result_bufs = pad_ctx->get_result_buf();
   int64_t *char_pos = pad_ctx->get_char_pos();
+  char **result_bufs = pad_ctx->get_result_buf();
   const ObCollationType cs_type = expr.datum_meta_.cs_type_;
   for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
     if (skip.at(idx) || eval_flags.at(idx)) {
@@ -1352,27 +1363,38 @@ int ObExprBaseLRpad::calc_mysql_inner_vector_optimized(const ObExpr &expr,
         // only substr needed
         int64_t result_size = ObCharsetStringHelper::fast_charpos<IsAscii, CanDoAsciiOptimize>(cs_type, str_text, length);
         res_vec->set_string(idx, str_text.ptr(), result_size);
+      } else if (OB_UNLIKELY(str_pad.empty())) {
+        res_vec->set_null(idx);
+      } else if (OB_UNLIKELY(pad_len == 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid pad character length", K(ret), K(pad_len), K(str_pad));
+      } else if (OB_UNLIKELY(str_text.length() > text_len * mbmaxlen)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("text size exceeds character length bound", K(ret), K(str_text), K(text_len), K(mbmaxlen));
       } else {
-        char *result_buf = result_bufs[idx];
-        int64_t repeat_count = (length - text_len) / pad_len;
-        int64_t remain_len = (length - text_len) % pad_len;
-        int64_t prefix_size = char_pos[remain_len];
-        int64_t result_size =  str_text.length() + str_pad.length() * repeat_count + prefix_size;
-        if (OB_UNLIKELY(result_size > max_result_size)) {
+        const int64_t repeat_count = (length - text_len) / pad_len;
+        const int64_t remain_len = (length - text_len) % pad_len;
+        const int64_t prefix_size = char_pos[remain_len];
+        const int64_t available_size = max_result_size - str_text.length();
+        if (OB_UNLIKELY(available_size < prefix_size)
+            || OB_UNLIKELY(repeat_count > (available_size - prefix_size) / pad_size)) {
           res_vec->set_null(idx);
           if (!IsLeftPad) {
             LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "rpad", static_cast<int>(max_result_size));
           } else {
             LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "lpad", static_cast<int>(max_result_size));
           }
-        } else if (OB_FAIL(padding_vector_mysql_optimized<IsLeftPad>(str_text.ptr(),
-                                                                       str_text.length(),
-                                                                       pad_buf,
-                                                                       result_size - str_text.length(),
-                                                                       result_buf))) {
-          LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
         } else {
-          res_vec->set_string(idx, result_buf, result_size);
+          const int64_t result_size = str_text.length() + pad_size * repeat_count + prefix_size;
+          if (OB_FAIL(padding_vector_mysql_optimized<IsLeftPad>(str_text.ptr(),
+                                                                str_text.length(),
+                                                                pad_buf,
+                                                                result_size - str_text.length(),
+                                                                result_bufs[idx]))) {
+            LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
+          } else {
+            res_vec->set_string(idx, result_bufs[idx], result_size);
+          }
         }
       }
     }
@@ -1612,21 +1634,24 @@ int ObExprBaseLRpad::calc_oracle(LRpadType pad_type, const ObExpr &expr,
       // pad_text 是 empty_clob，text 是 clob，如果不走截断逻辑的话，结果直接置为原 clob
       res.set_datum(text);
       is_unchanged_clob = ob_is_text_tc(res_type);
-    } else if (text_width == width) {
+    } else if (text_width == width && OB_LIKELY(str_text.length() <= max_result_size)) {
       res.set_datum(text);
       is_unchanged_clob = ob_is_text_tc(res_type);
     } else {
       char *result_ptr = NULL;
       int64_t result_size = 0;
       bool has_lob_header = expr.obj_meta_.has_lob_header();
-      if (text_width > width) {
-        // substr
+      if (text_width > width || OB_UNLIKELY(str_text.length() > max_result_size)) {
+        // Intermediate expressions can exceed the result type's byte limit.
         int64_t total_width = 0;
         if (OB_FAIL(ObCharset::max_display_width_charpos(cs_type, str_text.ptr(),
-                str_text.length(), width, prefix_size, &total_width))) {
+                std::min<int64_t>(str_text.length(), max_result_size), width, prefix_size, &total_width))) {
           LOG_WARN("Failed to get max display width", K(ret));
         } else if (OB_FAIL(padding(pad_type, cs_type, "", 0, str_text.ptr(), str_text.length(),
-                                    prefix_size, 0, (total_width != width), &res_alloc,
+                                    prefix_size, 0,
+                                    total_width != width && prefix_size +
+                                      ObCharsetUtils::get_const_str(cs_type, ' ').length() <= max_result_size,
+                                    &res_alloc,
                                     result_ptr, result_size, res_type, has_lob_header))) {
           LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad), K(prefix_size),
                                     K(repeat_count), K(pad_space));
@@ -1696,9 +1721,7 @@ int ObExprLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_mysql_lpad_expr;
-  if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
-    rt_expr.eval_vector_func_ = calc_mysql_lpad_expr_vector;
-  }
+  rt_expr.eval_vector_func_ = calc_mysql_lpad_expr_vector;
   return ret;
 }
 
@@ -1747,9 +1770,7 @@ int ObExprRpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_mysql_rpad_expr;
-  if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
-    rt_expr.eval_vector_func_ = calc_mysql_rpad_expr_vector;
-  }
+  rt_expr.eval_vector_func_ = calc_mysql_rpad_expr_vector;
   return ret;
 }
 
@@ -1818,7 +1839,6 @@ int ObExprOracleLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
     // lpad expr do not have a extra_info before 4_2_0_release, need to maintain compatibility
     rt_expr.extra_info_ = nullptr;
     rt_expr.eval_func_ = calc_oracle_lpad_expr;
-    rt_expr.eval_vector_func_ = calc_oracle_lpad_expr_vector;
   } else {
     ObIAllocator &alloc = *expr_cg_ctx.allocator_;
     ObIExprExtraInfo *extra_info = nullptr;
@@ -1832,10 +1852,10 @@ int ObExprOracleLpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
       info->is_called_in_sql_ = is_called_in_sql();
       rt_expr.extra_info_ = extra_info;
       rt_expr.eval_func_ = calc_oracle_lpad_expr;
-      if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
-        rt_expr.eval_vector_func_ = calc_oracle_lpad_expr_vector;
-      }
     }
+  }
+  if (OB_SUCC(ret)) {
+    rt_expr.eval_vector_func_ = calc_oracle_lpad_expr_vector;
   }
   return ret;
 }
@@ -1919,10 +1939,10 @@ int ObExprOracleRpad::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
       info->is_called_in_sql_ = is_called_in_sql();
       rt_expr.extra_info_ = extra_info;
       rt_expr.eval_func_ = calc_oracle_rpad_expr;
-      if ((OB_E(EventTable::EN_ENABLE_VEC_LRPAD) OB_SUCCESS) != OB_SUCCESS) {
-        rt_expr.eval_vector_func_ = calc_oracle_rpad_expr_vector;
-      }
     }
+  }
+  if (OB_SUCC(ret)) {
+    rt_expr.eval_vector_func_ = calc_oracle_rpad_expr_vector;
   }
   return ret;
 }
@@ -1959,6 +1979,9 @@ int ObExprBaseLRpad::get_padding_info_oracle_vector(const ObCollationType &cs,
   // GOAL: get repeat_count, prefix_size and pad space.
   if (pad_width < 0 && OB_FAIL(ObCharset::display_len(cs, str_pad, pad_width))) {
     LOG_WARN("failed to get display len", K(ret), K(str_pad));
+  } else if (OB_UNLIKELY(pad_width == 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pad display width", K(ret), K(pad_size), K(pad_width));
   } else {
     repeat_count = std::min((width - text_width) / pad_width, (max_result_size - text_size) / pad_size);
     int64_t remain_width = width - (text_width + pad_width * repeat_count);
@@ -2167,7 +2190,8 @@ int ObExprBaseLRpad::calc_oracle_vector(const ObExpr &expr,
           LOG_WARN("failed to read lob data pattern", K(ret), K(pad_text_vec->get_string(idx)));
         }
         // check unchanged clob
-        if ((3 == expr.arg_cnt_) && expr.args_[0]->datum_meta_.is_clob() && (0 == str_pad.length())) {
+        if (OB_FAIL(ret)) {
+        } else if ((3 == expr.arg_cnt_) && expr.args_[0]->datum_meta_.is_clob() && (0 == str_pad.length())) {
           int64_t text_width = 0;
           if (OB_FAIL(ObCharset::display_len(expr.datum_meta_.cs_type_, str_text, text_width))) {
             LOG_WARN("Failed to get displayed length", K(ret), K(str_text));
@@ -2180,7 +2204,7 @@ int ObExprBaseLRpad::calc_oracle_vector(const ObExpr &expr,
             } else if (OB_FAIL(output_result.get_reserved_buffer(result_buf, buf_len))) {
               LOG_WARN("failed to get reserved buffer", K(ret));
             } else if (FALSE_IT((MEMCPY(result_buf, str_text.ptr(), str_text.length())))) {
-            } else if (OB_FAIL(output_result.lseek(buf_len, 0))) {
+            } else if (OB_FAIL(output_result.lseek(str_text.length(), 0))) {
               LOG_WARN("temp lob lseek failed", K(ret));
             } else {
               ObString output;
@@ -2224,21 +2248,25 @@ int ObExprBaseLRpad::calc_oracle_inner_vector(const LRpadType pad_type,
   const ObObjType type = expr.datum_meta_.type_;
   if (OB_FAIL(ObCharsetStringHelper::fast_display_len(cs_type, str_text, is_ascii, text_width))) {
     LOG_WARN("Failed to get displayed length", K(ret), K(str_text));
-  } else if (text_width >= width) {
+  } else if (text_width >= width || OB_UNLIKELY(str_text.length() > max_result_size)) {
     // only substr needed
     int64_t total_width = 0;
+    bool pad_space = false;
+    const ObString space_str = ObCharsetUtils::get_const_str(cs_type, ' ');
     // fast width charpos
     if (OB_FAIL(ObCharset::max_display_width_charpos(cs_type, str_text.ptr(),
-                str_text.length(), width, prefix_size, &total_width))) {
+                std::min<int64_t>(str_text.length(), max_result_size), width, prefix_size, &total_width))) {
       LOG_WARN("Failed to get max display width", K(ret));
+    } else if (FALSE_IT(pad_space = total_width != width && prefix_size + space_str.length() <= max_result_size)) {
+    } else if (FALSE_IT(result_size = prefix_size + (pad_space ? space_str.length() : 0))) {
     } else if (!ob_is_text_tc(type)) {
-      char *result_buf = expr.get_str_res_mem(ctx, prefix_size, idx);
+      char *result_buf = expr.get_str_res_mem(ctx, result_size, idx);
       if (OB_ISNULL(result_buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc", K(ret));
       } else if (OB_FAIL(padding_vector(pad_type, cs_type, "", 0, str_text.ptr(),
                                  str_text.length(), prefix_size, 0,
-                                 (total_width != width), result_buf,
+                                 pad_space, result_buf,
                                  result_size))) {
         LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
       } else {
@@ -2252,16 +2280,16 @@ int ObExprBaseLRpad::calc_oracle_inner_vector(const LRpadType pad_type,
       char *result_buf = NULL;
       int64_t buf_len = 0;
       ObTextStringVectorResult<ResVec> output_result(type, &expr, &ctx, res_vec, idx);
-      if (OB_FAIL(output_result.init_with_batch_idx(prefix_size, idx))) {
+      if (OB_FAIL(output_result.init_with_batch_idx(result_size, idx))) {
         LOG_WARN("init lob result failed", K(ret));
       } else if (OB_FAIL(output_result.get_reserved_buffer(result_buf, buf_len))) {
         LOG_WARN("failed to get reserved buffer", K(ret));
       } else if (OB_FAIL(padding_vector(pad_type, cs_type, "", 0,
                                         str_text.ptr(), str_text.length(),
-                                        prefix_size, 0, (total_width != width),
+                                        prefix_size, 0, pad_space,
                                         result_buf, result_size))) {
         LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
-      } else if (OB_FAIL(output_result.lseek(buf_len, 0))) {
+      } else if (OB_FAIL(output_result.lseek(result_size, 0))) {
         LOG_WARN("temp lob lseek failed", K(ret));
       } else {
         if (OB_UNLIKELY(0 == result_size)) {
@@ -2315,7 +2343,7 @@ int ObExprBaseLRpad::calc_oracle_inner_vector(const LRpadType pad_type,
                                         str_pad.length(), prefix_size, repeat_count,
                                         pad_space, result_buf, result_size))) {
         LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
-      } else if (OB_FAIL(output_result.lseek(buf_len, 0))) {
+      } else if (OB_FAIL(output_result.lseek(result_size, 0))) {
         LOG_WARN("temp lob lseek failed", K(ret));
       } else {
         if (OB_UNLIKELY(0 == result_size)) {
@@ -2341,12 +2369,11 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   bool is_ascii = expr.args_[0]->get_vector(ctx)->is_batch_ascii();
-  int64_t mbmaxlen = 0;
   int64_t max_result_size = -1;
   int64_t len_int = -1;
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   TextVec *text_vec = static_cast<TextVec *>(expr.args_[0]->get_vector(ctx));
-  IntegerUniCVec *len_vec = static_cast<IntegerUniCVec *>(expr.args_[1]->get_vector(ctx));
+  ObIVector *len_vec = expr.args_[1]->get_vector(ctx);
   StrUniCVec *pad_text_vec = expr.arg_cnt_ == 2 ? NULL :
                              static_cast<StrUniCVec *>(expr.args_[2]->get_vector(ctx));
   ObString str_pad;
@@ -2392,8 +2419,6 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
         res_vec->set_null(idx);
       }
     }
-  } else if (OB_FAIL(ObCharset::get_mbmaxlen_by_coll(expr.datum_meta_.cs_type_, mbmaxlen))) {
-    LOG_WARN("failed to get mbmaxlen by coll", K(ret));
   }
 
   // get str_pad
@@ -2419,8 +2444,7 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
     ObExecContext &exec_ctx = ctx.exec_ctx_;
     uint64_t pad_id = static_cast<uint64_t>(expr.expr_ctx_id_);
     if (NULL == (pad_ctx = static_cast<ObExprLRPadContext *>(exec_ctx.get_expr_op_ctx(pad_id)))) {
-      int64_t buffer_size = std::min(max_result_size, len_int * mbmaxlen);
-      if (OB_FAIL(init_pad_ctx(expr, ctx, exec_ctx, pad_id, str_pad, len_int, buffer_size, false, max_result_size, pad_ctx))) {
+      if (OB_FAIL(init_pad_ctx(expr, ctx, str_pad, len_int, false, max_result_size, pad_ctx))) {
         LOG_WARN("failed to init pad ctx", K(ret));
       }
     }
@@ -2432,29 +2456,29 @@ int ObExprBaseLRpad::calc_oracle_vector_optimized(const ObExpr &expr,
     if (is_left_pad) {
       if (is_ascii) {
         if (can_do_ascii_optimize) {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, true, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, true, true>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         } else {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, true, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, true, false>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         }
       } else {
         if (can_do_ascii_optimize) {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, false, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, false, true>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         } else {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, false, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, true, false, false>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         }
       }
     } else {
       if (is_ascii) {
         if (can_do_ascii_optimize) {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, true, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, true, true>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         } else {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, true, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, true, false>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         }
       } else {
         if (can_do_ascii_optimize) {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, false, true>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, false, true>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         } else {
-          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, false, false>(expr, ctx, skip, bound, mbmaxlen, max_result_size, len_int, str_pad, pad_ctx);
+          ret = calc_oracle_inner_vector_optimized<ResVec, TextVec, false, false, false>(expr, ctx, skip, bound, max_result_size, len_int, str_pad, pad_ctx);
         }
       }
     }
@@ -2467,7 +2491,6 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
                                                         ObEvalCtx &ctx,
                                                         const ObBitVector &skip,
                                                         const EvalBound &bound,
-                                                        const int64_t mbmaxlen,
                                                         const int64_t max_result_size,
                                                         const int64_t len_int,
                                                         const ObString &str_pad,
@@ -2478,11 +2501,11 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
   TextVec *text_vec = static_cast<TextVec *>(expr.args_[0]->get_vector(ctx));
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   const ObCollationType cs_type = expr.datum_meta_.cs_type_;
-  int64_t buffer_size = len_int * mbmaxlen;
-  int64_t pad_len = pad_ctx->get_pad_len();
+  const int64_t pad_size = str_pad.length();
+  int64_t pad_width = pad_ctx->get_pad_len();
+  const int64_t mbmaxlen = pad_ctx->get_mbmaxlen();
   char *pad_buf = pad_ctx->get_pad_buf();
   char **result_bufs = pad_ctx->get_result_buf();
-  int64_t *char_pos = pad_ctx->get_char_pos();
   ObString space_str = ObCharsetUtils::get_const_str(cs_type, ' ');
   LRpadType pad_type = IsLeftPad ? LPAD_TYPE : RPAD_TYPE;
 
@@ -2493,86 +2516,66 @@ int ObExprBaseLRpad::calc_oracle_inner_vector_optimized(const ObExpr &expr,
       res_vec->set_null(idx);
     } else {
       ObString str_text = text_vec->get_string(idx);
-      char *result_buf = result_bufs[idx];
       int64_t text_width = 0;
       int64_t prefix_size = 0;
       int64_t result_size = 0;
       if (OB_FAIL((ObCharsetStringHelper::fast_display_len<IsAscii, CanDoAsciiOptimize>(cs_type, str_text, text_width)))) {
         LOG_WARN("Failed to get displayed length", K(ret), K(str_text));
-      } else if (text_width >= len_int) {
+      } else if (text_width >= len_int || OB_UNLIKELY(str_text.length() > max_result_size)) {
         // substr and pad space
         int64_t total_width = 0;
-        if (OB_FAIL((ObCharsetStringHelper::fast_display_charpos<IsAscii, CanDoAsciiOptimize>( cs_type, str_text, len_int, prefix_size, total_width)))) {
+        const ObString text_prefix(std::min<int64_t>(str_text.length(), max_result_size), str_text.ptr());
+        if (OB_FAIL((ObCharsetStringHelper::fast_display_charpos<IsAscii, CanDoAsciiOptimize>(
+                       cs_type, text_prefix, len_int, prefix_size, total_width)))) {
           LOG_WARN("Failed to get max display width", K(ret));
         } else if (OB_FAIL(padding_vector(pad_type, cs_type, "", 0, str_text.ptr(),
                                           str_text.length(), prefix_size, 0,
-                                          (total_width != len_int), result_buf,
+                                          total_width != len_int && prefix_size + space_str.length() <= max_result_size,
+                                          result_bufs[idx],
                                           result_size))) {
           LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
+        } else if (OB_UNLIKELY(0 == result_size)) {
+          res_vec->set_null(idx);
         } else {
-          if (OB_UNLIKELY(0 == result_size)) {
-            res_vec->set_null(idx);
-          } else {
-            res_vec->set_string(idx, result_buf, result_size);
-          }
+          res_vec->set_string(idx, result_bufs[idx], result_size);
         }
+      } else if (OB_UNLIKELY(pad_width == 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid pad display width", K(ret), K(pad_width), K(str_pad));
+      } else if (OB_UNLIKELY(str_text.length() > text_width * mbmaxlen)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("text size exceeds display width bound", K(ret), K(str_text), K(text_width), K(mbmaxlen));
       } else {
         bool pad_space = false;
         int64_t text_size = str_text.length();
-        int64_t pad_size = str_pad.length();
-        int64_t pad_width = pad_len;
-        // GOAL: get repeat_count, prefix_size and pad space.
-        int64_t repeat_count = (len_int - text_width) / pad_width;
-        int64_t remain_width = (len_int - text_width) % pad_width;
+        // Limit repeats before multiplying, while retaining the specialized character-position path.
+        const int64_t repeat_count = std::min((len_int - text_width) / pad_width,
+                                              (max_result_size - text_size) / pad_size);
+        const int64_t remain_width = len_int - (text_width + pad_width * repeat_count);
+        const int64_t remain_size = max_result_size - (text_size + pad_size * repeat_count);
         int64_t total_width = 0;
-        if (OB_FAIL((ObCharsetStringHelper::fast_display_charpos<false, CanDoAsciiOptimize>(cs_type,
-                                                                                            str_pad,
-                                                                                            remain_width,
-                                                                                            prefix_size,
-                                                                                            total_width)))) {
-          LOG_WARN("Failed to get max display width", K(ret), K(str_text), K(remain_width));
-        } else {
-          if (remain_width != total_width) {
+        if (remain_width > 0 && remain_size > 0) {
+          const ObString pad_prefix(std::min(pad_size, remain_size), str_pad.ptr());
+          if (OB_FAIL((ObCharsetStringHelper::fast_display_charpos<false, CanDoAsciiOptimize>(
+                         cs_type, pad_prefix, remain_width, prefix_size, total_width)))) {
+            LOG_WARN("Failed to get max display width", K(ret), K(str_pad), K(remain_width));
+          } else if (remain_width != total_width && remain_size != prefix_size) {
             pad_space = true;
           }
-          int64_t total_pad_size = repeat_count * pad_size + prefix_size;
-          int64_t result_size = text_size + total_pad_size + (pad_space ? space_str.length(): 0);
-          if (OB_UNLIKELY(result_size > max_result_size)) {
-            pad_space = false;
-            repeat_count = (max_result_size - text_size) / pad_size;
-            prefix_size = 0;
-            int64_t remain_width = len_int - (text_width + pad_width * repeat_count);
-            int64_t remain_size = max_result_size - (text_size + repeat_count * pad_size);
-            int64_t total_width = 0;
-            if (remain_width > 0 && remain_size > 0) {
-              if (OB_FAIL(ObCharsetStringHelper::fast_display_charpos(cs_type,
-                                                                      str_pad.ptr(),
-                                                                      std::min<int64_t>(str_pad.length(), remain_size),
-                                                                      remain_width,
-                                                                      false,
-                                                                      prefix_size,
-                                                                      total_width))) {
-                LOG_WARN("Failed to get max display width", K(ret), K(str_text), K(remain_width));
-              } else if (remain_width != total_width && remain_size != prefix_size) {
-                pad_space = true;
-              }
-            }
-            if (OB_SUCC(ret)) {
-              total_pad_size = repeat_count * pad_size + prefix_size;
-              result_size = text_size + total_pad_size + (pad_space ? space_str.length(): 0);
-            }
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL((padding_vector_oracle_optimized<IsLeftPad>(str_text.ptr(),
-                                                                         text_size,
-                                                                         pad_buf,
-                                                                         total_pad_size,
-                                                                         pad_space,
-                                                                         space_str,
-                                                                         result_buf)))) {
+        }
+        if (OB_SUCC(ret)) {
+          const int64_t total_pad_size = repeat_count * pad_size + prefix_size;
+          result_size = text_size + total_pad_size + (pad_space ? space_str.length() : 0);
+          if (OB_FAIL((padding_vector_oracle_optimized<IsLeftPad>(str_text.ptr(),
+                                                                  text_size,
+                                                                  pad_buf,
+                                                                  total_pad_size,
+                                                                  pad_space,
+                                                                  space_str,
+                                                                  result_bufs[idx])))) {
             LOG_WARN("Failed to pad", K(ret), K(str_text), K(str_pad));
           } else {
-            res_vec->set_string(idx, result_buf, result_size);
+            res_vec->set_string(idx, result_bufs[idx], result_size);
           }
         }
       }

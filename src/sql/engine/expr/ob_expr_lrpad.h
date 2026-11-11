@@ -24,21 +24,26 @@ public:
         : ObExprOperatorCtx(),
           buf_(NULL),
           result_buf_(NULL),
-          pad_len_(0)
+          char_pos_(NULL),
+          pad_len_(0),
+          mbmaxlen_(0)
     {}
     OB_INLINE char * get_pad_buf() { return buf_; }
     OB_INLINE void set_pad_buf(char *buf) { buf_ = buf; }
     OB_INLINE int64_t get_pad_len() { return pad_len_; }
     OB_INLINE void set_pad_len(int64_t len) { pad_len_ = len; }
+    OB_INLINE int64_t get_mbmaxlen() { return mbmaxlen_; }
+    OB_INLINE void set_mbmaxlen(int64_t len) { mbmaxlen_ = len; }
     OB_INLINE char ** get_result_buf() { return result_buf_; }
     OB_INLINE void set_result_buf(char **buf) { result_buf_ = buf; }
     OB_INLINE int64_t * get_char_pos() { return char_pos_; }
     OB_INLINE void set_char_pos(int64_t *pos) { char_pos_ = pos; }
-    TO_STRING_KV(K_(buf), K_(result_buf), K_(pad_len));
+    TO_STRING_KV(K_(buf), K_(result_buf), K_(pad_len), K_(mbmaxlen));
     char *buf_;
     char **result_buf_;
     int64_t *char_pos_;
     int64_t pad_len_;
+    int64_t mbmaxlen_;
   };
   virtual bool need_rt_ctx() const override { return true; }
 
@@ -188,7 +193,6 @@ public:
                                                  ObEvalCtx &ctx,
                                                  const ObBitVector &skip,
                                                  const EvalBound &bound,
-                                                 const int64_t mbmaxlen,
                                                  const int64_t max_result_size,
                                                  ObExprLRPadContext *pad_ctx);
 
@@ -246,7 +250,6 @@ public:
                                                  ObEvalCtx &ctx,
                                                  const ObBitVector &skip,
                                                  const EvalBound &bound,
-                                                 const int64_t mbmaxlen,
                                                  const int64_t max_result_size,
                                                  const int64_t len_int,
                                                  const ObString &str_pad,
@@ -254,11 +257,8 @@ public:
 
   static int init_pad_ctx(const ObExpr &expr,
                           ObEvalCtx &ctx,
-                          ObExecContext &exec_ctx,
-                          uint64_t pad_id,
                           const ObString &str_pad,
                           int64_t length,
-                          int64_t buffer_size,
                           bool is_mysql_mode,
                           const int64_t max_result_size,
                           ObExprLRPadContext *&pad_ctx);
