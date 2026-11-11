@@ -577,6 +577,18 @@ int ObCreateOutlineResolver::resolve(const ParseNode &parse_tree)
       }
     }
 
+    // FORMAT OUTLINE + BINDING_RULE combo (template format outline) requires a
+    // stricter version gate than BINDING_RULE alone: supported in [4.4.2.4,
+    // 4.5.0.0) and [4.5.1.0, ); 4.5.0.0 is a barrier version. BINDING_RULE
+    // alone (normal template outline) only needs >= 4.4.2.3 — not blocked here.
+    if (OB_SUCC(ret) && is_format_otl && create_outline_stmt->has_binding_rule()) {
+      if (!oceanbase::share::schema::ObOutlineSqlService::is_template_format_outline_compat(compat_version)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "FORMAT OUTLINE with BINDING_RULE not supported under current data version");
+        LOG_WARN("FORMAT OUTLINE with BINDING_RULE not supported", K(ret), K(compat_version));
+      }
+    }
+
     // BINDING_RULE requires ON stmt syntax (not USING hint)
     if (OB_SUCC(ret) && create_outline_stmt->has_binding_rule()) {
       if (node->children_[2]->value_ != 1) {

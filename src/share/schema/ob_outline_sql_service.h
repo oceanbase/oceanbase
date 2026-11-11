@@ -57,6 +57,12 @@ public:
   static bool is_binding_rule_compat(uint64_t compat_version) {
     return compat_version >= DATA_VERSION_4_4_2_3;
   }
+  // FORMAT OUTLINE + BINDING_RULE combo (template format outline): supported in
+  // [4.4.2.4, 4.5.0.0) and [4.5.1.0, ); 4.5.0.0 is a barrier version.
+  static bool is_template_format_outline_compat(uint64_t compat_version) {
+    return (compat_version >= DATA_VERSION_4_4_2_4 && compat_version < DATA_VERSION_4_5_0_0)
+        || (compat_version >= DATA_VERSION_4_5_1_0);
+  }
 private:
   int add_outline(common::ObISQLClient &sql_client, const ObOutlineInfo &outline_info,
                   const bool only_history = false);
