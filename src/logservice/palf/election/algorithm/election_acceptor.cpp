@@ -165,8 +165,13 @@ int ElectionAcceptor::start()
                          KTIME_(last_time_window_open_ts));
       }
       if (can_vote) {
+        // 缓存期间配置可能已更新，投票前需重新校验版本，避免向旧配置候选人投票。
+        const LogConfigVersion membership_version = p_election_->get_membership_version_();
         // 1. 定时任务触发时要检查是否重新开启过窗口，避免提前关闭新的窗口，同时检查是否有这一轮记录的prepare请求
-        if (ballot_of_time_window_ == highest_priority_prepare_req_.get_ballot_number() &&
+        if (highest_priority_prepare_req_.get_membership_version() < membership_version) {
+          LOG_ELECT_LEADER(INFO, "give up sending prepare response, cause membership version is stale",
+                           K(highest_priority_prepare_req_), K(membership_version));
+        } else if (ballot_of_time_window_ == highest_priority_prepare_req_.get_ballot_number() &&
             ballot_of_time_window_ > ballot_number_) {
           // 1.1 要投票了，可以推大ballot number了
           ballot_number_ = ballot_of_time_window_;
