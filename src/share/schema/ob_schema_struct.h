@@ -6318,6 +6318,14 @@ struct ObNeedPriv
         priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false),
         catalog_(), sensitive_rule_()
   { }
+  explicit ObNeedPriv(common::ObIAllocator &allocator)
+      : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
+        obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
+        priv_check_type_(OB_PRIV_CHECK_ALL),
+        columns_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, common::ModulePageAllocator(allocator)),
+        check_any_column_priv_(false), catalog_(), sensitive_rule_()
+  { }
+  // The destination must be constructed with ObNeedPriv(allocator) using the same allocator.
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
   common::ObString table_;

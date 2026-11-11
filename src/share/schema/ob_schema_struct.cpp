@@ -9428,7 +9428,7 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     proxy_user_info_capacity_(0),
     proxy_user_info_cnt_(0),
     user_flags_(),
-    trigger_list_(),
+    trigger_list_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     plugin_(),
     old_password_(),
     old_password_start_time_(OB_INVALID_TIMESTAMP)
@@ -9542,7 +9542,7 @@ int ObUserInfo::assign(const ObUserInfo &other)
       if (OB_SUCC(ret)) {
         user_flags_ = other.user_flags_;
       }
-      if (OB_SUCC(ret) && trigger_list_.assign(other.trigger_list_)) {
+      if (FAILEDx(trigger_list_.assign(other.trigger_list_))) {
         LOG_WARN("assign trigger list failed", K(ret));
       }
       if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(other.old_password_, old_password_))) {
@@ -10446,6 +10446,7 @@ OB_DEF_SERIALIZE_SIZE(ObSysPriv)
 int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  columns_.reset();
   priv_level_ = other.priv_level_;
   priv_set_ = other.priv_set_;
   grantee_id_ = other.grantee_id_;
@@ -10462,6 +10463,8 @@ int ObNeedPriv::deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocat
     LOG_WARN("Fail to deep copy table", K_(table), K(ret));
   } else if (OB_FAIL(ob_write_string(allocator, other.sensitive_rule_, sensitive_rule_))) {
     LOG_WARN("Fail to deep copy sensitive rule", K_(sensitive_rule), K(ret));
+  } else if (OB_FAIL(columns_.reserve(other.columns_.count()))) {
+    LOG_WARN("fail to reserve columns", K(ret), K(other.columns_.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < other.columns_.count(); i++) {
       ObString tmp_column;
@@ -10479,17 +10482,19 @@ int ObStmtNeedPrivs::deep_copy(const ObStmtNeedPrivs &other, common::ObIAllocato
 {
   int ret = OB_SUCCESS;
   need_privs_.reset();
-  if (OB_FAIL(need_privs_.reserve(other.need_privs_.count()))) {
+  need_privs_.set_allocator(&allocator);
+  if (OB_FAIL(need_privs_.prepare_allocate(other.need_privs_.count(), allocator))) {
     LOG_WARN("fail to reserve need prives size", K(ret), K(other.need_privs_.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < other.need_privs_.count(); ++i) {
     const ObNeedPriv &priv_other = other.need_privs_.at(i);
-    ObNeedPriv priv_new;
+    ObNeedPriv &priv_new = need_privs_.at(i);
     if (OB_FAIL(priv_new.deep_copy(priv_other, allocator))) {
       LOG_WARN("Fail to deep copy ObNeedPriv", K(priv_new), K(ret));
-    } else {
-      need_privs_.push_back(priv_new);
     }
+  }
+  if (OB_FAIL(ret)) {
+    need_privs_.reset();
   }
   return ret;
 }
@@ -10518,6 +10523,7 @@ int ObOraNeedPriv::deep_copy(const ObOraNeedPriv &other, common::ObIAllocator &a
   owner_id_ = other.owner_id_;
   col_id_array_.reset();
   col_id_array_.set_block_allocator(ModulePageAllocator(allocator));
+  col_id_array_.set_block_size(SCHEMA_SMALL_MALLOC_BLOCK_SIZE);
   if (OB_FAIL(ob_write_string(allocator, other.db_name_, db_name_))) {
     LOG_WARN("Fail to deep copy db", K_(db_name), K(ret));
   }
@@ -10564,17 +10570,19 @@ int ObStmtOraNeedPrivs::deep_copy(const ObStmtOraNeedPrivs &other, common::ObIAl
 {
   int ret = OB_SUCCESS;
   need_privs_.reset();
-  if (OB_FAIL(need_privs_.reserve(other.need_privs_.count()))) {
+  need_privs_.set_allocator(&allocator);
+  if (OB_FAIL(need_privs_.prepare_allocate(other.need_privs_.count()))) {
     LOG_WARN("fail to reserve need prives size", K(ret), K(other.need_privs_.count()));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < other.need_privs_.count(); ++i) {
     const ObOraNeedPriv &priv_other = other.need_privs_.at(i);
-    ObOraNeedPriv priv_new;
+    ObOraNeedPriv &priv_new = need_privs_.at(i);
     if (OB_FAIL(priv_new.deep_copy(priv_other, allocator))) {
       LOG_WARN("Fail to deep copy ObNeedPriv", K(priv_new), K(ret));
-    } else {
-      need_privs_.push_back(priv_new);
     }
+  }
+  if (OB_FAIL(ret)) {
+    need_privs_.reset();
   }
   return ret;
 }
