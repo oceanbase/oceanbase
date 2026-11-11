@@ -168,6 +168,7 @@ int ObPxReceiveOp::init_dfc(ObDtlDfoKey &key)
     LOG_WARN("Fail to init dfc", K(ret));
   } else {
     dfc_.set_timeout_ts(plan_ctx->get_timeout_timestamp());
+    dfc_.set_exec_ctx(ctx_);
     dfc_.set_receive();
     dfc_.set_dfo_key(key);
     dfc_.set_op_metric(&metric_);

@@ -239,22 +239,13 @@ int ObDtlBatchSendMessageP::process_batch_control_msg(ObDtlBatchMsg &msg)
         }
       } else if (msg.contained_msg_type_ == ObDtlMsgType::UNBLOCKING_DATA_FLOW) {
         if (OB_NOT_NULL(bc->get_dfc())) {
-          if (bc->get_dfc()->is_block(bc)) {
-            // transmit's rpc response is already processed,
-            // we can unblock the channel directly
-            if (OB_FAIL(bc->get_dfc()->unblock_channel(bc))) {
-              LOG_WARN("failed to unblock channel", K(ret), K(bc->get_id()), K(bc->get_peer()));
-            } else {
-              LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(bc->get_id()), K(bc->get_peer()));
-            }
-          } else {
-            // response message is not processed yet, we should feedup a unblocking msg
-            // for later processing
-            if (OB_FAIL(feedup_unblocking_msg(bc))) {
-              LOG_WARN("failed to feedup unblocking msg", K(ret));
-            }
-            LOG_TRACE("[DTL BATCH BLOCK] feedup unblocking msg", K(bc->get_id()), K(bc->get_peer()));
+          // The transmit worker must finish blocking before it processes UNBLOCK.
+          // Queue the notification even when DFC is blocked: the worker may still
+          // be between setting the DFC flag and setting the channel blocked bit.
+          if (OB_FAIL(feedup_unblocking_msg(bc))) {
+            LOG_WARN("failed to feedup unblocking msg", K(ret));
           }
+          LOG_TRACE("[DTL BATCH BLOCK] feedup unblocking msg", K(bc->get_id()), K(bc->get_peer()));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;

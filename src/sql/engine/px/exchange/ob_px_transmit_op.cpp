@@ -371,6 +371,7 @@ int ObPxTransmitOp::init_dfc(ObDtlDfoKey &parent_key, ObDtlSqcInfo &child_info)
     LOG_WARN("Fail to init dfc", K(ret));
   } else {
     dfc_.set_timeout_ts(phy_plan_ctx->get_timeout_timestamp());
+    dfc_.set_exec_ctx(ctx_);
     dfc_.set_transmit();
     dfc_.set_dfo_key(parent_key);
     dfc_.set_sender_sqc_info(child_info);
@@ -1413,7 +1414,7 @@ int ObPxTransmitOp::send_eof_row()
     update_task_channels_head();
     ObTransmitEofAsynSender eof_asyn_sender(
         task_channels_, ch_info_, true, phy_plan_ctx->get_timeout_timestamp(),
-        &eval_ctx_, data_msg_type_, &server_groups_);
+        eval_ctx_, data_msg_type_, &server_groups_);
     if (OB_FAIL(eof_asyn_sender.asyn_send())) {
       LOG_WARN("failed to asyn send eof", K(ret), K(lbt()));
     } else if (GCONF.enable_sql_audit) {

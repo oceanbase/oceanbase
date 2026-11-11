@@ -1,2 +1,3 @@
 sql_unittest(test_dtl_rpc_channel)
 sql_unittest(test_dtl_linked_buffer_serialize_compat)
+sql_unittest(test_dtl_block)

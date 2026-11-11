@@ -144,6 +144,7 @@ int ObPxCoordOp::init_dfc(ObDfo &dfo, dtl::ObDtlChTotalInfo *ch_info)
     ObDtlDfoKey dfo_key;
     dfo_key.set(GCTX.get_server_index(), dfo.get_px_sequence_id(), dfo.get_qc_id(), dfo.get_dfo_id());
     dfc_.set_timeout_ts(phy_plan_ctx->get_timeout_timestamp());
+    dfc_.set_exec_ctx(ctx_);
     dfc_.set_receive();
     dfc_.set_qc_coord();
     dfc_.set_dfo_key(dfo_key);
