@@ -423,7 +423,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
       LOG_WARN("no memory", K(ret));
     }
   }
-  bool ignore_vtable_error = coord_info_.should_ignore_vtable_error();
+  const bool ignore_vtable_error = coord_info_.should_ignore_vtable_error();
   int64_t cluster_id = GCONF.cluster_id;
   ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
     ObPxSqcMeta &sqc = sqcs.at(idx);
@@ -459,9 +459,7 @@ int ObSerialDfoScheduler::dispatch_sqcs(ObExecContext &exec_ctx,
         if (dfo.has_child_dfo()) {
           sqc.set_recieve_use_interm_result(true);
         }
-        if (ignore_vtable_error) {
-          sqc.set_ignore_vtable_error(true);
-        }
+        sqc.set_ignore_vtable_error(ignore_vtable_error);
         if (coord_info_.enable_px_batch_rescan()) {
           OZ(sqc.set_rescan_batch_params(coord_info_.batch_rescan_ctl_->params_));
         }

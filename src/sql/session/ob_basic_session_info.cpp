@@ -7464,6 +7464,11 @@ int ObBasicSessionInfo::get_enable_parallel_ddl(bool &v) const
   return get_bool_sys_var(SYS_VAR__ENABLE_PARALLEL_DDL, v);
 }
 
+int ObBasicSessionInfo::get_ignore_virtual_table_error(bool &v) const
+{
+  return get_bool_sys_var(SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR, v);
+}
+
 int ObBasicSessionInfo::get_force_parallel_query_dop(uint64_t &v) const
 {
   int ret = OB_SUCCESS;

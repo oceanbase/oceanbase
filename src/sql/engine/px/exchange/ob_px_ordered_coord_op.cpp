@@ -262,6 +262,7 @@ int ObPxOrderedCoordOp::inner_get_next_row()
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }
+    warn_on_virtual_table_error(ret);
   }
   return ret;
 }
@@ -428,6 +429,7 @@ int ObPxOrderedCoordOp::inner_get_next_batch(const int64_t max_row_cnt)
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }
+    warn_on_virtual_table_error(ret);
   }
   return ret;
 }

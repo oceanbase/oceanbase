@@ -796,11 +796,13 @@ int RuntimeFilterDependencyInfo::describe_dependency(ObDfo *root_dfo)
   return ret;
 }
 
-int ObPxCoordInfo::init()
+int ObPxCoordInfo::init(const ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   const int64_t bucket_num = 32;
-  if (OB_FAIL(p2p_dfo_map_.create(bucket_num,
+  if (OB_FAIL(session.get_ignore_virtual_table_error(ignore_vtable_error_))) {
+    LOG_WARN("failed to get ob_ignore_virtual_table_error", K(ret));
+  } else if (OB_FAIL(p2p_dfo_map_.create(bucket_num,
       "PxDfoMapKey",
       "PxDfoMapNode"))) {
     LOG_WARN("create hash table failed", K(ret));

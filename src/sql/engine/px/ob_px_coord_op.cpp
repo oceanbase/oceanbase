@@ -290,14 +290,20 @@ int ObPxCoordOp::inner_open()
   int ret = OB_SUCCESS;
   const uint64_t server_index = GCTX.get_server_index();
   ObDfo *root_dfo = NULL;
-  ObString cur_query_str = ctx_.get_my_session()->get_current_query_string();
-  char *buf = reinterpret_cast<char*>(ctx_.get_allocator().alloc(cur_query_str.length() + 1));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for query string", K(cur_query_str.length()));
+  ObSQLSessionInfo *session = ctx_.get_my_session();
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
   } else {
-    MEMCPY(buf, cur_query_str.ptr(), cur_query_str.length());
-    query_sql_.assign_ptr(buf, cur_query_str.length());
+    ObString cur_query_str = session->get_current_query_string();
+    char *buf = reinterpret_cast<char*>(ctx_.get_allocator().alloc(cur_query_str.length() + 1));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for query string", K(cur_query_str.length()));
+    } else {
+      MEMCPY(buf, cur_query_str.ptr(), cur_query_str.length());
+      query_sql_.assign_ptr(buf, cur_query_str.length());
+    }
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObPxReceiveOp::inner_open())) {
@@ -306,7 +312,7 @@ int ObPxCoordOp::inner_open()
     LOG_WARN("Server is initializing", K(ret), K(server_index));
   } else if (OB_FAIL(post_init_op_ctx())) {
     LOG_WARN("init operator context failed", K(ret));
-  } else if (OB_FAIL(coord_info_.init())) {
+  } else if (OB_FAIL(coord_info_.init(*session))) {
     LOG_WARN("fail to init coord info", K(ret));
   } else if (OB_FAIL(register_interrupt())) {
     LOG_WARN("fail to register interrupt", K(ret));
@@ -323,7 +329,7 @@ int ObPxCoordOp::inner_open()
     LOG_WARN("fail parse dfo tree",
              "server_index", server_index,
              "qc_id", (static_cast<const ObPxCoordSpec*>(&get_spec()))->qc_id_,
-             "execution_id", ctx_.get_my_session()->get_current_execution_id(),
+             "execution_id", session->get_current_execution_id(),
              K(ret));
   } else if (OB_ISNULL(root_dfo = coord_info_.dfo_mgr_.get_root_dfo())) {
     ret = OB_ERR_UNEXPECTED;
@@ -386,6 +392,19 @@ int ObPxCoordOp::init_dfo_mgr(const ObDfoInterruptIdGen &dfo_id_gen, ObDfoMgr &d
     LOG_WARN("fail init dfo mgr", K(ret));
   }
   return ret;
+}
+
+void ObPxCoordOp::warn_on_virtual_table_error(int error_code) const
+{
+  if (OB_UNLIKELY(OB_SUCCESS != error_code)
+      && OB_UNLIKELY(OB_ITER_END != error_code)
+      && OB_UNLIKELY(!coord_info_.ignore_vtable_error_)
+      && OB_UNLIKELY(TableAccessType::PURE_VIRTUAL_TABLE == coord_info_.table_access_type_)) {
+    LOG_USER_WARN(OB_ERR_UNEXPECTED,
+                  "Distributed virtual table query failed. "
+                  "Set ob_ignore_virtual_table_error = ON to ignore task errors "
+                  "and return partial results from available nodes.");
+  }
 }
 
 int ObPxCoordOp::terminate_running_dfos(ObDfoMgr &dfo_mgr)

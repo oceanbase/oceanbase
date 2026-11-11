@@ -11958,5 +11958,33 @@
     "info_cn": "存储到磁盘的密码哈希所使用的 SM3 迭代次数",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_resource_group": {
+    "id": 10769,
+    "name": "ob_resource_group",
+    "default_value": "",
+    "base_value": "",
+    "data_type": "varchar",
+    "info": "Specifies the resource group used by statements in the current session",
+    "flags": "SESSION",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_resource_group",
+    "publish_version": "",
+    "info_cn": "指定当前会话中 SQL 使用的资源组",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder":true
+  },
+  "ob_ignore_virtual_table_error": {
+    "id": 10770,
+    "name": "ob_ignore_virtual_table_error",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Controls whether to ignore distributed task scheduling and execution errors for distributed queries that access only virtual tables. When enabled, queries may return incomplete results and report ignored errors as warnings. When disabled, errors follow normal error handling.",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "",
+    "info_cn": "控制分布式查询仅访问虚拟表时，是否忽略分布式任务的调度和执行错误。开启后，查询可能返回不完整结果，并通过 warning 提示被忽略的错误；关闭后，错误按正常流程处理。",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

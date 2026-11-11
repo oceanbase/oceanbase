@@ -251,6 +251,7 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
         && OB_SUCCESS != ret_terminate) {
       ret = ret_terminate;
     }
+    warn_on_virtual_table_error(ret);
   }
   return ret;
 }

@@ -864,6 +864,7 @@ namespace share
   static const char* const OB_SV_UDF_SELECTIVITY = "ob_udf_selectivity";
   static const char* const OB_SV__ENABLE_PL_COMPOSITE_AS_SQL_UDT = "_enable_pl_composite_as_sql_udt";
   static const char* const OB_SV_SM3_PASSWORD_DIGEST_ROUNDS = "ob_sm3_password_digest_rounds";
+  static const char* const OB_SV_IGNORE_VIRTUAL_TABLE_ERROR = "ob_ignore_virtual_table_error";
 
 }
 }

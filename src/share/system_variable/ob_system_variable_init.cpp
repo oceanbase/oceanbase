@@ -11626,13 +11626,26 @@ static struct VarsInit{
     ObSysVars[847].alias_ = "OB_SV_SM3_PASSWORD_DIGEST_ROUNDS" ;
     }();
 
+    [&] (){
+      ObSysVars[848].default_value_ = "0" ;
+      ObSysVars[848].info_ = "Controls whether to ignore distributed task scheduling and execution errors for distributed queries that access only virtual tables. When enabled, queries may return incomplete results and report ignored errors as warnings. When disabled, errors follow normal error handling." ;
+      ObSysVars[848].name_ = "ob_ignore_virtual_table_error" ;
+      ObSysVars[848].data_type_ = ObIntType ;
+      ObSysVars[848].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[848].id_ = SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_IGNORE_VIRTUAL_TABLE_ERROR] = 848 ;
+      ObSysVars[848].base_value_ = "0" ;
+    ObSysVars[848].alias_ = "OB_SV_IGNORE_VIRTUAL_TABLE_ERROR" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 848;
+static int64_t var_amount = 849;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
