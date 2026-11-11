@@ -21,6 +21,7 @@
 #include "rootserver/ob_root_service.h" // for ObRootService
 #include "share/longops_mgr/ob_longops_mgr.h"
 #include "share/ob_common_rpc_proxy.h" // ObCommonRpcProxy
+#include "share/ob_debug_sync.h"
 #include "share/ob_ddl_sim_point.h"
 #include "share/restore/ob_import_util.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
@@ -79,8 +80,11 @@ int ObDDLTaskQueue::init(const int64_t bucket_num)
 int ObDDLTaskQueue::push_task(ObDDLTask *task)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool task_add_to_list = false;
   bool task_add_to_map = false;
+  bool task_add_to_id_map = false;
+  DEBUG_SYNC(BEFORE_DDL_TASK_QUEUE_PUSH);
   common::ObSpinLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = common::OB_NOT_INIT;
@@ -113,15 +117,26 @@ int ObDDLTaskQueue::push_task(ObDDLTask *task)
         } else {
           LOG_WARN("set task to task set", K(ret));
         }
+      } else {
+        task_add_to_id_map = true;
+        if (OB_TMP_FAIL(add_sys_task(task))) {
+          LOG_WARN("add sys task failed", K(tmp_ret), KPC(task));
+        }
       }
-      LOG_INFO("add task", K(*task), KP(task), K(common::lbt()));
+      if (OB_SUCC(ret)) {
+        LOG_INFO("add task", K(*task), KP(task), K(common::lbt()));
+      }
     }
   }
   if (OB_FAIL(ret) && task_add_to_list) {
-    int tmp_ret = OB_SUCCESS;
     if (!task_list_.remove(task)) {
       tmp_ret = common::OB_ERR_UNEXPECTED;
       LOG_WARN("fail to remove task", K(tmp_ret), K(*task));
+    }
+    if (task_add_to_id_map) {
+      if (OB_SUCCESS != (tmp_ret = task_id_map_.erase_refactored(task->get_ddl_task_id()))) {
+        LOG_WARN("erase from task id map failed", K(tmp_ret));
+      }
     }
     if (task_add_to_map) {
       if (OB_SUCCESS != (tmp_ret = task_map_.erase_refactored(task->get_task_key()))) {
@@ -1638,7 +1653,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
   return ret;
 }
 
-int ObDDLScheduler::add_sys_task(ObDDLTask *task)
+int ObDDLTaskQueue::add_sys_task(ObDDLTask *task)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(task)) {
@@ -1653,15 +1668,15 @@ int ObDDLScheduler::add_sys_task(ObDDLTask *task)
       sys_task_status.task_id_ = *ObCurTraceId::get_trace_id();
       sys_task_status.tenant_id_ = tenant_id;
       sys_task_status.task_type_ = DDL_TASK;
-      if (OB_FAIL(SYS_TASK_STATUS_MGR.add_task(sys_task_status))) {
+      if (OB_FAIL(DDL_SIM(task->get_tenant_id(), task->get_task_id(), DDL_SCHEDULER_ADD_SYS_TASK_FAILED))) {
+        LOG_WARN("ddl sim failure: add sys task failed", K(ret));
+      } else if (OB_FAIL(SYS_TASK_STATUS_MGR.add_task(sys_task_status))) {
         if (OB_ENTRY_EXIST == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("sys task already exist", K(sys_task_status.task_id_));
         } else {
           LOG_WARN("add task failed", K(ret));
         }
-      } else if (OB_FAIL(DDL_SIM(task->get_tenant_id(), task->get_task_id(), DDL_SCHEDULER_ADD_SYS_TASK_FAILED))) {
-        LOG_WARN("ddl sim failure: add sys task failed", K(ret));
       } else {
         task->set_sys_task_id(sys_task_status.task_id_);
         LOG_INFO("add sys task", K(sys_task_status.task_id_));
@@ -3817,10 +3832,10 @@ int ObDDLScheduler::schedule_partition_split_task(
       LOG_WARN("set trace id failed", K(ret));
     } else if (OB_FAIL(inner_schedule_ddl_task(split_task, task_record))) {
       if (OB_ENTRY_EXIST != ret) {
-        LOG_WARN("inner schedule task failed", K(ret), K(*split_task));
+        LOG_WARN("inner schedule task failed", K(ret), K(task_record));
       }
     } else {
-      LOG_INFO("scheduler partition split task successfully", K(*split_task));
+      LOG_INFO("scheduler partition split task successfully", K(task_record));
     }
   }
   if (OB_FAIL(ret) && nullptr != split_task) {
@@ -4278,7 +4293,6 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
       longops_added = false;
       LOG_WARN("add task to longops mgr failed", K(tmp_ret));
     }
-    ddl_task->disable_schedule();
     if (OB_FAIL(task_queue_.push_task(ddl_task))) {
       if (OB_ENTRY_EXIST != ret) {
         LOG_WARN("push back task to task queue failed", K(ret));
@@ -4289,10 +4303,7 @@ int ObDDLScheduler::inner_schedule_ddl_task(ObDDLTask *ddl_task,
         }
       }
     } else {
-      if (OB_TMP_FAIL(add_sys_task(ddl_task))) {
-        LOG_WARN("add sys task failed", K(tmp_ret));
-      }
-      ddl_task->enable_schedule();
+      DEBUG_SYNC(AFTER_DDL_TASK_QUEUE_PUSH);
       idler_.wakeup();
     }
   }

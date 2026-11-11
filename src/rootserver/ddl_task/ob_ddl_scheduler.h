@@ -78,6 +78,7 @@ public:
   int get_split_task_cnt(int64_t &task_cnt);
   void destroy();
 private:
+  int add_sys_task(ObDDLTask *task);
   typedef common::ObDList<ObDDLTask> TaskList;
   typedef common::hash::ObHashMap<ObDDLTaskKey, ObDDLTask *,
           common::hash::NoPthreadDefendMode> TaskKeyMap;
@@ -684,7 +685,6 @@ int create_partition_split_task(
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int schedule_partition_split_task(const ObDDLTaskRecord &task_record);
   int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);
-  int add_sys_task(ObDDLTask *task);
   int remove_sys_task(ObDDLTask *task);
   int add_task_to_longops_mgr(ObDDLTask *ddl_task);
   int remove_task_from_longops_mgr(ObDDLTask *ddl_task);
