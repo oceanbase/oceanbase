@@ -324,11 +324,20 @@ int ObAllVirtualDynamicPartitionTable::build_new_row_(
           break;
         }
         case TIME_UNIT: {
+          int64_t num = 1;
           ObDateUnitType time_unit = ObDateUnitType::DATE_UNIT_MAX;
-          if (OB_FAIL(share::ObDynamicPartitionManager::get_time_unit(table_schema, time_unit))) {
+          const int64_t time_length = 64;
+          char *buf = NULL;
+          int64_t pos = 0;
+          if (OB_FAIL(share::ObDynamicPartitionManager::get_time_unit(table_schema, num, time_unit))) {
             SERVER_LOG(WARN, "fail to get dynamic partition time unit", KR(ret));
+          } else if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(time_length)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            SERVER_LOG(WARN, "fail to allocate time unit buffer", KR(ret), K(time_length));
+          } else if (OB_FAIL(share::ObDynamicPartitionManager::print_time_unit(num, time_unit, buf, time_length, pos))) {
+            SERVER_LOG(WARN, "fail to print dynamic partition time unit", KR(ret), K(num), K(time_unit));
           } else {
-            cells[cell_idx].set_varchar(ob_date_unit_type_str_upper(time_unit));
+            cells[cell_idx].set_varchar(ObString(pos, buf));
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           }
           break;

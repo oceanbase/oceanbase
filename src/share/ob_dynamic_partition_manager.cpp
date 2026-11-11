@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/utility/ob_fast_convert.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "share/ob_cluster_version.h"
 #include "share/ob_errno.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 
@@ -376,7 +377,7 @@ int ObDynamicPartitionManager::build_precreate_partition_definition_list_(
         ObSqlString part_name;
         ObSqlString part_val;
         high_bound_val_timestamp = low_bound_val_timestamp;
-        if (OB_FAIL(add_timestamp_(1, time_unit, high_bound_val_timestamp))) {
+        if (OB_FAIL(add_timestamp_(policy_.time_unit_num_, time_unit, high_bound_val_timestamp))) {
           LOG_WARN("fail to add timestamp", KR(ret), K(time_unit));
         } else if (OB_FAIL(build_part_name_(low_bound_val_timestamp, part_name))) {
           LOG_WARN("fail to convert timestamp to part_name", KR(ret), K(low_bound_val_timestamp));
@@ -936,8 +937,10 @@ int ObDynamicPartitionManager::fetch_timestamp_from_range_part_key_(
             if (0 == scale) {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("bigint precision not specified", KR(ret), K(bigint_precision));
-            } else {
-              timestamp = timestamp * scale;
+            } else if (OB_UNLIKELY(__builtin_mul_overflow(timestamp, scale, &timestamp))) {
+              // Avoid dropping valid partitions due to timestamp overflow.
+              ret = OB_INVALID_DATE_VALUE;
+              LOG_WARN("dynamic partition integer timestamp overflows", KR(ret), K(int_obj), K(bigint_precision));
             }
           }
           break;
@@ -979,9 +982,14 @@ int ObDynamicPartitionManager::get_session_time_zone_str_(char *buf, const int64
 int ObDynamicPartitionManager::add_timestamp_(const int64_t num, const ObDateUnitType time_unit, int64_t &timestamp)
 {
   int ret = OB_SUCCESS;
+  // All supported units are at least one hour.
+  const int64_t max_interval_num = (DATETIME_MAX_VAL - DATETIME_MIN_VAL) / USECS_PER_SEC / SECS_PER_HOUR + 1;
 
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(num > max_interval_num || num < -max_interval_num)) {
+    ret = OB_INVALID_DATE_VALUE;
+    LOG_WARN("dynamic partition interval exceeds datetime range", KR(ret), K(num), K(time_unit));
   } else {
     ObSqlString interval_str;
     ObDateSqlMode date_sql_mode;
@@ -1098,15 +1106,16 @@ int ObDynamicPartitionManager::check_enable_is_valid_(const ObTableSchema &table
 }
 
 // dynamic partition time_unit:
-// - option values: hour, day, week, month, year
+// - option values: [N] hour, day, week, month, year; 1 <= N <= MAX_TIME_UNIT_NUM
 // - for mysql DATE part key, time_unit should not be hour
-// - for mysql YEAR part key, time_unit should only be hour
+// - for mysql YEAR part key, time_unit should only be year
 int ObDynamicPartitionManager::check_time_unit_is_valid_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  ObDateUnitType time_unit;
+  ObDateUnitType time_unit = ObDateUnitType::DATE_UNIT_MAX;
+  int64_t time_unit_num = 1;
   ObObjType col_data_type = ObObjType::ObMaxType;
-  if (OB_FAIL(get_time_unit(table_schema, time_unit))) {
+  if (OB_FAIL(get_time_unit(table_schema, time_unit_num, time_unit))) {
     LOG_WARN("fail to get dynamic partition time unit", KR(ret));
   } else if (OB_FAIL(table_schema.get_part_key_column_type(0, col_data_type))) {
     LOG_WARN("fail to get part key column type", KR(ret));
@@ -1114,6 +1123,19 @@ int ObDynamicPartitionManager::check_time_unit_is_valid_(const ObTableSchema &ta
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid time unit type", KR(ret), K(col_data_type), K(time_unit));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition time_unit");
+  } else if (time_unit_num > 1) {
+    uint64_t data_version = 0;
+    if (table_schema.is_list_part()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("multiple time units for dynamic list partition are not supported", KR(ret), K(time_unit_num));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple time units for dynamic list partition");
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(table_schema.get_tenant_id()));
+    } else if (data_version < DATA_VERSION_4_4_2_4) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("multiple dynamic partition time units require data version 4.4.2.4", KR(ret), K(data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "multiple dynamic partition time units before data version 4.4.2.4");
+    }
   }
   return ret;
 }
@@ -1129,11 +1151,12 @@ int ObDynamicPartitionManager::check_precreate_time_is_valid_(const ObTableSchem
 {
   int ret = OB_SUCCESS;
   int64_t precreate_num = -1;
+  int64_t time_unit_num = 1;
   ObDateUnitType precreate_time_unit = ObDateUnitType::DATE_UNIT_MAX;
   ObDateUnitType time_unit = ObDateUnitType::DATE_UNIT_MAX;
   if (OB_FAIL(get_precreate_time(table_schema, precreate_num, precreate_time_unit))) {
     LOG_WARN("fail to get precreate time", KR(ret), K(table_schema));
-  } else if (OB_FAIL(get_time_unit(table_schema, time_unit))) {
+  } else if (OB_FAIL(get_time_unit(table_schema, time_unit_num, time_unit))) {
     LOG_WARN("fail to get time unit", KR(ret), K(table_schema));
   } else if (precreate_num <= -2) {
     ret = OB_INVALID_ARGUMENT;
@@ -1147,10 +1170,8 @@ int ObDynamicPartitionManager::check_precreate_time_is_valid_(const ObTableSchem
       LOG_WARN("invalid precreate time", KR(ret), K(precreate_time_unit), K(time_unit));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition precreate_time");
     } else {
-      // To avoid precreating too many partitions at a time,
-      // (MAX_PRECREATE_PART_NUM * time_unit_hour_num) / (precreate_num * precreate_hour_num) should >= 1
-      int64_t ratio = MAX_PRECREATE_PART_NUM * time_unit_hour_num / precreate_num / precreate_hour_num;
-      if (ratio < 1) {
+      const int64_t max_precreate_hours = MAX_PRECREATE_PART_NUM * time_unit_num * time_unit_hour_num;
+      if (precreate_num > max_precreate_hours / precreate_hour_num) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid precreate time, too large", KR(ret), K(time_unit), K(precreate_num), K(precreate_time_unit));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition precreate_time");
@@ -1272,16 +1293,21 @@ int ObDynamicPartitionManager::print_dynamic_partition_policy_(
   int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  char time_unit_buf[64] = {0};
+  int64_t time_unit_pos = 0;
   const char *format = is_show_create_table
                        ? "ENABLE = %s, TIME_UNIT = '%s', PRECREATE_TIME = '%ld%s', EXPIRE_TIME = '%ld%s', TIME_ZONE = '%.*s', BIGINT_PRECISION = '%.*s'"
                        : "ENABLE=%s,TIME_UNIT=%s,PRECREATE_TIME=%ld%s,EXPIRE_TIME=%ld%s,TIME_ZONE=%.*s,BIGINT_PRECISION=%.*s";
 
-  if (OB_FAIL(databuff_printf(buf,
+  if (OB_FAIL(print_time_unit(policy.time_unit_num_, policy.time_unit_,
+                             time_unit_buf, sizeof(time_unit_buf), time_unit_pos))) {
+    LOG_WARN("fail to print dynamic partition time unit", KR(ret), K(policy));
+  } else if (OB_FAIL(databuff_printf(buf,
                               buf_len,
                               pos,
                               format,
                               policy.enable_ ? "TRUE": "FALSE",
-                              ob_date_unit_type_str_upper(policy.time_unit_),
+                              time_unit_buf,
                               policy.precreate_time_num_,
                               policy.precreate_time_num_ > 0 ? ob_date_unit_type_str_upper(policy.precreate_time_unit_) : "",
                               policy.expire_time_num_,
@@ -1317,6 +1343,47 @@ int ObDynamicPartitionManager::str_to_time_unit(const ObString &str, ObDateUnitT
   return ret;
 }
 
+int ObDynamicPartitionManager::str_to_time_unit_interval_(
+  const ObString &str,
+  int64_t &num,
+  ObDateUnitType &time_unit)
+{
+  int ret = OB_SUCCESS;
+  const ObString value = str.trim();
+  num = 1;
+  time_unit = ObDateUnitType::DATE_UNIT_MAX;
+  if (!value.empty() && value[0] >= '0' && value[0] <= '9') {
+    if (OB_FAIL(str_to_time(value, num, time_unit))) {
+      LOG_WARN("fail to parse dynamic partition time unit interval", KR(ret), K(str));
+    } else if (num <= 0 || num > MAX_TIME_UNIT_NUM) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid dynamic partition time unit interval", KR(ret), K(str));
+    }
+  } else if (OB_FAIL(str_to_time_unit(value, time_unit))) {
+    LOG_WARN("fail to parse dynamic partition time unit", KR(ret), K(str));
+  }
+  return ret;
+}
+
+int ObDynamicPartitionManager::print_time_unit(
+  const int64_t num,
+  const ObDateUnitType time_unit,
+  char *buf,
+  const int64_t buf_len,
+  int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (num <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dynamic partition time unit count", KR(ret), K(num));
+  } else if (num > 1 && OB_FAIL(databuff_printf(buf, buf_len, pos, "%ld", num))) {
+    LOG_WARN("fail to print dynamic partition time unit count", KR(ret), K(num));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", ob_date_unit_type_str_upper(time_unit)))) {
+    LOG_WARN("fail to print dynamic partition time unit", KR(ret), K(time_unit));
+  }
+  return ret;
+}
+
 int ObDynamicPartitionManager::str_to_time(
   const ObString &str,
   int64_t &time_num,
@@ -1325,34 +1392,49 @@ int ObDynamicPartitionManager::str_to_time(
   int ret = OB_SUCCESS;
   bool time_num_valid = true;
   bool time_unit_valid = true;
+  ObString value = str.trim();
   time_unit = ObDateUnitType::DATE_UNIT_MAX;
   time_num = -1;
-  if (str.suffix_match_ci("HOUR")) {
-    time_unit = ObDateUnitType::DATE_UNIT_HOUR;
-    time_num = ObFastAtoi<int64_t>::atoi(str.ptr(), str.ptr() + str.length() - 4, time_num_valid);
-  } else if (str.suffix_match_ci("DAY")) {
-    time_unit = ObDateUnitType::DATE_UNIT_DAY;
-    time_num = ObFastAtoi<int64_t>::atoi(str.ptr(), str.ptr() + str.length() - 3, time_num_valid);
-  } else if (str.suffix_match_ci("WEEK")) {
-    time_unit = ObDateUnitType::DATE_UNIT_WEEK;
-    time_num = ObFastAtoi<int64_t>::atoi(str.ptr(), str.ptr() + str.length() - 4, time_num_valid);
-  } else if (str.suffix_match_ci("MONTH")) {
-    time_unit = ObDateUnitType::DATE_UNIT_MONTH;
-    time_num = ObFastAtoi<int64_t>::atoi(str.ptr(), str.ptr() + str.length() - 5, time_num_valid);
-  } else if (str.suffix_match_ci("YEAR")) {
-    time_unit = ObDateUnitType::DATE_UNIT_YEAR;
-    time_num = ObFastAtoi<int64_t>::atoi(str.ptr(), str.ptr() + str.length() - 4, time_num_valid);
-  } else if (str == "-1") {
-    time_num = -1;
-    time_unit = ObDateUnitType::DATE_UNIT_MAX;
-  } else if (str == "0") {
-    time_num = 0;
-    time_unit = ObDateUnitType::DATE_UNIT_MAX;
+  if (value == "-1" || value == "0") {
+    time_num = value == "0" ? 0 : -1;
   } else {
-    time_unit_valid = false;
+    // Strip one plural suffix only from a duration, never from the special values.
+    if (value.suffix_match_ci("S")) {
+      value.assign_ptr(value.ptr(), value.length() - 1);
+    }
+    int64_t unit_len = 0;
+    if (value.suffix_match_ci("HOUR")) {
+      time_unit = ObDateUnitType::DATE_UNIT_HOUR;
+      unit_len = 4;
+    } else if (value.suffix_match_ci("DAY")) {
+      time_unit = ObDateUnitType::DATE_UNIT_DAY;
+      unit_len = 3;
+    } else if (value.suffix_match_ci("WEEK")) {
+      time_unit = ObDateUnitType::DATE_UNIT_WEEK;
+      unit_len = 4;
+    } else if (value.suffix_match_ci("MONTH")) {
+      time_unit = ObDateUnitType::DATE_UNIT_MONTH;
+      unit_len = 5;
+    } else if (value.suffix_match_ci("YEAR")) {
+      time_unit = ObDateUnitType::DATE_UNIT_YEAR;
+      unit_len = 4;
+    } else {
+      time_unit_valid = false;
+    }
+    if (time_unit_valid) {
+      ObString num_str(value.length() - unit_len, value.ptr());
+      num_str = num_str.trim();
+      if (num_str.empty()) {
+        time_num_valid = false;
+      } else {
+        time_num = ObFastAtoi<int64_t>::atoi(num_str.ptr(), num_str.ptr() + num_str.length(), time_num_valid);
+      }
+    }
   }
 
-  if (!time_num_valid || !time_unit_valid || (ObDateUnitType::DATE_UNIT_MAX != time_unit && time_num <= 0)) {
+  if (!time_num_valid
+      || !time_unit_valid
+      || (ObDateUnitType::DATE_UNIT_MAX != time_unit && time_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid dynamic partition policy params", KR(ret), K(str));
   }
@@ -1725,9 +1807,9 @@ int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
           if (is_alter) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("not support to alter dynamic partition time unit", KR(ret));
-          } else if (OB_FAIL(str_to_time_unit(v, policy.time_unit_))) {
+          } else if (OB_FAIL(str_to_time_unit_interval_(v, policy.time_unit_num_, policy.time_unit_))) {
             LOG_WARN("fail to convert str to time unit", KR(ret), K(v));
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition time_unit, expected HOUR/DAY/WEEK/MONTH/YEAR");
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition time_unit, expected a count from 1 to 65536 and HOUR/DAY/WEEK/MONTH/YEAR (count defaults to 1)");
           }
         } else if (0 == k.case_compare("PRECREATE_TIME")) {
           if (OB_FAIL(str_to_time(v, policy.precreate_time_num_, policy.precreate_time_unit_))) {
@@ -1926,15 +2008,18 @@ int ObDynamicPartitionManager::get_enable(
 
 int ObDynamicPartitionManager::get_time_unit(
   const ObTableSchema &table_schema,
+  int64_t &num,
   ObDateUnitType &time_unit)
 {
   int ret = OB_SUCCESS;
   ObDynamicPartitionPolicy policy;
   time_unit = ObDateUnitType::DATE_UNIT_MAX;
+  num = 1;
   if (OB_FAIL(str_to_dynamic_partition_policy_(table_schema.get_dynamic_partition_policy(), policy))) {
     LOG_WARN("fail to parse str to dynamic_partition_policy", KR(ret));
   } else {
     time_unit = policy.time_unit_;
+    num = policy.time_unit_num_;
   }
   return ret;
 }

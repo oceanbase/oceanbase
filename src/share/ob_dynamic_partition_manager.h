@@ -35,6 +35,7 @@ private:
     ObDynamicPartitionPolicy() :
       enable_(true),
       time_unit_(ObDateUnitType::DATE_UNIT_MAX),
+      time_unit_num_(1),
       precreate_time_num_(-1),
       precreate_time_unit_(ObDateUnitType::DATE_UNIT_MAX),
       expire_time_num_(-1),
@@ -45,6 +46,7 @@ private:
     void reset() {
       enable_ = true;
       time_unit_ = ObDateUnitType::DATE_UNIT_MAX;
+      time_unit_num_ = 1;
       precreate_time_num_ = -1;
       precreate_time_unit_ = ObDateUnitType::DATE_UNIT_MAX;
       expire_time_num_ = -1;
@@ -54,6 +56,7 @@ private:
     }
     TO_STRING_KV(K_(enable),
                  "time_unit", ob_date_unit_type_str_upper(time_unit_),
+                 K_(time_unit_num),
                  K_(precreate_time_num),
                  "precreate_time_unit", ob_date_unit_type_str_upper(precreate_time_unit_),
                  K_(expire_time_num),
@@ -63,6 +66,7 @@ private:
 
     bool enable_;
     ObDateUnitType time_unit_;
+    int64_t time_unit_num_;
     int64_t precreate_time_num_;
     ObDateUnitType precreate_time_unit_;
     int64_t expire_time_num_;
@@ -112,9 +116,11 @@ private:
   int floor_timestamp_(const ObDateUnitType time_unit, int64_t &timestamp);
 public:
   static const int64_t MAX_PRECREATE_PART_NUM = 2048;
+  static const int64_t MAX_TIME_UNIT_NUM = 65536;
 
 public:
   static int str_to_time_unit(const ObString &str, ObDateUnitType &time_unit);
+  static int print_time_unit(const int64_t num, const ObDateUnitType time_unit, char *buf, const int64_t buf_len, int64_t &pos);
   static int str_to_time(const ObString &str, int64_t &time_num, ObDateUnitType &time_unit);
   static int format_dynamic_partition_policy_str(ObIAllocator &allocator, const ObString &orig_str, ObString &new_str);
   static int fill_default_value(ObIAllocator &allocator, const ObString &orig_str, ObString &new_str);
@@ -123,7 +129,7 @@ public:
   static int check_is_supported(const schema::ObTableSchema &table_schema);
   static int check_is_valid(const schema::ObTableSchema &table_schema);
   static int get_enable(const schema::ObTableSchema &table_schema, bool &enable);
-  static int get_time_unit(const schema::ObTableSchema &table_schema, ObDateUnitType &time_unit);
+  static int get_time_unit(const schema::ObTableSchema &table_schema, int64_t &num, ObDateUnitType &time_unit);
   static int get_precreate_time(const schema::ObTableSchema &table_schema, int64_t &num, ObDateUnitType &time_unit);
   static int get_expire_time(const schema::ObTableSchema &table_schema, int64_t &num, ObDateUnitType &time_unit);
   static int get_bigint_precision(const schema::ObTableSchema &table_schema, common::ObString &bigint_precision);
@@ -137,6 +143,7 @@ private:
   static bool support_part_key_type_(ObObjType type);
   static int check_part_type_with_col_type_(const schema::ObTableSchema &table_schema, const ObObjType col_data_type, const common::ObCollationType col_collation_type);
   static bool is_valid_time_unit_(ObObjType type, ObDateUnitType time_unit);
+  static int str_to_time_unit_interval_(const ObString &str, int64_t &num, ObDateUnitType &time_unit);
   static int update_dynamic_partition_policy_with_str_(const ObString &str, bool is_alter, ObDynamicPartitionPolicy &policy);
   static int dynamic_partition_policy_to_str_(ObIAllocator &allocator, const ObDynamicPartitionPolicy& policy, ObString &str);
   static int str_to_dynamic_partition_policy_(const ObString &str, ObDynamicPartitionPolicy &policy);
