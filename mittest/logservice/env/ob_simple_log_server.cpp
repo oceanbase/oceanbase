@@ -868,8 +868,8 @@ int ObLogDeliver::init(const common::ObAddr &self,
     SERVER_LOG(WARN, "invalid argument", K(ret), K(self), KP(log_server));
   } else if (is_bootstrap && OB_FAIL(ObMittestBlacklist::init(self))) {
     SERVER_LOG(WARN, "ObMittestBlacklist init failed", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::COMMON_QUEUE_THREAD, tg_id_))) {
-    SERVER_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret));
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::COMMON_QUEUE_THREAD, tg_id_, RPC_QUEUE_SIZE))) {
+    SERVER_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret), K(RPC_QUEUE_SIZE));
   } else {
     log_server_ = log_server;
     is_inited_ = true;
@@ -904,8 +904,12 @@ int ObLogDeliver::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     SERVER_LOG(ERROR, "ObLogDeliver not init");
-  } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
-    SERVER_LOG(ERROR, "start ObLogDeliver failed");
+  } else if (OB_FAIL(TG_SET_HANDLER(tg_id_, *this))) {
+    SERVER_LOG(ERROR, "set ObLogDeliver handler failed", K(ret));
+  } else if (OB_FAIL(TG_SET_THREAD_CNT(tg_id_, RPC_THREAD_NUM))) {
+    SERVER_LOG(ERROR, "set ObLogDeliver thread count failed", K(ret), K(RPC_THREAD_NUM));
+  } else if (OB_FAIL(TG_START(tg_id_))) {
+    SERVER_LOG(ERROR, "start ObLogDeliver failed", K(ret), K(RPC_THREAD_NUM));
   } else {
     is_stopped_ = false;
     SERVER_LOG(INFO, "start ObLogDeliver success");

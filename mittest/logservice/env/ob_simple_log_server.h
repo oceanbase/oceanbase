@@ -226,6 +226,10 @@ private:
   }
   int handle_req_(rpc::ObRequest &req);
 private:
+  // Align the mittest RPC queue with the default value of observer's
+  // tenant_task_queue_size.
+  static constexpr int64_t RPC_QUEUE_SIZE = 16384;
+  static constexpr int64_t RPC_THREAD_NUM = 2;
   mutable common::RWLock lock_;
   bool is_inited_;
   ObSimpleLogServer *log_server_;
