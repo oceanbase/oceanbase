@@ -3906,7 +3906,6 @@ int ObParquetTableRowIterator::read_columns(const ObIArray<uint64_t> &column_ids
   const ObIArray<int64_t> &read_ranges = plan.read_ranges();
   read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
-  int64_t physical_span = 0;
   if (OB_UNLIKELY(skip_ranges.count() != read_ranges.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inconsistent parquet skip/read ranges",
@@ -3924,8 +3923,6 @@ int ObParquetTableRowIterator::read_columns(const ObIArray<uint64_t> &column_ids
                K(range_idx),
                K(skip_ranges.at(range_idx)),
                K(read_ranges.at(range_idx)));
-    } else {
-      physical_span += skip_ranges.at(range_idx) + read_ranges.at(range_idx);
     }
   }
   for (int64_t column_idx = 0;
@@ -3965,10 +3962,8 @@ int ObParquetTableRowIterator::read_columns(const ObIArray<uint64_t> &column_ids
               arr_type));
         }
 
-        const bool cross_page = is_cross_page(cur_col_id_)
-                                && check_if_batch_cross_page(cur_col_id_,
-                                                             state_.read_row_counts_[cur_col_id_],
-                                                             physical_span);
+        // Batch preparation checks the full logical row range, including skipped rows.
+        const bool cross_page = is_cross_page(cur_col_id_);
         bool first_batch = true;
         for (int64_t range_idx = 0; OB_SUCC(ret) && range_idx < skip_ranges.count(); ++range_idx) {
           SkipRowsInColumn(cur_col_id_,
@@ -4326,62 +4321,6 @@ void ObParquetTableRowIterator::check_cross_pages(const int64_t capacity)
       }
     }
   }
-}
-
-bool ObParquetTableRowIterator::check_if_batch_cross_page(const int64_t column_id,
-                                                          const int64_t current_row_pos,
-                                                          const int64_t batch_size)
-{
-  bool will_cross_page = true;
-  if (nullptr == rg_page_index_reader_ || column_id < 0 || column_id >= column_indexs_.count()
-      || column_indexs_.at(column_id) < 0) {
-    // do nothing
-  } else {
-    std::shared_ptr<parquet::OffsetIndex> offset_index;
-    if (column_id < offset_indexs_.count() && nullptr != offset_indexs_.at(column_id)) {
-      offset_index = offset_indexs_.at(column_id);
-    } else {
-      offset_index = rg_page_index_reader_->GetOffsetIndex(column_indexs_.at(column_id));
-      if (column_id < offset_indexs_.count()) {
-        offset_indexs_.at(column_id) = offset_index;
-      }
-    }
-    if (nullptr == offset_index || offset_index->page_locations().empty()) {
-      // do nothing
-    } else {
-      const auto &page_locations = offset_index->page_locations();
-      int64_t batch_end = current_row_pos + batch_size;
-      size_t found_page_idx = SIZE_MAX;
-      size_t left = 0;
-      size_t right = page_locations.size();
-      while (left < right) {
-        size_t mid = left + (right - left) / 2;
-        int64_t page_start = page_locations.at(mid).first_row_index;
-        if (current_row_pos < page_start) {
-          right = mid;
-        } else {
-          int64_t next_page_start = (mid + 1 < page_locations.size())
-                                        ? page_locations.at(mid + 1).first_row_index
-                                        : INT64_MAX;
-          if (current_row_pos < next_page_start) {
-            found_page_idx = mid;
-            break;
-          } else {
-            left = mid + 1;
-          }
-        }
-      }
-      if (found_page_idx != SIZE_MAX) {
-        if (found_page_idx + 1 < page_locations.size()) {
-          int64_t next_page_start = page_locations.at(found_page_idx + 1).first_row_index;
-          will_cross_page = (batch_end > next_page_start);
-        } else {
-          will_cross_page = false;
-        }
-      }
-    }
-  }
-  return will_cross_page;
 }
 
 int64_t ObParquetTableRowIterator::ReadPlan::read_row_count() const
@@ -5369,23 +5308,22 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
         for (int i = 0; OB_SUCC(ret) && i < column_indexs_.count(); i++) {
           if (column_indexs_.at(i) >= 0) {
             std::unique_ptr<parquet::PageReader> page_reader
-                          = rg_reader->GetColumnPageReader(column_indexs_.at(i));
+                = rg_reader->GetColumnPageReader(column_indexs_.at(i));
             if (is_enable_rg_parquet_page_mgr()) {
               SkipPageCallback skip_page_callback(cur_col_id_,
                                                   state_.read_row_counts_,
-                                                  all_column_page_locations_);
+                                                  all_column_page_locations_,
+                                                  parquet_page_mgr_);
               page_reader->set_skip_page_callback(skip_page_callback);
             } else {
-              ReadPages r1(cur_col_id_,
-                           state_.read_row_counts_,
-                           page_skip_ranges_);
+              ReadPages r1(cur_col_id_, state_.read_row_counts_, page_skip_ranges_);
               page_reader->set_data_page_filter(r1);
             }
 
             column_readers_.at(i) = parquet::ColumnReader::Make(
-                                    rg_reader->metadata()->schema()->Column(column_indexs_.at(i)),
-                                    std::move(page_reader),
-                                    &arrow_alloc_);
+                rg_reader->metadata()->schema()->Column(column_indexs_.at(i)),
+                std::move(page_reader),
+                &arrow_alloc_);
             record_readers_.at(i) = rg_reader->RecordReader(column_indexs_.at(i));
             if (rg_reader->metadata()->schema()->GetColumnRoot(column_indexs_.at(i))->is_group()) {
               for (int j = 0; j < coll_record_readers_.at(i).count(); j++) {

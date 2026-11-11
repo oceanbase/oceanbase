@@ -81,14 +81,16 @@ struct ReadPages
             common::ObIArray<int64_t> &read_row_counts,
             common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges)
       : cur_col_id_(cur_col_id), read_row_counts_(read_row_counts),
-        page_skip_ranges_(page_skip_ranges)
+        page_skip_ranges_(page_skip_ranges), next_page_row_(0)
   {
   }
   bool operator()(const parquet::DataPageStats &stats)
   {
     bool can_skip = false;
-    int64_t begin = read_row_counts_.at(cur_col_id_);
-    int64_t end = begin + stats.num_values;
+    // Skip/ReadBatch may visit several pages before the caller updates read_row_counts_.
+    const int64_t begin = next_page_row_;
+    const int64_t end = begin + stats.num_values;
+    next_page_row_ = end;
     for (int64_t i = 0; !can_skip && i < page_skip_ranges_.at(cur_col_id_)->count(); ++i) {
       if (begin >= page_skip_ranges_.at(cur_col_id_)->at(i).first
           && end <= page_skip_ranges_.at(cur_col_id_)->at(i).second) {
@@ -104,6 +106,11 @@ struct ReadPages
   int64_t &cur_col_id_;
   common::ObIArray<int64_t> &read_row_counts_;
   const common::ObIArray<ObArray<std::pair<int64_t, int64_t>> *> &page_skip_ranges_;
+  // Start row of the next data page within this column's current row group.
+  // Advance for every data page, whether retained or skipped. Keep this separate
+  // from read_row_counts_: the caller adds consumed values only after Skip/ReadBatch
+  // returns, while page-filter callbacks run inside those calls.
+  int64_t next_page_row_;
 };
 
 struct ObParquetPageLocation
@@ -133,13 +140,15 @@ struct SkipPageCallback
   SkipPageCallback(
       int64_t &cur_col_id,
       common::ObIArray<int64_t> &read_row_counts,
-      ObFixedArray<ObArray<ObParquetPageLocation> *, ObIAllocator> &all_column_page_locations)
+      ObFixedArray<ObArray<ObParquetPageLocation> *, ObIAllocator> &all_column_page_locations,
+      const ObParquetPageMgr &page_mgr)
       : cur_col_id_(cur_col_id), read_row_counts_(read_row_counts),
-        all_column_page_locations_(all_column_page_locations)
+        all_column_page_locations_(all_column_page_locations), page_mgr_(page_mgr)
   {
   }
   void operator()(int64_t skip_page_offset)
   {
+    int ret = OB_SUCCESS;
     const ObArray<ObParquetPageLocation> *column_page_locations
         = all_column_page_locations_.at(cur_col_id_);
     if (OB_ISNULL(column_page_locations)) {
@@ -158,12 +167,40 @@ struct SkipPageCallback
       throw parquet::ParquetException("skip page error");
     }
 
-    // Advance the read row count for this column
-    read_row_counts_.at(cur_col_id_) += it->num_rows_;
+    // Arrow calls back once for a jump to the next selected page, which can skip
+    // several consecutive pages. Account for the whole jump, not only its first page.
+    bool is_selected = false;
+    std::optional<int64_t> next_page_offset;
+    if (OB_FAIL(page_mgr_.check_page_selected(skip_page_offset, is_selected, next_page_offset))
+        || is_selected) {
+      throw parquet::ParquetException("invalid skipped page selection");
+    }
+    ObArray<ObParquetPageLocation>::const_iterator next = column_page_locations->end();
+    if (next_page_offset.has_value()) {
+      next = std::lower_bound(it,
+                              column_page_locations->end(),
+                              next_page_offset.value(),
+                              ObPageLocationCmp());
+    }
+    if (next != column_page_locations->end() && next->offset_ != next_page_offset.value()) {
+      throw parquet::ParquetException("invalid next selected page offset");
+    }
+    // The page manager is shared by all columns, so the next selected page can
+    // belong to a later column. In that case this jump ends at this column's end.
+    const ObParquetPageLocation &last
+        = column_page_locations->at(column_page_locations->count() - 1);
+    const int64_t end_row = next == column_page_locations->end()
+                                ? last.first_row_index_ + last.num_rows_
+                                : next->first_row_index_;
+    const int64_t skipped_rows = end_row - it->first_row_index_;
+    // Add the skipped span: the caller still has to account for values consumed
+    // by the enclosing Skip/ReadBatch, so assigning an absolute position double counts.
+    read_row_counts_.at(cur_col_id_) += skipped_rows;
   }
   int64_t &cur_col_id_;
   common::ObIArray<int64_t> &read_row_counts_;
   const ObFixedArray<ObArray<ObParquetPageLocation> *, ObIAllocator> &all_column_page_locations_;
+  const ObParquetPageMgr &page_mgr_;
 };
 
 class ObParquetIteratorState : public ObExternalIteratorState {
@@ -722,9 +759,6 @@ private:
   {
     return cross_pages_.at(column_id);
   }
-  bool check_if_batch_cross_page(const int64_t column_id,
-                                 const int64_t current_row_pos,
-                                 const int64_t batch_size);
   int build_source_read_plan(BatchReadState &batch);
   int fill_source_ranges(BatchReadState &batch);
   int fill_selected_source_ranges(BatchReadState &batch, const common::ObBitmap &filter_result);
