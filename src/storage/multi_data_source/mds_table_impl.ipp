@@ -1114,10 +1114,10 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
       if (OB_EAGAIN == ret) {
         if (REACH_TIME_INTERVAL(100_ms)) {
           MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause already exist");
-          ret = OB_SUCCESS;
-        } else if (OB_SIZE_OVERFLOW == ret) {// throw out
-          MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause queue already full");
         }
+        ret = OB_SUCCESS;
+      } else if (OB_SIZE_OVERFLOW == ret) {// throw out
+        MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag cause queue already full");
       } else {
         MDS_LOG_FLUSH(WARN, "failed to commit merge mds table dag");
       }
