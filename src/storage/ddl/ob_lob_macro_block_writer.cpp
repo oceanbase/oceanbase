@@ -111,7 +111,12 @@ int ObLobMacroBlockWriter::write(const ObColumnSchemaItem &column_schema, ObIAll
   } else {
     meta_write_iter_.reuse();
     lob_arena_.reuse();
-    const int64_t timeout_ts = ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+    const int64_t timeout_ts = is_ddl_direct_load(param_.direct_load_type_)
+        ? std::min(THIS_WORKER.get_timeout_ts(), ObTimeUtility::current_time() + GCONF._ob_ddl_timeout)
+        : ObTimeUtility::fast_current_time() + ObInsertLobColumnHelper::LOB_ACCESS_TX_TIMEOUT;
+    if (is_ddl_direct_load(param_.direct_load_type_)) {
+      DEBUG_SYNC(BEFORE_DDL_LOB_WRITE);
+    }
     ObLobStorageParam lob_storage_param;
     lob_storage_param.inrow_threshold_ = lob_inrow_threshold_;
     lob_storage_param.is_index_table_ = param_.ddl_table_schema_.table_item_.is_index_table_;
