@@ -524,7 +524,7 @@ TEST_F(TestTablet, test_serialize_mig_param_compat)
   ASSERT_EQ(head_val, 3);
   ret = new_mig_param.deserialize(buf, len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(new_mig_param.storage_schema_.column_array_.count(), 1);
+  ASSERT_EQ(new_mig_param.storage_schema_.get_schema().column_array_.count(), 1);
   ASSERT_TRUE(new_mig_param.is_valid());
   serialization::decode_i8(buf, len, pos, &tail_val);
   ASSERT_EQ(tail_val, 4);

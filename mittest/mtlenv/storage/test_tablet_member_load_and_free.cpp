@@ -7,6 +7,8 @@
  */
 
 
+#include <vector>
+
 #define USING_LOG_PREFIX STORAGE
 
 #define private public
@@ -125,6 +127,107 @@ int TestTabletMemberLoadAndFree::create_tablet(const common::ObTabletID &tablet_
   return ret;
 }
 
+static void check_schema_handle_load(const ObTablet &tablet, const ObStorageSchema &expected, ObIAllocator &allocator)
+{
+  ObStorageSchemaHandle handle;
+  ASSERT_EQ(OB_SUCCESS, tablet.load_storage_schema(allocator, handle));
+  ASSERT_TRUE(handle.is_valid());
+  ASSERT_EQ(-1, handle.serialize_size_); // Loading must not prepare a length before later schema updates.
+  std::vector<char> expected_wire(expected.get_serialize_size());
+  std::vector<char> actual_wire(handle.get_serialize_size());
+  int64_t expected_pos = 0;
+  int64_t actual_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, expected.serialize(expected_wire.data(), expected_wire.size(), expected_pos));
+  ASSERT_EQ(OB_SUCCESS, handle.serialize(actual_wire.data(), actual_wire.size(), actual_pos));
+  ASSERT_EQ(expected_wire.size(), expected_pos);
+  ASSERT_EQ(actual_wire.size(), actual_pos);
+  ASSERT_EQ(expected_wire, actual_wire);
+  ASSERT_EQ(OB_INIT_TWICE, tablet.load_storage_schema(allocator, handle));
+  ASSERT_TRUE(handle.is_valid());
+  actual_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, handle.serialize(actual_wire.data(), actual_wire.size(), actual_pos));
+  ASSERT_EQ(expected_wire, actual_wire); // Rejected reload must preserve the initialized handle.
+
+}
+
+static void check_transfer_schema_selection(const ObTablet &tablet, ObArenaAllocator &allocator)
+{
+  ObArenaAllocator selected_allocator;
+  ObArenaAllocator expected_allocator;
+  ObStorageSchemaHandle baseline;
+  ASSERT_EQ(OB_SUCCESS, tablet.get_storage_schema_for_transfer_in(allocator, baseline));
+  int64_t column_count = 0;
+  ASSERT_EQ(OB_SUCCESS, baseline.get_store_column_count(column_count, true/*full_col*/));
+  const int64_t schema_version = baseline.get_schema_version();
+  ObStorageSchemaHandle candidate;
+  ASSERT_EQ(OB_SUCCESS, candidate.init_placeholder(allocator));
+  ASSERT_EQ(OB_SUCCESS, candidate.update_column_cnt_and_schema_version(column_count, column_count, schema_version + 1));
+  ObStorageSchemaHandle selected;
+  ASSERT_EQ(OB_SUCCESS, tablet.get_storage_schema_for_transfer_in(allocator, selected, &candidate.get_schema()));
+  ASSERT_EQ(schema_version + 1, selected.get_schema_version()); // Equal stored-column counts prefer the candidate.
+  selected.reset();
+
+  ASSERT_EQ(OB_SUCCESS, candidate.update_column_cnt_and_schema_version(column_count + 1, column_count + 1, schema_version + 1));
+  ObStorageSchemaHandle expected;
+  ASSERT_EQ(OB_SUCCESS, expected.init(expected_allocator, candidate));
+  ASSERT_EQ(OB_SUCCESS, tablet.get_storage_schema_for_transfer_in(selected_allocator, selected, &candidate.get_schema()));
+  ASSERT_EQ(column_count + 1, selected.get_schema().column_cnt_);
+  ASSERT_EQ(schema_version + 1, selected.get_schema_version());
+  // The output allocator contains only the selected schema, no discarded tablet schema.
+  ASSERT_EQ(expected_allocator.used(), selected_allocator.used());
+  ASSERT_EQ(-1, selected.serialize_size_);
+  selected.reset();
+
+  ObProtectedMemtableMgrHandle *protected_handle = nullptr;
+  ASSERT_EQ(OB_SUCCESS, tablet.get_protected_memtable_mgr_handle(protected_handle));
+  ASSERT_NE(nullptr, protected_handle);
+  {
+    // The fixture has no writes, so its memtable manager has not been created yet.
+    SpinWLockGuard guard(protected_handle->memtable_mgr_handle_lock_);
+    const ObTabletMeta &meta = tablet.get_tablet_meta();
+    ASSERT_EQ(OB_SUCCESS, protected_handle->create_tablet_memtable_mgr_(meta.ls_id_, meta.tablet_id_, meta.compat_mode_));
+  }
+  auto *memtable_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
+  ASSERT_NE(nullptr, memtable_mgr);
+  ObStorageSchemaRecorder &recorder = memtable_mgr->get_storage_schema_recorder();
+  const int64_t saved_column_count = recorder.max_column_cnt_;
+  recorder.max_column_cnt_ = column_count + 1;
+  const int ret = tablet.get_storage_schema_for_transfer_in(allocator, selected, &candidate.get_schema());
+  recorder.max_column_cnt_ = saved_column_count;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(column_count + 1, selected.get_schema().column_cnt_);
+  ASSERT_EQ(schema_version + 1, selected.get_schema_version()); // Equal after recorder update: prefer candidate.
+  selected.reset();
+
+  recorder.max_column_cnt_ = column_count + 2;
+  const int fallback_ret = tablet.get_storage_schema_for_transfer_in(allocator, selected, &candidate.get_schema());
+  recorder.max_column_cnt_ = saved_column_count;
+  ASSERT_EQ(OB_SUCCESS, fallback_ret);
+  int64_t selected_store_column_count = 0;
+  ASSERT_EQ(OB_SUCCESS, selected.get_store_column_count(selected_store_column_count, true/*full_col*/));
+  ASSERT_EQ(column_count + 2, selected_store_column_count);
+  ASSERT_EQ(schema_version, selected.get_schema_version()); // Recorder requires more stored columns: load tablet.
+  selected.reset();
+
+  ObStorageSchema virtual_candidate;
+  ASSERT_EQ(OB_SUCCESS, virtual_candidate.init_placeholder(allocator));
+  ASSERT_EQ(OB_SUCCESS, virtual_candidate.update_column_cnt_and_schema_version(column_count + 10, column_count, schema_version + 2));
+  virtual_candidate.schema_version_ = 0; // A lower version must not veto a candidate with enough stored columns.
+  ASSERT_EQ(OB_SUCCESS, tablet.get_storage_schema_for_transfer_in(allocator, selected, &virtual_candidate));
+  ASSERT_EQ(0, selected.get_schema_version());
+  ASSERT_EQ(column_count + 10, selected.get_schema().column_cnt_);
+  selected.reset();
+
+  // Extra virtual columns cannot cover missing stored columns.
+  recorder.max_column_cnt_ = column_count + 1;
+  const int virtual_ret = tablet.get_storage_schema_for_transfer_in(allocator, selected, &virtual_candidate);
+  recorder.max_column_cnt_ = saved_column_count;
+  ASSERT_EQ(OB_SUCCESS, virtual_ret);
+  ASSERT_EQ(OB_SUCCESS, selected.get_store_column_count(selected_store_column_count, true/*full_col*/));
+  ASSERT_EQ(column_count + 1, selected_store_column_count);
+  ASSERT_EQ(schema_version, selected.get_schema_version());
+}
+
 TEST_F(TestTabletMemberLoadAndFree, storage_schema)
 {
   int ret = OB_SUCCESS;
@@ -145,6 +248,9 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
   ret = tablet->load_storage_schema(arena_allocator, storage_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, storage_schema);
+
+  check_schema_handle_load(*tablet, *storage_schema, arena_allocator);
+  check_transfer_schema_selection(*tablet, arena_allocator);
 
   ASSERT_NE(0, arena_allocator.used());
   ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
@@ -171,10 +277,23 @@ TEST_F(TestTabletMemberLoadAndFree, storage_schema)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_NE(nullptr, storage_schema);
 
+  check_schema_handle_load(*new_tablet, *storage_schema, arena_allocator);
+  check_transfer_schema_selection(*new_tablet, arena_allocator);
+
   ASSERT_NE(0, arena_allocator.used());
   ObTabletObjLoadHelper::free(arena_allocator, storage_schema);
   arena_allocator.clear();
   ASSERT_EQ(0, arena_allocator.used());
+}
+
+TEST_F(TestTabletMemberLoadAndFree, storage_schema_handle_invalid_address)
+{
+  ObTablet tablet;
+  ObStorageSchemaHandle handle;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, tablet.load_storage_schema(allocator_, handle));
+  ASSERT_FALSE(handle.is_valid());
+  ASSERT_FALSE(handle.get_schema().is_inited());
+  ASSERT_EQ(-1, handle.serialize_size_);
 }
 } // namespace storage
 } // namespace oceanbase

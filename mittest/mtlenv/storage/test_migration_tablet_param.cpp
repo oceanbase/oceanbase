@@ -206,6 +206,8 @@ TEST_F(TestMigrationTabletParam, migration)
     ObMigrationTabletParam param_v3;
     ret = tablet->build_migration_tablet_param(param_v3);
     ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_GT(param_v3.storage_schema_.serialize_size_, 0);
+    ASSERT_EQ(param_v3.storage_schema_.get_schema().get_serialize_size(), param_v3.storage_schema_.serialize_size_);
     ASSERT_EQ(true, param_v3.version_ == ObMigrationTabletParam::PARAM_VERSION_V3);
     // tablet has no cs sstables, mock cg schemas should stay invalid
     ASSERT_FALSE(param_v3.mock_rowkey_cg_schema_.is_valid());
@@ -269,14 +271,14 @@ TEST_F(TestMigrationTabletParam, mock_cg_schemas)
   ret = tablet->build_migration_tablet_param(param_src);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(param_src.is_valid());
-  ASSERT_TRUE(param_src.storage_schema_.is_row_store());
+  ASSERT_TRUE(param_src.storage_schema_.get_schema().is_row_store());
 
-  ASSERT_EQ(OB_SUCCESS, param_src.storage_schema_.build_rowkey_column_group_schema(
+  ASSERT_EQ(OB_SUCCESS, param_src.storage_schema_.get_schema().build_rowkey_column_group_schema(
       param_src.allocator_, param_src.mock_rowkey_cg_schema_));
   const uint16_t fake_idx = static_cast<uint16_t>(
-      param_src.storage_schema_.get_rowkey_column_num()
+      param_src.storage_schema_.get_schema().get_rowkey_column_num()
       + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt());
-  ASSERT_EQ(OB_SUCCESS, param_src.storage_schema_.generate_single_column_group_schema(
+  ASSERT_EQ(OB_SUCCESS, param_src.storage_schema_.get_schema().generate_single_column_group_schema(
       param_src.allocator_, param_src.mock_single_cg_schema_, fake_idx));
   ASSERT_TRUE(param_src.mock_rowkey_cg_schema_.is_valid());
   ASSERT_TRUE(param_src.mock_rowkey_cg_schema_.is_rowkey_column_group());
@@ -381,6 +383,26 @@ TEST_F(TestMigrationTabletParam, transfer)
     ASSERT_EQ(true, param_v3.version_ == ObMigrationTabletParam::PARAM_VERSION_V3);
     ASSERT_EQ(param_v3.last_persisted_committed_tablet_status_.data_type_, ObTabletMdsUserDataType::START_TRANSFER_IN);
     ASSERT_EQ(param_v3.last_persisted_committed_tablet_status_.tablet_status_, ObTabletStatus::TRANSFER_IN);
+    ASSERT_EQ(param_v3.storage_schema_.get_schema().get_serialize_size(), param_v3.storage_schema_.serialize_size_);
+
+    // Equal stored-column counts prefer the candidate, without comparing schema versions.
+    ObStorageSchemaHandle candidate;
+    ASSERT_EQ(OB_SUCCESS, candidate.init_placeholder(allocator_));
+    int64_t column_count = 0;
+    ASSERT_EQ(OB_SUCCESS, param_v3.storage_schema_.get_store_column_count(column_count, true/*full_col*/));
+    const int64_t candidate_version = param_v3.storage_schema_.get_schema_version() + 1;
+    ASSERT_EQ(OB_SUCCESS, candidate.update_column_cnt_and_schema_version(column_count, column_count, candidate_version));
+    ObMigrationTabletParam selected;
+    ASSERT_EQ(OB_SUCCESS, tablet->build_transfer_tablet_param(data_version, dst_ls_id, selected, &candidate.get_schema()));
+    ASSERT_EQ(candidate_version, selected.storage_schema_.get_schema_version());
+    ASSERT_EQ(selected.storage_schema_.get_schema().get_serialize_size(), selected.storage_schema_.serialize_size_);
+    // A wider candidate is selected and its length prepared before the builder returns.
+    ASSERT_EQ(OB_SUCCESS, candidate.update_column_cnt_and_schema_version(column_count + 1, column_count + 1, candidate_version));
+    ASSERT_EQ(OB_SUCCESS, tablet->build_transfer_tablet_param(data_version, dst_ls_id, selected, &candidate.get_schema()));
+    ASSERT_EQ(column_count + 1, selected.storage_schema_.get_schema().column_cnt_);
+    ASSERT_EQ(candidate_version, selected.storage_schema_.get_schema_version());
+    ASSERT_EQ(candidate_version, selected.max_sync_storage_schema_version_);
+    ASSERT_EQ(selected.storage_schema_.get_schema().get_serialize_size(), selected.storage_schema_.serialize_size_);
 
     int64_t serialize_size = param_v3.get_serialize_size();
     char *buffer = new char[serialize_size]();
@@ -458,6 +480,7 @@ TEST_F(TestMigrationTabletParam, empty_shell_transfer)
     ASSERT_EQ(false, param_v3.is_valid());
     ret = empty_shell_tablet->build_migration_tablet_param(param_v3);
     ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(-1, param_v3.storage_schema_.serialize_size_);
     ASSERT_EQ(true, param_v3.is_valid());
     ASSERT_EQ(true, param_v3.version_ == ObMigrationTabletParam::PARAM_VERSION_V3);
 

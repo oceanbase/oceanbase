@@ -1027,7 +1027,9 @@ int ObTabletStartTransferInHelper::on_register_success_(
   const int64_t start_ts = ObTimeUtil::current_time();
   const bool check_src_tablet_status = true;
   LOG_INFO("[TRANSFER] start tx start transfer in on_register_success_",
-      K(tx_start_transfer_in_info));
+      K(tx_start_transfer_in_info.task_id_), K(tx_start_transfer_in_info.src_ls_id_),
+      K(tx_start_transfer_in_info.dest_ls_id_), K(tx_start_transfer_in_info.start_scn_),
+      "tablet_count", tx_start_transfer_in_info.get_tablet_meta_list().count());
   if (!tx_start_transfer_in_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on register success get invalid argument", K(ret), K(tx_start_transfer_in_info));
@@ -1044,7 +1046,10 @@ int ObTabletStartTransferInHelper::on_register_success_(
   } else {
     mds::ObStartTransferInMdsCtx &mds_ctx = static_cast<mds::ObStartTransferInMdsCtx&>(ctx);
     mds_ctx.set_ls_id(tx_start_transfer_in_info.dest_ls_id_);
-    LOG_INFO("[TRANSFER] finish tx start transfer in on_register_success_", K(tx_start_transfer_in_info),
+    LOG_INFO("[TRANSFER] finish tx start transfer in on_register_success_",
+        K(tx_start_transfer_in_info.task_id_), K(tx_start_transfer_in_info.src_ls_id_),
+        K(tx_start_transfer_in_info.dest_ls_id_), K(tx_start_transfer_in_info.start_scn_),
+        "tablet_count", tx_start_transfer_in_info.get_tablet_meta_list().count(),
         "cost_ts", ObTimeUtil::current_time() - start_ts);
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_in",
@@ -1079,9 +1084,9 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablets_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", KR(ret), K(tx_start_transfer_in_info), KP(ls));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.get_tablet_meta_list().count(); ++i) {
       MDS_TG(10_ms);
-      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.get_tablet_meta_list().at(i);
       if (CLICK_FAIL(check_transfer_dest_tablet_(tablet_meta, for_replay, ls))) {
         LOG_WARN("failed to check transfer dest tablet", K(ret), K(tablet_meta));
       }
@@ -1199,8 +1204,8 @@ int ObTabletStartTransferInHelper::check_can_skip_replay_(
     LOG_INFO("replay skip for register tx start transfer in", KR(ret), K(scn),
         K(tx_start_transfer_in_info), K(ls->get_ls_meta()));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
-      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.get_tablet_meta_list().count(); ++i) {
+      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.get_tablet_meta_list().at(i);
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
       const ObTabletMapKey key(ls->get_ls_id(), tablet_meta.tablet_id_);
@@ -1265,9 +1270,9 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
     ret = OB_EAGAIN;
     LOG_WARN("src ls max decided scn is smaller than transfer start scn, need wait", K(ret), K(max_decided_scn), K(tx_start_transfer_in_info));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.get_tablet_meta_list().count(); ++i) {
       MDS_TG(10_ms);
-      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.get_tablet_meta_list().at(i);
       if (CLICK_FAIL(check_transfer_src_tablet_(scn, for_replay, tablet_meta, src_ls, check_src_tablet_status))) {
         LOG_WARN("failed to check src tablet", K(ret), K(for_replay), K(tablet_meta));
       }
@@ -1379,9 +1384,9 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
     ret = OB_LS_WAITING_SAFE_DESTROY;
     LOG_WARN("the migration status of transfer dest_ls is OB_MIGRATION_STATUS_GC", KR(ret), "dest_ls_id", dest_ls->get_ls_id());
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.get_tablet_meta_list().count(); ++i) {
       MDS_TG(10_ms);
-      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.get_tablet_meta_list().at(i);
       if (CLICK_FAIL(create_transfer_in_tablet_(scn, for_replay, tablet_meta,
           tx_start_transfer_in_info.src_ls_id_, dest_ls, ctx, creating_tablet_id_array,
           empty_mds_tablet_id_array))) {
@@ -1477,7 +1482,7 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("succeeded to create transfer in tablet", K(key), "ls_id", dest_ls->get_ls_id(), K(tablet_meta), K(for_replay));
+      LOG_INFO("succeeded to create transfer in tablet", K(key), K(tablet_meta.transfer_info_), K(for_replay));
     }
 #ifdef ERRSIM
     ObTransferEventRecorder::record_tablet_transfer_event("tx_start_transfer_in",
@@ -1525,10 +1530,10 @@ int ObTabletStartTransferInHelper::rollback_transfer_in_tablets_(
     const ObTabletID &tablet_id = tablet_id_array.at(i);
     bool found = false;
     share::SCN transfer_start_scn;
-    for (int64_t j = 0; OB_SUCC(ret) && j < tx_start_transfer_in_info.tablet_meta_list_.count() && !found; ++j) {
-      const ObTabletID &tmp_tablet_id = tx_start_transfer_in_info.tablet_meta_list_.at(j).tablet_id_;
+    for (int64_t j = 0; OB_SUCC(ret) && j < tx_start_transfer_in_info.get_tablet_meta_list().count() && !found; ++j) {
+      const ObTabletID &tmp_tablet_id = tx_start_transfer_in_info.get_tablet_meta_list().at(j).tablet_id_;
       if (tmp_tablet_id == tablet_id) {
-        transfer_start_scn = tx_start_transfer_in_info.tablet_meta_list_.at(j).transfer_info_.transfer_start_scn_;
+        transfer_start_scn = tx_start_transfer_in_info.get_tablet_meta_list().at(j).transfer_info_.transfer_start_scn_;
         found = true;
       }
     }
@@ -1653,7 +1658,10 @@ int ObTabletStartTransferInHelper::on_replay(
     LOG_WARN("tx start transfer in on_replay failed", K(ret), K(tx_start_transfer_in_info));
     ret = OB_EAGAIN;
   } else {
-    LOG_INFO("[TRANSFER] finish tx start transfer in on_replay success", K(tx_start_transfer_in_info),
+    LOG_INFO("[TRANSFER] finish tx start transfer in on_replay success",
+        K(tx_start_transfer_in_info.task_id_), K(tx_start_transfer_in_info.src_ls_id_),
+        K(tx_start_transfer_in_info.dest_ls_id_), K(tx_start_transfer_in_info.start_scn_),
+        "tablet_count", tx_start_transfer_in_info.get_tablet_meta_list().count(),
         "cost_ts", ObTimeUtil::current_time() - start_ts);
   }
 
@@ -1670,7 +1678,9 @@ int ObTabletStartTransferInHelper::on_replay_success_(
   const bool for_replay = true;
   const int64_t start_ts = ObTimeUtil::current_time();
   LOG_INFO("[TRANSFER] start tx start transfer in on_replay_success_",
-      K(tx_start_transfer_in_info));
+      K(tx_start_transfer_in_info.task_id_), K(tx_start_transfer_in_info.src_ls_id_),
+      K(tx_start_transfer_in_info.dest_ls_id_), K(tx_start_transfer_in_info.start_scn_),
+      "tablet_count", tx_start_transfer_in_info.get_tablet_meta_list().count());
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_in",
                    "stage", "on_replay_success",
@@ -1903,8 +1913,8 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablets_ready_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check transfer dest tablets ready invalid argument", K(ret), K(scn));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
-      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.get_tablet_meta_list().count(); ++i) {
+      const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.get_tablet_meta_list().at(i);
       if (OB_FAIL(check_transfer_dest_tablet_ready_(tablet_meta, can_skip))) {
         LOG_WARN("failed to create transfer in tablet", K(ret), K(tablet_meta));
       } else if (!can_skip) {
@@ -2040,8 +2050,8 @@ bool ObTabletStartTransferInHelper::check_can_replay_commit(
   if (b_ret) {
     int tmp_ret = OB_SUCCESS;
     transaction::ObTransService *tx_svr = MTL(transaction::ObTransService *);
-    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
-      const ObMigrationTabletParam &tablet_info = tx_start_transfer_in_info.tablet_meta_list_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.get_tablet_meta_list().count(); ++i) {
+      const ObMigrationTabletParam &tablet_info = tx_start_transfer_in_info.get_tablet_meta_list().at(i);
       if (OB_ISNULL(MTL(observer::ObTabletTableUpdater*))) {
         tmp_ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("tablet table updater should not be null", K(tmp_ret));

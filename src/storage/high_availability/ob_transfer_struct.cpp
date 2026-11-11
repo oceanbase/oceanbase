@@ -111,9 +111,9 @@ ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),
     dest_ls_id_(),
     start_scn_(),
-    tablet_meta_list_(),
     task_id_(),
-    data_version_(DEFAULT_MIN_DATA_VERSION)
+    data_version_(DEFAULT_MIN_DATA_VERSION),
+    tablet_meta_list_()
 {
 }
 
@@ -186,7 +186,86 @@ int64_t ObTXStartTransferInInfo::to_string(char *buf, const int64_t buf_len) con
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferInInfo, src_ls_id_, dest_ls_id_, start_scn_, tablet_meta_list_, task_id_, data_version_);
+OB_DEF_SERIALIZE(ObTXStartTransferInInfo)
+{
+  return serialize_members_(buf, buf_len, pos, nullptr);
+}
+
+int ObTXStartTransferInInfo::serialize_members_(char *buf, const int64_t buf_len, int64_t &pos,
+    const common::ObIArray<const ObMigrationTabletParam *> *tablet_meta_list) const
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, src_ls_id_, dest_ls_id_, start_scn_);
+  // Ordinary serialize() uses the owned array; the transfer sender supplies a borrowed array.
+  // Both encode the same array count and object contents in the same field position.
+  if (nullptr == tablet_meta_list) {
+    OB_UNIS_ENCODE(tablet_meta_list_);
+  } else {
+    const auto &metas = *tablet_meta_list;
+    OB_UNIS_ENCODE(metas.count());
+    for (int64_t i = 0; OB_SUCC(ret) && i < metas.count(); ++i) {
+      const ObMigrationTabletParam *meta = metas.at(i);
+      if (OB_ISNULL(meta)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tablet meta should not be NULL", K(ret), K(i));
+      } else if (OB_FAIL(meta->serialize(buf, buf_len, pos))) {
+        LOG_WARN("failed to serialize tablet meta", K(ret), K(i));
+      }
+    }
+  }
+  LST_DO_CODE(OB_UNIS_ENCODE, task_id_, data_version_);
+  return ret;
+}
+
+int ObTXStartTransferInInfo::serialize_with_tablet_meta(char *buf, const int64_t buf_len, int64_t &pos,
+    const common::ObIArray<const ObMigrationTabletParam *> &tablet_meta_list) const
+{
+  int ret = OB_SUCCESS;
+  // Match the UNIS envelope used by serialize(), with a borrowed array in the same field position.
+  if (OB_ISNULL(buf) || buf_len <= 0 || pos < 0 || pos > buf_len) {
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    OB_UNIS_ENCODE(UNIS_VERSION);
+  }
+  const int64_t size_pos = pos;
+  const int64_t size_nbytes = serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  if (OB_SUCC(ret)) {
+    if (buf_len - pos < size_nbytes) {
+      ret = OB_SIZE_OVERFLOW;
+    } else {
+      pos += size_nbytes;
+      const int64_t body_pos = pos;
+      if (OB_FAIL(serialize_members_(buf, buf_len, pos, &tablet_meta_list))) {
+        LOG_WARN("failed to serialize transfer in metadata", K(ret));
+      } else {
+        int64_t tmp_pos = 0;
+        ret = serialization::encode_fixed_bytes_i64(buf + size_pos, size_nbytes, tmp_pos, pos - body_pos);
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObTXStartTransferInInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, src_ls_id_, dest_ls_id_, start_scn_, tablet_meta_list_, task_id_, data_version_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObTXStartTransferInInfo)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, src_ls_id_, dest_ls_id_, start_scn_, tablet_meta_list_, task_id_, data_version_);
+  return len;
+}
+
+int64_t ObTXStartTransferInInfo::get_header_serialize_size() const
+{
+  int64_t len = serialization::encoded_length_vi64(UNIS_VERSION) + serialization::OB_SERIALIZE_SIZE_NEED_BYTES;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, src_ls_id_, dest_ls_id_, start_scn_, task_id_, data_version_);
+  return len;
+}
 
 /* ObTXFinishTransferInInfo */
 
@@ -890,22 +969,46 @@ ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::ObTransferTabletInfoMgr()
 
 ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::~ObTransferTabletInfoMgr()
 {
+  reuse();
+}
+
+int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::reserve_tablet_info(const int64_t count)
+{
   common::SpinWLockGuard guard(lock_);
-  tablet_info_array_.reset();
-  storage_schema_mgr_.reset();
+  return tablet_info_array_.reserve(count);
+}
+
+int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_storage_schema(
+    const ObTabletID &tablet_id, const ObStorageSchema *&schema)
+{
+  ObStorageSchema *candidate = nullptr;
+  int ret = storage_schema_mgr_.get_storage_schema(tablet_id, candidate);
+  schema = nullptr;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("failed to get transfer candidate schema", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(candidate)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transfer candidate schema is null", K(ret), K(tablet_id));
+  } else {
+    schema = candidate;
+  }
+  return ret;
 }
 
 int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::add_tablet_info(
-    const ObMigrationTabletParam &param)
+    ObMigrationTabletParam *&param)
 {
   int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
+  if (OB_ISNULL(param) || !param->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("add tablet info get invalid argument", K(ret), K(param));
+    LOG_WARN("add tablet info get invalid argument", K(ret), KPC(param));
   } else {
+    // The builder has completed schema selection and length preparation before publication.
     common::SpinWLockGuard guard(lock_);
     if (OB_FAIL(tablet_info_array_.push_back(param))) {
-      LOG_WARN("failed to add tablet info", K(ret), K(param));
+      LOG_WARN("failed to add tablet info", K(ret), KPC(param));
+    } else {
+      param = nullptr;
     }
   }
   return ret;
@@ -918,7 +1021,7 @@ int64_t ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_tablet_info_n
 }
 
 int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_tablet_info(
-    const int64_t index, const ObMigrationTabletParam *&param)
+    const int64_t index, const ObMigrationTabletParam *&param) const
 {
   int ret = OB_SUCCESS;
   param = nullptr;
@@ -926,25 +1029,11 @@ int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_tablet_info(
   if (index < 0 || index >= tablet_info_array_.count()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get tablet info get invalid argument", K(ret), K(index));
+  } else if (OB_ISNULL(tablet_info_array_.at(index))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet info should not be NULL", K(ret), K(index));
   } else {
-    ObMigrationTabletParam &tmp_param = tablet_info_array_.at(index);
-    ObStorageSchema *storage_schema = nullptr;
-    if (OB_FAIL(storage_schema_mgr_.get_storage_schema(tmp_param.tablet_id_, storage_schema))) {
-      LOG_WARN("failed to get storage schema", K(tmp_param));
-    } else if (OB_ISNULL(storage_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("storage schema should not be NULL", K(ret), K(tmp_param));
-    } else if (storage_schema->column_cnt_ > tmp_param.storage_schema_.column_cnt_) {
-      LOG_INFO("modified storage schema", "new_storage_schema", *storage_schema,
-          "old_storage_schema", tmp_param.storage_schema_);
-      if (OB_FAIL(tmp_param.storage_schema_.assign(tmp_param.allocator_, *storage_schema))) {
-        LOG_WARN("failed to assign storage schema", K(ret), K(tmp_param), KPC(storage_schema));
-      }
-    }
-
-    if (OB_SUCC(ret)) {
-      param = &tablet_info_array_.at(index);
-    }
+    param = tablet_info_array_.at(index);
   }
   return ret;
 }
@@ -952,6 +1041,10 @@ int ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::get_tablet_info(
 void ObTransferBuildTabletInfoCtx::ObTransferTabletInfoMgr::reuse()
 {
   common::SpinWLockGuard guard(lock_);
+  for (int64_t i = 0; i < tablet_info_array_.count(); ++i) {
+    ObMigrationTabletParam *&param = tablet_info_array_.at(i);
+    OB_DELETE(ObMigrationTabletParam, "TransferParam", param);
+  }
   tablet_info_array_.reset();
   storage_schema_mgr_.reset();
 }
@@ -1021,6 +1114,9 @@ int ObTransferBuildTabletInfoCtx::build_transfer_tablet_info(
     LOG_WARN("build transfer tablet info get invalid argument", K(ret), K(task_id), K(data_version));
   } else if (OB_FAIL(tablet_info_array_.assign(tablet_info_array))) {
     LOG_WARN("failed to assign tablet info array", K(ret), K(tablet_info_array));
+  } else if (OB_FAIL(mgr_.reserve_tablet_info(tablet_info_array.count()))) {
+    // Reserve before parallel collection to avoid deep-copying schemas while holding the manager lock.
+    LOG_WARN("failed to reserve tablet info array", K(ret), "tablet_count", tablet_info_array.count());
   } else {
     dest_ls_id_ = dest_ls_id;
     total_tablet_count_ = tablet_info_array_.count();
@@ -1125,20 +1221,17 @@ int32_t ObTransferBuildTabletInfoCtx::get_result()
 }
 
 int ObTransferBuildTabletInfoCtx::add_tablet_info(
-    const ObMigrationTabletParam &param)
+    ObMigrationTabletParam *&param)
 {
   int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("add tablet info get invalid argument", K(ret), K(param));
-  } else if (OB_FAIL(mgr_.add_tablet_info(param))) {
-    LOG_WARN("failed to add tablet info", K(ret), K(param));
+  if (OB_FAIL(mgr_.add_tablet_info(param))) {
+    LOG_WARN("failed to add tablet info", K(ret), KPC(param));
   }
   return ret;
 }
 
 int ObTransferBuildTabletInfoCtx::get_tablet_info(
-    const int64_t index, const ObMigrationTabletParam *&param)
+    const int64_t index, const ObMigrationTabletParam *&param) const
 {
   int ret = OB_SUCCESS;
   param = nullptr;
@@ -1181,7 +1274,10 @@ int ObTransferBuildTabletInfoHelper::build_tablet_info(
   ObTabletHandle tablet_handle;
   ObTabletCreateDeleteMdsUserData user_data;
   ObTablet *tablet = nullptr;
-  ObMigrationTabletParam param;
+  // Build a heap-owned param so the manager can retain it after this function returns,
+  // without deep-copying its wide-table schema under the manager lock.
+  ObMigrationTabletParam *param = nullptr;
+  const ObStorageSchema *candidate_schema = nullptr;
   mds::MdsWriter writer;// will be removed later
   mds::TwoPhaseCommitState trans_stat;// will be removed later
   share::SCN trans_version;// will be removed later
@@ -1209,11 +1305,18 @@ int ObTransferBuildTabletInfoHelper::build_tablet_info(
   } else if (tablet_info.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
     ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
     LOG_WARN("tablet transfer seq is not match", K(ret), KPC(tablet), K(tablet_info));
-  } else if (OB_FAIL(tablet->build_transfer_tablet_param(ctx.get_data_version(), ctx.get_dest_ls_id(), param))) {
+  } else if (OB_FAIL(ctx.get_storage_schema(tablet_info.tablet_id_, candidate_schema))) {
+    LOG_WARN("failed to get transfer candidate schema", K(ret), K(tablet_info));
+  } else if (OB_ISNULL(param = OB_NEW(ObMigrationTabletParam, ObMemAttr(MTL_ID(), "TransferParam")))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate tablet param", K(ret), K(tablet_info));
+  } else if (OB_FAIL(tablet->build_transfer_tablet_param(ctx.get_data_version(), ctx.get_dest_ls_id(), *param, candidate_schema))) {
     LOG_WARN("failed to build transfer tablet param", K(ret), K(tablet_info));
   } else if (OB_FAIL(ctx.add_tablet_info(param))) {
-    LOG_WARN("failed to add tablet info", K(ret), K(param));
+    LOG_WARN("failed to publish tablet info", K(ret), KPC(param));
   }
+  // Successful publication clears param; otherwise the caller must destroy it.
+  OB_DELETE(ObMigrationTabletParam, "TransferParam", param);
   return ret;
 }
 

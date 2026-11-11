@@ -1794,46 +1794,56 @@ int ObTransferHandler::do_tx_start_transfer_in_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transfer tablet meta info not match, unexpected", K(ret), K(tablet_count), K(task_info));
   } else {
-    int64_t index = 0;
     ObTXStartTransferInInfo start_transfer_in_info;
-    while (OB_SUCC(ret) && index < tablet_count) {
-      start_transfer_in_info.reset();
-      start_transfer_in_info.src_ls_id_ = task_info.src_ls_id_;
-      start_transfer_in_info.dest_ls_id_ = task_info.dest_ls_id_;
-      start_transfer_in_info.start_scn_ = start_scn;
-      start_transfer_in_info.task_id_ = task_info.task_id_;
-      start_transfer_in_info.data_version_ = task_info.data_version_;
-
+    start_transfer_in_info.src_ls_id_ = task_info.src_ls_id_;
+    start_transfer_in_info.dest_ls_id_ = task_info.dest_ls_id_;
+    start_transfer_in_info.start_scn_ = start_scn;
+    start_transfer_in_info.task_id_ = task_info.task_id_;
+    start_transfer_in_info.data_version_ = task_info.data_version_;
+    const int64_t header_size = start_transfer_in_info.get_header_serialize_size();
+    // Borrow ctx_ metadata for serialize_with_tablet_meta(), avoiding a deep copy into each batch.
+    ObSEArray<const ObMigrationTabletParam *, 16> tablet_meta_list;
+    tablet_meta_list.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
+    int64_t tablet_meta_serialize_size = 0;
+    for (int64_t index = 0; OB_SUCC(ret) && index < tablet_count; ++index) {
+      const ObMigrationTabletParam *tablet_meta = nullptr;
       if (timeout_ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
         LOG_WARN("already timeout", K(ret), K(task_info));
-      }
-
-      for (int64_t i = index; i < tablet_count && OB_SUCC(ret); ++i, ++index) {
-        const ObMigrationTabletParam *tablet_meta = nullptr;
-        if (OB_FAIL(ctx_.get_tablet_info(index, tablet_meta))) {
-          LOG_WARN("failed to get tablet info", K(ret), K(index));
-        } else if (start_transfer_in_info.get_serialize_size() + tablet_meta->get_serialize_size() > MAX_BUF_LEN) {
-          if (OB_FAIL(inner_tx_start_transfer_in_(task_info, start_transfer_in_info, trans))) {
-            LOG_WARN("failed to do inner tx start transfer in", K(ret), K(task_info), K(start_transfer_in_info));
+      } else if (OB_FAIL(ctx_.get_tablet_info(index, tablet_meta))) {
+        LOG_WARN("failed to get tablet info", K(ret), K(index));
+      } else if (OB_ISNULL(tablet_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet meta should not be NULL", K(ret), K(index));
+      } else {
+        const int64_t tablet_serialize_size = tablet_meta->get_serialize_size();
+        if (header_size + serialization::encoded_length_vi64(1) + tablet_serialize_size > MAX_BUF_LEN) {
+          ret = OB_SIZE_OVERFLOW;
+          LOG_WARN("single tablet meta exceeds transfer batch limit", K(ret), K(tablet_serialize_size), K(MAX_BUF_LEN));
+        } else if (header_size + serialization::encoded_length_vi64(tablet_meta_list.count() + 1)
+            + tablet_meta_serialize_size + tablet_serialize_size > MAX_BUF_LEN) {
+          if (OB_FAIL(inner_tx_start_transfer_in_(task_info, start_transfer_in_info,
+              tablet_meta_list, tablet_meta_serialize_size, trans))) {
+            LOG_WARN("failed to do inner tx start transfer in", K(ret), K(task_info));
           } else {
-            start_transfer_in_info.reset();
-            break;
+            tablet_meta_list.reuse();
+            tablet_meta_serialize_size = 0;
           }
-        } else if (OB_FAIL(start_transfer_in_info.tablet_meta_list_.push_back(*tablet_meta))) {
-          LOG_WARN("failed to push tablet meta into list", K(ret), KPC(tablet_meta));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(tablet_meta_list.push_back(tablet_meta))) {
+          LOG_WARN("failed to push tablet meta into list", K(ret), K(index));
+        } else {
+          // Collection is finished. ctx_ owns these snapshots until all synchronous sends finish.
+          tablet_meta_serialize_size += tablet_serialize_size;
         }
       }
-
-      if (OB_SUCC(ret) && !start_transfer_in_info.tablet_meta_list_.empty()) {
-        if (OB_FAIL(inner_tx_start_transfer_in_(task_info, start_transfer_in_info, trans))) {
-          LOG_WARN("failed to do inner tx start transfer in", K(ret), K(task_info), K(start_transfer_in_info));
-        }
+    }
+    if (OB_SUCC(ret) && !tablet_meta_list.empty()) {
+      if (OB_FAIL(inner_tx_start_transfer_in_(task_info, start_transfer_in_info,
+          tablet_meta_list, tablet_meta_serialize_size, trans))) {
+        LOG_WARN("failed to do inner tx start transfer in", K(ret), K(task_info));
       }
-#ifdef ERRSIM
-      ObTransferEventRecorder::record_transfer_task_event(
-        task_info.task_id_, "TX_START_TRANSFER_IN", task_info.src_ls_id_, task_info.dest_ls_id_);
-#endif
     }
 
 #ifdef ERRSIM
@@ -1860,6 +1870,8 @@ int ObTransferHandler::do_tx_start_transfer_in_(
 int ObTransferHandler::inner_tx_start_transfer_in_(
     const share::ObTransferTaskInfo &task_info,
     const ObTXStartTransferInInfo &start_transfer_in_info,
+    const common::ObIArray<const ObMigrationTabletParam *> &tablet_meta_list,
+    const int64_t tablet_meta_serialize_size,
     common::ObMySQLTransaction &trans)
 {
   int ret = OB_SUCCESS;
@@ -1869,14 +1881,18 @@ int ObTransferHandler::inner_tx_start_transfer_in_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
-  } else if (!task_info.is_valid() || !start_transfer_in_info.is_valid()) {
+  } else if (!task_info.is_valid() || !start_transfer_in_info.start_scn_.is_valid()
+      || start_transfer_in_info.src_ls_id_ != task_info.src_ls_id_
+      || start_transfer_in_info.dest_ls_id_ != task_info.dest_ls_id_
+      || start_transfer_in_info.data_version_ <= 0 || tablet_meta_list.empty() || tablet_meta_serialize_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner tx start transfer in get invalid argument", K(ret), K(task_info), K(start_transfer_in_info));
   } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("conn_ is NULL", KR(ret));
   } else {
-    int64_t buf_len = start_transfer_in_info.get_serialize_size();
+    const int64_t buf_len = start_transfer_in_info.get_header_serialize_size()
+        + serialization::encoded_length_vi64(tablet_meta_list.count()) + tablet_meta_serialize_size;
     int64_t pos = 0;
     char *buf = (char*)allocator.alloc(buf_len);
     ObRegisterMdsFlag flag;
@@ -1889,13 +1905,20 @@ int ObTransferHandler::inner_tx_start_transfer_in_(
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail alloc memory", KR(ret));
-    } else if (OB_FAIL(start_transfer_in_info.serialize(buf, buf_len, pos))) {
+    } else if (OB_FAIL(start_transfer_in_info.serialize_with_tablet_meta(buf, buf_len, pos, tablet_meta_list))) {
       LOG_WARN("fail to serialize start transfer out info", KR(ret), K(start_transfer_in_info));
+    } else if (pos != buf_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer metadata changed during serialization", K(ret), K(pos), K(buf_len));
     } else if (OB_FAIL(conn->register_multi_data_source(task_info.tenant_id_, task_info.dest_ls_id_,
         transaction::ObTxDataSourceType::START_TRANSFER_IN, buf, buf_len, flag))) {
       LOG_WARN("failed to register multi data source", K(ret), K(start_transfer_in_info));
     }
   }
+#ifdef ERRSIM
+  ObTransferEventRecorder::record_transfer_task_event(
+      task_info.task_id_, "TX_START_TRANSFER_IN", task_info.src_ls_id_, task_info.dest_ls_id_);
+#endif
   return ret;
 }
 

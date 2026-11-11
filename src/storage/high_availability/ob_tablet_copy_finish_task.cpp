@@ -537,7 +537,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
       }
     }
     ObBuildMajorSSTablesParam major_sstables_param(
-      param_.src_tablet_meta_->storage_schema_,
+      param_.src_tablet_meta_->storage_schema_.get_schema(),
       param_.src_tablet_meta_->has_merged_with_mds_info_);
 
     if (FAILEDx(ObStorageHATabletBuilderUtil::build_tablet_with_major_tables(param_.ls_,
@@ -549,7 +549,7 @@ int ObTabletCopyFinishTask::deal_with_major_sstables_()
     }
 
 #ifdef ERRSIM
-    if (OB_SUCC(ret) && need_replace_remote_sstable && !param_.src_tablet_meta_->storage_schema_.is_row_store()) {
+    if (OB_SUCC(ret) && need_replace_remote_sstable && !param_.src_tablet_meta_->storage_schema_.get_schema().is_row_store()) {
       ret = EN_COPY_COLUMN_STORE_MAJOR_FAILED ? : OB_SUCCESS;
       if (OB_FAIL(ret)) {
         STORAGE_LOG(ERROR, "errsim EN_COPY_COLUMN_STORE_MAJOR_FAILED", K(ret));

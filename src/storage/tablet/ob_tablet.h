@@ -406,6 +406,9 @@ public:
   int load_storage_schema(
       common::ObIAllocator &allocator,
       ObStorageSchema *&storage_schema) const;
+  // Load directly into an uninitialized owning handle and validate the schema.
+  // The allocator must outlive the handle; serialization length remains unprepared for later updates.
+  int load_storage_schema(common::ObIAllocator &allocator, ObStorageSchemaHandle &schema_handle) const;
   int read_medium_info_list(
       common::ObArenaAllocator &allocator,
       const compaction::ObMediumCompactionInfoList *&medium_info_list) const;
@@ -582,7 +585,8 @@ public:
 
   int get_storage_schema_for_transfer_in(
       common::ObArenaAllocator &allocator,
-      ObStorageSchema &storage_schema) const;
+      ObStorageSchemaHandle &storage_schema,
+      const ObStorageSchema *candidate_schema = nullptr) const;
   int get_restore_status(ObTabletRestoreStatus::STATUS &restore_status) const;
 
   // static help function
@@ -595,7 +599,7 @@ public:
   static int check_private_transfer_epoch_equal(const ObTablet &tablet, const int32_t private_transfer_epoch);
 
   // migration section
-  // used for migration source generating create tablet rpc argument
+  // Build source metadata for migration/backup, including its schema serialization length.
   int build_migration_tablet_param(
       ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_sstable_param(
@@ -619,7 +623,8 @@ public:
   int build_transfer_tablet_param(
       const int64_t data_version,
       const share::ObLSID &dest_ls_id,
-      ObMigrationTabletParam &mig_tablet_param);
+      ObMigrationTabletParam &mig_tablet_param,
+      const ObStorageSchema *candidate_schema = nullptr);
   int build_transfer_backfill_tablet_param(
       const ObTabletMeta &src_tablet_meta,
       const ObStorageSchema &src_storage_schema,
@@ -629,7 +634,7 @@ public:
       common::ObArenaAllocator &allocator,
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
-      const ObStorageSchema &input_storage_schema,
+      const ObStorageSchemaHandle &input_storage_schema,
       bool &need_generate_cs_replica_cg_array);
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle) const;
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
@@ -1048,6 +1053,7 @@ private:
 
   int check_medium_list(int64_t &max_sync_medium_scn) const;
   int check_sstable_column_checksum() const;
+  int check_sstable_column_checksum(const ObStorageSchema &storage_schema) const;
   int check_no_backup_data() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
 
@@ -1156,18 +1162,24 @@ private:
       common::ObArenaAllocator &allocator,
       const ObMigrationTabletParam &param,
       ObTableHandleV2 &mds_mini_sstable);
-  int build_migration_tablet_param_storage_schema(
-      ObMigrationTabletParam &mig_tablet_param) const;
+  // Fields shared by migration/backup, transfer-in construction and transfer backfill.
+  // Each path supplies its own checkpoints, snapshot versions, transfer info and storage schema.
+  int build_tablet_param_meta_(ObMigrationTabletParam &mig_tablet_param) const;
+  // Extends the common fields with this tablet's migration metadata, major checksum info and MDS status.
+  // Shared by build_migration_tablet_param() and build_transfer_backfill_tablet_param();
+  // leaves storage schema, mock CGs and schema serialization length to the caller.
+  int build_migration_tablet_param_meta_(ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_tablet_param_mock_cg_schemas(
       ObMigrationTabletParam &mig_tablet_param) const;
   int build_migration_tablet_param_last_tablet_status(
       ObMigrationTabletParam &mig_tablet_param) const;
-    int build_migration_tablet_param_major_ckm_info(
+  int build_migration_tablet_param_major_ckm_info(
       ObMigrationTabletParam &mig_tablet_param) const;
 
   int build_transfer_tablet_param_current_(
       const share::ObLSID &dest_ls_id,
-      ObMigrationTabletParam &mig_tablet_param);
+      ObMigrationTabletParam &mig_tablet_param,
+      const ObStorageSchema *candidate_schema);
 
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int check_table_store_flag_match_with_table_store_(const ObTabletTableStore *table_store);

@@ -298,9 +298,10 @@ public:
   share::SCN get_max_tablet_checkpoint_scn() const;
 
   // used for restore PENDING tablet, the placeholder tablet doesn't have storage schema to use
+  template <typename Schema>
   static int construct_placeholder_storage_schema_and_medium(
       common::ObArenaAllocator &allocator,
-      ObStorageSchema &storage_schema,
+      Schema &storage_schema,
       compaction::ObMediumCompactionInfoList &medium_info_list,
       ObTabletFullMemoryMdsData &full_memory_mds_data);
 
@@ -375,7 +376,7 @@ public:
   lib::Worker::CompatMode compat_mode_;
   ObTabletHAStatus ha_status_;
   ObTabletReportStatus report_status_;
-  ObStorageSchema storage_schema_; // not valid for empty shell
+  ObStorageSchemaHandle storage_schema_; // owns the schema; not valid for empty shell
   compaction::ObMediumCompactionInfoList medium_info_list_; // not valid for empty shell
   compaction::ObExtraMediumInfo extra_medium_info_;
   // Record source tablet last_persisted_committed_tablet_status_ for:
@@ -420,6 +421,27 @@ private:
   int deserialize_mock_cg_schemas_(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_mock_cg_schemas_serialize_size_() const;
 };
+
+template <typename Schema>
+int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
+    common::ObArenaAllocator &allocator,
+    Schema &storage_schema,
+    compaction::ObMediumCompactionInfoList &medium_info_list,
+    ObTabletFullMemoryMdsData &full_memory_mds_data)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_FAIL(storage_schema.init_placeholder(allocator))) {
+    STORAGE_LOG(WARN, "failed to initialize placeholder schema", K(ret));
+  } else if (OB_FAIL(medium_info_list.init(allocator))) {
+    STORAGE_LOG(WARN, "failed to init medium info list", K(ret));
+  } else if (OB_FAIL(full_memory_mds_data.init(allocator))) {
+    STORAGE_LOG(WARN, "failed to init full memory mds data", K(ret));
+  } else if (OB_UNLIKELY(!medium_info_list.is_valid())) {
+    ret = common::OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "placeholder medium info list is not valid", K(ret), K(storage_schema), K(medium_info_list));
+  }
+  return ret;
+}
 
 } // namespace storage
 } // namespace oceanbase

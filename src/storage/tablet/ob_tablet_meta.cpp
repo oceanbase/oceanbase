@@ -1369,7 +1369,7 @@ bool ObMigrationTabletParam::is_valid() const
               && clog_checkpoint_scn_ >= SCN::base_scn()
               && start_scn_ <= clog_checkpoint_scn_
               && (is_empty_shell()
-                  || (!is_empty_shell() && storage_schema_.is_valid()))));
+                  || storage_schema_.is_valid())));
     // no valid storage_schema_ for empty shell
     if (!bool_ret) {
       LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid param", K_(ha_status), K_(transfer_info),
@@ -2065,79 +2065,10 @@ int ObMigrationTabletParam::build_deleted_tablet_info(const share::ObLSID &ls_id
         storage_schema_,
         medium_info_list_,
         mds_data_))) {
-      LOG_WARN("failed to construct placeholder storage schema");
+      LOG_WARN("failed to construct placeholder storage schema", K(ret));
+    } else if (OB_FAIL(storage_schema_.prepare_serialize_size())) {
+      LOG_WARN("failed to prepare deleted tablet schema serialization length", K(ret), K_(tablet_id));
     }
-  }
-  return ret;
-}
-
-
-int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
-    common::ObArenaAllocator &allocator,
-    ObStorageSchema &storage_schema,
-    compaction::ObMediumCompactionInfoList &medium_info_list,
-    ObTabletFullMemoryMdsData &full_memory_mds_data)
-{
-  int ret = OB_SUCCESS;
-  storage_schema.reset();
-
-  storage_schema.allocator_ = &allocator;
-  storage_schema.rowkey_array_.set_allocator(&allocator);
-  storage_schema.column_array_.set_allocator(&allocator);
-
-  storage_schema.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
-  storage_schema.is_use_bloomfilter_ = false;
-  storage_schema.table_type_ = ObTableType::USER_TABLE;
-  //storage_schema.table_mode_
-  storage_schema.index_type_ = ObIndexType::INDEX_TYPE_PRIMARY;
-  storage_schema.row_store_type_ = ObRowStoreType::FLAT_ROW_STORE;
-  storage_schema.schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
-  storage_schema.column_cnt_ = 1;
-  storage_schema.store_column_cnt_ = 1;
-  storage_schema.tablet_size_ = OB_DEFAULT_TABLET_SIZE;
-  storage_schema.pctfree_ = OB_DEFAULT_PCTFREE;
-  storage_schema.block_size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
-  storage_schema.progressive_merge_round_ = 0;
-  storage_schema.progressive_merge_num_ = 0;
-  storage_schema.master_key_id_ = OB_INVALID_ID;
-  storage_schema.compat_mode_ = static_cast<uint32_t>(lib::Worker::get_compatibility_mode());
-  storage_schema.is_cs_replica_compat_ = false;
-  storage_schema.micro_block_format_version_ = ObMicroBlockFormatVersionHelper::DEFAULT_VERSION;
-
-  ObStorageRowkeyColumnSchema rowkey_schema;
-  rowkey_schema.meta_type_.set_tinyint();
-  rowkey_schema.column_idx_ = common::OB_APP_MIN_COLUMN_ID;
-  rowkey_schema.order_ = ObOrderType::ASC;
-
-  ObStorageColumnSchema col_schema;
-  col_schema.is_rowkey_column_ = true;
-  col_schema.is_column_stored_in_sstable_ = true;
-  col_schema.meta_type_ = rowkey_schema.meta_type_;
-  col_schema.default_checksum_ = 0;
-
-  if (OB_FAIL(storage_schema.rowkey_array_.reserve(storage_schema.column_cnt_))) {
-    STORAGE_LOG(WARN, "Fail to reserve rowkey column array", K(ret));
-  } else if (OB_FAIL(storage_schema.column_array_.reserve(storage_schema.column_cnt_))) {
-    STORAGE_LOG(WARN, "Fail to reserve column array", K(ret));
-  } else if (OB_FAIL(storage_schema.rowkey_array_.push_back(rowkey_schema))) {
-    STORAGE_LOG(WARN, "Fail to add rowkey column id to rowkey array", K(ret));
-  } else if (OB_FAIL(storage_schema.column_array_.push_back(col_schema))) {
-    STORAGE_LOG(WARN, "Fail to push into column array", K(ret), K(col_schema));
-  } else {
-    storage_schema.is_inited_ = true;
-  }
-
-  if (FAILEDx(medium_info_list.init(allocator))) {
-    LOG_WARN("failed to init medium info list", K(ret));
-  }
-
-  if (FAILEDx(full_memory_mds_data.init(allocator))) {
-    LOG_WARN("failed to init full memory mds data", K(ret));
-  }
-
-  if (OB_SUCC(ret) && OB_UNLIKELY(!storage_schema.is_valid() || !medium_info_list.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("placeholder storage schema or medium info list is not valid", K(ret), K(storage_schema), K(medium_info_list));
   }
   return ret;
 }

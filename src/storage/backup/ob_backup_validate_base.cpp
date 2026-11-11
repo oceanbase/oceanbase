@@ -630,7 +630,7 @@ int ObBackupValidateObUtils::get_rowkey_read_info(
     rowkey_read_info = storage::ObMdsSchemaHelper::get_instance().get_rowkey_read_info();
   } else {
     bool is_cs_replica_compat = false;
-    const ObStorageSchema &storage_schema = tablet_param.storage_schema_;
+    const ObStorageSchema &storage_schema = tablet_param.storage_schema_.get_schema();
     storage::ObRowkeyReadInfo *tmp_rowkey_read_info = nullptr;
     if (OB_FAIL(ObTablet::build_read_info_by_storage_schema(allocator, storage_schema,
         is_cs_replica_compat, tmp_rowkey_read_info))) {

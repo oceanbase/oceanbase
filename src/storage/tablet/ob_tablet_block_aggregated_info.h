@@ -158,6 +158,7 @@ public:
   ObTabletMacroInfo();
   ~ObTabletMacroInfo();
   void reset();
+  int init_empty();
   int init(
     ObArenaAllocator &allocator,
     const ObBlockInfoSet &id_set,

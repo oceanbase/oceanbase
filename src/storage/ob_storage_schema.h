@@ -6,6 +6,7 @@
 #ifndef OCEANBASE_STORAGE_STORAGE_SCHEMA_
 #define OCEANBASE_STORAGE_STORAGE_SCHEMA_
 
+#include <type_traits>
 #include "lib/container/ob_fixed_array.h"
 #include "share/schema/ob_table_schema.h"
 
@@ -20,6 +21,8 @@ class ObStorageDatum;
 
 namespace storage
 {
+class ObStorageSchemaHandle;
+
 struct ObStorageRowkeyColumnSchema
 {
   OB_UNIS_VERSION(1);
@@ -92,11 +95,30 @@ public:
   ObObj orig_default_value_;
 };
 
+// Owns the contiguous index storage for the column groups belonging to one schema.
+// Standalone groups do not use this buffer and retain their individual allocations.
+class ObStorageColumnGroupIdxBuffer
+{
+public:
+  ObStorageColumnGroupIdxBuffer() : allocator_(nullptr), data_(nullptr), capacity_(0), pos_(0) {}
+  ~ObStorageColumnGroupIdxBuffer() { reset(); }
+  int init(common::ObIAllocator &allocator, const int64_t capacity);
+  int alloc(const int64_t count, uint16_t *&data);
+  void reset();
+private:
+  common::ObIAllocator *allocator_;
+  uint16_t *data_;
+  int64_t capacity_;
+  int64_t pos_;
+  DISALLOW_COPY_AND_ASSIGN(ObStorageColumnGroupIdxBuffer);
+};
+
 struct ObStorageColumnGroupSchema
 {
 public:
   ObStorageColumnGroupSchema()
     : version_(COLUMN_GRUOP_SCHEMA_VERSION),
+      column_idxs_borrowed_(false),
       type_(share::schema::MAX_COLUMN_GROUP),
       compressor_type_(INVALID_COMPRESSOR),
       row_store_type_(MAX_ROW_STORE),
@@ -106,11 +128,14 @@ public:
       schema_rowkey_column_cnt_(0),
       column_cnt_(0),
       column_idxs_(nullptr)
-  {}
+  {
+    static_assert(sizeof(ObStorageColumnGroupSchema) == 24, "column group ownership must not increase its size");
+  }
   ObStorageColumnGroupSchema(const share::schema::ObColumnGroupType type, const ObCompressorType compressor_type,
       const ObRowStoreType row_store_type, const uint32_t block_size, const uint16_t schema_column_cnt, const uint16_t rowkey_column_cnt,
           const uint16_t schema_rowkey_column_cnt, const uint16_t column_cnt, uint16_t *column_idxs)
   : version_(COLUMN_GRUOP_SCHEMA_VERSION),
+    column_idxs_borrowed_(false),
     type_(type),
     compressor_type_(compressor_type),
     row_store_type_(row_store_type),
@@ -135,12 +160,15 @@ public:
       common::ObIArray<share::schema::ObColDesc> &column_ids,
       const int64_t schema_rowkey_cnt,
       const share::schema::ObColumnGroupSchema &cg_schema,
-      common::ObIAllocator &allocator);
+      common::ObIAllocator &allocator,
+      ObStorageColumnGroupIdxBuffer *idx_buffer = nullptr);
   uint16_t get_column_count() const { return column_cnt_;}
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
-  int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos,
+      ObStorageColumnGroupIdxBuffer *idx_buffer = nullptr);
   int64_t get_serialize_size() const;
-  int deep_copy(const ObStorageColumnGroupSchema &other, common::ObIAllocator &allocator);
+  int deep_copy(const ObStorageColumnGroupSchema &other, common::ObIAllocator &allocator,
+      ObStorageColumnGroupIdxBuffer *idx_buffer = nullptr);
   int truncate_all_column_group(const int64_t schema_store_column_cnt);
   OB_INLINE bool is_all_column_group() const { return type_ == share::schema::ALL_COLUMN_GROUP; }
   OB_INLINE bool is_default_column_group () const { return type_ == share::schema::DEFAULT_COLUMN_GROUP; }
@@ -157,7 +185,13 @@ public:
       K_(schema_rowkey_column_cnt), K_(column_cnt), "column_idxs", ObArrayWrap<uint16_t>(column_idxs_, column_cnt_));
 public:
   static const int64_t COLUMN_GRUOP_SCHEMA_VERSION = 1;
-  uint8_t version_;
+  static_assert(COLUMN_GRUOP_SCHEMA_VERSION < (1 << 7), "column group version must fit in 7 bits");
+  // Share one byte to keep each column group at 24 bytes. Only version_ is serialized.
+  uint8_t version_ : 7;
+private:
+  // Borrowed index slices are freed by the owning schema; standalone groups free their own indexes.
+  uint8_t column_idxs_borrowed_ : 1;
+public:
   share::schema::ObColumnGroupType type_;
   ObCompressorType compressor_type_;
   ObRowStoreType row_store_type_;
@@ -166,7 +200,10 @@ public:
   uint16_t rowkey_column_cnt_;
   uint16_t schema_rowkey_column_cnt_;
   uint16_t column_cnt_;
-  uint16_t *column_idxs_; //free the memory with the allocator outside
+  uint16_t *column_idxs_;
+private:
+  friend class ObStorageSchema;
+  int alloc_column_idxs_(common::ObIAllocator &allocator, ObStorageColumnGroupIdxBuffer *idx_buffer);
 };
 
 struct ObUpdateCSReplicaSchemaParam
@@ -231,6 +268,15 @@ public:
       const bool generate_cs_replica_cg_array = false,
       const ObUpdateCSReplicaSchemaParam *update_param = nullptr,
       const ColumnGroupLayout target_layout = INVALID);
+  int init(
+      common::ObIAllocator &allocator,
+      const ObStorageSchemaHandle &schema_handle,
+      const bool skip_column_info = false,
+      const ObStorageSchema *column_group_schema = nullptr,
+      const bool generate_cs_replica_cg_array = false,
+      const ObUpdateCSReplicaSchemaParam *update_param = nullptr,
+      const ColumnGroupLayout target_layout = INVALID);
+  int init_placeholder(common::ObIAllocator &allocator);
   int init_for_pure_col_to_row_store(
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema);
@@ -240,11 +286,13 @@ public:
       const ColumnGroupLayout target_layout);
   int build_rowkey_column_group_schema(
       common::ObIAllocator &allocator,
-      ObStorageColumnGroupSchema &column_group) const;
+      ObStorageColumnGroupSchema &column_group,
+      ObStorageColumnGroupIdxBuffer *idx_buffer = nullptr) const;
   int generate_single_column_group_schema(
       common::ObIAllocator &allocator,
       ObStorageColumnGroupSchema &column_group,
-      const uint16_t column_idx) const;
+      const uint16_t column_idx,
+      ObStorageColumnGroupIdxBuffer *idx_buffer = nullptr) const;
   int deep_copy_column_array(
       common::ObIAllocator &allocator,
       const ObStorageSchema &src_schema,
@@ -272,7 +320,7 @@ public:
       const int64_t data_len,
       int64_t &pos);
   int64_t get_serialize_size() const;
-  void update_column_cnt_and_schema_version(
+  int update_column_cnt_and_schema_version(
       const int64_t input_col_cnt,
       const int64_t input_store_col_cnt,
       const int64_t input_schema_version);
@@ -444,6 +492,12 @@ public:
 public:
   static int trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
+  int init_(common::ObIAllocator &allocator, const ObStorageSchema &old_schema,
+      const bool skip_column_info, const ObStorageSchema *column_group_schema,
+      const bool generate_cs_replica_cg_array, const ObUpdateCSReplicaSchemaParam *update_param,
+      const ColumnGroupLayout target_layout, const bool source_is_valid);
+  int init_column_group_idx_buffer_(common::ObIAllocator &allocator,
+      const int64_t column_group_cnt, const int64_t rowkey_column_cnt);
   int copy_from(const share::schema::ObMergeSchema &input_schema);
   int deep_copy_str(const ObString &src, ObString &dest);
   int add_column_group(const ObStorageColumnGroupSchema &column_group);
@@ -473,7 +527,8 @@ private:
   int generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const;
   int build_single_column_group_schemas(
       common::ObIAllocator &allocator,
-      common::ObIArray<ObStorageColumnGroupSchema> &out_array) const;
+      common::ObIArray<ObStorageColumnGroupSchema> &out_array,
+      ObStorageColumnGroupIdxBuffer *idx_buffer = nullptr) const;
   template <typename T>
   int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
@@ -558,9 +613,94 @@ public:
   common::ObFixedArray<ObStorageColumnGroupSchema, common::ObIAllocator> hidden_rowkey_column_group_; // if exists, the capacity will be 1
   bool is_inited_;
 private:
+  ObStorageColumnGroupIdxBuffer column_group_idx_buffer_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageSchema);
 };
 
+
+// Owns a schema, its validation result and an explicitly prepared serialization length.
+// Mutations must go through these methods;
+// readers must not modify nested storage through aliases obtained from get_schema().
+// The allocator must outlive the handle (or reset it before releasing the allocator).
+// Only the schema is serialized, with exactly the ObStorageSchema wire format.
+class ObStorageSchemaHandle
+{
+public:
+  ObStorageSchemaHandle() : schema_(), serialize_size_(-1), is_valid_(false) {}
+  template <typename Schema>
+  int init(common::ObIAllocator &allocator, const Schema &schema);
+  template <typename Schema>
+  int assign(common::ObIAllocator &allocator, const Schema &schema);
+  int init_placeholder(common::ObIAllocator &allocator);
+  int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
+  int update_column_cnt_and_schema_version(const int64_t column_cnt, const int64_t store_column_cnt, const int64_t schema_version);
+  void reset();
+  bool is_valid() const { return is_valid_; }
+  const ObStorageSchema &get_schema() const { return schema_; }
+  int get_store_column_count(int64_t &column_count, const bool full_col) const { return schema_.get_store_column_count(column_count, full_col); }
+  int64_t get_schema_version() const { return schema_.get_schema_version(); }
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const { return schema_.serialize(buf, buf_len, pos); }
+  // Call after the source finishes updating the schema, before publishing it to readers.
+  int prepare_serialize_size();
+  int64_t get_serialize_size() const;
+  TO_STRING_KV(K_(schema), K_(is_valid));
+private:
+  ObStorageSchema schema_;
+  // -1 means not prepared. Mutations invalidate the length; const readers never update it.
+  // This value is not serialized. Preparing or modifying the handle requires exclusive access.
+  int64_t serialize_size_;
+  bool is_valid_;
+  DISALLOW_COPY_AND_ASSIGN(ObStorageSchemaHandle);
+};
+
+template <typename Schema>
+int ObStorageSchemaHandle::init(common::ObIAllocator &allocator, const Schema &schema)
+{
+  static_assert(std::is_same<Schema, ObStorageSchema>::value || std::is_same<Schema, ObStorageSchemaHandle>::value,
+      "schema handle initialization requires a storage schema or an owning handle");
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(schema_.is_inited())) {
+    ret = common::OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "schema handle init twice", K(ret), K_(is_valid));
+  } else {
+    // assign() also uses this path. ObStorageSchema::init() may materialize a compatibility
+    // column group when the source has none, changing the serialized length even for a handle copy.
+    // Do not inherit the source handle's cached length; prepare it after the destination is finalized.
+    serialize_size_ = -1;
+    if (OB_FAIL(schema_.init(allocator, schema))) {
+      is_valid_ = false;
+      STORAGE_LOG(WARN, "failed to initialize owned schema", K(ret));
+    } else {
+      // ObStorageSchema::init validates the completed output.
+      is_valid_ = true;
+    }
+  }
+  return ret;
+}
+
+template <typename Schema>
+int ObStorageSchemaHandle::assign(common::ObIAllocator &allocator, const Schema &schema)
+{
+  int ret = common::OB_SUCCESS;
+  bool is_self = false;
+  if constexpr (std::is_same<Schema, ObStorageSchema>::value) {
+    is_self = &schema_ == &schema;
+  } else {
+    is_self = this == &schema;
+  }
+  if (is_self) {
+    if (OB_UNLIKELY(!is_valid_)) {
+      ret = common::OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "cannot assign invalid schema handle to itself", K(ret));
+    }
+  } else {
+    reset();
+    if (OB_FAIL(init(allocator, schema))) {
+      STORAGE_LOG(WARN, "failed to assign owned schema", K(ret));
+    }
+  }
+  return ret;
+}
 
 class ObStorageCGSchemaIterator
 {

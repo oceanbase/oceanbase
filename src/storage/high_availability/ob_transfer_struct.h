@@ -65,16 +65,32 @@ public:
   bool is_valid() const;
   int assign(const ObTXStartTransferInInfo &start_transfer_in_info);
 
+  int reserve_tablet_meta(const int64_t count) { return tablet_meta_list_.reserve(count); }
+  int add_tablet_meta(const ObMigrationTabletParam &tablet_meta) { return tablet_meta_list_.push_back(tablet_meta); }
+  const common::ObSArray<ObMigrationTabletParam> &get_tablet_meta_list() const { return tablet_meta_list_; }
+  // Encode borrowed tablet metadata directly to avoid deep-copying params and schemas when batching.
+  // The wire layout is identical to serialize(); only the source of the tablet metadata differs.
+  // The caller keeps the referenced tablet metadata alive and unchanged until serialization finishes.
+  int serialize_with_tablet_meta(char *buf, const int64_t buf_len, int64_t &pos,
+      const common::ObIArray<const ObMigrationTabletParam *> &tablet_meta_list) const;
+  // Includes the UNIS envelope and non-tablet fields; excludes the array count and tablet metadata.
+  int64_t get_header_serialize_size() const;
   int get_tablet_id_list(common::ObIArray<common::ObTabletID> &tablet_id_list) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
   share::SCN start_scn_;
-  common::ObSArray<ObMigrationTabletParam> tablet_meta_list_;
   share::ObTransferTaskID task_id_;
   uint64_t data_version_;
 
+private:
+  int serialize_members_(char *buf, const int64_t buf_len, int64_t &pos,
+      const common::ObIArray<const ObMigrationTabletParam *> *tablet_meta_list) const;
+  // Owns tablet params decoded on the receiver and supplies them for ordinary serialize().
+  // The transfer sender leaves this array empty and passes ctx_-owned params to
+  // serialize_with_tablet_meta(); borrowed pointers are never stored in this object.
+  common::ObSArray<ObMigrationTabletParam> tablet_meta_list_;
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferInInfo);
 };
 
@@ -320,8 +336,12 @@ public:
   uint64_t get_data_version() { return data_version_; }
   int32_t get_result();
 
-  int add_tablet_info(const ObMigrationTabletParam &param);
-  int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param);
+  int get_storage_schema(const ObTabletID &tablet_id, const ObStorageSchema *&schema)
+  { return mgr_.get_storage_schema(tablet_id, schema); }
+  // Publishes the completed param without modifying its schema.
+  // Takes ownership and clears param only on success; the caller owns it on failure.
+  int add_tablet_info(ObMigrationTabletParam *&param);
+  int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param) const;
   int64_t get_tablet_info_num() const;
   int build_storage_schema_info(
       const share::ObTransferTaskInfo &task_info,
@@ -378,9 +398,11 @@ private:
   public:
     ObTransferTabletInfoMgr();
     ~ObTransferTabletInfoMgr();
-    int add_tablet_info(const ObMigrationTabletParam &param);
+    int reserve_tablet_info(const int64_t count);
+    int get_storage_schema(const ObTabletID &tablet_id, const ObStorageSchema *&schema);
+    int add_tablet_info(ObMigrationTabletParam *&param);
     int64_t get_tablet_info_num() const;
-    int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param);
+    int get_tablet_info(const int64_t index, const ObMigrationTabletParam *&param) const;
     void reuse();
     int build_storage_schema(
         const share::ObTransferTaskInfo &task_info,
@@ -388,7 +410,7 @@ private:
     TO_STRING_KV(K_(tablet_info_array));
   private:
     common::SpinRWLock lock_;
-    common::ObArray<ObMigrationTabletParam> tablet_info_array_;
+    common::ObArray<ObMigrationTabletParam *> tablet_info_array_;
     ObTransferStorageSchemaMgr storage_schema_mgr_;
     DISALLOW_COPY_AND_ASSIGN(ObTransferTabletInfoMgr);
   };

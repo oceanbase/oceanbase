@@ -105,7 +105,7 @@ int ObSSTableCopyOps::prepare_data_store_desc_(
   int ret = OB_SUCCESS;
   ObTablet *tablet = nullptr;
   ObMergeType merge_type;
-  const ObStorageSchema *storage_schema = &src_tablet_meta.storage_schema_;
+  const ObStorageSchema *storage_schema = &src_tablet_meta.storage_schema_.get_schema();
   ObTabletHandle tablet_handle;
 
   if (OB_UNLIKELY(!tablet_id.is_valid() || cluster_version < 0)) {

@@ -232,6 +232,8 @@ private:
   int inner_tx_start_transfer_in_(
       const share::ObTransferTaskInfo &task_info,
       const ObTXStartTransferInInfo &start_transfer_in_info,
+      const common::ObIArray<const ObMigrationTabletParam *> &tablet_meta_list,
+      const int64_t tablet_meta_serialize_size,
       common::ObMySQLTransaction &trans);
   int update_all_tablet_to_ls_(
       const share::ObTransferTaskInfo &task_info,

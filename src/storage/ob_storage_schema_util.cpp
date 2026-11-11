@@ -107,18 +107,14 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
       LOG_WARN("fail to rebuild col layout storage schema for split", K(ret), KPC(input_schema),
           "target_layout", static_cast<int64_t>(target_layout));
     } else {
-      new_storage_schema_ptr->update_column_cnt_and_schema_version(
-        result_schema_column_cnt,
-        MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt),
-        MAX(tablet_schema_version, param_schema_version));
       if (other_progressive_merge_round > input_progressive_merge_round) {
         new_storage_schema_ptr->progressive_merge_round_ = other_schema->get_progressive_merge_round();
         new_storage_schema_ptr->row_store_type_ = other_schema->get_row_store_type();
         new_storage_schema_ptr->block_size_ = other_schema->get_block_size();
         new_storage_schema_ptr->compressor_type_ = other_schema->get_compressor_type();
       }
-      if (OB_UNLIKELY(!new_storage_schema_ptr->is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
+      if (OB_FAIL(new_storage_schema_ptr->update_column_cnt_and_schema_version(result_schema_column_cnt,
+          MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt), MAX(tablet_schema_version, param_schema_version)))) {
         LOG_ERROR("generated schema is invalid", KR(ret), KPC(new_storage_schema_ptr), K(old_schema_on_tablet), K(param_schema));
       } else if (param_schema_version > tablet_schema_version
           || param_schema_stored_col_cnt > tablet_schema_stored_col_cnt) {
@@ -148,50 +144,49 @@ int ObStorageSchemaUtil::update_storage_schema(
   int64_t src_schema_stored_col_cnt = 0;
   if (OB_FAIL(src_schema.get_store_column_count(src_schema_stored_col_cnt, true/*full_col*/))) {
     LOG_WARN("failed to get stored column count from schema", KR(ret), K(src_schema));
-  } else {
-    dst_schema.update_column_cnt_and_schema_version(
-      src_schema.get_column_count(),
-      src_schema_stored_col_cnt,
-      src_schema.get_schema_version());
-    if (src_schema.get_column_group_count() > dst_schema.get_column_group_count()) {
-      dst_schema.reset_column_group_array();
-      if (OB_FAIL(dst_schema.deep_copy_column_group_array(allocator, src_schema))) {
-        LOG_WARN("failed to deep copy column group array", KR(ret), K(src_schema));
-      }
+  } else if (OB_FAIL(dst_schema.update_column_cnt_and_schema_version(
+      src_schema.get_column_count(), src_schema_stored_col_cnt, src_schema.get_schema_version()))) {
+    LOG_WARN("failed to update storage schema", K(ret), K(src_schema), K(dst_schema));
+  } else if (src_schema.get_column_group_count() > dst_schema.get_column_group_count()) {
+    dst_schema.reset_column_group_array();
+    if (OB_FAIL(dst_schema.deep_copy_column_group_array(allocator, src_schema))) {
+      LOG_WARN("failed to deep copy column group array", KR(ret), K(src_schema));
     }
   }
   return ret;
 }
 
-int ObStorageSchemaUtil::update_storage_schema_by_memtable(
-      const ObTablet &tablet,
-      const common::ObIArray<ObTableHandleV2> &memtable_handles,
-      ObStorageSchema &schema)
+template <typename Schema>
+int ObStorageSchemaUtil::update_storage_schema_by_memtable(const ObTablet &tablet,
+    const common::ObIArray<ObTableHandleV2> &memtable_handles, Schema &schema)
 {
   int ret = OB_SUCCESS;
   int64_t max_column_cnt_in_memtable = 0;
   int64_t max_schema_version_in_memtable = 0;
   int64_t column_cnt_in_schema = 0;
-
   if (!tablet.is_valid() || !schema.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tablet), K(schema));
+    LOG_WARN("invalid argument", K(ret), K(tablet), K(schema));
   } else if (OB_FAIL(schema.get_store_column_count(column_cnt_in_schema, true/*full_col*/))) {
-    LOG_WARN("failed to get store column count from schema", KR(ret), K(schema));
-  } else if (OB_FAIL(get_schema_info_from_memtables_(tablet, memtable_handles, column_cnt_in_schema,
+    LOG_WARN("failed to get store column count from schema", K(ret), K(schema));
+  } else if (OB_FAIL(get_schema_info_from_memtables(tablet, memtable_handles, column_cnt_in_schema,
       max_column_cnt_in_memtable, max_schema_version_in_memtable))) {
-    LOG_WARN("failed to get schema info from memtables", KR(ret), K(tablet), K(memtable_handles), K(column_cnt_in_schema));
+    LOG_WARN("failed to get schema info from memtables", K(ret), K(tablet), K(column_cnt_in_schema));
   } else if (max_column_cnt_in_memtable > column_cnt_in_schema || max_schema_version_in_memtable > schema.get_schema_version()) {
-    schema.update_column_cnt_and_schema_version(
-      max_column_cnt_in_memtable,
-      MAX(column_cnt_in_schema, max_column_cnt_in_memtable),
-      max_schema_version_in_memtable);
+    if (OB_FAIL(schema.update_column_cnt_and_schema_version(max_column_cnt_in_memtable,
+        MAX(column_cnt_in_schema, max_column_cnt_in_memtable), max_schema_version_in_memtable))) {
+      LOG_WARN("failed to update storage schema from memtables", K(ret), K(max_column_cnt_in_memtable), K(max_schema_version_in_memtable));
+    }
   }
-
   return ret;
 }
 
-int ObStorageSchemaUtil::get_schema_info_from_memtables_(
+template int ObStorageSchemaUtil::update_storage_schema_by_memtable<ObStorageSchema>(
+    const ObTablet &, const common::ObIArray<ObTableHandleV2> &, ObStorageSchema &);
+template int ObStorageSchemaUtil::update_storage_schema_by_memtable<ObStorageSchemaHandle>(
+    const ObTablet &, const common::ObIArray<ObTableHandleV2> &, ObStorageSchemaHandle &);
+
+int ObStorageSchemaUtil::get_schema_info_from_memtables(
   const ObTablet &tablet,
   const common::ObIArray<ObTableHandleV2> &memtable_handles,
   const int64_t column_cnt_in_schema,

@@ -35,10 +35,9 @@ public:
       common::ObIAllocator &allocator,
       const ObStorageSchema &other_schema,
       ObStorageSchema &input_schema);
-  static int update_storage_schema_by_memtable(
-    const ObTablet &tablet,
-    const common::ObIArray<ObTableHandleV2> &memtable_handles,
-    ObStorageSchema &schema);
+  template <typename Schema>
+  static int update_storage_schema_by_memtable(const ObTablet &tablet,
+      const common::ObIArray<ObTableHandleV2> &memtable_handles, Schema &schema);
 
   /* TODO(@DanLing) remove this func after column_store merged into master
    * This func is just for replace ObTabletObjLoadHelper::alloc_and_new on master
@@ -53,8 +52,8 @@ public:
       common::ObIAllocator &allocator,
       const ObStorageSchema *storage_schema,
       ObStorageSchema *&new_storage_schema);
-private:
-  static int get_schema_info_from_memtables_(
+  // Collect schema updates before choosing which source schema to initialize.
+  static int get_schema_info_from_memtables(
     const ObTablet &tablet,
     const common::ObIArray<ObTableHandleV2> &memtable_handles,
     const int64_t column_cnt_in_schema,

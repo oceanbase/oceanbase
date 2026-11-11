@@ -107,6 +107,19 @@ void ObTabletMacroInfo::reset()
   }
 }
 
+int ObTabletMacroInfo::init_empty()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTabletMacroInfo has been inited", K(ret));
+  } else {
+    reset();
+    is_inited_ = true;
+  }
+  return ret;
+}
+
 int ObTabletMacroInfo::init(
     ObArenaAllocator &allocator,
     const ObBlockInfoSet &info_set,

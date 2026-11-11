@@ -705,6 +705,10 @@ int ObBackupTabletFuseTask::fuse_tablet_item_(
       }
     }
   }
+  if (OB_SUCC(ret) && !output_param.is_empty_shell()
+      && OB_FAIL(output_param.storage_schema_.prepare_serialize_size())) {
+    LOG_WARN("failed to prepare fused tablet schema serialization length", K(ret), K(output_param.tablet_id_));
+  }
   return ret;
 }
 

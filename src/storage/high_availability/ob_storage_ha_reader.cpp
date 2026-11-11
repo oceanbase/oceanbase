@@ -2195,14 +2195,14 @@ int ObCopySSTableInfoRestoreReader::compare_storage_schema_(
   int ret = OB_SUCCESS;
   need_update = false;
   int64_t old_storage_schema_stored_col_cnt = 0;
-  const int64_t new_storage_schema_stored_col_cnt = tablet_meta.tablet_meta_.storage_schema_.store_column_cnt_;
+  const int64_t new_storage_schema_stored_col_cnt = tablet_meta.tablet_meta_.storage_schema_.get_schema().store_column_cnt_;
   ObArenaAllocator temp_allocator(common::ObMemAttr(MTL_ID(), "RestoreReader"));
   ObStorageSchema *schema_on_tablet = nullptr;
 
   if (OB_FAIL(tablet_handle.get_obj()->load_storage_schema(temp_allocator, schema_on_tablet))) {
     LOG_WARN("failed to load storage schema", K(ret), K(tablet_handle));
   } else if (FALSE_IT(old_storage_schema_stored_col_cnt = schema_on_tablet->store_column_cnt_)) {
-  } else if (tablet_meta.tablet_meta_.storage_schema_.compare_schema_newer(*schema_on_tablet)) { // schema_on_tablet is newer
+  } else if (tablet_meta.tablet_meta_.storage_schema_.get_schema().compare_schema_newer(*schema_on_tablet)) { // schema_on_tablet is newer
     need_update = true;
     LOG_INFO("storage schema stored cnt compare", K(old_storage_schema_stored_col_cnt), K(new_storage_schema_stored_col_cnt), K(tablet_id));
 #ifdef ERRSIM

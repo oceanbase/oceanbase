@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <set>
+#include <vector>
+#include <type_traits>
 
 #define private public
 #define protected public
@@ -19,6 +22,8 @@ using namespace storage;
 
 namespace unittest
 {
+static_assert(std::is_same<decltype(std::declval<ObStorageSchemaHandle &>().get_schema()), const ObStorageSchema &>::value, "schema handle must expose const access only");
+
 class TestStorageSchema : public ::testing::Test
 {
 public:
@@ -32,6 +37,37 @@ public:
   static const int64_t tenant_id = 1;
   common::ObArenaAllocator allocator_;
   ObTenantBase tenant_base_;
+};
+
+// Arena free() alone cannot detect freeing an interior slice or freeing the same allocation twice.
+class ColumnGroupTrackingAllocator : public ObIAllocator
+{
+public:
+  explicit ColumnGroupTrackingAllocator(ObIAllocator &backing) : backing_(backing), fail_next_(false) {}
+  ~ColumnGroupTrackingAllocator() override { EXPECT_TRUE(live_.empty()); }
+  void *alloc(const int64_t size) override
+  {
+    void *ptr = fail_next_ ? nullptr : backing_.alloc(size);
+    fail_next_ = false;
+    if (nullptr != ptr) {
+      EXPECT_TRUE(live_.insert(ptr).second);
+    }
+    return ptr;
+  }
+  void *alloc(const int64_t size, const ObMemAttr &) override { return alloc(size); }
+  void free(void *ptr) override
+  {
+    if (nullptr != ptr) {
+      if (live_.erase(ptr) != 1) {
+        ADD_FAILURE() << "free of a borrowed slice or an already freed allocation: " << ptr;
+      } else {
+        backing_.free(ptr);
+      }
+    }
+  }
+  ObIAllocator &backing_;
+  std::set<void *> live_;
+  bool fail_next_;
 };
 
 void TestStorageSchema::SetUp()
@@ -808,6 +844,443 @@ TEST_F(TestStorageSchema, test_rowkey_and_each_column_group)
 
   COMMON_LOG(INFO, "rowkey and each cg deserialize", K(storage_schema), K(des_storage_schema));
   ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
+}
+
+TEST_F(TestStorageSchema, column_group_index_ownership)
+{
+  ColumnGroupTrackingAllocator allocator(allocator_);
+  ObStorageColumnGroupIdxBuffer indexes;
+  ASSERT_EQ(OB_SUCCESS, indexes.init(allocator, 6));
+  ObStorageColumnGroupSchema source(share::schema::ROWKEY_COLUMN_GROUP, NONE_COMPRESSOR,
+      ObRowStoreType::CS_ENCODING_ROW_STORE, 16384, 1, 3, 1, 3, nullptr);
+  ASSERT_EQ(OB_SUCCESS, source.alloc_column_idxs_(allocator, nullptr));
+  for (uint16_t i = 0; i < source.column_cnt_; ++i) {
+    source.column_idxs_[i] = i;
+  }
+  ObStorageColumnGroupSchema borrowed;
+  ObStorageColumnGroupSchema second_slice;
+  ObStorageColumnGroupSchema standalone;
+  ObStorageColumnGroupSchema exhausted;
+  ASSERT_EQ(OB_SUCCESS, borrowed.deep_copy(source, allocator, &indexes));
+  ASSERT_EQ(OB_SUCCESS, second_slice.deep_copy(source, allocator, &indexes));
+  ASSERT_EQ(borrowed.column_idxs_ + 3, second_slice.column_idxs_);
+  ASSERT_TRUE(borrowed.column_idxs_borrowed_);
+  ASSERT_TRUE(second_slice.column_idxs_borrowed_);
+  ASSERT_EQ(OB_SUCCESS, standalone.deep_copy(borrowed, allocator));
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, exhausted.deep_copy(borrowed, allocator, &indexes));
+  ASSERT_EQ(nullptr, exhausted.column_idxs_);
+  ASSERT_FALSE(standalone.column_idxs_borrowed_);
+  ASSERT_FALSE(exhausted.column_idxs_borrowed_);
+  ASSERT_FALSE(standalone.is_schema_changed(borrowed));
+  ASSERT_EQ(24, sizeof(ObStorageColumnGroupSchema));
+  ASSERT_EQ(3, allocator.live_.size());
+
+  ObStorageColumnGroupSchema failed;
+  allocator.fail_next_ = true;
+  ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, failed.deep_copy(borrowed, allocator));
+  ASSERT_EQ(nullptr, failed.column_idxs_);
+  ASSERT_FALSE(failed.column_idxs_borrowed_);
+  failed.destroy(allocator);
+  ObStorageColumnGroupSchema alias = second_slice;
+  alias.destroy(allocator); // Copying a borrowed group must preserve its ownership bit.
+  borrowed.destroy(allocator);
+  second_slice.destroy(allocator);
+  ASSERT_FALSE(borrowed.column_idxs_borrowed_);
+  ASSERT_EQ(0, static_cast<uint8_t>(borrowed.version_));
+  ASSERT_EQ(3, allocator.live_.size());
+  source.destroy(allocator);
+  standalone.destroy(allocator);
+  exhausted.destroy(allocator);
+  ASSERT_EQ(1, allocator.live_.size());
+  indexes.reset();
+  indexes.reset();
+  ASSERT_TRUE(allocator.live_.empty());
+}
+
+TEST_F(TestStorageSchema, column_group_borrowed_wire_compatibility)
+{
+  ColumnGroupTrackingAllocator allocator(allocator_);
+  ObStorageColumnGroupIdxBuffer indexes;
+  ASSERT_EQ(OB_SUCCESS, indexes.init(allocator, 6));
+  ObStorageColumnGroupSchema source(share::schema::ROWKEY_COLUMN_GROUP, NONE_COMPRESSOR,
+      ObRowStoreType::CS_ENCODING_ROW_STORE, 16384, 1, 3, 1, 3, nullptr);
+  ASSERT_EQ(OB_SUCCESS, source.alloc_column_idxs_(allocator, nullptr));
+  for (uint16_t i = 0; i < source.column_cnt_; ++i) {
+    source.column_idxs_[i] = i;
+  }
+  ObStorageColumnGroupSchema borrowed;
+  ASSERT_EQ(OB_SUCCESS, borrowed.deep_copy(source, allocator, &indexes));
+  ASSERT_TRUE(borrowed.column_idxs_borrowed_);
+  ASSERT_EQ(source.get_serialize_size(), borrowed.get_serialize_size());
+  std::vector<char> expected(source.get_serialize_size());
+  std::vector<char> actual(borrowed.get_serialize_size());
+  int64_t expected_pos = 0;
+  int64_t actual_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(expected.data(), expected.size(), expected_pos));
+  ASSERT_EQ(OB_SUCCESS, borrowed.serialize(actual.data(), actual.size(), actual_pos));
+  ASSERT_EQ(expected.size(), expected_pos);
+  ASSERT_EQ(expected_pos, actual_pos);
+  ASSERT_EQ(0, MEMCMP(expected.data(), actual.data(), expected_pos));
+  ASSERT_EQ(1, static_cast<uint8_t>(actual[0])); // The ownership bit must not enter the wire version.
+
+  ObStorageColumnGroupSchema decoded_owned;
+  ObStorageColumnGroupSchema decoded_borrowed;
+  actual_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, decoded_owned.deserialize(allocator, actual.data(), actual.size(), actual_pos));
+  ASSERT_EQ(expected_pos, actual_pos);
+  ASSERT_FALSE(decoded_owned.column_idxs_borrowed_);
+  actual_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, decoded_borrowed.deserialize(allocator, actual.data(), actual.size(), actual_pos, &indexes));
+  ASSERT_EQ(expected_pos, actual_pos);
+  ASSERT_TRUE(decoded_borrowed.column_idxs_borrowed_);
+  ASSERT_TRUE(decoded_borrowed.is_valid());
+  ASSERT_FALSE(source.is_schema_changed(decoded_owned));
+  ASSERT_FALSE(source.is_schema_changed(decoded_borrowed));
+  source.destroy(allocator);
+  borrowed.destroy(allocator);
+  decoded_owned.destroy(allocator);
+  decoded_borrowed.destroy(allocator);
+  indexes.reset();
+  ASSERT_TRUE(allocator.live_.empty());
+}
+
+TEST_F(TestStorageSchema, column_group_decode_failure_cleanup)
+{
+  ColumnGroupTrackingAllocator allocator(allocator_);
+  ObStorageColumnGroupIdxBuffer indexes;
+  ASSERT_EQ(OB_SUCCESS, indexes.init(allocator, 3));
+  ObStorageColumnGroupSchema source(share::schema::ROWKEY_COLUMN_GROUP, NONE_COMPRESSOR,
+      ObRowStoreType::CS_ENCODING_ROW_STORE, 16384, 1, 3, 1, 3, nullptr);
+  ASSERT_EQ(OB_SUCCESS, source.alloc_column_idxs_(allocator, nullptr));
+  for (uint16_t i = 0; i < source.column_cnt_; ++i) {
+    source.column_idxs_[i] = i;
+  }
+  source.column_idxs_[2] = 128; // Truncate inside a varint, not at an optional trailing-field boundary.
+  std::vector<char> wire(source.get_serialize_size());
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(wire.data(), wire.size(), pos));
+  const uint8_t invalid_versions[] = {0, 2, 0x81, 0xff};
+  for (const uint8_t version : invalid_versions) {
+    ObStorageColumnGroupSchema decoded;
+    wire[0] = static_cast<char>(version);
+    pos = 0;
+    ASSERT_EQ(OB_ERR_UNEXPECTED, decoded.deserialize(allocator, wire.data(), wire.size(), pos, &indexes));
+    ASSERT_EQ(nullptr, decoded.column_idxs_);
+    ASSERT_FALSE(decoded.column_idxs_borrowed_);
+    decoded.destroy(allocator);
+    ASSERT_EQ(2, allocator.live_.size());
+  }
+  wire[0] = 1;
+  for (const bool borrow : {false, true}) {
+    ObStorageColumnGroupSchema decoded;
+    pos = 0;
+    // Truncate an index after the destination allocation, exercising both cleanup paths.
+    ASSERT_NE(OB_SUCCESS, decoded.deserialize(allocator, wire.data(), wire.size() - 1, pos, borrow ? &indexes : nullptr));
+    ASSERT_EQ(nullptr, decoded.column_idxs_);
+    ASSERT_FALSE(decoded.column_idxs_borrowed_);
+    decoded.destroy(allocator);
+    ASSERT_EQ(2, allocator.live_.size());
+  }
+  source.destroy(allocator);
+  indexes.reset();
+  ASSERT_TRUE(allocator.live_.empty());
+}
+
+TEST_F(TestStorageSchema, column_group_buffer_schema_lifecycle)
+{
+  ColumnGroupTrackingAllocator allocator(allocator_);
+  share::schema::ObTableSchema table_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  TestSchemaPrepare::add_all_each_and_hidden_rowkey_column_group(allocator_, table_schema);
+  ObStorageSchema source;
+  ObStorageSchema copied;
+  ObStorageSchema decoded;
+  ASSERT_EQ(OB_SUCCESS, source.init(allocator, table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_EQ(OB_SUCCESS, copied.init(allocator, source));
+  std::vector<char> wire(source.get_serialize_size());
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(wire.data(), wire.size(), pos));
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, decoded.deserialize(allocator, wire.data(), wire.size(), pos));
+  ASSERT_EQ(wire.size(), pos);
+  for (ObStorageSchema *schema : {&source, &copied, &decoded}) {
+    for (int64_t i = 0; i < schema->column_group_array_.count(); ++i) {
+      const ObStorageColumnGroupSchema &cg = schema->column_group_array_.at(i);
+      ASSERT_TRUE(cg.is_valid());
+      ASSERT_EQ(!cg.is_all_column_group(), static_cast<bool>(cg.column_idxs_borrowed_));
+    }
+    ASSERT_EQ(1, schema->hidden_rowkey_column_group_.count());
+    ASSERT_TRUE(schema->hidden_rowkey_column_group_.at(0).column_idxs_borrowed_);
+  }
+  source.reset();
+  ASSERT_TRUE(copied.is_valid());
+  ASSERT_TRUE(decoded.is_valid());
+  copied.reset();
+  decoded.reset();
+  ASSERT_TRUE(allocator.live_.empty());
+}
+
+TEST_F(TestStorageSchema, column_group_index_buffer_errors)
+{
+  ColumnGroupTrackingAllocator allocator(allocator_);
+  ObStorageColumnGroupIdxBuffer indexes;
+  uint16_t *data = nullptr;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, indexes.init(allocator, -1));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, indexes.init(allocator, INT64_MAX));
+  ASSERT_EQ(OB_SUCCESS, indexes.init(allocator, 0));
+  ASSERT_EQ(OB_INIT_TWICE, indexes.init(allocator, 0));
+  ASSERT_EQ(OB_INIT_TWICE, indexes.init(allocator, 3));
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, indexes.alloc(1, data));
+  ASSERT_EQ(nullptr, data);
+  indexes.reset();
+  ASSERT_TRUE(allocator.live_.empty());
+  ASSERT_EQ(OB_SUCCESS, indexes.init(allocator, OB_USER_ROW_MAX_COLUMNS_COUNT + 3));
+  indexes.reset();
+  allocator.fail_next_ = true;
+  ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, indexes.init(allocator, 3));
+  ASSERT_EQ(OB_SUCCESS, indexes.init(allocator, 3));
+  ASSERT_EQ(OB_INIT_TWICE, indexes.init(allocator, 3));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, indexes.alloc(0, data));
+  ASSERT_EQ(nullptr, data);
+  ASSERT_EQ(OB_SUCCESS, indexes.alloc(2, data));
+  ASSERT_NE(nullptr, data);
+  uint16_t *first = data;
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, indexes.alloc(2, data));
+  ASSERT_EQ(nullptr, data);
+  ASSERT_EQ(OB_SUCCESS, indexes.alloc(1, data));
+  ASSERT_EQ(first + 2, data); // Failed allocations must not advance the buffer.
+  indexes.reset();
+  ASSERT_EQ(OB_BUF_NOT_ENOUGH, indexes.alloc(1, data));
+  ASSERT_EQ(nullptr, data);
+  ASSERT_TRUE(allocator.live_.empty());
+}
+
+TEST_F(TestStorageSchema, schema_handle_owns_validated_schema)
+{
+  share::schema::ObTableSchema table_schema;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  TestSchemaPrepare::add_all_and_each_column_group(allocator_, table_schema);
+  ObStorageSchema source;
+  ObStorageSchema invalid;
+  ObStorageSchemaHandle handle;
+  ObStorageSchemaHandle copied;
+  ASSERT_FALSE(handle.is_valid());
+  ASSERT_EQ(OB_INVALID_ARGUMENT, handle.init(allocator_, invalid));
+  ASSERT_FALSE(handle.is_valid());
+  ASSERT_EQ(OB_SUCCESS, source.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_EQ(OB_SUCCESS, handle.init(allocator_, source));
+  ASSERT_NE(&source, &handle.get_schema());
+  ASSERT_NE(&source.column_array_.at(0), &handle.get_schema().column_array_.at(0));
+  source.reset();
+  ASSERT_TRUE(handle.is_valid());
+  ASSERT_TRUE(handle.get_schema().is_valid());
+  ASSERT_EQ(OB_INIT_TWICE, handle.init(allocator_, invalid));
+  ASSERT_TRUE(handle.is_valid());
+  ASSERT_EQ(OB_SUCCESS, handle.assign(allocator_, handle));
+  ASSERT_EQ(OB_SUCCESS, handle.assign(allocator_, handle.get_schema()));
+  ASSERT_EQ(OB_SUCCESS, copied.init(allocator_, handle));
+  ObStorageSchema output;
+  ASSERT_EQ(OB_SUCCESS, output.init(allocator_, handle));
+  handle.reset();
+  ASSERT_FALSE(handle.is_valid());
+  ASSERT_TRUE(copied.is_valid());
+  ASSERT_TRUE(copied.get_schema().is_valid());
+  ASSERT_TRUE(output.is_valid());
+  ASSERT_EQ(OB_INVALID_ARGUMENT, copied.assign(allocator_, invalid));
+  ASSERT_FALSE(copied.is_valid());
+  ASSERT_EQ(OB_INVALID_ARGUMENT, copied.assign(allocator_, copied));
+}
+
+TEST_F(TestStorageSchema, schema_handle_assignment_failure_cleanup)
+{
+  ColumnGroupTrackingAllocator allocator(allocator_);
+  ObStorageSchema source;
+  ObStorageSchemaHandle handle;
+  ASSERT_EQ(OB_SUCCESS, source.init_placeholder(allocator_));
+  ASSERT_EQ(OB_SUCCESS, handle.init(allocator, source));
+  allocator.fail_next_ = true;
+  ASSERT_EQ(OB_ALLOCATE_MEMORY_FAILED, handle.assign(allocator, source));
+  ASSERT_FALSE(handle.is_valid());
+  ASSERT_TRUE(allocator.live_.empty());
+  ASSERT_EQ(OB_SUCCESS, handle.assign(allocator, source));
+  handle.reset();
+  ASSERT_TRUE(allocator.live_.empty());
+}
+
+TEST_F(TestStorageSchema, schema_handle_wire_and_decode_state)
+{
+  ObStorageSchema source;
+  ObStorageSchemaHandle handle;
+  ASSERT_EQ(OB_SUCCESS, source.init_placeholder(allocator_));
+  ASSERT_EQ(OB_SUCCESS, handle.init_placeholder(allocator_));
+  const int64_t offset = 7;
+  std::vector<char> expected(offset + source.get_serialize_size(), '\x5a');
+  std::vector<char> actual(offset + handle.get_serialize_size(), '\x5a');
+  int64_t pos = offset;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(expected.data(), expected.size(), pos));
+  ASSERT_EQ(expected.size(), pos);
+  pos = offset;
+  ASSERT_EQ(OB_SUCCESS, handle.serialize(actual.data(), actual.size(), pos));
+  ASSERT_EQ(actual.size(), pos);
+  ASSERT_EQ(expected, actual);
+
+  ObStorageSchemaHandle decoded;
+  pos = offset;
+  ASSERT_EQ(OB_SUCCESS, decoded.deserialize(allocator_, expected.data(), expected.size(), pos));
+  ASSERT_TRUE(decoded.is_valid());
+  ASSERT_EQ(expected.size(), pos);
+  pos = offset;
+  ASSERT_EQ(OB_INIT_TWICE, decoded.deserialize(allocator_, expected.data(), expected.size(), pos));
+  ASSERT_TRUE(decoded.is_valid());
+  decoded.reset();
+  pos = offset;
+  ASSERT_NE(OB_SUCCESS, decoded.deserialize(allocator_, expected.data(), offset + 1, pos));
+  ASSERT_FALSE(decoded.is_valid());
+
+  // Decoding and schema validity are distinct for legacy restore/placeholder data.
+  source.column_cnt_ = 0;
+  expected.resize(offset + source.get_serialize_size());
+  pos = offset;
+  ASSERT_EQ(OB_SUCCESS, source.serialize(expected.data(), expected.size(), pos));
+  pos = offset;
+  ASSERT_EQ(OB_SUCCESS, decoded.deserialize(allocator_, expected.data(), expected.size(), pos));
+  ASSERT_FALSE(decoded.is_valid());
+  ASSERT_EQ(OB_SUCCESS, decoded.init_placeholder(allocator_));
+  ASSERT_TRUE(decoded.is_valid());
+}
+
+TEST_F(TestStorageSchema, schema_handle_prepared_serialize_size)
+{
+  ObStorageSchemaHandle handle;
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size());
+  ASSERT_EQ(-1, handle.serialize_size_); // Const queries must not populate the cache.
+  ASSERT_EQ(OB_INVALID_ARGUMENT, handle.prepare_serialize_size());
+  ASSERT_EQ(OB_SUCCESS, handle.init_placeholder(allocator_));
+  ASSERT_EQ(-1, handle.serialize_size_); // Initialization alone must not walk the schema for its size.
+  const int64_t original_size = handle.get_serialize_size();
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.prepare_serialize_size());
+  ASSERT_EQ(original_size, handle.serialize_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.prepare_serialize_size());
+  ASSERT_EQ(original_size, handle.get_schema().get_serialize_size());
+  ASSERT_EQ(OB_SUCCESS, handle.assign(allocator_, handle));
+  ASSERT_EQ(original_size, handle.serialize_size_);
+  ASSERT_EQ(OB_INIT_TWICE, handle.init(allocator_, handle));
+  ASSERT_EQ(original_size, handle.serialize_size_);
+
+  // Simplifying the column array changes the wire length and must discard the old cache.
+  ASSERT_EQ(OB_SUCCESS, handle.update_column_cnt_and_schema_version(2, 2, 128));
+  ASSERT_EQ(-1, handle.serialize_size_);
+  const int64_t updated_size = handle.get_serialize_size();
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.prepare_serialize_size());
+  ASSERT_EQ(updated_size, handle.serialize_size_);
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), updated_size);
+  ASSERT_NE(original_size, updated_size);
+  ASSERT_EQ(updated_size, handle.get_serialize_size());
+  std::vector<char> wire(updated_size);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, handle.serialize(wire.data(), wire.size(), pos));
+  ASSERT_EQ(updated_size, pos);
+
+  ObStorageSchemaHandle decoded;
+  ASSERT_EQ(OB_SUCCESS, decoded.init_placeholder(allocator_));
+  ASSERT_EQ(OB_SUCCESS, decoded.prepare_serialize_size());
+  decoded.reset();
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, decoded.deserialize(allocator_, wire.data(), wire.size(), pos));
+  ASSERT_EQ(-1, decoded.serialize_size_);
+  ASSERT_EQ(decoded.get_schema().get_serialize_size(), decoded.get_serialize_size());
+  ASSERT_EQ(-1, decoded.serialize_size_);
+  ASSERT_EQ(OB_SUCCESS, decoded.prepare_serialize_size());
+  std::vector<char> decoded_wire(decoded.get_serialize_size());
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, decoded.serialize(decoded_wire.data(), decoded_wire.size(), pos));
+  ASSERT_EQ(decoded_wire.size(), pos);
+  ASSERT_EQ(OB_SUCCESS, handle.assign(allocator_, decoded));
+  ASSERT_EQ(-1, handle.serialize_size_);
+  // Schema copying may materialize a column group; prepare the destination's own length.
+  ASSERT_EQ(OB_SUCCESS, handle.prepare_serialize_size());
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size());
+
+  ObStorageSchema invalid;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, handle.assign(allocator_, invalid));
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size());
+  handle.reset();
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size());
+  pos = 0;
+  ASSERT_NE(OB_SUCCESS, handle.deserialize(allocator_, wire.data(), 1, pos));
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size());
+  ASSERT_EQ(OB_SUCCESS, handle.init_placeholder(allocator_));
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(original_size, handle.get_serialize_size());
+
+  ObStorageSchema source;
+  ASSERT_EQ(OB_SUCCESS, source.init_placeholder(allocator_));
+  for (int64_t version = ObStorageSchema::STORAGE_SCHEMA_VERSION;
+      version <= ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST; ++version) {
+    source.storage_schema_version_ = version;
+    std::vector<char> legacy_wire(source.get_serialize_size());
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, source.serialize(legacy_wire.data(), legacy_wire.size(), pos));
+    handle.reset();
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, handle.deserialize(allocator_, legacy_wire.data(), legacy_wire.size(), pos)) << version;
+    ASSERT_EQ(-1, handle.serialize_size_);
+    ASSERT_EQ(OB_SUCCESS, handle.prepare_serialize_size()) << version;
+    ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size()) << version;
+    if (version >= ObStorageSchema::STORAGE_SCHEMA_VERSION_V8) {
+      // Decoding replaces the unspecified engine (255, two bytes) with engine 0 (one byte).
+      ASSERT_EQ(legacy_wire.size() - 1, handle.get_serialize_size());
+    }
+    std::vector<char> encoded(handle.get_serialize_size());
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, handle.serialize(encoded.data(), encoded.size(), pos)) << version;
+    ASSERT_EQ(encoded.size(), pos) << version;
+    ObStorageSchemaHandle second_decode;
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, second_decode.deserialize(allocator_, encoded.data(), encoded.size(), pos)) << version;
+    ASSERT_EQ(encoded.size(), second_decode.get_serialize_size()) << version;
+    std::vector<char> reencoded(second_decode.get_serialize_size());
+    pos = 0;
+    ASSERT_EQ(OB_SUCCESS, second_decode.serialize(reencoded.data(), reencoded.size(), pos)) << version;
+    ASSERT_EQ(encoded, reencoded) << version;
+  }
+}
+
+TEST_F(TestStorageSchema, schema_handle_column_update)
+{
+  ObStorageSchema schema;
+  ObStorageSchemaHandle handle;
+  ASSERT_EQ(OB_INVALID_ARGUMENT, handle.update_column_cnt_and_schema_version(2, 2, 10));
+  ASSERT_EQ(OB_ERR_UNEXPECTED, schema.update_column_cnt_and_schema_version(2, 2, 10));
+  ASSERT_EQ(OB_SUCCESS, schema.init_placeholder(allocator_));
+  ASSERT_EQ(OB_SUCCESS, handle.init_placeholder(allocator_));
+  ASSERT_EQ(OB_SUCCESS, schema.update_column_cnt_and_schema_version(2, 2, 10));
+  ASSERT_EQ(OB_SUCCESS, handle.update_column_cnt_and_schema_version(2, 2, 10));
+  ASSERT_EQ(schema.column_cnt_, handle.get_schema().column_cnt_);
+  ASSERT_EQ(schema.store_column_cnt_, handle.get_schema().store_column_cnt_);
+  ASSERT_EQ(schema.schema_version_, handle.get_schema().schema_version_);
+  ASSERT_EQ(schema.is_column_info_simplified(), handle.get_schema().is_column_info_simplified());
+  ASSERT_EQ(2, handle.get_schema().column_cnt_);
+  ASSERT_EQ(10, handle.get_schema().schema_version_);
+  ASSERT_TRUE(handle.get_schema().is_column_info_simplified());
+  ASSERT_TRUE(handle.is_valid());
+  ASSERT_TRUE(handle.get_schema().is_valid());
+  // Inject an invalid field to verify that the update error invalidates both cached results.
+  ASSERT_EQ(OB_SUCCESS, handle.prepare_serialize_size());
+  ASSERT_EQ(handle.get_schema().get_serialize_size(), handle.get_serialize_size());
+  handle.schema_.pctfree_ = -1;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, handle.update_column_cnt_and_schema_version(3, 3, 11));
+  ASSERT_FALSE(handle.is_valid());
+  ASSERT_EQ(-1, handle.serialize_size_);
+  ASSERT_EQ(OB_SUCCESS, handle.init_placeholder(allocator_));
+  ASSERT_EQ(1, handle.get_schema().column_cnt_);
+  ASSERT_TRUE(handle.is_valid());
 }
 
 } // namespace unittest

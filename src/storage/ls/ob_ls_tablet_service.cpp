@@ -2881,7 +2881,7 @@ int ObLSTabletService::create_transfer_in_tablet(
   const bool is_transfer = true;
   const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
 
-  LOG_INFO("prepare to init transfer in tablet", K(ret), K(ls_id), K(tablet_meta));
+  LOG_INFO("prepare to init transfer in tablet", K(ret), K(key), K(tablet_meta.transfer_info_));
   ObTimeGuard time_guard("CreateTransferIn", 3_s);
 
   bool cover_empty_shell = false;
@@ -2964,7 +2964,7 @@ int ObLSTabletService::create_transfer_in_tablet(
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("create transfer in tablet", K(ret), K(key), K(tablet_meta), K(cover_empty_shell));
+      LOG_INFO("create transfer in tablet", K(ret), K(key), K(tablet_meta.transfer_info_), K(cover_empty_shell));
     } else if (rollback_if_failed) {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {
