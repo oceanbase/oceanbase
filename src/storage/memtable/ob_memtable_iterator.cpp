@@ -875,12 +875,12 @@ int ObMemtableMultiVersionScanIterator::get_uncommitted_row(const ObDatumRow *&r
   return ret;
 }
 
-int ObMemtableMultiVersionScanIterator::switch_to_committed_scan_state()
+int ObMemtableMultiVersionScanIterator::switch_to_committed_scan_state(const bool is_delete_insert_merge)
 {
   int ret = OB_SUCCESS;
   if (!value_iter_->is_compact_iter_end()) { // iter compacted not finish
     scan_state_ = SCAN_COMPACT_ROW;
-    if (OB_FAIL(value_iter_->init_multi_version_iter())) {
+    if (OB_FAIL(value_iter_->init_multi_version_iter(is_delete_insert_merge))) {
       LOG_WARN("Fail to init multi version iter", K(ret), K_(scan_state), KPC_(value_iter));
     }
   } else {
@@ -896,7 +896,7 @@ int ObMemtableMultiVersionScanIterator::switch_scan_state(const bool is_delete_i
   case SCAN_UNCOMMITTED_ROW:
     if (value_iter_->is_trans_node_iter_null()
         || row_.row_flag_.is_not_exist()) {
-      ret = switch_to_committed_scan_state();
+      ret = switch_to_committed_scan_state(is_delete_insert_merge);
     }
     break;
   case SCAN_COMPACT_ROW:
@@ -918,7 +918,7 @@ int ObMemtableMultiVersionScanIterator::switch_scan_state(const bool is_delete_i
     if (!value_iter_->is_trans_node_iter_null()) {
       scan_state_ = SCAN_UNCOMMITTED_ROW;
     } else {
-      ret = switch_to_committed_scan_state();
+      ret = switch_to_committed_scan_state(is_delete_insert_merge);
     }
     break;
   default:
@@ -1229,6 +1229,7 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
   int64_t trans_version = INT64_MIN;
   int64_t compare_trans_version = INT64_MAX;
   const ObVersionRange &version_range = context_->trans_version_range_;
+  int64_t compact_version = version_range.multi_version_start_;
   const ObMemtableDataHeader *mtd = NULL;
   const ObRowHeader *row_header = nullptr;
   bool first_delete_node = false;
@@ -1262,6 +1263,9 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
           TRANS_LOG(WARN, "Failed to check is delete insert merge", K(ret), K(row), K(context_->tablet_id_));
         } else {
           merge_engine_has_decided = true;
+          if (is_delete_insert_merge) {
+            compact_version = version_range.base_version_;
+          }
         }
       }
     }
@@ -1296,7 +1300,9 @@ int ObMemtableMultiVersionScanIterator::iterate_multi_version_row_value_(ObDatum
       if (bitmap_.is_empty() || row.row_flag_.is_delete()) {
         row.set_compacted_multi_version_row();
       }
-      if (trans_version > version_range.multi_version_start_
+      // Preserve each DI transaction above base_version. MINI's row merge
+      // iterator needs these images to retain the earliest DELETE above base.
+      if (trans_version > compact_version
           && value_iter_->is_cur_multi_version_row_end()) {
         // TODO: @dengzhi.ldz return empty when first row is insert and last row is delete
         break;

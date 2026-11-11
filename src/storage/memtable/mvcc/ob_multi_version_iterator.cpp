@@ -31,6 +31,7 @@ ObMultiVersionValueIterator::ObMultiVersionValueIterator()
       cur_trans_version_(SCN::min_scn()),
       is_node_compacted_(false),
       has_multi_commit_trans_(false),
+      is_delete_insert_(false),
       merge_scn_(SCN::max_scn())
 {
 }
@@ -64,10 +65,15 @@ int ObMultiVersionValueIterator::init(ObMvccAccessCtx *ctx,
   return ret;
 }
 
-int ObMultiVersionValueIterator::init_multi_version_iter()
+int ObMultiVersionValueIterator::init_multi_version_iter(const bool is_delete_insert)
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *iter = version_iter_;
+  is_delete_insert_ = is_delete_insert;
+  // DI rows above the base snapshot must keep their delete images, even if
+  // multi_version_start has already passed every committed transaction.
+  const int64_t compact_version = is_delete_insert_
+      ? version_range_.base_version_ : version_range_.multi_version_start_;
   has_multi_commit_trans_ = false;
   // find the first non-compacted trans_node and use its dml_type for the compacted row
   while (NULL != iter && NDT_COMPACT == iter->type_) {
@@ -80,7 +86,7 @@ int ObMultiVersionValueIterator::init_multi_version_iter()
   multi_version_iter_ = iter;
   if (OB_FAIL(cur_trans_version_.convert_for_tx(max_committed_trans_version_))) {
     TRANS_LOG(ERROR, "failed to convert scn", K(ret), K_(max_committed_trans_version));
-  } else if (max_committed_trans_version_ <= version_range_.multi_version_start_) {
+  } else if (max_committed_trans_version_ <= compact_version) {
     //如果多版本的开始版本大于等于当前以提交的最大版本
     //则只迭代出所有trans node compact结果
   } else {
@@ -359,20 +365,22 @@ int ObMultiVersionValueIterator::get_next_multi_version_node(const void *&tnode)
     ret = OB_ITER_END;
   } else {
     const SCN cur_trans_version = multi_version_iter_->trans_version_;
+    const int64_t compact_version = is_delete_insert_
+        ? version_range_.base_version_ : version_range_.multi_version_start_;
     ObMvccTransNode *record_node = nullptr;
     while (OB_SUCC(ret) && OB_NOT_NULL(multi_version_iter_) && OB_ISNULL(record_node)) {
       if (NDT_COMPACT == multi_version_iter_->type_) { // meet compacted node
-        if (multi_version_iter_->trans_version_.get_val_for_tx() > version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() > compact_version) {
           // ignore compact node
           is_compacted = true;
-        } else { // multi_version_iter_->trans_version_ <= multi_version_start
+        } else { // multi_version_iter_->trans_version_ <= compact_version
           is_node_compacted_ = true;
           record_node = multi_version_iter_;
           multi_version_iter_ = NULL;
           break;
         }
       } else { // not compacted node
-        if (multi_version_iter_->trans_version_.get_val_for_tx() <= version_range_.multi_version_start_) {
+        if (multi_version_iter_->trans_version_.get_val_for_tx() <= compact_version) {
           is_node_compacted_ = true;
         }
         record_node = multi_version_iter_;
@@ -451,6 +459,7 @@ void ObMultiVersionValueIterator::reset()
   cur_trans_version_ = SCN::min_scn();
   is_node_compacted_ = false;
   has_multi_commit_trans_ = false;
+  is_delete_insert_ = false;
   ctx_ = NULL;
   version_range_.reset();
 }

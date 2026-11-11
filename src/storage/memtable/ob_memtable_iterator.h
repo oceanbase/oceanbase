@@ -235,7 +235,7 @@ protected:
   int get_multi_version_row(const blocksstable::ObDatumRow *&row);
   int get_uncommitted_row(const blocksstable::ObDatumRow *&row);
   int switch_scan_state(const bool is_delete_insert_merge);
-  int switch_to_committed_scan_state();
+  int switch_to_committed_scan_state(const bool is_delete_insert_merge);
   virtual int init_next_value_iter();
   int get_next_row();
 protected:
