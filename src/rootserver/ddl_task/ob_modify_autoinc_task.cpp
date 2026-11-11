@@ -114,7 +114,9 @@ int ObUpdateAutoincSequenceTask::process()
         }
       }
     }
-    if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::notify_update_autoinc_end(task_key, max_value + 1, ret))) {
+    // Convert before adding: the next sequence value may exceed INT64_MAX.
+    const uint64_t next_value = static_cast<uint64_t>(max_value) + 1;
+    if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::notify_update_autoinc_end(task_key, next_value, ret))) {
       LOG_WARN("fail to finish update autoinc task", KR(tmp_ret), K(max_value));
     }
     LOG_INFO("execute finish update autoinc task finish", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_key), K(data_table_id_), K(column_id_), K(max_value));
