@@ -152,6 +152,11 @@ private:
     const uint64_t table_id,
     bool &is_table_valid,
     ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas);
+  // aux lob table follows its data table: skip it if data table should not check major merge progress
+  int check_aux_lob_table_need_skip(
+    ObSchemaGetterGuard &schema_guard,
+    const ObSimpleTableSchemaV2 &lob_schema,
+    bool &need_skip);
   int rebuild_tablet_status_map();
   int prepare_fts_group(
     const int64_t table_id,

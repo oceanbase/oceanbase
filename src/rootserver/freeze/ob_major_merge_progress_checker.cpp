@@ -384,6 +384,7 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
 {
   int ret = OB_SUCCESS;
   is_table_valid = false;
+  bool need_skip = false;
   const ObSimpleTableSchemaV2 *data_simple_schema = nullptr;
   if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, table_id, data_simple_schema))) {
     LOG_WARN("failed to get simple schema", KR(ret), K(table_id));
@@ -397,6 +398,11 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
   } else if (is_sys_tenant(tenant_id_) && is_shared_storage_sslog_table(table_id)) {
     // sys tenant __all_sslog_table has no tablet
 #endif
+  } else if (data_simple_schema->is_aux_lob_table()
+      && OB_FAIL(check_aux_lob_table_need_skip(schema_guard, *data_simple_schema, need_skip))) {
+    LOG_WARN("failed to check aux lob table need skip", KR(ret), K(table_id));
+  } else if (need_skip) {
+    // data table of aux lob table should not be checked, skip aux lob table together
   } else if (OB_FAIL(table_ids_.push_back(table_id))) {
     LOG_WARN("failed to add table id info", KR(ret), K(table_id));
   } else if (OB_FAIL(schema_guard.get_index_schemas_with_data_table_id(
@@ -405,6 +411,30 @@ int ObMajorMergeProgressChecker::get_table_and_index_schema(
       K(table_id), KPC(data_simple_schema));
   } else {
     is_table_valid = true;
+  }
+  return ret;
+}
+
+// aux lob table does not inherit the table state flag of data table (e.g. hidden table in offline ddl),
+// and lob meta table may have no major sstable before offline ddl commits.
+// keep the check scope of aux lob table consistent with its data table.
+int ObMajorMergeProgressChecker::check_aux_lob_table_need_skip(
+  ObSchemaGetterGuard &schema_guard,
+  const ObSimpleTableSchemaV2 &lob_schema,
+  bool &need_skip)
+{
+  int ret = OB_SUCCESS;
+  need_skip = false;
+  const uint64_t lob_table_id = lob_schema.get_table_id();
+  const uint64_t data_table_id = lob_schema.get_data_table_id();
+  const ObSimpleTableSchemaV2 *data_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, data_table_id, data_schema))) {
+    LOG_WARN("failed to get data table schema", KR(ret), K_(tenant_id), K(data_table_id), K(lob_table_id));
+  } else if (OB_ISNULL(data_schema)) {
+    need_skip = true;
+    LOG_WARN("data table schema is unexpected null, just skip", K_(tenant_id), K(data_table_id), K(lob_table_id));
+  } else if (!data_schema->should_check_major_merge_progress()) {
+    need_skip = true;
   }
   return ret;
 }
