@@ -54,7 +54,7 @@ public:
   int construct_iters();
   int save_curr_rowkey(const bool need_scan_di_base);
   int prepare_di_base_blockscan(bool di_base_only, ObDatumRow *row = nullptr);
-  int check_di_base_changed(const common::ObIArray<ObITable *> &tables, bool &is_changed);
+  int check_di_base_changed(ObTableStoreIterator &table_iter, bool &is_changed) const;
   void reset_iter_array();
   void reuse_iter_array();
   void reclaim_iter_array();
@@ -90,6 +90,8 @@ private:
     OB_ASSERT_MSG(idx >=0 && idx < di_base_iters_.count(), "idx is out of range");
     return di_base_iters_[idx];
   }
+
+  int get_next_visible_di_base(ObTableStoreIterator &table_iter, int64_t &idx, ObITable *&table) const;
 
 private:
   struct StashInfo

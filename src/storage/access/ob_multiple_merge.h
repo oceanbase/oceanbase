@@ -64,6 +64,7 @@ public:
       ObTabletReadTables &tablet_read_tables);
   virtual int get_next_row(blocksstable::ObDatumRow *&row);
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
+  int prepare_for_reuse();
   virtual void reset();
   virtual void reuse();
   // used for global cached query iterator

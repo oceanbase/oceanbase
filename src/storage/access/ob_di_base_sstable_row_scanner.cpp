@@ -7,6 +7,8 @@
 #include "ob_di_base_sstable_row_scanner.h"
 #include "ob_aggregated_store.h"
 #include "ob_aggregated_store_vec.h"
+#include "storage/compaction/ob_partition_merge_policy.h"
+#include "storage/tablet/ob_tablet_table_store_iterator.h"
 
 namespace oceanbase
 {
@@ -379,38 +381,60 @@ int ObDIBaseSSTableRowScanner::prepare_di_base_blockscan(bool di_base_only, ObDa
   return ret;
 }
 
-int ObDIBaseSSTableRowScanner::check_di_base_changed(const common::ObIArray<ObITable *> &tables, bool &is_changed)
+int ObDIBaseSSTableRowScanner::get_next_visible_di_base(
+    ObTableStoreIterator &table_iter, int64_t &idx, ObITable *&table) const
 {
   int ret = OB_SUCCESS;
-  is_changed = false;
-  tables_ = &tables;
-  ObITable *table = nullptr;
-  int64_t di_base_idx = 0;
-  for (int64_t idx = 0; OB_SUCC(ret) && !is_changed && idx < tables.count(); ++idx) {
-    if (OB_FAIL(tables.at(idx, table))) {
-      STORAGE_LOG(WARN, "fail to get table", K(ret), K(idx));
+  table = nullptr;
+  if (idx < table_iter.count()) {
+    bool can_access = true;
+    if (OB_FAIL(table_iter.get_ith_table(idx++, table))) {
+      STORAGE_LOG(WARN, "fail to get di base table", K(ret), K(idx));
     } else if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "get unexpected null table", K(ret), K(idx));
-    } else if (table->is_major_type_sstable()) {
-      if (OB_UNLIKELY(di_base_idx >= get_di_base_table_cnt())) {
-        is_changed = true;
-        FLOG_INFO("inc major count changed after refresh, retry to scan", K(ret), K(di_base_idx), K(get_di_base_table_cnt()));
-      } else if (OB_UNLIKELY(table->get_key() != get_di_base_table_key(di_base_idx))) {
-        is_changed = true;
-        FLOG_INFO("table key of di base sstable changed after refresh, retry to scan", K(ret),
-                                                                                       K(di_base_idx),
-                                                                                       K(get_di_base_table_key(di_base_idx)),
-                                                                                       KPC(table));
-      } else {
-        ++di_base_idx;
-      }
+      STORAGE_LOG(WARN, "unexpected null table", K(ret), K(idx));
+    } else if (!table->is_major_type_sstable()) {
+      table = nullptr;
+    } else if (table->is_inc_major_type_sstable()
+        && OB_FAIL(compaction::ObIncMajorTxHelper::check_can_access(
+            *access_ctx_, *static_cast<const ObSSTable *>(table), can_access))) {
+      STORAGE_LOG(WARN, "fail to check inc major visibility", K(ret), KPC(table));
+    } else if (!can_access) {
+      table = nullptr;
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret) && OB_UNLIKELY(di_base_idx != get_di_base_table_cnt())) {
-    is_changed = true;
-    FLOG_INFO("inc major count changed after refresh, retry to scan", K(ret), K(di_base_idx), K(get_di_base_table_cnt()));
+int ObDIBaseSSTableRowScanner::check_di_base_changed(ObTableStoreIterator &table_iter, bool &is_changed) const
+{
+  int ret = OB_SUCCESS;
+  is_changed = true;
+  if (OB_UNLIKELY(nullptr == stash_info_ || !stash_info_->tablet_iter_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected invalid stash info", K(ret), KPC(stash_info_));
+  } else {
+    ObTableStoreIterator &old_table_iter = *stash_info_->tablet_iter_.table_iter();
+    int64_t old_idx = 0;
+    int64_t new_idx = 0;
+    ObITable *old_table = nullptr;
+    ObITable *new_table = nullptr;
+    // Partition splitting and inc major are mutually exclusive, so DI base tables always form a contiguous prefix.
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(get_next_visible_di_base(old_table_iter, old_idx, old_table))) {
+        STORAGE_LOG(WARN, "fail to get old di base", K(ret));
+      } else if (OB_FAIL(get_next_visible_di_base(table_iter, new_idx, new_table))) {
+        STORAGE_LOG(WARN, "fail to get new di base", K(ret));
+      } else if (nullptr == old_table || nullptr == new_table) {
+        is_changed = old_table != new_table;
+        break;
+      } else if (old_table->get_key() != new_table->get_key()) {
+        break;
+      }
+    }
+    if (OB_SUCC(ret) && is_changed) {
+      FLOG_INFO("major or inc major sstable changed after refresh", KPC(old_table), KPC(new_table));
+    }
   }
   return ret;
 }
