@@ -3743,6 +3743,23 @@ int ObTransformUtils::get_range_column_items_by_ids(const ObDMLStmt *stmt,
   return ret;
 }
 
+int ObTransformUtils::check_utf8_sql_filter(const ObDMLStmt *stmt,
+                                            const ObIArray<ObRawExpr *> &exprs,
+                                            bool &has_char_or_varchar_column)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryCtx *query_ctx = nullptr;
+
+  has_char_or_varchar_column = false;
+  if (nullptr != stmt && nullptr != (query_ctx = stmt->get_query_ctx()) &&
+      query_ctx->force_char_or_varchar_sql_filter_ &&
+      OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(exprs, has_char_or_varchar_column))) {
+    LOG_WARN("failed to inspect utf8 SQL filter predicates", K(ret));
+  }
+
+  return ret;
+}
+
 int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
                                                       uint64_t table_id,
                                                       const ObIArray<uint64_t> &index_cols,
@@ -3758,12 +3775,19 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   const ParamStore *params = NULL;
   ObQueryCtx *query_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
+  bool has_char_or_varchar_column = false;
+
+  if (OB_FAIL(check_utf8_sql_filter(stmt, predicate_exprs, has_char_or_varchar_column))) {
+    LOG_WARN("failed to inspect CHAR/VARCHAR rewrite predicates", K(ret));
+  } else if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())
       || OB_ISNULL(query_ctx = stmt->get_query_ctx())
       || OB_ISNULL(session = ctx->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
+  } else if (has_char_or_varchar_column) {
+    // Rewrites must not prove that an index range covers predicates kept exclusively as SQL filters.
+    is_match = false;
   } else if (OB_FAIL(get_range_column_items_by_ids(stmt,
                                                    table_id,
                                                    index_cols,

@@ -993,6 +993,7 @@ public:
                                   ObIArray<ObRawExpr*> &pushdown_filters) const;
 
   int has_nonpushdown_filter(bool &has_npd_filter);
+  bool is_char_or_varchar_sql_filter_forced() const;
   int has_nonpushdown_aggr(const ObIArray<ObAggFunRawExpr*> &aggr_items, bool &has_npd_aggr);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
   int replace_index_merge_pushdown_filters(ObIndexMergeNode *node, ObRawExprReplacer &replacer);

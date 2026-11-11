@@ -1573,6 +1573,7 @@ int ObBasicSessionInfo::load_default_configs_in_pc()
   inf_pc_configs_.enable_hyperscan_regexp_engine_ = false;
   inf_pc_configs_.enable_re2_regexp_engine_ = false;
   inf_pc_configs_.min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
+  inf_pc_configs_.enable_invalid_utf8_range_fallback_ = false;
   return ret;
 }
 
@@ -5681,6 +5682,8 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
   OB_UNIS_ENCODE(global_rich_vector_configured_);
   OB_UNIS_ENCODE(route_to_column_replica_);
   OB_UNIS_ENCODE(client_attribute_capability_.capability_);
+  // Remote compilation must use the same configuration snapshot as the serialized plan-cache signature.
+  OB_UNIS_ENCODE(inf_pc_configs_.enable_invalid_utf8_range_fallback_);
   return ret;
 }
 
@@ -6030,6 +6033,9 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
     }
     OB_UNIS_DECODE(route_to_column_replica_);
     OB_UNIS_DECODE(client_attribute_capability_.capability_);
+    // A pooled session can retain the opposite value; older senders without this field default to disabled.
+    inf_pc_configs_.enable_invalid_utf8_range_fallback_ = false;
+    OB_UNIS_DECODE(inf_pc_configs_.enable_invalid_utf8_range_fallback_);
     pos = pos_orig + len;
   }
   return ret;
@@ -6332,6 +6338,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   OB_UNIS_ADD_LEN(global_rich_vector_configured_);
   OB_UNIS_ADD_LEN(route_to_column_replica_);
   OB_UNIS_ADD_LEN(client_attribute_capability_.capability_);
+  OB_UNIS_ADD_LEN(inf_pc_configs_.enable_invalid_utf8_range_fallback_);
   return len;
 }
 

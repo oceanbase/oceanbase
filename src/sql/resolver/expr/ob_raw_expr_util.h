@@ -460,6 +460,10 @@ public:
                                                ObIArray<ObRawExpr *> &vir_gen_columns);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
+  static int check_has_char_or_varchar_column(const ObRawExpr *expr, bool &has_char_or_varchar_column);
+  static int check_has_char_or_varchar_column(const common::ObIArray<ObRawExpr *> &exprs, bool &has_char_or_varchar_column);
+  static int extract_non_char_or_varchar_filters(const common::ObIArray<ObRawExpr *> &filters,
+                                                 common::ObIArray<ObRawExpr *> &non_char_or_varchar_filters);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
                                   common::ObIArray<ObRawExpr*> &set_op_exprs);
   static int extract_var_assign_exprs(const ObRawExpr *raw_expr,

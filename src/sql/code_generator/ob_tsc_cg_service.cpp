@@ -1947,6 +1947,18 @@ int ObTscCgService::generate_das_scan_ctdef(const ObLogTableScan &op,
     } else if (OB_FAIL(op.get_index_filters(scan_ctdef.index_merge_idx_, scan_pushdown_filters))) {
       LOG_WARN("failed to get index filters", K(ret));
     }
+
+    if (OB_SUCC(ret) && op.is_char_or_varchar_sql_filter_forced()) {
+      ObSEArray<ObRawExpr *, 4> non_char_or_varchar_filters;
+
+      // The index-merge root retains the full SQL filter. Child scans must not reject rows using CHAR/VARCHAR bounds.
+      if (OB_FAIL(ObRawExprUtils::extract_non_char_or_varchar_filters(scan_pushdown_filters, non_char_or_varchar_filters))) {
+        LOG_WARN("failed to collect index merge storage filters", K(ret));
+      } else if (OB_FAIL(scan_pushdown_filters.assign(non_char_or_varchar_filters))) {
+        LOG_WARN("failed to retain index merge storage filters", K(ret));
+      }
+    }
+
     // Index merge children skip generate_tsc_filter()'s scan_pushdown_filters, so attach
     // auto_split_filter here; otherwise dest tablet still reads src SSTable rows.
     if (OB_SUCC(ret) && OB_NOT_NULL(op.get_auto_split_filter())) {

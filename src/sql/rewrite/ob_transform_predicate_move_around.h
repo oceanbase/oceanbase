@@ -172,6 +172,11 @@ private:
   int pushdown_predicates(ObDMLStmt *stmt,
                           ObIArray<ObRawExpr *> &predicates);
 
+  int check_utf8_pushdown_preds_safe(const ObDMLStmt &stmt,
+                                     const ObIArray<ObRawExpr *> &pushdown_preds,
+                                     const ObIArray<ObRawExpr *> &pullup_preds,
+                                     bool &can_pushdown);
+
   static int check_dblink_pushdown_preds_safe(ObDMLStmt *stmt,
                                               ObIArray<ObRawExpr *> &preds,
                                               bool &can_pushdown);

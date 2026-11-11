@@ -162,6 +162,7 @@ ObPlanCacheValue::ObPlanCacheValue(uint64_t id)
     contain_sys_name_table_(false),
     need_param_(true),
     is_nested_sql_(false),
+    utf8_range_fallback_context_(Utf8RangeFallbackContext::DISABLED),
     is_batch_execute_(false),
     has_dynamic_values_table_(false),
     stored_schema_objs_(pc_alloc_),
@@ -179,6 +180,25 @@ ObPlanCacheValue::ObPlanCacheValue(uint64_t id)
   not_param_var_.set_attr(ObMemAttr(MTL_ID(), "NotParamVar"));
   param_charset_type_.set_attr(ObMemAttr(MTL_ID(), "ParamCharsType"));
   fmt_int_or_ch_decint_idx_.set_attr(ObMemAttr(MTL_ID(), "FMTIntPrecIdx"));
+}
+
+ObPlanCacheValue::Utf8RangeFallbackContext ObPlanCacheValue::get_utf8_range_fallback_context(
+    const ObSQLSessionInfo &session)
+{
+  Utf8RangeFallbackContext context = Utf8RangeFallbackContext::OTHER_SQL;
+
+  if (session.is_user_sql_for_utf8_range_fallback()) {
+    context = Utf8RangeFallbackContext::USER_SQL;
+  }
+
+  return context;
+}
+
+bool ObPlanCacheValue::match_utf8_range_fallback_context(const ObSQLSessionInfo &session) const
+{
+  // A disabled entry needs only this saved-state check, with no session-config or data-version lookup.
+  return Utf8RangeFallbackContext::DISABLED == utf8_range_fallback_context_ ||
+         utf8_range_fallback_context_ == get_utf8_range_fallback_context(session);
 }
 
 int ObPlanCacheValue::assign_udr_infos(ObPlanCacheCtx &pc_ctx)
@@ -222,7 +242,8 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
   int ret = OB_SUCCESS;
   ObMemAttr mem_attr;
   const ObPlanCacheObject *plan = static_cast<const ObPlanCacheObject*>(cache_obj);
-  if (OB_ISNULL(pcv_set) || OB_ISNULL(plan) || OB_ISNULL(pcv_set->get_plan_cache())) {
+  if (OB_ISNULL(pcv_set) || OB_ISNULL(plan) || OB_ISNULL(pcv_set->get_plan_cache()) ||
+      OB_ISNULL(pc_ctx.sql_ctx_.session_info_) || OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(pcv_set), K(plan));
   } else if (FALSE_IT(mem_attr = pcv_set->get_plan_cache()->get_mem_attr())) {
@@ -239,13 +260,6 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     if (OB_FAIL(set_outline_params_wrapper(*pc_ctx.exec_ctx_.get_outline_params_wrapper()))) {
       LOG_WARN("fail to set outline params", K(ret));
     }
-  } else if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_) ||
-             OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument",
-	     K(ret),
-	     K(pc_ctx.sql_ctx_.session_info_),
-	     K(pc_ctx.sql_ctx_.schema_guard_));
   }
 
   if (OB_SUCC(ret)) {
@@ -259,6 +273,13 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     stmt_type_ = plan->get_stmt_type();
     need_param_ = plan->need_param();
     is_nested_sql_ = ObSQLUtils::is_nested_sql(&pc_ctx.exec_ctx_);
+    utf8_range_fallback_context_ = Utf8RangeFallbackContext::DISABLED;
+    if (pc_ctx.sql_ctx_.session_info_->is_invalid_utf8_range_fallback_enabled() &&
+        (stmt::T_SELECT == stmt_type_ || stmt::T_UPDATE == stmt_type_ || stmt::T_DELETE == stmt_type_ ||
+         stmt::T_INSERT == stmt_type_)) {
+      utf8_range_fallback_context_ = get_utf8_range_fallback_context(*pc_ctx.sql_ctx_.session_info_);
+    }
+
     is_batch_execute_ = pc_ctx.sql_ctx_.is_batch_params_execute();
     has_dynamic_values_table_ = pc_ctx.exec_ctx_.has_dynamic_values_table();
     MEMCPY(sql_id_, pc_ctx.sql_ctx_.sql_id_, sizeof(pc_ctx.sql_ctx_.sql_id_));
@@ -1745,6 +1766,7 @@ void ObPlanCacheValue::reset()
   sess_create_time_ = 0;
   contain_sys_name_table_ = false;
   is_nested_sql_ = false;
+  utf8_range_fallback_context_ = Utf8RangeFallbackContext::DISABLED;
   is_batch_execute_ = false;
   has_dynamic_values_table_ = false;
   for (int64_t i = 0; i < stored_schema_objs_.count(); i++) {
@@ -1987,6 +2009,12 @@ int ObPlanCacheValue::match(ObPlanCacheCtx &pc_ctx,
     is_same = false;
     LOG_DEBUG("new transaction temporary table plan can not be reused in autonomous transaction",
               K(is_same), K(stmt_type_));
+  } else if (!match_utf8_range_fallback_context(*session_info)) {
+    // PL and user SQL may share PC_TEXT_MODE, but their VARCHAR scan policies must remain separate.
+    is_same = false;
+    LOG_TRACE("utf8 range fallback cache context mismatch", "saved_context", static_cast<int>(utf8_range_fallback_context_),
+                                                            "user_session", session_info->is_user_session(),
+                                                            "in_pl", nullptr != session_info->get_pl_context());
   } else if (is_nested_sql_ != ObSQLUtils::is_nested_sql(&pc_ctx.exec_ctx_)) {
     //the plan of nested sql can't match with the plan of general sql
     //because nested sql's plan be forced to use DAS plan

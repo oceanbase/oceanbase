@@ -637,6 +637,10 @@ public:
                                            const ObIArray<uint64_t> &column_ids,
                                            ObIArray<ColumnItem> &column_items);
 
+  static int check_utf8_sql_filter(const ObDMLStmt *stmt,
+                                   const ObIArray<ObRawExpr *> &exprs,
+                                   bool &has_char_or_varchar_column);
+
   static int check_index_extract_query_range(const ObDMLStmt *stmt,
                                              uint64_t table_id,
                                              const ObIArray<uint64_t> &index_cols,

@@ -1260,15 +1260,33 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t range_cnt = 0;
 
     common::ObSEArray<ObRawExpr *, 4> agent_table_filter;
+    ObSEArray<ObRawExpr *, 4> non_char_or_varchar_filters;
+    const ObIArray<ObRawExpr *> *range_filter_exprs = &helper.filters_;
+    const ObQueryCtx *query_ctx = opt_ctx->get_query_ctx();
     bool is_oracle_inner_index_table = share::is_oracle_mapping_real_virtual_table(index_schema->get_table_id());
-    if (is_oracle_inner_index_table
+
+    if (nullptr != query_ctx && query_ctx->force_char_or_varchar_sql_filter_ &&
+        table_schema->is_user_table() && !is_domain_index) {
+      if (OB_FAIL(ObRawExprUtils::extract_non_char_or_varchar_filters(helper.filters_, non_char_or_varchar_filters))) {
+        LOG_WARN("failed to extract non-CHAR/VARCHAR filters for ranges", K(ret));
+      } else {
+        // Use the native extractor even for no predicates: it constructs Whole Range, not an empty result.
+        range_filter_exprs = &non_char_or_varchar_filters;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(range_filter_exprs)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null scan range predicates", K(ret));
+    } else if (is_oracle_inner_index_table
         && OB_FAIL(extract_valid_range_expr_for_oracle_agent_table(helper.filters_,
                                                                    agent_table_filter))) {
       LOG_WARN("failed to extract expr", K(ret));
     } else if (!is_domain_index && OB_FAIL(extract_preliminary_query_range(range_columns,
                                                                  is_oracle_inner_index_table
                                                                   ? agent_table_filter
-                                                                    : helper.filters_,
+                                                                    : *range_filter_exprs,
                                                                  range_info.get_expr_constraints(),
                                                                  table_id,
 								             query_range_provider,

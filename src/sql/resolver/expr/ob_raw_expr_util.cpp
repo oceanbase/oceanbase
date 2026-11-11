@@ -3678,6 +3678,83 @@ int ObRawExprUtils::extract_set_op_exprs(const ObIArray<ObRawExpr*> &exprs,
   return ret;
 }
 
+int ObRawExprUtils::check_has_char_or_varchar_column(const ObRawExpr *expr, bool &has_char_or_varchar_column)
+{
+  int ret = OB_SUCCESS;
+
+  has_char_or_varchar_column = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null CHAR/VARCHAR predicate", K(ret));
+  } else if (expr->is_column_ref_expr()) {
+    // Include BINARY/VARBINARY as well: admission depends on the type, not the collation.
+    has_char_or_varchar_column = ObCharType == expr->get_data_type() || ObVarcharType == expr->get_data_type();
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_char_or_varchar_column && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_has_char_or_varchar_column(expr->get_param_expr(i), has_char_or_varchar_column)))) {
+        LOG_WARN("failed to inspect CHAR/VARCHAR predicate", K(ret), K(i));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRawExprUtils::check_has_char_or_varchar_column(const ObIArray<ObRawExpr *> &exprs, bool &has_char_or_varchar_column)
+{
+  int ret = OB_SUCCESS;
+
+  has_char_or_varchar_column = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_char_or_varchar_column && i < exprs.count(); ++i) {
+    if (OB_FAIL(check_has_char_or_varchar_column(exprs.at(i), has_char_or_varchar_column))) {
+      LOG_WARN("failed to inspect CHAR/VARCHAR predicates", K(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
+static int append_non_char_or_varchar_filters(ObRawExpr *expr, ObIArray<ObRawExpr *> &non_char_or_varchar_filters)
+{
+  int ret = OB_SUCCESS;
+  bool has_char_or_varchar_column = false;
+
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null scan predicate", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(expr, has_char_or_varchar_column))) {
+    LOG_WARN("failed to inspect filter predicate", K(ret));
+  } else if (!has_char_or_varchar_column) {
+    // Preserve the expression and its precision metadata unchanged for non-CHAR/VARCHAR predicates.
+    if (OB_FAIL(non_char_or_varchar_filters.push_back(expr))) {
+      LOG_WARN("failed to retain non-CHAR/VARCHAR filter", K(ret));
+    }
+  } else if (T_OP_AND == expr->get_expr_type()) {
+    // AND permits independent integer ranges. An OR containing CHAR/VARCHAR must stay intact as an SQL filter.
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(append_non_char_or_varchar_filters(expr->get_param_expr(i), non_char_or_varchar_filters)))) {
+        LOG_WARN("failed to collect non-CHAR/VARCHAR filters", K(ret), K(i));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObRawExprUtils::extract_non_char_or_varchar_filters(const ObIArray<ObRawExpr *> &filters,
+                                                        ObIArray<ObRawExpr *> &non_char_or_varchar_filters)
+{
+  int ret = OB_SUCCESS;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+    if (OB_FAIL(SMART_CALL(append_non_char_or_varchar_filters(filters.at(i), non_char_or_varchar_filters)))) {
+      LOG_WARN("failed to extract non-CHAR/VARCHAR filters", K(ret), K(i));
+    }
+  }
+
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_exprs(const ObRawExpr *raw_expr,
                                          ObIArray<ObRawExpr*> &column_exprs,
                                          bool need_pseudo_column,

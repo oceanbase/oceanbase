@@ -987,6 +987,16 @@ int ObLogTableScan::replace_index_merge_pushdown_filters(ObIndexMergeNode *node,
   return ret;
 }
 
+bool ObLogTableScan::is_char_or_varchar_sql_filter_forced() const
+{
+  const ObDMLStmt *stmt = get_stmt();
+
+  // Match ordinary scalar scan paths; specialized domain-index filters retain their own contracts.
+  return nullptr != stmt && nullptr != stmt->get_query_ctx() && stmt->get_query_ctx()->force_char_or_varchar_sql_filter_ &&
+         USER_TABLE == get_table_type() && !is_spatial_index_scan() && !is_multivalue_index_scan() &&
+         !is_text_retrieval_scan() && !is_vec_idx_scan() && !is_search_index_scan() && !is_hybrid_search();
+}
+
 int ObLogTableScan::has_nonpushdown_filter(bool &has_npd_filter)
 {
   int ret = OB_SUCCESS;
@@ -1045,6 +1055,8 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
   int ret = OB_SUCCESS;
   const ObIArray<ObRawExpr*> &filters = get_filter_exprs();
   const auto &flags = get_filter_before_index_flags();
+  const bool force_char_or_varchar_sql_filter = is_char_or_varchar_sql_filter_forced();
+
   if (get_contains_fake_cte()
     || is_oracle_mapping_real_virtual_table(get_ref_table_id())) {
     //all filters can not push down to storage
@@ -1063,7 +1075,17 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
     bool contains_pl_composite_expr = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       bool add_to_scan_filter = false;
-      if (use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
+      bool has_char_or_varchar_column = false;
+
+      if (force_char_or_varchar_sql_filter &&
+          OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(filters.at(i), has_char_or_varchar_column))) {
+        LOG_WARN("failed to inspect CHAR/VARCHAR scan filter", K(ret), K(i));
+      } else if (has_char_or_varchar_column) {
+        // Classify here so LIMIT/aggregate planning sees the SQL-side filter before code generation.
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("failed to retain CHAR/VARCHAR scan filter", K(ret));
+        }
+      } else if (use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
         //In Batch table scan the dynamic param filter do not push down to storage
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push dynamic filter to store non-pushdown filter failed", K(ret), K(i));
@@ -1320,6 +1342,8 @@ int ObLogTableScan::extract_nonpushdown_filters(const ObIArray<ObRawExpr*> &filt
                                                 ObIArray<ObRawExpr*> &pushdown_filters) const
 {
   int ret = OB_SUCCESS;
+  const bool force_char_or_varchar_sql_filter = is_char_or_varchar_sql_filter_forced();
+
   if (get_contains_fake_cte() ||
       is_virtual_table(get_ref_table_id()) ||
       EXTERNAL_TABLE == get_table_type()) {
@@ -1329,7 +1353,16 @@ int ObLogTableScan::extract_nonpushdown_filters(const ObIArray<ObRawExpr*> &filt
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      if (use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
+      bool has_char_or_varchar_column = false;
+
+      if (force_char_or_varchar_sql_filter &&
+          OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(filters.at(i), has_char_or_varchar_column))) {
+        LOG_WARN("failed to inspect CHAR/VARCHAR lookup filter", K(ret), K(i));
+      } else if (has_char_or_varchar_column) {
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("failed to retain CHAR/VARCHAR lookup filter", K(ret));
+        }
+      } else if (use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
         //In Batch table scan the dynamic param filter do not push down to storage
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("failed to push dynamic filter to non-pushdown filters", K(ret), K(i));
@@ -1792,6 +1825,24 @@ int ObLogTableScan::filter_before_index_back_set()
       } else { /* Do nothing */ }
     }
   }
+  if (OB_SUCC(ret) && is_char_or_varchar_sql_filter_forced()) {
+    if (OB_UNLIKELY(filter_before_index_back_.count() != filter_exprs_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid filter before index back count", K(ret), K(filter_before_index_back_.count()),
+                                                       K(filter_exprs_.count()));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < filter_exprs_.count(); ++i) {
+        bool has_char_or_varchar_column = false;
+
+        if (OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(filter_exprs_.at(i), has_char_or_varchar_column))) {
+          LOG_WARN("failed to classify CHAR/VARCHAR filter before index back", K(ret), K(i));
+        } else if (has_char_or_varchar_column) {
+          filter_before_index_back_.at(i) = false;
+        }
+      }
+    }
+  }
+
   LOG_TRACE("succeed to check filter before index back", K(filter_before_index_back_),
       K(index_back_), K(ret));
   return ret;

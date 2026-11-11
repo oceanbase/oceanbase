@@ -4260,6 +4260,31 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
   ObTransformerCtx trans_ctx;
   ObSchemaChecker schema_checker;
 
+  if (OB_SUCC(ret)) {
+    ObSQLSessionInfo *session = exec_ctx.get_my_session();
+    ObQueryCtx *query_ctx = transform_stmt->get_query_ctx();
+    uint64_t data_version = 0;
+
+    if (OB_ISNULL(session) || OB_ISNULL(query_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null CHAR/VARCHAR filter planning context", K(ret), KP(session), KP(query_ctx));
+    } else {
+      query_ctx->force_char_or_varchar_sql_filter_ = false;
+      if (session->is_invalid_utf8_range_fallback_enabled() && session->is_user_sql_for_utf8_range_fallback() &&
+          !query_ctx->has_pl_udf_ && !query_ctx->is_table_gen_col_with_udf_ && !query_ctx->has_dml_trigger_ &&
+          (transform_stmt->is_select_stmt() || transform_stmt->is_update_stmt() ||
+           transform_stmt->is_delete_stmt() || stmt::T_INSERT == transform_stmt->get_stmt_type())) {
+        if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+          LOG_WARN("failed to get tenant data version", K(ret));
+        } else {
+          query_ctx->force_char_or_varchar_sql_filter_ = data_version >= DATA_VERSION_5_0_2_0;
+          LOG_TRACE("initialize forced CHAR/VARCHAR SQL filtering", K(data_version),
+                                                                    K(query_ctx->force_char_or_varchar_sql_filter_));
+        }
+      }
+    }
+  }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(schema_checker.init(*sql_schema_guard))) {
     LOG_WARN("fail to init schema_checker", K(ret));

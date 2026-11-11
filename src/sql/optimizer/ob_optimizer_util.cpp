@@ -7995,8 +7995,20 @@ int ObOptimizerUtil::pushdown_filter_into_subquery(const ObDMLStmt &parent_stmt,
   int ret = OB_SUCCESS;
   bool has_rownum = false;
   bool has_rollup = false;
+  bool has_char_or_varchar_column = false;
+  const ObQueryCtx *query_ctx = opt_ctx.get_query_ctx();
+
   can_pushdown = false;
-  if (subquery.is_set_stmt()) {
+  if (nullptr != query_ctx && query_ctx->force_char_or_varchar_sql_filter_ &&
+      OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(pushdown_filters, has_char_or_varchar_column))) {
+    LOG_WARN("failed to inspect CHAR/VARCHAR subquery filters", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (has_char_or_varchar_column) {
+    // Keep CHAR/VARCHAR predicates above the subquery, including materialized CTEs. Invalid-byte
+    // comparisons need not be constant within a collation group or window partition.
+  } else if (subquery.is_set_stmt()) {
     if (subquery.is_recursive_union() || subquery.has_limit()) {
       //do nothing
     } else if (OB_FAIL(check_pushdown_filter(parent_stmt,

@@ -1263,6 +1263,7 @@ public:
     enable_px_task_rebalance_(false),
     enable_nested_sql_local_optimize_(false),
     enable_search_index_(true),
+    enable_invalid_utf8_range_fallback_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1329,6 +1330,7 @@ public:
   bool enable_px_task_rebalance_;
   bool enable_nested_sql_local_optimize_;
   bool enable_search_index_;
+  bool enable_invalid_utf8_range_fallback_;
 private:
   // current cluster config version_
   int64_t cluster_config_version_;

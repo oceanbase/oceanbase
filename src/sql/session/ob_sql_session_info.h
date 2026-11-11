@@ -1426,6 +1426,13 @@ public:
   {
     return inner_flag_;
   }
+
+  bool is_user_sql_for_utf8_range_fallback() const
+  {
+    // Remote PL SQL keeps inner_flag_ and USER_SESSION, but does not restore the sender's PL context pointer.
+    return is_user_session() && !is_inner() && nullptr == get_pl_context();
+  }
+
   void reset_audit_record(bool need_retry = false)
   {
     ObAuditRecordData &audit_record = audit_record_wrapper_.get_audit_record();

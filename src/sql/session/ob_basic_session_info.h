@@ -902,6 +902,11 @@ public:
     return ret;
   }
   const common::ObString &get_config_in_pc_str() const { return config_in_pc_str_; }
+  bool is_invalid_utf8_range_fallback_enabled() const
+  {
+    return inf_pc_configs_.enable_invalid_utf8_range_fallback_;
+  }
+
   int get_sys_var_config_hash_val(uint64_t &val) {
     int ret = OB_SUCCESS;
     if (OB_FAIL(gen_sys_var_in_pc_str_lazy())) {

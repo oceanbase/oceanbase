@@ -1176,6 +1176,11 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
   } else if (stmt->is_select_stmt() &&
              static_cast<ObSelectStmt *>(stmt)->contain_ab_param()) {
     // do nothing
+  } else if (OB_FAIL(check_utf8_pushdown_preds_safe(*stmt, pushdown_preds, *pullup_preds, can_pushdown))) {
+    LOG_WARN("failed to check utf8 predicate pushdown", K(ret));
+  } else if (!can_pushdown) {
+    // Keep all original predicates and exclude this batch from CTE candidate collection.
+    OPT_TRACE("skip CHAR/VARCHAR predicate pushdown batch, stmt_id:", stmt->get_stmt_id());
   } else if (stmt->is_set_stmt()) {
     ObSelectStmt *sel_stmt = static_cast<ObSelectStmt*>(stmt);
     if (OB_FAIL(pushdown_into_set_stmt(sel_stmt,
@@ -4677,6 +4682,63 @@ int ObTransformPredicateMoveAround::check_stmt_has_dblink(ObDMLStmt *stmt, bool 
       }
     }
   }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::check_utf8_pushdown_preds_safe(const ObDMLStmt &stmt,
+                                                                   const ObIArray<ObRawExpr *> &pushdown_preds,
+                                                                   const ObIArray<ObRawExpr *> &pullup_preds,
+                                                                   bool &can_pushdown)
+{
+  int ret = OB_SUCCESS;
+  const ObQueryCtx *query_ctx = stmt.get_query_ctx();
+
+  can_pushdown = true;
+  if (nullptr != query_ctx && query_ctx->force_char_or_varchar_sql_filter_) {
+    ObSEArray<ObSEArray<ObRawExpr *, 16>, 4> local_predicates;
+    bool has_char_or_varchar_column = false;
+
+    // Check only this batch and this query block's predicate arrays; do not prewalk child statements.
+    if (OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(pushdown_preds, has_char_or_varchar_column))) {
+      LOG_WARN("failed to inspect utf8 pushdown predicates", K(ret));
+    } else if (!has_char_or_varchar_column &&
+               OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(pullup_preds, has_char_or_varchar_column))) {
+      LOG_WARN("failed to inspect utf8 deduction properties", K(ret));
+    } else if (!has_char_or_varchar_column && OB_FAIL(store_all_preds(stmt, local_predicates))) {
+      LOG_WARN("failed to collect current predicate arrays", K(ret));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && !has_char_or_varchar_column && i < local_predicates.count(); ++i) {
+      if (OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(local_predicates.at(i), has_char_or_varchar_column))) {
+        LOG_WARN("failed to inspect current utf8 predicates", K(ret), K(i));
+      }
+    }
+
+    if (OB_SUCC(ret) && !has_char_or_varchar_column && stmt.is_select_stmt()) {
+      const ObSelectStmt &select_stmt = static_cast<const ObSelectStmt &>(stmt);
+
+      if (OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(select_stmt.get_having_exprs(),
+                                                                   has_char_or_varchar_column))) {
+        LOG_WARN("failed to inspect utf8 having predicates", K(ret));
+      } else if (!has_char_or_varchar_column &&
+                 OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(select_stmt.get_qualify_filters(),
+                                                                          has_char_or_varchar_column))) {
+        LOG_WARN("failed to inspect utf8 qualify predicates", K(ret));
+      }
+    } else if (OB_SUCC(ret) && !has_char_or_varchar_column && (stmt.is_insert_stmt() || stmt.is_merge_stmt())) {
+      const ObDelUpdStmt &dml_stmt = static_cast<const ObDelUpdStmt &>(stmt);
+
+      if (OB_FAIL(ObRawExprUtils::check_has_char_or_varchar_column(dml_stmt.get_sharding_conditions(),
+                                                                   has_char_or_varchar_column))) {
+        LOG_WARN("failed to inspect utf8 DML sharding predicates", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      can_pushdown = !has_char_or_varchar_column;
+    }
+  }
+
   return ret;
 }
 

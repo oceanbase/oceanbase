@@ -293,6 +293,11 @@ public:
   int get_evolving_evolution_task(EvolutionPlanList &evo_task_list);
 #endif
 private:
+  enum class Utf8RangeFallbackContext : uint8_t { DISABLED, USER_SQL, OTHER_SQL };
+
+  static Utf8RangeFallbackContext get_utf8_range_fallback_context(const ObSQLSessionInfo &session);
+  bool match_utf8_range_fallback_context(const ObSQLSessionInfo &session) const;
+
   //used for add plan
   //check table version, view table version, merged version
   int check_value_version_for_add(const ObPlanCacheObject &cache_obj,
@@ -440,6 +445,8 @@ private:
   //it may cause correctness problems.
   //Therefore, it is necessary to distinguish whether it is nested SQL or not.
   bool is_nested_sql_;
+  // Config on/off is isolated by the cache key; retain the remaining plan-time context distinction here.
+  Utf8RangeFallbackContext utf8_range_fallback_context_;
   bool is_batch_execute_;
   bool has_dynamic_values_table_;
   // only when not need to param, this feild will be used.

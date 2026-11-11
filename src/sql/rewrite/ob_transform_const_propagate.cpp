@@ -1541,7 +1541,19 @@ int ObTransformConstPropagate::check_const_expr_validity(const ObDMLStmt &stmt,
                                                          bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(check_const_expr_not_null(stmt, const_info, is_valid))) {
+  ObSEArray<ObRawExpr *, 1> exprs;
+  bool has_char_or_varchar_column = false;
+
+  if (OB_FAIL(exprs.push_back(const_info.column_expr_))) {
+    LOG_WARN("failed to add constant propagation expression", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::check_utf8_sql_filter(&stmt, exprs, has_char_or_varchar_column))) {
+    LOG_WARN("failed to inspect CHAR/VARCHAR constant propagation column", K(ret), KPC(const_info.column_expr_));
+  } else if (has_char_or_varchar_column) {
+    // Collation equality does not make the original bytes interchangeable against an invalid boundary.
+    // Reject the source fact so WHERE, OR branches, view pullup and CHECK inference all retain the column.
+    is_valid = false;
+    OPT_TRACE("skip CHAR/VARCHAR constant propagation for utf8 SQL filtering:", const_info.column_expr_);
+  } else if (OB_FAIL(check_const_expr_not_null(stmt, const_info, is_valid))) {
     LOG_WARN("failed to check const expr not null", K(ret));
   } else if (!is_valid) {
     // do nothing

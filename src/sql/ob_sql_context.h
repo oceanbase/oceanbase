@@ -897,7 +897,8 @@ public:
       forbid_pl_sql_transpiler_(false),
       is_mview_refresh_sql_(false),
       rt_mview_infos_(allocator),
-      has_dml_trigger_(false)
+      has_dml_trigger_(false),
+      force_char_or_varchar_sql_filter_(false)
   {
   }
   TO_STRING_KV(N_PARAM_NUM, question_marks_count_,
@@ -953,6 +954,7 @@ public:
     is_mview_refresh_sql_ = false;
     rt_mview_infos_.reuse();
     has_dml_trigger_ = false;
+    force_char_or_varchar_sql_filter_ = false;
   }
 
   int64_t get_new_stmt_id() { return stmt_count_++; }
@@ -1097,6 +1099,8 @@ public:
   bool is_mview_refresh_sql_;
   ObSqlArray<ObRtMViewInfo> rt_mview_infos_;
   bool has_dml_trigger_;
+  // Evaluate CHAR/VARCHAR predicates in SQL without range extraction or storage filter pushdown.
+  bool force_char_or_varchar_sql_filter_;
 };
 
 template<typename... Args>
