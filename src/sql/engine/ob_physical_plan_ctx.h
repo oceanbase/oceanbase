@@ -97,13 +97,18 @@ enum ObTimeoutStrategy
 struct ObArrayParamGroup {
   OB_UNIS_VERSION(1);
 public:
-  ObArrayParamGroup() : row_count_(0), column_count_(0), start_param_idx_(0) {}
+  ObArrayParamGroup()
+    : row_count_(0), column_count_(0), start_param_idx_(0), raw_start_param_idx_(0) {}
   ObArrayParamGroup(const int64_t row_cnt, const int64_t param_cnt, const int64_t start_param_idx)
-    : row_count_(row_cnt), column_count_(param_cnt), start_param_idx_(start_param_idx) {}
+    : row_count_(row_cnt), column_count_(param_cnt), start_param_idx_(start_param_idx),
+      raw_start_param_idx_(start_param_idx) {}
   int64_t row_count_;
   int64_t column_count_;
   int64_t start_param_idx_; // in param store
-  TO_STRING_KV(K(row_count_), K(column_count_), K(start_param_idx_));
+  // Original index in the folded raw params, used only for local parameter resolution.
+  // Not serialized: remote execution only needs start_param_idx_.
+  int64_t raw_start_param_idx_;
+  TO_STRING_KV(K(row_count_), K(column_count_), K(start_param_idx_), K(raw_start_param_idx_));
 };
 
 class ObPhysicalPlanCtx

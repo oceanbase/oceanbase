@@ -1940,7 +1940,8 @@ public:
   bool is_enable_pl_sql_parameterize()
   {
     cached_tenant_config_info_.refresh();
-    return cached_tenant_config_info_.enable_pl_sql_parameterize();
+    return cached_tenant_config_info_.enable_pl_sql_parameterize()
+           && get_local_ob_enable_plan_cache();
   }
 
   bool enable_monitor_profile() {

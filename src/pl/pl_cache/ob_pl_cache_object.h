@@ -35,7 +35,8 @@ struct ObPlParamInfo : public sql::ObParamInfo
     sql::ObParamInfo(),
     pl_type_(PL_INVALID_TYPE),
     udt_id_(OB_INVALID_ID),
-    is_null_deduced_type_(false)
+    is_null_deduced_type_(false),
+    need_to_check_accuracy_(false)
   {}
   ~ObPlParamInfo() {}
   void reset()
@@ -44,10 +45,13 @@ struct ObPlParamInfo : public sql::ObParamInfo
     pl_type_ = PL_INVALID_TYPE;
     udt_id_ = OB_INVALID_ID;
     is_null_deduced_type_ = false;
+    need_to_check_accuracy_ = false;
   }
 
   TO_STRING_KV(K_(flag),
                K_(scale),
+               K_(precision),
+               K_(need_to_check_accuracy),
                K_(type),
                K_(ext_real_type),
                K_(is_oracle_null_value),
@@ -59,6 +63,8 @@ struct ObPlParamInfo : public sql::ObParamInfo
   uint8_t pl_type_;
   uint64_t udt_id_;
   bool is_null_deduced_type_;
+  // CALL expressions are compiled using the original scalar bind accuracy.
+  bool need_to_check_accuracy_;
   static const int64_t MAX_STR_DES_LEN_PL = 96;
 
   OB_UNIS_VERSION_V(1);

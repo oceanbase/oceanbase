@@ -30,7 +30,9 @@ OB_SERIALIZE_MEMBER(ObPlParamInfo,
                     is_oracle_null_value_,  // FARM COMPAT WHITELIST
                     col_type_,
                     pl_type_,
-                    udt_id_);
+                    udt_id_,
+                    precision_,
+                    need_to_check_accuracy_);
 
 void ObPLCacheObject::reset()
 {
@@ -91,11 +93,18 @@ int ObPLCacheObject::set_params_info(const ParamStore &params,
   int ret = OB_SUCCESS;
   int64_t N = params.count();
   ObPlParamInfo param_info;
+  const bool need_strict_param_type = is_call_stmt()
+      && !static_cast<const sql::ObCallProcedureInfo *>(this)->can_direct_use_param();
   if (N > 0 && OB_FAIL(params_info_.reserve(N))) {
     OB_LOG(WARN, "fail to reserve params info", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     param_info.flag_ = params.at(i).get_param_flag();
+    if (need_strict_param_type) {
+      param_info.flag_.need_to_check_type_ = true;
+      param_info.flag_.need_strict_type_match_ = true;
+    }
+    param_info.need_to_check_accuracy_ = need_strict_param_type && !params.at(i).is_ext();
     param_info.type_ = params.at(i).get_param_meta().get_type();
     param_info.col_type_ = params.at(i).get_collation_type();
     if (sql::ObSQLUtils::is_oracle_null_with_normal_type(params.at(i))) {
@@ -141,6 +150,7 @@ int ObPLCacheObject::set_params_info(const ParamStore &params,
       LOG_DEBUG("ext params info", K(data_type), K(param_info), K(params.at(i)));
     } else {
       param_info.scale_ = params.at(i).get_scale();
+      param_info.precision_ = params.at(i).get_precision();
       if (is_anonymous) {
         ObPLFunction *func = static_cast<ObPLFunction *>(this);
         if (func->get_variables().count() > i &&

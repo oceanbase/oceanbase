@@ -1146,6 +1146,16 @@ bool ObPLObjectValue::match_params_info(const Ob2DArray<ObPlParamInfo,
           is_same = false;
         }
       }
+      // Use the same accuracy partition for lookup and insertion deduplication.
+      if (is_same) {
+        const ObPlParamInfo &cached_info = params_info_.at(i);
+        const ObPlParamInfo &new_info = infos.at(i);
+        is_same = cached_info.need_to_check_accuracy_ == new_info.need_to_check_accuracy_;
+        if (is_same && cached_info.need_to_check_accuracy_) {
+          is_same = cached_info.scale_ == new_info.scale_
+                    && cached_info.precision_ == new_info.precision_;
+        }
+      }
       if (true == is_same && params_info_.at(i).flag_.need_to_check_bool_value_) {
         if (infos.at(i).flag_.expected_bool_value_
             != params_info_.at(i).flag_.expected_bool_value_) {
@@ -1267,6 +1277,10 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
         is_same = param.get_number().is_valid_int();
       }
     }
+  }
+  if (is_same && param_info.need_to_check_accuracy_) {
+    is_same = param.get_scale() == param_info.scale_
+              && param.get_precision() == param_info.precision_;
   }
   if (is_same && param_info.flag_.need_to_check_bool_value_) {
     bool is_value_true = false;

@@ -437,7 +437,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
     for (int64_t i = 0; OB_SUCC(ret) && i < array_param_groups.count(); ++i) {
       int64_t param_num = array_param_groups.at(i).column_count_;
       int64_t batch_num = array_param_groups.at(i).row_count_;
-      int64_t array_idx = array_param_groups.at(i).start_param_idx_;
+      int64_t array_idx = array_param_groups.at(i).raw_start_param_idx_;
       if (OB_UNLIKELY(array_idx + param_num > raw_param_cnt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sql should be mutil stmt", K(ret));
@@ -456,7 +456,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
         }
       }
       if (OB_SUCC(ret)) {
-        array_param_groups.at(i).start_param_idx_ -= not_param_cnt;
+        array_param_groups.at(i).start_param_idx_ = array_idx - not_param_cnt;
       }
       // 1.2 build array_param in batch group
       for (int64_t j = 0; OB_SUCC(ret) && j < param_num; j++, raw_idx++, array_param_idx++) {
@@ -584,7 +584,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
     int64_t not_param_offset = 0;
     int64_t tmp_raw_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < array_param_groups.count(); i++) {
-      int64_t array_idx = array_param_groups.at(i).start_param_idx_;
+      int64_t array_idx = array_param_groups.at(i).raw_start_param_idx_;
       while (OB_SUCC(ret) && tmp_raw_idx < array_idx && tmp_raw_idx < raw_param_cnt) {
         ObPCParam *pc_param = pc_ctx.fp_result_.raw_params_.at(tmp_raw_idx);
         if (OB_ISNULL(pc_param)) {
@@ -600,7 +600,7 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected param", K(ret), K(array_idx), K(not_param_offset));
         } else {
-          array_param_groups.at(i).start_param_idx_ -= not_param_offset;
+          array_param_groups.at(i).start_param_idx_ = array_idx - not_param_offset;
         }
       }
     }

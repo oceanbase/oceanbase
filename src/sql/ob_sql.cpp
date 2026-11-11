@@ -2619,9 +2619,9 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
                                                       NULL, session.get_sql_mode(),
                                                       enable_decimal_int, compat_type,
                                                       enable_mysql_compatible_dates,
-                                                      stmt::T_ANONYMOUS_BLOCK == stmt_type,
                                                       session.get_min_const_integer_precision(),
                                                       session.get_exec_min_cluster_version(),
+                                                      is_pl_stmt,
                                                       false,
                                                       charset_compat_type))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
