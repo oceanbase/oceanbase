@@ -1,6 +1,11 @@
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0)
 
+option(OB_CDC_ERRSIM "Enable fault injection in standalone CDC" OFF)
+if(OB_CDC_ERRSIM)
+  add_definitions(-DCDC_ERRSIM)
+endif()
+
 # libobcdc LTO / sample PGO / hotfunc (profile files under libobcdc/profile/)
 # ThinLTO / sample PGO 仅在 CDC 构建(BUILD_CDC_ONLY=ON)中由 Env.cmake 的
 # ENABLE_CDC_COMPILE_OPTIMIZATIONS 全局启用(覆盖 oceanbase_static 全部代码,

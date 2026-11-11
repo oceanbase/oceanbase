@@ -267,9 +267,10 @@ int ObLSWorker::dispatch_fetch_task(LSFetchCtx &task, const char *dispatch_reaso
   return ret;
 }
 
-int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
+int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ)
 {
   int ret = OB_SUCCESS;
+  const int64_t RETRY_INTERVAL = 100L * 1000; // 100ms
 
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not init", K(inited_));
@@ -287,18 +288,24 @@ int ObLSWorker::dispatch_stream_task(FetchStream &task, const char *from_mod)
     }
 
     // Rotating the task of fetching log streams to work threads
-    if (OB_FAIL(ObMapQueueThreadPool::push(&task, hash_val))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("push stream task into thread queue fail", KR(ret));
+    do {
+      if (OB_FAIL(ObMapQueueThreadPool::push(&task, hash_val))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("push stream task into thread queue fail", KR(ret));
+        }
+        if (retry_until_succ) {
+          ob_usleep(RETRY_INTERVAL);
+        }
       }
-    }
+    } while (OB_FAIL(ret) && retry_until_succ);
   }
   return ret;
 }
 
-int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod)
+int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod, const bool retry_until_succ)
 {
   int ret = OB_SUCCESS;
+  const int64_t RETRY_INTERVAL = 100L * 1000; // 100ms
   bool print_stream_dispatch_info = ATOMIC_LOAD(&g_print_stream_dispatch_info);
 
   if (print_stream_dispatch_info) {
@@ -309,11 +316,16 @@ int ObLSWorker::hibernate_stream_task(FetchStream &task, const char *from_mod)
         "task", &task, K(from_mod), K(task));
   }
 
-  if (OB_FAIL(timer_.schedule(&task))) {
-    LOG_ERROR("schedule timer task fail", KR(ret));
-  } else {
-    // success
-  }
+  do {
+    if (OB_FAIL(timer_.schedule(&task))) {
+      LOG_ERROR("schedule timer task fail", KR(ret));
+      if (retry_until_succ) {
+        ob_usleep(RETRY_INTERVAL);
+      }
+    } else {
+      // success
+    }
+  } while (OB_FAIL(ret) && retry_until_succ);
   return ret;
 }
 
@@ -345,6 +357,13 @@ void ObLSWorker::handle(void *data,
   } else if (OB_FAIL(task->handle(stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("handle fetch stream task fail", KR(ret), K(task));
+      int tmp_ret = OB_SUCCESS;
+      // Restart from IDLE so the worker discards the old request and results.
+      // Keep ret unchanged for the error handler below.
+      task->switch_state(FetchStream::State::IDLE);
+      if (OB_TMP_FAIL(hibernate_stream_task(*task, "HandleTaskErr", true))) {
+        LOG_ERROR_RET(tmp_ret, "hibernate_stream_task on handle task failure", K(task), KPC(task));
+      }
     }
   } else {
     // Can no longer continue with the task

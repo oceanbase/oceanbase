@@ -45,6 +45,9 @@ int so_main()
   fprintf(stdout, "BUILD_TIME: %s %s\n",  build_date(), build_time());
   fprintf(stdout, "BUILD_FLAGS: %s%s\n",    build_flags(), extra_flags);
   fprintf(stdout, "BUILD_INFO: %s\n",    build_info());
+#ifdef CDC_ERRSIM
+  fprintf(stdout, "CDC_ERRSIM: ON\n");
+#endif
   exit(0);
 }
 

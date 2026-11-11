@@ -888,6 +888,7 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
   } else {
     bool need_dispatch_stream_task = false;
     bool need_stop_rpc = false;
+    bool rpc_send_succeed = false;
     RpcStopReason rpc_stop_reason = INVALID_REASON;
     int64_t next_upper_limit = OB_INVALID_TIMESTAMP;
     palf::LSN req_start_lsn;
@@ -898,13 +899,18 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
       req_start_lsn = resp->get_next_req_lsn();
     }
 
+    // Validate here so an invalid response also runs failure recovery.
+    if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
+      ret = OB_INVALID_ERROR;
+      LOG_ERROR("invalid response packet", KR(ret), K(rcode), K(resp));
+    }
     // Analyze the results and make decisions accordingly
     // 1. Decide if the next RPC needs to be launched
     // 2. Decide the upper limit of the next RPC
     //
     // TODO: Make more decisions based on request results
     //  1. Decide whether to dynamically modify the upper limit interval based on whether the upper limit is reached or not
-    if (OB_FAIL(analyze_result_(rpc_req, rcode, resp, need_stop_rpc, rpc_stop_reason,
+    else if (OB_FAIL(analyze_result_(rpc_req, rcode, resp, need_stop_rpc, rpc_stop_reason,
         next_upper_limit))) {
       LOG_ERROR("analyze_result_ fail", KR(ret), K(rpc_req), K(rcode), K(resp));
     }
@@ -924,7 +930,6 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
         // If you do not need to continue fetching logs, mark the RPC as not running
         rpc_req.mark_flying_state(false);
       } else {
-        bool rpc_send_succeed = false;
         int64_t server_progress = resp->get_progress();
         // Launch the next RPC
         if (OB_FAIL(launch_async_rpc_(rpc_req, req_start_lsn, server_progress, next_upper_limit, true, rpc_send_succeed))) {
@@ -937,6 +942,29 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
         if (OB_FAIL(stream_worker_->dispatch_stream_task(host_, "RpcCallback"))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("dispatch stream task fail", KR(ret));
+          }
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // This RPC has completed. Keep the request alive if the next RPC was sent.
+      if (!rpc_send_succeed) {
+        rpc_req.mark_flying_state(false);
+      }
+      LOG_ERROR("handle_rpc_response failed, need reschedule", KR(ret),
+          K(need_dispatch_stream_task), K(state_));
+      if (need_dispatch_stream_task || IDLE == state_) {
+        // Keep READY results for the consumer. An empty queue needs a fresh request.
+        if (IDLE == state_) {
+          host_.switch_state(FetchStream::State::IDLE);
+        }
+        // Retry recovery dispatch until success, as in LogFetcher.
+        // Do not access rpc_req after the handoff.
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(stream_worker_->dispatch_stream_task(host_, "FailPostProcess", true))) {
+          if (OB_IN_STOP_STATE != tmp_ret) {
+            LOG_ERROR_RET(tmp_ret, "dispatch recovery task fail", KR(ret));
           }
         }
       }
@@ -996,6 +1024,27 @@ void FetchLogARpc::free_rpc_request_(RpcRequest *request)
   }
 }
 
+#ifdef CDC_ERRSIM
+static bool need_inject_generate_rpc_result_failure()
+{
+  // Shared by all streams. Config reloads must not replenish consumed failures.
+  static int64_t injected_failure_count = 0;
+  bool need_inject = false;
+  if (OB_UNLIKELY(1 == TCONF.test_mode_on)) {
+    const int64_t failure_limit = TCONF.test_mode_generate_rpc_result_fail_count;
+    int64_t failure_count = ATOMIC_LOAD(&injected_failure_count);
+    while (failure_count < failure_limit && !need_inject) {
+      if (ATOMIC_BCAS(&injected_failure_count, failure_count, failure_count + 1)) {
+        need_inject = true;
+      } else {
+        failure_count = ATOMIC_LOAD(&injected_failure_count);
+      }
+    }
+  }
+  return need_inject;
+}
+#endif
+
 int FetchLogARpc::generate_rpc_result_(RpcRequest &rpc_req,
     const obrpc::ObRpcResultCode &rcode,
     const obrpc::ObCdcLSFetchLogResp *resp,
@@ -1014,6 +1063,14 @@ int FetchLogARpc::generate_rpc_result_(RpcRequest &rpc_req,
     LOG_ERROR("invalid result pool", K(result_pool_));
     ret = OB_INVALID_ERROR;
   }
+#ifdef CDC_ERRSIM
+  else if (OB_SUCCESS == rcode.rcode_ && nullptr != resp && OB_SUCCESS == resp->get_err()
+      && need_inject_generate_rpc_result_failure()) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("inject generate_rpc_result_ failure", KR(ret), K_(tenant_id), K_(svr),
+        "config", "test_mode_generate_rpc_result_fail_count", K(rpc_req));
+  }
+#endif
   // Assign an RPC result
   else if (OB_FAIL(result_pool_->alloc(result))) {
     LOG_ERROR("alloc rpc result fail", KR(ret));
@@ -1340,7 +1397,7 @@ int FetchLogARpc::RpcCB::process()
 
   if (OB_FAIL(do_process_(rcode, &result))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr), K_(host));
+      LOG_ERROR("process fetch log callback fail", KR(ret), K(result), K(rcode), K(svr));
     }
   }
   // Aone:
@@ -1363,7 +1420,7 @@ void FetchLogARpc::RpcCB::on_timeout()
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr), K_(host));
+      LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
     }
   }
 }
@@ -1383,7 +1440,7 @@ void FetchLogARpc::RpcCB::on_invalid()
 
   if (OB_FAIL(do_process_(rcode, NULL))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr), K_(host));
+      LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
     }
   }
 }
@@ -1394,14 +1451,10 @@ int FetchLogARpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLS
   RpcRequest &rpc_req = host_;
   FetchLogARpc &rpc_host = rpc_req.host_;
 
-  if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
-    LOG_ERROR("invalid response packet", K(rcode), K(resp));
-    ret = OB_INVALID_ERROR;
-  }
   // Processing RPC response results
-  else if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
+  if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode), K(rpc_req));
+      LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode));
     }
   } else {
     // success

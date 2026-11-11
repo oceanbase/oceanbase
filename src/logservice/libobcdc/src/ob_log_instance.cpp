@@ -505,6 +505,9 @@ int ObLogInstance::init_logger_()
     _LOG_INFO("BUILD_TIME: %s %s", build_date(), build_time());
     _LOG_INFO("BUILD_FLAGS: %s%s", build_flags(), extra_flags);
     _LOG_INFO("BUILD_INFO: %s", build_info());
+#ifdef CDC_ERRSIM
+    _LOG_INFO("CDC_ERRSIM: ON");
+#endif
     _LOG_INFO("Copyright (c) 2024 Ant Group Co., Ltd.");
     _LOG_INFO("======================================================");
     _LOG_INFO("\n");
@@ -525,6 +528,9 @@ void ObLogInstance::print_version()
   MPRINT("BUILD_TIME: %s %s", build_date(), build_time());
   MPRINT("BUILD_FLAGS: %s%s\n", build_flags(), extra_flags);
   MPRINT("BUILD_INFO: %s\n", build_info());
+#ifdef CDC_ERRSIM
+  MPRINT("CDC_ERRSIM: ON");
+#endif
   MPRINT("Copyright (c) 2024 Ant Group Co., Ltd.");
   MPRINT();
 }

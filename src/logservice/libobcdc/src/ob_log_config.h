@@ -495,6 +495,11 @@ public:
   // Test mode fail while init
   T_DEF_BOOL(test_mode_init_fail, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
+  // CDC_ERRSIM builds only. Process-wide cumulative limit; config reloads do not reset it.
+  T_DEF_INT_INFT(test_mode_generate_rpc_result_fail_count, OB_CLUSTER_PARAMETER, 0, 0,
+      "CDC_ERRSIM builds only: max injected RPC result allocation failures per process "
+      "under test_mode_on, 0 means disabled");
+
   // if force fetch archive is on, cdc service will seek archive for all rpc request unconditionally
   T_DEF_BOOL(test_mode_force_fetch_archive, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
