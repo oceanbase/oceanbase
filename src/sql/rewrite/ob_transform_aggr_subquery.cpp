@@ -1391,6 +1391,7 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
   ObSEArray<ObRawExpr *, 4> post_group_by_exprs; // having, select, assign values exprs
   ObSEArray<ObRawExpr *, 4> invalid_list;
   bool has_rownum = false;
+  const bool has_groupby = stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).has_group_by();
   if (OB_FAIL(pre_group_by_exprs.assign(stmt.get_condition_exprs()))) {
     LOG_WARN("failed to assign conditions", K(ret));
   } else if (OB_FAIL(stmt.has_rownum(has_rownum))) {
@@ -1449,14 +1450,14 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
         LOG_WARN("transform param is null", K(ret));
       } else if (ObOptimizerUtil::find_item(invalid_list, params.at(j)->ja_query_ref_)) {
         is_valid = false;
-      } else if (post_groupby_only &&
+      } else if (has_groupby && post_group_by &&
                  OB_FAIL(ObTransformUtils::recursive_find_shared_expr(pre_group_by_exprs,
                                                                       params.at(j)->ja_query_ref_,
                                                                       found))) {
         LOG_WARN("failed to find shared expr", K(ret));
       } else if (found) {
-        // found in pre_group_by_exprs, will be pushed down into view when
-        // 'post group by only' mode and can't transform
+        // Shared pre-groupby expressions move into the grouped view and cannot
+        // be transformed on the outer statement.
         is_valid = false;
       } else if (is_exists_op(expr->get_expr_type())) {
         if (OB_FAIL(choose_pullup_method_for_exists(params.at(j)->ja_query_ref_,
@@ -1478,7 +1479,6 @@ int ObTransformAggrSubquery::get_trans_param(ObDMLStmt &stmt,
       // create_simple_view only moves filters, scalar subqueries, and vector assignments
       // into the inner view. Reject candidates that would remain in the upper stmt before
       // mutating the statement tree.
-      const bool has_groupby = stmt.is_select_stmt() && static_cast<ObSelectStmt &>(stmt).has_group_by();
       const bool transform_on_inner_view = !stmt.is_select_stmt() || has_rownum || (has_groupby && !post_group_by);
       const bool push_vector_assign = stmt.is_update_stmt() && expr->has_flag(CNT_ALIAS);
       if (OB_SUCC(ret) && is_valid && transform_on_inner_view && !is_filter && !push_vector_assign
