@@ -2010,6 +2010,7 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE) != 0 ? OB_PRIV_CREATE_SENSITIVE_RULE : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_PLAINACCESS) != 0 ? OB_PRIV_PLAINACCESS : 0);
     user_info.set_priv((priv_others & OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN) != 0 ? OB_PRIV_APPLICATION_PASSWORD_ADMIN : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_TMP_TABLE) != 0 ? OB_PRIV_CREATE_TMP_TABLE : 0);
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
       //In user schema def, flag is a int column.
@@ -2378,6 +2379,7 @@ int ObSchemaRetrieveUtils::fill_db_priv_schema(
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_EVENT) != 0 ? OB_PRIV_EVENT : 0);
       db_priv.set_priv((priv_others & OB_PRIV_OTHERS_LOCK_TABLE) != 0 ? OB_PRIV_LOCK_TABLE: 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_TMP_TABLE) != 0 ? OB_PRIV_CREATE_TMP_TABLE : 0);
     }
   }
 

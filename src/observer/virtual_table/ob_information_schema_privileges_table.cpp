@@ -37,6 +37,8 @@ ObInfoSchemaSchemaPrivilegesTable::StaticInit::StaticInit()
   ObInfoSchemaSchemaPrivilegesTable::priv_type_strs[OB_PRIV_INDEX_SHIFT] = "INDEX";
   ObInfoSchemaSchemaPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_VIEW_SHIFT] = "CREATE VIEW";
   ObInfoSchemaSchemaPrivilegesTable::priv_type_strs[OB_PRIV_SHOW_VIEW_SHIFT] = "SHOW VIEW";
+  ObInfoSchemaSchemaPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_TMP_TABLE_SHIFT] =
+                                                   "CREATE TEMPORARY TABLES";
 }
 
 ObInfoSchemaSchemaPrivilegesTable::ObInfoSchemaSchemaPrivilegesTable()

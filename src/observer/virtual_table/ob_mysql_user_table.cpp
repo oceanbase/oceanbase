@@ -168,7 +168,7 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(ALTER);
                   EXIST_PRIV_CASE(SHOW_DB);
                   EXIST_PRIV_CASE(SUPER);
-                  NO_EXIST_PRIV_CASE(CREATE_TMP_TABLE);
+                  EXIST_PRIV_CASE(CREATE_TMP_TABLE);
                   EXIST_PRIV_CASE(LOCK_TABLE);
                   EXIST_PRIV_CASE(EXECUTE);
                   EXIST_PRIV_CASE(REPL_SLAVE);

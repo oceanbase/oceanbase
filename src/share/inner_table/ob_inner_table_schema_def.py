@@ -34000,7 +34000,8 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 17)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_SENSITIVE_RULE,
           (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS,
           OLD_PASSWORD,
-          OLD_PASSWORD_START_TIME
+          OLD_PASSWORD_START_TIME,
+          (CASE WHEN (PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -34075,7 +34076,8 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 17)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_SENSITIVE_RULE,
           (CASE WHEN (PRIV_OTHERS & (1 << 18)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_PLAINACCESS,
           OLD_PASSWORD,
-          OLD_PASSWORD_START_TIME
+          OLD_PASSWORD_START_TIME,
+          (CASE WHEN (PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -34136,7 +34138,8 @@ def_table_schema(
           (CASE WHEN (A.PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE,
-          (CASE WHEN (A.PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE
   FROM DB_PRIV A INNER JOIN OCEANBASE.__all_user B
         ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
   """.replace("\n", " ")
@@ -34197,7 +34200,8 @@ def_table_schema(
           (CASE WHEN (A.PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 10)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_LOCK_TABLE,
-          (CASE WHEN (A.PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 13)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EVENT,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 24)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TMP_TABLE
   FROM DB_PRIV A INNER JOIN OCEANBASE.__all_virtual_user B
         ON A.USER_ID = B.USER_ID AND A.TENANT_ID = B.TENANT_ID;
   """.replace("\n", " ")
@@ -34782,6 +34786,8 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 21) != 0) THEN 'DROP AI MODEL'
                 WHEN V1.C1 = 58
                      AND (U.PRIV_OTHERS & (1 << 22) != 0) THEN 'ACCESS AI MODEL'
+                WHEN V1.C1 = 60
+                     AND (U.PRIV_OTHERS & (1 << 24)) != 0 THEN 'CREATE TEMPORARY TABLES'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -34885,7 +34891,8 @@ def_table_schema(
         UNION ALL SELECT 55 AS C1
         UNION ALL SELECT 56 AS C1
         UNION ALL SELECT 57 AS C1
-        UNION ALL SELECT 58 AS C1) V1,
+        UNION ALL SELECT 58 AS C1
+        UNION ALL SELECT 60 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -34982,6 +34989,8 @@ def_table_schema(
                      AND (DP.PRIV_OTHERS & (1 << 10)) != 0 THEN 'LOCK TABLES'
                 WHEN V1.C1 = 49
                      AND (DP.PRIV_OTHERS & (1 << 13)) != 0 THEN 'EVENT'
+                WHEN V1.C1 = 60
+                     AND (DP.PRIV_OTHERS & (1 << 24)) != 0 THEN 'CREATE TEMPORARY TABLES'
                 ELSE NULL
             END PRIVILEGE_TYPE ,
             CASE
@@ -35006,7 +35015,8 @@ def_table_schema(
         UNION ALL SELECT 38 AS C1
         UNION ALL SELECT 44 AS C1
         UNION ALL SELECT 45 AS C1
-        UNION ALL SELECT 49 AS C1) V1,
+        UNION ALL SELECT 49 AS C1
+        UNION ALL SELECT 60 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID= 0

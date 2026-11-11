@@ -19279,6 +19279,11 @@ role_with_host
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
   $$->value_ = OB_PRIV_CREATE_TABLESPACE;
 }
+| CREATE TEMPORARY TABLES
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);
+  $$->value_ = OB_PRIV_CREATE_TMP_TABLE;
+}
 | SHUTDOWN
 {
   malloc_terminal_node($$, result->malloc_pool_, T_PRIV_TYPE);

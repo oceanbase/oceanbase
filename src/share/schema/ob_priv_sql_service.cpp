@@ -1341,6 +1341,7 @@ int ObPrivSqlService::gen_db_priv_dml(
   priv_others |= (priv_set & OB_PRIV_TRIGGER) != 0 ? OB_PRIV_OTHERS_TRIGGER : 0;
   priv_others |= (priv_set & OB_PRIV_EVENT) != 0 ? OB_PRIV_OTHERS_EVENT : 0;
   priv_others |= (priv_set & OB_PRIV_LOCK_TABLE) != 0 ? OB_PRIV_OTHERS_LOCK_TABLE : 0;
+  priv_others |= (priv_set & OB_PRIV_CREATE_TMP_TABLE) != 0 ? OB_PRIV_OTHERS_CREATE_TMP_TABLE : 0;
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
@@ -1368,6 +1369,12 @@ int ObPrivSqlService::gen_db_priv_dml(
       LOG_WARN("priv others is not suppported when tenant's data version is below 4.3.1.0 or 4.2.2.0", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke database level priv other privilege");
     }
+  } else if (compat_version < DATA_VERSION_4_4_2_4
+             && (priv_set & OB_PRIV_CREATE_TMP_TABLE) != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create temporary tables privilege is not supported when tenant's data version is below DATA_VERSION_4_4_2_4",
+             KR(ret), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke database level create temporary tables privilege");
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add column failed", K(ret));
   }

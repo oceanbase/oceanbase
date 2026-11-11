@@ -103,6 +103,8 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "PLAINACCESS";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_APPLICATION_PASSWORD_ADMIN_SHIFT] =
                                                    "APPLICATION_PASSWORD_ADMIN";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_TMP_TABLE_SHIFT] =
+                                                   "CREATE TEMPORARY TABLES";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

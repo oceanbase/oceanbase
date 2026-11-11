@@ -147,6 +147,8 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "PLAINACCESS"; break;
     case OB_PRIV_APPLICATION_PASSWORD_ADMIN:
       name = "APPLICATION_PASSWORD_ADMIN"; break;
+    case OB_PRIV_CREATE_TMP_TABLE:
+      name = "CREATE TEMPORARY TABLES"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));

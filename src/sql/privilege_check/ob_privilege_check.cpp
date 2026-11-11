@@ -1499,9 +1499,15 @@ int get_dml_stmt_need_privs(
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
+  bool is_tmp_table_priv_enabled = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should not be NULL", K(ret));
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(
+                         session_priv,
+                         ObCompatFeatureType::MYSQL_CREATE_TMP_TABLE_PRIV_ENHANCE,
+                         is_tmp_table_priv_enabled))) {
+    LOG_WARN("failed to get temporary table privilege compatibility", KR(ret));
   } else {
     ObNeedPriv need_priv;
     stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
@@ -1579,6 +1585,10 @@ int get_dml_stmt_need_privs(
             LOG_WARN("table item is null");
           } else if (table_item->is_link_table()) {
             // skip link table
+          } else if (lib::is_mysql_mode()
+                     && is_tmp_table_priv_enabled
+                     && share::schema::is_mysql_tmp_table(table_item->table_type_)) {
+            // MySQL checks privileges only when the session creates a temporary table.
           } else if (TableItem::BASE_TABLE == table_item->type_
             || TableItem::ALIAS_TABLE == table_item->type_
             || table_item->is_view_table_) {
@@ -1895,12 +1905,18 @@ int get_create_table_stmt_need_privs(
 {
   int ret = OB_SUCCESS;
   bool need_check = false;
+  bool is_tmp_table_priv_enabled = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
   } else if (OB_UNLIKELY(stmt::T_CREATE_TABLE != basic_stmt->get_stmt_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt type should be T_CREATE_TABLE", K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(
+                         session_priv,
+                         ObCompatFeatureType::MYSQL_CREATE_TMP_TABLE_PRIV_ENHANCE,
+                         is_tmp_table_priv_enabled))) {
+    LOG_WARN("failed to get temporary table privilege compatibility", KR(ret));
   } else {
     ObNeedPriv need_priv;
     const ObCreateTableStmt *stmt = static_cast<const ObCreateTableStmt*>(basic_stmt);
@@ -1917,14 +1933,19 @@ int get_create_table_stmt_need_privs(
     } else {
       const ObSelectStmt *select_stmt = stmt->get_sub_select();
       const ObSArray<obrpc::ObCreateForeignKeyArg> &foreign_keys = stmt->get_read_only_foreign_key_arg_list();
-      if (NULL != select_stmt) {
+      if (is_tmp_table_priv_enabled
+          && share::schema::is_mysql_tmp_table(stmt->get_table_type())) {
+        need_priv.priv_set_ = OB_PRIV_CREATE_TMP_TABLE;
+        need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      } else if (NULL != select_stmt) {
         need_priv.priv_set_ = OB_PRIV_CREATE | OB_PRIV_INSERT;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       } else {
         need_priv.priv_set_ = OB_PRIV_CREATE;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       }
       need_priv.db_ = stmt->get_database_name();
       need_priv.table_ = stmt->get_table_name();
-      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
       ADD_NEED_PRIV(need_priv);
       if (OB_SUCC(ret) && NULL != select_stmt) {
         OZ (ObPrivilegeCheck::get_stmt_need_privs(session_priv, select_stmt, need_privs));
@@ -1980,6 +2001,7 @@ int get_drop_table_stmt_need_privs(
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
+  bool is_tmp_table_priv_enabled = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
@@ -1987,13 +2009,23 @@ int get_drop_table_stmt_need_privs(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt type should be T_DROP_TABLE",
              K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(
+                         session_priv,
+                         ObCompatFeatureType::MYSQL_CREATE_TMP_TABLE_PRIV_ENHANCE,
+                         is_tmp_table_priv_enabled))) {
+    LOG_WARN("failed to get temporary table privilege compatibility", KR(ret));
   } else {
     ObNeedPriv need_priv;
     const ObDropTableStmt *stmt = static_cast<const ObDropTableStmt*>(basic_stmt);
     const ObIArray<obrpc::ObTableItem> &tables = stmt->get_drop_table_arg().tables_;
+    const bool is_drop_temporary = share::schema::TMP_TABLE == stmt->get_drop_table_arg().table_type_
+                                   || share::schema::TMP_TABLE_ALL == stmt->get_drop_table_arg().table_type_;
     for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); i++) {
       const obrpc::ObTableItem &table_item = tables.at(i);
-      if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_item.database_name_))) {
+      if (is_tmp_table_priv_enabled
+          && (is_drop_temporary || stmt->is_mysql_tmp_table(i))) {
+        // MySQL checks privileges only when the session creates a temporary table.
+      } else if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, table_item.database_name_))) {
         LOG_WARN("Can not drop table in information_schema database", K(session_priv), K(ret));
       } else if (ObPrivilegeCheck::is_mysql_org_table(table_item.database_name_, table_item.table_name_)
                  && session_priv.tenant_id_ != OB_SYS_TENANT_ID) {
@@ -3256,6 +3288,7 @@ int get_create_table_like_stmt_need_privs(
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
+  bool is_tmp_table_priv_enabled = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
@@ -3263,6 +3296,11 @@ int get_create_table_like_stmt_need_privs(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt type should be T_CREATE_TABLE_LIKE",
              K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(
+                         session_priv,
+                         ObCompatFeatureType::MYSQL_CREATE_TMP_TABLE_PRIV_ENHANCE,
+                         is_tmp_table_priv_enabled))) {
+    LOG_WARN("failed to get temporary table privilege compatibility", KR(ret));
   } else {
     ObNeedPriv need_priv;
     const ObCreateTableLikeStmt *stmt = static_cast<const ObCreateTableLikeStmt *>(basic_stmt);
@@ -3281,8 +3319,14 @@ int get_create_table_like_stmt_need_privs(
       ADD_NEED_PRIV(need_priv);
       need_priv.db_ = stmt->get_new_db_name();
       need_priv.table_ = stmt->get_new_table_name();
-      need_priv.priv_set_ = OB_PRIV_CREATE;
-      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      if (is_tmp_table_priv_enabled
+          && share::schema::is_mysql_tmp_table(stmt->get_table_type())) {
+        need_priv.priv_set_ = OB_PRIV_CREATE_TMP_TABLE;
+        need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
+      } else {
+        need_priv.priv_set_ = OB_PRIV_CREATE;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      }
       ADD_NEED_PRIV(need_priv);
     }
   }

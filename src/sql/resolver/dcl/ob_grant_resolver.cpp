@@ -1380,7 +1380,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                                                                       *allocator_))) {
             LOG_WARN("Resolve priv set error", K(ret));
           } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-            LOG_WARN("fail to get data version", K(tenant_id));
+            LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
           } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)
                      && ((priv_set & OB_PRIV_EXECUTE) != 0 ||
                          (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
@@ -1443,6 +1443,11 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_1", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant application_password_admin privilege");
+          } else if (compat_version < DATA_VERSION_4_4_2_4
+                     && ((priv_set & OB_PRIV_CREATE_TMP_TABLE) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_4", KR(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create temporary tables privilege");
           }
           if (OB_FAIL(ret)) {
           } else {
@@ -2266,13 +2271,15 @@ int ObGrantResolver::resolve_obj_priv_list_ora(
           if (is_ora_obj_priv_type(priv_type) == false) {
             if (PRIV_ID_ALTER_SYSTEM == priv_type) {
               priv_set |= OB_PRIV_ALTER_SYSTEM;
+            } else if (OB_PRIV_ALL == priv_type) {
+              priv_set |= OB_PRIV_ALL & ~OB_PRIV_CREATE_TMP_TABLE;
             } else {
               priv_set |= priv_type;
             }
           }
         } else if (OB_PRIV_DB_LEVEL == grant_level) {
           if (OB_PRIV_ALL == priv_type) {
-            priv_set |= OB_PRIV_DB_ACC;
+            priv_set |= OB_PRIV_DB_ACC & ~OB_PRIV_CREATE_TMP_TABLE;
           } else if (priv_type & (~(OB_PRIV_DB_ACC | OB_PRIV_GRANT))) {
             ret = OB_ERR_MISSING_OR_INVALID_PRIVIEGE;
             LOG_WARN("Grant/Revoke privilege than can not be used",

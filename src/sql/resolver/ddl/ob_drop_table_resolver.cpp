@@ -164,8 +164,24 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                                                   db_name))) {
             SQL_RESV_LOG(WARN, "failed to resolve table relation node!", K(ret));
           } else {
+            bool is_mysql_tmp_table = false;
+            if (lib::is_mysql_mode() && share::schema::USER_TABLE == drop_table_arg.table_type_) {
+              const share::schema::ObTableSchema *table_schema = NULL;
+              const int tmp_ret = schema_checker_->get_table_schema(
+                  session_info_->get_effective_tenant_id(), db_name, table_name, false, table_schema);
+              if (OB_SUCCESS == tmp_ret && OB_ISNULL(table_schema)) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_RESV_LOG(WARN, "table schema is null", KR(ret), K(db_name), K(table_name));
+              } else if (OB_SUCCESS == tmp_ret) {
+                is_mysql_tmp_table = table_schema->is_mysql_tmp_table();
+              } else if (OB_TABLE_NOT_EXIST != tmp_ret) {
+                ret = tmp_ret;
+                SQL_RESV_LOG(WARN, "failed to get table schema", KR(ret), K(db_name), K(table_name));
+              }
+            }
             table_item.reset();
-            if (OB_FAIL(session_info_->get_name_case_mode(table_item.mode_))) {
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(session_info_->get_name_case_mode(table_item.mode_))) {
               SQL_RESV_LOG(WARN, "failed to get name case mode!", K(ret));
             } else {
               table_item.database_name_ = db_name;
@@ -175,7 +191,7 @@ int ObDropTableResolver::resolve(const ParseNode &parse_tree)
                 LOG_USER_ERROR(OB_ERR_NONUNIQ_TABLE, table_item.table_name_.length(), table_item.table_name_.ptr());
               } else if (OB_FAIL(table_item_set->set_refactored(table_item))) {
                 SQL_RESV_LOG(WARN, "failed to add table item!", K(table_item), K(ret));
-              } else if (OB_FAIL(drop_table_stmt->add_table_item(table_item))) {
+              } else if (OB_FAIL(drop_table_stmt->add_table_item(table_item, is_mysql_tmp_table))) {
                 SQL_RESV_LOG(WARN, "failed to add table item!", K(table_item), K(ret));
               } else if (ObSchemaChecker::is_ora_priv_check()) {
                 uint64_t tenant_id = session_info_->get_effective_tenant_id();

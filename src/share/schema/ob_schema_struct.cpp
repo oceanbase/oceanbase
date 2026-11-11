@@ -9030,6 +9030,9 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_APPLICATION_PASSWORD_ADMIN) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" APPLICATION_PASSWORD_ADMIN,");
   }
+  if ((priv_set_ & OB_PRIV_CREATE_TMP_TABLE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE TEMPORARY TABLES,");
+  }
 
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','

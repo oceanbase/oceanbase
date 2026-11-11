@@ -1103,6 +1103,7 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_CREATE_SENSITIVE_RULE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_SENSITIVE_RULE; }
     if ((user.get_priv_set() & OB_PRIV_PLAINACCESS) != 0) { priv_others |= OB_PRIV_OTHERS_PLAINACCESS; }
     if ((user.get_priv_set() & OB_PRIV_APPLICATION_PASSWORD_ADMIN) != 0) { priv_others |= OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_TMP_TABLE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_TMP_TABLE; }
   }
   if (OB_FAIL(ret)) {
   } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
@@ -1126,6 +1127,11 @@ int ObUserSqlService::gen_user_dml(
             && (priv_others & OB_PRIV_OTHERS_APPLICATION_PASSWORD_ADMIN) != 0) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_1", K(ret), K(user.get_priv(OB_PRIV_APPLICATION_PASSWORD_ADMIN)));
+  } else if (compat_version < DATA_VERSION_4_4_2_4
+            && (priv_others & OB_PRIV_OTHERS_CREATE_TMP_TABLE) != 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("create temporary tables privilege is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_4_2_4",
+             KR(ret), K(user.get_priv(OB_PRIV_CREATE_TMP_TABLE)));
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));
   }

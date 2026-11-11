@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_RESOLVER_DDL_DROP_TABLE_STMT_
 
 #include "share/ob_rpc_struct.h"
+#include "lib/container/ob_se_array.h"
 #include "sql/resolver/ddl/ob_ddl_stmt.h"
 
 namespace oceanbase
@@ -51,7 +52,12 @@ public:
      */
     return true;
   }
-  int add_table_item(const obrpc::ObTableItem &table_item);
+  int add_table_item(const obrpc::ObTableItem &table_item, const bool is_mysql_tmp_table);
+  bool is_mysql_tmp_table(const int64_t index) const
+  {
+    return index >= 0 && index < mysql_tmp_table_flags_.count()
+        && mysql_tmp_table_flags_.at(index);
+  }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return drop_table_arg_; }
   bool is_view_stmt() const { return is_view_stmt_; }
   void set_is_view_stmt(const bool is_view_stmt) { is_view_stmt_ = is_view_stmt; }
@@ -60,6 +66,7 @@ public:
 private:
   obrpc::ObDropTableArg drop_table_arg_;
   bool is_view_stmt_;
+  common::ObSEArray<bool, 4> mysql_tmp_table_flags_;
   DISALLOW_COPY_AND_ASSIGN(ObDropTableStmt);
 };
 

@@ -23,14 +23,16 @@ namespace sql
 ObDropTableStmt::ObDropTableStmt(ObIAllocator *name_pool)
     : ObDDLStmt(name_pool, stmt::T_DROP_TABLE),
     drop_table_arg_(),
-    is_view_stmt_(false)
+    is_view_stmt_(false),
+    mysql_tmp_table_flags_()
 {
 }
 
 ObDropTableStmt::ObDropTableStmt()
   : ObDDLStmt(stmt::T_DROP_TABLE),
     drop_table_arg_(),
-    is_view_stmt_(false)
+    is_view_stmt_(false),
+    mysql_tmp_table_flags_()
 {
 }
 
@@ -38,10 +40,13 @@ ObDropTableStmt::~ObDropTableStmt()
 {
 }
 
-int ObDropTableStmt::add_table_item(const ObTableItem &table_item)
+int ObDropTableStmt::add_table_item(const ObTableItem &table_item, const bool is_mysql_tmp_table)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(drop_table_arg_.tables_.push_back(table_item))) {
+  if (OB_FAIL(mysql_tmp_table_flags_.push_back(is_mysql_tmp_table))) {
+    LOG_WARN("failed to add temporary table flag", K(is_mysql_tmp_table), KR(ret));
+  } else if (OB_FAIL(drop_table_arg_.tables_.push_back(table_item))) {
+    mysql_tmp_table_flags_.pop_back();
     LOG_WARN("failed to add table item!", K(table_item), K(ret));
   }
   return ret;

@@ -639,12 +639,35 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_table_id = OB_INVALID_ID;
             bool is_view = false;
             bool allow_show = false;
+            bool skip_tmp_table_priv_check = false;
             if (OB_FAIL(resolve_show_from_table(parse_tree.children_[0], NULL, database_name.empty(),
                                                 parse_tree.type_, real_tenant_id, show_catalog_id, show_db_name,
                                                 show_db_id, show_table_name, show_table_id, is_view, synonym_checker))) {
               LOG_WARN("fail to resolve show from table", K(ret));
             }
+            if (OB_SUCC(ret) && !is_oracle_mode && T_SHOW_CREATE_TABLE == parse_tree.type_
+                && !is_view && is_internal_catalog_id(show_catalog_id)) {
+              bool is_tmp_table_priv_enabled = false;
+              const ObTableSchema *table_schema = NULL;
+              if (OB_FAIL(session_info_->check_feature_enable(
+                              ObCompatFeatureType::MYSQL_CREATE_TMP_TABLE_PRIV_ENHANCE,
+                              is_tmp_table_priv_enabled))) {
+                LOG_WARN("failed to get temporary table privilege compatibility", KR(ret));
+              } else if (is_tmp_table_priv_enabled) {
+                if (OB_FAIL(schema_checker_->get_table_schema(real_tenant_id, show_table_id, table_schema))) {
+                  LOG_WARN("failed to get resolved show table schema", KR(ret), K(show_table_id));
+                } else if (OB_ISNULL(table_schema)) {
+                  ret = OB_TABLE_NOT_EXIST;
+                  LOG_WARN("resolved show table does not exist", KR(ret), K(show_table_id));
+                } else {
+                  // Check the resolved object, not a name shared with a persistent table.
+                  skip_tmp_table_priv_check = table_schema->is_mysql_tmp_table();
+                }
+              }
+            }
             if (OB_FAIL(ret)) {
+            } else if (skip_tmp_table_priv_check) {
+              // The current session may inspect its temporary table definition.
             } else if (T_SHOW_CREATE_VIEW == parse_tree.type_ || is_view) {
               if (ObSchemaChecker::is_ora_priv_check()) {
               } else {

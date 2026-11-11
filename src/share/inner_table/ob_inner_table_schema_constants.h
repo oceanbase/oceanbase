@@ -6910,6 +6910,7 @@ struct PrivilegeRow {
 
   const char* const ALTER_TB_MSG = "To alter the table";
   const char* const CREATE_DB_TB_MSG = "To create new databases and tables";
+  const char* const CREATE_TMP_TABLE_MSG = "To use CREATE TEMPORARY TABLE";
   const char* const CREATE_VIEW_MSG = "To create new views";
   const char* const CREATE_USER_MSG = "To create new users";
   const char* const DELETE_ROWS_MSG = "To delete existing rows";
@@ -6928,6 +6929,7 @@ static const PrivilegeRow all_privileges[] =
 {
   {"Alter", "Tables",  ALTER_TB_MSG},
   {"Create", "Databases,Tables,Indexes",  CREATE_DB_TB_MSG},
+  {"Create temporary tables", "Databases", CREATE_TMP_TABLE_MSG},
   {"Create view", "Tables",  CREATE_VIEW_MSG},
   {"Create user", "Server Admin",  CREATE_USER_MSG},
   {"Delete", "Tables",  DELETE_ROWS_MSG},
