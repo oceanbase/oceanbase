@@ -678,8 +678,12 @@ int ObKVCacheIterator::get_next_kvpair(
         if (common::OB_ENTRY_NOT_EXIST == ret) {
           if (pos_ >= map_->bucket_num_) {
             ret = OB_ITER_END;
-          } else if (OB_FAIL(map_->multi_get(cache_id_, pos_++, handle_list_))) {
+          } else if (OB_FAIL(map_->multi_get(cache_id_, pos_, handle_list_))) {
             COMMON_LOG(WARN, "Fail to multi get from map, ", K(ret));
+            handle_list_.reset();
+            allocator_.reset();
+          } else {
+            ++pos_;
           }
         } else {
           COMMON_LOG(WARN, "Unexpected error, ", K(ret));

@@ -620,9 +620,9 @@ int ObIndexTreeMultiPrefetcher::multi_prefetch()
 
         if (is_rowkey_sorted_ && rowkeys_info_.is_rowkey_not_exist(read_handle.range_idx_)) {
           read_handle.row_state_ = ObSSTableRowState::NOT_EXIST;
-           mark_cur_rowkey_prefetched(read_handle);
-        } else if (OB_FAIL(ObStoreRowIterator::IteratorMultiGet == iter_type_ &&
-                   lookup_in_cache(read_handle))) {
+          mark_cur_rowkey_prefetched(read_handle);
+        } else if (ObStoreRowIterator::IteratorMultiGet == iter_type_ &&
+                   OB_FAIL(lookup_in_cache(read_handle))) {
           LOG_WARN("Failed to lookup_in_cache", K(ret));
         } else if (ObSSTableRowState::IN_BLOCK == read_handle.row_state_) {
           if (OB_FAIL(sstable_->get_index_tree_root(index_block_))) {

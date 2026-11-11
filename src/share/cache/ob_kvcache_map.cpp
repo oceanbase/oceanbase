@@ -805,7 +805,9 @@ int ObKVCacheMap::multi_get(
           if (OB_FAIL(hazptr_holder.protect(protect_success, iter->mb_handle_, iter->seq_num_))) {
             COMMON_LOG(WARN, "protect failed", KP(iter->mb_handle_));
           } else if (protect_success) {
-            list.push_back(*iter);
+            if (OB_FAIL(list.push_back(*iter))) {
+              COMMON_LOG(WARN, "Fail to append cache node", K(ret), K(cache_id), K(pos));
+            }
             hazptr_holder.release();
           }
         }
