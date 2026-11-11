@@ -1887,10 +1887,8 @@ int ObExternalTableUtils::collect_file_basic_info(const common::ObString &locati
     LOG_WARN("failed to init", K(ret));
   } else if (OB_FAIL(collector.collect_file_content_digest(file_url, content_digest))) {
     LOG_WARN("failed to collect file content digest", K(ret), K(file_url));
-  } else if (OB_FAIL(collector.collect_file_modify_time(file_url, modify_time))) {
-    LOG_WARN("failed to collect file last modify time", K(ret), K(file_url));
-  } else if (OB_FAIL(collector.collect_file_size(file_url, file_size))) {
-    LOG_WARN("failed to collect file size", K(ret), K(file_url));
+  } else if (OB_FAIL(collector.collect_file_stat(file_url, file_size, modify_time))) {
+    LOG_WARN("failed to collect file stat", K(ret), K(file_url));
   }
   return ret;
 }
@@ -2119,6 +2117,25 @@ int ObExternalFileInfoCollector::collect_file_modify_time(const common::ObString
     }
   } else if (OB_FAIL(ObExternalIoAdapter::get_file_modify_time(url, storage_info_, modify_time))) {
     LOG_WARN("failed to get file modify time", K(ret));
+  }
+  return ret;
+}
+
+int ObExternalFileInfoCollector::collect_file_stat(const common::ObString &url,
+                                                 int64_t &file_size, int64_t &modify_time)
+{
+  int ret = OB_SUCCESS;
+  ObIODFileStat statbuf;
+  file_size = -1;
+  modify_time = -1;
+  if (OB_FAIL(ObExternalIoAdapter::get_file_stat(url, storage_info_, statbuf))) {
+    LOG_WARN("failed to get file stat", K(ret), K(url));
+  } else if (OB_UNLIKELY(statbuf.mtime_s_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("modify time is invalid", K(ret), K(url), K(statbuf.mtime_s_));
+  } else {
+    file_size = statbuf.size_;
+    modify_time = statbuf.mtime_s_;
   }
   return ret;
 }

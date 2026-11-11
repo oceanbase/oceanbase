@@ -11,6 +11,7 @@
 #include "lib/ob_define.h"
 #include "lib/oblog/ob_log_module.h"
 #include "plugin/v2/include/ob_external_table_plugin.h"  // OB_EXT_SEEK_*
+#include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/io/ob_io_define.h"
 #include "share/rc/ob_tenant_base.h"
@@ -24,8 +25,7 @@
 #endif
 
 #include <algorithm>
-#include <cstring>
-#include <new>
+#include <sys/stat.h>
 
 namespace oceanbase
 {
@@ -496,29 +496,26 @@ int ObExtDefaultFileSystem::get_file_status_(const common::ObString &path, int64
     LOG_WARN("ext get_file_status init storage failed", K(ret), K(path));
   } else {
     ExtStorageTenantGuard storage_tenant_guard(tenant_id_);
-    common::ObStorageUtil util;
     common::ObIODFileStat statbuf;
-    bool is_directory = false;
-    if (OB_FAIL(util.open(storage_holder.storage_info_))) {
-      LOG_WARN("ext get_file_status open storage util failed", K(ret), K(path));
+    const int stat_ret =
+        common::ObExternalIoAdapter::get_file_stat(path, storage_holder.storage_info_, statbuf);
+    if (OB_SUCC(stat_ret)) {
+      size = static_cast<int64_t>(statbuf.size_);
+      mtime_ms = statbuf.mtime_s_ * 1000;
+      is_dir = S_ISDIR(statbuf.mode_);
     } else {
-      const int stat_ret = util.get_file_stat(path, false, statbuf);
-      const int dir_ret = util.is_directory(path, false, is_directory);
-      util.close();
-
-      if (OB_SUCCESS == stat_ret) {
-        if (OB_SUCCESS != dir_ret) {
-          ret = dir_ret;
-          LOG_WARN("ext get_file_status is_directory failed", K(ret), K(path));
-        } else {
-          size = static_cast<int64_t>(statbuf.size_);
-          mtime_ms = statbuf.mtime_s_ * 1000;
-          is_dir = is_directory;
-        }
+      // The adapter's is_directory only supports HDFS. Preserve the local
+      // directory and object-store prefix fallback through ObStorageUtil.
+      common::ObStorageUtil util;
+      if (OB_FAIL(util.open(storage_holder.storage_info_))) {
+        LOG_WARN("ext get_file_status open storage util failed", K(ret), K(path));
       } else {
-        // get_file_stat fails on object-store directories (no real metadata).
-        // Fallback 1: is_directory (uses detect_storage_obj_meta).
-        // Fallback 2: a non-empty listing means it is a directory after all.
+        // Preserve directory/error fallback when ordinary file stat fails.
+        // Local directories have length -1; object-store prefixes may have
+        // no object metadata and require a non-empty listing.
+        bool is_directory = false;
+        const int dir_ret = util.is_directory(path, false, is_directory);
+        util.close();
         bool treat_as_dir = (OB_SUCCESS == dir_ret) && is_directory;
         if (!treat_as_dir) {
           int64_t entry_count = 0;

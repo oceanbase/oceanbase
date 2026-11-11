@@ -52,6 +52,9 @@ public:
   static int get_file_length(const common::ObString &uri,
                              const common::ObObjectStorageInfo *storage_info,
                              int64_t &file_length);
+  static int get_file_stat(const common::ObString &uri,
+                           const common::ObObjectStorageInfo *storage_info,
+                           common::ObIODFileStat &statbuf);
   static int get_file_size(ObIODevice *device_handle, const ObIOFd &fd, int64_t &file_length);
   static int adaptively_get_file_length(const common::ObString &uri,
                                         const common::ObObjectStorageInfo *storage_info,
@@ -360,6 +363,9 @@ public:
   EXTERNAL_IO_ADAPTER_FUNCTION(get_file_length, const common::ObString &, uri,
                                                 const common::ObObjectStorageInfo *, storage_info,
                                                 int64_t &, file_length)
+  EXTERNAL_IO_ADAPTER_FUNCTION(get_file_stat, const common::ObString &, uri,
+                                            const common::ObObjectStorageInfo *, storage_info,
+                                            common::ObIODFileStat &, statbuf)
   EXTERNAL_IO_ADAPTER_FUNCTION(adaptively_get_file_length, const common::ObString &, uri,
                                                            const common::ObObjectStorageInfo *, storage_info,
                                                            int64_t &, file_length)

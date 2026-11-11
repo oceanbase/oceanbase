@@ -9,6 +9,7 @@
 #include "lib/utility/ob_sort.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/string/ob_sensitive_string.h"
+#include <sys/stat.h>
 
 namespace oceanbase
 {
@@ -745,6 +746,7 @@ int ObStorageUtil::get_file_stat(
     const common::ObString &uri, const bool is_adaptive, ObIODFileStat &statbuf)
 {
   int ret = OB_SUCCESS;
+  statbuf = ObIODFileStat();
   const int64_t start_ts = ObTimeUtility::current_time();
   ObStorageObjectMeta obj_meta;
   OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO, true/*is_util_io*/);
@@ -768,6 +770,8 @@ int ObStorageUtil::get_file_stat(
   } else {
     statbuf.size_ = obj_meta.length_;
     statbuf.mtime_s_ = obj_meta.mtime_s_;
+    // The storage metadata carries the file type, but not POSIX permissions.
+    statbuf.mode_ = obj_meta.is_dir_type() ? S_IFDIR : S_IFREG;
   }
 
   return ret;

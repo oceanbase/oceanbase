@@ -116,6 +116,7 @@ public:
   int collect_files_modify_time(const common::ObIArray<common::ObString> &file_urls,
                                 common::ObIArray<int64_t> &modify_times);
   int collect_file_modify_time(const common::ObString &url, int64_t &modify_time, bool enable_cache = false);
+  int collect_file_stat(const common::ObString &url, int64_t &file_size, int64_t &modify_time);
   // Pure existence check (no file size). Unlike collect_file_size, this works
   // for directories too: OB's get_file_length/get_file_stat reject paths whose
   // length is -1 (directories), but is_exist only checks existence, so a

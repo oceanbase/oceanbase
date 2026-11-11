@@ -299,6 +299,20 @@ int ObBackupIoAdapter::get_file_length(const common::ObString &uri, const common
   return ret;
 }
 
+int ObBackupIoAdapter::get_file_stat(const common::ObString &uri,
+    const common::ObObjectStorageInfo *storage_info, common::ObIODFileStat &statbuf)
+{
+  int ret = OB_SUCCESS;
+  statbuf = ObIODFileStat();
+  DeviceGuard device_guard;
+  if (OB_FAIL(device_guard.init(uri, storage_info, ObStorageIdMod::get_default_id_mod()))) {
+    OB_LOG(WARN, "fail to init device guard", KR(ret), K(uri), KPC(storage_info));
+  } else if (OB_FAIL(OB_IO_MANAGER.stat(get_tenant_id(), device_guard.fd_, device_guard.uri_cstr_, statbuf))) {
+    OB_LOG(WARN, "fail to get file stat", KR(ret), K(uri), KPC(storage_info), K(device_guard));
+  }
+  return ret;
+}
+
 int ObBackupIoAdapter::adaptively_get_file_length(const common::ObString &uri, const common::ObObjectStorageInfo *storage_info, int64_t &file_length)
 {
   int ret = OB_SUCCESS;
