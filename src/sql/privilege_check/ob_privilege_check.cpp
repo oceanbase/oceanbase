@@ -1947,10 +1947,6 @@ int get_dml_stmt_need_privs(
         if (OB_SUCC(ret) && OB_FAIL(add_encrypt_priv_to_need_privs(dml_stmt, need_privs))) {
           LOG_WARN("failed to add encrypt priv to need privs", K(ret));
         }
-        if (OB_SUCC(ret) && lib::is_mysql_mode()
-            && OB_FAIL(add_mysql_transpiled_udf_privs(session_priv, dml_stmt, need_privs))) {
-          LOG_WARN("failed to add sql transpiled udf privs", K(ret));
-        }
         for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
           const TableItem *table_item = dml_stmt->get_table_item(i);
           if (OB_ISNULL(table_item)) {
@@ -4882,6 +4878,12 @@ int ObPrivilegeCheck::get_stmt_need_privs(const ObSessionPrivInfo &session_priv,
       } else {
         //do nothing
       }
+    }
+    // Transpiled UDFs no longer have a runtime EXECUTE check. Collect their
+    // privileges here for both legacy and view-definer-aware DML paths.
+    if (OB_SUCC(ret) && lib::is_mysql_mode()
+        && OB_FAIL(add_mysql_transpiled_udf_privs(session_priv, dml_stmt, need_privs))) {
+      LOG_WARN("failed to add sql transpiled udf privs", K(ret));
     }
     // Check privilege for CTE definitions (WITH clause)
     bool need_check_cte = false;
