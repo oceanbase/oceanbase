@@ -1169,7 +1169,7 @@ bool ObPLObjectValue::match_params_info(const Ob2DArray<ObPlParamInfo,
 
 int ObPLObjectValue::match_complex_type_info(const ObPlParamInfo &param_info,
                                               const ObObjParam &param,
-                                              bool &is_same) const
+                                              bool &is_same)
 {
   int ret = OB_SUCCESS;
   is_same = true;
@@ -1230,8 +1230,9 @@ bool ObPLObjectValue::check_param_type_compatible_for_cache(
 }
 
 int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
-                                              const ObObjParam &param,
-                                              bool &is_same) const
+                                    const ObObjParam &param,
+                                    bool enable_share_cache_for_null_param,
+                                    bool &is_same)
 {
   int ret = OB_SUCCESS;
   is_same = true;
@@ -1247,7 +1248,7 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
     }
 
     if (param.get_param_meta().get_type() != param_info.type_) {
-      if (enable_share_cache_for_null_param_
+      if (enable_share_cache_for_null_param
         && !param_info.flag_.need_strict_type_match_) {
         is_same = check_param_type_compatible_for_cache(param_info, param);
       } else {
@@ -1293,23 +1294,27 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
   return ret;
 }
 
-int ObPLObjectValue::match_params_info(const ParamStore *params,
-                                       bool &is_same)
+int ObPLObjectValue::match_params_info(
+    const Ob2DArray<ObPlParamInfo, OB_MALLOC_BIG_BLOCK_SIZE, ObWrapperAllocator, false> &infos,
+    const ParamStore *params,
+    bool enable_share_cache_for_null_param,
+    bool &is_same)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(params)) {
     is_same = true;
-  } else if (params->count() > params_info_.count()) {
+  } else if (params->count() > infos.count()) {
     is_same = false;
   } else {
     //match original param info
     int64_t N = params->count();
-    LOG_DEBUG("params info", K(params_info_), K(*params), K(this));
+    LOG_DEBUG("params info", K(infos), K(*params));
     for (int64_t i = 0; OB_SUCC(ret) && is_same && i < N; ++i) {
-      if (OB_FAIL(match_param_info(params_info_.at(i),
+      if (OB_FAIL(match_param_info(infos.at(i),
                                    params->at(i),
+                                   enable_share_cache_for_null_param,
                                    is_same))) {
-        LOG_WARN("fail to match param info", K(ret), K(params_info_), K(*params));
+        LOG_WARN("fail to match param info", K(ret), K(infos), K(*params));
       }
     }
 
@@ -1746,6 +1751,54 @@ do {                                                                            
     }
   }
 #undef TRANS_DB_ID
+  return ret;
+}
+
+int ObPLAnonBlockCache::init(common::ObIAllocator &alloc,
+                             const ObPLCacheCtx &pc_ctx,
+                             sql::ObCacheObjGuard &guard)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(guard.get_cache_obj())) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(key_.deep_copy(alloc, pc_ctx.key_))) {
+    LOG_WARN("failed to copy local anonymous block key", K(ret));
+    key_.destory(alloc);
+  } else {
+    guard_.swap(guard);
+  }
+  return ret;
+}
+
+void ObPLAnonBlockCache::destroy(common::ObIAllocator &alloc)
+{
+  key_.destory(alloc);
+  next_ = nullptr;
+}
+
+int ObPLAnonBlockCache::match(const ObPLCacheCtx &pc_ctx,
+                              ObPLFunction *&routine) const
+{
+  int ret = OB_SUCCESS;
+  routine = nullptr;
+  ObPLFunction *candidate = static_cast<ObPLFunction*>(guard_.get_cache_obj());
+  bool same = true;
+  if (OB_ISNULL(pc_ctx.cache_params_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pc_ctx.cache_params_ is null", K(ret));
+  } else if (OB_ISNULL(candidate)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (key_.name_.length() == pc_ctx.key_.name_.length()
+             && pc_ctx.cache_params_->count() == candidate->get_params_info().count()
+             && key_.is_equal(pc_ctx.key_)) {
+    OZ(ObPLObjectValue::match_params_info(candidate->get_params_info(),
+                                          pc_ctx.cache_params_,
+                                          false /* enable_share_cache_for_null_param */,
+                                          same));
+    if (OB_SUCC(ret) && same) {
+      routine = candidate;
+    }
+  }
   return ret;
 }
 

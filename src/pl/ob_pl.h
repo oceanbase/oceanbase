@@ -1201,12 +1201,39 @@ public:
   ObPLConfigItems value_;
 };
 
+struct ObPLCacheCtx;
+class ObPLAnonBlockCache;
+
+// Owns compiled helper references for one PL invocation. Construction and
+// lookup allocate nothing; entries and key strings are allocated only by add().
+class ObPLAnonBlockGuard
+{
+public:
+  explicit ObPLAnonBlockGuard(common::ObIAllocator &alloc)
+    : alloc_(alloc), head_(nullptr)
+  {}
+  ~ObPLAnonBlockGuard();
+
+  // The returned routine is borrowed and remains valid until reset/destruction.
+  int get(const ObPLCacheCtx &pc_ctx, ObPLFunction *&routine);
+  // Transfers guard ownership only after the entry is fully initialized.
+  int add(const ObPLCacheCtx &pc_ctx, sql::ObCacheObjGuard &guard);
+  // Must run before the owner resets the borrowed allocator.
+  void reset();
+
+private:
+  common::ObIAllocator &alloc_;
+  ObPLAnonBlockCache *head_;
+  DISALLOW_COPY_AND_ASSIGN(ObPLAnonBlockGuard);
+};
+
 class ObPLContext
 {
   friend class LinkPLStackGuard;
 public:
   ObPLContext() :
     alloc_("PlContext", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    local_anon_cache_guard_(nullptr),
     saved_session_(nullptr),
     database_id_(OB_INVALID_ID),
     origin_role_id_array_(nullptr),
@@ -1233,6 +1260,7 @@ public:
   void reuse()
   {
     CHAR_CARRAY_INIT(database_name_);
+    destroy_local_anon_cache_guard();
     if (saved_session_ != nullptr) {
       saved_session_->~TransSavedValue();
       saved_session_ = nullptr;
@@ -1388,9 +1416,12 @@ public:
   ObPLExecInfo* get_pl_exec_info() { return pl_exec_info_; }
   void set_pl_exec_info(ObPLExecInfo *pl_exec_info) { pl_exec_info_ = pl_exec_info; }
   ObIAllocator &get_allocator() { return alloc_; }
+  ObPLAnonBlockGuard *get_local_anon_cache_guard() const { return local_anon_cache_guard_; }
+  int init_local_anon_cache_guard();
 
 
 private:
+  void destroy_local_anon_cache_guard();
   ObPLContext* get_stack_pl_ctx();
   void set_parent_stack_ctx(pl::ObPLContext *parent_stack_ctx)
   {
@@ -1406,6 +1437,7 @@ private:
                                                                     const int64_t last_trans_active_ts);
 private:
   ObArenaAllocator alloc_;  // pl exec level allocator
+  ObPLAnonBlockGuard *local_anon_cache_guard_;
   sql::ObBasicSessionInfo::TransSavedValue *saved_session_;
 
   sql::ObExecEnv exec_env_;
@@ -1670,7 +1702,8 @@ private:
                       ParamStore &params,
                       uint64_t stmt_id,
                       const ObString &sql,
-                      ObCacheObjGuard& cacheobj_guard);
+                      ObCacheObjGuard& cacheobj_guard,
+                      ObPLFunction *&routine);
 
   // for anonymous + ps
   int generate_pl_function(sql::ObExecContext &ctx,

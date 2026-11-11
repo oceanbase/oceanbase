@@ -848,8 +848,90 @@ void ObPLContext::register_after_begin_autonomous_session_for_deadlock_(ObSQLSes
   }
 }
 
+ObPLAnonBlockGuard::~ObPLAnonBlockGuard()
+{
+  reset();
+}
+
+void ObPLAnonBlockGuard::reset()
+{
+  while (head_ != nullptr) {
+    ObPLAnonBlockCache *entry = head_;
+    head_ = entry->get_next();
+    entry->destroy(alloc_);
+    entry->~ObPLAnonBlockCache();
+    alloc_.free(entry);
+  }
+}
+
+int ObPLAnonBlockGuard::get(const ObPLCacheCtx &pc_ctx,
+                           ObPLFunction *&routine)
+{
+  int ret = OB_SUCCESS;
+  routine = nullptr;
+  if (OB_ISNULL(pc_ctx.cache_params_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("pc_ctx.cache_params_ is null", K(ret));
+  }
+  for (ObPLAnonBlockCache *entry = head_;
+       OB_SUCC(ret) && entry != nullptr && routine == nullptr;
+       entry = entry->get_next()) {
+    OZ(entry->match(pc_ctx, routine));
+  }
+  return ret;
+}
+
+int ObPLAnonBlockGuard::add(const ObPLCacheCtx &pc_ctx,
+                           ObCacheObjGuard &guard)
+{
+  int ret = OB_SUCCESS;
+  ObPLAnonBlockCache *entry = nullptr;
+  if (OB_ISNULL(guard.get_cache_obj())) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_ISNULL(entry = static_cast<ObPLAnonBlockCache*>(
+                            alloc_.alloc(sizeof(ObPLAnonBlockCache))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    entry = new (entry) ObPLAnonBlockCache();
+    if (OB_FAIL(entry->init(alloc_, pc_ctx, guard))) {
+      entry->destroy(alloc_);
+      entry->~ObPLAnonBlockCache();
+      alloc_.free(entry);
+    } else {
+      entry->set_next(head_);
+      head_ = entry;
+    }
+  }
+  return ret;
+}
+
+int ObPLContext::init_local_anon_cache_guard()
+{
+  int ret = OB_SUCCESS;
+  if (local_anon_cache_guard_ == nullptr) {
+    void *buf = alloc_.alloc(sizeof(ObPLAnonBlockGuard));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate local anonymous block guard", K(ret));
+    } else {
+      local_anon_cache_guard_ = new (buf) ObPLAnonBlockGuard(alloc_);
+    }
+  }
+  return ret;
+}
+
+void ObPLContext::destroy_local_anon_cache_guard()
+{
+  if (local_anon_cache_guard_ != nullptr) {
+    local_anon_cache_guard_->~ObPLAnonBlockGuard();
+    alloc_.free(local_anon_cache_guard_);
+    local_anon_cache_guard_ = nullptr;
+  }
+}
+
 ObPLContext::~ObPLContext()
 {
+  destroy_local_anon_cache_guard();
   if (OB_NOT_NULL(pl_exec_info_) && !pl_exec_info_->is_cached_) {
     pl_exec_info_->~ObPLExecInfo();
   }
@@ -1445,6 +1527,7 @@ void ObPLContext::destory(
       clean_pl_async_commit_state(session_info, ctx, ret);
     }
   }
+  destroy_local_anon_cache_guard();
 }
 
 void ObPLContext::clean_pl_async_commit_state(sql::ObSQLSessionInfo &session_info, sql::ObExecContext &ctx, int &ret)
@@ -3011,8 +3094,8 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
       OZ (ObSQLUtils::md5(pc_key, ctx.get_sql_ctx()->sql_id_,
                           (int32_t)sizeof(ctx.get_sql_ctx()->sql_id_)));
       OX (ctx.get_my_session()->set_cur_sql_id(ctx.get_sql_ctx()->sql_id_));
-      OZ (get_pl_function(ctx, exec_params, OB_INVALID_ID, pc_key, cacheobj_guard));
-      OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
+      OZ (get_pl_function(
+          ctx, exec_params, OB_INVALID_ID, pc_key, cacheobj_guard, routine));
       CK (OB_NOT_NULL(routine));
       OX (routine->set_debug_priv());
     } else {
@@ -3158,8 +3241,8 @@ int ObPL::execute(ObExecContext &ctx,
   }
 
   // get from cache or compile it ...
-  OZ (get_pl_function(ctx, params, stmt_id, sql, cacheobj_guard));
-  OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
+  OZ (get_pl_function(
+      ctx, params, stmt_id, sql, cacheobj_guard, routine));
   CK (OB_NOT_NULL(routine));
   OX (routine->set_debug_priv());
   OX (out_args = routine->get_out_args());
@@ -3572,13 +3655,17 @@ int ObPL::get_pl_function(ObExecContext &ctx,
                           ParamStore &params,
                           uint64_t stmt_id,
                           const ObString &sql,
-                          ObCacheObjGuard& cacheobj_guard)
+                          ObCacheObjGuard& cacheobj_guard,
+                          ObPLFunction *&routine)
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
-  ObPLFunction* routine = NULL;
+  routine = nullptr;
   OZ (ObPLContext::valid_execute_context(ctx));
   if (OB_SUCC(ret)) {
+    int global_cache_ret = OB_SUCCESS;
+    ObPLContext *current_pl_ctx = ctx.get_pl_stack_ctx();
+    bool use_local_cache = current_pl_ctx != nullptr && current_pl_ctx->get_is_inner_mock() && ctx.get_my_session()->get_local_ob_enable_pl_cache();
     uint64_t database_id = OB_INVALID_ID;
     ctx.get_my_session()->get_database_id(database_id);
 
@@ -3608,6 +3695,7 @@ int ObPL::get_pl_function(ObExecContext &ctx,
       LOG_DEBUG("find plan by stmt_id failed, start to find plan by sql",
                  K(ret), K(sql), K(stmt_id), K(pc_ctx.key_));
       if (OB_FAIL(ObPLCacheMgr::get_pl_cache(ctx.get_my_session()->get_plan_cache(), cacheobj_guard, pc_ctx))) {
+        global_cache_ret = ret;
         LOG_INFO("get pl function by sql failed, will ignore this error",
                  K(ret), K(pc_ctx.key_), K(stmt_id), K(sql), K(params));
         HANDLE_PL_CACHE_RET_VALUE(ret);
@@ -3629,7 +3717,21 @@ int ObPL::get_pl_function(ObExecContext &ctx,
                                                  K(ctx.get_sql_ctx()->sql_id_),
                                                  K(sql));
 
-    // not in cache, compile it and add to cache
+    // Preserve the global hit path (including its statistics). The invocation
+    // cache is a fallback only for an ordinary global miss, not for errors that
+    // HANDLE_PL_CACHE_RET_VALUE may have suppressed.
+    if (OB_SUCC(ret) && use_local_cache && OB_ISNULL(routine) && global_cache_ret == OB_SQL_PC_NOT_EXIST) {
+      ObPLAnonBlockGuard *local_cache_guard = current_pl_ctx->get_local_anon_cache_guard();
+      int cache_ret = local_cache_guard == nullptr ? OB_SUCCESS : local_cache_guard->get(pc_ctx, routine);
+      if (OB_SUCCESS == cache_ret && routine != nullptr) {
+        LOG_DEBUG("hit local anonymous block cache", K(sql), KPC(routine));
+      } else if (OB_SUCCESS != cache_ret) {
+        use_local_cache = false;
+        LOG_WARN("bypass local anonymous block cache", K(cache_ret));
+      }
+    }
+
+    // not in either cache, compile it and add to cache
     if (OB_SUCC(ret) && OB_ISNULL(routine)) {
       ParseNode root_node;
       uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(sql.ptr(), sql.length(), 0);
@@ -3657,6 +3759,14 @@ int ObPL::get_pl_function(ObExecContext &ctx,
           //OX (pc_ctx.key_.name_ = sql);
           //OZ (plan_cache->add_exists_cache_obj_by_sql(pc_ctx, routine));
           //OX (pc_ctx.key_.name_.reset());
+        } else if (OB_SUCC(ret) && use_local_cache) {
+          int cache_ret = current_pl_ctx->init_local_anon_cache_guard();
+          if (OB_SUCCESS == cache_ret) {
+            cache_ret = current_pl_ctx->get_local_anon_cache_guard()->add(pc_ctx, cacheobj_guard);
+          }
+          if (OB_SUCCESS != cache_ret) {
+            LOG_WARN("failed to retain local anonymous block", K(cache_ret));
+          }
         }
         LOG_DEBUG("add anonymous to cache",
                   K(ret), K(stmt_id), KPC(routine),

@@ -122,8 +122,8 @@ int ObPLCompiler::init_anonymous_ast(
 
           // try parent type if it is inner mock PL
           } else if (OB_NOT_NULL(session_info.get_pl_context())
-                       && session_info.get_pl_context()->get_is_inner_mock()
-                       && OB_NOT_NULL(session_info.get_pl_top_context()->get_current_ctx())) {
+                       && OB_NOT_NULL(session_info.get_pl_top_context()->get_current_state())
+                       && session_info.get_pl_top_context()->get_current_state()->get_cur_pl_ctx()->get_is_inner_mock()) {
             const ObPLFunction *parent = session_info.get_pl_top_context()->get_current_ctx()->func_;
 
             CK (OB_NOT_NULL(parent));

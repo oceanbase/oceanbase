@@ -374,16 +374,33 @@ public:
                                 ObWrapperAllocator, false> &infos,
                                 bool strict = false);
 
-  int match_complex_type_info(const ObPlParamInfo &param_info,
+  static int match_complex_type_info(const ObPlParamInfo &param_info,
                               const ObObjParam &param,
-                              bool &is_same) const;
+                              bool &is_same);
 
   int match_param_info(const ObPlParamInfo &param_info,
+                       const ObObjParam &param,
+                       bool &is_same) const
+  {
+    return match_param_info(
+        param_info, param, enable_share_cache_for_null_param_, is_same);
+  }
+  static int match_param_info(const ObPlParamInfo &param_info,
                               const ObObjParam &param,
-                              bool &is_same) const;
+                              bool enable_share_cache_for_null_param,
+                              bool &is_same);
 
-  int match_params_info(const ParamStore *params,
-                                 bool &is_same);
+  int match_params_info(const ParamStore *params, bool &is_same)
+  {
+    return match_params_info(
+        params_info_, params, enable_share_cache_for_null_param_, is_same);
+  }
+  static int match_params_info(const Ob2DArray<ObPlParamInfo,
+                                OB_MALLOC_BIG_BLOCK_SIZE,
+                                ObWrapperAllocator, false> &infos,
+                                const ParamStore *params,
+                                bool enable_share_cache_for_null_param,
+                                bool &is_same);
 
   int set_max_concurrent_num_for_add(ObPLCacheCtx &pc_ctx);
   int set_max_concurrent_num_for_get(ObPLCacheCtx &pc_ctx);
@@ -473,6 +490,30 @@ private:
   common::ObDList<ObPLObjectValue> object_value_sets_;
 };
 
+// Only a few fixed internal mock anonymous block templates (e.g., collection
+// predicate/multiset helpers) are cached per PL invocation frame, so a simple
+// singly linked list is sufficient.
+class ObPLAnonBlockCache
+{
+public:
+  ObPLAnonBlockCache() : key_(), guard_(sql::PL_ANON_HANDLE), next_(nullptr) {}
+  ~ObPLAnonBlockCache() {}
+
+  int init(common::ObIAllocator &alloc,
+           const ObPLCacheCtx &pc_ctx,
+           sql::ObCacheObjGuard &guard);
+  void destroy(common::ObIAllocator &alloc);
+  int match(const ObPLCacheCtx &pc_ctx, ObPLFunction *&routine) const;
+
+  ObPLAnonBlockCache *get_next() const { return next_; }
+  void set_next(ObPLAnonBlockCache *next) { next_ = next; }
+
+private:
+  ObPLObjectKey key_;
+  sql::ObCacheObjGuard guard_;
+  ObPLAnonBlockCache *next_;
+  DISALLOW_COPY_AND_ASSIGN(ObPLAnonBlockCache);
+};
 
 } // namespace pl end
 } // namespace oceanbase end
