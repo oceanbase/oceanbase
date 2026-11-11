@@ -39,7 +39,8 @@ enum DmlStmtScope {
   SCOPE_INSERT_VECTOR,
   SCOPE_RETURNING,
   SCOPE_DICT_FIELDS,
-  SCOPE_QUALIFY_FILTER
+  SCOPE_QUALIFY_FILTER,
+  SCOPE_DML_PREDICATE = 24  // Reserved for MERGE and conditional INSERT predicates.
 };
 
 class ObStmtExprVisitor
