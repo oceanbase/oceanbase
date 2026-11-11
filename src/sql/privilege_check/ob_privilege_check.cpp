@@ -1799,6 +1799,48 @@ int add_encrypt_priv_to_need_privs(const ObDMLStmt *dml_stmt, ObIArray<ObNeedPri
   return ret;
 }
 
+int add_mysql_transpiled_udf_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObDMLStmt *dml_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(dml_stmt) || OB_ISNULL(dml_stmt->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null dml stmt or query ctx", K(ret), KP(dml_stmt));
+  } else {
+    const ObIArray<ObUDFRawExpr *> &transpiled_exprs =
+        dml_stmt->get_query_ctx()->pl_sql_transpiled_exprs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < transpiled_exprs.count(); ++i) {
+      const ObUDFRawExpr *udf_expr = transpiled_exprs.at(i);
+      if (OB_ISNULL(udf_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null sql transpiled udf expr", K(ret), K(i));
+      } else if (!udf_expr->is_standalone_udf()
+                 || OB_INVALID_ID == udf_expr->get_udf_id()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected non-standalone sql transpiled udf expr", K(ret), K(i), KPC(udf_expr));
+      } else {
+        ObNeedPriv need_priv;
+        need_priv.db_ = udf_expr->get_database_name().empty()
+                            ? session_priv.db_
+                            : udf_expr->get_database_name();
+        need_priv.table_ = udf_expr->get_func_name();
+        need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
+        need_priv.priv_set_ = OB_PRIV_EXECUTE;
+        need_priv.obj_type_ = ObObjectType::FUNCTION;
+        if (need_priv.db_.empty() || need_priv.table_.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected empty sql transpiled udf name", K(ret), K(i), K(need_priv), KPC(udf_expr));
+        } else {
+          ADD_NEED_PRIV(need_priv);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int get_dml_stmt_need_privs(
     const ObSessionPrivInfo &session_priv,
     const ObStmt *basic_stmt,
@@ -1873,6 +1915,10 @@ int get_dml_stmt_need_privs(
         }
         if (OB_SUCC(ret) && OB_FAIL(add_encrypt_priv_to_need_privs(dml_stmt, need_privs))) {
           LOG_WARN("failed to add encrypt priv to need privs", K(ret));
+        }
+        if (OB_SUCC(ret) && lib::is_mysql_mode()
+            && OB_FAIL(add_mysql_transpiled_udf_privs(session_priv, dml_stmt, need_privs))) {
+          LOG_WARN("failed to add sql transpiled udf privs", K(ret));
         }
         for (int64_t i = 0; OB_SUCC(ret) && i < table_size; i++) {
           const TableItem *table_item = dml_stmt->get_table_item(i);
