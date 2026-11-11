@@ -1308,6 +1308,7 @@ public:
   static int all_virtual_backup_archive_piece_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_backup_archive_piece_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_memstore_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_proxy_ls_location_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1660,6 +1661,7 @@ public:
   static int all_virtual_log_transport_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_mview_refresh_pending_task_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_memstore_diagnose_info_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_proxy_ls_location_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -4761,6 +4763,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_backup_archive_piece_task_schema,
   ObInnerTableSchema::all_virtual_backup_archive_piece_task_history_schema,
   ObInnerTableSchema::all_virtual_tenant_memstore_diagnose_info_schema,
+  ObInnerTableSchema::all_virtual_proxy_ls_location_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -5113,6 +5116,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_log_transport_stat_ora_schema,
   ObInnerTableSchema::all_virtual_mview_refresh_pending_task_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_tenant_memstore_diagnose_info_ora_schema,
+  ObInnerTableSchema::all_virtual_proxy_ls_location_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -7188,6 +7192,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_TID,
   OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_PROXY_LS_LOCATION_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -7550,6 +7555,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_ORA_TID,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_ORA_TID,
+  OB_ALL_VIRTUAL_PROXY_LS_LOCATION_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -9639,7 +9645,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_TID,
   OB_ALL_VIRTUAL_KEYWORD_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,
-  OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID,  };
+  OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_PROXY_LS_LOCATION_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -9841,6 +9848,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_KEYWORD_ORA_TID
 ,  OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_ORA_TID
 ,  OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_ORA_TID
+,  OB_ALL_VIRTUAL_PROXY_LS_LOCATION_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -10518,6 +10526,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_TNAME,
   OB_ALL_VIRTUAL_BACKUP_ARCHIVE_PIECE_TASK_HISTORY_TNAME,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_TNAME,
+  OB_ALL_VIRTUAL_PROXY_LS_LOCATION_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -10880,6 +10889,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_ORA_TNAME,
   OB_ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO_ORA_TNAME,
+  OB_ALL_VIRTUAL_PROXY_LS_LOCATION_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,

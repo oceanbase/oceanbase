@@ -335,6 +335,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_PROCEDURE_TID ||
          table_id == share::OB_ALL_VIRTUAL_SESSTAT_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_SCHEMA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_PROXY_LS_LOCATION_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_PARTITION_INFO_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_PARTITION_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_SUB_PARTITION_TID ||
@@ -363,6 +364,7 @@ bool ObDbmsStatsUtils::is_no_stat_virtual_table(const int64_t table_id)
          table_id == share::OB_ALL_VIRTUAL_AUTO_INCREMENT_REAL_AGENT_ORA_TID ||
          table_id == share::OB_TENANT_VIRTUAL_SHOW_CREATE_TRIGGER_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_SCHEMA_ORA_TID ||
+         table_id == share::OB_ALL_VIRTUAL_PROXY_LS_LOCATION_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_PARTITION_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_PARTITION_INFO_ORA_TID ||
          table_id == share::OB_ALL_VIRTUAL_PROXY_SUB_PARTITION_ORA_TID ||

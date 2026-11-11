@@ -168,6 +168,11 @@ public:
       const int64_t cluster_id,
       const uint64_t tenant_id,
       common::ObIArray<ObLSLocation> &locations);
+  // Returns currently cached locations for the tenant.
+  int get_tenant_ls_locations(
+      const int64_t cluster_id,
+      const uint64_t tenant_id,
+      common::ObIArray<ObLSLocation> &locations);
   // Add update task into async_queue_set.
   int add_update_task(const ObLSLocationUpdateTask &task);
   // Process update tasks.

@@ -68,7 +68,7 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator
     REPLICA_TYPE,
     DUP_REPICA_TYPE,
     MEMSTORE_PERCENT,
-    SPARE1,// replace this with a svr_port(rpc_port)
+    SPARE1,// replace this with a svr_port(rpc_port), kept for compatibility
     SPARE2,//int, unused
     SPARE3,//int, unused
     SPARE4,//varchar, unused
@@ -79,6 +79,9 @@ class ObAllVirtualProxySchema : public common::ObVirtualTableIterator
     LEVEL1_DECODED_TABLE_NAME,//varchar
     LEVEL2_DECODED_DB_NAME,//varchar
     LEVEL2_DECODED_TABLE_NAME,//varchar
+    LS_ID,
+    TENANT_ID,
+    RPC_PORT,
   };
 
   enum ObComplexTableType
@@ -140,6 +143,7 @@ private:
       const share::schema::ObTableSchema &table_schema,
       const share::ObLSReplicaLocation &replica,
       const common::ObTabletID &tablet_id,
+      const share::ObLSID &ls_id,
       const DupReplicaType dup_replica_type);
 
   //////////// tenant server related ////////////
@@ -163,7 +167,8 @@ private:
   int get_next_tablet_location_(
       const common::ObString &table_name,
       const share::schema::ObTableSchema *table_schema,
-      const common::ObTabletID &tablet_id);
+      const common::ObTabletID &tablet_id,
+      bool &has_row);
   int get_table_tablet_location_(const int64_t table_idx);
   // add fake location to location_ for virtual table
   int add_virtual_tablet_location_();

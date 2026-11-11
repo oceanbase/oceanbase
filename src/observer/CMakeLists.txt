@@ -456,6 +456,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tablet_sstable_macro_info.cpp
   virtual_table/ob_all_virtual_tablet_store_stat.cpp
   virtual_table/ob_all_virtual_proxy_base.cpp
+  virtual_table/ob_all_virtual_proxy_ls_location.cpp
   virtual_table/ob_all_virtual_proxy_partition.cpp
   virtual_table/ob_all_virtual_proxy_partition_info.cpp
   virtual_table/ob_all_virtual_proxy_routine.cpp

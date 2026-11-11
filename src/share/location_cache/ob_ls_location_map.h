@@ -77,6 +77,11 @@ public:
   int del(const ObLSLocationCacheKey &key, const int64_t safe_delete_time);
   int check_and_generate_dead_cache(ObLSLocationArray &arr);
   int get_all(ObLSLocationArray &arr);
+  // Copies cached locations for the tenant under bucket read locks; resets locations.
+  int get_by_tenant(
+      const int64_t cluster_id,
+      const uint64_t tenant_id,
+      common::ObIArray<ObLSLocation> &locations);
   int64_t size() { return size_; }
 
   template <typename Function>

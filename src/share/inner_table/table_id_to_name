@@ -1410,6 +1410,7 @@
 # 12623: __all_virtual_backup_archive_piece_task_history
 # 12623: __all_backup_archive_piece_task_history  # BASE_TABLE_NAME
 # 12624: __all_virtual_tenant_memstore_diagnose_info
+# 12629: __all_virtual_proxy_ls_location
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2194,6 +2195,8 @@
 # 15557: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
 # 15559: ALL_VIRTUAL_TENANT_MEMSTORE_DIAGNOSE_INFO
 # 15559: __all_virtual_tenant_memstore_diagnose_info  # BASE_TABLE_NAME
+# 15562: ALL_VIRTUAL_PROXY_LS_LOCATION
+# 15562: __all_virtual_proxy_ls_location  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

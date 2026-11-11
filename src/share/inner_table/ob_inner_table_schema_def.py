@@ -10676,6 +10676,9 @@ def_table_schema(
   ('level1_decoded_table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
   ('level2_decoded_db_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH'),
   ('level2_decoded_table_name', 'varchar:OB_MAX_TABLE_NAME_LENGTH'),
+  ('ls_id', 'int'),
+  ('tenant_id', 'int'),
+  ('rpc_port', 'int'),
   ]
 )
 
@@ -10948,6 +10951,8 @@ def_table_schema(
     ('spare4', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare5', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare6', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('ls_id', 'int'),
+    ('schema_version', 'int'),
   ],
 )
 
@@ -10980,6 +10985,8 @@ def_table_schema(
     ('spare4', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare5', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
     ('spare6', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('ls_id', 'int'),
+    ('schema_version', 'int'),
   ],
 )
 
@@ -18246,6 +18253,33 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+def_table_schema(
+  owner = 'linxun.wf',
+  table_name = '__all_virtual_proxy_ls_location',
+  table_id = '12629',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('sql_port', 'int'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('svr_port', 'int'),
+    ('role', 'int'),
+    ('replica_type', 'int'),
+    ('proposal_id', 'int'),
+    ('spare1', 'int'),
+    ('spare2', 'int'),
+    ('spare3', 'int'),
+    ('spare4', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('spare5', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+    ('spare6', 'varchar:OB_MAX_PARTITION_EXPR_LENGTH'),
+  ],
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18838,6 +18872,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15553', all_def_keyword
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15554', all_def_keywords['__all_virtual_log_transport_stat']))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_keywords['__all_mview_refresh_pending_task']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15559', all_def_keywords['__all_virtual_tenant_memstore_diagnose_info'])))
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15562', all_def_keywords['__all_virtual_proxy_ls_location']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位

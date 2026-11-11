@@ -273,5 +273,33 @@ int ObLSLocationMap::get_all(ObLSLocationArray &arr)
   return ret;
 }
 
+int ObLSLocationMap::get_by_tenant(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    common::ObIArray<ObLSLocation> &locations)
+{
+  int ret = OB_SUCCESS;
+  ObLSLocation *location = NULL;
+  locations.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObLSLocationMap not init", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < BUCKETS_CNT; ++i) {
+    ObQSyncLockReadGuard guard(buckets_lock_[i]);
+    location = ls_buckets_[i];
+    while (OB_SUCC(ret) && OB_NOT_NULL(location)) {
+      const ObLSLocationCacheKey &key = location->get_cache_key();
+      if (cluster_id == key.get_cluster_id() && tenant_id == key.get_tenant_id()) {
+        if (OB_FAIL(locations.push_back(*location))) {
+          LOG_WARN("fail to add cached ls location", KR(ret), KPC(location));
+        }
+      }
+      location = (ObLSLocation *)location->next_;
+    }
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase

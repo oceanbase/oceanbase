@@ -13,6 +13,14 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_proxy_base.h"
+#include "lib/allocator/page_arena.h"
+#include "lib/container/ob_array.h"
+#include "lib/list/ob_list.h"
+#include "lib/time/ob_time_utility.h"
+#include "share/config/ob_server_config.h"
+#include "share/location_cache/ob_location_service.h"
+#include "share/ob_server_struct.h"
+#include "share/schema/ob_table_schema.h"
 #include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase::common;
@@ -39,6 +47,53 @@ ObAllVirtualProxyBaseIterator::~ObAllVirtualProxyBaseIterator()
 void ObAllVirtualProxyBaseIterator::set_schema_service(share::schema::ObMultiVersionSchemaService &schema_service)
 {
   schema_service_ = &schema_service;
+}
+
+int ObAllVirtualProxyBaseIterator::batch_refresh_tablet_ls_cache_(
+    const share::schema::ObSimpleTableSchemaV2 &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTabletID, 64> tablet_ids;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  if (OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("location service is not initialized", KR(ret), KP(GCTX.location_service_));
+  } else if (!table_schema.has_tablet()) {
+    // no need to refresh tablet to ls mappings
+  } else if (OB_FAIL(table_schema.get_tablet_ids(tablet_ids))) {
+    LOG_WARN("fail to get tablet ids", KR(ret), K(tenant_id), "table_id", table_schema.get_table_id());
+  } else if (!tablet_ids.empty()) {
+    ObArenaAllocator allocator;
+    ObList<ObTabletID, ObIAllocator> tablet_list(allocator);
+    ARRAY_FOREACH(tablet_ids, idx) {
+      if (OB_UNLIKELY(!tablet_ids.at(idx).is_valid_with_tenant(tenant_id))) {
+        // skip invalid tablet
+      } else if (OB_FAIL(tablet_list.push_back(tablet_ids.at(idx)))) {
+        LOG_WARN("fail to add tablet id", KR(ret), K(tenant_id), "tablet_id", tablet_ids.at(idx));
+      }
+    }
+    if (OB_SUCC(ret) && !tablet_list.empty()) {
+      bool is_nonblock = false;
+      ObArray<ObTabletLSCache> tablet_ls_caches;
+      const int64_t expire_renew_time =
+          ObTimeUtility::current_time() - GCONF.location_cache_refresh_min_interval;
+      // Use expire_renew_time to avoid repeatedly refreshing tablet-to-LS mappings during bursts of proxy requests.
+      // A table_id query would also reload mappings whose cache are still fresh.
+      // So batch-query only the tablets with missing or expired cache entries.
+      if (OB_FAIL(GCTX.location_service_->batch_renew_tablet_ls_cache(
+          tenant_id, tablet_list, is_nonblock, tablet_ls_caches, expire_renew_time))) {
+        if (OB_GET_LOCATION_TIME_OUT == ret) {
+          LOG_WARN("batch renew tablet to ls mappings timed out, use cached mappings",
+              KR(ret), K(tenant_id), "table_id", table_schema.get_table_id(), K(tablet_list));
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to batch renew tablet to ls mappings",
+              KR(ret), K(tenant_id), "table_id", table_schema.get_table_id(), K(tablet_list));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int ObAllVirtualProxyBaseIterator::inner_get_next_row(ObNewRow *&row)

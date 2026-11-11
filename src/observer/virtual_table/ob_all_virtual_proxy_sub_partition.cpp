@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX SERVER
 
 #include "ob_all_virtual_proxy_sub_partition.h"
+#include "share/location_cache/ob_location_service.h"
+#include "share/ob_server_struct.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 
 using namespace oceanbase::common;
@@ -27,6 +29,7 @@ namespace observer
 ObAllVirtualProxySubPartition::ObAllVirtualProxySubPartition()
     : ObAllVirtualProxyBaseIterator(),
       is_inited_(false),
+      need_ls_id_(false),
       part_iter_(),
       subpart_iter_(),
       part_func_type_(PARTITION_FUNC_TYPE_MAX),
@@ -41,10 +44,15 @@ ObAllVirtualProxySubPartition::~ObAllVirtualProxySubPartition()
 int ObAllVirtualProxySubPartition::inner_open()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(allocator_) || OB_ISNULL(schema_service_)) {
+  // check if need to get ls_id
+  need_ls_id_ = false;
+  for (int64_t i = 0; !need_ls_id_ && i < output_column_ids_.count(); ++i) {
+    need_ls_id_ = (LS_ID == output_column_ids_.at(i));
+  }
+  if (OB_ISNULL(allocator_) || OB_ISNULL(schema_service_) || OB_ISNULL(GCTX.location_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObAllVirtualProxySubPartition not init",
-        KR(ret), K_(schema_service), K_(allocator));
+        KR(ret), K_(schema_service), K_(allocator), KP(GCTX.location_service_));
   } else if (key_ranges_.count() != 1) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "batch query");
@@ -137,7 +145,11 @@ int ObAllVirtualProxySubPartition::inner_open()
           LOG_TRACE("table not exist", K(tenant_id), K(table_id)); // skip
         }
       } else if (PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
-        LOG_TRACE("not sub partition table", KR(ret), KPC(table_schema_)); // skip
+        // ret = OB_SUCCESS, warn and skip this table without failing the query.
+        LOG_USER_WARN(OB_NOT_SUPPORTED, "querying tables without subpartitions in __all_virtual_proxy_sub_partition");
+        LOG_WARN("skip table without subpartitions", K(tenant_id), K(table_id));
+      } else if (need_ls_id_ && OB_FAIL(batch_refresh_tablet_ls_cache_(*table_schema))) {
+        LOG_WARN("fail to batch refresh tablet to ls mappings", KR(ret), K(tenant_id), K(table_id));
       } else {
         part_func_type_ = table_schema->get_sub_part_option().get_part_func_type();
         const ObPartition *part = NULL;
@@ -160,34 +172,46 @@ int ObAllVirtualProxySubPartition::inner_get_next_row()
 {
   int ret = OB_SUCCESS;
   const ObSubPartition *sub_partition = NULL;
+  bool has_row = false;
   if (!is_inited_) {
     ret = OB_ITER_END; // maybe table or part not exists
-  } else if (OB_FAIL(subpart_iter_.next(sub_partition))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to iter sub_partition", KR(ret));
-    } else {
-      const ObPartition *partition = NULL;
-      if (OB_FAIL(part_iter_.next(partition))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get part failed", KR(ret));
-        }
-      } else if (OB_ISNULL(partition) || OB_ISNULL(table_schema_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition or table is null", KR(ret));
+  }
+  while (OB_SUCC(ret) && !has_row) {
+    if (OB_FAIL(subpart_iter_.next(sub_partition))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to iter sub_partition", KR(ret));
       } else {
-        subpart_iter_.init(*table_schema_, *partition, CHECK_PARTITION_MODE_NORMAL);
-        if (OB_FAIL(subpart_iter_.next(sub_partition))) {
-          LOG_WARN("fail to iter sub_partition", KR(ret), KPC(partition));
+        const ObPartition *partition = NULL;
+        if (OB_FAIL(part_iter_.next(partition))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get part failed", KR(ret));
+          }
+        } else if (OB_ISNULL(partition) || OB_ISNULL(table_schema_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition or table is null", KR(ret));
+        } else {
+          subpart_iter_.init(*table_schema_, *partition, CHECK_PARTITION_MODE_NORMAL);
+          if (OB_FAIL(subpart_iter_.next(sub_partition))) {
+            LOG_WARN("fail to iter sub_partition", KR(ret), KPC(partition));
+          }
         }
       }
     }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(sub_partition)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sub_partition is null", KR(ret));
-  } else if (OB_FAIL(fill_row_(*sub_partition))) {
-    LOG_WARN("fail to fill cells", KR(ret), KPC(sub_partition));
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(sub_partition)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sub_partition is null", KR(ret));
+    } else if (OB_FAIL(fill_row_(*sub_partition))) {
+      if (OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST == ret) {
+        // A stale schema may still contain a dropped subpartition. Continue with the next row.
+        LOG_WARN("tablet to ls mapping is unavailable, skip subpartition row", KR(ret), KPC(sub_partition));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to fill cells", KR(ret), KPC(sub_partition));
+      }
+    } else {
+      has_row = true;
+    }
   }
   return ret;
 }
@@ -201,6 +225,7 @@ int ObAllVirtualProxySubPartition::fill_row_(const ObSubPartition &sub_partition
   const int64_t table_id = sub_partition.get_table_id();
   const uint64_t tenant_id = sub_partition.get_tenant_id();
   bool is_oracle_mode = false;
+  ObLSID ls_id;
   const ObTableSchema *table_schema = NULL;
   if (OB_ISNULL(cells)) {
     ret = OB_ERR_UNEXPECTED;
@@ -218,6 +243,14 @@ int ObAllVirtualProxySubPartition::fill_row_(const ObSubPartition &sub_partition
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the table_schema is null", KR(ret), K(tenant_id), K(table_id));
+  } else if (need_ls_id_ && sub_partition.get_tablet_id().is_valid()) {
+    if (OB_FAIL(GCTX.location_service_->nonblock_get(
+        tenant_id, sub_partition.get_tablet_id(), ls_id))) {
+      if (OB_MAPPING_BETWEEN_TABLET_AND_LS_NOT_EXIST != ret) {
+        LOG_WARN("fail to get tablet to ls mapping from location cache",
+            KR(ret), K(tenant_id), "tablet_id", sub_partition.get_tablet_id());
+      }
+    }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_count; i++) {
     uint64_t col_id = output_column_ids_.at(i);
@@ -286,7 +319,7 @@ int ObAllVirtualProxySubPartition::fill_row_(const ObSubPartition &sub_partition
         cells[i].set_int(sub_partition.get_tablet_id().id());
         break;
       }
-    // replace the meaning of the 'spare1' column with that of table_level 'schema_version'
+    // Keep schema_version in spare1 for compatibility with old ObProxy versions.
     case SPARE1: {
         cells[i].set_int(table_schema->get_schema_version());
         break;
@@ -312,6 +345,18 @@ int ObAllVirtualProxySubPartition::fill_row_(const ObSubPartition &sub_partition
     case SPARE6: {
         cells[i].set_varchar("");
         cells[i].set_collation_type(coll_type);
+        break;
+      }
+    case LS_ID: {
+        if (ls_id.is_valid()) {
+          cells[i].set_int(ls_id.id());
+        } else {
+          cells[i].set_null();
+        }
+        break;
+      }
+    case SCHEMA_VERSION: {
+        cells[i].set_int(table_schema->get_schema_version());
         break;
       }
     default: {

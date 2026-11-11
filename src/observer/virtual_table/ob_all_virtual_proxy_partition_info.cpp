@@ -126,7 +126,9 @@ int ObAllVirtualProxyPartitionInfo::inner_open()
               LOG_TRACE("table not exist", K(tenant_id), K(current_table_id)); // skip
             }
           } else if (!table_schema->is_partitioned_table()) {
-            LOG_TRACE("is not partitioned table", K(current_table_id)); // skip
+            // ret = OB_SUCCESS, warn and skip this table without failing the query.
+            LOG_USER_WARN(OB_NOT_SUPPORTED, "querying non-partitioned tables in __all_virtual_proxy_partition_info");
+            LOG_WARN("skip non-partitioned table", K(tenant_id), K(current_table_id));
           } else if (OB_FAIL(table_schemas_.push_back(table_schema))) {
             LOG_WARN("fail to push back table_schema", K(table_schema), KR(ret));
           }

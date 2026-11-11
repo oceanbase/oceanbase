@@ -57,6 +57,23 @@ int ObLocationService::get(
   return ret;
 }
 
+int ObLocationService::get_tenant_ls_locations(
+    const uint64_t tenant_id,
+    common::ObIArray<ObLSLocation> &ls_locations)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(ls_location_service_.get_tenant_ls_locations(
+      GCONF.cluster_id,
+      tenant_id,
+      ls_locations))) {
+    LOG_WARN("fail to get cached tenant log stream locations", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
 int ObLocationService::renew_all_ls_locations_by_rpc()
 {
   int ret = OB_SUCCESS;
@@ -422,6 +439,37 @@ int ObLocationService::reload_config()
   return ret;
 }
 
+int ObLocationService::batch_renew_tablet_ls_cache(
+    const uint64_t tenant_id,
+    const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
+    const bool is_nonblock,
+    common::ObIArray<ObTabletLSCache> &tablet_ls_caches,
+    const int64_t expire_renew_time /* = INT64_MAX */)
+{
+  int ret = OB_SUCCESS;
+  tablet_ls_caches.reset();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (tablet_list.empty()) {
+    // do nothing
+  } else if (is_nonblock) {
+    FOREACH_X(tablet_id, tablet_list, OB_SUCC(ret)) {
+      if (OB_FAIL(tablet_ls_service_.nonblock_renew(tenant_id, *tablet_id))) {
+        LOG_WARN("nonblock renew failed", KR(ret), K(tenant_id), K(*tablet_id));
+      }
+    }
+  } else if (OB_FAIL(tablet_ls_service_.batch_renew_tablet_ls_cache(
+      tenant_id,
+      tablet_list,
+      tablet_ls_caches,
+      expire_renew_time))) {
+    LOG_WARN("fail to batch renew tablet to log stream mappings",
+        KR(ret), K(tenant_id), K(tablet_list), K(expire_renew_time));
+  }
+  return ret;
+}
+
 int ObLocationService::batch_renew_tablet_locations(
     const uint64_t tenant_id,
     const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
@@ -445,15 +493,10 @@ int ObLocationService::batch_renew_tablet_locations(
     // 1. renew tablet ls mapping
     if (OB_FAIL(ret)) {
     } else if (ONLY_RENEW_LS_LOCATION != renew_type) {
-      if (is_nonblock) {
-        FOREACH_X(tablet_id, tablet_list, OB_SUCC(ret)) {
-          if (OB_FAIL(tablet_ls_service_.nonblock_renew(tenant_id, *tablet_id))) {
-            LOG_WARN("nonblock renew failed", KR(ret), K(tenant_id), K(*tablet_id));
-          }
-        }
-      } else if (OB_FAIL(tablet_ls_service_.batch_renew_tablet_ls_cache( // block
+      if (OB_FAIL(batch_renew_tablet_ls_cache(
           tenant_id,
           tablet_list,
+          is_nonblock,
           tablet_ls_caches,
           expire_renew_time))) {
         LOG_WARN("batch renew cache failed", KR(ret), K(tenant_id), K(tablet_list), K(expire_renew_time));

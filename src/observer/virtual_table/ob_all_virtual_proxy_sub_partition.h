@@ -45,12 +45,14 @@ class ObAllVirtualProxySubPartition : public ObAllVirtualProxyBaseIterator
     SUB_PART_POSITION,
     TABLET_ID,
 
-    SPARE1, // replace this with a table-level schema_version
+    SPARE1, // schema_version, kept for compatibility
     SPARE2,
     SPARE3,
     SPARE4,
     SPARE5,
     SPARE6,
+    LS_ID,
+    SCHEMA_VERSION,
   };
 
   enum ALL_VIRTUAL_PROXY_SUB_PARTITOIN_ROWKEY_IDX
@@ -71,6 +73,7 @@ private:
   int fill_row_(const share::schema::ObSubPartition &table_schema);
 
   bool is_inited_;
+  bool need_ls_id_;
   share::schema::ObPartIterator part_iter_;
   share::schema::ObSubPartIterator subpart_iter_;
   share::schema::ObPartitionFuncType part_func_type_;

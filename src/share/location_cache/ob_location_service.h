@@ -119,6 +119,12 @@ public:
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id);
+
+  // Reads the tenant's LS list and returns cached locations without refreshing them.
+  int get_tenant_ls_locations(
+      const uint64_t tenant_id,
+      common::ObIArray<ObLSLocation> &ls_locations);
+
   // ------------------------ End interfaces for log stream location ------------------------
 
   // ------------- Interfaces for tablet to log stream (just for local cluster) -------------
@@ -187,6 +193,13 @@ public:
       const int error_code,
       const bool is_nonblock);
 
+  // Renews the mappings between tablets and log streams synchronously in batch.
+  int batch_renew_tablet_ls_cache(
+      const uint64_t tenant_id,
+      const ObList<common::ObTabletID, common::ObIAllocator> &tablet_list,
+      const bool is_nonblock,
+      common::ObIArray<ObTabletLSCache> &tablet_ls_caches,
+      const int64_t expire_renew_time = INT64_MAX);
   int submit_tablet_broadcast_task(const ObTabletLocationBroadcastTask &task);
   int submit_tablet_update_task(const ObTabletLocationBroadcastTask &task);
  // ----------------------- End interfaces for tablet to log stream -----------------------

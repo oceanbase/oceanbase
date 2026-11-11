@@ -91,6 +91,7 @@
 #include "observer/virtual_table/ob_virtual_obrpc_send_stat.h"
 #include "observer/virtual_table/ob_virtual_span_info.h"
 #include "observer/virtual_table/ob_all_virtual_proxy_schema.h"
+#include "observer/virtual_table/ob_all_virtual_proxy_ls_location.h"
 #include "observer/virtual_table/ob_virtual_proxy_server_stat.h"
 #include "observer/virtual_table/ob_virtual_proxy_sys_variable.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_sstable_macro_info.h"
@@ -608,6 +609,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               LOG_WARN("fail to init ObAllVirtualProxySchema", KR(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(avps);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_PROXY_LS_LOCATION_TID: {
+            ObAllVirtualProxyLSLocation *pi = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualProxyLSLocation, pi))) {
+              SERVER_LOG(ERROR, "fail to new", KR(ret), K(pure_tid));
+            } else {
+              pi->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(pi);
             }
             break;
           }

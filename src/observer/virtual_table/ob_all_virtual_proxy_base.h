@@ -73,6 +73,8 @@ public:
       share::schema::ObSchemaGetterGuard &schema_guard,
       const uint64_t tenant_id);
 protected:
+  int batch_refresh_tablet_ls_cache_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
+
   common::ObString input_tenant_name_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
   share::schema::ObSchemaGetterGuard tenant_schema_guard_;

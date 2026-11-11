@@ -819,6 +819,24 @@ int ObLSLocationService::renew_location_for_tenant(
   return ret;
 }
 
+int ObLSLocationService::get_tenant_ls_locations(
+    const int64_t cluster_id,
+    const uint64_t tenant_id,
+    common::ObIArray<ObLSLocation> &locations)
+{
+  int ret = OB_SUCCESS;
+  locations.reset();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_CLUSTER_ID == cluster_id || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(cluster_id), K(tenant_id));
+  } else if (OB_FAIL(inner_cache_.get_by_tenant(cluster_id, tenant_id, locations))) {
+    LOG_WARN("fail to get cached tenant ls locations", KR(ret), K(cluster_id), K(tenant_id));
+  }
+  return ret;
+}
+
 int ObLSLocationService::construct_rpc_dests_(
     ObIArray<ObAddr> &dests)
 {
