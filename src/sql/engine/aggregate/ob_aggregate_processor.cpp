@@ -107,6 +107,7 @@ OB_DEF_SERIALIZE(ObAggrInfo)
   OB_UNIS_ENCODE(has_ignore_null_);
   OB_UNIS_ENCODE(is_filter_distinct_bitmap_aggr_);
   OB_UNIS_ENCODE(filter_distinct_param_exprs_);
+  OB_UNIS_ENCODE(retention_is_final_);
   return ret;
 }
 
@@ -197,6 +198,7 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
   OB_UNIS_DECODE(has_ignore_null_);
   OB_UNIS_DECODE(is_filter_distinct_bitmap_aggr_);
   OB_UNIS_DECODE(filter_distinct_param_exprs_);
+  OB_UNIS_DECODE(retention_is_final_);
   return ret;
 }
 
@@ -260,6 +262,7 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
   OB_UNIS_ADD_LEN(has_ignore_null_);
   OB_UNIS_ADD_LEN(is_filter_distinct_bitmap_aggr_);
   OB_UNIS_ADD_LEN(filter_distinct_param_exprs_);
+  OB_UNIS_ADD_LEN(retention_is_final_);
   return len;
 }
 

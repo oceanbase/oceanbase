@@ -171,7 +171,8 @@ public:
     enable_fast_bypass_(false),
     is_statistic_agg_(false),
     is_filter_distinct_bitmap_aggr_(false),
-    filter_distinct_param_exprs_()
+    filter_distinct_param_exprs_(),
+    retention_is_final_(false)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : alloc_(&alloc),
@@ -215,7 +216,8 @@ public:
     enable_fast_bypass_(false),
     is_statistic_agg_(false),
     is_filter_distinct_bitmap_aggr_(false),
-    filter_distinct_param_exprs_(alloc)
+    filter_distinct_param_exprs_(alloc),
+    retention_is_final_(false)
   {}
   virtual ~ObAggrInfo();
   inline ObObjType get_first_child_type() const;
@@ -315,6 +317,7 @@ public:
   // Only for serialization compatibility with 5.0.2.
   bool is_filter_distinct_bitmap_aggr_;
   ExprFixedArray filter_distinct_param_exprs_;
+  bool retention_is_final_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;
