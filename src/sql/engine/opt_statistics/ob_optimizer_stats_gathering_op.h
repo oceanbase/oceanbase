@@ -100,8 +100,9 @@ private:
   int send_stats();
   int calc_stats();
   // calc stats for each column
-  int calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len);
-  int calc_columns_stats(int64_t &row_len);
+  int calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len, bool ignore);
+  int calc_columns_stats(int64_t &row_len, bool ignore);
+  int log_column_error(int err, ObExpr *expr, uint64_t column_id);
   int calc_table_stats(int64_t &row_len, bool is_sample_row);
   // generate stat_param that is used to write inner_table.
   int generate_stat_param(ObTableStatParam &param);

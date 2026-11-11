@@ -154,19 +154,34 @@ struct ObUserLoggingCtx
   private:
     ObUserLoggingCtx &ctx_;
   };
-  ObUserLoggingCtx() : column_name_(NULL), row_num_(-1) {}
+  ObUserLoggingCtx() : column_name_(NULL), row_num_(-1), bad_value_(), has_bad_value_(false) {}
   inline bool skip_logging() const { return NULL == column_name_ || row_num_ <= 0; }
   inline const ObString *get_column_name() const  { return column_name_; }
   inline int64_t get_row_num() const { return row_num_; }
+  static const int32_t BAD_VALUE_MAX_LEN = 256;
+  inline bool has_bad_value() const { return has_bad_value_; }
+  inline const common::ObString &get_bad_value() const { return bad_value_; }
+  inline void set_bad_value(const common::ObString &bad_value)
+  {
+    bad_value_ = bad_value;
+    if (bad_value_.length() > BAD_VALUE_MAX_LEN) {
+      bad_value_.assign_ptr(bad_value_.ptr(), BAD_VALUE_MAX_LEN);
+    }
+    has_bad_value_ = true;
+  }
 private:
   inline void reset()
   {
     column_name_ = NULL;
     row_num_ = -1;
+    bad_value_.reset();
+    has_bad_value_ = false;
   }
 private:
   const ObString *column_name_;
   int64_t row_num_;
+  common::ObString bad_value_;
+  bool has_bad_value_;
 };
 
 class ObIExtraStatusCheck;

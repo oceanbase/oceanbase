@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_optimizer_stats_gathering_op.h"
+#include "sql/engine/dml/ob_dml_service.h"
+#include "sql/engine/ob_physical_plan.h"
 
 namespace oceanbase
 {
@@ -329,7 +331,49 @@ int ObOptimizerStatsGatheringOp::get_col_stat_by_key(ObOptColumnStat::Key &key, 
   return ret;
 }
 
-int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len)
+int ObOptimizerStatsGatheringOp::log_column_error(int err, ObExpr *expr, uint64_t column_id)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *tab_schema = NULL;
+  const share::schema::ObColumnSchemaV2 *column_schema = NULL;
+  share::schema::ObSchemaGetterGuard *schema_guard = ctx_.get_virtual_table_ctx().schema_guard_;
+  ObUserLoggingCtx *logging_ctx = ctx_.get_user_logging_ctx();
+  if (OB_ISNULL(schema_guard) || OB_ISNULL(expr) || OB_ISNULL(MY_SPEC.plan_) ||
+      OB_ISNULL(logging_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KR(ret), K(column_id), K(logging_ctx));
+  } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id_, MY_SPEC.table_id_, tab_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret), K(tenant_id_), K(MY_SPEC.table_id_));
+  } else if (OB_ISNULL(tab_schema) || OB_ISNULL(column_schema = tab_schema->get_column_schema(column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get column schema", KR(ret), K(MY_SPEC.table_id_), K(column_id));
+  }
+  if (OB_FAIL(ret)) {
+    ret = err;
+  } else {
+    ObString column_name = column_schema->get_column_name_str();
+    ObOptTableStat *tab_stat = nullptr;
+    ObOptTableStat::Key key(tenant_id_, MY_SPEC.table_id_,
+                           MY_SPEC.is_part_table() ? -1 : static_cast<int64_t>(MY_SPEC.table_id_));
+    int64_t row_num = 1;
+    ObUserLoggingCtx::Guard logging_ctx_guard(*logging_ctx);
+
+    if (OB_SUCCESS == table_stats_map_.get_refactored(key, tab_stat) && OB_NOT_NULL(tab_stat)) {
+      row_num += tab_stat->get_row_count();
+    }
+
+    ctx_.set_cur_rownum(row_num);
+    ctx_.set_cur_column_name(&column_name);
+    if (OB_FAIL(ObDMLService::log_column_error(err, row_num, column_name, *this, *expr,
+                                              MY_SPEC.plan_->is_use_pdml()))) {
+      LOG_WARN("failed to eval column expr", KR(ret), K(column_id), K(row_num));
+    }
+  }
+  return ret;
+}
+
+int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len,
+                                                  bool ignore)
 {
   int ret = OB_SUCCESS;
   ObDatum *datum = NULL;
@@ -339,21 +383,26 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column
   if (MY_SPEC.is_part_table()) {
     global_col_stats_key.partition_id_ = -1;
   }
-  if (OB_ISNULL(expr) || OB_ISNULL(expr->basic_funcs_)) {
+  if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret));
+  } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
+    if (OB_FAIL(log_column_error(ret, expr, column_id))) {
+      LOG_WARN("failed to eval column expr", KR(ret), K(column_id), KPC(expr));
+    }
+  } else if (OB_ISNULL(datum)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null datum", KR(ret), K(column_id));
+  } else if (ignore) {
+  } else if (OB_ISNULL(expr->basic_funcs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null basic funcs", KR(ret), K(column_id));
   } else if (OB_FAIL(get_col_stat_by_key(global_col_stats_key, global_col_stat))) {
     LOG_WARN("fail to get global table stat", K(ret));
   } else if (OB_ISNULL(global_col_stat)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (!ObColumnStatParam::is_valid_opt_col_type(expr->obj_meta_.get_type(), true)) {
-    // do nothing yet, should use the plain stats.
-  } else if (OB_FAIL(expr->eval(eval_ctx_, datum))) {
-    LOG_WARN("failed to eval expr", K(*expr));
-  } else if (OB_ISNULL(datum) ) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null");
   } else if (OB_FAIL(ObExprSysOpOpnsize::calc_sys_op_opnsize(expr, datum, col_len))) {
     LOG_WARN("fail to calc sys op opnsize", K(ret));
   } else if (OB_FALSE_IT(global_col_stat->col_stat_->set_stat_level(StatLevel::TABLE_LEVEL))) {
@@ -367,7 +416,7 @@ int ObOptimizerStatsGatheringOp::calc_column_stats(ObExpr *expr, uint64_t column
   return ret;
 }
 
-int ObOptimizerStatsGatheringOp::calc_columns_stats(int64_t &row_len)
+int ObOptimizerStatsGatheringOp::calc_columns_stats(int64_t &row_len, bool ignore)
 {
   int ret = OB_SUCCESS;
   if (MY_SPEC.column_ids_.count() != MY_SPEC.col_conv_exprs_.count() + MY_SPEC.generated_column_exprs_.count()) {
@@ -376,14 +425,14 @@ int ObOptimizerStatsGatheringOp::calc_columns_stats(int64_t &row_len)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.col_conv_exprs_.count(); i++) {
       uint64_t column_id = MY_SPEC.column_ids_.at(i);
-      if (OB_FAIL(calc_column_stats(MY_SPEC.col_conv_exprs_.at(i), column_id, row_len))) {
+      if (OB_FAIL(calc_column_stats(MY_SPEC.col_conv_exprs_.at(i), column_id, row_len, ignore))) {
         LOG_WARN("fail to calc column stats", K(ret));
       }
     }
     //generated column
     for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.generated_column_exprs_.count(); i++) {
       uint64_t column_id = MY_SPEC.column_ids_.at(i + MY_SPEC.col_conv_exprs_.count());
-      if (OB_FAIL(calc_column_stats(MY_SPEC.generated_column_exprs_.at(i), column_id, row_len))) {
+      if (OB_FAIL(calc_column_stats(MY_SPEC.generated_column_exprs_.at(i), column_id, row_len, ignore))) {
         LOG_WARN("fail to calc column stats", K(ret));
       }
     }
@@ -422,8 +471,7 @@ int ObOptimizerStatsGatheringOp::calc_stats()
   bool ignore = false;
   if (OB_FAIL(sample_helper_.sample_row(ignore))) {
     LOG_WARN("failed to sample row", K(ret));
-  } else if (!ignore &&
-             OB_FAIL(calc_columns_stats(row_len))) {
+  } else if (OB_FAIL(calc_columns_stats(row_len, ignore))) {
     LOG_WARN("failed to calc column stats", K(ret));
   } else if (OB_FAIL(calc_table_stats(row_len, ignore))) {
     LOG_WARN("failed to calc table stats", K(ret));

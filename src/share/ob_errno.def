@@ -292,13 +292,16 @@ DEFINE_ERROR_EXT(OB_MAJOR_FREEZE_NOT_ALLOW, -4217, -1, "HY000", "Major freeze no
 DEFINE_ERROR(OB_PREPARE_FREEZE_FAILED, -4218, -1, "HY000", "prepare freeze failed");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_DATE_VALUE, -4219, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", "Incorrect datetime value: '%.*s'%s", 1861, "literal does not match format string", "literal does not match format string: '%.*s' for column '%s'");
 DEFINE_OTHER_MSG_FMT(OB_ERR_INVALID_DATE_MSG_FMT_V2, OB_INVALID_DATE_VALUE, "Incorrect datetime value for column '%.*s' at row %ld", "Incorrect datetime value for column '%.*s' at row %ld")
+DEFINE_OTHER_MSG_FMT(OB_INVALID_DATE_VALUE_V2, OB_INVALID_DATE_VALUE, "Incorrect %.*s value: '%.*s' for column '%.*s'", "Incorrect %.*s value: '%.*s' for column '%.*s'") // FARM COMPAT WHITELIST: intentional additional message format for OB_INVALID_DATE_VALUE
 DEFINE_ERROR_DEP(OB_INACTIVE_SQL_CLIENT, -4220, -1, "HY000", "Inactive sql client, only read allowed");
 DEFINE_ERROR_DEP(OB_INACTIVE_RPC_PROXY, -4221, -1, "HY000", "Inactive rpc proxy, can not send RPC request");
 DEFINE_ERROR_DEP(OB_INTERVAL_WITH_MONTH, -4222, -1, "42000", "Interval with year or month can not be converted to microseconds");
 DEFINE_ERROR_DEP(OB_TOO_MANY_DATETIME_PARTS, -4223, -1, "42000", "Interval has too many datetime parts");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_DATA_OUT_OF_RANGE, -4224, ER_WARN_DATA_OUT_OF_RANGE, "22003", "Out of range value for column", "Out of range value for column '%.*s' at row %ld", 1438, "value larger than specified precision allowed for this column", "value larger than specified precision allowed for this column '%.*s' at row %ld");
+DEFINE_OTHER_MSG_FMT(OB_DATA_OUT_OF_RANGE_V2, OB_DATA_OUT_OF_RANGE, "Out of range value for column '%.*s' value '%.*s'", "Out of range value for column '%.*s' value '%.*s'")
 DEFINE_ERROR(OB_PARTITION_NOT_EXIST, -4225, -1, "HY000", "Partition entry not exists");
 DEFINE_ERROR_EXT_DEP(OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD, -4226, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, "HY000", "Incorrect integer value", "Incorrect %.*s value for column '%.*s' at row %ld");
+DEFINE_OTHER_MSG_FMT(OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2, OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD, "Incorrect %.*s value: '%.*s' for column '%.*s'", "Incorrect %.*s value: '%.*s' for column '%.*s'")
 DEFINE_ERROR_EXT(OB_ERR_NO_DEFAULT_FOR_FIELD, -4227, ER_NO_DEFAULT_FOR_FIELD, "HY000", "Field doesn\'t have a default value", "Field \'%s\' doesn't have a default value");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_FIELD_SPECIFIED_TWICE, -4228, ER_FIELD_SPECIFIED_TWICE, "42000", "Column specified twice", "Column \'%s\' specified twice", 957, "duplicate column name", "duplicate column name \'%s\'");
 DEFINE_ERROR_EXT(OB_ERR_TOO_LONG_TABLE_COMMENT, -4229, ER_TOO_LONG_TABLE_COMMENT, "HY000", "Comment for table is too long", "Comment for table is too long (max = %ld)");
@@ -322,6 +325,7 @@ DEFINE_ERROR(OB_PARSE_DEBUG_SYNC_ERROR, -4246, -1, "HY000", "parse debug sync st
 DEFINE_ERROR(OB_UNKNOWN_DEBUG_SYNC_POINT, -4247, -1, "HY000", "unknown debug sync point");
 DEFINE_ERROR(OB_ERR_INTERRUPTED, -4248, -1, "HY000", "task is interrupted while running");
 DEFINE_ERROR_EXT_DEP(OB_ERR_DATA_TRUNCATED, -4249, WARN_DATA_TRUNCATED, "01000", "Data truncated for argument", "Data truncated for column '%.*s' at row %ld");
+DEFINE_OTHER_MSG_FMT(OB_ERR_DATA_TRUNCATED_V2, OB_ERR_DATA_TRUNCATED, "Data truncated for column '%.*s' value '%.*s'", "Data truncated for column '%.*s' value '%.*s'")
 // used by modules in partition service only, and not returned to client
 DEFINE_ERROR_DEP(OB_NOT_RUNNING, -4250, -1, "HY000", "module is not running");
 DEFINE_ERROR(OB_INVALID_PARTITION, -4251, -1, "HY000", "partition not valid");
@@ -332,6 +336,7 @@ DEFINE_ERROR(OB_TRACE_DESC_NOT_EXIST, -4255, -1, "HY000", "trace log title or ke
 DEFINE_ERROR_EXT(OB_ERR_NO_DEFAULT, -4256, ER_NO_DEFAULT, "42000", "Variable doesn't have a default value", "Variable '%.*s' doesn't have a default value");
 DEFINE_ERROR_DEP(OB_ERR_COMPRESS_DECOMPRESS_DATA, -4257, -1, "HY000", "compress data or decompress data failed");
 DEFINE_ERROR_EXT_DEP(OB_ERR_INCORRECT_STRING_VALUE, -4258, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, "HY000", "Incorrect string value", "Incorrect string value for column '%.*s' at row %ld");
+DEFINE_OTHER_MSG_FMT(OB_ERR_INCORRECT_STRING_VALUE_V2, OB_ERR_INCORRECT_STRING_VALUE, "Incorrect string value: '%.*s' for column '%.*s'", "Incorrect string value: '%.*s' for column '%.*s'")
 DEFINE_ERROR(OB_IS_CHANGING_LEADER, -4260, -1, "HY000", "the partition is changing leader");
 DEFINE_ERROR_DEP(OB_DATETIME_FUNCTION_OVERFLOW, -4261, ER_DATETIME_FUNCTION_OVERFLOW, "22008", "Datetime overflow");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DOUBLE_TRUNCATED, -4262, ER_TRUNCATED_WRONG_VALUE, "01000", "Truncated incorrect DOUBLE value", "Truncated incorrect DOUBLE value: '%.*s'", 1722, "invalid number", "invalid number: '%.*s'");
@@ -446,6 +451,7 @@ DEFINE_ERROR(OB_KMS_SERVER_CONNECT_ERROR, -4371, -1, "HY000", "kms server connec
 DEFINE_ERROR(OB_KMS_SERVER_IS_BUSY, -4372, -1, "HY000", "kms server is busy, try again");
 DEFINE_ERROR(OB_KMS_SERVER_UPDATE_KEY_CONFLICT, -4373, -1, "HY000", "kms server update key conflict at the same time, please try again");
 DEFINE_ORACLE_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED, -4374, -1, "HY000", "value larger than specified precision allowed for this column", 1438, "value larger than specified precision allowed for this column");
+DEFINE_OTHER_MSG_FMT(OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2, OB_ERR_VALUE_LARGER_THAN_ALLOWED, "value '%.*s' larger than specified precision allowed for this column '%.*s'", "value '%.*s' larger than specified precision allowed for this column '%.*s'")
 DEFINE_ERROR(OB_DISK_ERROR, -4375, -1, "HY000", "observer has disk error");
 DEFINE_ORACLE_ERROR(OB_UNIMPLEMENTED_FEATURE, -4376, -1, "HY000", "unimplemented feature", 3001, "unimplemented feature");
 DEFINE_ERROR_EXT(OB_ERR_DEFENSIVE_CHECK, -4377, -1, "HY000", "fatal internal error", "fatal internal error in [%.*s]");
@@ -841,6 +847,7 @@ DEFINE_ERROR_EXT_DEP(OB_INVALID_ARGUMENT_FOR_USEC_TO_TIME, -5111, -1, "42000", "
 DEFINE_ERROR_EXT(OB_ERR_USER_VARIABLE_UNKNOWN, -5112, -1, "42P01", "Unknown user variable", "Variable %.*s does not exists");
 DEFINE_ERROR_EXT(OB_ILLEGAL_USAGE_OF_MERGING_FROZEN_TIME, -5113, -1, "42000", "Illegal usage of merging_frozen_time()", "MERGING_FROZEN_TIME() system function only be used in daily merging.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_INVALID_NUMERIC, -5114, -1, "42000", "Invalid numeric", "Invalid numeric char '%c'", 1722, "invalid number", "invalid number char '%c'");
+DEFINE_OTHER_MSG_FMT(OB_INVALID_NUMERIC_V2, OB_INVALID_NUMERIC, "invalid number value: '%.*s' for column '%.*s'", "invalid number value: '%.*s' for column '%.*s'")
 DEFINE_ERROR_EXT_DEP(OB_ERR_REGEXP_ERROR, -5115, ER_REGEXP_ERROR, "42000", "Got error from regexp", "Got error '%s' from regexp");
 DEFINE_ERROR(OB_SQL_LOG_OP_SETCHILD_OVERFLOW, -5116, -1, "HY000", "Logical operator child index overflow");
 DEFINE_ERROR(OB_SQL_EXPLAIN_FAILED, -5117, -1, "HY000", "fail to explain plan");
@@ -888,6 +895,7 @@ DEFINE_ERROR_EXT(OB_ERR_COLUMN_SPEC, -5165, ER_WRONG_FIELD_SPEC, "42000", "Incor
 DEFINE_ERROR_EXT(OB_ERR_DB_DROP_EXISTS, -5166, ER_DB_DROP_EXISTS, "HY000", "Can't drop database;database doesn't exist", "Can't drop database '%.*s'; database doesn't exist");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DATA_TOO_LONG, -5167, ER_DATA_TOO_LONG, "22001", "Data too long for column", "Data too long for column '%.*s' at row %ld", 12899, "value too large for column", "value too large for column '%.*s' at row %ld");
 DEFINE_OTHER_MSG_FMT(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, OB_ERR_DATA_TOO_LONG, "Data too long for column '%.*s' at row %ld", "value too large for column %.*s (actual: %ld, maximum: %ld)")
+DEFINE_OTHER_MSG_FMT(OB_ERR_DATA_TOO_LONG_V2, OB_ERR_DATA_TOO_LONG, "Data too long for column '%.*s' value '%.*s'", "Data too long for column '%.*s' value '%.*s'") // FARM COMPAT WHITELIST: intentional additional message format for OB_ERR_DATA_TOO_LONG
 DEFINE_ERROR_EXT_DEP(OB_ERR_WRONG_VALUE_COUNT_ON_ROW, -5168, ER_WRONG_VALUE_COUNT_ON_ROW, "21S01", "column count does not match value count", "column count does not match value count at row '%d'");
 DEFINE_ERROR(OB_ERR_CREATE_USER_WITH_GRANT, -5169, ER_CANT_CREATE_USER_WITH_GRANT, "42000", "You are not allowed to create a user with GRANT");
 DEFINE_ERROR_EXT(OB_ERR_NO_DB_PRIVILEGE, -5170, ER_DBACCESS_DENIED_ERROR, "42000", "Access denied for user to database", "Access denied for user '%.*s'@'%.*s' to database '%.*s'");
@@ -942,6 +950,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_CANT_CHANGE_TX_CHARACTERISTICS, -5219, ER_CANT_CHANGE
 DEFINE_ORACLE_ERROR(OB_ERR_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION, -5220, ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION, "25006", "Cannot execute statement in a READ ONLY transaction.", 1456, "may not perform insert/delete/update operation inside a READ ONLY transaction");
 DEFINE_ERROR(OB_ERR_MIX_OF_GROUP_FUNC_AND_FIELDS, -5221, ER_MIX_OF_GROUP_FUNC_AND_FIELDS, "42000", "Mixing of GROUP columns (MIN(),MAX(),COUNT(),...) with no GROUP columns is illegal if there is no GROUP BY clause");
 DEFINE_ERROR_EXT_DEP(OB_ERR_TRUNCATED_WRONG_VALUE, -5222, ER_TRUNCATED_WRONG_VALUE, "22007", "Incorrect value", "Truncated incorrect %.*s value: '%.*s'");
+DEFINE_OTHER_MSG_FMT(OB_ERR_TRUNCATED_WRONG_VALUE_V2, OB_ERR_TRUNCATED_WRONG_VALUE, "Incorrect %.*s value: '%.*s' for column '%.*s'", "Incorrect %.*s value: '%.*s' for column '%.*s'")
 DEFINE_ERROR(OB_ERR_WRONG_IDENT_NAME, -5223, -1, "42000", "wrong ident name");
 DEFINE_ERROR_EXT(OB_WRONG_NAME_FOR_INDEX, -5224, ER_WRONG_NAME_FOR_INDEX, "42000", "Incorrect index name", "Incorrect index name '%.*s'");
 DEFINE_ERROR_EXT(OB_ILLEGAL_REFERENCE, -5225, ER_ILLEGAL_REFERENCE, "42S22", "Reference not supported (reference to group function)", "Reference '%.*s' not supported (reference to group function)")
@@ -1353,6 +1362,7 @@ DEFINE_ORACLE_ERROR_DEP(OB_ERR_INPUT_VALUE_NOT_LONG_ENOUGH, -5638, -1, "HY000", 
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_YEAR_VALUE, -5639, -1, "HY000", "(full) year must be between -4713 and +9999, and not be 0", 1841, "(full) year must be between -4713 and +9999, and not be 0");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_QUARTER_VALUE, -5640, -1, "HY000", "quarter must be between 1 and 4", 1842, "quarter must be between 1 and 4");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_MONTH, -5641, -1, "HY000", "not a valid month", 1843, "not a valid month");
+DEFINE_OTHER_MSG_FMT(OB_ERR_INVALID_MONTH_V2, OB_ERR_INVALID_MONTH, "not a valid month for column '%.*s' value '%.*s'", "not a valid month for column '%.*s' value '%.*s'")
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DAY_OF_THE_WEEK, -5642, -1, "HY000", "not a valid day of the week", 1846, "not a valid day of the week");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DAY_OF_YEAR_VALUE, -5643, -1, "HY000", "day of year must be between 1 and 365 (366 for leap year)", 1848, "day of year must be between 1 and 365 (366 for leap year)");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_HOUR12_VALUE, -5644, -1, "HY000", "hour must be between 1 and 12", 1849, "hour must be between 1 and 12");
@@ -1375,6 +1385,7 @@ DEFINE_ORACLE_ERROR_DEP(OB_ERR_MONTH_MAY_ONLY_BE_SPECIFIED_ONCE, -5660, -1, "HY0
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_DAY_OF_WEEK_MAY_ONLY_BE_SPECIFIED_ONCE, -5661, -1, "HY000", "day of week may only be specified once", 1817, "day of week may only be specified once");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_FORMAT_CODE_CANNOT_APPEAR, -5662, -1, "HY000", "format code cannot appear in date input format", 1820, "format code cannot appear in date input format");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_NON_NUMERIC_CHARACTER_VALUE, -5663, -1, "HY000", "a non-numeric character was found where a numeric was expected", 1858, "a non-numeric character was found where a numeric was expected");
+DEFINE_OTHER_MSG_FMT(OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2, OB_ERR_NON_NUMERIC_CHARACTER_VALUE, "a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'", "a non-numeric character was found where a numeric was expected for column '%.*s' value '%.*s'")
 DEFINE_ORACLE_ERROR_DEP(OB_INVALID_MERIDIAN_INDICATOR_USE, -5664, -1, "HY000", "'HH24' precludes use of meridian indicator", 1818, "'HH24' precludes use of meridian indicator");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CHAR_FOLLOWING_ESCAPE_CHAR, -5665, -1, "HY000", "missing or illegal character following the escape character", 1424, "missing or illegal character following the escape character");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_ESCAPE_CHAR_LENGTH, -5666, -1, "HY000", "escape character must be character string of length 1", 1425, "escape character must be character string of length 1");
