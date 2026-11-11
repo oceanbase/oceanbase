@@ -2153,9 +2153,12 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
   ObSEArray<ObRawExpr *, 4> columns;
   ObSqlBitSet<> table_set;
   bool is_needed = false;
+  ObSEArray<ObRawExpr *, 4> having_pullup_preds;
   OPT_TRACE("try to pushdown",pushdown_preds, "into having");
   if (sel_stmt.get_having_exprs().empty() && pushdown_preds.empty()) {
     // do nothing
+  } else if (OB_FAIL(collect_valid_pullup_preds_for_having(sel_stmt, pullup_preds, having_pullup_preds))) {
+    LOG_WARN("failed to collect valid pullup predicates for having", K(ret));
   } else if (OB_FAIL(sel_stmt.get_column_exprs(all_columns))) {
     LOG_WARN("failed to get column exprs", K(ret));
   } else if (OB_FAIL(sel_stmt.get_from_tables(table_set))) {
@@ -2163,10 +2166,10 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
   } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, all_columns,
                                                            table_set, columns))) {
     LOG_WARN("failed to get related columns", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, pullup_preds,
+  } else if (OB_FAIL(ObTransformUtils::extract_table_exprs(sel_stmt, having_pullup_preds,
                                                            table_set, input_preds))) {
     LOG_WARN("failed to get related pullup preds", K(ret));
-  } else if (OB_FAIL(get_exprs_cnt_exec(sel_stmt, pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly.
+  } else if (OB_FAIL(get_exprs_cnt_exec(sel_stmt, having_pullup_preds, input_preds))) { //exec param stored in pullup is useful certainly.
     LOG_WARN("get exec expr failed", K(ret));
   } else if (OB_FAIL(append(input_preds, pushdown_preds))) {
     LOG_WARN("failed to append push down predicates", K(ret));
@@ -2181,7 +2184,7 @@ int ObTransformPredicateMoveAround::pushdown_into_having(
     /* do nothing */
   } else if (OB_FAIL(accept_predicates(sel_stmt,
                                        sel_stmt.get_having_exprs(),
-                                       pullup_preds,
+                                       having_pullup_preds,
                                        new_having_exprs))) {
     LOG_WARN("failed to check different", K(ret));
   }
@@ -4962,6 +4965,27 @@ int ObTransformPredicateMoveAround::has_unsafe_implicit_cast(ObRawExpr *expr, bo
   for (int64_t i = 0; OB_SUCC(ret) && !has_unsafe && i < expr->get_param_count(); ++i) {
     if (OB_FAIL(SMART_CALL(has_unsafe_implicit_cast(expr->get_param_expr(i), has_unsafe)))) {
       LOG_WARN("failed to recurse has unsafe implicit cast", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::collect_valid_pullup_preds_for_having(ObSelectStmt &sel_stmt,
+                                                                          ObIArray<ObRawExpr *> &pullup_preds,
+                                                                          ObIArray<ObRawExpr *> &having_pullup_preds)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid = false;
+  // Pulling a predicate from the base table up into HAVING must not change the
+  // aggregation result, symmetric to the pushdown check.
+  for (int64_t i = 0; OB_SUCC(ret) && !sel_stmt.get_group_exprs().empty() && i < pullup_preds.count(); ++i) {
+    if (OB_ISNULL(pullup_preds.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null pullup predicate", K(ret));
+    } else if (OB_FAIL(check_pushdown_through_groupby_validity(sel_stmt, pullup_preds.at(i), is_valid))) {
+      LOG_WARN("failed to check pullup predicate through groupby", K(ret));
+    } else if (is_valid && OB_FAIL(having_pullup_preds.push_back(pullup_preds.at(i)))) {
+      LOG_WARN("failed to append having pullup predicate", K(ret));
     }
   }
   return ret;
