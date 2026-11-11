@@ -57,6 +57,7 @@ int ObBalanceGroup::init_by_tablegroup(
       scope_ = BG_SCOPE_CLUSTER;
     }
   } else if (tg.is_sharding_none() || tg.is_sharding_partition()
+      || tg.is_sharding_subpartition()
       || (tg.is_sharding_adaptive() && PARTITION_LEVEL_ONE == max_part_level)) {
     // whole tablegroup as one balance group
     if (OB_FAIL(bg_name_str.append_fmt("TABLEGROUP_%s", tg_name.ptr()))) {

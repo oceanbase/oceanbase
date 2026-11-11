@@ -500,8 +500,8 @@ int ObDBMSBalance::get_and_check_tablegroup_id_by_name_(
     LOG_WARN("invalid sharding-scope combination", KR(ret), KPC(tablegroup_schema));
   } else if (!tablegroup_schema->is_sharding_none()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support tg balance weight for sharding partition or adaptive tablegroup", KR(ret), KPC(tablegroup_schema));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sharding partition or adaptive tablegroup are");
+    LOG_WARN("not support tg balance weight for sharding partition or adaptive or subpartition tablegroup", KR(ret), KPC(tablegroup_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "sharding partition or adaptive or subpartition tablegroup are");
   } else if (tablegroup_schema->is_scope_cluster()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support tg balance weight for scope cluster tablegroup", KR(ret), KPC(tablegroup_schema));

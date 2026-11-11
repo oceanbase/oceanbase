@@ -168,10 +168,18 @@ private:
       const share::schema::ObSimpleTablegroupSchema &tablegroup_schema,
       const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
       const int64_t max_part_level);
-  int build_bg_for_tablegroup_sharding_subpart_(
+  int build_bg_for_tablegroup_sharding_adaptive_subpart_(
       const share::schema::ObSimpleTablegroupSchema &tablegroup_schema,
       const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
       const int max_part_level);
+  int build_bg_for_tablegroup_sharding_subpartition_(
+      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema,
+      const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
+      const int max_part_level);
+  int get_matched_global_indexes_for_subpart_sharding_(
+      const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
+      const share::schema::ObSimpleTableSchemaV2* primary_table_schema,
+      common::ObIArray<const share::schema::ObSimpleTableSchemaV2*> &matched_global_indexes);
   int build_bg_for_partlevel_zero_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int build_bg_for_partlevel_one_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int build_bg_for_partlevel_two_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
@@ -196,6 +204,10 @@ private:
   int get_global_indexes_of_tables_(
       const ObArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
       ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &global_index_schemas);
+  // Record global indexes when they are added to a tablegroup balance group together with their primary tables.
+  // Call this after determining which global indexes will be included in the tablegroup balance group.
+  int record_tablegroup_bg_global_indexes_(
+      const ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &global_index_schemas);
 private:
   static const int64_t MAP_BUCKET_NUM = 40960;
   static const int64_t SET_BUCKET_NUM = 1024;
@@ -221,7 +233,9 @@ private:
 
   ObArenaAllocator allocator_;
   hash::ObHashMap<ObTabletID, common::ObIArray<ObTabletID> *> related_tablets_map_;
-  hash::ObHashSet<uint64_t> sharding_none_tg_global_indexes_; // global indexes of the primary table in tablegroup sharding none
+  // Global indexes bound to a tablegroup balance group together with their primary tables;
+  // these indexes must not be added to standalone balance groups again.
+  hash::ObHashSet<uint64_t> tablegroup_bg_global_indexes_;
   ObObjectBalanceWeightMgr obj_weight_mgr_;
 };
 

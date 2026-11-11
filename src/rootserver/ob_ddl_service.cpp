@@ -31134,6 +31134,9 @@ int ObDDLService::create_tablegroup(const bool if_not_exist,
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("create tablegroup with scope before 4.4.2.1 is not allowed", KR(ret), K(tenant_id));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "create tablegroup with scope before 4.4.2.1 is");
+    } else if (tablegroup_schema.is_sharding_subpartition()
+            && OB_FAIL(ObShareUtil::check_compat_version_for_subpartition_sharding(tenant_id))) {
+      LOG_WARN("fail to check compat version for subpartition sharding", KR(ret), K(tenant_id));
     } else if (!ObTablegroupSchema::is_sharding_scope_matched(tablegroup_schema.get_sharding(),
                                                               tablegroup_schema.get_scope())) {
       ret = OB_OP_NOT_ALLOW;
