@@ -241,6 +241,40 @@ TEST_F(TestObSimpleLogClusterLogEngine, flashback_restart)
   EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
 }
 
+TEST_F(TestObSimpleLogClusterLogEngine, read_truncated_suffix_returns_upper_bound)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "read_truncated_suffix_returns_upper_bound");
+  ASSERT_EQ(OB_SUCCESS, init());
+  ASSERT_EQ(OB_SUCCESS, write_several_blocks(0, 3));
+
+  LogStorage *log_storage = &log_engine_->log_storage_;
+  block_id_t min_block_id = LOG_INVALID_BLOCK_ID;
+  block_id_t max_block_id = LOG_INVALID_BLOCK_ID;
+  ASSERT_EQ(OB_SUCCESS, log_storage->get_block_id_range(min_block_id, max_block_id));
+  ASSERT_GE(max_block_id, min_block_id + 2);
+  const LSN read_lsn((max_block_id * PALF_BLOCK_SIZE) + MAX_INFO_BLOCK_SIZE);
+  ASSERT_GT(log_storage->get_end_lsn(), read_lsn);
+
+  // Pause a suffix truncate after deleting the last block but before resetting the readable tail.
+  ASSERT_EQ(OB_SUCCESS, log_storage->block_mgr_.delete_block_from_back_to_front_until(max_block_id - 1));
+  ReadBufGuard buf_guard("truncated_suffix", 4096);
+  int64_t out_read_size = 0;
+  LogIOContext io_ctx(LogIOUser::FETCHLOG);
+  EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND,
+            log_storage->pread(read_lsn, 64, buf_guard.read_buf_, out_read_size, io_ctx));
+  LogBlockHeader block_header;
+  EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, log_storage->read_block_header_(max_block_id, block_header));
+
+  // A missing block inside the current range must still be treated as an error.
+  ASSERT_EQ(OB_SUCCESS, delete_block_by_human(max_block_id - 2));
+  EXPECT_EQ(OB_ERR_UNEXPECTED,
+            log_storage->read_block_header_(max_block_id - 2, block_header));
+
+  // Finish the interrupted truncate before releasing the PALF handle.
+  EXPECT_EQ(OB_SUCCESS, log_storage->truncate(LSN((max_block_id - 1) * PALF_BLOCK_SIZE)));
+  leader_.reset();
+}
+
 TEST_F(TestObSimpleLogClusterLogEngine, exception_path)
 {
   SET_CASE_LOG_FILE(TEST_NAME, "exception_path");
