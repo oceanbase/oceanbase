@@ -16,7 +16,9 @@
 #include "pl/ob_pl.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "lib/utility/ob_print_utils.h"
 #include "sql/engine/ob_batch_rows.h"
+#include "share/ob_lob_access_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -183,8 +185,9 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
     ObExpr *expr = dml_row.at(column_info.projector_index_);
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
-      ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx(),
-                                               expr->datum_meta_.type_);
+      ret = log_column_error(ret, row_num, column_name, dml_op, *expr,
+                             PHY_PX_MULTI_PART_INSERT == dml_op.get_spec().get_type()
+                             || PHY_PX_MULTI_PART_UPDATE == dml_op.get_spec().get_type());
     } else if (OB_ISNULL(datum)) {
       // impossible
     } else if (OB_FAIL(check_geometry_type(dml_op.get_eval_ctx(),
@@ -3175,6 +3178,312 @@ int ObDMLService::build_batch_fk_check_tasks(const ObDMLBaseCtDef &dml_ctdef,
         LOG_WARN("failed to build batch foreign key check scan task", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObDMLService::escape_binary_bad_value(ObIAllocator &allocator, ObString &str)
+{
+  int ret = OB_SUCCESS;
+  int64_t escaped_len = 0;
+  const ObCharsetInfo *binary_cs = ObCharset::get_charset(CS_TYPE_BINARY);
+  char *escaped_buf = static_cast<char *>(
+      allocator.alloc(ObUserLoggingCtx::BAD_VALUE_MAX_LEN));
+  if (OB_ISNULL(binary_cs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("binary charset is null", K(ret));
+  } else if (OB_ISNULL(escaped_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for escaped buffer", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < str.length(); ++i) {
+      if (ob_isprint(binary_cs, str.ptr()[i])) {
+        if (escaped_len >= ObUserLoggingCtx::BAD_VALUE_MAX_LEN) {
+          break;
+        }
+        escaped_buf[escaped_len++] = str.ptr()[i];
+      } else if (escaped_len + 4 > ObUserLoggingCtx::BAD_VALUE_MAX_LEN) {
+        break;
+      } else {
+        escaped_buf[escaped_len++] = '\\';
+        escaped_buf[escaped_len++] = 'x';
+        if (OB_FAIL(hex_print(str.ptr() + i, 1, escaped_buf,
+            ObUserLoggingCtx::BAD_VALUE_MAX_LEN, escaped_len))) {
+          LOG_WARN("failed to print hex value", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    str.assign_ptr(escaped_buf, static_cast<int32_t>(escaped_len));
+  }
+  return ret;
+}
+
+int ObDMLService::log_column_error(int err,
+                                  int64_t row_num,
+                                  ObString &column_name,
+                                  ObOperator &op,
+                                  const ObExpr &expr,
+                                  bool is_pdml)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext &exec_ctx = op.get_exec_ctx();
+  ObEvalCtx &eval_ctx = op.get_eval_ctx();
+  if (is_pdml) {
+    capture_bad_value_on_conv_fail(&expr, exec_ctx, eval_ctx, eval_ctx.get_batch_idx());
+  }
+  ObUserLoggingCtx *logging_ctx = exec_ctx.get_user_logging_ctx();
+  if (OB_NOT_NULL(logging_ctx) && logging_ctx->has_bad_value()) {
+    ret = log_user_error_with_bad_value(err, row_num, column_name, exec_ctx,
+                                       expr.datum_meta_.type_, logging_ctx->get_bad_value());
+  } else {
+    ret = log_user_error_inner(err, row_num, column_name, exec_ctx, expr.datum_meta_.type_);
+  }
+  return ret;
+}
+
+// column_convert 失败时，把源 datum 转成可打印字符串写入 ObUserLoggingCtx。
+void ObDMLService::capture_bad_value_on_conv_fail(const ObExpr *conv_expr,
+                                                  ObExecContext &exec_ctx,
+                                                  ObEvalCtx &eval_ctx,
+                                                  const int64_t capture_batch_idx)
+{
+  int ret = OB_SUCCESS;
+  if (capture_batch_idx < 0 || OB_ISNULL(conv_expr) || OB_ISNULL(conv_expr->args_)
+      || T_FUN_COLUMN_CONV != conv_expr->type_ || conv_expr->arg_cnt_ < 5) {
+    LOG_WARN("invalid parameter", K(conv_expr), K(capture_batch_idx));
+  } else {
+    ObUserLoggingCtx *logging_ctx = exec_ctx.get_user_logging_ctx();
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+    batch_info_guard.set_batch_idx(capture_batch_idx);
+    ObExpr *src_expr = conv_expr->args_[4];
+    ObDatum *src_datum = nullptr;
+    if (OB_ISNULL(src_expr)) {
+      LOG_WARN("src_expr is null", K(conv_expr));
+    } else {
+      // args_[4] 是 column_conv 的源 value 表达式。编译期 resolver 会在其外包：
+      //   CAST（类型转换，column_conv 依赖 CAST eval）
+      //   TIMESTAMP_NVL（MySQL 下 NOT NULL TIMESTAMP 列在 explicit_defaults_for_timestamp=OFF
+      //                  时插入，NVL(源值, CURRENT_TIMESTAMP) 语义）
+      //      典型树：column_conv -> CAST -> TIMESTAMP_NVL -> 列/表达式
+      while ((T_FUN_SYS_CAST == src_expr->type_ || T_FUN_SYS_TIMESTAMP_NVL == src_expr->type_)
+             && OB_NOT_NULL(src_expr->args_) && src_expr->arg_cnt_ >= 1
+             && OB_NOT_NULL(src_expr->args_[0])) {
+        src_expr = src_expr->args_[0];
+      }
+      if (OB_ISNULL(src_expr)) {
+        LOG_WARN("src_expr is null", K(conv_expr));
+      } else if (OB_FAIL(src_expr->eval(eval_ctx, src_datum))) {
+        LOG_WARN("src_expr eval failed", K(ret), K(conv_expr));
+      } else if (OB_ISNULL(src_datum) || src_datum->is_null()) {
+        LOG_WARN("src_datum is null", K(conv_expr));
+      } else if (src_expr->obj_meta_.is_string_type()) {
+        ObString str = src_datum->get_string();
+        bool capture_succ = true;
+        ObCollationType bad_value_cs_type = src_expr->datum_meta_.cs_type_;
+        if (src_expr->obj_meta_.is_lob_storage()) {
+          const bool has_lob_header = src_expr->obj_meta_.has_lob_header();
+          ObLobLocatorV2 lob_locator(str, has_lob_header);
+          if (lob_locator.is_valid() && lob_locator.is_delta_temp_lob()) {
+            capture_succ = false;
+          } else if (OB_FAIL(ObTextStringHelper::read_prefix_string_data(
+              eval_ctx, *src_datum, src_expr->datum_meta_, has_lob_header,
+              &exec_ctx.get_allocator(), str, ObUserLoggingCtx::BAD_VALUE_MAX_LEN))) {
+            capture_succ = false;
+          }
+        }
+        const ObCharsetType bad_value_charset = ObCharset::charset_type_by_coll(bad_value_cs_type);
+        // binary 值按 MySQL 规则保留可打印字符，并将不可打印字节转义为 \xHH。
+        if (capture_succ && CHARSET_BINARY == bad_value_charset) {
+          if (OB_FAIL(escape_binary_bad_value(exec_ctx.get_allocator(), str))) {
+            capture_succ = false;
+          } else {
+            bad_value_cs_type = CS_TYPE_UTF8MB4_BIN;
+          }
+        } else if (capture_succ && CHARSET_UTF8MB4 != bad_value_charset) {
+          // 非 UTF-8 字符串统一转换为 UTF-8，供后续错误消息链路处理。
+          ObString utf8_str;
+          if (OB_FAIL(ObCharset::charset_convert(
+              exec_ctx.get_allocator(), str, bad_value_cs_type,
+              CS_TYPE_UTF8MB4_BIN, utf8_str, ObCharset::REPLACE_UNKNOWN_CHARACTER))) {
+            capture_succ = false;
+          } else {
+            str = utf8_str;
+            bad_value_cs_type = CS_TYPE_UTF8MB4_BIN;
+          }
+        }
+        if (capture_succ) {
+          // 最终按字符边界截断到错误值允许的最大字节数。
+          if (str.length() > ObUserLoggingCtx::BAD_VALUE_MAX_LEN) {
+            int64_t char_len = 0;
+            const int64_t byte_len = ObCharset::max_bytes_charpos(
+                bad_value_cs_type, str.ptr(), str.length(),
+                ObUserLoggingCtx::BAD_VALUE_MAX_LEN, char_len);
+            str.assign_ptr(str.ptr(), static_cast<int32_t>(byte_len));
+          }
+          logging_ctx->set_bad_value(str);
+        }
+      } else {
+        // 非字符串类型先转换为 ObObj，再使用类型自身的纯文本打印逻辑采集错误值。
+        int64_t pos = 0;
+        ObObj src_obj;
+        ObObjPrintParams params;
+        const int64_t buf_len = ObUserLoggingCtx::BAD_VALUE_MAX_LEN;
+        char *buf = static_cast<char *>(exec_ctx.get_allocator().alloc(buf_len));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for buffer", K(ret));
+        } else if (OB_FAIL(src_datum->to_obj(src_obj, src_expr->obj_meta_))) {
+          LOG_WARN("failed to convert datum to obj", K(ret));
+        } else if (OB_FAIL(src_obj.print_plain_str_literal(buf, buf_len, pos, params))) {
+          LOG_WARN("failed to print plain string literal", K(ret));
+        } else {
+          logging_ctx->set_bad_value(ObString(static_cast<int32_t>(pos), buf));
+        }
+      }
+    }
+  }
+}
+
+int ObDMLService::log_user_error_with_bad_value(
+    int ret,
+    int64_t row_num,
+    common::ObString &column_name,
+    ObExecContext &ctx,
+    const ObObjType column_type,
+    const ObString &bad_value)
+{
+  if (OB_DATA_OUT_OF_RANGE == ret) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE_V2,
+                   column_name.length(), column_name.ptr(),
+                   bad_value.length(), bad_value.ptr());
+  } else if (OB_ERR_DATA_TOO_LONG == ret && lib::is_mysql_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_DATA_TOO_LONG_V2,
+                   column_name.length(), column_name.ptr(),
+                   bad_value.length(), bad_value.ptr());
+  } else if (OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_VALUE_LARGER_THAN_ALLOWED_V2,
+                   bad_value.length(), bad_value.ptr(),
+                   column_name.length(), column_name.ptr());
+  } else if (OB_INVALID_DATE_VALUE == ret || OB_INVALID_DATE_FORMAT == ret) {
+    ret = OB_INVALID_DATE_VALUE;
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    const char *type_name = "datetime";
+    LOG_USER_ERROR(OB_INVALID_DATE_VALUE_V2,
+                   (int)strlen(type_name), type_name,
+                   bad_value.length(), bad_value.ptr(),
+                   column_name.length(), column_name.ptr());
+  } else if (OB_ERR_TRUNCATED_WRONG_VALUE == ret && lib::is_mysql_mode()
+             && ob_is_time_tc(column_type)) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    ObString type_str("time");
+    LOG_USER_ERROR(OB_ERR_TRUNCATED_WRONG_VALUE_V2,
+                   type_str.length(), type_str.ptr(),
+                   bad_value.length(), bad_value.ptr(),
+                   column_name.length(), column_name.ptr());
+  } else if ((OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == ret || OB_INVALID_NUMERIC == ret)
+      && lib::is_mysql_mode()) {
+    ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    ObString decimal_type_str("decimal");
+    ObString default_type_str("integer");
+    ObString &type_str = ob_is_number_or_decimal_int_tc(column_type) ?
+      decimal_type_str : default_type_str;
+    LOG_USER_ERROR(OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD_V2,
+                   type_str.length(), type_str.ptr(),
+                   bad_value.length(), bad_value.ptr(),
+                   column_name.length(), column_name.ptr());
+  } else if (OB_ERR_WARN_DATA_OUT_OF_RANGE == ret && lib::is_mysql_mode()) {
+    ret = log_user_error_inner(ret, row_num, column_name, ctx, column_type);
+  } else if ((OB_ERR_DATA_TRUNCATED == ret || OB_ERR_DOUBLE_TRUNCATED == ret)
+             && lib::is_mysql_mode()) {
+    ret = OB_ERR_DATA_TRUNCATED;
+    ob_reset_tsi_warning_buffer();
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_DATA_TRUNCATED_V2,
+                   column_name.length(), column_name.ptr(),
+                   bad_value.length(), bad_value.ptr());
+  } else if (OB_ERR_INCORRECT_STRING_VALUE == ret && lib::is_mysql_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_INCORRECT_STRING_VALUE_V2,
+                   bad_value.length(), bad_value.ptr(),
+                   column_name.length(), column_name.ptr());
+  } else if (OB_INVALID_NUMERIC == ret && lib::is_oracle_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_INVALID_NUMERIC_V2,
+                   bad_value.length(), bad_value.ptr(),
+                   column_name.length(), column_name.ptr());
+  } else if (OB_ERR_INVALID_MONTH == ret && lib::is_oracle_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_INVALID_MONTH_V2,
+                   column_name.length(), column_name.ptr(),
+                   bad_value.length(), bad_value.ptr());
+  } else if (OB_ERR_NON_NUMERIC_CHARACTER_VALUE == ret && lib::is_oracle_mode()) {
+    ObSQLUtils::copy_and_convert_string_charset(
+        ctx.get_allocator(),
+        column_name,
+        column_name,
+        CS_TYPE_UTF8MB4_BIN,
+        ctx.get_my_session()->get_local_collation_connection());
+    LOG_USER_ERROR(OB_ERR_NON_NUMERIC_CHARACTER_VALUE_V2,
+                   column_name.length(), column_name.ptr(),
+                   bad_value.length(), bad_value.ptr());
+  } else {
+    ret = log_user_error_inner(ret, row_num, column_name, ctx, column_type);
   }
   return ret;
 }

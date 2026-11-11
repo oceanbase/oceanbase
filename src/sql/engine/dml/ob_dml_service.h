@@ -301,9 +301,27 @@ public:
                                   common::ObString &column_name,
                                   ObExecContext &ctx,
                                   const ObObjType column_type);
+  static int log_user_error_with_bad_value(int ret,
+                                           int64_t row_num,
+                                           common::ObString &column_name,
+                                           ObExecContext &ctx,
+                                           const ObObjType column_type,
+                                           const ObString &bad_value);
+  static int log_column_error(int err,
+                              int64_t row_num,
+                              common::ObString &column_name,
+                              ObOperator &op,
+                              const ObExpr &expr,
+                              bool is_pdml);
+  static void capture_bad_value_on_conv_fail(const ObExpr *conv_expr,
+                                             ObExecContext &exec_ctx,
+                                             ObEvalCtx &eval_ctx,
+                                             const int64_t capture_batch_idx);
   static int get_root_exec_ctx_for_fk_cascading(ObExecContext *ctx, ObExecContext* &needed_ctx);
 
 private:
+  static int escape_binary_bad_value(common::ObIAllocator &allocator,
+                                     common::ObString &str);
   static int check_agg_task_state(ObDMLRtCtx &dml_rtctx, ObIDASTaskOp *das_op, int64_t row_size, bool &reach_mem_limit);
   static int parallel_submit_das_task(ObDMLRtCtx &dml_rtctx, ObDasAggregatedTask *agg_task);
   template <int N>
