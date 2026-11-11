@@ -253,6 +253,8 @@ int ObTenantMajorFreeze::suspend_merge()
   } else if (merge_scheduler_.is_paused()) {
     ret = OB_LEADER_NOT_EXIST;
     LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(merge_scheduler_.try_update_epoch_and_reload())) {
+    LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(major_merge_info_mgr_.get_zone_merge_mgr().try_reload())) {
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
@@ -278,6 +280,8 @@ int ObTenantMajorFreeze::resume_merge()
   } else if (merge_scheduler_.is_paused()) {
     ret = OB_LEADER_NOT_EXIST;
     LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(merge_scheduler_.try_update_epoch_and_reload())) {
+    LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(major_merge_info_mgr_.get_zone_merge_mgr().try_reload())) {
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {
@@ -304,6 +308,8 @@ int ObTenantMajorFreeze::clear_merge_error()
   } else if (merge_scheduler_.is_paused()) {
     ret = OB_LEADER_NOT_EXIST;
     LOG_WARN("leader may switch", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(merge_scheduler_.try_update_epoch_and_reload())) {
+    LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(major_merge_info_mgr_.get_zone_merge_mgr().try_reload())) {
     LOG_WARN("fail to try reload zone_merge_mgr", KR(ret), K_(tenant_id));
   } else {

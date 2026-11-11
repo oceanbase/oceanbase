@@ -28,6 +28,7 @@ using namespace oceanbase::share;
 ///////////////////////////////////////////////////////////////////////////////
 ERRSIM_POINT_DEF(EN_MERGE_SCHEDULER_IDLE_IDLE_LOOP_UNTIL_PAUSED);
 ERRSIM_POINT_DEF(EN_CLEAR_PROGRESS_CHECKER_CACHED_INFO);
+ERRSIM_POINT_DEF(EN_SKIP_MERGE_SCHEDULER_UPDATE_EPOCH);
 
 int ObMajorMergeIdling::init(const uint64_t tenant_id)
 {
@@ -141,6 +142,12 @@ void ObMajorMergeScheduler::run3()
       update_last_run_timestamp();
       // record if try_update_epoch_and_reload() is failed.
       bool is_update_epoch_and_reload_failed = false;
+#ifdef ERRSIM
+      if (OB_UNLIKELY(EN_SKIP_MERGE_SCHEDULER_UPDATE_EPOCH)) {
+        is_update_epoch_and_reload_failed = true;
+        LOG_WARN("ERRSIM skip merge scheduler update epoch", K_(tenant_id), "epoch", get_epoch());
+      } else
+#endif
       if (OB_FAIL(try_update_epoch_and_reload())) {
         is_update_epoch_and_reload_failed = true;
         LOG_WARN("fail to try_update_epoch_and_reload", KR(ret), "cur_epoch", get_epoch());
