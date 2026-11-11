@@ -1264,7 +1264,6 @@ inline void ObLogger::do_log_message(const char *mod_name,
         LOG_STDERR("alloc_log_item error, ret=%d\n", ret);
       } else {
         // format to local buf
-        log_item->set_buf_size(buf_len);
         log_item->set_log_level(level);
         log_item->set_timestamp(start_ts);
         log_item->set_tl_type(tl_type_);

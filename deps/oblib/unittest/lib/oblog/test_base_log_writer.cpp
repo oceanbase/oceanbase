@@ -6,6 +6,10 @@
 #include <gtest/gtest.h>
 #include "lib/oblog/ob_base_log_writer.h"
 
+#define private public
+#include "lib/oblog/ob_log.h"
+#undef private
+
 //using namespace ::oblib;
 
 namespace oceanbase
@@ -104,6 +108,18 @@ TEST(ObBaseLogWriter, normal)
   //repeat destroy
   writer.destroy();
   writer.destroy();
+}
+
+TEST(ObLogger, alloc_log_item)
+{
+  ObPLogWriterCfg log_cfg;
+  OB_LOGGER.init(log_cfg, false);
+  ObPLogItem *log_item = NULL;
+  const int64_t buf_size = ObLogger::BASE_LOG_SIZE + 1024;
+  OB_LOGGER.alloc_log_item(OB_LOG_LEVEL_INFO, buf_size + ObLogger::LOG_ITEM_SIZE, log_item);
+  ASSERT_EQ(true, log_item != NULL);
+  ASSERT_EQ(false, log_item->is_large_item());
+  ASSERT_EQ(true, ObLogger::BASE_LOG_SIZE >= log_item->get_buf_size());
 }
 
 
