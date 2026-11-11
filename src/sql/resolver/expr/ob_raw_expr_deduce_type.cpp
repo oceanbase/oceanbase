@@ -3725,6 +3725,9 @@ int ObRawExprDeduceType::set_agg_min_max_result_type(ObAggFunRawExpr &expr,
   ObRawExpr *val_expr = NULL; // for compare
   int32_t arg_idx = 0;
   int32_t val_idx = is_arg_min_max ? 1 : 0;
+  const bool is_inner_min_max = expr.has_flag(IS_INNER_ADDED_EXPR)
+                               && (T_FUN_MIN == expr.get_expr_type()
+                                   || T_FUN_MAX == expr.get_expr_type());
   if (is_arg_min_max && expr.get_param_count() < 2) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param expr is not enough");
@@ -3741,9 +3744,11 @@ int ObRawExprDeduceType::set_agg_min_max_result_type(ObAggFunRawExpr &expr,
   } else if (OB_UNLIKELY(ob_is_collection_sql_type(val_expr->get_data_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect collection arguments", K(val_expr->get_data_type()), K(ret));
-  } else if (OB_UNLIKELY(ob_is_enumset_tc(arg_expr->get_data_type()))) {
-    // To compatible with MySQL, we need to add cast expression that enumset to varchar
-    // to evalute MIN/MAX aggregate functions.
+  } else if (OB_UNLIKELY(ob_is_enumset_tc(arg_expr->get_data_type())) && !is_inner_min_max) {
+    // For MySQL compatibility, MIN/MAX must compare ENUM/SET labels as strings,
+    // so cast the argument to VARCHAR.
+    // However, internally generated MIN/MAX use uint comparison semantics and
+    // do not need this cast.
     need_add_cast = true;
     const ObExprResType& res_type = arg_expr->get_result_type();
     result_type.set_varchar();

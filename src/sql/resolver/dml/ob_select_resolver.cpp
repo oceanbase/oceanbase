@@ -3936,14 +3936,15 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
         } else if (OB_FAIL(expand_target_list(*tab_item, target_list))) {
           LOG_WARN("resolve table columns failed", K(ret), K(tab_item), K(i));
         } else if (is_json_wildcard_column) {
+          const share::schema::ObColumnSchemaV2 *column_schema = NULL;
           if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tab_item->ref_id_, table_schema))) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("get table schema failed", K_(tab_item->table_name), K(tab_item->ref_id_), K(ret));
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_TABLE_NOT_EXIST;
             LOG_WARN("get table schema failed", K_(tab_item->table_name), K(tab_item->ref_id_), K(ret));
-          } else if (OB_NOT_NULL(table_schema->get_column_schema(column_ref.tbl_name_))
-                      && !table_schema->get_column_schema(column_ref.tbl_name_)->is_json()) {
+          } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_ref.tbl_name_))
+                     || !column_schema->is_json()) {
             ret = OB_ERR_TABLE_NAME_NOT_IN_LIST;
             LOG_WARN("table name not in from list", K(ret), K(column_ref.tbl_name_));
           }

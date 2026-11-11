@@ -4327,12 +4327,12 @@ int ObLogPlan::prepare_three_stage_expansion_info(ObLogicalOperator *top,
       for (int i = 0; OB_SUCC(ret) && i < helper.non_distinct_aggr_items_.count(); i++) {
         ObAggFunRawExpr *aggr = helper.non_distinct_aggr_items_.at(i);
         ObAggFunRawExpr *new_agg = nullptr;
-        if (OB_FAIL(expr_factory.create_raw_expr(T_FUN_MAX, new_agg))) {
-          LOG_WARN("failed to create raw expr", K(ret));
-        } else if (OB_FAIL(new_agg->add_real_param_expr(aggr))) {
-          LOG_WARN("failed to add real param expr", K(ret));
-        } else if (OB_FAIL(new_agg->formalize(get_optimizer_context().get_session_info()))) {
-          LOG_WARN("failed to formalize aggr expr", K(ret));
+        if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory,
+                                                           get_optimizer_context().get_session_info(),
+                                                           T_FUN_MAX,
+                                                           aggr,
+                                                           new_agg))) {
+          LOG_WARN("failed to build aggregate expr", K(ret));
         } else if (OB_FAIL(third_stage_replace_pairs.push_back(ObTuple<ObRawExpr *, ObRawExpr *>(aggr, new_agg)))) {
           LOG_WARN("failed to push back third stage replace pair", K(ret));
         }

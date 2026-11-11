@@ -1357,7 +1357,7 @@ int ObTransformTempTable::extract_pullup_group_expr(ObRawExpr &pred_expr,
 {
   int ret = OB_SUCCESS;
   can_pullup = false;
-  if (pred_expr.get_expr_type() == T_OP_EQ) {
+  if (pred_expr.get_expr_type() == T_OP_EQ || pred_expr.get_expr_type() == T_OP_NSEQ) {
     ObRawExpr *param_1 = pred_expr.get_param_expr(0);
     ObRawExpr *param_2 = pred_expr.get_param_expr(1);
     if (OB_ISNULL(param_1) || OB_ISNULL(param_2)) {

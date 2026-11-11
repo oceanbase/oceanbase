@@ -965,7 +965,18 @@ int ObTransformConditionalAggrCoalesce::create_aggr_for_merge(ObItemType aggr_ty
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected aggr type", K(ret), K(aggr_type));
   }
-  if (OB_SUCC(ret) && OB_FAIL(build_aggr_expr(aggr_type_for_merge, false, param_expr, aggr_expr))) {
+  if (OB_FAIL(ret)) {
+  } else if (T_FUN_MIN == aggr_type_for_merge || T_FUN_MAX == aggr_type_for_merge) {
+    if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(*ctx_->expr_factory_,
+                                                       ctx_->session_info_,
+                                                       aggr_type_for_merge,
+                                                       param_expr,
+                                                       aggr_expr))) {
+      LOG_WARN("failed to build min/max expr", K(ret));
+    } else if (OB_FAIL(aggr_expr->pull_relation_id())) {
+      LOG_WARN("failed to pull relation id", K(ret));
+    }
+  } else if (OB_FAIL(build_aggr_expr(aggr_type_for_merge, false, param_expr, aggr_expr))) {
     LOG_WARN("failed to build aggr expr", K(ret));
   }
   return ret;
