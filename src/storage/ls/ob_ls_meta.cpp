@@ -214,15 +214,13 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
     tmp.clog_base_lsn_ = clog_checkpoint_lsn;
     tmp.clog_checkpoint_scn_ = clog_checkpoint_scn;
 
-    if (write_slog) {
-      if (OB_FAIL(write_slog_(tmp))) {
-        LOG_WARN("clog_checkpoint write slog failed", K(ret));
-      }
+    if (write_slog && OB_FAIL(write_slog_(tmp))) {
+      LOG_WARN("clog_checkpoint write slog failed", K(ret));
+    } else {
+      ObReentrantWLockGuard guard(rw_lock_);
+      clog_base_lsn_ = clog_checkpoint_lsn;
+      clog_checkpoint_scn_ = clog_checkpoint_scn;
     }
-
-    ObReentrantWLockGuard guard(rw_lock_);
-    clog_base_lsn_ = clog_checkpoint_lsn;
-    clog_checkpoint_scn_ = clog_checkpoint_scn;
   }
 
   return ret;
