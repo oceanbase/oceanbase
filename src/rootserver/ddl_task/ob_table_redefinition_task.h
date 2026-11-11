@@ -90,7 +90,8 @@ private:
   int send_build_replica_request_by_sql();
   int check_build_replica_end(bool &is_end);
   int replica_end_check(const int ret_code);
-  int check_modify_autoinc(bool &modify_autoinc);
+  int check_modify_autoinc(const share::schema::ObTableSchema &orig_table_schema,
+                          bool &modify_autoinc);
   int check_use_heap_table_ddl_plan(const share::schema::ObTableSchema *target_table_schema);
   int get_direct_load_job_stat(common::ObArenaAllocator &allocator, sql::ObLoadDataStat &job_stat);
   int check_target_cg_cnt();
