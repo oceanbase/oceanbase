@@ -20,6 +20,10 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/ob_storage_schema.h"
 #include "share/ob_cluster_version.h"
+#ifdef ERRSIM
+#include "lib/thread/ob_thread_name.h"
+#include "observer/ob_server_event_history_table_operator.h"
+#endif
 
 namespace oceanbase
 {
@@ -465,6 +469,19 @@ int ObSSTableCopyOps::finalize_sstable(
                  K(ret), K(sstable_param), K(meta_hdl.get_sstable_meta()));
       }
     }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      // Batch copies bypass the legacy creator's snapshot verification event.
+      char *origin_thread_name = ob_get_tname_v2();
+      const int64_t base_snapshot_version = sstable_param.table_key_.get_end_scn().get_val_for_logservice();
+      SERVER_EVENT_SYNC_ADD("copy_errsim", "create_sstable",
+                            "origin_thread_name", origin_thread_name,
+                            "tablet_id", sstable_param.table_key_.tablet_id_.id(),
+                            "column_group_idx", sstable_param.table_key_.column_group_idx_,
+                            "base_snapshot_version", base_snapshot_version,
+                            "co_base_snapshot_version", create_param.co_base_snapshot_version());
+    }
+#endif
   }
   return ret;
 }
