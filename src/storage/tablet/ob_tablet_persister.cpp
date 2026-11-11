@@ -798,6 +798,9 @@ int ObTabletPersister::persist_major_sstable_linked_block_if_large(
     }
 
     if (OB_SUCC(ret)) {
+      // Reload restores the table-store cache key sequence from the tablet address.
+      ObTablet &tablet = *new_tablet.get_obj();
+      tablet.tablet_addr_.set_seq(tablet.table_store_addr_.addr_.seq());
       time_stats->click("persist_aggregated_meta");
       persister.print_time_stats(*time_stats, 20_ms, 1_s);
     }
@@ -822,6 +825,7 @@ int ObTabletPersister::modify_and_fill_tablet(
                                 ? false : true;
   ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(const_cast<char *>(buf));
   ObTabletTransformArg arg;
+  ObTablet::ObTableHandleArray memtable_handles;
   ObTabletPoolType type;
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
   if (OB_FAIL(multi_stats_.acquire_stats("persist_and_transform_only_tablet_meta", time_stats))) {
@@ -830,7 +834,7 @@ int ObTabletPersister::modify_and_fill_tablet(
     LOG_WARN("fail to get tablet pool type", K(ret), K(buf_header));
   } else if (OB_FAIL(acquire_tablet(type, key, try_smaller_pool, new_handle))) {
     LOG_WARN("fail to acqurie tablet", K(ret), K(type), K(new_handle));
-  } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg))) {
+  } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg, memtable_handles))) {
     LOG_WARN("fail to convert tablet to mem arg", K(ret), K(arg), K(old_tablet));
   } else if (FALSE_IT(time_stats->click("convert_tablet_to_mem_arg"))) {
   } else if (OB_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
@@ -866,6 +870,7 @@ int ObTabletPersister::modify_and_fill_tablet(
                                   ? false : true;
     ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(const_cast<char *>(buf));
     ObTabletTransformArg arg;
+    ObTablet::ObTableHandleArray memtable_handles;
     ObTabletPoolType type;
     ObTabletPersister persister(param, DEFAULT_CTX_ID);
     ObMultiTimeStats::TimeStats *time_stats = nullptr;
@@ -876,7 +881,7 @@ int ObTabletPersister::modify_and_fill_tablet(
       LOG_WARN("fail to get tablet pool type", K(ret), K(buf_header));
     } else if (OB_FAIL(acquire_tablet(type, key, try_smaller_pool, new_handle))) {
       LOG_WARN("fail to acqurie tablet", K(ret), K(type), K(new_handle));
-    } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg))) {
+    } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg, memtable_handles))) {
       LOG_WARN("fail to convert tablet to mem arg", K(ret), K(arg), K(old_tablet));
     } else if (FALSE_IT(time_stats->click("convert_tablet_to_mem_arg"))) {
     } else if (OB_FAIL(persister.transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
@@ -896,10 +901,12 @@ int ObTabletPersister::modify_and_fill_tablet(
 
 int ObTabletPersister::convert_tablet_to_mem_arg(
     const ObTablet &tablet,
-    ObTabletTransformArg &arg)
+    ObTabletTransformArg &arg,
+    ObTablet::ObTableHandleArray &memtable_handles)
 {
   int ret = OB_SUCCESS;
   arg.reset();
+  memtable_handles.reset();
   if (OB_UNLIKELY(!tablet.is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("old tablet isn't valid, don't allow to degrade tablet memory", K(ret), K(tablet));
@@ -915,10 +922,49 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     arg.is_tablet_referenced_by_collect_mv_ = tablet.is_tablet_referenced_by_collect_mv();
     arg.ddl_kvs_ = tablet.ddl_kvs_;
     arg.ddl_kv_count_ = tablet.ddl_kv_count_;
-    MEMCPY(arg.memtables_, tablet.memtables_, sizeof(ObIMemtable*) * MAX_MEMSTORE_CNT);
-    arg.memtable_count_ = tablet.memtable_count_;
     arg.new_table_store_ptr_ = tablet.table_store_addr_.ptr_;
     arg.table_store_cache_.assign(tablet.table_store_cache_);
+    if (OB_FAIL(snapshot_memtables_to_arg(tablet, arg, memtable_handles))) {
+      LOG_WARN("fail to snapshot memtables", K(ret), K(tablet));
+    }
+  }
+  return ret;
+}
+
+int ObTabletPersister::snapshot_memtables_to_arg(
+    const ObTablet &tablet,
+    ObTabletTransformArg &arg,
+    ObTablet::ObTableHandleArray &memtable_handles)
+{
+  int ret = OB_SUCCESS;
+  memtable_handles.reset();
+  MEMSET(arg.memtables_, 0, sizeof(arg.memtables_));
+  arg.memtable_count_ = 0;
+  if (OB_FAIL(tablet.get_memtables(memtable_handles))) {
+    LOG_WARN("fail to get memtables", K(ret), K(tablet));
+  } else if (OB_UNLIKELY(memtable_handles.count() > MAX_MEMSTORE_CNT)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected memtable count", K(ret), K(memtable_handles.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
+      ObIMemtable *memtable = nullptr;
+      if (OB_FAIL(memtable_handles.at(i).get_memtable(memtable))) {
+        LOG_WARN("fail to get memtable", K(ret), K(i), K(memtable_handles.at(i)));
+      } else if (OB_ISNULL(memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null memtable", K(ret), K(i));
+      } else {
+        arg.memtables_[i] = memtable;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      arg.memtable_count_ = memtable_handles.count();
+    }
+  }
+  if (OB_FAIL(ret)) {
+    memtable_handles.reset();
+    MEMSET(arg.memtables_, 0, sizeof(arg.memtables_));
+    arg.memtable_count_ = 0;
   }
   return ret;
 }
@@ -929,12 +975,14 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
       ObTabletPoolType &type,
       ObTabletTableStore &new_table_store,
       ObTabletTransformArg &arg,
+      ObTablet::ObTableHandleArray &memtable_handles,
       int64_t &total_tablet_meta_size,
       ObBlockInfoSet &block_info_set)
 {
   int ret = OB_SUCCESS;
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
   arg.reset();
+  memtable_handles.reset();
 
   common::ObSEArray<ObSharedObjectWriteInfo, 2> write_infos;
   const int64_t ctx_id = share::is_reserve_mode()
@@ -963,9 +1011,10 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
     time_stats->click("fetch_table_store_and_write_info");
     arg.ddl_kvs_ = tablet.ddl_kvs_;
     arg.ddl_kv_count_ = tablet.ddl_kv_count_;
-    arg.memtable_count_ = tablet.memtable_count_;
     arg.new_table_store_ptr_ = &new_table_store;
-    MEMCPY(arg.memtables_, tablet.memtables_, sizeof(arg.memtables_));
+    if (OB_FAIL(snapshot_memtables_to_arg(tablet, arg, memtable_handles))) {
+      LOG_WARN("fail to snapshot memtables", K(ret), K(tablet));
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -998,6 +1047,7 @@ int ObTabletPersister::persist_and_fill_tablet(
   int ret = OB_SUCCESS;
   ObTabletTableStore new_table_store;
   ObTabletTransformArg arg;
+  ObTablet::ObTableHandleArray memtable_handles;
   ObBlockInfoSet block_info_set;
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
 
@@ -1011,13 +1061,14 @@ int ObTabletPersister::persist_and_fill_tablet(
   } else if (OB_FAIL(block_info_set.init())) {
     LOG_WARN("fail to init macro id set", K(ret));
   } else if (old_tablet.is_empty_shell()) {
-    if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg))) {
+    if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg, memtable_handles))) {
       LOG_WARN("fail to conver tablet to mem arg", K(ret), K(old_tablet));
     } else {
       time_stats->click("convert_tablet_to_mem_arg");
     }
   } else if (OB_FAIL(convert_tablet_to_disk_arg(
-      old_tablet, total_write_ctxs, type, new_table_store, arg, space_usage.tablet_clustered_meta_size_, block_info_set))) {
+      old_tablet, total_write_ctxs, type, new_table_store, arg, memtable_handles,
+      space_usage.tablet_clustered_meta_size_, block_info_set))) {
     LOG_WARN("fail to conver tablet to disk arg", K(ret), K(old_tablet));
   } else {
     time_stats->click("convert_tablet_to_disk_arg");
@@ -2504,6 +2555,7 @@ int ObTabletPersister::transform_tablet_memory_footprint(
 {
   int ret = OB_SUCCESS;
   ObTabletTransformArg arg;
+  ObTablet::ObTableHandleArray memtable_handles;
   ObTabletPersister persister(param, DEFAULT_CTX_ID);
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
   if (OB_FAIL(persister.multi_stats_.acquire_stats("transform_tablet_memory_footprint", time_stats))) {
@@ -2511,7 +2563,7 @@ int ObTabletPersister::transform_tablet_memory_footprint(
   } else if (OB_UNLIKELY(!old_tablet.hold_ref_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("old tablet doesn't hold ref cnt", K(ret), K(old_tablet));
-  } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg))) {
+  } else if (OB_FAIL(convert_tablet_to_mem_arg(old_tablet, arg, memtable_handles))) {
     LOG_WARN("fail to convert tablet to mem arg", K(ret), K(arg), KP(buf), K(len), K(old_tablet));
   } else if (FALSE_IT(time_stats->click("convert_tablet_to_mem_arg"))) {
   } else if (OB_FAIL(persister.transform(arg, buf, len))) {

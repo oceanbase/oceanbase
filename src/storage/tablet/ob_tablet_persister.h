@@ -409,13 +409,19 @@ private:
       const ObTablet &tablet);
   static int convert_tablet_to_mem_arg(
       const ObTablet &tablet,
-      ObTabletTransformArg &arg);
+      ObTabletTransformArg &arg,
+      ObTablet::ObTableHandleArray &memtable_handles);
+  static int snapshot_memtables_to_arg(
+      const ObTablet &tablet,
+      ObTabletTransformArg &arg,
+      ObTablet::ObTableHandleArray &memtable_handles);
   int convert_tablet_to_disk_arg(
       const ObTablet &tablet,
       common::ObIArray<ObSharedObjectsWriteCtx> &total_write_ctxs,
       ObTabletPoolType &type,
       ObTabletTableStore &new_table_store,
       ObTabletTransformArg &arg,
+      ObTablet::ObTableHandleArray &memtable_handles,
       int64_t &total_tablet_meta_size,
       ObBlockInfoSet &block_info_set);
   int fill_sstable_write_info_and_record(

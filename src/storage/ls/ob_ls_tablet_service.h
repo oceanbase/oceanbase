@@ -591,6 +591,17 @@ private:
     common::ObTabletID cur_tablet_id_;
     ObLSTabletService *tablet_svr_;
   };
+  class ObUpdateTabletReportStatus final : public ObITabletMetaModifier
+  {
+  public:
+    explicit ObUpdateTabletReportStatus(const bool found_column_group_checksum_error)
+      : found_column_group_checksum_error_(found_column_group_checksum_error) {}
+    virtual ~ObUpdateTabletReportStatus() = default;
+    virtual int modify_tablet_meta(ObTabletMeta &meta) override;
+  private:
+    const bool found_column_group_checksum_error_;
+    DISALLOW_COPY_AND_ASSIGN(ObUpdateTabletReportStatus);
+  };
   class ObUpdateRestoreStatus final : public ObITabletMetaModifier
   {
   public:

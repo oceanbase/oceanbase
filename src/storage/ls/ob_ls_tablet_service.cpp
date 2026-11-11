@@ -1503,6 +1503,17 @@ int ObLSTabletService::update_tablet_release_memtable_for_offline(
   return ret;
 }
 
+int ObLSTabletService::ObUpdateTabletReportStatus::modify_tablet_meta(ObTabletMeta &meta)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(found_column_group_checksum_error_)) {
+    meta.report_status_.found_cg_checksum_error_ = true;
+  } else if (meta.report_status_.need_report()) {
+    meta.report_status_.cur_report_version_ = meta.report_status_.merge_snapshot_version_;
+  }
+  return ret;
+}
+
 int ObLSTabletService::update_tablet_report_status(
     const common::ObTabletID &tablet_id,
     const bool found_column_group_checksum_error)
@@ -1533,11 +1544,10 @@ int ObLSTabletService::update_tablet_report_status(
     ObTablet *tablet = tablet_handle.get_obj();
     ObTabletHandle new_tablet_handle;
     bool need_report = true;
+    ObUpdateTabletReportStatus modifier(found_column_group_checksum_error);
 
-    if (OB_UNLIKELY(found_column_group_checksum_error)) {
-      tablet->tablet_meta_.report_status_.found_cg_checksum_error_ = true;
-    } else if (tablet->tablet_meta_.report_status_.need_report()) {
-      tablet->tablet_meta_.report_status_.cur_report_version_ = tablet->tablet_meta_.report_status_.merge_snapshot_version_;
+    if (found_column_group_checksum_error || tablet->tablet_meta_.report_status_.need_report()) {
+      need_report = true;
     } else {
       need_report = false;
       FLOG_INFO("tablet doesn't need to report", K(ret), K(tablet_id));
@@ -1554,7 +1564,10 @@ int ObLSTabletService::update_tablet_report_status(
                                          tablet_id,
                                          tablet->get_transfer_seq(),
                                          tablet_meta_version);
-      if (FAILEDx(ObTabletPersister::persist_and_transform_tablet(param, *tablet, new_tablet_handle))) {
+      if (FAILEDx(tablet->check_valid())) {
+        LOG_WARN("failed to check tablet valid", K(ret), KPC(tablet));
+      } else if (OB_FAIL(ObTabletPersister::persist_and_transform_only_tablet_meta(
+          tablet->get_reorganization_scn(), param, *tablet, modifier, new_tablet_handle))) {
         LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tablet), K(new_tablet_handle));
       } else if (FALSE_IT(time_guard.click("Persist"))) {
       } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
@@ -1574,11 +1587,7 @@ int ObLSTabletService::update_tablet_snapshot_version(
 {
   int ret = OB_SUCCESS;
   common::ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "UTabletSnapVer"));
-  ObTabletHandle old_tablet_handle;
-  uint64_t data_version = 0;
   ObTimeGuard time_guard("ObLSTabletService::update_tablet_snapshot_version", 1_s);
-  ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
-  time_guard.click("Lock");
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1586,50 +1595,63 @@ int ObLSTabletService::update_tablet_snapshot_version(
   } else if (OB_UNLIKELY(!tablet_id.is_valid() || 0 >= snapshot_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(tablet_id), K(snapshot_version));
-  } else if (OB_FAIL(direct_get_tablet(tablet_id, old_tablet_handle))) {
-    LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-    LOG_WARN("fail to get min data version", K(ret));
   } else {
-    time_guard.click("GetTablet");
-
-    ObTabletHandle tmp_tablet_hdl;
-    ObTabletHandle new_tablet_hdl;
-    ObTablet *tmp_tablet = nullptr;
-    ObTablet *old_tablet = old_tablet_handle.get_obj();
     const share::ObLSID &ls_id = ls_->get_ls_id();
     const ObTabletMapKey key(ls_id, tablet_id);
-    ObMetaDiskAddr disk_addr;
-    int64_t tablet_meta_version = 0;
-    if (OB_FAIL(alloc_private_tablet_meta_version_without_lock(key, tablet_meta_version))) {
-      LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
-    }
-    const ObTabletPersisterParam param(data_version,
-                                       ls_id,
-                                       ls_->get_ls_epoch(),
-                                       tablet_id,
-                                       old_tablet->get_transfer_seq(),
-                                       tablet_meta_version);
-    ObTabletDataStatus::STATUS current_status = ObTabletDataStatus::DATA_STATUS_MAX;
-
-    if (FAILEDx(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        ret = OB_TABLET_NOT_EXIST;
+    TabletUpdateOp op([&](bool &giveup_retry) -> int {
+      int ret = OB_SUCCESS;
+      uint64_t data_version = 0;
+      ObTabletHandle old_tablet_handle;
+      ObTabletHandle tmp_tablet_hdl;
+      ObTabletHandle new_tablet_handle;
+      ObMetaDiskAddr old_tablet_addr;
+      ObMetaDiskAddr disk_addr;
+      if (OB_FAIL(get_tablet_and_address(key, old_tablet_handle, old_tablet_addr, time_guard))) {
+        LOG_WARN("failed to check and get tablet", K(ret), K(tablet_id));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+        LOG_WARN("fail to get min data version", K(ret));
       } else {
-        LOG_WARN("failed to acquire tablet", K(ret), K(key));
+        ObTablet *old_tablet = old_tablet_handle.get_obj();
+        ObTablet *tmp_tablet = nullptr;
+        int64_t tablet_meta_version = 0;
+        if (OB_FAIL(alloc_private_tablet_meta_version_with_lock(key, tablet_meta_version))) {
+          LOG_WARN("failed to alloc tablet meta version", K(ret), K(key));
+        }
+        const ObTabletPersisterParam param(data_version,
+                                           ls_id,
+                                           ls_->get_ls_epoch(),
+                                           tablet_id,
+                                           old_tablet->get_transfer_seq(),
+                                           tablet_meta_version);
+        ObTabletDataStatus::STATUS current_status = ObTabletDataStatus::DATA_STATUS_MAX;
+
+        if (FAILEDx(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, tmp_tablet_hdl))) {
+          if (OB_ENTRY_NOT_EXIST == ret) {
+            ret = OB_TABLET_NOT_EXIST;
+          } else {
+            LOG_WARN("failed to acquire tablet", K(ret), K(key));
+          }
+        } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
+        } else if (OB_FAIL(old_tablet->tablet_meta_.ha_status_.get_data_status(current_status))) {
+          LOG_WARN("failed to get data status", K(ret), KPC(old_tablet));
+        } else if (OB_FAIL(tmp_tablet->init_with_replace_members(allocator, *old_tablet, snapshot_version, current_status))) {
+          LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
+        } else if (FALSE_IT(time_guard.click("InitNew"))) {
+        } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet, new_tablet_handle))) {
+          LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_handle));
+        } else if (FALSE_IT(time_guard.click("Persist"))) {
+        } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {
+        } else if (OB_FAIL(try_update_tablet_after_persist(
+            key, old_tablet_addr, old_tablet_handle, new_tablet_handle, time_guard,
+            share::SCN::invalid_scn(), &giveup_retry))) {
+          LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
+        } else {
+          LOG_INFO("succeeded to init tablet with updating snapshot version", K(ret), K(key), K(disk_addr), K(snapshot_version));
+        }
       }
-    } else if (FALSE_IT(tmp_tablet = tmp_tablet_hdl.get_obj())) {
-    } else if (OB_FAIL(old_tablet->tablet_meta_.ha_status_.get_data_status(current_status))) {
-      LOG_WARN("failed to get data status", K(ret), KPC(old_tablet));
-    } else if (OB_FAIL(tmp_tablet->init_with_replace_members(allocator, *old_tablet, snapshot_version, current_status))) {
-      LOG_WARN("failed to init tablet", K(ret), KPC(old_tablet));
-    } else if (FALSE_IT(time_guard.click("InitNew"))) {
-    } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(param, *tmp_tablet, new_tablet_hdl))) {
-      LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tmp_tablet), K(new_tablet_hdl));
-    } else if (FALSE_IT(disk_addr = new_tablet_hdl.get_obj()->tablet_addr_)) {
-    } else if (OB_FAIL(safe_update_cas_tablet(key, disk_addr, old_tablet_handle, new_tablet_hdl, time_guard))) {
-      LOG_WARN("fail to update tablet", K(ret), K(key), K(disk_addr));
-    }
+      return ret;
+    });
+    ret = retry_tablet_update(key, "update tablet snapshot version", allocator, op);
   }
   return ret;
 }

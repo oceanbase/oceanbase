@@ -278,6 +278,195 @@ TEST_F(TestLSTabletService, test_try_update_tablet_after_persist_stale_addr)
   ASSERT_EQ(OB_SUCCESS, t3m->del_tablet(key));
 }
 
+TEST_F(TestLSTabletService, test_update_tablet_report_status_rejects_stale_snapshot)
+{
+  const ObTabletID tablet_id(10000022);
+  const ObTabletMapKey key(ls_id_, tablet_id);
+  ObLSHandle ls_handle;
+  ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(
+      ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
+
+  // Persist first so reporting reuses the table store, and pin its old cache entry.
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->update_tablet_snapshot_version(tablet_id, 100));
+  ObTimeGuard time_guard("TestReportStatusStaleSnapshot");
+  ObTabletHandle old_handle;
+  ObMetaDiskAddr old_addr;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet_and_address(key, old_handle, old_addr, time_guard));
+  ObTablet *const old_tablet = old_handle.get_obj();
+  const ObMetaDiskAddr cached_table_store_addr = old_tablet->table_store_addr_.addr_;
+  ObStorageMetaCache &meta_cache = OB_STORE_CACHE.get_storage_meta_cache();
+  ObStorageMetaHandle stale_meta_handle;
+  ObTabletMemberWrapper<ObTabletTableStore> stale_store;
+  ASSERT_EQ(OB_SUCCESS, meta_cache.get_meta(ObStorageMetaValue::MetaType::TABLE_STORE,
+      ObStorageMetaKey(tenant_id_, cached_table_store_addr), stale_meta_handle, old_tablet));
+  ASSERT_EQ(OB_SUCCESS, stale_store.set_cache_handle(stale_meta_handle));
+  ObSEArray<ObITable *, 1> memtables;
+  ASSERT_EQ(OB_SUCCESS, stale_store.get_member()->get_memtables(memtables));
+  ASSERT_EQ(0, memtables.count());
+
+  CreateMemtableArg create_memtable_arg;
+  create_memtable_arg.schema_version_ = 100;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->create_memtable(tablet_id, create_memtable_arg));
+  old_addr = old_tablet->get_tablet_addr();
+  ASSERT_FALSE(old_tablet->tablet_meta_.report_status_.found_cg_checksum_error_);
+  ASSERT_EQ(nullptr, old_tablet->allocator_);
+  const ObMetaDiskAddr old_table_store_addr = old_tablet->table_store_addr_.addr_;
+  ASSERT_TRUE(old_table_store_addr.is_disked());
+  ASSERT_GT(old_table_store_addr.seq(), cached_table_store_addr.seq());
+  ObTableHandleV2 old_memtable_handle;
+  ASSERT_EQ(OB_SUCCESS, old_tablet->get_active_memtable(old_memtable_handle));
+
+  // Persist a snapshot copy before the checksum error is reported, but delay its publication.
+  ObTabletHandle tmp_handle;
+  ObTabletHandle snapshot_handle;
+  ObTabletDataStatus::STATUS data_status;
+  ASSERT_EQ(OB_SUCCESS, ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator_, tmp_handle));
+  ASSERT_EQ(OB_SUCCESS, old_tablet->tablet_meta_.ha_status_.get_data_status(data_status));
+  ASSERT_EQ(OB_SUCCESS, tmp_handle.get_obj()->init_with_replace_members(
+      allocator_, *old_tablet, old_tablet->get_snapshot_version() + 100, data_status));
+  const ObTabletPersisterParam persist_param(DATA_CURRENT_VERSION,
+                                             ls_id_,
+                                             ls_handle.get_ls()->get_ls_epoch(),
+                                             tablet_id,
+                                             old_tablet->get_transfer_seq(),
+                                             0/*tablet_meta_version*/);
+  ASSERT_EQ(OB_SUCCESS, ObTabletPersister::persist_and_transform_tablet(
+      persist_param, *tmp_handle.get_obj(), snapshot_handle));
+  ASSERT_FALSE(snapshot_handle.get_obj()->tablet_meta_.report_status_.found_cg_checksum_error_);
+
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->update_tablet_report_status(tablet_id, true));
+  ObTabletHandle reported_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, reported_handle));
+  EXPECT_FALSE(old_tablet->tablet_meta_.report_status_.found_cg_checksum_error_);
+  EXPECT_EQ(old_addr, old_tablet->get_tablet_addr());
+  EXPECT_NE(old_tablet, reported_handle.get_obj());
+  EXPECT_TRUE(reported_handle.get_obj()->tablet_meta_.report_status_.found_cg_checksum_error_);
+  EXPECT_NE(old_addr, reported_handle.get_obj()->get_tablet_addr());
+
+  EXPECT_EQ(OB_EAGAIN, ls_tablet_service_->try_update_tablet_after_persist(
+      key, old_addr, old_handle, snapshot_handle, time_guard));
+  ObTabletHandle current_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, current_handle));
+  EXPECT_EQ(reported_handle.get_obj(), current_handle.get_obj());
+  EXPECT_TRUE(current_handle.get_obj()->tablet_meta_.report_status_.found_cg_checksum_error_);
+
+  // Wash the published object, then reload using the address retained in the map.
+  EXPECT_EQ(old_table_store_addr, reported_handle.get_obj()->table_store_addr_.addr_);
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr *);
+  ObITenantMetaObjPool *pool = reported_handle.obj_pool_;
+  const bool is_large = reported_handle.get_buf_len() == ObTenantMetaMemMgr::LARGE_TABLET_POOL_SIZE;
+  current_handle.reset();
+  reported_handle.reset();
+  ObTabletHandle empty_handle;
+  void *free_obj = nullptr;
+  {
+    SpinWLockGuard guard(t3m->wash_lock_);
+    ASSERT_EQ(OB_SUCCESS, t3m->tablet_map_.wash_meta_obj(key, empty_handle, free_obj));
+    ASSERT_NE(nullptr, free_obj);
+    auto &header = is_large ? t3m->large_tablet_header_ : t3m->normal_tablet_header_;
+    header.remove(static_cast<ObMetaObjBufferNode *>(free_obj));
+  }
+  pool->free_obj(free_obj);
+  ObTabletHandle reloaded_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, reloaded_handle));
+  ObTablet *const reloaded_tablet = reloaded_handle.get_obj();
+  EXPECT_EQ(old_table_store_addr, reloaded_tablet->table_store_addr_.addr_);
+
+  // Exercise the cache lookup used when the table store is not embedded in a tablet.
+  // The old entry stays pinned and must not hide the newly created memtable.
+  ObStorageMetaHandle reloaded_meta_handle;
+  ObTabletMemberWrapper<ObTabletTableStore> reloaded_store;
+  ASSERT_EQ(OB_SUCCESS, meta_cache.get_meta(ObStorageMetaValue::MetaType::TABLE_STORE,
+      ObStorageMetaKey(tenant_id_, reloaded_tablet->table_store_addr_.addr_),
+      reloaded_meta_handle, reloaded_tablet));
+  ASSERT_EQ(OB_SUCCESS, reloaded_store.set_cache_handle(reloaded_meta_handle));
+  memtables.reset();
+  ASSERT_EQ(OB_SUCCESS, reloaded_store.get_member()->get_memtables(memtables));
+  ASSERT_EQ(1, memtables.count());
+  EXPECT_EQ(old_memtable_handle.get_table(), memtables.at(0));
+  memtables.reset();
+  ASSERT_EQ(OB_SUCCESS, stale_store.get_member()->get_memtables(memtables));
+  EXPECT_EQ(0, memtables.count());
+
+  reloaded_store.reset();
+  reloaded_meta_handle.reset();
+  stale_store.reset();
+  stale_meta_handle.reset();
+  old_memtable_handle.reset();
+  reloaded_handle.reset();
+  current_handle.reset();
+  reported_handle.reset();
+  snapshot_handle.reset();
+  tmp_handle.reset();
+  old_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id));
+}
+
+TEST_F(TestLSTabletService, test_update_tablet_snapshot_version)
+{
+  const ObTabletID tablet_id(10000021);
+  ObLSHandle ls_handle;
+  ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ASSERT_EQ(OB_SUCCESS, MTL(ObLSService*)->get_ls(
+      ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD, ObLSAccessAttr::DISABLE_LOGONLY));
+  ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_));
+
+  CreateMemtableArg create_memtable_arg;
+  create_memtable_arg.schema_version_ = 100;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->create_memtable(tablet_id, create_memtable_arg));
+
+  ObTabletHandle old_tablet_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, old_tablet_handle));
+  ASSERT_EQ(1, old_tablet_handle.get_obj()->memtable_count_);
+  ObTableHandleV2 old_memtable_handle;
+  ASSERT_EQ(OB_SUCCESS, old_tablet_handle.get_obj()->get_active_memtable(old_memtable_handle));
+  ObITable *const old_memtable = old_memtable_handle.get_table();
+  ASSERT_NE(nullptr, old_memtable);
+  ASSERT_TRUE(old_memtable->is_memtable());
+  const ObMetaDiskAddr old_tablet_addr = old_tablet_handle.get_obj()->get_tablet_addr();
+  const int64_t old_snapshot_version = old_tablet_handle.get_obj()->get_snapshot_version();
+  const int64_t high_snapshot_version = old_snapshot_version + 100;
+  const int64_t low_snapshot_version = old_snapshot_version + 50;
+
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->update_tablet_snapshot_version(
+      tablet_id, high_snapshot_version));
+  ObTabletHandle high_snapshot_tablet_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, high_snapshot_tablet_handle));
+  ASSERT_NE(old_tablet_handle.get_obj(), high_snapshot_tablet_handle.get_obj());
+  EXPECT_EQ(high_snapshot_version, high_snapshot_tablet_handle.get_obj()->get_snapshot_version());
+  const ObMetaDiskAddr high_snapshot_tablet_addr = high_snapshot_tablet_handle.get_obj()->get_tablet_addr();
+  EXPECT_TRUE(high_snapshot_tablet_addr.is_disked());
+  EXPECT_NE(old_tablet_addr, high_snapshot_tablet_addr);
+  EXPECT_EQ(1, high_snapshot_tablet_handle.get_obj()->memtable_count_);
+  ObTableHandleV2 high_snapshot_memtable_handle;
+  ASSERT_EQ(OB_SUCCESS, high_snapshot_tablet_handle.get_obj()->get_active_memtable(
+      high_snapshot_memtable_handle));
+  EXPECT_EQ(old_memtable, high_snapshot_memtable_handle.get_table());
+
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->update_tablet_snapshot_version(
+      tablet_id, low_snapshot_version));
+  ObTabletHandle low_snapshot_tablet_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->get_tablet(tablet_id, low_snapshot_tablet_handle));
+  EXPECT_EQ(high_snapshot_version, low_snapshot_tablet_handle.get_obj()->get_snapshot_version());
+  EXPECT_EQ(1, low_snapshot_tablet_handle.get_obj()->memtable_count_);
+  ObTableHandleV2 low_snapshot_memtable_handle;
+  ASSERT_EQ(OB_SUCCESS, low_snapshot_tablet_handle.get_obj()->get_active_memtable(
+      low_snapshot_memtable_handle));
+  EXPECT_EQ(old_memtable, low_snapshot_memtable_handle.get_table());
+
+  old_memtable_handle.reset();
+  high_snapshot_memtable_handle.reset();
+  low_snapshot_memtable_handle.reset();
+  old_tablet_handle.reset();
+  high_snapshot_tablet_handle.reset();
+  low_snapshot_tablet_handle.reset();
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id));
+}
+
 TEST_F(TestLSTabletService, test_update_medium_compaction_info_only_clears_matching_scn)
 {
   const ObTabletID tablet_id(10000020);
