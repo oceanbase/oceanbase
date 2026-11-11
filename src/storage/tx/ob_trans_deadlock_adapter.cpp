@@ -449,7 +449,8 @@ int ObTransDeadlockDetectorAdapter::lock_wait_mgr_reconstruct_conflict_trans_ids
   int ret = OB_SUCCESS;
   SessionGuard session_guard;
   bool is_detector_exist = false;
-  ObTransDeadlockDetectorKey detector_key(ObDeadlockKeyType::REMOTE_EXEC_SIDE, self_tx_id);
+  // Replace the control-side detector; REMOTE_EXEC_SIDE is its dependency type.
+  ObTransDeadlockDetectorKey detector_key(ObDeadlockKeyType::DEFAULT, self_tx_id);
   if (sess_id_pair.get_valid_sess_id() == 1) {
     DETECT_LOG(INFO, "inner session no need register to deadlock", PRINT_WRAPPER);
   } else if (sess_id_pair.get_valid_sess_id() == 0) {
