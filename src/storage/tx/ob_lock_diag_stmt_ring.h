@@ -105,8 +105,9 @@ public:
       snapshot_inited_ = true;
       collect_query_sql_ = GCONF._ob_enable_lock_diagnose_collect_query_sql;
       if (collect_query_sql_ && OB_ISNULL(query_sql_ring_)) {
+        // The buffer belongs to ObTxDesc and outlives individual SQL requests.
         void *buf = ob_malloc(sizeof(ObLockDiagQuerySqlSlot) * LOCK_DIAG_RING_SIZE,
-                              lib::ObMemAttr(tenant_id, "AshDiagQuerySql"));
+                              SET_IGNORE_MEM_VERSION(lib::ObMemAttr(tenant_id, "AshDiagQuerySql")));
         if (OB_NOT_NULL(buf)) {
           query_sql_ring_ = reinterpret_cast<ObLockDiagQuerySqlSlot *>(buf);
           MEMSET(query_sql_ring_, 0, sizeof(ObLockDiagQuerySqlSlot) * LOCK_DIAG_RING_SIZE);
