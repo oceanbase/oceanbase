@@ -870,6 +870,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
       if (OB_SUCC(ret)) {
         // Setup field Type and Accuracy
         field.type_.set_type(expr->get_data_type());
+        (const_cast<ObObjMeta &>(field.type_.get_meta())).set_is_implicit_char_length(expr->get_result_type().is_implicit_char_length());
         field.accuracy_ = expr->get_accuracy();
         field.flags_ = static_cast<uint16_t>(expr->get_result_flag());
         if (T_FUN_SET_TO_STR == expr->get_expr_type()

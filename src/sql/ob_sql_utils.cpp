@@ -592,7 +592,12 @@ int ObSQLUtils::calc_sql_expression_without_row(
     LOG_WARN("session is NULL", K(ret));
   } else {
     const sql::ObExpr *new_expr = expr.get_expr();
-    exec_ctx.get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *exec_ctx.get_my_session());
+    // Only fetch cur_time when the expression tree actually depends on it (marked
+    // at PL code generation). need_cur_time() defaults to true for callers that do
+    // not compute the flag, preserving the original behavior.
+    if (!is_pl_expr_eval || static_cast<const ObSqlExpression &>(expr).need_cur_time()) {
+      exec_ctx.get_physical_plan_ctx()->set_cur_time(ObTimeUtility::current_time(), *exec_ctx.get_my_session());
+    }
     if (NULL == new_expr) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("static engine should have implement this function. unexpected null", K(ret));

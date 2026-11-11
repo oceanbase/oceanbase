@@ -1059,7 +1059,7 @@ int ObDMLResolver::check_first_node_name(const ObString &node_name, bool &check_
 
   ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
   if (OB_ISNULL(node_name)) {
-    LOG_WARN("node_name input null", K(ret));
+    // do nothing ...
   } else if (OB_FAIL(schema_checker_->get_database_id(session_info_->get_effective_tenant_id(), node_name, database_id))) {
     ret = OB_SUCCESS;
     if (OB_ISNULL(select_stmt)) {

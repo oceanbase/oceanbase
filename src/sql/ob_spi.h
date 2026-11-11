@@ -512,9 +512,20 @@ public:
                                const ObRawExpr *rawexpr,
                                ObObj *result,
                                const ParamStore *param_store = nullptr);
+
+  static int spi_pading_intf(pl::ObPLExecCtx *ctx,
+                              const ObSqlExpression *expr,
+                              ObIAllocator *expr_allocator,
+                              ObObjParam *result);
+  static int spi_pading_intf(ObSQLSessionInfo *session_info,
+                             const ObObjType &type,
+                             const ObAccuracy &accuracy,
+                             ObIAllocator *allocator,
+                             ObObjParam *result);
   static int spi_calc_expr(pl::ObPLExecCtx *ctx,
                            const ObSqlExpression *expr,
                            const int64_t result_idx,
+                           bool is_assign_or_default_value,
                            ObObjParam *result);
   static int spi_set_symbol(pl::ObPLExecCtx *ctx,
                                             const int64_t result_idx,
@@ -523,6 +534,7 @@ public:
                                   const int64_t expr_idx,
                                   const int64_t result_idx,
                                   const bool calc_once,
+                                  const bool is_assign_or_default_value,
                                   ObObjParam *result);
 
   static int spi_calc_subprogram_expr(pl::ObPLExecCtx *ctx,
@@ -540,6 +552,7 @@ public:
   static int spi_calc_package_expr(pl::ObPLExecCtx *ctx,
                            uint64_t package_id,
                            int64_t expr_idx,
+                           bool is_assign_or_default_value,
                            ObObjParam *result);
   static int spi_convert(ObSQLSessionInfo &session, ObIAllocator &allocator,
                          ObObj &src, const ObExprResType &result_type, ObObj &dst,

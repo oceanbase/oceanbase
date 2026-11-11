@@ -1415,6 +1415,64 @@ CALL p1(0x41, 0x42);
 
 DROP PROCEDURE p1;
 
+
+CREATE PROCEDURE p1()
+BEGIN
+  declare arg1 BINARY(2);
+  declare v BINARY(3);
+  SELECT 0x41 into arg1;
+  set v := concat(arg1,'3');
+  SELECT HEX(v);
+END|
+
+call p1()|
++--------+
+| HEX(v) |
++--------+
+| 410033 |
++--------+
+
+drop procedure p1|
+
+set @old_mode= @@sql_mode|
+set @@sql_mode= "PAD_CHAR_TO_FULL_LENGTH,PIPES_AS_CONCAT,ONLY_FULL_GROUP_BY"|
+
+CREATE PROCEDURE p1()
+BEGIN
+  declare arg1 char(5);
+  declare v char(10);
+  select '4' into arg1;
+  set v := concat(arg1,'3');
+  SELECT v;
+END|
+
+call p1()|
++------------+
+| v          |
++------------+
+| 4    3     |
++------------+
+
+drop procedure p1|
+
+CREATE PROCEDURE p1(arg1 char(5))
+BEGIN
+  declare v char(10);
+  set v := concat(arg1,'3');
+  SELECT v;
+END|
+
+call p1('4')|
++------------+
+| v          |
++------------+
+| 4    3     |
++------------+
+
+set @@sql_mode=@old_mode;
+drop procedure p1|
+
+
 ###########################################################################
 ###########################################################################
 

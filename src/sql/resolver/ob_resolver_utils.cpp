@@ -1379,7 +1379,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                                  src_type_id,
                                                  dst_pl_type,
                                                  is_sys_package))) {
-      LOG_WARN("argument type not match", K(ret), K(i), KPC(expr_params.at(i)), K(src_type), K(dst_pl_type));
+      LOG_WARN("argument type not match", K(ret), K(routine_info->get_routine_name()), K(i), KPC(expr_params.at(i)), K(src_type), K(dst_pl_type));
     }
   }
 
@@ -9534,6 +9534,7 @@ int ObResolverUtils::resolve_external_param_info(ExternalParams &param_infos,
           result_type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);   \
         } else if (result_type.is_char() || result_type.is_nchar()) {  \
           result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);   \
+          result_type.set_is_implicit_char_length(1);   \
         }  \
       }  \
       if (LS_INVALIED == result_type.get_length_semantics() && ob_is_string_tc(result_type.get_type())) {  \

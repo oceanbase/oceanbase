@@ -490,6 +490,8 @@ public:
     return is_ext() && extend_type_ > 0
                     && extend_type_ < T_EXT_SQL_ARRAY;
   }
+  OB_INLINE void set_is_implicit_char_length(uint8_t is_implicit_char_length) { is_implicit_char_length_ = is_implicit_char_length; }
+  OB_INLINE bool is_implicit_char_length() const { return is_char() || is_nchar() ? is_implicit_char_length_ == 1 : false; }
 
 // to_string function is used to calc the result of ObExprCmpMeta, can not be modified
 #ifdef NDEBUG
@@ -581,6 +583,7 @@ protected:
     int8_t scale_;  // scale, length of bit if type_ is ObBitType; reserved flags if type_ is UDT
     ObLobScale lob_scale_;
     uint8_t extend_type_; //detailed extend value(enum ObPLType), if type_ is ObExtendType
+    uint8_t is_implicit_char_length_; // if type_ is ObCharType or ObNCharType, this flag is set to 1 when the length is implicit
   };
 };
 

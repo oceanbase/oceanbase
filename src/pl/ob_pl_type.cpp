@@ -917,6 +917,8 @@ int ObPLDataType::init_session_var(const ObPLResolveCtx &resolve_ctx,
       ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_INIT_SESSION_VAR), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       if (OB_FAIL(ObSQLUtils::calc_sql_expression_without_row(exec_ctx,*default_expr,calc_obj, &tmp_allocator))) {
         LOG_WARN("calc expr failed", K(ret));
+      } else if (OB_FAIL(ObSPIService::spi_pad_char_or_varchar(exec_ctx.get_my_session(), default_expr, &tmp_allocator, &calc_obj))) {
+        LOG_WARN("pad char or varchar failed", K(ret));
       } else if (calc_obj.need_deep_copy()) {
         char *copy_data = NULL;
         int64_t copy_size = calc_obj.get_deep_copy_size();

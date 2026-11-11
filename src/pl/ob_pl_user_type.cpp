@@ -1902,11 +1902,12 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
       if (OB_INVALID_INDEX != member->get_default()) {
         OZ (buffer_guard.get_objparam_buffer(result));
         if (OB_NOT_NULL(member->get_default_expr())) {
-          OZ (generator.generate_expr(member->get_default(), *stmt, result_idx, result));
+          OZ (generator.generate_expr(member->get_default(), *stmt, result_idx, true, result));
         } else {
           OV (is_package_type(), OB_ERR_UNEXPECTED, KPC(this));
           OZ (generator.generate_spi_package_calc(extract_package_id(get_user_type_id()),
                                                   member->get_default(),
+                                                  true,
                                                   *stmt,
                                                   result));
         }
