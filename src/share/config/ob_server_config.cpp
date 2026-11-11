@@ -437,6 +437,7 @@ int ObServerMemoryConfig::set_500_tenant_limit(const int64_t limit_mode)
   }
   for (int ctx_id = 0; OB_SUCC(ret) && ctx_id < ObCtxIds::MAX_CTX_ID; ++ctx_id) {
     if (ObCtxIds::SCHEMA_SERVICE == ctx_id ||
+        ObCtxIds::LOCATION_SERVICE == ctx_id ||
         ObCtxIds::PKT_NIO == ctx_id ||
         ObCtxIds::CO_STACK == ctx_id ||
         ObCtxIds::LIBEASY == ctx_id ||
