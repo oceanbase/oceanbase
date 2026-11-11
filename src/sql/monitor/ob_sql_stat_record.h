@@ -223,7 +223,8 @@ class ObExecutedSqlStatRecord : public ObSqlStatRecordKeyHashValue
 public:
   const static int64_t BATCH_COUNT = 50;
   ObExecutedSqlStatRecord()
-      : sql_stat_info_(), latest_active_time_(0), avg_elapsed_time_(0.0), lock_(false) {
+      : sql_stat_info_(), latest_active_time_(0), avg_elapsed_time_(0.0), lock_(false),
+        plan_stat_init_state_(PLAN_STAT_UNINITIALIZED) {
 #define DEF_SQL_STAT_ITEM_CONSTRUCT(def_name)           \
     def_name##_total_ = 0;                              \
     def_name##_last_snap_ = 0;
@@ -260,7 +261,9 @@ public:
     : sql_stat_info_(),
       latest_active_time_(other.latest_active_time_),
       avg_elapsed_time_(other.avg_elapsed_time_),
-      lock_(false)
+      lock_(false),
+      plan_stat_init_state_(other.is_plan_stat_info_inited()
+          ? PLAN_STAT_INITIALIZED : PLAN_STAT_UNINITIALIZED)
 {
   //only use in sum_to_global_and_refresh_avg_elapsed_time
   //we do not mind if assign failed
@@ -299,6 +302,12 @@ public:
 
   ~ObExecutedSqlStatRecord() = default;
   int copy_sql_stat_info(const ObSqlStatInfo& sql_stat_info);
+  int try_init_plan_stat_info(const ObSqlStatRecordKey &key, const ObSQLSessionInfo &session_info,
+      const ObString &sql, const ObPhysicalPlan *plan);
+  bool is_plan_stat_info_inited() const
+  {
+    return PLAN_STAT_INITIALIZED == ATOMIC_LOAD_ACQ(&plan_stat_init_state_);
+  }
   int sum_stat_value(ObExecutingSqlStatRecord& executing_record);
   int sum_stat_value(ObExecutedSqlStatRecord& executed_record);
   int sub_stat_value(ObExecutedSqlStatRecord& executed_record);
@@ -354,6 +363,12 @@ public:
 
   TO_STRING_KV(K_(sql_stat_info), K_(executions_total), K_(executions_last_snap), K_(disk_reads_total), K_(disk_reads_last_snap), K_(buffer_gets_total), K_(buffer_gets_last_snap), K_(elapsed_time_total), K_(elapsed_time_last_snap), K_(cpu_time_total), K_(cpu_time_last_snap), K_(ccwait_total), K_(ccwait_last_snap), K_(userio_wait_total), K_(userio_wait_last_snap), K_(apwait_total), K_(apwait_last_snap), K_(physical_read_requests_total), K_(physical_read_requests_last_snap), K_(physical_read_bytes_total), K_(physical_read_bytes_last_snap), K_(write_throttle_total), K_(write_throttle_last_snap), K_(rows_processed_total), K_(rows_processed_last_snap), K_(memstore_read_rows_total), K_(memstore_read_rows_last_snap), K_(minor_ssstore_read_rows_total), K_(minor_ssstore_read_rows_last_snap), K_(major_ssstore_read_rows_total), K_(major_ssstore_read_rows_last_snap), K_(rpc_total), K_(rpc_last_snap), K_(fetches_total), K_(fetches_last_snap), K_(retry_total), K_(retry_last_snap), K_(partition_total), K_(partition_last_snap), K_(nested_sql_total), K_(nested_sql_last_snap), K_(route_miss_total), K_(route_miss_last_snap), K_(plan_cache_hit_total), K_(plan_cache_hit_last_snap), K_(latest_active_time), K_(avg_elapsed_time));
 private:
+  enum PlanStatInitState : uint8_t
+  {
+    PLAN_STAT_UNINITIALIZED = 0,
+    PLAN_STAT_INITIALIZING,
+    PLAN_STAT_INITIALIZED
+  };
   ObSqlStatInfo sql_stat_info_;
   #define DEF_SQL_STAT_ITEM(def_name)           \
     int64_t def_name##_total_;                  \
@@ -388,6 +403,7 @@ private:
   int64_t latest_active_time_; //only use in sqlstat manager
   double avg_elapsed_time_; //only use in physical plan
   bool lock_;
+  uint8_t plan_stat_init_state_; // initialization of the record stored in a physical plan
 };
 
 

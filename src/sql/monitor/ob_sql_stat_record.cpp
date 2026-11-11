@@ -382,6 +382,20 @@ int ObExecutedSqlStatRecord::sum_to_global_and_refresh_avg_elapsed_time(ObSqlSta
   return ret == OB_SUCCESS && tmp_ret != OB_SUCCESS ? tmp_ret : ret;
 }
 
+int ObExecutedSqlStatRecord::try_init_plan_stat_info(
+    const ObSqlStatRecordKey &key, const ObSQLSessionInfo &session_info,
+    const ObString &sql, const ObPhysicalPlan *plan)
+{
+  int ret = OB_SUCCESS;
+  if (!is_plan_stat_info_inited()
+      && ATOMIC_BCAS_AR(&plan_stat_init_state_, PLAN_STAT_UNINITIALIZED, PLAN_STAT_INITIALIZING)) {
+    ret = sql_stat_info_.init(key, session_info, sql, plan);
+    ATOMIC_STORE_REL(&plan_stat_init_state_,
+        OB_SUCCESS == ret ? PLAN_STAT_INITIALIZED : PLAN_STAT_UNINITIALIZED);
+  }
+  return ret;
+}
+
 int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
   ObSQLSessionInfo &session_info,
   ObString &cur_sql,
@@ -404,15 +418,15 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql_stat_value is NULL", KR(ret));
     } else {
-      if (!sql_stat_value->get_key().is_valid()) {
-        if (OB_FAIL(sql_stat_value->get_sql_stat_info().init(key, session_info, cur_sql, plan))) {
-          LOG_WARN("failed to init sql stat info", K(ret));
-        }
+      if (OB_FAIL(sql_stat_value->try_init_plan_stat_info(key, session_info, cur_sql, plan))) {
+        LOG_WARN("failed to init sql stat info", K(ret));
       }
       if (OB_FAIL(ret)) {
         //do nothing
       } else if (OB_FAIL(sql_stat_value->sum_stat_value(*this))) {
         LOG_WARN("sql_stat_value sum value failed", KR(ret));
+      } else if (!sql_stat_value->is_plan_stat_info_inited()) {
+        // Keep accumulated values until the initializing thread publishes the metadata.
       } else if (sql_stat_value->get_executions_total() == 1) {
         if (OB_FAIL(sql_stat_value->set_avg_elapsed_time(key, session_info, cur_sql, plan))) {
           LOG_WARN("failed to set avg elapsed time", K(ret), K(key));
@@ -468,8 +482,10 @@ int ObExecutedSqlStatRecord::move_to_sqlstat_cache(ObSqlStatRecordKey &key, bool
   int ret = OB_SUCCESS;
   bool is_create = false;
   ObExecutedSqlStatRecord *executed_record = nullptr;
-  ObSqlStatManager *sql_stat_manager = MTL(ObSqlStatManager *);
-  if (OB_ISNULL(sql_stat_manager)) {
+  ObSqlStatManager *sql_stat_manager = nullptr;
+  if (!is_plan_stat_info_inited()) {
+    // The plan's key and metadata must be published before accessing the cache.
+  } else if (OB_ISNULL(sql_stat_manager = MTL(ObSqlStatManager *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_stat_manager is NULL", KR(ret));
   //need_lock will be set true only when select from __all_virtual_sql_stat, so need_lock is used as for_select flag
@@ -612,6 +628,7 @@ int ObExecutedSqlStatRecord::sub_stat_value(ObExecutedSqlStatRecord& executed_re
 int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
 {
   int ret = OB_SUCCESS;
+  const bool plan_stat_info_inited = other.is_plan_stat_info_inited();
   if (OB_FAIL(sql_stat_info_.assign(other.get_sql_stat_info()))){
     LOG_WARN("failed to assign sql stat info", K(ret));
   } else {
@@ -647,6 +664,8 @@ int ObExecutedSqlStatRecord::assign(const ObExecutedSqlStatRecord& other)
     DEF_ASSIGN_FUNC(full_table_scan);
     DEF_ASSIGN_FUNC(error_count);
 #undef DEF_ASSIGN_FUNC
+    ATOMIC_STORE_REL(&plan_stat_init_state_,
+        plan_stat_info_inited ? PLAN_STAT_INITIALIZED : PLAN_STAT_UNINITIALIZED);
   }
   return ret;
 }
@@ -688,6 +707,7 @@ int ObExecutedSqlStatRecord::reset()
     DEF_RESET_FUNC(error_count);
 #undef DEF_RESET_FUNC
 
+  ATOMIC_STORE_REL(&plan_stat_init_state_, PLAN_STAT_UNINITIALIZED);
   return ret;
 }
 
