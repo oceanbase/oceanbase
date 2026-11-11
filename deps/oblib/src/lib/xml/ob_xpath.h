@@ -735,6 +735,7 @@ public:
     ObPathNode(ctx, parser_type, ObPathNodeClass::PN_LOCATION_FILTER),
     ans_(NOT_FILTERED), left_(nullptr), right_(nullptr),
     stage_positions_(&ctx->page_allocator_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+    buf_(&ctx->page_allocator_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
     group_starts_(&ctx->page_allocator_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
   virtual ~ObPathFilterOpNode() {}
   virtual int node_to_string(ObStringBuffer& str);
@@ -763,7 +764,7 @@ public:
   int size_ = -1;               // context size (node-set count), -1 = not computed
   int64_t current_context_id_ = -1; // input context of the filtered location step
   ObPositionGroupVector stage_positions_; // proximity position for each predicate stage
-  ObSeekVector buf_;            // materialized left node-set (only used when need_size_)
+  common::ObVector<ObSeekResult, ModulePageAllocator> buf_; // materialized left node-set (only used when need_size_)
   ObPositionGroupVector group_starts_; // starts of step-local groups plus an end sentinel
   int64_t group_idx_ = 0;       // current group in group_starts_
   int emit_idx_ = -1;           // emit cursor into buf_; -1 = buffer not yet built
