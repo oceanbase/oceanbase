@@ -400,6 +400,11 @@ int ObVirtualTableIterator::get_next_unfiltered_row(common::ObNewRow *&cur_row)
     fill_column_ids_ = &scan_param_->vt_pd_colums_ids_;
     do {
       scan_param_->op_->clear_evaluated_flag();
+      if (filtered) {
+        // The previous row was discarded. Keep an accepted row alive through
+        // fill_full_columns() and until the caller requests the next row.
+        row_calc_buf_.reuse();
+      }
       if (OB_FAIL(inner_get_next_row(cur_row))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("failed to get next pushdown filter row", K(ret));
