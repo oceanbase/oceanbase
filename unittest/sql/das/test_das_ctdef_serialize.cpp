@@ -340,6 +340,87 @@ TEST_F(TestDASCtDefSerialize, test_scan_ctdef_version_gate_and_expr_ref_context_
   ASSERT_FALSE(serialization::using_v4_encoding());
 }
 
+TEST_F(TestDASCtDefSerialize, test_legacy_v1_accepts_unknown_tail)
+{
+  ClusterVersionGuard version_guard(CLUSTER_VERSION_4_4_2_2);
+  ObArenaAllocator alloc;
+  ObArray<ObExpr> exprs;
+  ExprSerCtxGuard ctx_guard(&exprs);
+  ObDASScanCtDef src(alloc);
+  src.ref_table_id_ = 500126;
+  src.schema_version_ = 5679;
+  src.is_get_ = true;
+  src.cache_aware_row_num_ = 7;
+  ASSERT_EQ(OB_SUCCESS, src.access_column_ids_.init(1));
+  ASSERT_EQ(OB_SUCCESS, src.access_column_ids_.push_back(16));
+
+  char buf[64 * 1024];
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, src.serialize(buf, sizeof(buf), pos));
+  ASSERT_EQ(src.get_serialize_size(), pos);
+  const int64_t original_end = pos;
+  int64_t header_pos = 0;
+  int64_t version = 0;
+  int64_t body_len = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi64(buf, original_end, header_pos, &version));
+  ASSERT_EQ(1, version);
+  const int64_t length_pos = header_pos;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode_vi64(buf, original_end, header_pos, &body_len));
+  ASSERT_EQ(original_end, header_pos + body_len);
+
+  ObDASScanCtDef unchanged_dst(alloc);
+  int64_t unchanged_pos = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            das_compact::deserialize_scan_ctdef(unchanged_dst, buf, original_end, unchanged_pos, nullptr));
+  ASSERT_EQ(original_end, unchanged_pos);
+
+  // Model a future V1 sender appending a field inside the declared body.
+  const bool appended_field = true;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(buf, sizeof(buf), pos, appended_field));
+  const int64_t extended_end = pos;
+  int64_t length_write_pos = length_pos;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode_fixed_bytes_i64(buf, sizeof(buf), length_write_pos,
+                                                              body_len + extended_end - original_end));
+  ASSERT_EQ(header_pos, length_write_pos);
+
+  // A separate value after the object must remain readable by both callers.
+  const int64_t sentinel = 1234567;
+  ASSERT_EQ(OB_SUCCESS, serialization::encode(buf, sizeof(buf), pos, sentinel));
+  const int64_t data_len = pos;
+
+  ObDASScanCtDef standard_dst(alloc);
+  int64_t standard_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, standard_dst.deserialize(buf, data_len, standard_pos));
+  ASSERT_EQ(extended_end, standard_pos);
+  ASSERT_EQ(src.ref_table_id_, standard_dst.ref_table_id_);
+  ASSERT_EQ(src.schema_version_, standard_dst.schema_version_);
+  ASSERT_EQ(src.is_get_, standard_dst.is_get_);
+  ASSERT_EQ(src.cache_aware_row_num_, standard_dst.cache_aware_row_num_);
+  ASSERT_EQ(1, standard_dst.access_column_ids_.count());
+  ASSERT_EQ(16, standard_dst.access_column_ids_.at(0));
+  int64_t standard_sentinel = 0;
+  ASSERT_EQ(OB_SUCCESS, serialization::decode(buf, data_len, standard_pos, standard_sentinel));
+  ASSERT_EQ(sentinel, standard_sentinel);
+  ASSERT_EQ(data_len, standard_pos);
+
+  ObDASScanCtDef dispatched_dst(alloc);
+  int64_t dispatched_pos = 0;
+  const int ret = das_compact::deserialize_scan_ctdef(dispatched_dst, buf, data_len, dispatched_pos, nullptr);
+  EXPECT_EQ(extended_end, dispatched_pos);
+  EXPECT_EQ(src.ref_table_id_, dispatched_dst.ref_table_id_);
+  EXPECT_EQ(src.schema_version_, dispatched_dst.schema_version_);
+  EXPECT_EQ(src.is_get_, dispatched_dst.is_get_);
+  EXPECT_EQ(src.cache_aware_row_num_, dispatched_dst.cache_aware_row_num_);
+  ASSERT_EQ(1, dispatched_dst.access_column_ids_.count());
+  EXPECT_EQ(16, dispatched_dst.access_column_ids_.at(0));
+  int64_t dispatched_sentinel = 0;
+  EXPECT_EQ(OB_SUCCESS, serialization::decode(buf, data_len, dispatched_pos, dispatched_sentinel));
+  EXPECT_EQ(sentinel, dispatched_sentinel);
+  EXPECT_EQ(data_len, dispatched_pos);
+  EXPECT_EQ(OB_SUCCESS, ret) << "Legacy V1 must accept an unknown tail: original_end=" << original_end
+                            << ", extended_end=" << extended_end;
+}
+
 TEST_F(TestDASCtDefSerialize, test_expr_ref_varint_size_is_compact_only)
 {
   ObArenaAllocator alloc;

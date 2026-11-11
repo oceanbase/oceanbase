@@ -5387,23 +5387,6 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
         int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
         if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_id))) {
           LOG_ERROR("fail to serialize sys var id", K(buf_len), K(pos), K(sys_var_id), K(ret));
-        } else if (compact_session_serialize) {
-          const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
-          if (OB_FAIL(serialization::encode(buf, buf_len, pos, payload_len))) {
-            LOG_ERROR("fail to serialize compact sys var payload length",
-                      K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
-          } else {
-            const int64_t payload_start = pos;
-            if (OB_FAIL(sys_vars_[sys_var_idx]->serialize_(buf, buf_len, pos))) {
-              LOG_ERROR("fail to serialize compact sys var payload",
-                        K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
-            } else if (OB_UNLIKELY(pos - payload_start != payload_len)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_ERROR("compact sys var payload size mismatch",
-                        K(ret), K(i), K(sys_var_id), K(payload_len),
-                        "actual_len", pos - payload_start);
-            }
-          }
         } else if (OB_FAIL(sys_vars_[sys_var_idx]->serialize(buf, buf_len, pos))) {
           LOG_ERROR("fail to serialize sys var", K(buf_len), K(pos), K(i), K(sys_var_idx),
                     K(*sys_vars_[sys_var_idx]), K(ret));
@@ -5677,23 +5660,6 @@ int ObBasicSessionInfo::das_serialize_basic_block_payload_(char *buf,
           int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
           if (OB_FAIL(serialization::encode(buf, buf_len, pos, sys_var_id))) {
             LOG_ERROR("fail to serialize sys var id", K(sys_var_id), K(ret));
-          } else if (compact_session_serialize) {
-            const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
-            if (OB_FAIL(serialization::encode(buf, buf_len, pos, payload_len))) {
-              LOG_ERROR("fail to serialize compact sys var payload length",
-                        K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
-            } else {
-              const int64_t payload_start = pos;
-              if (OB_FAIL(sys_vars_[sys_var_idx]->serialize_(buf, buf_len, pos))) {
-                LOG_ERROR("fail to serialize compact sys var payload",
-                          K(ret), K(i), K(sys_var_id), K(payload_len), K(buf_len), K(pos));
-              } else if (OB_UNLIKELY(pos - payload_start != payload_len)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_ERROR("compact sys var payload size mismatch",
-                          K(ret), K(i), K(sys_var_id), K(payload_len),
-                          "actual_len", pos - payload_start);
-              }
-            }
           } else if (OB_FAIL(sys_vars_[sys_var_idx]->serialize(buf, buf_len, pos))) {
             LOG_ERROR("fail to serialize sys var", K(sys_var_idx), K(ret));
           }
@@ -5920,41 +5886,24 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
           ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
           int16_t tmp_sys_var_id = -1;
           int64_t store_idx = -1;
-          int64_t sys_var_len = -1;
-          int64_t sys_var_end = -1;
           if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
             LOG_WARN("fail to deserialize sys var id", K(ret));
           } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
-          } else if (compact_session_serialize
-                     && OB_FAIL(serialization::decode(buf, data_len, pos, sys_var_len))) {
-            LOG_WARN("fail to deserialize compact sys var payload length",
-                     K(ret), K(i), K(sys_var_id), K(data_len), K(pos));
-          } else if (compact_session_serialize
-                     && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
-            ret = OB_DESERIALIZE_ERROR;
-            LOG_WARN("invalid compact sys var payload length",
-                     K(ret), K(i), K(sys_var_id), K(sys_var_len), K(data_len), K(pos));
-          } else if (compact_session_serialize && FALSE_IT(sys_var_end = pos + sys_var_len)) {
           } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
             if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
               ret = OB_SUCCESS;
-              if (compact_session_serialize) {
-                pos = sys_var_end;
-                LOG_WARN("invalid compact sys var id, maybe version different, skip",
-                         K(sys_var_id), K(sys_var_len));
-              } else {
-                int64_t sys_var_version = 0;
-                OB_UNIS_DECODE(sys_var_version);
-                OB_UNIS_DECODE(sys_var_len);
-                if (OB_SUCC(ret) && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
-                  ret = OB_DESERIALIZE_ERROR;
-                  LOG_WARN("invalid serialized sys var length",
-                           K(ret), K(sys_var_id), K(sys_var_version), K(sys_var_len),
-                           K(data_len), K(pos));
-                } else if (OB_SUCC(ret)) {
-                  pos += sys_var_len;
-                  LOG_WARN("invalid sys var id, maybe version different, skip", K(sys_var_id));
-                }
+              int64_t sys_var_version = 0;
+              int64_t sys_var_len = -1;
+              OB_UNIS_DECODE(sys_var_version);
+              OB_UNIS_DECODE(sys_var_len);
+              if (OB_SUCC(ret) && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
+                ret = OB_DESERIALIZE_ERROR;
+                LOG_WARN("invalid serialized sys var length",
+                         K(ret), K(sys_var_id), K(sys_var_version), K(sys_var_len),
+                         K(data_len), K(pos));
+              } else if (OB_SUCC(ret)) {
+                pos += sys_var_len;
+                LOG_WARN("invalid sys var id, maybe version different, skip", K(sys_var_id));
               }
             } else {
               LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
@@ -5966,26 +5915,13 @@ int ObBasicSessionInfo::das_deserialize_basic_block_payload_(const char *buf,
           } else if (OB_ISNULL(sys_var)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("create sys var is NULL", K(ret));
-          } else {
-            if (compact_session_serialize) {
-              if (OB_FAIL(sys_var->deserialize_(buf, sys_var_end, pos))) {
-                LOG_WARN("fail to deserialize compact sys var payload",
-                         K(ret), K(data_len), K(pos), K(sys_var_id), K(sys_var_len));
-              } else if (OB_UNLIKELY(pos != sys_var_end)) {
-                ret = OB_DESERIALIZE_ERROR;
-                LOG_WARN("compact sys var payload length mismatch",
-                         K(ret), K(sys_var_id), K(sys_var_len), K(pos), K(sys_var_end));
-              }
-            } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
-              LOG_WARN("fail to deserialize sys var", K(sys_var_id), K(ret));
-            }
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
-              LOG_WARN("fail to update system variable", K(sys_var_id), K(ret));
-            } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
-                                                        check_timezone_valid, false))) {
-              LOG_WARN("process system variable error", K(ret), K(*sys_var));
-            }
+          } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
+            LOG_WARN("fail to deserialize sys var", K(sys_var_id), K(ret));
+          } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+            LOG_WARN("fail to update system variable", K(sys_var_id), K(ret));
+          } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
+                                                     check_timezone_valid, false))) {
+            LOG_WARN("process system variable error", K(ret), K(*sys_var));
           }
         }
       }
@@ -6358,41 +6294,24 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
           ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
           int16_t tmp_sys_var_id = -1;
           int64_t store_idx = -1;
-          int64_t sys_var_len = -1;
-          int64_t sys_var_end = -1;
           if (OB_FAIL(serialization::decode(buf, data_len, pos, tmp_sys_var_id))) {
             LOG_WARN("fail to deserialize sys var id", K(data_len), K(pos), K(ret));
           } else if (FALSE_IT(sys_var_id = static_cast<ObSysVarClassType>(tmp_sys_var_id))) {
-          } else if (compact_session_serialize
-                     && OB_FAIL(serialization::decode(buf, data_len, pos, sys_var_len))) {
-            LOG_WARN("fail to deserialize compact sys var payload length",
-                     K(ret), K(i), K(sys_var_id), K(data_len), K(pos));
-          } else if (compact_session_serialize
-                     && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
-            ret = OB_DESERIALIZE_ERROR;
-            LOG_WARN("invalid compact sys var payload length",
-                     K(ret), K(i), K(sys_var_id), K(sys_var_len), K(data_len), K(pos));
-          } else if (compact_session_serialize && FALSE_IT(sys_var_end = pos + sys_var_len)) {
           } else if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(sys_var_id, store_idx))) {
             if (OB_SYS_VARS_MAYBE_DIFF_VERSION == ret) {
               // 可能是版本不同，为了兼容，跳过这段数据，并继续循环
               ret = OB_SUCCESS;
-              if (compact_session_serialize) {
-                pos = sys_var_end;
-                LOG_WARN("invalid compact sys var id, maybe version is different, skip it",
-                         K(sys_var_id), K(sys_var_len));
-              } else {
-                int64_t sys_var_version = 0;
-                OB_UNIS_DECODE(sys_var_version);
-                OB_UNIS_DECODE(sys_var_len);
-                if (OB_SUCC(ret) && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
-                  ret = OB_DESERIALIZE_ERROR;
-                  LOG_WARN("invalid serialized sys var length",
-                           K(ret), K(sys_var_id), K(sys_var_version), K(sys_var_len), K(data_len), K(pos));
-                } else if (OB_SUCC(ret)) {
-                  pos += sys_var_len; // 跳过这段数据
-                  LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
-                }
+              int64_t sys_var_version = 0;
+              int64_t sys_var_len = -1;
+              OB_UNIS_DECODE(sys_var_version);
+              OB_UNIS_DECODE(sys_var_len);
+              if (OB_SUCC(ret) && OB_UNLIKELY(sys_var_len < 0 || sys_var_len > data_len - pos)) {
+                ret = OB_DESERIALIZE_ERROR;
+                LOG_WARN("invalid serialized sys var length",
+                         K(ret), K(sys_var_id), K(sys_var_version), K(sys_var_len), K(data_len), K(pos));
+              } else if (OB_SUCC(ret)) {
+                pos += sys_var_len; // 跳过这段数据
+                LOG_WARN("invalid sys var id, maybe version is different, skip it", K(sys_var_id));
               }
             } else {
               LOG_ERROR("invalid sys var id", K(sys_var_id), K(ret));
@@ -6404,28 +6323,14 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
           } else if (OB_ISNULL(sys_var)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("create sys var is NULL", K(ret));
-          } else {
-            if (compact_session_serialize) {
-              if (OB_FAIL(sys_var->deserialize_(buf, sys_var_end, pos))) {
-                LOG_WARN("fail to deserialize compact sys var payload",
-                         K(ret), K(data_len), K(pos), K(sys_var_id), K(sys_var_len));
-              } else if (OB_UNLIKELY(pos != sys_var_end)) {
-                ret = OB_DESERIALIZE_ERROR;
-                LOG_WARN("compact sys var payload length mismatch",
-                         K(ret), K(sys_var_id), K(sys_var_len), K(pos), K(sys_var_end));
-              }
-            } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
-              LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
-            }
-            if (OB_SUCC(ret)
-                && OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
-              LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
-            } else if (OB_SUCC(ret)
-                       && OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
-                                                           check_timezone_valid,
-                                                           false /*is_update_sys_var*/))) {
-              LOG_WARN("process system variable error",  K(ret), K(*sys_var));
-            }
+          } else if (OB_FAIL(sys_var->deserialize(buf, data_len, pos))) {
+            LOG_WARN("fail to deserialize sys var", K(data_len), K(pos), K(sys_var_id), K(ret));
+          } else if (OB_FAIL(deep_copy_sys_variable(*sys_var, sys_var_id, sys_var->get_value()))) {
+            LOG_WARN("fail to update system variable", K(sys_var_id), K(sys_var->get_value()), K(ret));
+          } else if (OB_FAIL(process_session_variable(sys_var_id, sys_var->get_value(),
+                                                     check_timezone_valid,
+                                                     false /*is_update_sys_var*/))) {
+            LOG_WARN("process system variable error",  K(ret), K(*sys_var));
           }
         }
       }
@@ -7188,13 +7093,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
       } else {
         int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
         len += serialization::encoded_length(sys_var_id);
-        if (compact_session_serialize) {
-          const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
-          len += serialization::encoded_length(payload_len);
-          len += payload_len;
-        } else {
-          len += sys_vars_[sys_var_idx]->get_serialize_size();
-        }
+        len += sys_vars_[sys_var_idx]->get_serialize_size();
       }
     }
   }
@@ -7394,13 +7293,7 @@ int ObBasicSessionInfo::das_get_basic_block_payload_size_(int64_t &len, const bo
         } else {
           int16_t sys_var_id = static_cast<int16_t>(sys_vars_[sys_var_idx]->get_type());
           len += serialization::encoded_length(sys_var_id);
-          if (compact_session_serialize) {
-            const int64_t payload_len = sys_vars_[sys_var_idx]->get_serialize_size_();
-            len += serialization::encoded_length(payload_len);
-            len += payload_len;
-          } else {
-            len += sys_vars_[sys_var_idx]->get_serialize_size();
-          }
+          len += sys_vars_[sys_var_idx]->get_serialize_size();
         }
       }
     }

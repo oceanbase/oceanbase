@@ -53,9 +53,8 @@ struct UnisOriginalRecord<sql::ObDASScanCtDef>
   {
     UNUSED(version);
     CompactExprPtrGuard legacy_guard(false);
-    int ret = ctdef.deserialize_(buf, data_len, pos);
-    if (OB_SUCC(ret) && pos != data_len) { ret = OB_DESERIALIZE_ERROR; }
-    return ret;
+    // The enclosing record uses its declared length to skip unknown V1 tail fields.
+    return ctdef.deserialize_(buf, data_len, pos);
   }
 };
 
