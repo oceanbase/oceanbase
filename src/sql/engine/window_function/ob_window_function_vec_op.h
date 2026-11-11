@@ -270,7 +270,7 @@ public:
   }
   virtual void destroy() override;
 public:
-  int get_part_end_idx() { return input_stores_.cur_->count(); }
+  int64_t get_part_end_idx() { return input_stores_.cur_->count(); }
   const RowMeta &get_input_row_meta() const { return input_row_meta_; }
   inline ObExprPtrIArray &get_all_expr()
   {

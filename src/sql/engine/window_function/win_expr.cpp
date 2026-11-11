@@ -1391,8 +1391,7 @@ int calc_borders_for_current_row(winfunc::WinExprEvalCtx &ctx, const int64_t row
     // we should jump to detect step by step(for case that the sort columns has very small ndv)
 
     // Exponential detection
-    int32_t step = 1;
-    int pos = row_start, prev_row_pos = -1;
+    int64_t prev_row_pos = -1;
     ObSortCollations &sort_collations = wf_info.sort_collations_;
     ObSortFuncs &sort_cmp_funcs = wf_info.sort_cmp_funcs_;
     ObExprPtrIArray &all_exprs = ctx.win_col_.op_.get_all_expr();
@@ -1420,8 +1419,8 @@ int calc_borders_for_current_row(winfunc::WinExprEvalCtx &ctx, const int64_t row
       if (OB_FAIL(ret)) {
       } else {
         const ObCompactRow *a_row = nullptr;
-        int32_t step = 1;
-        int32_t pos = cur_idx + row_start;
+        int64_t step = 1;
+        int64_t pos = cur_idx + row_start;
         ObSEArray<__data_tuple, 16> cur_row_tuple;
         int skip_start = ctx.use_tiny_partition_opt() ? ctx.partition_start_index_in_expr_ : 0;
         for (int i = 0; OB_SUCC(ret) && i < sort_collations.count(); i++) {
@@ -2259,7 +2258,7 @@ int _calc_borders_for_sort_expr(WinExprEvalCtx &ctx, const int64_t batch_size,
       if (is_preceding ^ is_upper) {
         cmp_mode = cmp_mode << 1; // why???
       }
-      int step = (cmp_mode & ROLL) ? 1 : 0;
+      int64_t step = (cmp_mode & ROLL) ? 1 : 0;
       int cmp_times = 0;
       r_isnull = bound_data->is_null(i + expr_start);
       bound_data->get_payload(i + expr_start, r_ptr, r_len);

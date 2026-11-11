@@ -2925,7 +2925,7 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
 
       // Exponential detection
       pos = row_idx;
-      int step = 1;
+      int64_t step = 1;
       ObSortCollations &sort_collations = wf_cell.wf_info_.sort_collations_;
       ObSortFuncs &sort_cmp_funcs = wf_cell.wf_info_.sort_cmp_funcs_;
       const ObRADatumStore::StoredRow *a_row = NULL;
@@ -3072,7 +3072,7 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
       }
       pos = row_idx;
       bool re_direction = false;
-      int step = cmp_mode & ROLL ? 1 : 0;
+      int64_t step = cmp_mode & ROLL ? 1 : 0;
       int64_t cmp_times = 0;
       ObDatum *cmp_val = NULL;
 
@@ -3348,7 +3348,7 @@ int ObWindowFunctionOp::compute_wf_values(const WinFuncCell *end, int64_t &check
     RowsReader row_reader(*input_rows_.cur_);
     if (wf == wf_list_.get_last()) {
       // record the last computed partition row count
-      const int v = input_rows_.cur_->count() - wf->part_first_row_idx_;
+      const int64_t v = input_rows_.cur_->count() - wf->part_first_row_idx_;
       if (v > 0) {
         last_computed_part_rows_ = v;
       }
