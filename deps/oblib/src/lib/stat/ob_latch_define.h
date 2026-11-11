@@ -1008,7 +1008,8 @@ LATCH_DEF(VECTOR_BOUNDED_OVERLAY_LOCK, 976, "vector bounded overlay lock", LATCH
 LATCH_DEF(ID_SERVICE_LS_CACHE_LOCK, 977, "ID service LS cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_TENANT_MAJOR_COPY_MGR_LOCK, 978, "tenant major copy mgr lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_HA_SRC_TABLET_HOLDER_LOCK, 979, "ob ha src tablet holder lock", LATCH_READ_PREFER, 2000, 0, true)
-LATCH_DEF(LATCH_END, 980, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_MODIFY_COLUMN_LENGTH_TASK_LOCK, 980, "ob modify column length task lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(LATCH_END, 981, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

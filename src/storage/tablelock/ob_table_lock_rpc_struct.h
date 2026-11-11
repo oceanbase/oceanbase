@@ -61,6 +61,7 @@ enum ObTableLockTaskType
   LOCK_TABLE_SCHEMA = 26,
   UNLOCK_TABLE_SCHEMA = 27,
   REPLACE_LOCK_TABLE_SCHEMA = 28,
+  LOCK_TABLES = 29,
   MAX_TASK_TYPE,
 };
 
@@ -189,6 +190,7 @@ public:
     LOCK_TABLE_SCHEMA_REQ =   13,
     UNLOCK_TABLE_SCHEMA_REQ = 14,
     BATCH_LOCK_ALONE_TABLET_REQ = 15,
+    LOCK_TABLES_REQ =         16,
   };
 
 public:
