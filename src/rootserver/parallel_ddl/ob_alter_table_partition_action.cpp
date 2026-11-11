@@ -199,6 +199,25 @@ int ObAlterTablePartitionAction::operate_schemas()
   return ret;
 }
 
+int ObAlterTablePartitionAction::handle_tablets_()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<const ObTableSchema *, 4> inc_table_schema_ptrs;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(get_ddl_service()->handle_tablets_for_alter_partitions(
+      get_arg(),
+      inc_table_schemas_,
+      del_table_schemas_,
+      new_table_schemas_,
+      get_schema_guard_wrapper(),
+      get_trans(),
+      inc_table_schema_ptrs))) {
+    LOG_WARN("fail to handle tablets for alter partitions", KR(ret));
+  }
+  return ret;
+}
+
 int ObAlterTablePartitionAction::pre_decide_global_index_op_types_()
 {
   int ret = OB_SUCCESS;
@@ -241,7 +260,7 @@ int ObAlterTablePartitionAction::calc_global_index_schema_version_cnt_(int64_t &
       case ObDDLService::DROP_AND_CREATE_INDEX:
         // update_index_status(1v + 1v update_data_table_schema_version)
         // + create_table(1v + 1v update_data_table_schema_version)
-        // + rename_dropping_index_name in before_commit(1v + 1v update_data_table_schema_version) = 6v
+        // + rename_dropping_index_name(1v + 1v update_data_table_schema_version) = 6v
         cnt += 6;
         break;
       case ObDDLService::MAX_OP_TYPE:

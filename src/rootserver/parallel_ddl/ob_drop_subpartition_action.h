@@ -21,7 +21,7 @@ public:
   virtual ~ObDropSubpartitionAction() {}
   virtual int init() override;
   virtual int calc_schema_version_cnt() override;
-  virtual int before_commit() override;
+  virtual int operate_schemas() override;
   virtual const char *get_action_name() const override { return "drop_subpartition"; }
 
 private:

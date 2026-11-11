@@ -2005,7 +2005,7 @@ static int drop_sequence_schema_for_drop_column(
     ret = OB_ERR_SYS;
     LOG_ERROR("schema_service must not null", KR(ret));
   } else {
-    ObArray<const ObObjPriv *> obj_privs;
+    ObSEArray<const ObObjPriv *, 4> obj_privs;
     if (OB_FAIL(schema_guard.get_obj_priv_with_obj_id(tenant_id,
                                                       sequence_schema.get_sequence_id(),
                                                       static_cast<uint64_t>(ObObjectType::SEQUENCE),
@@ -2023,7 +2023,7 @@ static int drop_sequence_schema_for_drop_column(
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(schema_service_impl)) {
-    ObArray<const ObSAuditSchema *> audits;
+    ObSEArray<const ObSAuditSchema *, 4> audits;
     if (OB_FAIL(schema_guard.get_audit_schema_in_owner(tenant_id,
                                                        AUDIT_SEQUENCE,
                                                        sequence_schema.get_sequence_id(),

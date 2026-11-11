@@ -964,16 +964,18 @@ int ObDDLHelper::obj_lock_obj_id(
 }
 
 int ObDDLHelper::check_dep_objs_consistent(
-    ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
-    ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &r)
+    ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
+    ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &r)
 {
   int ret = OB_SUCCESS;
   if (l.count() != r.count()) {
     ret = OB_ERR_PARALLEL_DDL_CONFLICT;
     LOG_WARN("dep objs count not consistent", KR(ret), K(l.count()), K(r.count()));
   } else {
-    lib::ob_sort(l.begin(), l.end(), dep_compare_func_);
-    lib::ob_sort(r.begin(), r.end(), dep_compare_func_);
+    if (l.count() > 1) {
+      lib::ob_sort(l.get_data(), l.get_data() + l.count(), dep_compare_func_);
+      lib::ob_sort(r.get_data(), r.get_data() + r.count(), dep_compare_func_);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < l.count(); i++) {
       if (l.at(i).first != r.at(i).first) {
         ret = OB_ERR_PARALLEL_DDL_CONFLICT;

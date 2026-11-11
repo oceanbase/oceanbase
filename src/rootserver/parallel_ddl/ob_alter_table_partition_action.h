@@ -19,6 +19,7 @@ class ObAlterTablePartitionAction : public ObIAlterTableAction
 public:
   explicit ObAlterTablePartitionAction(ObAlterTableHelper &helper)
     : ObIAlterTableAction(helper),
+      new_table_schema_(),
       orig_table_schemas_(),
       new_table_schemas_(),
       inc_table_schemas_(),
@@ -38,6 +39,7 @@ public:
   virtual int clean_on_fail() override { return OB_SUCCESS; }
 
 protected:
+  int handle_tablets_();
   int generate_tables_array_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::ObTableSchema &new_table_schema,
@@ -47,12 +49,12 @@ protected:
 
 protected:
   share::schema::ObTableSchema new_table_schema_;
-  common::ObArray<const share::schema::ObTableSchema*> orig_table_schemas_;
-  common::ObArray<share::schema::ObTableSchema*> new_table_schemas_;
+  common::ObSEArray<const share::schema::ObTableSchema*, 4> orig_table_schemas_;
+  common::ObSEArray<share::schema::ObTableSchema*, 4> new_table_schemas_;
   common::ObArray<share::schema::AlterTableSchema*> inc_table_schemas_;
   common::ObArray<share::schema::AlterTableSchema*> del_table_schemas_;
-  common::ObArray<share::schema::ObTableSchema*> upd_table_schemas_;
-  common::ObArray<ObDDLService::UpdateGlobalIndexOpType> global_index_op_types_;
+  common::ObSEArray<share::schema::ObTableSchema*, 4> upd_table_schemas_;
+  common::ObSEArray<ObDDLService::UpdateGlobalIndexOpType, 4> global_index_op_types_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterTablePartitionAction);

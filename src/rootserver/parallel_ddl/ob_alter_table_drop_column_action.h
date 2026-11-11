@@ -63,7 +63,7 @@ private:
   int register_table_audit_locks_(const share::schema::ObTableSchema &table_schema);
   int register_sensitive_rule_locks_(const share::schema::ObTableSchema &table_schema);
   int register_dep_view_locks_(const share::schema::ObTableSchema &table_schema);
-  // check() sub-steps (formerly in generate_schemas)
+  // check_legitimacy() sub-steps
   int check_can_drop_column_();
   int check_dep_objs_consistency_();
   int collect_drop_column_related_infos_();
@@ -76,7 +76,6 @@ private:
   // Runs after collect_drop_column_related_infos_() since it depends on
   // new_tbl_visible_cols_cnt_after_alter_ and last_drop_column_id_ populated there.
   int check_can_drop_columns_();
-  int check_drop_column_with_index_in_mysql_mode_();
   int check_drop_column_constraints_and_fk_();
   int check_fk_related_table_ddl_(const share::schema::ObTableSchema &data_table_schema,
                                   const share::ObDDLType &ddl_type);
@@ -89,19 +88,19 @@ private:
   int calc_dep_obj_schema_version_cnt_();
 
 private:
-  common::ObArray<uint64_t> drop_cols_id_arr_;
+  common::ObSEArray<uint64_t, 4> drop_cols_id_arr_;
   int64_t new_tbl_visible_cols_cnt_after_alter_;
   int64_t last_drop_column_id_;
   common::hash::ObHashSet<share::schema::ObColumnNameHashWrapper> update_column_name_set_;
-  common::ObArray<uint64_t> affected_index_ids_; // index IDs that contain at least one dropped column
+  common::ObSEArray<uint64_t, 4> affected_index_ids_; // index IDs that contain at least one dropped column
   int64_t drop_index_schema_version_cnt_;        // 2 per affected index (rename + update_data_table_schema_version)
   int64_t aux_column_update_schema_version_cnt_; // 2 per (dropped_col, aux_table) hit
   int64_t sensitive_rule_schema_version_cnt_;     // per sensitive rule on the table
   int64_t drop_constraint_schema_version_cnt_;   // 1 per constraint dropped caused by drop column
   int64_t drop_sequence_schema_version_cnt_;    // per identity column: 1 + obj_priv_count + audit_count
   int64_t rls_schema_version_cnt_;              // RLS policy drop/create/update versions
-  common::ObArray<std::pair<uint64_t, share::schema::ObObjectType>> dep_objs_before_lock_;
-  common::ObArray<std::pair<uint64_t, share::schema::ObObjectType>> dep_objs_;
+  common::ObSEArray<std::pair<uint64_t, share::schema::ObObjectType>, 4> dep_objs_before_lock_;
+  common::ObSEArray<std::pair<uint64_t, share::schema::ObObjectType>, 4> dep_objs_;
   int64_t dep_obj_schema_version_cnt_;          // 1 per non-INVALID VIEW dep obj
 
 private:

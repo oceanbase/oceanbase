@@ -37,7 +37,6 @@ public:
   explicit ObIAlterTableAction(ObAlterTableHelper &helper) : helper_(helper) {}
   virtual ~ObIAlterTableAction() {}
   virtual int init() = 0;
-  virtual int check() { return OB_SUCCESS; }
   // Object lock layer: actions enumerate ids into the helper's maps;
   // the helper itself is responsible for sort / flush.
   virtual int register_ddl_object_locks() { return common::OB_SUCCESS; }
@@ -45,7 +44,6 @@ public:
   // directly (e.g. lock_for_online_drop_column_in_trans) here.
   virtual int lock_table_and_online_ddl() { return common::OB_SUCCESS; }
   virtual int check_legitimacy() { return common::OB_SUCCESS; }
-  virtual int lock_objects() { return common::OB_SUCCESS; }
   virtual int generate_schemas() = 0;
   virtual int calc_schema_version_cnt() = 0;
   virtual int operate_schemas() = 0;
@@ -124,8 +122,8 @@ private:
   virtual int construct_and_adjust_result_(int &return_ret) override;
 
   int resolve_action_types_();
-  int resolve_column_action_type_(common::ObArray<ObAlterTableActionType> &action_types);
-  int resolve_partition_action_type_(common::ObArray<ObAlterTableActionType> &action_types);
+  int resolve_column_action_type_(common::ObIArray<ObAlterTableActionType> &action_types);
+  int resolve_partition_action_type_(common::ObIArray<ObAlterTableActionType> &action_types);
   // Gate parallel DDL by a whitelist of allowed action types AND enforce that a
   // single ALTER stmt maps to exactly one action. This aligns with the serial
   // path constraint in ObDDLService::alter_table_column (ob_ddl_service.cpp),
@@ -144,12 +142,12 @@ private:
 private:
   const obrpc::ObAlterTableArg &arg_;
   obrpc::ObAlterTableRes &res_;
-  common::ObArray<ObIAlterTableAction *> actions_;
-  common::ObArray<ObAlterTableActionType> action_types_;
+  common::ObSEArray<ObIAlterTableAction *, 1> actions_;
+  common::ObSEArray<ObAlterTableActionType, 4> action_types_;
   const share::schema::ObTableSchema *orig_table_schema_;
-  common::ObArray<share::schema::ObBasedSchemaObjectInfo> action_based_schema_object_infos_;
+  common::ObSEArray<share::schema::ObBasedSchemaObjectInfo, 4> action_based_schema_object_infos_;
   share::schema::ObTableSchema new_table_schema_;
-  common::ObArray<ObDDLTaskRecord> ddl_task_records_;
+  common::ObSEArray<ObDDLTaskRecord, 1> ddl_task_records_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAlterTableHelper);

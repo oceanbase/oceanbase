@@ -481,6 +481,7 @@ private:
 
 // On can_parallel_alter==false, `reason` points to a static string naming the
 // field that blocked parallel DDL (forwarded to LOG_WARN by callers).
+bool is_parallel_alter_table_data_version_supported(const uint64_t data_version);
 int check_alter_table_arg_for_parallel(const obrpc::ObAlterTableArg &arg,
                                        bool &can_parallel_alter,
                                        const char *&reason);
@@ -496,13 +497,9 @@ int count_drop_column_lob_columns(const ObTableSchema &table_schema,
                                   int64_t &lob_column_count);
 int check_drop_column_can_parallel(const obrpc::ObAlterTableArg &arg,
                                    const ObTableSchema &orig_table_schema,
-                                   ObSchemaGetterGuard &schema_guard,
+                                   ObSchemaGuardWrapper &schema_guard,
                                    bool &can_parallel_alter,
                                    const char *&reason);
-int check_add_column_can_parallel(const obrpc::ObAlterTableArg &arg,
-                                  const ObTableSchema &orig_table_schema,
-                                  bool &can_parallel_alter,
-                                  const char *&reason);
 class ObTenantDDLCountGuard
 {
 public:

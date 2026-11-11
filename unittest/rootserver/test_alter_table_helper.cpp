@@ -6,11 +6,17 @@
 #define USING_LOG_PREFIX RS
 #include <gtest/gtest.h>
 #include "share/schema/ob_schema_utils.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/ob_rpc_struct.h"
 #include "share/parameter/ob_parameter_macro.h"
+#include "rootserver/parallel_ddl/ob_ddl_helper.h"
+#define private public
 #include "rootserver/parallel_ddl/ob_alter_table_helper.h"
+#undef private
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 namespace oceanbase
 {
@@ -43,7 +49,7 @@ static int add_alter_column_with_name(
     col.set_table_id(0);
     // Ensure the table schema has valid tenant_id for compat mode check
     arg.alter_table_schema_.set_tenant_id(OB_SYS_TENANT_ID);
-    if (OB_FAIL(arg.alter_table_schema_.add_column(col))) {
+    if (OB_FAIL(arg.alter_table_schema_.add_alter_column(col, true/*need_allocate*/))) {
       LOG_WARN("fail to add column", KR(ret));
     }
   }
@@ -78,6 +84,79 @@ static int add_base_column(ObTableSchema &table_schema, const char *col_name)
   return ret;
 }
 
+TEST(TestParallelAlterTableVersion, release_and_upgrade_boundaries)
+{
+  ASSERT_FALSE(is_parallel_alter_table_data_version_supported(MOCK_DATA_VERSION_4_4_2_3));
+  ASSERT_TRUE(is_parallel_alter_table_data_version_supported(MOCK_DATA_VERSION_4_4_2_4));
+  ASSERT_TRUE(is_parallel_alter_table_data_version_supported(DATA_VERSION_4_5_0_0 - 1));
+  ASSERT_FALSE(is_parallel_alter_table_data_version_supported(DATA_VERSION_4_5_0_0));
+  ASSERT_FALSE(is_parallel_alter_table_data_version_supported(DATA_VERSION_5_0_1_0 - 1));
+  ASSERT_TRUE(is_parallel_alter_table_data_version_supported(DATA_VERSION_5_0_1_0));
+  ASSERT_TRUE(is_parallel_alter_table_data_version_supported(DATA_VERSION_5_0_1_0 + 1));
+}
+
+TEST(TestParallelDDLDependencies, consistency_across_array_storage)
+{
+  typedef std::pair<uint64_t, ObObjectType> DepObj;
+  ObArray<DepObj> before;
+  ObSEArray<DepObj, 4> after;
+  ASSERT_EQ(OB_SUCCESS, ObDDLHelper::check_dep_objs_consistent(before, after));
+
+  ASSERT_EQ(OB_SUCCESS, after.push_back(DepObj(100, ObObjectType::VIEW)));
+  ASSERT_EQ(OB_ERR_PARALLEL_DDL_CONFLICT,
+            ObDDLHelper::check_dep_objs_consistent(before, after));
+  ASSERT_EQ(OB_SUCCESS, before.push_back(DepObj(100, ObObjectType::VIEW)));
+  ASSERT_EQ(OB_SUCCESS, ObDDLHelper::check_dep_objs_consistent(before, after));
+
+  // Exercise dependency sorting after the inline array has expanded.
+  before.reset();
+  after.reset();
+  for (uint64_t i = 0; i < 6; ++i) {
+    ASSERT_EQ(OB_SUCCESS, before.push_back(DepObj(100 + i, ObObjectType::VIEW)));
+    ASSERT_EQ(OB_SUCCESS, after.push_back(DepObj(105 - i, ObObjectType::VIEW)));
+  }
+  ASSERT_EQ(OB_SUCCESS, ObDDLHelper::check_dep_objs_consistent(before, after));
+  after.at(0).first = 106;
+  ASSERT_EQ(OB_ERR_PARALLEL_DDL_CONFLICT,
+            ObDDLHelper::check_dep_objs_consistent(before, after));
+  after.at(0).first = 105;
+  after.at(0).second = ObObjectType::TABLE;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ObDDLHelper::check_dep_objs_consistent(before, after));
+}
+
+TEST(TestDropColumnParallelEligibility, mview_and_mlog_base_tables_use_serial_ddl)
+{
+  ObAlterTableArg arg;
+  arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+  arg.data_version_ = DATA_VERSION_4_6_1_0;
+  arg.alter_algorithm_ = ObAlterTableArg::AlterAlgorithm::INSTANT;
+  ASSERT_EQ(OB_SUCCESS, add_alter_column_with_name(arg, OB_DDL_DROP_COLUMN, "c2"));
+  ObTableSchema table_schema;
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c1"));
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c2"));
+  ObSchemaGetterGuard local_guard;
+  ObLatestSchemaGuard latest_guard(nullptr, OB_SYS_TENANT_ID);
+  ObSchemaGuardWrapper sql_wrapper(OB_SYS_TENANT_ID, nullptr);
+  ObSchemaGuardWrapper rs_wrapper(OB_SYS_TENANT_ID, nullptr);
+  ASSERT_EQ(OB_SUCCESS, sql_wrapper.init(local_guard));
+  ASSERT_EQ(OB_SUCCESS, rs_wrapper.init(latest_guard));
+  ObSchemaGuardWrapper *wrappers[] = {&sql_wrapper, &rs_wrapper};
+  // MLOG-only, MVIEW-only, and MVIEW with MLOG use the same SQL/RS gate.
+  for (int64_t scenario = 0; scenario < 3; ++scenario) {
+    table_schema.set_mlog_tid(scenario == 1 ? OB_INVALID_ID : 50001);
+    table_schema.set_table_referenced_by_mv(
+        scenario == 0 ? IS_NOT_REFERENCED_BY_MV : IS_REFERENCED_BY_MV);
+    for (int64_t i = 0; i < 2; ++i) {
+      bool can_parallel = true;
+      const char *reason = nullptr;
+      ASSERT_EQ(OB_SUCCESS, check_drop_column_can_parallel(
+          arg, table_schema, *wrappers[i], can_parallel, reason));
+      ASSERT_FALSE(can_parallel);
+      ASSERT_STREQ("table required by materialized view refresh", reason);
+    }
+  }
+}
+
 // =============================================================================
 // Test check_alter_table_arg_for_parallel
 // =============================================================================
@@ -85,7 +164,13 @@ static int add_base_column(ObTableSchema &table_schema, const char *col_name)
 class TestCheckAlterTableArgForParallel : public ::testing::Test
 {
 public:
-  void SetUp() override {}
+  void SetUp() override
+  {
+    ASSERT_EQ(OB_SUCCESS, omt::ObTenantConfigMgr::get_instance().add_tenant_config(OB_SYS_TENANT_ID));
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+    ASSERT_TRUE(tenant_config.is_valid());
+    ASSERT_TRUE(tenant_config->_parallel_ddl_control.set_value("ADD_COLUMN:ON,DROP_COLUMN:ON"));
+  }
   void TearDown() override {}
 };
 
@@ -98,9 +183,7 @@ TEST_F(TestCheckAlterTableArgForParallel, only_add_column)
   const char *reason = nullptr;
   ASSERT_EQ(OB_SUCCESS, add_alter_column(arg, OB_DDL_ADD_COLUMN));
   ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
-  // Note: can_parallel depends on config flag, but type validation should pass.
-  // With default config (empty string), ADD_COLUMN defaults to OFF for sys tenant.
-  // Here we only verify no error is returned.
+  ASSERT_TRUE(can_parallel);
 }
 
 // Only DROP_COLUMN operations should be supported
@@ -153,8 +236,7 @@ TEST_F(TestCheckAlterTableArgForParallel, mixed_supported_and_unsupported)
   ASSERT_FALSE(can_parallel);
 }
 
-// Empty column list (no column operations) should pass column check
-// but fail partition check (partition always returns false currently)
+// An argument without column or partition operations is not a parallel ALTER.
 TEST_F(TestCheckAlterTableArgForParallel, empty_column_list_no_partition)
 {
   ObAlterTableArg arg;
@@ -163,50 +245,61 @@ TEST_F(TestCheckAlterTableArgForParallel, empty_column_list_no_partition)
   bool can_parallel = false;
   const char *reason = nullptr;
   ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
-  // column check passes vacuously, then partition check returns false
-  // because check_alter_partition_arg_for_parallel_ always returns can_parallel=false
+  ASSERT_FALSE(can_parallel);
 }
 
-// Unsupported partition operations (e.g. DROP_PARTITION) should return can_parallel=false
-TEST_F(TestCheckAlterTableArgForParallel, partition_not_supported)
+TEST_F(TestCheckAlterTableArgForParallel, column_and_partition_operations_rejected)
 {
-  ObAlterTableArg arg;
-  arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
-  arg.alter_part_type_ = ObAlterTableArg::DROP_PARTITION;
-  bool can_parallel = false;
-  const char *reason = nullptr;
-  // Add a supported column op so column check passes
-  ASSERT_EQ(OB_SUCCESS, add_alter_column(arg, OB_DDL_ADD_COLUMN));
-  ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
-  // Even with valid column ops, partition check should make it false
-  // (partition parallel not implemented yet)
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+  ASSERT_TRUE(tenant_config->_parallel_ddl_control.set_value(
+      "ADD_COLUMN:ON,DROP_COLUMN:ON,ADD_PARTITION:ON,DROP_PARTITION:ON,TRUNCATE_PARTITION:ON,"
+      "ADD_SUB_PARTITION:ON,DROP_SUB_PARTITION:ON,TRUNCATE_SUB_PARTITION:ON"));
+  const ObAlterTableArg::AlterPartitionType part_types[] = {
+      ObAlterTableArg::ADD_PARTITION, ObAlterTableArg::DROP_PARTITION,
+      ObAlterTableArg::TRUNCATE_PARTITION, ObAlterTableArg::ADD_SUB_PARTITION,
+      ObAlterTableArg::DROP_SUB_PARTITION, ObAlterTableArg::TRUNCATE_SUB_PARTITION};
+  const ObSchemaOperationType column_types[] = {OB_DDL_ADD_COLUMN, OB_DDL_DROP_COLUMN};
+  for (int64_t i = 0; i < ARRAYSIZEOF(part_types); ++i) {
+    for (int64_t j = 0; j < ARRAYSIZEOF(column_types); ++j) {
+      ObAlterTableArg arg;
+      arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+      arg.alter_part_type_ = part_types[i];
+      bool can_parallel = false;
+      const char *reason = nullptr;
+      ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
+      ASSERT_TRUE(can_parallel);
+      ASSERT_EQ(OB_SUCCESS, add_alter_column(arg, column_types[j]));
+      ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
+      ASSERT_FALSE(can_parallel);
+      ASSERT_STREQ("mixed column and partition operations", reason);
+    }
+  }
 }
 
-// =============================================================================
-// Tripwire: detect new fields added to ObAlterTableArg
-// =============================================================================
-
-// If ObAlterTableArg's serialization layout changes (field added/removed/resized),
-// this test fails. The developer MUST then:
-// 1. Review ObAlterTableArg::has_no_non_column_operation() in ob_rpc_struct.cpp
-// 2. Add whitelist checks for any new non-column fields
-// 3. Update the expected size constant below
+// Measure a valid argument so the serialized fields, rather than an invalid
+// argument sentinel, contribute to the layout baseline. A size change requires
+// reviewing has_no_non_column_operation() and its per-field rejection tests.
 TEST_F(TestCheckAlterTableArgForParallel, serialize_size_tripwire)
 {
   ObAlterTableArg arg;
+  arg.alter_table_schema_.set_tenant_id(OB_SYS_TENANT_ID);
+  ASSERT_EQ(OB_SUCCESS, arg.alter_table_schema_.set_origin_database_name("test_db"));
+  ASSERT_EQ(OB_SUCCESS, arg.alter_table_schema_.set_origin_table_name("test_table"));
+  ASSERT_TRUE(arg.is_valid());
+  arg.tz_info_wrap_.set_tz_info_offset(0);
+
   const int64_t sz = arg.get_serialize_size();
-  ASSERT_GT(sz, 0);
-  // =================================================================
-  // IMPORTANT: If this constant no longer matches, ObAlterTableArg
-  // serialization changed. Review
-  // ObAlterTableArg::has_no_non_column_operation() in ob_rpc_struct.cpp,
-  // add whitelist checks for any new fields, then update this value.
-  // =================================================================
-  const int64_t EXPECTED_SERIALIZE_SIZE = 5;
+  const int64_t EXPECTED_SERIALIZE_SIZE = 869;
   ASSERT_EQ(EXPECTED_SERIALIZE_SIZE, sz)
       << "ObAlterTableArg serialize size changed. "
-         "Review ObAlterTableArg::has_no_non_column_operation() in ob_rpc_struct.cpp "
-         "and update the whitelist, then update this constant.";
+         "Review ObAlterTableArg::has_no_non_column_operation() and its field tests "
+         "before updating this baseline.";
+  ObArenaAllocator allocator;
+  char *buf = static_cast<char *>(allocator.alloc(sz));
+  ASSERT_NE(nullptr, buf);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, arg.serialize(buf, sz, pos));
+  ASSERT_EQ(sz, pos);
 }
 
 // =============================================================================
@@ -254,6 +347,21 @@ TEST_F(TestCheckAlterTableArgForParallel, non_column_is_alter_options)
   bool can_parallel = true;
   const char *reason = nullptr;
   ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_FALSE(can_parallel);
+}
+
+TEST_F(TestCheckAlterTableArgForParallel, random_partition_attributes_rejected)
+{
+  ObAlterTableArg arg;
+  arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+  arg.is_alter_random_partition_ = true;
+  bool can_parallel = true;
+  const char *reason = nullptr;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_FALSE(can_parallel);
+  ASSERT_STREQ("is_alter_random_partition", reason);
+  ASSERT_EQ(OB_SUCCESS, add_alter_column(arg, OB_DDL_ADD_COLUMN));
+  ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
   ASSERT_FALSE(can_parallel);
 }
 
@@ -473,6 +581,46 @@ TEST_F(TestCheckAlterTableArgForParallel, non_column_part_storage_cache_policy)
   ASSERT_FALSE(can_parallel);
 }
 
+TEST_F(TestCheckAlterTableArgForParallel, non_column_hidden_table_id)
+{
+  ObAlterTableArg arg;
+  bool can_parallel = false;
+  const char *reason = nullptr;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_TRUE(can_parallel);
+  ASSERT_EQ(nullptr, reason);
+
+  arg.hidden_table_id_ = 50001;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_FALSE(can_parallel);
+  ASSERT_STREQ("hidden_table_id", reason);
+
+  arg.hidden_table_id_ = OB_INVALID_ID;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_TRUE(can_parallel);
+  ASSERT_EQ(nullptr, reason);
+}
+
+TEST_F(TestCheckAlterTableArgForParallel, non_column_ddl_task_type)
+{
+  ObAlterTableArg arg;
+  bool can_parallel = false;
+  const char *reason = nullptr;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_TRUE(can_parallel);
+  ASSERT_EQ(nullptr, reason);
+
+  arg.ddl_task_type_ = REBUILD_INDEX_TASK;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_FALSE(can_parallel);
+  ASSERT_STREQ("ddl_task_type", reason);
+
+  arg.ddl_task_type_ = INVALID_TASK;
+  ASSERT_EQ(OB_SUCCESS, check_non_column_arg_for_parallel(arg, can_parallel, reason));
+  ASSERT_TRUE(can_parallel);
+  ASSERT_EQ(nullptr, reason);
+}
+
 TEST_F(TestCheckAlterTableArgForParallel, drop_column_requires_instant_algorithm)
 {
   ObAlterTableArg arg;
@@ -484,12 +632,107 @@ TEST_F(TestCheckAlterTableArgForParallel, drop_column_requires_instant_algorithm
   ASSERT_EQ(OB_SUCCESS, add_base_column(orig_table_schema, "c1"));
 
   ObSchemaGetterGuard schema_guard;
+  ObSchemaGuardWrapper wrapper(OB_SYS_TENANT_ID, nullptr);
+  ASSERT_EQ(OB_SUCCESS, wrapper.init(schema_guard));
   bool can_parallel = true;
   const char *reason = nullptr;
   ASSERT_EQ(OB_SUCCESS, check_drop_column_can_parallel(
-      arg, orig_table_schema, schema_guard, can_parallel, reason));
+      arg, orig_table_schema, wrapper, can_parallel, reason));
   ASSERT_FALSE(can_parallel);
   ASSERT_STREQ("alter algorithm is not instant", reason);
+}
+
+TEST_F(TestCheckAlterTableArgForParallel, drop_column_rechecks_instant_config)
+{
+  ObAlterTableArg arg;
+  arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+  arg.data_version_ = DATA_VERSION_4_6_1_0;
+  arg.alter_algorithm_ = ObAlterTableArg::AlterAlgorithm::INSTANT;
+  ASSERT_EQ(OB_SUCCESS, add_alter_column_with_name(arg, OB_DDL_DROP_COLUMN, "c2"));
+  ObTableSchema table_schema;
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c1"));
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c2"));
+  ObSchemaGetterGuard local_guard;
+  ObLatestSchemaGuard latest_guard(nullptr, OB_SYS_TENANT_ID);
+  ObSchemaGuardWrapper sql_wrapper(OB_SYS_TENANT_ID, nullptr);
+  ObSchemaGuardWrapper rs_wrapper(OB_SYS_TENANT_ID, nullptr);
+  ASSERT_EQ(OB_SUCCESS, sql_wrapper.init(local_guard));
+  ASSERT_EQ(OB_SUCCESS, rs_wrapper.init(latest_guard));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(OB_SYS_TENANT_ID));
+  const bool saved_instant = tenant_config->_enable_drop_column_instant;
+  ASSERT_TRUE(tenant_config->_enable_drop_column_instant.set_value("true"));
+  bool sql_can_parallel = false;
+  const char *reason = nullptr;
+  const int sql_ret = check_drop_column_can_parallel(arg, table_schema, sql_wrapper, sql_can_parallel, reason);
+  ASSERT_TRUE(tenant_config->_enable_drop_column_instant.set_value("false"));
+  bool rs_can_parallel = true;
+  const int rs_ret = check_drop_column_can_parallel(arg, table_schema, rs_wrapper, rs_can_parallel, reason);
+  ASSERT_TRUE(tenant_config->_enable_drop_column_instant.set_value(saved_instant ? "true" : "false"));
+  ASSERT_EQ(OB_SUCCESS, sql_ret);
+  ASSERT_TRUE(sql_can_parallel);
+  ASSERT_EQ(OB_SUCCESS, rs_ret);
+  ASSERT_FALSE(rs_can_parallel);
+  ASSERT_STREQ("drop column requires offline ddl", reason);
+}
+
+TEST_F(TestCheckAlterTableArgForParallel, drop_all_lob_columns_requires_serial)
+{
+  ObAlterTableArg arg;
+  arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+  arg.data_version_ = DATA_VERSION_4_6_1_0;
+  arg.alter_algorithm_ = ObAlterTableArg::AlterAlgorithm::INSTANT;
+  ASSERT_EQ(OB_SUCCESS, add_alter_column_with_name(arg, OB_DDL_DROP_COLUMN, "c2"));
+  ObTableSchema table_schema;
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c0"));
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c1"));
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c2"));
+  table_schema.get_column_schema("c1")->set_data_type(ObLongTextType);
+  table_schema.get_column_schema("c2")->set_data_type(ObRoaringBitmapType);
+  ObLatestSchemaGuard latest_guard(nullptr, OB_SYS_TENANT_ID);
+  ObSchemaGuardWrapper wrapper(OB_SYS_TENANT_ID, nullptr);
+  ASSERT_EQ(OB_SUCCESS, wrapper.init(latest_guard));
+  bool can_parallel = false;
+  const char *reason = nullptr;
+  ASSERT_EQ(OB_SUCCESS, check_drop_column_can_parallel(arg, table_schema, wrapper, can_parallel, reason));
+  ASSERT_TRUE(can_parallel);
+  ASSERT_EQ(OB_SUCCESS, add_alter_column_with_name(arg, OB_DDL_DROP_COLUMN, "c1"));
+  ASSERT_EQ(OB_SUCCESS, check_drop_column_can_parallel(arg, table_schema, wrapper, can_parallel, reason));
+  ASSERT_FALSE(can_parallel);
+  ASSERT_STREQ("dropping all lob columns", reason);
+}
+
+TEST_F(TestCheckAlterTableArgForParallel, add_column_returns_aggregate_ddl_type)
+{
+  ObAlterTableArg arg;
+  arg.exec_tenant_id_ = OB_SYS_TENANT_ID;
+  arg.data_version_ = DATA_VERSION_4_6_1_0;
+  arg.alter_algorithm_ = ObAlterTableArg::AlterAlgorithm::INSTANT;
+  ASSERT_EQ(OB_SUCCESS, add_alter_column_with_name(arg, OB_DDL_ADD_COLUMN, "c2"));
+  ASSERT_EQ(OB_SUCCESS, add_alter_column_with_name(arg, OB_DDL_ADD_COLUMN, "c3"));
+  ObTableSchema table_schema;
+  ASSERT_EQ(OB_SUCCESS, add_base_column(table_schema, "c1"));
+  table_schema.set_table_id(OB_MAX_INNER_TABLE_ID + 1);
+  AlterColumnSchema *c2 = static_cast<AlterColumnSchema *>(arg.alter_table_schema_.get_column_schema_by_idx(0));
+  AlterColumnSchema *c3 = static_cast<AlterColumnSchema *>(arg.alter_table_schema_.get_column_schema_by_idx(1));
+  ASSERT_NE(nullptr, c2);
+  ASSERT_NE(nullptr, c3);
+  bool can_parallel = false;
+  const char *reason = nullptr;
+  ObDDLType ddl_type = DDL_INVALID;
+  ASSERT_EQ(OB_SUCCESS, check_add_column_can_parallel(arg, table_schema, can_parallel, reason, &ddl_type));
+  ASSERT_TRUE(can_parallel) << (reason == nullptr ? "" : reason);
+  ASSERT_EQ(DDL_ADD_COLUMN_ONLINE, ddl_type);
+  for (int64_t i = 0; i < 2; ++i) {
+    c2->is_first_ = (i == 0);
+    c3->is_first_ = (i == 1);
+    ASSERT_EQ(OB_SUCCESS, check_add_column_can_parallel(arg, table_schema, can_parallel, reason, &ddl_type));
+    ASSERT_TRUE(can_parallel) << (reason == nullptr ? "" : reason);
+    ASSERT_EQ(DDL_ADD_COLUMN_INSTANT, ddl_type);
+  }
+  c3->is_autoincrement_ = true;
+  ASSERT_EQ(OB_SUCCESS, check_add_column_can_parallel(arg, table_schema, can_parallel, reason, &ddl_type));
+  ASSERT_FALSE(can_parallel);
+  ASSERT_EQ(DDL_INVALID, ddl_type);
 }
 
 // =============================================================================
@@ -662,6 +905,71 @@ TEST_F(TestCheckAlterTableArgForParallel, res_schema_version_default)
   ASSERT_EQ(OB_INVALID_VERSION, res.schema_version_);
 }
 
+class ResultTestAlterTableHelper : public ObAlterTableHelper
+{
+public:
+  ResultTestAlterTableHelper(const ObAlterTableArg &arg, ObAlterTableRes &res)
+      : ObAlterTableHelper(nullptr, OB_SYS_TENANT_ID, arg, res) {}
+protected:
+  int check_inner_stat_() override { return OB_SUCCESS; }
+};
+
+class TestAlterTableResult : public ::testing::Test
+{
+protected:
+  void SetUp() override
+  {
+    generator_ = GET_TSI(TSISchemaVersionGenerator);
+    ASSERT_NE(nullptr, generator_);
+    saved_generator_ = *generator_;
+    generator_->reset();
+  }
+  void TearDown() override
+  {
+    if (nullptr != generator_) {
+      *generator_ = saved_generator_;
+    }
+  }
+  ObSchemaVersionGenerator *generator_ = nullptr;
+  ObSchemaVersionGenerator saved_generator_;
+};
+
+TEST_F(TestAlterTableResult, preserves_transaction_error)
+{
+  ObAlterTableArg arg;
+  ObAlterTableRes res;
+  ResultTestAlterTableHelper helper(arg, res);
+  int ddl_ret = OB_TIMEOUT;
+  ASSERT_EQ(OB_TIMEOUT, helper.construct_and_adjust_result_(ddl_ret));
+  ASSERT_EQ(OB_INVALID_VERSION, res.schema_version_);
+  ASSERT_EQ(OB_SUCCESS, generator_->init(1000, 1016));
+  ASSERT_EQ(OB_TIMEOUT, helper.construct_and_adjust_result_(ddl_ret));
+  ASSERT_EQ(OB_INVALID_VERSION, res.schema_version_);
+}
+
+TEST_F(TestAlterTableResult, propagates_schema_version_error)
+{
+  ObAlterTableArg arg;
+  ObAlterTableRes res;
+  ResultTestAlterTableHelper helper(arg, res);
+  int ddl_ret = OB_SUCCESS;
+  ASSERT_EQ(OB_NOT_INIT, helper.construct_and_adjust_result_(ddl_ret));
+  ASSERT_EQ(OB_INVALID_VERSION, res.schema_version_);
+}
+
+TEST_F(TestAlterTableResult, returns_current_schema_version)
+{
+  ObAlterTableArg arg;
+  ObAlterTableRes res;
+  ResultTestAlterTableHelper helper(arg, res);
+  ASSERT_EQ(OB_SUCCESS, generator_->init(1000, 1016));
+  int64_t version = OB_INVALID_VERSION;
+  ASSERT_EQ(OB_SUCCESS, generator_->next_version(version));
+  int ddl_ret = OB_SUCCESS;
+  ASSERT_EQ(OB_SUCCESS, helper.construct_and_adjust_result_(ddl_ret));
+  ASSERT_EQ(version, res.schema_version_);
+}
+
 // Fix #3: When DROP_COLUMN is combined with a DROP_FOREIGN_KEY action
 // (via index_arg_list), parallel DDL should be rejected so that the
 // serial path handles mock FK parent table schema changes.
@@ -706,8 +1014,7 @@ TEST_F(TestCheckAlterTableArgForParallel, multiple_drop_columns_allowed)
   bool can_parallel = false;
   const char *reason = nullptr;
   ASSERT_EQ(OB_SUCCESS, check_alter_table_arg_for_parallel(arg, can_parallel, reason));
-  // Should pass arg-level check (column type is supported)
-  // Actual parallel enablement depends on DDL control config
+  ASSERT_TRUE(can_parallel);
 }
 
 // Fix #11: ALTER_COLUMN (ALTER COLUMN SET DEFAULT / DROP DEFAULT) should

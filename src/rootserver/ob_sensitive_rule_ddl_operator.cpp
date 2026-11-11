@@ -178,7 +178,7 @@ int ObSensitiveRuleDDLOperator::grant_or_revoke_after_ddl(ObSensitiveRuleSchema 
     LOG_ERROR("schema_sql_service must not null", K(ret));
   } else if (OB_DDL_DROP_SENSITIVE_RULE == ddl_type) {
     if (lib::Worker::CompatMode::ORACLE == compat_mode) {
-      ObArray<const ObObjPriv *> obj_privs;
+      ObSEArray<const ObObjPriv *, 4> obj_privs;
       OZ(schema_guard.get_obj_priv_with_obj_id(tenant_id,
                                                 schema.get_sensitive_rule_id(),
                                                 static_cast<uint64_t>(ObObjectType::SENSITIVE_RULE),

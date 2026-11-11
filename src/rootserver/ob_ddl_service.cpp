@@ -10441,11 +10441,14 @@ int ObDDLService::alter_table_update_aux_column(
           } else {
             const bool need_del_stat = false;
             ObColumnSchemaV2 new_shadow_column;
-            new_shadow_column.assign(*shadow_column);
-            new_shadow_column.set_data_type(new_column_schema.get_data_type());
-            if (OB_FAIL(ddl_operator.update_single_column(trans, *aux_table_schema, *aux_table_schema,
-                                                          new_shadow_column, need_del_stat))) {
-              LOG_WARN("failed to update global index shadow column", K(ret));
+            if (OB_FAIL(new_shadow_column.assign(*shadow_column))) {
+              LOG_WARN("failed to assign global index shadow column", KR(ret));
+            } else {
+              new_shadow_column.set_data_type(new_column_schema.get_data_type());
+              if (OB_FAIL(ddl_operator.update_single_column(trans, *aux_table_schema, *aux_table_schema,
+                                                            new_shadow_column, need_del_stat))) {
+                LOG_WARN("failed to update global index shadow column", K(ret));
+              }
             }
           }
 
@@ -11258,7 +11261,7 @@ int ObDDLService::check_alter_table_column_common_gates(
     }
   }
   if (OB_SUCC(ret) && has_add_column) {
-    ObArray<uint64_t> unused_column_ids;
+    ObSEArray<uint64_t, 4> unused_column_ids;
     if (OB_FAIL(orig_table_schema.get_unused_column_ids(unused_column_ids))) {
       LOG_WARN("get unused column ids failed", KR(ret), K(orig_table_schema));
     } else if (OB_UNLIKELY(unused_column_ids.count() >= OB_MAX_UNUSED_COLUMNS_COUNT)) {
@@ -12691,7 +12694,7 @@ int ObDDLService::submit_global_index_async_tasks(
         }
       } else if (obrpc::ObIndexArg::DROP_INDEX == index_arg->index_action_type_
                  && !alter_table_arg.is_alter_indexs_) {
-        ObArray<obrpc::ObDDLRes> unused_ddl_res_array;
+        ObSEArray<obrpc::ObDDLRes, 1> unused_ddl_res_array;
         obrpc::ObDropIndexArg *drop_index_arg = static_cast<obrpc::ObDropIndexArg *>(index_arg);
         if (OB_ISNULL(drop_index_arg)) {
           ret = OB_ERR_UNEXPECTED;
@@ -13421,7 +13424,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           if (OB_FAIL(check_restore_point_allow(tenant_id, *orig_table_schema))) {
             LOG_WARN("check restore point allow failed,", K(ret), K(tenant_id), K(orig_table_schema->get_table_id()));
           }
-          ObArray<UpdateGlobalIndexOpType> global_index_op_types;
+          ObSEArray<UpdateGlobalIndexOpType, 4> global_index_op_types;
           if (FAILEDx(pre_decide_global_index_op_types(
               alter_table_arg, tenant_id, *orig_table_schema,
               schema_guard_wrapper, global_index_op_types))) {
@@ -13640,7 +13643,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
           }
         }
 
-        common::ObArray<const ObTableSchema*> inc_table_schema_ptrs;
+        common::ObSEArray<const ObTableSchema*, 4> inc_table_schema_ptrs;
         if (FAILEDx(handle_tablets_for_alter_partitions(
             alter_table_arg,
             inc_table_schemas,

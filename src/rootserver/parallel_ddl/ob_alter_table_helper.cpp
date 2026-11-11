@@ -20,6 +20,7 @@
 #include "share/schema/ob_schema_utils.h"
 #include "rootserver/ob_ddl_service.h"
 #include "share/ob_share_util.h"
+#include "storage/tablet/ob_session_tablet_helper.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::obrpc;
@@ -38,6 +39,7 @@ ObAlterTableHelper::ObAlterTableHelper(
       actions_(),
       action_types_(),
       orig_table_schema_(nullptr),
+      action_based_schema_object_infos_(),
       new_table_schema_(),
       ddl_task_records_()
 {
@@ -95,7 +97,7 @@ int ObAlterTableHelper::init_()
 }
 
 int ObAlterTableHelper::resolve_column_action_type_(
-    common::ObArray<ObAlterTableActionType> &action_types)
+    common::ObIArray<ObAlterTableActionType> &action_types)
 {
   int ret = OB_SUCCESS;
   // action_types_ order tracks the user-input column order so [ADD b, DROP a]
@@ -138,7 +140,7 @@ int ObAlterTableHelper::resolve_column_action_type_(
 }
 
 int ObAlterTableHelper::resolve_partition_action_type_(
-    common::ObArray<ObAlterTableActionType> &action_types)
+    common::ObIArray<ObAlterTableActionType> &action_types)
 {
   int ret = OB_SUCCESS;
   if (ObAlterTableArg::NO_OPERATION != arg_.alter_part_type_) {
@@ -316,8 +318,8 @@ int ObAlterTableHelper::check_table_legitimacy_()
                      *orig_table_schema_, arg_,
                      false /*is_db_in_recyclebin*/,
                      false /*is_offline_ddl*/))) {
-    // Database recyclebin state is filtered out before this point by the
-    // name-lock + schema_guard path, so we pass false here.
+    // Database legitimacy is checked under its name lock when fetching
+    // the original table schema.
     LOG_WARN("fail to check alter table legitimacy", KR(ret));
   }
   return ret;
@@ -334,7 +336,7 @@ int ObAlterTableHelper::check_alter_table_column_common_gates_()
     LOG_WARN("ddl service is null", KR(ret));
   } else if (!arg_.is_alter_columns_) {
   } else if (OB_FAIL(ddl_service_->check_alter_table_column_common_gates(
-                         tenant_id_, arg_.alter_table_schema_, *orig_table_schema_))) {
+                     tenant_id_, arg_.alter_table_schema_, *orig_table_schema_))) {
     LOG_WARN("fail to check alter table column common gates", KR(ret),
              K_(tenant_id), K_(arg));
   }
@@ -372,11 +374,11 @@ int ObAlterTableHelper::prepare_alter_table_arg_()
   if (OB_SUCC(ret)) {
     ObAlterTableArg &alter_table_arg = const_cast<ObAlterTableArg &>(arg_);
     if (OB_FAIL(ddl_service_->prepare_alter_table_arg_progressive_merge_round(
-            tenant_data_version,
-            ddl_type,
-            *orig_table_schema_,
-            alter_table_arg,
-            &new_table_schema_))) {
+                tenant_data_version,
+                ddl_type,
+                *orig_table_schema_,
+                alter_table_arg,
+                &new_table_schema_))) {
       LOG_WARN("fail to prepare alter table arg progressive merge round",
                KR(ret), K(tenant_data_version));
     }
@@ -410,12 +412,9 @@ int ObAlterTableHelper::fetch_orig_table_schema_()
   int64_t schema_version = OB_INVALID_VERSION;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(schema_guard_wrapper_.get_database_id(
+  } else if (OB_FAIL(check_database_legitimacy_(
                      origin_database_name, database_id))) {
-    LOG_WARN("fail to get database id", KR(ret), K(origin_database_name));
-  } else if (OB_INVALID_ID == database_id) {
-    ret = OB_ERR_BAD_DATABASE;
-    LOG_WARN("database not exist", KR(ret), K(origin_database_name));
+    LOG_WARN("fail to check database legitimacy", KR(ret), K(origin_database_name));
   } else if (OB_FAIL(schema_guard_wrapper_.get_table_id(
                      database_id, arg_.session_id_, origin_table_name,
                      table_id, table_type, schema_version))) {
@@ -496,7 +495,7 @@ int ObAlterTableHelper::check_after_lock_()
   if (OB_FAIL(check_parallel_ddl_conflict_(arg_.based_schema_object_infos_))) {
     LOG_WARN("fail to check parallel ddl conflict", KR(ret));
   } else if (!action_based_schema_object_infos_.empty()
-      && OB_FAIL(check_parallel_ddl_conflict_(action_based_schema_object_infos_))) {
+             && OB_FAIL(check_parallel_ddl_conflict_(action_based_schema_object_infos_))) {
     LOG_WARN("fail to check action-pushed schema conflict", KR(ret));
   } else if (OB_FAIL(check_table_legitimacy_())) {
     LOG_WARN("fail to check table legitimacy", KR(ret));
@@ -592,6 +591,9 @@ int ObAlterTableHelper::operation_before_commit_()
       LOG_WARN("fail to do before_commit in action", KR(ret), K(i), KPC(actions_.at(i)));
     }
   }
+  if (FAILEDx(storage::ObSessionTabletGCHelper::is_table_has_active_session(orig_table_schema_, &arg_))) {
+    LOG_WARN("table has active session or error checking", KR(ret), K_(arg), KPC(orig_table_schema_));
+  }
   return ret;
 }
 
@@ -619,29 +621,30 @@ int ObAlterTableHelper::construct_and_adjust_result_(int &return_ret)
   } else if (OB_ISNULL(tsi_generator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tsi generator is null", KR(ret));
+  } else if (OB_FAIL(tsi_generator->get_current_version(res_.schema_version_))) {
+    LOG_WARN("fail to get current schema version", KR(ret));
   } else {
-    tsi_generator->get_current_version(res_.schema_version_);
-    if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < actions_.count(); ++i) {
-        if (OB_ISNULL(actions_.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("action is null", KR(ret), K(i));
-        } else if (OB_FAIL(actions_.at(i)->adjust_result())) {
-          LOG_WARN("fail to adjust result in action", KR(ret), K(i), KPC(actions_.at(i)));
-        }
+    for (int64_t i = 0; OB_SUCC(ret) && i < actions_.count(); ++i) {
+      if (OB_ISNULL(actions_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("action is null", KR(ret), K(i));
+      } else if (OB_FAIL(actions_.at(i)->adjust_result())) {
+        LOG_WARN("fail to adjust result in action", KR(ret), K(i), KPC(actions_.at(i)));
       }
-      // Set task_id from drop_lob async task if present so executor can wait for it.
-      for (int64_t i = 0; i < ddl_task_records_.count(); ++i) {
-        if (DDL_DROP_LOB == ddl_task_records_.at(i).ddl_type_) {
-          res_.task_id_ = ddl_task_records_.at(i).task_id_;
-          break;
-        }
+    }
+    // Set task_id from drop_lob async task if present so executor can wait for it.
+    for (int64_t i = 0; i < ddl_task_records_.count(); ++i) {
+      if (DDL_DROP_LOB == ddl_task_records_.at(i).ddl_type_) {
+        res_.task_id_ = ddl_task_records_.at(i).task_id_;
+        break;
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < ddl_task_records_.count(); ++i) {
-        ObDDLTaskRecord &task_record = ddl_task_records_.at(i);
-        if (OB_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
-          LOG_WARN("fail to schedule ddl task", KR(ret), K(task_record));
-        }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_task_records_.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      ObDDLTaskRecord &task_record = ddl_task_records_.at(i);
+      // The task record is committed; recovery will retry scheduling on failure.
+      if (OB_TMP_FAIL(ObSysDDLSchedulerUtil::schedule_ddl_task(task_record))) {
+        LOG_WARN("fail to schedule ddl task", KR(tmp_ret), K(task_record));
       }
     }
   }

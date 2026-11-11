@@ -97,15 +97,7 @@ int ObAddPartitionAction::before_commit()
     }
   }
   if (OB_SUCC(ret)) {
-    common::ObArray<const ObTableSchema*> inc_table_schema_ptrs;
-    if (OB_FAIL(get_ddl_service()->handle_tablets_for_alter_partitions(
-        get_arg(),
-        inc_table_schemas_,
-        del_table_schemas_,
-        new_table_schemas_,
-        get_schema_guard_wrapper(),
-        get_trans(),
-        inc_table_schema_ptrs))) {
+    if (OB_FAIL(handle_tablets_())) {
       LOG_WARN("fail to handle tablets", KR(ret));
     }
   }

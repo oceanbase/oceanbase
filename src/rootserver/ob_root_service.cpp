@@ -4222,7 +4222,7 @@ int ObRootService::parallel_alter_table(const ObAlterTableArg &arg, ObAlterTable
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (data_version < DATA_VERSION_4_6_1_0) {
+  } else if (!is_parallel_alter_table_data_version_supported(data_version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("parallel alter table is not supported", KR(ret), K(tenant_id), K(data_version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "parallel alter table");

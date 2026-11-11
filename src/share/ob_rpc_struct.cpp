@@ -2104,6 +2104,7 @@ bool ObAlterTableArg::has_no_non_column_operation(const char *&reason) const
   REJECT_IF(need_rebuild_trigger_,                                "need_rebuild_trigger");
   REJECT_IF(is_add_to_scheduler_,                                 "is_add_to_scheduler");
   REJECT_IF(alter_auto_partition_attr_,                           "alter_auto_partition_attr");
+  REJECT_IF(is_alter_random_partition_,                           "is_alter_random_partition");
   REJECT_IF(is_direct_load_partition_,                            "is_direct_load_partition");
   REJECT_IF(is_alter_column_group_delayed_,                       "is_alter_column_group_delayed");
   REJECT_IF(is_alter_mview_attributes_,                           "is_alter_mview_attributes");

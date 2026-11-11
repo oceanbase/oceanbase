@@ -21,6 +21,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
 using namespace oceanbase::transaction::tablelock;
 
+ERRSIM_POINT_DEF(ERRSIM_ADD_COLUMN_STALE_SCHEMA_GUARD);
 int ObAlterTableAddColumnAction::init_local_schema_guard_for_default_value_()
 {
   int ret = OB_SUCCESS;
@@ -32,35 +33,43 @@ int ObAlterTableAddColumnAction::init_local_schema_guard_for_default_value_()
     LOG_WARN("orig table schema is null", KR(ret));
   } else if (local_schema_guard_.is_inited()) {
     // Already initialized by a previous generate_schemas retry.
-  } else if (OB_ISNULL(get_ddl_service())) {
+  } else if (OB_ISNULL(get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ddl service is null", KR(ret));
-  } else if (OB_FAIL(get_ddl_service()->get_tenant_schema_guard_with_version_in_inner_table(
-                 get_tenant_id(), local_schema_guard_))) {
-    LOG_WARN("fail to get tenant schema guard with version in inner table",
-             KR(ret), "tenant_id", get_tenant_id());
+    LOG_WARN("schema service is null", KR(ret));
   } else {
-    local_schema_guard_.set_session_id(get_arg().session_id_);
+    // A historical snapshot exercises both missing and outdated local schemas.
+    const int64_t schema_version = OB_UNLIKELY(ERRSIM_ADD_COLUMN_STALE_SCHEMA_GUARD)
+        ? orig_table_schema->get_schema_version() - 1 : OB_INVALID_VERSION;
+    if (OB_FAIL(get_schema_service()->get_tenant_schema_guard(
+                  get_tenant_id(), local_schema_guard_, schema_version))) {
+      LOG_WARN("fail to get local tenant schema guard",
+               KR(ret), "tenant_id", get_tenant_id());
+    } else {
+      local_schema_guard_.set_session_id(get_arg().session_id_);
+    }
   }
   if (OB_SUCC(ret)) {
     const ObTableSchema *local_table_schema = nullptr;
-    if (OB_FAIL(local_schema_guard_.get_table_schema(
-                   get_tenant_id(), orig_table_schema->get_table_id(), local_table_schema))) {
+    if (OB_FAIL(local_schema_guard_.get_table_schema(get_tenant_id(), orig_table_schema->get_table_id(), local_table_schema))) {
       LOG_WARN("fail to get local table schema", KR(ret),
                "tenant_id", get_tenant_id(), "table_id", orig_table_schema->get_table_id());
     } else if (OB_ISNULL(local_table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("local table schema not exist", KR(ret),
+      ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+      LOG_WARN("local table schema not ready, retry add column", KR(ret),
                "tenant_id", get_tenant_id(), "table_id", orig_table_schema->get_table_id());
     } else if (local_table_schema->get_schema_version() != orig_table_schema->get_schema_version()) {
-      ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-      LOG_WARN("schema snapshot mismatch between latest guard and local guard, fallback to serial ddl",
+      ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+      LOG_WARN("schema snapshot mismatch between latest guard and local guard, retry add column",
                KR(ret),
                "tenant_id", get_tenant_id(),
                "table_id", orig_table_schema->get_table_id(),
                "latest_schema_version", orig_table_schema->get_schema_version(),
                "local_schema_version", local_table_schema->get_schema_version());
     }
+  }
+  if (OB_SCHEMA_EAGAIN == ret) {
+    // DDL retries use the parallel-conflict code for a schema that is not ready.
+    ret = OB_ERR_PARALLEL_DDL_CONFLICT;
   }
   return ret;
 }
@@ -80,17 +89,62 @@ int ObAlterTableAddColumnAction::register_main_table_lock_(const ObTableSchema &
   return ret;
 }
 
-// Only register LOB aux locks when the original table already has aux tables.
-// Aux tables created for the first new LOB column are allocated and persisted
-// inside operate_schemas_, so they need no prior lock registration.
-int ObAlterTableAddColumnAction::register_lob_aux_locks_(const ObTableSchema &table_schema)
+// Existing auxiliary tables must be locked before synchronizing their round.
+// Newly created LOB tables inherit the updated main-table round at creation.
+int ObAlterTableAddColumnAction::register_aux_table_locks_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  if (OB_INVALID_ID != table_schema.get_aux_lob_meta_tid()
+  bool need_progressive_merge = false;
+  aux_table_ids_for_round_.reset();
+  if (OB_FAIL(get_ddl_service()->check_need_add_progressive_round(
+                  get_arg().data_version_, table_schema,
+                  get_arg().alter_table_schema_, need_progressive_merge))) {
+    LOG_WARN("fail to check progressive merge round", KR(ret));
+  } else if (need_progressive_merge) {
+    const ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema.get_simple_index_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+      const uint64_t table_id = index_infos.at(i).table_id_;
+      if (OB_FAIL(add_ddl_object_lock_by_id(table_id, TABLE_SCHEMA, EXCLUSIVE))) {
+        LOG_WARN("fail to register index object lock", KR(ret), K(table_id));
+      } else if (OB_FAIL(aux_table_ids_for_round_.push_back(table_id))) {
+        LOG_WARN("fail to record index table id", KR(ret), K(table_id));
+      } else if (is_search_def_index(index_infos.at(i).index_type_)) {
+        const ObTableSchema *index_schema = nullptr;
+        if (OB_FAIL(get_schema_guard_wrapper().get_table_schema(table_id, index_schema))) {
+          LOG_WARN("fail to get search index schema", KR(ret), K(table_id));
+        } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+          LOG_WARN("search index changed before locking", KR(ret), K(table_id));
+        // Validate the parent version after locking so its child list cannot change unnoticed.
+        } else if (OB_FAIL(helper_.add_based_schema_object_info(ObBasedSchemaObjectInfo(
+                             table_id, TABLE_SCHEMA, index_schema->get_schema_version())))) {
+          LOG_WARN("fail to record search index schema version", KR(ret), K(table_id));
+        } else {
+          const ObIArray<ObAuxTableMetaInfo> &children = index_schema->get_simple_index_infos();
+          for (int64_t j = 0; OB_SUCC(ret) && j < children.count(); ++j) {
+            const uint64_t child_id = children.at(j).table_id_;
+            if (OB_FAIL(add_ddl_object_lock_by_id(child_id, TABLE_SCHEMA, EXCLUSIVE))) {
+              LOG_WARN("fail to register search index child lock", KR(ret), K(child_id));
+            } else if (OB_FAIL(aux_table_ids_for_round_.push_back(child_id))) {
+              LOG_WARN("fail to record search index child id", KR(ret), K(child_id));
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_INVALID_ID != table_schema.get_aux_lob_meta_tid()
+        && OB_FAIL(aux_table_ids_for_round_.push_back(table_schema.get_aux_lob_meta_tid()))) {
+      LOG_WARN("fail to record lob meta table id", KR(ret));
+    } else if (OB_SUCC(ret) && OB_INVALID_ID != table_schema.get_aux_lob_piece_tid()
+        && OB_FAIL(aux_table_ids_for_round_.push_back(table_schema.get_aux_lob_piece_tid()))) {
+      LOG_WARN("fail to record lob piece table id", KR(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_INVALID_ID != table_schema.get_aux_lob_meta_tid()
       && OB_FAIL(add_ddl_object_lock_by_id(
                  table_schema.get_aux_lob_meta_tid(), TABLE_SCHEMA, EXCLUSIVE))) {
     LOG_WARN("fail to register lob meta object lock", KR(ret));
-  } else if (OB_INVALID_ID != table_schema.get_aux_lob_piece_tid()
+  } else if (OB_SUCC(ret) && OB_INVALID_ID != table_schema.get_aux_lob_piece_tid()
       && OB_FAIL(add_ddl_object_lock_by_id(
                  table_schema.get_aux_lob_piece_tid(), TABLE_SCHEMA, EXCLUSIVE))) {
     LOG_WARN("fail to register lob piece object lock", KR(ret));
@@ -124,8 +178,8 @@ int ObAlterTableAddColumnAction::register_dep_view_locks_(
   return ret;
 }
 
-// Object lock registration. Add column only touches the main table and the
-// LOB aux pair (when pre-existing). Dependent views are locked because the
+// Register main/auxiliary object locks together for global id ordering.
+// Dependent views are locked because the
 // serial alter_table_in_trans path invalidates dependent object status for
 // column operations.
 int ObAlterTableAddColumnAction::register_ddl_object_locks()
@@ -139,8 +193,8 @@ int ObAlterTableAddColumnAction::register_ddl_object_locks()
     LOG_WARN("orig table schema is null", KR(ret));
   } else if (OB_FAIL(register_main_table_lock_(*table_schema))) {
     LOG_WARN("fail to register main table lock", KR(ret));
-  } else if (OB_FAIL(register_lob_aux_locks_(*table_schema))) {
-    LOG_WARN("fail to register lob aux locks", KR(ret));
+  } else if (OB_FAIL(register_aux_table_locks_(*table_schema))) {
+    LOG_WARN("fail to register auxiliary table locks", KR(ret));
   } else if (OB_FAIL(register_dep_view_locks_(*table_schema))) {
     LOG_WARN("fail to register dep view locks", KR(ret));
   }
@@ -157,9 +211,7 @@ int ObAlterTableAddColumnAction::lock_table_and_online_ddl()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig table schema is null", KR(ret));
   } else {
-    // Use arg.data_version_ (set by executor pre-RPC) to match the version used
-    // throughout other checks (e.g. check_add_column_types_), keeping the two
-    // callers consistent without an extra GET_MIN_DATA_VERSION round-trip.
+    // Use the same data version as the shared add-column admission check.
     const bool require_strict_binary_format =
         share::ObDDLUtil::use_idempotent_mode(get_arg().data_version_)
         && get_arg().need_progressive_merge();
@@ -178,59 +230,6 @@ int ObAlterTableAddColumnAction::lock_table_and_online_ddl()
   return ret;
 }
 
-int ObAlterTableAddColumnAction::check_add_column_types_()
-{
-  int ret = OB_SUCCESS;
-  add_col_ddl_types_.reset();
-  const ObTableSchema *orig_table_schema = get_orig_table_schema();
-  const AlterTableSchema &alter_table_schema = get_arg().alter_table_schema_;
-  const uint64_t tenant_data_version = get_arg().data_version_;
-  if (OB_ISNULL(orig_table_schema) || OB_ISNULL(get_ddl_service())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("orig table schema or ddl service is null", KR(ret),
-             KP(orig_table_schema), KP(get_ddl_service()));
-  } else {
-    ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
-    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
-    for (; OB_SUCC(ret) && it != it_end; ++it) {
-      if (OB_ISNULL(*it)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column is null", KR(ret));
-      } else {
-        const AlterColumnSchema *alter_col = static_cast<const AlterColumnSchema *>(*it);
-        if (OB_DDL_ADD_COLUMN != alter_col->alter_type_) {
-          ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-          LOG_WARN("unexpected column alter type for add column parallel DDL, fall back to serial",
-                   KR(ret), "alter_type", alter_col->alter_type_);
-        } else {
-          ObDDLType tmp_ddl_type = ObDDLType::DDL_INVALID;
-          if (OB_FAIL(share::ObAlterColumnDDLHelper::compute_add_column_ddl_type(
-                                         alter_table_schema, *orig_table_schema, *alter_col,
-                                         static_cast<int64_t>(get_arg().alter_algorithm_), is_oracle_mode_,
-                                         tenant_data_version, tmp_ddl_type))) {
-            // Oracle mode + INSTANT algorithm causes check_can_add_column_use_instant_ to
-            // return OB_NOT_SUPPORTED; remap so the parallel path falls back to serial DDL
-            // instead of surfacing an error to the user.
-            if (OB_NOT_SUPPORTED == ret) {
-              ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-            }
-            LOG_WARN("fail to check is add column online, fall back to serial", KR(ret));
-          } else if (ObDDLType::DDL_ADD_COLUMN_ONLINE != tmp_ddl_type
-                     && ObDDLType::DDL_ADD_COLUMN_INSTANT != tmp_ddl_type) {
-            // DDL_TABLE_REDEFINITION / DDL_ADD_COLUMN_OFFLINE not supported in parallel
-            ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-            LOG_WARN("add column type not supported in parallel", KR(ret),
-                     "ddl_type", tmp_ddl_type, "column", alter_col->get_column_name_str());
-          } else if (OB_FAIL(add_col_ddl_types_.push_back(tmp_ddl_type))) {
-            LOG_WARN("fail to push back ddl type", KR(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObAlterTableAddColumnAction::collect_add_column_infos_()
 {
   int ret = OB_SUCCESS;
@@ -243,7 +242,7 @@ int ObAlterTableAddColumnAction::collect_add_column_infos_()
   } else {
     has_add_lob_column_ = false;
     const AlterTableSchema &alter_table_schema = get_arg().alter_table_schema_;
-    ObArray<ObString> add_names;
+    ObSEArray<ObString, 4> add_names;
     ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
     ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
     for (; OB_SUCC(ret) && it != it_end; ++it) {
@@ -272,7 +271,7 @@ int ObAlterTableAddColumnAction::collect_add_column_infos_()
                        "column", alter_col->get_column_name_str());
             }
           }
-          if (OB_SUCC(ret) && OB_FAIL(add_names.push_back(alter_col->get_column_name_str()))) {
+          if (FAILEDx(add_names.push_back(alter_col->get_column_name_str()))) {
             LOG_WARN("fail to push back add column name", KR(ret));
           }
         }
@@ -320,22 +319,14 @@ int ObAlterTableAddColumnAction::check_legitimacy()
     LOG_WARN("fail to collect add column infos", KR(ret));
   } else if (OB_FAIL(check_dep_objs_consistency_())) {
     LOG_WARN("fail to check dep objs consistency", KR(ret));
-  } else if (OB_FAIL(check_add_column_types_())) {
-    LOG_WARN("fail to check add column types", KR(ret));
   } else {
     const ObTableSchema *orig_table_schema = get_orig_table_schema();
     if (OB_ISNULL(orig_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("orig table schema is null", KR(ret));
-    // Inner / system table rejected from parallel path. Mirrors the schema
-    // utils gate; defensive check in case any path bypasses the executor pre-check.
-    } else if (is_inner_table(orig_table_schema->get_table_id())) {
-      ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-      LOG_WARN("inner table add column not supported in parallel", KR(ret),
-               "table_id", orig_table_schema->get_table_id());
     } else if (OB_FAIL(share::schema::check_add_column_can_parallel(
                            get_arg(), *orig_table_schema,
-                           can_parallel_alter, reason))) {
+                           can_parallel_alter, reason, &ddl_type_))) {
       LOG_WARN("fail to re-check add column parallel gate", KR(ret));
     } else if (!can_parallel_alter) {
       ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
@@ -523,7 +514,7 @@ int ObAlterTableAddColumnAction::calc_dep_obj_schema_version_cnt_()
 
 int ObAlterTableAddColumnAction::calc_table_attribute_schema_version_cnt_(int64_t &cnt) const
 {
-  cnt = 1;
+  cnt = 2; // table options and the final operation carrying the user DDL
   return common::OB_SUCCESS;
 }
 
@@ -548,13 +539,15 @@ int ObAlterTableAddColumnAction::calc_schema_version_cnt()
     } else if (OB_FAIL(calc_table_attribute_schema_version_cnt_(tbl_attr))) {
       LOG_WARN("fail to calc table attribute schema version cnt", KR(ret));
     } else {
-      // tbl_attr for update_table_attribute called in persist_added_columns_.
+      // tbl_attr covers both main-table updates in persist_added_columns_.
       // helper's calc_schema_version_cnt_ adds +1 for write_1503_ddl_operation.
       const int64_t schema_version_cnt =
-          main_col + col_group + lob_aux + dep_obj_schema_version_cnt_ + tbl_attr;
+          main_col + col_group + lob_aux + dep_obj_schema_version_cnt_ + tbl_attr
+          + aux_table_ids_for_round_.count();
       add_schema_version_cnt(schema_version_cnt);
       LOG_INFO("calc add column schema version cnt",
                K(main_col), K(col_group), K(lob_aux),
+               "aux_round_cnt", aux_table_ids_for_round_.count(),
                K_(dep_obj_schema_version_cnt), K(tbl_attr), K(schema_version_cnt));
     }
   }
@@ -624,6 +617,13 @@ int ObAlterTableAddColumnAction::persist_added_columns_(ObDDLOperator &ddl_opera
                                              false /*need_sync_schema_version*/,
                                              is_add_lob))) {
       LOG_WARN("fail to create aux lob table if need", KR(ret));
+    // Preserve the serial ALTER table-options operation before updating auxiliary tables.
+    } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema,
+                                                           get_trans(),
+                                                           OB_DDL_ALTER_TABLE))) {
+      LOG_WARN("fail to persist add column table options", KR(ret));
+    } else if (OB_FAIL(sync_aux_table_progressive_merge_round_(ddl_operator))) {
+      LOG_WARN("fail to sync auxiliary table progressive merge round", KR(ret));
     } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema,
                                                            get_trans(),
                                                            OB_DDL_ALTER_TABLE,
@@ -631,6 +631,37 @@ int ObAlterTableAddColumnAction::persist_added_columns_(ObDDLOperator &ddl_opera
       LOG_WARN("fail to update table attribute", KR(ret));
     }
   }
+  return ret;
+}
+
+int ObAlterTableAddColumnAction::sync_aux_table_progressive_merge_round_(ObDDLOperator &ddl_operator)
+{
+  int ret = OB_SUCCESS;
+  const int64_t new_round = get_new_table_schema().get_progressive_merge_round();
+  HEAP_VAR(ObTableSchema, new_aux_table_schema) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aux_table_ids_for_round_.count(); ++i) {
+      const uint64_t table_id = aux_table_ids_for_round_.at(i);
+      const ObTableSchema *aux_table_schema = nullptr;
+      if (OB_FAIL(get_schema_guard_wrapper().get_table_schema(table_id, aux_table_schema))) {
+        LOG_WARN("fail to get locked auxiliary table schema", KR(ret), K(table_id));
+      } else if (OB_ISNULL(aux_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("locked auxiliary table schema is null", KR(ret), K(table_id));
+      } else {
+        new_aux_table_schema.reset();
+        if (OB_FAIL(new_aux_table_schema.assign(*aux_table_schema))) {
+          LOG_WARN("fail to copy auxiliary table schema", KR(ret), K(table_id));
+        } else {
+          new_aux_table_schema.set_progressive_merge_round(
+              std::max(new_round, aux_table_schema->get_progressive_merge_round()));
+          if (OB_FAIL(ddl_operator.update_table_attribute(
+                        new_aux_table_schema, get_trans(), OB_DDL_ALTER_TABLE))) {
+            LOG_WARN("fail to update auxiliary table round", KR(ret), K(table_id), K(new_round));
+          }
+        }
+      }
+    }
+  } // end HEAP_VAR
   return ret;
 }
 
@@ -643,37 +674,20 @@ int ObAlterTableAddColumnAction::modify_dep_obj_status_(ObDDLOperator &ddl_opera
     LOG_WARN("orig table schema or ddl service is null", KR(ret),
              KP(orig_table_schema), KP(get_ddl_service()));
   } else if (OB_FAIL(get_ddl_service()->modify_dep_obj_status_for_alter_table(
-                         get_arg(), *orig_table_schema, ddl_operator, get_trans()))) {
+                     get_arg(), *orig_table_schema, ddl_operator, get_trans()))) {
     LOG_WARN("fail to modify dep obj status", KR(ret));
   }
   return ret;
 }
 
-ObDDLType ObAlterTableAddColumnAction::get_result_ddl_type_() const
-{
-  ObDDLType result = ObDDLType::DDL_INVALID;
-  for (int64_t i = 0; i < add_col_ddl_types_.count(); ++i) {
-    const ObDDLType t = add_col_ddl_types_.at(i);
-    if (ObDDLType::DDL_ADD_COLUMN_INSTANT == t) {
-      result = ObDDLType::DDL_ADD_COLUMN_INSTANT;
-      break;
-    } else if (ObDDLType::DDL_ADD_COLUMN_ONLINE == t
-               && ObDDLType::DDL_INVALID == result) {
-      result = ObDDLType::DDL_ADD_COLUMN_ONLINE;
-    }
-  }
-  return result;
-}
-
 int ObAlterTableAddColumnAction::adjust_result()
 {
   int ret = OB_SUCCESS;
-  const ObDDLType ddl_type = get_result_ddl_type_();
-  if (DDL_INVALID == ddl_type) {
+  if (DDL_INVALID == ddl_type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ddl type for add column action", KR(ret));
   } else {
-    get_res().ddl_type_ = ddl_type;
+    get_res().ddl_type_ = ddl_type_;
   }
   return ret;
 }

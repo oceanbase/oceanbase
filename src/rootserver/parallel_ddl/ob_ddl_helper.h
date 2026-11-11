@@ -115,8 +115,8 @@ public:
 
   // sort and check if dep objs are consistent
   static int check_dep_objs_consistent(
-             ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
-             ObArray<std::pair<uint64_t, share::schema::ObObjectType>> &r);
+             ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &l,
+             ObIArray<std::pair<uint64_t, share::schema::ObObjectType>> &r);
 public:
   int clean_on_fail_commit()
   {

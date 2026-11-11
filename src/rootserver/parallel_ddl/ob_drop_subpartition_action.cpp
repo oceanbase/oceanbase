@@ -58,26 +58,18 @@ int ObDropSubpartitionAction::calc_schema_version_cnt()
   return ret;
 }
 
-int ObDropSubpartitionAction::before_commit()
+int ObDropSubpartitionAction::operate_schemas()
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *orig_table_schema = nullptr;
-  if (OB_FAIL(check_inner_stat_())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
+  if (OB_FAIL(ObAlterTablePartitionAction::operate_schemas())) {
+    LOG_WARN("fail to operate partition schemas", KR(ret));
   } else if (OB_ISNULL(orig_table_schema = get_orig_table_schema())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig table schema is null", KR(ret));
   }
   if (OB_SUCC(ret)) {
-    common::ObArray<const ObTableSchema*> inc_table_schema_ptrs;
-    if (OB_FAIL(get_ddl_service()->handle_tablets_for_alter_partitions(
-        get_arg(),
-        inc_table_schemas_,
-        del_table_schemas_,
-        new_table_schemas_,
-        get_schema_guard_wrapper(),
-        get_trans(),
-        inc_table_schema_ptrs))) {
+    if (OB_FAIL(handle_tablets_())) {
       LOG_WARN("fail to handle tablets for alter partitions", KR(ret));
     } else if (OB_FAIL(get_ddl_service()->submit_global_index_async_tasks(
         const_cast<obrpc::ObAlterTableArg &>(get_arg()),

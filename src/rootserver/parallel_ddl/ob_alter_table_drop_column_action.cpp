@@ -12,7 +12,6 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
 #include "storage/ddl/ob_ddl_lock.h"
-#include "sql/resolver/mv/ob_mv_dep_utils.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::obrpc;
@@ -87,7 +86,7 @@ int ObAlterTableDropColumnAction::register_identity_sequence_locks_(
         if (OB_FAIL(add_ddl_object_lock_by_id(sequence_id, SEQUENCE_SCHEMA, EXCLUSIVE))) {
           LOG_WARN("fail to register sequence object lock", KR(ret), K(sequence_id));
         } else {
-          ObArray<const ObSAuditSchema *> audits;
+          ObSEArray<const ObSAuditSchema *, 4> audits;
           if (OB_FAIL(get_schema_guard_wrapper().get_audit_schema_in_owner(
                       AUDIT_SEQUENCE, sequence_id, audits))) {
             LOG_WARN("fail to get audit schemas for sequence", KR(ret), K(sequence_id));
@@ -117,7 +116,7 @@ int ObAlterTableDropColumnAction::register_table_audit_locks_(
   if (table_schema.is_user_table() || table_schema.is_external_table()) {
     const uint64_t table_id = table_schema.get_table_id();
     // Pointer variant: entries owned by the underlying schema guard.
-    ObArray<const ObSAuditSchema *> audits;
+    ObSEArray<const ObSAuditSchema *, 4> audits;
     if (OB_FAIL(get_schema_guard_wrapper().get_audit_schema_in_owner(
                 AUDIT_TABLE, table_id, audits))) {
       LOG_WARN("fail to get audit schemas for table", KR(ret), K(table_id));
@@ -141,7 +140,7 @@ int ObAlterTableDropColumnAction::register_sensitive_rule_locks_(
     const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  ObArray<const ObSensitiveRuleSchema *> sensitive_rules;
+  ObSEArray<const ObSensitiveRuleSchema *, 4> sensitive_rules;
   if (OB_FAIL(get_schema_guard_wrapper().get_sensitive_rule_schemas_by_table(
               table_schema, sensitive_rules))) {
     LOG_WARN("fail to get sensitive rule schemas by table", KR(ret));
@@ -200,15 +199,12 @@ int ObAlterTableDropColumnAction::register_lob_aux_locks_(const ObTableSchema &t
                  table_schema.get_aux_lob_meta_tid(), TABLE_SCHEMA, EXCLUSIVE))) {
     LOG_WARN("fail to register lob meta object lock", KR(ret));
   } else if (OB_INVALID_ID != table_schema.get_aux_lob_piece_tid()
-      && OB_FAIL(add_ddl_object_lock_by_id(
-                 table_schema.get_aux_lob_piece_tid(), TABLE_SCHEMA, EXCLUSIVE))) {
+             && OB_FAIL(add_ddl_object_lock_by_id(table_schema.get_aux_lob_piece_tid(), TABLE_SCHEMA, EXCLUSIVE))) {
     LOG_WARN("fail to register lob piece object lock", KR(ret));
   }
   return ret;
 }
 
-// No MLOG lock: has_mlog_table() drop column is rejected by check_can_drop_column_
-// as MLOG/MVIEW dependency, falling back to serial.
 int ObAlterTableDropColumnAction::register_trigger_locks_(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
@@ -323,20 +319,27 @@ int ObAlterTableDropColumnAction::lock_table_and_online_ddl()
 int ObAlterTableDropColumnAction::check_legitimacy()
 {
   int ret = OB_SUCCESS;
+  bool can_parallel_alter = false;
+  const char *reason = nullptr;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_can_drop_column_())) {
     LOG_WARN("fail to check can drop column", KR(ret));
+  } else if (OB_FAIL(check_drop_column_can_parallel(
+                     get_arg(), *get_orig_table_schema(), get_schema_guard_wrapper(),
+                     can_parallel_alter, reason))) {
+    LOG_WARN("fail to re-check drop column parallel gate", KR(ret));
+  } else if (!can_parallel_alter) {
+    ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
+    LOG_WARN("drop column is not supported in parallel at action layer", KR(ret), K(reason));
   } else if (OB_FAIL(check_dep_objs_consistency_())) {
     LOG_WARN("fail to check dep objs consistency", KR(ret));
   } else if (OB_FAIL(collect_drop_column_related_infos_())) {
     LOG_WARN("fail to collect drop column related infos", KR(ret));
-  } else if (OB_FAIL(check_can_drop_columns_())) {
-    LOG_WARN("fail to check can drop columns", KR(ret));
-  } else if (OB_FAIL(check_drop_column_with_index_in_mysql_mode_())) {
-    LOG_WARN("fail to check drop column with index in mysql mode", KR(ret));
   } else if (OB_FAIL(check_drop_column_constraints_and_fk_())) {
     LOG_WARN("fail to check drop column constraints and fk", KR(ret));
+  } else if (OB_FAIL(check_can_drop_columns_())) {
+    LOG_WARN("fail to check can drop columns", KR(ret));
   }
   return ret;
 }
@@ -354,7 +357,7 @@ int ObAlterTableDropColumnAction::check_can_drop_column_()
   } else {
     // Check unused column count limit (must be checked under lock to prevent concurrent overflow)
     // Keep consistent with serial path: only check existing unused column count.
-    ObArray<uint64_t> unused_column_ids;
+    ObSEArray<uint64_t, 4> unused_column_ids;
     if (OB_FAIL(orig_table_schema->get_unused_column_ids(unused_column_ids))) {
       LOG_WARN("get unused column ids failed", KR(ret), KPC(orig_table_schema));
     } else if (OB_UNLIKELY(unused_column_ids.count() >= OB_MAX_UNUSED_COLUMNS_COUNT)) {
@@ -368,17 +371,11 @@ int ObAlterTableDropColumnAction::check_can_drop_column_()
       LOG_WARN("oracle temporary table column is not allowed to be dropped", KR(ret));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "drop column on oracle temporary table is");
     }
-    // The serial path updates MLOG metadata and checks the dropped column against
-    // every referring MV. Parallel drop falls back so those checks are not bypassed.
     if (OB_SUCC(ret) && orig_table_schema->is_materialized_view()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop column on materialized view is");
       LOG_WARN("drop column on materialized view is not supported",
                KR(ret), "table_id", orig_table_schema->get_table_id());
-    } else if (OB_SUCC(ret) && orig_table_schema->required_by_mv_refresh()) {
-      ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-      LOG_INFO("materialized view base table falls back to serial drop column", KR(ret),
-               "table_id", orig_table_schema->get_table_id());
     }
   }
   return ret;
@@ -476,12 +473,21 @@ int ObAlterTableDropColumnAction::check_dep_objs_consistency_()
 int ObAlterTableDropColumnAction::collect_drop_column_related_infos_()
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = false;
+  bool is_rename_first = false;
   const ObTableSchema *orig_table_schema = get_orig_table_schema();
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_ISNULL(orig_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig table schema is null", KR(ret), KP(orig_table_schema));
+  } else if (OB_FAIL(orig_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check compatibility mode", KR(ret));
+  } else if (OB_FAIL(get_ddl_service()->check_rename_first(
+                     get_arg().alter_table_schema_, *orig_table_schema,
+                     is_oracle_mode, is_rename_first))) {
+    // The serial precheck rejects repeated DROP targets before counting columns.
+    LOG_WARN("fail to check drop column targets", KR(ret));
   } else if (OB_FAIL(get_ddl_service()->get_all_dropped_column_ids(
                      get_arg(), *orig_table_schema, drop_cols_id_arr_,
                      &new_tbl_visible_cols_cnt_after_alter_, &last_drop_column_id_))) {
@@ -602,30 +608,6 @@ int ObAlterTableDropColumnAction::collect_affected_index_infos_()
   return ret;
 }
 
-int ObAlterTableDropColumnAction::check_drop_column_with_index_in_mysql_mode_()
-{
-  int ret = OB_SUCCESS;
-  const ObTableSchema *orig_table_schema = get_orig_table_schema();
-  if (OB_ISNULL(orig_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("orig table schema is null", KR(ret));
-  } else {
-    bool is_oracle_mode = false;
-    if (OB_FAIL(orig_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
-      LOG_WARN("fail to check oracle mode", KR(ret));
-    } else if (!is_oracle_mode && affected_index_ids_.count() > 0) {
-      // The executor pre-check should already route this case to serial DDL.
-      // If schema changes between pre-check and RS execution, return the fallback
-      // code so the caller can retry in the serial path instead of surfacing an
-      // internal error to the user.
-      ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-      LOG_INFO("drop column with index in mysql mode falls back to serial path",
-               KR(ret), K_(affected_index_ids));
-    }
-  }
-  return ret;
-}
-
 int ObAlterTableDropColumnAction::calc_index_schema_version_cnt_()
 {
   // aux_column_update_schema_version_cnt_ is already calculated in collect_affected_index_infos_()
@@ -696,7 +678,7 @@ int ObAlterTableDropColumnAction::calc_rls_schema_version_cnt_()
     for (int64_t i = 0; OB_SUCC(ret) && i < rls_policy_ids.count(); ++i) {
       const ObRlsPolicySchema *policy_schema = nullptr;
       if (OB_FAIL(get_schema_guard_wrapper().get_rls_policy_schema_by_id(
-              rls_policy_ids.at(i), policy_schema))) {
+                  rls_policy_ids.at(i), policy_schema))) {
         LOG_WARN("fail to get rls policy schema", KR(ret), "policy_id", rls_policy_ids.at(i));
       } else if (OB_ISNULL(policy_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -785,8 +767,8 @@ int ObAlterTableDropColumnAction::check_fk_related_table_ddl_(
           LOG_USER_ERROR(OB_OP_NOT_ALLOW,
                          "execute ddl while foreign key related table is executing long running ddl");
         } else if (OB_FAIL(ObDDLTaskRecordOperator::check_has_long_running_ddl(
-                get_sql_proxy(), get_tenant_id(), related_table_id,
-                check_mode, has_long_running_ddl))) {
+                           get_sql_proxy(), get_tenant_id(), related_table_id,
+                           check_mode, has_long_running_ddl))) {
           LOG_WARN("check has long running ddl failed", KR(ret), K(related_table_id));
         } else if (has_long_running_ddl) {
           ret = OB_OP_NOT_ALLOW;
@@ -846,10 +828,8 @@ int ObAlterTableDropColumnAction::calc_constraint_schema_version_cnt_()
   return ret;
 }
 
-// All pre-checks and collection have moved to check() (under lock); the actual
-// new_table_schema_ is materialized by operate_schemas(). Nothing left to do
-// here, but the base class declares generate_schemas() as pure virtual, so we
-// keep an empty override.
+// check_legitimacy() collects and validates dependencies under lock.
+// operate_schemas() applies the column changes to new_table_schema_.
 int ObAlterTableDropColumnAction::generate_schemas()
 {
   return OB_SUCCESS;
@@ -913,7 +893,7 @@ int ObAlterTableDropColumnAction::calc_schema_version_cnt()
     // Per sensitive rule on table: handle_sensitive_rule_function_inner(1) [+ update_table_schema(1) if matching]
     // Per identity column: drop_sequence consumes 1 + obj_priv_count + audit_count versions
     // RLS: drop/create per affected policy + update_table_attribute if any changed
-    // MLog/MView are rejected upfront by check_can_drop_column_, so no version cost here.
+    // Dependent view status updates are counted in dep_obj_schema_version_cnt_.
     const int64_t table_update_cnt = 1;
     const int64_t schema_version_cnt = total_drop_column_count * 2
                                        + aux_column_update_schema_version_cnt_
@@ -962,36 +942,34 @@ int ObAlterTableDropColumnAction::operate_schemas()
     // Step 1-2: Drop main-table columns one by one (must follow arg order for prev_id chain).
     // drop_main_table_column_online handles Oracle XMLType hidden columns internally.
     ObDDLOperator ddl_operator(get_ddl_service()->get_schema_service(), get_ddl_service()->get_sql_proxy());
-    if (OB_SUCC(ret)) {
-      const AlterColumnSchema *alter_col = nullptr;
-      ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
-      ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
-      for (; OB_SUCC(ret) && it != it_end; ++it) {
-        if (OB_ISNULL(*it)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column is null", KR(ret));
-        } else if (OB_ISNULL(alter_col = static_cast<const AlterColumnSchema *>(*it))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("alter column is null", KR(ret));
-        } else if (OB_DDL_DROP_COLUMN != alter_col->alter_type_) {
-          ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
-          LOG_WARN("unexpected column alter type for drop column parallel DDL, fall back to serial",
-                   KR(ret), "alter_type", alter_col->alter_type_);
-        } else {
-          const ObString &origin_column_name = alter_col->get_origin_column_name();
-          if (OB_FAIL(get_ddl_service()->drop_main_table_column_online(
-                                         get_schema_guard_wrapper(),
-                                         *orig_table_schema,
-                                         origin_column_name,
-                                         is_oracle_mode,
-                                         new_tbl_visible_cols_cnt_after_alter_,
-                                         last_drop_column_id_,
-                                         ddl_operator,
-                                         get_trans(),
-                                         new_table_schema,
-                                         update_column_name_set_))) {
-            LOG_WARN("fail to drop main table column online", KR(ret), K(origin_column_name));
-          }
+    const AlterColumnSchema *alter_col = nullptr;
+    ObTableSchema::const_column_iterator it = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+    for (; OB_SUCC(ret) && it != it_end; ++it) {
+      if (OB_ISNULL(*it)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column is null", KR(ret));
+      } else if (OB_ISNULL(alter_col = static_cast<const AlterColumnSchema *>(*it))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("alter column is null", KR(ret));
+      } else if (OB_DDL_DROP_COLUMN != alter_col->alter_type_) {
+        ret = OB_NOT_SUPPORTED_FOR_PARALLEL_DDL;
+        LOG_WARN("unexpected column alter type for drop column parallel DDL, fall back to serial",
+                 KR(ret), "alter_type", alter_col->alter_type_);
+      } else {
+        const ObString &origin_column_name = alter_col->get_origin_column_name();
+        if (OB_FAIL(get_ddl_service()->drop_main_table_column_online(
+                                       get_schema_guard_wrapper(),
+                                       *orig_table_schema,
+                                       origin_column_name,
+                                       is_oracle_mode,
+                                       new_tbl_visible_cols_cnt_after_alter_,
+                                       last_drop_column_id_,
+                                       ddl_operator,
+                                       get_trans(),
+                                       new_table_schema,
+                                       update_column_name_set_))) {
+          LOG_WARN("fail to drop main table column online", KR(ret), K(origin_column_name));
         }
       }
     }
@@ -1016,10 +994,9 @@ int ObAlterTableDropColumnAction::operate_schemas()
       LOG_WARN("fail to drop column aux objects online", KR(ret));
     // Step 8: Invalidate dependent objects (views that reference this table)
     } else if (OB_FAIL(get_ddl_service()->modify_dep_obj_status_for_alter_table(
-                           get_arg(), *orig_table_schema, ddl_operator, get_trans()))) {
+                       get_arg(), *orig_table_schema, ddl_operator, get_trans()))) {
       LOG_WARN("fail to modify dep obj status", KR(ret));
-    } else if (OB_FAIL(ddl_operator.update_table_attribute(
-                   new_table_schema, get_trans(), OB_DDL_ALTER_TABLE, &get_arg().ddl_stmt_str_))) {
+    } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema, get_trans(), OB_DDL_ALTER_TABLE, &get_arg().ddl_stmt_str_))) {
       LOG_WARN("fail to update table attribute", KR(ret));
     }
   }

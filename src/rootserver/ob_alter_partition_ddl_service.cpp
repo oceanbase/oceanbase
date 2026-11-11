@@ -1469,8 +1469,8 @@ int ObDDLService::handle_tablets_for_alter_partitions(
                        || obrpc::ObAlterTableArg::DROP_SUB_PARTITION == op_type;
   const bool is_truncate = obrpc::ObAlterTableArg::TRUNCATE_PARTITION == op_type
                            || obrpc::ObAlterTableArg::TRUNCATE_SUB_PARTITION == op_type;
-  common::ObArray<bool> need_create_empty_majors;
-  common::ObArray<const ObTableSchema*> del_table_schema_ptrs;
+  common::ObSEArray<bool, 4> need_create_empty_majors;
+  common::ObSEArray<const ObTableSchema*, 4> del_table_schema_ptrs;
   uint64_t tenant_data_version = 0;
   if (OB_UNLIKELY(inc_table_schemas.count() != new_table_schemas.count()
                   || del_table_schemas.count() != new_table_schemas.count())) {
@@ -1505,7 +1505,7 @@ int ObDDLService::handle_tablets_for_alter_partitions(
     }
   }
   // drop tablets for DROP/TRUNCATE
-  common::ObArray<share::ObLSID> ls_id_array;
+  common::ObSEArray<share::ObLSID, 4> ls_id_array;
   if (OB_SUCC(ret) && (is_drop || is_truncate)) {
     int64_t new_schema_version = OB_INVALID_VERSION;
     if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, new_schema_version))) {
@@ -2861,7 +2861,7 @@ int ObDDLService::check_alter_add_subpartitions(const share::schema::ObTableSche
   int ret = OB_SUCCESS;
   const AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   int64_t part_num = 0;
-  ObArray<const ObPartition*> orig_parts;
+  ObSEArray<const ObPartition*, 4> orig_parts;
 
   // get count of all partitions
   for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_schema.get_partition_num(); i++) {

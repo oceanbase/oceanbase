@@ -98,7 +98,7 @@ int ObDDLService::check_mysql_drop_column_with_index_(obrpc::ObAlterTableArg &al
                                                       ObDDLType &ddl_type)
 {
   int ret = OB_SUCCESS;
-  ObArray<uint64_t> drop_cols_id_arr;
+  ObSEArray<uint64_t, 4> drop_cols_id_arr;
   // TODO(xingrui.cwh) after miyuan support mutli or other type index do offline ddl,
   // delete check_has_domain_index and check_has_vec_domain_index constraint
   bool has_vec_index = false;
@@ -318,7 +318,7 @@ int ObDDLService::drop_index_caused_by_drop_column_online(
             drop_index_arg.is_hidden_         = origin_table_schema.is_user_hidden_table();
             drop_index_arg.is_in_recyclebin_  = index_schema->is_in_recyclebin();
             drop_index_arg.is_inner_          = true;
-            ObArray<obrpc::ObDDLRes> unused_ddl_res_array;
+            ObSEArray<obrpc::ObDDLRes, 1> unused_ddl_res_array;
             if (OB_FAIL(drop_index_to_scheduler_(trans, schema_guard, allocator, origin_table_schema,
                                                  nullptr/*inc_tablet_ids*/, nullptr/*del_tablet_ids*/,
                                                  &drop_index_arg, ddl_operator,
@@ -1202,8 +1202,8 @@ int ObDDLService::update_prev_id_for_add_column(const ObTableSchema &origin_tabl
         if (OB_ISNULL(head_col)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Failed to get first column", K(ret));
-        } else {
-          alter_column_schema.set_next_column_name(head_col->get_column_name());
+        } else if (OB_FAIL(alter_column_schema.set_next_column_name(head_col->get_column_name()))) {
+          LOG_WARN("failed to set next column name", KR(ret));
         }
       }
     }

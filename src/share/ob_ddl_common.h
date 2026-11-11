@@ -1839,6 +1839,17 @@ public:
       ObIArray<int64_t> &column_checksum_array);
 };
 
+namespace schema
+{
+// Shared ADD admission and classification. INSTANT takes precedence over ONLINE;
+// ddl_type is DDL_INVALID when the operation cannot run in parallel.
+int check_add_column_can_parallel(const obrpc::ObAlterTableArg &arg,
+                                  const ObTableSchema &orig_table_schema,
+                                  bool &can_parallel_alter,
+                                  const char *&reason,
+                                  ObDDLType *ddl_type = nullptr);
+}
+
 // Helpers shared by RS serial DDL routing (ObDDLService::check_is_add_column_online_
 // / check_can_drop_column_instant_) and parallel DDL admission
 // (share/schema/ob_schema_utils check_add_column_can_parallel /

@@ -1134,8 +1134,8 @@ int ObLatestSchemaGuard::get_table_schemas_in_tablegroup(
     ObIArray<const ObTableSchema *> &table_schemas)
 {
   int ret = OB_SUCCESS;
-  ObArray<ObString> table_names;
-  ObArray<uint64_t> table_ids;
+  ObSEArray<ObString, 4> table_names;
+  ObSEArray<uint64_t, 4> table_ids;
   if (OB_FAIL(get_table_id_and_table_name_in_tablegroup(
           tablegroup_id, table_names, table_ids))) {
     LOG_WARN("fail to get table ids in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
@@ -1233,7 +1233,7 @@ int ObLatestSchemaGuard::get_obj_priv_with_obj_id(
   int ret = OB_SUCCESS;
   ObISQLClient *sql_client = NULL;
   ObSchemaService *schema_service_impl = nullptr;
-  ObArray<ObObjPriv> tmp_privs;
+  ObSEArray<ObObjPriv, 1> tmp_privs;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == obj_id)) {
@@ -1268,7 +1268,7 @@ int ObLatestSchemaGuard::get_audit_schema_in_owner(
   int ret = OB_SUCCESS;
   ObISQLClient *sql_client = NULL;
   ObSchemaService *schema_service_impl = nullptr;
-  ObArray<ObSAuditSchema> tmp_audits;
+  ObSEArray<ObSAuditSchema, 1> tmp_audits;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_and_get_service_(schema_service_impl, sql_client))) {
@@ -1317,7 +1317,7 @@ int ObLatestSchemaGuard::get_sensitive_rule_schema_by_name(
     ObRefreshSchemaStatus schema_status;
     schema_status.tenant_id_ = tenant_id_;
     const int64_t schema_version = INT64_MAX;
-    ObArray<ObSensitiveRuleSchema> rule_array;
+    ObSEArray<ObSensitiveRuleSchema, 1> rule_array;
     if (OB_FAIL(schema_service_impl->get_all_sensitive_rules(
                     *sql_client, schema_status, schema_version,
                     tenant_id_, rule_array))) {

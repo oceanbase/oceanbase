@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/cmd/ob_table_executor.h"
+#include "share/schema/ob_schema_guard_wrapper.h"
 #include "sql/engine/cmd/ob_index_executor.h"
 #include "sql/engine/cmd/ob_ddl_executor_util.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
@@ -967,7 +968,8 @@ static int check_can_parallel_alter_table_(
   can_parallel_alter = false;
   const char *reason = nullptr;
   bool has_add = false, has_drop = false;
-  if (arg.data_version_ < DATA_VERSION_4_6_1_0) {
+  ObSchemaGuardWrapper wrapper(arg.alter_table_schema_.get_tenant_id(), GCTX.schema_service_);
+  if (!is_parallel_alter_table_data_version_supported(arg.data_version_)) {
     reason = "data version not supported";
   } else if (OB_ISNULL(orig_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -977,8 +979,10 @@ static int check_can_parallel_alter_table_(
   } else if (!can_parallel_alter) {
     // arg level check failed, reason already set by check_alter_table_arg_for_parallel
   } else if (FALSE_IT(check_column_op_types(arg, has_add, has_drop))) {
+  } else if (has_drop && OB_FAIL(wrapper.init(schema_guard))) {
+    LOG_WARN("fail to init schema wrapper for drop column admission", KR(ret));
   } else if (has_drop
-             && OB_FAIL(check_drop_column_can_parallel(arg, *orig_table_schema, schema_guard, can_parallel_alter, reason))) {
+             && OB_FAIL(check_drop_column_can_parallel(arg, *orig_table_schema, wrapper, can_parallel_alter, reason))) {
     LOG_WARN("fail to check drop column can parallel", KR(ret));
   } else if (can_parallel_alter
              && has_add

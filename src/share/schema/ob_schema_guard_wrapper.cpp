@@ -906,7 +906,7 @@ int ObSchemaGuardWrapper::get_table_id_and_table_name_in_tablegroup(
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("not init", KR(ret));
   } else if (OB_NOT_NULL(local_schema_guard_)) {
-    ObArray<const ObTableSchema *> table_schemas;
+    ObSEArray<const ObTableSchema *, 4> table_schemas;
     if (OB_FAIL(local_schema_guard_->get_table_schemas_in_tablegroup(
         tenant_id_, tablegroup_id, table_schemas))) {
       LOG_WARN("fail to get table schemas in tablegroup", KR(ret), K_(tenant_id), K(tablegroup_id));
