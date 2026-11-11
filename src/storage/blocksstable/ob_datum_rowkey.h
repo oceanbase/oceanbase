@@ -188,9 +188,9 @@ public:
   {
     return is_row_duplicate_;
   }
-  inline bool is_row_bf_checked() const
+  inline bool is_row_overlapped() const
   {
-    return row_bf_checked_;
+    return is_overlapped_;
   }
   inline void mark_row_checked()
   {
@@ -214,14 +214,14 @@ public:
   {
     skipped_this_time_ = 1;
   };
-  inline void mark_row_bf_checked()
+  inline void mark_row_overlapped()
   {
-    row_bf_checked_ = 1;
+    is_overlapped_ = 1;
   }
   inline void clear_row_non_existent()
   {
     skipped_this_time_ = 0;
-    row_bf_checked_ = 0;
+    is_overlapped_ = 0;
   };
   inline const ObDatumRowkey &get_rowkey() const
   {
@@ -237,7 +237,7 @@ private:
     struct {
       uint8_t row_lock_checked_  : 1;
       uint8_t row_exist_checked_ : 1;
-      uint8_t row_bf_checked_    : 1;
+      uint8_t is_overlapped_     : 1;
       uint8_t skipped_this_time_ : 1;
       uint8_t checked_           : 1;
       uint8_t is_row_duplicate_  : 1;

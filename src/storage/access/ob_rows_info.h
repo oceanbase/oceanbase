@@ -167,9 +167,9 @@ public:
   {
     rowkeys_[idx].marked_rowkey_.mark_row_exist_checked();
   }
-  inline void set_row_bf_checked(const int64_t idx)
+  inline void set_row_overlapped(const int64_t idx)
   {
-    rowkeys_[idx].marked_rowkey_.mark_row_bf_checked();
+    rowkeys_[idx].marked_rowkey_.mark_row_overlapped();
   }
   inline void set_row_checked(const int64_t idx)
   {
@@ -205,10 +205,10 @@ public:
     const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
     return marked_rowkey.is_row_lock_checked();
   }
-  inline bool is_row_bf_checked(const int64_t idx)
+  inline bool is_row_overlapped(const int64_t idx) const
   {
     const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
-    return marked_rowkey.is_row_bf_checked();
+    return marked_rowkey.is_row_overlapped();
   }
   inline uint32_t get_permutation_idx(const int64_t idx)
   {
