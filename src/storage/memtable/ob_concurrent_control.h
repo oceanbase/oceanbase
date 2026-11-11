@@ -32,7 +32,8 @@ struct ObWriteFlag
   #define OBWF_BIT_DELETE_INSERT            1
   #define OBWF_BIT_PLAIN_INSERT_GTS_OPT     1
   #define OBWF_BIT_FK_SKIP_PARENT_PURE_LOCK 1
-  #define OBWF_BIT_RESERVED                49
+  #define OBWF_BIT_DML_IGNORE               1
+  #define OBWF_BIT_RESERVED                48
 
   static const uint64_t OBWF_MASK_TABLE_API = (0x1UL << OBWF_BIT_TABLE_API) - 1;
   static const uint64_t OBWF_MASK_TABLE_LOCK = (0x1UL << OBWF_BIT_TABLE_LOCK) - 1;
@@ -62,6 +63,7 @@ struct ObWriteFlag
       uint64_t is_delete_insert_            : OBWF_BIT_DELETE_INSERT;    // 0: false(default), 1: true
       uint64_t is_plain_ins_gts_opt_        : OBWF_BIT_PLAIN_INSERT_GTS_OPT;
       uint64_t is_fk_skip_parent_pure_lock_ : OBWF_BIT_FK_SKIP_PARENT_PURE_LOCK;
+      uint64_t is_dml_ignore_               : OBWF_BIT_DML_IGNORE;       // 0: false(default), 1: true
       uint64_t reserved_                    : OBWF_BIT_RESERVED;
     };
   };
@@ -99,6 +101,8 @@ struct ObWriteFlag
   inline bool is_delete_insert() const { return is_delete_insert_; }
   inline void set_fk_skip_parent_pure_lock() { is_fk_skip_parent_pure_lock_ = true; }
   inline bool is_fk_skip_parent_pure_lock() const { return is_fk_skip_parent_pure_lock_; }
+  inline void set_dml_ignore() { is_dml_ignore_ = true; }
+  inline bool is_dml_ignore() const { return is_dml_ignore_; }
 
   TO_STRING_KV("is_table_api", is_table_api_,
                "is_table_lock", is_table_lock_,
@@ -114,7 +118,8 @@ struct ObWriteFlag
                "immediate_row_check",  immediate_row_check_,
                "is_delete_insert", is_delete_insert_,
                "is_plain_ins_gts_opt", is_plain_ins_gts_opt_,
-               "is_fk_skip_parent_pure_lock", is_fk_skip_parent_pure_lock_);
+               "is_fk_skip_parent_pure_lock", is_fk_skip_parent_pure_lock_,
+               "is_dml_ignore", is_dml_ignore_);
 
   OB_UNIS_VERSION(1);
 };
