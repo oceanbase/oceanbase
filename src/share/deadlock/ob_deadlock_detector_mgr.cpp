@@ -699,37 +699,13 @@ static int pick_hold_sql_from_merged_history_(
   return ret;
 }
 
-static bool is_associated_zero_visitor_(const ObString &visitor)
-{
-  if (visitor.empty() || OB_ISNULL(visitor.ptr())) {
-    return false;
-  }
-  static const ObString marker("(associated:0)");
-  return OB_NOT_NULL(memmem(visitor.ptr(), visitor.length(), marker.ptr(), marker.length()));
-}
-
-static bool parse_trans_detector_visitor_(
-  const ObDetectorInnerReportInfo &info,
-  ObStringHolder &sess_id,
-  ObStringHolder &trans_id)
-{
-  bool is_trans_detector = false;
-  const ObString &visitor = info.get_user_report_info().get_resource_visitor();
-  ObSEArray<ObStringHolder, 3> match_result;
-  if (OB_SUCCESS == ObOccamRegex::regex_match(visitor, "\\{session_id:([0-9]+).*txid:([0-9]+)\\}", match_result)
-      && match_result.count() == 3
-      && OB_SUCCESS == sess_id.assign(match_result[1])
-      && OB_SUCCESS == trans_id.assign(match_result[2])) {
-    is_trans_detector = true;
-  }
-  return is_trans_detector;
-}
-
 static int get_last_trans_blocked_sql_seq(const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
                                    const int64_t current_idx,
-                                   transaction::ObTxSEQ &this_tx_hold_lock_seq) {
+                                   transaction::ObTxSEQ &this_tx_hold_lock_seq,
+                                   ObAddr &hold_addr) {
   int ret = OB_ENTRY_NOT_EXIST;
   const int64_t count = collected_info_array.count();
+  hold_addr.reset();
   if (count <= 1 || current_idx < 0 || current_idx >= count) {
     ret = OB_INVALID_ARGUMENT;
     DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array), K(current_idx));
@@ -742,6 +718,7 @@ static int get_last_trans_blocked_sql_seq(const ObSArray<ObDetectorInnerReportIn
       if (collected_info_array.at(prev_idx).get_user_report_info().get_module_name() == ObString("transaction")) {
         this_tx_hold_lock_seq = collected_info_array.at(prev_idx).get_user_report_info().get_blocked_seq();
         if (this_tx_hold_lock_seq.is_valid()) {
+          hold_addr = collected_info_array.at(prev_idx).get_addr();
           ret = OB_SUCCESS;
           break;
         }
@@ -752,43 +729,28 @@ static int get_last_trans_blocked_sql_seq(const ObSArray<ObDetectorInnerReportIn
   return ret;
 }
 
-static int get_hold_seq_from_canonical_local_trans_(
-  const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
-  const int64_t current_idx,
-  const ObStringHolder &trans_id,
-  transaction::ObTxSEQ &holding_seq)
+// 本事务是否分布式路由场景: 当前节点或前一个节点是本事务的 detector 节点
+static bool is_routing_trans_(const ObSArray<ObDetectorInnerReportInfo> &collected_info_array,
+                              const int64_t current_idx,
+                              const ObStringHolder &trans_id)
 {
-  int ret = OB_ENTRY_NOT_EXIST;
-  if (current_idx < 0 || current_idx >= collected_info_array.count()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    const ObString &current_visitor = collected_info_array.at(current_idx).get_user_report_info().get_resource_visitor();
-    if (!is_associated_zero_visitor_(current_visitor)) {
-      ret = OB_INVALID_ARGUMENT;
-    } else {
-      for (int64_t idx = 0; idx < collected_info_array.count() && OB_SUCCESS != ret; ++idx) {
-        if (idx == current_idx) {
-          continue;
-        }
-        const ObDetectorInnerReportInfo &candidate_info = collected_info_array.at(idx);
-        const ObString &candidate_visitor = candidate_info.get_user_report_info().get_resource_visitor();
-        if (is_associated_zero_visitor_(candidate_visitor)) {
-          continue;
-        }
-        ObStringHolder candidate_sess_id;
-        ObStringHolder candidate_trans_id;
-        if (!parse_trans_detector_visitor_(candidate_info, candidate_sess_id, candidate_trans_id)) {
-          continue;
-        } else if (candidate_trans_id.get_ob_string() != trans_id.get_ob_string()) {
-          continue;
-        } else if (OB_FAIL(get_last_trans_blocked_sql_seq(collected_info_array, idx, holding_seq))) {
-          DETECT_LOG(INFO, "failed to fetch hold seq from canonical local trans node",
-                     KR(ret), K(idx), K(current_idx), K(candidate_info));
-        }
+  bool routing_on = false;
+  const int64_t count = collected_info_array.count();
+  for (int64_t i = 0; i < 2 && !routing_on; ++i) {
+    const int64_t idx = (current_idx - i + count) % count;
+    const ObDetectorUserReportInfo &info = collected_info_array.at(idx).get_user_report_info();
+    if (info.get_module_name() == ObString("detector")) {
+      // detector 节点 visitor 形如 {type:0, trans_id:{txid:X}}
+      ObSEArray<ObStringHolder, 2> match_result;
+      if (OB_SUCCESS == ObOccamRegex::regex_match(info.get_resource_visitor(),
+                                                  ".*txid:([0-9]+).*", match_result)
+          && match_result.count() == 2
+          && match_result[1].get_ob_string() == trans_id.get_ob_string()) {
+        routing_on = true;
       }
     }
   }
-  return ret;
+  return routing_on;
 }
 
 void ObDeadLockDetectorMgr::get_trans_history_sql_from_audit_(const ObDeadLockCollectInfoMessage &collect_info_msg)
@@ -799,28 +761,15 @@ void ObDeadLockDetectorMgr::get_trans_history_sql_from_audit_(const ObDeadLockCo
     DETECT_LOG(WARN, "not expected collected info size", K(collected_info_array), K(collect_info_msg));
   } else {
     transaction::ObTransID last_trans_id;
+    transaction::ObTxSEQ holding_seq;
     ObArray<ObTuple<ObStringHolder, ObStringHolder, int64_t>> trans_sql_history;
     for (int64_t idx = 0; idx < collected_info_array.count(); ++idx) {
       const ObDetectorInnerReportInfo &collected_info = collected_info_array[idx];
       ObDetectorUserReportInfo &user_report_info = const_cast<ObDetectorUserReportInfo &>(collected_info.get_user_report_info());
       ObStringHolder sess_id;
       ObStringHolder trans_id;
-      transaction::ObTxSEQ holding_seq;
       if (is_trans_detector_(collected_info, sess_id, trans_id)) {
-        int tmp_ret = get_last_trans_blocked_sql_seq(collected_info_array, idx, holding_seq);
-        if (OB_SUCCESS != tmp_ret) {
-          int tmp_ret2 = get_hold_seq_from_canonical_local_trans_(collected_info_array, idx, trans_id, holding_seq);
-          if (OB_SUCCESS != tmp_ret2) {
-            DETECT_LOG(WARN, "no prev trans blocked_seq for hold_sql", KR(tmp_ret), KR(tmp_ret2), K(idx), K(collected_info));
-            continue;
-          } else {
-            DETECT_LOG(INFO, "resolved hold seq from canonical local trans node", K(idx), K(collected_info), K(holding_seq));
-          }
-        }
-        if (!holding_seq.is_valid()) {
-          DETECT_LOG(WARN, "resolved hold seq is invalid", K(idx), K(collected_info), K(holding_seq));
-          continue;
-        }
+        int tmp_ret = OB_SUCCESS;
         ObString wait_sql_to_exclude;
         (void)get_wait_sql_from_report_info_(user_report_info, wait_sql_to_exclude);
         bool atoi_valid = false;
@@ -833,10 +782,23 @@ void ObDeadLockDetectorMgr::get_trans_history_sql_from_audit_(const ObDeadLockCo
           DETECT_LOG(WARN, "fail to parse trans_id", KR(tmp_ret), K(trans_id), K(cur_trans_id), K(atoi_valid), K(idx), K(collected_info));
           continue;
         }
+        // 每个事务只在第一个节点取一次 holding_seq 并查 audit
         if (cur_trans_id != last_trans_id) {
+          ObAddr hold_addr;
+          if (OB_TMP_FAIL(get_last_trans_blocked_sql_seq(collected_info_array, idx, holding_seq, hold_addr))) {
+            DETECT_LOG(WARN, "no prev trans blocked_seq for hold_sql", KR(tmp_ret), K(idx), K(collected_info));
+            continue;
+          }
+          if (!holding_seq.is_valid() || !hold_addr.is_valid()) {
+            DETECT_LOG(WARN, "resolved hold seq or addr is invalid",
+                       K(idx), K(collected_info), K(holding_seq), K(hold_addr));
+            continue;
+          }
+          const ObAddr &query_hold_addr = is_routing_trans_(collected_info_array, idx, trans_id)
+                                          ? hold_addr : collected_info.get_addr();
           trans_sql_history.reset();
           if (OB_TMP_FAIL(get_trans_sql_history_from_audit_(collected_info.get_tenant_id(), trans_id,
-                                                            collected_info.get_addr(), trans_sql_history))) {
+                                                            query_hold_addr, trans_sql_history))) {
             DETECT_LOG(WARN, "get trans sql history failed", KR(tmp_ret), K(trans_id), K(collected_info), K(idx));
             continue;
           }
