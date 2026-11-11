@@ -267,16 +267,10 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     LOG_WARN("error unexpected, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_SEND_BUILD_REPLICA_REQUEST_FAILED))) {
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
-  } else if (OB_FAIL(check_modify_autoinc(modify_autoinc))) {
-    LOG_WARN("failed to check modify autoinc", K(ret));
   } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, is_ddl_retryable_, data_format_version_, new_execution_id))) {
     LOG_WARN("failed to fetch new execution id", K(ret));
   } else {
     execution_id_ = new_execution_id;
-    ObSQLMode sql_mode = alter_table_arg_.sql_mode_;
-    if (!modify_autoinc) {
-      sql_mode = sql_mode | SMO_NO_AUTO_VALUE_ON_ZERO;
-    }
     // get execute inner sql addr
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, alter_table_arg_.inner_sql_exec_addr_))) {
       LOG_WARN("get sys ls leader addr fail", K(ret), K(tenant_id_));
@@ -287,34 +281,49 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *orig_table_schema = nullptr;
     const ObTableSchema *hidden_table_schema = nullptr;
-    ObDDLRedefinitionSSTableBuildTask task(
-        task_id_,
-        tenant_id_,
-        object_id_,
-        target_object_id_,
-        schema_version_,
-        snapshot_version_,
-        new_execution_id,
-        consumer_group_id_,
-        sql_mode,
-        trace_id_,
-        parallelism_,
-        use_heap_table_ddl_plan_,
-        GCTX.root_service_,
-        alter_table_arg_.inner_sql_exec_addr_,
-        data_format_version_,
-        is_ddl_retryable_,
-        alter_table_arg_.mview_refresh_info_);
     if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
       LOG_WARN("failed to get orig table schema", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, hidden_table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(target_object_id_));
-    } else if (OB_FAIL(task.init(*orig_table_schema, *hidden_table_schema, alter_table_arg_.alter_table_schema_, alter_table_arg_.tz_info_wrap_, alter_table_arg_.based_schema_object_infos_))) {
-      LOG_WARN("fail to init table redefinition sstable build task", K(ret));
-    } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
-      LOG_WARN("fail to submit ddl build single replica", K(ret));
+    } else if (OB_ISNULL(orig_table_schema) || OB_ISNULL(hidden_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret), KP(orig_table_schema), KP(hidden_table_schema));
+    } else if (OB_FAIL(check_modify_autoinc(*orig_table_schema, modify_autoinc))) {
+      LOG_WARN("failed to check modify autoinc", K(ret));
+    } else {
+      ObSQLMode sql_mode = alter_table_arg_.sql_mode_;
+      if (!modify_autoinc) {
+        sql_mode = sql_mode | SMO_NO_AUTO_VALUE_ON_ZERO;
+      }
+      ObDDLRedefinitionSSTableBuildTask task(
+          task_id_,
+          tenant_id_,
+          object_id_,
+          target_object_id_,
+          schema_version_,
+          snapshot_version_,
+          new_execution_id,
+          consumer_group_id_,
+          sql_mode,
+          trace_id_,
+          parallelism_,
+          use_heap_table_ddl_plan_,
+          GCTX.root_service_,
+          alter_table_arg_.inner_sql_exec_addr_,
+          data_format_version_,
+          is_ddl_retryable_,
+          alter_table_arg_.mview_refresh_info_);
+      if (OB_FAIL(task.init(*orig_table_schema,
+                           *hidden_table_schema,
+                           alter_table_arg_.alter_table_schema_,
+                           alter_table_arg_.tz_info_wrap_,
+                           alter_table_arg_.based_schema_object_infos_))) {
+        LOG_WARN("fail to init table redefinition sstable build task", K(ret));
+      } else if (OB_FAIL(root_service->submit_ddl_single_replica_build_task(task))) {
+        LOG_WARN("fail to submit ddl build single replica", K(ret));
+      }
     }
   }
   return ret;
@@ -1115,20 +1124,37 @@ int ObTableRedefinitionTask::process()
   return ret;
 }
 
-int ObTableRedefinitionTask::check_modify_autoinc(bool &modify_autoinc)
+int ObTableRedefinitionTask::check_modify_autoinc(const ObTableSchema &orig_table_schema,
+                                               bool &modify_autoinc)
 {
   int ret = OB_SUCCESS;
   modify_autoinc = false;
-  AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
-  ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
-  ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
-  AlterColumnSchema *alter_column_schema = nullptr;
-  for(; OB_SUCC(ret) && iter != iter_end; iter++) {
-    if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*iter))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("iter is NULL", K(ret));
-    } else if (alter_column_schema->is_autoincrement()) {
-      modify_autoinc = true;
+  // Partition DDL may copy existing columns into alter_table_schema without altering them.
+  if (alter_table_arg_.is_alter_columns_) {
+    const AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
+    ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
+    ObTableSchema::const_column_iterator iter_end = alter_table_schema.column_end();
+    const AlterColumnSchema *alter_column_schema = nullptr;
+    for (; OB_SUCC(ret) && iter != iter_end; iter++) {
+      if (OB_ISNULL(alter_column_schema = static_cast<const AlterColumnSchema *>(*iter))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("iter is NULL", K(ret));
+      } else if (alter_column_schema->is_autoincrement()) {
+        if (OB_DDL_ADD_COLUMN == alter_column_schema->alter_type_) {
+          modify_autoinc = true;
+        } else if (OB_DDL_MODIFY_COLUMN == alter_column_schema->alter_type_
+                   || OB_DDL_CHANGE_COLUMN == alter_column_schema->alter_type_) {
+          const ObColumnSchemaV2 *orig_column_schema = orig_table_schema.get_column_schema(
+              alter_column_schema->get_origin_column_name());
+          if (OB_ISNULL(orig_column_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("original column schema is null", K(ret), KPC(alter_column_schema));
+          } else if (!orig_column_schema->is_autoincrement()) {
+            // Only a newly introduced AUTO_INCREMENT property may require new values.
+            modify_autoinc = true;
+          }
+        }
+      }
     }
   }
   return ret;
