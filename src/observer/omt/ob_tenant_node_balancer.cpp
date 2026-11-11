@@ -31,6 +31,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "logservice/palf/palf_options.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "logservice/ob_log_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -423,7 +424,27 @@ int ObTenantNodeBalancer::check_new_tenant(
       }
       extra_memory = GMEMCONF.get_extra_memory();
     }
-    if (OB_SUCC(ret) && !(unit == tenant->get_unit())) {
+    bool need_update_unit = !(unit == tenant->get_unit());
+    // ObTenant retains the old quota during shrinking, while PALF may have a smaller target.
+    // A larger PALF target may be an intentional emergency expansion and must be preserved.
+    if (OB_SUCC(ret) && !need_update_unit && !is_virtual_tenant_id(tenant_id)) {
+      MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
+      if (OB_FAIL(tenant_guard.switch_to(tenant_id))) {
+        LOG_WARN("fail to switch tenant", KR(ret), K(tenant_id));
+      } else {
+        logservice::ObLogService *log_service = MTL(logservice::ObLogService *);
+        palf::PalfOptions palf_options;
+        if (OB_ISNULL(log_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("log service is null", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(log_service->get_palf_options(palf_options))) {
+          LOG_WARN("fail to get palf options", KR(ret), K(tenant_id));
+        } else if (palf_options.disk_options_.log_disk_usage_limit_size_ < unit.config_.log_disk_size()) {
+          need_update_unit = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && need_update_unit) {
       if (OB_FAIL(omt_->update_tenant_unit(unit))) {
         LOG_WARN("fail to update tenant unit", K(ret), K(tenant_id));
       }
