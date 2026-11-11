@@ -271,7 +271,7 @@ private:
   int parameters_init();
   // 非full partition wise获得task的方式
   // TODO: jiangting.lk 重构下函数名字
-  int try_fetch_task(ObGranuleTaskInfo &info, bool round_robin);
+  int try_fetch_task(ObGranuleTaskInfo &info, bool round_robin, bool record_rescan_task);
   int get_next_task_pos(int64_t &pos, const ObGITaskSet *&taskset);
   int pw_get_next_task_pos(const common::ObIArray<int64_t> &op_ids);
   /**
@@ -284,7 +284,7 @@ private:
   int fetch_full_pw_tasks(ObIArray<ObGranuleTaskInfo> &infos, const ObIArray<int64_t> &op_ids);
   int try_fetch_tasks(ObIArray<ObGranuleTaskInfo> &infos, const ObIArray<const ObTableScanSpec *> &tscs);
   int try_get_rows(const int64_t max_row_cnt);
-  int do_get_next_granule_task(bool &partition_pruning, bool round_robin);
+  int do_get_next_granule_task(bool &partition_pruning, bool round_robin, bool record_rescan_task);
   int prepare_table_scan();
   bool is_not_init() { return state_ == GI_UNINITIALIZED; }
   // 获得消费GI task的node：

@@ -485,7 +485,8 @@ int ObGranuleIteratorOp::try_pruning_repart_partition(
 // 2. 开始扫描后，对于左边来的每一行，都会反复从 rescan_tasks_pos_ 选择合适的 task 来做
 //    扫描。之所以引入 partition pruning 是为了处理 NLJ 右表是分区表场景
 //    下，避免扫描无效分区。
-int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info, bool round_robin)
+int ObGranuleIteratorOp::try_fetch_task(
+    ObGranuleTaskInfo &info, bool round_robin, bool record_rescan_task)
 {
   int ret = OB_SUCCESS;
   ObGranulePump *gi_task_pump = nullptr;
@@ -528,16 +529,18 @@ int ObGranuleIteratorOp::try_fetch_task(ObGranuleTaskInfo &info, bool round_robi
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("NULL taskset returned", K(ret));
       } else if (FALSE_IT(info.task_id_ = worker_id_)) {
-      } else if (OB_FAIL(rescan_tasks_info_.insert_rescan_task(pos, info))) {
+      } else if (record_rescan_task && OB_FAIL(rescan_tasks_info_.insert_rescan_task(pos, info))) {
         LOG_WARN("array push back failed", K(ret), K(info), K(splitter_type_), K(pos), K(taskset));
       } else {
         LOG_TRACE("gi op fetch task", K(get_spec().id_), K(pos), K(taskset), K(info),
                   K(splitter_type_));
-        if (NULL == rescan_taskset_) {
-          rescan_taskset_ = taskset;
-        } else if (rescan_taskset_ != taskset) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("taskset changed", K(ret), K(rescan_taskset_), K(taskset), K(tsc_op_id_));
+        if (record_rescan_task) {
+          if (NULL == rescan_taskset_) {
+            rescan_taskset_ = taskset;
+          } else if (rescan_taskset_ != taskset) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("taskset changed", K(ret), K(rescan_taskset_), K(taskset), K(tsc_op_id_));
+          }
         }
       }
     }
@@ -1217,7 +1220,9 @@ int ObGranuleIteratorOp::get_next_granule_task_map_for_range_gen_parallel() {
   int ret = OB_SUCCESS;
   bool partition_pruning = true;
   while (OB_SUCC(ret) && partition_pruning) {
-    if (OB_FAIL(do_get_next_granule_task(partition_pruning, false))) {
+    if (OB_FAIL(do_get_next_granule_task(partition_pruning,
+                                         false /* round_robin */,
+                                         false /* record_rescan_task */))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("failed to get all granule task", K(ret));
       }
@@ -1249,7 +1254,8 @@ int ObGranuleIteratorOp::get_next_granule_task(bool prepare /* =false */, bool r
   int ret = OB_SUCCESS;
   bool partition_pruning = true;
   while (OB_SUCC(ret) && partition_pruning) {
-    if (OB_FAIL(do_get_next_granule_task(partition_pruning, round_robin))) {
+    if (OB_FAIL(do_get_next_granule_task(
+            partition_pruning, round_robin, true /* record_rescan_task */))) {
       if (ret != OB_ITER_END) {
         LOG_WARN("failed to get all granule task", K(ret));
       }
@@ -1276,7 +1282,8 @@ int ObGranuleIteratorOp::get_next_granule_task(bool prepare /* =false */, bool r
  *  we will reset all table-scan operator
  *  in this plan.
  * */
-int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool round_robin)
+int ObGranuleIteratorOp::do_get_next_granule_task(
+    bool &partition_pruning, bool round_robin, bool record_rescan_task)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObGranuleTaskInfo, 4> gi_task_infos;
@@ -1311,7 +1318,7 @@ int ObGranuleIteratorOp::do_get_next_granule_task(bool &partition_pruning, bool 
         state_ = GI_END;
         all_task_fetched_ = true;
       }
-    } else if (OB_FAIL(try_fetch_task(gi_task_info, round_robin))) {
+    } else if (OB_FAIL(try_fetch_task(gi_task_info, round_robin, record_rescan_task))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("try fetch task failed", K(ret));
       } else {
