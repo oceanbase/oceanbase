@@ -740,7 +740,7 @@ public:
   int seal_write_buffer();
   int switch_writer(const ObDtlMsg &msg);
 
-  int mock_eof_buffer(int64_t timeout_ts);
+  int mock_eof_buffer(int64_t timeout_ts, uint64_t dfo_id);
   ObDtlLinkedBuffer *alloc_buf(const int64_t payload_size);
   void free_linked_buffer(ObDtlLinkedBuffer *b) { free_buf(b); }
 
