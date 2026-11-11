@@ -134,6 +134,7 @@ public:
     FILESYSTEM_TYPE,
     HMS_TYPE,
     REST_TYPE,
+    JDBC_TYPE,
     MAX_TYPE
   };
   ObCatalogProperties() : type_(CatalogType::INVALID_TYPE) {}
