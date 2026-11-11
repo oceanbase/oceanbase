@@ -14,6 +14,7 @@
 #include "ob_archive_store.h"
 #include "share/backup/ob_archive_path.h"
 #include "share/backup/ob_archive_checkpoint_mgr.h"
+#include "lib/utility/ob_tracepoint.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -1051,6 +1052,8 @@ int ObArchiveStore::is_single_ls_info_file_exist(const int64_t dest_id, const in
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_ARCHIVE_READ_SINGLE_LS_INFO_NOT_EXIST,
+    "simulate missing LS metadata in the piece selected by cond");
 int ObArchiveStore::read_single_ls_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObSingleLSInfoDesc &desc) const
 {
   int ret = OB_SUCCESS;
@@ -1061,6 +1064,8 @@ int ObArchiveStore::read_single_ls_info(const int64_t dest_id, const int64_t rou
     LOG_WARN("ObArchiveStore not init", K(ret));
   } else if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, dest_id, round_id, piece_id, ls_id, full_path))) {
     LOG_WARN("failed to get single ls info file path", K(ret), K(dest), K(dest_id), K(round_id), K(piece_id), K(ls_id));
+  } else if (OB_FAIL(OB_E(EN_ARCHIVE_READ_SINGLE_LS_INFO_NOT_EXIST, piece_id) OB_SUCCESS)) {
+    LOG_WARN("errsim single ls info read failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
   }

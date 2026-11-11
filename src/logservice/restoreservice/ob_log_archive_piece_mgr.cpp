@@ -1056,6 +1056,9 @@ int ObLogArchivePieceContext::get_piece_meta_info_(const int64_t piece_id)
       // ls在该piece内不存在, 并且该piece是FROZEN状态, 那么ls一定在更大piece内
       // NOTE: restore不理解归档文件内容, 很难区分是GC或LOW_BOUND
       // 依赖zeyong提交, 标示日志流已GC, 物理恢复场景固定, 可以假设是LOW_BOUND
+      // 补充归档清理场景: LS元数据文件可能先被删除, 但piece总清单仍保留该LS记录.
+      // 此时get_ls_inner_piece_info_会从总清单补回LSN范围, 不会将该LS判为LOW_BOUND.
+      // 只有有效的piece总清单中也不存在该LS记录时, 才进入当前分支.
       else {
         inner_piece_context_.state_ = InnerPieceContext::State::LOW_BOUND;
       }
@@ -1088,9 +1091,10 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id,
       && OB_BACKUP_FILE_NOT_EXIST != ret) {
     CLOG_LOG(WARN, "get single piece file failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(id));
   } else if (OB_BACKUP_FILE_NOT_EXIST == ret) {
-    exist = false;
-    ret = OB_SUCCESS;
-    CLOG_LOG(INFO, "ls not exist in cur piece", K(dest_id), K(round_id), K(piece_id), K(id));
+    if (OB_FAIL(get_ls_info_from_piece_manifest_(archive_store, id, dest_id, round_id,
+        piece_id, min_lsn, max_lsn, exist, gc))) {
+      CLOG_LOG(WARN, "get LS info from piece manifest failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(id));
+    }
   } else if (OB_UNLIKELY(!desc.is_valid())) {
     ret = OB_INVALID_DATA;
     CLOG_LOG(WARN, "invalid single piece file", K(ret), K(dest_id),
@@ -1100,6 +1104,54 @@ int ObLogArchivePieceContext::get_ls_inner_piece_info_(const share::ObLSID &id,
     gc = desc.deleted_;
     min_lsn = palf::LSN(desc.min_lsn_);
     max_lsn = palf::LSN(desc.max_lsn_);
+  }
+  return ret;
+}
+
+int ObLogArchivePieceContext::get_ls_info_from_piece_manifest_(
+    const share::ObArchiveStore &archive_store,
+    const share::ObLSID &id,
+    const int64_t dest_id,
+    const int64_t round_id,
+    const int64_t piece_id,
+    palf::LSN &min_lsn,
+    palf::LSN &max_lsn,
+    bool &exist,
+    bool &gc)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  gc = false;
+  // 归档清理可能先删除单 LS 元数据，再删除已冻结 piece 的总清单。
+  // 总清单包含相同的 LS 记录；只有有效总清单中也不存在该 LS 时，才判定为 LOW_BOUND。
+  share::ObPieceInfoDesc piece_desc;
+  if (OB_FAIL(archive_store.read_piece_info(dest_id, round_id, piece_id, piece_desc))) {
+    CLOG_LOG(WARN, "read piece manifest failed", K(ret), K(dest_id), K(round_id), K(piece_id), K(id));
+  } else if (OB_UNLIKELY(!piece_desc.is_valid()
+      || piece_desc.round_id_ != round_id
+      || piece_desc.piece_id_ != piece_id)) {
+    ret = OB_INVALID_DATA;
+    CLOG_LOG(WARN, "invalid piece manifest", K(ret), K(dest_id), K(round_id), K(piece_id), K(piece_desc));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !exist && i < piece_desc.filelist_.count(); ++i) {
+      const share::ObSingleLSInfoDesc &ls_desc = piece_desc.filelist_.at(i);
+      if (ls_desc.ls_id_ == id) {
+        if (OB_UNLIKELY(!ls_desc.is_valid()
+            || ls_desc.dest_id_ != piece_desc.dest_id_
+            || ls_desc.round_id_ != round_id
+            || ls_desc.piece_id_ != piece_id)) {
+          ret = OB_INVALID_DATA;
+          CLOG_LOG(WARN, "invalid LS record in piece manifest", K(ret), K(id), K(ls_desc));
+        } else {
+          exist = true;
+          gc = ls_desc.deleted_;
+          min_lsn = palf::LSN(ls_desc.min_lsn_);
+          max_lsn = palf::LSN(ls_desc.max_lsn_);
+        }
+      }
+    }
+    CLOG_LOG(INFO, "load LS info from piece manifest", K(ret), K(dest_id), K(round_id), K(piece_id),
+        K(id), K(exist), K(gc), K(min_lsn), K(max_lsn));
   }
   return ret;
 }
