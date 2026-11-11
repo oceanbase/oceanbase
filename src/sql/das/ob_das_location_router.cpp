@@ -1045,6 +1045,9 @@ int ObDASTabletMapper::get_tablet_id_for_temp_table(
   } else if (OB_ISNULL(data_table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("data table schema is null", KR(ret), K(table_schema));
+  } else if (is_xa_trans_ && data_table_schema->is_oracle_trx_tmp_table_v2()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "accessing a transaction-level temporary table in an XA transaction is");
   } else {
     const bool is_trx_tmp_table = data_table_schema->is_oracle_trx_tmp_table_v2();
     const int64_t sequence = is_trx_tmp_table ? gtt_tablet_info_.gtt_trans_scope_unique_id_

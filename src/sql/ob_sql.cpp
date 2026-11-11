@@ -5439,7 +5439,12 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
                                               || ObStmt::is_dml_write_stmt(phy_plan->get_stmt_type()))
                                           && !ObStmt::is_show_stmt(phy_plan->get_literal_stmt_type())
                                           && phy_plan->is_contain_oracle_trx_level_temporary_table();
-  if (may_access_trx_tmp_table
+  if (may_access_trx_tmp_table && !session.get_xid().empty()
+      && OB_NOT_NULL(session.get_tx_desc())
+      && transaction::ObGlobalTxType::XA_TRANS == session.get_tx_desc()->get_global_tx_type(session.get_xid())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "accessing a transaction-level temporary table in an XA transaction is");
+  } else if (may_access_trx_tmp_table
       && ObSQLUtils::is_in_autonomous_transaction(&pc_ctx.exec_ctx_)) {
     if (OB_ISNULL(pc_ctx.sql_ctx_.schema_guard_)) {
       ret = OB_ERR_UNEXPECTED;

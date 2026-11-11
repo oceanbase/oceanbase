@@ -105,6 +105,9 @@ int ObDASCtx::get_das_tablet_mapper(const uint64_t ref_table_id,
         LOG_WARN("session info is nullptr", K(ret), K(sql_ctx_), K(session_info));
       } else {
         tablet_mapper.related_info_.guard_ = schema_guard;
+        tablet_mapper.is_xa_trans_ = !session_info->get_xid().empty()
+                                    && OB_NOT_NULL(session_info->get_tx_desc())
+                                    && transaction::ObGlobalTxType::XA_TRANS == session_info->get_tx_desc()->get_global_tx_type(session_info->get_xid());
         const storage::ObGTTTabletInfo gtt_tablet_info(real_table_id,
                                                       session_info->get_session_gtt_v2_sequence(),
                                                       session_info->get_trans_gtt_v2_sequence(),

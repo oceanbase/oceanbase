@@ -168,6 +168,7 @@ public:
       vt_svr_pair_(nullptr),
       related_info_(),
       is_non_partition_optimized_(false),
+      is_xa_trans_(false),
       tablet_id_(ObTabletID::INVALID_TABLET_ID),
       object_id_(OB_INVALID_ID),
       related_list_(nullptr),
@@ -385,6 +386,7 @@ private:
   const VirtualSvrPair *vt_svr_pair_;
   share::schema::RelatedTableInfo related_info_;
   bool is_non_partition_optimized_;
+  bool is_xa_trans_;
   ObTabletID tablet_id_;
   ObObjectID object_id_;
   const RelatedTabletList *related_list_;
